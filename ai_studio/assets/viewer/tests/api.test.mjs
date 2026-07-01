@@ -1,6 +1,6 @@
 ﻿import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { resolveAssetViewerGalleryPath, safeResolve, selectSource } from "../api.mjs";
@@ -89,4 +89,9 @@ test("resolveAssetViewerGalleryPath ignores unusable gallery meta", () => {
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("asset viewer shell does not require external scripts", () => {
+  const html = readFileSync(new URL("../index.html", import.meta.url), "utf8");
+  assert.doesNotMatch(html, /<script[^>]+src=["']https?:\/\//i);
 });

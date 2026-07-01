@@ -22,7 +22,7 @@ function normalizeRelPath(value, label = "path") {
 function readRegistry(root) {
   const path = registryPath(root);
   if (!existsSync(path)) return { ...defaultRegistry, games: [] };
-  const parsed = JSON.parse(readFileSync(path, "utf8"));
+  const parsed = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
   return {
     schema: parsed.schema || defaultRegistry.schema,
     games: Array.isArray(parsed.games) ? parsed.games : [],

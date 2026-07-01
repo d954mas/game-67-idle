@@ -1,5 +1,5 @@
 ﻿import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -70,4 +70,23 @@ test("registerTemplateAssetSource keeps folder and assets inside the repository"
     () => registerTemplateAssetSource(root, { id: "bad-template", assets: "C:/outside/assets" }),
     /template assets must be repo-relative/,
   );
+});
+
+test("listRegisteredTemplates accepts UTF-8 BOM registry files", (t) => {
+  const root = tempRoot();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = join(root, "ai_studio", "assets", "storage", "sources", "templates.json");
+  mkdirSync(join(root, "ai_studio", "assets", "storage", "sources"), { recursive: true });
+  writeFileSync(path, `\uFEFF${JSON.stringify({
+    schema: "ai_studio.assets.templates.v1",
+    templates: [{ id: "template", title: "Template", folder: "templates/template", assets: "templates/template/assets" }],
+  })}`, "utf8");
+
+  assert.deepEqual(listRegisteredTemplates(root), [{
+    id: "template",
+    title: "Template",
+    folder: "templates/template",
+    assets: "templates/template/assets",
+    status: "active",
+  }]);
 });

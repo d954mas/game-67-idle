@@ -87,3 +87,30 @@ test("scanPackManifestSource can describe source-root template files", async (t)
   assert.equal(records[0].resource, "ui/button.png");
   assert.equal(records[0].preview, join(root, "ui", "button.png"));
 });
+
+test("scanPackManifestSource accepts UTF-8 BOM in pack manifests", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "pack-manifest-bom-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const packDir = join(root, "packs", "starter-props");
+  mkdirSync(join(packDir, "files"), { recursive: true });
+  writeFileSync(join(packDir, "files", "crate.glb"), "glb", "utf8");
+  writeFileSync(join(packDir, "pack.json"), `\uFEFF${JSON.stringify({
+    pack: "starter-props",
+    title: "Starter Props",
+    kind: "model",
+    origin: "mine",
+    license: "CC0",
+  })}`, "utf8");
+  writeFileSync(join(packDir, "assets.jsonl"), `\uFEFF${JSON.stringify({
+    asset_id: "starter__crate__cc0",
+    title: "Crate",
+    kind: "model",
+    resource: "files/crate.glb",
+  })}\n`, "utf8");
+
+  const { records, packs } = await scanPackManifestSource(root);
+
+  assert.equal(packs[0].pack, "starter-props");
+  assert.equal(records[0].asset_id, "starter__crate__cc0");
+});

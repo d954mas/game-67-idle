@@ -1,5 +1,5 @@
 ﻿import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -86,4 +86,22 @@ test("registerLibraryAssetSource requires an explicit assets path", (t) => {
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
   assert.throws(() => registerLibraryAssetSource(root, { id: "studio-library" }), /assets path is required/);
+});
+
+test("listRegisteredLibraries accepts UTF-8 BOM registry files", (t) => {
+  const root = tempRoot();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = join(root, "ai_studio", "assets", "storage", "sources", "libraries.json");
+  mkdirSync(join(root, "ai_studio", "assets", "storage", "sources"), { recursive: true });
+  writeFileSync(path, `\uFEFF${JSON.stringify({
+    schema: "ai_studio.assets.libraries.v1",
+    libraries: [{ id: "studio-library", title: "Studio Library", assets: "shared/assets" }],
+  })}`, "utf8");
+
+  assert.deepEqual(listRegisteredLibraries(root), [{
+    id: "studio-library",
+    title: "Studio Library",
+    assets: "shared/assets",
+    status: "active",
+  }]);
 });

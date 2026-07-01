@@ -19,7 +19,7 @@ function normalizeSourcePath(value) {
 function readRegistry(root) {
   const path = registryPath(root);
   if (!existsSync(path)) return { ...defaultRegistry, libraries: [...defaultRegistry.libraries] };
-  const parsed = JSON.parse(readFileSync(path, "utf8"));
+  const parsed = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
   return {
     schema: parsed.schema || defaultRegistry.schema,
     libraries: Array.isArray(parsed.libraries) ? parsed.libraries : [],

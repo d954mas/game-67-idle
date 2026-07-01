@@ -26,14 +26,14 @@ function safeResolve(base, relativePath = "") {
 }
 
 async function readJson(path) {
-  return JSON.parse(await readFile(path, "utf8"));
+  return JSON.parse((await readFile(path, "utf8")).replace(/^\uFEFF/, ""));
 }
 
 async function readJsonl(path) {
   const text = await readFile(path, "utf8");
   const rows = [];
   for (const [index, raw] of text.split(/\r?\n/).entries()) {
-    const line = raw.trim();
+    const line = raw.replace(/^\uFEFF/, "").trim();
     if (!line || line.startsWith("#")) continue;
     try {
       rows.push(JSON.parse(line));

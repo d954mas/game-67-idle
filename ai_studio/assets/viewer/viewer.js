@@ -22,6 +22,14 @@
 
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const vals = (it, key) => { const v = it[key]; return Array.isArray(v) ? v.filter(Boolean) : (v ? [v] : []); };
+  const supportsModelViewer = () => !!(window.customElements && window.customElements.get("model-viewer"));
+  function modelPreviewHtml(asset, model = "") {
+    if (model && supportsModelViewer()) {
+      return '<model-viewer camera-controls auto-rotate environment-image="studio_env.hdr" tone-mapping="neutral" exposure="1" shadow-intensity="1" shadow-softness="0.8" camera-orbit="45deg 55deg auto" poster="' + esc(asset.thumb || "") + '" src="' + esc(model) + '"></model-viewer>';
+    }
+    if (asset.thumb) return '<img src="' + esc(asset.thumb) + '">';
+    return '<div class="ph" style="font-size:60px">' + icon(asset.kind) + "</div>";
+  }
   const icon = (k) => (k === "model" ? "◫" : k === "font" ? "A" : k === "audio" ? "♪" : "▦");
 
   let active = {};
@@ -350,10 +358,7 @@
     const a = byId.get(id);
     const m = $("modal");
     if (!a) { closeModal(); return; }
-    let view3d;
-    if (a.model) view3d = '<model-viewer camera-controls auto-rotate environment-image="studio_env.hdr" tone-mapping="neutral" exposure="1" shadow-intensity="1" shadow-softness="0.8" camera-orbit="45deg 55deg auto" poster="' + esc(a.thumb || "") + '" src="' + esc(a.model) + '"></model-viewer>';
-    else if (a.thumb) view3d = '<img src="' + esc(a.thumb) + '">';
-    else view3d = '<div class="ph" style="font-size:60px">' + icon(a.kind) + "</div>";
+    const view3d = modelPreviewHtml(a, a.model);
     const kv = (k, v) => v ? '<div class="kv"><b>' + esc(k) + ":</b> " + v + "</div>" : "";
     const ins = "<h3>" + esc(a.name) + "</h3>" +
       kv("kind", esc(a.kind)) +
@@ -399,7 +404,7 @@
     if (!view) return;
     const model = await ensureModelForAsset(asset);
     if (!model || !document.querySelector("#modal .view3d")) return;
-    view.innerHTML = '<model-viewer camera-controls auto-rotate environment-image="studio_env.hdr" tone-mapping="neutral" exposure="1" shadow-intensity="1" shadow-softness="0.8" camera-orbit="45deg 55deg auto" poster="' + esc(asset.thumb || "") + '" src="' + esc(model) + '"></model-viewer>';
+    view.innerHTML = modelPreviewHtml(asset, model);
   }
 
   // hover preview: ONE pooled live model-viewer follows the hovered model card,
@@ -410,6 +415,7 @@
   // low ambient → side faces stay darker than the top, edges readable).
   const ISO = { "environment-image": "studio_env.hdr", "tone-mapping": "neutral", exposure: "1", "shadow-intensity": "0.6", "shadow-softness": "0.8", "camera-orbit": "45deg 55deg auto" };
   function ensureHov() {
+    if (!supportsModelViewer()) return null;
     if (hov) return hov;
     hov = document.createElement("model-viewer");
     hov.setAttribute("camera-controls", "");
@@ -431,6 +437,7 @@
     const t = card.querySelector(".thumb"); if (!t) return;
     const r = t.getBoundingClientRect();
     const h = ensureHov();
+    if (!h) return;
     h.dataset.aid = a.id;
     h.style.left = r.left + "px"; h.style.top = r.top + "px"; h.style.width = r.width + "px"; h.style.height = r.height + "px";
     h.setAttribute("src", a.model); h.style.display = "block";
@@ -635,7 +642,7 @@
       grid.querySelectorAll("[data-asset]").forEach((el) => {
         el.onclick = () => go("#/asset/" + encodeURIComponent(el.dataset.asset));
         const a = byId.get(el.dataset.asset);
-        if (a && a.kind === "model") {
+        if (a && a.kind === "model" && supportsModelViewer()) {
           el.addEventListener("mouseenter", () => {
             clearTimeout(hovTimer);
             clearTimeout(hideTimer);

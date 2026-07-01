@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -63,4 +63,23 @@ test("registerGameAssetSource keeps folder and assets inside the repository", (t
     () => registerGameAssetSource(root, { id: "bad-game", assets: "C:/outside/assets" }),
     /game assets must be repo-relative/,
   );
+});
+
+test("listRegisteredGames accepts UTF-8 BOM registry files", (t) => {
+  const root = tempRoot();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const path = join(root, "ai_studio", "assets", "storage", "sources", "games.json");
+  mkdirSync(join(root, "ai_studio", "assets", "storage", "sources"), { recursive: true });
+  writeFileSync(path, `\uFEFF${JSON.stringify({
+    schema: "ai_studio.assets.games.v1",
+    games: [{ id: "test-game", title: "Test Game", folder: "games/test-game", assets: "games/test-game/assets" }],
+  })}`, "utf8");
+
+  assert.deepEqual(listRegisteredGames(root), [{
+    id: "test-game",
+    title: "Test Game",
+    folder: "games/test-game",
+    assets: "games/test-game/assets",
+    status: "active",
+  }]);
 });
