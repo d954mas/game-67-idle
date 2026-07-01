@@ -21,3 +21,9 @@ repository root.
   sources.
 
 New games created through `ai_studio/bootstrap/new_game.mjs` are registered here.
+
+## Path Boundary
+
+Library sources may point at external shared storage. Template and game sources
+are repository-owned roots, so their `folder` and `assets` paths must be
+repo-relative and cannot use absolute paths or `..` traversal.

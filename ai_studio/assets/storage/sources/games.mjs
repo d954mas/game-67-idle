@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
+import { dirname, isAbsolute, join, relative } from "node:path";
 
 const defaultRegistry = {
   schema: "ai_studio.assets.games.v1",
@@ -10,8 +10,13 @@ function registryPath(root) {
   return join(root, "ai_studio", "assets", "storage", "sources", "games.json");
 }
 
-function normalizeRelPath(value) {
-  return String(value || "").replace(/\\/g, "/").replace(/^\.?\//, "").replace(/\/+$/, "");
+function normalizeRelPath(value, label = "path") {
+  const text = String(value || "").trim().replace(/\\/g, "/").replace(/^\.?\//, "").replace(/\/+$/, "");
+  if (!text) return "";
+  if (isAbsolute(text) || /^[a-zA-Z]:\//.test(text) || text.startsWith("//") || text.split("/").includes("..")) {
+    throw new Error(`game ${label} must be repo-relative and stay inside the repository`);
+  }
+  return text;
 }
 
 function readRegistry(root) {
@@ -37,8 +42,8 @@ export function listRegisteredGames(root) {
     .map((game) => ({
       id: String(game.id),
       title: String(game.title || game.id),
-      folder: normalizeRelPath(game.folder || game.id),
-      assets: normalizeRelPath(game.assets),
+      folder: normalizeRelPath(game.folder || game.id, "folder"),
+      assets: normalizeRelPath(game.assets, "assets"),
       status: String(game.status || "active"),
     }))
     .sort((a, b) => a.id.localeCompare(b.id));
@@ -50,8 +55,8 @@ export function registerGameAssetSource(root, { id, title = "", folder = "", ass
     throw new Error("game id must be lowercase kebab-case");
   }
 
-  const relFolder = normalizeRelPath(folder || gameId);
-  const relAssets = normalizeRelPath(assets || `${relFolder}/assets`);
+  const relFolder = normalizeRelPath(folder || gameId, "folder");
+  const relAssets = normalizeRelPath(assets || `${relFolder}/assets`, "assets");
   const registry = readRegistry(root);
   const next = {
     id: gameId,

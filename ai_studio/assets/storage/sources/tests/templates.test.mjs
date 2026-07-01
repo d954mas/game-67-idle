@@ -57,3 +57,17 @@ test("registerTemplateAssetSource rejects non-kebab ids", (t) => {
 
   assert.throws(() => registerTemplateAssetSource(root, { id: "Bad Template" }), /lowercase kebab-case/);
 });
+
+test("registerTemplateAssetSource keeps folder and assets inside the repository", (t) => {
+  const root = tempRoot();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  assert.throws(
+    () => registerTemplateAssetSource(root, { id: "bad-template", folder: "../outside" }),
+    /template folder must be repo-relative/,
+  );
+  assert.throws(
+    () => registerTemplateAssetSource(root, { id: "bad-template", assets: "C:/outside/assets" }),
+    /template assets must be repo-relative/,
+  );
+});

@@ -50,3 +50,17 @@ test("registerGameAssetSource rejects non-kebab ids", (t) => {
 
   assert.throws(() => registerGameAssetSource(root, { id: "Bad Game" }), /lowercase kebab-case/);
 });
+
+test("registerGameAssetSource keeps folder and assets inside the repository", (t) => {
+  const root = tempRoot();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  assert.throws(
+    () => registerGameAssetSource(root, { id: "bad-game", folder: "../outside" }),
+    /game folder must be repo-relative/,
+  );
+  assert.throws(
+    () => registerGameAssetSource(root, { id: "bad-game", assets: "C:/outside/assets" }),
+    /game assets must be repo-relative/,
+  );
+});
