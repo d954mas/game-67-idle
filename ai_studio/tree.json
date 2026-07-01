@@ -7,7 +7,7 @@
     "subtitle": "repo roots",
     "kind": "root",
     "color": "#172033",
-    "description": "Clean AI Studio architecture tree. Reviewed modules live under ai_studio/, while knowledge, game, feature, and template workspace folders are shown as root ownership boundaries.",
+    "description": "Clean AI Studio architecture tree. Reviewed modules live under ai_studio/, while game, feature, and template workspace folders are shown as root ownership boundaries.",
     "tags": [
       "reviewed-only",
       "workspace-roots",
@@ -30,32 +30,18 @@
       {
         "id": "workspace-folders",
         "title": "Workspace Folders",
-        "subtitle": "knowledge, games, templates, and features",
+        "subtitle": "games, templates, and features",
         "kind": "group",
         "color": "#64748b",
-        "description": "Repository workspace roots for reusable knowledge, reusable templates, copyable feature packs, and independent game folders. The map shows ownership boundaries here, not implementation files inside games, templates, or features.",
-        "role": "knowledge, game, template, and feature workspace roots",
+        "description": "Repository workspace roots for reusable templates, copyable feature packs, and independent game folders. The map shows ownership boundaries here, not implementation files inside games, templates, or features.",
+        "role": "game, template, and feature workspace roots",
         "tags": [
           "workspace",
-          "knowledge",
           "templates",
           "features",
           "games"
         ],
         "children": [
-          {
-            "id": "workspace:gamedev-knowledge",
-            "kind": "dir",
-            "path": "gamedev_knowledge",
-            "title": "gamedev_knowledge/",
-            "description": "Durable reusable game-development knowledge base: reusable knowledge pages and source notes. Project-specific game design remains under games/<game-id>/design/.",
-            "role": "reusable gamedev knowledge root",
-            "tags": [
-              "knowledge",
-              "gamedev",
-              "workspace"
-            ]
-          },
           {
             "id": "workspace:templates",
             "kind": "dir",
@@ -70,6 +56,19 @@
             ],
             "children": [
               {
+                "id": "workspace:templates-readme",
+                "kind": "doc",
+                "path": "templates/README.md",
+                "title": "README.md",
+                "description": "Templates workspace entrypoint: explains reusable template folders, template registry, game-copy ownership, and new template creation command.",
+                "role": "templates workspace entrypoint",
+                "tags": [
+                  "templates",
+                  "workspace",
+                  "docs"
+                ]
+              },
+              {
                 "id": "workspace:template:template",
                 "kind": "dir",
                 "path": "templates/template",
@@ -79,6 +78,47 @@
                 "tags": [
                   "template",
                   "game-template"
+                ]
+              },
+              {
+                "id": "workspace:templates:copy-model",
+                "kind": "doc",
+                "path": "templates/TEMPLATE.md",
+                "title": "TEMPLATE.md",
+                "description": "Template copy model: what is shared, what is copied into games, feature-pack policy, and game-only boundaries.",
+                "role": "template copy model documentation",
+                "tags": [
+                  "templates",
+                  "copy-model",
+                  "docs"
+                ]
+              },
+              {
+                "id": "workspace:templates:new-template",
+                "kind": "tool",
+                "path": "templates/new_template.mjs",
+                "title": "new_template.mjs",
+                "description": "Copies an existing template into templates/<template-id>/, registers it as a reusable template asset root, creates or reuses the matching Taskboard project, and refreshes generated VS Code tasks/launch entries.",
+                "role": "new template creation command",
+                "tags": [
+                  "templates",
+                  "template-creation",
+                  "assets",
+                  "taskboard",
+                  "vscode"
+                ]
+              },
+              {
+                "id": "workspace:templates:new-template-test",
+                "kind": "test",
+                "path": "templates/new_template.test.mjs",
+                "title": "new_template.test.mjs",
+                "description": "Regression tests proving new_template copies template files, registers template asset roots, creates a Taskboard project, and refreshes generated VS Code project entries without touching the real repository.",
+                "role": "new template creation tests",
+                "tags": [
+                  "templates",
+                  "test",
+                  "template-creation"
                 ]
               }
             ]
@@ -95,7 +135,21 @@
               "features",
               "workspace"
             ],
-            "children": []
+            "children": [
+              {
+                "id": "workspace:features-readme",
+                "kind": "doc",
+                "path": "features/README.md",
+                "title": "README.md",
+                "description": "Features workspace entrypoint: explains copyable feature-pack shape, rules, and future manifest/install possibilities.",
+                "role": "features workspace entrypoint",
+                "tags": [
+                  "features",
+                  "workspace",
+                  "docs"
+                ]
+              }
+            ]
           },
           {
             "id": "workspace:games",
@@ -109,7 +163,49 @@
               "games",
               "workspace"
             ],
-            "children": []
+            "children": [
+              {
+                "id": "workspace:games-readme",
+                "kind": "doc",
+                "path": "games/README.md",
+                "title": "README.md",
+                "description": "Games workspace entrypoint: explains independent game folders, game asset registry, private design knowledge, and game creation command.",
+                "role": "games workspace entrypoint",
+                "tags": [
+                  "games",
+                  "workspace",
+                  "docs"
+                ]
+              },
+              {
+                "id": "workspace:games:new-game",
+                "kind": "tool",
+                "path": "games/new_game.mjs",
+                "title": "new_game.mjs",
+                "description": "Copies templates/<template-id>/ into games/<game-id>/, registers that game asset root through Asset Storage, creates or reuses the matching Taskboard project, and refreshes generated VS Code tasks/launch entries.",
+                "role": "new game creation command",
+                "tags": [
+                  "games",
+                  "game-creation",
+                  "assets",
+                  "taskboard",
+                  "vscode"
+                ]
+              },
+              {
+                "id": "workspace:games:new-game-test",
+                "kind": "test",
+                "path": "games/new_game.test.mjs",
+                "title": "new_game.test.mjs",
+                "description": "Regression tests proving new_game copies template files, registers game asset roots, creates a Taskboard project, and refreshes generated VS Code project entries without touching the real repository.",
+                "role": "new game creation tests",
+                "tags": [
+                  "games",
+                  "test",
+                  "game-creation"
+                ]
+              }
+            ]
           }
         ]
       },
@@ -261,461 +357,98 @@
             ]
           },
           {
-            "id": "studio-shell:tunnel",
-            "title": "App Tunnel",
-            "subtitle": "temporary public URL",
-            "kind": "tool",
-            "path": "ai_studio/studio_shell/tunnel",
-            "description": "Studio Shell helper for serving a self-contained local directory and exposing it through a temporary public cloudflared quick tunnel for phone or external-device review.",
-            "role": "temporary public tunnel helper",
+            "id": "studio-shell:nt-app-tunnel-skill",
+            "kind": "skill",
+            "path": ".codex/skills/nt-app-tunnel",
+            "title": "nt-app-tunnel",
+            "description": "Skill bundle for sharing local AI Studio surfaces, asset viewer exports, static pages, or wasm builds through a temporary public cloudflared tunnel. It owns the tunnel script and safety rules.",
+            "role": "app tunnel skill bundle",
             "tags": [
-              "studio-shell",
+              "skill",
               "tunnel",
               "surface-share"
-            ],
-            "children": [
-              {
-                "id": "studio-shell:tunnel-readme",
-                "kind": "doc",
-                "path": "ai_studio/studio_shell/tunnel/README.md",
-                "title": "README.md",
-                "description": "App Tunnel contract: what may be served, public URL risks, and generated cloudflared cache location.",
-                "role": "app tunnel contract",
-                "tags": [
-                  "source",
-                  "contract"
-                ]
-              },
-              {
-                "id": "studio-shell:tunnel-serve",
-                "kind": "tool",
-                "path": "ai_studio/studio_shell/tunnel/serve_tunnel.mjs",
-                "title": "serve_tunnel.mjs",
-                "description": "Command that starts a local static server, runs a cloudflared quick tunnel, and prints a temporary public URL.",
-                "role": "public tunnel command",
-                "tags": [
-                  "tool",
-                  "tunnel"
-                ]
-              },
-              {
-                "id": "studio-shell:nt-app-tunnel-skill",
-                "kind": "skill",
-                "path": ".codex/skills/nt-app-tunnel/SKILL.md",
-                "title": "nt-app-tunnel",
-                "description": "Skill surface for sharing local AI Studio surfaces, asset viewer exports, static pages, or wasm builds through a temporary public tunnel.",
-                "role": "app tunnel skill",
-                "tags": [
-                  "skill",
-                  "tunnel"
-                ]
-              }
             ]
           }
         ]
       },
       {
-        "id": "bootstrap",
-        "title": "Bootstrap",
-        "subtitle": "project and game creation",
+        "id": "module:dev-environment",
+        "title": "Dev Environment",
+        "subtitle": "local IDE wiring",
         "kind": "module",
-        "moduleId": "bootstrap",
+        "moduleId": "dev-environment",
         "color": "#475569",
-        "description": "AI Studio bootstrap module for copying the template into a new game, exporting the reusable AI Studio base, and documenting the template copy model. It may call Asset Storage registries but does not own asset manifests or license policy.",
+        "description": "Local developer-environment helpers for generated IDE wiring. It owns VS Code task/launch generation from explicit template and game registries, but not game or template creation.",
         "tags": [
-          "bootstrap",
-          "export",
-          "game-creation"
+          "dev-environment",
+          "vscode",
+          "generated-output"
         ],
         "children": [
           {
-            "id": "bootstrap:readme",
+            "id": "dev-environment:readme",
             "kind": "doc",
-            "path": "ai_studio/bootstrap/README.md",
+            "path": "ai_studio/dev_environment/README.md",
             "title": "README.md",
-            "description": "Bootstrap module contract: role, commands, boundaries, and why bootstrap is not asset storage.",
-            "role": "bootstrap module entrypoint",
+            "description": "Dev Environment module contract: local IDE wiring owner, generated outputs, boundaries, and commands.",
+            "role": "Dev Environment contract",
             "tags": [
-              "bootstrap",
+              "dev-environment",
               "contract",
               "source"
             ]
           },
           {
-            "id": "bootstrap:new-game",
+            "id": "dev-environment:vscode-projects",
             "kind": "tool",
-            "path": "ai_studio/bootstrap/new_game.mjs",
-            "title": "new_game.mjs",
-            "description": "Copies templates/<template-id>/ into games/<game-id>/, registers that game asset root through Asset Storage, and refreshes generated VS Code tasks/launch entries.",
-            "role": "new game creation command",
-            "tags": [
-              "bootstrap",
-              "game-creation",
-              "assets",
-              "vscode"
-            ]
-          },
-          {
-            "id": "bootstrap:new-template",
-            "kind": "tool",
-            "path": "ai_studio/bootstrap/new_template.mjs",
-            "title": "new_template.mjs",
-            "description": "Copies an existing template into templates/<template-id>/, registers it as a reusable template asset root, and refreshes generated VS Code tasks/launch entries.",
-            "role": "new template creation command",
-            "tags": [
-              "bootstrap",
-              "template",
-              "assets",
-              "vscode"
-            ]
-          },
-          {
-            "id": "bootstrap:new-game-test",
-            "kind": "test",
-            "path": "ai_studio/bootstrap/new_game.test.mjs",
-            "title": "new_game.test.mjs",
-            "description": "Regression tests proving new_game copies template files, registers game asset roots, and refreshes generated VS Code project entries without touching the real repository.",
-            "role": "new game creation tests",
-            "tags": [
-              "bootstrap",
-              "test"
-            ]
-          },
-          {
-            "id": "bootstrap:new-template-test",
-            "kind": "test",
-            "path": "ai_studio/bootstrap/new_template.test.mjs",
-            "title": "new_template.test.mjs",
-            "description": "Regression tests proving new_template copies template files, registers template asset roots, and refreshes generated VS Code project entries without touching the real repository.",
-            "role": "new template creation tests",
-            "tags": [
-              "bootstrap",
-              "test",
-              "template"
-            ]
-          },
-          {
-            "id": "bootstrap:vscode-projects",
-            "kind": "tool",
-            "path": "ai_studio/bootstrap/vscode_projects.mjs",
+            "path": "ai_studio/dev_environment/vscode_projects.mjs",
             "title": "vscode_projects.mjs",
-            "description": "Generates .vscode/tasks.json and .vscode/launch.json from registered templates and games so VS Code can build packs, build games, and launch each project explicitly.",
+            "description": "Generates .vscode/tasks.json and .vscode/launch.json from registered templates and games so VS Code can build packs, build games, and launch each playable project explicitly.",
             "role": "VS Code project entry generator",
             "tags": [
-              "bootstrap",
+              "dev-environment",
               "vscode",
               "build",
               "game-run"
             ]
           },
           {
-            "id": "bootstrap:vscode-projects-test",
+            "id": "dev-environment:vscode-projects-test",
             "kind": "test",
-            "path": "ai_studio/bootstrap/vscode_projects.test.mjs",
+            "path": "ai_studio/dev_environment/vscode_projects.test.mjs",
             "title": "vscode_projects.test.mjs",
             "description": "Regression tests for generated VS Code tasks and launch configurations from template/game registries.",
             "role": "VS Code project entry generator tests",
             "tags": [
-              "bootstrap",
+              "dev-environment",
               "vscode",
               "test"
             ]
           },
           {
-            "id": "bootstrap:export-base",
-            "kind": "tool",
-            "path": "ai_studio/bootstrap/export_base.mjs",
-            "title": "export_base.mjs",
-            "description": "Exports the reusable AI Studio base into another project and regenerates agent surfaces in the target.",
-            "role": "portable AI Studio export command",
+            "id": "dev-environment:vscode-tasks",
+            "kind": "generated-output",
+            "path": ".vscode/tasks.json",
+            "title": ".vscode/tasks.json",
+            "description": "Generated VS Code task list for registered templates and games. Regenerate with ai_studio/dev_environment/vscode_projects.mjs.",
+            "role": "generated VS Code tasks",
             "tags": [
-              "bootstrap",
-              "export"
+              "generated",
+              "vscode",
+              "dev-environment"
             ]
           },
           {
-            "id": "bootstrap:export-base-test",
-            "kind": "test",
-            "path": "ai_studio/bootstrap/export_base.test.mjs",
-            "title": "export_base.test.mjs",
-            "description": "Regression test proving portable export includes AI Studio, taskboard, quality, asset modules, skills, and generated agent-surface checks.",
-            "role": "portable export tests",
+            "id": "dev-environment:vscode-launch",
+            "kind": "generated-output",
+            "path": ".vscode/launch.json",
+            "title": ".vscode/launch.json",
+            "description": "Generated VS Code launch configurations for registered templates and games. Regenerate with ai_studio/dev_environment/vscode_projects.mjs.",
+            "role": "generated VS Code launch configs",
             "tags": [
-              "bootstrap",
-              "export",
-              "test"
-            ]
-          },
-          {
-            "id": "bootstrap:template-doc",
-            "kind": "doc",
-            "path": "ai_studio/bootstrap/TEMPLATE.md",
-            "title": "TEMPLATE.md",
-            "description": "Human explanation of the template copy model, reuse tiers, feature packs, seed shell, and game-only boundaries.",
-            "role": "template copy model documentation",
-            "tags": [
-              "bootstrap",
-              "template",
-              "docs"
-            ]
-          }
-        ]
-      },
-      {
-        "id": "game-project",
-        "title": "Game Project",
-        "subtitle": "active game and playable iteration",
-        "kind": "module",
-        "moduleId": "game-project",
-        "color": "#2563eb",
-        "description": "AI Studio module for games/<game-id>/ routing, new prototype kickoff, compact pre-implementation context packs, playable feature iteration, and schema-first game state workflow.",
-        "tags": [
-          "game-project",
-          "context",
-          "prototype-kickoff",
-          "feature-iteration",
-          "state-management"
-        ],
-        "children": [
-          {
-            "id": "game-project:readme",
-            "kind": "doc",
-            "path": "ai_studio/game_project/README.md",
-            "title": "README.md",
-            "description": "Game Project module contract: active-game routing, prototype kickoff, iteration context, and boundaries against bootstrap, taskboard, assets, and GDD/design ownership.",
-            "role": "game project module entrypoint",
-            "tags": [
-              "game-project",
-              "contract",
-              "source"
-            ]
-          },
-          {
-            "id": "game-project:new-prototype",
-            "kind": "tool",
-            "path": "ai_studio/game_project/new_prototype.mjs",
-            "title": "new_prototype.mjs",
-            "description": "Creates the first game design folder, taskboard epic/task, and startup gate context for a new prototype.",
-            "role": "new prototype kickoff command",
-            "tags": [
-              "game-project",
-              "prototype",
-              "taskboard"
-            ]
-          },
-          {
-            "id": "game-project:iteration-context",
-            "kind": "tool",
-            "path": "ai_studio/game_project/iteration_context.mjs",
-            "title": "iteration_context.mjs",
-            "description": "Builds a compact pre-implementation context pack for playable game work from games/<game-id>/, taskboard, project docs, and runtime sources.",
-            "role": "game iteration context command",
-            "tags": [
-              "game-project",
-              "context",
-              "game-work"
-            ]
-          },
-          {
-            "id": "game-project:feature-iteration",
-            "title": "Feature Iteration Workflow",
-            "subtitle": "small playable slices",
-            "kind": "workflow",
-            "path": "ai_studio/game_project/feature_iteration",
-            "description": "Workflow docs for implementing, validating, reviewing, and handing off small current-game playable feature increments.",
-            "role": "playable feature iteration workflow",
-            "tags": [
-              "game-project",
-              "feature-iteration",
-              "playable",
-              "workflow"
-            ],
-            "children": [
-              {
-                "id": "game-project:feature-iteration-readme",
-                "kind": "doc",
-                "path": "ai_studio/game_project/feature_iteration/README.md",
-                "title": "README.md",
-                "description": "Feature Iteration Workflow contract: use cases, flow, files, and module boundaries.",
-                "role": "feature iteration workflow entrypoint",
-                "tags": [
-                  "game-project",
-                  "feature-iteration",
-                  "contract"
-                ]
-              },
-              {
-                "id": "game-project:feature-iteration-cycle",
-                "kind": "doc",
-                "path": "ai_studio/game_project/feature_iteration/iteration_cycle.md",
-                "title": "iteration_cycle.md",
-                "description": "Playable iteration cycle: orient, choose one goal, write task packet, implement, validate, capture evidence, review, update state, and commit.",
-                "role": "playable iteration cycle",
-                "tags": [
-                  "game-project",
-                  "feature-iteration",
-                  "cycle"
-                ]
-              },
-              {
-                "id": "game-project:feature-iteration-gates",
-                "kind": "doc",
-                "path": "ai_studio/game_project/feature_iteration/playable_gates.md",
-                "title": "playable_gates.md",
-                "description": "Routing for reference-driven work, quality checks, runtime proof, build/release tasks, and prototype handoff evidence.",
-                "role": "playable feature gates",
-                "tags": [
-                  "game-project",
-                  "feature-iteration",
-                  "gates"
-                ]
-              }
-            ]
-          },
-          {
-            "id": "game-project:state-management",
-            "title": "State Management",
-            "subtitle": "schema-first game state",
-            "kind": "workflow",
-            "path": "ai_studio/game_project/state_management",
-            "description": "Workflow and generator for schema-first game state, generated C GameState APIs, JSON save/load, versioned migrations, fixtures, and DevAPI state commands.",
-            "role": "game state workflow and generator",
-            "tags": [
-              "game-project",
-              "state-management",
-              "workflow",
-              "tool"
-            ],
-            "children": [
-              {
-                "id": "game-project:state-management-readme",
-                "kind": "doc",
-                "path": "ai_studio/game_project/state_management/README.md",
-                "title": "README.md",
-                "description": "State Management module contract: use cases, files, commands, default schema/output routing, and skill surface.",
-                "role": "state management entrypoint",
-                "tags": [
-                  "game-project",
-                  "state-management",
-                  "contract"
-                ]
-              },
-              {
-                "id": "game-project:state-contract",
-                "kind": "doc",
-                "path": "ai_studio/game_project/state_management/contract.md",
-                "title": "contract.md",
-                "description": "State contract for documents, save envelope, logical storage keys, generated API, dirty/autosave behavior, migrations, and domain actions.",
-                "role": "state contract",
-                "tags": [
-                  "game-project",
-                  "state-management",
-                  "contract"
-                ]
-              },
-              {
-                "id": "game-project:state-workflow",
-                "kind": "doc",
-                "path": "ai_studio/game_project/state_management/workflow.md",
-                "title": "workflow.md",
-                "description": "Schema-first state change workflow: inspect schema, change generator/template, regenerate, add fixtures/migrations, and prove save/load behavior.",
-                "role": "state workflow",
-                "tags": [
-                  "game-project",
-                  "state-management",
-                  "workflow"
-                ]
-              },
-              {
-                "id": "game-project:state-review",
-                "kind": "doc",
-                "path": "ai_studio/game_project/state_management/review.md",
-                "title": "review.md",
-                "description": "State management review checklist and failure signals for schema, generated API, migrations, DevAPI, fixtures, and saves.",
-                "role": "state review checklist",
-                "tags": [
-                  "game-project",
-                  "state-management",
-                  "review"
-                ]
-              },
-              {
-                "id": "game-project:state-generator",
-                "kind": "tool",
-                "path": "ai_studio/game_project/state_management/generate_state.py",
-                "title": "generate_state.py",
-                "description": "Generates C GameState headers/sources and DevAPI glue from a versioned JSON state schema.",
-                "role": "state code generator",
-                "tags": [
-                  "game-project",
-                  "state-management",
-                  "generator"
-                ]
-              },
-              {
-                "id": "game-project:state-generator-template",
-                "kind": "doc",
-                "path": "ai_studio/game_project/state_management/game_state.c.in",
-                "title": "game_state.c.in",
-                "description": "Template used by the state generator for generated `game_state.c` source output.",
-                "role": "state generator template",
-                "tags": [
-                  "game-project",
-                  "state-management",
-                  "template"
-                ]
-              },
-              {
-                "id": "game-project:state-generator-test",
-                "kind": "test",
-                "path": "ai_studio/game_project/state_management/generate_state_test.py",
-                "title": "generate_state_test.py",
-                "description": "Regression tests for the state generator's schema-to-C output, id stability, reserved fields, and variants.",
-                "role": "state generator tests",
-                "tags": [
-                  "game-project",
-                  "state-management",
-                  "test"
-                ]
-              }
-            ]
-          },
-          {
-            "id": "game-project:nt-game-feature-iteration-skill",
-            "kind": "skill",
-            "path": ".codex/skills/nt-game-feature-iteration/SKILL.md",
-            "title": "nt-game-feature-iteration",
-            "description": "Skill surface for implementing one focused playable game feature change with validation and evidence.",
-            "role": "playable feature iteration skill",
-            "tags": [
-              "skill",
-              "game-project",
-              "feature-iteration"
-            ]
-          },
-          {
-            "id": "game-project:nt-game-state-management-skill",
-            "kind": "skill",
-            "path": ".codex/skills/nt-game-state-management/SKILL.md",
-            "title": "nt-game-state-management",
-            "description": "Skill surface for schema-first game state work: generated GameState APIs, save/load, migrations, DevAPI state commands, fixtures, and state review.",
-            "role": "state management skill",
-            "tags": [
-              "skill",
-              "game-project",
-              "state-management"
-            ]
-          },
-          {
-            "id": "game-project:tests",
-            "kind": "test",
-            "path": "ai_studio/game_project/game_project.test.mjs",
-            "title": "game_project.test.mjs",
-            "description": "Regression tests for new prototype kickoff, active-game detection, startup gates, and generated iteration context packs.",
-            "role": "game project tests",
-            "tags": [
-              "game-project",
-              "test"
+              "generated",
+              "vscode",
+              "dev-environment"
             ]
           }
         ]
@@ -795,6 +528,33 @@
                   "skill-reference"
                 ]
               }
+            ]
+          },
+          {
+            "id": "runtime-automation:nt-game-feature-iteration-skill",
+            "kind": "skill",
+            "path": ".codex/skills/nt-game-feature-iteration/SKILL.md",
+            "title": "nt-game-feature-iteration",
+            "description": "Skill router for one focused current-game playable feature increment. It reads the owning games/<game-id>/ folder and routes runtime proof to Runtime Automation.",
+            "role": "playable feature iteration skill",
+            "tags": [
+              "runtime-automation",
+              "skill",
+              "game-work"
+            ]
+          },
+          {
+            "id": "runtime-automation:nt-game-state-management-skill",
+            "kind": "skill",
+            "path": ".codex/skills/nt-game-state-management",
+            "title": "nt-game-state-management",
+            "description": "Skill bundle for schema-first game state work. It owns the generator scripts and state references; game-specific schemas and generated files stay inside games/<game-id>/ or templates/template/.",
+            "role": "game state management skill bundle",
+            "tags": [
+              "runtime-automation",
+              "skill",
+              "state-management",
+              "game-work"
             ]
           },
           {
@@ -990,34 +750,6 @@
             "tags": [
               "generated-surface",
               "check-drift"
-            ]
-          },
-          {
-            "id": "core-harness:vscode-tasks",
-            "kind": "tool",
-            "path": ".vscode/tasks.json",
-            "title": ".vscode/tasks.json",
-            "description": "Generated VS Code task entrypoint for registered templates and games: configure native builds, build game asset packs, build game executables, run games, and capture settings screenshots.",
-            "role": "local IDE build/run task entrypoint",
-            "tags": [
-              "core",
-              "vscode",
-              "build",
-              "game-run"
-            ]
-          },
-          {
-            "id": "core-harness:vscode-launch",
-            "kind": "tool",
-            "path": ".vscode/launch.json",
-            "title": ".vscode/launch.json",
-            "description": "Generated VS Code Run and Debug entries for each registered template and game, with preLaunchTask wired to the matching native build task.",
-            "role": "local IDE launch entrypoint",
-            "tags": [
-              "core",
-              "vscode",
-              "launch",
-              "game-run"
             ]
           },
           {
@@ -1371,28 +1103,13 @@
                 "subtitle": "session retrospective instructions",
                 "kind": "skill",
                 "color": "#0e7490",
-                "path": "ai_studio/core_harness/profiling/skills/nt-chat-session-reflection/SKILL.md",
-                "description": "Canonical skill instructions for full retrospective analysis of long AI-assisted sessions using durable evidence, profiling telemetry, and chat/session context.",
-                "role": "profiling-owned full session reflection skill",
+                "path": ".codex/skills/nt-chat-session-reflection/SKILL.md",
+                "description": "Skill instructions for full retrospective analysis of long AI-assisted sessions using durable evidence, profiling telemetry, and chat/session context.",
+                "role": "full session reflection skill",
                 "tags": [
                   "skill",
                   "reflection",
                   "profiling"
-                ],
-                "children": [
-                  {
-                    "id": "core-harness:profiling-codex-skill-entrypoint",
-                    "kind": "config",
-                    "path": ".codex/skills/nt-chat-session-reflection/SKILL.md",
-                    "title": ".codex skill entrypoint",
-                    "description": "Codex-discoverable compatibility entrypoint that points to the canonical profiling-owned skill instructions.",
-                    "role": "Codex skill compatibility entrypoint",
-                    "tags": [
-                      "compatibility",
-                      "codex",
-                      "skill"
-                    ]
-                  }
                 ]
               },
               {
@@ -1651,11 +1368,11 @@
       {
         "id": "module:taskboard",
         "title": "Taskboard",
-        "subtitle": "tasks/ + ai_studio/taskboard",
+        "subtitle": "ai_studio/taskboard",
         "kind": "module",
         "moduleId": "taskboard",
         "color": "#2563eb",
-        "description": "Durable project work state: tasks, epics, context digest, and task-store validation.",
+        "description": "Durable project work state: projects, epics, tasks, context digest, and task-store validation.",
         "tags": [
           "state",
           "tasks",
@@ -1666,7 +1383,7 @@
             "id": "taskboard:readme",
             "kind": "doc",
             "path": "ai_studio/taskboard/README.md",
-            "description": "Taskboard contract for task files, statuses, task lifecycle, durable context, and task CLI usage.",
+            "description": "Taskboard contract for project, epic, and task files, statuses, durable context, and task CLI usage.",
             "role": "task store source contract",
             "tags": [
               "source",
@@ -1677,7 +1394,7 @@
             "id": "taskboard:reference",
             "kind": "doc",
             "path": "ai_studio/taskboard/task-store-reference.md",
-            "description": "Detailed task-store reference for fields, lifecycle, and maintenance rules.",
+            "description": "Detailed task-store reference for project, epic, task fields, lifecycle, and maintenance rules.",
             "role": "task store reference",
             "tags": [
               "reference"
@@ -1700,7 +1417,7 @@
             "id": "taskboard:cli",
             "kind": "tool",
             "path": "ai_studio/taskboard/cli.mjs",
-            "description": "Public Taskboard CLI for listing, context digest, task create/update, and task-store validation.",
+            "description": "Public Taskboard CLI for listing, context digest, project/epic/task create/update, and task-store validation.",
             "role": "taskboard public CLI",
             "tags": [
               "public-api",
@@ -1711,19 +1428,43 @@
             "id": "taskboard:lib",
             "kind": "tool",
             "path": "ai_studio/taskboard/lib.mjs",
-            "description": "Taskboard implementation library: parsing, validation, context digest, task mutation, and task-state checks used by orchestration.",
-            "role": "taskboard internal library",
+            "description": "Small public Taskboard store facade for root lookup, list/find, project ensure/create, epic/task create/update, payload builders, and validation.",
+            "role": "taskboard public store API",
+            "tags": [
+              "public-api",
+              "state",
+              "workflow-support"
+            ]
+          },
+          {
+            "id": "taskboard:store",
+            "kind": "tool",
+            "path": "ai_studio/taskboard/store.mjs",
+            "description": "Single durable markdown store implementation for constants, path layout, frontmatter parsing, templates, list/create/ensure/update/archive, lookup, stable JSON payloads, and validation.",
+            "role": "taskboard durable store and validation",
             "tags": [
               "internal",
               "state",
-              "workflow-support"
+              "mutation",
+              "validation"
+            ]
+          },
+          {
+            "id": "taskboard:items",
+            "kind": "folder",
+            "path": "ai_studio/taskboard/items",
+            "description": "Canonical Taskboard markdown store for projects, epics, active tasks, and archived tasks.",
+            "role": "taskboard state store",
+            "tags": [
+              "data",
+              "state"
             ]
           },
           {
             "id": "taskboard:api",
             "kind": "tool",
             "path": "ai_studio/taskboard/api.mjs",
-            "description": "Taskboard HTTP API adapter for board payloads and task/epic CRUD routes. Studio Shell mounts it but does not own the Taskboard domain contract.",
+            "description": "Taskboard HTTP API adapter for project/epic/task CRUD routes. Studio Shell mounts it but does not own the Taskboard domain contract.",
             "role": "taskboard browser API adapter",
             "tags": [
               "internal",
@@ -1785,7 +1526,7 @@
                     "kind": "ui-component",
                     "path": "ai_studio/taskboard/public/app.js",
                     "title": "app.js",
-                    "description": "Taskboard browser behavior for loading, editing, and rendering tasks through the shared Taskboard API.",
+                    "description": "Taskboard browser behavior for loading, filtering, editing, and rendering project-scoped tasks through the shared Taskboard API.",
                     "role": "taskboard browser behavior",
                     "tags": [
                       "ui",
@@ -1813,7 +1554,7 @@
             "id": "taskboard:test",
             "kind": "test",
             "path": "ai_studio/taskboard/tests/taskboard.test.mjs",
-            "description": "Taskboard regression tests for parsing, commands, context, validation, and task lifecycle behavior.",
+            "description": "Taskboard regression tests for parsing, commands, context, project references, validation, API routes, and task lifecycle behavior.",
             "role": "taskboard tests",
             "tags": [
               "test"
@@ -2322,7 +2063,7 @@
                     "kind": "config",
                     "path": "games/games.json",
                     "title": "games.json",
-                    "description": "Explicit registry of game-local asset folders shown by Asset Viewer. Lives under games/ and is updated by ai_studio/bootstrap/new_game.mjs.",
+                    "description": "Explicit registry of game-local asset folders shown by Asset Viewer. Lives under games/ and is updated by games/new_game.mjs.",
                     "role": "registered game asset source data",
                     "tags": [
                       "assets",
@@ -3630,7 +3371,7 @@
         "moduleId": "game_design",
         "color": "#7c3aed",
         "path": "ai_studio/game_design",
-        "description": "Reviewed AI Studio game-design workflow module. Owns primary GDD workflow, source routing, and reusable design knowledge workflow docs; durable design content remains in gamedev_knowledge/.",
+        "description": "Reviewed AI Studio game-design workflow module. Owns primary GDD workflow, source routing, and knowledge workflow docs; shared reusable knowledge remains in ai_studio/game_design/knowledge_base/ while each game owns private design knowledge under games/<game-id>/design/knowledge/.",
         "role": "game-design workflow module",
         "tags": [
           "game-design",
@@ -3644,11 +3385,24 @@
             "kind": "doc",
             "path": "ai_studio/game_design/README.md",
             "title": "README.md",
-            "description": "Game Design module contract: workflow ownership and boundary with durable gamedev_knowledge content.",
+            "description": "Game Design module contract: workflow ownership and boundary between shared reusable knowledge and private game knowledge.",
             "role": "game-design module entrypoint",
             "tags": [
               "source",
               "contract"
+            ]
+          },
+          {
+            "id": "game-design:knowledge-base",
+            "kind": "dir",
+            "path": "ai_studio/game_design/knowledge_base",
+            "title": "knowledge_base/",
+            "description": "Shared reusable game-development knowledge base: reusable knowledge pages and source notes. Per-game design knowledge remains under games/<game-id>/design/knowledge/.",
+            "role": "shared reusable game-development knowledge base",
+            "tags": [
+              "knowledge",
+              "sources",
+              "game-design"
             ]
           },
           {
@@ -3820,7 +3574,7 @@
                 "kind": "doc",
                 "path": "ai_studio/game_design/knowledge/source_routing.md",
                 "title": "source_routing.md",
-                "description": "Routing rules for reusable source notes, reusable knowledge, game design folders, tasks, and temporary scratch data.",
+                "description": "Routing rules for reusable source notes, reusable knowledge, private game knowledge, game design folders, tasks, and temporary scratch data.",
                 "role": "design source routing rules",
                 "tags": [
                   "sources",
@@ -3856,7 +3610,7 @@
                 "kind": "doc",
                 "path": "ai_studio/game_design/knowledge/templates.md",
                 "title": "templates.md",
-                "description": "Templates for reusable source notes, reusable knowledge pages, project source notes, and source review reports.",
+                "description": "Templates for reusable source notes, reusable knowledge pages, game source notes, and source review reports.",
                 "role": "design knowledge templates",
                 "tags": [
                   "templates"

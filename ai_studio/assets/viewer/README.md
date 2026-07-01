@@ -29,7 +29,7 @@ The gallery header lets the user choose which source to display:
 The generated static-gallery command remains for review exports and standalone
 sharing, but it is not the normal browser entry.
 
-New games created through `ai_studio/bootstrap/new_game.mjs --id <game-id>` are
+New games created through `games/new_game.mjs --id <game-id>` are
 registered automatically as `<game-id>/assets`. Asset Viewer does not scan root
 folders to guess games.
 

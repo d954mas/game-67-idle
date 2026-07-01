@@ -9,9 +9,8 @@ Load this for command-bus details when driving a live game through DevAPI.
   `command.describe`.
 - Game-specific commands belong to the game. Runtime Automation only supplies
   clients, capture helpers, and proof tooling.
-- State code generation belongs to
-  `ai_studio/game_project/state_management/`; Runtime Automation only drives
-  the live DevAPI surface.
+- State code generation belongs to `.codex/skills/nt-game-state-management/`;
+  Runtime Automation only drives the live DevAPI surface.
 
 ## Wire Shape
 

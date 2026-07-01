@@ -17,7 +17,7 @@ import json
 import os
 
 # Reusable state categories every game adapts to its own loop. See
-# gamedev_knowledge/knowledge/live_state_acceptance_matrix.md.
+# ai_studio/game_design/knowledge_base/knowledge/live_state_acceptance_matrix.md.
 STANDARD_STATES = [
     "first_screen",
     "primary_action_ready",

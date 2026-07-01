@@ -71,7 +71,9 @@ Reviewed profiling files:
 - `ai_studio/core_harness/profiling/hook_record.mjs`
 - `ai_studio/core_harness/profiling/hook_record_fast.c`
 - `ai_studio/core_harness/profiling/tests/profiling.test.mjs`
-- `ai_studio/core_harness/profiling/skills/nt-chat-session-reflection/SKILL.md`
+
+The reflection skill that consumes profiling output lives in
+`.codex/skills/nt-chat-session-reflection/SKILL.md`.
 
 ## Validation Module
 

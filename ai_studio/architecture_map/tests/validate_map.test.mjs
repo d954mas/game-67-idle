@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { createValidationReport, hasStrictFailures } from "../validate_map.mjs";
+import { collectScannedPaths, createValidationReport, hasStrictFailures } from "../validate_map.mjs";
 
 function write(root, rel, text = "") {
   const abs = join(root, rel);
@@ -202,23 +202,76 @@ test("child-directory scan roots report new folders without scanning their files
   assert.deepEqual(report.issues.unmappedOutsideAiStudio, [{ path: "templates/new-template" }]);
 });
 
-test("repo tree maps game, template, feature, and knowledge folders without listing their files", () => {
+test("root-file and child-directory scan roots report workspace root commands", () => {
+  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+  mkdirSync(join(root, "ai_studio"), { recursive: true });
+  write(
+    root,
+    "ai_studio/tree.json",
+    JSON.stringify({
+      schema: 1,
+      root: {
+        id: "studio",
+        title: "studio",
+        children: [
+          {
+            id: "templates-root",
+            kind: "dir",
+            path: "templates",
+            coverage: "self",
+            description: "Template container.",
+            children: [
+              {
+                id: "templates-base",
+                kind: "dir",
+                path: "templates/base",
+                description: "Mapped template folder.",
+              },
+            ],
+          },
+        ],
+      },
+    }),
+  );
+  write(root, "templates/base/README.md", "# mapped template");
+  write(root, "templates/new_template.mjs", "console.log('new template');");
+  write(root, "templates/new-template/README.md", "# unmapped template");
+
+  const report = createValidationReport({
+    repoRoot: root,
+    scanRoots: [{ path: "templates", mode: "root-files-and-child-directories" }],
+  });
+
+  assert.deepEqual(collectScannedPaths(root, [{ path: "templates", mode: "root-files-and-child-directories" }]), [
+    "templates/base",
+    "templates/new_template.mjs",
+    "templates/new-template",
+  ]);
+  assert.deepEqual(report.issues.unmappedOutsideAiStudio, [
+    { path: "templates/new_template.mjs" },
+    { path: "templates/new-template" },
+  ]);
+});
+
+test("repo tree maps game, template, feature, and game-design knowledge ownership without listing their files", () => {
   const nodes = collectNodes(loadRepoTreeRoot());
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const paths = nodes.map((node) => node.path).filter(Boolean);
 
   assert.equal(byId.get("workspace:templates")?.path, "templates");
   assert.equal(byId.get("workspace:templates")?.coverage, "self");
+  assert.equal(byId.get("workspace:templates-readme")?.path, "templates/README.md");
   assert.equal(byId.get("workspace:template:template")?.path, "templates/template");
   assert.equal(byId.get("workspace:features")?.path, "features");
   assert.equal(byId.get("workspace:features")?.kind, "group");
   assert.equal(byId.get("workspace:features")?.coverage, "self");
-  assert.equal(byId.has("workspace:features-readme"), false);
-  assert.equal(byId.get("workspace:gamedev-knowledge")?.path, "gamedev_knowledge");
+  assert.equal(byId.get("workspace:features-readme")?.path, "features/README.md");
+  assert.equal(byId.get("game-design:knowledge-base")?.path, "ai_studio/game_design/knowledge_base");
   assert.equal(byId.get("workspace:games")?.path, "games");
   assert.equal(byId.get("workspace:games")?.coverage, "self");
+  assert.equal(byId.get("workspace:games-readme")?.path, "games/README.md");
 
   assert.deepEqual(paths.filter((path) => path.startsWith("templates/template/")), []);
-  assert.deepEqual(paths.filter((path) => path === "features/README.md" || (path.startsWith("features/") && path.split("/").length > 2)), []);
+  assert.deepEqual(paths.filter((path) => path.startsWith("features/") && path !== "features/README.md" && path.split("/").length > 2), []);
   assert.deepEqual(paths.filter((path) => path.startsWith("games/") && path.split("/").length > 2), []);
 });

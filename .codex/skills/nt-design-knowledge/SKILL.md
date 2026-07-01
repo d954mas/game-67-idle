@@ -1,6 +1,6 @@
 ---
 name: nt-design-knowledge
-description: "Use when adding, reviewing, reorganizing, or promoting game-design research sources and reusable design knowledge: source notes, article/video/reference packet parsing, reusable `gamedev_knowledge/knowledge/` rules, project wiki routing, source hygiene review, knowledge index/log updates, or reference-backed design claims."
+description: "Use when adding, reviewing, reorganizing, or promoting game-design research sources and design knowledge: source notes, article/video/reference packet parsing, reusable `ai_studio/game_design/knowledge_base/knowledge/` rules, private `games/<game-id>/design/knowledge/` routing, source hygiene review, knowledge index/log updates, or reference-backed design claims."
 ---
 
 # NT Design Knowledge
@@ -12,7 +12,7 @@ Canonical workflow docs live in `ai_studio/game_design/knowledge/`.
 ## Load Only What Applies
 
 - `ai_studio/game_design/knowledge/source_routing.md`: where source notes,
-  reusable knowledge, project wiki material, tasks, and temp artifacts belong.
+  reusable knowledge, private game knowledge, tasks, and temp artifacts belong.
 - `ai_studio/game_design/knowledge/source_intake_promotion.md`: how to parse
   sources and promote conclusions without losing evidence labels.
 - `ai_studio/game_design/knowledge/reference_work_review.md`: how to handle a
@@ -25,11 +25,12 @@ Canonical workflow docs live in `ai_studio/game_design/knowledge/`.
 ## Default Workflow
 
 1. Read `ai_studio/game_design/knowledge/README.md`.
-2. Route before editing: reusable source shelf, reusable knowledge, project wiki,
-   task state, or temp scratch.
+2. Route before editing: reusable source shelf, reusable knowledge, private game
+   knowledge, task state, or temp scratch.
 3. Add or update source notes before conclusions when external evidence matters.
-4. Keep reusable principles in `gamedev_knowledge/knowledge/`; current-game facts stay
-   in the project wiki.
+4. Keep reusable principles in `ai_studio/game_design/knowledge_base/knowledge/`; current-game facts
+   stay in `games/<game-id>/design/knowledge/` or other focused files under
+   `games/<game-id>/design/`.
 5. Link conclusions back to source notes, update index/log files when
    discoverability changes, and state evidence gaps.
 

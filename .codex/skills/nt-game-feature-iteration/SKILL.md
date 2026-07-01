@@ -1,6 +1,6 @@
 ---
 name: nt-game-feature-iteration
-description: Use when implementing, changing, debugging, or validating a playable game feature: gameplay mechanics, controls, camera, UI flow, state, progression, balance, engine integration, prototype slice, build/run/debug tasks, release packaging, or CI for a current game.
+description: "Use when implementing, changing, debugging, or validating a playable game feature: gameplay mechanics, controls, camera, UI flow, state, progression, balance, engine integration, prototype slice, build/run/debug tasks, release packaging, or CI for a current game."
 ---
 
 # NT Game Feature Iteration
@@ -9,18 +9,13 @@ Use this skill as a thin router for small, verified playable increments.
 
 ## Start
 
-1. Read `ai_studio/game_project/feature_iteration/README.md`.
-2. Read `games/<game-id>/` only when the task is about a specific current game.
-3. Run `node ai_studio/game_project/iteration_context.mjs` when the work needs
-   compact current-game implementation context.
-4. Select one player-visible goal and one primary runtime/proof target.
+1. Read the explicit `games/<game-id>/` folder for the current game.
+2. Use `node ai_studio/taskboard/cli.mjs context --json` only when durable task
+   state is needed.
+3. Select one player-visible goal and one primary runtime/proof target.
 
 ## Routing
 
-- For the iteration loop, use
-  `ai_studio/game_project/feature_iteration/iteration_cycle.md`.
-- For proof, quality, build, named references, and handoff gates, use
-  `ai_studio/game_project/feature_iteration/playable_gates.md`.
 - For concept/GDD/source-of-truth changes, use `nt-primary-gdd`.
 - For reference research or reusable design knowledge, use `nt-design-knowledge`.
 - For quality checks, use `nt-quality-checks`.

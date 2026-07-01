@@ -1,7 +1,7 @@
 # Template (game starter)
 
 The minimal runnable game every new game is copied from. Spec + reuse model:
-`../../ai_studio/bootstrap/TEMPLATE.md`.
+`../TEMPLATE.md`.
 
 Layout (decomposition the template teaches by example — no god-file):
 
@@ -18,6 +18,8 @@ Layout (decomposition the template teaches by example — no god-file):
       game_audio.*, game_devapi_ui.*, game_storage.*  seed infra.
     assets/shaders/     common/ + slug_text + sprite + mesh_inst.
     state/              game-state schema (codegen source).
+    design/             game-owned concept, GDD, private knowledge base, and
+                        structured design data scaffold.
 
 Status: starter shell (empty scene + text). Build wiring (`CMakeLists.txt` referencing
 `../../external/neotolis-engine`) and the full shell (settings panel + sliders + long-press

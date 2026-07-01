@@ -1,27 +1,44 @@
 #!/usr/bin/env node
 // Taskboard CLI for humans and agents.
 //
-//   node ai_studio/taskboard/cli.mjs list [--json] [--status s] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
+//   node ai_studio/taskboard/cli.mjs list [--json] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
 //   node ai_studio/taskboard/cli.mjs summary [--json] [--tasks-limit 5]
 //   node ai_studio/taskboard/cli.mjs show T0001 [--json]
-//   node ai_studio/taskboard/cli.mjs new task --title "..." [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
-//   node ai_studio/taskboard/cli.mjs new epic --title "..." [--status active]
-//   node ai_studio/taskboard/cli.mjs set T0001 --status doing [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
+//   node ai_studio/taskboard/cli.mjs new project --title "..." [--kind ai-studio|game|template|tooling|research|other] [--target ai_studio]
+//   node ai_studio/taskboard/cli.mjs new epic --title "..." [--project P001] [--status active]
+//   node ai_studio/taskboard/cli.mjs new task --title "..." [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
+//   node ai_studio/taskboard/cli.mjs set T0001 --status doing [--project P001] [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node ai_studio/taskboard/cli.mjs context [--json] [--tasks-limit 25]
 //   node ai_studio/taskboard/cli.mjs validate [--json]
+//   node ai_studio/taskboard/cli.mjs help
 //
 // Agents: prefer `new` over hand-writing files so IDs never collide.
 
 import {
-  findRoot, listTasks, listEpics, findDoc, createTask, createEpic,
-  updateDoc, validateStoreDetailed, TASK_STATUSES,
+  agentContextPayload, agentEpicRow, agentProjectRow, agentTaskRow,
+  findRoot, listTasks, listEpics, listProjects, findDoc, createTask, createEpic, createProject,
+  updateDoc, validateStoreDetailed,
 } from "./lib.mjs";
-import { agentContextPayload, agentEpicRow, agentTaskRow } from "./api.mjs";
+import { ACTIVE_TASK_STATUSES, idNumber, priorityRank, TASK_STATUSES, taskRank } from "./store.mjs";
 import { relative } from "node:path";
 import { fail } from "../core_harness/tool_lib/cli.mjs";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
+
+const USAGE = `usage: cli.mjs <list|summary|context|show|new|set|validate|help> ...
+
+Commands:
+  list [--json] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
+  summary [--json] [--tasks-limit 5]
+  context [--json] [--tasks-limit 25]
+  show <P###|E###|T####> [--json]
+  new project --title "..." [--kind ai-studio|game|template|tooling|research|other] [--target path] [--tags a,b]
+  new epic --title "..." [--project P001] [--status active] [--tags a,b]
+  new task --title "..." [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
+  set <id> [--status s] [--project P001] [--epic E001] [--priority P1] [--title "..."] [--log "..."] [--json]
+  validate [--json]
+`;
 
 function parseArgs(args) {
   const out = { _: [] };
@@ -46,7 +63,9 @@ function shortRow(d) {
   const f = d.fields;
   const tags = (f.tags || []).length ? ` [${f.tags.join(",")}]` : "";
   const archive = d.archived ? " (archive)" : "";
-  return `${f.id}  ${String(f.status).padEnd(7)} ${String(f.priority || "").padEnd(3)} ${String(f.epic || "-").padEnd(5)} ${f.title}${tags}${archive}`;
+  const project = d.kind === "project" ? (f.kind || "-") : (f.project || "-");
+  const epic = d.kind === "task" ? (f.epic || "-") : "-";
+  return `${f.id}  ${String(f.status).padEnd(7)} ${String(f.priority || "").padEnd(3)} ${String(project).padEnd(8)} ${String(epic).padEnd(5)} ${f.title}${tags}${archive}`;
 }
 
 function numberArg(value, fallback) {
@@ -59,6 +78,10 @@ function writeJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 }
 
+function printUsage() {
+  process.stdout.write(USAGE);
+}
+
 function statusCounts(tasks) {
   const counts = new Map();
   for (const task of tasks) {
@@ -68,28 +91,14 @@ function statusCounts(tasks) {
   return TASK_STATUSES.map((status) => `${status}:${counts.get(status) || 0}`).join(" ");
 }
 
-function priorityRank(priority) {
-  return { P0: 0, P1: 1, P2: 2, P3: 3 }[priority] ?? 9;
-}
-
-function taskRank(task) {
-  const statusRank = { doing: 0, todo: 1, backlog: 2, review: 3, idea: 4, done: 5, dropped: 6 }[task.fields.status] ?? 9;
-  return statusRank * 10 + priorityRank(task.fields.priority);
-}
-
-function idNumber(task) {
-  const match = String(task.fields.id || "").match(/\d+/);
-  return match ? Number(match[0]) : 0;
-}
-
-function currentWorkTasks(root) {
-  const tasks = listTasks(root).filter((task) => ["backlog", "todo", "doing", "review"].includes(task.fields.status));
+function currentWorkTasks(tasks) {
+  tasks = tasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.fields.status));
   tasks.sort((a, b) => taskRank(a) - taskRank(b) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)));
   return tasks;
 }
 
-function reviewTasks(root) {
-  const tasks = listTasks(root).filter((task) => task.fields.status === "review");
+function reviewTasks(tasks) {
+  tasks = tasks.filter((task) => task.fields.status === "review");
   tasks.sort((a, b) => priorityRank(a.fields.priority) - priorityRank(b.fields.priority) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)));
   return tasks;
 }
@@ -109,12 +118,13 @@ function appendCurrentWork(lines, tasks, limit, overflowCommand) {
 
 function renderSummary(root, options) {
   const tasksLimit = numberArg(options["tasks-limit"], 5);
-  const openTasks = currentWorkTasks(root);
-  const reviewCount = reviewTasks(root).length;
+  const allTasks = listTasks(root);
+  const openTasks = currentWorkTasks(allTasks);
+  const reviewCount = reviewTasks(allTasks).length;
   const lines = [];
   lines.push("# Taskboard Summary");
   lines.push("");
-  lines.push(`active_task_counts: ${statusCounts(listTasks(root))}`);
+  lines.push(`active_task_counts: ${statusCounts(allTasks)}`);
   lines.push(`open_work_items: ${openTasks.length}`);
   lines.push(`review_tasks: ${reviewCount}`);
   appendCurrentWork(lines, openTasks, tasksLimit, "node ai_studio/taskboard/cli.mjs context --json");
@@ -135,12 +145,13 @@ function renderSummary(root, options) {
 
 function renderContext(root, options) {
   const tasksLimit = numberArg(options["tasks-limit"], 25);
-  const tasks = currentWorkTasks(root);
+  const allTasks = listTasks(root);
+  const tasks = currentWorkTasks(allTasks);
 
   const lines = [];
   lines.push("# Current Context Digest");
   lines.push("");
-  lines.push(`active_task_counts: ${statusCounts(listTasks(root))}`);
+  lines.push(`active_task_counts: ${statusCounts(allTasks)}`);
   appendCurrentWork(lines, tasks, tasksLimit, "node ai_studio/taskboard/cli.mjs list --json");
   lines.push("");
 
@@ -162,15 +173,23 @@ function renderContext(root, options) {
 
 const args = parseArgs(rest);
 
+if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") {
+  printUsage();
+  process.exit(0);
+}
+
 switch (cmd) {
   case "list": {
     const hidden = new Set(args.all ? [] : ["idea", "done", "dropped"]);
     if (args.ideas) hidden.delete("idea");
     if (args.review) hidden.delete("review");
     if (args.status) hidden.clear();
+    const projects = listProjects(root);
+    const epics = listEpics(root);
     const tasks = listTasks(root, { includeArchive: args.archive === true }).filter((t) => {
       if (hidden.has(t.fields.status)) return false;
       if (args.status && t.fields.status !== args.status) return false;
+      if (args.project && t.fields.project !== args.project) return false;
       if (args.epic && t.fields.epic !== args.epic) return false;
       if (args.tag && !(t.fields.tags || []).includes(args.tag)) return false;
       return true;
@@ -184,20 +203,28 @@ switch (cmd) {
         schema: "ai_studio.taskboard.list.v1",
         filters: {
           status: args.status || "",
+          project: args.project || "",
           epic: args.epic || "",
           tag: args.tag || "",
           includeArchive: args.archive === true,
           includeAllStatuses: args.all === true,
         },
         tasks: tasks.map((task) => agentTaskRow(root, task)),
-        epics: listEpics(root).map((epic) => agentEpicRow(root, epic)),
+        projects: projects.map((project) => agentProjectRow(root, project)),
+        epics: epics.map((epic) => agentEpicRow(root, epic)),
       });
       break;
     }
-    for (const e of listEpics(root)) {
-      if (!args.status && !args.tag && (!args.epic || args.epic === e.fields.id)) {
+    for (const p of projects) {
+      if (!args.status && !args.tag && !args.epic && (!args.project || args.project === p.fields.id)) {
+        if (!args.all && ["done", "dropped"].includes(p.fields.status)) continue;
+        console.log(`# ${p.fields.id} ${p.fields.title} (${p.fields.status}, ${p.fields.kind || "other"})`);
+      }
+    }
+    for (const e of epics) {
+      if (!args.status && !args.tag && (!args.project || args.project === e.fields.project) && (!args.epic || args.epic === e.fields.id)) {
         if (!args.all && !args.archive && ["done", "dropped"].includes(e.fields.status)) continue;
-        console.log(`# ${e.fields.id} ${e.fields.title} (${e.fields.status})`);
+        console.log(`# ${e.fields.id} ${e.fields.title} (${e.fields.status}, ${e.fields.project || "no-project"})`);
       }
     }
     for (const t of tasks) {
@@ -228,9 +255,17 @@ switch (cmd) {
     const id = args._[0] || fail("usage: show <id>");
     const doc = findDoc(root, id) || fail(`no doc with id ${id}`);
     if (args.json) {
+      let row;
+      if (doc.kind === "task") {
+        row = agentTaskRow(root, doc, { includeBody: true });
+      } else if (doc.kind === "epic") {
+        row = agentEpicRow(root, doc, { includeBody: true });
+      } else {
+        row = agentProjectRow(root, doc, { includeBody: true });
+      }
       writeJson({
         schema: "ai_studio.taskboard.doc.v1",
-        doc: doc.kind === "task" ? agentTaskRow(root, doc, { includeBody: true }) : { ...agentEpicRow(root, doc), body: doc.body },
+        doc: row,
       });
       break;
     }
@@ -243,23 +278,26 @@ switch (cmd) {
   }
   case "new": {
     const kind = args._[0];
-    if (kind !== "task" && kind !== "epic") fail("usage: new task|epic --title \"...\"");
+    if (!["project", "epic", "task"].includes(kind)) fail("usage: new project|epic|task --title \"...\"");
     if (!args.title) fail("--title is required");
     const input = {
       title: args.title,
       status: args.status,
+      project: args.project,
       epic: args.epic,
       priority: args.priority,
+      kind: args.kind,
+      target: args.target,
       tags: args.tags ? String(args.tags).split(",").map((s) => s.trim()).filter(Boolean) : [],
     };
-    const doc = kind === "task" ? createTask(root, input) : createEpic(root, input);
+    const doc = kind === "task" ? createTask(root, input) : (kind === "epic" ? createEpic(root, input) : createProject(root, input));
     console.log(`created ${doc.fields.id}: ${relative(root, doc.file)}`);
     break;
   }
   case "set": {
     const id = args._[0] || fail("usage: set <id> --field value ...");
     const fields = {};
-    for (const key of ["status", "epic", "priority", "title"]) {
+    for (const key of ["status", "project", "epic", "priority", "title", "target", "kind"]) {
       if (args[key] !== undefined) fields[key] = args[key];
     }
     if (args.tags !== undefined) {
@@ -309,8 +347,8 @@ switch (cmd) {
     break;
   }
   default:
-    console.log("usage: cli.mjs <list|context|show|new|set|validate> ...");
-    process.exit(cmd ? 1 : 0);
+    printUsage();
+    process.exit(1);
 }
 
 function remediationHint(problem) {
@@ -324,7 +362,13 @@ function remediationHint(problem) {
     return "add a short `title:` in frontmatter so list output is readable";
   }
   if (problem.includes("invalid status")) {
-    return "use task statuses idea/backlog/todo/doing/review/done/dropped or epic statuses idea/active/done/dropped";
+    return "use task statuses idea/backlog/todo/doing/review/done/dropped or project/epic statuses idea/active/done/dropped";
+  }
+  if (problem.includes("references missing project")) {
+    return "create the project first, fix the `project:` value, or clear it if the item is intentionally unassigned";
+  }
+  if (problem.includes("does not match epic")) {
+    return "make the task `project:` match its epic, or move the task to an epic in the intended project";
   }
   if (problem.includes("references missing epic")) {
     return "create the epic first, fix the task's `epic:` value, or clear it if the task is unassigned";
@@ -334,6 +378,9 @@ function remediationHint(problem) {
   }
   if (problem.includes("active epic needs")) {
     return "fill `## Goal`, `## In scope`, and `## Out of scope`, or move the epic back to `status: idea`";
+  }
+  if (problem.includes("active project needs")) {
+    return "fill `## Goal`, `## In scope`, and `## Out of scope`, or move the project back to `status: idea`";
   }
   return "";
 }

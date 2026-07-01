@@ -9,8 +9,14 @@ place.
 Register active game asset roots in
 `games/games.json`. This lets Asset Viewer and asset tools show game-local
 assets alongside template and library sources.
-Use `node ai_studio/bootstrap/new_game.mjs --id <game-id>` when creating a new
-game; it registers the game and refreshes VS Code build/run entries.
+Use `node games/new_game.mjs --id <game-id>` when creating a new
+game; it registers the game, creates/reuses a Taskboard project, lays down the
+game-owned `design/` scaffold, and refreshes VS Code build/run entries.
+
+Each game owns its private design knowledge base under
+`games/<game-id>/design/knowledge/`. Keep accepted game-specific facts, reference
+lessons, playtest findings, and build observations there. Keep reusable
+cross-game rules in the shared game-design knowledge base.
 
 `games/games.json` is not a record of which template a game came from. Template
 choice is only used at creation time because the template is copied.

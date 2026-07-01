@@ -3,9 +3,9 @@
 Primary GDD turns a loose game idea into a scoped, implementation-facing design
 package for one game.
 
-It owns workflow, not the game content itself. Current-game design files live in
-`games/<game-id>/design/`. Reusable design knowledge and source notes are
-routed through `ai_studio/game_design/knowledge/`.
+It owns workflow, not the game content itself. Current-game design files and the
+private game knowledge base live in `games/<game-id>/design/`. Reusable design
+knowledge and source notes are routed through `ai_studio/game_design/knowledge/`.
 
 ## Use
 
@@ -21,7 +21,7 @@ Do not use it as a general quality system, asset-storage system, or task store.
 
 ## Flow
 
-1. Locate or create `games/<game-id>/design/`.
+1. Locate or create `games/<game-id>/design/` with its private `knowledge/` base.
 2. Write a short Definition of Done: required artifacts, out of scope, accepted
    proof.
 3. Lock one gate at a time: concept, references, visual proof, first slice,

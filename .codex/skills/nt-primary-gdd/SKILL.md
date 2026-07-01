@@ -11,7 +11,8 @@ implementation-facing primary GDD.
 ## Start
 
 1. Read `ai_studio/game_design/gdd/README.md`.
-2. Locate or create the active game design folder under `games/<game-id>/design/`.
+2. Locate or create the active game design folder under `games/<game-id>/design/`,
+   including its private `knowledge/` base.
 3. State the current Definition of Done before writing broad docs.
 4. Load only the GDD reference file that matches the current gate.
 
@@ -29,11 +30,14 @@ implementation-facing primary GDD.
 - For reusable sources, knowledge promotion, or reference deconstruction, use
   `nt-design-knowledge` and `ai_studio/game_design/knowledge/README.md`.
 - For quality checks, use `nt-quality-checks` and `ai_studio/quality/README.md`.
-- For new prototype context tools, use `ai_studio/game_project/README.md`.
+- For creating a new game folder, use `games/new_game.mjs`;
+  project-specific design and private knowledge stay under
+  `games/<game-id>/design/`.
 
 ## Rules
 
-- Keep project-specific GDD material in `games/<game-id>/design/`.
+- Keep project-specific GDD material and private knowledge in
+  `games/<game-id>/design/`.
 - Do not store current-game facts, balance, screenshots, or task state in
   reusable knowledge files.
 - Separate reference, fake shot, prepared asset, runtime proof, and

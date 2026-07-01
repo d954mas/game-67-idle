@@ -1,4 +1,4 @@
-﻿---
+---
 name: nt-asset-image-generation
 description: "Use ONLY after a source-first search (shared asset library + free CC0/OFL sources) finds no fit, to generate real raster art for AI Studio asset workflows: fake shots, icon/source sheets, sprites, UI art, or source images for later asset prep. Generation is the last resort, not the default. Prefer Codex CLI imagegen via `codex exec` and `scripts/codex_imagegen.sh`; use Antigravity/agy CLI only as fallback. Owns raster creation only; nt-asset-workflow owns asset jobs/prep/storage handoff, and ai_studio/quality owns visual acceptance."
 ---

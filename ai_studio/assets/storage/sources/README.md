@@ -19,13 +19,13 @@ folders by scanning the repository root.
   sources. Game source data lives in `games/games.json`.
 
 `templates/templates.json` registers game template folders and their asset
-roots. `ai_studio/bootstrap/new_game.mjs --template <id>` resolves template ids
+roots. `games/new_game.mjs --template <id>` resolves template ids
 from this file.
 
 `games/games.json` registers game folders and their asset roots. It is not a
 template lineage/provenance file; after copy, each game owns its folder.
 
-New games created through `ai_studio/bootstrap/new_game.mjs` are registered in
+New games created through `games/new_game.mjs` are registered in
 `games/games.json`.
 
 ## Path Boundary

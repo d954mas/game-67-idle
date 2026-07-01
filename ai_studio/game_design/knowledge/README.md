@@ -9,17 +9,17 @@ material without mixing reusable knowledge with current-game facts.
 
 It owns workflow, not content:
 
-- reusable design knowledge content: `gamedev_knowledge/knowledge/`;
-- reusable source notes: `gamedev_knowledge/sources/`;
-- current-game design docs, references, screenshots, playtest notes, and GDD
-  facts: `games/<game-id>/design/`;
+- reusable design knowledge content: `ai_studio/game_design/knowledge_base/knowledge/`;
+- reusable source notes: `ai_studio/game_design/knowledge_base/sources/`;
+- current-game design docs, private knowledge, references, screenshots,
+  playtest notes, and GDD facts: `games/<game-id>/design/`;
 - work state: Taskboard;
 - temporary extraction and rejected material: `tmp/`.
 
 ## Files
 
 - `source_routing.md`: routing rules between source shelf, reusable knowledge,
-  game design folders, tasks, and temp scratch.
+  private game knowledge, game design folders, tasks, and temp scratch.
 - `source_intake_promotion.md`: source quality, evidence labels, and promotion
   workflow.
 - `reference_work_review.md`: reference-driven design work and review.

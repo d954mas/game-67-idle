@@ -1,6 +1,6 @@
 ---
 name: nt-taskboard-manager
-description: "Use this skill when routing project task work through AI Studio Taskboard: capturing, refining, decomposing, planning, prioritizing, or reporting work items. Triggers include new feature ideas, add a task, what should we do next, breaking a large request into smaller tasks, grouping work into epics, backlog grooming, marking work done, deferred later work that must not be lost, and any request to look at or update the task board."
+description: "Use this skill when routing project, epic, or task work through AI Studio Taskboard: creating or updating projects for games/templates/AI Studio work, capturing/refining/decomposing/planning/prioritizing/reporting work items, backlog grooming, marking work done, and any request to inspect or update the task board."
 ---
 
 # NT Taskboard Manager
@@ -19,16 +19,28 @@ Taskboard data contract here.
 - Summary: `node ai_studio/taskboard/cli.mjs summary --json`.
 - Current work: `node ai_studio/taskboard/cli.mjs context --json`.
 - List rows: `node ai_studio/taskboard/cli.mjs list --json`.
-- Read one item: `node ai_studio/taskboard/cli.mjs show T0001 --json`.
-- Mutate through CLI: `new`, `set`, then `validate --json`.
+- Read one item: `node ai_studio/taskboard/cli.mjs show <P###|E###|T####> --json`.
+- Help: `node ai_studio/taskboard/cli.mjs help`.
+- Create project: `node ai_studio/taskboard/cli.mjs new project --title "..." --kind <ai-studio|game|template|tooling|research|other> --target <path>`.
+- Create epic: `node ai_studio/taskboard/cli.mjs new epic --title "..." --project P###`.
+- Create task: `node ai_studio/taskboard/cli.mjs new task --title "..." --project P### --epic E### --priority P1`.
+- Update item: `node ai_studio/taskboard/cli.mjs set <id> --status <status> --log "..." --json`.
+- Validate after mutations: `node ai_studio/taskboard/cli.mjs validate --json`.
 - Board: `node ai_studio/studio_shell/start_site.mjs --open`, then open
   `/taskboard/`.
 
 ## Workflow
 
 1. Start with `summary --json`; use `context --json` only for longer work.
-2. Load `task-store-reference.md` only when changing task fields, statuses,
-   epics, lifecycle rules, or markdown format.
-3. Capture deferred work as `status: idea`; use `backlog` only after scope and
+2. Use projects as top-level owners, epics as grouped slices, and tasks as
+   actionable cards.
+3. Load `task-store-reference.md` only when changing project/task fields,
+   statuses, epics, lifecycle rules, or markdown format.
+4. Capture deferred work as `status: idea`; use `backlog` only after scope and
    checkable done criteria are clear.
-4. Mark `done` only when `## Done when` is checked and `## Log` has evidence.
+5. Mark `done` only when `## Done when` is checked and `## Log` has evidence.
+
+## Boundary
+
+Keep this skill as a router. Taskboard code, schemas, markdown templates,
+browser UI, API payloads, and validation belong in `ai_studio/taskboard/`.

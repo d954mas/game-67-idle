@@ -8,3 +8,9 @@ description: "Use when adding, changing, testing, reviewing, or migrating game s
 
 Codex-discoverable instructions live in `.codex/skills/nt-game-state-management/SKILL.md`.
 Read that file and follow it.
+
+Reference playbooks (load only when the Codex entrypoint says to):
+
+- `.codex/skills/nt-game-state-management/references/contract.md`
+- `.codex/skills/nt-game-state-management/references/review.md`
+- `.codex/skills/nt-game-state-management/references/workflow.md`

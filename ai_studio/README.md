@@ -12,8 +12,6 @@ public surface, internals, and validation path.
 - `architecture_map/`: live architecture map renderer and validation report for
   unmapped files.
 - `assets/`: reviewed asset-facing modules, starting with Asset Viewer.
-- `game_project/`: reviewed active-game routing and prototype kickoff/context
-  scaffolding.
 - `runtime_automation/`: reviewed local DevAPI, capture, screenshot health, and
   UI readability proof helpers.
 - `core_harness/`: reviewed core routing and agent harness docs.
@@ -22,6 +20,8 @@ public surface, internals, and validation path.
 - `core_harness/agent_surfaces/`: generated Codex/Claude compatibility surfaces.
 - `core_harness/profiling/`: passive profiling, Codex recovery, session status,
   and chat-session reflection ownership.
+- `dev_environment/`: local developer-environment generators such as VS Code
+  task and launch file generation.
 - `quality/`: reviewed small quality rules for selecting evidence and checks.
 - `taskboard/`: reviewed durable task state module.
 
@@ -33,8 +33,10 @@ reviewed and ready to move.
 Load only the route that matches the current task:
 
 - Repository contract and hard invariants: `AGENTS.md`.
-- Current game context and prototype kickoff:
-  `ai_studio/game_project/README.md` and `games/<game-id>/`.
+- Current game context: `games/<game-id>/`.
+- New game folder creation: `node games/new_game.mjs --id <game-id>`.
+- VS Code task/launch regeneration:
+  `node ai_studio/dev_environment/vscode_projects.mjs`.
 - Agent workflow, context policy, Markdown shape, or multi-agent use:
   `ai_studio/core_harness/workflow/README.md`.
 - Broad read-heavy work that should be split before loading too much context:
@@ -45,12 +47,14 @@ Load only the route that matches the current task:
   `node ai_studio/core_harness/agent_surfaces/sync.mjs --check`.
 - Quality rule selection, player-facing evidence, clarity checks, and repeated failure
   stops: `ai_studio/quality/README.md`.
-- Profiling, prototype closeout, visual/asset routing, or portable export:
+- Profiling, prototype closeout, or visual/asset routing:
   `ai_studio/core_harness/profiling/README.md`.
 - Durable task state and task commands: `ai_studio/taskboard/README.md` and
   `node ai_studio/taskboard/cli.mjs context --json`.
 - Runtime evidence, DevAPI client, screenshots, pixel health, and UI
   readability proof: `ai_studio/runtime_automation/README.md`.
+- Schema-first game-state generation:
+  `.codex/skills/nt-game-state-management/SKILL.md`.
 - AI Studio architecture and refactor tree: `ai_studio/tree.json` and
   `ai_studio/architecture_map/README.md`.
 - AI Studio browser entry point:

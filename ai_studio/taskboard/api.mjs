@@ -5,17 +5,17 @@
 
 import {
   createEpic,
+  createProject,
   createTask,
-  EPIC_STATUSES,
+  findDoc,
+  agentContextPayload,
+  boardPayload,
   listEpics,
+  listProjects,
   listTasks,
-  PRIORITIES,
-  TASK_STATUSES,
+  publicDoc,
   updateDoc,
 } from "./lib.mjs";
-import { relative } from "node:path";
-
-const ACTIVE_TASK_STATUSES = ["backlog", "todo", "doing", "review"];
 
 function sendJson(res, status, data) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -43,99 +43,6 @@ function readBody(req) {
   });
 }
 
-function publicDoc(doc) {
-  return { kind: doc.kind, fields: doc.fields, body: doc.body, rev: doc.rev };
-}
-
-function priorityRank(priority) {
-  return { P0: 0, P1: 1, P2: 2, P3: 3 }[priority] ?? 9;
-}
-
-function idNumber(doc) {
-  const match = String(doc.fields.id || "").match(/\d+/);
-  return match ? Number(match[0]) : 0;
-}
-
-function taskRank(task) {
-  const statusRank = { doing: 0, todo: 1, backlog: 2, review: 3, idea: 4, done: 5, dropped: 6 }[task.fields.status] ?? 9;
-  return statusRank * 10 + priorityRank(task.fields.priority);
-}
-
-function countsByStatus(docs, statuses) {
-  const counts = Object.fromEntries(statuses.map((status) => [status, 0]));
-  for (const doc of docs) {
-    const status = doc.fields.status || "unknown";
-    counts[status] = (counts[status] || 0) + 1;
-  }
-  return counts;
-}
-
-export function agentTaskRow(root, doc, options = {}) {
-  const row = {
-    id: doc.fields.id,
-    title: doc.fields.title,
-    status: doc.fields.status,
-    priority: doc.fields.priority || "",
-    epic: doc.fields.epic || "",
-    tags: doc.fields.tags || [],
-    archived: doc.archived === true,
-    file: relative(root, doc.file).replace(/\\/g, "/"),
-  };
-  if (options.includeBody) {
-    row.body = doc.body;
-  }
-  return row;
-}
-
-export function agentEpicRow(root, doc) {
-  return {
-    id: doc.fields.id,
-    title: doc.fields.title,
-    status: doc.fields.status,
-    priority: doc.fields.priority || "",
-    tags: doc.fields.tags || [],
-    file: relative(root, doc.file).replace(/\\/g, "/"),
-  };
-}
-
-export function currentWorkRows(root, limit = 25) {
-  return listTasks(root)
-    .filter((task) => ACTIVE_TASK_STATUSES.includes(task.fields.status))
-    .sort((a, b) => taskRank(a) - taskRank(b) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)))
-    .slice(0, limit)
-    .map((task) => agentTaskRow(root, task));
-}
-
-export function agentContextPayload(root, options = {}) {
-  const limit = Number.isFinite(Number(options.limit)) ? Number(options.limit) : 25;
-  const tasks = listTasks(root);
-  const epics = listEpics(root);
-  const currentWork = currentWorkRows(root, limit);
-  return {
-    schema: "ai_studio.taskboard.agent_context.v1",
-    root,
-    counts: {
-      tasks: countsByStatus(tasks, TASK_STATUSES),
-      epics: countsByStatus(epics, EPIC_STATUSES),
-      currentWork: tasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.fields.status)).length,
-      review: tasks.filter((task) => task.fields.status === "review").length,
-    },
-    currentWork,
-    agentNextStep: "Open only the task file(s) needed for the current decision; do not scan archives unless linked.",
-  };
-}
-
-export function boardPayload(root) {
-  return {
-    root,
-    taskStatuses: TASK_STATUSES,
-    epicStatuses: EPIC_STATUSES,
-    priorities: PRIORITIES,
-    tasks: listTasks(root).map(publicDoc),
-    epics: listEpics(root).map(publicDoc),
-  };
-}
-
 export function createTaskboardApi(root) {
   return async function handleTaskboardApi(req, res, url) {
     const parts = url.pathname.split("/").filter(Boolean);
@@ -146,17 +53,43 @@ export function createTaskboardApi(root) {
       if (req.method === "GET" && url.pathname === "/api/agent/context") {
         return sendJson(res, 200, agentContextPayload(root));
       }
+      if (req.method === "GET" && url.pathname === "/api/projects") {
+        return sendJson(res, 200, { projects: listProjects(root).map((doc) => publicDoc(doc)) });
+      }
+      if (req.method === "GET" && url.pathname === "/api/epics") {
+        return sendJson(res, 200, { epics: listEpics(root).map((doc) => publicDoc(doc)) });
+      }
+      if (req.method === "GET" && url.pathname === "/api/tasks") {
+        return sendJson(res, 200, { tasks: listTasks(root).map((doc) => publicDoc(doc)) });
+      }
+      if (req.method === "GET" && parts.length === 3 && ["tasks", "epics", "projects"].includes(parts[1])) {
+        const expectedKind = { tasks: "task", epics: "epic", projects: "project" }[parts[1]];
+        const doc = findDoc(root, parts[2]);
+        if (!doc || doc.kind !== expectedKind) {
+          return sendJson(res, 404, { error: `${expectedKind} not found: ${parts[2]}` });
+        }
+        return sendJson(res, 200, publicDoc(doc, { includeBody: true }));
+      }
       if (req.method === "POST" && url.pathname === "/api/tasks") {
         const input = await readBody(req);
-        return sendJson(res, 201, publicDoc(createTask(root, input)));
+        return sendJson(res, 201, publicDoc(createTask(root, input), { includeBody: true }));
       }
       if (req.method === "POST" && url.pathname === "/api/epics") {
         const input = await readBody(req);
-        return sendJson(res, 201, publicDoc(createEpic(root, input)));
+        return sendJson(res, 201, publicDoc(createEpic(root, input), { includeBody: true }));
       }
-      if (req.method === "PATCH" && parts.length === 3 && (parts[1] === "tasks" || parts[1] === "epics")) {
+      if (req.method === "POST" && url.pathname === "/api/projects") {
+        const input = await readBody(req);
+        return sendJson(res, 201, publicDoc(createProject(root, input), { includeBody: true }));
+      }
+      if (req.method === "PATCH" && parts.length === 3 && ["tasks", "epics", "projects"].includes(parts[1])) {
+        const expectedKind = { tasks: "task", epics: "epic", projects: "project" }[parts[1]];
+        const doc = findDoc(root, parts[2]);
+        if (!doc || doc.kind !== expectedKind) {
+          return sendJson(res, 404, { error: `${expectedKind} not found: ${parts[2]}` });
+        }
         const patch = await readBody(req);
-        return sendJson(res, 200, publicDoc(updateDoc(root, parts[2], patch)));
+        return sendJson(res, 200, publicDoc(updateDoc(root, parts[2], patch), { includeBody: true }));
       }
       return sendJson(res, 404, { error: "not found" });
     } catch (err) {

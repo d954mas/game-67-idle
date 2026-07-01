@@ -1,6 +1,6 @@
 ---
 name: nt-game-state-management
-description: Use when adding, changing, testing, reviewing, or migrating game state: schema-first state files, generated C GameState APIs, JSON save/load, versioned migrations, DevAPI state commands, fixtures, inventory/equipment references, or bots/tests that read or write progression data.
+description: "Use when adding, changing, testing, reviewing, or migrating game state: schema-first state files, generated C GameState APIs, JSON save/load, versioned migrations, DevAPI state commands, fixtures, inventory/equipment references, or bots/tests that read or write progression data."
 ---
 
 # NT Game State Management
@@ -10,20 +10,19 @@ agent-legible.
 
 ## Start
 
-1. Read `ai_studio/game_project/state_management/README.md`.
-2. Inspect the relevant schema before call sites:
+1. Inspect the relevant schema before call sites:
    `state/*.schema.json` in a game project, or `template/state/*.schema.json`
    in this AI Studio repository.
-3. Inspect `ai_studio/game_project/state_management/generate_state.py` before
+2. Inspect `scripts/generate_state.py` before
    editing generated state APIs.
-4. Change schema/generator/template, then regenerate. Do not hand-edit generated
+3. Change schema/generator/template, then regenerate. Do not hand-edit generated
    `game_state.*` files.
 
 ## Commands
 
 ```powershell
-python ai_studio/game_project/state_management/generate_state.py
-python -m unittest ai_studio.game_project.state_management.generate_state_test
+py -3.12 .codex/skills/nt-game-state-management/scripts/generate_state.py
+py -3.12 .codex/skills/nt-game-state-management/scripts/generate_state_test.py
 ```
 
 Use `--schema` and `--out-dir` for game variants or build-local outputs.
@@ -31,10 +30,10 @@ Use `--schema` and `--out-dir` for game variants or build-local outputs.
 ## Routing
 
 - For state contracts, documents, save envelopes, DevAPI shape, and domain
-  actions, read `ai_studio/game_project/state_management/contract.md`.
+  actions, read `references/contract.md`.
 - For schema-first change workflow, migrations, generated code, and runtime
-  access rules, read `ai_studio/game_project/state_management/workflow.md`.
-- For review, read `ai_studio/game_project/state_management/review.md`.
+  access rules, read `references/workflow.md`.
+- For review, read `references/review.md`.
 - For runtime DevAPI proof, use `nt-runtime-automation`.
 - For playable feature changes that consume state, use `nt-game-feature-iteration`.
 

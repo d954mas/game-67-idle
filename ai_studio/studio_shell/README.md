@@ -15,7 +15,8 @@ surface and map data. `taskboard/` owns the board surface and task state.
 - Unified local server: `server.mjs`.
 - Stable local launcher: `start_site.mjs`.
 - Windows-safe launcher: `start_site_windows.ps1`.
-- Temporary public tunnel helper: `tunnel/`.
+- Temporary public tunnel routing belongs to the `nt-app-tunnel` skill:
+  `.codex/skills/nt-app-tunnel/scripts/serve_tunnel.mjs`.
 
 ## Start
 

@@ -44,15 +44,26 @@
 
     <main class="studio-content taskboard-content">
       <header class="topbar">
-        <h1>Taskboard</h1>
+        <div class="title-block">
+          <h1>Taskboard</h1>
+          <span id="boardStatus" class="board-status"></span>
+        </div>
+        <div class="view-tabs" role="tablist" aria-label="Taskboard views">
+          <button type="button" class="view-tab is-active" data-view="board" role="tab" aria-selected="true">Board</button>
+          <button type="button" class="view-tab" data-view="projects" role="tab" aria-selected="false">Projects</button>
+          <button type="button" class="view-tab" data-view="epics" role="tab" aria-selected="false">Epics</button>
+        </div>
         <input id="search" type="search" placeholder="Search title, id, tag...">
+        <select id="projectFilter"><option value="">All projects</option></select>
         <select id="epicFilter"><option value="">All epics</option></select>
         <label class="toggle"><input type="checkbox" id="showClosed"> all statuses</label>
         <span class="spacer"></span>
+        <button id="newProject" class="ghost">+ Project</button>
         <button id="newEpic" class="ghost">+ Epic</button>
         <button id="newTask" class="primary">+ Task</button>
       </header>
 
+      <section id="overview" class="overview" aria-label="Taskboard overview"></section>
       <section id="board" class="board"></section>
     </main>
   </div>
@@ -66,7 +77,10 @@
       <div class="editor-fields">
         <label>Status <select id="fStatus" name="status"></select></label>
         <label>Priority <select id="fPriority" name="priority"></select></label>
+        <label id="projectFieldWrap">Project <select id="fProject" name="project"></select></label>
         <label id="epicFieldWrap">Epic <select id="fEpic" name="epic"></select></label>
+        <label id="projectKindFieldWrap">Kind <select id="fProjectKind" name="kind"></select></label>
+        <label id="targetFieldWrap">Target <input id="fTarget" name="target" placeholder="ai_studio or games/id" autocomplete="off"></label>
         <label class="grow">Tags <input id="fTags" name="tags" placeholder="comma, separated" autocomplete="off"></label>
       </div>
       <div class="body-editor">

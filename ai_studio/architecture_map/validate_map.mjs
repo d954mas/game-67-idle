@@ -12,10 +12,9 @@ const defaultScanRoots = [
   "AGENTS.md",
   "CLAUDE.md",
   ".codex/skills",
-  "gamedev_knowledge",
-  { path: "templates", mode: "child-directories" },
-  { path: "features", mode: "child-directories" },
-  { path: "games", mode: "child-directories" },
+  { path: "templates", mode: "root-files-and-child-directories" },
+  { path: "features", mode: "root-files-and-child-directories" },
+  { path: "games", mode: "root-files-and-child-directories" },
 ];
 
 const ignoredPrefixes = [
@@ -96,6 +95,23 @@ function listChildDirectories(repoRoot, rel) {
     .map((entry) => normalizeMapPath(join(rel, entry.name)));
 }
 
+function listRootFilesAndChildDirectories(repoRoot, rel) {
+  const abs = repoPath(repoRoot, rel);
+  if (!existsSync(abs)) return [];
+  const stat = statSync(abs);
+  if (!stat.isDirectory()) return [];
+  return readdirSync(abs, { withFileTypes: true })
+    .filter((entry) => {
+      if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "__pycache__") return false;
+      return entry.isDirectory() || entry.isFile();
+    })
+    .map((entry) => normalizeMapPath(join(rel, entry.name)))
+    .filter((path) => {
+      const entry = statSync(repoPath(repoRoot, path));
+      return entry.isDirectory() || shouldTrack(path);
+    });
+}
+
 function normalizeScanRoot(scanRoot) {
   if (typeof scanRoot === "string") return { path: scanRoot, mode: "tracked-files" };
   return {
@@ -109,6 +125,7 @@ function collectScannedPaths(repoRoot, scanRoots = defaultScanRoots) {
     const spec = normalizeScanRoot(root);
     if (spec.mode === "tracked-files") return walkRepo(repoRoot, spec.path);
     if (spec.mode === "child-directories") return listChildDirectories(repoRoot, spec.path);
+    if (spec.mode === "root-files-and-child-directories") return listRootFilesAndChildDirectories(repoRoot, spec.path);
     throw new Error(`Unknown architecture map scan mode: ${spec.mode}`);
   }))].sort((a, b) => a.localeCompare(b));
 }

@@ -1,29 +1,28 @@
 {
   "schema": 1,
-  "generatedAt": "2026-07-01T08:00:54.141Z",
+  "generatedAt": "2026-07-01T10:48:04.104Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
     "AGENTS.md",
     "CLAUDE.md",
     ".codex/skills",
-    "gamedev_knowledge",
     {
       "path": "templates",
-      "mode": "child-directories"
+      "mode": "root-files-and-child-directories"
     },
     {
       "path": "features",
-      "mode": "child-directories"
+      "mode": "root-files-and-child-directories"
     },
     {
       "path": "games",
-      "mode": "child-directories"
+      "mode": "root-files-and-child-directories"
     }
   ],
   "summary": {
-    "mappedPaths": 279,
-    "scannedPaths": 301,
+    "mappedPaths": 262,
+    "scannedPaths": 300,
     "missingInRepo": 0,
     "duplicateMappings": 0,
     "unmappedInAiStudio": 0,

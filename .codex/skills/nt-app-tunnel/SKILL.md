@@ -13,11 +13,11 @@ a phone or another device.
 One background command prints the URL, then holds the tunnel:
 
 ```powershell
-node ai_studio/studio_shell/tunnel/serve_tunnel.mjs --dir <dir-to-serve> [--port <n>]
+node .codex/skills/nt-app-tunnel/scripts/serve_tunnel.mjs --dir <dir-to-serve> [--port <n>]
 ```
 
 It auto-fetches `cloudflared` to
-`tmp/ai_studio/studio_shell/tunnel/bin/` on first use, starts a static server
+`tmp/nt-app-tunnel/bin/` on first use, starts a static server
 for `<dir>`, and prints:
 
 ```text
@@ -30,8 +30,8 @@ background task to tear everything down.
 Examples:
 
 ```powershell
-node ai_studio/studio_shell/tunnel/serve_tunnel.mjs --dir tmp/asset-review-ll
-node ai_studio/studio_shell/tunnel/serve_tunnel.mjs --dir <wasm-build-dir>
+node .codex/skills/nt-app-tunnel/scripts/serve_tunnel.mjs --dir tmp/asset-review-ll
+node .codex/skills/nt-app-tunnel/scripts/serve_tunnel.mjs --dir <wasm-build-dir>
 ```
 
 ## What To Serve

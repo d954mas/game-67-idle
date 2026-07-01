@@ -37,7 +37,7 @@ Purpose: what reusable knowledge this source packet can support.
 
 ## Candidate Knowledge Updates
 
-- `gamedev_knowledge/knowledge/<page>.md` - proposed reusable rule or checklist item.
+- `ai_studio/game_design/knowledge_base/knowledge/<page>.md` - proposed reusable rule or checklist item.
 ```
 
 ## Reusable Knowledge Page
@@ -77,13 +77,13 @@ Reusable rule or method, not project status.
 - [Source note](../sources/source_file.md) - what it supports.
 ```
 
-## Project Source Or Reference Note
+## Game Source Or Reference Note
 
 ```markdown
 ---
 type: Project Source Notes
 title: Reference Or Source Title
-description: Source notes for <game-id>; project-specific, not reusable knowledge.
+description: Source notes for <game-id>; game-specific, not reusable knowledge.
 tags: [project, references]
 timestamp: YYYY-MM-DDT00:00:00Z
 ---

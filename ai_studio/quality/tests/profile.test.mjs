@@ -8,12 +8,12 @@ import { spawnSync } from "node:child_process";
 function tempRoot(t) {
   const dir = mkdtempSync(join(tmpdir(), "quality-profile-test-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
-  mkdirSync(join(dir, "tasks", "active"), { recursive: true });
+  mkdirSync(join(dir, "ai_studio", "taskboard", "items", "active"), { recursive: true });
   return dir;
 }
 
 function writeTask(root, id, body) {
-  writeFileSync(join(root, "tasks", "active", `${id}-test.md`), `---
+  writeFileSync(join(root, "ai_studio", "taskboard", "items", "active", `${id}-test.md`), `---
 id: ${id}
 title: Test ${id}
 status: doing

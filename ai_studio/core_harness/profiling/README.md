@@ -59,4 +59,7 @@ py -3.12 -m pip install -r ai_studio/core_harness/profiling/requirements-full.tx
 - `requirements-full.txt`: pinned optional Python dependencies for full profiling
   or visual/numeric gates that need Pillow, NumPy, or SciPy.
 - `tests/profiling.test.mjs`: focused profiling tests.
-- `skills/nt-chat-session-reflection/`: canonical reflection skill instructions.
+
+Session-retrospective instructions live in
+`.codex/skills/nt-chat-session-reflection/SKILL.md`; Profiling owns the
+telemetry commands those instructions use.

@@ -5,20 +5,54 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
+import { EventEmitter } from "node:events";
+import { URL } from "node:url";
 import vm from "node:vm";
 import {
-  parseDoc, serializeDoc, slugify, createTask, createEpic, listTasks,
-  listEpics, updateDoc, findDoc, validateStore, validateStoreDetailed,
+  createTask, createEpic, createProject, listTasks,
+  listEpics, listProjects, updateDoc, findDoc, validateStore, validateStoreDetailed,
 } from "../lib.mjs";
-import { boardPayload } from "../api.mjs";
+import { boardPayload, parseDoc, serializeDoc, slugify } from "../store.mjs";
+import { createTaskboardApi } from "../api.mjs";
 
 const taskboardDir = dirname(import.meta.dirname);
 const cliPath = join(taskboardDir, "cli.mjs");
+const activeProjectBody = "## Goal\n\nTrack scoped work.\n\n## In scope\n\n- Owned work\n\n## Out of scope\n\n- Unowned work\n\n## Log\n";
 
 function tempRoot(t) {
   const dir = mkdtempSync(join(tmpdir(), "taskboard-test-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
+}
+
+function invokeApi(handler, method, path, body = {}) {
+  const req = new EventEmitter();
+  req.method = method;
+  req.destroy = () => {};
+  const res = {
+    status: 0,
+    headers: {},
+    body: "",
+    writeHead(status, headers) {
+      this.status = status;
+      this.headers = headers;
+    },
+    end(chunk = "") {
+      this.body = String(chunk);
+      this.resolve({
+        status: this.status,
+        headers: this.headers,
+        data: this.body ? JSON.parse(this.body) : null,
+      });
+    },
+  };
+  const done = new Promise((resolve) => { res.resolve = resolve; });
+  handler(req, res, new URL(path, "http://taskboard.local"));
+  queueMicrotask(() => {
+    req.emit("data", Buffer.from(JSON.stringify(body)));
+    req.emit("end");
+  });
+  return done;
 }
 
 test("frontmatter roundtrip preserves fields and body", () => {
@@ -58,27 +92,114 @@ test("createTask allocates sequential ids and createEpic separate sequence", (t)
   assert.equal(listEpics(root).length, 1);
 });
 
+test("projects are first-class parents for epics and tasks", (t) => {
+  const root = tempRoot(t);
+  const project = createProject(root, {
+    title: "AI Studio",
+    status: "active",
+    kind: "ai-studio",
+    target: "ai_studio",
+    body: "## Goal\n\nImprove the reusable pipeline.\n\n## In scope\n\n- Taskboard\n\n## Out of scope\n\n- Game lore\n\n## Log\n",
+  });
+  const epic = createEpic(root, {
+    title: "Taskboard decomposition",
+    status: "active",
+    project: project.fields.id,
+    body: "## Goal\n\nMake it reusable.\n\n## In scope\n\n- Projects\n\n## Out of scope\n\n- Heavy PM suite\n\n## Log\n",
+  });
+  const task = createTask(root, {
+    title: "Implement project API",
+    status: "backlog",
+    epic: epic.fields.id,
+    body: "## What\n\nAdd project APIs.\n\n## Done when\n\n- [ ] APIs are tested\n\n## Open questions\n\n## Log\n",
+  });
+
+  assert.equal(project.fields.id, "P001");
+  assert.equal(epic.fields.project, "P001");
+  assert.equal(task.fields.project, "P001");
+  assert.deepEqual(listProjects(root).map((doc) => doc.fields.id), ["P001"]);
+  assert.deepEqual(validateStore(root), []);
+});
+
+test("validation enforces project references and task epic/project consistency", (t) => {
+  const root = tempRoot(t);
+  const projectA = createProject(root, { title: "AI Studio", status: "active", kind: "ai-studio", body: activeProjectBody });
+  const projectB = createProject(root, { title: "Game", status: "active", kind: "game", body: activeProjectBody });
+  createEpic(root, { title: "Missing project", status: "idea", project: "P999" });
+  createEpic(root, { title: "Real epic", status: "idea", project: projectA.fields.id });
+  createTask(root, { title: "Mismatch", status: "idea", epic: "E002", project: projectB.fields.id });
+  createTask(root, { title: "Missing task project", status: "idea", project: "P999" });
+
+  assert.deepEqual(
+    validateStoreDetailed(root).map((problem) => problem.message),
+    [
+      'E001: references missing project "P999"',
+      "T0001: project P002 does not match epic E002 project P001",
+      'T0002: references missing project "P999"',
+    ],
+  );
+});
+
 test("task store ignores operational docs", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "First" });
-  writeFileSync(join(root, "tasks", "README.md"), "# Task Store\n");
+  writeFileSync(join(root, "ai_studio", "taskboard", "items", "active", "README.md"), "# Task Store\n");
   assert.equal(listTasks(root).length, 1);
   assert.deepEqual(validateStore(root), []);
 });
 
-test("Taskboard API board payload exposes public task and epic state", (t) => {
+test("Taskboard API board payload exposes public project, epic, and task state", (t) => {
   const root = tempRoot(t);
-  createTask(root, { title: "Visible task", status: "todo" });
-  createEpic(root, { title: "Visible epic", status: "active" });
+  createProject(root, { title: "Visible project", status: "active", kind: "ai-studio" });
+  createTask(root, { title: "Visible task", status: "todo", project: "P001" });
+  createEpic(root, { title: "Visible epic", status: "active", project: "P001" });
 
   const payload = boardPayload(root);
   assert.equal(payload.root, root);
   assert.deepEqual(payload.tasks.map((doc) => doc.fields.id), ["T0001"]);
   assert.deepEqual(payload.epics.map((doc) => doc.fields.id), ["E001"]);
+  assert.deepEqual(payload.projects.map((doc) => doc.fields.id), ["P001"]);
   assert.ok(payload.taskStatuses.includes("doing"));
   assert.ok(payload.epicStatuses.includes("active"));
+  assert.ok(payload.projectStatuses.includes("active"));
+  assert.ok(payload.projectKinds.includes("ai-studio"));
   assert.ok(payload.priorities.includes("P1"));
+  assert.equal(payload.tasks[0].body, undefined);
   assert.equal(payload.tasks[0].file, undefined);
+});
+
+test("Taskboard API refuses kind-mismatched patch routes", async (t) => {
+  const root = tempRoot(t);
+  createProject(root, { title: "Project" });
+  createEpic(root, { title: "Epic", status: "idea", project: "P001" });
+  const handler = createTaskboardApi(root);
+
+  const response = await invokeApi(handler, "PATCH", "/api/tasks/E001", {
+    fields: { status: "done" },
+  });
+
+  assert.equal(response.status, 404);
+  assert.match(response.data.error, /task not found/);
+  assert.equal(findDoc(root, "E001").fields.status, "idea");
+});
+
+test("Taskboard API exposes explicit project, epic, and task collections", async (t) => {
+  const root = tempRoot(t);
+  createProject(root, { title: "Project" });
+  createEpic(root, { title: "Epic", project: "P001" });
+  createTask(root, { title: "Task", project: "P001", epic: "E001" });
+  const handler = createTaskboardApi(root);
+
+  const projects = await invokeApi(handler, "GET", "/api/projects");
+  const epics = await invokeApi(handler, "GET", "/api/epics");
+  const tasks = await invokeApi(handler, "GET", "/api/tasks");
+  const task = await invokeApi(handler, "GET", "/api/tasks/T0001");
+
+  assert.deepEqual(projects.data.projects.map((doc) => doc.fields.id), ["P001"]);
+  assert.deepEqual(epics.data.epics.map((doc) => doc.fields.id), ["E001"]);
+  assert.deepEqual(tasks.data.tasks.map((doc) => doc.fields.id), ["T0001"]);
+  assert.equal(tasks.data.tasks[0].body, undefined);
+  assert.match(task.data.body, /## What/);
 });
 
 test("done tasks move to archive and stay addressable by id", (t) => {
@@ -86,7 +207,7 @@ test("done tasks move to archive and stay addressable by id", (t) => {
   createEpic(root, { title: "Epic" });
   createTask(root, { title: "Archive me", epic: "E001", status: "todo" });
   const updated = updateDoc(root, "T0001", { fields: { status: "done" } });
-  assert.match(updated.file, /tasks[\\/]+archive[\\/]+E001[\\/]+T0001-/);
+  assert.match(updated.file, /ai_studio[\\/]taskboard[\\/]items[\\/]archive[\\/]E001[\\/]T0001-/);
   assert.equal(existsSync(updated.file), true);
   assert.equal(listTasks(root).length, 0);
   assert.equal(listTasks(root, { includeArchive: true }).length, 1);
@@ -205,7 +326,7 @@ BODY_SHOULD_NOT_APPEAR
   assert.equal(payload.counts.tasks.review, 1);
   assert.equal(payload.counts.tasks.idea, 1);
   assert.deepEqual(payload.currentWork.map((task) => task.id), ["T0001", "T0002"]);
-  assert.equal(payload.currentWork[0].file.includes("tasks/active/T0001-"), true);
+  assert.equal(payload.currentWork[0].file.includes("ai_studio/taskboard/items/active/T0001-"), true);
   assert.equal("body" in payload.currentWork[0], false);
   assert.doesNotMatch(result.stdout, /BODY_SHOULD_NOT_APPEAR/);
 });
@@ -245,11 +366,23 @@ Detailed body.
   assert.match(showPayload.doc.body, /Detailed body/);
 });
 
+test("taskboard cli help exits successfully and documents commands", () => {
+  for (const args of [[], ["help"], ["--help"], ["-h"]]) {
+    const result = spawnSync(process.execPath, [cliPath, ...args], { encoding: "utf8" });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|new\|set\|validate\|help>/);
+    assert.match(result.stdout, /new project --title/);
+    assert.match(result.stdout, /summary \[--json\]/);
+    assert.match(result.stdout, /validate \[--json\]/);
+  }
+});
+
 test("taskboard cli rejects unrelated core commands", () => {
   const result = spawnSync(process.execPath, [cliPath, "workflow-run"], { encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|new\|set\|validate>/);
+  assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|new\|set\|validate\|help>/);
   assert.doesNotMatch(result.stdout, /workflow-run/);
 });
 
@@ -277,7 +410,7 @@ test("updateDoc checks archive move conflicts before rewriting source", (t) => {
     body: "## What\n\nKeep source stable.\n\n## Done when\n\n- [ ] source unchanged on move conflict\n",
   });
   const original = readFileSync(task.file, "utf8");
-  const archiveDir = join(root, "tasks", "archive", "E001");
+  const archiveDir = join(root, "ai_studio", "taskboard", "items", "archive", "E001");
   mkdirSync(archiveDir, { recursive: true });
   writeFileSync(join(archiveDir, "T0001-conflict-move.md"), "existing archive task\n");
 

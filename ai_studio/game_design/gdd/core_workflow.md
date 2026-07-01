@@ -7,8 +7,10 @@ plan, implementation handoff, or source-of-truth design package.
 
 - Start with a Definition of Done before creating files.
 - Project-specific game design belongs under `games/<game-id>/design/`.
-- Reusable design knowledge belongs in `gamedev_knowledge/knowledge/`; raw reusable
-  source notes belong in `gamedev_knowledge/sources/`.
+- Game-specific durable knowledge belongs under
+  `games/<game-id>/design/knowledge/`.
+- Reusable design knowledge belongs in `ai_studio/game_design/knowledge_base/knowledge/`; raw reusable
+  source notes belong in `ai_studio/game_design/knowledge_base/sources/`.
 - Separate reference, fake shot, prepared asset, runtime proof, and
   implementation plan.
 - Treat the GDD as a living source of truth, not a static essay.
@@ -36,6 +38,9 @@ Inside `games/<game-id>/design/`, prefer:
 
 - `concept.md`;
 - `gdd.md`;
+- `knowledge/README.md`;
+- `knowledge/index.md`;
+- `knowledge/sources/README.md`;
 - `references/` or a references section;
 - `data/core_loop.json`;
 - `data/ui_flow.json`;
@@ -48,8 +53,8 @@ Add more files only when they remove implementation ambiguity.
 
 ## Start Checklist
 
-1. Locate or create the active game design folder. For a new prototype, use
-   `node ai_studio/game_project/new_prototype.mjs --game-id <id> --title <name> --brief <one sentence>`.
+1. Locate or create the active game design folder under `games/<game-id>/design/`.
+   For a new game folder, use `node games/new_game.mjs --id <id>`.
 2. Check `git status` and confirm temporary/generated folders are ignored.
 3. Write the Definition of Done: what must exist, what is out of scope, and what
    proof is accepted.

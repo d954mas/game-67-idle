@@ -70,8 +70,8 @@ function isPathLikeBacktick(ref) {
     ref.startsWith("./") ||
     ref.startsWith("../") ||
     ref.startsWith(".codex/") ||
-    ref.startsWith("gamedev_knowledge/") ||
-    ref.startsWith("tasks/") ||
+    ref.startsWith("ai_studio/game_design/knowledge_base/") ||
+    ref.startsWith("ai_studio/taskboard/items/") ||
     ref.startsWith("ai_studio/") ||
     ref.startsWith("state/") ||
     ref.startsWith("AGENTS.md") ||

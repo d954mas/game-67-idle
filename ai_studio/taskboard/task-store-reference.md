@@ -1,6 +1,7 @@
 # Task Store Reference
 
-Detailed task protocol for work that changes tasks, epics, or reporting shape.
+Detailed task protocol for work that changes projects, epics, tasks, or
+reporting shape.
 Start from `ai_studio/taskboard/README.md`; load this file only when editing
 or auditing the task store.
 
@@ -11,7 +12,7 @@ Users describe work naturally; do not require task IDs.
 Before broad edits or expensive validation, state:
 
 - interpreted goal;
-- selected task/epic or why no durable task is needed;
+- selected project/epic/task or why no durable task is needed;
 - first action;
 - out of scope.
 
@@ -20,6 +21,14 @@ direction changes, destructive task/status moves, or broad irreversible work are
 in play.
 
 ## Task Lifecycle
+
+Project statuses: `idea -> active -> done`, plus `dropped`.
+
+Project kinds: `ai-studio`, `game`, `template`, `tooling`, `research`, `other`.
+
+Projects are the top-level owner for work. Use one project for reusable AI
+Studio work, one project per active game, one project per active template, and
+lightweight tooling/research projects when they own durable cross-cutting work.
 
 Task statuses: `idea -> backlog -> todo -> doing -> review -> done`, plus
 `dropped`.
@@ -54,6 +63,11 @@ A backlog task must have:
 - non-empty `## What`;
 - checkable `## Done when`;
 - clear scope boundaries or open questions.
+
+Epics should set `project: P###` once the owning project is known. Tasks should
+set `project: P###` and `epic: E###` for scheduled work; task creation inherits
+the project from the epic when possible. Validation rejects missing project
+references and task project/epic mismatches.
 
 ## Done And Evidence
 
@@ -91,11 +105,61 @@ Where information goes:
 
 ## Format
 
+Project:
+
+```markdown
+---
+id: P001
+title: AI Studio
+status: active
+kind: ai-studio
+target: ai_studio
+priority: P1
+tags: [ai-studio]
+created: 2026-07-01
+updated: 2026-07-01
+---
+
+## Goal
+
+## In scope
+
+## Out of scope
+
+## Log
+```
+
+Epic:
+
+```markdown
+---
+id: E001
+title: First playable vertical slice
+status: active
+project: P001
+priority: P2
+tags: [prototype]
+created: 2026-07-01
+updated: 2026-07-01
+---
+
+## Goal
+
+## In scope
+
+## Out of scope
+
+## Log
+```
+
+Task:
+
 ```markdown
 ---
 id: T0001
 title: First playable action
 status: backlog
+project: P001
 epic: E001
 priority: P2
 tags: [state, core-loop]

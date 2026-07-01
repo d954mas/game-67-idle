@@ -18,20 +18,22 @@ The page must not infer architecture from the repository. New files are not
 silently added to the map. They appear in validation until a human decides
 whether to map, ignore, assign to the review backlog, or delete them.
 
-`gamedev_knowledge/` is a durable knowledge root and is mapped as one covered
-folder. `templates/` and `games/` are shown as workspace containers; `features/`
-is shown as a feature group. They use
+`ai_studio/game_design/knowledge_base/` is owned by the Game Design module and is
+mapped there as one covered folder. `templates/` and `games/` are shown as
+workspace containers; `features/` is shown as a feature group. They use
 `coverage: "self"` so the container path is checked without automatically
-covering every child folder. Validation scans immediate child directories under
-those roots; new `templates/<id>`, `features/<id>`, or `games/<id>` folders appear as unmapped
-outside-AI-Studio paths until they are intentionally added to `tree.json`.
-Files inside each game, template, or feature folder are not listed in the
-architecture map.
+covering every child folder. Validation scans tracked files directly under
+those roots and their immediate child directories. Root-level commands and docs
+such as `games/new_game.mjs` or `templates/new_template.mjs` therefore appear
+in validation if they are not mapped, while new `templates/<id>`,
+`features/<id>`, or `games/<id>` folders appear as unmapped outside-AI-Studio
+paths until they are intentionally added to `tree.json`. Files inside each game,
+template, or feature folder are not listed in the architecture map.
 
-Taskboard data is not architecture map data. `tasks/active/`, `tasks/archive/`,
-and `tasks/epics/` are owned and validated by `ai_studio/taskboard/`; they are
-not scanned here unless a future architecture decision promotes a task-store
-file into the map as an explicit module/source document.
+Taskboard data is not architecture map module data. The markdown store lives in
+`ai_studio/taskboard/items/{projects,epics,active,archive}/` and is owned by the
+Taskboard module. The map covers that folder as state, not as individual source
+nodes.
 
 ## Display Types
 
@@ -65,8 +67,9 @@ http://127.0.0.1:8765/architecture_map/
 - `unmappedInAiStudio`: a file exists under `ai_studio/`, but is not listed or
   covered by a mapped directory in `tree.json`.
 - `unmappedOutsideAiStudio`: a scanned path exists outside `ai_studio/` and is
-  not explicitly mapped. For `templates/`, `features/`, and `games/`, scanned paths are
-  immediate child directories, not files inside those directories.
+  not explicitly mapped. For `templates/`, `features/`, and `games/`, scanned
+  paths are root-level tracked files plus immediate child directories, not files
+  inside those child directories.
 - `missingDescriptions`: a visible node lacks a useful description.
 
 Scanning is validation only. It does not edit `tree.json`.

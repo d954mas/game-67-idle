@@ -45,5 +45,6 @@ Use this module when the agent needs local runtime evidence: state snapshots,
 screenshots, visual health checks, readability zooms, or repeatable native
 iteration probes.
 
-Use `ai_studio/game_project/` for active game context, startup gates, feature
-iteration, and state-code generation workflow.
+Game-specific context, startup gates, and feature iteration belong inside
+`games/<game-id>/` or the matching skill. State-code generation lives inside
+`.codex/skills/nt-game-state-management/`.
