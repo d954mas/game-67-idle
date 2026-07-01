@@ -28,11 +28,15 @@ paths, a movement system, screenshot capture).
 
 ## Build + run a game (template shown)
 
+VS Code users can run the `Game: build native debug`, `Game: build packs native debug`,
+and `Game: run native debug` tasks. The `gameProjectPath` prompt accepts
+`templates/template` or any `games/<game-id>` folder.
+
 ```powershell
-cmake -S templates/template -B templates/template/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
-cmake --build templates/template/build
-templates/template/build/bin/game.exe                                   # window: cubes + text + Settings
-templates/template/build/bin/game.exe --settings --capture tmp/x.ppm    # headless screenshot
+cmake -S templates/template -B templates/template/build/native-debug -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
+cmake --build templates/template/build/native-debug --target game
+templates/template/build/native-debug/bin/game.exe                                # window: cubes + text + Settings
+templates/template/build/native-debug/bin/game.exe --settings --capture tmp/x.ppm # headless screenshot
 ```
 
 Layout a game folder teaches by example: `src/main.c` is the conductor; systems in

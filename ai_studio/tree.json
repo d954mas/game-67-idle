@@ -938,6 +938,20 @@
             ]
           },
           {
+            "id": "core-harness:vscode-tasks",
+            "kind": "tool",
+            "path": ".vscode/tasks.json",
+            "title": ".vscode/tasks.json",
+            "description": "Supported VS Code task entrypoint for starting AI Studio, building native/wasm games, building game asset packs, running games, and validating the architecture map.",
+            "role": "local IDE build/run task entrypoint",
+            "tags": [
+              "core",
+              "vscode",
+              "build",
+              "game-run"
+            ]
+          },
+          {
             "id": "core-harness:workflow",
             "title": "Workflow",
             "subtitle": "task execution order",
