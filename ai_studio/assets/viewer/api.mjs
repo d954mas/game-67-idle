@@ -21,7 +21,7 @@ function safeSlug(value) {
   return String(value || "asset-viewer").replace(/[^a-zA-Z0-9_.-]+/g, "_").replace(/^_+|_+$/g, "") || "asset-viewer";
 }
 
-function safeResolve(base, relativePath) {
+export function safeResolve(base, relativePath) {
   const resolvedBase = resolve(base);
   const full = resolve(resolvedBase, normalize(relativePath));
   if (full !== resolvedBase && !full.startsWith(resolvedBase + sep)) return null;
@@ -227,7 +227,7 @@ function runBuilder(args, cwd) {
   });
 }
 
-function selectSource(sources, body, root) {
+export function selectSource(sources, body, root) {
   const byId = new Map(sources.map((source) => [source.id, source]));
   if (body.sourceId && byId.has(body.sourceId)) return byId.get(body.sourceId);
 

@@ -3198,6 +3198,19 @@
                       "surface-adapter",
                       "assets"
                     ]
+                  },
+                  {
+                    "id": "assets:asset-viewer-api-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/viewer/tests/api.test.mjs",
+                    "title": "api.test.mjs",
+                    "description": "Regression tests for Asset Viewer API source selection and confined gallery/library/repo media path resolution.",
+                    "role": "asset viewer API boundary tests",
+                    "tags": [
+                      "assets",
+                      "tests",
+                      "api"
+                    ]
                   }
                 ]
               },
