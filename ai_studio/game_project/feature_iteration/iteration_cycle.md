@@ -19,7 +19,7 @@ orient -> choose goal -> packet -> implement -> validate -> evidence -> review -
 Read only what is needed:
 
 - root rules already loaded;
-- `GAME_PROJECT.md` for current-game routing;
+- `games/<game-id>/` for current-game routing;
 - `ai_studio/game_project/iteration_context.mjs` output when useful;
 - relevant design/source files;
 - nearby code;

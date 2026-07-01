@@ -73,5 +73,5 @@ engagement/mastery.
 
 ## Candidate Knowledge Updates
 
-- `gamedesign/knowledge/player_need_lanes.md` - reusable design model for
+- `gamedev_knowledge/knowledge/player_need_lanes.md` - reusable design model for
   choosing and validating a primary player-need lane before GDD/fake-shot work.

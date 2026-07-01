@@ -40,7 +40,7 @@ pipeline agent-legible and tool-legible:
 
 - Agent Skills use progressive disclosure: a compact skill activates first,
   then scripts/references/assets are loaded as needed. This supports keeping
-  the fast path in `SKILL.md` and deeper art research in `gamedesign/knowledge/`.
+  the fast path in `SKILL.md` and deeper art research in `gamedev_knowledge/knowledge/`.
 - OpenAI's harness engineering write-up frames human time as the scarce
   resource and recommends making apps, logs, screenshots, and project knowledge
   legible to agents. For art, our equivalent is native screenshots, manifests,

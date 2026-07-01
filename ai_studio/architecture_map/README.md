@@ -18,7 +18,8 @@ The page must not infer architecture from the repository. New files are not
 silently added to the map. They appear in validation until a human decides
 whether to map, ignore, assign to the review backlog, or delete them.
 
-`templates/`, `features/`, and `games/` are shown as workspace containers. They use
+`gamedev_knowledge/` is a durable knowledge root and is mapped as one covered
+folder. `templates/`, `features/`, and `games/` are shown as workspace containers. They use
 `coverage: "self"` so the container path is checked without automatically
 covering every child folder. Validation scans immediate child directories under
 those roots; new `templates/<id>`, `features/<id>`, or `games/<id>` folders appear as unmapped

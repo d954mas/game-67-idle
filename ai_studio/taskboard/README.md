@@ -43,7 +43,7 @@ the API and serves the surface.
 ## Minimal Context
 
 For substantial work: `node ai_studio/taskboard/cli.mjs context --json` ->
-needed task/evidence files -> `GAME_PROJECT.md` only for game-specific work ->
+needed task/evidence files -> `games/<game-id>/` only for game-specific work ->
 one matching skill.
 
 Search current scope only. Avoid archives, P3 ideas, broad design, and build

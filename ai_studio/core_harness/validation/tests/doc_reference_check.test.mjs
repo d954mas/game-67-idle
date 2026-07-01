@@ -28,7 +28,6 @@ function writeMinimalRoot(dir) {
   mkdirSync(join(dir, "ai_studio", "core_harness", "workflow"), { recursive: true });
   writeFileSync(join(dir, "AGENTS.md"), "# Agents\n\nSee `ai_studio/README.md` and `CLAUDE.md`.\n", "utf8");
   writeFileSync(join(dir, "CLAUDE.md"), "# Claude\n\nSee `AGENTS.md`.\n", "utf8");
-  writeFileSync(join(dir, "GAME_PROJECT.md"), "# Game Project\n\nNo active game.\n", "utf8");
   writeFileSync(join(dir, "ai_studio", "README.md"), "# AI Studio\n\nSee `ai_studio/core_harness/README.md`.\n", "utf8");
   writeFileSync(
     join(dir, "ai_studio", "core_harness", "README.md"),
@@ -67,7 +66,7 @@ test("doc reference check ignores bare backticked template names", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
-    writeFileSync(join(dir, "AGENTS.md"), "Template names: `gdd.md`, `GAME_PROJECT.md`.\n", "utf8");
+    writeFileSync(join(dir, "AGENTS.md"), "Template names: `gdd.md`, `design/README.md`.\n", "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 0, result.stderr);
   } finally {

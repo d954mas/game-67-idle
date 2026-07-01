@@ -91,7 +91,7 @@ Matrix file example:
   "states": {
     "primary_action_ready": {
       "status": "covered",
-      "evidence": "build/captures/primary-action.png"
+      "evidence": "tmp/captures/primary-action.png"
     },
     "reward_active": {
       "status": "not_covered",

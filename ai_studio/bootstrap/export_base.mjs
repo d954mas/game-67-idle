@@ -35,11 +35,11 @@ const COPY = [
   "games/games.json",
   "templates/README.md",
   "templates/templates.json",
-  "gamedesign/README.md",
-  "gamedesign/knowledge",
-  "gamedesign/sources",
+  "features/README.md",
+  "gamedev_knowledge/README.md",
+  "gamedev_knowledge/knowledge",
+  "gamedev_knowledge/sources",
   "ai_studio",
-  "AI_PIPELINE_HISTORY.md",
 ];
 
 const AGENTS_TEMPLATE = `# AGENTS.md
@@ -53,20 +53,17 @@ const AGENTS_TEMPLATE = `# AGENTS.md
   concept before creating GDD, assets, gameplay tasks, or implementation plans.
 - Engine/runtime location is not selected yet. Once chosen, record its path and
   editing policy here.
-- Templates live in \`templates/\`; game folders live in \`games/\`.
+- Templates live in \`templates/\`; reusable feature packs live in \`features/\`;
+  game folders live in \`games/\`.
 - Game-specific design, code, assets, evidence, and project data live under
   \`games/<game-id>/\`.
-- Universal reusable design knowledge lives in \`gamedesign/knowledge/\`.
+- Universal reusable design knowledge lives in \`gamedev_knowledge/knowledge/\`.
 - Reusable project skills live in \`.codex/skills/\`; keep them generic enough to reuse in other games.
 - Work items live in \`tasks/\`; follow \`ai_studio/taskboard/README.md\`.
-- Current game routing lives in \`GAME_PROJECT.md\`.
 - Temporary generation, scripts, rejected images, screenshots, and audit logs go in \`tmp/\` or another ignored temp folder.
 - Final durable docs/data/assets go in their game folder.
 - The shared human/agent process, including AI session profiling, lives in
   \`ai_studio/README.md\`; raw telemetry stays in \`tmp/session_profiles/\`.
-- AI workflow history, retrospectives, and the external observability decision
-  criteria live in \`AI_PIPELINE_HISTORY.md\`; start local-first and run only
-  bounded pilots until a tool proves value.
 
 ## Direction
 
@@ -90,32 +87,9 @@ For status, task format, and workflow rules, follow \`ai_studio/taskboard/README
 
 - Process: \`.codex/skills/nt-taskboard-manager/SKILL.md\`
 - Conventions: \`ai_studio/taskboard/README.md\`
-- Current game routing: \`GAME_PROJECT.md\`
+- Current game routing: \`games/<game-id>/\`
 - CLI: \`node ai_studio/taskboard/cli.mjs <list|show|new|set|validate>\`
 - Visual board for the user: \`node ai_studio/studio_shell/server.mjs\`, then open \`/taskboard/\`.
-`;
-
-const GAME_PROJECT_TEMPLATE = `# GAME_PROJECT
-
-## Active Game
-
-Status: none
-
-There is no active game concept right now.
-
-## When A Game Is Active
-
-Keep only routing and current-game summary here:
-
-- Game id:
-- Game folder:
-- Design docs:
-- Task board:
-- Current milestone:
-- Hard game-specific constraints:
-
-Full GDD, balance, lore, asset lists, and per-game implementation detail should
-live in \`games/<game-id>/\` or task files.
 `;
 
 mkdirSync(dst, { recursive: true });
@@ -141,7 +115,6 @@ mkdirSync(join(dst, "tmp"), { recursive: true });
 for (const [name, content] of [
   ["AGENTS.md", AGENTS_TEMPLATE],
   ["CLAUDE.md", CLAUDE_TEMPLATE],
-  ["GAME_PROJECT.md", GAME_PROJECT_TEMPLATE],
 ]) {
   const file = join(dst, name);
   if (existsSync(file) && !force) {

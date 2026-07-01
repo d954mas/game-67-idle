@@ -10,7 +10,7 @@ Use this skill as a thin router for small, verified playable increments.
 ## Start
 
 1. Read `ai_studio/game_project/feature_iteration/README.md`.
-2. Read `GAME_PROJECT.md` only when the task is about a specific current game.
+2. Read `games/<game-id>/` only when the task is about a specific current game.
 3. Run `node ai_studio/game_project/iteration_context.mjs` when the work needs
    compact current-game implementation context.
 4. Select one player-visible goal and one primary runtime/proof target.

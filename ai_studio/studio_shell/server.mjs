@@ -21,7 +21,7 @@ const assetPreviewRoot = join(aiStudioRoot, "assets", "storage", "previews");
 const port = Number.parseInt(process.argv[2] || process.env.AI_STUDIO_PORT || "8765", 10);
 const handleTaskboardApi = createTaskboardApi(root);
 const handleAssetViewerApi = createAssetViewerApi(root);
-const stateDir = join(root, ".tmp", "ai_studio");
+const stateDir = join(root, "tmp", "ai_studio");
 const pidFile = join(stateDir, `studio_shell_${port}.pid`);
 
 const mime = {

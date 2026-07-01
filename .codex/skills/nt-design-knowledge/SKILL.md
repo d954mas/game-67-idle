@@ -1,6 +1,6 @@
 ---
 name: nt-design-knowledge
-description: "Use when adding, reviewing, reorganizing, or promoting game-design research sources and reusable design knowledge: source notes, article/video/reference packet parsing, reusable `gamedesign/knowledge/` rules, project wiki routing, source hygiene review, knowledge index/log updates, or reference-backed design claims."
+description: "Use when adding, reviewing, reorganizing, or promoting game-design research sources and reusable design knowledge: source notes, article/video/reference packet parsing, reusable `gamedev_knowledge/knowledge/` rules, project wiki routing, source hygiene review, knowledge index/log updates, or reference-backed design claims."
 ---
 
 # NT Design Knowledge
@@ -28,7 +28,7 @@ Canonical workflow docs live in `ai_studio/game_design/knowledge/`.
 2. Route before editing: reusable source shelf, reusable knowledge, project wiki,
    task state, or temp scratch.
 3. Add or update source notes before conclusions when external evidence matters.
-4. Keep reusable principles in `gamedesign/knowledge/`; current-game facts stay
+4. Keep reusable principles in `gamedev_knowledge/knowledge/`; current-game facts stay
    in the project wiki.
 5. Link conclusions back to source notes, update index/log files when
    discoverability changes, and state evidence gaps.

@@ -1,6 +1,4 @@
-build/
 tmp/
-.tmp/
 .cache/
 .vs/
 .vscode/.cmake/
@@ -9,18 +7,15 @@ compile_commands.json
 *.user
 *.suo
 *.ntpack
-src/generated/
 __pycache__/
 *.pyc
 
 # Builder scratch for asset packs
-assets/runtime/*/_cache/
-assets/packs/
 *.png.ppm
 
-# Restricted (paid/licensed) asset binaries — never commit to an open repo.
-# Only the catalog/license .md (metadata, no binary) is committed; the binaries
-# live here locally and in the private library. See ai_studio/assets/storage/license/.
+# Restricted paid/licensed asset binaries: never commit to an open repo.
+# Only catalog/license metadata is committed; binaries live locally and in the
+# private library. See ai_studio/assets/storage/license/.
 # Per-game: matches <game>/assets/restricted/ in any game folder.
 **/assets/restricted/
 **/assets/_incoming/

@@ -9,8 +9,8 @@ material without mixing reusable knowledge with current-game facts.
 
 It owns workflow, not content:
 
-- reusable design knowledge content: `gamedesign/knowledge/`;
-- reusable source notes: `gamedesign/sources/`;
+- reusable design knowledge content: `gamedev_knowledge/knowledge/`;
+- reusable source notes: `gamedev_knowledge/sources/`;
 - current-game design docs, references, screenshots, playtest notes, and GDD
   facts: `games/<game-id>/design/`;
 - work state: Taskboard;

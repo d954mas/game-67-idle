@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronous Python harness for the temporary game DevAPI."""
+"""Synchronous Python harness for a game DevAPI."""
 
 from __future__ import annotations
 
@@ -17,13 +17,16 @@ from typing import Any, Iterable
 
 HOST = "127.0.0.1"
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-NATIVE_DEBUG_EXE = os.path.join(ROOT, "build", "game_seed", "native-debug", "game_seed.exe")
+NATIVE_DEBUG_EXE = os.environ.get(
+    "AI_STUDIO_GAME_EXE",
+    os.path.join(ROOT, "templates", "template", "build", "bin", "game.exe"),
+)
 RUNTIME_AUTOMATION_DIR = os.path.join(ROOT, "ai_studio", "runtime_automation")
 CAPTURE_SCREEN_SCRIPT = os.path.join(RUNTIME_AUTOMATION_DIR, "capture_screen.ps1")
 CAPTURE_WINDOW_SCRIPT = os.path.join(RUNTIME_AUTOMATION_DIR, "capture_window.py")
 RECORD_SCREEN_SCRIPT = os.path.join(RUNTIME_AUTOMATION_DIR, "record_screen_ffmpeg.ps1")
 ACTIVE_RECORDINGS: list["DevApiRecording"] = []
-LAUNCH_LOG_DIR = os.path.join(ROOT, "build", "logs")
+LAUNCH_LOG_DIR = os.path.join(ROOT, "tmp", "ai_studio", "runtime_automation", "logs")
 
 
 class DevApiError(RuntimeError):
@@ -162,7 +165,7 @@ class DevApiClient:
 
     def capture_screenshot(
         self,
-        output: str = "build/captures/screenshot.png",
+        output: str = "tmp/captures/screenshot.png",
         x: int = 0,
         y: int = 0,
         width: int = 0,
@@ -191,7 +194,7 @@ class DevApiClient:
             # surface it as a DevApiError like every other audit failure.
             raise DevApiError(str(exc)) from exc
 
-    def capture_framebuffer(self, output: str = "build/captures/screenshot.png") -> str:
+    def capture_framebuffer(self, output: str = "tmp/captures/screenshot.png") -> str:
         path = ensure_output_dir(output)
         ppm_path = path + ".ppm"
         if os.path.exists(ppm_path):
@@ -207,7 +210,7 @@ class DevApiClient:
 
     def record_gameplay(
         self,
-        output: str = "build/captures/gameplay.mp4",
+        output: str = "tmp/captures/gameplay.mp4",
         seconds: int = 8,
         framerate: int = 30,
         x: int = 0,
@@ -222,7 +225,7 @@ class DevApiClient:
 
     def start_recording(
         self,
-        output: str = "build/captures/gameplay.mp4",
+        output: str = "tmp/captures/gameplay.mp4",
         framerate: int = 30,
         x: int = 0,
         y: int = 0,
@@ -388,7 +391,7 @@ def run_powershell_script(script: str, args: list[str]) -> str:
     return completed.stdout.strip()
 
 
-def run_capture_screenshot(output: str = "build/captures/screenshot.png", x: int = 0, y: int = 0, width: int = 0, height: int = 0, process_id: int | None = None) -> str:
+def run_capture_screenshot(output: str = "tmp/captures/screenshot.png", x: int = 0, y: int = 0, width: int = 0, height: int = 0, process_id: int | None = None) -> str:
     path = resolve_output_path(output)
     if os.name == "nt" and os.path.exists(CAPTURE_WINDOW_SCRIPT):
         args = [sys.executable, CAPTURE_WINDOW_SCRIPT, "--output", path]
@@ -414,7 +417,7 @@ def run_capture_screenshot(output: str = "build/captures/screenshot.png", x: int
 
 
 def run_record_gameplay(
-    output: str = "build/captures/gameplay.mp4",
+    output: str = "tmp/captures/gameplay.mp4",
     seconds: int = 8,
     framerate: int = 30,
     x: int = 0,
@@ -445,7 +448,7 @@ def run_record_gameplay(
 
 
 def start_recording(
-    output: str = "build/captures/gameplay.mp4",
+    output: str = "tmp/captures/gameplay.mp4",
     framerate: int = 30,
     x: int = 0,
     y: int = 0,

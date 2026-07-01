@@ -40,7 +40,7 @@ or changing the local automation helpers.
 
 Use ignored scratch paths such as:
 
-- `build/captures/`
+- `tmp/captures/`
 - `build/logs/`
 - game-local `tmp/` output
 

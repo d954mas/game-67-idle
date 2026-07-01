@@ -6,18 +6,18 @@ game-design research sources and reusable knowledge.
 ## Load First
 
 1. Use the already-loaded root rules.
-2. Read `gamedesign/README.md`, `gamedesign/knowledge/README.md`,
-   `gamedesign/sources/README.md`, and `gamedesign/knowledge/index.md`.
+2. Read `gamedev_knowledge/README.md`, `gamedev_knowledge/knowledge/README.md`,
+   `gamedev_knowledge/sources/README.md`, and `gamedev_knowledge/knowledge/index.md`.
 3. If references guide gameplay, UI, economy, balance, or final art, also read
-   `gamedesign/knowledge/reference_deconstruction.md`.
+   `gamedev_knowledge/knowledge/reference_deconstruction.md`.
 4. For templates, read `templates.md` only when creating or substantially
    rewriting source/knowledge files.
 
 ## Routing
 
-- `gamedesign/sources/`: raw or near-raw source notes for reusable
+- `gamedev_knowledge/sources/`: raw or near-raw source notes for reusable
   cross-project knowledge. Keep facts close to the original material.
-- `gamedesign/knowledge/`: reusable principles, checklists, methods, and
+- `gamedev_knowledge/knowledge/`: reusable principles, checklists, methods, and
   validation rules. Do not put current-game facts here.
 - `games/<game-id>/design/sources/` or `references/`: source material
   that supports one game, one GDD, one balance file, one art direction, or one

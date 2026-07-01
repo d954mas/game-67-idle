@@ -1,5 +1,5 @@
 param(
-    [string]$Output = "build/captures/gameplay.mp4",
+    [string]$Output = "tmp/captures/gameplay.mp4",
     [int]$Seconds = 8,
     [int]$Framerate = 30,
     [int]$X = 0,

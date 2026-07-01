@@ -17,7 +17,7 @@ import json
 import os
 
 # Reusable state categories every game adapts to its own loop. See
-# gamedesign/knowledge/live_state_acceptance_matrix.md.
+# gamedev_knowledge/knowledge/live_state_acceptance_matrix.md.
 STANDARD_STATES = [
     "first_screen",
     "primary_action_ready",
@@ -45,7 +45,7 @@ class StateCapture:
             sc.write_matrix("games/my-game/design/art/state_matrix.json")
     """
 
-    def __init__(self, client, project: str, out_dir: str = "build/captures") -> None:
+    def __init__(self, client, project: str, out_dir: str = "tmp/captures") -> None:
         self.client = client
         self.project = project
         self.out_dir = out_dir

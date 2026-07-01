@@ -37,7 +37,7 @@ Purpose: what reusable knowledge this source packet can support.
 
 ## Candidate Knowledge Updates
 
-- `gamedesign/knowledge/<page>.md` - proposed reusable rule or checklist item.
+- `gamedev_knowledge/knowledge/<page>.md` - proposed reusable rule or checklist item.
 ```
 
 ## Reusable Knowledge Page

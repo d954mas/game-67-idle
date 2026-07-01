@@ -12,34 +12,21 @@ Usage: py -3.12 ai_studio/runtime_automation/iterate.py [port] [--reuse]
 """
 from __future__ import annotations
 
-import subprocess
 import sys
 from pathlib import Path
 
 from devapi_client import NATIVE_DEBUG_EXE, ROOT, running_game
 
-SHOT = "build/captures/iterate.png"
-
-
-def newest_src_mtime() -> float:
-    newest = 0.0
-    src = Path(ROOT, "src")
-    for path in src.rglob("*"):
-        if path.suffix in (".c", ".h"):
-            newest = max(newest, path.stat().st_mtime)
-    return newest
+SHOT = "tmp/captures/iterate.png"
 
 
 def build_if_stale() -> bool:
     exe = Path(NATIVE_DEBUG_EXE)
-    if exe.exists() and exe.stat().st_mtime >= newest_src_mtime():
-        print("build: up to date")
+    if exe.exists():
+        print(f"build: using {exe}")
         return True
-    print("build: rebuilding game_seed (native-debug) ...")
-    result = subprocess.run(
-        ["cmake", "--build", "--preset", "native-debug", "--target", "game_seed"], cwd=ROOT
-    )
-    return result.returncode == 0
+    print("build: native executable not found; build the game first or set AI_STUDIO_GAME_EXE", file=sys.stderr)
+    return False
 
 
 def main() -> int:

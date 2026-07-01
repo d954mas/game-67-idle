@@ -1,11 +1,11 @@
 param(
-    [string]$Output = "build/captures/screenshot.png",
+    [string]$Output = "tmp/captures/screenshot.png",
     [int]$X = 0,
     [int]$Y = 0,
     [int]$Width = 0,
     [int]$Height = 0,
     [int]$ProcessId = 0,
-    [string]$ProcessName = "game_seed"
+    [string]$ProcessName = "game"
 )
 
 $ErrorActionPreference = "Stop"

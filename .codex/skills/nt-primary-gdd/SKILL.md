@@ -11,7 +11,7 @@ implementation-facing primary GDD.
 ## Start
 
 1. Read `ai_studio/game_design/gdd/README.md`.
-2. Locate or create the active game project under `gamedesign/projects/<game-id>/`.
+2. Locate or create the active game design folder under `games/<game-id>/design/`.
 3. State the current Definition of Done before writing broad docs.
 4. Load only the GDD reference file that matches the current gate.
 
@@ -33,7 +33,7 @@ implementation-facing primary GDD.
 
 ## Rules
 
-- Keep project-specific GDD material in `gamedesign/projects/<game-id>/`.
+- Keep project-specific GDD material in `games/<game-id>/design/`.
 - Do not store current-game facts, balance, screenshots, or task state in
   reusable knowledge files.
 - Separate reference, fake shot, prepared asset, runtime proof, and

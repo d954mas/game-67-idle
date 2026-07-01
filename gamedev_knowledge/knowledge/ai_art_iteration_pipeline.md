@@ -57,7 +57,7 @@ when no suitable packet already exists.
   style-sensitive candidate generation and masks, then deterministic scripts
   for trim boxes, pivots, slice9 sanity, pack building, and screenshot health.
 
-Supporting research notes: `gamedesign/knowledge/ai_art_pipeline_research_2026.md`.
+Supporting research notes: `gamedev_knowledge/knowledge/ai_art_pipeline_research_2026.md`.
 
 ## Art Request Packet
 
@@ -83,7 +83,7 @@ Include:
 Quick scaffold:
 
 ```powershell
-node ai_studio/assets/workflow/art_jobs/new_art_job.mjs --id character-lineup-v1 --family "starter character set" --target gamedesign/my-game/visuals/first-lineup-v1.png
+node ai_studio/assets/workflow/art_jobs/new_art_job.mjs --id character-lineup-v1 --family "starter character set" --target games/my-game/design/visuals/first-lineup-v1.png
 ```
 
 ## Fast Local Loop

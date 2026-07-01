@@ -4,8 +4,8 @@ Reviewed AI Studio workflows for game-design data and design-production
 processes.
 
 This module does not own the design data itself. Durable reusable design
-knowledge lives in `gamedesign/knowledge/`; reusable source notes live in
-`gamedesign/sources/`; current-game material lives under
+knowledge lives in `gamedev_knowledge/knowledge/`; reusable source notes live in
+`gamedev_knowledge/sources/`; current-game material lives under
 `games/<game-id>/design/`.
 
 ## Groups

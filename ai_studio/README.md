@@ -33,8 +33,8 @@ reviewed and ready to move.
 Load only the route that matches the current task:
 
 - Repository contract and hard invariants: `AGENTS.md`.
-- Current active game context and prototype kickoff:
-  `ai_studio/game_project/README.md` and `GAME_PROJECT.md`.
+- Current game context and prototype kickoff:
+  `ai_studio/game_project/README.md` and `games/<game-id>/`.
 - Agent workflow, context policy, Markdown shape, or multi-agent use:
   `ai_studio/core_harness/workflow/README.md`.
 - Broad read-heavy work that should be split before loading too much context:

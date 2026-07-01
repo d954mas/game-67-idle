@@ -39,7 +39,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/s
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Port 8780 -Open
 ```
 
-The launcher writes PID and logs to `.tmp/ai_studio/`, checks that the page
+The launcher writes PID and logs to `tmp/ai_studio/`, checks that the page
 really answers, and reports a clear error if the port is busy or the server
 does not start. The `.cmd` wrapper uses the same Windows-safe launcher:
 

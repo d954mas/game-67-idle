@@ -7,8 +7,8 @@ plan, implementation handoff, or source-of-truth design package.
 
 - Start with a Definition of Done before creating files.
 - Project-specific game design belongs under `games/<game-id>/design/`.
-- Reusable design knowledge belongs in `gamedesign/knowledge/`; raw reusable
-  source notes belong in `gamedesign/sources/`.
+- Reusable design knowledge belongs in `gamedev_knowledge/knowledge/`; raw reusable
+  source notes belong in `gamedev_knowledge/sources/`.
 - Separate reference, fake shot, prepared asset, runtime proof, and
   implementation plan.
 - Treat the GDD as a living source of truth, not a static essay.
@@ -64,7 +64,7 @@ For resumed or long sessions, rebuild from files:
 
 1. `AGENTS.md` already-loaded root rules.
 2. Active task if durable tracking exists.
-3. `GAME_PROJECT.md` only for game-specific work.
+3. `games/<game-id>/` only for game-specific work.
 4. Game design files in `games/<game-id>/design/`.
 5. Temporary session state only after checking durable files.
 

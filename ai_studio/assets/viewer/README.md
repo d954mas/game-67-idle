@@ -23,8 +23,6 @@ The gallery header lets the user choose which source to display:
   `ai_studio/assets/storage/sources/libraries.json`.
 - Templates: registered template asset roots from
   `templates/templates.json`.
-- Current Game: the active game assets folder from `GAME_PROJECT.md`, when one
-  is set.
 - Registered Games: game-local asset folders from
   `games/games.json`.
 

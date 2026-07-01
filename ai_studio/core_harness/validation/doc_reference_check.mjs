@@ -28,7 +28,6 @@ if (args.length > 0) usage();
 const checkedRoots = [
   "AGENTS.md",
   "CLAUDE.md",
-  "GAME_PROJECT.md",
   join("ai_studio", "README.md"),
   join("ai_studio", "core_harness"),
 ];
@@ -71,10 +70,9 @@ function isPathLikeBacktick(ref) {
     ref.startsWith("./") ||
     ref.startsWith("../") ||
     ref.startsWith(".codex/") ||
-    ref.startsWith("gamedesign/") ||
+    ref.startsWith("gamedev_knowledge/") ||
     ref.startsWith("tasks/") ||
     ref.startsWith("ai_studio/") ||
-    ref.startsWith("scripts/") ||
     ref.startsWith("state/") ||
     ref.startsWith("AGENTS.md") ||
     ref.startsWith("README.md")

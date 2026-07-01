@@ -9,7 +9,7 @@ timestamp: 2026-06-15T00:00:00Z
 # Hybrid-Casual Patterns
 
 Reusable, cross-project patterns for picking and shaping a casual/hybrid-casual
-game. Source evidence: `gamedesign/sources/voodoo_new_big_three_hybrid_casual_2026-06-15.md`
+game. Source evidence: `gamedev_knowledge/sources/voodoo_new_big_three_hybrid_casual_2026-06-15.md`
 (AppMagic, VOODOO's 2026 hits). Apply as direction, not as a clone target.
 
 ## Pick the concept

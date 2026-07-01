@@ -8,7 +8,7 @@ timestamp: 2026-06-16T00:00:00Z
 
 # Sources - Game Deconstruction / Teardown Method (checked 2026-06-16)
 
-Reusable source notes backing `gamedesign/knowledge/reference_deconstruction.md`
+Reusable source notes backing `gamedev_knowledge/knowledge/reference_deconstruction.md`
 with real external teardown practice, so a "deconstruction" means an
 evidence-based teardown, not genre memory. Labels: `observed` (read),
 `secondary`, or `inferred`.

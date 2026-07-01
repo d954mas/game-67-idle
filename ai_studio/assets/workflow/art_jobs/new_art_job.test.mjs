@@ -34,7 +34,7 @@ test("default concept writes art job paths under games/<id>/design", (t) => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /would write games\/test-game\/design\/art_requests\/ui-kit-v1\.json/);
   assert.match(result.stdout, /would write games\/test-game\/design\/data\/ui-kit-v1-crop_plan\.json/);
-  assert.doesNotMatch(result.stdout, /gamedesign\/test-game\//);
+  assert.doesNotMatch(result.stdout, /gamedev_knowledge\/test-game\//);
 });
 
 test("explicit project-dir still overrides the concept default", (t) => {

@@ -6,9 +6,9 @@ tags: [knowledge, gdd, okf-lite, ai]
 timestamp: 2026-06-13T00:00:00Z
 ---
 
-# Design Knowledge Base
+# Game Development Knowledge Base
 
-Reusable design knowledge for game GDD work.
+Reusable game-development knowledge for game GDD and production work.
 
 This folder is an OKF-lite knowledge bundle: plain Markdown files with small
 YAML frontmatter, links between related pages, citations when external sources
@@ -17,9 +17,9 @@ status board, database, SDK, or required pipeline.
 
 ## Folder Roles
 
-- `gamedesign/knowledge/` - reusable principles, checklists, patterns, and
+- `gamedev_knowledge/knowledge/` - reusable principles, checklists, patterns, and
   reference-study methods that can apply across game projects.
-- `gamedesign/sources/` - optional raw source notes, excerpts, links, and
+- `gamedev_knowledge/sources/` - optional raw source notes, excerpts, links, and
   durable research packets. Keep these closer to the original material.
 - Project-specific concept docs belong in the active project GDD folder, not in
   this reusable knowledge base.
@@ -61,7 +61,7 @@ updated when they are edited; do not run a large format-only rewrite.
   over essays.
 - Link related knowledge files instead of duplicating sections.
 - Put external sources under `## References` or `## Citations`.
-- Use `gamedesign/sources/` for raw research; summarize only reusable lessons
+- Use `gamedev_knowledge/sources/` for raw research; summarize only reusable lessons
   in `knowledge/`.
 - Add a new page only when an existing page would become less readable.
 
@@ -88,6 +88,6 @@ When adding or changing durable knowledge:
 1. Update the page itself.
 2. Add or fix links in [Index](index.md) if discoverability changed.
 3. Add one short entry to [Log](log.md) for meaningful changes.
-4. Move raw source material to `gamedesign/sources/` if it should be preserved.
+4. Move raw source material to `gamedev_knowledge/sources/` if it should be preserved.
 5. Keep tooling optional; do not add a validator or script unless repeated
    mistakes prove it would save time.

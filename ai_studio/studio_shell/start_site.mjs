@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 const repoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const serverPath = join(scriptDir, "server.mjs");
-const stateDir = join(repoRoot, ".tmp", "ai_studio");
+const stateDir = join(repoRoot, "tmp", "ai_studio");
 
 const args = process.argv.slice(2);
 const port = readPort(args);

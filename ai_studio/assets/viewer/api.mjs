@@ -36,36 +36,6 @@ function sourceAvailable(path) {
   return Boolean(path && existsSync(path));
 }
 
-function readCurrentGameSource(root) {
-  const projectFile = join(root, "GAME_PROJECT.md");
-  if (!existsSync(projectFile)) {
-    return {
-      available: false,
-      path: "",
-      description: "No GAME_PROJECT.md found.",
-    };
-  }
-
-  const text = readFileSync(projectFile, "utf8");
-  const status = text.match(/^\s*Status:\s*(.+)$/im)?.[1]?.trim().toLowerCase() || "";
-  const folder = text.match(/^\s*-\s*Game folder:\s*(.+)$/im)?.[1]?.trim() || "";
-  if (!folder || folder === "-" || status === "none") {
-    return {
-      available: false,
-      path: "",
-      description: "No active game is set in GAME_PROJECT.md.",
-    };
-  }
-
-  const gameRoot = safeResolve(root, folder);
-  const assetsPath = gameRoot ? join(gameRoot, "assets") : "";
-  return {
-    available: sourceAvailable(assetsPath),
-    path: assetsPath,
-    description: "Assets folder for the active game from GAME_PROJECT.md.",
-  };
-}
-
 function registeredGameSources(root) {
   return listRegisteredGames(root).map((game) => {
     const assetsPath = safeResolve(root, game.assets);
@@ -111,19 +81,8 @@ function registeredTemplateSources(root) {
 }
 
 export async function listAssetViewerSources(root) {
-  const currentGame = readCurrentGameSource(root);
   const sources = registeredLibrarySources(root);
   sources.push(...registeredTemplateSources(root));
-  if (currentGame.available) {
-    sources.push({
-      id: "current-game",
-      type: "game",
-      label: "Current Game",
-      description: currentGame.description,
-      path: currentGame.path,
-      available: true,
-    });
-  }
   sources.push(...registeredGameSources(root));
   return {
     sources,

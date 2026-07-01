@@ -7,7 +7,7 @@
     "subtitle": "repo roots",
     "kind": "root",
     "color": "#172033",
-    "description": "Clean AI Studio architecture tree. Reviewed modules live under ai_studio/, while game, feature, and template workspace folders are shown as shallow roots.",
+    "description": "Clean AI Studio architecture tree. Reviewed modules live under ai_studio/, while knowledge, game, feature, and template workspace folders are shown as root ownership boundaries.",
     "tags": [
       "reviewed-only",
       "workspace-roots",
@@ -30,18 +30,32 @@
       {
         "id": "workspace-folders",
         "title": "Workspace Folders",
-        "subtitle": "games, templates, and features",
+        "subtitle": "knowledge, games, templates, and features",
         "kind": "group",
         "color": "#64748b",
-        "description": "Repository workspace roots for reusable templates, copyable feature packs, and independent game folders. The map shows folder ownership boundaries here, not implementation files inside games, templates, or features.",
-        "role": "game, template, and feature workspace roots",
+        "description": "Repository workspace roots for reusable knowledge, reusable templates, copyable feature packs, and independent game folders. The map shows ownership boundaries here, not implementation files inside games, templates, or features.",
+        "role": "knowledge, game, template, and feature workspace roots",
         "tags": [
           "workspace",
+          "knowledge",
           "templates",
           "features",
           "games"
         ],
         "children": [
+          {
+            "id": "workspace:gamedev-knowledge",
+            "kind": "dir",
+            "path": "gamedev_knowledge",
+            "title": "gamedev_knowledge/",
+            "description": "Durable reusable game-development knowledge base: reusable knowledge pages and source notes. Project-specific game design remains under games/<game-id>/design/.",
+            "role": "reusable gamedev knowledge root",
+            "tags": [
+              "knowledge",
+              "gamedev",
+              "workspace"
+            ]
+          },
           {
             "id": "workspace:templates",
             "kind": "dir",
@@ -412,7 +426,7 @@
         "kind": "module",
         "moduleId": "game-project",
         "color": "#2563eb",
-        "description": "AI Studio module for active game routing, GAME_PROJECT.md orientation, new prototype kickoff, compact pre-implementation context packs, playable feature iteration, and schema-first game state workflow.",
+        "description": "AI Studio module for games/<game-id>/ routing, new prototype kickoff, compact pre-implementation context packs, playable feature iteration, and schema-first game state workflow.",
         "tags": [
           "game-project",
           "context",
@@ -439,7 +453,7 @@
             "kind": "tool",
             "path": "ai_studio/game_project/new_prototype.mjs",
             "title": "new_prototype.mjs",
-            "description": "Creates the first game design folder, GAME_PROJECT.md routing, taskboard epic/task, and startup gate context for a new prototype.",
+            "description": "Creates the first game design folder, taskboard epic/task, and startup gate context for a new prototype.",
             "role": "new prototype kickoff command",
             "tags": [
               "game-project",
@@ -452,7 +466,7 @@
             "kind": "tool",
             "path": "ai_studio/game_project/iteration_context.mjs",
             "title": "iteration_context.mjs",
-            "description": "Builds a compact pre-implementation context pack for playable game work from GAME_PROJECT.md, taskboard, project docs, and runtime sources.",
+            "description": "Builds a compact pre-implementation context pack for playable game work from games/<game-id>/, taskboard, project docs, and runtime sources.",
             "role": "game iteration context command",
             "tags": [
               "game-project",
@@ -660,18 +674,6 @@
             "tags": [
               "game-project",
               "test"
-            ]
-          },
-          {
-            "id": "game-project:root-game-project",
-            "kind": "doc",
-            "path": "GAME_PROJECT.md",
-            "title": "GAME_PROJECT.md",
-            "description": "Repository root active-game routing file. Load only for game-specific work; keep lore, balance, GDD detail, and task state elsewhere.",
-            "role": "active game routing entrypoint",
-            "tags": [
-              "game-project",
-              "root-entrypoint"
             ]
           }
         ]
@@ -3558,7 +3560,7 @@
         "moduleId": "game_design",
         "color": "#7c3aed",
         "path": "ai_studio/game_design",
-        "description": "Reviewed AI Studio game-design workflow module. Owns primary GDD workflow, source routing, and reusable design knowledge workflow docs; durable design content remains in gamedesign/.",
+        "description": "Reviewed AI Studio game-design workflow module. Owns primary GDD workflow, source routing, and reusable design knowledge workflow docs; durable design content remains in gamedev_knowledge/.",
         "role": "game-design workflow module",
         "tags": [
           "game-design",
@@ -3572,7 +3574,7 @@
             "kind": "doc",
             "path": "ai_studio/game_design/README.md",
             "title": "README.md",
-            "description": "Game Design module contract: workflow ownership and boundary with durable gamedesign content.",
+            "description": "Game Design module contract: workflow ownership and boundary with durable gamedev_knowledge content.",
             "role": "game-design module entrypoint",
             "tags": [
               "source",

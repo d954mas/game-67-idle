@@ -53,10 +53,11 @@ When useful, split problems into product, pipeline, and agent behavior.
 
 ## Durable Changes
 
-Do not edit files by default. If the user asks to preserve lessons, add a short
-entry to `AI_PIPELINE_HISTORY.md`. If the reflection creates project work,
-create or update taskboard tasks instead of burying work only in the
-retrospective.
+Do not edit files by default. If the user asks to preserve lessons, update the
+owning `ai_studio/` module README or `gamedev_knowledge/knowledge/log.md`,
+depending on whether the lesson is workflow/tooling or reusable game-development
+knowledge. If the reflection creates project work, create or update taskboard
+tasks instead of burying work only in the retrospective.
 
 ## Non-Negotiables
 

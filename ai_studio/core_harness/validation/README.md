@@ -11,7 +11,6 @@ Checked by this module:
 
 - `AGENTS.md`
 - `CLAUDE.md`
-- `GAME_PROJECT.md`
 - `ai_studio/README.md`
 - `ai_studio/core_harness/`
 

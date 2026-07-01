@@ -1,18 +1,17 @@
 # Game Project
 
-AI Studio module for active game routing, first-slice startup context, and
+AI Studio module for game-folder routing, first-slice startup context, and
 playable feature iteration.
 
 ## Role
 
 Game Project owns the agent-facing bridge between the reusable AI Studio
-harness and one current game project:
+harness and a game under `games/<game-id>/`:
 
-- `GAME_PROJECT.md`: compact active-game routing file at repository root.
 - `new_prototype.mjs`: creates the first game design folder, task, epic, and
   startup context pack for a new prototype.
 - `iteration_context.mjs`: builds a compact pre-implementation context pack for
-  playable game work.
+  playable game work. Pass `--game-id <id>` when more than one game folder exists.
 - `feature_iteration/`: small playable-increment workflow for implementing,
   validating, reviewing, and handing off current-game feature work.
 - `state_management/`: schema-first game state workflow and generator for
@@ -27,7 +26,7 @@ Runtime proof helpers belong to `ai_studio/runtime_automation/`.
 
 ```powershell
 node ai_studio/game_project/new_prototype.mjs --game-id <id> --title <name> --brief <one sentence>
-node ai_studio/game_project/iteration_context.mjs --json-output tmp/prototype_startup_gate_context.json
+node ai_studio/game_project/iteration_context.mjs --game-id <id> --json-output tmp/prototype_startup_gate_context.json
 node --test ai_studio/game_project/game_project.test.mjs
 ```
 

@@ -29,7 +29,7 @@ This checklist only helps collect runtime evidence.
 ## Commands
 
 ```powershell
-py -3.12 ai_studio/runtime_automation/pixel_health.py build/captures/screenshot.png
-py -3.12 ai_studio/runtime_automation/ui_readability.py build/captures/screenshot.png
+py -3.12 ai_studio/runtime_automation/pixel_health.py tmp/captures/screenshot.png
+py -3.12 ai_studio/runtime_automation/ui_readability.py tmp/captures/screenshot.png
 py -3.12 ai_studio/runtime_automation/state_capture.py --help
 ```

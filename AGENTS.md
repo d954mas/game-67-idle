@@ -22,10 +22,11 @@ AI-pipeline docs/tools belong in the owning `ai_studio/` module.
 
 ## Current Game
 
-Current game context lives in `GAME_PROJECT.md`.
+Current game context lives under `games/<game-id>/`.
 
-Read `GAME_PROJECT.md` only when the task is about a specific game. Do not store
-game lore, balance, roadmap, GDD detail, or per-game task state in `AGENTS.md`.
+When the task is about a specific game, use the explicit game id from the user or
+infer it only when there is exactly one game folder. Do not store game lore,
+balance, roadmap, GDD detail, or per-game task state in `AGENTS.md`.
 
 If there is no active game, do not start game implementation unless the lead
 explicitly asks for it.
@@ -47,5 +48,8 @@ explicitly asks for it.
 - Task/status state: `ai_studio/taskboard/README.md` and the taskboard.
 - AI Studio architecture: `ai_studio/README.md`, `ai_studio/tree.json`, and
   `ai_studio/architecture_map/README.md`.
+- Templates, games, and features: `templates/README.md`, `games/README.md`,
+  and `features/README.md`.
+- Reusable game-development knowledge: `gamedev_knowledge/README.md`.
 - Detailed engine, workflow, validation, subagent, asset, and release procedures:
   load the matching `ai_studio/` module, doc, or skill only when the task needs it.

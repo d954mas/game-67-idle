@@ -29,7 +29,7 @@ function Open-Url([string]$Url) {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = (Resolve-Path (Join-Path $scriptDir "..\..")).Path
 $serverPath = Join-Path $scriptDir "server.mjs"
-$stateDir = Join-Path $repoRoot ".tmp\ai_studio"
+$stateDir = Join-Path $repoRoot "tmp\ai_studio"
 $pidFile = Join-Path $stateDir "studio_shell_$Port.pid"
 $outLog = Join-Path $stateDir "studio_shell_$Port.out.log"
 $errLog = Join-Path $stateDir "studio_shell_$Port.err.log"

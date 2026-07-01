@@ -61,11 +61,6 @@ function activeTaskFiles(root) {
   return readdirSync(dir).filter((name) => name.endsWith(".md") && name.toLowerCase() !== "readme.md");
 }
 
-function namesActiveConcept(text) {
-  return !/status:\s*none|no active game concept/i.test(String(text || "")) &&
-    /game id:\s*`?[a-z0-9][a-z0-9-]{1,48}`?|game folder:\s*`?games[\\/]+[a-z0-9][a-z0-9-]{1,48}`?/i.test(String(text || ""));
-}
-
 function gameFolderRel(gameId) {
   return `games/${gameId}`;
 }
@@ -83,20 +78,6 @@ function assertCleanKickoffTarget(root, gameId, options) {
   if (activeTasks.length > 0 && !options.force) {
     fail(`tasks/active already has ${activeTasks.length} task file(s); close or archive current work before kickoff`);
   }
-  const gameProject = readText(join(root, "GAME_PROJECT.md"));
-  if (namesActiveConcept(gameProject) && !options.force) {
-    fail("GAME_PROJECT.md already names an active game concept");
-  }
-}
-
-function updateGameProject(root, title, gameId, brief) {
-  const path = join(root, "GAME_PROJECT.md");
-  const body = gameProjectBody(title, gameId, brief);
-  if (!readText(path)) {
-    writeNew(path, body, { root, force: false });
-    return;
-  }
-  writeFileSync(path, body, "utf8");
 }
 
 function projectReadme(title, gameId, brief) {
@@ -117,7 +98,7 @@ ${brief}
   non-goal, proof, stop condition, likely files.
 - Before visual/runtime coding, compare current native screenshot or capture
   plan against the accepted fake shot/target and write a mismatch list.
-- Keep reusable process learnings in \`gamedesign/knowledge/\`; keep project-specific facts in this game folder.
+- Keep reusable process learnings in \`gamedev_knowledge/knowledge/\`; keep project-specific facts in this game folder.
 
 ## First Slice
 
@@ -284,7 +265,7 @@ function liveStateMatrixDoc(title, gameId) {
 
 Project: \`${gameId}\`
 
-Reusable rule: \`gamedesign/knowledge/live_state_acceptance_matrix.md\`.
+Reusable rule: \`gamedev_knowledge/knowledge/live_state_acceptance_matrix.md\`.
 Machine input: \`visual/live_state_acceptance_matrix.json\`.
 
 Fill this before accepting a broad UI/visual review. A review only
@@ -385,39 +366,14 @@ not a notes dump.
 `;
 }
 
-function gameProjectBody(title, gameId, brief) {
-  return `# GAME_PROJECT
-
-## Active Game
-
-Status: active
-
-${brief}
-
-- Game id: \`${gameId}\`
-- Game folder: \`${gameFolderRel(gameId)}/\`
-- Design docs: \`${designDirRel(gameId)}/gdd.md\`, \`${designDirRel(gameId)}/data/core_loop.json\`
-- Task board: taskboard epic and first native playable-slice task
-- Current milestone: Stage 0 startup review for \`${title}\`
-- Hard game-specific constraints:
-  - Native-first implementation until an explicit web/mobile exception is approved.
-  - Do not expand broad systems until the first fake-shot review and native proof are filled.
-  - For visual slices, use review evidence with state coverage.
-
-## Detailed Project State
-
-- GDD and game-specific docs live under \`${designDirRel(gameId)}/\`.
-- Work state, evidence, review, and done criteria live in Taskboard task files.
-- Do not put lore, balance, asset lists, or detailed implementation notes in this file.
-`;
-}
-
-function runStartupGate(root) {
+function runStartupGate(root, gameId) {
   const jsonOutput = join(root, "tmp", "prototype_startup_gate_context.json");
   const result = spawnSync(process.execPath, [
     join(scriptDir, "iteration_context.mjs"),
     "--root",
     root,
+    "--game-id",
+    gameId,
     "--json-output",
     jsonOutput,
   ], {
@@ -443,7 +399,6 @@ const brief = String(args.brief || "").trim() || fail("--brief is required");
 const options = { root, force: args.force === true };
 
 assertCleanKickoffTarget(root, gameId, options);
-updateGameProject(root, title, gameId, brief);
 
 const projectDir = join(root, "games", gameId, "design");
 writeNew(join(projectDir, "README.md"), projectReadme(title, gameId, brief), options);
@@ -488,7 +443,7 @@ const task = createTask(root, {
   body: taskBody(title, gameId),
 });
 
-const gate = runStartupGate(root);
+const gate = runStartupGate(root, gameId);
 
 console.log(`created project: ${relative(root, projectDir)}`);
 console.log(`created epic: ${epic.fields.id}`);

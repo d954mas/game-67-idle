@@ -17,4 +17,4 @@ The URL is public and unauthenticated while the command runs. Do not serve
 secrets, source trees, private assets, or account-gated files.
 
 The downloaded cloudflared binary is cached under
-`.tmp/ai_studio/studio_shell/tunnel/bin/`, which is ignored by git.
+`tmp/ai_studio/studio_shell/tunnel/bin/`, which is ignored by git.

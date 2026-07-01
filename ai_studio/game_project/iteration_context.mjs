@@ -9,7 +9,7 @@ const harnessRoot = resolve(scriptDir, "..", "..");
 
 function usage() {
   console.error(`usage:
-  node ai_studio/game_project/iteration_context.mjs [--root <repo>] [--json-output <file>] [--status-max-chars <n>]
+  node ai_studio/game_project/iteration_context.mjs [--root <repo>] [--game-id <id>] [--json-output <file>] [--status-max-chars <n>]
 
 Builds a compact pre-implementation context pack for playable game work.`);
   process.exit(2);
@@ -100,21 +100,6 @@ function hasMeaningfulText(text) {
 function isActiveConcept(text) {
   const value = String(text || "");
   return hasMeaningfulText(value) && !/status:\s*none|no active|no concept|none selected|clean template/i.test(value);
-}
-
-function gameProjectConcept(markdown) {
-  const activeGame = sectionText(markdown, "Active Game");
-  if (!activeGame) return "Status: none";
-  const status = activeGame.match(/status:\s*([^\r\n]+)/i)?.[1]?.trim() || "";
-  if (/^none\b/i.test(status)) return "Status: none";
-  const gameId = activeGame.match(/game id:\s*`?([a-z0-9][a-z0-9-]{1,64})`?/i)?.[1] || "";
-  const summary = activeGame.split(/\r?\n/).find((line) => line.trim() && !/^status:|^-/.test(line.trim()))?.trim() || "";
-  return [`Status: ${status || "active"}`, gameId ? `Game id: ${gameId}` : "", summary].filter(Boolean).join("; ");
-}
-
-function gameProjectId(markdown) {
-  const activeGame = sectionText(markdown, "Active Game");
-  return activeGame.match(/game id:\s*`?([a-z0-9][a-z0-9-]{1,64})`?/i)?.[1] || "";
 }
 
 function taskContextHasActionableWork(text) {
@@ -275,6 +260,36 @@ function directories(path) {
   }
 }
 
+function validGameId(value) {
+  return /^[a-z0-9][a-z0-9-]{1,64}$/.test(String(value || ""));
+}
+
+function gameDirectories(root) {
+  return directories(join(root, "games")).filter((name) => validGameId(name));
+}
+
+function inferActiveGameId(root, requested = "") {
+  const gameId = String(requested || "").trim();
+  if (gameId) return validGameId(gameId) ? gameId : "";
+  const ids = gameDirectories(root);
+  return ids.length === 1 ? ids[0] : "";
+}
+
+function firstMeaningfulLine(text) {
+  return String(text || "").split(/\r?\n/)
+    .map((line) => line.trim())
+    .find((line) => line && !line.startsWith("#") && !line.startsWith("---") && !/^[a-z_]+:/i.test(line)) || "";
+}
+
+function gameConcept(root, gameId) {
+  if (!gameId) return "Status: none";
+  const designReadme = readIfExists(join(root, "games", gameId, "design", "README.md"));
+  const gdd = readIfExists(join(root, "games", gameId, "design", "gdd.md"))
+    || readIfExists(join(root, "games", gameId, "design", "GDD.md"));
+  const summary = firstMeaningfulLine(designReadme) || firstMeaningfulLine(gdd);
+  return [`Status: active`, `Game id: ${gameId}`, summary].filter(Boolean).join("; ");
+}
+
 function projectDesignSources(root, activeGameId = "") {
   const sources = [];
   const gameIds = activeGameId ? [activeGameId] : directories(join(root, "games"));
@@ -296,15 +311,13 @@ function projectDesignSources(root, activeGameId = "") {
 function buildContext(root, options = {}) {
   const maxStatusChars = Number.isFinite(Number(options.statusMaxChars)) ? Number(options.statusMaxChars) : 5000;
   const agents = readIfExists(join(root, "AGENTS.md"));
-  const gameProject = readIfExists(join(root, "GAME_PROJECT.md"));
-  const activeGame = sectionText(gameProject, "Active Game");
-  const activeGameId = gameProjectId(gameProject);
+  const activeGameId = inferActiveGameId(root, options.gameId);
   const project = sectionText(agents, "Project");
   const direction = sectionText(agents, "Direction");
   const validation = sectionText(agents, "Validation");
   const taskContext = runTaskContext(root, Math.max(1200, maxStatusChars));
 
-  const concept = gameProjectConcept(gameProject);
+  const concept = gameConcept(root, activeGameId);
   const activeConcept = isActiveConcept(concept);
   const productTarget = bulletContaining(direction, [/current product target/i, /release-quality/i, /product target/i, /Current runtime surface/i], "");
   const runtimeSurface = bulletContaining(direction, [/current runtime surface/i, /src\/clean_seed_main\.c/i, /src\/main\.c/i, /placeholder/i], "");
@@ -314,8 +327,8 @@ function buildContext(root, options = {}) {
   const visualGate = bulletContaining(direction, [/generated-art/i, /visual work/i, /quality/i], "");
 
   const designSources = existing(root, [
-    "gamedesign/knowledge/README.md",
-    "gamedesign/knowledge/reference_deconstruction.md",
+    "gamedev_knowledge/knowledge/README.md",
+    "gamedev_knowledge/knowledge/reference_deconstruction.md",
   ]).concat(activeConcept ? projectDesignSources(root, activeGameId) : []);
   const runtimeCandidates = activeConcept
     ? [
@@ -332,8 +345,8 @@ function buildContext(root, options = {}) {
       ];
   const runtimeSources = existing(root, runtimeCandidates);
 
-  const currentGate = sectionText(taskContext, "Current Gate") || sectionText(taskContext, "Current Goal") || activeGame;
-  const nextPriorities = sectionText(taskContext, "Next Priorities") || activeGame;
+  const currentGate = sectionText(taskContext, "Current Gate") || sectionText(taskContext, "Current Goal") || concept;
+  const nextPriorities = sectionText(taskContext, "Next Priorities") || concept;
   const blockers = sectionText(taskContext, "Blocking Work") || sectionText(taskContext, "Blockers");
   const requiredValidation = sectionText(taskContext, "Required Validation");
 
@@ -454,7 +467,7 @@ function renderMarkdown(context) {
 
 const args = parseArgs(process.argv.slice(2));
 const root = args.root ? resolve(String(args.root)) : findRoot();
-const context = buildContext(root, { statusMaxChars: args["status-max-chars"] });
+const context = buildContext(root, { statusMaxChars: args["status-max-chars"], gameId: args["game-id"] });
 const markdown = renderMarkdown(context);
 
 if (args["json-output"]) {

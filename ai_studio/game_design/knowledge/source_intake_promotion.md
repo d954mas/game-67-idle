@@ -1,4 +1,4 @@
-﻿# Source Intake And Promotion
+# Source Intake And Promotion
 
 Load this reference when parsing articles, videos, reference packets, store
 pages, gameplay footage, talks, or other game-design research sources.
@@ -25,11 +25,11 @@ proof. If browsing or source access is missing, write the evidence gap plainly.
 1. Decide scope before editing: reusable knowledge, project-specific knowledge,
    raw source shelf, or task/status.
 2. Add or update the source note first when external evidence matters.
-3. Extract only reusable conclusions into `gamedesign/knowledge/`, or project
+3. Extract only reusable conclusions into `gamedev_knowledge/knowledge/`, or project
    conclusions into the active game design folder.
 4. Link the conclusion back to its source note when the source matters.
-5. Update `gamedesign/knowledge/index.md` when discoverability changes.
-6. Update `gamedesign/knowledge/log.md` for meaningful reusable knowledge-base
+5. Update `gamedev_knowledge/knowledge/index.md` when discoverability changes.
+6. Update `gamedev_knowledge/knowledge/log.md` for meaningful reusable knowledge-base
    changes. Keep the log short.
 7. Do not create a new knowledge page if a focused edit to an existing page is
    clearer.

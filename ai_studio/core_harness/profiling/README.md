@@ -8,6 +8,11 @@ subagent spawn diagnostics.
 Profiling is passive. Hooks write JSONL records under `tmp/session_profiles/`.
 The raw telemetry is local evidence and should not be committed.
 
+Stay local-first for AI observability. Do not add external tracing, eval, or
+dashboard services unless a concrete repeated need exists, such as shared human
+review, comparable datasets/evals, production telemetry, OTLP integration, or a
+local JSONL workflow that cannot answer an important repeated question.
+
 ## Boundary
 
 - `agent_surfaces/` owns generated hook config for Codex and Claude.

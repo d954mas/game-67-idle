@@ -88,4 +88,4 @@ explicitly choose that direction.
 
 ## Reusable rule promoted to knowledge
 
-See `gamedesign/knowledge/hybrid_casual_patterns.md`.
+See `gamedev_knowledge/knowledge/hybrid_casual_patterns.md`.

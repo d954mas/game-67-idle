@@ -5,6 +5,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 
+const removedRootGameFile = `GAME_${"PROJECT.md"}`;
+
 function tempRoot(t) {
   const dir = mkdtempSync(join(tmpdir(), "game-context-test-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
@@ -51,22 +53,6 @@ function writeStarter(root) {
 - Hard gate: for playable game work, do not create, serve, validate, or pivot to
   a web prototype/page/app because it seems faster or prettier. Use the native
   PC build first.
-`, "utf8");
-  writeFileSync(join(root, "GAME_PROJECT.md"), `# GAME_PROJECT
-
-## Active Game
-
-Status: active
-
-67 World, child-friendly meme merge/evolution game.
-
-- Game id: \`meme-evolution\`
-- Game folder: \`games/meme-evolution/\`
-- Design docs: \`games/meme-evolution/design/gdd.md\`, \`games/meme-evolution/design/data/core_loop.json\`
-- Current milestone: Native PC review gate.
-- Hard game-specific constraints:
-  - Manual child-test is required.
-  - Native PC review gate.
 `, "utf8");
   writeTaskContext(root, `# Taskboard Context
 
@@ -148,14 +134,6 @@ test("game iteration context blocks broad coding without active concept", (t) =>
 
 - Native desktop/PC is the preferred development harness.
 `, "utf8");
-  writeFileSync(join(fixture, "GAME_PROJECT.md"), `# GAME_PROJECT
-
-## Active Game
-
-Status: none
-
-There is no active game concept.
-`, "utf8");
   writeFileSync(join(fixture, "src", "main.c"), "int main(void){return 0;}\n", "utf8");
 
   const json = join(fixture, "tmp", "context.json");
@@ -186,7 +164,7 @@ test("game iteration context omits closed project sources without active concept
   mkdirSync(join(fixture, "tasks"), { recursive: true });
   mkdirSync(join(fixture, "src"), { recursive: true });
   mkdirSync(join(fixture, "state"), { recursive: true });
-  mkdirSync(join(fixture, "gamedesign", "knowledge"), { recursive: true });
+  mkdirSync(join(fixture, "gamedev_knowledge", "knowledge"), { recursive: true });
   mkdirSync(join(fixture, "games", "closed-alpha", "design", "data"), { recursive: true });
   mkdirSync(join(fixture, "games", "closed-beta", "design", "data"), { recursive: true });
   writeFileSync(join(fixture, "AGENTS.md"), `# AGENTS.md
@@ -203,16 +181,8 @@ test("game iteration context omits closed project sources without active concept
 
 - Native desktop/PC is the preferred development harness.
 `, "utf8");
-  writeFileSync(join(fixture, "GAME_PROJECT.md"), `# GAME_PROJECT
-
-## Active Game
-
-Status: none
-
-There is no active game concept.
-`, "utf8");
-  writeFileSync(join(fixture, "gamedesign", "knowledge", "README.md"), "# Knowledge\n", "utf8");
-  writeFileSync(join(fixture, "gamedesign", "knowledge", "reference_deconstruction.md"), "# References\n", "utf8");
+  writeFileSync(join(fixture, "gamedev_knowledge", "knowledge", "README.md"), "# Knowledge\n", "utf8");
+  writeFileSync(join(fixture, "gamedev_knowledge", "knowledge", "reference_deconstruction.md"), "# References\n", "utf8");
   writeFileSync(join(fixture, "games", "closed-alpha", "design", "gdd.md"), "# Closed Alpha\n", "utf8");
   writeFileSync(join(fixture, "games", "closed-alpha", "design", "data", "core_loop.json"), "{}\n", "utf8");
   writeFileSync(join(fixture, "games", "closed-beta", "design", "GDD.md"), "# Closed Beta\n", "utf8");
@@ -236,8 +206,8 @@ There is no active game concept.
   const context = JSON.parse(readFileSync(json, "utf8"));
   assert.equal(context.visual_first_contract.status, "inactive_until_active_concept");
   assert.deepEqual(context.design_sources, [
-    "gamedesign/knowledge/README.md",
-    "gamedesign/knowledge/reference_deconstruction.md",
+    "gamedev_knowledge/knowledge/README.md",
+    "gamedev_knowledge/knowledge/reference_deconstruction.md",
   ]);
   assert.ok(context.runtime_sources.includes("src/clean_seed_main.c"));
   assert.ok(context.runtime_sources.includes("state/game_state.schema.json"));
@@ -268,28 +238,8 @@ function writeKickoffTemplate(root) {
 
 - Native desktop/PC is the preferred development harness.
 `, "utf8");
-  writeFileSync(join(root, "GAME_PROJECT.md"), `# GAME_PROJECT
-
-## Active Game
-
-Status: none
-
-There is no active game concept.
-`, "utf8");
   writeFileSync(join(root, "src", "main.c"), "int main(void){return 0;}\n", "utf8");
   writeFileSync(join(root, "CMakePresets.json"), "{}\n", "utf8");
-}
-
-function writeKickoffTemplateWithActiveNone(root) {
-  writeKickoffTemplate(root);
-  writeFileSync(join(root, "GAME_PROJECT.md"), `# GAME_PROJECT
-
-## Active Game
-
-Status: none
-
-There is no active game concept. Focus on the reusable AI-first native game seed.
-`, "utf8");
 }
 
 test("new prototype kickoff creates startup-ready skeleton", (t) => {
@@ -320,11 +270,7 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   assert.equal(existsSync(join(fixture, "games", "bubble-bay", "design", "reviews", "first_slice_review.md")), true);
   assert.equal(existsSync(join(fixture, "games", "bubble-bay", "design", "visual", "live_state_acceptance_matrix.md")), true);
   assert.equal(existsSync(join(fixture, "games", "bubble-bay", "design", "visual", "live_state_acceptance_matrix.json")), true);
-  const gameProject = readFileSync(join(fixture, "GAME_PROJECT.md"), "utf8");
-  assert.match(gameProject, /Status: active/);
-  assert.match(gameProject, /Game id: `bubble-bay`/);
-  assert.match(gameProject, /fake-shot review and native proof/);
-  assert.match(gameProject, /review evidence with state coverage/);
+  assert.equal(existsSync(join(fixture, removedRootGameFile)), false);
   assert.match(readFileSync(join(fixture, "games", "bubble-bay", "design", "gdd.md"), "utf8"), /visual-first session contract/);
   assert.match(readFileSync(join(fixture, "games", "bubble-bay", "design", "gdd.md"), "utf8"), /review evidence/);
   assert.match(readFileSync(join(fixture, "games", "bubble-bay", "design", "gdd.md"), "utf8"), /live_state_acceptance_matrix\.json/);
@@ -355,17 +301,17 @@ test("new prototype kickoff creates startup-ready skeleton", (t) => {
   // the core-loop model before it is ready to build.
   assert.equal(context.prototype_startup_gate.status, "not_ready_for_implementation");
   assert.equal(context.prototype_startup_gate.hard_stop, true);
-  assert.deepEqual(context.prototype_startup_gate.missing, ["runtime_harness", "core_loop_model"]);
+  assert.deepEqual(context.prototype_startup_gate.missing, ["runtime_harness", "visual_review_plan", "core_loop_model"]);
   assert.equal(context.visual_first_contract.status, "required_before_visual_runtime_work");
   assert.ok(context.visual_first_contract.stop_conditions.some((item) => item.includes("Failed review blocks")));
   assert.ok(context.design_sources.includes("games/bubble-bay/design/reviews/first_slice_review.md"));
   assert.ok(context.design_sources.includes("games/bubble-bay/design/visual/live_state_acceptance_matrix.json"));
 });
 
-test("new prototype kickoff accepts active concept none seed wording", (t) => {
+test("new prototype kickoff keeps game routing inside games folder", (t) => {
   const fixture = tempRoot(t);
   const repoRoot = process.cwd();
-  writeKickoffTemplateWithActiveNone(fixture);
+  writeKickoffTemplate(fixture);
 
   const result = spawnSync(process.execPath, [
     join(repoRoot, "ai_studio", "game_project", "new_prototype.mjs"),
@@ -384,43 +330,8 @@ test("new prototype kickoff accepts active concept none seed wording", (t) => {
   });
 
   assert.equal(result.status, 0, result.stderr);
-  const gameProject = readFileSync(join(fixture, "GAME_PROJECT.md"), "utf8");
-  assert.match(gameProject, /Status: active/);
-  assert.match(gameProject, /Game id: `orb-garden`/);
-});
-
-test("new prototype kickoff refuses real active concept without force", (t) => {
-  const fixture = tempRoot(t);
-  const repoRoot = process.cwd();
-  writeKickoffTemplateWithActiveNone(fixture);
-  writeFileSync(join(fixture, "GAME_PROJECT.md"), `# GAME_PROJECT
-
-## Active Game
-
-Status: active
-
-- Game id: \`existing-game\`
-- Game folder: \`games/existing-game/\`
-`, "utf8");
-
-  const result = spawnSync(process.execPath, [
-    join(repoRoot, "ai_studio", "game_project", "new_prototype.mjs"),
-    "--root",
-    fixture,
-    "--game-id",
-    "orb-garden",
-    "--title",
-    "Orb Garden",
-    "--brief",
-    "Original merge-3 dragon grove puzzle.",
-  ], {
-    cwd: repoRoot,
-    encoding: "utf8",
-    shell: false,
-  });
-
-  assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /GAME_PROJECT\.md already names an active game concept/);
+  assert.equal(existsSync(join(fixture, removedRootGameFile)), false);
+  assert.equal(existsSync(join(fixture, "games", "orb-garden", "design", "gdd.md")), true);
 });
 
 test("new prototype kickoff refuses existing project without force", (t) => {

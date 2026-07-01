@@ -172,7 +172,7 @@ def write_png(path: str, width: int, height: int, bgra: bytes) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--output", default="build/captures/screenshot.png")
+    parser.add_argument("--output", default="tmp/captures/screenshot.png")
     parser.add_argument("--process-id", type=int, default=0)
     parser.add_argument("--x", type=int, default=0)
     parser.add_argument("--y", type=int, default=0)
