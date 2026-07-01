@@ -11,7 +11,7 @@
 //   node ai_studio/assets/viewer/pull.mjs --ids kenney__desk__cc0-1-0 --to mygame/assets --apply
 import { readFile, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { scanPackManifestSource } from "../storage/manifests/manifest.mjs";
 import { decideLicense, isPublishable } from "../storage/license/restricted.mjs";
 import { defaultLibrarySourceRoot } from "../storage/sources/libraries.mjs";
@@ -21,6 +21,18 @@ const PULL_PACK = "library-pulls";
 
 function relPosix(root, abs) {
   return relative(root, abs).replace(/\\/g, "/");
+}
+
+function resolvePullTarget(root, target) {
+  const resolvedRoot = resolve(root);
+  const full = resolve(resolvedRoot, target);
+  if (full === resolvedRoot) {
+    throw new Error("--to must be a game/template assets directory, not the repository root");
+  }
+  if (!full.startsWith(resolvedRoot + sep)) {
+    throw new Error("--to must stay inside the repository");
+  }
+  return full;
 }
 
 function parseArgs(argv) {
@@ -102,7 +114,7 @@ function localRecord(record, resource, preview, ts) {
 async function main() {
   const a = parseArgs(process.argv.slice(2));
   const library = resolve(a.library);
-  const to = resolve(a.to);
+  const to = resolvePullTarget(process.cwd(), a.to);
   const want = new Set(a.ids.split(",").map((s) => s.trim()).filter(Boolean));
   const { records } = await scanPackManifestSource(library);
   const picks = records.filter((r) => want.has(r.asset_id));
@@ -148,4 +160,4 @@ if (isMain(import.meta.url)) {
   main().catch((e) => { console.error(e.message); process.exit(1); });
 }
 
-export { parseArgs, localRecord };
+export { parseArgs, localRecord, resolvePullTarget };
