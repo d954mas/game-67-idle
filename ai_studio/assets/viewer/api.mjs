@@ -182,6 +182,14 @@ function writeGalleryMeta(root, source) {
   return { outDir, galleryUrl: `/asset_viewer/gallery/${slug}/`, meta };
 }
 
+function readGalleryMeta(metaPath) {
+  try {
+    return JSON.parse(readFileSync(metaPath, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function readAssetFilters(url) {
   const filters = new Map();
   for (const [key, value] of url.searchParams.entries()) {
@@ -485,8 +493,8 @@ export function resolveAssetViewerGalleryPath(root, pathname) {
 
   if (relativeParts[0] === "lib") {
     if (!existsSync(metaPath)) return null;
-    const meta = JSON.parse(readFileSync(metaPath, "utf8"));
-    if (!meta.libraryRoot) return null;
+    const meta = readGalleryMeta(metaPath);
+    if (!meta?.libraryRoot) return null;
     return safeResolve(meta.libraryRoot, relativeParts.slice(1).join("/"));
   }
   if (relativeParts[0] === "repo") {

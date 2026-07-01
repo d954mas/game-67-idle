@@ -73,3 +73,20 @@ test("resolveAssetViewerGalleryPath confines gallery, library, and repo routes",
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test("resolveAssetViewerGalleryPath ignores unusable gallery meta", () => {
+  const root = tempRoot();
+  try {
+    const galleryDir = join(root, "tmp", "ai-studio-asset-viewer", "global-library");
+    mkdirSync(galleryDir, { recursive: true });
+    const metaPath = join(galleryDir, ".asset-viewer-source.json");
+
+    writeFileSync(metaPath, "{not json", "utf8");
+    assert.equal(resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/lib/model.glb"), null);
+
+    writeFileSync(metaPath, JSON.stringify({ sourceId: "global-library" }), "utf8");
+    assert.equal(resolveAssetViewerGalleryPath(root, "/asset_viewer/gallery/global-library/lib/model.glb"), null);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
