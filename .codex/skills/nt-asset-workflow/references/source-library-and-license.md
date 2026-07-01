@@ -4,7 +4,8 @@ Load this when searching, adding, promoting, pulling, or recording assets.
 
 ## Current Architecture
 
-- Global/private library: `C:\Users\ROG\YandexDisk\gamedev\assets\ai_pipeline_assets`.
+- Global/private library: register an explicit external source in
+  `ai_studio/assets/storage/sources/libraries.json`.
 - AI Studio storage code: `ai_studio/assets/storage/`.
 - AI Studio viewer/pull/promote UI/tooling: `ai_studio/assets/viewer/`.
 - Generated fast data: `tmp/ai_studio/assets/index`, `tmp/ai_studio/assets/snapshots`,

@@ -13,7 +13,7 @@ humans should use the knowledge base.
 
 ## 2026-06-13
 
-- Migrated legacy knowledge pages to OKF-lite frontmatter so agents can index
+- Added OKF-lite frontmatter to existing knowledge pages so agents can index
   them without reading every page first.
 - Neutralized one old project-specific art-pipeline example so the knowledge
   base stays template-friendly.

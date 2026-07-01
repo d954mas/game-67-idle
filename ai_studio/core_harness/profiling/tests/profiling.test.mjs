@@ -841,7 +841,7 @@ test("hook_record_fast (C) and hook_record.mjs (JS) agree on result + category",
       { cmd: "ninja -C build", exit: 1, want: "fail" },   // real build failure -> fail
       { cmd: "git commit -m x", exit: 0, want: "pass" },  // task_status
       { cmd: "cmake --build .", exit: 0, want: "pass" },  // validation
-      { cmd: "node tools/x.mjs", exit: 0, want: "pass" }, // tooling
+      { cmd: "node ai_studio/core_harness/tool_lib/x.mjs", exit: 0, want: "pass" }, // tooling
     ];
     for (const item of cases) {
       const payload = { hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command: item.cmd }, tool_response: { exit_code: item.exit } };

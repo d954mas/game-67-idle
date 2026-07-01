@@ -1,30 +1,28 @@
 {
   "schema": 1,
-  "generatedAt": "2026-07-01T00:16:18.982Z",
+  "generatedAt": "2026-07-01T04:22:26.257Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
     "AGENTS.md",
     "CLAUDE.md",
     "GAME_PROJECT.md",
-    ".codex/skills",
-    "docs/ai-pipeline",
-    "tools"
+    ".codex/skills"
   ],
   "summary": {
-    "mappedPaths": 271,
-    "scannedFiles": 265,
+    "mappedPaths": 269,
+    "scannedFiles": 263,
     "missingInRepo": 0,
     "duplicateMappings": 0,
     "unmappedInAiStudio": 0,
-    "unmappedLegacy": 0,
+    "unmappedOutsideAiStudio": 0,
     "missingDescriptions": 0
   },
   "issues": {
     "missingInRepo": [],
     "duplicateMappings": [],
     "unmappedInAiStudio": [],
-    "unmappedLegacy": [],
+    "unmappedOutsideAiStudio": [],
     "missingDescriptions": []
   }
 }

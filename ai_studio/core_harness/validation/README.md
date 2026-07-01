@@ -26,12 +26,12 @@ Not checked here:
 ## Public Tool
 
 - `doc_reference_check.mjs`: checks agent-facing Markdown for stale local file
-  references and retired Core-era command routes.
+  references.
 
 ## When To Use
 
-Run this after moving docs, renaming files, deleting old commands, or changing
-agent-facing entrypoints.
+Run this after moving docs, renaming files, or changing agent-facing
+entrypoints.
 
 ```powershell
 node ai_studio/core_harness/validation/doc_reference_check.mjs

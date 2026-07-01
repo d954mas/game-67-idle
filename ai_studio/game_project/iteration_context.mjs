@@ -284,15 +284,6 @@ function projectDesignSources(root) {
       `gamedesign/projects/${projectId}/data/core_loop.json`,
     ]));
   }
-  for (const legacyId of directories(join(root, "gamedesign"))) {
-    if (legacyId === "knowledge" || legacyId === "sources" || legacyId === "projects") continue;
-    sources.push(...existing(root, [
-      `gamedesign/${legacyId}/gdd.md`,
-      `gamedesign/${legacyId}/GDD.md`,
-      `gamedesign/${legacyId}/art/art_direction.md`,
-      `gamedesign/${legacyId}/data/core_loop.json`,
-    ]));
-  }
   return [...new Set(sources)];
 }
 

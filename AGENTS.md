@@ -17,8 +17,7 @@ workflows, and future production modules.
 
 Reviewed AI pipeline modules live in `ai_studio/`. Compatibility entrypoints may
 still exist in root, `.codex/skills/`, `.claude/`, and `tasks/`, but new
-AI-pipeline docs/tools should not be added to legacy `docs/` or `tools/`
-locations.
+AI-pipeline docs/tools belong in the owning `ai_studio/` module.
 
 ## Current Game
 

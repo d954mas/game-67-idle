@@ -15,17 +15,14 @@ function tempRoot() {
   return mkdtempSync(join(tmpdir(), "ai-studio-libraries-registry-"));
 }
 
-test("listRegisteredLibraries falls back to the shared asset library", (t) => {
+test("listRegisteredLibraries starts empty until a library is registered", (t) => {
   const root = tempRoot();
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
   const libraries = listRegisteredLibraries(root);
 
-  assert.equal(libraries.length, 1);
-  assert.equal(libraries[0].id, "global-library");
-  assert.equal(libraries[0].title, "All Assets");
-  assert.equal(libraries[0].status, "active");
-  assert.match(libraries[0].assets, /ai_pipeline_assets$/);
+  assert.deepEqual(libraries, []);
+  assert.equal(defaultLibrarySourceRoot(root), "");
 });
 
 test("registerLibraryAssetSource creates and lists a library asset source", (t) => {
@@ -38,12 +35,6 @@ test("registerLibraryAssetSource creates and lists a library asset source", (t) 
   assert.equal(libraryRegistryPath(root), "ai_studio/assets/storage/sources/libraries.json");
   assert.deepEqual(listRegisteredLibraries(root), [
     {
-      id: "global-library",
-      title: "All Assets",
-      assets: "C:/Users/ROG/YandexDisk/gamedev/assets/ai_pipeline_assets",
-      status: "active",
-    },
-    {
       id: "studio-library",
       title: "Studio Library",
       assets: "shared/assets",
@@ -52,7 +43,7 @@ test("registerLibraryAssetSource creates and lists a library asset source", (t) 
   ]);
 
   const parsed = JSON.parse(readFileSync(join(root, "ai_studio", "assets", "storage", "sources", "libraries.json"), "utf8"));
-  assert.equal(parsed.libraries.length, 2);
+  assert.equal(parsed.libraries.length, 1);
 });
 
 test("defaultLibrarySourceRoot resolves the first active registered library", (t) => {
@@ -65,13 +56,14 @@ test("defaultLibrarySourceRoot resolves the first active registered library", (t
   assert.equal(defaultLibrarySourceRoot(root), join(root, "shared", "assets"));
 });
 
-test("defaultLibrarySourceRoot prefers global-library while active", (t) => {
+test("defaultLibrarySourceRoot prefers registered global-library while active", (t) => {
   const root = tempRoot();
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
   registerLibraryAssetSource(root, { id: "active-library", title: "Active", assets: "./shared/assets" });
+  registerLibraryAssetSource(root, { id: "global-library", title: "Global", assets: "./global/assets" });
 
-  assert.match(defaultLibrarySourceRoot(root), /ai_pipeline_assets$/);
+  assert.equal(defaultLibrarySourceRoot(root), join(root, "global", "assets"));
 });
 
 test("resolveRegisteredSourcePath keeps absolute paths and resolves relative paths under root", (t) => {
@@ -87,4 +79,11 @@ test("registerLibraryAssetSource rejects non-kebab ids", (t) => {
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
   assert.throws(() => registerLibraryAssetSource(root, { id: "Bad Library" }), /lowercase kebab-case/);
+});
+
+test("registerLibraryAssetSource requires an explicit assets path", (t) => {
+  const root = tempRoot();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  assert.throws(() => registerLibraryAssetSource(root, { id: "studio-library" }), /assets path is required/);
 });

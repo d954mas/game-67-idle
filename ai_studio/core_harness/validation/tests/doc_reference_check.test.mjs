@@ -63,19 +63,6 @@ test("doc reference check fails missing core markdown references", () => {
   }
 });
 
-test("doc reference check ignores non-core module docs", () => {
-  const dir = tempDir();
-  try {
-    writeMinimalRoot(dir);
-    mkdirSync(join(dir, "ai_studio", "taskboard"), { recursive: true });
-    writeFileSync(join(dir, "ai_studio", "taskboard", "README.md"), "See `ai_studio/taskboard/missing.md`.\n", "utf8");
-    const result = run(["--root", dir]);
-    assert.equal(result.status, 0, result.stderr);
-  } finally {
-    cleanup(dir);
-  }
-});
-
 test("doc reference check ignores bare backticked template names", () => {
   const dir = tempDir();
   try {
@@ -101,23 +88,6 @@ test("doc reference check fails missing markdown links", () => {
   }
 });
 
-test("doc reference check rejects retired ai facade command", () => {
-  const dir = tempDir();
-  try {
-    writeMinimalRoot(dir);
-    writeFileSync(
-      join(dir, "ai_studio", "README.md"),
-      "Old command:\n\n```powershell\nnode tools/ai.mjs validate --file AGENTS.md\n```\n",
-      "utf8",
-    );
-    const result = run(["--root", dir]);
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /retired command `node tools\/ai\.mjs`/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
 test("doc reference check allows direct core doc reference command in docs", () => {
   const dir = tempDir();
   try {
@@ -134,30 +104,13 @@ test("doc reference check allows direct core doc reference command in docs", () 
   }
 });
 
-test("doc reference check rejects retired global pipeline validator command", () => {
+test("doc reference check validates non-markdown AI Studio references in core docs", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
-    writeFileSync(
-      join(dir, "ai_studio", "README.md"),
-      "Old command:\n\n```powershell\nnode ai_studio/validation/pipeline_validate.mjs --full\n```\n",
-      "utf8",
-    );
-    const result = run(["--root", dir]);
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /retired command `node ai_studio\/validation\/pipeline_validate\.mjs`/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("doc reference check validates non-markdown tool references in core docs", () => {
-  const dir = tempDir();
-  try {
-    writeMinimalRoot(dir);
-    mkdirSync(join(dir, "tools"), { recursive: true });
-    writeFileSync(join(dir, "tools", "sample_tool.mjs"), "// sample\n", "utf8");
-    writeFileSync(join(dir, "AGENTS.md"), "Run `tools/sample_tool.mjs`.\n", "utf8");
+    mkdirSync(join(dir, "ai_studio", "core_harness", "validation"), { recursive: true });
+    writeFileSync(join(dir, "ai_studio", "core_harness", "validation", "sample_check.mjs"), "// sample\n", "utf8");
+    writeFileSync(join(dir, "AGENTS.md"), "Run `ai_studio/core_harness/validation/sample_check.mjs`.\n", "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 0, result.stderr);
   } finally {
@@ -165,14 +118,14 @@ test("doc reference check validates non-markdown tool references in core docs", 
   }
 });
 
-test("doc reference check fails missing non-markdown tool references in core docs", () => {
+test("doc reference check fails missing non-markdown AI Studio references in core docs", () => {
   const dir = tempDir();
   try {
     writeMinimalRoot(dir);
-    writeFileSync(join(dir, "AGENTS.md"), "Run `tools/missing_tool.mjs`.\n", "utf8");
+    writeFileSync(join(dir, "AGENTS.md"), "Run `ai_studio/core_harness/validation/missing_check.mjs`.\n", "utf8");
     const result = run(["--root", dir]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /tools\/missing_tool\.mjs/);
+    assert.match(result.stderr, /ai_studio\/core_harness\/validation\/missing_check\.mjs/);
   } finally {
     cleanup(dir);
   }

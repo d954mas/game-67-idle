@@ -6,8 +6,8 @@ The map is data-driven:
 
 - `../tree.json` is the architecture source of truth.
 - `index.html` renders the map in the browser.
-- `validate_map.mjs` scans known AI Studio and legacy pipeline/tool/doc
-  locations and writes `validation-report.json`.
+- `validate_map.mjs` scans AI Studio source locations and writes
+  `validation-report.json`.
 - `validation-report.json` is displayed by the page so unmapped, missing, or
   duplicated files are visible during refactoring.
 - `../studio_shell/server.mjs` hosts the map surface so browser `fetch()` can
@@ -15,7 +15,7 @@ The map is data-driven:
 
 The page must not infer architecture from the repository. New files are not
 silently added to the map. They appear in validation until a human decides
-whether to map, ignore, move to `Not Refactored`, or delete them.
+whether to map, ignore, assign to the review backlog, or delete them.
 
 Taskboard data is not architecture map data. `tasks/active/`, `tasks/archive/`,
 and `tasks/epics/` are owned and validated by `ai_studio/taskboard/`; they are
@@ -53,8 +53,8 @@ http://127.0.0.1:8765/architecture_map/
 - `duplicateMappings`: a path is listed by more than one map node.
 - `unmappedInAiStudio`: a file exists under `ai_studio/`, but is not listed or
   covered by a mapped directory in `tree.json`.
-- `unmappedLegacy`: a legacy pipeline/tool/doc file exists outside `ai_studio/`
-  in the scanned roots and is not explicitly mapped.
+- `unmappedOutsideAiStudio`: a scanned file exists outside `ai_studio/` and is
+  not explicitly mapped.
 - `missingDescriptions`: a visible node lacks a useful description.
 
 Scanning is validation only. It does not edit `tree.json`.

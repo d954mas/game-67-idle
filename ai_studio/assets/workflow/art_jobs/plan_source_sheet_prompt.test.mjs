@@ -99,7 +99,7 @@ test("writes prompt packet from art job and intake suggested key color", (t) => 
   assert.equal(packet.source_sheet_layout.rows[1].id, "button_and_chip_bases");
 });
 
-test("uses intake next prompt key color before legacy suggested key color", (t) => {
+test("uses intake next prompt key color before fallback suggested key color", (t) => {
   const dir = tempDir(t);
   const job = writeJob(dir);
   writeFileSync(join(dir, "intake.json"), `${JSON.stringify({

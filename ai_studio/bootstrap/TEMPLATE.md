@@ -1,7 +1,7 @@
 # Game template (copy model)
 
-A new game starts by **copying the template**; when it finishes, its **universal**
-parts copy **back** to the template, so the next game inherits the improvements.
+A new game starts by **copying the template**. Reusable improvements go into
+AI Studio, the engine, or a systems showcase module after review.
 
 **The template has two jobs:** (1) a runnable shell a game copies, and (2) — just
 as important — it **lays down the architecture for all future work**: the worked
@@ -14,12 +14,10 @@ in every game after it.
 **Layout: in THIS repo, as folders** - `templates/<template-id>/` and
 `games/<game-id>/`. Each game is a self-contained folder copied from a template.
 
-- `new_game.mjs` - copy `templates/template/` -> `games/gameN/` (UNIVERSAL + SEED; engine submodule
-  + shared asset library are referenced, not copied).
-- `sync_to_template.mjs` - copy UNIVERSAL from `games/gameN/` -> `templates/template/`.
-- Paths are defined in `template_paths.mjs` (the single source of truth; the
-  UNIVERSAL/SEED lists are relative to a template-or-game folder, not the repo root).
-- The asset library is shared and external (YandexDisk); never copied.
+- `new_game.mjs` - copy `templates/template/` -> `games/gameN/`; the engine
+  submodule and shared asset library are referenced, not copied.
+- `export_base.mjs` - copy the reusable AI Studio base into another project.
+- The asset library is a registered external source; never copied wholesale.
 
 ## Reuse tiers — what is shared vs copied-and-customized
 
@@ -27,8 +25,7 @@ Two KINDS of reuse, different by nature:
 
 - **Dev pipeline** — `ai_studio/`, `.codex/skills/`, taskboard, reusable design
   knowledge, and the shared asset library. Shared infra, ONE copy used by every
-  game; improvements are immediately everyone's. (The UNIVERSAL set below; flows
-  both ways.)
+  game; improvements are reviewed in their owning module.
 - **Code systems** — gameplay AND the shell (settings, audio, save, UI, terrain,
   character controller, …). These inherently need PER-GAME tweaks, so they are
   **COPIED into a game when needed and the game owns/customizes its copy** — the same
@@ -77,12 +74,12 @@ CODE — and like the engine's `examples/` folder, **each solution demonstrates 
   shell, font/mesh/pack) are NOT here — they simply live **in the template**, since
   every game starts with them. No "starter vs optional" tag, no separate "core".
 
-## UNIVERSAL (flows both ways)
+## Reusable Studio Base
 
 The reusable pipeline: `ai_studio/`, `.codex/skills/`,
 `AI_PIPELINE_HISTORY.md`, and `gamedesign/knowledge` + `sources`.
 
-## SEED — the runnable starter SHELL (copied once, then game-owned)
+## Template Seed - the runnable starter shell
 
 The template is NOT a bare seed: a new game opens to a working shell and builds on it.
 

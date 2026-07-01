@@ -49,6 +49,35 @@ test("map validation reports missing, duplicate, and unmapped files", () => {
   assert.equal(hasStrictFailures(report), true);
 });
 
+test("map validation reports unmapped scanned files outside ai_studio", () => {
+  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+  mkdirSync(join(root, "ai_studio"), { recursive: true });
+  write(
+    root,
+    "ai_studio/tree.json",
+    JSON.stringify({
+      schema: 1,
+      root: {
+        id: "studio",
+        title: "studio",
+        children: [
+          { id: "tree", kind: "doc", path: "ai_studio/tree.json", description: "Map source." },
+        ],
+      },
+    }),
+  );
+  write(root, "AGENTS.md", "# Agents");
+
+  const report = createValidationReport({
+    repoRoot: root,
+    scanRoots: ["ai_studio", "AGENTS.md"],
+  });
+
+  assert.equal(report.summary.unmappedOutsideAiStudio, 1);
+  assert.deepEqual(report.issues.unmappedOutsideAiStudio, [{ path: "AGENTS.md" }]);
+  assert.equal(hasStrictFailures(report), true);
+});
+
 test("mapped directories cover their child files", () => {
   const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
   mkdirSync(join(root, "ai_studio"), { recursive: true });

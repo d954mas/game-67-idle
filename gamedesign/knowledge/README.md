@@ -51,9 +51,8 @@ timestamp: 2026-06-13T00:00:00Z
 ```
 
 Only `type` is required. The other fields are recommended because they help an
-agent find the right page without reading every file. Existing legacy pages can
-be migrated when they are edited; do not run a large migration just to satisfy a
-format.
+agent find the right page without reading every file. Existing pages can be
+updated when they are edited; do not run a large format-only rewrite.
 
 ## Page Rules
 

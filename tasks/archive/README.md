@@ -15,7 +15,7 @@ Pipeline cleanup evidence preserved from earlier taskboard/status resets:
 - Profiling hot hook writes are serialized with a short file lock and covered by
   a parallel JSONL append regression test, so concurrent validations do not
   corrupt `tmp/session_profiles/sessions/*.jsonl`.
-- Hot-doc budget checks and full pipeline validation were retired from active
+- Hot-doc budget checks and broad pipeline validation stay outside active
   routing. Prefer focused module validators and direct module tests.
 - Reviewed `nt-*` skills keep hot `SKILL.md` files as short routers. Detailed
   procedures may live in owned `ai_studio/` module docs instead of skill-local

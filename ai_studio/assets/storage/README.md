@@ -19,7 +19,7 @@ own browser UI; `../viewer/` displays this data.
 - `previews/`: generated preview preparation and cache refresh.
 - `license/`: public-repo license guard and publishability policy.
 - `search.mjs`: agent-facing asset search over the generated index.
-- `defaults.mjs` and `kinds.mjs`: shared storage constants.
+- `kinds.mjs`: shared asset-kind storage constants.
 
 ## Source Shape
 
@@ -137,8 +137,8 @@ node ai_studio/assets/storage/search.mjs --query "metal floor" --license CC0 --j
 ```
 
 `search.mjs` defaults to active `global-library` from
-`sources/libraries.json` and reads the generated index by default. If that
-source is disabled, it falls back to another active library. Add `--refresh`
-only when local files or manifests changed and the query must update the index
-first. Unchanged sources use a snapshot check; changed sources rebuild from Pack
-Manifest metadata or a raw folder scan.
+`sources/libraries.json` when one is registered and reads the generated index by
+default. If that source is disabled, it falls back to another active library.
+Add `--refresh` only when local files or manifests changed and the query must
+update the index first. Unchanged sources use a snapshot check; changed sources
+rebuild from Pack Manifest metadata or a raw folder scan.

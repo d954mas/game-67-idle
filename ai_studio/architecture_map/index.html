@@ -3044,11 +3044,11 @@
         (summary.missingInRepo || 0) +
         (summary.duplicateMappings || 0) +
         (summary.unmappedInAiStudio || 0) +
-        (summary.unmappedLegacy || 0) +
+        (summary.unmappedOutsideAiStudio || 0) +
         (summary.missingDescriptions || 0);
       const categories = [
         ["unmappedInAiStudio", "Unmapped in ai_studio"],
-        ["unmappedLegacy", "Unmapped legacy/current files"],
+        ["unmappedOutsideAiStudio", "Unmapped outside ai_studio"],
         ["missingInRepo", "Mapped but missing in repo"],
         ["duplicateMappings", "Duplicate mappings"],
         ["missingDescriptions", "Missing descriptions"]
@@ -3085,7 +3085,7 @@
             '<div class="map-validation-stat"><b>' + countText(summary.mappedPaths) + '</b><span>mapped paths</span></div>' +
             '<div class="map-validation-stat"><b>' + countText(summary.scannedFiles) + '</b><span>scanned files</span></div>' +
             '<div class="map-validation-stat"><b>' + countText(summary.unmappedInAiStudio) + '</b><span>unmapped ai_studio</span></div>' +
-            '<div class="map-validation-stat"><b>' + countText(summary.unmappedLegacy) + '</b><span>unmapped legacy</span></div>' +
+            '<div class="map-validation-stat"><b>' + countText(summary.unmappedOutsideAiStudio) + '</b><span>unmapped outside</span></div>' +
           '</div>' +
           categories.map((entry) => renderCategory(entry[0], entry[1])).join("") +
           '<p class="map-validation-note">Source: <a href="validation-report.json">validation-report.json</a>. Scanner only audits; tree ownership stays in ai_studio/tree.json.</p>' +

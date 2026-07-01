@@ -314,7 +314,7 @@ test("accepted incoming candidates are not indexed as unregistered duplicates", 
   const root = mkdtempSync(join(tmpdir(), "asset-index-accepted-incoming-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const library = join(root, "library");
-  const packDir = join(library, "packs", "legacy-model");
+  const packDir = join(library, "packs", "sample-model");
   const incomingDir = join(library, "_incoming", "khronos", "box-glb");
   const acceptedDir = join(library, "_accepted", "old-source", "old-slug");
   mkdirSync(join(packDir, "files", "khronos__box-glb__cc-by-4-0"), { recursive: true });
@@ -332,8 +332,8 @@ test("accepted incoming candidates are not indexed as unregistered duplicates", 
     files: [{ path: "Box.glb", sha256: hash }],
   });
   writeJson(join(packDir, "pack.json"), {
-    pack: "legacy-model",
-    title: "Legacy Model",
+    pack: "sample-model",
+    title: "Sample Model",
     source: "khronos",
     kind: "model",
     license: "CC-BY-4.0",

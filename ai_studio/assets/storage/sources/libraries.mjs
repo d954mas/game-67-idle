@@ -1,15 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
-import { DEFAULT_ASSET_SOURCE_ROOT } from "../defaults.mjs";
 
 const defaultRegistry = {
   schema: "ai_studio.assets.libraries.v1",
-  libraries: [{
-    id: "global-library",
-    title: "All Assets",
-    assets: DEFAULT_ASSET_SOURCE_ROOT,
-    status: "active",
-  }],
+  libraries: [],
 };
 
 function registryPath(root) {
@@ -62,7 +56,7 @@ export function defaultLibrarySourceRoot(root = process.cwd()) {
   const libraries = listRegisteredLibraries(root);
   const library = libraries.find((item) => item.id === "global-library" && item.status !== "disabled")
     || libraries.find((item) => item.status !== "disabled");
-  return resolveRegisteredSourcePath(root, library?.assets || DEFAULT_ASSET_SOURCE_ROOT);
+  return library ? resolveRegisteredSourcePath(root, library.assets) : "";
 }
 
 export function registerLibraryAssetSource(root, { id, title = "", assets = "", status = "active" }) {
@@ -71,7 +65,8 @@ export function registerLibraryAssetSource(root, { id, title = "", assets = "", 
     throw new Error("library id must be lowercase kebab-case");
   }
 
-  const normalizedAssets = normalizeSourcePath(assets || DEFAULT_ASSET_SOURCE_ROOT);
+  const normalizedAssets = normalizeSourcePath(assets);
+  if (!normalizedAssets) throw new Error("library assets path is required");
   const registry = readRegistry(root);
   const next = {
     id: libraryId,

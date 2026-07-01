@@ -13,8 +13,6 @@ const defaultScanRoots = [
   "CLAUDE.md",
   "GAME_PROJECT.md",
   ".codex/skills",
-  "docs/ai-pipeline",
-  "tools",
 ];
 
 const ignoredPrefixes = [
@@ -158,7 +156,7 @@ function createValidationReport(options = {}) {
   const scanned = collectScannedFiles(repoRoot, scanRoots);
   const unmapped = scanned.filter((file) => !mappedFiles.has(file) && !isCoveredByMappedDirectory(file, mappedDirectories));
   const unmappedInAiStudio = unmapped.filter((file) => file.startsWith("ai_studio/"));
-  const unmappedLegacy = unmapped.filter((file) => !file.startsWith("ai_studio/"));
+  const unmappedOutsideAiStudio = unmapped.filter((file) => !file.startsWith("ai_studio/"));
   const duplicateMappings = [...pathToEntries.entries()]
     .filter(([, items]) => items.length > 1)
     .map(([path, items]) => ({ path, nodes: items.map((item) => ({ id: item.id, title: item.title })) }));
@@ -174,14 +172,14 @@ function createValidationReport(options = {}) {
       missingInRepo: missingInRepo.length,
       duplicateMappings: duplicateMappings.length,
       unmappedInAiStudio: unmappedInAiStudio.length,
-      unmappedLegacy: unmappedLegacy.length,
+      unmappedOutsideAiStudio: unmappedOutsideAiStudio.length,
       missingDescriptions: missingDescriptions.length,
     },
     issues: {
       missingInRepo,
       duplicateMappings,
       unmappedInAiStudio: unmappedInAiStudio.map((path) => ({ path })),
-      unmappedLegacy: unmappedLegacy.map((path) => ({ path })),
+      unmappedOutsideAiStudio: unmappedOutsideAiStudio.map((path) => ({ path })),
       missingDescriptions,
     },
   };
@@ -228,6 +226,7 @@ function hasStrictFailures(report) {
   return report.summary.missingInRepo > 0
     || report.summary.duplicateMappings > 0
     || report.summary.unmappedInAiStudio > 0
+    || report.summary.unmappedOutsideAiStudio > 0
     || report.summary.missingDescriptions > 0;
 }
 
@@ -242,7 +241,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     const report = createValidationReport({ repoRoot, mapPath: options.mapPath || defaultMapPath });
     writeReport(report, repoRoot, options.reportPath || defaultReportPath);
     console.log(`wrote ${options.reportPath || defaultReportPath}`);
-    console.log(`mapped=${report.summary.mappedPaths} scanned=${report.summary.scannedFiles} unmapped_ai_studio=${report.summary.unmappedInAiStudio} unmapped_legacy=${report.summary.unmappedLegacy} missing=${report.summary.missingInRepo} duplicates=${report.summary.duplicateMappings}`);
+    console.log(`mapped=${report.summary.mappedPaths} scanned=${report.summary.scannedFiles} unmapped_ai_studio=${report.summary.unmappedInAiStudio} unmapped_outside_ai_studio=${report.summary.unmappedOutsideAiStudio} missing=${report.summary.missingInRepo} duplicates=${report.summary.duplicateMappings}`);
     if (options.strict && hasStrictFailures(report)) process.exit(1);
   } catch (error) {
     console.error(error && error.message ? error.message : String(error));

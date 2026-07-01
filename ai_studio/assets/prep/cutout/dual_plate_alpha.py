@@ -13,7 +13,7 @@ from PIL import Image
 
 import sys
 
-ROOT = Path(__file__).resolve().parents[4]  # cutout -> assets -> tools -> repo root
+ROOT = Path(__file__).resolve().parents[4]  # cutout -> prep -> assets -> ai_studio -> repo root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
@@ -22,8 +22,8 @@ from ai_studio.assets.prep.cutout.dual_plate_pair_gate import evaluate as evalua
 
 RGB = tuple[int, int, int]
 # "proj" = Smith & Blinn (1996) Theorem-4 joint-channel projection: the
-# least-squares (1-alpha) using all channels at once. "min"/"max"/"avg" are the
-# legacy per-channel solve + reconcile and are kept for backward compatibility.
+# least-squares (1-alpha) using all channels at once. "min"/"max"/"avg" are
+# older per-channel combine modes retained for explicit comparisons.
 AlphaCombine = Literal["min", "max", "avg", "proj"]
 RecoverySource = Literal["dark", "light", "average"]
 

@@ -89,7 +89,7 @@ function staticPath(pathname) {
     return safeResolve(root, pathname.slice(1));
   }
 
-  return safeResolve(root, pathname.replace(/^\/+/, ""));
+  return null;
 }
 
 function serveStatic(req, res, url) {

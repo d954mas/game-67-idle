@@ -7,9 +7,9 @@ This module owns rule navigation, lightweight quality evidence, and rule usage
 profiling. It does not own asset production, task storage, runtime automation,
 or game implementation.
 
-Do not create ad-hoc quality rule IDs in project docs, generated templates,
-tasks, or legacy tools. New reusable rules belong under `ai_studio/quality/rules`
-and must be linked from the matching group README.
+Do not create ad-hoc quality rule IDs in project docs, generated templates, or
+tasks. New reusable rules belong under `ai_studio/quality/rules` and must be
+linked from the matching group README.
 
 ## Rule Groups
 

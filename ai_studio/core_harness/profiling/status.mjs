@@ -2,7 +2,6 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import {
-  defaultProfilePath,
   deriveSessionId,
   latestSessionProfilePath,
   listSessionProfiles,
@@ -93,9 +92,9 @@ function parseProfiles(files) {
 /* Resolve which log file(s) `status` reads:
  *   --profile <p>  -> that file
  *   --session <id> -> the matching per-session log (any day)
- *   --all          -> all of today's per-session logs + the legacy daily file
+ *   --all          -> all of today's per-session logs
  *   (default)      -> the active session (self-identified from harness env);
- *                     newest per-session log, then legacy daily file, as fallback. */
+ *                     newest per-session log as fallback. */
 function resolveProfilePaths(values) {
   const explicit = stringArg(values, "profile", "");
   if (explicit) return [resolve(explicit)];
@@ -107,10 +106,7 @@ function resolveProfilePaths(values) {
   }
 
   if (values.all === true) {
-    const all = [...todaySessionProfiles()];
-    const daily = defaultProfilePath();
-    if (existsSync(daily)) all.push(daily);
-    return all.length > 0 ? all : [daily];
+    return [...todaySessionProfiles()];
   }
 
   /* --harness <name>: the latest session for that harness -- reliably picks YOUR
@@ -138,7 +134,7 @@ function resolveProfilePaths(values) {
   }
 
   const latest = latestSessionProfilePath();
-  return [latest || defaultProfilePath()];
+  return latest ? [latest] : [];
 }
 
 function eventTime(record) {

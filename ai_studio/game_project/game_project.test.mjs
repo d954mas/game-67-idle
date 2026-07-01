@@ -29,7 +29,7 @@ ${body}
 
 function writeStarter(root) {
   mkdirSync(join(root, "ai_studio", "game_project"), { recursive: true });
-  mkdirSync(join(root, "gamedesign", "meme-evolution", "data"), { recursive: true });
+  mkdirSync(join(root, "gamedesign", "projects", "meme-evolution", "data"), { recursive: true });
   mkdirSync(join(root, "src"), { recursive: true });
   mkdirSync(join(root, "tasks"), { recursive: true });
   writeFileSync(join(root, "AGENTS.md"), `# AGENTS.md
@@ -60,8 +60,8 @@ Status: active
 67 World, child-friendly meme merge/evolution game.
 
 - Game id: \`meme-evolution\`
-- Game folder: \`gamedesign/meme-evolution/\`
-- Design docs: \`gamedesign/meme-evolution/gdd.md\`, \`gamedesign/meme-evolution/data/core_loop.json\`
+- Game folder: \`gamedesign/projects/meme-evolution/\`
+- Design docs: \`gamedesign/projects/meme-evolution/gdd.md\`, \`gamedesign/projects/meme-evolution/data/core_loop.json\`
 - Current milestone: Native PC review gate.
 - Hard game-specific constraints:
   - Manual child-test is required.
@@ -85,8 +85,8 @@ cmake --build --preset native-debug
 `, "utf8");
   writeFileSync(join(root, "CMakePresets.json"), "{}\n", "utf8");
   writeFileSync(join(root, "src", "main.c"), "int main(void){return 0;}\n", "utf8");
-  writeFileSync(join(root, "gamedesign", "meme-evolution", "gdd.md"), "# GDD\n", "utf8");
-  writeFileSync(join(root, "gamedesign", "meme-evolution", "data", "core_loop.json"), "{}\n", "utf8");
+  writeFileSync(join(root, "gamedesign", "projects", "meme-evolution", "gdd.md"), "# GDD\n", "utf8");
+  writeFileSync(join(root, "gamedesign", "projects", "meme-evolution", "data", "core_loop.json"), "{}\n", "utf8");
 }
 
 test("game iteration context preserves wrapped hard gates", (t) => {
@@ -122,7 +122,7 @@ test("game iteration context preserves wrapped hard gates", (t) => {
   assert.ok(context.visual_first_contract.generated_ui_runtime_gate.some((item) => item.includes("Non-empty crop plan")));
   assert.ok(context.visual_first_contract.generated_ui_runtime_gate.some((item) => item.includes("Non-empty prepared asset manifest")));
   assert.ok(context.runtime_sources.includes("src/main.c"));
-  assert.ok(context.design_sources.includes("gamedesign/meme-evolution/gdd.md"));
+  assert.ok(context.design_sources.includes("gamedesign/projects/meme-evolution/gdd.md"));
   assert.ok(context.before_coding_checklist.some((item) => item.includes("prototype_startup_gate.status")));
   assert.ok(context.before_coding_checklist.some((item) => item.includes("5-line visual session contract")));
   assert.ok(context.before_coding_checklist.some((item) => item.includes("runtime harness")));
@@ -132,7 +132,6 @@ test("game iteration context blocks broad coding without active concept", (t) =>
   const fixture = tempRoot(t);
   const repoRoot = process.cwd();
   mkdirSync(join(fixture, "ai_studio", "game_project"), { recursive: true });
-  mkdirSync(join(fixture, "tools", "taskboard"), { recursive: true });
   mkdirSync(join(fixture, "tasks"), { recursive: true });
   mkdirSync(join(fixture, "src"), { recursive: true });
   writeFileSync(join(fixture, "AGENTS.md"), `# AGENTS.md
@@ -180,7 +179,6 @@ There is no active game concept.
 test("game iteration context omits closed project sources without active concept", (t) => {
   const fixture = tempRoot(t);
   const repoRoot = process.cwd();
-  mkdirSync(join(fixture, "tools", "game_context"), { recursive: true });
   mkdirSync(join(fixture, "tasks"), { recursive: true });
   mkdirSync(join(fixture, "src"), { recursive: true });
   mkdirSync(join(fixture, "state"), { recursive: true });

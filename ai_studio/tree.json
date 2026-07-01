@@ -7,7 +7,7 @@
     "subtitle": "refactor root",
     "kind": "root",
     "color": "#172033",
-    "description": "Clean refactor tree. Start with Core Harness only; promote modules from Not Refactored after review, cleanup, owner assignment, and compatibility checks.",
+    "description": "Clean AI Studio architecture tree. Modules appear here after review, owner assignment, and validation coverage.",
     "tags": [
       "reviewed-only",
       "no-bulk-move",
@@ -303,19 +303,6 @@
               "bootstrap",
               "export",
               "test"
-            ]
-          },
-          {
-            "id": "bootstrap:template-paths",
-            "kind": "doc",
-            "path": "ai_studio/bootstrap/template_paths.mjs",
-            "title": "template_paths.mjs",
-            "description": "Declarative template copy model notes and path groups for universal, seed, shared-library, and game-only files.",
-            "role": "template copy model source",
-            "tags": [
-              "bootstrap",
-              "template",
-              "paths"
             ]
           },
           {
@@ -1271,7 +1258,7 @@
             "subtitle": "fast route checks",
             "kind": "validation",
             "color": "#7f1d1d",
-            "description": "Fast Core Harness validation for agent-facing docs, stale file references, and retired command routes. Module test suites stay with their owning modules.",
+            "description": "Fast Core Harness validation for agent-facing docs and stale file references. Module test suites stay with their owning modules.",
             "role": "core harness route and reference guard",
             "tags": [
               "core",
@@ -1295,7 +1282,7 @@
                 "id": "core-harness:doc-reference-check",
                 "kind": "validation",
                 "path": "ai_studio/core_harness/validation/doc_reference_check.mjs",
-                "description": "Mechanical guard for stale local references, missing files, and retired commands in agent-facing Markdown.",
+                "description": "Mechanical guard for stale local references and missing files in agent-facing Markdown.",
                 "role": "stale reference guard",
                 "tags": [
                   "validator",
@@ -1307,7 +1294,7 @@
                 "id": "core-harness:doc-reference-check-test",
                 "kind": "test",
                 "path": "ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs",
-                "description": "Regression tests for the stale-reference guard and retired command detection.",
+                "description": "Regression tests for the stale-reference guard.",
                 "role": "stale reference guard tests",
                 "tags": [
                   "test",
@@ -1962,19 +1949,6 @@
                   "storage",
                   "search",
                   "sqlite"
-                ]
-              },
-              {
-                "id": "assets:storage-defaults",
-                "kind": "tool",
-                "path": "ai_studio/assets/storage/defaults.mjs",
-                "title": "defaults.mjs",
-                "description": "Shared Asset Storage defaults such as the global asset source root.",
-                "role": "asset storage defaults",
-                "tags": [
-                  "assets",
-                  "storage",
-                  "config"
                 ]
               },
               {
@@ -3459,7 +3433,7 @@
             "kind": "validation",
             "path": "ai_studio/architecture_map/validate_map.mjs",
             "title": "validate_map.mjs",
-            "description": "Scans known AI Studio and legacy pipeline paths and writes validation-report.json with unmapped, missing, duplicate, and underspecified files.",
+            "description": "Scans AI Studio source locations and writes validation-report.json with unmapped, missing, duplicate, and underspecified files.",
             "role": "architecture map scanner and report writer",
             "tags": [
               "validator",
@@ -4135,12 +4109,12 @@
         ]
       },
       {
-        "id": "not-refactored",
-        "title": "Not Refactored",
-        "subtitle": "current scattered pipeline",
+        "id": "review-backlog",
+        "title": "Review Backlog",
+        "subtitle": "unassigned module candidates",
         "kind": "backlog",
         "color": "#64748b",
-        "description": "Everything that exists today but has not yet been reviewed, cleaned, assigned an owner, and moved into the main ai_studio tree.",
+        "description": "Known module candidates that still need review, ownership, and validation before promotion into the main ai_studio tree.",
         "tags": [
           "current-state",
           "do-not-lose",

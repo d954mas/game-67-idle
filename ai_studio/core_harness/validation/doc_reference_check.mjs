@@ -73,12 +73,10 @@ function isPathLikeBacktick(ref) {
     ref.startsWith(".codex/") ||
     ref.startsWith("gamedesign/") ||
     ref.startsWith("tasks/") ||
-    ref.startsWith("tools/") ||
     ref.startsWith("ai_studio/") ||
     ref.startsWith("scripts/") ||
     ref.startsWith("state/") ||
     ref.startsWith("AGENTS.md") ||
-    ref.startsWith("docs/") ||
     ref.startsWith("README.md")
   );
 }
@@ -95,26 +93,8 @@ function resolveReference(sourceFile, ref) {
 
 const files = checkedRoots.flatMap((entry) => walkMarkdown(join(root, entry)));
 const problems = [];
-const retiredCommandPatterns = [
-  {
-    pattern: /\bnode\s+tools[\\/]ai\.mjs\b/i,
-    message:
-      "retired command `node tools/ai.mjs`; call the owning CLI directly",
-  },
-  {
-    pattern: /\bnode\s+ai_studio[\\/]validation[\\/]pipeline_validate\.mjs\b/i,
-    message:
-      "retired command `node ai_studio/validation/pipeline_validate.mjs`; run the owning module validator directly",
-  },
-];
 for (const file of files) {
   const rawText = readFileSync(file, "utf8");
-  for (const retired of retiredCommandPatterns) {
-    if (retired.pattern.test(rawText)) {
-      problems.push(`${rel(file)} -> ${retired.message}`);
-    }
-  }
-
   const text = stripCodeFences(rawText);
   const candidates = [];
   for (const match of text.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {

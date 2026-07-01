@@ -1,7 +1,7 @@
 # Template (game starter)
 
 The minimal runnable game every new game is copied from. Spec + reuse model:
-`../ai_studio/bootstrap/TEMPLATE.md`.
+`../../ai_studio/bootstrap/TEMPLATE.md`.
 
 Layout (decomposition the template teaches by example — no god-file):
 

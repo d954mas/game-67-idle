@@ -115,7 +115,7 @@
           <dl>
             <div><dt>Root</dt><dd>ai_studio/</dd></div>
             <div><dt>Reviewed</dt><dd>Core Harness, Taskboard, Architecture Map</dd></div>
-            <div><dt>Backlog</dt><dd>Not Refactored node</dd></div>
+            <div><dt>Backlog</dt><dd>Review backlog node</dd></div>
           </dl>
         </article>
 
@@ -156,7 +156,7 @@
       try {
         const report = await readJson("/architecture_map/validation-report.json");
         const summary = report.summary || {};
-        const unmapped = Number(summary.unmappedInAiStudio || 0) + Number(summary.unmappedLegacy || 0);
+        const unmapped = Number(summary.unmappedInAiStudio || 0) + Number(summary.unmappedOutsideAiStudio || 0);
         setText("unmappedCount", unmapped);
         setText("missingCount", summary.missingInRepo || 0);
       } catch {

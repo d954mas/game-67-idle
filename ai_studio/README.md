@@ -24,7 +24,6 @@ public surface, internals, and validation path.
   and chat-session reflection ownership.
 - `quality/`: reviewed small quality rules for selecting evidence and checks.
 - `taskboard/`: reviewed durable task state module.
-- `Not Refactored`: map node for everything not reviewed yet.
 
 Create domain folders such as `assets/` or `tech/` only when that module is
 reviewed and ready to move.
@@ -40,7 +39,7 @@ Load only the route that matches the current task:
   `ai_studio/core_harness/workflow/README.md`.
 - Broad read-heavy work that should be split before loading too much context:
   `ai_studio/core_harness/workflow/orchestration/README.md`.
-- Core entrypoint/doc references and retired Core-era command routes:
+- Core entrypoint/doc references:
   `node ai_studio/core_harness/validation/doc_reference_check.mjs`.
 - Generated Codex/Claude skills and hook surfaces:
   `node ai_studio/core_harness/agent_surfaces/sync.mjs --check`.
@@ -92,12 +91,12 @@ Use `kind: "surface"` for user-facing browser entries. Use `kind: "module"` for
 domain ownership, data, APIs, and contracts. `studio_shell/` hosts surfaces; it
 does not own Architecture Map or Taskboard domain logic.
 
-## Migration Rule
+## Module Intake Rule
 
 Move a module here only with: owner, README/contract, public surface, internal
 helpers, and validation or an explicit no-validator reason.
 
-## Migration Loop
+## Review Loop
 
 1. Pick one module from the map.
 2. Decide: move to `ai_studio/`, keep external, or delete.
