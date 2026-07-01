@@ -28,9 +28,11 @@ paths, a movement system, screenshot capture).
 
 ## Build + run a game (template shown)
 
-VS Code users can run the `Game: build native debug`, `Game: build packs native debug`,
-and `Game: run native debug` tasks. The `gameProjectPath` prompt accepts
-`templates/template` or any `games/<game-id>` folder.
+VS Code users can use Run and Debug entries such as
+`Debug Template: template (native debug)`. Build, pack, and run tasks are
+generated from `templates/templates.json` and `games/games.json` by
+`node ai_studio/bootstrap/vscode_projects.mjs`; `new_game.mjs` and
+`new_template.mjs` refresh them after creating a project.
 
 ```powershell
 cmake -S templates/template -B templates/template/build/native-debug -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug

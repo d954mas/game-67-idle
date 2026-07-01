@@ -1,0 +1,29 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug Template: template (native debug)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/templates/template/build/native-debug/bin/game.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/templates/template",
+      "environment": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "Template: template: build native debug"
+    },
+    {
+      "name": "Run Template: template (native release)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/templates/template/build/native-release/bin/game.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/templates/template",
+      "environment": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "Template: template: build native release"
+    }
+  ]
+}

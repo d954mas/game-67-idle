@@ -27,6 +27,7 @@ test("new_game copies template and registers game assets in AI Studio", (t) => {
 
   assert.match(output, /new game 'test-game' created/);
   assert.match(output, /registered assets: games\/games\.json -> games\/test-game\/assets/);
+  assert.match(output, /updated VS Code tasks\/launch/);
   assert.equal(existsSync(join(root, "games", "test-game", "CMakeLists.txt")), true);
   assert.equal(existsSync(join(root, "games", "test-game", "assets", "readme.txt")), true);
   assert.equal(existsSync(join(root, "games", "test-game", "src", "generated", "game.h")), true);
@@ -42,6 +43,11 @@ test("new_game copies template and registers game assets in AI Studio", (t) => {
     assets: "games/test-game/assets",
     status: "active",
   }]);
+
+  const tasks = JSON.parse(readFileSync(join(root, ".vscode", "tasks.json"), "utf8"));
+  const launch = JSON.parse(readFileSync(join(root, ".vscode", "launch.json"), "utf8"));
+  assert.ok(tasks.tasks.some((task) => task.label === "Game: test-game: build packs native debug"));
+  assert.ok(launch.configurations.some((config) => config.name === "Debug Game: test-game (native debug)"));
 });
 
 test("new_game --force updates the same registry entry", (t) => {

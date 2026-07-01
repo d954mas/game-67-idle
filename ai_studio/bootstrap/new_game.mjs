@@ -8,14 +8,15 @@
 //   node ai_studio/bootstrap/new_game.mjs --root <repo> --id mygame
 //
 // Build/run the new game:
-//   cmake -S games/mygame -B games/mygame/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
-//   cmake --build games/mygame/build
-//   ./games/mygame/build/bin/game.exe
+//   cmake -S games/mygame -B games/mygame/build/native-debug -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
+//   cmake --build games/mygame/build/native-debug --target game
+//   ./games/mygame/build/native-debug/bin/game.exe
 import { existsSync, mkdirSync, readdirSync, copyFileSync, statSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gameRegistryPath, registerGameAssetSource } from "../assets/storage/sources/games.mjs";
 import { listRegisteredTemplates } from "../assets/storage/sources/templates.mjs";
+import { writeVscodeProjectFiles } from "./vscode_projects.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
@@ -81,11 +82,14 @@ const registered = registerGameAssetSource(repoRoot, {
   assets: `games/${a.id}/assets`,
   status: "active",
 });
+const vscode = writeVscodeProjectFiles(repoRoot);
 console.log(`new game '${a.id}' created from ${fromRel}/ -> games/${a.id}/`);
 console.log(`registered assets: ${gameRegistryPath(repoRoot)} -> ${registered.assets}`);
+console.log(`updated VS Code tasks/launch for ${vscode.projects.length} playable project(s)`);
 console.log("\nbuild + run:");
-console.log(`  cmake -S games/${a.id} -B games/${a.id}/build -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug`);
-console.log(`  cmake --build games/${a.id}/build`);
-console.log(`  games/${a.id}/build/bin/game.exe`);
+console.log(`  cmake -S games/${a.id} -B games/${a.id}/build/native-debug -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug`);
+console.log(`  cmake --build games/${a.id}/build/native-debug --target game`);
+console.log(`  games/${a.id}/build/native-debug/bin/game.exe`);
+console.log(`  or use VS Code: Debug Game ${a.id} (native debug)`);
 console.log("\nThen: set the title/pack/concept, pull library assets (skill nt-asset-workflow),");
 console.log("copy feature packs from features/ as needed, and build your game on top.");

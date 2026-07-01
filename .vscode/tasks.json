@@ -2,29 +2,14 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "AI Studio: start site",
-      "type": "shell",
-      "command": "powershell.exe",
-      "args": [
-        "-NoProfile",
-        "-ExecutionPolicy",
-        "Bypass",
-        "-File",
-        "${workspaceFolder}/ai_studio/studio_shell/start_site_windows.ps1",
-        "-Restart",
-        "-Open"
-      ],
-      "problemMatcher": []
-    },
-    {
-      "label": "Game: configure native debug",
+      "label": "Template: template: configure native debug",
       "type": "shell",
       "command": "cmake",
       "args": [
         "-S",
-        "${workspaceFolder}/${input:gameProjectPath}",
+        "${workspaceFolder}/templates/template",
         "-B",
-        "${workspaceFolder}/${input:gameProjectPath}/build/native-debug",
+        "${workspaceFolder}/templates/template/build/native-debug",
         "-G",
         "Ninja",
         "-DCMAKE_C_COMPILER=clang",
@@ -33,229 +18,127 @@
       "problemMatcher": []
     },
     {
-      "label": "Game: build packs native debug",
+      "label": "Template: template: build packs native debug",
       "type": "shell",
       "command": "cmake",
       "args": [
         "--build",
-        "${workspaceFolder}/${input:gameProjectPath}/build/native-debug",
+        "${workspaceFolder}/templates/template/build/native-debug",
         "--target",
         "game_asset_packs"
       ],
-      "dependsOn": "Game: configure native debug",
+      "dependsOn": "Template: template: configure native debug",
       "problemMatcher": [
         "$gcc"
-      ]
+      ],
+      "group": "build"
     },
     {
-      "label": "Game: build native debug",
+      "label": "Template: template: build native debug",
       "type": "shell",
       "command": "cmake",
       "args": [
         "--build",
-        "${workspaceFolder}/${input:gameProjectPath}/build/native-debug",
+        "${workspaceFolder}/templates/template/build/native-debug",
         "--target",
         "game"
       ],
-      "dependsOn": "Game: configure native debug",
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
+      "dependsOn": "Template: template: configure native debug",
       "problemMatcher": [
         "$gcc"
-      ]
+      ],
+      "group": "build"
     },
     {
-      "label": "Game: run native debug",
+      "label": "Template: template: run native debug",
       "type": "shell",
-      "command": "${workspaceFolder}/${input:gameProjectPath}/build/native-debug/bin/game.exe",
-      "dependsOn": "Game: build native debug",
+      "command": "${workspaceFolder}/templates/template/build/native-debug/bin/game.exe",
+      "dependsOn": "Template: template: build native debug",
       "options": {
-        "cwd": "${workspaceFolder}/${input:gameProjectPath}"
+        "cwd": "${workspaceFolder}/templates/template"
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always"
       },
       "problemMatcher": []
     },
     {
-      "label": "Game: capture settings native debug",
+      "label": "Template: template: configure native release",
       "type": "shell",
-      "command": "${workspaceFolder}/${input:gameProjectPath}/build/native-debug/bin/game.exe",
+      "command": "cmake",
+      "args": [
+        "-S",
+        "${workspaceFolder}/templates/template",
+        "-B",
+        "${workspaceFolder}/templates/template/build/native-release",
+        "-G",
+        "Ninja",
+        "-DCMAKE_C_COMPILER=clang",
+        "-DCMAKE_BUILD_TYPE=Release"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "Template: template: build packs native release",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "${workspaceFolder}/templates/template/build/native-release",
+        "--target",
+        "game_asset_packs"
+      ],
+      "dependsOn": "Template: template: configure native release",
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "group": "build"
+    },
+    {
+      "label": "Template: template: build native release",
+      "type": "shell",
+      "command": "cmake",
+      "args": [
+        "--build",
+        "${workspaceFolder}/templates/template/build/native-release",
+        "--target",
+        "game"
+      ],
+      "dependsOn": "Template: template: configure native release",
+      "problemMatcher": [
+        "$gcc"
+      ],
+      "group": "build"
+    },
+    {
+      "label": "Template: template: run native release",
+      "type": "shell",
+      "command": "${workspaceFolder}/templates/template/build/native-release/bin/game.exe",
+      "dependsOn": "Template: template: build native release",
+      "options": {
+        "cwd": "${workspaceFolder}/templates/template"
+      },
+      "presentation": {
+        "panel": "dedicated",
+        "reveal": "always"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Template: template: capture settings native debug",
+      "type": "shell",
+      "command": "${workspaceFolder}/templates/template/build/native-debug/bin/game.exe",
       "args": [
         "--settings",
         "--capture",
-        "${workspaceFolder}/tmp/vscode-settings.ppm"
+        "${workspaceFolder}/tmp/vscode-template-template-settings.ppm"
       ],
-      "dependsOn": "Game: build native debug",
+      "dependsOn": "Template: template: build native debug",
       "options": {
-        "cwd": "${workspaceFolder}/${input:gameProjectPath}"
+        "cwd": "${workspaceFolder}/templates/template"
       },
       "problemMatcher": []
-    },
-    {
-      "label": "Game: configure native release",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "-S",
-        "${workspaceFolder}/${input:gameProjectPath}",
-        "-B",
-        "${workspaceFolder}/${input:gameProjectPath}/build/native-release",
-        "-G",
-        "Ninja",
-        "-DCMAKE_C_COMPILER=clang",
-        "-DCMAKE_BUILD_TYPE=Release"
-      ],
-      "problemMatcher": []
-    },
-    {
-      "label": "Game: build packs native release",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--build",
-        "${workspaceFolder}/${input:gameProjectPath}/build/native-release",
-        "--target",
-        "game_asset_packs"
-      ],
-      "dependsOn": "Game: configure native release",
-      "problemMatcher": [
-        "$gcc"
-      ]
-    },
-    {
-      "label": "Game: build native release",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--build",
-        "${workspaceFolder}/${input:gameProjectPath}/build/native-release",
-        "--target",
-        "game"
-      ],
-      "dependsOn": "Game: configure native release",
-      "group": "build",
-      "problemMatcher": [
-        "$gcc"
-      ]
-    },
-    {
-      "label": "Game: run native release",
-      "type": "shell",
-      "command": "${workspaceFolder}/${input:gameProjectPath}/build/native-release/bin/game.exe",
-      "dependsOn": "Game: build native release",
-      "options": {
-        "cwd": "${workspaceFolder}/${input:gameProjectPath}"
-      },
-      "problemMatcher": []
-    },
-    {
-      "label": "Game: configure wasm debug",
-      "type": "shell",
-      "command": "emcmake.bat",
-      "args": [
-        "cmake",
-        "-S",
-        "${workspaceFolder}/${input:gameProjectPath}",
-        "-B",
-        "${workspaceFolder}/${input:gameProjectPath}/build/wasm-debug",
-        "-DCMAKE_BUILD_TYPE=Debug"
-      ],
-      "problemMatcher": []
-    },
-    {
-      "label": "Game: build wasm debug",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--build",
-        "${workspaceFolder}/${input:gameProjectPath}/build/wasm-debug",
-        "--target",
-        "game"
-      ],
-      "dependsOn": "Game: configure wasm debug",
-      "problemMatcher": [
-        "$gcc"
-      ]
-    },
-    {
-      "label": "Game: serve wasm debug",
-      "type": "shell",
-      "command": "py",
-      "args": [
-        "-3.12",
-        "-m",
-        "http.server",
-        "8080",
-        "--directory",
-        "${workspaceFolder}/${input:gameProjectPath}/build/wasm-debug/bin"
-      ],
-      "dependsOn": "Game: build wasm debug",
-      "isBackground": true,
-      "problemMatcher": []
-    },
-    {
-      "label": "Game: configure wasm release",
-      "type": "shell",
-      "command": "emcmake.bat",
-      "args": [
-        "cmake",
-        "-S",
-        "${workspaceFolder}/${input:gameProjectPath}",
-        "-B",
-        "${workspaceFolder}/${input:gameProjectPath}/build/wasm-release",
-        "-DCMAKE_BUILD_TYPE=Release"
-      ],
-      "problemMatcher": []
-    },
-    {
-      "label": "Game: build wasm release",
-      "type": "shell",
-      "command": "cmake",
-      "args": [
-        "--build",
-        "${workspaceFolder}/${input:gameProjectPath}/build/wasm-release",
-        "--target",
-        "game"
-      ],
-      "dependsOn": "Game: configure wasm release",
-      "group": "build",
-      "problemMatcher": [
-        "$gcc"
-      ]
-    },
-    {
-      "label": "Game: serve wasm release",
-      "type": "shell",
-      "command": "py",
-      "args": [
-        "-3.12",
-        "-m",
-        "http.server",
-        "8081",
-        "--directory",
-        "${workspaceFolder}/${input:gameProjectPath}/build/wasm-release/bin"
-      ],
-      "dependsOn": "Game: build wasm release",
-      "isBackground": true,
-      "problemMatcher": []
-    },
-    {
-      "label": "AI Studio: validate architecture map",
-      "type": "shell",
-      "command": "node",
-      "args": [
-        "ai_studio/architecture_map/validate_map.mjs",
-        "--strict"
-      ],
-      "problemMatcher": []
-    }
-  ],
-  "inputs": [
-    {
-      "id": "gameProjectPath",
-      "type": "promptString",
-      "description": "Project folder to build or run, for example templates/template or games/my-game.",
-      "default": "templates/template"
     }
   ]
 }

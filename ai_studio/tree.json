@@ -346,12 +346,27 @@
             "kind": "tool",
             "path": "ai_studio/bootstrap/new_game.mjs",
             "title": "new_game.mjs",
-            "description": "Copies templates/template/ into games/<game-id>/ and registers that game asset root through Asset Storage.",
+            "description": "Copies templates/<template-id>/ into games/<game-id>/, registers that game asset root through Asset Storage, and refreshes generated VS Code tasks/launch entries.",
             "role": "new game creation command",
             "tags": [
               "bootstrap",
               "game-creation",
-              "assets"
+              "assets",
+              "vscode"
+            ]
+          },
+          {
+            "id": "bootstrap:new-template",
+            "kind": "tool",
+            "path": "ai_studio/bootstrap/new_template.mjs",
+            "title": "new_template.mjs",
+            "description": "Copies an existing template into templates/<template-id>/, registers it as a reusable template asset root, and refreshes generated VS Code tasks/launch entries.",
+            "role": "new template creation command",
+            "tags": [
+              "bootstrap",
+              "template",
+              "assets",
+              "vscode"
             ]
           },
           {
@@ -359,10 +374,50 @@
             "kind": "test",
             "path": "ai_studio/bootstrap/new_game.test.mjs",
             "title": "new_game.test.mjs",
-            "description": "Regression tests proving new_game copies template files and registers game asset roots without touching the real repository.",
+            "description": "Regression tests proving new_game copies template files, registers game asset roots, and refreshes generated VS Code project entries without touching the real repository.",
             "role": "new game creation tests",
             "tags": [
               "bootstrap",
+              "test"
+            ]
+          },
+          {
+            "id": "bootstrap:new-template-test",
+            "kind": "test",
+            "path": "ai_studio/bootstrap/new_template.test.mjs",
+            "title": "new_template.test.mjs",
+            "description": "Regression tests proving new_template copies template files, registers template asset roots, and refreshes generated VS Code project entries without touching the real repository.",
+            "role": "new template creation tests",
+            "tags": [
+              "bootstrap",
+              "test",
+              "template"
+            ]
+          },
+          {
+            "id": "bootstrap:vscode-projects",
+            "kind": "tool",
+            "path": "ai_studio/bootstrap/vscode_projects.mjs",
+            "title": "vscode_projects.mjs",
+            "description": "Generates .vscode/tasks.json and .vscode/launch.json from registered templates and games so VS Code can build packs, build games, and launch each project explicitly.",
+            "role": "VS Code project entry generator",
+            "tags": [
+              "bootstrap",
+              "vscode",
+              "build",
+              "game-run"
+            ]
+          },
+          {
+            "id": "bootstrap:vscode-projects-test",
+            "kind": "test",
+            "path": "ai_studio/bootstrap/vscode_projects.test.mjs",
+            "title": "vscode_projects.test.mjs",
+            "description": "Regression tests for generated VS Code tasks and launch configurations from template/game registries.",
+            "role": "VS Code project entry generator tests",
+            "tags": [
+              "bootstrap",
+              "vscode",
               "test"
             ]
           },
@@ -942,12 +997,26 @@
             "kind": "tool",
             "path": ".vscode/tasks.json",
             "title": ".vscode/tasks.json",
-            "description": "Supported VS Code task entrypoint for starting AI Studio, building native/wasm games, building game asset packs, running games, and validating the architecture map.",
+            "description": "Generated VS Code task entrypoint for registered templates and games: configure native builds, build game asset packs, build game executables, run games, and capture settings screenshots.",
             "role": "local IDE build/run task entrypoint",
             "tags": [
               "core",
               "vscode",
               "build",
+              "game-run"
+            ]
+          },
+          {
+            "id": "core-harness:vscode-launch",
+            "kind": "tool",
+            "path": ".vscode/launch.json",
+            "title": ".vscode/launch.json",
+            "description": "Generated VS Code Run and Debug entries for each registered template and game, with preLaunchTask wired to the matching native build task.",
+            "role": "local IDE launch entrypoint",
+            "tags": [
+              "core",
+              "vscode",
+              "launch",
               "game-run"
             ]
           },
