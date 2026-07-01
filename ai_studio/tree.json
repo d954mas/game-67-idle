@@ -3228,6 +3228,19 @@
                 ]
               },
               {
+                "id": "assets:asset-viewer-serve-test",
+                "kind": "test",
+                "path": "ai_studio/assets/viewer/tests/serve_gallery.test.mjs",
+                "title": "serve_gallery.test.mjs",
+                "description": "Regression tests for standalone Asset Viewer gallery server argument parsing and safe gallery/library request path resolution.",
+                "role": "asset gallery server tests",
+                "tags": [
+                  "assets",
+                  "tests",
+                  "server"
+                ]
+              },
+              {
                 "id": "assets:asset-viewer-promote",
                 "kind": "tool",
                 "path": "ai_studio/assets/viewer/promote.mjs",
