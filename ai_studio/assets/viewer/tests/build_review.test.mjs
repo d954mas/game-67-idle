@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { detectOrigin, kindForExt, libraryKind, renderHtml, safeJson, escHtml } from "../build_review.mjs";
+import { detectOrigin, kindForExt, libraryKind, parseArgs, renderHtml, safeJson, escHtml } from "../build_review.mjs";
 
 test("kindForExt maps primary extensions, ignores sidecars", () => {
   assert.equal(kindForExt(".obj"), "model");
@@ -48,4 +48,32 @@ test("escHtml escapes the five HTML entities and handles nullish", () => {
   assert.equal(escHtml(`<>&"'`), "&lt;&gt;&amp;&quot;&#39;");
   assert.equal(escHtml(null), "");
   assert.equal(escHtml(undefined), "");
+});
+
+test("parseArgs covers gallery builder CLI contract", () => {
+  assert.equal(parseArgs([]).mode, "library");
+
+  const args = parseArgs([
+    "--mode", "scan",
+    "--game", "demo",
+    "--base", "clean-seed",
+    "--library", "C:/assets",
+    "--repo", "C:/repo",
+    "--out", "tmp/out",
+    "--path", "demo/assets",
+    "--ref",
+  ]);
+
+  assert.equal(args.mode, "scan");
+  assert.equal(args.game, "demo");
+  assert.equal(args.base, "clean-seed");
+  assert.equal(args.library, "C:/assets");
+  assert.equal(args.repo, "C:/repo");
+  assert.equal(args.out, "tmp/out");
+  assert.equal(args.path, "demo/assets");
+  assert.equal(args.ref, true);
+
+  assert.throws(() => parseArgs(["--mode"]), /missing value/);
+  assert.throws(() => parseArgs(["--bad", "x"]), /unknown option/);
+  assert.throws(() => parseArgs(["--mode", "broken"]), /unknown mode/);
 });

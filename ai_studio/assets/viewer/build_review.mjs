@@ -190,6 +190,7 @@ async function buildScanCards(root, mediaDir, repo) {
 }
 
 const ORIGIN_COLOR = { mine: "#7dd3fc", ai: "#f0abfc", sourced: "#86efac", unknown: "#9ca3af" };
+const MODES = new Set(["library", "review", "scan"]);
 const escHtml = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 // Safe to embed inside a <script>: neutralize </script>/<!-- breakout + JS line separators.
 const safeJson = (v) => JSON.stringify(v).replace(/</g, "\\u003c").replace(new RegExp("[\\u2028\\u2029]", "g"), (c) => "\\u" + c.charCodeAt(0).toString(16));
@@ -228,11 +229,12 @@ function parseArgs(argv) {
     else if (arg === "--path") a.path = next;
     else throw new Error(`unknown option: ${arg}`);
   }
+  if (!MODES.has(a.mode)) throw new Error(`unknown mode: ${a.mode}`);
   return a;
 }
 
-async function main() {
-  const a = parseArgs(process.argv.slice(2));
+async function main(argv = process.argv.slice(2)) {
+  const a = parseArgs(argv);
   const outDir = resolve(a.out);
   const mediaDir = join(outDir, "media");
   await mkdir(mediaDir, { recursive: true });
@@ -301,4 +303,4 @@ if (isMain(import.meta.url)) {
   main().catch((e) => { console.error(e.message); process.exit(1); });
 }
 
-export { discoverGameAssets, detectOrigin, kindForExt, libraryKind, buildLibraryCards, buildReviewCards, buildScanCards, renderHtml, escHtml, safeJson };
+export { discoverGameAssets, detectOrigin, kindForExt, libraryKind, buildLibraryCards, buildReviewCards, buildScanCards, main, parseArgs, renderHtml, escHtml, safeJson };
