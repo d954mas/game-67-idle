@@ -9,7 +9,7 @@
 //        --ids "a,b,c" --source kenney --license CC0-1.0 --apply
 import { readFile, writeFile, mkdir, cp, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
-import { join, resolve, basename, extname } from "node:path";
+import { join, resolve, basename, extname, sep } from "node:path";
 import { createHash } from "node:crypto";
 import { KIND_DIR } from "../storage/kinds.mjs";
 import { isMain } from "../../core_harness/tool_lib/cli.mjs";
@@ -162,6 +162,13 @@ function list(value) {
   return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
 }
 
+function resolveManifestPath(repo, relpath, label = "manifest path") {
+  const base = resolve(repo);
+  const full = resolve(base, relpath);
+  if (full !== base && full.startsWith(base + sep)) return full;
+  throw new Error(`${label} escapes --repo: ${relpath}`);
+}
+
 async function readJson(path, fallback) {
   if (!existsSync(path)) return fallback;
   return JSON.parse(await readFile(path, "utf8"));
@@ -251,7 +258,7 @@ async function main() {
   const rows = a.apply ? await readJsonl(assetsPath) : [];
   for (const it of plan) {
     const { pick, source, kind, assetId, filesDir, licenseDir } = it;
-    const abs = resolve(a.repo, pick.relpath);
+    const abs = resolveManifestPath(a.repo, pick.relpath, "asset relpath");
     if (!existsSync(abs)) throw new Error(`source file missing: ${abs}`);
     console.log(`  ${assetId}  (${kind})${it.exists ? " [OVERWRITE]" : ""}  <- ${pick.relpath}`);
     if (!a.apply) continue;
@@ -326,7 +333,7 @@ async function main() {
     await writeFile(join(packDir, "pack.json"), `${JSON.stringify(packJson, null, 2)}\n`, "utf8");
     await writeFile(join(licenseDir, `${assetId}.md`), licenseMarkdown(rec), "utf8");
     if (pick.licenseFile) {
-      const licAbs = resolve(a.repo, pick.licenseFile);
+      const licAbs = resolveManifestPath(a.repo, pick.licenseFile, "licenseFile");
       if (existsSync(licAbs)) await cp(licAbs, join(licenseDir, `${assetId}-${basename(licAbs)}`), { force: true });
     }
     await appendFile(join(library, "intake-log.md"), `- ${ts} promoted ${assetId} (${originOrKind(rec)}) [pack ${packSlug}] from ${pick.relpath}\n`, "utf8");
@@ -343,4 +350,4 @@ if (isMain(import.meta.url)) {
   main().catch((e) => { console.error(e.message); process.exit(1); });
 }
 
-export { parseArgs, kebab };
+export { parseArgs, kebab, resolveManifestPath };

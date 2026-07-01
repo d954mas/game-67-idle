@@ -168,6 +168,37 @@ test("refuses to overwrite an existing record without --overwrite", async () => 
   }
 });
 
+test("rejects manifest asset paths that escape --repo", async () => {
+  const { root, repo, library, manifestPath } = await setup([
+    { id: "escape", name: "outside.obj", relpath: "../outside.obj", kind: "model", origin: "sourced", source: "kenney", licenseFile: "" },
+  ]);
+  try {
+    await writeFile(join(root, "outside.obj"), "outside-bytes");
+    await expectFail(
+      ["--manifest", manifestPath, "--ids", "escape", "--repo", repo, "--library", library, "--source", "kenney", "--license", "CC0-1.0", "--apply"],
+      /asset relpath escapes --repo/,
+    );
+    assert.equal(existsSync(join(library, "packs")), false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("rejects manifest license files that escape --repo", async () => {
+  const { root, repo, library, manifestPath } = await setup([
+    { id: "bad-license", name: "desk.obj", relpath: "assets/source/models/kenney/desk.obj", kind: "model", origin: "sourced", source: "kenney", licenseFile: "../outside-license.txt" },
+  ]);
+  try {
+    await writeFile(join(root, "outside-license.txt"), "outside license");
+    await expectFail(
+      ["--manifest", manifestPath, "--ids", "bad-license", "--repo", repo, "--library", library, "--source", "kenney", "--license", "CC0-1.0", "--apply"],
+      /licenseFile escapes --repo/,
+    );
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("rejects duplicate asset_ids within one batch", async () => {
   // two distinct files -> same kebab slug + source + license => same asset_id
   const { root, repo, library, manifestPath } = await setup([
