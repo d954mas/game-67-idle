@@ -8,9 +8,9 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
-export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done", "dropped"];
-export const EPIC_STATUSES = ["idea", "active", "done", "dropped"];
-export const PROJECT_STATUSES = ["idea", "active", "done", "dropped"];
+export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done"];
+export const EPIC_STATUSES = ["idea", "active", "done"];
+export const PROJECT_STATUSES = ["idea", "active", "done"];
 export const PROJECT_KINDS = ["ai-studio", "game", "template", "tooling", "research", "other"];
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
 export const ACTIVE_TASK_STATUSES = ["backlog", "todo", "doing", "review"];
@@ -95,7 +95,7 @@ export function idNumber(doc) {
 }
 
 export function taskRank(task) {
-  const statusRank = { doing: 0, todo: 1, backlog: 2, review: 3, idea: 4, done: 5, dropped: 6 }[task.fields.status] ?? 9;
+  const statusRank = { doing: 0, todo: 1, backlog: 2, review: 3, idea: 4, done: 5 }[task.fields.status] ?? 9;
   return statusRank * 10 + priorityRank(task.fields.priority);
 }
 
@@ -475,7 +475,7 @@ export function updateDoc(root, id, patch = {}) {
 }
 
 function taskStorageDir(root, fields) {
-  if (["done", "dropped"].includes(fields.status)) {
+  if (fields.status === "done") {
     return join(archiveTaskDir(root), fields.epic || "unassigned");
   }
   return activeTaskDir(root);

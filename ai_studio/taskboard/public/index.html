@@ -50,7 +50,6 @@
       <header class="topbar">
         <div class="title-block">
           <h1>Taskboard</h1>
-          <span id="boardStatus" class="board-status"></span>
         </div>
         <div class="view-tabs" role="tablist" aria-label="Taskboard views">
           <button type="button" class="view-tab is-active" data-view="board" role="tab" aria-selected="true">Board</button>
@@ -58,16 +57,24 @@
           <button type="button" class="view-tab" data-view="epics" role="tab" aria-selected="false">Epics</button>
         </div>
         <input id="search" type="search" placeholder="Search title, id, tag...">
-        <select id="projectFilter"><option value="">All projects</option></select>
-        <select id="epicFilter"><option value="">All epics</option></select>
-        <label class="toggle"><input type="checkbox" id="showClosed"> all statuses</label>
+        <div class="multi-filter" id="projectFilterWrap">
+          <button type="button" id="projectFilterButton" class="filter-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="projectFilterMenu">Projects: all</button>
+          <div id="projectFilterMenu" class="filter-menu" role="group" aria-label="Projects" hidden></div>
+        </div>
+        <div class="multi-filter" id="epicFilterWrap">
+          <button type="button" id="epicFilterButton" class="filter-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="epicFilterMenu">Epics: all</button>
+          <div id="epicFilterMenu" class="filter-menu" role="group" aria-label="Epics" hidden></div>
+        </div>
+        <div class="multi-filter" id="statusFilterWrap">
+          <button type="button" id="statusFilterButton" class="filter-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="statusFilterMenu">Statuses: working</button>
+          <div id="statusFilterMenu" class="filter-menu" role="group" aria-label="Statuses" hidden></div>
+        </div>
         <span class="spacer"></span>
         <button id="newProject" class="ghost">+ Project</button>
         <button id="newEpic" class="ghost">+ Epic</button>
         <button id="newTask" class="primary">+ Task</button>
       </header>
 
-      <section id="overview" class="overview" aria-label="Taskboard overview"></section>
       <section id="board" class="board"></section>
     </main>
   </div>

@@ -162,6 +162,9 @@ test("Taskboard API board payload exposes public project, epic, and task state",
   assert.ok(payload.taskStatuses.includes("doing"));
   assert.ok(payload.epicStatuses.includes("active"));
   assert.ok(payload.projectStatuses.includes("active"));
+  assert.equal(payload.taskStatuses.includes("dropped"), false);
+  assert.equal(payload.epicStatuses.includes("dropped"), false);
+  assert.equal(payload.projectStatuses.includes("dropped"), false);
   assert.ok(payload.projectKinds.includes("ai-studio"));
   assert.ok(payload.priorities.includes("P1"));
   assert.equal(payload.tasks[0].body, undefined);
@@ -399,6 +402,7 @@ test("updateDoc rejects invalid status", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "Bad status" });
   assert.throws(() => updateDoc(root, "T0001", { fields: { status: "nonsense" } }), /Invalid status/);
+  assert.throws(() => updateDoc(root, "T0001", { fields: { status: "dropped" } }), /Invalid status/);
 });
 
 test("updateDoc checks archive move conflicts before rewriting source", (t) => {

@@ -16,8 +16,8 @@ cleanup, or user request.
 The browser product is a compact task board: active work columns only
 (`backlog`, `todo`, `doing`, `review`) plus search, project filter, and epic
 filter. Projects are the top-level work owner; epics group slices inside a
-project; tasks are the actionable cards. Enable "all statuses" only when
-reviewing raw ideas or archive state.
+project; tasks are the actionable cards. Use the Statuses filter when reviewing
+raw ideas or closed state.
 
 Run it through Studio Shell:
 

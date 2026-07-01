@@ -16,7 +16,7 @@ The map is data-driven:
 
 The page must not infer architecture from the repository. New files are not
 silently added to the map. They appear in validation until a human decides
-whether to map, ignore, assign to the review backlog, or delete them.
+whether to map, ignore, open a task, or delete them.
 
 `ai_studio/game_design/knowledge_base/` is owned by the Game Design module and is
 mapped there as one covered folder. `templates/` and `games/` are shown as

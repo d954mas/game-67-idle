@@ -355,19 +355,6 @@
                 ]
               }
             ]
-          },
-          {
-            "id": "studio-shell:nt-app-tunnel-skill",
-            "kind": "skill",
-            "path": ".codex/skills/nt-app-tunnel",
-            "title": "nt-app-tunnel",
-            "description": "Skill bundle for sharing local AI Studio surfaces, asset viewer exports, static pages, or wasm builds through a temporary public cloudflared tunnel. It owns the tunnel script and safety rules.",
-            "role": "app tunnel skill bundle",
-            "tags": [
-              "skill",
-              "tunnel",
-              "surface-share"
-            ]
           }
         ]
       },
@@ -817,6 +804,37 @@
                       "entrypoint"
                     ]
                   }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "core-harness:utility-skills",
+            "title": "Utility Skills",
+            "subtitle": "cross-cutting agent workflows",
+            "kind": "group",
+            "color": "#0f766e",
+            "description": "Self-contained Codex skills for reusable agent workflows that do not belong to one AI Studio product module.",
+            "role": "shared utility skill ownership",
+            "tags": [
+              "core",
+              "skills",
+              "agent-facing",
+              "utility"
+            ],
+            "children": [
+              {
+                "id": "core-harness:nt-app-tunnel-skill",
+                "kind": "skill",
+                "path": ".codex/skills/nt-app-tunnel",
+                "title": "nt-app-tunnel",
+                "description": "Self-contained skill for sharing local self-contained static directories, AI Studio surfaces, asset exports, or wasm game builds through a temporary public cloudflared tunnel.",
+                "role": "temporary public preview tunnel skill",
+                "tags": [
+                  "skill",
+                  "tunnel",
+                  "surface-share",
+                  "cross-cutting"
                 ]
               }
             ]
@@ -4049,23 +4067,6 @@
             ]
           }
         ]
-      },
-      {
-        "id": "review-backlog",
-        "title": "Review Backlog",
-        "subtitle": "unassigned module candidates",
-        "kind": "backlog",
-        "color": "#64748b",
-        "description": "Known module candidates that still need review, ownership, and validation before promotion into the main ai_studio tree.",
-        "tags": [
-          "current-state",
-          "do-not-lose",
-          "move-gradually"
-        ],
-        "generatedChildren": [
-          "module-backlog"
-        ],
-        "children": []
       }
     ]
   }

@@ -17,5 +17,5 @@ updated: 2026-07-01
 
 ## Log
 
-- 2026-07-01: moved from the dropped shared Game Projects bucket to AI Studio;
+- 2026-07-01: moved from the closed shared Game Projects bucket to AI Studio;
   this is reusable template/workflow planning, not a concrete game project.

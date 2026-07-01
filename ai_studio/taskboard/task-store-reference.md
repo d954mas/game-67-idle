@@ -22,7 +22,7 @@ in play.
 
 ## Task Lifecycle
 
-Project statuses: `idea -> active -> done`, plus `dropped`.
+Project statuses: `idea -> active -> done`.
 
 Project kinds: `ai-studio`, `game`, `template`, `tooling`, `research`, `other`.
 
@@ -30,10 +30,9 @@ Projects are the top-level owner for work. Use one project for reusable AI
 Studio work, one project per active game, one project per active template, and
 lightweight tooling/research projects when they own durable cross-cutting work.
 
-Task statuses: `idea -> backlog -> todo -> doing -> review -> done`, plus
-`dropped`.
+Task statuses: `idea -> backlog -> todo -> doing -> review -> done`.
 
-Epic statuses: `idea -> active -> done`, plus `dropped`.
+Epic statuses: `idea -> active -> done`.
 
 - `idea`: raw intake; do not implement from it.
 - `backlog`: refined, checkable, ready to schedule.
@@ -41,7 +40,7 @@ Epic statuses: `idea -> active -> done`, plus `dropped`.
 - `doing`: active work.
 - `review`: awaiting human or explicit cleanup review.
 - `done`: acceptance criteria checked and evidence logged.
-- `dropped`: intentionally closed; never delete task files to hide work.
+- `done`: completed or intentionally closed; record the reason in `## Log`.
 
 Default `list --json` shows current work, including `review`. Use
 `list --ideas --json` for raw intake and `list --archive --json` for history.

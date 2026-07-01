@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AI Pipeline Core Refactor Map</title>
+  <title>AI Studio Architecture Map</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/ai_studio/studio_shell/studio_shell.css">
   <style>
@@ -192,6 +192,7 @@
       max-width: 760px;
     }
     .type-chip {
+      appearance: none;
       display: inline-flex;
       align-items: center;
       gap: 6px;
@@ -200,14 +201,30 @@
       border-radius: 999px;
       background: color-mix(in srgb, var(--c) 8%, #fff);
       color: #334155;
+      cursor: pointer;
+      font-family: inherit;
       padding: 3px 8px;
       font-size: 11px;
       font-weight: 650;
       white-space: nowrap;
     }
+    .type-chip:hover,
+    .type-chip:focus-visible {
+      outline: 0;
+      border-color: color-mix(in srgb, var(--c) 62%, #64748b);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 14%, transparent);
+    }
+    .type-chip.is-muted {
+      background: #fff;
+      color: #94a3b8;
+      opacity: .56;
+    }
     .type-chip .swatch {
       width: 10px;
       height: 10px;
+    }
+    .type-chip.is-muted .swatch {
+      opacity: .36;
     }
     .advanced-controls {
       position: relative;
@@ -1281,7 +1298,18 @@
         font-size: 12px;
       }
       .type-legend {
-        display: none;
+        display: flex;
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+        max-width: 100%;
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: thin;
+      }
+      .type-chip {
+        flex: 0 0 auto;
+        min-height: 30px;
+        width: auto;
       }
       .graph-controls {
         gap: 6px;
@@ -1365,39 +1393,34 @@
         <div class="graph-head">
           <div class="graph-titlebar">
             <div>
-              <h1 id="graphTitle">ai_studio map</h1>
-              <p class="muted">Refactor tree from <code>ai_studio/tree.json</code>.</p>
+              <h1 id="graphTitle">AI Studio Architecture Map</h1>
+              <p class="muted">Live ownership tree from <code>ai_studio/tree.json</code>.</p>
             </div>
             <div class="type-legend" id="typeLegend" aria-label="Node type color legend"></div>
           </div>
           <div class="graph-controls">
-            <input id="search" type="search" placeholder="Поиск по модулю, source, skill, utility, risk">
-            <details class="advanced-controls type-filter-controls">
-              <summary id="kindFilterSummary">Types</summary>
-              <div class="advanced-controls-body type-filter-body" id="kindFilterControls" aria-label="Node type filters"></div>
-            </details>
-            <button id="resetBtn" type="button">Reset layout</button>
-            <button id="fitBtn" type="button" class="secondary">Fit start</button>
-            <details class="advanced-controls">
-              <summary>More</summary>
-              <div class="advanced-controls-body">
-                <select id="moduleFilter" aria-label="Module filter"></select>
-                <select id="focusMode" aria-label="Focus mode">
-                  <option value="local">Local graph: выбранный модуль + соседи</option>
-                  <option value="all">All contracts</option>
-                  <option value="inventory">Inventory pressure</option>
-                </select>
-                <button id="zoomInBtn" type="button" class="secondary">Zoom +</button>
-                <button id="zoomOutBtn" type="button" class="secondary">Zoom -</button>
-                <button id="clearSavedLayoutBtn" type="button" class="secondary">Clear saved layout</button>
-                <span class="chip info" id="zoomLabel">100%</span>
-                <span class="metric"><b id="moduleCount">0</b> modules</span>
-                <span class="metric"><b id="docCount">0</b> md sources</span>
-                <span class="metric"><b id="toolCount">0</b> tools</span>
-                <span class="metric"><b id="contractCount">0</b> contracts</span>
-                <div class="legend" id="legend" hidden></div>
-              </div>
-            </details>
+            <div hidden aria-hidden="true">
+              <div id="kindFilterSummary">Types</div>
+              <div id="kindFilterControls" aria-label="Node type filters"></div>
+              <input id="search" type="search" value="">
+              <button id="resetBtn" type="button">Reset layout</button>
+              <button id="fitBtn" type="button" class="secondary">Fit start</button>
+              <select id="moduleFilter" aria-label="Module filter"></select>
+              <select id="focusMode" aria-label="Focus mode">
+                <option value="local">Local graph</option>
+                <option value="all">All contracts</option>
+                <option value="inventory">Inventory pressure</option>
+              </select>
+              <button id="zoomInBtn" type="button" class="secondary">Zoom +</button>
+              <button id="zoomOutBtn" type="button" class="secondary">Zoom -</button>
+              <button id="clearSavedLayoutBtn" type="button" class="secondary">Clear saved layout</button>
+              <span class="chip info" id="zoomLabel">100%</span>
+              <span class="metric"><b id="moduleCount">0</b> modules</span>
+              <span class="metric"><b id="docCount">0</b> md sources</span>
+              <span class="metric"><b id="toolCount">0</b> tools</span>
+              <span class="metric"><b id="contractCount">0</b> contracts</span>
+              <div class="legend" id="legend" hidden></div>
+            </div>
           </div>
         </div>
         <div class="boot-error" id="bootError"></div>
@@ -1443,42 +1466,47 @@
     const kindPalette = {
       root: { label: "Root", color: "#334155" },
       module: { label: "Module", color: "#2563eb" },
-      group: { label: "Group", color: "#7c3aed" },
-      section: { label: "Group", color: "#7c3aed" },
-      shell: { label: "Shell", color: "#0f766e" },
-      folder: { label: "Folder", color: "#0891b2" },
-      dir: { label: "Folder", color: "#0891b2" },
+      workspace: { label: "Workspace", color: "#7c3aed" },
       doc: { label: "Doc", color: "#15803d" },
       config: { label: "Config", color: "#4f46e5" },
       tool: { label: "Tool", color: "#b45309" },
       surface: { label: "Surface", color: "#0284c7" },
-      server: { label: "Server", color: "#0d9488" },
-      "ui-component": { label: "UI", color: "#475569" },
+      api: { label: "API", color: "#0d9488" },
+      cli: { label: "CLI", color: "#92400e" },
+      workflow: { label: "Workflow", color: "#9333ea" },
       skill: { label: "Skill", color: "#c026d3" },
-      validation: { label: "Validation", color: "#b91c1c" },
+      validation: { label: "Validator", color: "#b91c1c" },
       test: { label: "Test", color: "#64748b" },
       contract: { label: "Contract", color: "#b91c1c" },
-      backlog: { label: "Backlog", color: "#64748b" },
       item: { label: "Item", color: "#475569" }
     };
-    const typeLegendItems = ["module", "shell", "group", "doc", "config", "tool", "surface", "server", "ui-component", "skill", "validation", "test", "backlog"];
+    const typeLegendItems = ["module", "workspace", "surface", "api", "cli", "workflow", "skill", "tool", "doc", "config", "test", "validation"];
     const defaultHiddenKinds = new Set(["test", "validation"]);
     function normalizedKind(kind) {
       const value = String(kind || "item").toLowerCase();
       if (kindPalette[value]) return value;
+      if (value === "group" || value === "section" || value === "dir" || value === "folder" || value === "library" || value === "asset" || value === "backlog") return "workspace";
+      if (value === "shell" || value === "ui-component") return "surface";
+      if (value === "server") return "api";
+      if (value === "generated-output") return "validation";
       if (value.includes("validation") || value.includes("validator")) return "validation";
       if (value.includes("test")) return "test";
       if (value.includes("config") || value.includes("settings")) return "config";
       if (value.includes("doc")) return "doc";
       if (value.includes("tool")) return "tool";
       if (value.includes("surface")) return "surface";
-      if (value.includes("server")) return "server";
+      if (value.includes("server") || value.includes("api")) return "api";
+      if (value.includes("cli")) return "cli";
+      if (value.includes("workflow")) return "workflow";
       if (value.includes("skill")) return "skill";
-      if (value.includes("dir") || value.includes("folder")) return "dir";
+      if (value.includes("dir") || value.includes("folder")) return "workspace";
       return "item";
     }
     function kindMeta(kind) {
       return kindPalette[normalizedKind(kind)] || kindPalette.item;
+    }
+    function kindLabel(kind) {
+      return kindMeta(kind).label;
     }
     function kindColor(kind) {
       return kindMeta(kind).color;
@@ -1532,7 +1560,7 @@
     }
     function isTopGraphNode(node) {
       const kind = normalizedKind(node.kind);
-      return kind === "module" || kind === "backlog" || node.kind === "shell" || (node.children || []).length > 0;
+      return kind === "module" || node.kind === "backlog" || node.kind === "shell" || (node.children || []).length > 0;
     }
     function modulePoint(index, count) {
       const cx = 700;
@@ -1554,7 +1582,7 @@
         tags: node.tags || [],
         module: moduleId,
         group: moduleId,
-        surface: (node.tags || []).includes("public-api") || kind === "surface" || kind === "server" ? "public" : "internal"
+        surface: (node.tags || []).includes("public-api") || kind === "surface" || kind === "api" ? "public" : "internal"
       };
     }
     function groupTitleFor(kind) {
@@ -1563,12 +1591,12 @@
       if (kind === "skill") return "Skills";
       if (kind === "tool") return "Tools";
       if (kind === "surface") return "Surfaces";
-      if (kind === "server") return "Servers";
-      if (kind === "ui-component") return "UI";
-      if (kind === "validation") return "Validation";
+      if (kind === "api") return "APIs";
+      if (kind === "cli") return "CLI";
+      if (kind === "workflow") return "Workflows";
+      if (kind === "validation") return "Validators";
       if (kind === "test") return "Tests";
-      if (kind === "group" || kind === "dir") return "Groups";
-      if (kind === "backlog") return "Backlog";
+      if (kind === "workspace") return "Workspace";
       return "Items";
     }
     function collectModuleItems(node, moduleId, includeSelf = false, out = []) {
@@ -1594,7 +1622,7 @@
           title: groupTitleFor(kind),
           description: "Mapped " + groupTitleFor(kind).toLowerCase() + " owned by " + defaultTitle(moduleNode) + ".",
           color: kindColor(kind),
-          icon: kind === "tool" || kind === "server" ? "tool" : kind === "skill" ? "skill" : kind === "surface" ? "window" : kind === "validation" ? "shield" : kind === "test" ? "sync" : "doc",
+          icon: kind === "tool" || kind === "api" || kind === "cli" ? "tool" : kind === "skill" ? "skill" : kind === "surface" ? "window" : kind === "validation" ? "shield" : kind === "test" ? "sync" : "doc",
           tags: [kind],
           items
         }));
@@ -1976,7 +2004,10 @@
       if (typeLegend) {
         typeLegend.innerHTML = typeLegendItems.map((kind) => {
           const meta = kindMeta(kind);
-          return '<span class="type-chip" style="--c:' + esc(meta.color) + '"><span class="swatch"></span>' + esc(meta.label) + '</span>';
+          const pressed = hiddenKinds.has(kind) ? "false" : "true";
+          const muted = hiddenKinds.has(kind) ? " is-muted" : "";
+          const title = hiddenKinds.has(kind) ? "Show " + meta.label : "Hide " + meta.label;
+          return '<button type="button" class="type-chip' + muted + '" data-kind-toggle="' + esc(kind) + '" aria-pressed="' + pressed + '" title="' + esc(title) + '" style="--c:' + esc(meta.color) + '"><span class="swatch"></span>' + esc(meta.label) + '</button>';
         }).join("");
       }
       renderKindFilterControls();
@@ -2011,9 +2042,18 @@
       kindFilterSummary.textContent = hiddenKinds.size ? "Types: " + hiddenLabels.join(", ") + " off" : "Types: all";
       kindFilterSummary.title = count ? count + " nodes hidden by type filter" : "All node types visible";
     }
+    function applyKindVisibility(kind, visible) {
+      if (visible) hiddenKinds.delete(kind);
+      else hiddenKinds.add(kind);
+      const root = buildExplorerRoot();
+      if (!findExplorerNode(root, explorerSelected)) explorerSelected = "studio";
+      if (!findExplorerNode(root, explorerView)) explorerView = "studio";
+      renderLegend();
+      updateAll();
+    }
     function moduleNodeHtml(m) {
       const inv = inventory(m.id);
-      return '<div class="top"><span class="kind">' + esc(m.kind) + '</span><span class="swatch" style="--c:' + esc(m.color) + '"></span></div>' +
+      return '<div class="top"><span class="kind">' + esc(kindLabel(m.kind)) + '</span><span class="swatch" style="--c:' + esc(m.color) + '"></span></div>' +
         '<div class="title">' + esc(m.title) + '</div>' +
         '<div class="desc">' + esc(m.description) + '</div>' +
         '<div class="counts">' +
@@ -2125,7 +2165,7 @@
       if (!groups.length) return "";
       return '<div class="node-sections">' + groups.map((group) => {
         const items = group.items.slice(0, id === "hot" ? 6 : 4);
-        const more = group.items.length > items.length ? '<span class="chip">+' + (group.items.length - items.length) + ' more</span>' : "";
+        const more = group.items.length > items.length ? '<span class="chip">+' + (group.items.length - items.length) + ' hidden</span>' : "";
         return '<section class="node-section" style="--section-color:' + esc(group.color) + '">' +
           '<div class="node-section-head">' +
             '<div class="node-section-title">' + icon(group.icon) + '<span>' + esc(group.title) + '</span></div>' +
@@ -2301,20 +2341,20 @@
       return '<' + tag + ' class="hierarchy-node ' + hierarchyDepthClass(index) + (isCurrent ? ' current' : '') + (!hasChildren ? ' leaf' : '') + '" style="--c:' + esc(node.color) + '"' + attrs + '>' +
         explorerNodeIcon(node) +
         '<span>' + esc(node.title) + '</span>' +
-        '<small>' + esc(node.kind) + '</small>' +
+        '<small>' + esc(kindLabel(node.kind)) + '</small>' +
       '</' + tag + '>';
     }
     function breadcrumbTitle(node) {
-      return node.id === "studio" ? "ai_studio" : node.title;
+      return node.id === "studio" ? "AI Studio" : node.title;
     }
     function renderHierarchyPanel(current, path, visibleChildren) {
       const displayPath = path.length ? path : [current];
       const rows = displayPath.map((node, index) => renderHierarchyRow(node, index, current.id)).join("");
       const childRows = visibleChildren.slice(0, 18).map((node) => renderHierarchyRow(node, Math.min(3, displayPath.length), "")).join("");
-      const more = visibleChildren.length > 18 ? '<p class="muted">+' + (visibleChildren.length - 18) + ' hidden by panel limit; use graph or search.</p>' : "";
+      const more = visibleChildren.length > 18 ? '<p class="muted">+' + (visibleChildren.length - 18) + ' hidden by panel limit; open child nodes in the card view.</p>' : "";
       const canBack = current.id !== "studio";
       return '<aside class="drill-hierarchy-panel" aria-label="Hierarchy">' +
-        '<div class="actions">' + (canBack ? '<button type="button" class="secondary" data-explorer-back="1">Назад</button>' : '') + '<button type="button" class="secondary" data-explorer-close="1">Граф связей</button></div>' +
+        '<div class="actions">' + (canBack ? '<button type="button" class="secondary" data-explorer-back="1">Назад</button>' : '') + '</div>' +
         '<div class="block"><h3>Иерархия</h3><div class="hierarchy-list">' + rows + '</div></div>' +
         '<div class="hierarchy-children"><h3>Внутри уровня</h3>' + (childRows || '<p class="muted">Внутренних узлов нет.</p>') + more + '</div>' +
       '</aside>';
@@ -2348,19 +2388,18 @@
       const path = findExplorerPath(root, current.id, []);
       const displayPath = path.length ? path : [root];
       const pathText = displayPath.map(breadcrumbTitle).join(" / ");
-      const viewTitle = current.id === "studio" ? "Main Refactor Tree" : current.title;
+      const viewTitle = current.id === "studio" ? "Architecture Tree" : current.title;
       const canBack = current.id !== "studio";
       const toolbarActions =
         '<div class="drill-toolbar-actions">' +
           (canBack ? '<button type="button" class="secondary" data-explorer-back="1">Назад</button>' : '') +
-          '<button type="button" class="secondary" data-explorer-close="1">Граф связей</button>' +
         '</div>';
       studioExplorerTree.innerHTML =
         '<div class="drill-graph-shell">' +
           '<div class="drill-graph-toolbar">' +
             '<div><h2>' + esc(viewTitle) + '</h2><p class="muted">' + esc(pathText) + '</p></div>' +
             '<div class="drill-toolbar-meta">' +
-              '<div class="legend"><span class="chip">' + visibleChildren.length + ' visible</span><span class="chip">' + children.length + ' children</span><span class="chip">' + esc(current.kind) + '</span></div>' +
+              '<div class="legend"><span class="chip">' + visibleChildren.length + ' visible</span><span class="chip">' + children.length + ' children</span><span class="chip">' + esc(kindLabel(current.kind)) + '</span></div>' +
               toolbarActions +
             '</div>' +
           '</div>' +
@@ -2397,11 +2436,7 @@
         '<div class="drill-node-actions">' + open + copy + '</div>';
     }
     function renderDescriptionToggle(node, role, hasChildren) {
-      const text = node.description || "";
-      const canToggle = text.trim().length > 0;
-      return canToggle
-        ? '<button type="button" class="drill-node-more" data-toggle-description="1" aria-expanded="false">More</button>'
-        : "";
+      return "";
     }
     function drillTitleFitClass(title) {
       const text = String(title || "");
@@ -2427,7 +2462,7 @@
         '<p class="drill-node-desc">' + esc(node.description || "No description yet.") + '</p>' +
         descToggle +
         leafActions +
-        '<div class="metrics"><span class="metric"><b>' + (node.children ? node.children.length : 0) + '</b> children</span><span class="metric"><b>' + esc(node.kind) + '</b></span></div>' +
+        '<div class="metrics"><span class="metric"><b>' + (node.children ? node.children.length : 0) + '</b> children</span><span class="metric"><b>' + esc(kindLabel(node.kind)) + '</b></span></div>' +
       '</' + tag + '>';
     }
     function drillGraphLayout(children) {
@@ -2840,7 +2875,7 @@
           const expanded = !node.classList.contains("desc-open");
           node.classList.toggle("desc-open", expanded);
           toggleDescription.setAttribute("aria-expanded", expanded ? "true" : "false");
-          toggleDescription.textContent = expanded ? "Less" : "More";
+          toggleDescription.textContent = expanded ? "Close" : "Details";
           return;
         }
         const card = event.target.closest("[data-explorer-card]");
@@ -2892,14 +2927,14 @@
       const m = moduleById.get(selected) || modules[0];
       const inv = inventory(m.id);
       detail.innerHTML =
-        '<div class="block"><div class="legend"><span class="swatch" style="--c:' + esc(m.color) + '"></span><span class="chip">' + esc(m.kind) + '</span>' + chip(migrationStatus(m.id)[0], migrationStatus(m.id)[1]) + risks(m.id).map((r) => chip(r[0], r[1])).join("") + '</div><h2>' + esc(m.title) + '</h2><p class="muted">' + esc(m.description) + '</p></div>' +
+        '<div class="block"><div class="legend"><span class="swatch" style="--c:' + esc(m.color) + '"></span><span class="chip">' + esc(kindLabel(m.kind)) + '</span>' + chip(migrationStatus(m.id)[0], migrationStatus(m.id)[1]) + risks(m.id).map((r) => chip(r[0], r[1])).join("") + '</div><h2>' + esc(m.title) + '</h2><p class="muted">' + esc(m.description) + '</p></div>' +
         '<div class="block"><div class="actions"><button type="button" data-detail-expand="' + esc(m.id) + '">' + (expanded.has(m.id) ? "Collapse on graph" : "Expand on graph") + '</button></div></div>' +
         '<div class="block"><h3>Текущий инвентарь</h3><div class="legend"><span class="chip">' + inv.docs.length + ' markdown</span><span class="chip">' + inv.skills.length + ' skills</span><span class="chip">' + inv.publicTools.length + ' public tools</span><span class="chip">' + inv.internalTools.length + ' internal tools</span><span class="chip">' + inv.contracts.length + ' contracts</span></div></div>' +
         renderGroupDetail(m.id) +
         '<div class="block"><h3>Source docs</h3><div class="list">' + listItems(inv.docs.slice(0, 8), (d) => '<div class="mini-card"><a class="file" href="' + esc(d.href) + '">' + esc(d.path) + '</a><p class="muted">' + esc(d.description) + '</p></div>', 'No markdown source classified here.') + '</div></div>' +
         '<div class="block"><h3>Public tools</h3><div class="list">' + listItems(inv.publicTools.slice(0, 10), (t) => '<div class="mini-card"><a class="file" href="' + esc(t.href) + '">' + esc(t.path) + '</a><p class="muted">' + esc(t.description) + '</p></div>', 'No public tools classified here.') + '</div></div>' +
         '<div class="block"><h3>Contracts</h3><div class="list">' + listItems(inv.contracts, (e) => '<div class="mini-card"><div class="legend"><span class="chip">' + esc(e.from) + ' -> ' + esc(e.to) + '</span><span class="chip">' + esc(e.label) + '</span></div><p class="muted">' + esc(e.description) + '</p></div>', 'No direct module contracts.') + '</div></div>' +
-        '<div class="block"><h3>Next refactor actions</h3><div class="list">' + refactorActions(m.id).map((x) => '<div class="mini-card">' + esc(x) + '</div>').join("") + '</div></div>';
+        '<div class="block"><h3>Next architecture actions</h3><div class="list">' + refactorActions(m.id).map((x) => '<div class="mini-card">' + esc(x) + '</div>').join("") + '</div></div>';
     }
     function refactorActions(id) {
       const inv = inventory(id);
@@ -3128,7 +3163,7 @@
       moduleFilter.value = "";
       search.value = "";
       hiddenKinds = new Set(defaultHiddenKinds);
-      renderKindFilterControls();
+      renderLegend();
       focusMode.value = "local";
       expanded.clear();
       explorerHistory.length = 0;
@@ -3173,17 +3208,17 @@
       }
     });
     search.addEventListener("input", updateAll);
+    document.getElementById("typeLegend").addEventListener("click", (event) => {
+      const button = event.target.closest("[data-kind-toggle]");
+      if (!button) return;
+      event.preventDefault();
+      applyKindVisibility(button.dataset.kindToggle, hiddenKinds.has(button.dataset.kindToggle));
+    });
     if (kindFilterControls) {
       kindFilterControls.addEventListener("change", (event) => {
         const input = event.target.closest("[data-kind-filter]");
         if (!input) return;
-        const kind = input.dataset.kindFilter;
-        if (input.checked) hiddenKinds.delete(kind);
-        else hiddenKinds.add(kind);
-        const root = buildExplorerRoot();
-        if (!findExplorerNode(root, explorerSelected)) explorerSelected = "studio";
-        if (!findExplorerNode(root, explorerView)) explorerView = "studio";
-        updateAll();
+        applyKindVisibility(input.dataset.kindFilter, input.checked);
       });
     }
     focusMode.addEventListener("change", updateAll);

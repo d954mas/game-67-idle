@@ -180,7 +180,7 @@ if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") {
 
 switch (cmd) {
   case "list": {
-    const hidden = new Set(args.all ? [] : ["idea", "done", "dropped"]);
+    const hidden = new Set(args.all ? [] : ["idea", "done"]);
     if (args.ideas) hidden.delete("idea");
     if (args.review) hidden.delete("review");
     if (args.status) hidden.clear();
@@ -217,13 +217,13 @@ switch (cmd) {
     }
     for (const p of projects) {
       if (!args.status && !args.tag && !args.epic && (!args.project || args.project === p.fields.id)) {
-        if (!args.all && ["done", "dropped"].includes(p.fields.status)) continue;
+        if (!args.all && p.fields.status === "done") continue;
         console.log(`# ${p.fields.id} ${p.fields.title} (${p.fields.status}, ${p.fields.kind || "other"})`);
       }
     }
     for (const e of epics) {
       if (!args.status && !args.tag && (!args.project || args.project === e.fields.project) && (!args.epic || args.epic === e.fields.id)) {
-        if (!args.all && !args.archive && ["done", "dropped"].includes(e.fields.status)) continue;
+        if (!args.all && !args.archive && e.fields.status === "done") continue;
         console.log(`# ${e.fields.id} ${e.fields.title} (${e.fields.status}, ${e.fields.project || "no-project"})`);
       }
     }
@@ -362,7 +362,7 @@ function remediationHint(problem) {
     return "add a short `title:` in frontmatter so list output is readable";
   }
   if (problem.includes("invalid status")) {
-    return "use task statuses idea/backlog/todo/doing/review/done/dropped or project/epic statuses idea/active/done/dropped";
+    return "use task statuses idea/backlog/todo/doing/review/done or project/epic statuses idea/active/done";
   }
   if (problem.includes("references missing project")) {
     return "create the project first, fix the `project:` value, or clear it if the item is intentionally unassigned";

@@ -1,7 +1,7 @@
 ---
 id: P002
-title: Game Projects
-status: dropped
+title: Retired shared game bucket
+status: done
 kind: game
 target: games
 priority: P3
@@ -29,6 +29,6 @@ tracked by one project per concrete `games/<game-id>` folder.
 ## Log
 
 - 2026-07-01: created as the top-level Taskboard project for game/prototype work.
-- 2026-07-01: dropped because Taskboard should not have a shared "Game
+- 2026-07-01: closed because Taskboard should not have a shared "Game
   Projects" owner; each active game gets its own project when
   `games/new_game.mjs` creates `games/<game-id>`.

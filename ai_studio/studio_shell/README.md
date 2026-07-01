@@ -15,8 +15,13 @@ surface and map data. `taskboard/` owns the board surface and task state.
 - Unified local server: `server.mjs`.
 - Stable local launcher: `start_site.mjs`.
 - Windows-safe launcher: `start_site_windows.ps1`.
-- Temporary public tunnel routing belongs to the `nt-app-tunnel` skill:
-  `.codex/skills/nt-app-tunnel/scripts/serve_tunnel.mjs`.
+
+## Related Utility
+
+Temporary public sharing of self-contained static directories is handled by the
+`nt-app-tunnel` skill: `.codex/skills/nt-app-tunnel/`. Studio Shell surfaces can
+be shared through that skill, but `studio_shell/` does not own the tunnel
+workflow.
 
 ## Start
 
