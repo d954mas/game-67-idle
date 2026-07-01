@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
 import { localRecord, parseArgs, resolvePullTarget } from "../pull.mjs";
-import { isPublishable } from "../../storage/license/restricted.mjs";
+import { isPublishable } from "../../backlog/storage/license/restricted.mjs";
 
 test("parseArgs requires ids and target asset root", () => {
   assert.throws(() => parseArgs(["--to", "templates/template/assets"]), /missing --ids/);

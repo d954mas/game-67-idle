@@ -18,7 +18,8 @@ const root = findRoot(repoGuess);
 const aiStudioRoot = join(root, "ai_studio");
 const taskboardPublic = join(aiStudioRoot, "taskboard", "public");
 const assetViewerRoot = join(aiStudioRoot, "assets", "viewer");
-const assetPreviewRoot = join(aiStudioRoot, "assets", "storage", "previews");
+const assetPrepRoot = join(aiStudioRoot, "assets", "tools", "manual");
+const assetPreviewRoot = join(aiStudioRoot, "assets", "backlog", "storage", "previews");
 const port = Number.parseInt(process.argv[2] || process.env.AI_STUDIO_PORT || "8765", 10);
 const handleTaskboardApi = createTaskboardApi(root);
 const handleAssetViewerApi = createAssetViewerApi(root);
@@ -29,6 +30,7 @@ const mime = {
   ".html": "text/html; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
+  ".mjs": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".md": "text/plain; charset=utf-8",
   ".svg": "image/svg+xml",
@@ -84,6 +86,13 @@ function staticPath(pathname) {
   }
   if (pathname.startsWith("/viewer/")) {
     return safeResolve(assetViewerRoot, pathname.slice("/viewer/".length));
+  }
+
+  if (pathname === "/asset_prep" || pathname === "/asset_prep/") {
+    return join(assetPrepRoot, "index.html");
+  }
+  if (pathname.startsWith("/asset_prep/")) {
+    return safeResolve(assetPrepRoot, pathname.slice("/asset_prep/".length));
   }
 
   if (pathname === "/quality" || pathname === "/quality/") {

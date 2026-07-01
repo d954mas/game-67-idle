@@ -9,15 +9,15 @@ source-sheet crop/cutout work, or slice9 UI art.
 
 ## Source First
 
-Search Asset Storage before generating:
+Search Backlog Asset Storage before generating:
 
 ```powershell
-node ai_studio/assets/storage/search.mjs --kind texture --query "<need>" --json
-node ai_studio/assets/storage/search.mjs --kind material --query "<need>" --json
+node ai_studio/assets/backlog/storage/search.mjs --kind texture --query "<need>" --json
+node ai_studio/assets/backlog/storage/search.mjs --kind material --query "<need>" --json
 ```
 
 If no library asset fits, use practical free sources such as CC0/OFL texture
-libraries or generate a new source, then record the route through Asset Storage.
+libraries or generate a new source, then record the route through Backlog Asset Storage.
 
 ## Usage Class
 
@@ -48,7 +48,7 @@ texture is meant for a model.
 For repeated textures, run the tile audit helper when useful:
 
 ```powershell
-py -3.12 ai_studio/assets/prep/textures/audit_tileable_texture.py --source <texture.png> --preview <texture_2x2.png> --json-output <audit.json> --report <audit.md>
+py -3.12 ai_studio/assets/tools/textures/audit_tileable_texture.py --source <texture.png> --preview <texture_2x2.png> --json-output <audit.json> --report <audit.md>
 ```
 
 Numeric seam checks catch obvious edge mismatches. A visual 2x2 preview is still

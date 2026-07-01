@@ -5,10 +5,10 @@ models, meshes, props, furniture, characters, or model packs.
 
 ## Source First
 
-Search Asset Storage before downloading or generating:
+Search Backlog Asset Storage before downloading or generating:
 
 ```powershell
-node ai_studio/assets/storage/search.mjs --kind model --query "<need>" --json
+node ai_studio/assets/backlog/storage/search.mjs --kind model --query "<need>" --json
 ```
 
 If a library asset fits, pull it into the game-local asset root:
@@ -18,7 +18,7 @@ node ai_studio/assets/viewer/pull.mjs --ids <asset-id> --to <game>/assets --appl
 ```
 
 Only source from free/public sources or generate when the library has no fit.
-Store newly accepted models back through Asset Storage so future games can reuse
+Store newly accepted models back through Backlog Asset Storage so future games can reuse
 them.
 
 ## Conversion
@@ -27,7 +27,7 @@ Prefer vendor-shipped `.glb` when available. Convert OBJ/MTL/FBX only when the
 source license and material data are clear:
 
 ```powershell
-py -3.12 ai_studio/assets/prep/conversion/obj_to_glb.py ...
+py -3.12 ai_studio/assets/tools/conversion/obj_to_glb.py ...
 ```
 
 Record the source file, converted output, license, author/source, and any

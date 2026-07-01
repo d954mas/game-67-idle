@@ -1,4 +1,4 @@
-# Asset Viewer
+﻿# Asset Viewer
 
 Browser-facing asset review module.
 
@@ -20,7 +20,7 @@ stable public route.
 The gallery header lets the user choose which source to display:
 
 - All Assets: the shared manifest-backed asset library from
-  `ai_studio/assets/storage/sources/libraries.json`.
+  `ai_studio/assets/backlog/storage/sources/libraries.json`.
 - Templates: registered template asset roots from
   `templates/templates.json`.
 - Registered Games: game-local asset folders from
@@ -40,7 +40,7 @@ or source files changed. This keeps the viewer predictable and avoids background
 state.
 
 Asset Viewer does not own Blender preview rendering. Prepared preview images
-come from `../storage/previews/`. Use `Refresh previews` after
+come from `../backlog/storage/previews/`. Use `Refresh previews` after
 adding or changing assets; it creates or replaces only missing/stale preview
 cache files for the selected source, renders model thumbnails when Blender can
 process the model, and then refreshes that source index. Generated previews and
@@ -49,7 +49,7 @@ their `preview.json` sidecars live under `tmp/` and are not committed.
 Large library views use a scroll feed. The API still returns bounded batches,
 but the user does not manage pages or press a manual "show more" button. When
 the feed approaches the end of the loaded items, Asset Viewer asks the local API
-for the next slice. Those reads are served from `../storage/index/`,
+for the next slice. Those reads are served from `../backlog/storage/index/`,
 not by rescanning the asset source for each request.
 
 Template and game-local sources use the same index API. They have their own
@@ -63,7 +63,7 @@ node ai_studio/assets/viewer/build_review.mjs --mode library
 node ai_studio/assets/viewer/build_review.mjs --mode review --game <id> --base <git-ref>
 node ai_studio/assets/viewer/build_review.mjs --mode scan --path <asset-dir>
 node ai_studio/assets/viewer/serve_gallery.mjs --gallery tmp/lib-gallery --lib <library-root> --port 8910
-node ai_studio/assets/storage/previews/render_library_previews.mjs --pack <pack>
+node ai_studio/assets/backlog/storage/previews/render_library_previews.mjs --pack <pack>
 ```
 
 Promotion and reuse:
@@ -78,15 +78,14 @@ node ai_studio/assets/viewer/pull.mjs --ids <asset-ids> --to <game>/assets
 - `build_review.mjs` generates the static gallery output and review manifest.
 - `index.html` is the hosted gallery entry.
 - `api.mjs` lists available sources, opens the selected source in the gallery,
-  rebuilds/queries `../storage/index/`, and maps gallery media back
+  rebuilds/queries `../backlog/storage/index/`, and maps gallery media back
   into the Studio Shell server.
-- `../storage/sources/libraries.json` is the explicit list of
-  registered global library roots.
-- `templates/templates.json` is the explicit list of registered template asset
-  roots.
-- `games/games.json` is the explicit list of registered game asset roots.
-- `../storage/sources/libraries.mjs`, `templates.mjs`, and `games.mjs` read
-  and update those registries.
+- Asset Viewer consumes registered sources through backlog storage helpers. It
+  does not own registry data: global library data currently lives in
+  `../backlog/storage/sources/libraries.json`, template data in
+  `templates/templates.json`, and game data in `games/games.json`.
+- `../backlog/storage/sources/libraries.mjs`, `templates.mjs`, and `games.mjs`
+  read and update those registries for the viewer and CLI commands.
 - `viewer.js` and `viewer.css` are surface implementation details.
 - `serve_gallery.mjs` is kept because library mode can reference a large
   external asset library through `/lib/` instead of copying every model.

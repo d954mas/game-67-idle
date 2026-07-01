@@ -74,7 +74,8 @@ atlases, and native runtime proof.
 
 6. Reproducible generation.
    Mature AI art tools preserve seeds and parameters. ComfyUI-style workflows
-   preserve node graphs. For game art, this should be attached to the art job.
+   preserve node graphs. For game art, this should be attached to the
+   game-owned request packet or asset manifest.
 
 7. Audit and correction loop.
    ComfyUI-GameAssetsMaker's VLM audit/correction pattern and GameUIAgent's
@@ -175,7 +176,7 @@ atlases, and native runtime proof.
 
 The current validator direction is right but incomplete. It should enforce:
 
-- `format: game.art_job`
+- a game-owned request/manifest schema when the game needs one
 - explicit `visual_targets`
 - `reusable_kinds` includes at least one runtime UI kind when UI is requested:
   `slice9`, `icon`, `sprite`, `map_tile`, `panel`, `button`, `bar`
@@ -227,7 +228,7 @@ The revised extraction rule:
   policy, or an explicit recorded exception.
 - Contact sheets must be inspected as a production gate before runtime
   integration. If the sheet shows clipped silhouettes, neighboring fragments,
-  or key-color outlines, the art job is not done.
+  or key-color outlines, the game-owned request is not done.
 
 ## Follow-up: purple halo after chroma removal
 
@@ -290,8 +291,8 @@ Source intake rule added after the halo fix:
 - Normal contact sheets are not enough evidence for this class of defect. The
   pipeline now needs an edge-proof preview that shows zoomed
   top/right/bottom/left alpha-boundary strips on checkerboard and marks any
-  detected bad edge pixels. Accepted proof images should be recorded in the
-  art job as durable evidence, not kept only as temporary viewer screenshots.
+  detected bad edge pixels. Accepted proof images should be recorded as durable
+  game-owned evidence, not kept only as temporary viewer screenshots.
 - The audit must be source-key aware. Switching from magenta to green is not
   enough if the cleanup and pixel audit still only understand magenta/purple
   halos. A green-screen source can leave visible green chroma spill on the
@@ -299,17 +300,18 @@ Source intake rule added after the halo fix:
   and should be counted against the actual `green_screen.key` in the crop
   manifest.
 - For source families that keep producing key-color spill after cleanup, create
-  a dual-plate prompt packet instead of endlessly retuning a single chroma key:
+  a game-owned dual-plate prompt note instead of endlessly retuning a single
+  chroma key:
   one light-background plate, one dark-background plate, same dimensions,
   same composition, no baked text, and a deterministic alpha extraction step
   with blob cleanup and alpha hardening.
-- The next generation prompt should be compiled from the art job contract and
-  intake findings. A reusable prompt packet must carry source family role,
+- The next generation prompt should be compiled from the game-owned request and
+  intake findings. A reusable prompt note should carry source family role,
   no-bake rules, slice9 restrictions, gutters, background/chroma choice, and
   acceptance checklist so the next source sheet does not repeat the same
-  fused-UI/chroma/stretch-zone mistakes. The accepted generation record should
-  reference the prompt packet so provenance traces from contract -> prompt ->
-  source -> crop -> runtime audit.
+  fused-UI/chroma/stretch-zone mistakes. Accepted source provenance should
+  reference that note so traceability runs from request -> prompt -> source ->
+  crop -> runtime audit.
 
 ## Follow-up: procedural scaffold failure found in Rune Marches V2
 
@@ -322,8 +324,8 @@ The revised rule:
 
 - Procedural UI art may be used only as a debug scaffold to prove geometry,
   min-size behavior, content safe areas, and overlay anchors.
-- A procedural scaffold cannot close a generated-art task unless the art job
-  records an explicit exception accepted by the lead.
+- A procedural scaffold cannot close a generated-art task unless the
+  game-owned request records an explicit exception accepted by the lead.
 - Final generated UI bases must come from generated or artist-authored source
   families. Code may cut, validate, pack, and compose those assets, but should
   not replace them with two-color programmer art.
@@ -331,9 +333,10 @@ The revised rule:
   source families: blank stretchable bases, repeatable edge strips, corner
   caps, and separate overlay decor. Do not flatten everything into one
   uncuttable sheet, and do not solve it by throwing the art away.
-- Each accepted source family needs a generation record: provider/model or
-  workflow, workflow file/json, seed, prompt, negative prompt, source family
-  role, accepted image path, and rejected candidate notes.
+- Each accepted source family needs game-owned provenance: provider/model or
+  workflow, workflow file/json when available, seed or no-seed reason, prompt,
+  negative prompt, source family role, accepted image path, and rejected
+  candidate notes.
 - A manifest-level policy is not enough. The Rune Marches builder briefly
   recorded trim/component policy but still called the old direct crop path in
   `main()`. The pixel audit caught the mismatch because runtime PNG alpha

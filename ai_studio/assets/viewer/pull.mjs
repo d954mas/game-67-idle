@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 // Pull (reuse) shared-library assets into a game/template asset source.
 //
 // Copies the asset file, optional preview, and license evidence into a local
@@ -12,9 +12,9 @@
 import { readFile, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import { scanPackManifestSource } from "../storage/manifests/manifest.mjs";
-import { decideLicense, isPublishable } from "../storage/license/restricted.mjs";
-import { defaultLibrarySourceRoot } from "../storage/sources/libraries.mjs";
+import { scanPackManifestSource } from "../backlog/storage/manifests/manifest.mjs";
+import { decideLicense, isPublishable } from "../backlog/storage/license/restricted.mjs";
+import { defaultLibrarySourceRoot } from "../backlog/storage/sources/libraries.mjs";
 import { isMain } from "../../core_harness/tool_lib/cli.mjs";
 
 const PULL_PACK = "library-pulls";

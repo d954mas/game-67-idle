@@ -1,6 +1,6 @@
 ---
 name: nt-asset-image-generation
-description: "Use ONLY after a source-first search (shared asset library + free CC0/OFL sources) finds no fit, to generate real raster art for AI Studio asset workflows: fake shots, icon/source sheets, sprites, UI art, or source images for later asset prep. Generation is the last resort, not the default. Prefer Codex CLI imagegen via `codex exec` and `scripts/codex_imagegen.sh`; use Antigravity/agy CLI only as fallback. Owns raster creation only; nt-asset-workflow owns asset jobs/prep/storage handoff, and ai_studio/quality owns visual acceptance."
+description: "Use ONLY after a source-first search (shared asset library + free CC0/OFL sources) finds no fit, to generate real raster art for AI Studio asset workflows: fake shots, icon/source sheets, sprites, UI art, or source images for later asset tools. Generation is the last resort, not the default. Prefer Codex CLI imagegen via `codex exec` and `scripts/codex_imagegen.sh`; use Antigravity/agy CLI only as fallback. Owns raster creation only; nt-asset-workflow coordinates asset tools, backlog storage handoff, and ai_studio/quality visual acceptance."
 ---
 
 # NT Asset Image Generation
@@ -22,9 +22,9 @@ has no native image model. Generate, verify the PNG, then hand off to
 ## Source First (before generating)
 
 Generation is the last resort. First run
-`node ai_studio/assets/storage/search.mjs --query <need>`: reuse a library hit,
+`node ai_studio/assets/backlog/storage/search.mjs --query <need>`: reuse a library hit,
 or search free CC0/OFL sources and intake one. Only generate what you could not
-source, and record the source decision in the task or art job.
+source, and record the source decision in the task or game-owned asset notes.
 
 ## Default Route
 

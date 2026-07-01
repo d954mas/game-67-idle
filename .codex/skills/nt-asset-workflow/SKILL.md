@@ -1,4 +1,4 @@
----
+﻿---
 name: nt-asset-workflow
 description: "Use when sourcing, adding, moving, preparing, recording, promoting, pulling, reviewing, licensing, or validating game assets in this repository: add an asset to a game, reuse an asset from the global library, add a new asset or pack to the global library, handle paid/non-redistributable assets, refresh previews, inspect unregistered files, or update asset storage/viewer/index/manifest workflows. Source first, keep license/provenance, and route through ai_studio/assets."
 ---
@@ -36,7 +36,7 @@ decisions.
 
 1. Identify the target: global library, template, or a specific game source.
 2. Search before creating:
-   `node ai_studio/assets/storage/search.mjs --query "<need>" --kind <kind> --json`.
+   `node ai_studio/assets/backlog/storage/search.mjs --query "<need>" --kind <kind> --json`.
 3. If reusing, pull from the library into the game:
    `node ai_studio/assets/viewer/pull.mjs --ids <asset-id> --to <game>/assets --apply`.
 4. If adding/promoting, record `origin`, license, source page/path, author/vendor
@@ -62,10 +62,10 @@ decisions.
 ## Useful Commands
 
 ```powershell
-node ai_studio/assets/storage/search.mjs --query "wood crate" --kind model --json
+node ai_studio/assets/backlog/storage/search.mjs --query "wood crate" --kind model --json
 node ai_studio/assets/viewer/pull.mjs --ids <asset-id> --to <game>/assets --apply
 node ai_studio/assets/viewer/promote.mjs --manifest <review-manifest.json> --ids <ids> --source <source> --license <license> --origin <mine|ai|sourced> --apply
-node ai_studio/assets/storage/previews/render_library_previews.mjs --pack <pack>
+node ai_studio/assets/backlog/storage/previews/render_library_previews.mjs --pack <pack>
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
 ```
 

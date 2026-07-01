@@ -5,8 +5,8 @@ Load this when searching, adding, promoting, pulling, or recording assets.
 ## Current Architecture
 
 - Global/private library: register an explicit external source in
-  `ai_studio/assets/storage/sources/libraries.json`.
-- AI Studio storage code: `ai_studio/assets/storage/`.
+  `ai_studio/assets/backlog/storage/sources/libraries.json`.
+- AI Studio storage code: `ai_studio/assets/backlog/storage/`.
 - AI Studio viewer/pull/promote UI/tooling: `ai_studio/assets/viewer/`.
 - Generated fast data: `tmp/ai_studio/assets/index`, `tmp/ai_studio/assets/snapshots`,
   and `tmp/ai_studio/assets/previews`.
@@ -20,8 +20,8 @@ from the global library.
 Use storage search for agent work:
 
 ```powershell
-node ai_studio/assets/storage/search.mjs --query "<need>" --kind <model|texture|material|audio|font|ui> --json
-node ai_studio/assets/storage/search.mjs --source-path templates/template/assets --source-type local --query "<need>" --json
+node ai_studio/assets/backlog/storage/search.mjs --query "<need>" --kind <model|texture|material|audio|font|ui> --json
+node ai_studio/assets/backlog/storage/search.mjs --source-path templates/template/assets --source-type local --query "<need>" --json
 ```
 
 Search reads the generated index. Add `--refresh` only after files or manifests
@@ -70,9 +70,9 @@ Required metadata:
 Use manifest intake for new reviewed asset sources:
 
 ```powershell
-node ai_studio/assets/storage/intake/stage.mjs --source-root <asset-source> --input <file-or-folder> --source <source> --slug <candidate>
-node ai_studio/assets/storage/intake/accept.mjs --source-root <asset-source> --source <source> --slug <candidate> --file <relative-file> --pack <pack-id> --asset-id <id> --kind <kind> --license <license>
-node ai_studio/assets/storage/intake/reject.mjs --source-root <asset-source> --source <source> --slug <candidate>
+node ai_studio/assets/backlog/storage/intake/stage.mjs --source-root <asset-source> --input <file-or-folder> --source <source> --slug <candidate>
+node ai_studio/assets/backlog/storage/intake/accept.mjs --source-root <asset-source> --source <source> --slug <candidate> --file <relative-file> --pack <pack-id> --asset-id <id> --kind <kind> --license <license>
+node ai_studio/assets/backlog/storage/intake/reject.mjs --source-root <asset-source> --source <source> --slug <candidate>
 ```
 
 `stage` records provenance and hashes only. `accept` writes Pack Manifest
@@ -96,7 +96,7 @@ Accept an asset only when the license/provenance is enough to decide:
 
 Unknown or non-redistributable binaries are restricted. Do not commit them.
 
-Known open licenses are decided by `ai_studio/assets/storage/license/registry.mjs`.
+Known open licenses are decided by `ai_studio/assets/backlog/storage/license/registry.mjs`.
 Custom licenses default to `publish=false`. Use `--publish true` only when the
 license evidence explicitly allows redistribution, commercial use, and
 modification in this project.

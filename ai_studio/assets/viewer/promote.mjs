@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 // Promote picked assets from an asset-review manifest into Pack Manifest storage.
 //
 // Dry-run by default; pass --apply to write. This handles assets already
@@ -11,10 +11,10 @@ import { readFile, writeFile, mkdir, cp, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, basename, extname, sep } from "node:path";
 import { createHash } from "node:crypto";
-import { KIND_DIR } from "../storage/kinds.mjs";
+import { KIND_DIR } from "../backlog/storage/kinds.mjs";
 import { isMain } from "../../core_harness/tool_lib/cli.mjs";
-import { LICENSE_URLS, boolText, decideLicense, validateLicenseRecord } from "../storage/license/registry.mjs";
-import { defaultLibrarySourceRoot } from "../storage/sources/libraries.mjs";
+import { LICENSE_URLS, boolText, decideLicense, validateLicenseRecord } from "../backlog/storage/license/registry.mjs";
+import { defaultLibrarySourceRoot } from "../backlog/storage/sources/libraries.mjs";
 
 // review-kind -> library-kind fallback for review manifests that do not yet
 // carry a storage kind.

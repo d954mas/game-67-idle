@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+﻿#!/usr/bin/env node
 // Asset viewer - one universal tool, two modes, self-contained served output.
 //
 //   review : after a game, gallery of NEW assets the run brought in
@@ -17,8 +17,8 @@ import { readFile, readdir, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, dirname, basename, extname, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scanPackManifestSource } from "../storage/manifests/manifest.mjs";
-import { defaultLibrarySourceRoot } from "../storage/sources/libraries.mjs";
+import { scanPackManifestSource } from "../backlog/storage/manifests/manifest.mjs";
+import { defaultLibrarySourceRoot } from "../backlog/storage/sources/libraries.mjs";
 import { isMain } from "../../core_harness/tool_lib/cli.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -256,7 +256,7 @@ async function main(argv = process.argv.slice(2)) {
     const assets = await discoverGameAssets({ base: a.base, repo: resolve(a.repo) });
     cards = await buildReviewCards(assets, mediaDir);
     title = `Asset review - ${a.game || "game"}`;
-    const byOrigin = ORIGINS.map((o) => `${o}: ${cards.filter((x) => x.origin === o).length}`).filter((s) => !s.endsWith(": 0")).join(" В· ");
+    const byOrigin = ORIGINS.map((o) => `${o}: ${cards.filter((x) => x.origin === o).length}`).filter((s) => !s.endsWith(": 0")).join(" Р’В· ");
     meta = `${cards.length} new assets since ${a.base} - ${byOrigin}. Check keepers, send ids to the lead to export.`;
     await writeFile(join(outDir, "review-manifest.json"), JSON.stringify({ game: a.game, base: a.base, generated: new Date().toISOString(), assets }, null, 2), "utf8");
   } else if (a.mode === "scan") {
@@ -264,7 +264,7 @@ async function main(argv = process.argv.slice(2)) {
     const { cards: c, assets } = await buildScanCards(root, mediaDir, resolve(a.repo));
     cards = c;
     title = `Game assets - ${a.game || basename(root)}`;
-    const byKind = [...new Set(cards.map((x) => x.kind))].sort().map((k) => `${k}: ${cards.filter((x) => x.kind === k).length}`).join(" В· ");
+    const byKind = [...new Set(cards.map((x) => x.kind))].sort().map((k) => `${k}: ${cards.filter((x) => x.kind === k).length}`).join(" Р’В· ");
     meta = `${cards.length} assets under ${root} - ${byKind}. Pick keepers to export to the library.`;
     await writeFile(join(outDir, "review-manifest.json"), JSON.stringify({ game: a.game, base: "scan", root, generated: new Date().toISOString(), assets }, null, 2), "utf8");
   } else {
@@ -297,7 +297,7 @@ async function main(argv = process.argv.slice(2)) {
       packs.push({ ...p, count: p.count || members.length, covers: thumbs.slice(0, 4), coverImg });
     }
     title = "Asset library";
-    meta = `${cards.length} records В· ${packs.length} packs В· ${cards.filter((c) => c.model).length} 3D models`;
+    meta = `${cards.length} records Р’В· ${packs.length} packs Р’В· ${cards.filter((c) => c.model).length} 3D models`;
   }
   await cp(join(HERE, "viewer.js"), join(outDir, "viewer.js"));
   await cp(join(HERE, "viewer.css"), join(outDir, "viewer.css"));

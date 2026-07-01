@@ -1,4 +1,4 @@
----
+﻿---
 type: Art Pipeline Knowledge
 title: AI Art Iteration Pipeline
 description: Reusable workflow for moving generated art into runtime assets.
@@ -23,11 +23,12 @@ visual target -> art request packet -> generated sheet -> crop/slice manifest
 The agent should not rely on chat-only crop coordinates, ad hoc temporary
 files, or one-piece screenshot art when the game needs reusable components.
 
-For any non-trivial generated art pass, treat this as an **art job**, not a
-loose conversation. The job owns the source paths, candidate policy,
-crop/slice9 data, runtime manifest, pack command, and native evidence path.
-Use `ai_studio/assets/workflow/art_jobs/new_art_job.mjs` to scaffold the job
-when no suitable packet already exists.
+For any non-trivial generated art pass, treat this as a game-owned request
+packet, not a loose conversation. The game owns the source paths, candidate
+policy, crop/slice9 data, runtime manifest, pack command, and native evidence
+path. AI Studio no longer provides a shared generated-art scaffold; write
+the packet next to the current game's design/assets metadata when the game
+needs one.
 
 ## What Other Pipelines Suggest
 
@@ -51,8 +52,8 @@ when no suitable packet already exists.
 - Recent game UI agent research converges on a structured intermediate
   representation: JSON/YAML design specs between natural language, visual
   reflection, deterministic post-processing, and engine/runtime assets. For
-  this repo, the local intermediate representation is the art job plus crop and
-  runtime manifests.
+  this repo, the local intermediate representation is the game-owned request
+  packet plus crop and runtime manifests.
 - Sprite processing research supports a hybrid split: use visual/AI methods for
   style-sensitive candidate generation and masks, then deterministic scripts
   for trim boxes, pivots, slice9 sanity, pack building, and screenshot health.
@@ -79,12 +80,6 @@ Include:
 - `runtime_composition`: how the game will assemble the parts.
 - `qa_rejects`: unreadable text, random letters, watermarks, wrong subject,
   fused icons, weak silhouette, style drift, non-transparent background.
-
-Quick scaffold:
-
-```powershell
-node ai_studio/assets/workflow/art_jobs/new_art_job.mjs --id character-lineup-v1 --family "starter character set" --target games/my-game/design/visuals/first-lineup-v1.png
-```
 
 ## Fast Local Loop
 
@@ -113,13 +108,15 @@ node ai_studio/assets/workflow/art_jobs/new_art_job.mjs --id character-lineup-v1
 
 For generated sprites, UI sheets, fake shots, or icons:
 
-- Generate a small batch of candidates, usually 3-6, against the same art job.
+- Generate a small batch of candidates, usually 3-6, against the same
+  game-owned request packet.
 - Reject obvious failures before any runtime work.
 - Select one or two source sheets for slicing; do not integrate every
   generated candidate.
 - Keep rejected candidates in `tmp/` or another ignored source folder with a
   short reason when the failure teaches the next prompt.
-- Update the art job with the accepted source paths before crop/slice work.
+- Update the game-owned request packet with the accepted source paths before
+  crop/slice work.
 
 ## Parallel Work Split
 
@@ -130,8 +127,9 @@ When the user asks to parallelize art work, split by artifact ownership:
 - runtime worker: owns pack ids, engine integration, DevAPI screenshot;
 - verifier: owns visual QA notes and evidence-source checks.
 
-All lanes must write back to the same art job. Do not let separate agents keep
-private crop coordinates, selected candidates, or pack ids only in chat.
+All lanes must write back to the same game-owned request packet or manifest. Do
+not let separate agents keep private crop coordinates, selected candidates, or
+pack ids only in chat.
 
 ## Reusable UI Rules
 

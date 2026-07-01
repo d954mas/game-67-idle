@@ -14,8 +14,8 @@
 import { existsSync, mkdirSync, readdirSync, copyFileSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { gameRegistryPath, registerGameAssetSource } from "../ai_studio/assets/storage/sources/games.mjs";
-import { listRegisteredTemplates } from "../ai_studio/assets/storage/sources/templates.mjs";
+import { gameRegistryPath, registerGameAssetSource } from "../ai_studio/assets/backlog/storage/sources/games.mjs";
+import { listRegisteredTemplates } from "../ai_studio/assets/backlog/storage/sources/templates.mjs";
 import { writeVscodeProjectFiles } from "../ai_studio/dev_environment/vscode_projects.mjs";
 import { ensureProject } from "../ai_studio/taskboard/lib.mjs";
 

@@ -3,7 +3,7 @@
 // Dependency-free (node builtins only) and deliberately SEPARATE from the arg
 // tokenizer in lib/args.mjs: importing fail() must never pull in the parser, so
 // a tool that only needs fail/isMain stays minimal. The leak guard
-// (ai_studio/assets/storage/license/restricted_assets_guard.mjs) intentionally keeps its own
+// (ai_studio/assets/backlog/storage/license/restricted_assets_guard.mjs) intentionally keeps its own
 // inline copies and never imports this module — its dependency surface stays at
 // zero shared leaves.
 import { resolve } from "node:path";

@@ -3,8 +3,8 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { listRegisteredGames } from "../assets/storage/sources/games.mjs";
-import { listRegisteredTemplates } from "../assets/storage/sources/templates.mjs";
+import { listRegisteredGames } from "../assets/backlog/storage/sources/games.mjs";
+import { listRegisteredTemplates } from "../assets/backlog/storage/sources/templates.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 

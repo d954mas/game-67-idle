@@ -1,4 +1,4 @@
-﻿# Throughput And Handoff
+# Throughput And Handoff
 
 Load this reference when generating many assets, re-running changed jobs, or
 connecting generated art to `nt-asset-workflow` and `ai_studio/assets`.
@@ -21,20 +21,22 @@ Use:
 ## Source-Sheet First
 
 For bulk opaque families such as UI icons, generate one source sheet and crop N
-assets through intake, crop, cutout, and review-atlas prep. This is usually much
+assets through intake, crop, cutout, and review-atlas tools. This is usually much
 cheaper than one generation per asset.
 
 Reserve per-asset dual-plate generation for a few genuinely soft hero effects.
-Use route warnings from the asset prep tools to decide where the extra
+Use route warnings from the asset tools to decide where the extra
 generation cost is justified.
 
 ## Handoff To Asset Workflow
 
 All generation paths produce raw source images only. The deterministic asset
-workflow still owns cleanup, metadata, and project/library acceptance:
+pipeline still owns cleanup, metadata, and project/library acceptance:
 
-- `nt-asset-workflow`: prompt packet/art job, intake, crop, prepared outputs,
-  provenance, license routing, storage, and project/library handoff.
+- the current game: game-specific prompts, contracts, rejected-candidate notes,
+  and durable provenance when the game needs them.
+- `nt-asset-workflow`: source-first decision, intake, crop, prepared outputs,
+  license routing, backlog storage, and project/library handoff.
 - `ai_studio/quality/README.md`: select existing player-clarity/art rules for the
   assembled screen and record evidence.
 
