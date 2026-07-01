@@ -570,6 +570,18 @@
             ]
           },
           {
+            "id": "runtime-automation:devapi-client-test",
+            "kind": "test",
+            "path": "ai_studio/runtime_automation/devapi_client_test.py",
+            "title": "devapi_client_test.py",
+            "description": "Regression tests for engine default DevAPI port handling and engine-native PNG capture payload decoding.",
+            "role": "DevAPI client tests",
+            "tags": [
+              "runtime-automation",
+              "test"
+            ]
+          },
+          {
             "id": "runtime-automation:devapi-cli",
             "kind": "tool",
             "path": "ai_studio/runtime_automation/devapi_cli.py",
@@ -3624,6 +3636,60 @@
             ]
           },
           {
+            "id": "quality:surface",
+            "kind": "surface",
+            "path": "ai_studio/quality/index.html",
+            "title": "Quality Checks Surface",
+            "description": "Browser surface hosted at /quality/ for browsing quality rule groups, numbered checks, matching use cases, and evidence requirements.",
+            "role": "quality checks browser surface",
+            "tags": [
+              "quality",
+              "surface",
+              "checks"
+            ],
+            "children": [
+              {
+                "id": "quality:surface-style",
+                "kind": "ui-component",
+                "path": "ai_studio/quality/quality.css",
+                "title": "quality.css",
+                "description": "Quality Checks page styling for filters, group sections, check cards, and responsive layout.",
+                "role": "quality checks surface styling",
+                "tags": [
+                  "quality",
+                  "surface",
+                  "css"
+                ]
+              },
+              {
+                "id": "quality:surface-script",
+                "kind": "ui-component",
+                "path": "ai_studio/quality/quality.js",
+                "title": "quality.js",
+                "description": "Quality Checks browser behavior for loading the catalog API, filtering groups/checks, and copying rule IDs or agent requests.",
+                "role": "quality checks surface behavior",
+                "tags": [
+                  "quality",
+                  "surface",
+                  "browser"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "quality:catalog",
+            "kind": "tool",
+            "path": "ai_studio/quality/catalog.mjs",
+            "title": "catalog.mjs",
+            "description": "Reads quality group README files and numbered rule markdown files into a catalog consumed by the Quality Checks browser surface and API.",
+            "role": "quality rule catalog builder",
+            "tags": [
+              "quality",
+              "catalog",
+              "rules"
+            ]
+          },
+          {
             "id": "quality:skill-nt-quality-checks",
             "kind": "skill",
             "path": ".codex/skills/nt-quality-checks/SKILL.md",
@@ -3967,6 +4033,19 @@
               "quality",
               "test",
               "profiling"
+            ]
+          },
+          {
+            "id": "quality:catalog-test",
+            "kind": "test",
+            "path": "ai_studio/quality/tests/catalog.test.mjs",
+            "title": "catalog.test.mjs",
+            "description": "Regression test for the quality rule catalog used by the /quality/ surface and /api/quality-checks route.",
+            "role": "quality catalog tests",
+            "tags": [
+              "quality",
+              "test",
+              "catalog"
             ]
           }
         ]

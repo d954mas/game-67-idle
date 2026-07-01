@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quality Checks</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/ai_studio/studio_shell/studio_shell.css">
+  <link rel="stylesheet" href="/quality/quality.css">
+</head>
+<body>
+  <div class="studio-shell">
+    <aside class="studio-sidebar" aria-label="AI Studio navigation">
+      <div class="studio-sidebar-brand">
+        <span class="studio-brand-mark">AI</span>
+        <div class="studio-brand-copy">
+          <strong>AI Studio</strong>
+          <span>game pipeline</span>
+        </div>
+        <button class="studio-sidebar-toggle" type="button" data-studio-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true">&lt;</button>
+      </div>
+
+      <nav class="studio-side-nav" aria-label="Primary">
+        <p class="studio-nav-section">Workspace</p>
+        <a class="studio-nav-item" href="/">
+          <span class="studio-nav-icon">S</span>
+          <span class="studio-nav-label">Studio Home</span>
+        </a>
+        <a class="studio-nav-item" href="/architecture_map/">
+          <span class="studio-nav-icon map">M</span>
+          <span class="studio-nav-label">Architecture Map</span>
+        </a>
+        <a class="studio-nav-item" href="/taskboard/">
+          <span class="studio-nav-icon tasks">T</span>
+          <span class="studio-nav-label">Taskboard</span>
+        </a>
+        <a class="studio-nav-item" href="/asset_viewer/">
+          <span class="studio-nav-icon assets">A</span>
+          <span class="studio-nav-label">Asset Viewer</span>
+        </a>
+        <a class="studio-nav-item is-active" href="/quality/">
+          <span class="studio-nav-icon quality">Q</span>
+          <span class="studio-nav-label">Quality Checks</span>
+        </a>
+      </nav>
+    </aside>
+
+    <main class="studio-content quality-content">
+      <header class="quality-header">
+        <div>
+          <p class="eyebrow">Quality</p>
+          <h1>Quality Checks</h1>
+        </div>
+        <div class="quality-stats" aria-label="Quality checks summary">
+          <span><b id="groupCount">...</b> groups</span>
+          <span><b id="checkCount">...</b> checks</span>
+        </div>
+      </header>
+
+      <section class="quality-toolbar" aria-label="Quality groups">
+        <div id="groupTabs" class="group-tabs" role="tablist" aria-label="Quality groups"></div>
+      </section>
+
+      <section id="qualityStatus" class="quality-status" role="status">Loading quality checks...</section>
+      <section id="qualityGroups" class="quality-groups" aria-label="Quality check groups"></section>
+    </main>
+  </div>
+
+  <script src="/quality/quality.js"></script>
+  <script src="/ai_studio/studio_shell/studio_shell.js"></script>
+</body>
+</html>

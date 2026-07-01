@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { createTaskboardApi } from "../taskboard/api.mjs";
 import { findRoot } from "../taskboard/lib.mjs";
 import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/viewer/api.mjs";
+import { loadQualityCatalog } from "../quality/catalog.mjs";
 
 const repoGuess = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const root = findRoot(repoGuess);
@@ -85,6 +86,13 @@ function staticPath(pathname) {
     return safeResolve(assetViewerRoot, pathname.slice("/viewer/".length));
   }
 
+  if (pathname === "/quality" || pathname === "/quality/") {
+    return join(aiStudioRoot, "quality", "index.html");
+  }
+  if (pathname.startsWith("/quality/")) {
+    return safeResolve(join(aiStudioRoot, "quality"), pathname.slice("/quality/".length));
+  }
+
   if (pathname.startsWith("/ai_studio/")) {
     return safeResolve(root, pathname.slice(1));
   }
@@ -103,9 +111,19 @@ function serveStatic(req, res, url) {
   createReadStream(full).pipe(res);
 }
 
+function serveJson(res, value) {
+  res.writeHead(200, { "content-type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify(value));
+}
+
 const server = createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
   if (url.pathname.startsWith("/api/")) {
+    if (url.pathname === "/api/quality-checks") {
+      serveJson(res, loadQualityCatalog(root));
+      return;
+    }
+
     handleAssetViewerApi(req, res, url).then((handled) => {
       if (!handled) handleTaskboardApi(req, res, url);
     });

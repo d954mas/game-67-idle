@@ -65,3 +65,4 @@ Current hosted surfaces:
 - `/architecture_map/` -> Architecture Map surface.
 - `/taskboard/` -> Taskboard surface.
 - `/asset_viewer/` -> Asset Viewer launcher.
+- `/quality/` -> Quality Checks surface.

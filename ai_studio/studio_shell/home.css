@@ -103,6 +103,7 @@ h4 { font-size: 15px; line-height: 1.2; }
 .type-pill.graph { --pill: var(--studio-blue); }
 .type-pill.state { --pill: var(--studio-teal); }
 .type-pill.assets { --pill: var(--studio-amber); }
+.type-pill.quality { --pill: var(--studio-amber); }
 .type-pill.source { --pill: var(--studio-amber); }
 .type-pill.audit { --pill: var(--studio-red); }
 
