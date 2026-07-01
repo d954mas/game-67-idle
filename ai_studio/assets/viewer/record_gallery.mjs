@@ -8,20 +8,25 @@
 //   node ai_studio/assets/viewer/record_gallery.mjs --url http://localhost:8910 --out tmp/gallery.mp4
 import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { isMain } from "../../core_harness/tool_lib/cli.mjs";
 
 function parseArgs(argv) {
   const a = { url: "http://localhost:8910", out: "tmp/gallery.mp4", port: 9222, gallery: "tmp/lib-gallery",
     chrome: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe", pack: "", asset: "", w: 1280, h: 800 };
   for (let i = 0; i < argv.length; i += 1) {
     const k = argv[i];
-    if (k === "--url") a.url = argv[++i];
-    else if (k === "--out") a.out = argv[++i];
-    else if (k === "--port") a.port = Number(argv[++i]);
-    else if (k === "--gallery") a.gallery = argv[++i];
-    else if (k === "--chrome") a.chrome = argv[++i];
-    else if (k === "--pack") a.pack = argv[++i];
-    else if (k === "--asset") a.asset = argv[++i];
+    const next = argv[i + 1];
+    if (next === undefined || next.startsWith("--")) throw new Error(`missing value for ${k}`);
+    i += 1;
+    if (k === "--url") a.url = next;
+    else if (k === "--out") a.out = next;
+    else if (k === "--port") a.port = Number(next) || 9222;
+    else if (k === "--gallery") a.gallery = next;
+    else if (k === "--chrome") a.chrome = next;
+    else if (k === "--pack") a.pack = next;
+    else if (k === "--asset") a.asset = next;
+    else throw new Error(`unknown option: ${k}`);
   }
   return a;
 }
@@ -42,16 +47,17 @@ function pickHero(galleryDir, wantPack, wantAsset) {
     // prefer a colourful/recognisable theme near the top
     pack = scored.find((p) => /food|furniture|space|nature|city|kitchen/i.test(p.title || p.pack)) || scored[0] || packs[0];
   }
+  if (!pack) throw new Error("gallery has no packs");
   let asset = wantAsset ? assets.find((c) => c.id === wantAsset) : null;
   if (!asset) asset = assets.find((c) => c.pack === pack.pack && c.model) || assets.find((c) => c.model);
   return { pack, asset };
 }
 
-async function cdp() {
+async function cdp(port) {
   // resolve the page websocket target
   let targets;
   for (let t = 0; t < 40; t += 1) {
-    try { targets = await (await fetch(`http://127.0.0.1:${PORT}/json`)).json(); break; } catch { await sleep(250); }
+    try { targets = await (await fetch(`http://127.0.0.1:${port}/json`)).json(); break; } catch { await sleep(250); }
   }
   if (!targets) throw new Error("chrome devtools not reachable");
   const page = targets.find((x) => x.type === "page") || targets[0];
@@ -67,9 +73,6 @@ async function cdp() {
   return { send, on: (fn) => handlers.push(fn), close: () => ws.close() };
 }
 
-const A = parseArgs(process.argv.slice(2));
-const PORT = A.port;
-const FRAMES = resolve("tmp/rec_frames");
 let spawnedChrome = null;
 
 function stopSpawnedChrome() {
@@ -81,25 +84,27 @@ function stopSpawnedChrome() {
   }
 }
 
-async function main() {
-  const { pack, asset } = pickHero(resolve(A.gallery), A.pack, A.asset);
+async function main(argv = process.argv.slice(2)) {
+  const a = parseArgs(argv);
+  const framesDir = resolve("tmp/rec_frames");
+  const { pack, asset } = pickHero(resolve(a.gallery), a.pack, a.asset);
   console.log("hero pack:", pack.pack, "| hero model:", asset ? asset.id : "(none)");
 
-  rmSync(FRAMES, { recursive: true, force: true });
-  mkdirSync(FRAMES, { recursive: true });
+  rmSync(framesDir, { recursive: true, force: true });
+  mkdirSync(framesDir, { recursive: true });
 
   const userDir = resolve("tmp/chrome_rec_profile");
   rmSync(userDir, { recursive: true, force: true });
-  spawnedChrome = spawn(A.chrome, [
-    `--remote-debugging-port=${PORT}`, `--user-data-dir=${userDir}`,
+  spawnedChrome = spawn(a.chrome, [
+    `--remote-debugging-port=${a.port}`, `--user-data-dir=${userDir}`,
     "--no-first-run", "--no-default-browser-check", "--new-window",
-    `--window-size=${A.w},${A.h}`, "--window-position=40,40", "--hide-scrollbars",
+    `--window-size=${a.w},${a.h}`, "--window-position=40,40", "--hide-scrollbars",
     "--autoplay-policy=no-user-gesture-required",
-    `${A.url}/#/packs`,
+    `${a.url}/#/packs`,
   ], { stdio: "ignore" });
 
   await sleep(1500);
-  const c = await cdp();
+  const c = await cdp(a.port);
   await c.send("Page.enable");
   await c.send("Runtime.enable");
 
@@ -108,7 +113,7 @@ async function main() {
   c.on(async (msg) => {
     if (msg.method === "Page.screencastFrame") {
       const { data, sessionId, metadata } = msg.params;
-      const file = join(FRAMES, `f_${String(++n).padStart(5, "0")}.jpg`);
+      const file = join(framesDir, `f_${String(++n).padStart(5, "0")}.jpg`);
       writeFileSync(file, Buffer.from(data, "base64"));
       frames.push({ file, ts: metadata.timestamp || (Date.now() / 1000) });
       c.send("Page.screencastFrameAck", { sessionId });
@@ -135,7 +140,7 @@ async function main() {
     await evalJs(`location.hash = '#/asset/${asset.id}'`);
     await sleep(2500); // model load
     // manual drag-spin on the model-viewer for extra life
-    const cx = Math.round(A.w / 2), cy = Math.round(A.h / 2);
+    const cx = Math.round(a.w / 2), cy = Math.round(a.h / 2);
     await c.send("Input.dispatchMouseEvent", { type: "mousePressed", x: cx, y: cy, button: "left", clickCount: 1 });
     for (let dx = 0; dx <= 320; dx += 16) { await c.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: cx + dx, y: cy, button: "left" }); await sleep(35); }
     await c.send("Input.dispatchMouseEvent", { type: "mouseReleased", x: cx + 320, y: cy, button: "left", clickCount: 1 });
@@ -160,11 +165,11 @@ async function main() {
     concat += `file '${frames[i].file.replace(/\\/g, "/")}'\nduration ${dur.toFixed(3)}\n`;
   }
   concat += `file '${frames[frames.length - 1].file.replace(/\\/g, "/")}'\n`;
-  const listFile = join(FRAMES, "concat.txt");
+  const listFile = join(framesDir, "concat.txt");
   writeFileSync(listFile, concat, "utf8");
 
-  const out = resolve(A.out);
-  mkdirSync(resolve(A.out, ".."), { recursive: true });
+  const out = resolve(a.out);
+  mkdirSync(dirname(out), { recursive: true });
   const ff = spawnSync("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", listFile,
     "-vf", "scale=trunc(iw/2)*2:trunc(ih/2)*2,fps=30", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", out],
     { stdio: ["ignore", "ignore", "inherit"] });
@@ -172,8 +177,12 @@ async function main() {
   console.log("wrote", out, "(", (frames[frames.length - 1].ts - t0).toFixed(1), "s )");
 }
 
-main().catch((e) => {
-  console.error("FATAL:", e.message);
-  stopSpawnedChrome();
-  process.exit(1);
-});
+if (isMain(import.meta.url)) {
+  main().catch((e) => {
+    console.error("FATAL:", e.message);
+    stopSpawnedChrome();
+    process.exit(1);
+  });
+}
+
+export { main, parseArgs, pickHero };

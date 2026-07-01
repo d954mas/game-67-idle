@@ -3293,6 +3293,19 @@
                 ]
               },
               {
+                "id": "assets:asset-viewer-record-test",
+                "kind": "test",
+                "path": "ai_studio/assets/viewer/tests/record_gallery.test.mjs",
+                "title": "record_gallery.test.mjs",
+                "description": "Regression tests for Asset Viewer recorder argument parsing and gallery hero selection without launching Chrome.",
+                "role": "asset gallery recorder tests",
+                "tags": [
+                  "assets",
+                  "tests",
+                  "recorder"
+                ]
+              },
+              {
                 "id": "assets:asset-viewer-implementation",
                 "title": "Surface Implementation",
                 "subtitle": "viewer js/css",
