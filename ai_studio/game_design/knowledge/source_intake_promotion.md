@@ -26,7 +26,7 @@ proof. If browsing or source access is missing, write the evidence gap plainly.
    raw source shelf, or task/status.
 2. Add or update the source note first when external evidence matters.
 3. Extract only reusable conclusions into `gamedesign/knowledge/`, or project
-   conclusions into the active project wiki.
+   conclusions into the active game design folder.
 4. Link the conclusion back to its source note when the source matters.
 5. Update `gamedesign/knowledge/index.md` when discoverability changes.
 6. Update `gamedesign/knowledge/log.md` for meaningful reusable knowledge-base

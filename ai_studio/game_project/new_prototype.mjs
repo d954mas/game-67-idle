@@ -12,7 +12,7 @@ function usage() {
   console.error(`usage:
   node ai_studio/game_project/new_prototype.mjs --game-id <id> --title <name> --brief <one sentence> [--root <repo>] [--force]
 
-Creates the first project wiki/task/routing skeleton for a new native-first game prototype,
+Creates the first game design/task/routing skeleton for a new native-first game prototype,
 then writes a compact startup context pack in tmp/prototype_startup_gate_context.*.`);
   process.exit(2);
 }
@@ -63,13 +63,21 @@ function activeTaskFiles(root) {
 
 function namesActiveConcept(text) {
   return !/status:\s*none|no active game concept/i.test(String(text || "")) &&
-    /game id:\s*`?[a-z0-9][a-z0-9-]{1,48}`?|game folder:\s*`?gamedesign[\\/]+projects[\\/]+[a-z0-9][a-z0-9-]{1,48}`?/i.test(String(text || ""));
+    /game id:\s*`?[a-z0-9][a-z0-9-]{1,48}`?|game folder:\s*`?games[\\/]+[a-z0-9][a-z0-9-]{1,48}`?/i.test(String(text || ""));
+}
+
+function gameFolderRel(gameId) {
+  return `games/${gameId}`;
+}
+
+function designDirRel(gameId) {
+  return `${gameFolderRel(gameId)}/design`;
 }
 
 function assertCleanKickoffTarget(root, gameId, options) {
-  const projectDir = join(root, "gamedesign", "projects", gameId);
+  const projectDir = join(root, "games", gameId, "design");
   if (existsSync(projectDir) && !options.force) {
-    fail(`gamedesign/projects/${gameId} already exists`);
+    fail(`${designDirRel(gameId)} already exists`);
   }
   const activeTasks = activeTaskFiles(root);
   if (activeTasks.length > 0 && !options.force) {
@@ -94,7 +102,7 @@ function updateGameProject(root, title, gameId, brief) {
 function projectReadme(title, gameId, brief) {
   return `# ${title}
 
-Project wiki for the active prototype \`${gameId}\`.
+Game design folder for the active prototype \`${gameId}\`.
 
 ## Concept
 
@@ -109,7 +117,7 @@ ${brief}
   non-goal, proof, stop condition, likely files.
 - Before visual/runtime coding, compare current native screenshot or capture
   plan against the accepted fake shot/target and write a mismatch list.
-- Keep reusable process learnings in \`gamedesign/knowledge/\`; keep project-specific facts here.
+- Keep reusable process learnings in \`gamedesign/knowledge/\`; keep project-specific facts in this game folder.
 
 ## First Slice
 
@@ -174,12 +182,12 @@ Build the first native playable slice for \`${title}\` after the Stage 0 startup
 
 ## Done when
 
-- [ ] \`gamedesign/projects/${gameId}/gdd.md\` names the first playable loop and player-readable goal.
-- [ ] \`gamedesign/projects/${gameId}/data/core_loop.json\` describes the
+- [ ] \`${designDirRel(gameId)}/gdd.md\` names the first playable loop and player-readable goal.
+- [ ] \`${designDirRel(gameId)}/data/core_loop.json\` describes the
       player verbs, rules, feedback, risk, goals, replay reason, and reference
       grounding without assuming hands-off progression, away-time rewards, or
       reset-meta loops.
-- [ ] \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json\`
+- [ ] \`${designDirRel(gameId)}/visual/live_state_acceptance_matrix.json\`
       is reviewed for this game's HUD, primary CTA, feedback, modal,
       blocked/affordable, and transient stress states.
 - [ ] A fake shot or visual target exists before runtime polish starts.
@@ -343,8 +351,8 @@ not a notes dump.
 
 ## Live-State Matrix
 
-- Matrix doc: \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.md\`
-- Matrix JSON: \`gamedesign/projects/${gameId}/visual/live_state_acceptance_matrix.json\`
+- Matrix doc: \`${designDirRel(gameId)}/visual/live_state_acceptance_matrix.md\`
+- Matrix JSON: \`${designDirRel(gameId)}/visual/live_state_acceptance_matrix.json\`
 - Required first proof states:
   - [ ] \`first_screen\`
   - [ ] \`hud_visible\`
@@ -387,8 +395,8 @@ Status: active
 ${brief}
 
 - Game id: \`${gameId}\`
-- Game folder: \`gamedesign/projects/${gameId}/\`
-- Design docs: \`gamedesign/projects/${gameId}/gdd.md\`, \`gamedesign/projects/${gameId}/data/core_loop.json\`
+- Game folder: \`${gameFolderRel(gameId)}/\`
+- Design docs: \`${designDirRel(gameId)}/gdd.md\`, \`${designDirRel(gameId)}/data/core_loop.json\`
 - Task board: taskboard epic and first native playable-slice task
 - Current milestone: Stage 0 startup review for \`${title}\`
 - Hard game-specific constraints:
@@ -398,7 +406,7 @@ ${brief}
 
 ## Detailed Project State
 
-- GDD and game-specific docs live under \`gamedesign/projects/${gameId}/\`.
+- GDD and game-specific docs live under \`${designDirRel(gameId)}/\`.
 - Work state, evidence, review, and done criteria live in Taskboard task files.
 - Do not put lore, balance, asset lists, or detailed implementation notes in this file.
 `;
@@ -437,7 +445,7 @@ const options = { root, force: args.force === true };
 assertCleanKickoffTarget(root, gameId, options);
 updateGameProject(root, title, gameId, brief);
 
-const projectDir = join(root, "gamedesign", "projects", gameId);
+const projectDir = join(root, "games", gameId, "design");
 writeNew(join(projectDir, "README.md"), projectReadme(title, gameId, brief), options);
 writeNew(join(projectDir, "gdd.md"), gdd(title, brief), options);
 mkdirSync(join(projectDir, "reviews"), { recursive: true });

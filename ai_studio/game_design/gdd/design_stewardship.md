@@ -6,7 +6,7 @@ exists.
 ## Workflow
 
 1. Find the local design source of truth under
-   `gamedesign/projects/<game-id>/`.
+   `games/<game-id>/design/`.
 2. Separate accepted decisions from brainstorms and stale notes.
 3. Prefer short implementation-ready specs over long prose.
 4. When a design choice affects code, state expected player-visible behavior and

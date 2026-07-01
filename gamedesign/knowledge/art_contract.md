@@ -32,7 +32,7 @@ what should count as cheap or expensive for this particular game.
 Recommended path:
 
 ```text
-gamedesign/projects/<game-id>/art/art_contract.json
+games/<game-id>/design/art/art_contract.json
 ```
 
 Starter shape:
@@ -67,13 +67,13 @@ Starter shape:
   "references": {
     "yes": [{ "ref": "", "why": "" }],
     "no": [{ "ref": "", "why": "" }],
-    "approved_dir": "gamedesign/projects/<game-id>/art/approved",
-    "rejected_dir": "gamedesign/projects/<game-id>/art/rejected"
+    "approved_dir": "games/<game-id>/design/art/approved",
+    "rejected_dir": "games/<game-id>/design/art/rejected"
   },
   "forbidden": ["debug wireframes / visible grid", "thin grey low-contrast UI"],
   "cheap_signals": ["placeholder/prototype look", "plastic cube silhouettes"],
   "expensive_signals": ["authored silhouettes", "material separation"],
-  "state_matrix": "gamedesign/projects/<game-id>/visual/live_state_acceptance_matrix.json"
+  "state_matrix": "games/<game-id>/design/visual/live_state_acceptance_matrix.json"
 }
 ```
 

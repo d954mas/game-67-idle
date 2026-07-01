@@ -29,7 +29,7 @@ test("registerTemplateAssetSource creates and lists a template asset source", (t
   const registered = registerTemplateAssetSource(root, { id: "mobile-template", title: "Mobile Template" });
 
   assert.equal(registered.assets, "templates/mobile-template/assets");
-  assert.equal(templateRegistryPath(root), "ai_studio/assets/storage/sources/templates.json");
+  assert.equal(templateRegistryPath(root), "templates/templates.json");
   assert.deepEqual(listRegisteredTemplates(root), [
     {
       id: "mobile-template",
@@ -47,7 +47,7 @@ test("registerTemplateAssetSource creates and lists a template asset source", (t
     },
   ]);
 
-  const parsed = JSON.parse(readFileSync(join(root, "ai_studio", "assets", "storage", "sources", "templates.json"), "utf8"));
+  const parsed = JSON.parse(readFileSync(join(root, "templates", "templates.json"), "utf8"));
   assert.equal(parsed.templates.length, 2);
 });
 
@@ -75,8 +75,8 @@ test("registerTemplateAssetSource keeps folder and assets inside the repository"
 test("listRegisteredTemplates accepts UTF-8 BOM registry files", (t) => {
   const root = tempRoot();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const path = join(root, "ai_studio", "assets", "storage", "sources", "templates.json");
-  mkdirSync(join(root, "ai_studio", "assets", "storage", "sources"), { recursive: true });
+  const path = join(root, "templates", "templates.json");
+  mkdirSync(join(root, "templates"), { recursive: true });
   writeFileSync(path, `\uFEFF${JSON.stringify({
     schema: "ai_studio.assets.templates.v1",
     templates: [{ id: "template", title: "Template", folder: "templates/template", assets: "templates/template/assets" }],

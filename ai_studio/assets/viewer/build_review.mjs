@@ -11,7 +11,7 @@
 // so the page works opened locally AND served over a tunnel (no file:// refs).
 //
 //   node ai_studio/assets/viewer/build_review.mjs --mode library
-//   node ai_studio/assets/viewer/build_review.mjs --mode review --game little-lives --base clean-seed
+//   node ai_studio/assets/viewer/build_review.mjs --mode review --game <game-id> --base clean-seed
 import { execFileSync } from "node:child_process";
 import { readFile, readdir, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";

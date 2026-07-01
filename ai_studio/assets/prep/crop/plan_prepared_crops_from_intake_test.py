@@ -17,7 +17,7 @@ def write_intake(path: Path) -> None:
                 "schema": "game.source_sheet_intake_audit",
                 "version": 1,
                 "status": "pass",
-                "source": "gamedesign/projects/test/art/source.png",
+                "source": "games/test/design/art/source.png",
                 "size": [420, 300],
                 "key_color": "#00ff00",
                 "key_tolerance": 8,

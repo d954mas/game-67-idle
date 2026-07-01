@@ -16,7 +16,7 @@ test("registerGameAssetSource creates and lists a game asset source", (t) => {
   const registered = registerGameAssetSource(root, { id: "test-game", title: "Test Game" });
 
   assert.equal(registered.assets, "games/test-game/assets");
-  assert.equal(gameRegistryPath(root), "ai_studio/assets/storage/sources/games.json");
+  assert.equal(gameRegistryPath(root), "games/games.json");
   assert.deepEqual(listRegisteredGames(root), [{
     id: "test-game",
     title: "Test Game",
@@ -33,7 +33,7 @@ test("registerGameAssetSource upserts by game id", (t) => {
   registerGameAssetSource(root, { id: "test-game", title: "Old" });
   registerGameAssetSource(root, { id: "test-game", title: "New", folder: "./games/test-game/", assets: "./games/test-game/assets/" });
 
-  const parsed = JSON.parse(readFileSync(join(root, "ai_studio", "assets", "storage", "sources", "games.json"), "utf8"));
+  const parsed = JSON.parse(readFileSync(join(root, "games", "games.json"), "utf8"));
   assert.equal(parsed.games.length, 1);
   assert.deepEqual(listRegisteredGames(root), [{
     id: "test-game",
@@ -68,8 +68,8 @@ test("registerGameAssetSource keeps folder and assets inside the repository", (t
 test("listRegisteredGames accepts UTF-8 BOM registry files", (t) => {
   const root = tempRoot();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  const path = join(root, "ai_studio", "assets", "storage", "sources", "games.json");
-  mkdirSync(join(root, "ai_studio", "assets", "storage", "sources"), { recursive: true });
+  const path = join(root, "games", "games.json");
+  mkdirSync(join(root, "games"), { recursive: true });
   writeFileSync(path, `\uFEFF${JSON.stringify({
     schema: "ai_studio.assets.games.v1",
     games: [{ id: "test-game", title: "Test Game", folder: "games/test-game", assets: "games/test-game/assets" }],

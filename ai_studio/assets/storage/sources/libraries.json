@@ -1,4 +1,11 @@
 {
   "schema": "ai_studio.assets.libraries.v1",
-  "libraries": []
+  "libraries": [
+    {
+      "id": "global-library",
+      "title": "All Assets",
+      "assets": "C:\\Users\\ROG\\YandexDisk\\gamedev\\assets\\ai_pipeline_assets",
+      "status": "active"
+    }
+  ]
 }

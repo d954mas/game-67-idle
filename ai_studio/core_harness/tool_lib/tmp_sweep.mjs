@@ -4,7 +4,7 @@
 //   node ai_studio/core_harness/tool_lib/tmp_sweep.mjs [--list] [--all-scratch] [--keep-validate <n>] [--dry-run] [--root <dir>]
 //
 // tmp/ is gitignored disposable scratch; durable evidence lives under
-// gamedesign/projects/<id>/. Legacy pipeline validation exports are pruned
+// games/<id>/design/. Legacy pipeline validation exports are pruned
 // tmp/pipeline-validate-* dirs (T0043). This sweep is the EXPLICIT, opt-in way
 // to clear the rest (closed-prototype renders, generation pipelines, atlas
 // review dirs) at prototype close. Default is --list (reports, deletes nothing).

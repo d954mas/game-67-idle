@@ -5,7 +5,8 @@ processes.
 
 This module does not own the design data itself. Durable reusable design
 knowledge lives in `gamedesign/knowledge/`; reusable source notes live in
-`gamedesign/sources/`; current-game material lives in that game's project wiki.
+`gamedesign/sources/`; current-game material lives under
+`games/<game-id>/design/`.
 
 ## Groups
 

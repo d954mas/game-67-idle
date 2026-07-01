@@ -9,7 +9,7 @@ Game Project owns the agent-facing bridge between the reusable AI Studio
 harness and one current game project:
 
 - `GAME_PROJECT.md`: compact active-game routing file at repository root.
-- `new_prototype.mjs`: creates the first game-project wiki, task, epic, and
+- `new_prototype.mjs`: creates the first game design folder, task, epic, and
   startup context pack for a new prototype.
 - `iteration_context.mjs`: builds a compact pre-implementation context pack for
   playable game work.

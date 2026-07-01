@@ -42,7 +42,7 @@ class StateCapture:
             sc.capture("first_screen")
             game.result("game.playtest.do_thing")      # game-specific routing
             sc.capture("reward_active")
-            sc.write_matrix("gamedesign/projects/my-game/art/state_matrix.json")
+            sc.write_matrix("games/my-game/design/art/state_matrix.json")
     """
 
     def __init__(self, client, project: str, out_dir: str = "build/captures") -> None:

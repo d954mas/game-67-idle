@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
@@ -17,13 +17,13 @@ function run(args) {
 
 const baseArgs = [
   "--id", "ui-source-v1",
-  "--project-dir", "gamedesign/projects/test",
+  "--project-dir", "games/test/design",
   "--source-family", "blank UI kit sheet",
-  "--accepted-source", "gamedesign/projects/test/art/source_sheets/ui-source-v1.png",
+  "--accepted-source", "games/test/design/art/source_sheets/ui-source-v1.png",
   "--provider", "comfyui",
   "--model", "fantasy-ui-workflow",
   "--workflow-json", "{\"nodes\":[]}",
-  "--prompt-packet", "gamedesign/projects/test/art/prompts/ui-source-v1-prompt.json",
+  "--prompt-packet", "games/test/design/art/prompts/ui-source-v1-prompt.json",
   "--seed", "42",
   "--prompt", "blank fantasy UI kit sheet",
   "--negative-prompt", "text, watermark",

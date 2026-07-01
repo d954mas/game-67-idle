@@ -112,16 +112,21 @@ function gameProjectConcept(markdown) {
   return [`Status: ${status || "active"}`, gameId ? `Game id: ${gameId}` : "", summary].filter(Boolean).join("; ");
 }
 
+function gameProjectId(markdown) {
+  const activeGame = sectionText(markdown, "Active Game");
+  return activeGame.match(/game id:\s*`?([a-z0-9][a-z0-9-]{1,64})`?/i)?.[1] || "";
+}
+
 function taskContextHasActionableWork(text) {
   return /-\s+T\d{4}\s+(doing|todo|backlog)\s+/i.test(String(text || ""));
 }
 
 function hasProjectWikiSource(sources) {
-  return sources.some((source) => /^gamedesign\/projects\/[^/]+\//.test(source));
+  return sources.some((source) => /^games\/[^/]+\/design\//.test(source));
 }
 
 function hasLiveStateMatrixSource(sources) {
-  return sources.some((source) => /^gamedesign\/projects\/[^/]+\/visual\/live_state_acceptance_matrix\.json$/.test(source));
+  return sources.some((source) => /^games\/[^/]+\/design\/visual\/live_state_acceptance_matrix\.json$/.test(source));
 }
 
 function mentionsReviewProof(text) {
@@ -146,8 +151,8 @@ function buildStartupGate({ concept, designSources, runtimeSources, taskContext,
     {
       id: "project_wiki",
       ok: activeConcept && hasProjectWikiSource(designSources),
-      evidence: activeConcept && hasProjectWikiSource(designSources) ? "Project wiki/design sources found for an active concept." : "No active-concept project wiki source found.",
-      fix: "Create gamedesign/projects/<game-id>/ for the active concept with concept/GDD/evidence before runtime work.",
+      evidence: activeConcept && hasProjectWikiSource(designSources) ? "Game design sources found for an active concept." : "No active-concept design source found.",
+      fix: "Create games/<game-id>/design/ for the active concept with concept/GDD/evidence before runtime work.",
     },
     {
       id: "runtime_harness",
@@ -167,7 +172,7 @@ function buildStartupGate({ concept, designSources, runtimeSources, taskContext,
       evidence: activeConcept && hasLiveStateMatrixSource(designSources)
         ? "Live-state acceptance matrix found for the active concept."
         : "No active-concept live-state acceptance matrix found.",
-      fix: "Create gamedesign/projects/<game-id>/visual/live_state_acceptance_matrix.json and use it as review evidence before accepting UI/visual work.",
+      fix: "Create games/<game-id>/design/visual/live_state_acceptance_matrix.json and use it as review evidence before accepting UI/visual work.",
     },
     {
       id: "core_loop_model",
@@ -175,7 +180,7 @@ function buildStartupGate({ concept, designSources, runtimeSources, taskContext,
       evidence: activeConcept && designSources.some((source) => /\/data\/core_loop\.json$/.test(source))
         ? "Core-loop model found (data/core_loop.json) for the active concept."
         : "No core-loop model (data/core_loop.json) for the active concept.",
-      fix: "Design the core loop FIRST: write gamedesign/projects/<id>/data/core_loop.json (player verbs, rules, feedback, risk, goals, replay reason, and reference grounding) before building. A pretty screen is not a game (AGENTS.md Game/core-loop gate).",
+      fix: "Design the core loop FIRST: write games/<id>/design/data/core_loop.json (player verbs, rules, feedback, risk, goals, replay reason, and reference grounding) before building. A pretty screen is not a game (AGENTS.md Game/core-loop gate).",
     },
   ];
   const missing = requirements.filter((requirement) => !requirement.ok);
@@ -270,18 +275,19 @@ function directories(path) {
   }
 }
 
-function projectDesignSources(root) {
+function projectDesignSources(root, activeGameId = "") {
   const sources = [];
-  for (const projectId of directories(join(root, "gamedesign", "projects"))) {
+  const gameIds = activeGameId ? [activeGameId] : directories(join(root, "games"));
+  for (const projectId of gameIds) {
     sources.push(...existing(root, [
-      `gamedesign/projects/${projectId}/README.md`,
-      `gamedesign/projects/${projectId}/gdd.md`,
-      `gamedesign/projects/${projectId}/GDD.md`,
-      `gamedesign/projects/${projectId}/art/art_direction.md`,
-      `gamedesign/projects/${projectId}/reviews/first_slice_review.md`,
-      `gamedesign/projects/${projectId}/visual/live_state_acceptance_matrix.md`,
-      `gamedesign/projects/${projectId}/visual/live_state_acceptance_matrix.json`,
-      `gamedesign/projects/${projectId}/data/core_loop.json`,
+      `games/${projectId}/design/README.md`,
+      `games/${projectId}/design/gdd.md`,
+      `games/${projectId}/design/GDD.md`,
+      `games/${projectId}/design/art/art_direction.md`,
+      `games/${projectId}/design/reviews/first_slice_review.md`,
+      `games/${projectId}/design/visual/live_state_acceptance_matrix.md`,
+      `games/${projectId}/design/visual/live_state_acceptance_matrix.json`,
+      `games/${projectId}/design/data/core_loop.json`,
     ]));
   }
   return [...new Set(sources)];
@@ -292,6 +298,7 @@ function buildContext(root, options = {}) {
   const agents = readIfExists(join(root, "AGENTS.md"));
   const gameProject = readIfExists(join(root, "GAME_PROJECT.md"));
   const activeGame = sectionText(gameProject, "Active Game");
+  const activeGameId = gameProjectId(gameProject);
   const project = sectionText(agents, "Project");
   const direction = sectionText(agents, "Direction");
   const validation = sectionText(agents, "Validation");
@@ -309,13 +316,12 @@ function buildContext(root, options = {}) {
   const designSources = existing(root, [
     "gamedesign/knowledge/README.md",
     "gamedesign/knowledge/reference_deconstruction.md",
-  ]).concat(activeConcept ? projectDesignSources(root) : []);
+  ]).concat(activeConcept ? projectDesignSources(root, activeGameId) : []);
   const runtimeCandidates = activeConcept
     ? [
-        "src/clean_seed_main.c",
-        "src/main.c",
-        "state/game_state.schema.json",
-        "CMakePresets.json",
+        activeGameId ? `games/${activeGameId}/src/main.c` : "src/main.c",
+        activeGameId ? `games/${activeGameId}/state/game_state.schema.json` : "state/game_state.schema.json",
+        activeGameId ? `games/${activeGameId}/CMakeLists.txt` : "CMakePresets.json",
         "ai_studio/runtime_automation",
       ]
     : [
@@ -367,7 +373,7 @@ function buildContext(root, options = {}) {
     before_coding_checklist: [
       "Check `prototype_startup_gate.status`; if it is not ready, do not start broad runtime implementation.",
       "Write the 5-line visual session contract when the slice has visual, UI, FTUE, feel, or audience-test risk.",
-      "Open exactly one actionable task and one active project wiki before code.",
+      "Open exactly one actionable task and one active game design folder before code.",
       "Name the visual review evidence that can stop feature expansion.",
       "Use `visual/live_state_acceptance_matrix.json` as evidence and cover or explicitly debt every required state.",
       "Compare current native screenshot against the accepted fake shot/target and list mismatches before visual code.",

@@ -10,7 +10,7 @@ knowledge. Templates live under `templates/`; each **game is its own folder** un
 - Shared asset library lives OUTSIDE the repo (private); games pull project-local
   copies. Paid/licensed binaries never enter git - see the restricted-asset rule
   in `AGENTS.md` + `ai_studio/assets/storage/license/`.
-- Closed prototypes are git tags (e.g. `blockside-heat-snapshot-2026-06-24`).
+- Closed prototypes are preserved as git tags.
 
 ## Start a new game
 

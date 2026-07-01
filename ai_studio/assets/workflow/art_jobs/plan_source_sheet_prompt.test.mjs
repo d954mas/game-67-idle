@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -24,8 +24,8 @@ function run(args, cwd) {
 }
 
 function writeJob(dir) {
-  mkdirSync(join(dir, "gamedesign/projects/test/art_requests"), { recursive: true });
-  const jobPath = "gamedesign/projects/test/art_requests/ui-job.json";
+  mkdirSync(join(dir, "games/test/design/art_requests"), { recursive: true });
+  const jobPath = "games/test/design/art_requests/ui-job.json";
   writeFileSync(join(dir, jobPath), `${JSON.stringify({
     schema: "game.art_job",
     id: "ui-job",
@@ -248,8 +248,8 @@ test("uses explicit key color over intake audit", (t) => {
 
 test("uses custom source sheet layout rows from art job", (t) => {
   const dir = tempDir(t);
-  mkdirSync(join(dir, "gamedesign/projects/test/art_requests"), { recursive: true });
-  const jobPath = "gamedesign/projects/test/art_requests/equipment-job.json";
+  mkdirSync(join(dir, "games/test/design/art_requests"), { recursive: true });
+  const jobPath = "games/test/design/art_requests/equipment-job.json";
   writeFileSync(join(dir, jobPath), `${JSON.stringify({
     schema: "game.art_job",
     id: "equipment-job",

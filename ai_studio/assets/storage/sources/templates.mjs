@@ -13,7 +13,7 @@ const defaultRegistry = {
 };
 
 function registryPath(root) {
-  return join(root, "ai_studio", "assets", "storage", "sources", "templates.json");
+  return join(root, "templates", "templates.json");
 }
 
 function normalizeRelPath(value, label = "path") {

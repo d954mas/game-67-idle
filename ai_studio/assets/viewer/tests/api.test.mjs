@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { resolveAssetViewerGalleryPath, safeResolve, selectSource } from "../api.mjs";
+import { listAssetViewerSources, resolveAssetViewerGalleryPath, safeResolve, selectSource } from "../api.mjs";
 
 function tempRoot() {
   return mkTemp("asset-viewer-api-");
@@ -42,6 +42,58 @@ test("selectSource returns registered source or confined custom game source", ()
 
   assert.throws(() => selectSource(sources, { type: "game", path: "../outside/assets" }, root), /inside the repository/);
   assert.throws(() => selectSource(sources, { sourceId: "missing" }, root), /unknown asset source/);
+});
+
+test("listAssetViewerSources keeps global library with workspace template and game registries", async () => {
+  const root = tempRoot();
+  try {
+    mkdirSync(join(root, "shared-library", "packs"), { recursive: true });
+    mkdirSync(join(root, "templates", "template", "assets"), { recursive: true });
+    mkdirSync(join(root, "games", "test-game", "assets"), { recursive: true });
+    mkdirSync(join(root, "ai_studio", "assets", "storage", "sources"), { recursive: true });
+    writeFileSync(join(root, "ai_studio", "assets", "storage", "sources", "libraries.json"), JSON.stringify({
+      schema: "ai_studio.assets.libraries.v1",
+      libraries: [{
+        id: "global-library",
+        title: "All Assets",
+        assets: "shared-library",
+        status: "active",
+      }],
+    }), "utf8");
+    writeFileSync(join(root, "templates", "templates.json"), JSON.stringify({
+      schema: "ai_studio.assets.templates.v1",
+      templates: [{
+        id: "template",
+        title: "Template",
+        folder: "templates/template",
+        assets: "templates/template/assets",
+        status: "active",
+      }],
+    }), "utf8");
+    writeFileSync(join(root, "games", "games.json"), JSON.stringify({
+      schema: "ai_studio.assets.games.v1",
+      games: [{
+        id: "test-game",
+        title: "Test Game",
+        folder: "games/test-game",
+        assets: "games/test-game/assets",
+        status: "active",
+      }],
+    }), "utf8");
+
+    const { sources } = await listAssetViewerSources(root);
+
+    assert.deepEqual(
+      sources.map((source) => ({ id: source.id, type: source.type, available: source.available })),
+      [
+        { id: "global-library", type: "library", available: true },
+        { id: "template", type: "template", available: true },
+        { id: "game:test-game", type: "game", available: true },
+      ],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("resolveAssetViewerGalleryPath confines gallery, library, and repo routes", () => {

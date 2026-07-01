@@ -1,4 +1,4 @@
-﻿# Source Routing
+# Source Routing
 
 Load this reference before adding, reviewing, reorganizing, or promoting
 game-design research sources and reusable knowledge.
@@ -19,10 +19,10 @@ game-design research sources and reusable knowledge.
   cross-project knowledge. Keep facts close to the original material.
 - `gamedesign/knowledge/`: reusable principles, checklists, methods, and
   validation rules. Do not put current-game facts here.
-- `gamedesign/projects/<game-id>/sources/` or `references/`: source material
+- `games/<game-id>/design/sources/` or `references/`: source material
   that supports one game, one GDD, one balance file, one art direction, or one
   current implementation decision.
-- `gamedesign/projects/<game-id>/`: project-specific conclusions, decisions,
+- `games/<game-id>/design/`: project-specific conclusions, decisions,
   examples, reference studies, evidence, screenshots, playtest notes, UI flow,
   balance, and content data.
 - `tasks/`: work status and deferred tasks.
@@ -31,4 +31,4 @@ game-design research sources and reusable knowledge.
 
 If a note names the active game, local balance numbers, screenshots, current
 implementation status, accepted GDD facts, or playtest results, keep it in the
-project wiki unless it has been rewritten as a reusable rule.
+game design folder unless it has been rewritten as a reusable rule.

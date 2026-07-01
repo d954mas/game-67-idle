@@ -6,7 +6,8 @@ The map is data-driven:
 
 - `../tree.json` is the architecture source of truth.
 - `index.html` renders the map in the browser.
-- `validate_map.mjs` scans AI Studio source locations and writes
+- `validate_map.mjs` scans AI Studio source locations, shallow workspace
+  folder roots, and writes
   `validation-report.json`.
 - `validation-report.json` is displayed by the page so unmapped, missing, or
   duplicated files are visible during refactoring.
@@ -16,6 +17,14 @@ The map is data-driven:
 The page must not infer architecture from the repository. New files are not
 silently added to the map. They appear in validation until a human decides
 whether to map, ignore, assign to the review backlog, or delete them.
+
+`templates/` and `games/` are shown as workspace containers. They use
+`coverage: "self"` so the container path is checked without automatically
+covering every child folder. Validation scans immediate child directories under
+those roots; new `templates/<id>` or `games/<id>` folders appear as unmapped
+outside-AI-Studio paths until they are intentionally added to `tree.json`.
+Files inside each game or template folder are not listed in the architecture
+map.
 
 Taskboard data is not architecture map data. `tasks/active/`, `tasks/archive/`,
 and `tasks/epics/` are owned and validated by `ai_studio/taskboard/`; they are
@@ -53,8 +62,9 @@ http://127.0.0.1:8765/architecture_map/
 - `duplicateMappings`: a path is listed by more than one map node.
 - `unmappedInAiStudio`: a file exists under `ai_studio/`, but is not listed or
   covered by a mapped directory in `tree.json`.
-- `unmappedOutsideAiStudio`: a scanned file exists outside `ai_studio/` and is
-  not explicitly mapped.
+- `unmappedOutsideAiStudio`: a scanned path exists outside `ai_studio/` and is
+  not explicitly mapped. For `templates/` and `games/`, scanned paths are
+  immediate child directories, not files inside those directories.
 - `missingDescriptions`: a visible node lacks a useful description.
 
 Scanning is validation only. It does not edit `tree.json`.

@@ -1,8 +1,8 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 // Scaffold a structured generated-art job for agent-readable iteration.
 //
 // Example:
-//   node ai_studio/assets/workflow/art_jobs/new_art_job.mjs --id 67-world-characters-v2 --family "next 67 variants" --concept meme-evolution --target gamedesign/projects/meme-evolution/visuals/67-world-first-7-lineup-v1.png
+//   node ai_studio/assets/workflow/art_jobs/new_art_job.mjs --id 67-world-characters-v2 --family "next 67 variants" --concept meme-evolution --target games/meme-evolution/design/visuals/67-world-first-7-lineup-v1.png
 //
 // Use --dry-run to preview without writing files.
 
@@ -41,7 +41,7 @@ function parseArgs(argv) {
 }
 
 function usage() {
-  console.log("usage: node ai_studio/assets/workflow/art_jobs/new_art_job.mjs --id <job-id> --family <asset family> [--concept meme-evolution] [--project-dir gamedesign/projects/meme-evolution] [--target path] [--audience text] [--dry-run]");
+  console.log("usage: node ai_studio/assets/workflow/art_jobs/new_art_job.mjs --id <job-id> --family <asset family> [--concept meme-evolution] [--project-dir games/meme-evolution/design] [--target path] [--audience text] [--dry-run]");
 }
 
 function writeJson(path, data, dryRun) {
@@ -61,7 +61,7 @@ if (!args.family) fail("--family is required");
 
 const concept = args.concept || "meme-evolution";
 const explicitProjectDir = args.projectDir ? args.projectDir.replaceAll("\\", "/").replace(/\/+$/g, "") : "";
-const conceptProjectDir = `gamedesign/projects/${concept}`;
+const conceptProjectDir = `games/${concept}/design`;
 const projectDir = explicitProjectDir || conceptProjectDir;
 const artRequestPath = `${projectDir}/art_requests/${args.id}.json`;
 const cropPlanPath = `${projectDir}/data/${args.id}-crop_plan.json`;

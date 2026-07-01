@@ -11,7 +11,7 @@ When a named reference drives gameplay, UI, economy, balance, or final art:
 - declare study mode: quick check, central deconstruction, or deep
   deconstruction;
 - use the Source Ladder in `reference_deconstruction.md`;
-- create or update the durable deconstruction in the project wiki;
+- create or update the durable deconstruction in the game design folder;
 - include source matrix, observation ledger, borrow/avoid/copy-risk,
   current-build mismatch, and next native screenshot/scenario proof;
 - do not claim "grounded in refs" unless you can cite at least three labeled

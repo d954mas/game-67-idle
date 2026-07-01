@@ -13,6 +13,8 @@ const defaultScanRoots = [
   "CLAUDE.md",
   "GAME_PROJECT.md",
   ".codex/skills",
+  { path: "templates", mode: "child-directories" },
+  { path: "games", mode: "child-directories" },
 ];
 
 const ignoredPrefixes = [
@@ -83,8 +85,31 @@ function walkRepo(repoRoot, rel, out = []) {
   return out;
 }
 
-function collectScannedFiles(repoRoot, scanRoots = defaultScanRoots) {
-  return [...new Set(scanRoots.flatMap((root) => walkRepo(repoRoot, root)))].sort((a, b) => a.localeCompare(b));
+function listChildDirectories(repoRoot, rel) {
+  const abs = repoPath(repoRoot, rel);
+  if (!existsSync(abs)) return [];
+  const stat = statSync(abs);
+  if (!stat.isDirectory()) return [];
+  return readdirSync(abs, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules" && entry.name !== "__pycache__")
+    .map((entry) => normalizeMapPath(join(rel, entry.name)));
+}
+
+function normalizeScanRoot(scanRoot) {
+  if (typeof scanRoot === "string") return { path: scanRoot, mode: "tracked-files" };
+  return {
+    path: scanRoot.path,
+    mode: scanRoot.mode || "tracked-files",
+  };
+}
+
+function collectScannedPaths(repoRoot, scanRoots = defaultScanRoots) {
+  return [...new Set(scanRoots.flatMap((root) => {
+    const spec = normalizeScanRoot(root);
+    if (spec.mode === "tracked-files") return walkRepo(repoRoot, spec.path);
+    if (spec.mode === "child-directories") return listChildDirectories(repoRoot, spec.path);
+    throw new Error(`Unknown architecture map scan mode: ${spec.mode}`);
+  }))].sort((a, b) => a.localeCompare(b));
 }
 
 function visitNodes(node, visitor, ancestry = []) {
@@ -105,6 +130,7 @@ function collectMapEntries(map) {
         id: node.id || "",
         title: node.title || pathValue.split("/").at(-1),
         kind: node.kind || "",
+        coverage: node.coverage || "children",
         ancestry: ancestry.map((item) => item.title || item.id || "").filter(Boolean),
       });
     }
@@ -136,7 +162,7 @@ function createValidationReport(options = {}) {
     pathToEntries.get(entry.path).push(entry);
   }
 
-  const mappedFiles = new Set();
+  const mappedExactPaths = new Set();
   const mappedDirectories = [];
   const missingInRepo = [];
   for (const entry of entries) {
@@ -146,15 +172,16 @@ function createValidationReport(options = {}) {
       continue;
     }
     const stat = statSync(abs);
+    mappedExactPaths.add(entry.path);
     if (stat.isDirectory()) {
-      mappedDirectories.push(entry.path.endsWith("/") ? entry.path : `${entry.path}/`);
-    } else {
-      mappedFiles.add(entry.path);
+      if (entry.coverage !== "self") {
+        mappedDirectories.push(entry.path.endsWith("/") ? entry.path : `${entry.path}/`);
+      }
     }
   }
 
-  const scanned = collectScannedFiles(repoRoot, scanRoots);
-  const unmapped = scanned.filter((file) => !mappedFiles.has(file) && !isCoveredByMappedDirectory(file, mappedDirectories));
+  const scanned = collectScannedPaths(repoRoot, scanRoots);
+  const unmapped = scanned.filter((file) => !mappedExactPaths.has(file) && !isCoveredByMappedDirectory(file, mappedDirectories));
   const unmappedInAiStudio = unmapped.filter((file) => file.startsWith("ai_studio/"));
   const unmappedOutsideAiStudio = unmapped.filter((file) => !file.startsWith("ai_studio/"));
   const duplicateMappings = [...pathToEntries.entries()]
@@ -168,7 +195,7 @@ function createValidationReport(options = {}) {
     scanRoots,
     summary: {
       mappedPaths: entries.length,
-      scannedFiles: scanned.length,
+      scannedPaths: scanned.length,
       missingInRepo: missingInRepo.length,
       duplicateMappings: duplicateMappings.length,
       unmappedInAiStudio: unmappedInAiStudio.length,
@@ -241,7 +268,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
     const report = createValidationReport({ repoRoot, mapPath: options.mapPath || defaultMapPath });
     writeReport(report, repoRoot, options.reportPath || defaultReportPath);
     console.log(`wrote ${options.reportPath || defaultReportPath}`);
-    console.log(`mapped=${report.summary.mappedPaths} scanned=${report.summary.scannedFiles} unmapped_ai_studio=${report.summary.unmappedInAiStudio} unmapped_outside_ai_studio=${report.summary.unmappedOutsideAiStudio} missing=${report.summary.missingInRepo} duplicates=${report.summary.duplicateMappings}`);
+    console.log(`mapped=${report.summary.mappedPaths} scanned=${report.summary.scannedPaths} unmapped_ai_studio=${report.summary.unmappedInAiStudio} unmapped_outside_ai_studio=${report.summary.unmappedOutsideAiStudio} missing=${report.summary.missingInRepo} duplicates=${report.summary.duplicateMappings}`);
     if (options.strict && hasStrictFailures(report)) process.exit(1);
   } catch (error) {
     console.error(error && error.message ? error.message : String(error));
@@ -251,7 +278,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
 
 export {
   collectMapEntries,
-  collectScannedFiles,
+  collectScannedPaths,
   createValidationReport,
   hasStrictFailures,
 };

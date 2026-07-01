@@ -12,14 +12,14 @@ It owns workflow, not content:
 - reusable design knowledge content: `gamedesign/knowledge/`;
 - reusable source notes: `gamedesign/sources/`;
 - current-game design docs, references, screenshots, playtest notes, and GDD
-  facts: `gamedesign/projects/<game-id>/`;
+  facts: `games/<game-id>/design/`;
 - work state: Taskboard;
 - temporary extraction and rejected material: `tmp/`.
 
 ## Files
 
 - `source_routing.md`: routing rules between source shelf, reusable knowledge,
-  project wiki, tasks, and temp scratch.
+  game design folders, tasks, and temp scratch.
 - `source_intake_promotion.md`: source quality, evidence labels, and promotion
   workflow.
 - `reference_work_review.md`: reference-driven design work and review.

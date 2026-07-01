@@ -22,7 +22,7 @@ function run(args, cwd) {
   });
 }
 
-test("default concept writes art job paths under gamedesign/projects", (t) => {
+test("default concept writes art job paths under games/<id>/design", (t) => {
   const dir = tempDir(t);
   const result = run([
     "--id", "ui-kit-v1",
@@ -32,8 +32,8 @@ test("default concept writes art job paths under gamedesign/projects", (t) => {
   ], dir);
 
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /would write gamedesign\/projects\/test-game\/art_requests\/ui-kit-v1\.json/);
-  assert.match(result.stdout, /would write gamedesign\/projects\/test-game\/data\/ui-kit-v1-crop_plan\.json/);
+  assert.match(result.stdout, /would write games\/test-game\/design\/art_requests\/ui-kit-v1\.json/);
+  assert.match(result.stdout, /would write games\/test-game\/design\/data\/ui-kit-v1-crop_plan\.json/);
   assert.doesNotMatch(result.stdout, /gamedesign\/test-game\//);
 });
 
@@ -49,5 +49,5 @@ test("explicit project-dir still overrides the concept default", (t) => {
 
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /would write custom\/art-space\/art_requests\/ui-kit-v1\.json/);
-  assert.doesNotMatch(result.stdout, /gamedesign\/projects\/test-game\/art_requests/);
+  assert.doesNotMatch(result.stdout, /games\/test-game\/design\/art_requests/);
 });

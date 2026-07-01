@@ -20,4 +20,4 @@ Keep only routing and current-game summary here:
 - Hard game-specific constraints:
 
 Full GDD, balance, lore, asset lists, and per-game implementation detail should
-live in `gamedesign/projects/<game-id>/`, the game folder, or task files.
+live in `games/<game-id>/design/`, the game folder, or task files.

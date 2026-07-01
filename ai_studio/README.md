@@ -82,7 +82,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/s
 
 Open `http://127.0.0.1:8765/`. The map page reads `tree.json` and
 `architecture_map/validation-report.json`.
-Scanning is validation only: new files appear in the report until a human maps,
+Scanning is validation only: new files or shallow workspace folders appear in the report until a human maps,
 ignores, moves, or deletes them.
 
 ## Browser Surfaces

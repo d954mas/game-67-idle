@@ -15,7 +15,7 @@ keyness mass -- pixels that are a blend of key + foreground spread over a wide
 band -- plus how DEEP that transition runs. Opaque art has a bimodal keyness
 histogram (a tiny partial ring); soft art has a fat middle / deep gradient.
 
-Calibrated 2026-06-18 on mine-cards sources (key from the crop plan):
+Calibrated 2026-06-18 on representative source sheets (key from the crop plan):
   hard/opaque icons/coins  soft_score <= 0.06,  depth90 <= 11px
   soft FX / glow / ring     soft_score >= 0.17,  ring depth90 = 22px
 => route to dual_plate when soft_score >= 0.11 OR depth90 >= 14px (the OR catches

@@ -139,10 +139,10 @@ example of decomposition, not a blank seed.
 
 ### Concrete `src/` layout the template ships
 
-Motivated by the anti-pattern: the current Blockside Heat `clean_seed_main.c` is an
-896-line god-file mixing scene build, input, update, render, dozens of DevAPI
-endpoints, the HUD/UI tree, material setup and `main`. The template ships these as
-SEPARATE modules from day one so a copied game keeps them apart:
+Motivated by the anti-pattern: an earlier game-local seed grew into a large
+god-file mixing scene build, input, update, render, DevAPI endpoints, the
+HUD/UI tree, material setup, and `main`. The template ships these as SEPARATE
+modules from day one so a copied game keeps them apart:
 
     src/
       main.c                  THE CONDUCTOR: init subsystems -> nt_app_run(frame) ->
@@ -177,14 +177,14 @@ one large file.
 
 ## GAME-ONLY (never in the template)
 
-`gamedesign/projects/<id>/`, per-game `tasks/active|epics|archive`, game-local
+`games/<id>/design/`, per-game `tasks/active|epics|archive`, game-local
 runtime scripts, game-local asset source/storage folders, built runtime packs
 (`*.ntpack`), and game src modules (anything in `src/` beyond the seed files).
 
 ## Build approach
 
-Most of the shell already exists as working code in the current Blockside Heat
-runtime (pack pipeline, text, meshes, state, storage, audio). The template is
-**distilled** from it: genericize names (`blockside_*` to generic), strip game
-logic, keep the shell. The settings screen + GUI art + long-press reset are added
-on top, sourcing the panel/button kit from the shared library (Kenney UI, CC0).
+Most of the shell already exists as proven reusable runtime code: pack pipeline,
+text, meshes, state, storage, and audio. The template is distilled from earlier
+prototype work: genericize game-specific names, strip game logic, keep the
+shell. The settings screen + GUI art + long-press reset are added on top,
+sourcing the panel/button kit from the shared library (Kenney UI, CC0).

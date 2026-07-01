@@ -6,9 +6,9 @@ Boundary: do not edit `external/neotolis-engine`.
 
 ## Purpose
 
-Turn the current Mine Cards game-local CPU-skinned proof into a reusable
-extension path that can render an Ozz-driven skinned character and socketed
-gear in Mine Cards and later games.
+Turn the current game-local CPU-skinned proof into a reusable extension path
+that can render an Ozz-driven skinned character and socketed gear in future
+games.
 
 The existing extension already owns Ozz loading/sampling through:
 
@@ -27,11 +27,11 @@ Current reusable layer:
 - exposes model-space joint matrices;
 - resolves attachment joints by name.
 
-Current Mine Cards proof layer:
+Current game-local proof layer:
 
-- generated mesh header: `src/mine_cards_kaykit_mesh.gen.h`;
-- local CPU skinning/render code: `src/mine_cards_model_proof.c`;
-- hardcoded KayKit symbols and pickaxe attachment offsets.
+- generated mesh header in the game folder;
+- local CPU skinning/render code in the game folder;
+- hardcoded source-asset symbols and tool attachment offsets.
 
 T0007 moves proof behavior into a reusable module while keeping game-specific
 assets/data outside the module.
@@ -41,7 +41,7 @@ assets/data outside the module.
 - No changes to `external/neotolis-engine`.
 - No broad material/GLB scene importer rewrite.
 - No GPU skinning in v001 unless CPU skinning misses the budget.
-- No final Mine Cards custom character art.
+- No final project-specific custom character art.
 - No equipment mechanics or inventory UI.
 
 ## Coordinate Policy
@@ -50,8 +50,8 @@ The game wants Y-up content.
 
 The renderer contract should preserve source-space convention in the mesh asset
 metadata, then require an explicit `asset_to_world` or `asset_to_render` matrix
-at draw time. Do not hide the current KayKit Y-up to engine Z-up conversion as a
-Mine Cards-only hardcode in the reusable module.
+at draw time. Do not hide source-asset coordinate conversion as a game-only
+hardcode in the reusable module.
 
 Minimum v001 metadata:
 
@@ -232,7 +232,7 @@ Do not add GPU skinning speculatively before the CPU path is measured.
 ## Asset Conversion Boundary
 
 For v001 the module can receive generated C arrays. The generator must be
-project-specific or tool-specific, not Mine Cards symbols embedded in the
+project-specific or tool-specific, not game-specific symbols embedded in the
 reusable runtime layer.
 
 Allowed:
@@ -243,7 +243,7 @@ Allowed:
 
 Not allowed:
 
-- `mine_cards_*` symbols inside `extensions/skeletal_animation/src/`;
+- game-specific symbols inside `extensions/skeletal_animation/src/`;
 - direct source GLB parsing in the frame loop;
 - hidden absolute paths to local downloads.
 
@@ -255,8 +255,8 @@ Minimum proof for T0007:
 - Ozz clip samples successfully;
 - skinned mesh instance updates from `nt_skeletal_anim_copy_model_matrices`;
 - pickaxe/tool socket resolves by name;
-- native screenshot or capture shows KayKit/Quaternius-style skinned character
-  plus attached tool in `game_seed` or Mining screen;
+- native screenshot or capture shows a skinned character plus attached tool in
+  the template or target game screen;
 - `external/neotolis-engine` has no diff.
 
 Suggested commands:

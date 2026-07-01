@@ -22,11 +22,11 @@ The gallery header lets the user choose which source to display:
 - All Assets: the shared manifest-backed asset library from
   `ai_studio/assets/storage/sources/libraries.json`.
 - Templates: registered template asset roots from
-  `ai_studio/assets/storage/sources/templates.json`.
+  `templates/templates.json`.
 - Current Game: the active game assets folder from `GAME_PROJECT.md`, when one
   is set.
 - Registered Games: game-local asset folders from
-  `ai_studio/assets/storage/sources/games.json`.
+  `games/games.json`.
 
 The generated static-gallery command remains for review exports and standalone
 sharing, but it is not the normal browser entry.
@@ -84,10 +84,9 @@ node ai_studio/assets/viewer/pull.mjs --ids <asset-ids> --to <game>/assets
   into the Studio Shell server.
 - `../storage/sources/libraries.json` is the explicit list of
   registered global library roots.
-- `../storage/sources/templates.json` is the explicit list of
-  registered template asset roots.
-- `../storage/sources/games.json` is the explicit list of
-  registered game asset roots.
+- `templates/templates.json` is the explicit list of registered template asset
+  roots.
+- `games/games.json` is the explicit list of registered game asset roots.
 - `../storage/sources/libraries.mjs`, `templates.mjs`, and `games.mjs` read
   and update those registries.
 - `viewer.js` and `viewer.css` are surface implementation details.

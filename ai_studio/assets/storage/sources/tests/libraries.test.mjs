@@ -2,6 +2,7 @@
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import {
   defaultLibrarySourceRoot,
@@ -15,6 +16,10 @@ function tempRoot() {
   return mkdtempSync(join(tmpdir(), "ai-studio-libraries-registry-"));
 }
 
+function repoRoot() {
+  return fileURLToPath(new URL("../../../../../", import.meta.url));
+}
+
 test("listRegisteredLibraries starts empty until a library is registered", (t) => {
   const root = tempRoot();
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -23,6 +28,15 @@ test("listRegisteredLibraries starts empty until a library is registered", (t) =
 
   assert.deepEqual(libraries, []);
   assert.equal(defaultLibrarySourceRoot(root), "");
+});
+
+test("repository library registry keeps the active global library source", () => {
+  const globalLibrary = listRegisteredLibraries(repoRoot()).find((library) => library.id === "global-library");
+
+  assert.ok(globalLibrary, "global-library must stay registered for Asset Viewer");
+  assert.equal(globalLibrary.title, "All Assets");
+  assert.equal(globalLibrary.status, "active");
+  assert.match(globalLibrary.assets, /ai_pipeline_assets$/);
 });
 
 test("registerLibraryAssetSource creates and lists a library asset source", (t) => {

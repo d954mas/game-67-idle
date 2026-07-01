@@ -31,6 +31,10 @@ if (dst === root) {
 const COPY = [
   ".codex/skills",
   "ai_studio/core_harness/profiling",
+  "games/README.md",
+  "games/games.json",
+  "templates/README.md",
+  "templates/templates.json",
   "gamedesign/README.md",
   "gamedesign/knowledge",
   "gamedesign/sources",
@@ -49,13 +53,15 @@ const AGENTS_TEMPLATE = `# AGENTS.md
   concept before creating GDD, assets, gameplay tasks, or implementation plans.
 - Engine/runtime location is not selected yet. Once chosen, record its path and
   editing policy here.
-- Game design lives in \`gamedesign/\`; game code lives in \`src/\`.
+- Templates live in \`templates/\`; game folders live in \`games/\`.
+- Game-specific design, code, assets, evidence, and project data live under
+  \`games/<game-id>/\`.
 - Universal reusable design knowledge lives in \`gamedesign/knowledge/\`.
 - Reusable project skills live in \`.codex/skills/\`; keep them generic enough to reuse in other games.
 - Work items live in \`tasks/\`; follow \`ai_studio/taskboard/README.md\`.
 - Current game routing lives in \`GAME_PROJECT.md\`.
 - Temporary generation, scripts, rejected images, screenshots, and audit logs go in \`tmp/\` or another ignored temp folder.
-- Final durable docs/data/assets go in their project folder.
+- Final durable docs/data/assets go in their game folder.
 - The shared human/agent process, including AI session profiling, lives in
   \`ai_studio/README.md\`; raw telemetry stays in \`tmp/session_profiles/\`.
 - AI workflow history, retrospectives, and the external observability decision
@@ -109,7 +115,7 @@ Keep only routing and current-game summary here:
 - Hard game-specific constraints:
 
 Full GDD, balance, lore, asset lists, and per-game implementation detail should
-live in \`gamedesign/projects/<game-id>/\`, the game folder, or task files.
+live in \`games/<game-id>/\` or task files.
 `;
 
 mkdirSync(dst, { recursive: true });

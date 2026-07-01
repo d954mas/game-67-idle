@@ -6,7 +6,7 @@ plan, implementation handoff, or source-of-truth design package.
 ## Non-Negotiables
 
 - Start with a Definition of Done before creating files.
-- Project-specific game design belongs under `gamedesign/projects/<game-id>/`.
+- Project-specific game design belongs under `games/<game-id>/design/`.
 - Reusable design knowledge belongs in `gamedesign/knowledge/`; raw reusable
   source notes belong in `gamedesign/sources/`.
 - Separate reference, fake shot, prepared asset, runtime proof, and
@@ -32,7 +32,7 @@ adding more documents.
 
 ## Minimum Artifacts
 
-Inside `gamedesign/projects/<game-id>/`, prefer:
+Inside `games/<game-id>/design/`, prefer:
 
 - `concept.md`;
 - `gdd.md`;
@@ -48,7 +48,7 @@ Add more files only when they remove implementation ambiguity.
 
 ## Start Checklist
 
-1. Locate or create the active project wiki. For a new prototype, use
+1. Locate or create the active game design folder. For a new prototype, use
    `node ai_studio/game_project/new_prototype.mjs --game-id <id> --title <name> --brief <one sentence>`.
 2. Check `git status` and confirm temporary/generated folders are ignored.
 3. Write the Definition of Done: what must exist, what is out of scope, and what
@@ -65,7 +65,7 @@ For resumed or long sessions, rebuild from files:
 1. `AGENTS.md` already-loaded root rules.
 2. Active task if durable tracking exists.
 3. `GAME_PROJECT.md` only for game-specific work.
-4. Project design files in `gamedesign/projects/<game-id>/`.
+4. Game design files in `games/<game-id>/design/`.
 5. Temporary session state only after checking durable files.
 
 Restate the current gate and Definition of Done before editing.

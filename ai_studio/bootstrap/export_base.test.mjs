@@ -46,6 +46,10 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.equal(existsSync(join(target, "ai_studio", "taskboard", "cli.mjs")), true);
     assert.equal(existsSync(join(target, "gamedesign", "README.md")), true);
     assert.equal(existsSync(join(target, "gamedesign", "sources", "README.md")), true);
+    assert.equal(existsSync(join(target, "games", "README.md")), true);
+    assert.equal(existsSync(join(target, "games", "games.json")), true);
+    assert.equal(existsSync(join(target, "templates", "README.md")), true);
+    assert.equal(existsSync(join(target, "templates", "templates.json")), true);
     assert.equal(existsSync(join(target, "ai_studio", "core_harness", "workflow", "README.md")), true);
     assert.equal(
       existsSync(join(target, "ai_studio", "core_harness", "workflow", "orchestration", "README.md")),
@@ -96,6 +100,9 @@ test("portable export includes task guides and generated skill pointers", () => 
     assert.match(studio, /ai_studio\/quality\/README\.md/);
     assert.match(studio, /ai_studio\/core_harness\/profiling\/README\.md/);
     assert.match(studio, /ai_studio\/studio_shell\/start_site_windows\.ps1/);
+    const gameProject = readFileSync(join(target, "GAME_PROJECT.md"), "utf8");
+    assert.match(gameProject, /games\/<game-id>\//);
+    assert.equal(gameProject.includes(["gamedesign", "projects"].join("/")), false);
 
     const docRefs = runInTarget(target, ["ai_studio/core_harness/validation/doc_reference_check.mjs"]);
     assert.equal(docRefs.status, 0, docRefs.stderr);

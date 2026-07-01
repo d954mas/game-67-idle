@@ -1,16 +1,16 @@
 {
   "schema": 1,
-  "description": "Declarative source for the ai_studio refactor tree. The architecture map page is only a renderer; serve ai_studio/architecture_map/index.html and validate this JSON with ai_studio/architecture_map/validate_map.mjs.",
+  "description": "Declarative source for the AI Studio workspace tree. The architecture map page is only a renderer; serve ai_studio/architecture_map/index.html and validate this JSON with ai_studio/architecture_map/validate_map.mjs.",
   "root": {
     "id": "studio",
-    "title": "ai_studio/",
-    "subtitle": "refactor root",
+    "title": "AI Studio Workspace",
+    "subtitle": "repo roots",
     "kind": "root",
     "color": "#172033",
-    "description": "Clean AI Studio architecture tree. Modules appear here after review, owner assignment, and validation coverage.",
+    "description": "Clean AI Studio architecture tree. Reviewed modules live under ai_studio/, while game and template workspace folders are shown as shallow roots.",
     "tags": [
       "reviewed-only",
-      "no-bulk-move",
+      "workspace-roots",
       "core-first"
     ],
     "children": [
@@ -25,6 +25,63 @@
           "source",
           "router",
           "migration"
+        ]
+      },
+      {
+        "id": "workspace-folders",
+        "title": "Workspace Folders",
+        "subtitle": "games and templates",
+        "kind": "group",
+        "color": "#64748b",
+        "description": "Repository workspace roots for reusable templates and independent game folders. The map shows folder ownership boundaries here, not files inside games or templates.",
+        "role": "game and template workspace roots",
+        "tags": [
+          "workspace",
+          "templates",
+          "games"
+        ],
+        "children": [
+          {
+            "id": "workspace:templates",
+            "kind": "dir",
+            "path": "templates",
+            "coverage": "self",
+            "title": "templates/",
+            "description": "Container for reusable game template folders. Immediate child folders are explicit map nodes; files inside each template remain template-owned implementation detail.",
+            "role": "template root folder",
+            "tags": [
+              "templates",
+              "workspace"
+            ],
+            "children": [
+              {
+                "id": "workspace:template:template",
+                "kind": "dir",
+                "path": "templates/template",
+                "title": "template/",
+                "description": "Default reusable game template folder. The map stops at this folder; source files inside are template-owned implementation detail.",
+                "role": "default game template folder",
+                "tags": [
+                  "template",
+                  "game-template"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "workspace:games",
+            "kind": "dir",
+            "path": "games",
+            "coverage": "self",
+            "title": "games/",
+            "description": "Container for independent game folders. Immediate child folders are explicit map nodes; files inside each game remain game-owned implementation detail.",
+            "role": "games root folder",
+            "tags": [
+              "games",
+              "workspace"
+            ],
+            "children": []
+          }
         ]
       },
       {
@@ -354,7 +411,7 @@
             "kind": "tool",
             "path": "ai_studio/game_project/new_prototype.mjs",
             "title": "new_prototype.mjs",
-            "description": "Creates the first project wiki, GAME_PROJECT.md routing, taskboard epic/task, and startup gate context for a new prototype.",
+            "description": "Creates the first game design folder, GAME_PROJECT.md routing, taskboard epic/task, and startup gate context for a new prototype.",
             "role": "new prototype kickoff command",
             "tags": [
               "game-project",
@@ -2126,9 +2183,9 @@
                   {
                     "id": "assets:templates-registry-data",
                     "kind": "config",
-                    "path": "ai_studio/assets/storage/sources/templates.json",
+                    "path": "templates/templates.json",
                     "title": "templates.json",
-                    "description": "Explicit registry of template asset folders shown by Asset Viewer.",
+                    "description": "Explicit registry of template asset folders shown by Asset Viewer. Lives under templates/ so template workspace data stays with templates.",
                     "role": "registered template asset source data",
                     "tags": [
                       "assets",
@@ -2163,9 +2220,9 @@
                   {
                     "id": "assets:games-registry-data",
                     "kind": "config",
-                    "path": "ai_studio/assets/storage/sources/games.json",
+                    "path": "games/games.json",
                     "title": "games.json",
-                    "description": "Explicit registry of game-local asset folders shown by Asset Viewer. Updated by ai_studio/bootstrap/new_game.mjs.",
+                    "description": "Explicit registry of game-local asset folders shown by Asset Viewer. Lives under games/ and is updated by ai_studio/bootstrap/new_game.mjs.",
                     "role": "registered game asset source data",
                     "tags": [
                       "assets",
@@ -3383,7 +3440,7 @@
         "subtitle": "tree renderer and map validation",
         "kind": "module",
         "color": "#64748b",
-        "description": "Self-map for this AI Studio refactor tree: live HTML renderer, declarative tree data, and validation report for unmapped or stale files.",
+        "description": "Self-map for this AI Studio workspace tree: live HTML renderer, declarative tree data, and validation report for unmapped or stale paths.",
         "tags": [
           "map",
           "migration",
@@ -3396,8 +3453,8 @@
             "kind": "doc",
             "path": "ai_studio/tree.json",
             "title": "tree.json",
-            "description": "Declarative source for the working ai_studio tree: hierarchy, node ids, manual labels, roles, tags, and explicit child order.",
-            "role": "declarative source of the ai_studio tree",
+            "description": "Declarative source for the working AI Studio workspace tree: hierarchy, node ids, manual labels, roles, tags, explicit child order, and shallow workspace roots.",
+            "role": "declarative source of the AI Studio workspace tree",
             "tags": [
               "tree-source",
               "edit-this"
@@ -3433,7 +3490,7 @@
             "kind": "validation",
             "path": "ai_studio/architecture_map/validate_map.mjs",
             "title": "validate_map.mjs",
-            "description": "Scans AI Studio source locations and writes validation-report.json with unmapped, missing, duplicate, and underspecified files.",
+            "description": "Scans AI Studio source locations and shallow workspace folder roots, then writes validation-report.json with unmapped, missing, duplicate, and underspecified paths.",
             "role": "architecture map scanner and report writer",
             "tags": [
               "validator",
@@ -3445,7 +3502,7 @@
             "kind": "validation",
             "path": "ai_studio/architecture_map/validation-report.json",
             "title": "validation-report.json",
-            "description": "Generated report displayed by the map page so newly created or unmapped files are visible during refactoring.",
+            "description": "Generated report displayed by the map page so newly created or unmapped paths are visible during refactoring.",
             "role": "generated validation report",
             "tags": [
               "generated",
@@ -3457,7 +3514,7 @@
             "kind": "test",
             "path": "ai_studio/architecture_map/tests/validate_map.test.mjs",
             "title": "validate_map.test.mjs",
-            "description": "Regression tests for missing, duplicate, unmapped, and mapped-directory validation behavior.",
+            "description": "Regression tests for missing, duplicate, unmapped, mapped-directory, and shallow workspace-folder validation behavior.",
             "role": "architecture map validator tests",
             "tags": [
               "test"
@@ -3663,7 +3720,7 @@
                 "kind": "doc",
                 "path": "ai_studio/game_design/knowledge/source_routing.md",
                 "title": "source_routing.md",
-                "description": "Routing rules for reusable source notes, reusable knowledge, project wiki material, tasks, and temporary scratch data.",
+                "description": "Routing rules for reusable source notes, reusable knowledge, game design folders, tasks, and temporary scratch data.",
                 "role": "design source routing rules",
                 "tags": [
                   "sources",

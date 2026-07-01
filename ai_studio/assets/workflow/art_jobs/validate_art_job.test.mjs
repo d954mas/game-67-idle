@@ -1,4 +1,4 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -23,17 +23,17 @@ function run(args, cwd) {
 }
 
 function writeValidDraft(dir) {
-  mkdirSync(join(dir, "gamedesign/projects/test/art_requests"), { recursive: true });
-  mkdirSync(join(dir, "gamedesign/projects/test/data"), { recursive: true });
-  const job = "gamedesign/projects/test/art_requests/ui-kit.json";
-  const crop = "gamedesign/projects/test/data/ui-kit-crop.json";
-  const prepared = "gamedesign/projects/test/data/ui-kit-assets.json";
+  mkdirSync(join(dir, "games/test/design/art_requests"), { recursive: true });
+  mkdirSync(join(dir, "games/test/design/data"), { recursive: true });
+  const job = "games/test/design/art_requests/ui-kit.json";
+  const crop = "games/test/design/data/ui-kit-crop.json";
+  const prepared = "games/test/design/data/ui-kit-assets.json";
   writeFileSync(join(dir, job), `${JSON.stringify({
     schema: "game.art_job",
     version: 1,
     id: "ui-kit",
     asset_family: "prepared-ui-kit",
-    visual_targets: ["gamedesign/projects/test/art/design_bible.md"],
+    visual_targets: ["games/test/design/art/design_bible.md"],
     reusable_kinds: ["slice9", "icon", "sprite"],
     required_asset_groups: [
       {
@@ -86,7 +86,7 @@ function writeValidDraft(dir) {
       generation_records: [],
       crop_plan: crop,
       prepared_assets: prepared,
-      prepared_dir: "gamedesign/projects/test/art/prepared/ui-kit",
+      prepared_dir: "games/test/design/art/prepared/ui-kit",
     },
     game_composition: { buttons: "slice9 plus prepared text" },
   }, null, 2)}\n`, "utf8");
@@ -94,14 +94,14 @@ function writeValidDraft(dir) {
     schema: "game.asset_crop_plan",
     version: 1,
     art_job: job,
-    prepared_dir: "gamedesign/projects/test/art/prepared/ui-kit",
+    prepared_dir: "games/test/design/art/prepared/ui-kit",
     sources: [],
   }, null, 2)}\n`, "utf8");
   writeFileSync(join(dir, prepared), `${JSON.stringify({
     schema: "game.prepared_asset_manifest",
     version: 1,
     art_job: job,
-    prepared_dir: "gamedesign/projects/test/art/prepared/ui-kit",
+    prepared_dir: "games/test/design/art/prepared/ui-kit",
     assets: [],
   }, null, 2)}\n`, "utf8");
   return job;
@@ -109,53 +109,53 @@ function writeValidDraft(dir) {
 
 function writeStrictValidJob(dir, recordOverrides = {}) {
   const job = writeValidDraft(dir);
-  mkdirSync(join(dir, "gamedesign/projects/test/art"), { recursive: true });
-  mkdirSync(join(dir, "gamedesign/projects/test/art/workflows"), { recursive: true });
-  mkdirSync(join(dir, "gamedesign/projects/test/art/generation_records"), { recursive: true });
-  mkdirSync(join(dir, "gamedesign/projects/test/art/prepared/ui-kit"), { recursive: true });
-  writeFileSync(join(dir, "gamedesign/projects/test/art/ui-source.png"), "fake-png", "utf8");
-  writeFileSync(join(dir, "gamedesign/projects/test/art/workflows/ui-source.json"), "{}", "utf8");
-  writeFileSync(join(dir, "gamedesign/projects/test/art/prepared/ui-kit/panel.png"), "fake-png", "utf8");
-  writeFileSync(join(dir, "gamedesign/projects/test/art/prepared/ui-kit/icon.png"), "fake-png", "utf8");
-  writeFileSync(join(dir, "gamedesign/projects/test/art/prepared/ui-kit/enemy.png"), "fake-png", "utf8");
+  mkdirSync(join(dir, "games/test/design/art"), { recursive: true });
+  mkdirSync(join(dir, "games/test/design/art/workflows"), { recursive: true });
+  mkdirSync(join(dir, "games/test/design/art/generation_records"), { recursive: true });
+  mkdirSync(join(dir, "games/test/design/art/prepared/ui-kit"), { recursive: true });
+  writeFileSync(join(dir, "games/test/design/art/ui-source.png"), "fake-png", "utf8");
+  writeFileSync(join(dir, "games/test/design/art/workflows/ui-source.json"), "{}", "utf8");
+  writeFileSync(join(dir, "games/test/design/art/prepared/ui-kit/panel.png"), "fake-png", "utf8");
+  writeFileSync(join(dir, "games/test/design/art/prepared/ui-kit/icon.png"), "fake-png", "utf8");
+  writeFileSync(join(dir, "games/test/design/art/prepared/ui-kit/enemy.png"), "fake-png", "utf8");
 
-  const generationRecord = "gamedesign/projects/test/art/generation_records/ui-source.json";
+  const generationRecord = "games/test/design/art/generation_records/ui-source.json";
   writeFileSync(join(dir, generationRecord), `${JSON.stringify({
     schema: "game.art_generation_record",
     version: 1,
     id: "ui-source",
     provider: "test-generator",
     model_or_workflow: "test-workflow",
-    workflow_path: "gamedesign/projects/test/art/workflows/ui-source.json",
+    workflow_path: "games/test/design/art/workflows/ui-source.json",
     seed: 1234,
     prompt: "blank fantasy UI source family",
     negative_prompt: "text, watermark",
     source_family_role: "blank UI kit sheet",
-    accepted_source_image: "gamedesign/projects/test/art/ui-source.png",
+    accepted_source_image: "games/test/design/art/ui-source.png",
     final_art_source: "generated",
     ...recordOverrides,
   }, null, 2)}\n`, "utf8");
 
   const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  jobData.expected_outputs.source_art = ["gamedesign/projects/test/art/ui-source.png"];
+  jobData.expected_outputs.source_art = ["games/test/design/art/ui-source.png"];
   jobData.expected_outputs.generation_records = [generationRecord];
   writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
 
-  const crop = "gamedesign/projects/test/data/ui-kit-crop.json";
+  const crop = "games/test/design/data/ui-kit-crop.json";
   writeFileSync(join(dir, crop), `${JSON.stringify({
     schema: "game.asset_crop_plan",
     version: 1,
     art_job: job,
-    prepared_dir: "gamedesign/projects/test/art/prepared/ui-kit",
+    prepared_dir: "games/test/design/art/prepared/ui-kit",
     sources: [{
       id: "ui-source",
-      path: "gamedesign/projects/test/art/ui-source.png",
+      path: "games/test/design/art/ui-source.png",
       crops: [
         {
           id: "panel",
           kind: "slice9",
           rect: [0, 0, 96, 64],
-          output: "gamedesign/projects/test/art/prepared/ui-kit/panel.png",
+          output: "games/test/design/art/prepared/ui-kit/panel.png",
           slice9: { left: 12, top: 12, right: 12, bottom: 12 },
           content: { x: 18, y: 18, w: 60, h: 32 },
           target_preview_sizes: [[160, 96], [240, 160]],
@@ -164,7 +164,7 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
           id: "resource_icon",
           kind: "icon",
           rect: [96, 0, 64, 64],
-          output: "gamedesign/projects/test/art/prepared/ui-kit/icon.png",
+          output: "games/test/design/art/prepared/ui-kit/icon.png",
           semantic_role: "resource",
           size_class: "64px source",
           trim_padding: 6,
@@ -174,24 +174,24 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
           id: "enemy",
           kind: "sprite",
           rect: [160, 0, 64, 64],
-          output: "gamedesign/projects/test/art/prepared/ui-kit/enemy.png",
+          output: "games/test/design/art/prepared/ui-kit/enemy.png",
           pivot: [32, 56],
         },
       ],
     }],
   }, null, 2)}\n`, "utf8");
 
-  const prepared = "gamedesign/projects/test/data/ui-kit-assets.json";
+  const prepared = "games/test/design/data/ui-kit-assets.json";
   writeFileSync(join(dir, prepared), `${JSON.stringify({
     schema: "game.prepared_asset_manifest",
     version: 1,
     art_job: job,
-    prepared_dir: "gamedesign/projects/test/art/prepared/ui-kit",
+    prepared_dir: "games/test/design/art/prepared/ui-kit",
     assets: [
       {
         id: "panel",
         kind: "slice9",
-        path: "gamedesign/projects/test/art/prepared/ui-kit/panel.png",
+        path: "games/test/design/art/prepared/ui-kit/panel.png",
         slice9: { left: 12, top: 12, right: 12, bottom: 12 },
         content: { x: 18, y: 18, w: 60, h: 32 },
         target_preview_sizes: [[160, 96], [240, 160]],
@@ -199,13 +199,13 @@ function writeStrictValidJob(dir, recordOverrides = {}) {
       {
         id: "resource_icon",
         kind: "icon",
-        path: "gamedesign/projects/test/art/prepared/ui-kit/icon.png",
+        path: "games/test/design/art/prepared/ui-kit/icon.png",
         semantic_role: "resource",
       },
       {
         id: "enemy",
         kind: "sprite",
-        path: "gamedesign/projects/test/art/prepared/ui-kit/enemy.png",
+        path: "games/test/design/art/prepared/ui-kit/enemy.png",
         pivot: [32, 56],
       },
     ],
@@ -249,8 +249,8 @@ test("strict mode rejects missing source sheets and crops", (t) => {
 
 test("reports missing reusable UI contract pieces", (t) => {
   const dir = tempDir(t);
-  mkdirSync(join(dir, "gamedesign/projects/test/art_requests"), { recursive: true });
-  const job = "gamedesign/projects/test/art_requests/bad.json";
+  mkdirSync(join(dir, "games/test/design/art_requests"), { recursive: true });
+  const job = "games/test/design/art_requests/bad.json";
   writeFileSync(join(dir, job), `${JSON.stringify({
     schema: "game.art_job",
     id: "bad",
@@ -267,51 +267,51 @@ test("reports missing reusable UI contract pieces", (t) => {
 test("strict mode validates slice9 content and prepared metadata", (t) => {
   const dir = tempDir(t);
   const job = writeValidDraft(dir);
-  mkdirSync(join(dir, "gamedesign/projects/test/art"), { recursive: true });
-  mkdirSync(join(dir, "gamedesign/projects/test/art/workflows"), { recursive: true });
-  mkdirSync(join(dir, "gamedesign/projects/test/art/generation_records"), { recursive: true });
-  mkdirSync(join(dir, "gamedesign/projects/test/art/prepared/ui-kit"), { recursive: true });
-  writeFileSync(join(dir, "gamedesign/projects/test/art/ui-source.png"), "fake-png", "utf8");
-  writeFileSync(join(dir, "gamedesign/projects/test/art/workflows/ui-source.json"), "{}", "utf8");
-  writeFileSync(join(dir, "gamedesign/projects/test/art/prepared/ui-kit/panel.png"), "fake-png", "utf8");
-  writeFileSync(join(dir, "gamedesign/projects/test/art/prepared/ui-kit/icon.png"), "fake-png", "utf8");
-  writeFileSync(join(dir, "gamedesign/projects/test/art/prepared/ui-kit/enemy.png"), "fake-png", "utf8");
+  mkdirSync(join(dir, "games/test/design/art"), { recursive: true });
+  mkdirSync(join(dir, "games/test/design/art/workflows"), { recursive: true });
+  mkdirSync(join(dir, "games/test/design/art/generation_records"), { recursive: true });
+  mkdirSync(join(dir, "games/test/design/art/prepared/ui-kit"), { recursive: true });
+  writeFileSync(join(dir, "games/test/design/art/ui-source.png"), "fake-png", "utf8");
+  writeFileSync(join(dir, "games/test/design/art/workflows/ui-source.json"), "{}", "utf8");
+  writeFileSync(join(dir, "games/test/design/art/prepared/ui-kit/panel.png"), "fake-png", "utf8");
+  writeFileSync(join(dir, "games/test/design/art/prepared/ui-kit/icon.png"), "fake-png", "utf8");
+  writeFileSync(join(dir, "games/test/design/art/prepared/ui-kit/enemy.png"), "fake-png", "utf8");
 
   const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  jobData.expected_outputs.source_art = ["gamedesign/projects/test/art/ui-source.png"];
-  const generationRecord = "gamedesign/projects/test/art/generation_records/ui-source.json";
+  jobData.expected_outputs.source_art = ["games/test/design/art/ui-source.png"];
+  const generationRecord = "games/test/design/art/generation_records/ui-source.json";
   writeFileSync(join(dir, generationRecord), `${JSON.stringify({
     schema: "game.art_generation_record",
     version: 1,
     id: "ui-source",
     provider: "test-generator",
     model_or_workflow: "test-workflow",
-    workflow_path: "gamedesign/projects/test/art/workflows/ui-source.json",
+    workflow_path: "games/test/design/art/workflows/ui-source.json",
     seed: 1234,
     prompt: "blank fantasy UI source family",
     negative_prompt: "text, watermark",
     source_family_role: "blank UI kit sheet",
-    accepted_source_image: "gamedesign/projects/test/art/ui-source.png",
+    accepted_source_image: "games/test/design/art/ui-source.png",
     final_art_source: "generated",
   }, null, 2)}\n`, "utf8");
   jobData.expected_outputs.generation_records = [generationRecord];
   writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
 
-  const crop = "gamedesign/projects/test/data/ui-kit-crop.json";
+  const crop = "games/test/design/data/ui-kit-crop.json";
   writeFileSync(join(dir, crop), `${JSON.stringify({
     schema: "game.asset_crop_plan",
     version: 1,
     art_job: job,
-    prepared_dir: "gamedesign/projects/test/art/prepared/ui-kit",
+    prepared_dir: "games/test/design/art/prepared/ui-kit",
     sources: [{
       id: "ui-source",
-      path: "gamedesign/projects/test/art/ui-source.png",
+      path: "games/test/design/art/ui-source.png",
       crops: [
         {
           id: "panel",
           kind: "slice9",
           rect: [0, 0, 96, 64],
-          output: "gamedesign/projects/test/art/prepared/ui-kit/panel.png",
+          output: "games/test/design/art/prepared/ui-kit/panel.png",
           slice9: { left: 12, top: 12, right: 12, bottom: 12 },
           content: { x: 18, y: 18, w: 60, h: 32 },
           target_preview_sizes: [[160, 96], [240, 160]],
@@ -320,7 +320,7 @@ test("strict mode validates slice9 content and prepared metadata", (t) => {
           id: "resource_icon",
           kind: "icon",
           rect: [96, 0, 64, 64],
-          output: "gamedesign/projects/test/art/prepared/ui-kit/icon.png",
+          output: "games/test/design/art/prepared/ui-kit/icon.png",
           semantic_role: "resource",
           size_class: "64px source",
           trim_padding: 6,
@@ -330,24 +330,24 @@ test("strict mode validates slice9 content and prepared metadata", (t) => {
           id: "enemy",
           kind: "sprite",
           rect: [160, 0, 64, 64],
-          output: "gamedesign/projects/test/art/prepared/ui-kit/enemy.png",
+          output: "games/test/design/art/prepared/ui-kit/enemy.png",
           pivot: [32, 56],
         },
       ],
     }],
   }, null, 2)}\n`, "utf8");
 
-  const prepared = "gamedesign/projects/test/data/ui-kit-assets.json";
+  const prepared = "games/test/design/data/ui-kit-assets.json";
   writeFileSync(join(dir, prepared), `${JSON.stringify({
     schema: "game.prepared_asset_manifest",
     version: 1,
     art_job: job,
-    prepared_dir: "gamedesign/projects/test/art/prepared/ui-kit",
+    prepared_dir: "games/test/design/art/prepared/ui-kit",
     assets: [
       {
         id: "panel",
         kind: "slice9",
-        path: "gamedesign/projects/test/art/prepared/ui-kit/panel.png",
+        path: "games/test/design/art/prepared/ui-kit/panel.png",
         slice9: { left: 12, top: 12, right: 12, bottom: 12 },
         content: { x: 18, y: 18, w: 60, h: 32 },
         target_preview_sizes: [[160, 96], [240, 160]],
@@ -355,13 +355,13 @@ test("strict mode validates slice9 content and prepared metadata", (t) => {
       {
         id: "resource_icon",
         kind: "icon",
-        path: "gamedesign/projects/test/art/prepared/ui-kit/icon.png",
+        path: "games/test/design/art/prepared/ui-kit/icon.png",
         semantic_role: "resource",
       },
       {
         id: "enemy",
         kind: "sprite",
-        path: "gamedesign/projects/test/art/prepared/ui-kit/enemy.png",
+        path: "games/test/design/art/prepared/ui-kit/enemy.png",
         pivot: [32, 56],
       },
     ],
@@ -375,7 +375,7 @@ test("strict mode validates slice9 content and prepared metadata", (t) => {
 test("strict mode rejects prepared assets manifest missing a crop asset", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir);
-  const prepared = "gamedesign/projects/test/data/ui-kit-assets.json";
+  const prepared = "games/test/design/data/ui-kit-assets.json";
   const preparedData = JSON.parse(readFileSync(join(dir, prepared), "utf8"));
   preparedData.assets = preparedData.assets.filter((asset) => asset.id !== "resource_icon");
   writeFileSync(join(dir, prepared), `${JSON.stringify(preparedData, null, 2)}\n`, "utf8");
@@ -388,24 +388,24 @@ test("strict mode rejects prepared assets manifest missing a crop asset", (t) =>
 test("strict mode rejects prepared asset path that differs from crop output", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir);
-  const prepared = "gamedesign/projects/test/data/ui-kit-assets.json";
+  const prepared = "games/test/design/data/ui-kit-assets.json";
   const preparedData = JSON.parse(readFileSync(join(dir, prepared), "utf8"));
   const asset = preparedData.assets.find((item) => item.id === "panel");
-  asset.path = "gamedesign/projects/test/art/prepared/ui-kit/other-panel.png";
-  writeFileSync(join(dir, "gamedesign/projects/test/art/prepared/ui-kit/other-panel.png"), "fake-png", "utf8");
+  asset.path = "games/test/design/art/prepared/ui-kit/other-panel.png";
+  writeFileSync(join(dir, "games/test/design/art/prepared/ui-kit/other-panel.png"), "fake-png", "utf8");
   writeFileSync(join(dir, prepared), `${JSON.stringify(preparedData, null, 2)}\n`, "utf8");
 
   const result = run(["--job", job, "--strict"], dir);
   assert.equal(result.status, 1);
-  assert.match(result.stdout, /prepared asset panel path must match crop output gamedesign\/projects\/test\/art\/prepared\/ui-kit\/panel\.png/);
+  assert.match(result.stdout, /prepared asset panel path must match crop output games\/test\/design\/art\/prepared\/ui-kit\/panel\.png/);
 });
 
 test("strict mode rejects prepared assets manifest pointing at another crop plan", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir);
-  const prepared = "gamedesign/projects/test/data/ui-kit-assets.json";
+  const prepared = "games/test/design/data/ui-kit-assets.json";
   const preparedData = JSON.parse(readFileSync(join(dir, prepared), "utf8"));
-  preparedData.crop_plan = "gamedesign/projects/test/data/other-crop.json";
+  preparedData.crop_plan = "games/test/design/data/other-crop.json";
   writeFileSync(join(dir, prepared), `${JSON.stringify(preparedData, null, 2)}\n`, "utf8");
 
   const result = run(["--job", job, "--strict"], dir);
@@ -416,7 +416,7 @@ test("strict mode rejects prepared assets manifest pointing at another crop plan
 test("strict mode validates generation record prompt packet path when present", (t) => {
   const dir = tempDir(t);
   const { job } = writeStrictValidJob(dir, {
-    prompt_packet: "gamedesign/projects/test/art/prompts/missing-prompt.json",
+    prompt_packet: "games/test/design/art/prompts/missing-prompt.json",
   });
 
   const result = run(["--job", job, "--strict"], dir);
@@ -426,7 +426,7 @@ test("strict mode validates generation record prompt packet path when present", 
 
 test("strict mode validates generation record prompt packet schema and required fields", (t) => {
   const dir = tempDir(t);
-  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const promptPacket = "games/test/design/art/prompts/ui-source-prompt.json";
   const { job } = writeStrictValidJob(dir, {
     prompt_packet: promptPacket,
   });
@@ -445,7 +445,7 @@ test("strict mode validates generation record prompt packet schema and required 
 
 test("strict mode rejects prompt packet from the wrong source family", (t) => {
   const dir = tempDir(t);
-  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const promptPacket = "games/test/design/art/prompts/ui-source-prompt.json";
   const { job } = writeStrictValidJob(dir, {
     prompt_packet: promptPacket,
   });
@@ -461,7 +461,7 @@ test("strict mode rejects prompt packet from the wrong source family", (t) => {
 
 test("strict mode rejects unsafe chroma prompt packet without diagnostic override", (t) => {
   const dir = tempDir(t);
-  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const promptPacket = "games/test/design/art/prompts/ui-source-prompt.json";
   const { job } = writeStrictValidJob(dir, {
     prompt_packet: promptPacket,
   });
@@ -478,7 +478,7 @@ test("strict mode rejects unsafe chroma prompt packet without diagnostic overrid
 
 test("strict mode accepts explicit diagnostic chroma prompt packet override", (t) => {
   const dir = tempDir(t);
-  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const promptPacket = "games/test/design/art/prompts/ui-source-prompt.json";
   const { job } = writeStrictValidJob(dir, {
     prompt_packet: promptPacket,
   });
@@ -507,7 +507,7 @@ test("strict mode accepts explicit diagnostic chroma prompt packet override", (t
 
 test("strict mode rejects inconsistent prompt packet intake routing", (t) => {
   const dir = tempDir(t);
-  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const promptPacket = "games/test/design/art/prompts/ui-source-prompt.json";
   const { job } = writeStrictValidJob(dir, {
     prompt_packet: promptPacket,
   });
@@ -534,7 +534,7 @@ test("strict mode rejects inconsistent prompt packet intake routing", (t) => {
 
 test("strict mode rejects malformed prompt packet intake blocking reasons", (t) => {
   const dir = tempDir(t);
-  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const promptPacket = "games/test/design/art/prompts/ui-source-prompt.json";
   const { job } = writeStrictValidJob(dir, {
     prompt_packet: promptPacket,
   });
@@ -557,7 +557,7 @@ test("strict mode rejects malformed prompt packet intake blocking reasons", (t) 
 
 test("strict mode rejects malformed prompt packet source sheet layout", (t) => {
   const dir = tempDir(t);
-  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const promptPacket = "games/test/design/art/prompts/ui-source-prompt.json";
   const { job } = writeStrictValidJob(dir, {
     prompt_packet: promptPacket,
   });
@@ -592,7 +592,7 @@ test("strict mode rejects malformed prompt packet source sheet layout", (t) => {
 
 test("strict mode accepts matching generation record prompt packet", (t) => {
   const dir = tempDir(t);
-  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const promptPacket = "games/test/design/art/prompts/ui-source-prompt.json";
   const { job } = writeStrictValidJob(dir, {
     prompt_packet: promptPacket,
   });
@@ -605,7 +605,7 @@ test("strict mode accepts matching generation record prompt packet", (t) => {
 
 test("strict mode accepts canonical source_family with specific source_family_role", (t) => {
   const dir = tempDir(t);
-  const promptPacket = "gamedesign/projects/test/art/prompts/ui-source-prompt.json";
+  const promptPacket = "games/test/design/art/prompts/ui-source-prompt.json";
   const { job } = writeStrictValidJob(dir, {
     source_family: "blank UI kit sheet",
     source_family_role: "accepted large modal and primary button bases",
@@ -686,7 +686,7 @@ test("final-art mode rejects procedural debug records even with exception", (t) 
     prompt: "temporary panel geometry",
     negative_prompt: "final art claim",
     source_family_role: "temporary blank UI kit sheet geometry proof",
-    accepted_source_image: "gamedesign/projects/test/art/prepared/ui-kit/panel.png",
+    accepted_source_image: "games/test/design/art/prepared/ui-kit/panel.png",
     final_art_source: "procedural",
     procedural_exception: "debug scaffold only",
   });
@@ -746,42 +746,42 @@ test("final-art mode rejects empty inline workflow for generated source", (t) =>
 test("strict mode rejects icon crops without trim and component policy", (t) => {
   const dir = tempDir(t);
   const job = writeValidDraft(dir);
-  mkdirSync(join(dir, "gamedesign/projects/test/art"), { recursive: true });
-  mkdirSync(join(dir, "gamedesign/projects/test/art/prepared/ui-kit"), { recursive: true });
-  writeFileSync(join(dir, "gamedesign/projects/test/art/ui-source.png"), "fake-png", "utf8");
-  writeFileSync(join(dir, "gamedesign/projects/test/art/prepared/ui-kit/icon.png"), "fake-png", "utf8");
+  mkdirSync(join(dir, "games/test/design/art"), { recursive: true });
+  mkdirSync(join(dir, "games/test/design/art/prepared/ui-kit"), { recursive: true });
+  writeFileSync(join(dir, "games/test/design/art/ui-source.png"), "fake-png", "utf8");
+  writeFileSync(join(dir, "games/test/design/art/prepared/ui-kit/icon.png"), "fake-png", "utf8");
 
   const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  jobData.expected_outputs.source_art = ["gamedesign/projects/test/art/ui-source.png"];
+  jobData.expected_outputs.source_art = ["games/test/design/art/ui-source.png"];
   writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
 
-  const crop = "gamedesign/projects/test/data/ui-kit-crop.json";
+  const crop = "games/test/design/data/ui-kit-crop.json";
   writeFileSync(join(dir, crop), `${JSON.stringify({
     schema: "game.asset_crop_plan",
     version: 1,
     art_job: job,
-    prepared_dir: "gamedesign/projects/test/art/prepared/ui-kit",
+    prepared_dir: "games/test/design/art/prepared/ui-kit",
     sources: [{
       id: "ui-source",
-      path: "gamedesign/projects/test/art/ui-source.png",
+      path: "games/test/design/art/ui-source.png",
       crops: [{
         id: "resource_icon",
         kind: "icon",
         rect: [96, 0, 64, 64],
-        output: "gamedesign/projects/test/art/prepared/ui-kit/icon.png",
+        output: "games/test/design/art/prepared/ui-kit/icon.png",
         semantic_role: "resource",
         size_class: "64px source",
       }],
     }],
   }, null, 2)}\n`, "utf8");
 
-  const prepared = "gamedesign/projects/test/data/ui-kit-assets.json";
+  const prepared = "games/test/design/data/ui-kit-assets.json";
   writeFileSync(join(dir, prepared), `${JSON.stringify({
     schema: "game.prepared_asset_manifest",
     version: 1,
     art_job: job,
-    prepared_dir: "gamedesign/projects/test/art/prepared/ui-kit",
-    assets: [{ id: "resource_icon", kind: "icon", path: "gamedesign/projects/test/art/prepared/ui-kit/icon.png", semantic_role: "resource" }],
+    prepared_dir: "games/test/design/art/prepared/ui-kit",
+    assets: [{ id: "resource_icon", kind: "icon", path: "games/test/design/art/prepared/ui-kit/icon.png", semantic_role: "resource" }],
   }, null, 2)}\n`, "utf8");
 
   const result = run(["--job", job, "--strict"], dir);
@@ -793,10 +793,10 @@ test("strict mode rejects icon crops without trim and component policy", (t) => 
 test("strict mode rejects missing generation provenance", (t) => {
   const dir = tempDir(t);
   const job = writeValidDraft(dir);
-  mkdirSync(join(dir, "gamedesign/projects/test/art"), { recursive: true });
-  writeFileSync(join(dir, "gamedesign/projects/test/art/ui-source.png"), "fake-png", "utf8");
+  mkdirSync(join(dir, "games/test/design/art"), { recursive: true });
+  writeFileSync(join(dir, "games/test/design/art/ui-source.png"), "fake-png", "utf8");
   const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  jobData.expected_outputs.source_art = ["gamedesign/projects/test/art/ui-source.png"];
+  jobData.expected_outputs.source_art = ["games/test/design/art/ui-source.png"];
   writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
   const result = run(["--job", job, "--strict"], dir);
   assert.equal(result.status, 1);
@@ -806,11 +806,11 @@ test("strict mode rejects missing generation provenance", (t) => {
 test("strict mode rejects missing generation record files", (t) => {
   const dir = tempDir(t);
   const job = writeValidDraft(dir);
-  mkdirSync(join(dir, "gamedesign/projects/test/art"), { recursive: true });
-  writeFileSync(join(dir, "gamedesign/projects/test/art/ui-source.png"), "fake-png", "utf8");
+  mkdirSync(join(dir, "games/test/design/art"), { recursive: true });
+  writeFileSync(join(dir, "games/test/design/art/ui-source.png"), "fake-png", "utf8");
   const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  jobData.expected_outputs.source_art = ["gamedesign/projects/test/art/ui-source.png"];
-  jobData.expected_outputs.generation_records = ["gamedesign/projects/test/art/generation_records/missing.json"];
+  jobData.expected_outputs.source_art = ["games/test/design/art/ui-source.png"];
+  jobData.expected_outputs.generation_records = ["games/test/design/art/generation_records/missing.json"];
   writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");
   const result = run(["--job", job, "--strict"], dir);
   assert.equal(result.status, 1);
@@ -820,21 +820,21 @@ test("strict mode rejects missing generation record files", (t) => {
 test("strict mode rejects procedural final art without exception", (t) => {
   const dir = tempDir(t);
   const job = writeValidDraft(dir);
-  mkdirSync(join(dir, "gamedesign/projects/test/art/workflows"), { recursive: true });
-  writeFileSync(join(dir, "gamedesign/projects/test/art/ui-source.png"), "fake-png", "utf8");
-  writeFileSync(join(dir, "gamedesign/projects/test/art/workflows/ui-source.json"), "{}", "utf8");
+  mkdirSync(join(dir, "games/test/design/art/workflows"), { recursive: true });
+  writeFileSync(join(dir, "games/test/design/art/ui-source.png"), "fake-png", "utf8");
+  writeFileSync(join(dir, "games/test/design/art/workflows/ui-source.json"), "{}", "utf8");
   const jobData = JSON.parse(readFileSync(join(dir, job), "utf8"));
-  jobData.expected_outputs.source_art = ["gamedesign/projects/test/art/ui-source.png"];
+  jobData.expected_outputs.source_art = ["games/test/design/art/ui-source.png"];
   jobData.expected_outputs.generation_records = [{
     id: "ui-source",
     provider: "local-script",
     model_or_workflow: "procedural-debug",
-    workflow_path: "gamedesign/projects/test/art/workflows/ui-source.json",
+    workflow_path: "games/test/design/art/workflows/ui-source.json",
     seed: 0,
     prompt: "draw a panel with code",
     negative_prompt: "none",
     source_family_role: "blank UI kit sheet",
-    accepted_source_image: "gamedesign/projects/test/art/ui-source.png",
+    accepted_source_image: "games/test/design/art/ui-source.png",
     final_art_source: "procedural",
   }];
   writeFileSync(join(dir, job), `${JSON.stringify(jobData, null, 2)}\n`, "utf8");

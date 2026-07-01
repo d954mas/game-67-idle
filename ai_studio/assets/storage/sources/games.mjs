@@ -7,7 +7,7 @@ const defaultRegistry = {
 };
 
 function registryPath(root) {
-  return join(root, "ai_studio", "assets", "storage", "sources", "games.json");
+  return join(root, "games", "games.json");
 }
 
 function normalizeRelPath(value, label = "path") {

@@ -17,8 +17,8 @@ static void usage(void) {
 }
 
 static int parse_args(int argc, char **argv, CliArgs *args) {
-    args->skeleton_path = "gamedesign/projects/mine-cards/visual/skeletal_spike/ozz_runtime/rig_medium_skeleton.ozz";
-    args->animation_path = "gamedesign/projects/mine-cards/visual/skeletal_spike/ozz_runtime/rig_medium_pickaxing.ozz";
+    args->skeleton_path = NULL;
+    args->animation_path = NULL;
     args->trace_csv_path = NULL;
     args->frames = 8;
     args->fps = 4.0F;
@@ -70,6 +70,11 @@ static int parse_args(int argc, char **argv, CliArgs *args) {
             fprintf(stderr, "unknown option: %s\n", argv[i]);
             return 0;
         }
+    }
+    if (args->skeleton_path == NULL || args->animation_path == NULL) {
+        fprintf(stderr, "--skeleton and --animation are required\n");
+        usage();
+        return 0;
     }
     return 1;
 }

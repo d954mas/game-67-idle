@@ -15,8 +15,8 @@ Current migrated modules:
   records, and provenance checks.
 
 Asset sources are explicit. Global libraries are registered in
-`storage/sources/libraries.json`, templates in
-`storage/sources/templates.json`, and games in `storage/sources/games.json`.
+`storage/sources/libraries.json`, templates in `templates/templates.json`, and
+games in `games/games.json`.
 Asset Viewer does not scan the repository to guess source folders.
 
 Asset refresh is explicit. Do not add filesystem watch mode to this module.
