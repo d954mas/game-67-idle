@@ -211,13 +211,14 @@ test("repo tree maps game, template, feature, and knowledge folders without list
   assert.equal(byId.get("workspace:templates")?.coverage, "self");
   assert.equal(byId.get("workspace:template:template")?.path, "templates/template");
   assert.equal(byId.get("workspace:features")?.path, "features");
+  assert.equal(byId.get("workspace:features")?.kind, "group");
   assert.equal(byId.get("workspace:features")?.coverage, "self");
-  assert.equal(byId.get("workspace:features-readme")?.path, "features/README.md");
+  assert.equal(byId.has("workspace:features-readme"), false);
   assert.equal(byId.get("workspace:gamedev-knowledge")?.path, "gamedev_knowledge");
   assert.equal(byId.get("workspace:games")?.path, "games");
   assert.equal(byId.get("workspace:games")?.coverage, "self");
 
   assert.deepEqual(paths.filter((path) => path.startsWith("templates/template/")), []);
-  assert.deepEqual(paths.filter((path) => path.startsWith("features/") && path.split("/").length > 2), []);
+  assert.deepEqual(paths.filter((path) => path === "features/README.md" || (path.startsWith("features/") && path.split("/").length > 2)), []);
   assert.deepEqual(paths.filter((path) => path.startsWith("games/") && path.split("/").length > 2), []);
 });

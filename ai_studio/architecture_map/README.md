@@ -19,13 +19,14 @@ silently added to the map. They appear in validation until a human decides
 whether to map, ignore, assign to the review backlog, or delete them.
 
 `gamedev_knowledge/` is a durable knowledge root and is mapped as one covered
-folder. `templates/`, `features/`, and `games/` are shown as workspace containers. They use
+folder. `templates/` and `games/` are shown as workspace containers; `features/`
+is shown as a feature group. They use
 `coverage: "self"` so the container path is checked without automatically
 covering every child folder. Validation scans immediate child directories under
 those roots; new `templates/<id>`, `features/<id>`, or `games/<id>` folders appear as unmapped
 outside-AI-Studio paths until they are intentionally added to `tree.json`.
-Files inside each game, template, or feature folder are not listed in the architecture
-map.
+Files inside each game, template, or feature folder are not listed in the
+architecture map.
 
 Taskboard data is not architecture map data. `tasks/active/`, `tasks/archive/`,
 and `tasks/epics/` are owned and validated by `ai_studio/taskboard/`; they are

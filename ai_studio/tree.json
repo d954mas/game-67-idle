@@ -85,30 +85,17 @@
           },
           {
             "id": "workspace:features",
-            "kind": "dir",
+            "kind": "group",
             "path": "features",
             "coverage": "self",
             "title": "features/",
-            "description": "Container for reusable feature pack folders. Immediate child folders are explicit map nodes; files inside each feature remain feature-owned implementation detail.",
-            "role": "feature pack root folder",
+            "description": "Feature group for reusable copyable feature-pack folders. Immediate child folders are explicit map nodes; files inside each feature remain feature-owned implementation detail.",
+            "role": "reusable feature group",
             "tags": [
               "features",
               "workspace"
             ],
-            "children": [
-              {
-                "id": "workspace:features-readme",
-                "kind": "doc",
-                "path": "features/README.md",
-                "title": "README.md",
-                "description": "Defines the feature pack copy model, expected folder shape, and rules for copyable game capabilities.",
-                "role": "feature pack contract",
-                "tags": [
-                  "features",
-                  "contract"
-                ]
-              }
-            ]
+            "children": []
           },
           {
             "id": "workspace:games",

@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "generatedAt": "2026-07-01T07:42:23.659Z",
+  "generatedAt": "2026-07-01T07:46:41.408Z",
   "mapPath": "ai_studio/tree.json",
   "scanRoots": [
     "ai_studio",
@@ -22,7 +22,7 @@
     }
   ],
   "summary": {
-    "mappedPaths": 274,
+    "mappedPaths": 273,
     "scannedPaths": 297,
     "missingInRepo": 0,
     "duplicateMappings": 0,
