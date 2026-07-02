@@ -181,7 +181,8 @@ function groupSection(group) {
   wrap.appendChild(head);
 
   if (!collapsed) {
-    for (const element of members) wrap.appendChild(elementRow(element, true));
+    // Front-at-top inside the group too (paint order reversed).
+    for (const element of [...members].reverse()) wrap.appendChild(elementRow(element, true));
   }
   return wrap;
 }
@@ -245,8 +246,10 @@ export function renderLayers() {
     list.appendChild(empty);
     return;
   }
-  for (const element of ungrouped) list.appendChild(elementRow(element, false));
-  for (const group of groupList) list.appendChild(groupSection(group));
+  // Figma orientation (lead 2026-07-02): top row = front of the canvas (painted
+  // last). Arrays store back-to-front paint order, so the panel renders reversed.
+  for (const group of [...groupList].reverse()) list.appendChild(groupSection(group));
+  for (const element of [...ungrouped].reverse()) list.appendChild(elementRow(element, false));
   applyLayersSelection();
 }
 
@@ -314,16 +317,21 @@ function dropPlan(clientX, clientY, dragId) {
   return { kind: "reparent", groupId: null }; // panel header / empty space / gap = top level
 }
 
-// Target sibling index for a reorder plan (standard remove-then-insert math).
+// Target sibling index for a reorder plan. The panel lists FRONT-first (Figma),
+// i.e. the reverse of the array's back-to-front paint order — so run the standard
+// remove-then-insert math in visual space, then map the result back to an array
+// index for the reorder op.
 function reorderTargetIndex(dragId, plan) {
   const siblings = plan.scope ? memberElements(plan.scope) : ungroupedElements();
-  const overIndex = siblings.findIndex((e) => e.id === plan.overId);
-  const dragIndex = siblings.findIndex((e) => e.id === dragId);
+  const visual = [...siblings].reverse();
+  const overIndex = visual.findIndex((e) => e.id === plan.overId);
+  const dragIndex = visual.findIndex((e) => e.id === dragId);
   if (overIndex < 0 || dragIndex < 0) return null;
   let insert = plan.after ? overIndex + 1 : overIndex;
   if (dragIndex < insert) insert -= 1; // account for removing the dragged row first
-  insert = Math.max(0, Math.min(siblings.length - 1, insert));
-  return insert === dragIndex ? null : insert;
+  insert = Math.max(0, Math.min(visual.length - 1, insert));
+  if (insert === dragIndex) return null;
+  return visual.length - 1 - insert; // visual position -> array (paint) index
 }
 
 function clearDropHint() {
