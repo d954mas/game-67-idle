@@ -107,7 +107,14 @@ export function render() {
   if (!canvas || !state.project) return;
   resizeCanvas();
   const vp = state.viewport;
-  ctx.clearRect(0, 0, state.cssWidth, state.cssHeight);
+  // Clear in DEVICE pixels, not CSS pixels: with a fractional devicePixelRatio
+  // (Windows display scaling) a CSS-space clearRect ends on a fractional device
+  // row and never fully clears the last one — drag frames that painted into that
+  // strip leave a 1-2px residue at the canvas edge until a page reload.
+  ctx.save();
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.restore();
   // Crisp sprite pixels when zoomed in (>= 2x); smooth when zoomed out.
   ctx.imageSmoothingEnabled = vp.scale < 2;
 
