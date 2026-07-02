@@ -63,22 +63,21 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **Fit group** (`T0221`, P1) — `fitGroup` op: frame = union of descendant
-   boxes + padding; inspector button + context menu + CLI.
-2. **Text elements** (`T0222`, P1, research running) — Figma-like text node
-   type (font/stroke/shadow, OFL font bundle, canvas-2D + PIL parity);
-   build from the research report.
-3. **Multi-gesture op integrity** (`T0223`, P1, debt) — batched `moveNodes`
+1. **Multi-gesture op integrity** (`T0223`, P1, debt) — batched `moveNodes`
    (mixed groups+elements = 1 entry), `reorderNodes` (multi-select Ctrl+[/]),
    true `ungroupGroup` op (exact z-slot restore). Law: every gesture = one
    journal entry, no exceptions.
-4. **UX polish leftovers** (`T0224`, P2, debt) — multi-group inspector,
-   filled-body click-select, export suffix clear-in-place, lead's live-check
-   notes.
-5. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
+2. **UX polish leftovers** (`T0224`, P2, debt) — multi-group inspector,
+   filled-body click-select, export suffix clear-in-place, shift-range in
+   region lists, clip ghost off-by-default + Alt peek, layers deep-nesting
+   pack, export button label count, lead's live-check notes.
+3. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
    journal + `jumpHistory` op (CLI parity).
-6. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
+4. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
    builds on T0218's `_bridge` + pinned venv `pythonPath`.
+5. **Agent skill** (`T0226`, P2) — thin `nt-canvas-operations` skill so any
+   agent resolves `canvas://` refs and acts via CLI (pointers to README,
+   never duplicates).
 
 T0219 groups v2 COMPLETE (2026-07-02 night, → review): flat Defold-style
 model (additive `parentId`/`order`/`clip`/`background`, NO stored tree;
@@ -90,6 +89,25 @@ increments: `64965a8d` foundation+background, `5e7a037e` group z-order
 (reparentGroup w/ cycle guard, subtree cascades, recursive render,
 top-level-only export), `7a4a2a49` clip (nested intersection, ghost hint).
 Tests 110→159. Full design record + known compromises in the T0219 task.
+
+T0221 fit group LANDED `8d165cc2` (2026-07-02 night): `fitGroup` op — frame =
+union of descendant closure + padding 24, empty group = loud error; inspector
+button + context menu + CLI parity.
+
+T0222 text elements INCREMENT 1 LANDED `66f98288` (2026-07-02 night, → review):
+`type:"text"` in flat `elements[]` (z/grouping/undo/marquee inherited free);
+shared pure `fonts.mjs` (ops + page normalize styles identically); bundled
+static OFL fonts w/ Cyrillic — Inter/Rubik/Bitter/JetBrains Mono (Rubik
+replaced Latin-only Fredoka), per-family OFL.txt + fonts.json origin manifest
+= the parity contract (page @font-face and PIL load the SAME files);
+`addText`/`patchElement` content+style, HTTP + CLI `add-text`/`element-set
+--content/--style-json`; page T tool + dblclick inline editor + inspector Text
+section; `render_group.py paint_text` (anchor la, stroke outward, hard
+shadow-first) vs canvas stroke-under-fill 2×. v1 = auto-width only, \n
+newlines, NO wrap. v1.1 deferred: standalone text→PNG export, letter-spacing,
+shadow blur, italic, v-align, fixed box+wrap. Same commit: geometric
+drop-reparenting REMOVED (lead law: membership changes explicit-only; canvas
+drag never reparents) + parked-member marquee fix. Tests 172→181.
 
 T0200 perf frontend-churn LANDED `e37d8a5a` (2026-07-02 night): op responses
 carry `history{seq,canUndo,canRedo}` and drive the page (zero follow-up GETs,

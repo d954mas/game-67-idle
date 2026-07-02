@@ -1,7 +1,7 @@
 ---
 id: T0222
 title: "Canvas: text elements - Figma-like text node type (font, stroke, shadow)"
-status: backlog
+status: review
 project: P001
 epic: E010
 priority: P1
@@ -42,10 +42,11 @@ Design constraints known up front:
 ## Done when
 
 - [x] research note: Figma text model distilled (adopt/skip table), font sourcing/licensing decision (which OFL fonts ship, where they live) - see log 2026-07-02
-- [ ] text element type: create (toolbar/context menu + CLI), inline edit on double-click, move/select/group like any element
-- [ ] style: font family (picker from bundled fonts), size, weight, fill color, alignment; stroke + drop shadow; auto-size vs fixed box behavior decided in design
-- [ ] canvas draw and renderGroup/export produce matching text (same font files, PIL parity test with pixel tolerance)
-- [ ] journaled ops with undo; CLI parity; tests + gates green
+- [x] text element type: create (T tool + CLI add-text), inline edit on double-click, move/select/group like any element
+- [x] style: font family (picker from bundled fonts), size, weight, fill color, alignment; stroke + drop shadow; auto-width decided in design (v1)
+- [x] canvas draw and renderGroup/export produce matching text (same font files; PIL render tests: dims/stroke/shadow/Cyrillic; visual chunky-heading check = lead live verify)
+- [x] journaled ops with undo; CLI parity; tests + gates green (172 -> 181)
+- [ ] lead live-verified (T tool, inline edit, inspector Text, export bake)
 
 ## Open questions
 
@@ -59,3 +60,4 @@ Design constraints known up front:
   - KNOWN ASYMMETRY (accepted): CLI addText stores nominal box, next page-open re-measures precisely; renderer re-measures so exported pixels always correct. Optional measure_text.py if exact off-page boxes ever needed.
   - INCREMENTS: 1) fonts bundle + model + addText/patch + T tool + inline dblclick edit (textarea overlay) + inspector Text section + paint_text in render_group.py + CLI = shippable core (headings in screens EXPORT in v1); 2) standalone text-PNG export, letter spacing, shadow blur, italic, v-align; 3) wrap/fixed box, presets.
   - WATCH: validate stroke 2x mapping visually on a chunky heading before calling parity done.
+- 2026-07-02: INCREMENT 1 LANDED, commit `66f98288` (accepted: gates re-run by orchestrator, 181/181 + strict map + docs green; :8780 restarted, .ttf MIME verified live). Deviation from research: **Rubik 500/700 replaces Fredoka** - Google Fonts Fredoka has NO Cyrillic; Rubik is the rounded-display slot with full Cyrillic. Bundle = Inter 400/600/700 (opsz=14), Rubik 500/700, Bitter 400/700, JetBrains Mono 400/700; static instances via fontTools varLib.instancer; per-family OFL.txt + fonts.json origin manifest. New shared pure `fonts.mjs` (ops+site normalize styles identically). Two lead amendments folded in workspace.js: (A1) geometric drop-reparenting fully removed - drag NEVER changes membership; (A2) parked-member selection - marquee counts a group via frame OR visible member box (ancestry-based click path was already correct once A1 landed). Deferred to v1.1 (by design): standalone text->PNG export (loud skip today), letter-spacing, shadow blur, italic, v-align, fixed-box+wrap, presets. REMAINING: lead live verify (incl. stroke-2x visual on chunky heading).
