@@ -928,14 +928,16 @@ function commitElementDrag(finished) {
     (it) => Math.round(it.element.x) !== Math.round(it.origX) || Math.round(it.element.y) !== Math.round(it.origY),
   );
   // Reparent: an element whose centre lands inside a frame it doesn't belong to
-  // joins that screen; landing outside every frame while belonging to one clears it.
+  // joins that screen. Landing OUTSIDE every frame never clears membership (lead
+  // 2026-07-02: screens park off-frame elements — "убираю за границу то что сейчас
+  // не нужно"); leaving a group is explicit only (layers drag to root / Ungroup).
   // Group elements by target so it is ONE assign call per target group.
   const reassign = new Map();
   for (const it of finished.items) {
     const element = it.element;
     const target = groupAtCenter(element.x + element.w / 2, element.y + element.h / 2);
     const current = element.groupId || null;
-    if (target !== current) {
+    if (target !== current && target !== null) {
       if (!reassign.has(target)) reassign.set(target, []);
       reassign.get(target).push(element.id);
     }
