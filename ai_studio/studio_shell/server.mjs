@@ -45,6 +45,7 @@ const mime = {
   ".glb": "model/gltf-binary",
   ".gltf": "model/gltf+json; charset=utf-8",
   ".hdr": "image/vnd.radiance",
+  ".ttf": "font/ttf",
 };
 
 function safeResolve(base, relativePath) {

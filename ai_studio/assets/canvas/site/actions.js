@@ -16,6 +16,8 @@ import {
   state,
 } from "./app.js";
 import { orderedChildren, nodeScope } from "../tree.mjs";
+import { mergeTextStyle } from "../fonts.mjs";
+import { getFontManifest, measureTextBox } from "./fonts.js";
 import { screenToImagePoint } from "./viewport.mjs";
 import { downloadFiles, pickDestination, supportsFsa, writeFilesToDir } from "./export_dest.mjs";
 import { runLongOp } from "./toasts.js";
@@ -70,6 +72,56 @@ export async function addImageFiles(files, worldPoint) {
     }
     if (lastResult) selectOnly(lastResult.element.id);
     applyMutation(lastResult, `Added ${list.length} image(s).`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// ---- text --------------------------------------------------------------------
+
+// Add a text element at a world point (the T tool click). Returns the created
+// element so the caller can immediately open its inline editor. One journaled
+// addText op; the op validates style against fonts.json.
+export async function addTextAt(worldPoint, { content, style } = {}) {
+  if (!state.project) return null;
+  try {
+    const body = { x: Math.round(worldPoint.x), y: Math.round(worldPoint.y) };
+    if (content !== undefined) body.content = content;
+    if (style !== undefined) body.style = style;
+    const result = await api("POST", `/projects/${pid()}/text`, body);
+    if (result && result.element) selectOnly(result.element.id);
+    applyMutation(result, "Added text.");
+    return result ? result.element : null;
+  } catch (error) {
+    setStatus(error.message, true);
+    return null;
+  }
+}
+
+// Patch a text element's content and/or style in ONE journaled patchElement, always
+// re-measuring the auto-width box with the RESULTING content+style so the stored w/h
+// (selection/marquee bookkeeping) stays in sync from the same entry — no extra journal
+// steps. `stylePatch` is a PARTIAL style; the op shallow-merges + validates it, and we
+// merge the same way locally only to measure.
+export async function patchTextElement(id, { content, style } = {}, message) {
+  const element = elementById(id);
+  if (!element || element.type !== "text") return;
+  const nextContent = content !== undefined ? content : element.content;
+  let nextStyle = element.style;
+  if (style !== undefined) {
+    try {
+      nextStyle = mergeTextStyle(element.style, style, getFontManifest());
+    } catch (error) {
+      setStatus(error.message, true);
+      return;
+    }
+  }
+  const box = measureTextBox(nextContent, nextStyle);
+  const patch = { w: box.w, h: box.h };
+  if (content !== undefined) patch.content = content;
+  if (style !== undefined) patch.style = style;
+  try {
+    applyMutation(await api("PATCH", `/projects/${pid()}/elements/${id}`, patch), message);
   } catch (error) {
     setStatus(error.message, true);
   }

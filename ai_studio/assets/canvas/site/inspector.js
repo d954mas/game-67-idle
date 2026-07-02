@@ -31,6 +31,7 @@ import {
   fitGroupAction,
   patchElementBox,
   patchGroupBox,
+  patchTextElement,
   renameElement,
   renameGroup,
   renameRegion,
@@ -42,6 +43,7 @@ import {
   sliceRegionsFor,
 } from "./actions.js";
 import { descendantsOf } from "../tree.mjs";
+import { fontFamilies, fontWeights } from "./fonts.js";
 import { lastDestinationName } from "./export_dest.mjs";
 import { openContextMenu } from "./context_menu.js";
 import { inlineEdit } from "./inline.js";
@@ -502,6 +504,104 @@ function renderElement(element, root) {
   renderExport(element, root);
 }
 
+// ---- text element ------------------------------------------------------------
+
+// A native color picker bound to a commit; seeds from the current #rrggbb value.
+function colorInput(value, onCommit) {
+  const input = document.createElement("input");
+  input.type = "color";
+  input.className = "insp-color";
+  input.value = /^#[0-9a-fA-F]{6}$/.test(String(value || "")) ? value : "#111111";
+  input.addEventListener("change", () => onCommit(input.value));
+  return input;
+}
+
+// The TEXT section: font family + weight, size, line height, align, fill color, an
+// Outline (stroke width + color) row, and a Drop shadow toggle with dx/dy + color. Each
+// change commits ONE patchElement (style patch + re-measured box) via patchTextElement.
+function renderTextStyle(element, style, root) {
+  const body = collapsible(root, "text", "Text");
+  const commit = (stylePatch) => patchTextElement(element.id, { style: stylePatch });
+
+  const families = fontFamilies();
+  const familySel = selectInput(style.fontFamily, families.length ? families : [style.fontFamily], (family) => {
+    // Keep the weight valid for the new family (fall back to its first available weight).
+    const weights = fontWeights(family);
+    const weight = weights.includes(Number(style.fontWeight)) ? Number(style.fontWeight) : weights[0];
+    commit({ fontFamily: family, fontWeight: weight });
+  });
+  body.appendChild(field("Font", familySel));
+
+  const weights = fontWeights(style.fontFamily).map(String);
+  const weightSel = selectInput(String(style.fontWeight), weights.length ? weights : [String(style.fontWeight)], (value) =>
+    commit({ fontWeight: Number(value) }),
+  );
+  body.appendChild(field("Weight", weightSel));
+
+  const sizeRow = document.createElement("div");
+  sizeRow.className = "insp-grid";
+  sizeRow.appendChild(field("Size", numberInput(style.fontSize, (v) => commit({ fontSize: v }))));
+  sizeRow.appendChild(field("Line", numberInput(style.lineHeight, (v) => commit({ lineHeight: v }))));
+  body.appendChild(sizeRow);
+
+  body.appendChild(field("Align", selectInput(style.align || "left", ["left", "center", "right"], (v) => commit({ align: v }))));
+
+  const fill = field("Fill", colorInput(style.color, (v) => commit({ color: v })));
+  body.appendChild(fill);
+
+  // Outline (stroke): width + color on one row. Width 0 = no outline.
+  const stroke = style.stroke || { width: 0, color: "#000000" };
+  const strokeRow = field("Outline", numberInput(stroke.width, (v) => commit({ stroke: { width: Math.max(0, v), color: stroke.color || "#000000" } })));
+  strokeRow.appendChild(colorInput(stroke.color, (v) => commit({ stroke: { width: Number(stroke.width) || 0, color: v } })));
+  body.appendChild(strokeRow);
+
+  // Drop shadow: a hard offset (blur is 0 in v1). Toggle + dx/dy + color when on.
+  const shadow = style.shadow || null;
+  const shadowToggle = document.createElement("label");
+  shadowToggle.className = "insp-check";
+  const chk = document.createElement("input");
+  chk.type = "checkbox";
+  chk.checked = !!shadow;
+  chk.addEventListener("change", () =>
+    commit({ shadow: chk.checked ? { dx: 2, dy: 2, blur: 0, color: "#000000" } : null }),
+  );
+  const chkLabel = document.createElement("span");
+  chkLabel.textContent = "Drop shadow";
+  shadowToggle.append(chk, chkLabel);
+  body.appendChild(shadowToggle);
+
+  if (shadow) {
+    const offRow = document.createElement("div");
+    offRow.className = "insp-grid";
+    offRow.appendChild(field("X", numberInput(shadow.dx, (v) => commit({ shadow: { dx: v } }))));
+    offRow.appendChild(field("Y", numberInput(shadow.dy, (v) => commit({ shadow: { dy: v } }))));
+    body.appendChild(offRow);
+    body.appendChild(field("Shadow", colorInput(shadow.color, (v) => commit({ shadow: { color: v } }))));
+  }
+}
+
+function renderTextElement(element, root) {
+  const style = element.style || {};
+  const name = field("Name", textInput(element.name, (next) => renameElement(element.id, next)));
+  name.classList.add("insp-name");
+  root.appendChild(name);
+
+  const layout = collapsible(root, "layout", "Position & Size");
+  const grid = document.createElement("div");
+  grid.className = "insp-grid";
+  grid.appendChild(field("X", numberInput(element.x, (v) => patchElementBox(element.id, { x: v }))));
+  grid.appendChild(field("Y", numberInput(element.y, (v) => patchElementBox(element.id, { y: v }))));
+  layout.appendChild(grid);
+  layout.appendChild(readOnly("Size", `${element.w} x ${element.h} (auto-width)`));
+
+  const hint = document.createElement("div");
+  hint.className = "insp-region-hint";
+  hint.textContent = "Double-click the text on the canvas to edit its content.";
+  root.appendChild(hint);
+
+  renderTextStyle(element, style, root);
+}
+
 // The group's BACKGROUND section: mode None/Solid + a color input (enabled for Solid).
 // A change persists via patchGroup({background}) through the actions -> applyMutation
 // flow (canvas + render honor it). The render-time bg dropdown in "Render group" stays
@@ -704,6 +804,11 @@ function inspectorSig() {
   }
   if (selected.length === 1) {
     const e = selected[0];
+    // A text element's structure is its content + style (family/size/align/stroke/
+    // shadow) — any change must rebuild the Text section so the inputs reflect it.
+    if (e.type === "text") {
+      return `t:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.content}|${JSON.stringify(e.style || {})}`;
+    }
     const regions = (e.regions || [])
       .map((r) => `${r.id}~${r.name || ""}~${(r.rect || r.content_bbox || []).join(",")}`)
       .join("|");
@@ -763,7 +868,8 @@ export function renderInspector() {
   if (group) {
     renderGroupInspector(group, root);
   } else if (selected.length === 1) {
-    renderElement(selected[0], root);
+    if (selected[0].type === "text") renderTextElement(selected[0], root);
+    else renderElement(selected[0], root);
   } else if (selected.length > 1) {
     renderMulti(selected, root);
   } else {

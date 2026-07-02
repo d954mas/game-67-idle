@@ -129,7 +129,16 @@ function elementRow(element, depth) {
     row.appendChild(spacer);
   }
 
-  row.appendChild(thumbFor(element)); // reused node — no re-download / re-decode on rebuild
+  if (element.type === "text") {
+    // Text has no image file — show a "T" glyph placeholder instead of an <img>.
+    const glyph = document.createElement("span");
+    glyph.className = "thumb thumb-text";
+    glyph.textContent = "T";
+    glyph.setAttribute("aria-hidden", "true");
+    row.appendChild(glyph);
+  } else {
+    row.appendChild(thumbFor(element)); // reused node — no re-download / re-decode on rebuild
+  }
 
   const name = document.createElement("span");
   name.className = "layer-name";

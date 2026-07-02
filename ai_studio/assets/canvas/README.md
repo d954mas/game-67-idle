@@ -74,8 +74,20 @@ Every capability is one op in `ops.mjs`:
   journal moves with the folder). `listProjects` skips the dot-prefixed `.trash`.
 - `addImage` (parses real PNG/JPEG/GIF dimensions, persists `source_w`/`source_h`,
   writes an immutable file) — journaled
-- `patchElement` (move/resize/rename/`visible`) / `removeElement` (element only;
-  file stays) — journaled
+- `addText({ projectId, x?, y?, content?, style?, groupId? })` — add a Figma-style
+  **text element** (`type: "text"`) in the flat `elements[]` beside images, so z-order,
+  grouping/nesting, undo, and marquee are inherited for free. `style` is merged over the
+  defaults and **validated loudly** against the fonts manifest (an unknown
+  family/weight, a bad align/color, or a non-finite size throws before any write); an
+  optional `groupId` drops the text straight into a group. Journaled (mirrors `addImage`,
+  incl. the front-order hook). The stored `w`/`h` is a **nominal box** — see **Text
+  elements** below. Both clients: the page's **T tool** and the CLI `add-text`.
+- `patchElement` (move/resize/rename/`visible`; for a **text** element also `content`
+  and `style`) / `removeElement` (element only; file stays) — journaled. A `content`
+  string and a **partial** `style` are shallow-merged over the element's current style
+  and re-validated against the fonts manifest (nested `stroke`/`shadow` merge, so a
+  width-only edit keeps the color); `content`/`style` on a non-text element is a loud
+  error. `patchElements` (batched) accepts the same text fields.
 - `patchElements({ projectId, patches })` / `removeElements({ projectId, elementIds })`
   — the **batched** multi-element ops behind marquee/multi-select move and multi-delete.
   Each applies the whole gesture in ONE `commitMutation`, so it is **one journal entry**
@@ -369,6 +381,89 @@ future polygonal shape (`{ shape: { type: "polygon", points: [...] } }`) slots i
 additively without changing the spec contract — and `setRegions` preserves unknown
 region fields so that geometry survives a round-trip through the op layer today.
 
+## Text elements
+
+A **text element** is a Figma-style text node in the flat model — `type: "text"` in
+`elements[]` beside images, so z-order, grouping/nesting, undo, marquee, and the
+inspector all treat it like any element. It carries a `content` string (explicit `\n`
+newlines) and a `style` block:
+
+```json
+{ "fontFamily": "Inter", "fontWeight": 400, "fontStyle": "normal", "fontSize": 24,
+  "lineHeight": 1.2, "align": "left", "color": "#111111",
+  "stroke": { "width": 0, "color": "#000000" }, "shadow": null, "autoResize": "width" }
+```
+
+`shadow`, when set, is a HARD offset `{ dx, dy, blur, color }` (blur is stored but always
+0 in v1). The defaults are `content` "Text", Inter 400, size 24, lineHeight 1.2
+(unitless), align left, color `#111111`, stroke width 0, shadow off.
+
+**v1 scope** (kills the parity traps): **auto-width only** (explicit newlines, NO
+auto-wrap), solid fill, OUTLINE + HARD offset shadow, align L/C/R. Letter-spacing, shadow
+blur, italic, vertical-align, fixed-box + wrap, rich-text spans, gradient fill, and
+standalone per-element text-PNG export are **v1.1+**.
+
+### Fonts (the parity contract)
+
+The one contract that makes canvas preview == PNG export is **the same font files** on
+both sides. Static TTF instances (NOT variable fonts — PIL's variation selection is
+build-sensitive) live under `site/fonts/<Family>/<File>.ttf`, each family with its own
+`OFL.txt`, and a `site/fonts/fonts.json` manifest maps `family` + `weight` + `style` → a
+relative file (+ its Google-Fonts origin URL). The page builds `FontFace`s from
+`fonts.json` and gates the first text paint on `document.fonts.ready`; `ops.mjs` reads the
+same manifest from disk and resolves each entry to an **absolute** path passed to
+`render_group.py`, which loads that exact file with PIL. `fonts.mjs` is the shared, pure
+module (imported by `ops.mjs` in node AND the site over `/ai_studio/`) holding the style
+defaults, the loud validation/merge, the font resolution, and line splitting — one
+implementation, two clients. Studio Shell serves `.ttf` as `font/ttf`.
+
+Shipped families (all OFL-1.1, all with **Cyrillic**): **Inter** 400/600/700 (UI sans),
+**Rubik** 500/700 (rounded chunky display — replaces Fredoka, which lacks Cyrillic on
+Google Fonts), **Bitter** 400/700 (slab serif), **JetBrains Mono** 400/700 (monospace).
+All are static instances produced from the Google Fonts variable sources with
+`fontTools.varLib.instancer` (all axes pinned; `pythonPath` venv + `pip install
+fonttools`). An unknown family/weight vs the manifest is a **loud error** in both clients
+and at render time.
+
+### Parity stance
+
+PIL is the **single source of rendered truth**; the canvas page is a faithful **same-font
+approximation** (~1-2px glyph drift acceptable; line breaks identical by construction).
+Both renderers **re-measure** from `content` + `style` every paint, so the stored `w`/`h`
+is never load-bearing — it is **bookkeeping** for selection/marquee only. The page updates
+it in memory as it paints and writes it to disk **only** on the `patchElement` that commits
+a content/style change (no extra journal entries); the CLI/server `addText` stores a
+**nominal** box (no font metrics offline) that the next page-open re-measures precisely.
+Two traps the shared contract closes:
+
+- **Stroke.** `strokeText` on canvas centers the stroke on the glyph outline; PIL's
+  `stroke_width` grows **outward**. So the page draws `strokeText` UNDER `fillText` with
+  `lineWidth = 2 × style.stroke.width` and `lineJoin: "round"`; PIL uses `stroke_width =
+  round(style.stroke.width × scale)`. The two then match.
+- **Baseline.** canvas `textBaseline = "top"` / PIL `anchor = "la"`; each line's origin
+  `y = top + i × (fontSize × lineHeight)`. The hard shadow is the same glyphs in the
+  shadow color drawn FIRST (fill only, no outline), then stroke-under-fill on top.
+
+**Export.** Text bakes into a screen PNG: it renders + exports through `renderGroup` /
+`exportProject` (the recursive painter emits a `kind:"text"` node with the absolute font
+path, split lines, and style; `render_group.py`'s `paint_text` re-measures for
+auto-width alignment). **Standalone** per-element text export via `exportElements` is a
+loud v1.1 skip ("put it in a group and export the screen"). Text in a `clip:true`
+subgroup crops naturally (it paints onto the same cropped sub-layer as images).
+
+### Page
+
+The **T** tool in the tool rail places a text element at the click point (then switches
+back to Select and opens the inline editor). Double-click a text element to edit it in
+place (a textarea overlay over the box; commit on blur or `Ctrl/Cmd+Enter`, `Esc`
+cancels — one `patchElement` per commit, content + the re-measured box in the same
+entry). The inspector shows a **Text** section for a selected text element (font family +
+weight from `fonts.json`, size, line height, align, fill, outline width + color, and a
+drop-shadow toggle with dx/dy + color). The layers row shows a **"T"** glyph placeholder
+(text has no image file). Group membership is **never** changed by a canvas drag — a text
+element parked outside its group's frame stays a member; joining/leaving a group is
+explicit (layers drag, Ctrl+G, Ungroup, CLI `group-assign`).
+
 ## Journal, undo, and redo
 
 Each project folder has an append-only `journal.jsonl` next to `project.json`.
@@ -522,6 +617,8 @@ node ai_studio/assets/canvas/cli.mjs show <id>
 node ai_studio/assets/canvas/cli.mjs rename <id> --title "New title"
 node ai_studio/assets/canvas/cli.mjs delete <id>          # moves to .trash
 node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
+node ai_studio/assets/canvas/cli.mjs add-text <id> [--x 40 --y 40] [--content "Заголовок"] [--style-json style.json] [--group <gid>]
+node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--content "New text"] [--style-json style.json]   # text edits (validated vs fonts.json)
 node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
 node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--name "X"] [--visible true|false]

@@ -8,6 +8,7 @@
 //   PATCH  /api/canvas/projects/<id>               {title}          (rename)
 //   DELETE /api/canvas/projects/<id>                                (move to .trash)
 //   POST   /api/canvas/projects/<id>/images        {name, bytes_base64, x?, y?}
+//   POST   /api/canvas/projects/<id>/text          {x?, y?, content?, style?, groupId?}
 //   POST   /api/canvas/projects/<id>/detect-regions {elementId, params?}
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
 //   POST   /api/canvas/projects/<id>/export         {elementIds, rows?} | {project:true}
@@ -34,6 +35,7 @@ import { basename, extname } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
   addImage,
+  addText,
   assignToGroup,
   createGroup,
   createProject,
@@ -201,6 +203,21 @@ export function createCanvasApi(root) {
         const bytes = Buffer.from(String(body.bytes_base64 || ""), "base64");
         // x/y let the page drop an image at a world point; addImage defaults to 0,0.
         sendMutation(201, addImage(root, id, { name: body.name, bytes, x: body.x, y: body.y }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/text  (add a text element)
+      // x/y place it at a world point; content/style/groupId are optional (style is
+      // validated against the fonts manifest by the op — a loud 400 on bad input).
+      if (parts.length === 5 && sub === "text" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(201, addText(root, id, {
+          x: body.x,
+          y: body.y,
+          content: body.content,
+          style: body.style,
+          groupId: body.groupId,
+        }));
         return true;
       }
 

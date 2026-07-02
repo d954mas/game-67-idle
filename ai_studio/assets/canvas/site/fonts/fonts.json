@@ -1,0 +1,47 @@
+{
+  "schema": "ai_studio.canvas.fonts.v1",
+  "note": "Static TTF instances produced from Google Fonts variable sources with fontTools varLib.instancer (fontTools 4.63.0, all axes pinned). OFL-1.1 per family (see each <Family>/OFL.txt). Both the browser page (@font-face / FontFace API) and render_group.py (PIL ImageFont) load these exact files, so canvas preview and PNG export share one font — the parity contract.",
+  "families": [
+    {
+      "family": "Inter",
+      "role": "ui-sans",
+      "license": "OFL-1.1",
+      "licenseFile": "Inter/OFL.txt",
+      "fonts": [
+        { "weight": 400, "style": "normal", "file": "Inter/Inter-Regular.ttf",  "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter[opsz,wght].ttf", "instance": "wght=400 opsz=14" },
+        { "weight": 600, "style": "normal", "file": "Inter/Inter-SemiBold.ttf", "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter[opsz,wght].ttf", "instance": "wght=600 opsz=14" },
+        { "weight": 700, "style": "normal", "file": "Inter/Inter-Bold.ttf",     "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter[opsz,wght].ttf", "instance": "wght=700 opsz=14" }
+      ]
+    },
+    {
+      "family": "Rubik",
+      "role": "display-rounded",
+      "license": "OFL-1.1",
+      "licenseFile": "Rubik/OFL.txt",
+      "fonts": [
+        { "weight": 500, "style": "normal", "file": "Rubik/Rubik-Medium.ttf", "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/rubik/Rubik[wght].ttf", "instance": "wght=500" },
+        { "weight": 700, "style": "normal", "file": "Rubik/Rubik-Bold.ttf",   "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/rubik/Rubik[wght].ttf", "instance": "wght=700" }
+      ]
+    },
+    {
+      "family": "Bitter",
+      "role": "slab-serif",
+      "license": "OFL-1.1",
+      "licenseFile": "Bitter/OFL.txt",
+      "fonts": [
+        { "weight": 400, "style": "normal", "file": "Bitter/Bitter-Regular.ttf", "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/bitter/Bitter[wght].ttf", "instance": "wght=400" },
+        { "weight": 700, "style": "normal", "file": "Bitter/Bitter-Bold.ttf",    "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/bitter/Bitter[wght].ttf", "instance": "wght=700" }
+      ]
+    },
+    {
+      "family": "JetBrains Mono",
+      "role": "monospace",
+      "license": "OFL-1.1",
+      "licenseFile": "JetBrainsMono/OFL.txt",
+      "fonts": [
+        { "weight": 400, "style": "normal", "file": "JetBrainsMono/JetBrainsMono-Regular.ttf", "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono[wght].ttf", "instance": "wght=400" },
+        { "weight": 700, "style": "normal", "file": "JetBrainsMono/JetBrainsMono-Bold.ttf",    "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono[wght].ttf", "instance": "wght=700" }
+      ]
+    }
+  ]
+}

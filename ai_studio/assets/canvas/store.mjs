@@ -242,7 +242,10 @@ const NUMERIC_ELEMENT_FIELDS = ["x", "y", "w", "h"];
 // Apply the mutable element fields from a patch onto an element IN PLACE: numeric
 // x/y/w/h (finite values only), name (string), and the optional explicit visibility
 // boolean (stored so renderGroup/the page can hide with `element.visible !== false`).
-// Shared by patchElement and the batched patchElements so both honor identical rules.
+// For a TEXT element it also applies `content` (string) and `style` (a fully
+// validated/normalized style OBJECT — the op layer does the fonts-manifest validation
+// before this runs, so the store only stores the object verbatim). Shared by
+// patchElement and the batched patchElements so both honor identical rules.
 function applyElementFields(element, patch = {}) {
   for (const field of NUMERIC_ELEMENT_FIELDS) {
     if (patch[field] !== undefined && patch[field] !== null && Number.isFinite(Number(patch[field]))) {
@@ -253,7 +256,36 @@ function applyElementFields(element, patch = {}) {
   if (patch.visible !== undefined) {
     element.visible = !(patch.visible === false || patch.visible === "false");
   }
+  if (patch.content !== undefined) element.content = String(patch.content);
+  if (patch.style !== undefined && patch.style && typeof patch.style === "object") {
+    element.style = patch.style;
+  }
   return element;
+}
+
+// Append a TEXT element (parallel to addImage, but no backing file: the content +
+// style ARE the element). `style` is the fully validated/normalized style object and
+// `name` the layer name — the op layer computes both before calling this. `w`/`h` are
+// the nominal box (bookkeeping only; both renderers re-measure). Optional `groupId`
+// drops the text straight into a group.
+export function addText(root, id, { x = 0, y = 0, w = 0, h = 0, content = "Text", style = {}, name, groupId, meta } = {}) {
+  const project = readProjectFile(root, id);
+  const element = {
+    id: `el_${randomUUID().slice(0, 8)}`,
+    type: "text",
+    x: finiteOr(x, 0),
+    y: finiteOr(y, 0),
+    w: finiteOr(w, 0),
+    h: finiteOr(h, 0),
+    content: String(content),
+    style,
+    name: String(name || "Text"),
+    meta: meta && typeof meta === "object" ? meta : {},
+  };
+  if (groupId != null && groupId !== "") element.groupId = String(groupId);
+  project.elements = [...(project.elements || []), element];
+  const saved = updateProject(root, id, { elements: project.elements });
+  return { project: saved, element };
 }
 
 export function patchElement(root, id, elementId, patch = {}) {

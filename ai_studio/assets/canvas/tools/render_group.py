@@ -28,7 +28,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
@@ -73,6 +73,78 @@ def paint_element(out: Image.Image, node: dict[str, Any], origin: tuple[float, f
     out.alpha_composite(layer)
 
 
+_FONT_CACHE: dict[tuple[str, int], Any] = {}
+
+
+def load_font(path: str, size: int) -> Any:
+    key = (path, size)
+    font = _FONT_CACHE.get(key)
+    if font is None:
+        font = ImageFont.truetype(path, size)
+        _FONT_CACHE[key] = font
+    return font
+
+
+def paint_text(out: Image.Image, node: dict[str, Any], origin: tuple[float, float], scale: float) -> None:
+    """Draw a text node's lines onto `out` (an RGBA layer whose (0,0) maps to world `origin`).
+
+    Parity with the browser canvas (the PIL side is the source of rendered truth):
+      * textBaseline top / PIL anchor='la'; per-line origin y = top + i*(fontSize*lineHeight)
+      * AUTO-WIDTH: measure every line, align each within the max line width (L/C/R)
+      * the stroke GROWS OUTWARD (PIL stroke_width) — the page draws it UNDER the fill with
+        lineWidth = 2 x style.stroke.width so the two match
+      * the HARD offset shadow is the same glyphs in the shadow color drawn FIRST (blur is
+        stored but always 0 in v1)."""
+    size = max(1, round(float(node["fontSize"]) * scale))
+    font = load_font(node["fontFile"], size)
+    draw = ImageDraw.Draw(out)
+    lines = node.get("lines") or [""]
+    line_step = float(node["fontSize"]) * float(node["lineHeight"]) * scale
+    widths = [draw.textlength(line, font=font) for line in lines]
+    box_w = max(widths) if widths else 0.0
+    align = node.get("align", "left")
+
+    ox, oy = origin
+    base_x = (float(node.get("x") or 0) - ox) * scale
+    base_y = (float(node.get("y") or 0) - oy) * scale
+
+    def line_x(i: int) -> float:
+        if align == "center":
+            return base_x + (box_w - widths[i]) / 2.0
+        if align == "right":
+            return base_x + (box_w - widths[i])
+        return base_x
+
+    stroke = node.get("stroke")
+    stroke_w = round(float(stroke["width"]) * scale) if stroke else 0
+    stroke_fill = stroke["color"] if stroke else None
+    shadow = node.get("shadow")
+
+    # Shadow pass FIRST (hard offset, fill only) so the main text always sits on top.
+    if shadow:
+        sdx = float(shadow.get("dx") or 0) * scale
+        sdy = float(shadow.get("dy") or 0) * scale
+        for i, line in enumerate(lines):
+            draw.text(
+                (line_x(i) + sdx, base_y + i * line_step + sdy),
+                line,
+                font=font,
+                fill=shadow["color"],
+                anchor="la",
+            )
+    # Main pass: PIL draws the stroke OUTWARD then the fill inside in one call.
+    for i, line in enumerate(lines):
+        draw.text(
+            (line_x(i), base_y + i * line_step),
+            line,
+            font=font,
+            fill=node["color"],
+            anchor="la",
+            stroke_width=stroke_w,
+            stroke_fill=stroke_fill,
+        )
+
+
 def paint_children(out: Image.Image, children: Any, origin: tuple[float, float], scale: float) -> int:
     """Paint `children` BACK -> FRONT directly onto `out`, an RGBA layer whose (0,0) maps to
     world `origin`. Returns the count of image elements drawn.
@@ -89,6 +161,9 @@ def paint_children(out: Image.Image, children: Any, origin: tuple[float, float],
         kind = node.get("kind")
         if kind == "element":
             paint_element(out, node, origin, scale)
+            drawn += 1
+        elif kind == "text":
+            paint_text(out, node, origin, scale)
             drawn += 1
         elif kind == "group":
             gx = round((float(node.get("x") or 0) - ox) * scale)

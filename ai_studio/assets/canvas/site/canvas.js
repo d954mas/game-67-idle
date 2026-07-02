@@ -50,6 +50,7 @@ import { initLayers } from "./layers_panel.js";
 import { initInspector } from "./inspector.js";
 import { closeContextMenu, initContextMenu } from "./context_menu.js";
 import { initDnd } from "./dnd.js";
+import { loadCanvasFonts } from "./fonts.js";
 
 // ---- view routing ------------------------------------------------------------
 
@@ -272,6 +273,9 @@ initLayers();
 initInspector();
 initContextMenu();
 initDnd();
+// Load the bundled text fonts (FontFace API); gate the first text paint on
+// document.fonts.ready by repainting the canvas once they resolve.
+loadCanvasFonts(() => hooks.renderCanvas());
 
 el("back-projects").addEventListener("click", () => showHome());
 window.addEventListener("keydown", onKeyDown);

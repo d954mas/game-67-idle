@@ -996,6 +996,19 @@
           ]
         },
         {
+          "id": "assets:canvas-fonts",
+          "kind": "tool",
+          "path": "ai_studio/assets/canvas/fonts.mjs",
+          "title": "fonts.mjs",
+          "description": "Pure, dependency-free text/font contract shared by ops.mjs (node) AND the site (static /ai_studio/ import), so a text element renders the same on the browser canvas and in the PIL export. Holds the DEFAULT_TEXT_STYLE, the loud validation + shallow-merge normalizer (mergeTextStyle: unknown family/weight vs the fonts.json manifest, bad align/color, non-finite size, malformed stroke/shadow all throw), the (family, weight, style) -> manifest entry resolver, family/weight lists for the inspector pickers, line splitting on explicit newlines (no auto-wrap in v1), the canvas font-string builder, and a rough offline nominal-box estimate. ops.mjs owns the node-only disk read of site/fonts/fonts.json and resolves each entry to an absolute .ttf for render_group.py; the site fetches the same manifest and builds FontFaces.",
+          "role": "canvas text/font contract",
+          "tags": [
+            "assets",
+            "canvas",
+            "tool-parity"
+          ]
+        },
+        {
           "id": "assets:canvas-ops",
           "kind": "tool",
           "path": "ai_studio/assets/canvas/ops.mjs",
@@ -1248,6 +1261,24 @@
               "description": "Pure canvas viewport math shared by the site modules (workspace, actions, dnd, regions): screen<->image point conversion, fit-to-frame centering, and zoom-at-cursor. No DOM and no rect-editing helpers (the region workbench owns rect/polygon geometry). The canvas owns its own viewport code here.",
               "role": "canvas viewport geometry",
               "tags": ["assets", "canvas", "ui", "browser-js", "testable-logic"]
+            },
+            {
+              "id": "assets:canvas-site-fonts",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/fonts.js",
+              "title": "fonts.js",
+              "description": "Browser font loading + text measurement for canvas text elements (the page side of the shared fonts.mjs contract): fetches the same site/fonts/fonts.json the ops layer reads, registers every static .ttf as a FontFace (so the 2D canvas and the inline-edit textarea both render with it), and gates the first text paint on document.fonts.ready — no FOUT mismatch with the PIL export. Exposes the manifest, family/weight picker lists, and measureTextBox/measureTextLines (auto-width box + per-line widths) via a throwaway 2D context. All style/line logic is imported from ../fonts.mjs so the browser and the agent normalize a style identically.",
+              "role": "canvas font loading + measurement",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-fonts-bundle",
+              "kind": "asset",
+              "path": "ai_studio/assets/canvas/site/fonts",
+              "title": "fonts/",
+              "description": "The bundled text fonts + the fonts.json manifest that is the canvas/export parity contract. Static TTF instances (produced from Google Fonts variable sources with fontTools varLib.instancer, all axes pinned) per family with its OFL.txt: Inter 400/600/700, Rubik 500/700, Bitter 400/700, JetBrains Mono 400/700 — all OFL-1.1 with Cyrillic. fonts.json maps family+weight+style to a relative .ttf with its origin URL (license/provenance/origin law). The page builds FontFaces from it; ops.mjs resolves the same entries to absolute paths for render_group.py (PIL), which loads the exact files.",
+              "role": "canvas text font bundle",
+              "tags": ["assets", "canvas", "font", "license"]
             }
           ]
         },

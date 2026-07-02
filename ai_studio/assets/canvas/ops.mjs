@@ -55,8 +55,22 @@ import { uploadImageSource } from "../tools/image/sources/api.mjs";
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
 import { descendantsOf, frontOrder, isNodeHidden, nodeScope, orderedChildren, wouldCycle } from "./tree.mjs";
+// Shared, pure text/font contract (imported by the site too — see fonts.mjs). ops.mjs
+// owns the node-only disk read of the manifest; all validation/merge/resolution logic
+// lives in fonts.mjs so the browser and the agent normalize a style identically.
+import {
+  FONTS_DIR_REPO_PATH,
+  FONTS_MANIFEST_REPO_PATH,
+  defaultTextStyle,
+  firstTextLine,
+  mergeTextStyle,
+  nominalTextBox,
+  resolveFontEntry,
+  splitTextLines,
+} from "./fonts.mjs";
 import {
   addImage as storeAddImage,
+  addText as storeAddText,
   appendArchive,
   appendError,
   appendJournal,
@@ -144,6 +158,48 @@ function slug(value) {
     .replace(/^_+|_+$/g, "")
     .slice(0, 60);
   return cleaned || "element";
+}
+
+// ---- text fonts (node side of the shared fonts.mjs contract) -----------------
+
+// Read the bundled fonts.json manifest from disk (node-only; the page fetches the
+// same file over HTTP). A loud error names the manifest path when it is missing or
+// corrupt — text can't be validated without it.
+function readFontsManifest(root) {
+  const path = join(root, FONTS_MANIFEST_REPO_PATH);
+  if (!existsSync(path)) throw new Error(`canvas fonts manifest not found: ${FONTS_MANIFEST_REPO_PATH}`);
+  try {
+    return JSON.parse(readFileSync(path, "utf8").replace(/^﻿/, ""));
+  } catch (error) {
+    throw new Error(`canvas fonts manifest is not valid JSON (${FONTS_MANIFEST_REPO_PATH}): ${error.message}`);
+  }
+}
+
+// Absolute path to a manifest font entry's .ttf, for render_group.py / PIL. entry.file
+// is a trusted repo-relative path from our own manifest.
+function resolveFontFileAbs(root, entry) {
+  return join(root, FONTS_DIR_REPO_PATH, entry.file);
+}
+
+// Sanitize a patch that may carry text `content`/`style` for a TEXT element: validate
+// + normalize the style against the manifest (loud on unknown family/weight), coerce
+// content to a string, and pass every other field (x/y/w/h/name/visible) through
+// untouched. A no-op fast path when the patch has neither, so image patches never load
+// the manifest. Throws if content/style target a non-text element.
+function sanitizeTextPatch(root, project, elementId, patch = {}) {
+  if (patch.style === undefined && patch.content === undefined) return patch;
+  const element = (project.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  if (element.type !== "text") {
+    throw new Error(`element ${elementId} is not a text element (content/style only apply to type:"text")`);
+  }
+  const clean = { ...patch };
+  if (patch.content !== undefined) clean.content = String(patch.content);
+  if (patch.style !== undefined) {
+    const manifest = readFontsManifest(root);
+    clean.style = mergeTextStyle(element.style || defaultTextStyle(), patch.style, manifest);
+  }
+  return clean;
 }
 
 // ---- journal core ------------------------------------------------------------
@@ -291,13 +347,70 @@ export function addImage(root, projectId, args = {}) {
   return { project, element };
 }
 
+// Add a TEXT element (Figma text node). Mirrors addImage: builds the element via the
+// store, gives it a FRONT order when its destination scope is already explicit (so a
+// reordered scope stays explicit), and journals ONE undoable entry. `style` is merged
+// over the defaults and validated LOUDLY against the fonts manifest (an unknown
+// family/weight, bad align/color, or non-finite size throws before any write). Optional
+// `groupId` drops the text straight into a group (validated). The stored w/h is a
+// NOMINAL box (the page re-measures on open, the renderer re-measures at export).
+export function addText(root, projectId, args = {}) {
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const manifest = readFontsManifest(root);
+  const style = mergeTextStyle(defaultTextStyle(), args.style || {}, manifest);
+  const content = args.content == null ? "Text" : String(args.content);
+  const groupId = args.groupId == null || args.groupId === "" ? undefined : String(args.groupId);
+  if (groupId && !groupsOf(before).some((group) => group.id === groupId)) {
+    throw new Error(`group not found: ${groupId}`);
+  }
+  const box = nominalTextBox(content, style);
+  const name = firstTextLine(content) || "Text";
+  const result = storeAddText(root, projectId, {
+    x: args.x,
+    y: args.y,
+    w: box.w,
+    h: box.h,
+    content,
+    style,
+    name,
+    groupId,
+  });
+  // Front-order hook (identical to addImage): a fresh text lands at the FRONT of its
+  // scope when that scope is already explicitly ordered; a no-op otherwise.
+  let after = result.project;
+  const fo = frontOrder(before, result.element.groupId == null ? null : result.element.groupId);
+  if (fo !== null) {
+    after = updateProject(root, projectId, {
+      elements: (result.project.elements || []).map((element) =>
+        element.id === result.element.id ? { ...element, order: fo } : element,
+      ),
+    });
+  }
+  const project = commitMutation(root, projectId, {
+    op: "addText",
+    args_summary: {
+      elementId: result.element.id,
+      content: content.slice(0, 40),
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+    },
+    before,
+    after,
+    startedAt,
+  });
+  const element = (project.elements || []).find((item) => item.id === result.element.id) || result.element;
+  return { project, element };
+}
+
 export function patchElement(root, projectId, elementId, patch = {}) {
   const startedAt = performance.now();
   const before = getProject(root, projectId);
-  const result = storePatchElement(root, projectId, elementId, patch);
+  const clean = sanitizeTextPatch(root, before, elementId, patch);
+  const result = storePatchElement(root, projectId, elementId, clean);
   const project = commitMutation(root, projectId, {
     op: "patchElement",
-    args_summary: { elementId, patch },
+    args_summary: { elementId, patch: clean },
     before,
     after: result.project,
     startedAt,
@@ -328,14 +441,16 @@ export function removeElement(root, projectId, elementId) {
 export function patchElements(root, { projectId, patches } = {}) {
   if (!projectId) throw new Error("patchElements requires projectId");
   if (!Array.isArray(patches)) throw new Error("patchElements requires a patches array");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
   const clean = patches.map((patch, index) => {
     if (!patch || typeof patch !== "object") throw new Error(`patch ${index} is not an object`);
     const elementId = String(patch.elementId == null ? "" : patch.elementId).trim();
     if (!elementId) throw new Error(`patch ${index} is missing an elementId`);
-    return { ...patch, elementId };
+    // Text content/style patches are validated + normalized against the manifest here
+    // (same as patchElement); image geometry patches skip the manifest entirely.
+    return { ...sanitizeTextPatch(root, before, elementId, patch), elementId };
   });
-  const startedAt = performance.now();
-  const before = getProject(root, projectId);
   const result = storePatchElements(root, projectId, clean);
   const project = commitMutation(root, projectId, {
     op: "patchElements",
@@ -1528,6 +1643,14 @@ export async function exportElements(root, { projectId, elementIds, rows } = {})
   for (const id of ids) {
     const element = (project.elements || []).find((item) => String(item.id) === id);
     if (!element) throw new Error(`element not found: ${id}`);
+    if (element.type === "text") {
+      // Standalone per-element text-PNG export is a v1.1 feature (see T0222). Text bakes
+      // into a screen today: put it in a group and export the screen (renderGroup) or run
+      // a project export, which composites text with PIL through render_group.py.
+      throw new Error(
+        `element ${id} is a text element — standalone text export is not in v1. Put it in a group and export the screen (Render group / project export) to bake the text into the PNG.`,
+      );
+    }
     if (element.type !== "image" || !element.src) throw new Error(`element ${id} is not an exportable image`);
     elements.push(element);
   }
@@ -1705,7 +1828,7 @@ function hexColor(value) {
 // a clip:true subgroup's subtree onto its OWN box-sized layer (cropping overflow) before
 // pasting it into the parent; a clip:false subgroup paints into the same layer at absolute
 // offsets (overflow preserved).
-function buildRenderNodes(root, projectId, project, scopeId, leaves) {
+function buildRenderNodes(root, projectId, project, scopeId, leaves, fonts) {
   const nodes = [];
   for (const child of orderedChildren(project, scopeId)) {
     if (isNodeHidden(project, child.ref)) continue;
@@ -1720,10 +1843,42 @@ function buildRenderNodes(root, projectId, project, scopeId, leaves) {
         w: Number(group.w) || 0,
         h: Number(group.h) || 0,
         background: groupBg,
-        children: buildRenderNodes(root, projectId, project, group.id, leaves),
+        children: buildRenderNodes(root, projectId, project, group.id, leaves, fonts),
       });
     } else {
       const element = child.ref;
+      if (element.type === "text") {
+        // A text node carries the ABSOLUTE font file (render_group.py loads the same
+        // .ttf the page @font-faces) plus the split lines + style; the painter
+        // re-measures each line for auto-width alignment, so no width is baked here.
+        const style = element.style || defaultTextStyle();
+        const entry = resolveFontEntry(fonts, {
+          family: style.fontFamily,
+          weight: style.fontWeight,
+          style: style.fontStyle,
+        });
+        const stroke = style.stroke && Number(style.stroke.width) > 0
+          ? { width: Number(style.stroke.width), color: style.stroke.color || "#000000" }
+          : null;
+        const shadow = style.shadow
+          ? { dx: Number(style.shadow.dx) || 0, dy: Number(style.shadow.dy) || 0, color: style.shadow.color || "#000000" }
+          : null;
+        leaves.push(element);
+        nodes.push({
+          kind: "text",
+          x: Number(element.x) || 0,
+          y: Number(element.y) || 0,
+          fontFile: resolveFontFileAbs(root, entry),
+          fontSize: Number(style.fontSize) || 24,
+          lineHeight: Number(style.lineHeight) || 1.2,
+          align: style.align || "left",
+          color: style.color || "#111111",
+          lines: splitTextLines(element.content),
+          stroke,
+          shadow,
+        });
+        continue;
+      }
       if (element.type !== "image" || !element.src) continue;
       leaves.push(element);
       nodes.push({
@@ -1758,7 +1913,10 @@ async function compositeGroup(root, projectId, project, group, { scale, backgrou
   // (nested subgroups included; each subgroup's background composites inside the parent
   // band). `members` is every painted image element (leaf) for the manifest + count.
   const members = [];
-  const children = buildRenderNodes(root, projectId, project, group.id, members);
+  // Load the fonts manifest once per composite so text nodes resolve to absolute .ttf
+  // paths (a no-op file read when the group has no text).
+  const fonts = readFontsManifest(root);
+  const children = buildRenderNodes(root, projectId, project, group.id, members, fonts);
   const spec = {
     schema: "ai_studio.canvas.render_group_spec.v1",
     scale: renderScale,

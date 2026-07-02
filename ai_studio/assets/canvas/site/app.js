@@ -41,6 +41,10 @@ export const state = {
   regionTool: "select",
   polygonDraft: [],
   polygonHover: null,
+  // The text element currently open in the inline textarea editor (T tool / dblclick),
+  // or null. Page-only (like regionEditId); the workspace owns the overlay DOM and skips
+  // painting this element's glyphs while it is being edited.
+  editingTextId: null,
   history: { canUndo: false, canRedo: false },
   viewport: { scale: 1, offsetX: 0, offsetY: 0 },
   tool: "select", // "select" | "pan"
@@ -237,6 +241,7 @@ export function clearSelection() {
   state.selectedRegionIds = new Set();
   state.regionEditId = null;
   state.enteredGroupId = null;
+  state.editingTextId = null;
 }
 
 // The element currently in region-edit isolation (mode B): its regions become the

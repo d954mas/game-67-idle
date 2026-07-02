@@ -11,8 +11,9 @@
 //     clicking a region selects it, dragging moves it, corner/edge handles resize,
 //     and (while a region is selected) dragging the element's empty area rubber-
 //     bands a NEW region. Every region gesture commits ONCE via setRegions.
-//   * Dropping an element with its centre inside another screen frame reparents it
-//     (assignToGroup); positions persist ONCE on mouseup (no mid-drag journal spam).
+//   * A canvas drag NEVER changes group membership (lead 2026-07-02): positions persist
+//     ONCE on mouseup as one batched op (no mid-drag journal spam); joining/leaving a
+//     group is explicit only (layers drag, Ctrl+G, Ungroup, CLI group-assign).
 import {
   api,
   applyMutation,
@@ -36,7 +37,9 @@ import {
   syncPrimaryGroup,
   toggleSelect,
 } from "./app.js";
-import { renameProject, setRegionsFor, undo, redo } from "./actions.js";
+import { addTextAt, patchTextElement, renameProject, setRegionsFor, undo, redo } from "./actions.js";
+import { canvasFontString } from "../fonts.mjs";
+import { areFontsReady, measureTextLines } from "./fonts.js";
 import { inlineEdit } from "./inline.js";
 import { openContextMenu } from "./context_menu.js";
 import {
@@ -134,6 +137,7 @@ export function render() {
   updateRegionTools(editEl);
   updateZoomIndicator();
   updateEmptyHint();
+  syncTextEditor();
 }
 
 // A breadcrumb chip for the entered scope (Figma "Screen ▸ Button — Esc to exit"), so
@@ -190,6 +194,10 @@ function paintScope(scopeId, vp, editEl) {
 }
 
 function paintElement(element, vp, editEl) {
+  if (element.type === "text") {
+    paintTextElement(element, vp, editEl);
+    return;
+  }
   const isEdit = editEl && element.id === editEl.id;
   // Mode B dims every other element to focus the isolated one.
   ctx.globalAlpha = editEl && !isEdit ? 0.3 : 1;
@@ -214,6 +222,178 @@ function paintElement(element, vp, editEl) {
       interactive: Boolean(isEdit),
     });
   }
+}
+
+// Paint a TEXT element: the page's same-font approximation of the PIL export (PIL is
+// the source of rendered truth). Re-measures every paint (auto-width); reconciles the
+// stored w/h (selection/marquee bookkeeping) in memory WITHOUT writing to disk — the
+// disk w/h only updates on the patchElement that commits a content/style change.
+// Parity rules: textBaseline "top"; per-line y = top + i*(fontSize*lineHeight); the
+// HARD offset shadow is drawn FIRST (blur 0 in v1); the stroke is drawn UNDER the fill
+// with lineWidth = 2 x style.stroke.width + lineJoin round (PIL grows the stroke
+// outward, so 2x centered matches). The element being inline-edited is skipped (the
+// textarea overlay shows the live text).
+function paintTextElement(element, vp, editEl) {
+  const isEdit = editEl && element.id === editEl.id;
+  ctx.globalAlpha = editEl && !isEdit ? 0.3 : 1;
+  const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
+  const style = element.style || {};
+  if (areFontsReady() && state.editingTextId !== element.id) {
+    drawTextGlyphs(element, style, origin, vp);
+  }
+  ctx.globalAlpha = 1;
+  if (isSelected(element)) {
+    ctx.strokeStyle = "#77a7ff";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(origin.x, origin.y, element.w * vp.scale, element.h * vp.scale);
+  }
+}
+
+// Draw a text element's glyphs onto the canvas and reconcile its in-memory box.
+// `origin` is the box top-left in screen px; widths are measured at WORLD size and
+// scaled (canvas advance scales linearly), so lines align without a second measure.
+function drawTextGlyphs(element, style, origin, vp) {
+  const scale = vp.scale;
+  const fontSize = Number(style.fontSize) || 24;
+  const lineHeight = Number(style.lineHeight) || 1.2;
+  const { lines, widths, boxW } = measureTextLines(element.content, style);
+  // Reconcile the stored box (world px) so selection/marquee/hit-test match the glyphs.
+  element.w = Math.max(1, Math.ceil(boxW));
+  element.h = Math.max(1, Math.ceil(lines.length * fontSize * lineHeight));
+
+  const align = style.align || "left";
+  const lineStep = fontSize * lineHeight * scale;
+  const lineX = (i) => {
+    if (align === "center") return origin.x + ((boxW - widths[i]) * scale) / 2;
+    if (align === "right") return origin.x + (boxW - widths[i]) * scale;
+    return origin.x;
+  };
+
+  ctx.save();
+  ctx.font = canvasFontString(style, fontSize * scale);
+  ctx.textBaseline = "top";
+  ctx.textAlign = "left"; // per-line align offsets are computed manually
+  const stroke = style.stroke && Number(style.stroke.width) > 0 ? style.stroke : null;
+  const shadow = style.shadow || null;
+
+  // Shadow pass FIRST (hard offset, fill only) so the main text always sits on top.
+  if (shadow) {
+    ctx.fillStyle = shadow.color || "#000000";
+    const sdx = (Number(shadow.dx) || 0) * scale;
+    const sdy = (Number(shadow.dy) || 0) * scale;
+    for (let i = 0; i < lines.length; i += 1) ctx.fillText(lines[i], lineX(i) + sdx, origin.y + i * lineStep + sdy);
+  }
+  // Stroke UNDER fill: lineWidth = 2 x width so the centered canvas stroke matches PIL's
+  // outward-grown stroke.
+  if (stroke) {
+    ctx.strokeStyle = stroke.color || "#000000";
+    ctx.lineWidth = 2 * Number(stroke.width) * scale;
+    ctx.lineJoin = "round";
+    for (let i = 0; i < lines.length; i += 1) ctx.strokeText(lines[i], lineX(i), origin.y + i * lineStep);
+  }
+  ctx.fillStyle = style.color || "#111111";
+  for (let i = 0; i < lines.length; i += 1) ctx.fillText(lines[i], lineX(i), origin.y + i * lineStep);
+  ctx.restore();
+}
+
+// ---- inline text editor (textarea overlay) -----------------------------------
+//
+// Double-click a text element (or place one with the T tool) to edit it in place: a
+// textarea positioned over the box, styled to match the font. Commit on blur or
+// Ctrl/Cmd+Enter (Enter alone inserts a newline — text is multi-line); Esc cancels.
+// One patchElement per commit (content + the re-measured box in the SAME entry).
+let textEditor = null; // { el: <textarea>, elementId }
+let textCommitting = false;
+
+function openTextEditor(element) {
+  closeTextEditor();
+  state.editingTextId = element.id;
+  const ta = document.createElement("textarea");
+  ta.className = "text-edit-overlay";
+  ta.value = element.content || "";
+  ta.spellcheck = false;
+  ta.wrap = "off";
+  el("stage").appendChild(ta);
+  textEditor = { el: ta, elementId: element.id };
+  positionTextEditor();
+  ta.focus();
+  ta.select();
+  ta.addEventListener("keydown", onTextEditorKey);
+  ta.addEventListener("blur", () => commitTextEditor());
+  ta.addEventListener("input", positionTextEditor);
+}
+
+function onTextEditorKey(event) {
+  event.stopPropagation(); // keep the global shortcut handler out of the editor
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeTextEditor();
+    render();
+  } else if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    commitTextEditor();
+  }
+}
+
+function positionTextEditor() {
+  if (!textEditor) return;
+  const element = elements().find((item) => item.id === textEditor.elementId);
+  if (!element) {
+    closeTextEditor();
+    return;
+  }
+  const vp = state.viewport;
+  const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
+  const style = element.style || {};
+  const fontSize = Number(style.fontSize) || 24;
+  const ta = textEditor.el;
+  ta.style.left = `${origin.x}px`;
+  ta.style.top = `${origin.y}px`;
+  ta.style.font = canvasFontString(style, fontSize * vp.scale);
+  ta.style.lineHeight = `${fontSize * (Number(style.lineHeight) || 1.2) * vp.scale}px`;
+  ta.style.color = style.color || "#111111";
+  ta.style.textAlign = style.align || "left";
+  ta.style.width = `${Math.max(48, (element.w || 48) * vp.scale + 12)}px`;
+  ta.style.height = "auto";
+  ta.style.height = `${Math.max((element.h || fontSize) * vp.scale, ta.scrollHeight)}px`;
+}
+
+async function commitTextEditor() {
+  if (!textEditor || textCommitting) return;
+  textCommitting = true;
+  const { el: ta, elementId } = textEditor;
+  const content = ta.value;
+  const element = elements().find((item) => item.id === elementId);
+  textEditor = null;
+  state.editingTextId = null;
+  ta.remove();
+  if (element && content !== element.content) {
+    await patchTextElement(elementId, { content });
+  } else {
+    render();
+  }
+  textCommitting = false;
+}
+
+// Discard the editor without committing (Esc / teardown). Safe to call when none open.
+function closeTextEditor() {
+  if (!textEditor) return;
+  const ta = textEditor.el;
+  textEditor = null;
+  state.editingTextId = null;
+  ta.remove();
+}
+
+// Reposition or tear down the editor to match state each render (pan/zoom, or the
+// element vanished under undo/redo/project-switch).
+function syncTextEditor() {
+  if (!textEditor) return;
+  const element = elements().find((item) => item.id === textEditor.elementId);
+  if (!element || state.editingTextId !== textEditor.elementId) {
+    closeTextEditor();
+    return;
+  }
+  positionTextEditor();
 }
 
 // Solid group background fill behind the group's children (§ group background). Only a
@@ -561,22 +741,8 @@ function hitGroupLabel(screen) {
   return null;
 }
 
-// Innermost VISIBLE group frame whose bounds contain the world point (for drop-to-
-// reparent) — walks the scene tree so a drop lands in the deepest nested frame under the
-// point, not just an outer screen.
-function groupAtCenter(cx, cy) {
-  const inBox = (g) => cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h;
-  let best = null;
-  const walk = (scopeId) => {
-    for (const child of orderedChildren(state.project, scopeId)) {
-      if (child.kind !== "group" || isNodeHidden(state.project, child.ref)) continue;
-      if (inBox(child.ref)) best = child.id; // deeper containing groups overwrite -> innermost wins
-      walk(child.id);
-    }
-  };
-  walk(null);
-  return best;
-}
+// (groupAtCenter removed 2026-07-02 with geometric drop-reparenting — group
+// membership changes are explicit only: layers drag, Ctrl+G, Ungroup, CLI.)
 
 // ---- region gesture starts ---------------------------------------------------
 
@@ -644,6 +810,12 @@ function onMouseDown(event) {
   if (wantPan) {
     drag = { mode: "pan", startX: screen.x, startY: screen.y, origOffset: { ...state.viewport } };
     setCursor("grabbing");
+    return;
+  }
+
+  // T tool: drop a text element at the click point (Figma-style), then edit it inline.
+  if (state.tool === "text") {
+    placeTextAt(world);
     return;
   }
 
@@ -783,7 +955,23 @@ function applyMarquee() {
   const insideGroups = new Set(drag.baseGroups || []);
   for (const group of scope.groups) {
     if (isNodeHidden(state.project, group)) continue;
-    if (intersects(group)) insideGroups.add(group.id);
+    // A group is touched when the marquee hits its FRAME or any of its VISIBLE member
+    // artwork — membership is derived from ancestry, never frame containment, so a member
+    // parked OUTSIDE the frame is still grabbed via its group at root (invariant: parked
+    // == in-frame). A clip:true member is tested by its visible (clipped) box, so a
+    // cropped-away part never grabs.
+    let touched = intersects(group);
+    if (!touched) {
+      for (const member of descendantsOf(state.project, group.id).elements) {
+        if (isElementHidden(member)) continue;
+        const box = visibleBox(member);
+        if (box && intersects(box)) {
+          touched = true;
+          break;
+        }
+      }
+    }
+    if (touched) insideGroups.add(group.id);
   }
   state.selectedRegionIds = new Set();
   state.selectedIds = inside;
@@ -927,44 +1115,25 @@ function commitElementDrag(finished) {
   const moved = finished.items.filter(
     (it) => Math.round(it.element.x) !== Math.round(it.origX) || Math.round(it.element.y) !== Math.round(it.origY),
   );
-  // Reparent: an element whose centre lands inside a frame it doesn't belong to
-  // joins that screen. Landing OUTSIDE every frame never clears membership (lead
-  // 2026-07-02: screens park off-frame elements — "убираю за границу то что сейчас
-  // не нужно"); leaving a group is explicit only (layers drag to root / Ungroup).
-  // Group elements by target so it is ONE assign call per target group.
-  const reassign = new Map();
-  for (const it of finished.items) {
-    const element = it.element;
-    const target = groupAtCenter(element.x + element.w / 2, element.y + element.h / 2);
-    const current = element.groupId || null;
-    if (target !== current && target !== null) {
-      if (!reassign.has(target)) reassign.set(target, []);
-      reassign.get(target).push(element.id);
-    }
-  }
-  if (!moved.length && !reassign.size) {
+  // NO geometric reparenting (lead 2026-07-02, live verify): a canvas drag NEVER
+  // changes group membership — parked-off-frame elements stay members, and moving a
+  // button over another frame must not capture it ("я бы хотел выносить и добавлять в
+  // группу всегда явно"). Joining/leaving a group is explicit only: layers drag onto a
+  // group header / to root, Ctrl+G, Ungroup, CLI group-assign.
+  if (!moved.length) {
     refresh();
     return;
   }
+  // Persist ALL positions as ONE batched elements-set, so a single Ctrl+Z restores
+  // every element's pre-drag position in one step (one HTTP call, one journal entry).
   (async () => {
     try {
-      // Reparent FIRST, then persist ALL positions LAST as ONE batched op, so a
-      // single Ctrl+Z restores every element's pre-drag position in one step (the
-      // newest journal entry is the position batch). A pure multi-move is now exactly
-      // one HTTP call + one journal entry (was N sequential PATCHes / N entries).
-      let last = null;
-      for (const [groupId, ids] of reassign) {
-        last = await api("POST", `/projects/${projectId}/assign-group`, { elementIds: ids, groupId });
-      }
-      if (moved.length) {
-        const patches = moved.map((it) => ({
-          elementId: it.element.id,
-          x: Math.round(it.element.x),
-          y: Math.round(it.element.y),
-        }));
-        last = await api("POST", `/projects/${projectId}/elements-set`, { patches });
-      }
-      applyMutation(last);
+      const patches = moved.map((it) => ({
+        elementId: it.element.id,
+        x: Math.round(it.element.x),
+        y: Math.round(it.element.y),
+      }));
+      applyMutation(await api("POST", `/projects/${projectId}/elements-set`, { patches }));
     } catch (error) {
       setStatus(error.message, true);
     }
@@ -1269,6 +1438,14 @@ function onDblClick(event) {
     refresh();
     return;
   }
+  // A TEXT leaf has no regions, so double-click = inline text edit (T0219: text leaf
+  // dblclick edits text INSTEAD of region-edit). An image leaf enters region-edit.
+  if (hit.type === "text") {
+    selectOnly(hit.id);
+    openTextEditor(hit);
+    refresh();
+    return;
+  }
   // The click already resolves to the leaf element in the entered scope -> region-edit
   // isolation (unchanged trigger path).
   enterRegionEdit(hit.id);
@@ -1380,9 +1557,20 @@ async function onFilePick(event) {
 }
 
 export function setTool(tool) {
-  state.tool = tool === "pan" ? "pan" : "select";
+  state.tool = tool === "pan" ? "pan" : tool === "text" ? "text" : "select";
   const stage = el("stage");
   if (stage) stage.classList.toggle("pan-tool", state.tool === "pan");
-  if (canvas) canvas.style.cursor = state.tool === "pan" ? "grab" : "default";
+  if (canvas) canvas.style.cursor = state.tool === "pan" ? "grab" : state.tool === "text" ? "text" : "default";
   syncTopBar();
+}
+
+// T tool: place a fresh text element at the click point, switch back to Select (Figma),
+// and open its inline editor so the user types immediately over the default "Text".
+async function placeTextAt(world) {
+  const element = await addTextAt(world);
+  setTool("select");
+  if (element) {
+    const live = elements().find((item) => item.id === element.id);
+    if (live) openTextEditor(live);
+  }
 }

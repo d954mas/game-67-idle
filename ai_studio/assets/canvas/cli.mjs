@@ -9,6 +9,7 @@
 //   node ai_studio/assets/canvas/cli.mjs rename <id> --title "New title"
 //   node ai_studio/assets/canvas/cli.mjs delete <id>
 //   node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
+//   node ai_studio/assets/canvas/cli.mjs add-text <id> [--x n --y n] [--content "..."] [--style-json path] [--group gid]
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
 //   node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json
@@ -34,6 +35,7 @@ import { fileURLToPath } from "node:url";
 import { fail, isMain } from "../../core_harness/tool_lib/cli.mjs";
 import {
   addImage,
+  addText,
   assignToGroup,
   createGroup,
   createProject,
@@ -116,16 +118,17 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|group-fit|group-assign|group-delete|render-group|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|group-fit|group-assign|group-delete|render-group|undo|redo|history>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
   rename <id> --title <title>
   delete <id>
   add-image <id> --file <path>
+  add-text <id> [--x <n> --y <n>] [--content "<text>"] [--style-json <path>] [--group <gid>]
   detect-regions <id> --element <eid>
   move <id> --element <eid> --x <n> --y <n>
-  element-set <id> --element <eid> [--name <name>] [--visible true|false]
+  element-set <id> --element <eid> [--name <name>] [--visible true|false] [--content "<text>"] [--style-json <path>]
   element-remove <id> --element <eid>
   elements-set <id> --json <path>   (batched patch: [{elementId,x?,y?,w?,h?,name?,visible?}] or {patches:[...]}; one undo step)
   elements-remove <id> --elements e1,e2   (batched delete; one undo step)
@@ -174,6 +177,19 @@ async function runCommand(command, id, positional, flags) {
       const bytes = readFileSync(filePath);
       return print(addImage(repoRoot, id, { name: basename(filePath), bytes }));
     }
+    case "add-text": {
+      if (!id) fail("add-text requires <id>");
+      const args = {};
+      if (flags.x !== undefined) args.x = Number(flags.x);
+      if (flags.y !== undefined) args.y = Number(flags.y);
+      if (flags.content && flags.content !== "true") args.content = flags.content;
+      if (flags["style-json"] && flags["style-json"] !== "true") {
+        args.style = JSON.parse(readFileSync(resolve(flags["style-json"]), "utf8"));
+      }
+      if (flags.group && flags.group !== "true" && flags.group !== "none") args.groupId = flags.group;
+      // addText(root, projectId, args) — the op validates style against fonts.json.
+      return print(addText(repoRoot, id, args));
+    }
     case "detect-regions": {
       if (!id) fail("detect-regions requires <id>");
       if (!flags.element) fail("detect-regions requires --element <eid>");
@@ -193,7 +209,13 @@ async function runCommand(command, id, positional, flags) {
       const patch = {};
       if (flags.name && flags.name !== "true") patch.name = flags.name;
       if (flags.visible !== undefined) patch.visible = flags.visible === "true";
-      if (!Object.keys(patch).length) fail("element-set requires --name and/or --visible");
+      // Text-element edits: --content sets the string (\n for newlines); --style-json is
+      // a partial or full style object shallow-merged + validated against fonts.json.
+      if (flags.content !== undefined && flags.content !== "true") patch.content = flags.content;
+      if (flags["style-json"] && flags["style-json"] !== "true") {
+        patch.style = JSON.parse(readFileSync(resolve(flags["style-json"]), "utf8"));
+      }
+      if (!Object.keys(patch).length) fail("element-set requires --name, --visible, --content, and/or --style-json");
       return print(patchElement(repoRoot, id, flags.element, patch));
     }
     case "element-remove": {
