@@ -36,14 +36,93 @@ export function regionScreenRect(element, region, vp) {
   return { x: p.x, y: p.y, w: world.w * vp.scale, h: world.h * vp.scale };
 }
 
-// Topmost region whose world rect contains the point (last in array = topmost).
+// ---- polygonal regions -------------------------------------------------------
+// A region is polygonal when it carries a `polygon` ring of >=3 [x, y] source-pixel
+// pairs (no `shape` field — the discriminator matches ops.setRegions and the slicer).
+
+export function regionHasPolygon(region) {
+  return Boolean(region && Array.isArray(region.polygon) && region.polygon.length >= 3);
+}
+
+// World-space points {x, y} of a region's polygon on its element (or null).
+export function regionWorldPolygon(element, region) {
+  if (!regionHasPolygon(region)) return null;
+  const { sx, sy } = scaleFactors(element);
+  return region.polygon.map((p) => ({ x: element.x + Number(p[0]) * sx, y: element.y + Number(p[1]) * sy }));
+}
+
+// Screen-space points {x, y} of a region's polygon under the viewport (or null).
+export function regionScreenPolygon(element, region, vp) {
+  const world = regionWorldPolygon(element, region);
+  if (!world) return null;
+  return world.map((p) => imageToScreenPoint(p, vp));
+}
+
+// Even-odd point-in-polygon over an array of {x, y}. Affine-invariant, so it is run in
+// world space; used to hit-test polygonal region bodies instead of a plain rect.
+function pointInPolygon(point, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = ring[i].x;
+    const yi = ring[i].y;
+    const xj = ring[j].x;
+    const yj = ring[j].y;
+    const denom = yj - yi || 1e-9;
+    if (((yi > point.y) !== (yj > point.y)) && point.x < ((xj - xi) * (point.y - yi)) / denom + xi) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
+
+// Proportionally rescale a polygon's points from oldRect to newRect (ports the legacy
+// transformPolygon). Both rects are [x, y, w, h] in source pixels; returns rounded int
+// points (or null when there is nothing to transform).
+export function transformPolygon(points, oldRect, newRect) {
+  if (!Array.isArray(points) || points.length < 3) return null;
+  const [ox, oy, ow, oh] = oldRect;
+  const [nx, ny, nw, nh] = newRect;
+  const scaleX = nw / Math.max(1, ow);
+  const scaleY = nh / Math.max(1, oh);
+  return points.map((p) => [
+    Math.round(nx + (Number(p[0]) - ox) * scaleX),
+    Math.round(ny + (Number(p[1]) - oy) * scaleY),
+  ]);
+}
+
+// Axis-aligned bbox [x, y, w, h] of an integer polygon (page-side mirror of the op's
+// rectFromPolygon; the op re-derives the stored rect, this is for the live draft/finish).
+export function polygonBBox(points) {
+  const xs = points.map((p) => Number(p[0]));
+  const ys = points.map((p) => Number(p[1]));
+  const x = Math.floor(Math.min(...xs));
+  const y = Math.floor(Math.min(...ys));
+  return [x, y, Math.max(1, Math.ceil(Math.max(...xs)) - x), Math.max(1, Math.ceil(Math.max(...ys)) - y)];
+}
+
+// Topmost region containing the point (last in array = topmost): point-in-polygon for
+// polygonal regions, rect AABB otherwise.
 export function hitRegion(world, element) {
   const regions = element.regions || [];
   for (let i = regions.length - 1; i >= 0; i -= 1) {
-    const r = regionWorldRect(element, regions[i]);
-    if (r && world.x >= r.x && world.x <= r.x + r.w && world.y >= r.y && world.y <= r.y + r.h) return regions[i];
+    const region = regions[i];
+    if (regionHasPolygon(region)) {
+      const ring = regionWorldPolygon(element, region);
+      if (ring && pointInPolygon(world, ring)) return region;
+    } else {
+      const r = regionWorldRect(element, region);
+      if (r && world.x >= r.x && world.x <= r.x + r.w && world.y >= r.y && world.y <= r.y + r.h) return region;
+    }
   }
   return null;
+}
+
+// Trace a screen-space polygon ({x, y} points) as a closed path on ctx.
+function tracePolygonPath(ctx, points) {
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i += 1) ctx.lineTo(points[i].x, points[i].y);
+  ctx.closePath();
 }
 
 // Eight resize handles (corners + edges) as fractional positions with a cursor.
@@ -110,9 +189,11 @@ export function drawRegionsOverlay(ctx, element, vp, { selectedRegionIds, intera
     const box = regionScreenRect(element, regions[i], vp);
     if (!box) continue;
     const selected = Boolean(interactive && selectedRegionIds && selectedRegionIds.has(regions[i].id));
+    // Polygonal regions render as their stroked ring (same fill/selection colors), not
+    // just the bbox; a plain region renders as its rect.
+    const poly = regionScreenPolygon(element, regions[i], vp);
     if (interactive) {
       ctx.fillStyle = selected ? "rgba(215, 161, 74, 0.24)" : "rgba(63, 199, 186, 0.14)";
-      ctx.fillRect(box.x, box.y, box.w, box.h);
       ctx.lineWidth = selected ? 2 : 1.5;
       ctx.strokeStyle = selected ? "#ffca6a" : "#3fc7ba";
     } else {
@@ -120,7 +201,14 @@ export function drawRegionsOverlay(ctx, element, vp, { selectedRegionIds, intera
       ctx.lineWidth = 1;
       ctx.strokeStyle = "rgba(63, 199, 186, 0.6)";
     }
-    ctx.strokeRect(box.x + 0.5, box.y + 0.5, Math.max(0, box.w - 1), Math.max(0, box.h - 1));
+    if (poly) {
+      tracePolygonPath(ctx, poly);
+      if (interactive) ctx.fill();
+      ctx.stroke();
+    } else {
+      if (interactive) ctx.fillRect(box.x, box.y, box.w, box.h);
+      ctx.strokeRect(box.x + 0.5, box.y + 0.5, Math.max(0, box.w - 1), Math.max(0, box.h - 1));
+    }
     // Badge shows the region's NAME (detect assigns "<element> 1..N"); the bare
     // index is only the fallback for unnamed regions. Long names truncate.
     const label = (regions[i].name || "").trim() || String(i + 1);
@@ -133,7 +221,53 @@ export function drawRegionsOverlay(ctx, element, vp, { selectedRegionIds, intera
         ctx.strokeStyle = "#1a1f2b";
         ctx.strokeRect(point.x - HANDLE_HALF, point.y - HANDLE_HALF, HANDLE_HALF * 2, HANDLE_HALF * 2);
       }
+      // Vertex dots for a selected polygon (not individually draggable — bbox handles
+      // rescale the whole ring, matching the legacy editor).
+      if (poly) {
+        for (const point of poly) {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 3.5, 0, Math.PI * 2);
+          ctx.fillStyle = "#d7a14a";
+          ctx.fill();
+          ctx.strokeStyle = "#1a1f2b";
+          ctx.stroke();
+        }
+      }
     }
+  }
+  ctx.restore();
+}
+
+// Draw the in-progress polygon draft on the isolated element: dashed edges (auto-
+// closing at >=3 points), a live rubber segment to the hover point, and a dot at each
+// placed vertex. `draft`/`hover` are SOURCE-pixel coordinates on `element`.
+export function drawPolygonDraft(ctx, element, draft, hover, vp) {
+  if (!draft || !draft.length) return;
+  const { sx, sy } = scaleFactors(element);
+  const toScreen = (p) => imageToScreenPoint({ x: element.x + Number(p[0]) * sx, y: element.y + Number(p[1]) * sy }, vp);
+  const placed = draft.map(toScreen);
+  const chain = hover ? [...placed, toScreen([hover.x, hover.y])] : placed;
+  ctx.save();
+  ctx.setLineDash([7, 5]);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = "#d7a14a";
+  ctx.fillStyle = "rgba(215, 161, 74, 0.14)";
+  if (chain.length >= 2) {
+    ctx.beginPath();
+    ctx.moveTo(chain[0].x, chain[0].y);
+    for (let i = 1; i < chain.length; i += 1) ctx.lineTo(chain[i].x, chain[i].y);
+    if (draft.length >= 3) ctx.closePath();
+    ctx.stroke();
+    if (draft.length >= 3) ctx.fill();
+  }
+  ctx.setLineDash([]);
+  for (const point of placed) {
+    ctx.beginPath();
+    ctx.arc(point.x, point.y, 4, 0, Math.PI * 2);
+    ctx.fillStyle = "#f8fbff";
+    ctx.fill();
+    ctx.strokeStyle = "#1a1f2b";
+    ctx.stroke();
   }
   ctx.restore();
 }

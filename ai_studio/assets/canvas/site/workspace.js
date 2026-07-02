@@ -41,12 +41,15 @@ import { renameProject, setRegionsFor, undo, redo } from "./actions.js";
 import { inlineEdit } from "./inline.js";
 import { openContextMenu } from "./context_menu.js";
 import {
+  drawPolygonDraft,
   drawRegionsOverlay,
   hitRegion,
   hitRegionHandle,
   newRegionId,
+  polygonBBox,
   regionRect,
   scaleFactors,
+  transformPolygon,
 } from "./regions.js";
 import {
   clamp,
@@ -122,7 +125,12 @@ export function render() {
     drawGroupFrame(group, vp);
   }
   drawGestureOverlay();
+  // Live polygon draft on the isolated element (page-only state, never journaled).
+  if (editEl && state.regionTool === "polygon" && state.polygonDraft.length) {
+    drawPolygonDraft(ctx, editEl, state.polygonDraft, state.polygonHover, vp);
+  }
   updateBreadcrumb(editEl);
+  updateRegionTools(editEl);
   updateZoomIndicator();
   updateEmptyHint();
 }
@@ -134,11 +142,24 @@ function updateBreadcrumb(editEl) {
     const empty = !(editEl.regions || []).length;
     // Empty-state hint inside the mode so a fresh image tells you what to do.
     node.textContent = empty
-      ? `Regions: ${editEl.name || editEl.id} — drag on the image to draw a region (Esc to exit)`
+      ? `Regions: ${editEl.name || editEl.id} — pick a tool and draw on the image (Esc to exit)`
       : `Regions: ${editEl.name || editEl.id} — Esc to exit`;
     node.classList.remove("hidden");
   } else {
     node.classList.add("hidden");
+  }
+}
+
+// The region-edit tool row (Select / Draw Rect / Draw Polygon) is shown only inside
+// region-edit isolation; the active tool is highlighted. Placement/markup is a chip-
+// like floating toolbar under the breadcrumb (canvas.html / canvas.css).
+function updateRegionTools(editEl) {
+  const node = el("region-tools");
+  if (!node) return;
+  node.classList.toggle("hidden", !editEl);
+  if (!editEl) return;
+  for (const button of node.querySelectorAll(".rtool")) {
+    button.classList.toggle("active", button.dataset.regionTool === state.regionTool);
   }
 }
 
@@ -311,6 +332,8 @@ function beginRegionResize(element, grabbed, screen) {
     region: grabbed.region,
     handle: grabbed.handle,
     orig: [...regionRect(grabbed.region)],
+    // A polygonal region rescales its ring with the bbox; capture the original points.
+    origPolygon: Array.isArray(grabbed.region.polygon) ? grabbed.region.polygon.map((p) => [...p]) : null,
     startX: screen.x,
     startY: screen.y,
     sx,
@@ -333,7 +356,12 @@ function beginRegionSelectMove(element, region, screen, shift) {
     const { sx, sy } = scaleFactors(element);
     const items = (element.regions || [])
       .filter((r) => state.selectedRegionIds.has(r.id) && regionRect(r))
-      .map((r) => ({ region: r, orig: [...regionRect(r)] }));
+      .map((r) => ({
+        region: r,
+        orig: [...regionRect(r)],
+        // Capture the polygon ring so a move translates it with the bbox (one commit).
+        origPolygon: Array.isArray(r.polygon) ? r.polygon.map((p) => [...p]) : null,
+      }));
     drag = { mode: "region-move", element, items, startX: screen.x, startY: screen.y, sx, sy, changed: false };
     setCursor("move");
   } else {
@@ -363,29 +391,48 @@ function onMouseDown(event) {
     return;
   }
 
-  // MODE B (region-edit isolation): only the isolated element's regions respond.
+  // MODE B (region-edit isolation): only the isolated element's regions respond, and
+  // the active region tool decides what a press on the image does.
   const editEl = regionEditElement();
   if (editEl) {
-    if (state.selectedRegionIds.size) {
-      const grabbed = hitRegionHandle(screen, editEl, state.selectedRegionIds, state.viewport);
-      if (grabbed) {
-        beginRegionResize(editEl, grabbed, screen);
+    const tool = state.regionTool;
+    if (tool === "polygon") {
+      if (pointInElement(world, editEl)) {
+        // Double-click (detail>1) on a >=3-point draft closes it; otherwise place a vertex.
+        if (event.detail > 1 && state.polygonDraft.length >= 3) finishPolygonDraft();
+        else addPolygonVertex(editEl, screen);
         return;
       }
-    }
-    if (pointInElement(world, editEl)) {
-      const region = hitRegion(world, editEl);
-      if (region) {
-        beginRegionSelectMove(editEl, region, screen, event.shiftKey);
+      // Outside the image: never abandon an in-progress draft on a stray click.
+      if (state.polygonDraft.length) return;
+      exitRegionEdit();
+      refresh();
+    } else {
+      // Select tool reserves the region body for move/resize; Rect tool always draws
+      // (a rubber-band NEW rect region), even on top of existing regions.
+      if (tool === "select" && state.selectedRegionIds.size) {
+        const grabbed = hitRegionHandle(screen, editEl, state.selectedRegionIds, state.viewport);
+        if (grabbed) {
+          beginRegionResize(editEl, grabbed, screen);
+          return;
+        }
+      }
+      if (pointInElement(world, editEl)) {
+        if (tool === "select") {
+          const region = hitRegion(world, editEl);
+          if (region) {
+            beginRegionSelectMove(editEl, region, screen, event.shiftKey);
+            return;
+          }
+        }
+        // Empty area (select) or anywhere (rect) -> rubber-band a NEW rect region.
+        beginRegionCreate(editEl, screen, world);
         return;
       }
-      // Empty area of the isolated (locked) image -> rubber-band a NEW region.
-      beginRegionCreate(editEl, screen, world);
-      return;
+      // Clicked outside the isolated image -> exit isolation, then handle as mode A.
+      exitRegionEdit();
+      refresh();
     }
-    // Clicked outside the isolated image -> exit isolation, then handle as mode A.
-    exitRegionEdit();
-    refresh();
   }
 
   const labelGroupId = hitGroupLabel(screen);
@@ -454,7 +501,11 @@ function dragRegionMove(screen) {
   const dySrc = Math.round((screen.y - drag.startY) / (state.viewport.scale * drag.sy));
   for (const item of drag.items) {
     const [ox, oy, w, h] = item.orig;
-    item.region.rect = [clamp(ox + dxSrc, 0, Math.max(0, sw - w)), clamp(oy + dySrc, 0, Math.max(0, sh - h)), w, h];
+    const nx = clamp(ox + dxSrc, 0, Math.max(0, sw - w));
+    const ny = clamp(oy + dySrc, 0, Math.max(0, sh - h));
+    item.region.rect = [nx, ny, w, h];
+    // Translate the polygon with its bbox (same w/h → transformPolygon is a pure shift).
+    if (item.origPolygon) item.region.polygon = transformPolygon(item.origPolygon, item.orig, [nx, ny, w, h]);
   }
   if (dxSrc !== 0 || dySrc !== 0) drag.changed = true;
 }
@@ -484,6 +535,8 @@ function dragRegionResize(screen) {
     h = clamp(oh + dy, MIN, sh - oy);
   }
   drag.region.rect = [x, y, w, h];
+  // Rescale the polygon proportionally into the new bbox (matches the legacy editor).
+  if (drag.origPolygon) drag.region.polygon = transformPolygon(drag.origPolygon, drag.orig, [x, y, w, h]);
   if (x !== ox || y !== oy || w !== ow || h !== oh) drag.changed = true;
 }
 
@@ -630,6 +683,77 @@ function commitRegionCreate(finished) {
   setRegionsFor(element.id, [...(element.regions || []), { id, rect: [x0, y0, w, h] }], "Added region.");
 }
 
+// ---- polygon draft (page-only; never journaled until it closes) --------------
+
+// A stage point -> the edited element's SOURCE-pixel coordinate, clamped to bounds.
+function screenToSource(element, screen) {
+  const world = screenToImagePoint(screen, state.viewport);
+  const { sx, sy } = scaleFactors(element);
+  const sw = element.source_w || element.w;
+  const sh = element.source_h || element.h;
+  return {
+    x: clamp(Math.round((world.x - element.x) / sx), 0, sw),
+    y: clamp(Math.round((world.y - element.y) / sy), 0, sh),
+  };
+}
+
+// Append a vertex to the in-progress polygon draft (pure UI state — no journal entry).
+function addPolygonVertex(element, screen) {
+  const p = screenToSource(element, screen);
+  state.polygonDraft = [...state.polygonDraft, [p.x, p.y]];
+  state.polygonHover = p;
+  render();
+}
+
+// Pop the last placed vertex (Ctrl+Z / Backspace while a draft is open). Returns true
+// if a vertex was removed, so the key handler knows it consumed the event. Never
+// touches the journal.
+export function popPolygonVertex() {
+  if (!state.polygonDraft.length) return false;
+  state.polygonDraft = state.polygonDraft.slice(0, -1);
+  state.polygonHover = null;
+  render();
+  return true;
+}
+
+// Cancel the whole draft (first Esc). Returns true when there was one to cancel.
+export function cancelPolygonDraft() {
+  if (!state.polygonDraft.length) return false;
+  state.polygonDraft = [];
+  state.polygonHover = null;
+  render();
+  return true;
+}
+
+// Close the draft (double-click / Enter) into ONE journaled setRegions that appends the
+// new polygon region ({id, rect: bbox, polygon}); the op re-derives rect from the ring.
+// No-ops below 3 points.
+export function finishPolygonDraft() {
+  const element = regionEditElement();
+  if (!element || state.polygonDraft.length < 3) return;
+  const polygon = state.polygonDraft.map((p) => [p[0], p[1]]);
+  const rect = polygonBBox(polygon);
+  const id = newRegionId();
+  state.polygonDraft = [];
+  state.polygonHover = null;
+  state.selectedRegionIds = new Set([id]);
+  state.expandedElements.add(element.id);
+  setRegionsFor(element.id, [...(element.regions || []), { id, rect, polygon }], "Added polygon region.");
+}
+
+// Switch the region-edit tool (Select / Draw Rect / Draw Polygon). Leaving polygon
+// abandons any in-progress draft. Page-only state, so no journal entry.
+export function setRegionTool(tool) {
+  const next = tool === "rect" || tool === "polygon" ? tool : "select";
+  // Leaving polygon abandons the in-progress draft (it lives only in polygon mode).
+  if (state.regionTool === "polygon" && next !== "polygon") {
+    state.polygonDraft = [];
+    state.polygonHover = null;
+  }
+  state.regionTool = next;
+  render();
+}
+
 function onMouseUp() {
   if (!drag) return;
   const finished = drag;
@@ -671,6 +795,12 @@ function updateCursorAt(screen) {
   const world = screenToImagePoint(screen, state.viewport);
   const editEl = regionEditElement();
   if (editEl) {
+    // Draw tools: crosshair over the image, default elsewhere.
+    if (state.regionTool === "polygon" || state.regionTool === "rect") {
+      setCursor(pointInElement(world, editEl) ? "crosshair" : "default");
+      return;
+    }
+    // Select tool: resize over a handle, move over a region body, crosshair over empty.
     if (state.selectedRegionIds.size) {
       const grabbed = hitRegionHandle(screen, editEl, state.selectedRegionIds, state.viewport);
       if (grabbed) {
@@ -694,12 +824,22 @@ function updateCursorAt(screen) {
 
 function onHover(event) {
   if (drag) return;
-  updateCursorAt(pointer(event));
+  const screen = pointer(event);
+  const editEl = regionEditElement();
+  // Live rubber segment while placing polygon vertices.
+  if (editEl && state.regionTool === "polygon" && state.polygonDraft.length) {
+    state.polygonHover = screenToSource(editEl, screen);
+    render();
+  }
+  updateCursorAt(screen);
 }
 
 // Double-click any image -> enter region-edit isolation (mode B). Works on a fresh
-// image with no regions so the user can draw the FIRST region there.
+// image with no regions so the user can draw the FIRST region there. In polygon mode a
+// double-click closes the draft (handled in onMouseDown via event.detail), so it must
+// not re-enter isolation here.
 function onDblClick(event) {
+  if (state.regionEditId && state.regionTool === "polygon") return;
   const world = screenToImagePoint(pointer(event), state.viewport);
   const hit = hitElement(world);
   if (hit) {
@@ -769,6 +909,10 @@ export function initWorkspace() {
 
   for (const button of document.querySelectorAll("#tool-rail .tool")) {
     button.addEventListener("click", () => setTool(button.dataset.tool));
+  }
+  // Region-edit tool row (shown only in isolation mode): Select / Draw Rect / Draw Polygon.
+  for (const button of document.querySelectorAll("#region-tools .rtool")) {
+    button.addEventListener("click", () => setRegionTool(button.dataset.regionTool));
   }
   el("undo").addEventListener("click", undo);
   el("redo").addEventListener("click", redo);

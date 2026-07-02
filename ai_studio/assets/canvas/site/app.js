@@ -21,6 +21,13 @@ export const state = {
   // reset whenever the element selection changes.
   regionEditId: null,
   selectedRegionIds: new Set(),
+  // Region-edit tool + in-progress polygon draft (page-only, like regionEditId; never
+  // journaled). regionTool ∈ {select, rect, polygon} drives the region-edit tool row;
+  // polygonDraft holds the vertices [[x,y]...] being placed (SOURCE pixels of the edited
+  // element) and polygonHover the live cursor point. All reset to select/[] on mode exit.
+  regionTool: "select",
+  polygonDraft: [],
+  polygonHover: null,
   history: { canUndo: false, canRedo: false },
   viewport: { scale: 1, offsetX: 0, offsetY: 0 },
   tool: "select", // "select" | "pan"
@@ -225,14 +232,22 @@ export function enterRegionEdit(elementId) {
   state.selectedIds = new Set([elementId]);
   if (state.regionEditId !== elementId) state.regionEditBaseSeq = state.history.seq ?? null;
   state.regionEditId = elementId;
+  // Fresh isolation starts on the Select tool with no polygon draft.
+  state.regionTool = "select";
+  state.polygonDraft = [];
+  state.polygonHover = null;
   state.expandedElements.add(elementId);
 }
 
-// Leave isolation: clears region selection AND the mode (one Escape step).
+// Leave isolation: clears region selection, the draw tool + any draft, AND the mode
+// (one Escape step).
 export function exitRegionEdit() {
   state.regionEditId = null;
   state.regionEditBaseSeq = null;
   state.selectedRegionIds = new Set();
+  state.regionTool = "select";
+  state.polygonDraft = [];
+  state.polygonHover = null;
 }
 
 // Reconcile region-edit isolation (page-only state) against a (re)loaded project.
@@ -339,7 +354,13 @@ export async function reloadProject(message) {
   const region = reconcileRegionEdit(state.project, state.regionEditId, state.selectedRegionIds);
   state.regionEditId = region.regionEditId;
   state.selectedRegionIds = region.selectedRegionIds;
-  if (!state.regionEditId) state.regionEditBaseSeq = null;
+  if (!state.regionEditId) {
+    // Left the mode (element/regions gone): drop the draw tool + any polygon draft too.
+    state.regionEditBaseSeq = null;
+    state.regionTool = "select";
+    state.polygonDraft = [];
+    state.polygonHover = null;
+  }
   await refreshHistory();
   refresh();
   if (message !== undefined) setStatus(message);

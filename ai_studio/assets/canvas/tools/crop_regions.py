@@ -7,9 +7,10 @@ their exact rects) and spawns this script directly. Each region is cropped from 
 element's own pixels by its STORED rect — no re-detection — so user-moved, resized,
 and hand-drawn regions all crop exactly where they sit. One PIL spawn, atomic writes.
 
-Per-region spec entries are objects ({id, rect}); a future polygon shape
-({"shape": {"type": "polygon", "points": [...]}}) slots in additively without
-changing the spec contract.
+Per-region spec entries are objects ({id, rect}). A polygonal region additionally
+carries {polygon: [[x, y], ...]} (>=3 source-pixel vertices); the crop is the rect
+bbox with alpha zeroed outside the polygon (ImageDraw.polygon mask). No `shape` field
+— the discriminator is polygon presence, matching ops.setRegions and the JS side.
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
@@ -38,6 +39,26 @@ def crop_rect(image: Image.Image, rect: list[Any]) -> Image.Image:
     return image.crop((left, top, right, bottom))
 
 
+def apply_polygon_mask(crop: Image.Image, region: dict[str, Any]) -> Image.Image:
+    """Zero the crop's alpha outside the region polygon (ported verbatim from the
+    legacy slice_regions.apply_polygon_mask): local points = polygon - rect origin, an
+    L mask filled by ImageDraw.polygon, applied via putalpha. No-op without a polygon."""
+    polygon = region.get("polygon")
+    if not polygon:
+        return crop
+    rect = region["rect"]
+    x, y = int(round(float(rect[0]))), int(round(float(rect[1])))
+    local_points = [(int(point[0]) - x, int(point[1]) - y) for point in polygon]
+    mask = Image.new("L", crop.size, 0)
+    ImageDraw.Draw(mask).polygon(local_points, fill=255)
+    result = crop.copy()
+    alpha = result.getchannel("A")
+    masked_alpha = Image.new("L", crop.size, 0)
+    masked_alpha.paste(alpha, mask=mask)
+    result.putalpha(masked_alpha)
+    return result
+
+
 def run(spec: dict[str, Any]) -> dict[str, Any]:
     source = Path(spec["source"])
     if not source.exists():
@@ -52,6 +73,7 @@ def run(spec: dict[str, Any]) -> dict[str, Any]:
         if not (isinstance(rect, list) and len(rect) == 4):
             raise ValueError(f"region {region.get('id') or index} is missing a rect")
         cropped = crop_rect(image, rect)
+        cropped = apply_polygon_mask(cropped, region)
         file_name = f"{index:03d}.png"
         save_image_atomic(cropped, out_dir / file_name)
         crops.append(

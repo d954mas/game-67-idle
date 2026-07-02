@@ -64,6 +64,13 @@
           <div id="empty-hint" class="hidden">Drop images here or press <b>Add image</b></div>
           <div id="drop-overlay" class="hidden"><span>Drop image(s) here</span></div>
           <div id="region-breadcrumb" class="hidden"></div>
+          <!-- Region-edit tool row (shown only in isolation mode): draw rect, draw
+               polygon, or just move — a chip-like floating toolbar under the breadcrumb. -->
+          <div id="region-tools" class="hidden">
+            <button type="button" class="rtool" data-region-tool="select" title="Select / move (V)">Select</button>
+            <button type="button" class="rtool" data-region-tool="rect" title="Draw a rectangle region">Draw Rect</button>
+            <button type="button" class="rtool" data-region-tool="polygon" title="Draw a polygon region (click vertices, double-click / Enter to close)">Draw Polygon</button>
+          </div>
           <div id="zoom-indicator">100%</div>
         </div>
 

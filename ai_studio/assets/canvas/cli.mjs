@@ -176,7 +176,14 @@ async function runCommand(command, id, positional, flags) {
       if (!flags.element) fail("regions-show requires --element <eid>");
       const element = (getProject(repoRoot, id).elements || []).find((item) => item.id === flags.element);
       if (!element) fail(`element not found: ${flags.element}`);
-      return print({ elementId: element.id, regions: element.regions || [] });
+      const regions = element.regions || [];
+      // `shapes` annotates each region as rect or polygon(<vertex-count>) without
+      // touching the round-tripping `regions` array.
+      const shapes = regions.map((region) => ({
+        id: region.id,
+        shape: Array.isArray(region.polygon) && region.polygon.length >= 3 ? `polygon(${region.polygon.length})` : "rect",
+      }));
+      return print({ elementId: element.id, regions, shapes });
     }
     case "slice": {
       if (!id) fail("slice requires <id>");

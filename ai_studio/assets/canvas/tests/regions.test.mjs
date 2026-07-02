@@ -133,6 +133,82 @@ test("setRegions rejects out-of-bounds, malformed, missing-id, and duplicate rec
   assert.throws(call("nope"), /requires a regions array/);
 });
 
+// ---- polygonal regions -------------------------------------------------------
+
+test("setRegions accepts a polygon: rounds+clamps points, derives rect = bbox, round-trips", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Polygon" });
+  const { element } = addImage(ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() }); // 64x48
+
+  // Float vertices + one out-of-bounds vertex; the supplied rect is intentionally wrong
+  // (it must be overridden by the polygon bbox).
+  const regions = [
+    { id: "poly1", name: "Tri", rect: [0, 0, 5, 5], polygon: [[8.4, 8.6], [40, 10], [80, 60], [12, 44]] },
+  ];
+  const result = setRegions(ROOT, { projectId: project.id, elementId: element.id, regions });
+  const r = result.regions[0];
+  // Points rounded to int + clamped to [0,64]x[0,48] (far edge inclusive): 80->64, 60->48.
+  assert.deepEqual(r.polygon, [[8, 9], [40, 10], [64, 48], [12, 44]]);
+  // rect is the polygon bbox: x=8, y=9, w=64-8=56, h=48-9=39 (in bounds).
+  assert.deepEqual(r.rect, [8, 9, 56, 39]);
+  assert.equal(r.name, "Tri");
+
+  // Persisted on disk and re-readable with the same shape.
+  const stored = getProject(ROOT, project.id).elements.find((el) => el.id === element.id);
+  assert.deepEqual(stored.regions[0].polygon, r.polygon);
+  assert.deepEqual(stored.regions[0].rect, r.rect);
+});
+
+test("setRegions drops a sub-3-point polygon, keeping the region as a plain rect", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Drop poly" });
+  const { element } = addImage(ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
+
+  // Two valid points + a malformed entry -> <3 clean points -> polygon dropped; the
+  // supplied rect is then required and validated.
+  const result = setRegions(ROOT, {
+    projectId: project.id,
+    elementId: element.id,
+    regions: [{ id: "r1", rect: [4, 4, 10, 10], polygon: [[1, 1], [2, 2], "nope"] }],
+  });
+  assert.equal("polygon" in result.regions[0], false, "polygon dropped below 3 clean points");
+  assert.deepEqual(result.regions[0].rect, [4, 4, 10, 10]);
+});
+
+test("setRegions rejects a non-array polygon", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Bad poly" });
+  const { element } = addImage(ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
+  assert.throws(
+    () =>
+      setRegions(ROOT, {
+        projectId: project.id,
+        elementId: element.id,
+        regions: [{ id: "r1", rect: [0, 0, 4, 4], polygon: "triangle" }],
+      }),
+    /polygon must be an array/,
+  );
+});
+
+test("setRegions polygon is journaled: undo/redo round-trips the ring", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Undo poly" });
+  const { element } = addImage(ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
+  setRegions(ROOT, { projectId: project.id, elementId: element.id, regions: [{ id: "r1", rect: [0, 0, 10, 10] }] });
+  const poly = [[8, 8], [28, 8], [8, 28]];
+  setRegions(ROOT, {
+    projectId: project.id,
+    elementId: element.id,
+    regions: [{ id: "r1", rect: [8, 8, 20, 20], polygon: poly }],
+  });
+
+  const undone = undoOp(ROOT, { projectId: project.id }).project.elements.find((el) => el.id === element.id);
+  assert.equal("polygon" in undone.regions[0], false, "undo restores the pre-polygon rect region");
+  const redone = redoOp(ROOT, { projectId: project.id }).project.elements.find((el) => el.id === element.id);
+  assert.deepEqual(redone.regions[0].polygon, poly);
+  assert.deepEqual(redone.regions[0].rect, [8, 8, 20, 20]);
+});
+
 // ---- API + CLI parity --------------------------------------------------------
 
 function invokeApi(handler, method, path, body) {
@@ -208,12 +284,25 @@ test("cli regions-set/regions-show round-trip through a JSON file", (t) => {
   const elementId = runCli("add-image", projectId, "--file", pngPath).element.id;
 
   const jsonPath = join(dir, "regions.json");
-  writeFileSync(jsonPath, JSON.stringify([{ id: "r1", rect: [2, 2, 8, 8] }, { id: "r2", rect: [20, 10, 12, 12] }]));
+  // r1 is a rect; r2 is a polygon (triangle) so regions-show reports its vertex count.
+  writeFileSync(
+    jsonPath,
+    JSON.stringify([
+      { id: "r1", rect: [2, 2, 8, 8] },
+      { id: "r2", rect: [20, 10, 12, 12], polygon: [[20, 10], [32, 10], [20, 22]] },
+    ]),
+  );
   const set = runCli("regions-set", projectId, "--element", elementId, "--json", jsonPath);
   assert.equal(set.regions.length, 2);
+  assert.deepEqual(set.regions[1].polygon, [[20, 10], [32, 10], [20, 22]], "polygon round-trips through the CLI JSON");
 
   const shown = runCli("regions-show", projectId, "--element", elementId);
   assert.deepEqual(shown.regions.map((r) => r.id), ["r1", "r2"]);
+  // `shapes` annotates rect vs polygon(<vertex-count>).
+  assert.deepEqual(shown.shapes, [
+    { id: "r1", shape: "rect" },
+    { id: "r2", shape: "polygon(3)" },
+  ]);
 });
 
 test("nameDetectedRegions numbers unnamed regions from the element name", () => {

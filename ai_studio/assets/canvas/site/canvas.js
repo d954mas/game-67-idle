@@ -34,7 +34,16 @@ import {
   undo,
 } from "./actions.js";
 import { initHome, render as renderHome } from "./home.js";
-import { fit, initWorkspace, setTool, zoomTo } from "./workspace.js";
+import {
+  cancelPolygonDraft,
+  finishPolygonDraft,
+  fit,
+  initWorkspace,
+  popPolygonVertex,
+  setRegionTool,
+  setTool,
+  zoomTo,
+} from "./workspace.js";
 import { initLayers } from "./layers_panel.js";
 import { initInspector } from "./inspector.js";
 import { closeContextMenu, initContextMenu } from "./context_menu.js";
@@ -121,6 +130,22 @@ function onKeyDown(event) {
   // Home view: nothing to do beyond letting inputs work.
   if (!state.project) return;
 
+  // A polygon draft owns Ctrl+Z / Backspace / Delete (pop the last placed vertex) and
+  // Enter (close). This MUST run before global undo AND its region-edit clamp so a draft
+  // edit never reaches the journal — the draft is pure UI state.
+  if (state.regionEditId && state.regionTool === "polygon" && state.polygonDraft.length) {
+    if ((meta && code === "KeyZ") || code === "Backspace" || code === "Delete") {
+      event.preventDefault();
+      popPolygonVertex();
+      return;
+    }
+  }
+  if (state.regionEditId && state.regionTool === "polygon" && code === "Enter") {
+    event.preventDefault();
+    finishPolygonDraft(); // no-op below 3 points
+    return;
+  }
+
   if (meta && code === "KeyZ") {
     event.preventDefault();
     if (event.shiftKey) redo();
@@ -162,7 +187,12 @@ function onKeyDown(event) {
     event.preventDefault();
     return;
   }
-  if (code === "KeyV") return setTool("select");
+  if (code === "KeyV") {
+    // V = Select globally; inside region-edit it also drops the draw tool back to Select.
+    setTool("select");
+    if (state.regionEditId) setRegionTool("select");
+    return;
+  }
   if (code === "KeyH") return setTool("pan");
   if (code === "Digit0" || code === "Numpad0") {
     event.preventDefault();
@@ -177,11 +207,20 @@ function onKeyDown(event) {
     return zoomTo(2);
   }
   if (key === "escape") {
-    // Escape never leaves the project. It unwinds one level at a time: close the
-    // menu, then exit region-edit isolation (clearing region selection + mode),
-    // then clear element/group selection.
+    // Escape never leaves the project. It unwinds one level at a time: close the menu;
+    // inside region-edit, cancel an open polygon draft, else drop a draw tool back to
+    // Select, else exit isolation; finally clear element/group selection.
     closeContextMenu();
     if (state.regionEditId) {
+      if (state.regionTool === "polygon" && state.polygonDraft.length) {
+        cancelPolygonDraft();
+        return;
+      }
+      if (state.regionTool !== "select") {
+        setRegionTool("select");
+        refresh();
+        return;
+      }
       exitRegionEdit();
       refresh();
       return;

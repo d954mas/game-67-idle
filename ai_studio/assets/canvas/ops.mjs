@@ -90,6 +90,35 @@ function ms(value) {
   return Math.round(value * 1000) / 1000;
 }
 
+// Round to int and clamp to [0, bound] (far edge inclusive) — the polygon vertex rule
+// (mirrors the Python slicer's max(0, min(image_dim, x))).
+function clampRound(value, bound) {
+  return Math.max(0, Math.min(bound, Math.round(value)));
+}
+
+// Axis-aligned bounding box [x, y, w, h] of an integer polygon, kept inside source
+// bounds (ports the legacy rectFromPolygon: floor min / ceil max, min dimension 1). A
+// polygonal region stores this as its rect so shape and bbox never diverge.
+function polygonBBox(points, boundsW, boundsH) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const [px, py] of points) {
+    if (px < minX) minX = px;
+    if (py < minY) minY = py;
+    if (px > maxX) maxX = px;
+    if (py > maxY) maxY = py;
+  }
+  let x = Math.max(0, Math.floor(minX));
+  let y = Math.max(0, Math.floor(minY));
+  const w = Math.max(1, Math.ceil(maxX) - x);
+  const h = Math.max(1, Math.ceil(maxY) - y);
+  if (x + w > boundsW) x = Math.max(0, boundsW - w);
+  if (y + h > boundsH) y = Math.max(0, boundsH - h);
+  return [x, y, w, h];
+}
+
 function mimeForExt(fileName) {
   const ext = String(fileName || "").toLowerCase().split(".").pop();
   return (
@@ -343,21 +372,51 @@ export function setRegions(root, { projectId, elementId, regions } = {}) {
     if (!id) throw new Error(`region ${index} is missing an id`);
     if (seen.has(id)) throw new Error(`duplicate region id: ${id}`);
     seen.add(id);
-    const rect = region.rect;
-    if (!Array.isArray(rect) || rect.length !== 4 || !rect.every((value) => Number.isFinite(Number(value)))) {
-      throw new Error(`region ${id} rect must be [x, y, w, h] numbers`);
+
+    // Optional polygon shape: >=3 finite [x, y] pairs, each rounded to int and clamped
+    // to source bounds (far edge inclusive). A clean polygon makes this a polygonal
+    // region — the discriminator is polygon.length >= 3 (no `shape` field), matching the
+    // Python slicer. <3 clean points drops the polygon back to a plain rect region.
+    let polygon = null;
+    if (region.polygon !== undefined && region.polygon !== null) {
+      if (!Array.isArray(region.polygon)) throw new Error(`region ${id} polygon must be an array of [x, y] points`);
+      const points = [];
+      for (const point of region.polygon) {
+        if (!Array.isArray(point) || point.length !== 2) continue;
+        const px = Number(point[0]);
+        const py = Number(point[1]);
+        if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+        points.push([clampRound(px, boundsW), clampRound(py, boundsH)]);
+      }
+      if (points.length >= 3) polygon = points;
     }
-    const x = Math.round(Number(rect[0]));
-    const y = Math.round(Number(rect[1]));
-    const w = Math.round(Number(rect[2]));
-    const h = Math.round(Number(rect[3]));
-    if (w <= 0 || h <= 0) throw new Error(`region ${id} rect must have positive width and height`);
-    if (x < 0 || y < 0 || x + w > boundsW || y + h > boundsH) {
-      throw new Error(`region ${id} rect [${x}, ${y}, ${w}, ${h}] is out of source bounds ${boundsW}x${boundsH}`);
+
+    // rect: a polygon's stored rect IS its bounding box (rectFromPolygon), so shape and
+    // bbox never diverge; otherwise validate the supplied rect as an in-bounds integer box.
+    let box;
+    if (polygon) {
+      box = polygonBBox(polygon, boundsW, boundsH);
+    } else {
+      const rect = region.rect;
+      if (!Array.isArray(rect) || rect.length !== 4 || !rect.every((value) => Number.isFinite(Number(value)))) {
+        throw new Error(`region ${id} rect must be [x, y, w, h] numbers`);
+      }
+      const x = Math.round(Number(rect[0]));
+      const y = Math.round(Number(rect[1]));
+      const w = Math.round(Number(rect[2]));
+      const h = Math.round(Number(rect[3]));
+      if (w <= 0 || h <= 0) throw new Error(`region ${id} rect must have positive width and height`);
+      if (x < 0 || y < 0 || x + w > boundsW || y + h > boundsH) {
+        throw new Error(`region ${id} rect [${x}, ${y}, ${w}, ${h}] is out of source bounds ${boundsW}x${boundsH}`);
+      }
+      box = [x, y, w, h];
     }
-    // Preserve extra detector/slicer fields (content_bbox, area_px, future shape);
-    // normalize id + rect and the optional first-class `name` (trimmed string).
-    const out = { ...region, id, rect: [x, y, w, h] };
+
+    // Preserve extra detector/slicer fields (content_bbox, area_px, ...); normalize id +
+    // rect, the optional polygon, and the optional first-class `name` (trimmed string).
+    const out = { ...region, id, rect: box };
+    if (polygon) out.polygon = polygon;
+    else delete out.polygon;
     if (out.name !== undefined && out.name !== null) {
       const name = String(out.name).trim();
       if (name) out.name = name;
@@ -811,8 +870,9 @@ export async function detectRegions(root, { projectId, elementId, params = {} } 
 // content-addressed file + a new image element placed in a grid to the right of the
 // parent, with provenance in meta.parent. The whole slice is one journal entry
 // (undo removes every crop). detectRegions still uses the raster2d bridge; only
-// slice is ours. Per-region spec entries are objects, so a future polygon shape
-// slots in additively.
+// slice is ours. Per-region spec entries are objects carrying the rect and, for a
+// polygonal region, its vertex ring (the crop tool then alpha-masks outside it);
+// mixed rect + polygon sets stay one spawn.
 export async function sliceRegions(root, { projectId, elementId, regionIds } = {}) {
   if (!projectId) throw new Error("sliceRegions requires projectId");
   if (!elementId) throw new Error("sliceRegions requires elementId");
@@ -847,13 +907,16 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
       source: sourceAbs,
       output_dir: workDir,
       report: reportPath,
-      // Objects (not bare rects) so a future {shape:{type:"polygon",points}} slots in.
+      // Objects (not bare rects): a polygonal region also carries its vertex ring, so
+      // the crop tool masks alpha outside the polygon (bbox crop + ImageDraw.polygon).
       regions: selected.map((region) => {
         const rect = region.rect || region.content_bbox;
         if (!Array.isArray(rect) || rect.length !== 4) {
           throw new Error(`region ${region.id} has no rect to slice`);
         }
-        return { id: String(region.id), rect };
+        const entry = { id: String(region.id), rect };
+        if (Array.isArray(region.polygon) && region.polygon.length >= 3) entry.polygon = region.polygon;
+        return entry;
       }),
     };
     writeFileSync(specPath, `${JSON.stringify(spec, null, 2)}\n`);

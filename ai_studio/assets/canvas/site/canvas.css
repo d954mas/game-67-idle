@@ -1006,6 +1006,43 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* Region-edit tool row: a chip-like floating toolbar under the breadcrumb, shown only
+   inside region-edit isolation. Matches the breadcrumb visual language; the active tool
+   is highlighted in cyan. */
+#region-tools {
+  position: absolute;
+  top: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: rgba(16, 18, 20, 0.9);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  z-index: 6;
+}
+
+#region-tools .rtool {
+  padding: 3px 9px;
+  font-size: 12px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+#region-tools .rtool:hover {
+  background: var(--panel-soft);
+}
+
+#region-tools .rtool.active {
+  color: #071014;
+  background: var(--cyan);
+  border-color: var(--cyan);
+}
+
 /* Layers reparent drag hints. The panel never text-selects during a row drag. */
 #layers-panel {
   user-select: none;

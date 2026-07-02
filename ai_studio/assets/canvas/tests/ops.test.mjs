@@ -169,6 +169,39 @@ test("sliceRegions crops the STORED rects verbatim (edited + hand-drawn regions)
   assert.deepEqual(greenPng.at(5, 5).slice(0, 3), [40, 180, 60], "green crop centre = green blob");
 });
 
+test("sliceRegions masks alpha outside a polygon region (in-poly opaque, out transparent)", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Polygon slice" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() }); // 64x48
+
+  // A right-triangle polygon over the red blob [8,8)-[28,28): vertices (8,8),(28,8),(8,28).
+  // bbox = [8,8,20,20]; inside the triangle (local x+y < 20) stays red + opaque, outside
+  // the ring (but inside the bbox) is alpha-zeroed by the ImageDraw.polygon mask.
+  setRegions(REPO_ROOT, {
+    projectId: project.id,
+    elementId: element.id,
+    regions: [{ id: "tri", name: "Tri", rect: [8, 8, 20, 20], polygon: [[8, 8], [28, 8], [8, 28]] }],
+  });
+
+  let sliced;
+  try {
+    sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
+  } catch (error) {
+    t.skip(`crop_regions.py / PIL unavailable: ${error.message}`);
+    return;
+  }
+
+  assert.equal(sliced.created.length, 1, "one crop for the polygon region");
+  const crop = decodePng(readFileSync(resolveProjectFile(REPO_ROOT, project.id, sliced.created[0].src)));
+  assert.equal(crop.width, 20, "crop is the polygon bbox width");
+  assert.equal(crop.height, 20, "crop is the polygon bbox height");
+  assert.equal(crop.channels, 4, "polygon crop carries an alpha channel");
+  // Inside the triangle: opaque red (the source pixel survives the mask).
+  assert.deepEqual(crop.at(2, 2), [220, 40, 40, 255], "in-polygon pixel = opaque red");
+  // Outside the triangle but inside the bbox: fully transparent.
+  assert.equal(crop.at(18, 18)[3], 0, "out-of-polygon pixel is transparent");
+});
+
 test("sliceRegions errors clearly when the element has no regions", (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "NoRegions" });
