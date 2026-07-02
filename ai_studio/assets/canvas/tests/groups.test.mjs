@@ -14,6 +14,7 @@ import {
   createGroup,
   createProject,
   deleteGroup,
+  fitGroup,
   getProject,
   patchElement,
   patchGroup,
@@ -165,6 +166,95 @@ test("patchGroup background=null on a plain group is a no-op (no journal entry)"
   const seqBefore = Number(getProject(ROOT, projectId).history_seq);
   patchGroup(ROOT, { projectId, groupId: group.id, background: null });
   assert.equal(Number(getProject(ROOT, projectId).history_seq), seqBefore, "None on already-none = no change");
+});
+
+// ---- fitGroup (resize frame to content) ----------------------------------------
+
+test("fitGroup fits the frame around direct elements + default 24px padding; children never move", (t) => {
+  tempProjects(t);
+  const { projectId, red, green } = seedScreen(ROOT);
+  // A group with a deliberately oversized frame so the fit visibly shrinks it.
+  const { group } = createGroup(ROOT, { projectId, name: "Loose", x: -100, y: -100, w: 800, h: 800 });
+  assignToGroup(ROOT, { projectId, elementIds: [red.id, green.id], groupId: group.id });
+
+  const { group: fitted } = fitGroup(ROOT, { projectId, groupId: group.id });
+  // bbox of red@(10,10,8,8) + green@(30,20,6,6): minX=10 minY=10 maxX=36 maxY=26; +24 pad.
+  assert.deepEqual({ x: fitted.x, y: fitted.y, w: fitted.w, h: fitted.h }, { x: -14, y: -14, w: 74, h: 64 });
+  // Members are untouched by the fit.
+  const stored = getProject(ROOT, projectId);
+  assert.deepEqual(pos(stored, red.id), { x: 10, y: 10 });
+  assert.deepEqual(pos(stored, green.id), { x: 30, y: 20 });
+});
+
+test("fitGroup honors a custom padding (0 = tight bbox)", (t) => {
+  tempProjects(t);
+  const { projectId, red, green } = seedScreen(ROOT);
+  const { group } = createGroup(ROOT, { projectId, name: "Tight", x: 0, y: 0, w: 500, h: 500 });
+  assignToGroup(ROOT, { projectId, elementIds: [red.id, green.id], groupId: group.id });
+
+  const tight = fitGroup(ROOT, { projectId, groupId: group.id, padding: 0 }).group;
+  assert.deepEqual({ x: tight.x, y: tight.y, w: tight.w, h: tight.h }, { x: 10, y: 10, w: 26, h: 16 });
+
+  const padded = fitGroup(ROOT, { projectId, groupId: group.id, padding: 10 }).group;
+  assert.deepEqual({ x: padded.x, y: padded.y, w: padded.w, h: padded.h }, { x: 0, y: 0, w: 46, h: 36 });
+});
+
+test("fitGroup fits around a NESTED subgroup's frame (2 levels)", (t) => {
+  tempProjects(t);
+  const { projectId, red, green } = seedScreen(ROOT);
+  const outer = createGroup(ROOT, { projectId, name: "Outer", x: 0, y: 0, w: 1000, h: 1000 }).group;
+  assignToGroup(ROOT, { projectId, elementIds: [red.id], groupId: outer.id }); // red is a direct child of outer
+  // Inner subgroup nested in outer with a frame that extends BEYOND its own element, so
+  // maxX/maxY must come from the subgroup FRAME (200,200,80,60 -> 280,260), not green.
+  const inner = createGroup(ROOT, { projectId, name: "Inner", x: 200, y: 200, w: 80, h: 60, parentId: outer.id }).group;
+  assignToGroup(ROOT, { projectId, elementIds: [green.id], groupId: inner.id });
+  patchElement(ROOT, projectId, green.id, { x: 250, y: 250 }); // green (250,250,6,6) -> 256,256
+
+  const fitted = fitGroup(ROOT, { projectId, groupId: outer.id, padding: 0 }).group;
+  // union of red(10,10,8,8)=>18,18, green(250,250,6,6)=>256,256, inner frame=>280,260.
+  assert.deepEqual({ x: fitted.x, y: fitted.y, w: fitted.w, h: fitted.h }, { x: 10, y: 10, w: 270, h: 250 });
+  // The nested subgroup frame and its element are untouched.
+  const stored = getProject(ROOT, projectId);
+  const innerStored = stored.groups.find((g) => g.id === inner.id);
+  assert.deepEqual({ x: innerStored.x, y: innerStored.y, w: innerStored.w, h: innerStored.h }, { x: 200, y: 200, w: 80, h: 60 });
+  assert.deepEqual(pos(stored, green.id), { x: 250, y: 250 });
+});
+
+test("fitGroup on an empty group is a loud error; invalid padding throws", (t) => {
+  tempProjects(t);
+  const { projectId, red } = seedScreen(ROOT);
+  const empty = createGroup(ROOT, { projectId, name: "Empty", x: 0, y: 0, w: 100, h: 100 }).group;
+  assert.throws(() => fitGroup(ROOT, { projectId, groupId: empty.id }), /nothing to fit/);
+  assert.throws(() => fitGroup(ROOT, { projectId, groupId: "nope" }), /group not found/);
+
+  // A group WITH content, so the throw is about padding not emptiness.
+  const withContent = createGroup(ROOT, { projectId, name: "Full", fromElements: [red.id] }).group;
+  assert.throws(() => fitGroup(ROOT, { projectId, groupId: withContent.id, padding: -1 }), /padding must be/);
+  assert.throws(() => fitGroup(ROOT, { projectId, groupId: withContent.id, padding: "abc" }), /padding must be/);
+  assert.throws(() => fitGroup(ROOT, { projectId, groupId: withContent.id, padding: Infinity }), /padding must be/);
+});
+
+test("fitGroup is one journal entry; undo restores the old frame; works with clip=true", (t) => {
+  tempProjects(t);
+  const { projectId, red, green } = seedScreen(ROOT);
+  const { group } = createGroup(ROOT, { projectId, name: "Clip", x: 0, y: 0, w: 500, h: 500 });
+  assignToGroup(ROOT, { projectId, elementIds: [red.id, green.id], groupId: group.id });
+  patchGroup(ROOT, { projectId, groupId: group.id, clip: true });
+  const oldFrame = (() => {
+    const g = getProject(ROOT, projectId).groups[0];
+    return { x: g.x, y: g.y, w: g.w, h: g.h };
+  })();
+  const seqBefore = Number(getProject(ROOT, projectId).history_seq);
+
+  const fitted = fitGroup(ROOT, { projectId, groupId: group.id }).group;
+  assert.deepEqual({ x: fitted.x, y: fitted.y, w: fitted.w, h: fitted.h }, { x: -14, y: -14, w: 74, h: 64 });
+  assert.equal(fitted.clip, true, "clip flag preserved through the fit (frame re-evaluates the clip)");
+  assert.equal(Number(getProject(ROOT, projectId).history_seq), seqBefore + 1, "exactly one journal entry");
+
+  const undone = undoOp(ROOT, { projectId }).project;
+  const g = undone.groups[0];
+  assert.deepEqual({ x: g.x, y: g.y, w: g.w, h: g.h }, oldFrame, "undo restores the old frame");
+  assert.equal(g.clip, true, "clip survives undo");
 });
 
 test("renderGroup fills group.background and an explicit arg overrides it (skips without Python)", async (t) => {

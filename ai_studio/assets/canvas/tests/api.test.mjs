@@ -358,6 +358,46 @@ test("canvas API groups reparent route nests a group and rejects a cycle", async
   assert.match(bad.json().error, /cycle/);
 });
 
+test("canvas API groups fit route resizes the frame to content; empty group is a 400", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Fit API" })).json().project.id;
+  const add = async (name, png) =>
+    (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+      name,
+      bytes_base64: png.toString("base64"),
+    })).json().element.id;
+  const elA = await add("a.png", solidPng(8, 8));
+  const elB = await add("b.png", solidPng(6, 6));
+  await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/elements/${elA}`, { x: 10, y: 10 });
+  await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/elements/${elB}`, { x: 30, y: 20 });
+  const groupId = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups`, {
+    name: "Loose", x: 0, y: 0, w: 500, h: 500,
+  })).json().group.id;
+  await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/assign-group`, { elementIds: [elA, elB], groupId });
+
+  const fitted = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups/${groupId}/fit`, {});
+  assert.equal(fitted.status, 200);
+  assert.deepEqual(
+    { x: fitted.json().group.x, y: fitted.json().group.y, w: fitted.json().group.w, h: fitted.json().group.h },
+    { x: -14, y: -14, w: 74, h: 64 },
+  );
+  // Custom padding rides the body through the route.
+  const tight = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups/${groupId}/fit`, { padding: 0 });
+  assert.deepEqual(
+    { x: tight.json().group.x, y: tight.json().group.y, w: tight.json().group.w, h: tight.json().group.h },
+    { x: 10, y: 10, w: 26, h: 16 },
+  );
+
+  // An empty group is a loud 400.
+  const empty = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups`, {
+    name: "Empty", x: 0, y: 0, w: 100, h: 100,
+  })).json().group.id;
+  const bad = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups/${empty}/fit`, {});
+  assert.equal(bad.status, 400);
+  assert.match(bad.json().error, /nothing to fit/);
+});
+
 test("canvas API render-screen route composites a group PNG (skips without Python)", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(REPO_ROOT);

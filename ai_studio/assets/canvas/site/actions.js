@@ -447,6 +447,21 @@ export async function setGroupClip(groupId, clip) {
   await patchGroupBox(groupId, { clip });
 }
 
+// Resize a group's frame to fit its content (Figma "Resize to fit"): one journaled
+// fitGroup op sets the frame to the union of the descendant closure + padding; children
+// never move. An empty group is a loud op error that surfaces as an error toast (no
+// client-side pre-check). Metadata op, so no spinner — the applyMutation flow updates
+// the page from the response.
+export async function fitGroupAction(groupId, padding) {
+  try {
+    const body = {};
+    if (padding !== undefined && padding !== null) body.padding = padding;
+    applyMutation(await api("POST", `/projects/${pid()}/groups/${groupId}/fit`, body), "Fit group to content.");
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 // Render a group to a composited screen PNG — long (python-backed) op. Resolves into a
 // pinned-result toast with the download link; the triggering `control` is disabled while
 // in flight (context-menu callers pass none — the menu already closed).

@@ -14,6 +14,7 @@ import {
   deleteElements,
   deleteGroupAction,
   deleteRegion,
+  fitGroupAction,
   pasteImageBlob,
   renderScreen,
   reparentGroupTo,
@@ -310,6 +311,9 @@ function itemsFor(target) {
     const visible = group.visible !== false;
     const items = [
       { label: "Render group", onClick: () => renderScreen(group.id, { scale: 1 }) },
+      // Resize the frame to fit its content (one journaled fitGroup op; children never
+      // move). Always enabled — an empty group surfaces the op's loud error as a toast.
+      { label: "Fit to content", onClick: () => fitGroupAction(group.id) },
       { label: "Order", submenu: orderItems(group.id) },
       { label: "Background", submenu: backgroundItems(group.id) },
       // Checkmark via label prefix (the menu has no checkbox item type; mirrors the

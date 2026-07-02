@@ -128,6 +128,33 @@ test("cli group-set --clip toggles the frame clip flag (no python)", (t) => {
   assert.equal("clip" in run(env, "show", projectId).project.groups[0], false, "clip false removes the field");
 });
 
+test("cli group-fit resizes the frame to content (no python)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-fit-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const a = join(dir, "a.png");
+  const b = join(dir, "b.png");
+  writeFileSync(a, solidPng(8, 8, [10, 20, 30]));
+  writeFileSync(b, solidPng(6, 6, [30, 40, 50]));
+
+  const projectId = run(env, "create", "--title", "CLI Fit").project.id;
+  const elA = run(env, "add-image", projectId, "--file", a).element.id;
+  const elB = run(env, "add-image", projectId, "--file", b).element.id;
+  run(env, "move", projectId, "--element", elA, "--x", "10", "--y", "10");
+  run(env, "move", projectId, "--element", elB, "--x", "30", "--y", "20");
+
+  // An oversized explicit group, assign both, then fit it down to content + 24px pad.
+  const groupId = run(env, "group-create", projectId, "--name", "Loose", "--x", "0", "--y", "0", "--w", "500", "--h", "500").group.id;
+  run(env, "group-assign", projectId, "--elements", `${elA},${elB}`, "--group", groupId);
+
+  const fitted = run(env, "group-fit", projectId, "--group", groupId).group;
+  assert.deepEqual({ x: fitted.x, y: fitted.y, w: fitted.w, h: fitted.h }, { x: -14, y: -14, w: 74, h: 64 });
+
+  const tight = run(env, "group-fit", projectId, "--group", groupId, "--padding", "0").group;
+  assert.deepEqual({ x: tight.x, y: tight.y, w: tight.w, h: tight.h }, { x: 10, y: 10, w: 26, h: 16 });
+});
+
 test("cli group-create/move/set/assign/delete smoke (no python)", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-groups-"));
   const env = { CANVAS_PROJECTS_ROOT: dir };

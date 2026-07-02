@@ -88,8 +88,8 @@ Every capability is one op in `ops.mjs`:
   and an in-source-bounds integer `rect`, while **preserving any extra fields**
   the detector/slicer attach (`content_bbox`, `area_px`, `merged_from`, and any
   future shape field). Journaled, so undo/redo restore the previous regions.
-- `createGroup` / `patchGroup` / `assignToGroup` / `deleteGroup` — group (screen)
-  mutations, journaled; `renderGroup` — composited screen PNG export, not
+- `createGroup` / `patchGroup` / `fitGroup` / `assignToGroup` / `deleteGroup` — group
+  (screen) mutations, journaled; `renderGroup` — composited screen PNG export, not
   journaled. See **Groups = screens** below.
 - `detectRegions` — reads the element image, runs it through the image tools
   upload + detect pipeline, stores `element.regions` (and backfills
@@ -176,6 +176,16 @@ scope-crossing walk (render, move cascade, delete, visibility) is cycle-safe.
   Figma-frame clip flag (see **Group clip** below): a real `true` clips the group's members
   to its bounds, `false` clears it (stored as an **absent** field, so `clip:false` on an
   already-unclipped group is a no-op); any non-boolean is a loud error.
+- `fitGroup({projectId, groupId, padding?})` — Figma **"Resize to fit"**: set the group's
+  frame to the union bounding box of its **full descendant closure** (every descendant
+  element AND every nested subgroup frame — both carry `x/y/w/h`; reuses the same
+  `elementsBBox` math `createGroup`/`sliceRegions` use) expanded by `padding` on all sides
+  (default **24**, the shared slice/group-create pad). **Children never move** — only the
+  group's own `x/y/w/h` change, so with `clip:true` the new frame re-evaluates the clip
+  (the point of the button); `background`/`clip`/`parentId`/`order`/`name`/`visible` are
+  preserved. An **empty group** (no descendant content) is a **loud error** ("nothing to
+  fit"), as is a non-finite or negative `padding` (no silent fallback). One journal entry;
+  undo restores the old frame.
 - `reparentGroup({projectId, groupId, parentId|null, index?})` — move a group under a new
   parent (`null` = top level) at an optional **merged-sibling** `index` (default = front
   of the destination scope). **Cycle guard**: a parent that is the group itself or any
@@ -209,8 +219,11 @@ scope-crossing walk (render, move cascade, delete, visibility) is cycle-safe.
   reparented out first. Kept composed (multiple journal entries); children land at the
   front of the parent scope.
 
-HTTP: `POST /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null, index?}`;
-`POST .../groups {..., parentId?}` nests on create. Page (Figma nesting): a canvas drag
+HTTP: `POST /api/canvas/projects/<id>/groups/<gid>/fit {padding?}` (resize to content);
+`POST /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null, index?}`;
+`POST .../groups {..., parentId?}` nests on create. The **Fit to content** button in the
+inspector Position & Size section (disabled for a trivially-empty group) and the group
+context-menu **Fit to content** item both call `fitGroup`. Page (Figma nesting): a canvas drag
 moves a selected group's **whole subtree**; the layers panel drags a group onto another
 group's header **middle** to nest (its own subtree is an inert target — a cycle can't be
 dropped), a header **edge**/element row to reorder or reparent across scopes (the
@@ -528,6 +541,7 @@ node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e
 node ai_studio/assets/canvas/cli.mjs group-reparent <id> --group g --parent <gid>|none [--index n]   # nest a group; none = top level
 node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
 node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none] [--clip true|false]
+node ai_studio/assets/canvas/cli.mjs group-fit <id> --group g [--padding n]   # resize the frame to fit its content (padding default 24)
 node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 node ai_studio/assets/canvas/cli.mjs render-screen <id> --group g [--scale 2] [--background '#rrggbb']
@@ -592,7 +606,8 @@ one document that swaps two views; the JS is split into focused ES modules under
   compact per-region rows — number + name/size + delete, coords in the tooltip —
   that select/enter region-edit on the canvas and inline-rename on double-click,
   plus **+ Add region**, **Slice selected region(s)**, and one muted matte-pipeline
-  placeholder line), group/screen (name, X/Y/W/H, **Visible** + **Clip content**
+  placeholder line), group/screen (name, X/Y/W/H + a **Fit to content** button that
+  resizes the frame to its content, **Visible** + **Clip content**
   checkboxes, member count, Background, **Render screen** with scale + background),
   multi-select (count + "each exports
   its own settings" + Export), or "Nothing selected" (with a project-export button

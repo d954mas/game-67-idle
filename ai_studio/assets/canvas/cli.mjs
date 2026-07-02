@@ -22,6 +22,7 @@
 //   node ai_studio/assets/canvas/cli.mjs group-reparent <id> --group g --parent <gid>|none [--index n]
 //   node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
 //   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none] [--clip true|false]
+//   node ai_studio/assets/canvas/cli.mjs group-fit <id> --group g [--padding n]
 //   node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs render-group <id> --group g [--scale 2] [--background "#rrggbb"]
@@ -41,6 +42,7 @@ import {
   detectRegions,
   exportElements,
   exportProject,
+  fitGroup,
   getProject,
   listProjects,
   opsStats,
@@ -114,7 +116,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|group-assign|group-delete|render-group|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|group-fit|group-assign|group-delete|render-group|undo|redo|history>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -138,6 +140,7 @@ function usage() {
   group-reparent <id> --group <gid> --parent <gid>|none [--index <n>]   (nest a group; none = top level)
   group-move <id> --group <gid> --x <n> --y <n>
   group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>] [--background '#rrggbb'|none] [--clip true|false]
+  group-fit <id> --group <gid> [--padding <n>]   (resize the frame to fit its content; padding default 24)
   group-assign <id> --elements e1,e2 --group <gid>|none
   group-delete <id> --group <gid>
   render-group <id> --group <gid>  (alias: render-screen) [--scale <n>] [--background '#rrggbb']
@@ -356,6 +359,15 @@ async function runCommand(command, id, positional, flags) {
         args.clip = flags.clip === "true";
       }
       return print(patchGroup(repoRoot, args));
+    }
+    case "group-fit": {
+      if (!id) fail("group-fit requires <id>");
+      if (!flags.group) fail("group-fit requires --group <gid>");
+      const args = { projectId: id, groupId: flags.group };
+      // --padding overrides the default (24). Passed through as a number so the op
+      // validates it (finite >= 0, else a loud error — no silent fallback).
+      if (flags.padding !== undefined && flags.padding !== "true") args.padding = Number(flags.padding);
+      return print(fitGroup(repoRoot, args));
     }
     case "group-assign": {
       if (!id) fail("group-assign requires <id>");

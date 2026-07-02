@@ -16,6 +16,7 @@
 //   PATCH  /api/canvas/projects/<id>/groups/<gid>   {name?,x?,y?,w?,h?,visible?,background?}
 //   DELETE /api/canvas/projects/<id>/groups/<gid>
 //   POST   /api/canvas/projects/<id>/groups/<gid>/render {scale?, background?}
+//   POST   /api/canvas/projects/<id>/groups/<gid>/fit {padding?}   (resize frame to content)
 //   POST   /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null, index?}
 //   POST   /api/canvas/projects/<id>/assign-group   {elementIds, groupId|null}
 //   POST   /api/canvas/projects/<id>/undo
@@ -41,6 +42,7 @@ import {
   detectRegions,
   exportElements,
   exportProject,
+  fitGroup,
   getProject,
   historyFlags,
   listProjects,
@@ -317,6 +319,15 @@ export function createCanvasApi(root) {
           scale: body.scale,
           background: body.background,
         }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/groups/<gid>/fit  (resize the frame to fit its
+      // content: union of the descendant closure + padding; children never move).
+      if (parts.length === 7 && sub === "groups" && parts[6] === "fit" && req.method === "POST") {
+        const groupId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, fitGroup(root, { projectId: id, groupId, padding: body.padding }));
         return true;
       }
 

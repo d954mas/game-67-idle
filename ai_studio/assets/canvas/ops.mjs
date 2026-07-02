@@ -935,6 +935,45 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
   return { project, group: (project.groups || []).find((item) => item.id === groupId) };
 }
 
+// Resize a group's frame to fit its content (Figma "Resize to fit"). The new frame is
+// the union bounding box of the group's FULL descendant closure — every descendant
+// element AND every nested subgroup frame (both carry x/y/w/h; reuses the same
+// elementsBBox math createGroup/sliceRegions use) — expanded by `padding` on all sides
+// (default 24, the shared slice/group-create pad). Children NEVER move: only the group's
+// own x/y/w/h change, so with clip=true the new frame re-evaluates the clip (the whole
+// point of the button). An empty group (no descendant content) is a loud error, as is a
+// non-finite or negative padding (no silent fallback). One journal entry; undo restores
+// the old frame. `background`/`clip`/`parentId`/`order`/`name`/`visible` are preserved.
+export function fitGroup(root, { projectId, groupId, padding } = {}) {
+  if (!projectId) throw new Error("fitGroup requires projectId");
+  if (!groupId) throw new Error("fitGroup requires groupId");
+  const pad = padding === undefined || padding === null ? 24 : Number(padding);
+  if (!Number.isFinite(pad) || pad < 0) {
+    throw new Error(`fitGroup padding must be a finite number >= 0, got ${JSON.stringify(padding)}`);
+  }
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  findGroup(before, groupId); // loud error on an unknown group
+  const descendants = descendantsOf(before, groupId);
+  const boxes = [...descendants.elements, ...descendants.groups];
+  if (!boxes.length) throw new Error(`group ${groupId} has nothing to fit (no descendant content)`);
+  const { minX, minY, maxX, maxY } = elementsBBox(boxes);
+  const frame = { x: minX - pad, y: minY - pad, w: maxX - minX + pad * 2, h: maxY - minY + pad * 2 };
+
+  const nextGroups = groupsOf(before).map((group) =>
+    group.id === groupId ? { ...group, x: frame.x, y: frame.y, w: frame.w, h: frame.h } : group,
+  );
+  const after = updateProject(root, projectId, { groups: nextGroups });
+  const project = commitMutation(root, projectId, {
+    op: "fitGroup",
+    args_summary: { groupId, padding: pad, x: frame.x, y: frame.y, w: frame.w, h: frame.h },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, group: (project.groups || []).find((item) => item.id === groupId) };
+}
+
 // Assign elements to a group (groupId) or clear their group (groupId=null). One
 // journal entry.
 export function assignToGroup(root, { projectId, elementIds, groupId } = {}) {

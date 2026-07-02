@@ -28,6 +28,7 @@ import {
   detectRegionsFor,
   exportElementIds,
   exportProjectAction,
+  fitGroupAction,
   patchElementBox,
   patchGroupBox,
   renameElement,
@@ -40,6 +41,7 @@ import {
   setGroupVisible,
   sliceRegionsFor,
 } from "./actions.js";
+import { descendantsOf } from "../tree.mjs";
 import { lastDestinationName } from "./export_dest.mjs";
 import { openContextMenu } from "./context_menu.js";
 import { inlineEdit } from "./inline.js";
@@ -552,6 +554,18 @@ function renderGroupInspector(group, root) {
 
   const layout = collapsible(root, "layout", "Position & Size");
   layout.appendChild(boxGrid(group, (patch) => patchGroupBox(group.id, patch)));
+
+  // Fit to content (Figma "Resize to fit"): one journaled fitGroup op sets the frame to
+  // the union of the group's descendant closure + padding; children never move. Disabled
+  // only for a trivially-empty group (no descendant elements or subgroups) — the op still
+  // errors loudly on empty, so the context-menu path surfaces that as a toast.
+  const closure = state.project ? descendantsOf(state.project, group.id) : { groups: [], elements: [] };
+  const isEmpty = closure.elements.length === 0 && closure.groups.length === 0;
+  const fitBtn = smallBtn("Fit to content", () => fitGroupAction(group.id));
+  fitBtn.classList.add("insp-fit-btn");
+  fitBtn.disabled = isEmpty;
+  fitBtn.title = isEmpty ? "Nothing to fit — the group has no content" : "Resize the frame to fit its content";
+  layout.appendChild(fitBtn);
 
   const visRow = document.createElement("label");
   visRow.className = "insp-check";
