@@ -21,6 +21,7 @@ import {
   memberElements,
   rangeSelectIds,
   refresh,
+  selectGroupOnly,
   selectOnly,
   state,
   toggleSelect,
@@ -108,6 +109,7 @@ function selectRange(targetId) {
     return;
   }
   state.selectedGroupId = null;
+  state.selectedGroupIds = new Set(); // plural set too — stale ids would leak into node-batch actions
   state.selectedRegionIds = new Set();
   state.regionEditId = null;
   state.selectedIds = new Set(ids);
@@ -273,17 +275,16 @@ function groupSection(group, depth) {
       active: false,
     };
   });
+  // selectGroupOnly (NOT hand-rolled state writes): it also fills the plural
+  // selectedGroupIds set, which the Delete key and every node-batch action key on —
+  // a hand-rolled write here left the set empty, so Delete from layers did nothing.
   head.addEventListener("click", () => {
-    state.selectedGroupId = group.id;
-    state.selectedIds = new Set();
-    state.selectedRegionIds = new Set();
+    selectGroupOnly(group.id);
     refresh();
   });
   head.addEventListener("contextmenu", (event) => {
     event.preventDefault();
-    state.selectedGroupId = group.id;
-    state.selectedIds = new Set();
-    state.selectedRegionIds = new Set();
+    selectGroupOnly(group.id);
     refresh();
     openContextMenu(event.clientX, event.clientY, { kind: "group", groupId: group.id });
   });
