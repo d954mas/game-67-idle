@@ -81,6 +81,7 @@ import {
   reorderNodes,
   reparentGroup,
   setExportSettings,
+  setOpsActor,
   setRegions,
   sliceRegions,
   undoOp,
@@ -585,5 +586,9 @@ async function main(argv) {
 }
 
 if (isMain(import.meta.url)) {
+  // The CLI is the AGENT transport: every mutation it commits is attributed as
+  // agent-made so history marks it (🤖, T0228). Set ONLY when actually running as
+  // the CLI — importing this module (tests do) must not flip the process actor.
+  setOpsActor("agent");
   main(process.argv.slice(2)).catch((error) => fail(error && error.message ? error.message : String(error)));
 }

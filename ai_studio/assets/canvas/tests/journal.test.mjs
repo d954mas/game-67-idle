@@ -16,6 +16,7 @@ import {
   patchElement,
   patchProject,
   readHistory,
+  setOpsActor,
   redoOp,
   removeElement,
   undoOp,
@@ -290,4 +291,32 @@ test("exportElements writes a stamped folder with copied files + manifest", asyn
   // The copied bytes match the immutable source.
   const firstFile = readdirSync(result.folder).find((name) => name.endsWith(".png"));
   assert.ok(firstFile, "at least one exported png");
+});
+
+test("actor attribution: agent-made ops carry actor + robot label, user default unmarked (T0228)", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Actors" });
+  const { element } = addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() });
+
+  setOpsActor("agent");
+  try {
+    patchElement(ROOT, project.id, element.id, { x: 7, y: 9 });
+  } finally {
+    setOpsActor("user"); // never leak the actor into other tests in this file
+  }
+  patchElement(ROOT, project.id, element.id, { x: 20, y: 21 });
+
+  const { entries } = listHistory(ROOT, { projectId: project.id });
+  const byOp = entries.filter((row) => row.op === "patchElement");
+  assert.equal(byOp.length, 2);
+  assert.equal(byOp[0].actor, "agent");
+  assert.equal(byOp[0].label.startsWith("🤖 "), true);
+  assert.equal(byOp[1].actor, "user");
+  assert.equal(byOp[1].label.startsWith("🤖"), false);
+  // addImage ran before setOpsActor -> default user, unmarked.
+  const added = entries.find((row) => row.op === "addImage");
+  assert.equal(added.actor, "user");
+  assert.equal(added.label.startsWith("🤖"), false);
+
+  assert.throws(() => setOpsActor("robot"), /unknown ops actor/);
 });

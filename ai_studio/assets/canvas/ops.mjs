@@ -238,6 +238,16 @@ function snapshotForEntry(root, projectId, entry) {
 // snapshot to a sidecar and keeps the journal line thin (op metadata + duration_ms),
 // then compacts history past the depth cap. `startedAt` is a performance.now() taken
 // at op entry, so the recorded duration_ms covers the whole op (incl. any Python).
+// Actor attribution (T0228): which kind of client drives the ops — "user" (the page
+// over HTTP; also the default for direct imports/tests) or "agent" (the CLI). Set once
+// per process at the transport seam (cli.mjs boot); no per-op signature churn. Recorded
+// on every mutation entry; readers treat an absent field (pre-T0228 entries) as "user".
+let opsActor = "user";
+export function setOpsActor(actor) {
+  if (actor !== "user" && actor !== "agent") throw new Error(`unknown ops actor: ${JSON.stringify(actor)}`);
+  opsActor = actor;
+}
+
 function commitMutation(root, projectId, { op, args_summary, before, after, startedAt }) {
   ensureThinJournal(root, projectId); // one-time migration of a legacy fat journal
   const undoPatch = snapshotOf(before);
@@ -249,6 +259,7 @@ function commitMutation(root, projectId, { op, args_summary, before, after, star
     seq,
     at: new Date().toISOString(),
     op,
+    actor: opsActor,
     args_summary: args_summary || {},
     parent: Number(before.history_seq) || 0,
     duration_ms: startedAt === undefined ? undefined : ms(performance.now() - startedAt),
@@ -1979,10 +1990,22 @@ export function listHistory(root, { projectId } = {}) {
   const { head, undoChain, redoChain } = historySpine(project, journal);
   const rowOf = (line, undone) => {
     const { label, summary } = historyEntryLabel(line.op, line.args_summary);
-    return { seq: Number(line.seq), op: line.op, label, summary, at: line.at ?? null, current: Number(line.seq) === head, undone };
+    // Agent-made entries carry the robot marker IN the label (lead 2026-07-03), so the
+    // page palette and CLI history-list render identical text — parity by construction.
+    const actor = line.actor === "agent" ? "agent" : "user";
+    return {
+      seq: Number(line.seq),
+      op: line.op,
+      actor,
+      label: actor === "agent" ? `🤖 ${label}` : label,
+      summary,
+      at: line.at ?? null,
+      current: Number(line.seq) === head,
+      undone,
+    };
   };
   const entries = [
-    { seq: 0, op: "base", label: "Base", summary: "", at: null, current: head === 0, undone: false },
+    { seq: 0, op: "base", actor: "user", label: "Base", summary: "", at: null, current: head === 0, undone: false },
     ...undoChain.map((line) => rowOf(line, false)),
     ...redoChain.map((line) => rowOf(line, true)),
   ];

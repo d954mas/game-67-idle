@@ -67,9 +67,11 @@ test("cli history-list + history-jump parity (Base spine + jump reaches panel st
   const elementId = run(env, "add-image", projectId, "--file", pngPath).element.id; // seq1
   run(env, "move", projectId, "--element", elementId, "--x", "25", "--y", "10"); // seq2, head2
 
-  // history-list: the same labeled linear spine the page panel renders.
+  // history-list: the same labeled linear spine the page panel renders. CLI-made
+  // entries are agent-attributed (T0228), so their labels carry the robot marker.
   const list = run(env, "history-list", projectId);
-  assert.deepEqual(list.entries.map((e) => e.label), ["Base", "Add image", "Move"]);
+  assert.deepEqual(list.entries.map((e) => e.label), ["Base", "🤖 Add image", "🤖 Move"]);
+  assert.deepEqual(list.entries.map((e) => e.actor), ["user", "agent", "agent"]);
   assert.equal(list.entries.at(-1).current, true);
 
   // history-jump back to seq1 (== undo): the CLI reaches the same state as the panel.

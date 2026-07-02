@@ -1,7 +1,7 @@
 ---
 id: T0228
 title: "Canvas: history actor attribution - mark agent-made ops (robot icon)"
-status: backlog
+status: review
 project: P001
 epic: E010
 priority: P2
@@ -34,11 +34,12 @@ this lands AFTER T0202 is accepted.
 
 ## Done when
 
-- [ ] journal entries record actor (cli=agent, page=user, additive field)
-- [ ] history panel shows 🤖 on agent-made entries; CLI history-list shows the same marker
-- [ ] old entries (no field) render unmarked; tests + gates green
+- [x] journal entries record actor (cli=agent, page=user, additive field)
+- [x] history panel shows 🤖 on agent-made entries; CLI history-list shows the same marker (marker lives IN the shared label - parity by construction, zero page changes)
+- [x] old entries (no field) render unmarked; tests + gates green (226)
 
 ## Open questions
 
 ## Log
 - 2026-07-03: Created from lead request during live verify of T0204.
+- 2026-07-03: DONE by orchestrator (small seam, one writer on ops.mjs after T0202). setOpsActor("user"|"agent") module-level in ops.mjs; commitMutation records actor on every mutation entry (additive; absent = user for pre-T0228 lines). cli.mjs sets agent INSIDE the isMain guard only - importing the module (tests do) must not flip the process actor. listHistory row carries actor AND prefixes the label "🤖 " for agent rows - page palette + CLI render identical text with zero page changes. Base row actor=user. Tests: journal.test.mjs actor attribution + cli.test.mjs parity now pins CLI=agent labels. Tests 226.
