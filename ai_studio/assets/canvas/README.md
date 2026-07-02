@@ -261,3 +261,19 @@ node --test ai_studio/assets/canvas/tests/*.test.mjs
 node ai_studio/architecture_map/validate_map.mjs
 node ai_studio/core_harness/validation/doc_reference_check.mjs
 ```
+
+## Bench
+
+`tests/bench.mjs` is a plain Node script (not `*.test.mjs`, so `node --test
+ai_studio/assets/canvas/tests/*.test.mjs` never runs it) that baselines every
+metadata op, `readHistory` at 10/100/1000 journal entries, the Python-bridged
+`detectRegions`/`sliceRegions`/`renderGroup` ops (plus raw Python spawn
+overhead in isolation), and one HTTP round-trip, all against a throwaway temp
+projects root:
+
+```powershell
+node ai_studio/assets/canvas/tests/bench.mjs
+```
+
+Prints an aligned console table and writes JSON results under `tmp/`
+(gitignored).
