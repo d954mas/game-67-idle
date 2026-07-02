@@ -91,6 +91,28 @@ test("cli batched elements-set / elements-remove parity (one undo each)", (t) =>
   assert.equal(run(env, "show", projectId).project.elements.length, 2);
 });
 
+test("cli group-reparent / group-create --parent nesting smoke (no python)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-nest-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const projectId = run(env, "create", "--title", "CLI Nest").project.id;
+  const outer = run(env, "group-create", projectId, "--name", "Outer", "--x", "0", "--y", "0", "--w", "100", "--h", "100").group.id;
+  // group-create --parent nests directly.
+  const child = run(env, "group-create", projectId, "--name", "Child", "--x", "5", "--y", "5", "--w", "20", "--h", "20", "--parent", outer);
+  assert.equal(child.group.parentId, outer);
+
+  // A separate top-level group, then group-reparent it under outer, then back to root.
+  const widget = run(env, "group-create", projectId, "--name", "Widget", "--x", "40", "--y", "0", "--w", "30", "--h", "30").group.id;
+  run(env, "group-reparent", projectId, "--group", widget, "--parent", outer);
+  let shown = run(env, "show", projectId).project;
+  assert.equal(shown.groups.find((g) => g.id === widget).parentId, outer);
+
+  run(env, "group-reparent", projectId, "--group", widget, "--parent", "none");
+  shown = run(env, "show", projectId).project;
+  assert.equal(shown.groups.find((g) => g.id === widget).parentId, undefined, "reparent to none = top level");
+});
+
 test("cli group-create/move/set/assign/delete smoke (no python)", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-groups-"));
   const env = { CANVAS_PROJECTS_ROOT: dir };

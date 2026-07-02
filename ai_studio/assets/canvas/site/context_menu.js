@@ -4,6 +4,7 @@
 // pointer, clamped to the viewport, supports one level of hover submenu ("Move to
 // group"), and closes on click-away or Escape. Pure rendering/input.
 import { el, elementById, enterRegionEdit, groupById, groups, refresh, setStatus, state } from "./app.js";
+import { descendantsOf, orderedChildren } from "../tree.mjs";
 import {
   assignElementsToGroup,
   bringNodeForward,
@@ -15,6 +16,7 @@ import {
   deleteRegion,
   pasteImageBlob,
   renderScreen,
+  reparentGroupTo,
   sendNodeBackward,
   sendNodeToBack,
   setGroupBackground,
@@ -160,15 +162,51 @@ function copyIdItemFor(target) {
   };
 }
 
-// "Move to group ▸" submenu items: every group + "None" (top level).
+// Every group in scene-tree order with its nesting depth, optionally EXCLUDING a group's
+// own subtree (invalid reparent targets). Backs the indented "Move to group" submenus.
+function groupTree(excludeSubtreeOf) {
+  const exclude = excludeSubtreeOf
+    ? new Set([excludeSubtreeOf, ...descendantsOf(state.project, excludeSubtreeOf).groups.map((g) => g.id)])
+    : new Set();
+  const out = [];
+  const walk = (scopeId, depth) => {
+    for (const child of orderedChildren(state.project, scopeId)) {
+      if (child.kind !== "group" || exclude.has(child.id)) continue;
+      out.push({ group: child.ref, depth });
+      walk(child.id, depth + 1);
+    }
+  };
+  walk(null, 0);
+  return out;
+}
+
+// Indent a submenu label by nesting depth with non-breaking spaces (plain spaces
+// collapse in the menu button).
+function indentLabel(name, depth) {
+  return `${"  ".repeat(depth)}${name || "Group"}`;
+}
+
+// "Move to group ▸" submenu items for an ELEMENT: every group (nested indented) + "None".
 function moveToScreenItems(elementId) {
   const ids = targetElementIds(elementId);
-  const items = groups().map((group) => ({
-    label: group.name || "Group",
+  const items = groupTree(null).map(({ group, depth }) => ({
+    label: indentLabel(group.name, depth),
     onClick: () => assignElementsToGroup(ids, group.id),
   }));
   items.push({ separator: true });
   items.push({ label: "None (top level)", onClick: () => assignElementsToGroup(ids, null) });
+  return items;
+}
+
+// "Move to group ▸" submenu items for a GROUP (reparent): every group NOT in its own
+// subtree (cycle guard), nested indented, + "None" (top level).
+function moveGroupItems(groupId) {
+  const items = groupTree(groupId).map(({ group, depth }) => ({
+    label: indentLabel(group.name, depth),
+    onClick: () => reparentGroupTo(groupId, group.id, undefined),
+  }));
+  items.push({ separator: true });
+  items.push({ label: "None (top level)", onClick: () => reparentGroupTo(groupId, null, undefined) });
   return items;
 }
 
@@ -269,17 +307,24 @@ function itemsFor(target) {
     const group = groupById(target.groupId);
     if (!group) return [];
     const visible = group.visible !== false;
-    return [
+    const items = [
       { label: "Render group", onClick: () => renderScreen(group.id, { scale: 1 }) },
       { label: "Order", submenu: orderItems(group.id) },
       { label: "Background", submenu: backgroundItems(group.id) },
+    ];
+    // Nest this group under another (or out to top level) when there is a valid target.
+    if (groupTree(group.id).length || group.parentId) {
+      items.push({ label: "Move to group", submenu: moveGroupItems(group.id) });
+    }
+    items.push(
       { label: "Rename", onClick: () => focusInspectorName() },
       { label: visible ? "Hide" : "Show", onClick: () => setGroupVisible(group.id, !visible) },
       { label: "Ungroup", onClick: () => ungroup(group.id) },
       { separator: true },
       copyIdItemFor(target),
       { label: "Delete group", danger: true, onClick: () => deleteGroupAction(group.id) },
-    ];
+    );
+    return items;
   }
   if (target.kind === "layers-empty") {
     // Layers-panel background: group creation lives here (the "+ Screen" header

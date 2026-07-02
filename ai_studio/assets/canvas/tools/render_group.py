@@ -2,15 +2,19 @@
 """Composite a canvas group's visible member elements into ONE screen PNG.
 
 This is the canvas module's OWN Python tool (not a raster2d step). ops.mjs writes
-a render spec JSON (absolute paths, group bounds, scale, background) and spawns
-this script directly. Compositing rules mirror ops.renderGroup:
+a render spec JSON (absolute paths, group bounds, scale, background, a RECURSIVE
+z-ordered `children` tree) and spawns this script directly. Compositing rules mirror
+ops.compositeGroup:
 
   * canvas size = round(group.w * scale) x round(group.h * scale)
-  * background  = transparent, or a solid "#rrggbb" fill
-  * each element is drawn (in spec order = z-order) at its display box
-    (element.w/h) scaled by `scale`, offset relative to the group origin, and
-    alpha-composited so overlap and transparency are correct
-  * anything outside the group box is clipped (the canvas IS the group box)
+  * background  = transparent, or a solid "#rrggbb" fill (the top group's band)
+  * `children` are painted BACK -> FRONT; an element draws at its display box
+    (element.w/h) scaled by `scale`, offset relative to the top group origin, and
+    alpha-composited so overlap + transparency are correct; a nested group paints
+    its own background band (if any) then its children at absolute offsets
+  * nested groups have NO clip yet — they paint into the same layer so overflow is
+    preserved; a clipped group (increment 4) will render into its own sized layer
+  * anything outside the top group box is clipped (the canvas IS the group box)
 
 Outputs are written atomically; a small JSON report is emitted for provenance.
 """
@@ -46,6 +50,24 @@ def scaled_len(value: float, scale: float) -> int:
     return max(1, round(float(value) * scale))
 
 
+def flatten(nodes: Any, ops: list[tuple[str, dict[str, Any]]]) -> None:
+    """Flatten the recursive z-ordered child tree into a paint-op list (back -> front).
+
+    Since nested groups have no clip yet, everything paints into the same layer at
+    absolute offsets, so the tree collapses to an ordered list of fill/element ops.
+    A clipped group (increment 4) would instead render its children into its own
+    sized layer here, before its siblings continue — the branch slots in cleanly.
+    """
+    for node in nodes or []:
+        kind = node.get("kind")
+        if kind == "group":
+            if node.get("background"):
+                ops.append(("fill", node))
+            flatten(node.get("children"), ops)
+        elif kind == "element":
+            ops.append(("element", node))
+
+
 def render(spec: dict[str, Any]) -> dict[str, Any]:
     scale = float(spec.get("scale") or 1)
     group = spec.get("group") or {}
@@ -56,24 +78,40 @@ def render(spec: dict[str, Any]) -> dict[str, Any]:
 
     canvas = Image.new("RGBA", (width, height), parse_background(spec.get("background")))
 
+    # Accept the recursive `children` tree; fall back to a flat `elements` list for any
+    # older/simple spec (each element becomes an element op).
+    children = spec.get("children")
+    if children is None:
+        children = [{"kind": "element", **element} for element in spec.get("elements") or []]
+    ops: list[tuple[str, dict[str, Any]]] = []
+    flatten(children, ops)
+
     drawn = 0
-    for element in spec.get("elements") or []:
-        source = Path(element["src"])
-        if not source.exists():
-            raise FileNotFoundError(f"element image missing: {source}")
-        image = Image.open(source).convert("RGBA")
-        box_w = scaled_len(element.get("w") or image.width, scale)
-        box_h = scaled_len(element.get("h") or image.height, scale)
-        if (image.width, image.height) != (box_w, box_h):
-            image = image.resize((box_w, box_h), Image.Resampling.LANCZOS)
-        px = round((float(element.get("x") or 0) - origin_x) * scale)
-        py = round((float(element.get("y") or 0) - origin_y) * scale)
+    for kind, node in ops:
         # Paste onto a full-canvas transparent layer (paste clips negative/overflow
         # offsets to the group box), then alpha-composite for correct z-order blending.
         layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-        layer.paste(image, (px, py), image)
+        if kind == "fill":
+            gx = round((float(node.get("x") or 0) - origin_x) * scale)
+            gy = round((float(node.get("y") or 0) - origin_y) * scale)
+            gw = scaled_len(node.get("w") or 1, scale)
+            gh = scaled_len(node.get("h") or 1, scale)
+            band = Image.new("RGBA", (gw, gh), parse_background(node.get("background")))
+            layer.paste(band, (gx, gy))
+        else:
+            source = Path(node["src"])
+            if not source.exists():
+                raise FileNotFoundError(f"element image missing: {source}")
+            image = Image.open(source).convert("RGBA")
+            box_w = scaled_len(node.get("w") or image.width, scale)
+            box_h = scaled_len(node.get("h") or image.height, scale)
+            if (image.width, image.height) != (box_w, box_h):
+                image = image.resize((box_w, box_h), Image.Resampling.LANCZOS)
+            px = round((float(node.get("x") or 0) - origin_x) * scale)
+            py = round((float(node.get("y") or 0) - origin_y) * scale)
+            layer.paste(image, (px, py), image)
+            drawn += 1
         canvas = Image.alpha_composite(canvas, layer)
-        drawn += 1
 
     output = Path(spec["output"])
     save_image_atomic(canvas, output)

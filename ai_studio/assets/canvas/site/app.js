@@ -16,6 +16,16 @@ export const state = {
   project: null,
   selectedIds: new Set(),
   selectedGroupId: null,
+  // Figma nested-selection scope: the group the user has "entered" (double-click drills
+  // in, Esc steps out); null = root scope. A single click resolves to the top-most
+  // container within this scope. Page-only, reset on empty-canvas click / clearSelection.
+  enteredGroupId: null,
+  // Groups selected as units (marquee / canvas). selectedGroupId stays the SINGLE-group
+  // primary the inspector/context menu key on; syncPrimaryGroup keeps it = the sole
+  // member when exactly one group and no elements are selected, else null.
+  selectedGroupIds: new Set(),
+  // The group a plain click would select at the current scope (hover affordance). Page-only.
+  hoverGroupId: null,
   // Region isolation mode (increment 6). regionEditId is the element currently in
   // region-edit mode (mode B / Figma-style isolation); null = object mode (mode A,
   // regions are passive, non-hit-testable overlays). selectedRegionIds are the
@@ -200,6 +210,7 @@ export function clearImageCache() {
 
 export function selectOnly(elementId) {
   state.selectedGroupId = null;
+  state.selectedGroupIds = new Set();
   state.selectedRegionIds = new Set();
   state.regionEditId = null;
   state.selectedIds = elementId ? new Set([elementId]) : new Set();
@@ -207,17 +218,39 @@ export function selectOnly(elementId) {
 
 export function toggleSelect(elementId) {
   state.selectedGroupId = null;
+  state.selectedGroupIds = new Set();
   state.selectedRegionIds = new Set();
   state.regionEditId = null;
   if (state.selectedIds.has(elementId)) state.selectedIds.delete(elementId);
   else state.selectedIds.add(elementId);
 }
 
+// Select a single group as the whole selection (label click, layers head, canvas
+// Figma-select, context menu). Sets both the singular primary and the plural set so the
+// canvas + inspector agree. Does NOT touch enteredGroupId (scope is managed by callers).
+export function selectGroupOnly(groupId) {
+  state.selectedIds = new Set();
+  state.selectedRegionIds = new Set();
+  state.regionEditId = null;
+  state.selectedGroupId = groupId || null;
+  state.selectedGroupIds = groupId ? new Set([groupId]) : new Set();
+}
+
+// Keep selectedGroupId (the single-group primary the inspector/context menu key on) in
+// sync with the plural selectedGroupIds set: the sole selected group when exactly one
+// group and no elements are selected, else null (a mixed/multi selection has no primary).
+export function syncPrimaryGroup() {
+  state.selectedGroupId =
+    state.selectedGroupIds.size === 1 && state.selectedIds.size === 0 ? [...state.selectedGroupIds][0] : null;
+}
+
 export function clearSelection() {
   state.selectedIds = new Set();
   state.selectedGroupId = null;
+  state.selectedGroupIds = new Set();
   state.selectedRegionIds = new Set();
   state.regionEditId = null;
+  state.enteredGroupId = null;
 }
 
 // The element currently in region-edit isolation (mode B): its regions become the
@@ -358,7 +391,12 @@ function ingestProject(project) {
   state.project = project;
   const alive = new Set(elements().map((element) => element.id));
   state.selectedIds = new Set([...state.selectedIds].filter((id) => alive.has(id)));
-  if (state.selectedGroupId && !groupById(state.selectedGroupId)) state.selectedGroupId = null;
+  const aliveGroups = new Set(groups().map((group) => group.id));
+  if (state.selectedGroupId && !aliveGroups.has(state.selectedGroupId)) state.selectedGroupId = null;
+  state.selectedGroupIds = new Set([...state.selectedGroupIds].filter((id) => aliveGroups.has(id)));
+  // The entered scope can vanish under undo/redo/reload (its group was deleted); fall
+  // back to root so clicks never resolve against a dead scope.
+  if (state.enteredGroupId && !aliveGroups.has(state.enteredGroupId)) state.enteredGroupId = null;
   const region = reconcileRegionEdit(state.project, state.regionEditId, state.selectedRegionIds);
   state.regionEditId = region.regionEditId;
   state.selectedRegionIds = region.selectedRegionIds;

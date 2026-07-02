@@ -124,10 +124,11 @@ Every capability is one op in `ops.mjs`:
   passed, overrides every element's settings for that one run (agent one-shots / the
   CLI `--scale` flags). Not journaled (no project mutation), recorded in `tool_runs`.
 - `exportProject({ projectId })` — no-selection project export: composite **every
-  visible group** (screen) at its own default 1x png into ONE
+  visible TOP-LEVEL group** (`parentId` null/absent) at its own default 1x png into ONE
   `<project>/export/<utc-stamp>/` folder plus a combined manifest, reusing the
-  `renderGroup` compositor. Not journaled; records an `export_project` `tool_runs`
-  entry. Errors clearly when there are no visible screens.
+  `renderGroup` compositor. A nested group is a **component inside its root screen**
+  (composited by the recursive painter), never a separate screen. Not journaled; records
+  an `export_project` `tool_runs` entry. Errors clearly when there are no visible screens.
 - `resolveExportScale(token, srcW, srcH)` / `parseScaleSpec(token)` — the scale-token
   parser (exported for reuse/tests): a multiplier (`0.5x`/`1x`/`2x`/`3x`/`4x` or a
   bare `2`) or a fixed target dimension (`512w` = 512px wide, `512h` = 512px tall;
@@ -154,34 +155,62 @@ is the two arrays, and nesting/z-order are expressed by additive optional fields
 `order` z-key (on elements AND groups, among same-scope siblings), and
 `group.background` (an optional solid fill; see below). Paint order is **computed**,
 never persisted (see **Scene tree & paint order**). `order` is written by `reorderNode`
-(group + element z-order, below); `parentId` is read by the scene-tree math now (a
-project that carries it paints correctly) and the op that WRITES it — nesting — lands in
-the next increment.
+(group + element z-order, below); `parentId` is written by `createGroup({parentId})` and
+`reparentGroup` (**nesting**, below) — groups nest arbitrarily deep, and every
+scope-crossing walk (render, move cascade, delete, visibility) is cycle-safe.
 
-- `createGroup({projectId, name, x?, y?, w?, h?, fromElements?})` — explicit
-  bounds, **or** `fromElements: [elementIds]` = the bounding box of those
-  elements + 24px padding, assigning them to the new group. One journal entry.
+- `createGroup({projectId, name, x?, y?, w?, h?, fromElements?, parentId?})` — explicit
+  bounds, **or** `fromElements: [elementIds]` = the bounding box of those elements +
+  24px padding, assigning them to the new group. Optional `parentId` **nests** the new
+  group inside an existing group (validated; `null`/absent = a top-level screen); for
+  `fromElements`, a missing `parentId` defaults to the members' **common** `groupId`
+  (nest a widget group inside the screen it was built from), root when they differ. One
+  journal entry.
 - `patchGroup({projectId, groupId, name?, x?, y?, w?, h?, visible?, background?})` —
-  when `x`/`y` change, **all member elements translate by the same delta** atomically
-  (one journal entry; undo restores the frame and every member). Resize (`w`/`h`)
-  never moves members. `background` sets the optional solid fill (see below): `null`
-  clears it, `{type:"color", color:"#rrggbb"}` sets it — validated (invalid = a loud
-  error, no silent fallback). `None` on an already-unfilled group is a no-op.
+  when `x`/`y` change, the group's **full descendant closure** translates by the same
+  delta — nested subgroup frames AND every element in the subtree — atomically (one
+  journal entry; undo restores the frame and the whole closure). Resize (`w`/`h`) never
+  moves members. `background` sets the optional solid fill (see below): `null` clears it,
+  `{type:"color", color:"#rrggbb"}` sets it — validated (invalid = a loud error, no
+  silent fallback). `None` on an already-unfilled group is a no-op.
+- `reparentGroup({projectId, groupId, parentId|null, index?})` — move a group under a new
+  parent (`null` = top level) at an optional **merged-sibling** `index` (default = front
+  of the destination scope). **Cycle guard**: a parent that is the group itself or any
+  group in its subtree is a **loud error** (`tree.wouldCycle`), never a silent no-op.
+  Order handling follows the "scopes never go half-explicit" invariant: an explicit
+  `index` normalizes the destination scope to contiguous `order` (like `reorderNode`); no
+  index gives a front `order` iff the destination is already explicit, else drops the
+  group's stale order. One journal entry.
 - `assignToGroup({projectId, elementIds, groupId|null})` — set or clear the group
   of the given elements. Journaled.
-- `deleteGroup({projectId, groupId})` — remove the group **and its member
-  elements** (a group is a container; deleting it deletes the content). One
-  journal entry — undo restores the group and every member; image files stay in
-  `files/` (non-destructive). Dissolving a group while keeping the elements is
-  `assignToGroup(..., null)` (the page's Ungroup).
-- `renderGroup({projectId, groupId, scale?, background?})` — composite all
-  **visible** member elements (`element.visible !== false`), in **computed z-order**
-  (the group scope's `order`, else the v1 array-order fallback — so a reordered member
-  composites in its new position), clipped to the group bounds, into one PNG at `scale`
-  (default 1). Nested subgroups are not composited yet (recursive render is a later
-  increment). Background precedence: an explicit `background` arg (`#rrggbb`)
+- `deleteGroup({projectId, groupId})` — remove the group **and its entire subtree**
+  (nested subgroups AND every element in the closure — a group is a container; deleting
+  it deletes the content). One journal entry — undo restores the whole subtree; image
+  files stay in `files/` (non-destructive). Returns `removedGroups` + `removedElements`.
+  Dissolving a group without deleting content is **Ungroup** (below).
+- `renderGroup({projectId, groupId, scale?, background?})` — composite the group's
+  **visible subtree** (`isNodeHidden` prunes hidden nodes), in **computed z-order** per
+  scope (the scope's `order`, else the v1 array-order fallback). The painter is
+  **recursive**: a nested subgroup composites its own background band then its children
+  inside the parent band (no clip yet — overflow is preserved; the clip branch is
+  structured to slot in). Clipped to the top group bounds, into one PNG at `scale`
+  (default 1). Background precedence: an explicit `background` arg (`#rrggbb`)
   **overrides** the group's own `background`; else the group's stored fill; else
   transparent.
+- **Ungroup** (page action `ungroup`, composed from the shared ops) — dissolve **one
+  level**: the group's direct child elements AND direct child subgroups move up to the
+  group's **own parent** (not unconditionally to root, so nesting depth is preserved),
+  then the now-empty group is deleted. Because `deleteGroup` cascades, the children are
+  reparented out first. Kept composed (multiple journal entries); children land at the
+  front of the parent scope.
+
+HTTP: `POST /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null, index?}`;
+`POST .../groups {..., parentId?}` nests on create. Page (Figma nesting): a canvas drag
+moves a selected group's **whole subtree**; the layers panel drags a group onto another
+group's header **middle** to nest (its own subtree is an inert target — a cycle can't be
+dropped), a header **edge**/element row to reorder or reparent across scopes (the
+insertion line's indent encodes the target scope); the group context menu's **Move to
+group ▸** submenu lists nested targets indented.
 
 ### Node z-order (`reorderNode`)
 
@@ -261,8 +290,13 @@ spawns the script directly with the same robust Python discovery the image tools
 bridge uses (`AI_STUDIO_PYTHON`/`PYTHON` env, bundled runtime, `py -3.12`, then
 `python`). A direct child-process call is fine here because this tool is ours.
 Each element is drawn at its display box (`element.w`/`h`) scaled by `scale`,
-offset relative to the group origin, and alpha-composited so overlap and
-transparency stay correct; anything outside the group box is clipped.
+offset relative to the top group origin, and alpha-composited so overlap and
+transparency stay correct; anything outside the top group box is clipped. The spec
+carries a **recursive** z-ordered `children` tree (built by `compositeGroup` /
+`buildRenderNodes`): a nested subgroup contributes its background band + its own
+children, painted inside the parent band at absolute offsets (no clip yet, so overflow
+is preserved; the flatten step in `render_group.py` leaves a clean seam for the clip
+branch). A hidden node prunes its whole subtree.
 
 ### Slice crop tool
 
@@ -450,7 +484,8 @@ node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows
 node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --scale 2x [--suffix @2x] [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest]
 node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all, or --project (all visible screens)
 node ai_studio/assets/canvas/cli.mjs export <id> --all [--scale 2x --format jpg --quality 80 --suffix @2x --resample lanczos] [--to <dir>]
-node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h]
+node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h] [--parent <gid>|none]
+node ai_studio/assets/canvas/cli.mjs group-reparent <id> --group g --parent <gid>|none [--index n]   # nest a group; none = top level
 node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
 node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none]
 node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
@@ -502,7 +537,10 @@ one document that swaps two views; the JS is split into focused ES modules under
   top level; groups as collapsible sections with an eye toggle and inline-rename
   name; member rows indented; 24px thumbnail, region-count badge, eye toggle;
   region-bearing elements expand into indented region rows; element rows drag onto a
-  group header / top level to reparent; selection syncs both ways with the canvas). A
+  group header / top level to reparent; **group rows drag to nest** — onto a header's
+  middle to nest into it, an edge/between rows to reorder or reparent across scopes, with
+  the drag's own subtree an inert (cycle-safe) target; selection syncs both ways with the
+  canvas). A
   structure-signature guard skips the DOM rebuild on selection-only changes, and
   thumbnail `<img>` nodes are **reused** across rebuilds (keyed by element id, guarded
   on `src`), so an unrelated op never re-downloads or re-decodes a thumbnail. The
@@ -544,10 +582,19 @@ isolation (mode B) with the first region selected; both may stay. Downloads: aft
 status area shows clickable links served by the confined
 `GET /api/canvas/projects/<id>/export/<stamp>/<file>` route.
 
-Visible groups draw as Figma-like frames with a name label above the top-left
-corner; clicking the label selects the group and dragging it moves the whole
-screen. Elements that are `visible:false` or inside a hidden group are neither
-drawn nor hit-testable.
+Visible groups draw as Figma-like frames with a name label above the top-left corner.
+Selection is **Figma-nested**: a single click selects the **top-most container group** of
+whatever artwork is under the cursor **within the current scope** (an element directly in
+the scope selects itself); double-click **drills one level** into the group under the
+cursor (a breadcrumb chip — "Screen ▸ Button — Esc to exit" — shows the entered scope);
+`Ctrl`/`Cmd`+click **deep-selects** the leaf element directly; clicking a group's label
+selects that group; clicking empty canvas clears the selection **and** exits to root.
+`Esc` steps out one scope level (then clears selection). Hit-testing follows the computed
+z-order (top-most first). Dragging a selected group moves its **whole subtree**; a hovered
+group at the current scope shows a subtle outline (what a click will select). A marquee
+selects nodes **at the current scope** (top-level groups + loose elements at root, a
+group's own children once entered). Elements that are `visible:false` or inside a hidden
+group are neither drawn nor hit-testable.
 
 ### Shortcuts
 
@@ -556,13 +603,14 @@ drawn nor hit-testable.
 | `V` / `H` | Select tool / Hand (pan) tool |
 | Space (hold) / middle-mouse | Pan (panning is Hand tool / Space-hold / middle-mouse only) |
 | Drag on empty canvas | Marquee-select elements (Shift adds to the selection) |
-| Click / Shift+Click / Ctrl+Click | Select / add-to-selection on canvas and in layers |
+| Click / Double-click / Ctrl+Click | Select top-most group at scope / drill one level in (region-edit on a leaf) / deep-select the leaf element |
+| Shift+Click | Add to selection (layers: contiguous range) |
 | `0` / `1` / `2` | Fit / 100% / 200% zoom (wheel also zooms) |
 | `Ctrl/Cmd`+`Z` / `Ctrl/Cmd`+`Shift`+`Z` or `Ctrl`+`Y` | Undo / Redo |
 | `Ctrl/Cmd`+`G` | Group 2+ selected elements into a screen |
 | `Ctrl/Cmd`+`]` / `Ctrl/Cmd`+`[` (`+Alt` = to front / to back) | Z-order the single selected node (a group, or one element) among its merged siblings |
 | `Delete` / `Backspace` | Region-edit mode: remove selected regions; else remove selected elements |
-| `Escape` | Close menu, then exit region-edit isolation, then clear element/group selection |
+| `Escape` | Close menu, then exit region-edit isolation, then step UP one entered-group scope, then clear selection |
 | Right-click | Context menu (element / region / group / empty); double-click a name to inline-rename |
 
 **Region workbench (isolation mode)** — regions use a Figma-style edit-in-place

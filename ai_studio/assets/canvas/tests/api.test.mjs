@@ -303,6 +303,40 @@ test("canvas API group routes: create/patch/assign/delete round-trip", async (t)
   assert.equal(afterDelete.elements[0].id, elB);
 });
 
+test("canvas API groups reparent route nests a group and rejects a cycle", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Reparent API" })).json().project.id;
+  const mkGroup = async (name) =>
+    (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups`, {
+      name,
+      x: 0,
+      y: 0,
+      w: 100,
+      h: 100,
+    })).json().group.id;
+  const outer = await mkGroup("Outer");
+  const inner = await mkGroup("Inner");
+
+  // Nest inner under outer.
+  const nested = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups/${inner}/reparent`, { parentId: outer });
+  assert.equal(nested.status, 200);
+  const stored = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.equal(stored.groups.find((g) => g.id === inner).parentId, outer);
+
+  // A create with parentId nests directly.
+  const child = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups`, {
+    name: "Child", x: 5, y: 5, w: 20, h: 20, parentId: inner,
+  });
+  assert.equal(child.status, 201);
+  assert.equal(child.json().group.parentId, inner);
+
+  // A cycle (outer under its descendant inner) is a loud 400.
+  const bad = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups/${outer}/reparent`, { parentId: inner });
+  assert.equal(bad.status, 400);
+  assert.match(bad.json().error, /cycle/);
+});
+
 test("canvas API render-screen route composites a group PNG (skips without Python)", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(REPO_ROOT);

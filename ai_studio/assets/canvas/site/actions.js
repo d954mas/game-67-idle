@@ -9,6 +9,7 @@ import {
   elementById,
   elements,
   groupById,
+  groups,
   regionEditElement,
   selectOnly,
   setStatus,
@@ -379,6 +380,23 @@ export async function createGroupOrDefault(name) {
   }
 }
 
+// Nest a group under another group (parentId), or move it to top level (null), at an
+// optional merged-sibling index (default = front of the destination scope). One
+// journaled reparentGroup op. Used by the layers-panel group-row drag-to-nest and the
+// "Move to group" submenu on a group.
+export async function reparentGroupTo(groupId, parentId, index) {
+  try {
+    const body = { parentId: parentId ?? null };
+    if (index !== undefined && index !== null) body.index = index;
+    applyMutation(
+      await api("POST", `/projects/${pid()}/groups/${groupId}/reparent`, body),
+      parentId ? "Nested group." : "Moved group to top level.",
+    );
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 // Move elements into a group (groupId) or out to top level (null). Used by the
 // "Move to group" context submenu and the layers-panel row drag.
 export async function assignElementsToGroup(elementIds, groupId) {
@@ -430,13 +448,29 @@ export async function renderScreen(groupId, { scale = 1, background } = {}) {
   }
 }
 
-// Ungroup: clear the group from every member, then delete the (now empty) group.
+// Ungroup = dissolve ONE level: the group's direct child elements AND direct child
+// subgroups move up to the group's OWN parent (not unconditionally to root, so nesting
+// depth is preserved), then the now-empty group is deleted. Composed from the shared ops
+// so it stays a page action. deleteGroup now cascades over the whole subtree, so the
+// children MUST be reparented out FIRST — otherwise ungroup would delete them. Multiple
+// journal entries is the known trade of keeping this composed (see PLAN); children land
+// at the front of the parent scope (exact former z-slot is not preserved).
 export async function ungroup(groupId) {
   try {
-    const memberIds = elements().filter((element) => element.groupId === groupId).map((element) => element.id);
-    if (memberIds.length) await api("POST", `/projects/${pid()}/assign-group`, { elementIds: memberIds, groupId: null });
+    const group = groupById(groupId);
+    if (!group) return;
+    const parentId = group.parentId ?? null;
+    const childElementIds = elements().filter((e) => (e.groupId || null) === groupId).map((e) => e.id);
+    const childGroupIds = groups().filter((g) => (g.parentId || null) === groupId).map((g) => g.id);
+    if (childElementIds.length) {
+      await api("POST", `/projects/${pid()}/assign-group`, { elementIds: childElementIds, groupId: parentId });
+    }
+    for (const childGroupId of childGroupIds) {
+      await api("POST", `/projects/${pid()}/groups/${childGroupId}/reparent`, { parentId });
+    }
     const result = await api("DELETE", `/projects/${pid()}/groups/${groupId}`);
     state.selectedGroupId = null;
+    state.selectedGroupIds = new Set();
     applyMutation(result, "Ungrouped.");
   } catch (error) {
     setStatus(error.message, true);

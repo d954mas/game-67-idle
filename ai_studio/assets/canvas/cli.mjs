@@ -18,7 +18,8 @@
 //   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 //   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --suffix --resample]
 //   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --suffix --resample] [--to <dir>]
-//   node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h]
+//   node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h] [--parent <gid>|none]
+//   node ai_studio/assets/canvas/cli.mjs group-reparent <id> --group g --parent <gid>|none [--index n]
 //   node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
 //   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none]
 //   node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
@@ -55,6 +56,7 @@ import {
   renderGroup,
   reorderElement,
   reorderNode,
+  reparentGroup,
   setExportSettings,
   setRegions,
   sliceRegions,
@@ -112,7 +114,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-move|group-set|group-assign|group-delete|render-group|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|group-assign|group-delete|render-group|undo|redo|history>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -132,7 +134,8 @@ function usage() {
   slice <id> --element <eid> [--regions r1,r2]
   export-set <id> --element <eid> --json <path> | --scale <t> [--suffix <s>] [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest]
   export <id> --elements e1,e2 | --all | --project [--scale <t> --format <f> --quality <n> --suffix <s> --resample <r>] [--to <dir>]
-  group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>]
+  group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]
+  group-reparent <id> --group <gid> --parent <gid>|none [--index <n>]   (nest a group; none = top level)
   group-move <id> --group <gid> --x <n> --y <n>
   group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>] [--background '#rrggbb'|none]
   group-assign <id> --elements e1,e2 --group <gid>|none
@@ -307,7 +310,21 @@ async function runCommand(command, id, positional, flags) {
         if (flags.w !== undefined) args.w = Number(flags.w);
         if (flags.h !== undefined) args.h = Number(flags.h);
       }
+      // --parent <gid> nests the new group; --parent none forces top level. Omit to
+      // let fromElements default to the members' common parent (else root).
+      if (flags.parent !== undefined && flags.parent !== "true") {
+        args.parentId = flags.parent === "none" ? null : flags.parent;
+      }
       return print(createGroup(repoRoot, args));
+    }
+    case "group-reparent": {
+      if (!id) fail("group-reparent requires <id>");
+      if (!flags.group) fail("group-reparent requires --group <gid>");
+      const args = { projectId: id, groupId: flags.group };
+      // --parent <gid> nests under that group; --parent none (or omitted) = top level.
+      args.parentId = !flags.parent || flags.parent === "none" || flags.parent === "true" ? null : flags.parent;
+      if (flags.index !== undefined && flags.index !== "true") args.index = Number(flags.index);
+      return print(reparentGroup(repoRoot, args));
     }
     case "group-move": {
       if (!id) fail("group-move requires <id>");

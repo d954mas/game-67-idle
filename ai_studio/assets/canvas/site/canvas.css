@@ -1086,6 +1086,25 @@ button:disabled {
   white-space: nowrap;
 }
 
+/* Nested-group scope breadcrumb chip. Same chip language as the region breadcrumb but a
+   blue accent (matching group frames), so "you are inside this group" reads distinctly
+   from region-edit isolation. */
+#scope-breadcrumb {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(16, 18, 20, 0.9);
+  border: 1px solid #77a7ff;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #a8c4ff;
+  pointer-events: none;
+  z-index: 6;
+  white-space: nowrap;
+}
+
 /* Region-edit tool row: a chip-like floating toolbar under the breadcrumb, shown only
    inside region-edit isolation. Matches the breadcrumb visual language; the active tool
    is highlighted in cyan. */

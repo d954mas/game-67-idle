@@ -11,12 +11,14 @@ import {
   elementById,
   enterRegionEdit,
   exitRegionEdit,
+  groupById,
   hooks,
   lastProjectId,
   loadProjects,
   refresh,
   refreshHistory,
   rememberLastProject,
+  selectGroupOnly,
   selectOnly,
   setProjectParam,
   setStatus,
@@ -213,7 +215,8 @@ function onKeyDown(event) {
   if (key === "escape") {
     // Escape never leaves the project. It unwinds one level at a time: close the menu;
     // inside region-edit, cancel an open polygon draft, else drop a draw tool back to
-    // Select, else exit isolation; finally clear element/group selection.
+    // Select, else exit isolation; else step UP one entered-group scope (selecting the
+    // group just exited); finally clear element/group selection.
     closeContextMenu();
     if (state.regionEditId) {
       if (state.regionTool === "polygon" && state.polygonDraft.length) {
@@ -226,6 +229,14 @@ function onKeyDown(event) {
         return;
       }
       exitRegionEdit();
+      refresh();
+      return;
+    }
+    if (state.enteredGroupId) {
+      const exited = state.enteredGroupId;
+      const group = groupById(exited);
+      state.enteredGroupId = group ? group.parentId || null : null;
+      selectGroupOnly(exited); // select the group we stepped out of, at the parent scope
       refresh();
       return;
     }

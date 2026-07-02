@@ -12,10 +12,11 @@
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
 //   POST   /api/canvas/projects/<id>/export         {elementIds, rows?} | {project:true}
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/export {rows}  (export settings)
-//   POST   /api/canvas/projects/<id>/groups         {name, x?,y?,w?,h?, fromElements?}
+//   POST   /api/canvas/projects/<id>/groups         {name, x?,y?,w?,h?, fromElements?, parentId?}
 //   PATCH  /api/canvas/projects/<id>/groups/<gid>   {name?,x?,y?,w?,h?,visible?,background?}
 //   DELETE /api/canvas/projects/<id>/groups/<gid>
 //   POST   /api/canvas/projects/<id>/groups/<gid>/render {scale?, background?}
+//   POST   /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null, index?}
 //   POST   /api/canvas/projects/<id>/assign-group   {elementIds, groupId|null}
 //   POST   /api/canvas/projects/<id>/undo
 //   POST   /api/canvas/projects/<id>/redo
@@ -56,6 +57,7 @@ import {
   renderGroup,
   reorderElement,
   reorderNode,
+  reparentGroup,
   resolveProjectFile,
   resolveProjectPath,
   setExportSettings,
@@ -251,6 +253,7 @@ export function createCanvasApi(root) {
           w: body.w,
           h: body.h,
           fromElements: body.fromElements,
+          parentId: body.parentId,
         }));
         return true;
       }
@@ -313,6 +316,20 @@ export function createCanvasApi(root) {
           groupId,
           scale: body.scale,
           background: body.background,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/groups/<gid>/reparent  (nest a group under another
+      // group, or {parentId:null} = top level; optional merged-sibling index).
+      if (parts.length === 7 && sub === "groups" && parts[6] === "reparent" && req.method === "POST") {
+        const groupId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, reparentGroup(root, {
+          projectId: id,
+          groupId,
+          parentId: body.parentId ?? null,
+          index: body.index,
         }));
         return true;
       }

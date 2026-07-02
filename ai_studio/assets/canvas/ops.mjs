@@ -54,7 +54,7 @@ import { uploadImageSource } from "../tools/image/sources/api.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
-import { frontOrder, nodeScope, orderedChildren } from "./tree.mjs";
+import { descendantsOf, frontOrder, isNodeHidden, nodeScope, orderedChildren, wouldCycle } from "./tree.mjs";
 import {
   addImage as storeAddImage,
   appendArchive,
@@ -773,8 +773,11 @@ function elementsBBox(elements) {
 
 // Create a screen group. Either explicit bounds (x/y/w/h) OR fromElements: an
 // array of element ids whose bounding box (+24px padding) becomes the frame and
-// which are assigned this group. One journal entry.
-export function createGroup(root, { projectId, name, x, y, w, h, fromElements } = {}) {
+// which are assigned this group. Optional `parentId` NESTS the new group inside an
+// existing group (validated; null/absent = a top-level screen); for fromElements a
+// missing parentId defaults to the members' COMMON groupId (nest a widget group
+// inside the screen it was built from), root when they differ. One journal entry.
+export function createGroup(root, { projectId, name, x, y, w, h, fromElements, parentId } = {}) {
   if (!projectId) throw new Error("createGroup requires projectId");
   const startedAt = performance.now();
   const before = getProject(root, projectId);
@@ -783,9 +786,10 @@ export function createGroup(root, { projectId, name, x, y, w, h, fromElements } 
 
   let bounds;
   let memberIds = [];
+  let members = [];
   if (Array.isArray(fromElements) && fromElements.length) {
     memberIds = fromElements.map(String);
-    const members = memberIds.map((id) => {
+    members = memberIds.map((id) => {
       const element = (before.elements || []).find((item) => item.id === id);
       if (!element) throw new Error(`element not found: ${id}`);
       return element;
@@ -800,10 +804,24 @@ export function createGroup(root, { projectId, name, x, y, w, h, fromElements } 
     bounds = { x: finite(x) ? Number(x) : 0, y: finite(y) ? Number(y) : 0, w: Number(w), h: Number(h) };
   }
 
+  // Resolve the parent scope. An explicit parentId (validated below) wins; else, for
+  // fromElements, the members' common groupId; else root.
+  let parentScope;
+  if (parentId !== undefined) {
+    parentScope = parentId == null || parentId === "" ? null : String(parentId);
+  } else if (members.length) {
+    const scopes = new Set(members.map((m) => (m.groupId == null || m.groupId === "" ? null : String(m.groupId))));
+    parentScope = scopes.size === 1 ? [...scopes][0] : null;
+  } else {
+    parentScope = null;
+  }
+  if (parentScope != null) findGroup(before, parentScope); // loud error on an unknown parent
+
   const group = { id: groupId, name: cleanName, x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h, visible: true };
-  // A new group is a top-level screen (root scope): keep an explicitly-ordered root
-  // explicit by giving the group a front order (no-op on a never-reordered root).
-  const groupFront = frontOrder(before, null);
+  if (parentScope != null) group.parentId = parentScope;
+  // Keep an explicitly-ordered destination scope explicit by giving the new group a
+  // front order (no-op on a never-reordered scope).
+  const groupFront = frontOrder(before, parentScope);
   if (groupFront !== null) group.order = groupFront;
   const memberSet = new Set(memberIds);
   // Members entering the fresh group scope drop any stale `order` from their old scope,
@@ -820,7 +838,7 @@ export function createGroup(root, { projectId, name, x, y, w, h, fromElements } 
   });
   const project = commitMutation(root, projectId, {
     op: "createGroup",
-    args_summary: { groupId, name: cleanName, members: memberIds, bounds },
+    args_summary: { groupId, name: cleanName, members: memberIds, bounds, parentId: parentScope },
     before,
     after,
     startedAt,
@@ -829,10 +847,11 @@ export function createGroup(root, { projectId, name, x, y, w, h, fromElements } 
 }
 
 // Patch a group's name/bounds/visibility/background. When x or y change, translate
-// ALL member elements by the same delta so the whole screen moves as one; resize
-// (w/h) never moves members. `background` is the optional solid fill (null clears it;
-// {type:"color", color:"#rrggbb"} sets it — validated, no silent fallback). One
-// journal entry restores everything on undo.
+// the group's FULL descendant closure by the same delta — nested subgroup frames AND
+// every element in the subtree — so the whole screen (and its nested widget groups)
+// moves as one; resize (w/h) never moves members. `background` is the optional solid
+// fill (null clears it; {type:"color", color:"#rrggbb"} sets it — validated, no silent
+// fallback). One journal entry restores everything on undo.
 export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible, background } = {}) {
   if (!projectId) throw new Error("patchGroup requires projectId");
   if (!groupId) throw new Error("patchGroup requires groupId");
@@ -846,25 +865,39 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
   const bgProvided = background !== undefined;
   const bgResolved = bgProvided ? normalizeGroupBackground(background) : undefined;
 
+  // On a move, gather the FULL descendant closure once: nested subgroup frames AND
+  // every element in the subtree translate with the group.
+  const moving = dx !== 0 || dy !== 0;
+  const descendants = moving ? descendantsOf(before, groupId) : { groups: [], elements: [] };
+  const descGroupIds = new Set(descendants.groups.map((g) => g.id));
+  const descElementIds = new Set(descendants.elements.map((e) => e.id));
+
   const nextGroups = groupsOf(before).map((group) => {
-    if (group.id !== groupId) return group;
-    const patched = { ...group };
-    if (name !== undefined) patched.name = String(name);
-    if (finite(x)) patched.x = Number(x);
-    if (finite(y)) patched.y = Number(y);
-    if (finite(w)) patched.w = Number(w);
-    if (finite(h)) patched.h = Number(h);
-    if (visible !== undefined) patched.visible = !(visible === false || visible === "false");
-    if (bgProvided) {
-      if (bgResolved === null) delete patched.background; // "None" -> absent field
-      else patched.background = bgResolved;
+    if (group.id === groupId) {
+      const patched = { ...group };
+      if (name !== undefined) patched.name = String(name);
+      if (finite(x)) patched.x = Number(x);
+      if (finite(y)) patched.y = Number(y);
+      if (finite(w)) patched.w = Number(w);
+      if (finite(h)) patched.h = Number(h);
+      if (visible !== undefined) patched.visible = !(visible === false || visible === "false");
+      if (bgProvided) {
+        if (bgResolved === null) delete patched.background; // "None" -> absent field
+        else patched.background = bgResolved;
+      }
+      return patched;
     }
-    return patched;
+    // A nested subgroup frame translates with the closure (its own members are in the
+    // element closure below).
+    if (moving && descGroupIds.has(group.id)) {
+      return { ...group, x: (Number(group.x) || 0) + dx, y: (Number(group.y) || 0) + dy };
+    }
+    return group;
   });
 
-  const nextElements = (dx !== 0 || dy !== 0)
+  const nextElements = moving
     ? (before.elements || []).map((element) =>
-        element.groupId === groupId
+        descElementIds.has(element.id)
           ? { ...element, x: (Number(element.x) || 0) + dx, y: (Number(element.y) || 0) + dy }
           : element,
       )
@@ -918,30 +951,115 @@ export function assignToGroup(root, { projectId, elementIds, groupId } = {}) {
   return { project, count: ids.length, groupId: target };
 }
 
-// Remove a group. Members keep their positions and have groupId cleared. One
-// journal entry.
-// Deleting a group deletes its MEMBER ELEMENTS with it (lead 2026-07-02: a group
-// is a container — dissolving one without deleting content is Ungroup, i.e.
-// assignToGroup(null)). One journal entry; undo restores the group and every
-// member. Member image files stay in files/ (non-destructive storage).
+// Deleting a group deletes its ENTIRE SUBTREE with it (lead 2026-07-02: a group is a
+// container — dissolving one without deleting content is Ungroup). The full closure —
+// nested subgroups AND every element in the subtree — goes in ONE journal entry; undo
+// restores all of it. Member image files stay in files/ (non-destructive storage).
 export function deleteGroup(root, { projectId, groupId } = {}) {
   if (!projectId) throw new Error("deleteGroup requires projectId");
   if (!groupId) throw new Error("deleteGroup requires groupId");
   const startedAt = performance.now();
   const before = getProject(root, projectId);
   findGroup(before, groupId);
-  const nextGroups = groupsOf(before).filter((group) => group.id !== groupId);
-  const removedElements = (before.elements || []).filter((element) => element.groupId === groupId);
-  const nextElements = (before.elements || []).filter((element) => element.groupId !== groupId);
+  const descendants = descendantsOf(before, groupId);
+  const removedGroupIds = new Set([groupId, ...descendants.groups.map((group) => group.id)]);
+  const removedElementIds = new Set(descendants.elements.map((element) => element.id));
+  const nextGroups = groupsOf(before).filter((group) => !removedGroupIds.has(group.id));
+  const removedElements = (before.elements || []).filter((element) => removedElementIds.has(element.id));
+  const nextElements = (before.elements || []).filter((element) => !removedElementIds.has(element.id));
   const after = updateProject(root, projectId, { groups: nextGroups, elements: nextElements });
   const project = commitMutation(root, projectId, {
     op: "deleteGroup",
-    args_summary: { groupId, deletedElements: removedElements.map((element) => element.id) },
+    args_summary: {
+      groupId,
+      deletedGroups: [...removedGroupIds],
+      deletedElements: removedElements.map((element) => element.id),
+    },
     before,
     after,
     startedAt,
   });
-  return { project, removed: groupId, removedElements: removedElements.map((element) => element.id) };
+  return {
+    project,
+    removed: groupId,
+    removedGroups: [...removedGroupIds],
+    removedElements: removedElements.map((element) => element.id),
+  };
+}
+
+// Move a group under a new parent (null = root) at an optional merged-sibling `index`
+// (default = front of the destination scope). CYCLE GUARD: reject a parent that is the
+// group itself or any group in its subtree (tree.wouldCycle) — a loud error, never a
+// silent no-op. Order handling mirrors the "scopes never go half-explicit" invariant:
+//   - with an explicit `index`, assign contiguous order 0..N over the destination's new
+//     arrangement (destination becomes explicit — the reorderNode normalization);
+//   - without an index (front), give the group a FRONT order iff the destination scope
+//     is already explicit, else drop its (now-stale) order so the scope stays implicit.
+// The group's old scope keeps its remaining siblings' orders (still explicit, gaps are
+// harmless); the moved group never leaves a stale order behind. One journal entry.
+export function reparentGroup(root, { projectId, groupId, parentId, index } = {}) {
+  if (!projectId) throw new Error("reparentGroup requires projectId");
+  if (!groupId) throw new Error("reparentGroup requires groupId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  findGroup(before, groupId); // loud error on an unknown group
+  const target = parentId == null || parentId === "" ? null : String(parentId);
+  if (target != null) findGroup(before, target); // loud error on an unknown parent
+  if (wouldCycle(before, groupId, target)) {
+    throw new Error(
+      `reparentGroup would create a cycle: cannot move ${groupId} under ${
+        target === groupId ? "itself" : `its own descendant ${target}`
+      }`,
+    );
+  }
+
+  const hasIndex = index !== undefined && index !== null && Number.isFinite(Number(index));
+
+  // The moved group's new parentId (root => drop the field).
+  const withParent = (group) => {
+    const next = { ...group };
+    if (target == null) delete next.parentId;
+    else next.parentId = target;
+    return next;
+  };
+
+  let nextGroups;
+  let nextElements = before.elements || [];
+  if (hasIndex) {
+    // Explicit placement: contiguous order 0..N over the destination's new arrangement
+    // (destination merged siblings BEFORE the move, excluding the group itself).
+    const destSiblings = orderedChildren(before, target).filter((node) => node.id !== groupId);
+    const clampedIndex = Math.max(0, Math.min(destSiblings.length, Math.round(Number(index))));
+    const arranged = destSiblings.slice();
+    arranged.splice(clampedIndex, 0, { kind: "group", id: groupId });
+    const orderByNodeId = new Map(arranged.map((node, order) => [node.id, order]));
+    nextGroups = groupsOf(before).map((group) => {
+      if (group.id === groupId) return { ...withParent(group), order: orderByNodeId.get(groupId) };
+      return orderByNodeId.has(group.id) ? { ...group, order: orderByNodeId.get(group.id) } : group;
+    });
+    nextElements = (before.elements || []).map((element) =>
+      orderByNodeId.has(element.id) ? { ...element, order: orderByNodeId.get(element.id) } : element,
+    );
+  } else {
+    const fo = frontOrder(before, target);
+    nextGroups = groupsOf(before).map((group) => {
+      if (group.id !== groupId) return group;
+      const moved = withParent(group);
+      if (fo === null) delete moved.order;
+      else moved.order = fo;
+      return moved;
+    });
+  }
+
+  const after = updateProject(root, projectId, { groups: nextGroups, elements: nextElements });
+  const project = commitMutation(root, projectId, {
+    op: "reparentGroup",
+    args_summary: { groupId, parentId: target, index: hasIndex ? Math.round(Number(index)) : undefined },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, group: (project.groups || []).find((item) => item.id === groupId) };
 }
 
 // ---- undo / redo / history ---------------------------------------------------
@@ -1519,10 +1637,51 @@ function hexColor(value) {
   return /^#[0-9a-fA-F]{6}$/.test(text) ? text.toLowerCase() : null;
 }
 
-// Composite one group's visible members into a screen PNG at the given absolute
+// Build the recursive z-ordered paint tree for a scope. Each VISIBLE child is either
+// an element paint node (absolute box) or a group node (its background fill + its own
+// recursively-built children painted inside the parent band). Hidden subtrees are
+// pruned (isNodeHidden cascade). `leaves` accumulates every painted image element ref
+// for the manifest + member count. `clip` rides along per group so the (increment-4)
+// clip branch slots into the painter without a spec change; today every group paints
+// into the same layer at absolute offsets (overflow preserved).
+function buildRenderNodes(root, projectId, project, scopeId, leaves) {
+  const nodes = [];
+  for (const child of orderedChildren(project, scopeId)) {
+    if (isNodeHidden(project, child.ref)) continue;
+    if (child.kind === "group") {
+      const group = child.ref;
+      const groupBg = group.background && group.background.type === "color" ? hexColor(group.background.color) : null;
+      nodes.push({
+        kind: "group",
+        clip: group.clip === true,
+        x: Number(group.x) || 0,
+        y: Number(group.y) || 0,
+        w: Number(group.w) || 0,
+        h: Number(group.h) || 0,
+        background: groupBg,
+        children: buildRenderNodes(root, projectId, project, group.id, leaves),
+      });
+    } else {
+      const element = child.ref;
+      if (element.type !== "image" || !element.src) continue;
+      leaves.push(element);
+      nodes.push({
+        kind: "element",
+        src: resolveProjectFile(root, projectId, element.src),
+        x: Number(element.x) || 0,
+        y: Number(element.y) || 0,
+        w: Number(element.w) || 0,
+        h: Number(element.h) || 0,
+      });
+    }
+  }
+  return nodes;
+}
+
+// Composite one group's visible SUBTREE into a screen PNG at the given absolute
 // output/spec/report paths (spawns render_group.py once). Shared by renderGroup
-// (single screen, own folder) and exportProject (every visible screen into one
-// folder). Uses the module's legacy runPython discovery like the other bridged
+// (single screen, own folder) and exportProject (every visible top-level screen into
+// one folder). Uses the module's legacy runPython discovery like the other bridged
 // canvas tools; the T0218 canvas seam flips these to the config-only interpreter.
 async function compositeGroup(root, projectId, project, group, { scale, background, outputAbs, specAbs, reportAbs } = {}) {
   const renderScale = finite(scale) && Number(scale) > 0 ? Number(scale) : 1;
@@ -1534,22 +1693,11 @@ async function compositeGroup(root, projectId, project, group, { scale, backgrou
   const groupBg = group.background && group.background.type === "color" ? hexColor(group.background.color) : null;
   const bg = explicit || groupBg || null;
 
-  // Visible DIRECT member elements, in COMPUTED z-order (orderedChildren honors the
-  // group scope's explicit `order` when present, else the v1 array-order fallback — so a
-  // reordered member composites in its new position, and a legacy project is unchanged).
-  // Nested subgroups are not composited yet (recursive render is increment 3).
-  const members = orderedChildren(project, group.id)
-    .filter((child) => child.kind === "element")
-    .map((child) => child.ref)
-    .filter((element) => element.visible !== false && element.type === "image" && element.src);
-  const specElements = members.map((element) => ({
-    id: element.id,
-    src: resolveProjectFile(root, projectId, element.src),
-    x: Number(element.x) || 0,
-    y: Number(element.y) || 0,
-    w: Number(element.w) || 0,
-    h: Number(element.h) || 0,
-  }));
+  // Recursive paint tree of the group's VISIBLE subtree, in COMPUTED z-order per scope
+  // (nested subgroups included; each subgroup's background composites inside the parent
+  // band). `members` is every painted image element (leaf) for the manifest + count.
+  const members = [];
+  const children = buildRenderNodes(root, projectId, project, group.id, members);
   const spec = {
     schema: "ai_studio.canvas.render_group_spec.v1",
     scale: renderScale,
@@ -1557,7 +1705,7 @@ async function compositeGroup(root, projectId, project, group, { scale, backgrou
     group: { x: Number(group.x) || 0, y: Number(group.y) || 0, w: Number(group.w) || 0, h: Number(group.h) || 0 },
     output: outputAbs,
     report: reportAbs,
-    elements: specElements,
+    children,
   };
   writeProjectBytes(specAbs, `${JSON.stringify(spec, null, 2)}\n`);
   await runPython(root, ["ai_studio/assets/canvas/tools/render_group.py", "--spec", specAbs]);
@@ -1624,16 +1772,19 @@ export async function renderGroup(root, { projectId, groupId, scale, background 
 
 // ---- exportProject (no selection -> export every screen) ---------------------
 
-// Project-level export used when nothing is selected: render EVERY visible group
-// (screen) at its own default 1x png into ONE <project>/export/<utc-stamp>/ folder
-// plus a combined manifest. Reuses the renderGroup compositor (compositeGroup) per
-// visible screen. Like the other export ops it makes no project mutation, so it is
-// NOT journaled; it records one export_project tool_runs entry.
+// Project-level export used when nothing is selected: render every visible TOP-LEVEL
+// group (screen) at its own default 1x png into ONE <project>/export/<utc-stamp>/
+// folder plus a combined manifest. A nested group is a component INSIDE its root
+// screen (composited by compositeGroup's recursion), never a separate screen, so only
+// parentId-less groups are exported here. Like the other export ops it makes no project
+// mutation, so it is NOT journaled; it records one export_project tool_runs entry.
 export async function exportProject(root, { projectId } = {}) {
   if (!projectId) throw new Error("exportProject requires projectId");
   const project = getProject(root, projectId);
-  const visibleGroups = groupsOf(project).filter((group) => group.visible !== false);
-  if (!visibleGroups.length) throw new Error("no visible screens to export (project export renders every visible group)");
+  const visibleGroups = groupsOf(project).filter(
+    (group) => group.parentId == null && group.visible !== false,
+  );
+  if (!visibleGroups.length) throw new Error("no visible screens to export (project export renders every visible top-level group)");
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const folder = resolveProjectPath(root, projectId, "export", stamp);

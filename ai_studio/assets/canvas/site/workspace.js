@@ -16,7 +16,6 @@
 import {
   api,
   applyMutation,
-  clearSelection,
   el,
   elements,
   enterRegionEdit,
@@ -27,13 +26,14 @@ import {
   isElementHidden,
   isSelected,
   imageFor,
-  memberElements,
   refresh,
   regionEditElement,
   selectedElements,
+  selectGroupOnly,
   selectOnly,
   setStatus,
   state,
+  syncPrimaryGroup,
   toggleSelect,
 } from "./app.js";
 import { renameProject, setRegionsFor, undo, redo } from "./actions.js";
@@ -57,7 +57,7 @@ import {
   screenToImagePoint,
   zoomViewportAt,
 } from "./viewport.mjs";
-import { isNodeHidden, orderedChildren } from "../tree.mjs";
+import { ancestorsOf, childrenOf, descendantsOf, isNodeHidden, nodeScope, orderedChildren } from "../tree.mjs";
 
 let canvas = null;
 let ctx = null;
@@ -127,9 +127,34 @@ export function render() {
     drawPolygonDraft(ctx, editEl, state.polygonDraft, state.polygonHover, vp);
   }
   updateBreadcrumb(editEl);
+  updateScopeBreadcrumb(editEl);
   updateRegionTools(editEl);
   updateZoomIndicator();
   updateEmptyHint();
+}
+
+// A breadcrumb chip for the entered scope (Figma "Screen ▸ Button — Esc to exit"), so
+// the user always knows which group's interior clicks resolve into. Shown only outside
+// region-edit (the region breadcrumb owns that state). Reuses the chip visual language.
+function updateScopeBreadcrumb(editEl) {
+  const node = el("scope-breadcrumb");
+  if (!node) return;
+  if (!editEl && state.enteredGroupId) {
+    const parts = [];
+    let cur = state.enteredGroupId;
+    let guard = 0;
+    while (cur && guard < 64) {
+      const group = groupById(cur);
+      if (!group) break;
+      parts.unshift(group.name || "Group");
+      cur = group.parentId || null;
+      guard += 1;
+    }
+    node.textContent = `${parts.join(" ▸ ")} — Esc to exit`;
+    node.classList.remove("hidden");
+  } else {
+    node.classList.add("hidden");
+  }
 }
 
 // Recursive artwork paint for one scope (null = root): each child in computed
@@ -217,10 +242,20 @@ function drawGroupFrame(group, vp) {
   const origin = imageToScreenPoint({ x: group.x, y: group.y }, vp);
   const w = group.w * vp.scale;
   const h = group.h * vp.scale;
-  const selected = state.selectedGroupId === group.id;
+  const selected = state.selectedGroupId === group.id || state.selectedGroupIds.has(group.id);
   ctx.lineWidth = selected ? 2 : 1;
   ctx.strokeStyle = selected ? "#d7a14a" : "#77a7ff";
   ctx.strokeRect(origin.x, origin.y, w, h);
+
+  // Hover affordance: a subtle outline on the group a plain click would select at the
+  // current scope, so the user sees what a click will grab before pressing.
+  if (!selected && state.hoverGroupId === group.id) {
+    ctx.save();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "rgba(119, 167, 255, 0.6)";
+    ctx.strokeRect(origin.x, origin.y, w, h);
+    ctx.restore();
+  }
 
   const label = group.name || "Group";
   ctx.font = "12px system-ui, 'Segoe UI', sans-serif";
@@ -341,14 +376,77 @@ function setCursor(name) {
   if (canvas) canvas.style.cursor = name;
 }
 
+// Top-most VISIBLE image element under a world point, in COMPUTED paint order (front =
+// painted last = on top). Walks the scene tree front-to-back so z-order + nesting agree
+// with what is drawn (replaces the old elements[]-reverse hit test).
 function hitElement(world) {
-  const items = elements();
-  for (let i = items.length - 1; i >= 0; i -= 1) {
-    const e = items[i];
-    if (isElementHidden(e)) continue;
-    if (world.x >= e.x && world.x <= e.x + e.w && world.y >= e.y && world.y <= e.y + e.h) return e;
+  const inBox = (e) => world.x >= e.x && world.x <= e.x + e.w && world.y >= e.y && world.y <= e.y + e.h;
+  const walk = (scopeId) => {
+    const children = orderedChildren(state.project, scopeId);
+    for (let i = children.length - 1; i >= 0; i -= 1) {
+      const child = children[i];
+      if (isNodeHidden(state.project, child.ref)) continue;
+      if (child.kind === "group") {
+        const found = walk(child.id);
+        if (found) return found;
+      } else if (inBox(child.ref)) {
+        return child.ref;
+      }
+    }
+    return null;
+  };
+  return walk(null);
+}
+
+// Resolve a Figma single-click on element `e` given the entered scope: select the
+// element itself when it lives directly in that scope, else the TOP-MOST ancestor group
+// that is a child of that scope. Returns { kind, id, scope } — `scope` becomes the new
+// enteredGroupId (clicking outside the entered group resolves at root, i.e. steps out).
+function resolveClickSelection(e, enteredGroupId) {
+  const project = state.project;
+  const chain = ancestorsOf(project, e).map((group) => group.id); // nearest ... top-level
+  const scope = enteredGroupId && chain.includes(enteredGroupId) ? enteredGroupId : null;
+  if (nodeScope(project, e) === scope) return { kind: "element", id: e.id, scope };
+  for (const gid of chain) {
+    const group = groupById(gid);
+    if (group && (group.parentId || null) === scope) return { kind: "group", id: gid, scope };
   }
-  return null;
+  return { kind: "element", id: e.id, scope };
+}
+
+// A drag item for a selected group: its full descendant closure captured at grab time so
+// the live preview moves the whole subtree (frames + elements); the commit patchGroup
+// then cascades identically on the server.
+function groupDragItem(groupId) {
+  const group = groupById(groupId);
+  if (!group) return null;
+  const desc = descendantsOf(state.project, groupId);
+  return {
+    group,
+    origX: group.x,
+    origY: group.y,
+    members: desc.elements.map((element) => ({ element, origX: element.x, origY: element.y })),
+    subgroups: desc.groups.map((sub) => ({ group: sub, origX: sub.x, origY: sub.y })),
+  };
+}
+
+// Start a drag matching the current selection: a lone group moves its whole subtree; a
+// pure element set moves via the element batch; a mix (or 2+ groups) moves as a combined
+// "selection" drag (loose elements batched + each group cascaded).
+function beginSelectionDrag(screen) {
+  const groupIds = [...state.selectedGroupIds];
+  const elItems = selectedElements().map((element) => ({ element, origX: element.x, origY: element.y }));
+  if (groupIds.length === 0) {
+    drag = { mode: "element", startX: screen.x, startY: screen.y, items: elItems };
+    return;
+  }
+  const grpItems = groupIds.map((gid) => groupDragItem(gid)).filter(Boolean);
+  if (groupIds.length === 1 && elItems.length === 0) {
+    const only = grpItems[0];
+    drag = { mode: "group", startX: screen.x, startY: screen.y, group: only.group, origGroup: { x: only.origX, y: only.origY }, members: only.members, subgroups: only.subgroups };
+    return;
+  }
+  drag = { mode: "selection", startX: screen.x, startY: screen.y, elItems, grpItems };
 }
 
 function hitGroupLabel(screen) {
@@ -359,15 +457,21 @@ function hitGroupLabel(screen) {
   return null;
 }
 
-// Topmost visible screen frame whose bounds contain the world point (for reparent).
+// Innermost VISIBLE group frame whose bounds contain the world point (for drop-to-
+// reparent) — walks the scene tree so a drop lands in the deepest nested frame under the
+// point, not just an outer screen.
 function groupAtCenter(cx, cy) {
-  const list = groups();
-  for (let i = list.length - 1; i >= 0; i -= 1) {
-    const g = list[i];
-    if (g.visible === false) continue;
-    if (cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h) return g.id;
-  }
-  return null;
+  const inBox = (g) => cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h;
+  let best = null;
+  const walk = (scopeId) => {
+    for (const child of orderedChildren(state.project, scopeId)) {
+      if (child.kind !== "group" || isNodeHidden(state.project, child.ref)) continue;
+      if (inBox(child.ref)) best = child.id; // deeper containing groups overwrite -> innermost wins
+      walk(child.id);
+    }
+  };
+  walk(null);
+  return best;
 }
 
 // ---- region gesture starts ---------------------------------------------------
@@ -483,41 +587,70 @@ function onMouseDown(event) {
     }
   }
 
+  // A group LABEL always selects that group (chrome above the artwork) — dragging it
+  // moves the whole subtree. Scope is unchanged (a label selects, it does not enter).
   const labelGroupId = hitGroupLabel(screen);
   if (labelGroupId) {
-    state.selectedGroupId = labelGroupId;
-    state.selectedIds = new Set();
-    state.selectedRegionIds = new Set();
-    state.regionEditId = null;
-    const group = groupById(labelGroupId);
-    const members = memberElements(labelGroupId).map((element) => ({ element, origX: element.x, origY: element.y }));
-    drag = { mode: "group", startX: screen.x, startY: screen.y, group, origGroup: { x: group.x, y: group.y }, members };
+    selectGroupOnly(labelGroupId);
+    beginSelectionDrag(screen);
     setCursor("move");
     refresh();
     return;
   }
 
-  // MODE A (object mode): regions are passive; drag always moves the whole element.
+  // MODE A (object mode): Figma nested selection. Ctrl/Cmd+click deep-selects the leaf
+  // (and enters its scope); a plain click selects the leaf when it lives directly in the
+  // entered scope, else the top-most container group within that scope; Shift adds.
   const hit = hitElement(world);
   if (hit) {
-    state.selectedGroupId = null;
-    if (event.shiftKey || event.ctrlKey || event.metaKey) toggleSelect(hit.id);
-    else if (!state.selectedIds.has(hit.id)) selectOnly(hit.id);
-    const items = selectedElements().map((element) => ({ element, origX: element.x, origY: element.y }));
-    drag = { mode: "element", startX: screen.x, startY: screen.y, items };
+    if (event.ctrlKey || event.metaKey) {
+      state.enteredGroupId = nodeScope(state.project, hit);
+      selectOnly(hit.id);
+    } else {
+      const res = resolveClickSelection(hit, state.enteredGroupId);
+      state.enteredGroupId = res.scope;
+      if (res.kind === "group") {
+        if (event.shiftKey && state.selectedIds.size === 0) {
+          if (state.selectedGroupIds.has(res.id)) state.selectedGroupIds.delete(res.id);
+          else state.selectedGroupIds.add(res.id);
+          state.selectedRegionIds = new Set();
+          state.regionEditId = null;
+          syncPrimaryGroup();
+        } else {
+          selectGroupOnly(res.id);
+        }
+      } else if (event.shiftKey) {
+        toggleSelect(hit.id);
+      } else if (!state.selectedIds.has(hit.id)) {
+        // A fresh element replaces the selection; an already-selected element keeps the
+        // whole (possibly mixed) selection so a press-drag moves it all together.
+        selectOnly(hit.id);
+      }
+    }
+    beginSelectionDrag(screen);
     setCursor("move");
     refresh();
     return;
   }
 
-  // Empty canvas -> marquee select (panning is Hand/Space/middle-mouse only).
+  // Empty canvas -> marquee select at the CURRENT scope (panning is Hand/Space/middle-
+  // mouse only). The selection clears now but the entered scope is kept so the marquee
+  // selects within it; a plain click (no marquee drag) exits to root on mouseup.
   drag = {
     mode: "marquee",
     startScreen: screen,
     lastScreen: screen,
+    shift: event.shiftKey,
     base: event.shiftKey ? new Set(state.selectedIds) : new Set(),
+    baseGroups: event.shiftKey ? new Set(state.selectedGroupIds) : new Set(),
   };
-  if (!event.shiftKey) clearSelection();
+  if (!event.shiftKey) {
+    state.selectedIds = new Set();
+    state.selectedGroupId = null;
+    state.selectedGroupIds = new Set();
+    state.selectedRegionIds = new Set();
+    state.regionEditId = null;
+  }
   setCursor("crosshair");
   refresh();
 }
@@ -529,15 +662,25 @@ function applyMarquee() {
   const ry = Math.min(a.y, b.y);
   const rw = Math.abs(b.x - a.x);
   const rh = Math.abs(b.y - a.y);
+  const intersects = (box) => !(box.x + box.w < rx || box.x > rx + rw || box.y + box.h < ry || box.y > ry + rh);
+  // Marquee selects nodes at the CURRENT scope: loose elements + groups-as-units (a
+  // group's frame box). Root marquee = top-level groups + loose elements; inside an
+  // entered group = its own children.
+  const scope = childrenOf(state.project, state.enteredGroupId);
   const inside = new Set(drag.base);
-  for (const element of elements()) {
+  for (const element of scope.elements) {
     if (isElementHidden(element)) continue;
-    const outside = element.x + element.w < rx || element.x > rx + rw || element.y + element.h < ry || element.y > ry + rh;
-    if (!outside) inside.add(element.id);
+    if (intersects(element)) inside.add(element.id);
   }
-  state.selectedGroupId = null;
+  const insideGroups = new Set(drag.baseGroups || []);
+  for (const group of scope.groups) {
+    if (isNodeHidden(state.project, group)) continue;
+    if (intersects(group)) insideGroups.add(group.id);
+  }
   state.selectedRegionIds = new Set();
   state.selectedIds = inside;
+  state.selectedGroupIds = insideGroups;
+  syncPrimaryGroup();
 }
 
 function dragRegionMove(screen) {
@@ -608,6 +751,33 @@ function onMouseMove(event) {
       for (const item of drag.members) {
         item.element.x = item.origX + dx;
         item.element.y = item.origY + dy;
+      }
+      // The group drag moves its FULL subtree: nested frames translate too.
+      for (const item of drag.subgroups || []) {
+        item.group.x = item.origX + dx;
+        item.group.y = item.origY + dy;
+      }
+      requestRender();
+      break;
+    }
+    case "selection": {
+      const dx = (screen.x - drag.startX) / vp.scale;
+      const dy = (screen.y - drag.startY) / vp.scale;
+      for (const item of drag.elItems) {
+        item.element.x = item.origX + dx;
+        item.element.y = item.origY + dy;
+      }
+      for (const g of drag.grpItems) {
+        g.group.x = g.origX + dx;
+        g.group.y = g.origY + dy;
+        for (const m of g.members) {
+          m.element.x = m.origX + dx;
+          m.element.y = m.origY + dy;
+        }
+        for (const s of g.subgroups) {
+          s.group.x = s.origX + dx;
+          s.group.y = s.origY + dy;
+        }
       }
       requestRender();
       break;
@@ -706,6 +876,40 @@ function commitGroupDrag(finished) {
         y: Math.round(finished.group.y),
       });
       applyMutation(result, "Moved group.");
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  })();
+}
+
+// Commit a mixed selection move (loose elements + one or more groups). Loose elements
+// go in ONE batched elements-set entry; each moved group is its OWN patchGroup entry
+// (the op cascades over its subtree). A mixed move is therefore N+1 journal entries —
+// a known compromise; a single batched mixed-move op is a future follow-up. Reparent-on-
+// drop is intentionally NOT applied to a mixed selection (only single-element drags).
+function commitSelectionDrag(finished) {
+  const projectId = state.project.id;
+  const changed = (a, bx, by) => Math.round(a.x) !== Math.round(bx) || Math.round(a.y) !== Math.round(by);
+  const movedEls = finished.elItems.filter((it) => changed(it.element, it.origX, it.origY));
+  const movedGroups = finished.grpItems.filter((g) => changed(g.group, g.origX, g.origY));
+  if (!movedEls.length && !movedGroups.length) {
+    refresh();
+    return;
+  }
+  (async () => {
+    try {
+      let last = null;
+      for (const g of movedGroups) {
+        last = await api("PATCH", `/projects/${projectId}/groups/${g.group.id}`, {
+          x: Math.round(g.group.x),
+          y: Math.round(g.group.y),
+        });
+      }
+      if (movedEls.length) {
+        const patches = movedEls.map((it) => ({ elementId: it.element.id, x: Math.round(it.element.x), y: Math.round(it.element.y) }));
+        last = await api("POST", `/projects/${projectId}/elements-set`, { patches });
+      }
+      applyMutation(last, "Moved selection.");
     } catch (error) {
       setStatus(error.message, true);
     }
@@ -839,9 +1043,17 @@ function onMouseUp() {
     case "group":
       commitGroupDrag(finished);
       break;
-    case "marquee":
+    case "selection":
+      commitSelectionDrag(finished);
+      break;
+    case "marquee": {
+      // A plain click (no real marquee) on empty canvas exits the entered scope to root
+      // (Figma: click outside deselects and steps out). A real marquee keeps the scope.
+      const movedPx = Math.hypot(finished.lastScreen.x - finished.startScreen.x, finished.lastScreen.y - finished.startScreen.y);
+      if (movedPx < 3 && !finished.shift) state.enteredGroupId = null;
       refresh(); // selection already applied live
       break;
+    }
     case "region-move":
     case "region-resize":
       if (finished.changed) setRegionsFor(finished.element.id, finished.element.regions);
@@ -905,7 +1117,26 @@ function onHover(event) {
     state.polygonHover = screenToSource(editEl, screen);
     render();
   }
+  updateHoverGroup(screen, editEl);
   updateCursorAt(screen);
+}
+
+// Track the group a plain click would select at the current scope (hover affordance).
+// Only repaints when the hovered group actually changes, so idle mouse-moves are cheap.
+function updateHoverGroup(screen, editEl) {
+  let next = null;
+  if (!editEl && state.tool === "select" && !state.spacePan) {
+    const world = screenToImagePoint(screen, state.viewport);
+    const hit = hitElement(world);
+    if (hit) {
+      const res = resolveClickSelection(hit, state.enteredGroupId);
+      if (res.kind === "group") next = res.id;
+    }
+  }
+  if (next !== state.hoverGroupId) {
+    state.hoverGroupId = next;
+    requestRender();
+  }
 }
 
 // Double-click any image -> enter region-edit isolation (mode B). Works on a fresh
@@ -916,10 +1147,22 @@ function onDblClick(event) {
   if (state.regionEditId && state.regionTool === "polygon") return;
   const world = screenToImagePoint(pointer(event), state.viewport);
   const hit = hitElement(world);
-  if (hit) {
-    enterRegionEdit(hit.id);
+  if (!hit) return;
+  const res = resolveClickSelection(hit, state.enteredGroupId);
+  if (res.kind === "group") {
+    // Drill ONE level: enter that group, then select the child under the cursor at the
+    // new (deeper) scope — a nested subgroup, or the leaf element if it lives here.
+    state.enteredGroupId = res.id;
+    const inner = resolveClickSelection(hit, res.id);
+    if (inner.kind === "group") selectGroupOnly(inner.id);
+    else selectOnly(hit.id);
     refresh();
+    return;
   }
+  // The click already resolves to the leaf element in the entered scope -> region-edit
+  // isolation (unchanged trigger path).
+  enterRegionEdit(hit.id);
+  refresh();
 }
 
 function onWheel(event) {
@@ -957,6 +1200,16 @@ function onContextMenu(event) {
   }
   const hit = hitElement(world);
   if (hit) {
+    // Resolve like a left-click so the menu targets the same node the click would select
+    // (the container group for a grouped element, else the element).
+    const res = resolveClickSelection(hit, state.enteredGroupId);
+    state.enteredGroupId = res.scope;
+    if (res.kind === "group") {
+      selectGroupOnly(res.id);
+      refresh();
+      openContextMenu(event.clientX, event.clientY, { kind: "group", groupId: res.id });
+      return;
+    }
     if (!state.selectedIds.has(hit.id)) selectOnly(hit.id);
     refresh();
     openContextMenu(event.clientX, event.clientY, { kind: "element", elementId: hit.id });
