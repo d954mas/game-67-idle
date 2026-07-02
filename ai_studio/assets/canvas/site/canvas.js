@@ -99,6 +99,10 @@ function isTypingTarget(target) {
 }
 
 function onKeyDown(event) {
+  // Shortcuts match physical keys (event.code), NOT event.key: event.key is
+  // layout-dependent — under a Cyrillic layout Ctrl+Z arrives as key "я", the
+  // comparison misses, preventDefault never runs, and the browser default wins.
+  const code = event.code;
   const key = event.key.toLowerCase();
   const meta = event.ctrlKey || event.metaKey;
   if (isTypingTarget(event.target)) return; // let inspector/inline fields type freely
@@ -106,25 +110,25 @@ function onKeyDown(event) {
   // Home view: nothing to do beyond letting inputs work.
   if (!state.project) return;
 
-  if (meta && key === "z") {
+  if (meta && code === "KeyZ") {
     event.preventDefault();
     if (event.shiftKey) redo();
     else undo();
     return;
   }
-  if (meta && key === "y") {
+  if (meta && code === "KeyY") {
     event.preventDefault();
     redo();
     return;
   }
-  if (meta && key === "g") {
+  if (meta && code === "KeyG") {
     event.preventDefault();
     createGroupFromSelection("New screen");
     return;
   }
   if (meta) return; // leave other browser shortcuts alone
 
-  if (key === " ") {
+  if (code === "Space") {
     if (!state.spacePan) {
       state.spacePan = true;
       el("stage").classList.add("space-pan");
@@ -132,17 +136,17 @@ function onKeyDown(event) {
     event.preventDefault();
     return;
   }
-  if (key === "v") return setTool("select");
-  if (key === "h") return setTool("pan");
-  if (key === "0") {
+  if (code === "KeyV") return setTool("select");
+  if (code === "KeyH") return setTool("pan");
+  if (code === "Digit0" || code === "Numpad0") {
     event.preventDefault();
     return fit();
   }
-  if (key === "1") {
+  if (code === "Digit1" || code === "Numpad1") {
     event.preventDefault();
     return zoomTo(1);
   }
-  if (key === "2") {
+  if (code === "Digit2" || code === "Numpad2") {
     event.preventDefault();
     return zoomTo(2);
   }
@@ -176,7 +180,7 @@ function onKeyDown(event) {
 }
 
 function onKeyUp(event) {
-  if (event.key === " ") {
+  if (event.code === "Space") {
     state.spacePan = false;
     el("stage").classList.remove("space-pan");
   }
