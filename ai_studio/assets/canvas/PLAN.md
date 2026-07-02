@@ -63,40 +63,36 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **UI organization** (`T0217`, P1, AGENT IN FLIGHT) — context-menu diet (no
-   Rename/Hide, regions = one entry; Export stays until T0206), Figma-like
-   titled collapsible inspector sections with persisted state, z-order
-   (layers sibling drag + Bring forward/Send backward/front/back + Ctrl+[/]
-   by event.code) on a new journaled reorder op, proper layers-collapse rail.
-   Amendments folded in live: region tree LEAVES the layers panel (duplicate
-   of region-edit mode), rename bug hunt (dblclick layer/region + "Rename
-   region" not applying + names invisible), region row ergonomics (× delete
-   broken, bigger hit target, no hover layout shift, styled scrollbar).
-   ACCEPTANCE PASS after it lands (orchestrator, by hand): undo CLAMPS at the
-   region-edit entry seq (lead overruled pure-global undo: in-mode Ctrl+Z
-   only undoes in-mode region edits; pre-mode ops need Esc first).
-2. **Export panel** (`T0206`, P1) — Figma-style Export section at the bottom
+1. **Export panel** (`T0206`, P1) — Figma-style Export section at the bottom
    of the inspector (see "Export design" below); absorbs export-destination
-   from T0203; export leaves the context menu.
-3. **Perf: frontend churn** (`T0200`, P1) — use op responses instead of
+   from T0203 (lead re-confirmed live: export must ASK where — today it
+   silently writes `<project>/export/<stamp>/`); export leaves the context
+   menu.
+2. **Perf: frontend churn** (`T0200`, P1) — use op responses instead of
    reload+history GETs, immutable cache headers + `<img>` reuse, rAF drag,
    batched multi-ops (also collapses marquee-move/multi-delete to one journal
    entry per gesture — audit finding).
-4. **Polygonal regions** (`T0209`) — legacy system mined, port plan ready:
-   `tmp/t0209_legacy_polygon_research_2026-07-02.md` (tool row Select/Draw
-   Rect/Draw Polygon replaces the centered-rect "+ Add region"; polygon =
-   rect + `polygon` points field; crop via ImageDraw.polygon mask).
-5. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
+3. **Groups** (`T0219`, P1, design first) — sibling z-order for groups,
+   NESTED groups (model change), clip-to-bounds flag, group background
+   (color; canvas draw + render parity). Slice-group + delete-group already
+   landed ahead of it (`59eb9df0`).
+4. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
    busy spinner, input never blocked, max-N concurrent long ops with a
    visible queue.
-6. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
+5. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
    journal + `jumpHistory` op (CLI parity).
-7. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
+6. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
    builds on T0218's `_bridge` + pinned venv `pythonPath`.
 
 DONE 2026-07-02: T0201 + T0205 (journal O(n²) + observability, `4db81a07`);
 undo/journal audit fix pass (`cf538516`); layout-independent shortcuts
-(`8fca3d90`); region fix pass (`07923dd3`).
+(`8fca3d90`); region fix pass (`07923dd3`); T0217 UI organization + undo
+clamp + screen→group + front-at-top layers; T0209 polygonal regions
+(`ead8f099`); T0220 legacy sweep (`494ae3dd`: editor deleted, gallery
+module, seam closed, standard studio sidebar on canvas `59eb9df0`); evening
+UX pass (`4c5b6815` shift-range/indent/labels, `68be02f2` Copy ID canvas://
+refs, `59eb9df0` slice→group + delete-group-deletes-content, named regions
+at creation).
 
 ## Image tools track (T0218 — gates T0210 alpha + T0207 cleanup)
 
