@@ -115,6 +115,19 @@ group's former z-slot, internal order kept, one undo deep-restores). Pure
 block math in `tree.mjs`; HTTP + CLI `nodes-move`/`nodes-reorder`/
 `group-ungroup`; full gesture audit table in the task log. Tests 181→195.
 
+T0227 node clipboard + delete completeness LANDED `d5c346b9` (2026-07-03,
+→ review): Figma-like Ctrl+C/V/D for nodes — pure `buildNodesSpec` subtree
+snapshot (works after source deletion; immutable files), `pasteNodes`
+(atomic validation, server-side id mint, +16 per repeat paste, one entry),
+`duplicateNodes`, batched `deleteNodes` (mixed elements+group subtrees, one
+entry, exact z-slot undo); Ctrl+V owned solely by the dnd.js paste event
+(OS image wins over node buffer); HTTP + CLI nodes-paste/duplicate/delete.
+Delete key covers every selection shape. Tests 204→215. Live-verify fixes
+same day: Delete-on-group from layers (selectGroupOnly wiring `1b44152f`),
+fractional-DPR bottom-edge artifact (`c3500214`), no accidental
+region-edit/region-on-tap (`80381b33`), multi-group drag keeps selection
+(`41b8c641`).
+
 T0200 perf frontend-churn LANDED `e37d8a5a` (2026-07-02 night): op responses
 carry `history{seq,canUndo,canRedo}` and drive the page (zero follow-up GETs,
 was 2), `/files` immutable + ETag with `<img>` node reuse, rAF-coalesced drag
