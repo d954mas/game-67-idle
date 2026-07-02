@@ -6,13 +6,16 @@ import {
   api,
   applyMutation,
   clearSelection,
+  elementById,
   elements,
+  groupById,
   regionEditElement,
   selectOnly,
   setStatus,
   setStatusLinks,
   state,
 } from "./app.js";
+import { orderedChildren, nodeScope } from "../tree.mjs";
 import { screenToImagePoint } from "./viewport.mjs";
 import { downloadFiles, pickDestination, supportsFsa, writeFilesToDir } from "./export_dest.mjs";
 
@@ -113,56 +116,65 @@ export function deleteSelectedElements() {
   return deleteElements([...state.selectedIds]);
 }
 
-// ---- z-order (element ordering) ----------------------------------------------
+// ---- z-order (element + group ordering) --------------------------------------
+//
+// z-order acts on a NODE — an element OR a group. The op reorders it among its MERGED
+// same-scope siblings (elements + groups); these page helpers only translate a
+// Figma-style intent (forward/backward/front/back) into an absolute merged-sibling index
+// via the shared tree math, then call the one reorderNode op. Elements and groups share
+// one id namespace, so a single helper set serves both.
 
-// Sibling elements of `element` (same group scope) in paint/z-order. The op works
-// on an absolute sibling index; these page helpers only translate a Figma-style
-// intent (forward/backward/front/back) into that index and call the one reorder op.
-function siblingsOf(element) {
-  const scope = element.groupId || null;
-  return elements().filter((item) => (item.groupId || null) === scope);
+function nodeById(id) {
+  return elementById(id) || groupById(id);
 }
 
-// Move one element to a target sibling index (0 = back / painted first). One
-// journaled op; undo restores the exact previous order.
-export async function reorderElementTo(id, index) {
+// Merged siblings (elements + groups) of a node in computed back → front order, or null
+// when the id is unknown. The same list tree.mjs paints from, so the index math agrees
+// with what the user sees.
+function nodeSiblings(id) {
+  const node = nodeById(id);
+  if (!node) return null;
+  return orderedChildren(state.project, nodeScope(state.project, node));
+}
+
+// Move any node (element or group) to a target merged-sibling index (0 = back / painted
+// first). One journaled op; undo restores the exact previous order.
+export async function reorderNodeTo(id, index) {
   try {
-    applyMutation(await api("POST", `/projects/${pid()}/elements/${id}/reorder`, { index }));
+    applyMutation(await api("POST", `/projects/${pid()}/nodes/${id}/reorder`, { index }));
   } catch (error) {
     setStatus(error.message, true);
   }
 }
 
 function nudgeZ(id, delta) {
-  const element = elements().find((item) => item.id === id);
-  if (!element) return undefined;
-  const siblings = siblingsOf(element);
-  const from = siblings.findIndex((item) => item.id === id);
+  const siblings = nodeSiblings(id);
+  if (!siblings) return undefined;
+  const from = siblings.findIndex((sibling) => sibling.id === id);
   const target = from + delta;
   if (target < 0 || target >= siblings.length) return undefined; // already at the edge
-  return reorderElementTo(id, target);
+  return reorderNodeTo(id, target);
 }
 
 function edgeZ(id, edge) {
-  const element = elements().find((item) => item.id === id);
-  if (!element) return undefined;
-  const siblings = siblingsOf(element);
-  const from = siblings.findIndex((item) => item.id === id);
+  const siblings = nodeSiblings(id);
+  if (!siblings) return undefined;
+  const from = siblings.findIndex((sibling) => sibling.id === id);
   const target = edge === "front" ? siblings.length - 1 : 0;
   if (from === target) return undefined;
-  return reorderElementTo(id, target);
+  return reorderNodeTo(id, target);
 }
 
-export function bringElementForward(id) {
+export function bringNodeForward(id) {
   return nudgeZ(id, +1);
 }
-export function sendElementBackward(id) {
+export function sendNodeBackward(id) {
   return nudgeZ(id, -1);
 }
-export function bringElementToFront(id) {
+export function bringNodeToFront(id) {
   return edgeZ(id, "front");
 }
-export function sendElementToBack(id) {
+export function sendNodeToBack(id) {
   return edgeZ(id, "back");
 }
 

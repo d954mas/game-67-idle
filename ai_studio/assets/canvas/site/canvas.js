@@ -23,14 +23,14 @@ import {
   state,
 } from "./app.js";
 import {
-  bringElementForward,
-  bringElementToFront,
+  bringNodeForward,
+  bringNodeToFront,
   createGroupFromSelection,
   deleteSelectedElements,
   deleteSelectedRegions,
   redo,
-  sendElementBackward,
-  sendElementToBack,
+  sendNodeBackward,
+  sendNodeToBack,
   undo,
 } from "./actions.js";
 import { initHome, render as renderHome } from "./home.js";
@@ -111,10 +111,14 @@ function isTypingTarget(target) {
   return /^(input|textarea|select)$/i.test(target && target.tagName ? target.tagName : "");
 }
 
-// The single selected element id for z-order shortcuts, or null (multi/none, or in
-// region-edit mode where the keys belong to region work, not layer ordering).
-function soloElementId() {
-  if (state.regionEditId || state.selectedGroupId) return null;
+// The single selected NODE id for z-order shortcuts — the selected group, or the one
+// selected element — or null. Null in region-edit mode (the keys belong to region work)
+// and for a multi-element selection (a batched multi-node reorder would be N journal
+// entries, so Ctrl+[/] stays a single-node gesture; use the layers drag / Order menu per
+// node for a multi-selection).
+function soloNodeId() {
+  if (state.regionEditId) return null;
+  if (state.selectedGroupId) return state.selectedGroupId;
   return state.selectedIds.size === 1 ? [...state.selectedIds][0] : null;
 }
 
@@ -163,18 +167,18 @@ function onKeyDown(event) {
     return;
   }
   // Z-order by physical key (event.code so it works on any layout): Ctrl+] forward,
-  // Ctrl+[ backward, add Alt for to-front / to-back. Applies to a single selected
-  // element (z-order of one layer among its siblings), never in region-edit mode.
+  // Ctrl+[ backward, add Alt for to-front / to-back. Applies to a single selected NODE —
+  // an element OR a group — among its merged siblings, never in region-edit mode.
   if (meta && code === "BracketRight") {
     event.preventDefault();
-    const id = soloElementId();
-    if (id) (event.altKey ? bringElementToFront : bringElementForward)(id);
+    const id = soloNodeId();
+    if (id) (event.altKey ? bringNodeToFront : bringNodeForward)(id);
     return;
   }
   if (meta && code === "BracketLeft") {
     event.preventDefault();
-    const id = soloElementId();
-    if (id) (event.altKey ? sendElementToBack : sendElementBackward)(id);
+    const id = soloNodeId();
+    if (id) (event.altKey ? sendNodeToBack : sendNodeBackward)(id);
     return;
   }
   if (meta) return; // leave other browser shortcuts alone

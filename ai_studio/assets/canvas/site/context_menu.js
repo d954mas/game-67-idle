@@ -6,8 +6,8 @@
 import { el, elementById, enterRegionEdit, groupById, groups, refresh, setStatus, state } from "./app.js";
 import {
   assignElementsToGroup,
-  bringElementForward,
-  bringElementToFront,
+  bringNodeForward,
+  bringNodeToFront,
   createGroupFromSelection,
   createGroupOrDefault,
   deleteElements,
@@ -15,8 +15,8 @@ import {
   deleteRegion,
   pasteImageBlob,
   renderScreen,
-  sendElementBackward,
-  sendElementToBack,
+  sendNodeBackward,
+  sendNodeToBack,
   setGroupBackground,
   setGroupVisible,
   sliceRegionsFor,
@@ -199,14 +199,15 @@ function pickGroupColor(groupId) {
   input.click();
 }
 
-// "Order ▸" submenu: the four Figma z-order moves for one element (same actions as
-// the Ctrl+]/[ shortcuts; each no-ops harmlessly when already at that edge).
-function orderItems(elementId) {
+// "Order ▸" submenu: the four Figma z-order moves for one NODE — an element OR a group
+// (same actions as the Ctrl+]/[ shortcuts, computed over MERGED same-scope siblings; each
+// no-ops harmlessly when already at that edge).
+function orderItems(nodeId) {
   return [
-    { label: "Bring to front", onClick: () => bringElementToFront(elementId) },
-    { label: "Bring forward", onClick: () => bringElementForward(elementId) },
-    { label: "Send backward", onClick: () => sendElementBackward(elementId) },
-    { label: "Send to back", onClick: () => sendElementToBack(elementId) },
+    { label: "Bring to front", onClick: () => bringNodeToFront(nodeId) },
+    { label: "Bring forward", onClick: () => bringNodeForward(nodeId) },
+    { label: "Send backward", onClick: () => sendNodeBackward(nodeId) },
+    { label: "Send to back", onClick: () => sendNodeToBack(nodeId) },
   ];
 }
 
@@ -270,6 +271,7 @@ function itemsFor(target) {
     const visible = group.visible !== false;
     return [
       { label: "Render group", onClick: () => renderScreen(group.id, { scale: 1 }) },
+      { label: "Order", submenu: orderItems(group.id) },
       { label: "Background", submenu: backgroundItems(group.id) },
       { label: "Rename", onClick: () => focusInspectorName() },
       { label: visible ? "Hide" : "Show", onClick: () => setGroupVisible(group.id, !visible) },

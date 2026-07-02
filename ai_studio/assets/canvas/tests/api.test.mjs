@@ -8,7 +8,13 @@ import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
 import { URL, fileURLToPath } from "node:url";
 import { createCanvasApi } from "../api.mjs";
+import { orderedChildren } from "../tree.mjs";
 import { magentaSheetPng, solidPng } from "./png_fixture.mjs";
+
+// Computed element paint order (back -> front) by name for a project scope — reorderNode
+// writes `order` fields, not the raw elements[] array, so tests assert the computed order.
+const elemOrder = (project, scopeId = null) =>
+  orderedChildren(project, scopeId).filter((node) => node.kind === "element").map((node) => node.ref.name);
 
 const ROOT = "C:/unused-repo-root";
 // The bridged slice/detect routes run raster2d Python with cwd = repo root, so
@@ -338,12 +344,44 @@ test("canvas API reorder route moves an element among its siblings (z-order)", a
   assert.equal(moved.status, 200);
   assert.equal(moved.json().index, 2);
   const after = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
-  assert.deepEqual(after.elements.map((e) => e.name), ["b.png", "c.png", "a.png"]);
+  assert.deepEqual(elemOrder(after), ["b.png", "c.png", "a.png"]);
 
   // Undo restores the original order in one step.
   await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`);
   const undone = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
-  assert.deepEqual(undone.elements.map((e) => e.name), ["a.png", "b.png", "c.png"]);
+  assert.deepEqual(elemOrder(undone), ["a.png", "b.png", "c.png"]);
+});
+
+test("canvas API nodes reorder route moves an element or group among merged siblings", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Node Z API" })).json().project.id;
+  const add = async (name) =>
+    (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+      name,
+      bytes_base64: solidPng(4, 4).toString("base64"),
+    })).json().element.id;
+  const elA = await add("a.png");
+  await add("b.png");
+  const elC = await add("c.png");
+  // Group C so root holds elements a, b and a group.
+  const groupId = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups`, {
+    name: "G",
+    fromElements: [elC],
+  })).json().group.id;
+
+  // Move the GROUP to the back (index 0) among its merged root siblings.
+  const movedGroup = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/nodes/${groupId}/reorder`, { index: 0 });
+  assert.equal(movedGroup.status, 200);
+  assert.equal(movedGroup.json().index, 0);
+  const project = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  const label = (node) => (node.kind === "group" ? "G" : node.ref.name);
+  assert.deepEqual(orderedChildren(project, null).map(label), ["G", "a.png", "b.png"]);
+
+  // An out-of-range index is a loud 400 (no silent clamp on the node route).
+  const bad = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/nodes/${elA}/reorder`, { index: 9 });
+  assert.equal(bad.status, 400);
+  assert.match(bad.json().error, /out of range/);
 });
 
 test("canvas API returns an error for a missing project", async (t) => {

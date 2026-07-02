@@ -15,6 +15,7 @@ import {
   elementById,
   elements,
   fileUrl,
+  groupById,
   groups,
   hooks,
   memberElements,
@@ -24,20 +25,22 @@ import {
   toggleSelect,
   ungroupedElements,
 } from "./app.js";
-import { orderedChildren } from "../tree.mjs";
+import { nodeScope, orderedChildren } from "../tree.mjs";
 import {
   assignElementsToGroup,
   renameElement,
   renameGroup,
-  reorderElementTo,
+  reorderNodeTo,
   setElementVisible,
   setGroupVisible,
 } from "./actions.js";
 import { inlineEdit } from "./inline.js";
 import { openContextMenu } from "./context_menu.js";
 
-// Pointer-based element-row drag (reparent OR reorder; kept deliberately simple).
-let layerDrag = null; // { id, name, rowEl, startX, startY, active }
+// Pointer-based layer-row drag (reparent OR reorder; kept deliberately simple). `kind`
+// is "element" (reorder among siblings + reparent onto a group / root) or "group"
+// (reorder among its own-level siblings only — drag-to-nest is a later increment).
+let layerDrag = null; // { id, kind, name, rowEl, startX, startY, active }
 
 // Reused thumbnail <img> nodes, keyed by element id (with the src it was built for).
 // A full layers rebuild (replaceChildren) detaches the old rows but we re-append the
@@ -153,6 +156,7 @@ function elementRow(element, depth) {
     if (event.button !== 0 || event.target.closest("button")) return;
     layerDrag = {
       id: element.id,
+      kind: "element",
       name: element.name || element.id,
       rowEl: row,
       startX: event.clientX,
@@ -236,6 +240,21 @@ function groupSection(group, depth) {
 
   head.appendChild(eyeButton(group.visible !== false, () => setGroupVisible(group.id, group.visible === false)));
 
+  // A group head is a drag source too: dragging it REORDERS the group among its own-level
+  // siblings (drag-to-nest is a later increment). Mirrors the element-row threshold; the
+  // eye/caret buttons stopPropagation, so this never fires for them.
+  head.addEventListener("mousedown", (event) => {
+    if (event.button !== 0 || event.target.closest("button")) return;
+    layerDrag = {
+      id: group.id,
+      kind: "group",
+      name: group.name || "Group",
+      rowEl: head,
+      startX: event.clientX,
+      startY: event.clientY,
+      active: false,
+    };
+  });
   head.addEventListener("click", () => {
     state.selectedGroupId = group.id;
     state.selectedIds = new Set();
@@ -364,9 +383,10 @@ function removeGhost() {
   }
 }
 
+// The parent scope of any node id (element or group), or null for root.
 function scopeOf(id) {
-  const element = elementById(id);
-  return element ? element.groupId || null : null;
+  const node = elementById(id) || groupById(id);
+  return node ? nodeScope(state.project, node) : null;
 }
 
 // Is this drag a single element (reorder-eligible) or a 2+ multi-selection drag
@@ -375,46 +395,66 @@ function isSingleDrag(dragId) {
   return !(state.selectedIds.has(dragId) && state.selectedIds.size > 1);
 }
 
-// Resolve the drop under the pointer into a plan:
-//   { kind: "reparent", groupId }  — join a screen (or null = top level)
+// Resolve the drop under the pointer into a plan for the active `drag`:
+//   { kind: "reparent", groupId }  — element joins a screen (or null = top level)
 //   { kind: "reorder", scope, overId, after, rect } — move among same-scope siblings
-//   { kind: "none" } — outside the panel
-function dropPlan(clientX, clientY, dragId) {
+//   { kind: "none" } — outside the panel, or a group over a non-sibling / nest target
+function dropPlan(clientX, clientY, drag) {
   const node = document.elementFromPoint(clientX, clientY);
   if (!node || !node.closest("#layers-panel")) return { kind: "none" };
+  const dragScope = scopeOf(drag.id);
   const head = node.closest(".group-head");
-  if (head && head.dataset.groupId) return { kind: "reparent", groupId: head.dataset.groupId };
   const row = node.closest(".layer-row[data-element-id]");
-  const dragScope = scopeOf(dragId);
+
+  if (drag.kind === "group") {
+    // A group only REORDERS among its own-level siblings. A same-scope sibling row
+    // (element OR group head) under the pointer sets an insertion line; anything else —
+    // a group body to nest into, a foreign scope, the panel background — is a no-op
+    // (drag-to-nest is a later increment; the drop highlight stays suppressed).
+    const overEl = head || row;
+    const overId = head ? head.dataset.groupId : row && row.dataset.elementId;
+    if (overEl && overId && overId !== drag.id && scopeOf(overId) === dragScope) {
+      const rect = overEl.getBoundingClientRect();
+      const after = clientY > rect.top + rect.height / 2;
+      return { kind: "reorder", scope: dragScope, overId, after, rect };
+    }
+    return { kind: "none" };
+  }
+
+  // Element drag (unchanged intents): a group header = reparent (join it); a same-scope
+  // element row = reorder; a foreign-scope element row = reparent to that scope; empty
+  // space = top level. (Element↔sibling-group z-order via drag stays out of scope — use
+  // the Order menu / Ctrl+[.)
+  if (head && head.dataset.groupId) return { kind: "reparent", groupId: head.dataset.groupId };
   if (row) {
     const overId = row.dataset.elementId;
     const overScope = row.dataset.groupId || null;
-    if (overScope === dragScope && overId !== dragId && isSingleDrag(dragId)) {
+    if (overScope === dragScope && overId !== drag.id && isSingleDrag(drag.id)) {
       const rect = row.getBoundingClientRect();
       const after = clientY > rect.top + rect.height / 2;
       return { kind: "reorder", scope: dragScope, overId, after, rect };
     }
-    if (overScope !== dragScope) return { kind: "reparent", groupId: overScope };
-    return { kind: "reparent", groupId: overScope }; // same-scope, same/multi -> no-op reparent
+    return { kind: "reparent", groupId: overScope }; // foreign scope, or same-scope multi -> reparent/no-op
   }
   return { kind: "reparent", groupId: null }; // panel header / empty space / gap = top level
 }
 
-// Target sibling index for a reorder plan. The panel lists FRONT-first (Figma),
-// i.e. the reverse of the array's back-to-front paint order — so run the standard
-// remove-then-insert math in visual space, then map the result back to an array
-// index for the reorder op.
+// Target merged-sibling index (0 = back) for a reorder plan. The panel lists FRONT-first
+// (Figma), the reverse of the back → front computed order — so run the remove-then-insert
+// math in visual space over the scope's MERGED siblings (elements + groups), then map back
+// to the op's back → front index. Works for an element OR a group drag (both are nodes in
+// orderedChildren).
 function reorderTargetIndex(dragId, plan) {
-  const siblings = plan.scope ? memberElements(plan.scope) : ungroupedElements();
+  const siblings = orderedChildren(state.project, plan.scope);
   const visual = [...siblings].reverse();
-  const overIndex = visual.findIndex((e) => e.id === plan.overId);
-  const dragIndex = visual.findIndex((e) => e.id === dragId);
+  const overIndex = visual.findIndex((sibling) => sibling.id === plan.overId);
+  const dragIndex = visual.findIndex((sibling) => sibling.id === dragId);
   if (overIndex < 0 || dragIndex < 0) return null;
   let insert = plan.after ? overIndex + 1 : overIndex;
   if (dragIndex < insert) insert -= 1; // account for removing the dragged row first
   insert = Math.max(0, Math.min(visual.length - 1, insert));
   if (insert === dragIndex) return null;
-  return visual.length - 1 - insert; // visual position -> array (paint) index
+  return visual.length - 1 - insert; // visual position -> back → front (op) index
 }
 
 function clearDropHint() {
@@ -439,9 +479,9 @@ function showDropLine(rect, after) {
   list.appendChild(dropLine);
 }
 
-function updateDropHint(clientX, clientY, dragId) {
+function updateDropHint(clientX, clientY, drag) {
   clearDropHint();
-  const plan = dropPlan(clientX, clientY, dragId);
+  const plan = dropPlan(clientX, clientY, drag);
   if (plan.kind === "reorder") {
     showDropLine(plan.rect, plan.after);
     return;
@@ -454,6 +494,7 @@ function updateDropHint(clientX, clientY, dragId) {
     const head = document.querySelector(`.group-head[data-group-id="${plan.groupId}"]`);
     if (head) head.classList.add("drop-target");
   }
+  // "none" (a group over a non-sibling / nest target, or outside the panel): no hint.
 }
 
 function onLayerMouseMove(event) {
@@ -467,7 +508,7 @@ function onLayerMouseMove(event) {
     makeGhost(multi ? `${state.selectedIds.size} layers` : layerDrag.name, event.clientX, event.clientY);
   }
   moveGhost(event.clientX, event.clientY);
-  updateDropHint(event.clientX, event.clientY, layerDrag.id);
+  updateDropHint(event.clientX, event.clientY, layerDrag);
 }
 
 function onLayerMouseUp(event) {
@@ -480,16 +521,18 @@ function onLayerMouseUp(event) {
   clearDropHint();
   if (!drag.active) return; // a plain click — let the row's click handler select
 
-  const plan = dropPlan(event.clientX, event.clientY, drag.id);
+  const plan = dropPlan(event.clientX, event.clientY, drag);
   if (plan.kind === "none") return;
 
   if (plan.kind === "reorder") {
+    // ONE reorderNode per drop (element OR group) — one gesture, one journal entry.
     const target = reorderTargetIndex(drag.id, plan);
-    if (target !== null) reorderElementTo(drag.id, target);
+    if (target !== null) reorderNodeTo(drag.id, target);
     return;
   }
 
-  // Reparent (single row, or the whole selection when the dragged row is in a 2+ set).
+  // Reparent is element-only (a group drag never yields "reparent"): a single row, or the
+  // whole selection when the dragged row is in a 2+ set.
   const groupId = plan.groupId ?? null;
   const ids = state.selectedIds.has(drag.id) && state.selectedIds.size > 1 ? [...state.selectedIds] : [drag.id];
   const allMatch = ids.every((id) => {

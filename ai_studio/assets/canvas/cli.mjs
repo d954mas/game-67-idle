@@ -13,6 +13,8 @@
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
 //   node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json
 //   node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
+//   node ai_studio/assets/canvas/cli.mjs element-reorder <id> --element <eid> --index <n>
+//   node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>
 //   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 //   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --suffix --resample]
 //   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --suffix --resample] [--to <dir>]
@@ -52,6 +54,7 @@ import {
   removeElements,
   renderGroup,
   reorderElement,
+  reorderNode,
   setExportSettings,
   setRegions,
   sliceRegions,
@@ -109,7 +112,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-move|group-set|group-assign|group-delete|render-group|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-move|group-set|group-assign|group-delete|render-group|undo|redo|history>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -123,6 +126,7 @@ function usage() {
   elements-set <id> --json <path>   (batched patch: [{elementId,x?,y?,w?,h?,name?,visible?}] or {patches:[...]}; one undo step)
   elements-remove <id> --elements e1,e2   (batched delete; one undo step)
   element-reorder <id> --element <eid> --index <n>   (z-order among siblings; 0 = back)
+  node-reorder <id> --node <id> --index <n>   (z-order of an element OR group among merged siblings; 0 = back)
   regions-set <id> --element <eid> --json <path>   (JSON: a regions array or {regions:[...]})
   regions-show <id> --element <eid>
   slice <id> --element <eid> [--regions r1,r2]
@@ -213,6 +217,12 @@ async function runCommand(command, id, positional, flags) {
       if (!flags.element) fail("element-reorder requires --element <eid>");
       if (flags.index === undefined || flags.index === "true") fail("element-reorder requires --index <n>");
       return print(reorderElement(repoRoot, { projectId: id, elementId: flags.element, index: Number(flags.index) }));
+    }
+    case "node-reorder": {
+      if (!id) fail("node-reorder requires <id>");
+      if (!flags.node || flags.node === "true") fail("node-reorder requires --node <id>");
+      if (flags.index === undefined || flags.index === "true") fail("node-reorder requires --index <n>");
+      return print(reorderNode(repoRoot, { projectId: id, nodeId: flags.node, index: Number(flags.index) }));
     }
     case "regions-set": {
       if (!id) fail("regions-set requires <id>");

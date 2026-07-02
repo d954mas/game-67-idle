@@ -153,9 +153,10 @@ is the two arrays, and nesting/z-order are expressed by additive optional fields
 `group.parentId` (its parent group; absent/`null` = a top-level screen), a numeric
 `order` z-key (on elements AND groups, among same-scope siblings), and
 `group.background` (an optional solid fill; see below). Paint order is **computed**,
-never persisted (see **Scene tree & paint order**). `parentId`/`order` are read by
-the scene-tree math now (so a project that carries them paints correctly); the ops
-that WRITE them — group z-order and nesting — land in the next increments.
+never persisted (see **Scene tree & paint order**). `order` is written by `reorderNode`
+(group + element z-order, below); `parentId` is read by the scene-tree math now (a
+project that carries it paints correctly) and the op that WRITES it — nesting — lands in
+the next increment.
 
 - `createGroup({projectId, name, x?, y?, w?, h?, fromElements?})` — explicit
   bounds, **or** `fromElements: [elementIds]` = the bounding box of those
@@ -174,11 +175,50 @@ that WRITE them — group z-order and nesting — land in the next increments.
   `files/` (non-destructive). Dissolving a group while keeping the elements is
   `assignToGroup(..., null)` (the page's Ungroup).
 - `renderGroup({projectId, groupId, scale?, background?})` — composite all
-  **visible** member elements (`element.visible !== false`), in element array
-  order (z-order), clipped to the group bounds, into one PNG at `scale`
-  (default 1). Background precedence: an explicit `background` arg (`#rrggbb`)
+  **visible** member elements (`element.visible !== false`), in **computed z-order**
+  (the group scope's `order`, else the v1 array-order fallback — so a reordered member
+  composites in its new position), clipped to the group bounds, into one PNG at `scale`
+  (default 1). Nested subgroups are not composited yet (recursive render is a later
+  increment). Background precedence: an explicit `background` arg (`#rrggbb`)
   **overrides** the group's own `background`; else the group's stored fill; else
   transparent.
+
+### Node z-order (`reorderNode`)
+
+`reorderNode({projectId, nodeId, index})` moves a node — an ELEMENT **or** a GROUP —
+to a target `index` among its **merged same-scope siblings** (the elements *and* groups
+sharing its parent scope, in the computed back → front order `orderedChildren` yields;
+`0` = back / painted first, `N-1` = front / painted last). The move assigns explicit
+contiguous `order` values `0..N-1` to **every** sibling of that scope reflecting the new
+arrangement — **lazy per-scope normalization**: the first reorder on a scope makes it
+explicit, and it never goes half-explicit afterwards. Only that scope is touched; every
+other scope is left exactly as it was. One journal entry; undo restores the whole scope's
+previous `order` fields (free via the snapshot). An **unknown node id or an out-of-range
+index is a loud error** (no silent clamp).
+
+To keep a reordered scope from silently reverting to array order when content is added,
+the ops that put a node into a scope give it a **front `order`** when that scope is
+already explicit (and drop a stale `order` when the destination is still implicit):
+`addImage`, `assignToGroup`, `createGroup` (the new group at root; its members enter a
+fresh scope), and `sliceRegions` (the slices group at root). All are no-ops on a
+never-reordered scope.
+
+`reorderElement({projectId, elementId, index})` stays as a thin **delegate** to
+`reorderNode` (element ids are node ids) for back-compat — its index is now over the
+merged siblings too, and it keeps the historical **forgiving** contract that an
+out-of-range index snaps to the nearest edge (only the delegate clamps; `reorderNode`
+itself is strict).
+
+- HTTP: `POST /api/canvas/projects/<id>/nodes/<nodeId>/reorder {index}` (element or
+  group); the element-only `POST .../elements/<eid>/reorder {index}` still routes through
+  the delegate.
+- Page: **Order ▸** (Bring to front / forward / Send backward / to back) on element and
+  group rows in the layers panel and on canvas targets (label right-click), and
+  `Ctrl+[` / `Ctrl+]` (`+Alt` = to back / to front) on the single selected node (a group,
+  or one element; a multi-element selection is left to the layers drag / Order menu so a
+  shortcut is always one journal entry). Dragging a layer row reorders it among its
+  siblings (an insertion line between same-scope rows); a group row reorders at its own
+  level only (drag-to-nest is a later increment).
 
 ### Scene tree & paint order
 
@@ -401,6 +441,8 @@ node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--name "X
 node ai_studio/assets/canvas/cli.mjs element-remove <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs elements-set <id> --json patches.json    # batched patch [{elementId,x?,y?,w?,h?,name?,visible?}]; one undo step
 node ai_studio/assets/canvas/cli.mjs elements-remove <id> --elements e1,e2    # batched delete; one undo step
+node ai_studio/assets/canvas/cli.mjs element-reorder <id> --element <eid> --index <n>   # z-order among merged siblings; 0 = back (clamps)
+node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>          # reorder an element OR group among merged siblings; 0 = back (strict)
 node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json   # a regions array or {regions:[...]}
 node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
@@ -518,6 +560,7 @@ drawn nor hit-testable.
 | `0` / `1` / `2` | Fit / 100% / 200% zoom (wheel also zooms) |
 | `Ctrl/Cmd`+`Z` / `Ctrl/Cmd`+`Shift`+`Z` or `Ctrl`+`Y` | Undo / Redo |
 | `Ctrl/Cmd`+`G` | Group 2+ selected elements into a screen |
+| `Ctrl/Cmd`+`]` / `Ctrl/Cmd`+`[` (`+Alt` = to front / to back) | Z-order the single selected node (a group, or one element) among its merged siblings |
 | `Delete` / `Backspace` | Region-edit mode: remove selected regions; else remove selected elements |
 | `Escape` | Close menu, then exit region-edit isolation, then clear element/group selection |
 | Right-click | Context menu (element / region / group / empty); double-click a name to inline-rename |

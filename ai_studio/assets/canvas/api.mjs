@@ -23,6 +23,7 @@
 //   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible}
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/regions {regions}   (replace)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/reorder {index}     (z-order)
+//   POST   /api/canvas/projects/<id>/nodes/<nodeId>/reorder {index}     (z-order: element or group)
 //   DELETE /api/canvas/projects/<id>/elements/<eid>
 //   GET    /api/canvas/projects/<id>/files/<name>  (image bytes, path-confined)
 //   GET    /api/canvas/projects/<id>/export/<...>  (export files, path-confined)
@@ -54,6 +55,7 @@ import {
   removeElements,
   renderGroup,
   reorderElement,
+  reorderNode,
   resolveProjectFile,
   resolveProjectPath,
   setExportSettings,
@@ -379,6 +381,15 @@ export function createCanvasApi(root) {
         const elementId = decodeURIComponent(parts[5]);
         const body = await readJsonBody(req);
         sendMutation(200, reorderElement(root, { projectId: id, elementId, index: body.index }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/nodes/<nodeId>/reorder  (z-order: move an element OR a
+      // group to a target index among its MERGED same-scope siblings).
+      if (parts.length === 7 && sub === "nodes" && parts[6] === "reorder" && req.method === "POST") {
+        const nodeId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, reorderNode(root, { projectId: id, nodeId, index: body.index }));
         return true;
       }
 

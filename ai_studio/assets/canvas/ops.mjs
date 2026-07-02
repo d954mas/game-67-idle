@@ -51,6 +51,10 @@ import { canvasHistoryDepth } from "../../core_harness/tool_lib/studio_config.mj
 import { runPython as runExportPython } from "../tools/image/_bridge/bridge.mjs";
 import { detectImageRegions } from "../tools/image/regions/api.mjs";
 import { uploadImageSource } from "../tools/image/sources/api.mjs";
+// Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
+// Imported here so paint/composite order and the reorder op go through ONE
+// implementation the site also loads — ordering itself obeys tool parity.
+import { frontOrder, nodeScope, orderedChildren } from "./tree.mjs";
 import {
   addImage as storeAddImage,
   appendArchive,
@@ -263,14 +267,28 @@ export function addImage(root, projectId, args = {}) {
   const startedAt = performance.now();
   const before = getProject(root, projectId);
   const result = storeAddImage(root, projectId, args);
+  // Keep an explicitly-ordered destination scope explicit (scopes never go
+  // half-explicit): a fresh image lands at the FRONT of its scope. Computed from
+  // `before` (the scope's siblings prior to the add); a no-op on any scope that
+  // has never been reordered (frontOrder === null).
+  let after = result.project;
+  const fo = frontOrder(before, result.element.groupId == null ? null : result.element.groupId);
+  if (fo !== null) {
+    after = updateProject(root, projectId, {
+      elements: (result.project.elements || []).map((element) =>
+        element.id === result.element.id ? { ...element, order: fo } : element,
+      ),
+    });
+  }
   const project = commitMutation(root, projectId, {
     op: "addImage",
     args_summary: { name: result.element.name, elementId: result.element.id, w: result.element.w, h: result.element.h },
     before,
-    after: result.project,
+    after,
     startedAt,
   });
-  return { project, element: result.element };
+  const element = (project.elements || []).find((item) => item.id === result.element.id) || result.element;
+  return { project, element };
 }
 
 export function patchElement(root, projectId, elementId, patch = {}) {
@@ -350,57 +368,87 @@ export function removeElements(root, { projectId, elementIds } = {}) {
   return { project, removed: result.removed };
 }
 
-// Move an element to a target index AMONG ITS SIBLINGS (same parent scope: the
-// root-level ungrouped elements, or its group's members). Element array order IS
-// the paint/z-order everywhere — the canvas paints elements() in array order and a
-// group's render/export filters its members preserving that order — so this permutes
-// only the sibling subsequence within the flat-array slots those siblings already
-// occupy, leaving every other element's absolute position untouched. `index` is
-// 0-based among siblings (0 = back / painted first, siblings.length-1 = front /
-// painted last) and is clamped into range. One journal entry; undo restores the
-// exact previous order. Groups (screens) keep their own array order — element
-// z-order is the must-have here; reordering screens would be its own op.
-export function reorderElement(root, { projectId, elementId, index } = {}) {
-  if (!projectId) throw new Error("reorderElement requires projectId");
-  if (!elementId) throw new Error("reorderElement requires elementId");
-  if (!Number.isFinite(Number(index))) throw new Error("reorderElement requires a numeric index");
+// Locate a node (element OR group) by id and resolve its parent scope (the group it
+// lives in, or null for root). Throws loudly on an unknown id. Element and group ids
+// are disjoint namespaces, so one id resolves to at most one node.
+function findNode(project, nodeId) {
+  const element = (project.elements || []).find((item) => item.id === nodeId);
+  if (element) return { kind: "element", ref: element, scopeId: nodeScope(project, element) };
+  const group = groupsOf(project).find((item) => item.id === nodeId);
+  if (group) return { kind: "group", ref: group, scopeId: nodeScope(project, group) };
+  throw new Error(`node not found: ${nodeId}`);
+}
+
+// Move a node (ELEMENT or GROUP) to a target `index` among its MERGED same-scope
+// siblings — the elements AND groups sharing its parent scope, in the computed
+// back → front order tree.mjs.orderedChildren yields (0 = back / painted first,
+// N-1 = front / painted last). The move assigns explicit contiguous `order` values
+// (0..N-1) to EVERY sibling of that scope reflecting the new arrangement — the design's
+// lazy per-scope normalization: the first reorder on a scope makes it explicit, and it
+// never goes half-explicit afterwards (see the frontOrder hook on add/assign). Only this
+// scope's siblings are touched; every other scope is left exactly as it was. One journal
+// entry; undo restores the whole scope's previous `order` fields for free (snapshots).
+// An unknown node or an out-of-range index is a loud error (no silent clamp — the thin
+// reorderElement delegate keeps the historical clamping contract for element callers).
+export function reorderNode(root, { projectId, nodeId, index } = {}) {
+  if (!projectId) throw new Error("reorderNode requires projectId");
+  if (!nodeId) throw new Error("reorderNode requires nodeId");
+  if (!Number.isFinite(Number(index))) throw new Error("reorderNode requires a numeric index");
   const startedAt = performance.now();
   const before = getProject(root, projectId);
-  const list = Array.isArray(before.elements) ? before.elements : [];
-  const moved = list.find((item) => item.id === elementId);
-  if (!moved) throw new Error(`element not found: ${elementId}`);
-  const scope = moved.groupId || null;
-  const sameScope = (item) => (item.groupId || null) === scope;
+  const node = findNode(before, nodeId);
+  const target = Math.round(Number(index));
 
-  // Siblings in current paint order + the flat-array slots they occupy.
-  const siblings = list.filter(sameScope);
-  const slots = [];
-  list.forEach((item, i) => {
-    if (sameScope(item)) slots.push(i);
-  });
-  const from = siblings.findIndex((item) => item.id === elementId);
-  const target = Math.max(0, Math.min(siblings.length - 1, Math.round(Number(index))));
-  if (from === target) return { project: before, element: moved, index: target }; // no-op
+  // Merged siblings of the scope in current visual (back → front) order.
+  const siblings = orderedChildren(before, node.scopeId);
+  const count = siblings.length;
+  if (target < 0 || target > count - 1) {
+    throw new Error(`reorderNode index ${target} is out of range 0..${count - 1} for scope ${node.scopeId == null ? "(root)" : node.scopeId}`);
+  }
+  const from = siblings.findIndex((sibling) => sibling.id === nodeId);
+  if (from === target) return { project: before, node: node.ref, kind: node.kind, index: target }; // no-op
 
-  const nextSiblings = siblings.slice();
-  nextSiblings.splice(from, 1);
-  nextSiblings.splice(target, 0, moved);
-  // Pour the reordered siblings back into their original slots; non-siblings stay put.
-  const nextElements = list.slice();
-  slots.forEach((slotIndex, i) => {
-    nextElements[slotIndex] = nextSiblings[i];
-  });
+  // New arrangement; assign contiguous order 0..N-1 to every sibling.
+  const arranged = siblings.slice();
+  const [moved] = arranged.splice(from, 1);
+  arranged.splice(target, 0, moved);
+  const orderByNodeId = new Map(arranged.map((sibling, order) => [sibling.id, order]));
 
-  const after = updateProject(root, projectId, { elements: nextElements });
+  const nextElements = (before.elements || []).map((element) =>
+    orderByNodeId.has(element.id) ? { ...element, order: orderByNodeId.get(element.id) } : element,
+  );
+  const nextGroups = groupsOf(before).map((group) =>
+    orderByNodeId.has(group.id) ? { ...group, order: orderByNodeId.get(group.id) } : group,
+  );
+
+  const after = updateProject(root, projectId, { elements: nextElements, groups: nextGroups });
   const project = commitMutation(root, projectId, {
-    op: "reorderElement",
-    args_summary: { elementId, index: target, scope },
+    op: "reorderNode",
+    args_summary: { nodeId, kind: node.kind, index: target, scope: node.scopeId },
     before,
     after,
     startedAt,
   });
+  return { project, node: findNode(project, nodeId).ref, kind: node.kind, index: target };
+}
+
+// Move an ELEMENT to a target sibling index — a thin delegate to reorderNode (element
+// ids ARE node ids). The index is over the MERGED same-scope siblings (elements + groups
+// of the element's scope), matching the computed paint order. Kept as its own op + route
+// + CLI for back-compat; it preserves the historical FORGIVING contract that an
+// out-of-range index snaps to the nearest edge (reorderNode itself is strict), so page
+// z-order nudges and older callers never throw on a clamp. One journal entry.
+export function reorderElement(root, { projectId, elementId, index } = {}) {
+  if (!projectId) throw new Error("reorderElement requires projectId");
+  if (!elementId) throw new Error("reorderElement requires elementId");
+  if (!Number.isFinite(Number(index))) throw new Error("reorderElement requires a numeric index");
+  const project = getProject(root, projectId);
   const element = (project.elements || []).find((item) => item.id === elementId);
-  return { project, element, index: target };
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  const count = orderedChildren(project, nodeScope(project, element)).length;
+  const clamped = Math.max(0, Math.min(count - 1, Math.round(Number(index))));
+  const result = reorderNode(root, { projectId, nodeId: elementId, index: clamped });
+  return { project: result.project, element: (result.project.elements || []).find((item) => item.id === elementId), index: clamped };
 }
 
 // Replace an element's regions array (the ADJUST/SELECT step before slicing).
@@ -753,10 +801,19 @@ export function createGroup(root, { projectId, name, x, y, w, h, fromElements } 
   }
 
   const group = { id: groupId, name: cleanName, x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h, visible: true };
+  // A new group is a top-level screen (root scope): keep an explicitly-ordered root
+  // explicit by giving the group a front order (no-op on a never-reordered root).
+  const groupFront = frontOrder(before, null);
+  if (groupFront !== null) group.order = groupFront;
   const memberSet = new Set(memberIds);
-  const nextElements = (before.elements || []).map((element) =>
-    memberSet.has(element.id) ? { ...element, groupId } : element,
-  );
+  // Members entering the fresh group scope drop any stale `order` from their old scope,
+  // so the new group starts implicit (v1 array-order fallback) rather than half-explicit.
+  const nextElements = (before.elements || []).map((element) => {
+    if (!memberSet.has(element.id)) return element;
+    const moved = { ...element, groupId };
+    delete moved.order;
+    return moved;
+  });
   const after = updateProject(root, projectId, {
     groups: [...groupsOf(before), group],
     elements: nextElements,
@@ -838,9 +895,18 @@ export function assignToGroup(root, { projectId, elementIds, groupId } = {}) {
   for (const id of ids) {
     if (!(before.elements || []).some((item) => item.id === id)) throw new Error(`element not found: ${id}`);
   }
-  const nextElements = (before.elements || []).map((element) =>
-    idSet.has(element.id) ? { ...element, groupId: target } : element,
-  );
+  // Scope-change order rule (scopes never go half-explicit): when the destination scope
+  // is explicitly ordered, each moved element gets a fresh FRONT order (stacked in
+  // elements[] order); otherwise its `order` is dropped so it sorts by the v1 fallback in
+  // the new scope and never leaves a stale key from its previous scope behind.
+  let fo = frontOrder(before, target);
+  const nextElements = (before.elements || []).map((element) => {
+    if (!idSet.has(element.id)) return element;
+    const moved = { ...element, groupId: target };
+    if (fo === null) delete moved.order;
+    else moved.order = fo++;
+    return moved;
+  });
   const after = updateProject(root, projectId, { elements: nextElements });
   const project = commitMutation(root, projectId, {
     op: "assignToGroup",
@@ -1197,6 +1263,10 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
     h: maxY - minY + pad * 2,
     visible: true,
   };
+  // Top-level slices group: front order keeps an explicitly-ordered root explicit
+  // (no-op on a never-reordered root). The crops sit in the group's own fresh scope.
+  const sliceGroupFront = frontOrder(before, null);
+  if (sliceGroupFront !== null) group.order = sliceGroupFront;
   const createdIds = new Set(created.map((element) => element.id));
 
   const run = {
@@ -1464,10 +1534,14 @@ async function compositeGroup(root, projectId, project, group, { scale, backgrou
   const groupBg = group.background && group.background.type === "color" ? hexColor(group.background.color) : null;
   const bg = explicit || groupBg || null;
 
-  // Visible member elements, in element array order (z-order).
-  const members = (project.elements || []).filter(
-    (element) => element.groupId === group.id && element.visible !== false && element.type === "image" && element.src,
-  );
+  // Visible DIRECT member elements, in COMPUTED z-order (orderedChildren honors the
+  // group scope's explicit `order` when present, else the v1 array-order fallback — so a
+  // reordered member composites in its new position, and a legacy project is unchanged).
+  // Nested subgroups are not composited yet (recursive render is increment 3).
+  const members = orderedChildren(project, group.id)
+    .filter((child) => child.kind === "element")
+    .map((child) => child.ref)
+    .filter((element) => element.visible !== false && element.type === "image" && element.src);
   const specElements = members.map((element) => ({
     id: element.id,
     src: resolveProjectFile(root, projectId, element.src),

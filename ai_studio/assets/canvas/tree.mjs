@@ -177,6 +177,30 @@ export function isNodeHidden(project, node) {
   return false;
 }
 
+// The resolved parent scope of a node (element OR group): the group id it lives in, or
+// null for root. Mirrors orderedChildren's scope resolution (a dangling parent resolves
+// to root), so the reorder op and the site compute the SAME sibling set the paint order
+// uses. Backs reorderNode and the site's group/element z-order helpers.
+export function nodeScope(project, node) {
+  if (!node) return null;
+  const gmap = groupMap(project);
+  return nodeIsGroup(project, node) ? groupParent(node, gmap) : elementScope(node, gmap);
+}
+
+// The `order` value a NEW or MOVED node needs to sit at the FRONT of a scope while
+// keeping that scope EXPLICIT — max existing sibling order + 1 — or null when the scope
+// is not (yet) explicit (empty, or some sibling lacks a finite order), in which case the
+// node stays order-less and the scope keeps painting by the v1 fallback. This is the
+// "scopes never go half-explicit" hook: once a scope has been reordered (every sibling
+// carries `order`), adding/moving a node into it assigns a front order so orderedChildren
+// keeps honoring the explicit arrangement instead of silently reverting to array order.
+export function frontOrder(project, scopeId) {
+  const { elements, groups } = childrenOf(project, scopeId);
+  const all = [...elements, ...groups];
+  if (!all.length || !all.every(hasNumericOrder)) return null;
+  return Math.max(...all.map((node) => node.order)) + 1;
+}
+
 // Would reparenting `groupId` under `newParentId` create a cycle? True when the new
 // parent is the group itself or any group in its subtree; false for root (null) or an
 // unrelated/ancestor target. Used by the (later) reparent op's guard.
