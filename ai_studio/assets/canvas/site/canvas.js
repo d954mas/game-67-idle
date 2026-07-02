@@ -54,6 +54,7 @@ import {
 } from "./workspace.js";
 import { initLayers } from "./layers_panel.js";
 import { initInspector } from "./inspector.js";
+import { initHistory, toggleHistoryPanel } from "./history_panel.js";
 import { closeContextMenu, initContextMenu } from "./context_menu.js";
 import { initDnd } from "./dnd.js";
 import { loadCanvasFonts } from "./fonts.js";
@@ -224,6 +225,12 @@ function onKeyDown(event) {
     return;
   }
   if (code === "KeyH") return setTool("pan");
+  // Backquote toggles the history palette (hidden by default; view-state only). A safe
+  // non-tool key that never collides with the V/H/T tools or the Ctrl+Z/Y undo shortcuts.
+  if (code === "Backquote") {
+    event.preventDefault();
+    return toggleHistoryPanel();
+  }
   if (code === "Digit0" || code === "Numpad0") {
     event.preventDefault();
     return fit();
@@ -309,6 +316,7 @@ initHome();
 initWorkspace();
 initLayers();
 initInspector();
+initHistory();
 initContextMenu();
 initDnd();
 // Load the bundled text fonts (FontFace API); gate the first text paint on

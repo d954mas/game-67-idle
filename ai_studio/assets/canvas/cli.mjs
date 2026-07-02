@@ -36,6 +36,8 @@
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs render-group <id> --group g [--scale 2] [--background "#rrggbb"]
 //   node ai_studio/assets/canvas/cli.mjs undo|redo|history <id>
+//   node ai_studio/assets/canvas/cli.mjs history-list <id>
+//   node ai_studio/assets/canvas/cli.mjs history-jump <id> --seq <n>   (0 = base; like N undos/redos, undoable)
 import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -57,6 +59,8 @@ import {
   exportProject,
   fitGroup,
   getProject,
+  jumpHistory,
+  listHistory,
   listProjects,
   moveNodes,
   opsStats,
@@ -134,7 +138,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history|history-list|history-jump>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -173,7 +177,9 @@ function usage() {
   render-group <id> --group <gid>  (alias: render-screen) [--scale <n>] [--background '#rrggbb']
   undo <id>
   redo <id>
-  history <id>`);
+  history <id>
+  history-list <id>   (labeled linear history the panel shows: Base + undo chain + dimmed redo tail)
+  history-jump <id> --seq <n>   (jump the applied head to a spine seq; 0 = base; like N undos/redos, undoable)`);
 }
 
 async function runCommand(command, id, positional, flags) {
@@ -533,6 +539,17 @@ async function runCommand(command, id, positional, flags) {
     case "history":
       if (!id) fail("history requires <id>");
       return print(readHistory(repoRoot, { projectId: id }));
+    case "history-list":
+      // Labeled linear spine (Base + undo chain + redo tail) — the exact rows the page's
+      // history panel renders; the parity list for `history-jump`.
+      if (!id) fail("history-list requires <id>");
+      return print(listHistory(repoRoot, { projectId: id }));
+    case "history-jump":
+      // Jump the applied head to a spine seq (0 = base) — one call, behaves like N
+      // undos/redos, undoable. Loud on an unknown/out-of-range seq.
+      if (!id) fail("history-jump requires <id>");
+      if (flags.seq === undefined || flags.seq === "true") fail("history-jump requires --seq <n>");
+      return print(jumpHistory(repoRoot, { projectId: id, seq: Number(flags.seq) }));
     case "ops-stats":
       if (!id) fail("ops-stats requires <id>");
       return print(opsStats(repoRoot, { projectId: id }));

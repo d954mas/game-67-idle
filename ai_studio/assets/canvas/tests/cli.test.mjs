@@ -56,6 +56,37 @@ test("cli create/add-image/undo/redo/history/export smoke", (t) => {
   assert.equal(stats.errors.count, 0);
 });
 
+test("cli history-list + history-jump parity (Base spine + jump reaches panel states)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-history-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const pngPath = join(dir, "pic.png");
+  writeFileSync(pngPath, solidPng(9, 6, [12, 34, 56]));
+  const projectId = run(env, "create", "--title", "CLI History").project.id;
+  const elementId = run(env, "add-image", projectId, "--file", pngPath).element.id; // seq1
+  run(env, "move", projectId, "--element", elementId, "--x", "25", "--y", "10"); // seq2, head2
+
+  // history-list: the same labeled linear spine the page panel renders.
+  const list = run(env, "history-list", projectId);
+  assert.deepEqual(list.entries.map((e) => e.label), ["Base", "Add image", "Move"]);
+  assert.equal(list.entries.at(-1).current, true);
+
+  // history-jump back to seq1 (== undo): the CLI reaches the same state as the panel.
+  const back = run(env, "history-jump", projectId, "--seq", "1");
+  assert.equal(back.project.elements[0].x, 0);
+  assert.equal(back.jumped_to, 1);
+
+  // history-jump forward into the dimmed redo tail (seq2, == redo).
+  const forward = run(env, "history-jump", projectId, "--seq", "2");
+  assert.equal(forward.project.elements[0].x, 25);
+
+  // history-jump to base (0): empty project.
+  const base = run(env, "history-jump", projectId, "--seq", "0");
+  assert.equal(base.project.elements.length, 0);
+  assert.equal(base.project.history_seq, 0);
+});
+
 test("cli batched elements-set / elements-remove parity (one undo each)", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-batch-"));
   const env = { CANVAS_PROJECTS_ROOT: dir };

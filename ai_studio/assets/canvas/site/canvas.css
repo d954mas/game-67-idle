@@ -629,6 +629,124 @@ body.layers-resizing {
   pointer-events: none;
 }
 
+/* ---- history palette (Photoshop-style, floating, hidden by default) ------- */
+
+#history-toggle.active {
+  border-color: #91bbff;
+  background: var(--panel);
+}
+
+#history-panel {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 232px;
+  max-height: calc(100% - 24px);
+  display: flex;
+  flex-direction: column;
+  background: rgba(23, 27, 31, 0.97);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 6;
+  overflow: hidden;
+}
+
+#history-panel.hidden {
+  display: none;
+}
+
+#history-panel header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+#history-panel header .panel-title {
+  font-weight: 600;
+  font-size: 13px;
+  flex: 1;
+}
+
+#history-close {
+  padding: 1px 7px;
+  line-height: 1.2;
+  font-size: 15px;
+}
+
+.history-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 4px;
+  scrollbar-gutter: stable;
+}
+
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 5px 8px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.history-row:hover {
+  background: var(--panel-soft);
+}
+
+.history-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: none;
+  opacity: 0.6;
+}
+
+.history-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.history-summary {
+  color: var(--muted);
+  font-size: 11px;
+  margin-left: auto;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45%;
+}
+
+/* Current step: highlighted (the applied head). */
+.history-row.current {
+  background: rgba(39, 100, 189, 0.28);
+  border-color: var(--blue, #77a7ff);
+}
+
+.history-row.current .history-dot {
+  background: var(--blue, #77a7ff);
+  opacity: 1;
+}
+
+/* Undone (redo-tail / future) steps: dimmed but still clickable (Photoshop). */
+.history-row.undone {
+  opacity: 0.42;
+}
+
+.history-row.undone:hover {
+  opacity: 0.72;
+}
+
 /* ---- inspector ------------------------------------------------------------ */
 
 #inspector {

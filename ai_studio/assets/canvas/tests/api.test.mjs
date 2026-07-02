@@ -207,6 +207,45 @@ test("canvas API undo/redo/history routes round-trip an element move", async (t)
   assert.deepEqual(history.json().entries.map((entry) => entry.op), ["addImage", "patchElement", "undo", "redo"]);
 });
 
+test("canvas API history-list + history-jump routes drive the panel (jump folds history flags)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const created = await invokeApi(handler, "POST", "/api/canvas/projects", { title: "History panel API" });
+  const projectId = created.json().project.id;
+
+  const uploaded = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "hero.png",
+    bytes_base64: solidPng(8, 8).toString("base64"),
+  });
+  const elementId = uploaded.json().element.id;
+  await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/elements/${elementId}`, { x: 40 }); // seq2, head2
+
+  // history-list: labeled linear spine the panel renders.
+  const list = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/history-list`);
+  assert.equal(list.status, 200);
+  assert.deepEqual(list.json().entries.map((e) => e.label), ["Base", "Add image", "Move"]);
+  assert.equal(list.json().entries.at(-1).current, true);
+
+  // history-jump back to seq1: restores the pre-move state AND folds history flags so the
+  // page needs no follow-up GET (canRedo true after jumping back).
+  const jumped = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/history-jump`, { seq: 1 });
+  assert.equal(jumped.status, 200);
+  assert.equal(jumped.json().project.elements[0].x, 0);
+  assert.equal(jumped.json().project.history_seq, 1);
+  assert.equal(jumped.json().history.canRedo, true, "jump response folds history flags like undo/redo");
+  assert.equal(jumped.json().history.seq, 1);
+
+  // The redo-tail entry (seq2) is now dimmed; jumping forward restores it (== redo).
+  const dimmed = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/history-list`);
+  assert.equal(dimmed.json().entries.find((e) => e.seq === 2).undone, true);
+  const forward = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/history-jump`, { seq: 2 });
+  assert.equal(forward.json().project.elements[0].x, 40);
+
+  // A bad seq is a loud 4xx (never a silent no-op).
+  const bad = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/history-jump`, { seq: 999 });
+  assert.equal(bad.status >= 400, true, "unknown seq is a loud error");
+});
+
 test("canvas API export route writes a folder + manifest", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(ROOT);

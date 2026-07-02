@@ -58,6 +58,8 @@ import {
   fitGroup,
   getProject,
   historyFlags,
+  jumpHistory,
+  listHistory,
   listProjects,
   moveNodes,
   opsStats,
@@ -500,6 +502,20 @@ export function createCanvasApi(root) {
       // /api/canvas/projects/<id>/history
       if (parts.length === 5 && sub === "history" && req.method === "GET") {
         sendJson(res, 200, readHistory(root, { projectId: id }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/history-list  (labeled linear spine for the panel)
+      if (parts.length === 5 && sub === "history-list" && req.method === "GET") {
+        sendJson(res, 200, listHistory(root, { projectId: id }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/history-jump  (jump the applied head to a spine seq;
+      // one journaled nav marker, folds history flags like undo/redo)
+      if (parts.length === 5 && sub === "history-jump" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(200, jumpHistory(root, { projectId: id, seq: body.seq }));
         return true;
       }
 

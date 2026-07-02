@@ -10,6 +10,9 @@ import {
   createProject,
   exportElements,
   getProject,
+  historyEntryLabel,
+  jumpHistory,
+  listHistory,
   patchElement,
   patchProject,
   readHistory,
@@ -120,6 +123,140 @@ test("patchProject renames the project and is journaled (undo/redo restore the t
   // A no-op rename (blank -> keeps current) writes no new journal entry.
   patchProject(ROOT, { projectId: project.id, title: "   " });
   assert.equal(getProject(ROOT, project.id).title, "New Name");
+});
+
+// ---- history panel view + jumpHistory (T0204) --------------------------------
+
+test("listHistory renders a labeled linear spine (Base + undo chain), current at the head", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Spine" });
+  const { element } = addImage(ROOT, project.id, { name: "hero.png", bytes: solidPng() });
+  const head = patchElement(ROOT, project.id, element.id, { x: 50, y: 30 }).project.history_seq;
+
+  const view = listHistory(ROOT, { projectId: project.id });
+  assert.deepEqual(view.entries.map((e) => e.label), ["Base", "Add image", "Move"]);
+  assert.deepEqual(view.entries.map((e) => e.seq), [0, 1, 2]);
+  assert.equal(view.entries.find((e) => e.seq === head).current, true, "head is current");
+  assert.equal(view.entries.filter((e) => e.current).length, 1, "exactly one current entry");
+  assert.equal(view.entries.every((e) => e.undone === false), true, "nothing dimmed while at the tip");
+  assert.equal(view.canUndo, true);
+  assert.equal(view.canRedo, false);
+  assert.equal(view.entries[1].summary, "hero.png", "add-image summary is the file name");
+
+  // A pure label mapping is exported for reuse; unknown ops fall back to the raw name.
+  assert.equal(historyEntryLabel("removeElements", { count: 3 }).label, "Delete elements");
+  assert.equal(historyEntryLabel("removeElements", { count: 3 }).summary, "3 elements");
+  assert.equal(historyEntryLabel("zzz-unknown").label, "zzz-unknown");
+});
+
+test("jumpHistory back = N undos, jump forward = N redos (identical state, same snapshots)", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Jump" });
+  const a = addImage(ROOT, project.id, { name: "a.png", bytes: solidPng(4, 3, [1, 2, 3]) }).element; // seq1
+  const b = addImage(ROOT, project.id, { name: "b.png", bytes: solidPng(5, 4, [9, 8, 7]) }).element; // seq2
+  patchElement(ROOT, project.id, b.id, { x: 100 }); // seq3, head3
+
+  // Jump back to seq1 (two steps) == undo, undo.
+  const jumped = jumpHistory(ROOT, { projectId: project.id, seq: 1 });
+  assert.equal(jumped.jumped_from, 3);
+  assert.equal(jumped.jumped_to, 1);
+  assert.equal(jumped.project.history_seq, 1);
+  assert.deepEqual(jumped.project.elements.map((e) => e.id), [a.id], "only A present after jumping to seq1");
+
+  // The redo chain is now the forward spine: jump forward to seq3 == redo, redo.
+  const view = listHistory(ROOT, { projectId: project.id });
+  assert.deepEqual(view.entries.map((e) => e.seq), [0, 1, 2, 3]);
+  assert.equal(view.entries.find((e) => e.seq === 1).current, true);
+  assert.deepEqual(view.entries.filter((e) => e.undone).map((e) => e.seq), [2, 3], "seq2/seq3 are the dimmed redo tail");
+  assert.equal(view.canRedo, true);
+
+  const forward = jumpHistory(ROOT, { projectId: project.id, seq: 3 });
+  assert.equal(forward.project.history_seq, 3);
+  assert.equal(forward.project.elements.find((e) => e.id === b.id).x, 100, "B restored to its moved position");
+
+  // The undo/redo chain stays coherent AFTER a jump: undo steps back one, redo re-applies.
+  const undone = undoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(undone.elements.find((e) => e.id === b.id).x, 0, "undo after a jump behaves as one undo");
+  const redone = redoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(redone.elements.find((e) => e.id === b.id).x, 100);
+});
+
+test("jumpHistory reaches a dimmed redo-tail entry (== redo) and a jump is reversible", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Redo tail" });
+  const { element } = addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() }); // seq1
+  patchElement(ROOT, project.id, element.id, { x: 50 }); // seq2, head2
+  undoOp(ROOT, { projectId: project.id }); // head1 (x0); seq2 is now the redo tail
+
+  const view = listHistory(ROOT, { projectId: project.id });
+  assert.equal(view.entries.find((e) => e.seq === 2).undone, true, "seq2 is a dimmed future state");
+  assert.equal(view.canRedo, true);
+
+  // Clicking the dimmed redo-tail entry jumps INTO it (== redo).
+  const jumped = jumpHistory(ROOT, { projectId: project.id, seq: 2 }).project;
+  assert.equal(jumped.elements[0].x, 50);
+  assert.equal(jumped.history_seq, 2);
+
+  // Reverse the jump by jumping back to seq1 (== undo).
+  const back = jumpHistory(ROOT, { projectId: project.id, seq: 1 }).project;
+  assert.equal(back.elements[0].x, 0);
+  assert.equal(back.history_seq, 1);
+});
+
+test("jumpHistory to seq 0 restores the base state and leaves undo bottomed out", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "To base" });
+  const a = addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() }).element;
+  addImage(ROOT, project.id, { name: "b.png", bytes: solidPng(5, 5, [1, 1, 1]) });
+  patchElement(ROOT, project.id, a.id, { x: 10 }); // head3
+
+  const based = jumpHistory(ROOT, { projectId: project.id, seq: 0 }).project;
+  assert.equal(based.elements.length, 0, "base is the empty project");
+  assert.equal(based.history_seq, 0);
+  assert.throws(() => undoOp(ROOT, { projectId: project.id }), /nothing to undo/, "undo bottoms out at base");
+
+  // Redo re-enters the newest branch from base (== redo), proving the chain is intact.
+  const redone = redoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(redone.elements.length, 1);
+});
+
+test("jumpHistory is one nav marker (not a mutation); no-op jump writes nothing", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Marker" });
+  const { element } = addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() });
+  patchElement(ROOT, project.id, element.id, { x: 7 }); // head2
+
+  jumpHistory(ROOT, { projectId: project.id, seq: 1 });
+  const ops = readHistory(ROOT, { projectId: project.id }).entries.map((e) => e.op);
+  assert.deepEqual(ops, ["addImage", "patchElement", "jump"], "a jump appends a jump marker, not a mutation");
+
+  // A jump to the CURRENT head is a no-op — no extra marker.
+  const before = readHistory(ROOT, { projectId: project.id }).entries.length;
+  const noop = jumpHistory(ROOT, { projectId: project.id, seq: 1 });
+  assert.equal(noop.jumped_to, 1);
+  assert.equal(readHistory(ROOT, { projectId: project.id }).entries.length, before, "no marker for a no-op jump");
+});
+
+test("jumpHistory is loud on an unknown, stale-branch, or invalid seq", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Loud" });
+  const { element } = addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() }); // seq1
+  patchElement(ROOT, project.id, element.id, { x: 50 }); // seq2
+  undoOp(ROOT, { projectId: project.id }); // head1 (the undo marker consumes seq3)
+  const live = patchElement(ROOT, project.id, element.id, { x: 99 }).project.history_seq; // seq4 — invalidates seq2
+
+  // seq2 is on a dead branch now (and seq3 is a marker, not a mutation): not reachable.
+  assert.throws(() => jumpHistory(ROOT, { projectId: project.id, seq: 2 }), /not on the current history/);
+  assert.throws(() => jumpHistory(ROOT, { projectId: project.id, seq: 3 }), /not on the current history/);
+  // An unknown seq, a negative seq, and a non-integer seq are all loud.
+  assert.throws(() => jumpHistory(ROOT, { projectId: project.id, seq: 999 }), /not on the current history/);
+  assert.throws(() => jumpHistory(ROOT, { projectId: project.id, seq: -1 }), /non-negative integer/);
+  assert.throws(() => jumpHistory(ROOT, { projectId: project.id, seq: 1.5 }), /non-negative integer/);
+  assert.throws(() => jumpHistory(ROOT, {}), /requires projectId/);
+
+  // The live branch (seq4) is still reachable.
+  assert.equal(live, 4);
+  assert.equal(jumpHistory(ROOT, { projectId: project.id, seq: live }).project.elements[0].x, 99);
 });
 
 test("exportElements writes a stamped folder with copied files + manifest", async (t) => {

@@ -76,6 +76,7 @@ export const hooks = {
   renderCanvas: () => {},
   renderLayers: () => {},
   renderInspector: () => {},
+  renderHistory: () => {},
   syncTopBar: () => {},
   renderHome: () => {},
   openProject: () => {}, // set by canvas.js: (id, opts) => Promise
@@ -86,6 +87,7 @@ export function refresh() {
   hooks.renderCanvas();
   hooks.renderLayers();
   hooks.renderInspector();
+  hooks.renderHistory();
   hooks.syncTopBar();
 }
 

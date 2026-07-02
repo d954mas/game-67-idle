@@ -175,7 +175,7 @@ Every capability is one op in `ops.mjs`:
   bare `2`) or a fixed target dimension (`512w` = 512px wide, `512h` = 512px tall;
   the other axis keeps aspect). Throws on anything else — an unknown scale is a clear
   validation error, never a silent fallback.
-- `undoOp` / `redoOp` / `readHistory` — see Journal below.
+- `undoOp` / `redoOp` / `readHistory` / `listHistory` / `jumpHistory` — see Journal below.
 - `opsStats({ projectId })` — read-only per-op timing rollup (count/median/p95
   `duration_ms`) from the journal plus the `errors.jsonl` count. See Observability.
 
@@ -578,6 +578,29 @@ the op response alone — no reload GET, no separate `/history` GET (see **Page*
 loads) plus a `duration_ms` on each entry; the `historyFlags(root, { projectId })` op
 is the lightweight summary (same flags, no entries list) the adapter folds in.
 
+### History panel + jump (T0204)
+
+`listHistory({ projectId })` (`GET /history-list`, CLI `history-list`) is the Photoshop
+history-panel view: the current **linear spine** — a synthetic `Base` (seq `0`), then the
+applied **undo chain** (head back to base), then the **redo tail** (future states, forward
+from the head). Each row is `{ seq, op, label, summary, current, undone }`, so BOTH clients
+render identical text with no journal parsing — the human `label`/`summary` come from the
+pure, exported `historyEntryLabel(op, args_summary)`. A stale (invalidated) branch is never
+on the spine. `current` marks the applied head; `undone` marks the dimmed-but-clickable redo
+tail.
+
+`jumpHistory({ projectId, seq })` (`POST /history-jump`, CLI `history-jump --seq N`) moves
+the applied head to any spine seq — `0` = base, an undo-chain seq = jump **back**, a redo-tail
+seq = jump **forward**. It restores that seq's **existing** sidecar snapshot (`state` for a real
+entry; the oldest retained entry's `undo_patch` for base) and repoints `history_seq`, so the
+result is **exactly** what N undos or N redos would produce — one HTTP call, ZERO recomputation.
+It appends only a `{ op: "jump", target_seq, from_seq }` **nav marker** (like the undo/redo
+markers — no snapshot, not a mutation), so no parent pointer changes and no compaction runs:
+undo/redo/jump from the new head behave identically to N manual steps and a jump is itself
+reversible (`redo`/jump-forward after a back jump, and vice-versa). Loud on a non-integer/
+negative seq or a seq not on the current spine (unknown or stale-branch); a jump to the current
+head is a no-op (no marker).
+
 Per-project observability files (all under the project folder, alongside
 `project.json`): `journal.jsonl` (thin op log), `snapshots/<seq>.json` (fat
 before/after snapshots), `journal.archive.jsonl` (compacted-away lines),
@@ -682,6 +705,8 @@ node ai_studio/assets/canvas/cli.mjs render-screen <id> --group g [--scale 2] [-
 node ai_studio/assets/canvas/cli.mjs undo <id>
 node ai_studio/assets/canvas/cli.mjs redo <id>
 node ai_studio/assets/canvas/cli.mjs history <id>
+node ai_studio/assets/canvas/cli.mjs history-list <id>            # labeled linear spine the panel shows (Base + undo chain + dimmed redo tail)
+node ai_studio/assets/canvas/cli.mjs history-jump <id> --seq <n>  # jump the head to a spine seq (0 = base); like N undos/redos, undoable
 node ai_studio/assets/canvas/cli.mjs ops-stats <id>   # per-op count/median/p95 + errors count
 ```
 
@@ -760,6 +785,17 @@ one document that swaps two views; the JS is split into focused ES modules under
   System Access dir picker opens every time starting at the last-used folder (handle
   remembered per project in IndexedDB), cancel aborts the export, and a browser-
   download fallback runs only when the API is unavailable.
+- `history_panel.js` — the Photoshop-style **History** palette: a hideable floating
+  list of journal steps (Base + the applied undo chain + the dimmed, still-clickable
+  redo tail), toggled from the top-bar **History** button or the **`** key, hidden by
+  default with its open state persisted in localStorage (view-state only — never
+  journaled). A thin view over `listHistory` (labeled rows — no journal parsing on the
+  page); a row click jumps the project to that step via the one `jumpHistory` op (`GET
+  /history-list` + `POST /history-jump`, the same ops the CLI's `history-list`/
+  `history-jump` drive). It renders through the refresh bus so it stays live: the current
+  step re-highlights instantly from the folded op-response head, then the list re-fetches
+  (structure-signature guarded). Quiet like undo/redo — the highlight is the feedback, no
+  toast. The undo/redo keyboard shortcuts are untouched.
 - `toasts.js` — the feedback layer (there is no status bar; see **Feedback layer**
   below). A fixed bottom-right toast stack with kinds success/info/error/pinned-result,
   plus `runLongOp` (limiter + progress toast + control-disable) for the python-backed

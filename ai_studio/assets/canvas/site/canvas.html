@@ -70,6 +70,7 @@
         <button id="add-image" type="button">Add image</button>
         <button id="undo" type="button" disabled>Undo</button>
         <button id="redo" type="button" disabled>Redo</button>
+        <button id="history-toggle" type="button" title="History (`) — jump to any step" aria-pressed="false">History</button>
         <span class="divider"></span>
         <button id="zoom-fit" type="button" title="Fit (0)">Fit</button>
         <button id="zoom-100" type="button" title="100% (1)">100%</button>
@@ -124,6 +125,16 @@
             <button type="button" class="rtool" data-region-tool="polygon" title="Draw a polygon region (click vertices, double-click / Enter to close)">Draw Polygon</button>
           </div>
           <div id="zoom-indicator">100%</div>
+          <!-- Photoshop-style history palette (floating overlay, hidden by default,
+               toggled from the top bar / backtick). A thin list of journal steps; a
+               click jumps the project to that step via the jumpHistory op. -->
+          <div id="history-panel" class="hidden" aria-label="History">
+            <header>
+              <span class="panel-title">History</span>
+              <button id="history-close" type="button" title="Hide history" aria-label="Hide history">&times;</button>
+            </header>
+            <div class="history-list"></div>
+          </div>
         </div>
 
         <!-- Right inspector panel. -->

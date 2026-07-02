@@ -1204,6 +1204,15 @@
               "tags": ["assets", "canvas", "ui", "browser-js"]
             },
             {
+              "id": "assets:canvas-site-history",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/history_panel.js",
+              "title": "history_panel.js",
+              "description": "Photoshop-style history palette: a hideable floating list of journal steps (Base + the applied undo chain + the dimmed, still-clickable redo tail), toggled from the top-bar History button or the backtick key, hidden by default with its open state persisted in localStorage (view-state only, never journaled). A THIN view over the op layer's listHistory (labeled rows {seq,label,summary,current,undone} — no journal parsing on the page); clicking a row jumps the project to that step via the one jumpHistory op (the same op the CLI's history-jump drives). Renders through the shared refresh bus so it stays live: the current step re-highlights instantly from the folded op-response head, then the labeled list re-fetches (structure-signature guarded so Ctrl+Z spam re-highlights instead of rebuilding). Quiet like undo/redo (the highlight is the feedback, no toast).",
+              "role": "canvas history panel",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
               "id": "assets:canvas-site-context-menu",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/context_menu.js",

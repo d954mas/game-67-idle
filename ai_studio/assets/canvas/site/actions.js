@@ -770,6 +770,20 @@ export async function redo() {
   }
 }
 
+// Jump the project to any recorded history step (the history panel row click; Base = 0 =
+// empty). ONE jumpHistory op — the same op the CLI's history-jump drives (tool parity).
+// Behaves like N undos/redos and is itself undoable; quiet like undo/redo (the panel's
+// live highlight is the feedback, no toast). applyMutation reconciles selection/region
+// mode against the restored state, exactly like undo/redo.
+export async function jumpToHistory(seq) {
+  if (!state.project) return;
+  try {
+    applyMutation(await api("POST", `/projects/${pid()}/history-jump`, { seq }));
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 export async function renameProject(title) {
   try {
     applyMutation(await api("PATCH", `/projects/${pid()}`, { title }), "Renamed project.");

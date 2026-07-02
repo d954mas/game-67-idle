@@ -1852,6 +1852,195 @@ export function opsStats(root, { projectId } = {}) {
   };
 }
 
+// ---- history panel view + jump navigation (T0204) ----------------------------
+//
+// The Photoshop-style history panel (page) and `history-list` (CLI) are a THIN view
+// over the journal: the op layer computes the human LABEL/summary AND the current
+// linear spine, so neither client parses the journal. jumpHistory is history
+// NAVIGATION — it moves the applied head to any seq on that spine by restoring the
+// seq's EXISTING sidecar snapshot. It composes with undo/redo: jumping N steps
+// back/forward lands on exactly the state N undos/redos would (the same snapshots), in
+// ONE call, appending only a nav marker (like the undo/redo markers, never a mutation).
+// No parent pointer changes and no snapshot is written, so undo/redo/jump from the new
+// head behave identically to N manual steps — the undo/redo chain stays coherent and a
+// jump is itself reversible (redo/jump-forward after a back jump, and vice-versa).
+
+// The label for a patchElement entry, derived from which fields its patch touched (the
+// op records the clean patch in args_summary). Move/Resize/Transform/Rename/Show/Hide/
+// Edit text — the frequent single-field edits get a precise verb.
+function patchElementLabel(patch = {}) {
+  const p = patch && typeof patch === "object" ? patch : {};
+  const has = (key) => p[key] !== undefined;
+  if (has("content") || has("style")) return "Edit text";
+  if (has("visible")) return p.visible === false ? "Hide" : "Show";
+  const geo = ["x", "y", "w", "h"].filter(has);
+  if (geo.length) {
+    const sized = has("w") || has("h");
+    const moved = has("x") || has("y");
+    if (sized && !moved) return "Resize";
+    if (moved && !sized) return "Move";
+    return "Transform";
+  }
+  if (has("name")) return "Rename";
+  return "Edit element";
+}
+
+// Human { label, summary } for a journaled mutation, from its op name + the small
+// args_summary the op recorded. PURE (no disk) and exported so BOTH clients render
+// identical text off listHistory's output — the page never maps op names itself. An
+// unknown op falls back to the raw op name (no silent blank row).
+export function historyEntryLabel(op, args = {}) {
+  const a = args && typeof args === "object" ? args : {};
+  const count = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+  const items = (value) => (Array.isArray(value) ? value.length : 0);
+  const plural = (n, noun) => `${n} ${noun}${n === 1 ? "" : "s"}`;
+  switch (op) {
+    case "base": return { label: "Base", summary: "" };
+    case "addImage": return { label: "Add image", summary: String(a.name || "") };
+    case "addImages": return { label: "Add images", summary: plural(count(a.count), "image") };
+    case "addText": return { label: "Add text", summary: String(a.content || "") };
+    case "patchElement": return { label: patchElementLabel(a.patch), summary: "" };
+    case "patchElements": return { label: "Move elements", summary: plural(count(a.count), "element") };
+    case "removeElement": return { label: "Delete element", summary: "" };
+    case "removeElements": return { label: "Delete elements", summary: plural(count(a.count), "element") };
+    case "moveNodes": return { label: "Move", summary: plural(count(a.count), "item") };
+    case "reorderNode": return { label: "Reorder", summary: String(a.kind || "") };
+    case "reorderElement": return { label: "Reorder", summary: "" };
+    case "reorderNodes": return { label: "Reorder", summary: plural(items(a.nodeIds), "item") };
+    case "setRegions": return { label: "Edit regions", summary: a.region_count != null ? plural(count(a.region_count), "region") : "" };
+    case "detectRegions": return { label: "Detect regions", summary: "" };
+    case "sliceRegions": return { label: "Slice", summary: "" };
+    case "setExportSettings": return { label: "Export settings", summary: "" };
+    case "patchProject": return { label: "Rename project", summary: String(a.title || "") };
+    case "createGroup": return { label: "Group", summary: String(a.name || "") };
+    case "patchGroup": return { label: "Edit group", summary: "" };
+    case "patchGroups": return { label: "Edit groups", summary: plural(items(a.groupIds), "group") };
+    case "deleteGroup": return { label: "Delete group", summary: "" };
+    case "assignToGroup": return { label: "Move to group", summary: "" };
+    case "fitGroup": return { label: "Fit group", summary: "" };
+    case "reparentGroup": return { label: "Nest group", summary: "" };
+    case "ungroupGroup": return { label: "Ungroup", summary: "" };
+    case "pasteNodes": return { label: "Paste", summary: plural(count(a.count), "item") };
+    case "duplicateNodes": return { label: "Duplicate", summary: plural(count(a.count), "item") };
+    case "deleteNodes": return { label: "Delete", summary: plural(items(a.deletedElements) + items(a.deletedGroups), "item") };
+    default: return { label: String(op || "Edit"), summary: "" };
+  }
+}
+
+// The current LINEAR history spine (Photoshop-style): the undo chain from the applied
+// head back to base, plus the redo chain forward from the head to the tip. Both mirror
+// the exact walks undoOp/redoOp take — undoChain follows `parent` to 0; redoChain picks
+// the greatest-seq child at each step (the branch redo would re-enter) — so a stale
+// (invalidated) branch is never on the spine. `seen` guards a malformed parent cycle.
+function historySpine(project, journal) {
+  const head = Number(project.history_seq) || 0;
+  const mutationsBySeq = new Map();
+  for (const line of journal) if (isMutation(line)) mutationsBySeq.set(Number(line.seq), line);
+
+  const undoChain = [];
+  const seen = new Set();
+  let cursor = head;
+  while (cursor && mutationsBySeq.has(cursor) && !seen.has(cursor)) {
+    seen.add(cursor);
+    const entry = mutationsBySeq.get(cursor);
+    undoChain.push(entry);
+    cursor = Number(entry.parent) || 0;
+  }
+  undoChain.reverse(); // oldest → head (head is last)
+
+  const redoChain = [];
+  cursor = head;
+  for (;;) {
+    let best = null;
+    for (const line of journal) {
+      if (!isMutation(line)) continue;
+      const seq = Number(line.seq);
+      if (seen.has(seq)) continue;
+      if ((Number(line.parent) || 0) !== cursor) continue;
+      if (!best || seq > Number(best.seq)) best = line;
+    }
+    if (!best) break;
+    seen.add(Number(best.seq));
+    redoChain.push(best);
+    cursor = Number(best.seq);
+  }
+  return { head, undoChain, redoChain };
+}
+
+// Labeled linear history for the panel / `history-list`: a synthetic `Base` (seq 0) row
+// then the undo chain (applied) then the redo chain (undone — dimmed, still clickable).
+// Each entry is { seq, op, label, summary, at, current, undone }. current marks the
+// applied head; undone marks the redo-tail (future) states. canUndo/canRedo match
+// historyFlags. A cheap metadata scan (no snapshot loads).
+export function listHistory(root, { projectId } = {}) {
+  if (!projectId) throw new Error("listHistory requires projectId");
+  const project = getProject(root, projectId);
+  const journal = readJournal(root, projectId);
+  const { head, undoChain, redoChain } = historySpine(project, journal);
+  const rowOf = (line, undone) => {
+    const { label, summary } = historyEntryLabel(line.op, line.args_summary);
+    return { seq: Number(line.seq), op: line.op, label, summary, at: line.at ?? null, current: Number(line.seq) === head, undone };
+  };
+  const entries = [
+    { seq: 0, op: "base", label: "Base", summary: "", at: null, current: head === 0, undone: false },
+    ...undoChain.map((line) => rowOf(line, false)),
+    ...redoChain.map((line) => rowOf(line, true)),
+  ];
+  return { history_seq: head, canUndo: head > 0 && undoChain.length > 0, canRedo: redoChain.length > 0, entries };
+}
+
+// Jump the applied head to `seq` — any seq on the current spine (0 = base, an undo-chain
+// seq = jump back, a redo-chain seq = jump forward). Restores that seq's EXISTING sidecar
+// snapshot (state for a real entry; the oldest retained entry's undo_patch for base) and
+// repoints history_seq, so the result equals N undos/redos with ZERO recomputation. One
+// call; appends only a `jump` nav marker (no snapshot, not a mutation) so undo/redo stay
+// coherent and the jump is reversible. LOUD on a non-integer/negative seq or a seq that is
+// not on the current spine (an unknown or stale-branch seq). No-op (no marker) when already
+// there. Like undo/redo it never grows depth, so no compaction runs.
+export function jumpHistory(root, { projectId, seq } = {}) {
+  if (!projectId) throw new Error("jumpHistory requires projectId");
+  if (seq === undefined || seq === null || seq === "") throw new Error("jumpHistory requires a target seq");
+  const target = Number(seq);
+  if (!Number.isInteger(target) || target < 0) {
+    throw new Error(`jumpHistory seq must be a non-negative integer, got ${JSON.stringify(seq)}`);
+  }
+  const startedAt = performance.now();
+  ensureThinJournal(root, projectId); // a migrating open is a mutating open
+  const project = getProject(root, projectId);
+  const head = Number(project.history_seq) || 0;
+  if (target === head) return { project, history_seq: head, jumped_from: head, jumped_to: head }; // already here
+
+  const journal = readJournal(root, projectId);
+  const { undoChain, redoChain } = historySpine(project, journal);
+  const back = undoChain.find((entry) => Number(entry.seq) === target);
+  const forward = redoChain.find((entry) => Number(entry.seq) === target);
+  if (target !== 0 && !back && !forward) {
+    const reachable = [0, ...undoChain.map((entry) => Number(entry.seq)), ...redoChain.map((entry) => Number(entry.seq))];
+    throw new Error(`jumpHistory seq ${target} is not on the current history (reachable seqs: ${reachable.join(", ")})`);
+  }
+
+  // Resolve the target project state from EXISTING snapshots only. A jump to base (0)
+  // restores the oldest retained entry's BEFORE snapshot (undo_patch) — exactly where undo
+  // bottoms out; any other seq restores its AFTER snapshot (state) — exactly where redo/undo
+  // to that seq would land.
+  let snap;
+  if (target === 0) {
+    snap = snapshotForEntry(root, projectId, undoChain[0]).undo_patch || {}; // head>0 here → non-empty chain
+  } else {
+    snap = snapshotForEntry(root, projectId, back || forward).state || {};
+  }
+  const restore = {
+    elements: snap.elements || [],
+    groups: snap.groups || [],
+    tool_runs: snap.tool_runs || [],
+    history_seq: target,
+  };
+  if (snap.title !== undefined) restore.title = snap.title;
+  const saved = updateProject(root, projectId, restore);
+  appendJournal(root, projectId, { op: "jump", target_seq: target, from_seq: head, duration_ms: ms(performance.now() - startedAt) });
+  return { project: saved, history_seq: saved.history_seq, jumped_from: head, jumped_to: target };
+}
+
 // ---- detectRegions (bridged) -------------------------------------------------
 
 // Meaningful numbered names for freshly detected regions: "<base> 1..N" (base =
