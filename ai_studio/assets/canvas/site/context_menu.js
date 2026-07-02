@@ -1,12 +1,11 @@
 // Right-click context menu. Its items depend on the target (an element, a region
 // on the selected element, a group label/frame, empty canvas, or the layers-panel
 // background); every item calls an existing action. The menu is positioned at the
-// pointer, clamped to the viewport, supports one level of hover submenu ("Move to
-// group"), and closes on click-away or Escape. Pure rendering/input.
+// pointer, clamped to the viewport, supports one level of hover submenu ("Order"),
+// and closes on click-away or Escape. Pure rendering/input. Kept deliberately
+// SHORT (lead's menu diet): anything with an inspector/layers home stays out.
 import { el, elementById, enterRegionEdit, groupById, groups, refresh, setStatus, state } from "./app.js";
-import { descendantsOf, orderedChildren } from "../tree.mjs";
 import {
-  assignElementsToGroup,
   bringNodeForward,
   bringNodeToFront,
   createGroupFromSelection,
@@ -14,15 +13,9 @@ import {
   deleteElements,
   deleteGroupAction,
   deleteRegion,
-  fitGroupAction,
   pasteImageBlob,
-  renderScreen,
-  reparentGroupTo,
   sendNodeBackward,
   sendNodeToBack,
-  setGroupBackground,
-  setGroupClip,
-  setGroupVisible,
   sliceRegionsFor,
   ungroup,
 } from "./actions.js";
@@ -43,18 +36,6 @@ export function closeContextMenu() {
 
 function onDocMouseDown(event) {
   if (!el("context-menu").contains(event.target)) closeContextMenu();
-}
-
-// Focus the inspector's first text input so a "Rename" item reuses the existing
-// inline field rather than a browser prompt().
-function focusInspectorName() {
-  requestAnimationFrame(() => {
-    const input = document.querySelector("#inspector .insp-input");
-    if (input) {
-      input.focus();
-      input.select();
-    }
-  });
 }
 
 // Open the inline rename editor on the selected region's inspector row (mirrors the
@@ -164,81 +145,6 @@ function copyIdItemFor(target) {
   };
 }
 
-// Every group in scene-tree order with its nesting depth, optionally EXCLUDING a group's
-// own subtree (invalid reparent targets). Backs the indented "Move to group" submenus.
-function groupTree(excludeSubtreeOf) {
-  const exclude = excludeSubtreeOf
-    ? new Set([excludeSubtreeOf, ...descendantsOf(state.project, excludeSubtreeOf).groups.map((g) => g.id)])
-    : new Set();
-  const out = [];
-  const walk = (scopeId, depth) => {
-    for (const child of orderedChildren(state.project, scopeId)) {
-      if (child.kind !== "group" || exclude.has(child.id)) continue;
-      out.push({ group: child.ref, depth });
-      walk(child.id, depth + 1);
-    }
-  };
-  walk(null, 0);
-  return out;
-}
-
-// Indent a submenu label by nesting depth with non-breaking spaces (plain spaces
-// collapse in the menu button).
-function indentLabel(name, depth) {
-  return `${"  ".repeat(depth)}${name || "Group"}`;
-}
-
-// "Move to group ▸" submenu items for an ELEMENT: every group (nested indented) + "None".
-function moveToScreenItems(elementId) {
-  const ids = targetElementIds(elementId);
-  const items = groupTree(null).map(({ group, depth }) => ({
-    label: indentLabel(group.name, depth),
-    onClick: () => assignElementsToGroup(ids, group.id),
-  }));
-  items.push({ separator: true });
-  items.push({ label: "None (top level)", onClick: () => assignElementsToGroup(ids, null) });
-  return items;
-}
-
-// "Move to group ▸" submenu items for a GROUP (reparent): every group NOT in its own
-// subtree (cycle guard), nested indented, + "None" (top level).
-function moveGroupItems(groupId) {
-  const items = groupTree(groupId).map(({ group, depth }) => ({
-    label: indentLabel(group.name, depth),
-    onClick: () => reparentGroupTo(groupId, group.id, undefined),
-  }));
-  items.push({ separator: true });
-  items.push({ label: "None (top level)", onClick: () => reparentGroupTo(groupId, null, undefined) });
-  return items;
-}
-
-// "Background ▸" quick submenu for a group: None clears the fill; Pick color opens a
-// native color input and sets a solid background (both journaled via setGroupBackground).
-function backgroundItems(groupId) {
-  return [
-    { label: "None", onClick: () => setGroupBackground(groupId, null) },
-    { label: "Pick color…", onClick: () => pickGroupColor(groupId) },
-  ];
-}
-
-// A throwaway native <input type="color"> so the menu can set a group background
-// without depending on the inspector DOM. Seeds from the current fill when present.
-function pickGroupColor(groupId) {
-  const group = groupById(groupId);
-  const input = document.createElement("input");
-  input.type = "color";
-  input.value = group && group.background && group.background.color ? group.background.color : "#1a1f2b";
-  input.style.position = "fixed";
-  input.style.left = "-9999px";
-  document.body.appendChild(input);
-  input.addEventListener("change", () => {
-    setGroupBackground(groupId, { type: "color", color: input.value });
-    input.remove();
-  });
-  input.addEventListener("blur", () => setTimeout(() => input.remove(), 0));
-  input.click();
-}
-
 // "Order ▸" submenu: the four Figma z-order moves for one NODE — an element OR a group
 // (same actions as the Ctrl+]/[ shortcuts, computed over MERGED same-scope siblings; each
 // no-ops harmlessly when already at that edge).
@@ -278,9 +184,8 @@ function itemsFor(target) {
     } else {
       items.push({ label: "Order", submenu: orderItems(element.id) });
     }
-    if (groups().length || element.groupId) {
-      items.push({ label: "Move to group", submenu: moveToScreenItems(element.id) });
-    }
+    // "Move to group" removed everywhere (lead 2026-07-02: with many groups the
+    // submenu is unusable) — reparenting lives in the layers drag.
     items.push(
       { separator: true },
       copyIdItemFor(target),
@@ -308,31 +213,16 @@ function itemsFor(target) {
   if (target.kind === "group") {
     const group = groupById(target.groupId);
     if (!group) return [];
-    const visible = group.visible !== false;
-    const items = [
-      { label: "Render group", onClick: () => renderScreen(group.id, { scale: 1 }) },
-      // Resize the frame to fit its content (one journaled fitGroup op; children never
-      // move). Always enabled — an empty group surfaces the op's loud error as a toast.
-      { label: "Fit to content", onClick: () => fitGroupAction(group.id) },
+    // Diet (lead 2026-07-02, second pass): render/fit/background/clip live in the
+    // inspector, rename is dblclick, hide is the layers eye, reparent is layers drag.
+    // The menu keeps only what has no better home.
+    return [
       { label: "Order", submenu: orderItems(group.id) },
-      { label: "Background", submenu: backgroundItems(group.id) },
-      // Checkmark via label prefix (the menu has no checkbox item type; mirrors the
-      // Hide/Show label toggle). Toggles the Figma frame clip via patchGroup({clip}).
-      { label: `${group.clip === true ? "✓ " : ""}Clip content`, onClick: () => setGroupClip(group.id, group.clip !== true) },
-    ];
-    // Nest this group under another (or out to top level) when there is a valid target.
-    if (groupTree(group.id).length || group.parentId) {
-      items.push({ label: "Move to group", submenu: moveGroupItems(group.id) });
-    }
-    items.push(
-      { label: "Rename", onClick: () => focusInspectorName() },
-      { label: visible ? "Hide" : "Show", onClick: () => setGroupVisible(group.id, !visible) },
       { label: "Ungroup", onClick: () => ungroup(group.id) },
       { separator: true },
       copyIdItemFor(target),
       { label: "Delete group", danger: true, onClick: () => deleteGroupAction(group.id) },
-    );
-    return items;
+    ];
   }
   if (target.kind === "layers-empty") {
     // Layers-panel background: group creation lives here (the "+ Screen" header
