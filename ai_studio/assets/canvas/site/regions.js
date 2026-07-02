@@ -121,7 +121,10 @@ export function drawRegionsOverlay(ctx, element, vp, { selectedRegionIds, intera
       ctx.strokeStyle = "rgba(63, 199, 186, 0.6)";
     }
     ctx.strokeRect(box.x + 0.5, box.y + 0.5, Math.max(0, box.w - 1), Math.max(0, box.h - 1));
-    drawBadge(ctx, box.x, box.y, String(i + 1), selected, interactive);
+    // Badge shows the region's NAME (detect assigns "<element> 1..N"); the bare
+    // index is only the fallback for unnamed regions. Long names truncate.
+    const label = (regions[i].name || "").trim() || String(i + 1);
+    drawBadge(ctx, box.x, box.y, label.length > 20 ? `${label.slice(0, 19)}…` : label, selected, interactive);
     if (selected) {
       ctx.lineWidth = 1;
       for (const point of handlePoints(box)) {
