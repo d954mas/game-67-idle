@@ -63,21 +63,25 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **Perf: frontend churn** (`T0200`, P1) — use op responses instead of
-   reload+history GETs, immutable cache headers + `<img>` reuse, rAF drag,
-   batched multi-ops (also collapses marquee-move/multi-delete to one journal
-   entry per gesture — audit finding).
-2. **Groups** (`T0219`, P1, design first) — sibling z-order for groups,
+1. **Groups** (`T0219`, P1, design first) — sibling z-order for groups,
    NESTED groups (model change), clip-to-bounds flag, group background
    (color; canvas draw + render parity). Slice-group + delete-group already
    landed ahead of it (`59eb9df0`).
-3. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
+2. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
    busy spinner, input never blocked, max-N concurrent long ops with a
    visible queue.
-4. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
+3. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
    journal + `jumpHistory` op (CLI parity).
-5. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
+4. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
    builds on T0218's `_bridge` + pinned venv `pythonPath`.
+
+T0200 perf frontend-churn LANDED `e37d8a5a` (2026-07-02 night): op responses
+carry `history{seq,canUndo,canRedo}` and drive the page (zero follow-up GETs,
+was 2), `/files` immutable + ETag with `<img>` node reuse, rAF-coalesced drag
+renders + realloc guard, batched `patchElements`/`removeElements` (HTTP
+`elements-set`/`elements-remove`, CLI parity) — one journal entry per gesture:
+8-element move/delete 8→1 entries, one Ctrl+Z. Frontend-churn row of the
+perf table is closed; remaining perf item is the Python spawn (`T0202`).
 
 T0206 export panel LANDED `6620d2a6` (2026-07-02 night): journaled per-element
 export rows, one-python-spawn batches, scale syntax + Lanczos/nearest,
