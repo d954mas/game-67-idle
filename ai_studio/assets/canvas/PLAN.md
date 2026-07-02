@@ -63,8 +63,24 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **Alpha on canvas** (`T0210`, image-tools track, IN FLIGHT) — per-element
-   alpha op with method choice, regions optional; wings = acceptance asset.
+Queue is EMPTY as of 2026-07-03 morning — next candidates for the lead to
+order: `T0207` (post-gen cleanup: Quantize/Denoise interactive tools — the
+image-tools track's next step), Render-group delivery unified onto the
+save-dialog (T0229 leftover, flagged), Ctrl+G auto-expand of the new group
+in layers (T0224 nuance), mixed element+group range-select in layers,
+`T0211` generation on canvas.
+
+T0210 alpha cutout inc1 LANDED `80f2827f` (2026-07-03 night, → review):
+`alphaCutout` op — element pixels through route/key_matte REUSED verbatim
+(new tools/alpha_cutout.py, warm worker), swap to NEW content-addressed
+alpha PNG, one entry, byte-exact undo; auto router (soft zones → dual_plate
+= LOUD error, single element has no plate pair) or forced matte;
+regions-scoped composition in python (rect + polygon masks); inspector
+Alpha control replaces the Coming-soon hint; HTTP /alpha + CLI alpha;
+meta.alpha + tool_runs provenance. Wings acceptance: alpha'd DUPLICATE
+beside the original on benchmark-fixture-c7f9dc, artifacts in
+tmp/t0210_wings_before_after/ (corners 0, subject 255) — visual verdict =
+lead. Tests 232→240.
 
 T0202 warm python worker LANDED `9ffe0b27` (2026-07-03 night, → review):
 generic script-runner in image/_bridge (worker.py + worker.mjs, line-JSON
