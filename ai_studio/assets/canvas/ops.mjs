@@ -8,7 +8,7 @@
 //
 // Most mutating ops are thin store wrappers that also append one journal entry so
 // they are undoable. detectRegions and sliceRegions are the bridged pipeline ops:
-// they reuse the existing raster2d tool functions unmodified.
+// they reuse the image tools functions (regions/sources bridges) unmodified.
 //
 // Journal / undo-redo design (single linear history over an append-only log):
 //   - Each mutating op appends a THIN metadata line
@@ -43,10 +43,8 @@ import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { canvasHistoryDepth } from "../../core_harness/tool_lib/studio_config.mjs";
-import {
-  detectRaster2dRegions,
-  uploadRaster2dSource,
-} from "../tools/raster2d/api.mjs";
+import { detectImageRegions } from "../tools/image/regions/api.mjs";
+import { uploadImageSource } from "../tools/image/sources/api.mjs";
 import {
   addImage as storeAddImage,
   appendArchive,
@@ -794,8 +792,8 @@ export function nameDetectedRegions(regions, baseName) {
   );
 }
 
-// Read the element's stored image, run it through the existing raster2d upload +
-// detect pipeline (imported unmodified from ../tools/raster2d/api.mjs), then
+// Read the element's stored image, run it through the image tools upload +
+// detect pipeline (imported unmodified from ../tools/image/{sources,regions}/api.mjs), then
 // persist the detected regions on the element and record a tool_runs entry. One
 // journal entry makes the detection undoable.
 export async function detectRegions(root, { projectId, elementId, params = {} } = {}) {
@@ -806,8 +804,8 @@ export async function detectRegions(root, { projectId, elementId, params = {} } 
   const dims = imageSize(buffer);
 
   const dataUrl = `data:${mimeForExt(fileName)};base64,${buffer.toString("base64")}`;
-  const uploaded = await uploadRaster2dSource(root, { fileName, dataUrl });
-  const detected = await detectRaster2dRegions(root, {
+  const uploaded = await uploadImageSource(root, { fileName, dataUrl });
+  const detected = await detectImageRegions(root, {
     sourcePath: uploaded.sourcePath,
     options: params || {},
   });
@@ -869,7 +867,7 @@ export async function detectRegions(root, { projectId, elementId, params = {} } 
 // which would key/normalize the pixels and re-derive geometry). Each crop becomes a
 // content-addressed file + a new image element placed in a grid to the right of the
 // parent, with provenance in meta.parent. The whole slice is one journal entry
-// (undo removes every crop). detectRegions still uses the raster2d bridge; only
+// (undo removes every crop). detectRegions still uses the image tools bridge; only
 // slice is ours. Per-region spec entries are objects carrying the rect and, for a
 // polygonal region, its vertex ring (the crop tool then alpha-masks outside it);
 // mixed rect + polygon sets stay one spawn.
@@ -1056,7 +1054,7 @@ export function exportElements(root, { projectId, elementIds, format } = {}) {
 // the requested scale over a transparent (or solid) background. The pixel work
 // is done by our own Python tool (tools/render_group.py, PIL) because there is
 // no dependency-free pure-Node compositor. This tool is OURS, so ops spawns it
-// directly with the same robust Python discovery the raster2d bridge uses; the
+// directly with the same robust Python discovery the image tools bridge uses; the
 // full render spec is handed over as one JSON file. renderGroup makes no
 // undoable geometry change, so like exportElements it is NOT journaled — it only
 // records a render_group tool_runs entry.

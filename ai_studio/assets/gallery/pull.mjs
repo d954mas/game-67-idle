@@ -8,7 +8,7 @@
 //
 // Assets are per-game or per-template: --to is the target assets dir (e.g.
 // templates/template/assets or games/<game>/assets), NOT the repo root.
-//   node ai_studio/assets/viewer/pull.mjs --ids kenney__desk__cc0-1-0 --to games/mygame/assets --apply
+//   node ai_studio/assets/gallery/pull.mjs --ids kenney__desk__cc0-1-0 --to games/mygame/assets --apply
 import { readFile, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";

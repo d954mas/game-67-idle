@@ -7,6 +7,23 @@
     <link rel="stylesheet" href="canvas.css" />
   </head>
   <body>
+    <!-- Shared AI Studio strip: keeps Canvas inside the studio shell instead of
+         being a bare standalone page. Deliberately quiet (a thin recessed bar,
+         muted text) so it never fights the canvas top-bar directly below it. -->
+    <nav id="studio-strip" aria-label="AI Studio">
+      <a class="ss-brand" href="/" title="AI Studio home">
+        <span class="ss-mark">AI</span>
+        <span class="ss-name">Studio</span>
+      </a>
+      <span class="ss-sep">/</span>
+      <span class="ss-here">Canvas</span>
+      <span class="ss-spacer"></span>
+      <a class="ss-link" href="/">Home</a>
+      <a class="ss-link" href="/taskboard/">Taskboard</a>
+      <a class="ss-link" href="/architecture_map/">Map</a>
+      <a class="ss-link" href="/asset_viewer/">Gallery</a>
+    </nav>
+
     <!-- HOME: full-page project card grid (shown when no project is open). -->
     <section id="home-view" class="view">
       <header id="home-bar">

@@ -32,7 +32,7 @@
       "title": "Asset Viewer",
       "subtitle": "visual asset surface",
       "kind": "surface",
-      "path": "ai_studio/assets/viewer",
+      "path": "ai_studio/assets/gallery",
       "color": "#0891b2",
       "description": "Browser-facing asset viewer surface for library browsing, game-asset review, pick manifests, 3D model inspection, promotion, and reuse pulls. It consumes backlog storage but does not own storage or registry data.",
       "role": "asset viewer surface",
@@ -46,7 +46,7 @@
         {
           "id": "assets:asset-viewer-readme",
           "kind": "doc",
-          "path": "ai_studio/assets/viewer/README.md",
+          "path": "ai_studio/assets/gallery/README.md",
           "title": "README.md",
           "description": "Asset Viewer module contract: modes, commands, ownership boundaries, and why the gallery server remains separate.",
           "role": "Asset Viewer contract",
@@ -73,7 +73,7 @@
             {
               "id": "assets:asset-viewer-launcher-index",
               "kind": "surface",
-              "path": "ai_studio/assets/viewer/index.html",
+              "path": "ai_studio/assets/gallery/index.html",
               "title": "index.html",
               "description": "Asset Viewer browser entry. It loads the existing gallery UI and lets the user choose the displayed asset source from inside the gallery header.",
               "role": "asset viewer gallery document",
@@ -85,7 +85,7 @@
             {
               "id": "assets:asset-viewer-api",
               "kind": "tool",
-              "path": "ai_studio/assets/viewer/api.mjs",
+              "path": "ai_studio/assets/gallery/api.mjs",
               "title": "api.mjs",
               "description": "Studio Shell API adapter for listing asset sources, opening the selected source in the gallery, rebuilding/querying the asset index, and resolving gallery media.",
               "role": "asset viewer HTTP API adapter",
@@ -97,7 +97,7 @@
             {
               "id": "assets:asset-viewer-api-test",
               "kind": "test",
-              "path": "ai_studio/assets/viewer/tests/api.test.mjs",
+              "path": "ai_studio/assets/gallery/tests/api.test.mjs",
               "title": "api.test.mjs",
               "description": "Regression tests for Asset Viewer API source selection and confined gallery/library/repo media path resolution.",
               "role": "asset viewer API boundary tests",
@@ -110,25 +110,9 @@
           ]
         },
         {
-          "id": "assets:asset-tools-surface",
-          "title": "Asset Tools",
-          "subtitle": "image workspace",
-          "kind": "surface",
-          "path": "ai_studio/assets/viewer/asset_tools.html",
-          "color": "#0891b2",
-          "description": "Browser Asset Tools surface hosted at /asset_prep/. It presents one raster2d image workspace with source loading, explicit background mode selection, region detection, pan/zoom region review, close selected-region source/alpha preview, rect and polygon manual fixes, region naming, per-region alpha mode, review sheet preview, ZIP export, single selected-region PNG export, and a separate Slice 9 test mode for whole-image or selected-region scalable UI images.",
-          "role": "asset tools browser surface",
-          "tags": [
-            "surface",
-            "assets",
-            "tool-picker",
-            "image"
-          ]
-        },
-        {
           "id": "assets:asset-viewer-build",
           "kind": "tool",
-          "path": "ai_studio/assets/viewer/build_review.mjs",
+          "path": "ai_studio/assets/gallery/build_review.mjs",
           "title": "build_review.mjs",
           "description": "Generates static asset gallery outputs for shared-library browsing, game-asset review, or direct asset-folder scans.",
           "role": "asset gallery generator",
@@ -141,7 +125,7 @@
         {
           "id": "assets:asset-viewer-serve",
           "kind": "server",
-          "path": "ai_studio/assets/viewer/serve_gallery.mjs",
+          "path": "ai_studio/assets/gallery/serve_gallery.mjs",
           "title": "serve_gallery.mjs",
           "description": "Serves a generated asset gallery and maps a large external asset library at /lib/ so library browsing can avoid copying every media file.",
           "role": "asset gallery media server",
@@ -154,7 +138,7 @@
         {
           "id": "assets:asset-viewer-serve-test",
           "kind": "test",
-          "path": "ai_studio/assets/viewer/tests/serve_gallery.test.mjs",
+          "path": "ai_studio/assets/gallery/tests/serve_gallery.test.mjs",
           "title": "serve_gallery.test.mjs",
           "description": "Regression tests for standalone Asset Viewer gallery server argument parsing and safe gallery/library request path resolution.",
           "role": "asset gallery server tests",
@@ -167,7 +151,7 @@
         {
           "id": "assets:asset-viewer-promote",
           "kind": "tool",
-          "path": "ai_studio/assets/viewer/promote.mjs",
+          "path": "ai_studio/assets/gallery/promote.mjs",
           "title": "promote.mjs",
           "description": "Promotes selected assets from a review manifest into Pack Manifest storage with license records and integrity data.",
           "role": "asset manifest promotion command",
@@ -180,7 +164,7 @@
         {
           "id": "assets:asset-viewer-pull",
           "kind": "tool",
-          "path": "ai_studio/assets/viewer/pull.mjs",
+          "path": "ai_studio/assets/gallery/pull.mjs",
           "title": "pull.mjs",
           "description": "Copies selected shared-library assets into a game-local asset tree while preserving source_id linkage and restricted-asset routing.",
           "role": "asset reuse pull command",
@@ -193,7 +177,7 @@
         {
           "id": "assets:asset-viewer-pull-test",
           "kind": "test",
-          "path": "ai_studio/assets/viewer/tests/pull.test.mjs",
+          "path": "ai_studio/assets/gallery/tests/pull.test.mjs",
           "title": "pull.test.mjs",
           "description": "Regression tests for Asset Viewer pull argument parsing and preservation of publishability metadata in game-local manifest rows.",
           "role": "asset pull tests",
@@ -206,7 +190,7 @@
         {
           "id": "assets:asset-viewer-record",
           "kind": "tool",
-          "path": "ai_studio/assets/viewer/record_gallery.mjs",
+          "path": "ai_studio/assets/gallery/record_gallery.mjs",
           "title": "record_gallery.mjs",
           "description": "Records a browser session of the asset gallery for review or presentation evidence.",
           "role": "asset gallery recording command",
@@ -219,7 +203,7 @@
         {
           "id": "assets:asset-viewer-record-test",
           "kind": "test",
-          "path": "ai_studio/assets/viewer/tests/record_gallery.test.mjs",
+          "path": "ai_studio/assets/gallery/tests/record_gallery.test.mjs",
           "title": "record_gallery.test.mjs",
           "description": "Regression tests for Asset Viewer recorder argument parsing and gallery hero selection without launching Chrome.",
           "role": "asset gallery recorder tests",
@@ -232,10 +216,10 @@
         {
           "id": "assets:asset-viewer-implementation",
           "title": "Surface Implementation",
-          "subtitle": "viewer and tools js/css",
+          "subtitle": "gallery js/css",
           "kind": "group",
           "color": "#0891b2",
-          "description": "Static browser files for Asset Viewer and Asset Tools. Hidden from the default graph so the viewer module remains readable as one surface.",
+          "description": "Static browser files for the Asset Viewer gallery. Hidden from the default graph so the viewer module remains readable as one surface.",
           "role": "asset viewer browser implementation details",
           "tags": [
             "ui",
@@ -246,7 +230,7 @@
             {
               "id": "assets:asset-viewer-js",
               "kind": "ui-component",
-              "path": "ai_studio/assets/viewer/viewer.js",
+              "path": "ai_studio/assets/gallery/viewer.js",
               "title": "viewer.js",
               "description": "Vanilla browser SPA for filters, pack views, asset modal, picking, and model-viewer integration.",
               "role": "asset viewer browser behavior",
@@ -259,7 +243,7 @@
             {
               "id": "assets:asset-viewer-css",
               "kind": "ui-component",
-              "path": "ai_studio/assets/viewer/viewer.css",
+              "path": "ai_studio/assets/gallery/viewer.css",
               "title": "viewer.css",
               "description": "Asset Viewer page styling for gallery cards, filters, sheets, and model previews.",
               "role": "asset viewer styling",
@@ -267,126 +251,6 @@
                 "ui",
                 "style",
                 "assets"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-js",
-              "kind": "ui-component",
-              "path": "ai_studio/assets/viewer/asset_tools.js",
-              "title": "asset_tools.js",
-              "description": "Browser-only behavior for Asset Tools: upload, workspace mode selection, central review-sheet or canvas stage selection, explicit background mode selection, region overlay editing with visible region names, close region inspection, region naming, per-region alpha mode, selected-region PNG downloads, whole-image or selected-region Slice 9 preview wiring, review sheet refresh, and export requests.",
-              "role": "asset tools browser behavior",
-              "tags": [
-                "ui",
-                "browser-js",
-                "assets",
-                "image"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-css",
-              "kind": "ui-component",
-              "path": "ai_studio/assets/viewer/asset_tools.css",
-              "title": "asset_tools.css",
-              "description": "Asset Tools page styling for the pipeline rail, canvas toolbar, pan/zoom editor, region list, inspector, close region preview, Slice 9 preview, and review preview.",
-              "role": "asset tools styling",
-              "tags": [
-                "ui",
-                "style",
-                "assets",
-                "image"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-viewport",
-              "kind": "ui-component",
-              "path": "ai_studio/assets/viewer/asset_tools_viewport.mjs",
-              "title": "asset_tools_viewport.mjs",
-              "description": "Pure viewport and rect geometry helpers for Asset Tools canvas pan, zoom, hit testing, move, and resize behavior.",
-              "role": "asset tools canvas geometry",
-              "tags": [
-                "ui",
-                "browser-js",
-                "assets",
-                "image",
-                "testable-logic"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-history",
-              "kind": "ui-component",
-              "path": "ai_studio/assets/viewer/asset_tools_history.mjs",
-              "title": "asset_tools_history.mjs",
-              "description": "Pure undo/redo history helper for Asset Tools region review snapshots.",
-              "role": "asset tools region history helper",
-              "tags": [
-                "ui",
-                "browser-js",
-                "assets",
-                "image",
-                "testable-logic"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-alpha-preview",
-              "kind": "ui-component",
-              "path": "ai_studio/assets/viewer/asset_tools_alpha_preview.mjs",
-              "title": "asset_tools_alpha_preview.mjs",
-              "description": "Pure alpha-preview helper for Asset Tools selected-region preview: key-color parsing, magenta spill cleanup near transparent matte edges, generation-mode diagnostic overlays, and region-local polygon masking.",
-              "role": "asset tools alpha preview helper",
-              "tags": [
-                "ui",
-                "browser-js",
-                "assets",
-                "image",
-                "alpha",
-                "testable-logic"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-region-label",
-              "kind": "ui-component",
-              "path": "ai_studio/assets/viewer/asset_tools_region_label.mjs",
-              "title": "asset_tools_region_label.mjs",
-              "description": "Pure region overlay label helper for Asset Tools canvas badges: prefer explicit region names, fall back to visible numbers, and trim long labels to the badge width.",
-              "role": "asset tools region overlay label helper",
-              "tags": [
-                "ui",
-                "browser-js",
-                "assets",
-                "image",
-                "testable-logic"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-stage-view",
-              "kind": "ui-component",
-              "path": "ai_studio/assets/viewer/asset_tools_stage_view.mjs",
-              "title": "asset_tools_stage_view.mjs",
-              "description": "Pure stage-view helper for Asset Tools deciding whether the central workspace shows the review sheet or the canvas editor across Regions and Slice 9 modes.",
-              "role": "asset tools central stage view helper",
-              "tags": [
-                "ui",
-                "browser-js",
-                "assets",
-                "image",
-                "testable-logic"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-slice9",
-              "kind": "ui-component",
-              "path": "ai_studio/assets/viewer/asset_tools_slice9.mjs",
-              "title": "asset_tools_slice9.mjs",
-              "description": "Pure Slice 9 geometry helper for clamping fixed edges and mapping full-image or offset region source patches to stretched preview patches.",
-              "role": "asset tools slice 9 geometry",
-              "tags": [
-                "ui",
-                "browser-js",
-                "assets",
-                "image",
-                "slice9",
-                "testable-logic"
               ]
             }
           ]
@@ -407,7 +271,7 @@
             {
               "id": "assets:asset-viewer-build-test",
               "kind": "test",
-              "path": "ai_studio/assets/viewer/tests/build_review.test.mjs",
+              "path": "ai_studio/assets/gallery/tests/build_review.test.mjs",
               "title": "build_review.test.mjs",
               "description": "Regression tests for asset kind classification, origin detection, escaping, and gallery HTML rendering.",
               "role": "asset gallery generator tests",
@@ -419,99 +283,13 @@
             {
               "id": "assets:asset-viewer-promote-test",
               "kind": "test",
-              "path": "ai_studio/assets/viewer/tests/promote.test.mjs",
+              "path": "ai_studio/assets/gallery/tests/promote.test.mjs",
               "title": "promote.test.mjs",
               "description": "Regression tests for promoting picked assets into Pack Manifest storage with license and integrity records.",
               "role": "asset promotion tests",
               "tags": [
                 "test",
                 "assets"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-viewport-test",
-              "kind": "test",
-              "path": "ai_studio/assets/viewer/tests/asset_tools_viewport.test.mjs",
-              "title": "asset_tools_viewport.test.mjs",
-              "description": "Regression tests for Asset Tools viewport transforms, zoom-to-cursor, rect hit handles, movement, and resize clamping.",
-              "role": "asset tools viewport tests",
-              "tags": [
-                "test",
-                "assets",
-                "image",
-                "ui"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-history-test",
-              "kind": "test",
-              "path": "ai_studio/assets/viewer/tests/asset_tools_history.test.mjs",
-              "title": "asset_tools_history.test.mjs",
-              "description": "Regression tests for Asset Tools region undo/redo snapshots and redo clearing.",
-              "role": "asset tools history tests",
-              "tags": [
-                "test",
-                "assets",
-                "image",
-                "ui"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-alpha-preview-test",
-              "kind": "test",
-              "path": "ai_studio/assets/viewer/tests/asset_tools_alpha_preview.test.mjs",
-              "title": "asset_tools_alpha_preview.test.mjs",
-              "description": "Regression tests for Asset Tools selected-region alpha preview key-color removal, magenta spill cleanup, isolated purple preservation, and polygon masks.",
-              "role": "asset tools alpha preview tests",
-              "tags": [
-                "test",
-                "assets",
-                "image",
-                "alpha",
-                "ui"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-region-label-test",
-              "kind": "test",
-              "path": "ai_studio/assets/viewer/tests/asset_tools_region_label.test.mjs",
-              "title": "asset_tools_region_label.test.mjs",
-              "description": "Regression tests for Asset Tools canvas overlay labels using region names, numeric fallbacks, and width fitting.",
-              "role": "asset tools region overlay label tests",
-              "tags": [
-                "test",
-                "assets",
-                "image",
-                "ui"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-stage-view-test",
-              "kind": "test",
-              "path": "ai_studio/assets/viewer/tests/asset_tools_stage_view.test.mjs",
-              "title": "asset_tools_stage_view.test.mjs",
-              "description": "Regression tests for Asset Tools central stage selection between the review sheet, canvas editor, and Slice 9 canvas workspace.",
-              "role": "asset tools central stage view tests",
-              "tags": [
-                "test",
-                "assets",
-                "image",
-                "ui"
-              ]
-            },
-            {
-              "id": "assets:asset-tools-slice9-test",
-              "kind": "test",
-              "path": "ai_studio/assets/viewer/tests/asset_tools_slice9.test.mjs",
-              "title": "asset_tools_slice9.test.mjs",
-              "description": "Regression tests for Asset Tools Slice 9 insets, target clamping, and patch mapping.",
-              "role": "asset tools slice 9 tests",
-              "tags": [
-                "test",
-                "assets",
-                "image",
-                "slice9",
-                "ui"
               ]
             }
           ]
@@ -721,22 +499,6 @@
                 "lib"
               ]
             }
-          ]
-        },
-        {
-          "id": "assets:tools-raster2d",
-          "title": "Raster 2D Seam Shim",
-          "subtitle": "temporary canvas seam -> image tools",
-          "kind": "group",
-          "path": "ai_studio/assets/tools/raster2d",
-          "color": "#0d9488",
-          "description": "Temporary canvas seam. The 2D image tools were decomposed into ai_studio/assets/tools/image/*; api.mjs here only re-exports uploadImageSource/detectImageRegions (and the composed handler) under their old raster2d names because the canvas still imports them (ops.mjs). The canvas migrates in increment 6, then this folder is deleted. The public /api/asset-tools/raster2d/* endpoint URLs and the tmp/ai_studio/assets/raster2d/ prefix stay stable for the frozen viewer.",
-          "role": "temporary canvas seam shim",
-          "tags": [
-            "assets",
-            "tools",
-            "image",
-            "seam"
           ]
         },
         {
@@ -1172,7 +934,7 @@
       "path": "ai_studio/assets/canvas",
       "color": "#7c3aed",
       "coverage": "self",
-      "description": "Figma/Recraft-like multi-image canvas projects. Every capability is one operation in a shared ops layer with two equal clients: the agent (CLI/import) and the thin browser page. Owns project persistence, an append-only operation journal with linear undo/redo, groups as named game screens (Figma-frame regions that own elements, hide/show, move as a whole, and export as one composited PNG), region slicing into new elements, and selected-element export; bridges detect_regions and slice to the raster2d pipeline unmodified and composites screens with its own render_group.py tool.",
+      "description": "Figma/Recraft-like multi-image canvas projects. Every capability is one operation in a shared ops layer with two equal clients: the agent (CLI/import) and the thin browser page. Owns project persistence, an append-only operation journal with linear undo/redo, groups as named game screens (Figma-frame regions that own elements, hide/show, move as a whole, and export as one composited PNG), region slicing into new elements, and selected-element export; bridges detect_regions and slice to the image tools pipeline unmodified and composites screens with its own render_group.py tool.",
       "role": "canvas projects module",
       "tags": [
         "assets",
@@ -1225,7 +987,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/ops.mjs",
           "title": "ops.mjs",
-          "description": "The one operation layer both clients call: journaled store wrappers (addImage/patchElement/removeElement/reorderElement), project-level patchProject (journaled rename; title carried in the snapshot) and deleteProject (moves the folder to the projects-root .trash, not journaled), group (screen) ops (createGroup/patchGroup/assignToGroup/deleteGroup) whose metadata-only snapshots also carry groups so undo restores frames and members together, linear undo/redo/history over the thin sidecar-snapshot journal, the bridged detectRegions and sliceRegions (which reuse the raster2d upload/detect/slice functions unmodified), exportElements, and renderGroup (spawns tools/render_group.py to composite a screen PNG). reorderElement is the z-order op: it moves an element to a target index among its siblings (root or its group), permuting only that sibling subsequence within the flat array slots it occupies (array order IS paint/composite order everywhere), clamps the index, and journals one undoable entry. commitMutation writes fat snapshots to a sidecar + a thin duration_ms line and compacts history past canvasHistoryDepth (default 200) with a clean undo horizon; observability adds duration_ms on every entry, recordOpFailure into errors.jsonl, and an opsStats timing rollup. Records regions, slice crops with provenance, and capped tool_runs entries on the project.",
+          "description": "The one operation layer both clients call: journaled store wrappers (addImage/patchElement/removeElement/reorderElement), project-level patchProject (journaled rename; title carried in the snapshot) and deleteProject (moves the folder to the projects-root .trash, not journaled), group (screen) ops (createGroup/patchGroup/assignToGroup/deleteGroup) whose metadata-only snapshots also carry groups so undo restores frames and members together, linear undo/redo/history over the thin sidecar-snapshot journal, the bridged detectRegions and sliceRegions (which reuse the image tools upload/detect/slice functions unmodified; setRegions applies polygon validation and bbox derivation, and slice alpha-masks polygonal regions), exportElements, and renderGroup (spawns tools/render_group.py to composite a screen PNG). reorderElement is the z-order op: it moves an element to a target index among its siblings (root or its group), permuting only that sibling subsequence within the flat array slots it occupies (array order IS paint/composite order everywhere), clamps the index, and journals one undoable entry. commitMutation writes fat snapshots to a sidecar + a thin duration_ms line and compacts history past canvasHistoryDepth (default 200) with a clean undo horizon; observability adds duration_ms on every entry, recordOpFailure into errors.jsonl, and an opsStats timing rollup. Records regions, slice crops with provenance, and capped tool_runs entries on the project.",
           "role": "canvas operation layer",
           "tags": [
             "assets",
@@ -1267,7 +1029,7 @@
           "kind": "group",
           "path": "ai_studio/assets/canvas/tools",
           "color": "#7c3aed",
-          "description": "The canvas module's own Python tools (not raster2d steps), spawned directly by the ops layer with the shared Python discovery.",
+          "description": "The canvas module's own Python tools (not image-tools steps), spawned directly by the ops layer with the shared Python discovery.",
           "role": "canvas python tools",
           "tags": [
             "assets",
@@ -1366,7 +1128,7 @@
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/workspace.js",
               "title": "workspace.js",
-              "description": "Workspace view: the devicePixelRatio-crisp pan/zoom canvas (imageSmoothing off at >=2x), the tool rail (Select/Hand), zoom controls + indicator, top bar sync, group frame drawing, and all pointer interaction (select, drag-move, pan with tool/Space/middle-mouse).",
+              "description": "Workspace view: the devicePixelRatio-crisp pan/zoom canvas (imageSmoothing off at >=2x), the tool rail (Select/Hand), zoom controls + indicator, top bar sync, group frame drawing, the region-edit tool row (Select/Rect/Polygon) with live polygon-draft drawing, and all pointer interaction (select, drag-move, pan with tool/Space/middle-mouse).",
               "role": "canvas workspace and rendering",
               "tags": ["assets", "canvas", "ui", "browser-js"]
             },
@@ -1420,9 +1182,18 @@
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/regions.js",
               "title": "regions.js",
-              "description": "Region workbench geometry: convert an element's source-pixel region rects to world/screen boxes, hit-test region bodies and resize handles, and draw the bright numbered overlays. Pure DOM-free helpers for the workspace; region edits still persist through the shared setRegions op.",
+              "description": "Region workbench geometry: convert region rects and polygon rings to world/screen boxes, hit-test region bodies and resize handles (even-odd point-in-polygon for polygonal regions), map vertices via transformPolygon, and draw the bright numbered overlays. Pure DOM-free helpers for the workspace; region edits still persist through the shared setRegions op.",
               "role": "canvas region geometry",
               "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-viewport",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/viewport.mjs",
+              "title": "viewport.mjs",
+              "description": "Pure canvas viewport math shared by the site modules (workspace, actions, dnd, regions): screen<->image point conversion, fit-to-frame centering, and zoom-at-cursor. No DOM and no rect-editing helpers (the region workbench owns rect/polygon geometry). The canvas owns its own viewport code here.",
+              "role": "canvas viewport geometry",
+              "tags": ["assets", "canvas", "ui", "browser-js", "testable-logic"]
             }
           ]
         },

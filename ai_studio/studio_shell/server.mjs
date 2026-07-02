@@ -10,8 +10,7 @@ import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTaskboardApi } from "../taskboard/api.mjs";
 import { findRoot } from "../taskboard/lib.mjs";
-import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/viewer/api.mjs";
-import { createImageAssetToolsApi, resolveImageTmpPath } from "../assets/tools/image/api.mjs";
+import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/gallery/api.mjs";
 import { createArchitectureMapApi } from "../architecture_map/api.mjs";
 import { createCanvasApi } from "../assets/canvas/api.mjs";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
@@ -20,12 +19,11 @@ const repoGuess = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const root = findRoot(repoGuess);
 const aiStudioRoot = join(root, "ai_studio");
 const taskboardPublic = join(aiStudioRoot, "taskboard", "public");
-const assetViewerRoot = join(aiStudioRoot, "assets", "viewer");
+const assetViewerRoot = join(aiStudioRoot, "assets", "gallery");
 const assetPreviewRoot = join(aiStudioRoot, "assets", "backlog", "storage", "previews");
 const port = Number.parseInt(process.argv[2] || process.env.AI_STUDIO_PORT || "8765", 10);
 const handleTaskboardApi = createTaskboardApi(root);
 const handleAssetViewerApi = createAssetViewerApi(root);
-const handleImageAssetToolsApi = createImageAssetToolsApi(root);
 const handleArchitectureMapApi = createArchitectureMapApi(root);
 const handleCanvasApi = createCanvasApi(root);
 const stateDir = join(root, "tmp", "ai_studio");
@@ -100,13 +98,6 @@ function staticPath(pathname) {
     return safeResolve(assetViewerRoot, pathname.slice("/viewer/".length));
   }
 
-  if (pathname === "/asset_prep" || pathname === "/asset_prep/") {
-    return join(assetViewerRoot, "asset_tools.html");
-  }
-  if (pathname.startsWith("/asset_prep/")) {
-    return safeResolve(assetViewerRoot, pathname.slice("/asset_prep/".length));
-  }
-
   if (pathname === "/quality" || pathname === "/quality/") {
     return join(aiStudioRoot, "quality", "index.html");
   }
@@ -116,10 +107,6 @@ function staticPath(pathname) {
 
   if (pathname.startsWith("/ai_studio/")) {
     return safeResolve(root, pathname.slice(1));
-  }
-
-  if (pathname.startsWith("/tmp/")) {
-    return resolveImageTmpPath(root, pathname);
   }
 
   return null;
@@ -163,11 +150,8 @@ const server = createServer((req, res) => {
       return;
     }
 
-    handleImageAssetToolsApi(req, res, url).then((handled) => {
-      if (handled) return;
-      handleAssetViewerApi(req, res, url).then((assetHandled) => {
-        if (!assetHandled) handleTaskboardApi(req, res, url);
-      });
+    handleAssetViewerApi(req, res, url).then((assetHandled) => {
+      if (!assetHandled) handleTaskboardApi(req, res, url);
     });
   } else {
     serveStatic(req, res, url);

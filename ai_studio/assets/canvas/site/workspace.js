@@ -1,6 +1,6 @@
 // Workspace view: the pan/zoom canvas, its crisp DPR-aware rendering, tool rail,
 // zoom controls, top bar sync, and all pointer interaction. Geometry is reused
-// from the Asset Tools viewport module and the region helpers in regions.js. Every
+// from the canvas viewport module (viewport.mjs) and the region helpers in regions.js. Every
 // persisted change goes through the shared actions/API; this module only renders
 // and turns input into those calls.
 //
@@ -57,7 +57,7 @@ import {
   imageToScreenPoint,
   screenToImagePoint,
   zoomViewportAt,
-} from "../../viewer/asset_tools_viewport.mjs";
+} from "./viewport.mjs";
 
 let canvas = null;
 let ctx = null;
@@ -680,7 +680,25 @@ function commitRegionCreate(finished) {
   const id = newRegionId();
   state.selectedRegionIds = new Set([id]);
   state.expandedElements.add(element.id);
-  setRegionsFor(element.id, [...(element.regions || []), { id, rect: [x0, y0, w, h] }], "Added region.");
+  setRegionsFor(
+    element.id,
+    [...(element.regions || []), { id, name: nextRegionName(element), rect: [x0, y0, w, h] }],
+    "Added region.",
+  );
+}
+
+// Hand-drawn regions get the same "<element name> N" names as detected ones
+// (ops.mjs nameDetectedRegions); N continues past both the region count and the
+// highest existing suffix, so deleting a region never reuses its number.
+function nextRegionName(element) {
+  const base = String(element.name || "").trim() || "Region";
+  let max = 0;
+  for (const region of element.regions || []) {
+    const name = typeof region.name === "string" ? region.name : "";
+    const match = name.startsWith(`${base} `) ? name.slice(base.length + 1).match(/^(\d+)$/) : null;
+    if (match) max = Math.max(max, Number(match[1]));
+  }
+  return `${base} ${Math.max(max, (element.regions || []).length) + 1}`;
 }
 
 // ---- polygon draft (page-only; never journaled until it closes) --------------
@@ -738,7 +756,11 @@ export function finishPolygonDraft() {
   state.polygonHover = null;
   state.selectedRegionIds = new Set([id]);
   state.expandedElements.add(element.id);
-  setRegionsFor(element.id, [...(element.regions || []), { id, rect, polygon }], "Added polygon region.");
+  setRegionsFor(
+    element.id,
+    [...(element.regions || []), { id, name: nextRegionName(element), rect, polygon }],
+    "Added polygon region.",
+  );
 }
 
 // Switch the region-edit tool (Select / Draw Rect / Draw Polygon). Leaving polygon

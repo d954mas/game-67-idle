@@ -13,7 +13,7 @@ import {
   setStatusLinks,
   state,
 } from "./app.js";
-import { screenToImagePoint } from "../../viewer/asset_tools_viewport.mjs";
+import { screenToImagePoint } from "./viewport.mjs";
 
 function pid() {
   return state.project.id;

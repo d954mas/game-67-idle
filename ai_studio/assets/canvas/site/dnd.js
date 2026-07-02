@@ -4,7 +4,7 @@
 // the viewport center. Pure input wiring over the shared actions.
 import { el, state } from "./app.js";
 import { addImageFiles, pasteImageBlob } from "./actions.js";
-import { screenToImagePoint } from "../../viewer/asset_tools_viewport.mjs";
+import { screenToImagePoint } from "./viewport.mjs";
 
 function dropWorldPoint(event) {
   const canvas = el("canvas");

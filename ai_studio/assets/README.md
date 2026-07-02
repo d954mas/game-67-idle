@@ -4,21 +4,19 @@ Reviewed AI Studio home for asset-related modules.
 
 Top-level groups:
 
-- `viewer/`: browser-facing asset surface. This is the clear visual group for
+- `gallery/`: browser-facing asset surface. This is the clear visual group for
   browsing registered asset sources, inspecting packs/assets, reviewing
   game-local assets, promoting keepers, pulling reusable assets into a game,
   and recording gallery sessions.
 - `tools/`: concrete asset work utilities. The 2D image pipeline is decomposed
   per media type under `tools/image/` (`sources`, `bg_fix`, `regions`, `slice`,
   `alpha_matte`, `alpha_dualplate`, `route`, over a shared `_bridge`), used by
-  agents plus the browser Asset Tools surface. The browser surface itself is
-  owned by `viewer/`. `tools/raster2d/` is a temporary re-export shim for the
-  canvas seam only (removed once the canvas migrates). Older source-sheet, crop,
-  and review tools stay in place until replaced stage by stage.
+  agents and the canvas module. Older source-sheet, crop, and review tools stay
+  in place until replaced stage by stage.
 - `canvas/`: multi-image canvas projects (Figma/Recraft-like). Every capability
   is one operation in a shared ops layer with two equal clients, the agent
   (CLI/import) and the thin browser page; `detect_regions` bridges to the image
-  tools (via the `tools/raster2d/` shim today) unmodified. See `canvas/README.md`.
+  tools (`tools/image/{regions,sources}`) unmodified. See `canvas/README.md`.
 - `backlog/`: temporary holding area for asset modules that still need a better
   decomposition. Storage, source registry, manifests, index, preview cache, and
   license guard live there until they are split into clearer groups.

@@ -7,7 +7,7 @@ Load this when searching, adding, promoting, pulling, or recording assets.
 - Global/private library: register an explicit external source in
   `ai_studio/assets/backlog/storage/sources/libraries.json`.
 - AI Studio storage code: `ai_studio/assets/backlog/storage/`.
-- AI Studio viewer/pull/promote UI/tooling: `ai_studio/assets/viewer/`.
+- AI Studio viewer/pull/promote UI/tooling: `ai_studio/assets/gallery/`.
 - Generated fast data: `tmp/ai_studio/assets/index`, `tmp/ai_studio/assets/snapshots`,
   and `tmp/ai_studio/assets/previews`.
 
@@ -38,7 +38,7 @@ Open `http://127.0.0.1:8765/asset_viewer/`.
 ## Pull Into A Game
 
 ```powershell
-node ai_studio/assets/viewer/pull.mjs --ids <asset-id> --to <game>/assets --apply
+node ai_studio/assets/gallery/pull.mjs --ids <asset-id> --to <game>/assets --apply
 ```
 
 Dry-run first if the destination is unclear. The game-local copy should keep a
@@ -51,7 +51,7 @@ Promote game-local or review-selected assets only after license/provenance are
 clear:
 
 ```powershell
-node ai_studio/assets/viewer/promote.mjs --manifest <review-manifest.json> --ids <ids> --source <source> --license <license> --origin <mine|ai|sourced> --apply
+node ai_studio/assets/gallery/promote.mjs --manifest <review-manifest.json> --ids <ids> --source <source> --license <license> --origin <mine|ai|sourced> --apply
 ```
 
 Required metadata:

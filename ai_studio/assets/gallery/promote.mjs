@@ -5,7 +5,7 @@
 // vendored into a project, computes integrity, copies the file + license, writes
 // pack.json/assets.jsonl metadata, and appends intake-log.md.
 //
-//   node ai_studio/assets/viewer/promote.mjs --manifest tmp/asset-review-ll/review-manifest.json \
+//   node ai_studio/assets/gallery/promote.mjs --manifest tmp/asset-review-ll/review-manifest.json \
 //        --ids "a,b,c" --source kenney --license CC0-1.0 --apply
 import { readFile, writeFile, mkdir, cp, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";

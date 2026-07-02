@@ -14,7 +14,7 @@ node ai_studio/assets/backlog/storage/search.mjs --kind model --query "<need>" -
 If a library asset fits, pull it into the game-local asset root:
 
 ```powershell
-node ai_studio/assets/viewer/pull.mjs --ids <asset-id> --to <game>/assets --apply
+node ai_studio/assets/gallery/pull.mjs --ids <asset-id> --to <game>/assets --apply
 ```
 
 Only source from free/public sources or generate when the library has no fit.

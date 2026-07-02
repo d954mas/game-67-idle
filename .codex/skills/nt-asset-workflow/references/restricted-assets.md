@@ -33,7 +33,7 @@ After preparation, accept with `--publish false` or the preserved intake flag.
 ## Reuse In A Game
 
 ```powershell
-node ai_studio/assets/viewer/pull.mjs --ids <asset-id> --to <game>/assets --apply
+node ai_studio/assets/gallery/pull.mjs --ids <asset-id> --to <game>/assets --apply
 ```
 
 Expected result:

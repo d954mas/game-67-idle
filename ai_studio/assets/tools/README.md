@@ -17,12 +17,11 @@ model, or checking a texture. They are not a separate top-level asset group.
 ## Groups
 
 - `lib/`: low-level shared Python helpers for asset tools.
-- `raster2d/`: Python-first staged structure for generated or sourced 2D image
-  work. It owns reusable pipeline tools and the API bridge used by the browser
-  Asset Tools surface in `../viewer/`: source images in `tmp`, background
-  normalization, region detection, manual region review, slicing, alpha cleanup,
-  review sheets, ZIP export, single selected-region PNG export, Slice 9 site
-  testing, and later promotion handoff.
+- `image/`: the 2D image pipeline, decomposed per media type over a shared
+  `_bridge` (source intake, background normalization, region detection, slicing,
+  key-matte and dual-plate alpha, routing). Used by agents and the `../canvas/`
+  module: source images in `tmp`, region JSON, sliced images, review sheets, and
+  ZIP/PNG exports.
 - `conversion/`: format conversion helpers such as OBJ/MTL to GLB.
 - `source_sheets/`: generated UI/icon/sprite source sheet normalization and
   intake audits before cropping.
@@ -36,5 +35,5 @@ model, or checking a texture. They are not a separate top-level asset group.
   generation and seam metrics.
 
 The older `source_sheets/`, `crop/`, `cutout/`, and `review_atlas/` folders
-remain in place until each step is moved into `raster2d/` with tests, site
-wiring, and callers updated.
+remain in place until each step is moved into `image/` with tests and callers
+updated.

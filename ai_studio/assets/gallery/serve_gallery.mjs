@@ -3,7 +3,7 @@
 // and the asset library at /lib/ - so the page references library files in place
 // (no media copy) for huge libraries.
 //
-//   node ai_studio/assets/viewer/serve_gallery.mjs --gallery tmp/lib-gallery --lib <libraryRoot> --port 8910
+//   node ai_studio/assets/gallery/serve_gallery.mjs --gallery tmp/lib-gallery --lib <libraryRoot> --port 8910
 import { createServer } from "node:http";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import { isAbsolute, normalize, relative, resolve } from "node:path";

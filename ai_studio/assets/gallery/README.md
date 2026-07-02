@@ -1,12 +1,13 @@
-﻿# Asset Viewer
+# Asset Viewer (Gallery)
 
-Browser-facing asset review module.
+Browser-facing asset browsing and review module.
 
 ## Role
 
-Asset Viewer creates inspectable galleries for the shared library or a game's
+The gallery creates inspectable galleries for the shared library or a game's
 assets. It is a user-facing surface plus supporting commands; it does not own
-the whole asset pipeline.
+the whole asset pipeline. It is the source-first browsing keystone: search the
+shared library here before generating anything new.
 
 Studio Shell hosts the launcher at:
 
@@ -29,41 +30,17 @@ The gallery header lets the user choose which source to display:
 The generated static-gallery command remains for review exports and standalone
 sharing, but it is not the normal browser entry.
 
-The same viewer module also owns the browser Asset Tools surface at:
-
-```text
-http://127.0.0.1:8765/asset_prep/
-```
-
-That surface presents one image workspace with pipeline stages: load a source
-image, choose how the background step should run, detect regions, review and
-name rect or polygon regions in a pan/zoom canvas, choose per-region alpha mode,
-preview the selected region crop and alpha result, preview the review sheet, and
-export slices as a ZIP or save one selected region as a PNG from the inspector
-or region context menu. The background choice is applied when `Run Detect` runs:
-`Auto sheet background` normalizes a sheet background before region detection,
-while `Whole image / no background` skips normalization and creates one
-full-image region. It also includes a separate Slice 9 test mode that can use
-either the whole loaded image or the selected region as the fixed-edge/
-stretch-center source. The processing code lives in `../tools/raster2d/`; this
-module owns only the browser surface.
-
-In the selected-region inspector, `key_matte` alpha preview shows the local
-matte result. `generation` alpha preview is a diagnostic view: it shows the
-matte approximation and marks edge pixels that the later generated/dual-plate
-alpha pass needs to solve.
-
 New games created through `games/new_game.mjs --id <game-id>` are
-registered automatically as `<game-id>/assets`. Asset Viewer does not scan root
+registered automatically as `<game-id>/assets`. The gallery does not scan root
 folders to guess games.
 
-Asset Viewer does not run filesystem watch mode. When assets are added or
+The gallery does not run filesystem watch mode. When assets are added or
 changed locally, use the `Refresh` button. It checks the selected source
 signature and only rebuilds the generated SQLite index when manifest metadata
-or source files changed. This keeps the viewer predictable and avoids background watcher
-state.
+or source files changed. This keeps the viewer predictable and avoids background
+watcher state.
 
-Asset Viewer does not own Blender preview rendering. Prepared preview images
+The gallery does not own Blender preview rendering. Prepared preview images
 come from `../backlog/storage/previews/`. Use `Refresh previews` after
 adding or changing assets; it creates or replaces only missing/stale preview
 cache files for the selected source, renders model thumbnails when Blender can
@@ -72,7 +49,7 @@ their `preview.json` sidecars live under `tmp/` and are not committed.
 
 Large library views use a scroll feed. The API still returns bounded batches,
 but the user does not manage pages or press a manual "show more" button. When
-the feed approaches the end of the loaded items, Asset Viewer asks the local API
+the feed approaches the end of the loaded items, the gallery asks the local API
 for the next slice. Those reads are served from `../backlog/storage/index/`,
 not by rescanning the asset source for each request.
 
@@ -83,18 +60,18 @@ endpoint as the shared library.
 ## Commands
 
 ```powershell
-node ai_studio/assets/viewer/build_review.mjs --mode library
-node ai_studio/assets/viewer/build_review.mjs --mode review --game <id> --base <git-ref>
-node ai_studio/assets/viewer/build_review.mjs --mode scan --path <asset-dir>
-node ai_studio/assets/viewer/serve_gallery.mjs --gallery tmp/lib-gallery --lib <library-root> --port 8910
+node ai_studio/assets/gallery/build_review.mjs --mode library
+node ai_studio/assets/gallery/build_review.mjs --mode review --game <id> --base <git-ref>
+node ai_studio/assets/gallery/build_review.mjs --mode scan --path <asset-dir>
+node ai_studio/assets/gallery/serve_gallery.mjs --gallery tmp/lib-gallery --lib <library-root> --port 8910
 node ai_studio/assets/backlog/storage/previews/render_library_previews.mjs --pack <pack>
 ```
 
 Promotion and reuse:
 
 ```powershell
-node ai_studio/assets/viewer/promote.mjs --manifest <review-manifest.json> --ids <ids> --source <source> --license <license>
-node ai_studio/assets/viewer/pull.mjs --ids <asset-ids> --to <game>/assets
+node ai_studio/assets/gallery/promote.mjs --manifest <review-manifest.json> --ids <ids> --source <source> --license <license>
+node ai_studio/assets/gallery/pull.mjs --ids <asset-ids> --to <game>/assets
 ```
 
 ## Ownership
@@ -104,12 +81,12 @@ node ai_studio/assets/viewer/pull.mjs --ids <asset-ids> --to <game>/assets
 - `api.mjs` lists available sources, opens the selected source in the gallery,
   rebuilds/queries `../backlog/storage/index/`, and maps gallery media back
   into the Studio Shell server.
-- Asset Viewer consumes registered sources through backlog storage helpers. It
+- The gallery consumes registered sources through backlog storage helpers. It
   does not own registry data: global library data currently lives in
   `../backlog/storage/sources/libraries.json`, template data in
   `templates/templates.json`, and game data in `games/games.json`.
 - `../backlog/storage/sources/libraries.mjs`, `templates.mjs`, and `games.mjs`
-  read and update those registries for the viewer and CLI commands.
+  read and update those registries for the gallery and CLI commands.
 - `viewer.js` and `viewer.css` are surface implementation details.
 - `serve_gallery.mjs` is kept because library mode can reference a large
   external asset library through `/lib/` instead of copying every model.
@@ -117,4 +94,6 @@ node ai_studio/assets/viewer/pull.mjs --ids <asset-ids> --to <game>/assets
 - `pull.mjs` copies selected shared-library assets into a game-local asset tree.
 - `record_gallery.mjs` captures a browser session of the gallery.
 
-The broader intake, conversion, and validators are separate asset modules.
+The broader intake, conversion, and validators are separate asset modules. The
+raster image tools (region detection, slicing, alpha) live in
+`../tools/image/` and the multi-image canvas editor lives in `../canvas/`.

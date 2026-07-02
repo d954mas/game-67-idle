@@ -3,7 +3,7 @@
 // hit-test region bodies and resize handles, and draw the bright numbered overlays.
 // The pointer state machine lives in workspace.js; every persisted change still
 // goes through the shared setRegions op. No business logic beyond geometry/drawing.
-import { imageToScreenPoint } from "../../viewer/asset_tools_viewport.mjs";
+import { imageToScreenPoint } from "./viewport.mjs";
 
 // The editable rect is the padded slice rect; fall back to the tight content_bbox
 // for older/foreign regions that only carry that.

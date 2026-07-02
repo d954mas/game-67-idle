@@ -61,8 +61,8 @@ Load only the route that matches the current task:
   `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open`.
 - Asset browsing and review:
   `http://127.0.0.1:8765/asset_viewer/`.
-- Manual image slicing and alpha prep:
-  `http://127.0.0.1:8765/asset_prep/`.
+- Multi-image canvas, region detect/slice, and composite export:
+  `http://127.0.0.1:8765/canvas`.
 - Architecture map validation report:
   `node ai_studio/architecture_map/validate_map.mjs`.
 

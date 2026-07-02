@@ -4,8 +4,8 @@
 
 It is not the owner of the tools it hosts. `architecture_map/` owns the map
 surface and map data. `taskboard/` owns the board surface and task state.
-`assets/viewer/` owns the asset browsing launcher, galleries, and the Asset
-Tools browser surface.
+`assets/gallery/` owns the asset browsing launcher and galleries.
+`assets/canvas/` owns the multi-image canvas editor surface.
 
 ## Owned Here
 
@@ -71,7 +71,6 @@ Current hosted surfaces:
 - `/architecture_map/` -> Architecture Map surface.
 - `/taskboard/` -> Taskboard surface.
 - `/asset_viewer/` -> Asset Viewer launcher.
-- `/asset_prep/` -> Asset Tools surface.
 - `/canvas` -> 302 redirect (query string preserved) to the Canvas surface
   (`ai_studio/assets/canvas/site/canvas.html`), owned by `assets/canvas/`.
 - `/quality/` -> Quality Checks surface.

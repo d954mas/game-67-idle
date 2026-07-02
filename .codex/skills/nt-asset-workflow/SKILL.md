@@ -38,7 +38,7 @@ decisions.
 2. Search before creating:
    `node ai_studio/assets/backlog/storage/search.mjs --query "<need>" --kind <kind> --json`.
 3. If reusing, pull from the library into the game:
-   `node ai_studio/assets/viewer/pull.mjs --ids <asset-id> --to <game>/assets --apply`.
+   `node ai_studio/assets/gallery/pull.mjs --ids <asset-id> --to <game>/assets --apply`.
 4. If adding/promoting, record `origin`, license, source page/path, author/vendor
    when known, and enough description/tags for future search.
 5. Refresh the selected source from Asset Viewer or CLI so new/unregistered files
@@ -63,8 +63,8 @@ decisions.
 
 ```powershell
 node ai_studio/assets/backlog/storage/search.mjs --query "wood crate" --kind model --json
-node ai_studio/assets/viewer/pull.mjs --ids <asset-id> --to <game>/assets --apply
-node ai_studio/assets/viewer/promote.mjs --manifest <review-manifest.json> --ids <ids> --source <source> --license <license> --origin <mine|ai|sourced> --apply
+node ai_studio/assets/gallery/pull.mjs --ids <asset-id> --to <game>/assets --apply
+node ai_studio/assets/gallery/promote.mjs --manifest <review-manifest.json> --ids <ids> --source <source> --license <license> --origin <mine|ai|sourced> --apply
 node ai_studio/assets/backlog/storage/previews/render_library_previews.mjs --pack <pack>
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
 ```

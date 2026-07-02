@@ -8,7 +8,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
 const exec = promisify(execFile);
-const TOOL = "ai_studio/assets/viewer/promote.mjs";
+const TOOL = "ai_studio/assets/gallery/promote.mjs";
 
 async function setup(extraAssets = []) {
   const root = await mkdtemp(join(tmpdir(), "promote-"));

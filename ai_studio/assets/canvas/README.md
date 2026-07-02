@@ -8,7 +8,7 @@ thin browser page. The tools are the product; the page is only a local interface
 
 This module owns canvas project persistence, the shared operation layer, its HTTP
 adapter, the agent CLI, and the thin page. It does not own the 2D image pipeline:
-`detect_regions` bridges to the existing `../tools/raster2d/` ops unmodified so the
+`detect_regions` bridges to the existing `../tools/image/` ops unmodified so the
 browser and an agent get identical pixels/regions.
 
 ## Layout
@@ -84,10 +84,10 @@ Every capability is one op in `ops.mjs`:
 - `createGroup` / `patchGroup` / `assignToGroup` / `deleteGroup` — group (screen)
   mutations, journaled; `renderGroup` — composited screen PNG export, not
   journaled. See **Groups = screens** below.
-- `detectRegions` — reads the element image, runs it through the raster2d
+- `detectRegions` — reads the element image, runs it through the image tools
   upload + detect pipeline, stores `element.regions` (and backfills
   `source_w`/`source_h`), records a `tool_runs` entry — journaled. Requires Python
-  (numpy + Pillow), as the rest of the raster2d pipeline.
+  (numpy + Pillow), as the rest of the image tools pipeline.
 - `sliceRegions({ projectId, elementId, regionIds? })` — crops the element's
   **stored** regions into new immutable content-addressed image elements, cropping
   each region's rect **verbatim** from the element's own pixels (so moved, resized,
@@ -142,7 +142,7 @@ handed-over `render_spec.json`, and a small `render_report.json`. It records a
 geometry change so it is **not** journaled. Compositing is done by our own Python
 tool `tools/render_group.py` (PIL): `ops.renderGroup` writes a render spec
 (absolute file paths, group bounds, scale, background, output/report paths) and
-spawns the script directly with the same robust Python discovery the raster2d
+spawns the script directly with the same robust Python discovery the image tools
 bridge uses (`AI_STUDIO_PYTHON`/`PYTHON` env, bundled runtime, `py -3.12`, then
 `python`). A direct child-process call is fine here because this tool is ours.
 Each element is drawn at its display box (`element.w`/`h`) scaled by `scale`,
@@ -158,9 +158,9 @@ path + the element's selected regions with their exact rects) and spawns the
 script once. Each region is cropped from the element's own pixels by its **stored**
 rect — no re-detection — so user-moved, resized, and hand-drawn regions (ids that
 never came from any detect run) all crop exactly where they sit. This replaced the
-earlier detect-then-export raster2d bridge, which re-normalized/keyed the pixels
+earlier detect-then-export image tools bridge, which re-normalized/keyed the pixels
 and re-derived geometry (two Python spawns); `detectRegions` still uses the
-raster2d bridge, only slice is ours.
+image tools bridge, only slice is ours.
 
 Each per-region spec entry is an **object** (`{ id, rect }`), not a bare rect, so a
 future polygonal shape (`{ shape: { type: "polygon", points: [...] } }`) slots in

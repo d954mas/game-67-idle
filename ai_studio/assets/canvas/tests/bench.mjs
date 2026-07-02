@@ -322,7 +322,7 @@ async function benchPythonOps() {
     await bench("python", "python spawn (detect_regions.py --help)", "n/a", {
       warmups: 0,
       runs: 3,
-      op: () => runPythonRaw(["ai_studio/assets/tools/raster2d/regions/detect_regions.py", "--help"]),
+      op: () => runPythonRaw(["ai_studio/assets/tools/image/regions/detect_regions.py", "--help"]),
     });
   } catch (error) {
     console.log(`  skip: python spawn overhead unavailable — ${error.message}`);

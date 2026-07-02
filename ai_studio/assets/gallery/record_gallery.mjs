@@ -5,7 +5,7 @@
 // Frames are encoded to mp4 with ffmpeg using their real timestamps (faithful
 // timing, no compositing).
 //
-//   node ai_studio/assets/viewer/record_gallery.mjs --url http://localhost:8910 --out tmp/gallery.mp4
+//   node ai_studio/assets/gallery/record_gallery.mjs --url http://localhost:8910 --out tmp/gallery.mp4
 import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, readdirSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
