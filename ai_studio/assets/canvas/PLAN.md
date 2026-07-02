@@ -63,18 +63,29 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **UX polish leftovers** (`T0224`, P2, debt) — multi-group inspector,
-   filled-body click-select, export suffix clear-in-place, shift-range in
-   region lists, clip ghost off-by-default + Alt peek, layers deep-nesting
-   pack, export button label count, batched addImages (multi-drop = 1
-   entry), lead's live-check notes.
-2. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
-   journal + `jumpHistory` op (CLI parity).
-3. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
+1. **History panel** (`T0204`, P2, IN FLIGHT) — Photoshop-style hideable
+   list over the journal + `jumpHistory` op (CLI parity).
+2. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
    builds on T0218's `_bridge` + pinned venv `pythonPath`.
-4. **Agent skill** (`T0226`, P2) — thin `nt-canvas-operations` skill so any
-   agent resolves `canvas://` refs and acts via CLI (pointers to README,
-   never duplicates).
+3. **Alpha on canvas** (`T0210`, image-tools track) — per-element alpha op
+   with method choice, regions optional; wings = acceptance asset.
+
+T0224 UX polish LANDED `d95fcf3b` (2026-07-03, → review): patchGroups
+batched op + tri-state multi-group inspector; filled-body click-select;
+export suffix clear-in-place (textInput allowEmpty, rename guards intact);
+shared rangeSelectIds (layers + regions); clip ghost OFF by default +
+Alt-hold peek; addImages batched op (multi-drop = 1 entry — one-entry law
+now exception-free); layers deep-nesting pack (collapse-by-default +
+selection-path auto-reveal, indent guides, draggable panel width); export
+label = top-level visible count. Tests 195→204. Mixed-selection click
+support added post-landing (`61e39efd` + layers toggles `5bf8bf60`,
+`b272730e`).
+
+T0226 agent skill LANDED `838f3d95` (2026-07-03, → review): thin
+`nt-canvas-operations` skill (.codex/skills + synced Claude surface) —
+canvas:// ref grammar, CLI routing, laws, README as single source. Live
+smoke passed: a fresh agent given ONLY a canvas:// ref resolved it and
+ran a journaled mutation unaided.
 
 T0219 groups v2 COMPLETE (2026-07-02 night, → review): flat Defold-style
 model (additive `parentId`/`order`/`clip`/`background`, NO stored tree;
