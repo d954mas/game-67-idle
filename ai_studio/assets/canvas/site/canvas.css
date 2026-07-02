@@ -279,13 +279,47 @@ button:disabled {
   min-height: 0;
 }
 
-#layers-panel.collapsed {
-  width: 44px;
+/* Collapsed = a slim vertical rail with an obvious re-open control (not an empty
+   strip): the header + list hide and the #layers-expand rail button takes over. */
+#layers-expand {
+  display: none;
 }
 
-#layers-panel.collapsed .panel-title,
+#layers-panel.collapsed {
+  width: 34px;
+}
+
+#layers-panel.collapsed header,
 #layers-panel.collapsed #layers-list {
   display: none;
+}
+
+#layers-panel.collapsed #layers-expand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  height: 100%;
+  padding: 10px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+#layers-panel.collapsed #layers-expand:hover {
+  background: var(--panel-soft);
+  color: var(--text);
+  border-color: transparent;
+}
+
+#layers-expand .rail-label {
+  writing-mode: vertical-rl;
+  text-orientation: mixed;
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 #layers-panel header {
@@ -312,15 +346,24 @@ button:disabled {
   line-height: 1.6;
 }
 
-#layers-panel.collapsed #layers-new-group {
-  display: none;
-}
-
 #layers-list {
   flex: 1;
   min-height: 0;
   overflow: auto;
   padding: 6px;
+  position: relative; /* anchors the reorder drop-line */
+  scrollbar-gutter: stable;
+}
+
+/* Reorder insertion indicator between sibling rows during a layers drag. */
+.layer-drop-line {
+  position: absolute;
+  height: 2px;
+  background: var(--blue);
+  border-radius: 2px;
+  pointer-events: none;
+  z-index: 3;
+  box-shadow: 0 0 4px rgba(119, 167, 255, 0.8);
 }
 
 .layers-empty {
@@ -504,6 +547,7 @@ button:disabled {
   overflow: auto;
   padding: 12px;
   min-height: 0;
+  scrollbar-gutter: stable;
 }
 
 .insp-nothing {
@@ -512,16 +556,72 @@ button:disabled {
   padding: 24px 0;
 }
 
-.insp-section {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  margin: 14px 0 8px;
+/* Titled collapsible section (Figma Design-tab style): a subtle top separator, a
+   header button with a chevron + title (+ optional count badge), and a body that
+   hides when collapsed. Full-bleed separators inside the padded inspector. */
+.insp-name {
+  margin-bottom: 10px;
 }
 
-.insp-section:first-child {
-  margin-top: 0;
+.insp-group {
+  margin: 0 -12px;
+  padding: 0 12px;
+  border-top: 1px solid var(--line);
+}
+
+.insp-group:first-of-type {
+  border-top: none;
+}
+
+.insp-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 0 8px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  color: var(--muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.insp-group-head:hover {
+  color: var(--text);
+  border-color: transparent;
+}
+
+.insp-chevron {
+  width: 12px;
+  font-size: 10px;
+  color: var(--muted);
+  transition: transform 0.12s ease;
+}
+
+.insp-group.collapsed .insp-chevron {
+  transform: rotate(-90deg);
+}
+
+.insp-group-title {
+  flex: 1;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.insp-group-body {
+  padding-bottom: 10px;
+}
+
+.insp-group.collapsed .insp-group-body {
+  display: none;
+}
+
+.insp-multi-title {
+  font-weight: 600;
+  margin-bottom: 10px;
 }
 
 .insp-field {
@@ -744,24 +844,51 @@ button:disabled {
   background: rgba(215, 161, 74, 0.2);
 }
 
-/* Inspector REGIONS section. */
-.insp-region-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.insp-region-head .badge {
-  color: var(--cyan);
-}
-
+/* Inspector REGIONS section. The list scrolls with a stable gutter (no layout
+   shift when the scrollbar appears) and a styled scrollbar consistent with the
+   panels. */
 .insp-regions {
   display: flex;
   flex-direction: column;
   gap: 1px;
   margin-bottom: 8px;
-  max-height: 220px;
-  overflow: auto;
+  max-height: 240px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* Custom scrollbars for the scrolling panels (consistent, non-shifting). */
+#inspector,
+#layers-list,
+.insp-regions {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+#inspector::-webkit-scrollbar,
+#layers-list::-webkit-scrollbar,
+.insp-regions::-webkit-scrollbar {
+  width: 10px;
+}
+
+#inspector::-webkit-scrollbar-track,
+#layers-list::-webkit-scrollbar-track,
+.insp-regions::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#inspector::-webkit-scrollbar-thumb,
+#layers-list::-webkit-scrollbar-thumb,
+.insp-regions::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 6px;
+  border: 2px solid var(--panel);
+}
+
+#inspector::-webkit-scrollbar-thumb:hover,
+#layers-list::-webkit-scrollbar-thumb:hover,
+.insp-regions::-webkit-scrollbar-thumb:hover {
+  background: #45525c;
 }
 
 .insp-region-row {
@@ -806,16 +933,20 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
+/* Generous, always-present delete target (~22px) — no hover-only reveal that would
+   move under the cursor, and the row reserves its width so nothing shifts. */
 .region-del {
   padding: 0;
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   line-height: 1;
+  font-size: 15px;
   border: none;
+  border-radius: 4px;
   background: transparent;
   color: var(--muted);
   flex: none;
-  opacity: 0;
+  opacity: 0.55;
 }
 
 .insp-region-row:hover .region-del,
@@ -825,12 +956,25 @@ button:disabled {
 
 .region-del:hover {
   color: var(--red);
+  background: rgba(225, 111, 111, 0.14);
 }
 
 .insp-region-actions {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-top: 8px;
+}
+
+.insp-region-btnrow {
+  display: flex;
+  gap: 6px;
+}
+
+.insp-btn-small {
+  flex: 1;
+  padding: 5px 6px;
+  font-size: 12px;
 }
 
 .insp-region-hint {

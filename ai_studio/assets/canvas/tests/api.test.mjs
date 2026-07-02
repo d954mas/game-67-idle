@@ -317,6 +317,32 @@ test("canvas API render-screen route composites a group PNG (skips without Pytho
   assert.equal(rendered.json().members, 1);
 });
 
+test("canvas API reorder route moves an element among its siblings (z-order)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Z API" })).json().project.id;
+  const add = async (name) =>
+    (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+      name,
+      bytes_base64: solidPng(4, 4).toString("base64"),
+    })).json().element.id;
+  const elA = await add("a.png");
+  await add("b.png");
+  await add("c.png");
+
+  // Send A (index 0) to the front (index 2).
+  const moved = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/elements/${elA}/reorder`, { index: 2 });
+  assert.equal(moved.status, 200);
+  assert.equal(moved.json().index, 2);
+  const after = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.deepEqual(after.elements.map((e) => e.name), ["b.png", "c.png", "a.png"]);
+
+  // Undo restores the original order in one step.
+  await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`);
+  const undone = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.deepEqual(undone.elements.map((e) => e.name), ["a.png", "b.png", "c.png"]);
+});
+
 test("canvas API returns an error for a missing project", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(ROOT);

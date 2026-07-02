@@ -1,10 +1,15 @@
-// Layers panel: a flat, group-aware tree. Ungrouped elements sit at the top level;
-// each group is a collapsible section (eye toggle + inline-rename name) with its
-// member elements indented beneath. An element with regions is itself expandable
-// (a caret reveals indented region rows whose numbers match the canvas badges and
-// the inspector). Clicking a row selects on the canvas (both ways through refresh);
-// dragging an element row onto a group header (or out to the top level) reassigns
-// it. Pure rendering/input — all mutations go through actions.
+// Layers panel: a flat, group-aware tree of ELEMENTS and GROUPS only (the region
+// list lives in the inspector now, not here). Ungrouped elements sit at the top
+// level; each group is a collapsible section (eye toggle + inline-rename name) with
+// its member elements indented beneath. Clicking a row selects on the canvas (both
+// ways through refresh); dragging a row reorders it among its siblings (a drop
+// between two rows, shown by an insertion line) or reparents it (a drop onto a
+// screen header / another group's row / the top level). Pure rendering/input — all
+// mutations go through actions.
+//
+// Render is structure-signature guarded: a selection-only change does not rebuild
+// the DOM, it only re-applies selection classes. That keeps a row's node stable
+// across the two clicks of a double-click, so double-click rename opens its editor.
 import {
   el,
   elementById,
@@ -14,7 +19,6 @@ import {
   memberElements,
   refresh,
   selectOnly,
-  selectRegion,
   state,
   toggleSelect,
   ungroupedElements,
@@ -23,16 +27,16 @@ import {
   assignElementsToGroup,
   createGroupOrDefault,
   renameElement,
-  renameRegion,
-  setElementVisible,
   renameGroup,
+  reorderElementTo,
+  setElementVisible,
   setGroupVisible,
 } from "./actions.js";
 import { inlineEdit } from "./inline.js";
 import { openContextMenu } from "./context_menu.js";
 
-// Pointer-based element-row reparent drag (kept deliberately simple).
-let layerDrag = null; // { id, startX, startY, active }
+// Pointer-based element-row drag (reparent OR reorder; kept deliberately simple).
+let layerDrag = null; // { id, name, rowEl, startX, startY, active }
 
 function eyeButton(visible, onToggle) {
   const button = document.createElement("button");
@@ -49,69 +53,7 @@ function eyeButton(visible, onToggle) {
   return button;
 }
 
-function caretButton(element, hasRegions) {
-  const button = document.createElement("button");
-  button.className = "caret";
-  button.type = "button";
-  if (!hasRegions) {
-    button.classList.add("empty");
-    button.disabled = true;
-    return button; // spacer, keeps names aligned with group rows
-  }
-  const expanded = state.expandedElements.has(element.id);
-  button.textContent = expanded ? "▾" : "▸";
-  button.title = expanded ? "Collapse regions" : "Expand regions";
-  button.addEventListener("mousedown", (event) => event.stopPropagation());
-  button.addEventListener("click", (event) => {
-    event.stopPropagation();
-    if (expanded) state.expandedElements.delete(element.id);
-    else state.expandedElements.add(element.id);
-    hooks.renderLayers();
-  });
-  return button;
-}
-
-function regionRow(element, region, index, indented) {
-  const row = document.createElement("div");
-  row.className = "layer-row region-row";
-  if (indented) row.classList.add("in-group");
-  row.dataset.groupId = element.groupId || "";
-  if (state.regionEditId === element.id && state.selectedRegionIds.has(region.id)) row.classList.add("selected");
-
-  const num = document.createElement("span");
-  num.className = "region-num";
-  num.textContent = String(index + 1);
-  row.appendChild(num);
-
-  const rect = region.rect || region.content_bbox || [0, 0, 0, 0];
-  const name = document.createElement("span");
-  name.className = "layer-name";
-  name.textContent = region.name || `${rect[2]}×${rect[3]}`;
-  name.title = `region ${index + 1}: ${rect[2]}×${rect[3]} @ (${rect[0]}, ${rect[1]})`;
-  row.appendChild(name);
-
-  row.addEventListener("click", (event) => {
-    selectRegion(element.id, region.id, event.shiftKey || event.ctrlKey || event.metaKey);
-    refresh();
-  });
-  // Double-click the region row to rename it (journaled via setRegions).
-  row.addEventListener("dblclick", (event) => {
-    event.stopPropagation();
-    inlineEdit(name, region.name || "", (next) => renameRegion(element.id, region.id, next));
-  });
-  row.addEventListener("contextmenu", (event) => {
-    event.preventDefault();
-    selectRegion(element.id, region.id, false);
-    refresh();
-    openContextMenu(event.clientX, event.clientY, { kind: "region", elementId: element.id, regionId: region.id });
-  });
-  return row;
-}
-
 function elementRow(element, indented) {
-  const wrap = document.createElement("div");
-  wrap.className = "layer-item";
-
   const row = document.createElement("div");
   row.className = "layer-row";
   row.dataset.elementId = element.id;
@@ -119,15 +61,16 @@ function elementRow(element, indented) {
   if (indented) row.classList.add("indented");
   if (state.selectedIds.has(element.id)) row.classList.add("selected");
 
-  const regions = element.regions || [];
-  const hasRegions = regions.length > 0;
-  row.appendChild(caretButton(element, hasRegions));
+  // Spacer keeps element names aligned with group rows (which carry a caret).
+  const spacer = document.createElement("span");
+  spacer.className = "caret empty";
+  row.appendChild(spacer);
 
   const thumb = document.createElement("img");
   thumb.className = "thumb";
   thumb.src = fileUrl(element);
   thumb.alt = "";
-  thumb.draggable = false; // never start a native image drag when reparenting
+  thumb.draggable = false; // never start a native image drag when dragging a row
   row.appendChild(thumb);
 
   const name = document.createElement("span");
@@ -135,18 +78,19 @@ function elementRow(element, indented) {
   name.textContent = element.name || element.id;
   name.title = element.name || element.id;
   row.appendChild(name);
-  // Rename on double-click anywhere on the row (not the eye/caret buttons).
+  // Rename on double-click anywhere on the row (not the eye button).
   row.addEventListener("dblclick", (event) => {
     if (event.target.closest("button")) return;
     event.stopPropagation();
     inlineEdit(name, element.name || "", (next) => renameElement(element.id, next));
   });
 
-  if (hasRegions) {
+  const regions = element.regions || [];
+  if (regions.length) {
     const badge = document.createElement("span");
     badge.className = "badge";
     badge.textContent = `${regions.length}r`;
-    badge.title = `${regions.length} region(s)`;
+    badge.title = `${regions.length} region(s) — edit them in the inspector`;
     row.appendChild(badge);
   }
 
@@ -176,12 +120,7 @@ function elementRow(element, indented) {
     refresh();
     openContextMenu(event.clientX, event.clientY, { kind: "element", elementId: element.id });
   });
-  wrap.appendChild(row);
-
-  if (hasRegions && state.expandedElements.has(element.id)) {
-    regions.forEach((region, index) => wrap.appendChild(regionRow(element, region, index, indented)));
-  }
-  return wrap;
+  return row;
 }
 
 function groupSection(group) {
@@ -198,6 +137,7 @@ function groupSection(group) {
   caret.className = "caret";
   caret.type = "button";
   caret.textContent = collapsed ? "▸" : "▾"; // ▸ / ▾
+  caret.addEventListener("mousedown", (event) => event.stopPropagation());
   caret.addEventListener("click", (event) => {
     event.stopPropagation();
     if (collapsed) state.collapsedGroups.delete(group.id);
@@ -247,16 +187,55 @@ function groupSection(group) {
   return wrap;
 }
 
+// ---- structure-signature guarded render --------------------------------------
+
+let lastLayersSig = null;
+
+// Everything that changes which rows exist and their text/badges/visibility —
+// NOT the selection (that is applied as a lightweight overlay so selection clicks
+// never rebuild the DOM out from under a pending double-click).
+function layersSignature() {
+  const parts = [];
+  for (const e of ungroupedElements()) {
+    parts.push(`e:${e.id}:${e.name || ""}:${e.visible !== false ? 1 : 0}:${(e.regions || []).length}`);
+  }
+  for (const g of groups()) {
+    const collapsed = state.collapsedGroups.has(g.id);
+    parts.push(`g:${g.id}:${g.name || ""}:${g.visible !== false ? 1 : 0}:${collapsed ? 1 : 0}`);
+    if (!collapsed) {
+      for (const m of memberElements(g.id)) {
+        parts.push(` m:${m.id}:${m.name || ""}:${m.visible !== false ? 1 : 0}:${(m.regions || []).length}`);
+      }
+    }
+  }
+  return parts.join("\n");
+}
+
+function applyLayersSelection() {
+  const list = el("layers-list");
+  if (!list) return;
+  for (const row of list.querySelectorAll(".layer-row[data-element-id]")) {
+    row.classList.toggle("selected", state.selectedIds.has(row.dataset.elementId));
+  }
+  for (const head of list.querySelectorAll(".group-head[data-group-id]")) {
+    head.classList.toggle("selected", state.selectedGroupId === head.dataset.groupId);
+  }
+}
+
 export function renderLayers() {
   const list = el("layers-list");
   if (!list) return;
-  // An open inline rename must survive selection-driven re-renders, but a COMMITTED
-  // edit blurs the input and hands focus back to the stage; only skip the rebuild
-  // while the editor is still FOCUSED. (Skipping on mere presence froze the tree: the
-  // committed input is never removed, so every later render — including undo's —
-  // short-circuited and the layers/region rows never reflected the change.)
+  // An open inline rename must survive selection-driven re-renders; only skip the
+  // rebuild while the editor is still FOCUSED (a committed edit blurs to the stage).
   const editing = list.querySelector(".inline-input");
   if (editing && document.activeElement === editing) return;
+
+  const sig = layersSignature();
+  if (sig === lastLayersSig && list.childElementCount) {
+    applyLayersSelection();
+    return;
+  }
+  lastLayersSig = sig;
   list.replaceChildren();
   const ungrouped = ungroupedElements();
   const groupList = groups();
@@ -269,11 +248,13 @@ export function renderLayers() {
   }
   for (const element of ungrouped) list.appendChild(elementRow(element, false));
   for (const group of groupList) list.appendChild(groupSection(group));
+  applyLayersSelection();
 }
 
-// ---- reparent drag -----------------------------------------------------------
+// ---- drag: reparent + reorder ------------------------------------------------
 
 let dragGhost = null;
+let dropLine = null;
 
 function makeGhost(text, x, y) {
   removeGhost();
@@ -298,37 +279,91 @@ function removeGhost() {
   }
 }
 
-// The drop target under the pointer: a group id (a group header or any row tagged
-// with that group), null for ANY other spot in the panel (top-level rows, empty
-// space, or the panel header) so dropping to root is always reachable, or undefined
-// only when the pointer left the panel entirely.
-function dropTarget(clientX, clientY) {
+function scopeOf(id) {
+  const element = elementById(id);
+  return element ? element.groupId || null : null;
+}
+
+// Is this drag a single element (reorder-eligible) or a 2+ multi-selection drag
+// (reparent only — reordering many at once is out of scope)?
+function isSingleDrag(dragId) {
+  return !(state.selectedIds.has(dragId) && state.selectedIds.size > 1);
+}
+
+// Resolve the drop under the pointer into a plan:
+//   { kind: "reparent", groupId }  — join a screen (or null = top level)
+//   { kind: "reorder", scope, overId, after, rect } — move among same-scope siblings
+//   { kind: "none" } — outside the panel
+function dropPlan(clientX, clientY, dragId) {
   const node = document.elementFromPoint(clientX, clientY);
-  if (!node) return undefined;
+  if (!node || !node.closest("#layers-panel")) return { kind: "none" };
   const head = node.closest(".group-head");
-  if (head && head.dataset.groupId) return head.dataset.groupId;
-  const row = node.closest(".layer-row");
-  if (row && row.dataset.groupId) return row.dataset.groupId;
-  if (node.closest("#layers-panel")) return null; // panel header / empty space / top-level row = root
-  return undefined;
+  if (head && head.dataset.groupId) return { kind: "reparent", groupId: head.dataset.groupId };
+  const row = node.closest(".layer-row[data-element-id]");
+  const dragScope = scopeOf(dragId);
+  if (row) {
+    const overId = row.dataset.elementId;
+    const overScope = row.dataset.groupId || null;
+    if (overScope === dragScope && overId !== dragId && isSingleDrag(dragId)) {
+      const rect = row.getBoundingClientRect();
+      const after = clientY > rect.top + rect.height / 2;
+      return { kind: "reorder", scope: dragScope, overId, after, rect };
+    }
+    if (overScope !== dragScope) return { kind: "reparent", groupId: overScope };
+    return { kind: "reparent", groupId: overScope }; // same-scope, same/multi -> no-op reparent
+  }
+  return { kind: "reparent", groupId: null }; // panel header / empty space / gap = top level
+}
+
+// Target sibling index for a reorder plan (standard remove-then-insert math).
+function reorderTargetIndex(dragId, plan) {
+  const siblings = plan.scope ? memberElements(plan.scope) : ungroupedElements();
+  const overIndex = siblings.findIndex((e) => e.id === plan.overId);
+  const dragIndex = siblings.findIndex((e) => e.id === dragId);
+  if (overIndex < 0 || dragIndex < 0) return null;
+  let insert = plan.after ? overIndex + 1 : overIndex;
+  if (dragIndex < insert) insert -= 1; // account for removing the dragged row first
+  insert = Math.max(0, Math.min(siblings.length - 1, insert));
+  return insert === dragIndex ? null : insert;
 }
 
 function clearDropHint() {
   const panel = el("layers-panel");
   if (panel) panel.classList.remove("drop-root");
   for (const node of document.querySelectorAll(".group-head.drop-target")) node.classList.remove("drop-target");
+  if (dropLine && dropLine.parentNode) dropLine.parentNode.removeChild(dropLine);
 }
 
-function updateDropHint(clientX, clientY) {
+function showDropLine(rect, after) {
+  const list = el("layers-list");
+  if (!list) return;
+  if (!dropLine) {
+    dropLine = document.createElement("div");
+    dropLine.className = "layer-drop-line";
+  }
+  const listRect = list.getBoundingClientRect();
+  const y = (after ? rect.bottom : rect.top) - listRect.top + list.scrollTop;
+  dropLine.style.top = `${y}px`;
+  dropLine.style.left = `${rect.left - listRect.left}px`;
+  dropLine.style.width = `${rect.width}px`;
+  list.appendChild(dropLine);
+}
+
+function updateDropHint(clientX, clientY, dragId) {
   clearDropHint();
-  const target = dropTarget(clientX, clientY);
-  if (target === undefined) return;
-  if (target === null) {
-    el("layers-panel").classList.add("drop-root"); // "drop to top level" indicator
+  const plan = dropPlan(clientX, clientY, dragId);
+  if (plan.kind === "reorder") {
+    showDropLine(plan.rect, plan.after);
     return;
   }
-  const head = document.querySelector(`.group-head[data-group-id="${target}"]`);
-  if (head) head.classList.add("drop-target");
+  if (plan.kind === "reparent") {
+    if (plan.groupId === null) {
+      el("layers-panel").classList.add("drop-root");
+      return;
+    }
+    const head = document.querySelector(`.group-head[data-group-id="${plan.groupId}"]`);
+    if (head) head.classList.add("drop-target");
+  }
 }
 
 function onLayerMouseMove(event) {
@@ -342,7 +377,7 @@ function onLayerMouseMove(event) {
     makeGhost(multi ? `${state.selectedIds.size} layers` : layerDrag.name, event.clientX, event.clientY);
   }
   moveGhost(event.clientX, event.clientY);
-  updateDropHint(event.clientX, event.clientY);
+  updateDropHint(event.clientX, event.clientY, layerDrag.id);
 }
 
 function onLayerMouseUp(event) {
@@ -354,17 +389,41 @@ function onLayerMouseUp(event) {
   document.body.classList.remove("layer-dragging");
   clearDropHint();
   if (!drag.active) return; // a plain click — let the row's click handler select
-  const target = dropTarget(event.clientX, event.clientY);
-  if (target === undefined) return; // dropped outside the panel: no change
-  // Move the whole selection when the dragged row is part of a 2+ selection.
+
+  const plan = dropPlan(event.clientX, event.clientY, drag.id);
+  if (plan.kind === "none") return;
+
+  if (plan.kind === "reorder") {
+    const target = reorderTargetIndex(drag.id, plan);
+    if (target !== null) reorderElementTo(drag.id, target);
+    return;
+  }
+
+  // Reparent (single row, or the whole selection when the dragged row is in a 2+ set).
+  const groupId = plan.groupId ?? null;
   const ids = state.selectedIds.has(drag.id) && state.selectedIds.size > 1 ? [...state.selectedIds] : [drag.id];
-  // Skip a no-op drop (every element already sits in the target).
   const allMatch = ids.every((id) => {
     const element = elementById(id);
-    return element && (element.groupId || null) === (target || null);
+    return element && (element.groupId || null) === (groupId || null);
   });
-  if (allMatch) return;
-  assignElementsToGroup(ids, target);
+  if (allMatch) return; // no-op drop (already in the target scope)
+  assignElementsToGroup(ids, groupId);
+}
+
+// ---- collapse rail -----------------------------------------------------------
+
+const LAYERS_COLLAPSE_KEY = "canvas.layersCollapsed";
+
+function setLayersCollapsed(collapsed) {
+  const panel = el("layers-panel");
+  if (!panel) return;
+  panel.classList.toggle("collapsed", collapsed);
+  try {
+    localStorage.setItem(LAYERS_COLLAPSE_KEY, collapsed ? "1" : "0");
+  } catch {
+    // Private mode / disabled storage: collapse still works this session.
+  }
+  hooks.renderCanvas(); // the stage width changed — resize + repaint the canvas
 }
 
 export function initLayers() {
@@ -373,6 +432,17 @@ export function initLayers() {
   // empty default-size screen when nothing is selected.
   const newGroupBtn = el("layers-new-group");
   if (newGroupBtn) newGroupBtn.addEventListener("click", () => createGroupOrDefault("New screen"));
+
+  // Collapse to a slim rail (header ☰) / re-open from the rail (icon button).
+  const panel = el("layers-panel");
+  try {
+    if (panel && localStorage.getItem(LAYERS_COLLAPSE_KEY) === "1") panel.classList.add("collapsed");
+  } catch {
+    // ignore storage errors
+  }
+  el("layers-collapse")?.addEventListener("click", () => setLayersCollapsed(true));
+  el("layers-expand")?.addEventListener("click", () => setLayersCollapsed(false));
+
   window.addEventListener("mousemove", onLayerMouseMove);
   window.addEventListener("mouseup", onLayerMouseUp);
 }

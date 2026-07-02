@@ -266,6 +266,59 @@ export function removeElement(root, projectId, elementId) {
   return { project, removed: result.removed };
 }
 
+// Move an element to a target index AMONG ITS SIBLINGS (same parent scope: the
+// root-level ungrouped elements, or its group's members). Element array order IS
+// the paint/z-order everywhere — the canvas paints elements() in array order and a
+// group's render/export filters its members preserving that order — so this permutes
+// only the sibling subsequence within the flat-array slots those siblings already
+// occupy, leaving every other element's absolute position untouched. `index` is
+// 0-based among siblings (0 = back / painted first, siblings.length-1 = front /
+// painted last) and is clamped into range. One journal entry; undo restores the
+// exact previous order. Groups (screens) keep their own array order — element
+// z-order is the must-have here; reordering screens would be its own op.
+export function reorderElement(root, { projectId, elementId, index } = {}) {
+  if (!projectId) throw new Error("reorderElement requires projectId");
+  if (!elementId) throw new Error("reorderElement requires elementId");
+  if (!Number.isFinite(Number(index))) throw new Error("reorderElement requires a numeric index");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const list = Array.isArray(before.elements) ? before.elements : [];
+  const moved = list.find((item) => item.id === elementId);
+  if (!moved) throw new Error(`element not found: ${elementId}`);
+  const scope = moved.groupId || null;
+  const sameScope = (item) => (item.groupId || null) === scope;
+
+  // Siblings in current paint order + the flat-array slots they occupy.
+  const siblings = list.filter(sameScope);
+  const slots = [];
+  list.forEach((item, i) => {
+    if (sameScope(item)) slots.push(i);
+  });
+  const from = siblings.findIndex((item) => item.id === elementId);
+  const target = Math.max(0, Math.min(siblings.length - 1, Math.round(Number(index))));
+  if (from === target) return { project: before, element: moved, index: target }; // no-op
+
+  const nextSiblings = siblings.slice();
+  nextSiblings.splice(from, 1);
+  nextSiblings.splice(target, 0, moved);
+  // Pour the reordered siblings back into their original slots; non-siblings stay put.
+  const nextElements = list.slice();
+  slots.forEach((slotIndex, i) => {
+    nextElements[slotIndex] = nextSiblings[i];
+  });
+
+  const after = updateProject(root, projectId, { elements: nextElements });
+  const project = commitMutation(root, projectId, {
+    op: "reorderElement",
+    args_summary: { elementId, index: target, scope },
+    before,
+    after,
+    startedAt,
+  });
+  const element = (project.elements || []).find((item) => item.id === elementId);
+  return { project, element, index: target };
+}
+
 // Replace an element's regions array (the ADJUST/SELECT step before slicing).
 // Validates each region carries an id and an in-source-bounds integer rect while
 // preserving any extra fields the detector/slicer attach (content_bbox, area_px,

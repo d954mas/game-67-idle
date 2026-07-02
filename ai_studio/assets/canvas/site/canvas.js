@@ -23,10 +23,14 @@ import {
   state,
 } from "./app.js";
 import {
+  bringElementForward,
+  bringElementToFront,
   createGroupFromSelection,
   deleteSelectedElements,
   deleteSelectedRegions,
   redo,
+  sendElementBackward,
+  sendElementToBack,
   undo,
 } from "./actions.js";
 import { initHome, render as renderHome } from "./home.js";
@@ -98,6 +102,13 @@ function isTypingTarget(target) {
   return /^(input|textarea|select)$/i.test(target && target.tagName ? target.tagName : "");
 }
 
+// The single selected element id for z-order shortcuts, or null (multi/none, or in
+// region-edit mode where the keys belong to region work, not layer ordering).
+function soloElementId() {
+  if (state.regionEditId || state.selectedGroupId) return null;
+  return state.selectedIds.size === 1 ? [...state.selectedIds][0] : null;
+}
+
 function onKeyDown(event) {
   // Shortcuts match physical keys (event.code), NOT event.key: event.key is
   // layout-dependent — under a Cyrillic layout Ctrl+Z arrives as key "я", the
@@ -124,6 +135,21 @@ function onKeyDown(event) {
   if (meta && code === "KeyG") {
     event.preventDefault();
     createGroupFromSelection("New screen");
+    return;
+  }
+  // Z-order by physical key (event.code so it works on any layout): Ctrl+] forward,
+  // Ctrl+[ backward, add Alt for to-front / to-back. Applies to a single selected
+  // element (z-order of one layer among its siblings), never in region-edit mode.
+  if (meta && code === "BracketRight") {
+    event.preventDefault();
+    const id = soloElementId();
+    if (id) (event.altKey ? bringElementToFront : bringElementForward)(id);
+    return;
+  }
+  if (meta && code === "BracketLeft") {
+    event.preventDefault();
+    const id = soloElementId();
+    if (id) (event.altKey ? sendElementToBack : sendElementBackward)(id);
     return;
   }
   if (meta) return; // leave other browser shortcuts alone

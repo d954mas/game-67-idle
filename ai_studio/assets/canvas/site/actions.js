@@ -112,6 +112,60 @@ export function deleteSelectedElements() {
   return deleteElements([...state.selectedIds]);
 }
 
+// ---- z-order (element ordering) ----------------------------------------------
+
+// Sibling elements of `element` (same group scope) in paint/z-order. The op works
+// on an absolute sibling index; these page helpers only translate a Figma-style
+// intent (forward/backward/front/back) into that index and call the one reorder op.
+function siblingsOf(element) {
+  const scope = element.groupId || null;
+  return elements().filter((item) => (item.groupId || null) === scope);
+}
+
+// Move one element to a target sibling index (0 = back / painted first). One
+// journaled op; undo restores the exact previous order.
+export async function reorderElementTo(id, index) {
+  try {
+    await api("POST", `/projects/${pid()}/elements/${id}/reorder`, { index });
+    await reloadProject();
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+function nudgeZ(id, delta) {
+  const element = elements().find((item) => item.id === id);
+  if (!element) return undefined;
+  const siblings = siblingsOf(element);
+  const from = siblings.findIndex((item) => item.id === id);
+  const target = from + delta;
+  if (target < 0 || target >= siblings.length) return undefined; // already at the edge
+  return reorderElementTo(id, target);
+}
+
+function edgeZ(id, edge) {
+  const element = elements().find((item) => item.id === id);
+  if (!element) return undefined;
+  const siblings = siblingsOf(element);
+  const from = siblings.findIndex((item) => item.id === id);
+  const target = edge === "front" ? siblings.length - 1 : 0;
+  if (from === target) return undefined;
+  return reorderElementTo(id, target);
+}
+
+export function bringElementForward(id) {
+  return nudgeZ(id, +1);
+}
+export function sendElementBackward(id) {
+  return nudgeZ(id, -1);
+}
+export function bringElementToFront(id) {
+  return edgeZ(id, "front");
+}
+export function sendElementToBack(id) {
+  return edgeZ(id, "back");
+}
+
 export async function detectRegionsFor(id) {
   try {
     setStatus("Detecting regions...");

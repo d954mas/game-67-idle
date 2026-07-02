@@ -21,6 +21,7 @@
 //   GET    /api/canvas/projects/<id>/history
 //   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible}
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/regions {regions}   (replace)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/reorder {index}     (z-order)
 //   DELETE /api/canvas/projects/<id>/elements/<eid>
 //   GET    /api/canvas/projects/<id>/files/<name>  (image bytes, path-confined)
 //   GET    /api/canvas/projects/<id>/export/<...>  (export files, path-confined)
@@ -47,6 +48,7 @@ import {
   redoOp,
   removeElement,
   renderGroup,
+  reorderElement,
   resolveProjectFile,
   resolveProjectPath,
   setRegions,
@@ -302,6 +304,14 @@ export function createCanvasApi(root) {
         const body = await readJsonBody(req);
         const regions = Array.isArray(body) ? body : body.regions;
         sendMutation(200, setRegions(root, { projectId: id, elementId, regions }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/reorder  (z-order: move to sibling index)
+      if (parts.length === 7 && sub === "elements" && parts[6] === "reorder" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, reorderElement(root, { projectId: id, elementId, index: body.index }));
         return true;
       }
 

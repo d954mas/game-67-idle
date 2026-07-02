@@ -47,6 +47,7 @@ import {
   redoOp,
   removeElement,
   renderGroup,
+  reorderElement,
   setRegions,
   sliceRegions,
   undoOp,
@@ -75,7 +76,7 @@ function print(value) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|regions-set|regions-show|slice|export|group-create|group-move|group-set|group-assign|group-delete|render-screen|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|element-reorder|regions-set|regions-show|slice|export|group-create|group-move|group-set|group-assign|group-delete|render-screen|undo|redo|history>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -86,6 +87,7 @@ function usage() {
   move <id> --element <eid> --x <n> --y <n>
   element-set <id> --element <eid> [--name <name>] [--visible true|false]
   element-remove <id> --element <eid>
+  element-reorder <id> --element <eid> --index <n>   (z-order among siblings; 0 = back)
   regions-set <id> --element <eid> --json <path>   (JSON: a regions array or {regions:[...]})
   regions-show <id> --element <eid>
   slice <id> --element <eid> [--regions r1,r2]
@@ -152,6 +154,12 @@ async function runCommand(command, id, positional, flags) {
       if (!id) fail("element-remove requires <id>");
       if (!flags.element) fail("element-remove requires --element <eid>");
       return print(removeElement(repoRoot, id, flags.element));
+    }
+    case "element-reorder": {
+      if (!id) fail("element-reorder requires <id>");
+      if (!flags.element) fail("element-reorder requires --element <eid>");
+      if (flags.index === undefined || flags.index === "true") fail("element-reorder requires --index <n>");
+      return print(reorderElement(repoRoot, { projectId: id, elementId: flags.element, index: Number(flags.index) }));
     }
     case "regions-set": {
       if (!id) fail("regions-set requires <id>");

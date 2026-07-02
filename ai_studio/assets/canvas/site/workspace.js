@@ -782,10 +782,7 @@ export function initWorkspace() {
     inlineEdit(title, state.project.title, (next) => renameProject(next));
   });
 
-  el("layers-collapse").addEventListener("click", () => {
-    el("layers-panel").classList.toggle("collapsed");
-    render();
-  });
+  // Layers-panel collapse/expand is owned by layers_panel.js (persisted + rail).
 
   window.addEventListener("resize", () => {
     if (state.project) render();

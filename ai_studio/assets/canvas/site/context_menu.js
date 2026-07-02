@@ -3,19 +3,20 @@
 // an existing action. The menu is positioned at the pointer, clamped to the
 // viewport, supports one level of hover submenu ("Move to screen"), and closes on
 // click-away or Escape. Pure rendering/input.
-import { el, elementById, enterRegionEdit, groupById, groups, refresh, regionCount, setStatus, state } from "./app.js";
+import { el, elementById, enterRegionEdit, groupById, groups, refresh, setStatus, state } from "./app.js";
 import {
-  addImageFiles,
   assignElementsToGroup,
+  bringElementForward,
+  bringElementToFront,
   createGroupFromSelection,
   deleteElements,
   deleteGroupAction,
   deleteRegion,
-  detectRegionsFor,
   exportElementIds,
   pasteImageBlob,
   renderScreen,
-  setElementVisible,
+  sendElementBackward,
+  sendElementToBack,
   setGroupVisible,
   sliceRegionsFor,
   ungroup,
@@ -100,14 +101,26 @@ function moveToScreenItems(elementId) {
   return items;
 }
 
+// "Order ▸" submenu: the four Figma z-order moves for one element (same actions as
+// the Ctrl+]/[ shortcuts; each no-ops harmlessly when already at that edge).
+function orderItems(elementId) {
+  return [
+    { label: "Bring to front", onClick: () => bringElementToFront(elementId) },
+    { label: "Bring forward", onClick: () => bringElementForward(elementId) },
+    { label: "Send backward", onClick: () => sendElementBackward(elementId) },
+    { label: "Send to back", onClick: () => sendElementToBack(elementId) },
+  ];
+}
+
 function itemsFor(target) {
   if (target.kind === "element") {
     const element = elementById(target.elementId);
     if (!element) return [];
-    const visible = element.visible !== false;
-    const hasRegions = regionCount(element) > 0;
+    // Diet (T0217): a short menu of frequent object actions. Region work is one
+    // "Edit regions" entry (double-click is the primary path; detect/slice/add live
+    // in the inspector Regions section); rename is double-click, hide is the layers
+    // eye dot. Export stays until T0206's inspector panel lands.
     const items = [
-      { label: "Detect regions", onClick: () => detectRegionsFor(element.id) },
       {
         // Enabled for ANY image so a fresh sheet can draw its FIRST region in mode B.
         label: "Edit regions",
@@ -116,22 +129,22 @@ function itemsFor(target) {
           refresh();
         },
       },
-      { label: "Slice regions", disabled: !hasRegions, onClick: () => sliceRegionsFor(element.id) },
-      { label: "Export", onClick: () => exportElementIds([element.id]) },
+      { label: "Export", onClick: () => exportElementIds(targetElementIds(element.id)) },
     ];
     // Right-clicking a selected element keeps the whole multi-selection (see
-    // workspace.js onContextMenu), so a 2+ selection offers the grouping shortcut.
+    // workspace.js onContextMenu): a 2+ selection offers grouping; a single element
+    // offers z-order (ambiguous across a multi-selection, so hidden there).
     if (state.selectedIds.size >= 2) {
       items.push({ label: "Group into screen", onClick: () => createGroupFromSelection("New screen") });
+    } else {
+      items.push({ label: "Order", submenu: orderItems(element.id) });
     }
     if (groups().length || element.groupId) {
       items.push({ label: "Move to screen", submenu: moveToScreenItems(element.id) });
     }
     items.push(
-      { label: "Rename", onClick: () => focusInspectorName() },
-      { label: visible ? "Hide" : "Show", onClick: () => setElementVisible(element.id, !visible) },
       { separator: true },
-      { label: "Delete", danger: true, onClick: () => deleteElements([element.id]) },
+      { label: "Delete", danger: true, onClick: () => deleteElements(targetElementIds(element.id)) },
     );
     return items;
   }
