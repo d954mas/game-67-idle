@@ -63,21 +63,24 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **Groups** (`T0219`, P1, DESIGN SETTLED 2026-07-02, building) — flat
-   Defold-style model (additive `parentId`/`order`/`clip`/`background`
-   fields, NO stored tree; paint order computed in shared `tree.mjs`; v1
-   projects open with zero converter), Figma selection (click = top-most
-   group, dbl-click drills, Ctrl+click deep-selects; lead's calls). Four
-   increments: foundation+background → group z-order → nesting+selection →
-   clip. Full design record in the T0219 task. Slice-group + delete-group
-   already landed ahead of it (`59eb9df0`).
-2. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
+1. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
    busy spinner, input never blocked, max-N concurrent long ops with a
    visible queue.
-3. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
+2. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
    journal + `jumpHistory` op (CLI parity).
-4. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
+3. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
    builds on T0218's `_bridge` + pinned venv `pythonPath`.
+
+T0219 groups v2 COMPLETE (2026-07-02 night, → review): flat Defold-style
+model (additive `parentId`/`order`/`clip`/`background`, NO stored tree;
+paint order computed in shared `tree.mjs`; v1 projects open with zero
+converter) + Figma selection (click = top-most group at scope, dbl-click
+drills, Ctrl+click deep-selects, Esc steps up; lead's calls). Landed in four
+increments: `64965a8d` foundation+background, `5e7a037e` group z-order
+(reorderNode over merged siblings), `f9e9ec0f` nesting+selection
+(reparentGroup w/ cycle guard, subtree cascades, recursive render,
+top-level-only export), `7a4a2a49` clip (nested intersection, ghost hint).
+Tests 110→159. Full design record + known compromises in the T0219 task.
 
 T0200 perf frontend-churn LANDED `e37d8a5a` (2026-07-02 night): op responses
 carry `history{seq,canUndo,canRedo}` and drive the page (zero follow-up GETs,
