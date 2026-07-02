@@ -46,6 +46,14 @@ test("cli create/add-image/undo/redo/history/export smoke", (t) => {
   const exported = run(env, "export", projectId, "--all");
   assert.equal(exported.items.length, 1);
   assert.equal(exported.manifest.schema, "ai_studio.canvas.export.v1");
+
+  // ops-stats parity: the CLI reports the per-op timing rollup from the journal.
+  const stats = run(env, "ops-stats", projectId);
+  assert.equal(stats.projectId, projectId);
+  const ops = Object.fromEntries(stats.ops.map((o) => [o.op, o]));
+  assert.equal(ops.addImage.count, 1);
+  assert.equal(ops.patchElement.count, 1);
+  assert.equal(stats.errors.count, 0);
 });
 
 test("cli group-create/move/set/assign/delete smoke (no python)", (t) => {

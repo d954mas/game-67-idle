@@ -57,3 +57,27 @@ export function canvasProjectsRoot(root) {
   }
   return looksAbsolute(raw) ? resolve(raw) : resolve(root, raw);
 }
+
+// Maximum retained undo depth for canvas projects (the journal-compaction horizon).
+// CANVAS_HISTORY_DEPTH env overrides for tests/one-off runs; otherwise the committed
+// `canvasHistoryDepth` config value is used, defaulting to 200 when unset. A value
+// <= 0 means "unlimited" (compaction disabled). Resolution never throws: a missing
+// config is treated as the default so read-only history still works before any
+// studio config exists.
+export const DEFAULT_CANVAS_HISTORY_DEPTH = 200;
+
+export function canvasHistoryDepth(root) {
+  const fromEnv = String(process.env.CANVAS_HISTORY_DEPTH || "").trim();
+  if (fromEnv) {
+    const parsed = Number(fromEnv);
+    return Number.isFinite(parsed) ? parsed : DEFAULT_CANVAS_HISTORY_DEPTH;
+  }
+  let configured;
+  try {
+    configured = loadStudioConfig(root).canvasHistoryDepth;
+  } catch {
+    return DEFAULT_CANVAS_HISTORY_DEPTH;
+  }
+  const parsed = Number(configured);
+  return Number.isFinite(parsed) ? parsed : DEFAULT_CANVAS_HISTORY_DEPTH;
+}

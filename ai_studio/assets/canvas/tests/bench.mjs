@@ -211,23 +211,51 @@ async function benchMetadataOps() {
   });
 }
 
-// ---- readHistory scaling ----------------------------------------------------
+// ---- journal scaling (REALISTIC snapshots) ----------------------------------
+//
+// The research showed empty-snapshot fixtures under-report ~40x, so this runs on a
+// 100-element project: every journaled mutation now carries a realistic ~100-element
+// snapshot (in a sidecar), and the thin journal line stays tiny. Compaction is
+// DISABLED here (CANVAS_HISTORY_DEPTH=0) so the journal genuinely reaches 1000
+// entries — isolating the sidecar-vs-fat-line win; default operation caps at
+// canvasHistoryDepth (200), which bounds this further in real use. Measures append
+// (patchElement) + readHistory at 100/500/1000 entries and undo at 100 elements.
 
-async function benchReadHistoryScaling() {
-  console.log("== readHistory scaling ==");
-  const project = createProject(REPO_ROOT, { title: "History Scaling" });
-  const { element } = addImage(REPO_ROOT, project.id, { name: "target.png", bytes: tinyPng(1) });
-  let journalLen = 1; // the addImage above is entry #1
-  let x = 0;
-  for (const target of [10, 100, 1000]) {
-    while (journalLen < target) {
-      x += 1;
-      patchElement(REPO_ROOT, project.id, element.id, { x, y: 0 });
-      journalLen += 1;
+async function benchJournalScaling() {
+  console.log("== journal scaling (100-element project, realistic snapshots) ==");
+  const prevDepth = process.env.CANVAS_HISTORY_DEPTH;
+  process.env.CANVAS_HISTORY_DEPTH = "0"; // unlimited: let the journal reach 1000 entries
+  try {
+    const base = buildProject("Journal Scaling 100", 100); // 100 realistic addImage snapshots
+    const targetId = base.elements[0].id;
+    let journalLen = 100; // one addImage entry per element
+    let x = 0;
+    for (const target of [100, 500, 1000]) {
+      while (journalLen < target) {
+        x += 1;
+        patchElement(REPO_ROOT, base.id, targetId, { x, y: 0 });
+        journalLen += 1;
+      }
+      // Append cost: one more realistic-snapshot mutation at this journal length.
+      await bench("journal", "append (patch, 100 el)", `${journalLen} entries`, {
+        op: () => {
+          x += 1;
+          patchElement(REPO_ROOT, base.id, targetId, { x, y: 0 });
+          journalLen += 1;
+        },
+      });
+      await bench("journal", "readHistory (100 el)", `${journalLen} entries`, {
+        op: () => readHistory(REPO_ROOT, { projectId: base.id }),
+      });
     }
-    await bench("readHistory", "readHistory", `${journalLen} entries`, {
-      op: () => readHistory(REPO_ROOT, { projectId: project.id }),
+    // Undo cost on a 100-element project (restore via redo so each run is comparable).
+    await bench("journal", "undoOp (100 el)", `${journalLen} entries`, {
+      op: () => undoOp(REPO_ROOT, { projectId: base.id }),
+      after: () => redoOp(REPO_ROOT, { projectId: base.id }),
     });
+  } finally {
+    if (prevDepth === undefined) delete process.env.CANVAS_HISTORY_DEPTH;
+    else process.env.CANVAS_HISTORY_DEPTH = prevDepth;
   }
 }
 
@@ -430,7 +458,7 @@ function printTable() {
 
 async function main() {
   await benchMetadataOps();
-  await benchReadHistoryScaling();
+  await benchJournalScaling();
   await benchPythonOps();
   await benchHttpOverhead();
 

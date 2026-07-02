@@ -26,6 +26,7 @@
 //   GET    /api/canvas/projects/<id>/export/<...>  (export files, path-confined)
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname } from "node:path";
+import { performance } from "node:perf_hooks";
 import {
   addImage,
   assignToGroup,
@@ -37,10 +38,12 @@ import {
   exportElements,
   getProject,
   listProjects,
+  opsStats,
   patchElement,
   patchGroup,
   patchProject,
   readHistory,
+  recordOpFailure,
   redoOp,
   removeElement,
   renderGroup,
@@ -106,6 +109,11 @@ function serveFile(res, filePath) {
 export function createCanvasApi(root) {
   return async function handleCanvasApi(req, res, url) {
     const parts = url.pathname.split("/").filter(Boolean); // ["api","canvas","projects", id, ...]
+    const t0 = performance.now();
+    // Mutating responses carry the API-observed duration_ms (additive: existing
+    // fields are untouched, so the running page keeps working unchanged).
+    const sendMutation = (status, data) =>
+      sendJson(res, status, { ...data, duration_ms: Math.round((performance.now() - t0) * 1000) / 1000 });
     try {
       if (parts[0] !== "api" || parts[1] !== "canvas" || parts[2] !== "projects") {
         sendJson(res, 404, { error: "not found" });
@@ -120,7 +128,7 @@ export function createCanvasApi(root) {
         }
         if (req.method === "POST") {
           const body = await readJsonBody(req);
-          sendJson(res, 201, { project: createProject(root, { title: body.title }) });
+          sendMutation(201, { project: createProject(root, { title: body.title }) });
           return true;
         }
         sendJson(res, 405, { error: "method not allowed" });
@@ -137,11 +145,11 @@ export function createCanvasApi(root) {
         }
         if (req.method === "PATCH") {
           const body = await readJsonBody(req);
-          sendJson(res, 200, patchProject(root, { projectId: id, title: body.title }));
+          sendMutation(200, patchProject(root, { projectId: id, title: body.title }));
           return true;
         }
         if (req.method === "DELETE") {
-          sendJson(res, 200, deleteProject(root, { projectId: id }));
+          sendMutation(200, deleteProject(root, { projectId: id }));
           return true;
         }
         sendJson(res, 405, { error: "method not allowed" });
@@ -155,14 +163,14 @@ export function createCanvasApi(root) {
         const body = await readJsonBody(req);
         const bytes = Buffer.from(String(body.bytes_base64 || ""), "base64");
         // x/y let the page drop an image at a world point; addImage defaults to 0,0.
-        sendJson(res, 201, addImage(root, id, { name: body.name, bytes, x: body.x, y: body.y }));
+        sendMutation(201, addImage(root, id, { name: body.name, bytes, x: body.x, y: body.y }));
         return true;
       }
 
       // /api/canvas/projects/<id>/detect-regions
       if (parts.length === 5 && sub === "detect-regions" && req.method === "POST") {
         const body = await readJsonBody(req);
-        sendJson(res, 200, await detectRegions(root, {
+        sendMutation(200, await detectRegions(root, {
           projectId: id,
           elementId: body.elementId,
           params: body.params || {},
@@ -173,7 +181,7 @@ export function createCanvasApi(root) {
       // /api/canvas/projects/<id>/slice
       if (parts.length === 5 && sub === "slice" && req.method === "POST") {
         const body = await readJsonBody(req);
-        sendJson(res, 200, await sliceRegions(root, {
+        sendMutation(200, await sliceRegions(root, {
           projectId: id,
           elementId: body.elementId,
           regionIds: body.regionIds,
@@ -184,7 +192,7 @@ export function createCanvasApi(root) {
       // /api/canvas/projects/<id>/export
       if (parts.length === 5 && sub === "export" && req.method === "POST") {
         const body = await readJsonBody(req);
-        sendJson(res, 200, exportElements(root, {
+        sendMutation(200, exportElements(root, {
           projectId: id,
           elementIds: Array.isArray(body.elementIds) ? body.elementIds : [],
           format: body.format,
@@ -195,7 +203,7 @@ export function createCanvasApi(root) {
       // /api/canvas/projects/<id>/groups  (create)
       if (parts.length === 5 && sub === "groups" && req.method === "POST") {
         const body = await readJsonBody(req);
-        sendJson(res, 201, createGroup(root, {
+        sendMutation(201, createGroup(root, {
           projectId: id,
           name: body.name,
           x: body.x,
@@ -210,7 +218,7 @@ export function createCanvasApi(root) {
       // /api/canvas/projects/<id>/assign-group
       if (parts.length === 5 && sub === "assign-group" && req.method === "POST") {
         const body = await readJsonBody(req);
-        sendJson(res, 200, assignToGroup(root, {
+        sendMutation(200, assignToGroup(root, {
           projectId: id,
           elementIds: Array.isArray(body.elementIds) ? body.elementIds : [],
           groupId: body.groupId,
@@ -223,11 +231,11 @@ export function createCanvasApi(root) {
         const groupId = decodeURIComponent(parts[5]);
         if (req.method === "PATCH") {
           const body = await readJsonBody(req);
-          sendJson(res, 200, patchGroup(root, { projectId: id, groupId, ...body }));
+          sendMutation(200, patchGroup(root, { projectId: id, groupId, ...body }));
           return true;
         }
         if (req.method === "DELETE") {
-          sendJson(res, 200, deleteGroup(root, { projectId: id, groupId }));
+          sendMutation(200, deleteGroup(root, { projectId: id, groupId }));
           return true;
         }
         sendJson(res, 405, { error: "method not allowed" });
@@ -238,7 +246,7 @@ export function createCanvasApi(root) {
       if (parts.length === 7 && sub === "groups" && parts[6] === "render" && req.method === "POST") {
         const groupId = decodeURIComponent(parts[5]);
         const body = await readJsonBody(req);
-        sendJson(res, 200, await renderGroup(root, {
+        sendMutation(200, await renderGroup(root, {
           projectId: id,
           groupId,
           scale: body.scale,
@@ -250,18 +258,24 @@ export function createCanvasApi(root) {
       // /api/canvas/projects/<id>/undo | /redo
       if (parts.length === 5 && sub === "undo" && req.method === "POST") {
         await readJsonBody(req);
-        sendJson(res, 200, undoOp(root, { projectId: id }));
+        sendMutation(200, undoOp(root, { projectId: id }));
         return true;
       }
       if (parts.length === 5 && sub === "redo" && req.method === "POST") {
         await readJsonBody(req);
-        sendJson(res, 200, redoOp(root, { projectId: id }));
+        sendMutation(200, redoOp(root, { projectId: id }));
         return true;
       }
 
       // /api/canvas/projects/<id>/history
       if (parts.length === 5 && sub === "history" && req.method === "GET") {
         sendJson(res, 200, readHistory(root, { projectId: id }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/ops-stats  (per-op timing rollup + error count)
+      if (parts.length === 5 && sub === "ops-stats" && req.method === "GET") {
+        sendJson(res, 200, opsStats(root, { projectId: id }));
         return true;
       }
 
@@ -287,7 +301,7 @@ export function createCanvasApi(root) {
         const elementId = decodeURIComponent(parts[5]);
         const body = await readJsonBody(req);
         const regions = Array.isArray(body) ? body : body.regions;
-        sendJson(res, 200, setRegions(root, { projectId: id, elementId, regions }));
+        sendMutation(200, setRegions(root, { projectId: id, elementId, regions }));
         return true;
       }
 
@@ -296,11 +310,11 @@ export function createCanvasApi(root) {
         const elementId = decodeURIComponent(parts[5]);
         if (req.method === "PATCH") {
           const body = await readJsonBody(req);
-          sendJson(res, 200, patchElement(root, id, elementId, body));
+          sendMutation(200, patchElement(root, id, elementId, body));
           return true;
         }
         if (req.method === "DELETE") {
-          sendJson(res, 200, removeElement(root, id, elementId));
+          sendMutation(200, removeElement(root, id, elementId));
           return true;
         }
         sendJson(res, 405, { error: "method not allowed" });
@@ -310,6 +324,17 @@ export function createCanvasApi(root) {
       sendJson(res, 404, { error: "not found" });
       return true;
     } catch (error) {
+      // Log project-resolvable failures to <project>/errors.jsonl (recordOpFailure
+      // no-ops when the id can't resolve, e.g. project-not-found). The op name and a
+      // coarse summary are derived from the route since the parsed body is gone here.
+      const projectId = parts.length >= 4 ? decodeURIComponent(parts[3]) : "";
+      const opName = `${req.method} ${parts.slice(4).join("/") || "project"}`;
+      recordOpFailure(root, projectId, {
+        op: opName,
+        args_summary: { method: req.method, path: url.pathname },
+        error,
+        duration_ms: performance.now() - t0,
+      });
       sendJson(res, 400, { error: error && error.message ? error.message : String(error) });
       return true;
     }

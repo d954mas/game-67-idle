@@ -40,6 +40,10 @@ The on-disk projects root is resolved from studio config
 project create, never at load time. The `CANVAS_PROJECTS_ROOT` env var overrides
 config so tests and one-off runs never touch the configured location.
 
+The same config carries `canvasHistoryDepth` (default 200) — the retained undo-depth
+cap read via `canvasHistoryDepth(root)`; `CANVAS_HISTORY_DEPTH` overrides it for
+tests. See **History depth cap + compaction** below.
+
 ## Operations
 
 Every capability is one op in `ops.mjs`:
@@ -82,6 +86,8 @@ Every capability is one op in `ops.mjs`:
   collision-suffixed name plus a `manifest.json`. Not journaled (it makes no
   project mutation), but recorded in `tool_runs`.
 - `undoOp` / `redoOp` / `readHistory` — see Journal below.
+- `opsStats({ projectId })` — read-only per-op timing rollup (count/median/p95
+  `duration_ms`) from the journal plus the `errors.jsonl` count. See Observability.
 
 ## Groups = screens
 
@@ -147,29 +153,92 @@ region fields so that geometry survives a round-trip through the op layer today.
 ## Journal, undo, and redo
 
 Each project folder has an append-only `journal.jsonl` next to `project.json`.
-Every mutating op appends one line
-`{ seq, at, op, args_summary, undo_patch, state, parent }`:
+Every mutating op appends one **thin** metadata line — no fat snapshot inline:
+`{ seq, at, op, args_summary, parent, duration_ms, has_snapshot: true }`. The
+before/after project snapshot for that op lives OUT of the line in a sidecar file
+`snapshots/<seq>.json` = `{ undo_patch, state }`:
 
-- `undo_patch` is the `{ elements, tool_runs }` snapshot **before** the op (undo
-  restores it); `state` is the snapshot **after** (redo re-applies it). Files are
-  immutable, so a metadata-only snapshot always fully restores `project.json`.
+- `undo_patch` is the `{ title, elements, groups, tool_runs }` snapshot **before**
+  the op (undo restores it); `state` is the snapshot **after** (redo re-applies it).
+  Files are immutable, so a metadata-only snapshot always fully restores
+  `project.json`. Keeping these in a sidecar makes every journal line **O(1)** in
+  project size, so `appendJournal`, `readHistory`, and undo/redo's scan only read
+  tiny lines and load exactly the one snapshot they need by `seq`.
 - `parent` is the history head that was current when the op ran, linking the log
-  into a chain; `seq` is monotonic and unique per physical line.
-- Undo and redo append audit markers `{ seq, at, op: "undo"|"redo", target_seq }`.
+  into a chain; `seq` is monotonic and unique per physical line. The next `seq` is
+  allocated in **O(1)** by tail-reading the last journal line (not re-parsing the
+  whole file).
+- Undo and redo append audit markers
+  `{ seq, at, op: "undo"|"redo", target_seq, duration_ms }` (no snapshot).
 
 `project.json` carries one pointer, `history_seq` (the applied head; `0` = base).
-Undo restores the head entry's `undo_patch` and moves the head to `entry.parent`.
-Redo picks the greatest-`seq` mutation whose `parent` equals the current head,
-restores its `state`, and advances the head. A new mutation after an undo attaches
-to the current head as its newest child, so redo (greatest-`seq` child) never
-re-picks the stale branch — the redo tail is invalidated automatically (standard
-linear history). Append is a single `O_APPEND` write (atomic for this
+Undo loads the head entry's sidecar `undo_patch` and moves the head to
+`entry.parent`. Redo picks the greatest-`seq` mutation whose `parent` equals the
+current head, restores its `state`, and advances the head. A new mutation after an
+undo attaches to the current head as its newest child, so redo (greatest-`seq`
+child) never re-picks the stale branch — the redo tail is invalidated automatically
+(standard linear history). Append is a single `O_APPEND` write (atomic for this
 single-writer local tool); a torn last line is tolerated on read.
+
+### History depth cap + compaction
+
+History is capped at `canvasHistoryDepth` (studio config, default **200**;
+`CANVAS_HISTORY_DEPTH` env overrides for tests; `<= 0` = unlimited). After each
+mutation, compaction walks the undo chain from the head; if it exceeds the cap it
+keeps every line with `seq >= ` the horizon (the cap-th step from the tip), archives
+the older thin lines to append-only `journal.archive.jsonl`, deletes their sidecar
+snapshots, and rebases the horizon entry's `parent` to `0` so undo stops cleanly
+("nothing to undo") at the horizon. Redo children of kept entries always have a
+larger `seq`, so the retained undo/redo tree is fully preserved. Because compaction
+physically shrinks `journal.jsonl` back to ~cap lines, the per-op journal scan stays
+bounded instead of growing over a session. This matches industry norms (Photoshop
+caps steps; unlimited verbatim history is not kept) and is the deliberate trade for
+`journal.archive.jsonl`: dropped **metadata** is retained as an audit trail while the
+fat snapshots past the horizon are reclaimed.
+
+### tool_runs cap
+
+`detect`/`slice`/`export`/`render` append provenance rows to `project.tool_runs`,
+which rides inside every snapshot and every `project.json` read/write. The array is
+capped at the last **50** (`CANVAS_TOOL_RUNS_CAP` env overrides); overflow spills to
+an append-only `tool_runs.jsonl` sidecar, so provenance is never lost but `P` stays
+small.
+
+### Legacy fat-journal migration
+
+Projects created before this layout inlined `undo_patch`/`state` on every line
+(O(project) per line, O(n²) per session). On the **first mutating open**, the store
+transparently migrates them: it extracts each fat line's snapshot to
+`snapshots/<seq>.json`, rewrites `journal.jsonl` thin, and keeps the original as
+`journal.jsonl.bak` (non-destructive — the lead's history is never deleted). The
+gate is O(1) (a `snapshots/` dir means "already migrated"), and migration is
+idempotent. Read-only opens never migrate.
 
 Note: because `exportElements` is intentionally not journaled, its `tool_runs`
 entry is not protected by the undo chain — undoing past the point where the export
 ran can drop that provenance row. Export creates no element/geometry change, so
 this only affects the audit row.
+
+## Observability
+
+Every journaled entry carries `duration_ms` (measured around the whole op, so
+detect/slice include their Python spawn). Failed ops that touch a resolvable project
+append one row to `<project>/errors.jsonl`
+(`{ at, op, args_summary, error, duration_ms }`); this is wired from both clients
+(the API adapter's central catch and the CLI's top-level catch), so a project-not-
+found failure — which has no folder to write to — is simply not logged. API mutating
+responses **add** a `duration_ms` field (existing fields are untouched, so the
+running page keeps working), and `/history` still returns `canUndo`/`canRedo`
+(computed from metadata only, no snapshot loads) plus a `duration_ms` on each entry.
+
+Per-project observability files (all under the project folder, alongside
+`project.json`): `journal.jsonl` (thin op log), `snapshots/<seq>.json` (fat
+before/after snapshots), `journal.archive.jsonl` (compacted-away lines),
+`journal.jsonl.bak` (pre-migration original), `tool_runs.jsonl` (spilled provenance),
+and `errors.jsonl` (failure trail). Read the timing rollup with
+`ops-stats <id>` (CLI) or `GET /api/canvas/projects/<id>/ops-stats`: per-op
+`count` / `median_ms` / `p95_ms` from the journal plus the `errors` count (and a
+short recent tail).
 
 ## Export contract
 
@@ -208,6 +277,7 @@ node ai_studio/assets/canvas/cli.mjs render-screen <id> --group g [--scale 2] [-
 node ai_studio/assets/canvas/cli.mjs undo <id>
 node ai_studio/assets/canvas/cli.mjs redo <id>
 node ai_studio/assets/canvas/cli.mjs history <id>
+node ai_studio/assets/canvas/cli.mjs ops-stats <id>   # per-op count/median/p95 + errors count
 ```
 
 `show <id>` includes `groups` in its project output.

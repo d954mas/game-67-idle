@@ -1,4 +1,5 @@
 {
   "schema": "ai_studio.studio_config.v1",
-  "canvasProjectsRoot": "C:/Users/ROG/YandexDisk/gamedev/ai_studio/canvas_projects"
+  "canvasProjectsRoot": "C:/Users/ROG/YandexDisk/gamedev/ai_studio/canvas_projects",
+  "canvasHistoryDepth": 200
 }

@@ -24,6 +24,7 @@
 //   node ai_studio/assets/canvas/cli.mjs undo|redo|history <id>
 import { readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
+import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { fail, isMain } from "../../core_harness/tool_lib/cli.mjs";
 import {
@@ -37,10 +38,12 @@ import {
   exportElements,
   getProject,
   listProjects,
+  opsStats,
   patchElement,
   patchGroup,
   patchProject,
   readHistory,
+  recordOpFailure,
   redoOp,
   removeElement,
   renderGroup,
@@ -98,11 +101,7 @@ function usage() {
   history <id>`);
 }
 
-async function main(argv) {
-  const [command, ...rest] = argv;
-  const { positional, flags } = parseFlags(rest);
-  const id = positional[0];
-
+async function runCommand(command, id, positional, flags) {
   switch (command) {
     case "list":
       return print({ projects: listProjects(repoRoot) });
@@ -254,6 +253,9 @@ async function main(argv) {
     case "history":
       if (!id) fail("history requires <id>");
       return print(readHistory(repoRoot, { projectId: id }));
+    case "ops-stats":
+      if (!id) fail("ops-stats requires <id>");
+      return print(opsStats(repoRoot, { projectId: id }));
     case "help":
     case "--help":
     case "-h":
@@ -262,6 +264,26 @@ async function main(argv) {
     default:
       usage();
       return fail(`unknown command: ${command}`);
+  }
+}
+
+async function main(argv) {
+  const [command, ...rest] = argv;
+  const { positional, flags } = parseFlags(rest);
+  const id = positional[0];
+  const startedAt = performance.now();
+  try {
+    return await runCommand(command, id, positional, flags);
+  } catch (error) {
+    // Mirror the API: a project-resolvable failure leaves a trail in
+    // <project>/errors.jsonl (recordOpFailure no-ops when id can't resolve).
+    recordOpFailure(repoRoot, id, {
+      op: command || "",
+      args_summary: flags || {},
+      error,
+      duration_ms: performance.now() - startedAt,
+    });
+    throw error;
   }
 }
 

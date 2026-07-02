@@ -11,45 +11,70 @@
 // they reuse the existing raster2d tool functions unmodified.
 //
 // Journal / undo-redo design (single linear history over an append-only log):
-//   - Each mutating op appends a line {seq, at, op, args_summary, undo_patch,
-//     state, parent}. undo_patch is the {elements, tool_runs} snapshot BEFORE the
-//     op (restore target for undo); state is the snapshot AFTER (re-apply target
-//     for redo); parent is the history head that was current when the op ran, so
-//     the journal forms a linked chain. Files are immutable, so a metadata-only
-//     snapshot always fully restores project.json.
+//   - Each mutating op appends a THIN metadata line
+//     {seq, at, op, args_summary, parent, duration_ms, has_snapshot:true}; the fat
+//     before/after project snapshot lives in a sidecar <project>/snapshots/<seq>.json
+//     ({undo_patch, state}). undo_patch is the {title, elements, groups, tool_runs}
+//     snapshot BEFORE the op (restore target for undo); state is the snapshot AFTER
+//     (re-apply target for redo); parent is the history head that was current when
+//     the op ran, so the journal forms a linked chain. Files are immutable, so a
+//     metadata-only snapshot always fully restores project.json.
 //   - project.json carries one pointer, history_seq (the applied head; 0 = base).
-//   - undo restores the head entry's undo_patch, moves the head to entry.parent,
-//     and appends a {op:"undo", target_seq} marker.
+//   - undo loads the head entry's snapshot.undo_patch, moves the head to
+//     entry.parent, and appends a {op:"undo", target_seq} marker.
 //   - redo picks the greatest-seq mutation whose parent == the current head,
-//     restores its state, advances the head, and appends a {op:"redo"} marker.
+//     restores its snapshot.state, advances the head, and appends a {op:"redo"}.
 //   - A new mutation after an undo appends with parent == the current head, so it
 //     becomes the newest child of that head; redo (greatest-seq child) then never
 //     picks the stale branch — the redo tail is invalidated automatically.
+//   - History is capped (canvasHistoryDepth, default 200): post-mutation compaction
+//     drops entries past the Nth undo step, deletes their snapshots, archives their
+//     thin lines to journal.archive.jsonl, and rebases the horizon entry's parent to
+//     0 so undo stops cleanly ("nothing to undo") at the horizon.
+//   - Legacy fat journals (inline undo_patch/state) are migrated transparently to
+//     this sidecar layout on the first mutating open (store.ensureThinJournal), with
+//     the original kept as journal.jsonl.bak.
+//   - Observability: every journaled line carries duration_ms; failed ops append to
+//     <project>/errors.jsonl (see recordOpFailure, wired from the API + CLI clients).
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
+import { performance } from "node:perf_hooks";
+import { canvasHistoryDepth } from "../../core_harness/tool_lib/studio_config.mjs";
 import {
   detectRaster2dRegions,
   uploadRaster2dSource,
 } from "../tools/raster2d/api.mjs";
 import {
   addImage as storeAddImage,
+  appendArchive,
+  appendError,
   appendJournal,
+  appendJournalLine,
+  capToolRuns,
   createProject as storeCreateProject,
   deleteProject as storeDeleteProject,
+  deleteSnapshot,
+  ensureThinJournal,
   getProject,
   imageSize,
   listProjects,
+  nextJournalSeq,
   patchElement as storePatchElement,
+  projectExists,
   readElementBytes,
+  readErrors,
   readJournal,
+  readSnapshot,
   removeElement as storeRemoveElement,
   resolveProjectFile,
   resolveProjectPath,
+  rewriteJournal,
   updateProject,
   writeProjectBytes,
+  writeSnapshot,
 } from "./store.mjs";
 
 export {
@@ -59,6 +84,11 @@ export {
   resolveProjectPath,
   updateProject,
 };
+
+// Round a millisecond duration to 3 decimals for compact, stable journal/error rows.
+function ms(value) {
+  return Math.round(value * 1000) / 1000;
+}
 
 function mimeForExt(fileName) {
   const ext = String(fileName || "").toLowerCase().split(".").pop();
@@ -92,26 +122,110 @@ function snapshotOf(project) {
   };
 }
 
+// A mutation line (has a sidecar snapshot); tolerates a legacy inline fat line too,
+// so undo/redo/history stay correct even if migration has not run yet.
+function isMutation(line) {
+  return !!line && (line.has_snapshot === true || line.undo_patch !== undefined || line.state !== undefined);
+}
+
+// The {undo_patch, state} snapshot for one entry: inline (legacy fat line) or the
+// sidecar file (thin line). Returns {} if neither is present.
+function snapshotForEntry(root, projectId, entry) {
+  if (entry && (entry.undo_patch !== undefined || entry.state !== undefined)) {
+    return { undo_patch: entry.undo_patch, state: entry.state };
+  }
+  return readSnapshot(root, projectId, entry.seq) || {};
+}
+
 // Append one mutation entry and advance the project's history head. Returns the
-// saved project (with the new history_seq). If the op changed nothing, no entry
-// is written and the current project state is returned unchanged.
-function commitMutation(root, projectId, { op, args_summary, before, after }) {
+// saved project (with the new history_seq). If the op changed nothing, no entry is
+// written and the current project state is returned unchanged. Writes the fat
+// snapshot to a sidecar and keeps the journal line thin (op metadata + duration_ms),
+// then compacts history past the depth cap. `startedAt` is a performance.now() taken
+// at op entry, so the recorded duration_ms covers the whole op (incl. any Python).
+function commitMutation(root, projectId, { op, args_summary, before, after, startedAt }) {
+  ensureThinJournal(root, projectId); // one-time migration of a legacy fat journal
   const undoPatch = snapshotOf(before);
   const state = snapshotOf(after);
-  if (JSON.stringify(undoPatch) === JSON.stringify(state)) return after;
-  const entry = appendJournal(root, projectId, {
+  if (JSON.stringify(undoPatch) === JSON.stringify(state)) return after; // no-op: no entry
+  const seq = nextJournalSeq(root, projectId);
+  writeSnapshot(root, projectId, seq, { undo_patch: undoPatch, state });
+  appendJournalLine(root, projectId, {
+    seq,
+    at: new Date().toISOString(),
     op,
     args_summary: args_summary || {},
-    undo_patch: undoPatch,
-    state,
     parent: Number(before.history_seq) || 0,
+    duration_ms: startedAt === undefined ? undefined : ms(performance.now() - startedAt),
+    has_snapshot: true,
   });
-  return updateProject(root, projectId, { history_seq: entry.seq });
+  const saved = updateProject(root, projectId, { history_seq: seq });
+  compactJournal(root, projectId);
+  return saved;
+}
+
+// Bound retained undo depth to canvasHistoryDepth (default 200; <= 0 disables). Walk
+// the undo chain from the current head; if it exceeds the cap, keep every line with
+// seq >= the horizon (the cap-th step from the tip), archive + drop the rest, delete
+// their snapshots, and rebase the horizon entry's parent to 0 so undo bottoms out
+// cleanly there. Redo children of kept entries always have a larger seq, so the
+// redo/undo tree for the retained window is fully preserved. Runs post-mutation only
+// (undo/redo never grow depth), and since it physically shrinks the journal to ~cap
+// lines the per-op scan stays bounded rather than O(session).
+function compactJournal(root, projectId) {
+  const cap = canvasHistoryDepth(root);
+  if (!(cap > 0)) return; // unlimited: compaction disabled
+  const head = Number(getProject(root, projectId).history_seq) || 0;
+  if (!head) return;
+  const journal = readJournal(root, projectId);
+  const mutationsBySeq = new Map();
+  for (const line of journal) if (isMutation(line)) mutationsBySeq.set(Number(line.seq), line);
+
+  const chain = [];
+  const guard = new Set();
+  let cursor = head;
+  while (cursor && mutationsBySeq.has(cursor) && !guard.has(cursor) && chain.length < cap + 1) {
+    guard.add(cursor);
+    const entry = mutationsBySeq.get(cursor);
+    chain.push(entry);
+    cursor = Number(entry.parent) || 0;
+  }
+  if (chain.length <= cap) return; // within the cap: nothing to drop
+
+  const horizonSeq = Number(chain[cap - 1].seq);
+  const kept = [];
+  const dropped = [];
+  for (const line of journal) {
+    if (Number(line.seq) >= horizonSeq) {
+      // Rebase the horizon entry so the last retained undo lands on base (0).
+      if (Number(line.seq) === horizonSeq && isMutation(line)) line.parent = 0;
+      kept.push(line);
+    } else {
+      dropped.push(line);
+    }
+  }
+  appendArchive(root, projectId, dropped);
+  for (const line of dropped) if (isMutation(line)) deleteSnapshot(root, projectId, Number(line.seq));
+  rewriteJournal(root, projectId, kept);
+}
+
+// Append an errors.jsonl row for a failed op (project-resolvable failures only; a
+// missing/unsafe project id can't be logged). Wired from the API and CLI clients so
+// every surfaced failure leaves a trail without masking the caller's error.
+export function recordOpFailure(root, projectId, { op, args_summary, error, duration_ms } = {}) {
+  if (!projectId) return false;
+  return appendError(root, projectId, {
+    op: op || "",
+    args_summary: args_summary || {},
+    error: error && error.message ? error.message : String(error),
+    duration_ms: duration_ms === undefined ? undefined : ms(duration_ms),
+  });
 }
 
 // ---- journaled store wrappers ------------------------------------------------
 
 export function addImage(root, projectId, args = {}) {
+  const startedAt = performance.now();
   const before = getProject(root, projectId);
   const result = storeAddImage(root, projectId, args);
   const project = commitMutation(root, projectId, {
@@ -119,11 +233,13 @@ export function addImage(root, projectId, args = {}) {
     args_summary: { name: result.element.name, elementId: result.element.id, w: result.element.w, h: result.element.h },
     before,
     after: result.project,
+    startedAt,
   });
   return { project, element: result.element };
 }
 
 export function patchElement(root, projectId, elementId, patch = {}) {
+  const startedAt = performance.now();
   const before = getProject(root, projectId);
   const result = storePatchElement(root, projectId, elementId, patch);
   const project = commitMutation(root, projectId, {
@@ -131,11 +247,13 @@ export function patchElement(root, projectId, elementId, patch = {}) {
     args_summary: { elementId, patch },
     before,
     after: result.project,
+    startedAt,
   });
   return { project, element: result.element };
 }
 
 export function removeElement(root, projectId, elementId) {
+  const startedAt = performance.now();
   const before = getProject(root, projectId);
   const result = storeRemoveElement(root, projectId, elementId);
   const project = commitMutation(root, projectId, {
@@ -143,6 +261,7 @@ export function removeElement(root, projectId, elementId) {
     args_summary: { elementId },
     before,
     after: result.project,
+    startedAt,
   });
   return { project, removed: result.removed };
 }
@@ -157,6 +276,7 @@ export function setRegions(root, { projectId, elementId, regions } = {}) {
   if (!projectId) throw new Error("setRegions requires projectId");
   if (!elementId) throw new Error("setRegions requires elementId");
   if (!Array.isArray(regions)) throw new Error("setRegions requires a regions array");
+  const startedAt = performance.now();
   const before = getProject(root, projectId);
   const element = (before.elements || []).find((item) => item.id === elementId);
   if (!element) throw new Error(`element not found: ${elementId}`);
@@ -202,6 +322,7 @@ export function setRegions(root, { projectId, elementId, regions } = {}) {
     args_summary: { elementId, region_count: clean.length },
     before,
     after,
+    startedAt,
   });
   const updated = (project.elements || []).find((item) => item.id === elementId);
   return { project, element: updated, regions: (updated && updated.regions) || [] };
@@ -241,6 +362,7 @@ export function createProject(root, { title } = {}) {
 export function patchProject(root, { projectId, title } = {}) {
   if (!projectId) throw new Error("patchProject requires projectId");
   if (title === undefined) throw new Error("patchProject requires a title");
+  const startedAt = performance.now();
   const before = getProject(root, projectId);
   const cleanTitle = String(title).trim() || before.title;
   const after = updateProject(root, projectId, { title: cleanTitle });
@@ -249,6 +371,7 @@ export function patchProject(root, { projectId, title } = {}) {
     args_summary: { title: cleanTitle },
     before,
     after,
+    startedAt,
   });
   return { project };
 }
@@ -301,6 +424,7 @@ function elementsBBox(elements) {
 // which are assigned this group. One journal entry.
 export function createGroup(root, { projectId, name, x, y, w, h, fromElements } = {}) {
   if (!projectId) throw new Error("createGroup requires projectId");
+  const startedAt = performance.now();
   const before = getProject(root, projectId);
   const groupId = `grp_${randomUUID().slice(0, 8)}`;
   const cleanName = String(name || "").trim() || "Screen";
@@ -338,6 +462,7 @@ export function createGroup(root, { projectId, name, x, y, w, h, fromElements } 
     args_summary: { groupId, name: cleanName, members: memberIds, bounds },
     before,
     after,
+    startedAt,
   });
   return { project, group: (project.groups || []).find((item) => item.id === groupId) };
 }
@@ -348,6 +473,7 @@ export function createGroup(root, { projectId, name, x, y, w, h, fromElements } 
 export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible } = {}) {
   if (!projectId) throw new Error("patchGroup requires projectId");
   if (!groupId) throw new Error("patchGroup requires groupId");
+  const startedAt = performance.now();
   const before = getProject(root, projectId);
   const current = findGroup(before, groupId);
 
@@ -380,6 +506,7 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
     args_summary: { groupId, name, x, y, w, h, visible, dx, dy },
     before,
     after,
+    startedAt,
   });
   return { project, group: (project.groups || []).find((item) => item.id === groupId) };
 }
@@ -388,6 +515,7 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
 // journal entry.
 export function assignToGroup(root, { projectId, elementIds, groupId } = {}) {
   if (!projectId) throw new Error("assignToGroup requires projectId");
+  const startedAt = performance.now();
   const before = getProject(root, projectId);
   const ids = Array.isArray(elementIds) ? elementIds.map(String) : [];
   if (!ids.length) throw new Error("assignToGroup requires elementIds");
@@ -406,6 +534,7 @@ export function assignToGroup(root, { projectId, elementIds, groupId } = {}) {
     args_summary: { elementIds: ids, groupId: target },
     before,
     after,
+    startedAt,
   });
   return { project, count: ids.length, groupId: target };
 }
@@ -415,6 +544,7 @@ export function assignToGroup(root, { projectId, elementIds, groupId } = {}) {
 export function deleteGroup(root, { projectId, groupId } = {}) {
   if (!projectId) throw new Error("deleteGroup requires projectId");
   if (!groupId) throw new Error("deleteGroup requires groupId");
+  const startedAt = performance.now();
   const before = getProject(root, projectId);
   findGroup(before, groupId);
   const nextGroups = groupsOf(before).filter((group) => group.id !== groupId);
@@ -427,6 +557,7 @@ export function deleteGroup(root, { projectId, groupId } = {}) {
     args_summary: { groupId },
     before,
     after,
+    startedAt,
   });
   return { project, removed: groupId };
 }
@@ -435,61 +566,109 @@ export function deleteGroup(root, { projectId, groupId } = {}) {
 
 export function undoOp(root, { projectId } = {}) {
   if (!projectId) throw new Error("undoOp requires projectId");
+  const startedAt = performance.now();
+  ensureThinJournal(root, projectId); // migrating open is a mutating open
   const project = getProject(root, projectId);
   const head = Number(project.history_seq) || 0;
   if (!head) throw new Error("nothing to undo");
-  const entry = readJournal(root, projectId).find((item) => Number(item.seq) === head && item.undo_patch);
-  if (!entry) throw new Error(`no undoable journal entry for seq ${head}`);
+  const entry = readJournal(root, projectId).find((item) => Number(item.seq) === head && isMutation(item));
+  // The head entry can be absent once history has been compacted past this point
+  // (its parent was rebased to 0), so undo bottoms out cleanly at the horizon.
+  if (!entry) throw new Error("nothing to undo");
+  const undoPatch = snapshotForEntry(root, projectId, entry).undo_patch || {};
   const restore = {
-    elements: entry.undo_patch.elements || [],
-    groups: entry.undo_patch.groups || [],
-    tool_runs: entry.undo_patch.tool_runs || [],
+    elements: undoPatch.elements || [],
+    groups: undoPatch.groups || [],
+    tool_runs: undoPatch.tool_runs || [],
     history_seq: Number(entry.parent) || 0,
   };
-  // Older journals predate title-in-snapshot; only restore title when present so
+  // Older snapshots predate title-in-snapshot; only restore title when present so
   // updateProject never clobbers the live title with undefined.
-  if (entry.undo_patch.title !== undefined) restore.title = entry.undo_patch.title;
+  if (undoPatch.title !== undefined) restore.title = undoPatch.title;
   const saved = updateProject(root, projectId, restore);
-  appendJournal(root, projectId, { op: "undo", target_seq: head });
+  appendJournal(root, projectId, { op: "undo", target_seq: head, duration_ms: ms(performance.now() - startedAt) });
   return { project: saved, undone_seq: head, history_seq: saved.history_seq };
 }
 
 export function redoOp(root, { projectId } = {}) {
   if (!projectId) throw new Error("redoOp requires projectId");
+  const startedAt = performance.now();
+  ensureThinJournal(root, projectId);
   const project = getProject(root, projectId);
   const head = Number(project.history_seq) || 0;
-  const candidates = readJournal(root, projectId).filter((item) => item.state && (Number(item.parent) || 0) === head);
+  const candidates = readJournal(root, projectId).filter((item) => isMutation(item) && (Number(item.parent) || 0) === head);
   if (!candidates.length) throw new Error("nothing to redo");
   const entry = candidates.reduce((best, item) => (Number(item.seq) > Number(best.seq) ? item : best));
+  const state = snapshotForEntry(root, projectId, entry).state || {};
   const restore = {
-    elements: entry.state.elements || [],
-    groups: entry.state.groups || [],
-    tool_runs: entry.state.tool_runs || [],
+    elements: state.elements || [],
+    groups: state.groups || [],
+    tool_runs: state.tool_runs || [],
     history_seq: Number(entry.seq),
   };
-  if (entry.state.title !== undefined) restore.title = entry.state.title;
+  if (state.title !== undefined) restore.title = state.title;
   const saved = updateProject(root, projectId, restore);
-  appendJournal(root, projectId, { op: "redo", target_seq: entry.seq });
+  appendJournal(root, projectId, { op: "redo", target_seq: entry.seq, duration_ms: ms(performance.now() - startedAt) });
   return { project: saved, redone_seq: entry.seq, history_seq: saved.history_seq };
 }
 
 // Compact journal view for `history <id>` / GET .../history: seq, timestamp, op,
-// and the small args_summary (or marker target) — never the big snapshots.
+// the small args_summary (or marker target), and duration_ms — never the big
+// snapshots (thin lines carry no snapshot, so this is a cheap metadata scan). Back-
+// compatible: canUndo/canRedo are computed from metadata only (no snapshot loads)
+// and existing fields are unchanged; duration_ms is added, never removed/renamed.
 export function readHistory(root, { projectId } = {}) {
   if (!projectId) throw new Error("readHistory requires projectId");
   const project = getProject(root, projectId);
   const journal = readJournal(root, projectId);
   const head = Number(project.history_seq) || 0;
-  const canUndo = head > 0 && journal.some((item) => Number(item.seq) === head && item.undo_patch);
-  const canRedo = journal.some((item) => item.state && (Number(item.parent) || 0) === head);
+  const canUndo = head > 0 && journal.some((item) => Number(item.seq) === head && isMutation(item));
+  const canRedo = journal.some((item) => isMutation(item) && (Number(item.parent) || 0) === head);
   const entries = journal.map((item) => ({
     seq: item.seq,
     at: item.at,
     op: item.op,
     ...(item.args_summary ? { args_summary: item.args_summary } : {}),
     ...(item.target_seq !== undefined ? { target_seq: item.target_seq } : {}),
+    ...(item.duration_ms !== undefined ? { duration_ms: item.duration_ms } : {}),
   }));
   return { history_seq: head, canUndo, canRedo, entries };
+}
+
+// Per-op timing rollup for `ops-stats <id>` / GET .../ops-stats: from the thin
+// journal, group by op and report count + median + p95 duration_ms; from
+// errors.jsonl, the failure count (and a small tail of recent errors). A read-only
+// observability op — no journal entry, no mutation.
+export function opsStats(root, { projectId } = {}) {
+  if (!projectId) throw new Error("opsStats requires projectId");
+  if (!projectExists(root, projectId)) throw new Error(`canvas project not found: ${projectId}`);
+  const journal = readJournal(root, projectId);
+  const byOp = new Map();
+  for (const line of journal) {
+    const op = String(line.op || "");
+    if (!byOp.has(op)) byOp.set(op, { op, count: 0, durations: [] });
+    const bucket = byOp.get(op);
+    bucket.count += 1;
+    if (Number.isFinite(Number(line.duration_ms))) bucket.durations.push(Number(line.duration_ms));
+  }
+  const percentile = (sorted, q) => {
+    if (!sorted.length) return null;
+    const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1));
+    return sorted[idx];
+  };
+  const ops = [...byOp.values()].map(({ op, count, durations }) => {
+    const sorted = [...durations].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    const median = sorted.length ? (sorted.length % 2 ? sorted[mid] : ms((sorted[mid - 1] + sorted[mid]) / 2)) : null;
+    return { op, count, timed: sorted.length, median_ms: median, p95_ms: percentile(sorted, 0.95) };
+  }).sort((a, b) => a.op.localeCompare(b.op));
+  const errors = readErrors(root, projectId);
+  return {
+    projectId,
+    total_entries: journal.length,
+    ops,
+    errors: { count: errors.length, recent: errors.slice(-5) },
+  };
 }
 
 // ---- detectRegions (bridged) -------------------------------------------------
@@ -501,6 +680,7 @@ export function readHistory(root, { projectId } = {}) {
 export async function detectRegions(root, { projectId, elementId, params = {} } = {}) {
   if (!projectId) throw new Error("detectRegions requires projectId");
   if (!elementId) throw new Error("detectRegions requires elementId");
+  const startedAt = performance.now();
   const { buffer, fileName } = readElementBytes(root, projectId, elementId);
   const dims = imageSize(buffer);
 
@@ -540,13 +720,14 @@ export async function detectRegions(root, { projectId, elementId, params = {} } 
   );
   const after = updateProject(root, projectId, {
     elements: nextElements,
-    tool_runs: [...(before.tool_runs || []), run],
+    tool_runs: capToolRuns(root, projectId, [...(before.tool_runs || []), run]),
   });
   const project = commitMutation(root, projectId, {
     op: "detectRegions",
     args_summary: { elementId, region_count: regions.length },
     before,
     after,
+    startedAt,
   });
   const element = (project.elements || []).find((item) => item.id === elementId);
   return { project, element, run, regions };
@@ -569,6 +750,7 @@ export async function detectRegions(root, { projectId, elementId, params = {} } 
 export async function sliceRegions(root, { projectId, elementId, regionIds } = {}) {
   if (!projectId) throw new Error("sliceRegions requires projectId");
   if (!elementId) throw new Error("sliceRegions requires elementId");
+  const startedAt = performance.now();
   const before = getProject(root, projectId);
   const parent = (before.elements || []).find((item) => item.id === elementId);
   if (!parent) throw new Error(`element not found: ${elementId}`);
@@ -659,7 +841,7 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
     result_summary: { slice_count: created.length },
   };
   const withRun = updateProject(root, projectId, {
-    tool_runs: [...(getProject(root, projectId).tool_runs || []), run],
+    tool_runs: capToolRuns(root, projectId, [...(getProject(root, projectId).tool_runs || []), run]),
   });
   const project = commitMutation(root, projectId, {
     op: "slice",
@@ -671,6 +853,7 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
     },
     before,
     after: withRun,
+    startedAt,
   });
   return { project, created, run, regions: selected };
 }
@@ -733,7 +916,7 @@ export function exportElements(root, { projectId, elementIds, format } = {}) {
     params: { elementIds: ids, format: format || "copy" },
     result_summary: { item_count: items.length, folder },
   };
-  updateProject(root, projectId, { tool_runs: [...(project.tool_runs || []), run] });
+  updateProject(root, projectId, { tool_runs: capToolRuns(root, projectId, [...(project.tool_runs || []), run]) });
   return { folder, items, manifest, run };
 }
 
@@ -875,6 +1058,6 @@ export async function renderGroup(root, { projectId, groupId, scale, background 
     params: { groupId, scale: renderScale, background: bg },
     result_summary: { file: fileName, folder, member_count: members.length, width: manifest.width, height: manifest.height },
   };
-  updateProject(root, projectId, { tool_runs: [...(getProject(root, projectId).tool_runs || []), run] });
+  updateProject(root, projectId, { tool_runs: capToolRuns(root, projectId, [...(getProject(root, projectId).tool_runs || []), run]) });
   return { folder, file: fileName, path: outputAbs, manifest, run, members: members.length };
 }

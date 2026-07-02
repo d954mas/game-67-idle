@@ -14,11 +14,17 @@
 import { randomUUID } from "node:crypto";
 import {
   appendFileSync,
+  closeSync,
+  copyFileSync,
   existsSync,
+  fstatSync,
   mkdirSync,
+  openSync,
   readFileSync,
+  readSync,
   readdirSync,
   renameSync,
+  rmSync,
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
@@ -302,13 +308,31 @@ export function readElementBytes(root, id, elementId) {
 
 // ---- operation journal -------------------------------------------------------
 //
-// One append-only journal.jsonl sits next to project.json. Each line is a JSON
-// object; the op layer writes mutation entries ({seq, at, op, args_summary,
-// undo_patch, state, parent}) and undo/redo markers ({seq, at, op, target_seq}).
-// The store only owns the plumbing: read, atomic append, monotonic seq.
+// One append-only journal.jsonl sits next to project.json. Each line is a small
+// JSON object of op METADATA only: mutation entries
+// ({seq, at, op, args_summary, parent, duration_ms, has_snapshot:true}) and
+// undo/redo markers ({seq, at, op, target_seq, duration_ms}). The fat before/after
+// project snapshots live OUT of the line, one file per mutation under
+// <project>/snapshots/<seq>.json ({undo_patch, state}). This keeps every journal
+// line O(1) in project size, so appendJournal, readHistory, and undo/redo scan
+// only tiny lines and load exactly the one snapshot they need by seq.
+//
+// The store owns the plumbing: read, atomic append, O(1) monotonic seq (tail
+// read), sidecar snapshot read/write/delete, thin-journal rewrite/archive, a
+// transparent one-time migration of legacy fat lines, capped tool_runs with a
+// spill sidecar, and the per-project errors.jsonl sink.
 
 function journalPath(root, id) {
   return join(projectDir(root, id), "journal.jsonl");
+}
+
+function snapshotsDir(root, id) {
+  return join(projectDir(root, id), "snapshots");
+}
+
+function snapshotPath(root, id, seq) {
+  // seq is an integer we allocate, so it can never contain a path separator.
+  return join(snapshotsDir(root, id), `${Number(seq)}.json`);
 }
 
 export function readJournal(root, id) {
@@ -328,18 +352,227 @@ export function readJournal(root, id) {
   return entries;
 }
 
-// Append one journal line. `seq` is assigned monotonically (max existing + 1) so
-// every physical entry has a unique, ever-increasing id. The append is a single
-// O_APPEND write, which is atomic for this single-writer local tool; the whole
-// file is never rewritten, so a crash can at worst drop the last partial line
-// (tolerated by readJournal).
-export function appendJournal(root, id, entry) {
+// O(1) max-seq via a tail read: seq is monotonic and appends are physical-append
+// only, so the last complete line always carries the max seq. Read only the file
+// tail (not the whole journal), scan backward for the last parseable line, and
+// fall back to a full parse only if the tail holds no complete line (e.g. a single
+// giant legacy fat line larger than the tail window \u2014 rare and one-time).
+const SEQ_TAIL_BYTES = 65536;
+
+function lastJournalSeq(root, id) {
+  const path = journalPath(root, id);
+  if (!existsSync(path)) return 0;
+  const fd = openSync(path, "r");
+  try {
+    const size = fstatSync(fd).size;
+    if (size === 0) return 0;
+    const window = Math.min(size, SEQ_TAIL_BYTES);
+    const buffer = Buffer.alloc(window);
+    readSync(fd, buffer, 0, window, size - window);
+    const lines = buffer.toString("utf8").split("\n");
+    for (let i = lines.length - 1; i >= 0; i -= 1) {
+      const trimmed = lines[i].trim();
+      if (!trimmed) continue;
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Number.isFinite(Number(parsed.seq))) return Number(parsed.seq);
+      } catch {
+        // Partial fragment at the chunk boundary or a torn tail: keep scanning back.
+      }
+    }
+  } finally {
+    closeSync(fd);
+  }
+  // Tail held no complete line: fall back to a full parse (correctness over speed).
+  return readJournal(root, id).reduce((max, item) => Math.max(max, Number(item.seq) || 0), 0);
+}
+
+export function nextJournalSeq(root, id) {
+  return lastJournalSeq(root, id) + 1;
+}
+
+// Append one pre-built journal line verbatim (single O_APPEND write, atomic for
+// this single-writer local tool; the file is never rewritten here, so a crash at
+// worst drops the last partial line \u2014 tolerated on read).
+export function appendJournalLine(root, id, line) {
   const dir = projectDir(root, id);
   mkdirSync(dir, { recursive: true });
-  const seq = readJournal(root, id).reduce((max, item) => Math.max(max, Number(item.seq) || 0), 0) + 1;
-  const line = { seq, at: nowIso(), ...entry };
   appendFileSync(journalPath(root, id), `${JSON.stringify(line)}\n`);
   return line;
+}
+
+// Convenience append that allocates seq (O(1) tail read) + timestamp. Used for the
+// undo/redo markers (which carry no snapshot).
+export function appendJournal(root, id, entry) {
+  const line = { seq: nextJournalSeq(root, id), at: nowIso(), ...entry };
+  return appendJournalLine(root, id, line);
+}
+
+// ---- sidecar snapshots -------------------------------------------------------
+
+export function writeSnapshot(root, id, seq, snapshot) {
+  const dir = snapshotsDir(root, id);
+  mkdirSync(dir, { recursive: true });
+  writeAtomic(snapshotPath(root, id, seq), `${JSON.stringify(snapshot)}\n`);
+}
+
+export function readSnapshot(root, id, seq) {
+  const path = snapshotPath(root, id, seq);
+  if (!existsSync(path)) return null;
+  try {
+    return JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
+  } catch {
+    return null;
+  }
+}
+
+export function deleteSnapshot(root, id, seq) {
+  rmSync(snapshotPath(root, id, seq), { force: true });
+}
+
+// Atomic rewrite of the whole journal (used only by compaction). Kept lines are
+// serialized in order; the last kept line still carries the max seq, so the tail
+// seq read stays correct afterward.
+export function rewriteJournal(root, id, lines) {
+  const dir = projectDir(root, id);
+  mkdirSync(dir, { recursive: true });
+  const body = lines.map((line) => JSON.stringify(line)).join("\n");
+  writeAtomic(journalPath(root, id), body ? `${body}\n` : "");
+}
+
+// Append dropped journal lines to the compaction archive (append-only audit trail
+// of what fell past the history horizon; the fat snapshots themselves are dropped).
+export function appendArchive(root, id, lines) {
+  if (!lines.length) return;
+  const dir = projectDir(root, id);
+  mkdirSync(dir, { recursive: true });
+  const body = lines.map((line) => JSON.stringify(line)).join("\n");
+  appendFileSync(join(dir, "journal.archive.jsonl"), `${body}\n`);
+}
+
+// ---- transparent fat-journal migration --------------------------------------
+//
+// Legacy journals inlined {undo_patch, state} on every line (O(project) per line,
+// O(n^2) per session). On the first mutating open we move those blobs into sidecar
+// snapshots and rewrite the journal thin, keeping the ORIGINAL as journal.jsonl.bak
+// (non-destructive: the lead's history is never deleted). The gate is O(1): once a
+// snapshots/ dir exists the project is already v2, so this never re-scans. Migration
+// is idempotent \u2014 a re-run finds no inline blobs and only ensures snapshots/ exists.
+
+function lineHasInlineSnapshot(line) {
+  return line && (line.undo_patch !== undefined || line.state !== undefined);
+}
+
+export function ensureThinJournal(root, id) {
+  const dir = projectDir(root, id);
+  // Fast O(1) gate: a snapshots/ dir means this project was already created or
+  // migrated under the sidecar format; nothing to do.
+  if (existsSync(snapshotsDir(root, id))) return;
+  const jp = journalPath(root, id);
+  if (!existsSync(jp)) return; // brand-new project: the first snapshot write creates snapshots/.
+
+  const journal = readJournal(root, id);
+  const fatLines = journal.filter(lineHasInlineSnapshot);
+  if (!fatLines.length) {
+    // Journal exists but is already thin (or markers-only): just mark it v2 so the
+    // O(1) gate stops re-reading it every op.
+    mkdirSync(snapshotsDir(root, id), { recursive: true });
+    return;
+  }
+
+  // Back up the original fat journal once (never clobber an existing backup).
+  const bak = `${jp}.bak`;
+  if (!existsSync(bak)) copyFileSync(jp, bak);
+
+  const thin = journal.map((line) => {
+    if (!lineHasInlineSnapshot(line)) return line; // markers pass through unchanged.
+    writeSnapshot(root, id, line.seq, { undo_patch: line.undo_patch, state: line.state });
+    const { undo_patch, state, ...meta } = line;
+    return { ...meta, has_snapshot: true };
+  });
+  mkdirSync(snapshotsDir(root, id), { recursive: true });
+  rewriteJournal(root, id, thin);
+}
+
+// ---- tool_runs cap + spill ---------------------------------------------------
+//
+// tool_runs ride inside every snapshot and every project.json read/write, so an
+// unbounded array quietly inflates P. Keep the last N in project.json and spill the
+// overflow to an append-only <project>/tool_runs.jsonl provenance sidecar.
+const DEFAULT_TOOL_RUNS_CAP = 50;
+
+function toolRunsCap() {
+  const raw = Number(process.env.CANVAS_TOOL_RUNS_CAP);
+  return Number.isFinite(raw) && raw >= 0 ? raw : DEFAULT_TOOL_RUNS_CAP;
+}
+
+export function capToolRuns(root, id, runs) {
+  const list = Array.isArray(runs) ? runs : [];
+  const cap = toolRunsCap();
+  if (list.length <= cap) return list;
+  const spill = list.slice(0, list.length - cap);
+  const dir = projectDir(root, id);
+  mkdirSync(dir, { recursive: true });
+  appendFileSync(join(dir, "tool_runs.jsonl"), `${spill.map((run) => JSON.stringify(run)).join("\n")}\n`);
+  return list.slice(list.length - cap);
+}
+
+export function readToolRunsArchive(root, id) {
+  const path = join(projectDir(root, id), "tool_runs.jsonl");
+  if (!existsSync(path)) return [];
+  const out = [];
+  for (const line of readFileSync(path, "utf8").replace(/^\uFEFF/, "").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      out.push(JSON.parse(trimmed));
+    } catch {
+      // tolerate a torn line
+    }
+  }
+  return out;
+}
+
+// ---- errors sink -------------------------------------------------------------
+//
+// Failed ops append one line to <project>/errors.jsonl. Only project-resolvable
+// failures land here (a missing/unsafe project id can't be logged \u2014 there is no
+// folder to write to), so this never throws for the caller's original error.
+export function projectExists(root, id) {
+  try {
+    return existsSync(projectDir(root, id));
+  } catch {
+    return false; // unsafe id: confineChild threw
+  }
+}
+
+export function appendError(root, id, entry) {
+  if (!projectExists(root, id)) return false;
+  try {
+    const dir = projectDir(root, id);
+    mkdirSync(dir, { recursive: true });
+    const line = { at: nowIso(), ...entry };
+    appendFileSync(join(dir, "errors.jsonl"), `${JSON.stringify(line)}\n`);
+    return true;
+  } catch {
+    return false; // logging must never mask the real error
+  }
+}
+
+export function readErrors(root, id) {
+  const path = join(projectDir(root, id), "errors.jsonl");
+  if (!existsSync(path)) return [];
+  const out = [];
+  for (const line of readFileSync(path, "utf8").replace(/^\uFEFF/, "").split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      out.push(JSON.parse(trimmed));
+    } catch {
+      // tolerate a torn line
+    }
+  }
+  return out;
 }
 
 // Confined absolute path built from nested project-relative segments (e.g.
