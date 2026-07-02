@@ -63,10 +63,29 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **Perf: warm Python worker** (`T0202`, P1, IN FLIGHT) — JSON-RPC stdio
-   worker; builds on T0218's `_bridge` + pinned venv `pythonPath`.
-2. **Alpha on canvas** (`T0210`, image-tools track) — per-element alpha op
-   with method choice, regions optional; wings = acceptance asset.
+1. **Alpha on canvas** (`T0210`, image-tools track, IN FLIGHT) — per-element
+   alpha op with method choice, regions optional; wings = acceptance asset.
+
+T0202 warm python worker LANDED `9ffe0b27` (2026-07-03 night, → review):
+generic script-runner in image/_bridge (worker.py + worker.mjs, line-JSON
+stdio, runpy per request, imports cached); runPython signature unchanged →
+zero call-site churn; ops.mjs candidate-discovery DELETED (pinned venv only);
+all canvas spawns warm (detect/crop/export/render): render 99→7.5 ms, detect
+429→19 ms; 5-min idle kill, crash = loud + respawn, no orphans.
+
+T0228 history actor attribution LANDED `10525404` (2026-07-03 night, →
+review): journal entries record actor at the transport seam (CLI = agent
+inside its isMain guard; page/imports = user); listHistory rows carry actor +
+🤖 prefix in the shared label (page/CLI parity by construction); legacy
+entries unmarked. Tests 226.
+
+T0229 export destination redesign LANDED `425cfb27` (2026-07-03 night, →
+review): save-file dialog with editable name (single output), server-built
+STORE zip over GET export-zip/<stamp> (multi; zip.mjs, node built-ins only),
+suffix removed (loud reject on new writes, legacy ignored), automatic naming
+slug + @scale + _NN (deterministic), dir-picker/IndexedDB path deleted; CLI
+--to unchanged, --zip added. Tests 232. Live browser check (real Downloads
+write + Windows unzip) = lead's morning item.
 
 T0204 history panel LANDED `df8cfe09` (2026-07-03 night, → review):
 `jumpHistory` = history NAVIGATION over the existing sidecar snapshots
@@ -199,15 +218,18 @@ syntax `2x` / `512w` / `512h`; formats PNG/JPG/SVG/PDF (SVG/PDF locked to 1x);
 JPG quality is a preset, resampling bicubic ("Detailed") or nearest ("Basic");
 a Preview disclosure; bulk export modal on Ctrl+Shift+E.
 
-Our raster adaptation (T0206): same section/rows/persistence/scale syntax;
-formats PNG/JPG/WebP with an explicit quality slider for the lossy two (the
-lead wants visible "сжатие"); resample = Lanczos (smooth) / nearest (pixel
-art); per-element settings stored via a journaled op (agent parity — CLI can
-set them too); Export button asks WHERE (File System Access dir picker,
-remembered per project, zip/download fallback, CLI `--to`); no selection →
-project-level export of screens; `<project>/export/<stamp>/` stays the
-automation default. The clean-art supersampling (generate 2x → export 1x with
-Lanczos) lands with this panel.
+Our raster adaptation (T0206, destination REDESIGNED by T0229 2026-07-03):
+same section/rows/persistence/scale syntax; formats PNG/JPG/WebP with an
+explicit quality slider for the lossy two; resample = Lanczos (smooth) /
+nearest (pixel art); per-element settings stored via a journaled op (agent
+parity — CLI can set them too); no selection → project-level export of
+screens; `<project>/export/<stamp>/` stays the automation default. The
+clean-art supersampling (generate 2x → export 1x with Lanczos) lands with
+this panel. DESTINATION (T0229, replaces the dir-picker after Chrome blocked
+system folders): single output = save-file dialog with editable name;
+multiple outputs = one STORE zip via the same dialog; suffix REMOVED — names
+are automatic (slug + @scale marker only when needed); CLI `--to` unchanged,
+`--zip` added.
 
 ## Clean art track (lead's 4-step ladder against AI noise)
 
