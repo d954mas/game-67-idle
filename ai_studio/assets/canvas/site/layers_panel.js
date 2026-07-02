@@ -218,7 +218,9 @@ function groupSection(group, depth) {
   head.dataset.groupId = group.id;
   if (depth > 0) head.classList.add("indented");
   head.style.setProperty("--depth", String(depth)); // CSS indent guides (item 8b)
-  if (state.selectedGroupId === group.id) head.classList.add("selected");
+  // Highlight keys on the PLURAL set: with 2+ groups selected the singular primary
+  // is null (syncPrimaryGroup), and the rows looked unselected — "не работает".
+  if (state.selectedGroupIds.has(group.id)) head.classList.add("selected");
 
   // Indent a nested group head one spacer per ancestor level (its own caret button
   // provides the baseline indent for its members).
@@ -352,7 +354,7 @@ function applyLayersSelection() {
     row.classList.toggle("selected", state.selectedIds.has(row.dataset.elementId));
   }
   for (const head of list.querySelectorAll(".group-head[data-group-id]")) {
-    head.classList.toggle("selected", state.selectedGroupId === head.dataset.groupId);
+    head.classList.toggle("selected", state.selectedGroupIds.has(head.dataset.groupId));
   }
 }
 
