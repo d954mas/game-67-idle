@@ -122,7 +122,7 @@
             "surface",
             "assets",
             "tool-picker",
-            "raster2d"
+            "image"
           ]
         },
         {
@@ -280,7 +280,7 @@
                 "ui",
                 "browser-js",
                 "assets",
-                "raster2d"
+                "image"
               ]
             },
             {
@@ -294,7 +294,7 @@
                 "ui",
                 "style",
                 "assets",
-                "raster2d"
+                "image"
               ]
             },
             {
@@ -308,7 +308,7 @@
                 "ui",
                 "browser-js",
                 "assets",
-                "raster2d",
+                "image",
                 "testable-logic"
               ]
             },
@@ -323,7 +323,7 @@
                 "ui",
                 "browser-js",
                 "assets",
-                "raster2d",
+                "image",
                 "testable-logic"
               ]
             },
@@ -338,7 +338,7 @@
                 "ui",
                 "browser-js",
                 "assets",
-                "raster2d",
+                "image",
                 "alpha",
                 "testable-logic"
               ]
@@ -354,7 +354,7 @@
                 "ui",
                 "browser-js",
                 "assets",
-                "raster2d",
+                "image",
                 "testable-logic"
               ]
             },
@@ -369,7 +369,7 @@
                 "ui",
                 "browser-js",
                 "assets",
-                "raster2d",
+                "image",
                 "testable-logic"
               ]
             },
@@ -384,7 +384,7 @@
                 "ui",
                 "browser-js",
                 "assets",
-                "raster2d",
+                "image",
                 "slice9",
                 "testable-logic"
               ]
@@ -438,7 +438,7 @@
               "tags": [
                 "test",
                 "assets",
-                "raster2d",
+                "image",
                 "ui"
               ]
             },
@@ -452,7 +452,7 @@
               "tags": [
                 "test",
                 "assets",
-                "raster2d",
+                "image",
                 "ui"
               ]
             },
@@ -466,7 +466,7 @@
               "tags": [
                 "test",
                 "assets",
-                "raster2d",
+                "image",
                 "alpha",
                 "ui"
               ]
@@ -481,7 +481,7 @@
               "tags": [
                 "test",
                 "assets",
-                "raster2d",
+                "image",
                 "ui"
               ]
             },
@@ -495,7 +495,7 @@
               "tags": [
                 "test",
                 "assets",
-                "raster2d",
+                "image",
                 "ui"
               ]
             },
@@ -509,7 +509,7 @@
               "tags": [
                 "test",
                 "assets",
-                "raster2d",
+                "image",
                 "slice9",
                 "ui"
               ]
@@ -725,18 +725,18 @@
         },
         {
           "id": "assets:tools-raster2d",
-          "title": "Raster 2D Image Tools",
-          "subtitle": "sources, regions, slicing, alpha, review",
+          "title": "Raster 2D Seam Shim",
+          "subtitle": "temporary canvas seam -> image tools",
           "kind": "group",
           "path": "ai_studio/assets/tools/raster2d",
           "color": "#0d9488",
-          "description": "New Python-first staged structure and API bridge for generated or sourced 2D image work: source-image conventions, background normalization, region detection, slicing, single-region PNG export, per-region alpha policy, and review outputs used by the Asset Tools surface.",
-          "role": "2D image workflow tools",
+          "description": "Temporary canvas seam. The 2D image tools were decomposed into ai_studio/assets/tools/image/*; api.mjs here only re-exports uploadImageSource/detectImageRegions (and the composed handler) under their old raster2d names because the canvas still imports them (ops.mjs). The canvas migrates in increment 6, then this folder is deleted. The public /api/asset-tools/raster2d/* endpoint URLs and the tmp/ai_studio/assets/raster2d/ prefix stay stable for the frozen viewer.",
+          "role": "temporary canvas seam shim",
           "tags": [
             "assets",
             "tools",
-            "raster2d",
-            "image-pipeline"
+            "image",
+            "seam"
           ]
         },
         {
@@ -1051,37 +1051,6 @@
           ]
         },
         {
-          "id": "assets:tools-cutout",
-          "title": "Cutout / Alpha Tools",
-          "subtitle": "key matte and dual plate",
-          "kind": "group",
-          "path": "ai_studio/assets/tools/cutout",
-          "color": "#0d9488",
-          "description": "Tools for alpha extraction, key-matte cleanup, dual-plate extraction, trim support, and transparent-edge hygiene.",
-          "role": "cutout and alpha cleanup",
-          "tags": [
-            "assets",
-            "tools",
-            "cutout",
-            "alpha"
-          ],
-          "children": [
-            {
-              "id": "assets:tools-cutout-readme",
-              "kind": "doc",
-              "path": "ai_studio/assets/tools/cutout/README.md",
-              "title": "README.md",
-              "description": "Cutout Tools contract: alpha extraction, key matte, dual plate, and edge cleanup ownership.",
-              "role": "cutout tools guide",
-              "tags": [
-                "assets",
-                "tools",
-                "cutout"
-              ]
-            }
-          ]
-        },
-        {
           "id": "assets:tools-review-atlas",
           "title": "Review Atlas",
           "subtitle": "visual contact sheets",
@@ -1209,7 +1178,7 @@
         "assets",
         "canvas",
         "tool-parity",
-        "raster2d"
+        "image"
       ],
       "children": [
         {
@@ -1262,7 +1231,7 @@
             "assets",
             "canvas",
             "tool-parity",
-            "raster2d"
+            "image"
           ]
         },
         {

@@ -1,4 +1,4 @@
-# Raster 2D Region Detection
+# image/regions — region detection
 
 Detect isolated regions on a normalized chroma-key source sheet and emit rects
 for slicing.

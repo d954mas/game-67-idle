@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 import { createTaskboardApi } from "../taskboard/api.mjs";
 import { findRoot } from "../taskboard/lib.mjs";
 import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/viewer/api.mjs";
-import { createRaster2dAssetToolsApi, resolveRaster2dTmpPath } from "../assets/tools/raster2d/api.mjs";
+import { createImageAssetToolsApi, resolveImageTmpPath } from "../assets/tools/image/api.mjs";
 import { createArchitectureMapApi } from "../architecture_map/api.mjs";
 import { createCanvasApi } from "../assets/canvas/api.mjs";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
@@ -25,7 +25,7 @@ const assetPreviewRoot = join(aiStudioRoot, "assets", "backlog", "storage", "pre
 const port = Number.parseInt(process.argv[2] || process.env.AI_STUDIO_PORT || "8765", 10);
 const handleTaskboardApi = createTaskboardApi(root);
 const handleAssetViewerApi = createAssetViewerApi(root);
-const handleRaster2dAssetToolsApi = createRaster2dAssetToolsApi(root);
+const handleImageAssetToolsApi = createImageAssetToolsApi(root);
 const handleArchitectureMapApi = createArchitectureMapApi(root);
 const handleCanvasApi = createCanvasApi(root);
 const stateDir = join(root, "tmp", "ai_studio");
@@ -119,7 +119,7 @@ function staticPath(pathname) {
   }
 
   if (pathname.startsWith("/tmp/")) {
-    return resolveRaster2dTmpPath(root, pathname);
+    return resolveImageTmpPath(root, pathname);
   }
 
   return null;
@@ -163,7 +163,7 @@ const server = createServer((req, res) => {
       return;
     }
 
-    handleRaster2dAssetToolsApi(req, res, url).then((handled) => {
+    handleImageAssetToolsApi(req, res, url).then((handled) => {
       if (handled) return;
       handleAssetViewerApi(req, res, url).then((assetHandled) => {
         if (!assetHandled) handleTaskboardApi(req, res, url);

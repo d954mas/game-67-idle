@@ -1,1 +1,1 @@
-"""Raster 2D region detection tools."""
+"""Region detection over a normalized source image."""

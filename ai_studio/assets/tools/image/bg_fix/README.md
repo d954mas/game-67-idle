@@ -1,4 +1,4 @@
-# Raster 2D Background
+# image/bg_fix — background normalization
 
 Normalize generated or sourced sheet backgrounds before region detection.
 

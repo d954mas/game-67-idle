@@ -1,1 +1,1 @@
-"""Raster 2D background normalization tools."""
+"""Border-connected background chroma normalization (snap background to key)."""

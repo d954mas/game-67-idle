@@ -1,4 +1,4 @@
-# Raster 2D Sources
+# image/sources — source image conventions
 
 Working conventions for source images before they become accepted project
 assets.
