@@ -1,0 +1,13 @@
+{
+  "id": "studio-readme",
+  "kind": "doc",
+  "path": "ai_studio/README.md",
+  "title": "ai_studio/README.md",
+  "description": "AI Studio root index: describes available capabilities, task routing, migration rules, map ownership, and where to go for each kind of work.",
+  "role": "AI Studio root capability index and router",
+  "tags": [
+    "source",
+    "router",
+    "migration"
+  ]
+}

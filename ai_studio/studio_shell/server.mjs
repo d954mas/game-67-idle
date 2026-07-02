@@ -12,6 +12,7 @@ import { createTaskboardApi } from "../taskboard/api.mjs";
 import { findRoot } from "../taskboard/lib.mjs";
 import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/viewer/api.mjs";
 import { createRaster2dAssetToolsApi, resolveRaster2dTmpPath } from "../assets/tools/raster2d/api.mjs";
+import { createArchitectureMapApi } from "../architecture_map/api.mjs";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
 
 const repoGuess = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -24,6 +25,7 @@ const port = Number.parseInt(process.argv[2] || process.env.AI_STUDIO_PORT || "8
 const handleTaskboardApi = createTaskboardApi(root);
 const handleAssetViewerApi = createAssetViewerApi(root);
 const handleRaster2dAssetToolsApi = createRaster2dAssetToolsApi(root);
+const handleArchitectureMapApi = createArchitectureMapApi(root);
 const stateDir = join(root, "tmp", "ai_studio");
 const pidFile = join(stateDir, `studio_shell_${port}.pid`);
 
@@ -135,6 +137,10 @@ const server = createServer((req, res) => {
   if (url.pathname.startsWith("/api/")) {
     if (url.pathname === "/api/quality-checks") {
       serveJson(res, loadQualityCatalog(root));
+      return;
+    }
+    if (url.pathname === "/api/architecture-tree" || url.pathname === "/api/architecture-validation") {
+      handleArchitectureMapApi(req, res, url);
       return;
     }
 

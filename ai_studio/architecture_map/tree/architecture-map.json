@@ -1,0 +1,136 @@
+{
+  "id": "architecture-map",
+  "title": "Architecture Map",
+  "subtitle": "tree renderer and map validation",
+  "kind": "module",
+  "color": "#64748b",
+  "description": "Self-map for this AI Studio workspace tree: live HTML renderer, declarative tree data, and validation report for unmapped or stale paths.",
+  "tags": [
+    "map",
+    "migration",
+    "source-of-truth",
+    "validation-report"
+  ],
+  "children": [
+    {
+      "id": "architecture-map:tree-source",
+      "kind": "doc",
+      "path": "ai_studio/tree.json",
+      "title": "tree.json",
+      "description": "Declarative source for the working AI Studio workspace tree: hierarchy, node ids, manual labels, roles, tags, explicit child order, and shallow workspace roots.",
+      "role": "declarative source of the AI Studio workspace tree",
+      "tags": [
+        "tree-source",
+        "edit-this"
+      ]
+    },
+    {
+      "id": "architecture-map:readme",
+      "kind": "doc",
+      "path": "ai_studio/architecture_map/README.md",
+      "title": "README.md",
+      "description": "Architecture Map module contract: tree.json is architecture truth, index.html only renders, validate_map.mjs only audits.",
+      "role": "architecture map module contract",
+      "tags": [
+        "source",
+        "contract"
+      ]
+    },
+    {
+      "id": "architecture-map:surface",
+      "kind": "surface",
+      "path": "ai_studio/architecture_map/index.html",
+      "title": "Architecture Map Surface",
+      "description": "Browser surface and renderer for tree.json and validation-report.json. It is hosted by Studio Shell but owned by Architecture Map.",
+      "role": "live architecture map surface",
+      "tags": [
+        "renderer",
+        "ui",
+        "surface"
+      ]
+    },
+    {
+      "id": "architecture-map:validator",
+      "kind": "validation",
+      "path": "ai_studio/architecture_map/validate_map.mjs",
+      "title": "validate_map.mjs",
+      "description": "Scans AI Studio source locations and shallow workspace folder roots, then writes validation-report.json with unmapped, missing, duplicate, and underspecified paths.",
+      "role": "architecture map scanner and report writer",
+      "tags": [
+        "validator",
+        "audit"
+      ]
+    },
+    {
+      "id": "architecture-map:validation-report",
+      "kind": "validation",
+      "path": "ai_studio/architecture_map/validation-report.json",
+      "title": "validation-report.json",
+      "description": "Generated report displayed by the map page so newly created or unmapped paths are visible during refactoring.",
+      "role": "generated validation report",
+      "tags": [
+        "generated",
+        "report"
+      ]
+    },
+    {
+      "id": "architecture-map:validator-tests",
+      "kind": "test",
+      "path": "ai_studio/architecture_map/tests/validate_map.test.mjs",
+      "title": "validate_map.test.mjs",
+      "description": "Regression tests for missing, duplicate, unmapped, mapped-directory, and shallow workspace-folder validation behavior.",
+      "role": "architecture map validator tests",
+      "tags": [
+        "test"
+      ]
+    },
+    {
+      "id": "architecture-map:tree-parts",
+      "kind": "dir",
+      "path": "ai_studio/architecture_map/tree",
+      "title": "tree/",
+      "description": "Split architecture tree parts: one JSON file per top-level workspace child, listed by the ai_studio/tree.json index and merged back into one tree by tree_loader.mjs.",
+      "role": "split architecture tree parts",
+      "tags": [
+        "tree-source",
+        "split",
+        "parts"
+      ]
+    },
+    {
+      "id": "architecture-map:tree-loader",
+      "kind": "tool",
+      "path": "ai_studio/architecture_map/tree_loader.mjs",
+      "title": "tree_loader.mjs",
+      "description": "Loads the ai_studio/tree.json index and merges the architecture_map/tree/ parts into one workspace tree for the validator, the Studio Shell route, and the renderer.",
+      "role": "architecture tree loader and part merger",
+      "tags": [
+        "loader",
+        "merge"
+      ]
+    },
+    {
+      "id": "architecture-map:api",
+      "kind": "api",
+      "path": "ai_studio/architecture_map/api.mjs",
+      "title": "api.mjs",
+      "description": "Studio Shell API adapter for Architecture Map: serves the merged tree at /api/architecture-tree and a live report at /api/architecture-validation so no report file is committed.",
+      "role": "architecture map HTTP API adapter",
+      "tags": [
+        "api",
+        "server"
+      ]
+    },
+    {
+      "id": "architecture-map:split-tests",
+      "kind": "test",
+      "path": "ai_studio/architecture_map/tests/tree_split.test.mjs",
+      "title": "tree_split.test.mjs",
+      "description": "Round-trip tests for splitting and merging the architecture tree index, plus sanity checks for the /api/architecture-tree and /api/architecture-validation routes.",
+      "role": "architecture tree split and API tests",
+      "tags": [
+        "test"
+      ]
+    }
+  ]
+}

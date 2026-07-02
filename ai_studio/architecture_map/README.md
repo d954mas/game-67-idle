@@ -4,15 +4,26 @@ This module owns the visual AI Studio architecture map.
 
 The map is data-driven:
 
-- `../tree.json` is the architecture source of truth.
-- `index.html` renders the map in the browser.
-- `validate_map.mjs` scans AI Studio source locations, shallow workspace
-  folder roots, and writes
-  `validation-report.json`.
-- `validation-report.json` is displayed by the page so unmapped, missing, or
-  duplicated files are visible during refactoring.
-- `../studio_shell/server.mjs` hosts the map surface so browser `fetch()` can
-  read JSON files.
+- `../tree.json` is the architecture source of truth. It is a small **index**:
+  it keeps the root-node metadata plus a `root.parts` list of per-child files
+  under `tree/`. Each top-level workspace child (one module or workspace group)
+  is one JSON file in `tree/`, so edits localize to a single part.
+- `tree/` holds the split parts. Edit the matching part file, not one giant
+  tree; add or reorder a top-level child by editing the `parts` list in
+  `../tree.json`.
+- `tree_loader.mjs` merges the index and its parts back into one tree. A legacy
+  single-file tree (`root.children` with no `root.parts`) is returned unchanged.
+- `index.html` renders the map in the browser. It loads the merged tree from
+  `GET /api/architecture-tree` (falling back to reading `../tree.json` and
+  merging `tree/` parts client-side).
+- `validate_map.mjs` merges the tree, scans AI Studio source locations and
+  shallow workspace folder roots, and writes a local `validation-report.json`
+  for offline inspection. That file is **git-ignored, not committed**.
+- `api.mjs` is the Studio Shell adapter. `GET /api/architecture-validation`
+  returns a freshly computed report so the page never depends on a committed
+  file; `GET /api/architecture-tree` returns the merged tree.
+- `../studio_shell/server.mjs` hosts the map surface and mounts `api.mjs` so
+  browser `fetch()` can read the merged tree and the live report.
 
 The page must not infer architecture from the repository. New files are not
 silently added to the map. They appear in validation until a human decides

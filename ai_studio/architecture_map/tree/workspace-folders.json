@@ -1,0 +1,240 @@
+{
+  "id": "workspace-folders",
+  "title": "Workspace Folders",
+  "subtitle": "games, templates, and features",
+  "kind": "group",
+  "color": "#64748b",
+  "description": "Repository workspace roots for reusable templates, copyable feature packs, and independent game folders. The map shows ownership boundaries here, not implementation files inside games, templates, or features.",
+  "role": "game, template, and feature workspace roots",
+  "tags": [
+    "workspace",
+    "templates",
+    "features",
+    "games"
+  ],
+  "children": [
+    {
+      "id": "workspace:templates",
+      "kind": "dir",
+      "path": "templates",
+      "coverage": "self",
+      "title": "templates/",
+      "description": "Container for reusable game template folders. Immediate child folders are explicit map nodes; files inside each template remain template-owned implementation detail.",
+      "role": "template root folder",
+      "tags": [
+        "templates",
+        "workspace"
+      ],
+      "children": [
+        {
+          "id": "workspace:templates-readme",
+          "kind": "doc",
+          "path": "templates/README.md",
+          "title": "README.md",
+          "description": "Templates workspace entrypoint: explains reusable template folders, template registry, game-copy ownership, and new template creation command.",
+          "role": "templates workspace entrypoint",
+          "tags": [
+            "templates",
+            "workspace",
+            "docs"
+          ]
+        },
+        {
+          "id": "workspace:templates:registry-data",
+          "kind": "config",
+          "path": "templates/templates.json",
+          "title": "templates.json",
+          "description": "Template workspace registry data. Asset Viewer and backlog source helpers read it, but templates/ owns the file.",
+          "role": "template workspace registry data",
+          "tags": [
+            "templates",
+            "workspace",
+            "assets",
+            "registry"
+          ]
+        },
+        {
+          "id": "workspace:template:template",
+          "kind": "dir",
+          "path": "templates/template",
+          "title": "template/",
+          "description": "Default reusable game template folder. The map stops at this folder; source files inside are template-owned implementation detail.",
+          "role": "default game template folder",
+          "tags": [
+            "template",
+            "game-template"
+          ]
+        },
+        {
+          "id": "workspace:templates:copy-model",
+          "kind": "doc",
+          "path": "templates/TEMPLATE.md",
+          "title": "TEMPLATE.md",
+          "description": "Template copy model: what is shared, what is copied into games, feature-pack policy, and game-only boundaries.",
+          "role": "template copy model documentation",
+          "tags": [
+            "templates",
+            "copy-model",
+            "docs"
+          ]
+        },
+        {
+          "id": "workspace:templates:new-template",
+          "kind": "tool",
+          "path": "templates/new_template.mjs",
+          "title": "new_template.mjs",
+          "description": "Copies an existing template into templates/<template-id>/, registers it as a reusable template asset root, creates or reuses the matching Taskboard project, and refreshes generated VS Code tasks/launch entries.",
+          "role": "new template creation command",
+          "tags": [
+            "templates",
+            "template-creation",
+            "assets",
+            "taskboard",
+            "vscode"
+          ]
+        },
+        {
+          "id": "workspace:templates:new-template-test",
+          "kind": "test",
+          "path": "templates/new_template.test.mjs",
+          "title": "new_template.test.mjs",
+          "description": "Regression tests proving new_template copies template files, registers template asset roots, creates a Taskboard project, and refreshes generated VS Code project entries without touching the real repository.",
+          "role": "new template creation tests",
+          "tags": [
+            "templates",
+            "test",
+            "template-creation"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "workspace:features",
+      "kind": "group",
+      "path": "features",
+      "coverage": "self",
+      "title": "features/",
+      "description": "Feature group for reusable copyable feature-pack folders. Immediate child folders are explicit map nodes; files inside each feature remain feature-owned implementation detail.",
+      "role": "reusable feature group",
+      "tags": [
+        "features",
+        "workspace"
+      ],
+      "children": [
+        {
+          "id": "workspace:features-readme",
+          "kind": "doc",
+          "path": "features/README.md",
+          "title": "README.md",
+          "description": "Features workspace entrypoint: explains copyable feature-pack shape, rules, and future manifest/install possibilities.",
+          "role": "features workspace entrypoint",
+          "tags": [
+            "features",
+            "workspace",
+            "docs"
+          ]
+        },
+        {
+          "id": "features:game-state",
+          "kind": "feature",
+          "path": "features/game-state",
+          "title": "game-state/",
+          "description": "Reusable schema-first game-state feature pack with code generation scripts, state contract references, migration rules, and DevAPI adapter generation.",
+          "role": "copyable game-state feature pack",
+          "tags": [
+            "features",
+            "game-state",
+            "schema",
+            "codegen"
+          ],
+          "children": [
+            {
+              "id": "features:game-state-skill",
+              "kind": "skill",
+              "path": ".codex/skills/nt-game-state-management",
+              "title": "nt-game-state-management",
+              "description": "Agent-facing skill router for the Game State feature pack. Canonical scripts and references live in features/game-state/.",
+              "role": "game-state agent router",
+              "tags": [
+                "features",
+                "game-state",
+                "skill",
+                "agent-facing"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "workspace:games",
+      "kind": "dir",
+      "path": "games",
+      "coverage": "self",
+      "title": "games/",
+      "description": "Container for independent game folders. Immediate child folders are explicit map nodes; files inside each game remain game-owned implementation detail.",
+      "role": "games root folder",
+      "tags": [
+        "games",
+        "workspace"
+      ],
+      "children": [
+        {
+          "id": "workspace:games-readme",
+          "kind": "doc",
+          "path": "games/README.md",
+          "title": "README.md",
+          "description": "Games workspace entrypoint: explains independent game folders, game asset registry, private design knowledge, and game creation command.",
+          "role": "games workspace entrypoint",
+          "tags": [
+            "games",
+            "workspace",
+            "docs"
+          ]
+        },
+        {
+          "id": "workspace:games:registry-data",
+          "kind": "config",
+          "path": "games/games.json",
+          "title": "games.json",
+          "description": "Game workspace registry data for game-local asset roots. Asset Viewer and backlog source helpers read it, but games/ owns the file.",
+          "role": "game workspace registry data",
+          "tags": [
+            "games",
+            "workspace",
+            "assets",
+            "registry"
+          ]
+        },
+        {
+          "id": "workspace:games:new-game",
+          "kind": "tool",
+          "path": "games/new_game.mjs",
+          "title": "new_game.mjs",
+          "description": "Copies templates/<template-id>/ into games/<game-id>/, registers that game asset root through backlog source helpers, creates or reuses the matching Taskboard project, and refreshes generated VS Code tasks/launch entries.",
+          "role": "new game creation command",
+          "tags": [
+            "games",
+            "game-creation",
+            "assets",
+            "taskboard",
+            "vscode"
+          ]
+        },
+        {
+          "id": "workspace:games:new-game-test",
+          "kind": "test",
+          "path": "games/new_game.test.mjs",
+          "title": "new_game.test.mjs",
+          "description": "Regression tests proving new_game copies template files, registers game asset roots, creates a Taskboard project, and refreshes generated VS Code project entries without touching the real repository.",
+          "role": "new game creation tests",
+          "tags": [
+            "games",
+            "test",
+            "game-creation"
+          ]
+        }
+      ]
+    }
+  ]
+}

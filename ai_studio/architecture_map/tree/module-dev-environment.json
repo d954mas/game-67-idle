@@ -1,0 +1,82 @@
+{
+  "id": "module:dev-environment",
+  "title": "Dev Environment",
+  "subtitle": "local IDE wiring",
+  "kind": "module",
+  "moduleId": "dev-environment",
+  "color": "#475569",
+  "description": "Local developer-environment helpers for generated IDE wiring. It owns VS Code task/launch generation from explicit template and game registries, but not game or template creation.",
+  "tags": [
+    "dev-environment",
+    "vscode",
+    "generated-output"
+  ],
+  "children": [
+    {
+      "id": "dev-environment:readme",
+      "kind": "doc",
+      "path": "ai_studio/dev_environment/README.md",
+      "title": "README.md",
+      "description": "Dev Environment module contract: local IDE wiring owner, generated outputs, boundaries, and commands.",
+      "role": "Dev Environment contract",
+      "tags": [
+        "dev-environment",
+        "contract",
+        "source"
+      ]
+    },
+    {
+      "id": "dev-environment:vscode-projects",
+      "kind": "tool",
+      "path": "ai_studio/dev_environment/vscode_projects.mjs",
+      "title": "vscode_projects.mjs",
+      "description": "Generates .vscode/tasks.json and .vscode/launch.json from registered templates and games so VS Code can build packs, build games, and launch each playable project explicitly.",
+      "role": "VS Code project entry generator",
+      "tags": [
+        "dev-environment",
+        "vscode",
+        "build",
+        "game-run"
+      ]
+    },
+    {
+      "id": "dev-environment:vscode-projects-test",
+      "kind": "test",
+      "path": "ai_studio/dev_environment/vscode_projects.test.mjs",
+      "title": "vscode_projects.test.mjs",
+      "description": "Regression tests for generated VS Code tasks and launch configurations from template/game registries.",
+      "role": "VS Code project entry generator tests",
+      "tags": [
+        "dev-environment",
+        "vscode",
+        "test"
+      ]
+    },
+    {
+      "id": "dev-environment:vscode-tasks",
+      "kind": "generated-output",
+      "path": ".vscode/tasks.json",
+      "title": ".vscode/tasks.json",
+      "description": "Generated VS Code task list for registered templates and games. Regenerate with ai_studio/dev_environment/vscode_projects.mjs.",
+      "role": "generated VS Code tasks",
+      "tags": [
+        "generated",
+        "vscode",
+        "dev-environment"
+      ]
+    },
+    {
+      "id": "dev-environment:vscode-launch",
+      "kind": "generated-output",
+      "path": ".vscode/launch.json",
+      "title": ".vscode/launch.json",
+      "description": "Generated VS Code launch configurations for registered templates and games. Regenerate with ai_studio/dev_environment/vscode_projects.mjs.",
+      "role": "generated VS Code launch configs",
+      "tags": [
+        "generated",
+        "vscode",
+        "dev-environment"
+      ]
+    }
+  ]
+}

@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
 
 import { collectScannedPaths, createValidationReport, hasStrictFailures } from "../validate_map.mjs";
+import { loadArchitectureTree } from "../tree_loader.mjs";
 
 function write(root, rel, text = "") {
   const abs = join(root, rel);
@@ -19,7 +21,8 @@ function collectNodes(node, out = []) {
 }
 
 function loadRepoTreeRoot() {
-  return JSON.parse(readFileSync(new URL("../../tree.json", import.meta.url), "utf8")).root;
+  const repoRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+  return loadArchitectureTree(repoRoot, "ai_studio/tree.json").root;
 }
 
 test("map validation reports missing, duplicate, and unmapped files", () => {

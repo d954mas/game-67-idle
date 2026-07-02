@@ -1,7 +1,8 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { loadArchitectureTree } from "./tree_loader.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 const defaultMapPath = "ai_studio/tree.json";
@@ -49,10 +50,6 @@ function toPosix(value) {
 
 function repoPath(repoRoot, rel) {
   return join(repoRoot, rel);
-}
-
-function readJson(repoRoot, rel) {
-  return JSON.parse(readFileSync(repoPath(repoRoot, rel), "utf8"));
 }
 
 function normalizeMapPath(pathValue) {
@@ -172,7 +169,7 @@ function createValidationReport(options = {}) {
   const repoRoot = options.repoRoot || defaultRepoRoot;
   const mapPath = options.mapPath || defaultMapPath;
   const scanRoots = options.scanRoots || defaultScanRoots;
-  const map = readJson(repoRoot, mapPath);
+  const map = loadArchitectureTree(repoRoot, mapPath);
   const { entries, missingDescriptions } = collectMapEntries(map);
   const pathToEntries = new Map();
   for (const entry of entries) {

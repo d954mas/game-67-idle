@@ -13,6 +13,10 @@ __pycache__/
 # Builder scratch for asset packs
 *.png.ppm
 
+# Generated architecture map report: served live via /api/architecture-validation.
+# The validate_map.mjs CLI still writes it locally for offline inspection.
+ai_studio/architecture_map/validation-report.json
+
 # Restricted paid/licensed asset binaries: never commit to an open repo.
 # Only catalog/license metadata is committed; binaries live locally and in the
 # private library. See ai_studio/assets/storage/license/.

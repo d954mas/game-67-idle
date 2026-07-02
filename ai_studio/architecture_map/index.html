@@ -1539,11 +1539,32 @@
       }
       return normalized;
     }
-    const externalTree = await fetchJson("../tree.json");
+    async function loadStudioTree() {
+      // Primary: merged tree served live by Studio Shell.
+      const merged = await fetchJson("/api/architecture-tree");
+      if (merged && merged.root) return merged;
+      // Fallback: read the on-disk index and merge its parts client-side.
+      const index = await fetchJson("../tree.json");
+      if (!index || !index.root) return null;
+      if (Array.isArray(index.root.parts)) {
+        const parts = await Promise.all(index.root.parts.map((part) => fetchJson("../" + part)));
+        if (parts.some((part) => !part)) return null;
+        const { parts: _parts, ...rootMeta } = index.root;
+        return { ...index, root: { ...rootMeta, children: parts } };
+      }
+      return index;
+    }
+    async function loadValidationReport() {
+      // Primary: live report from Studio Shell; fallback: local generated file.
+      const live = await fetchJson("/api/architecture-validation");
+      if (live) return live;
+      return await fetchJson("validation-report.json");
+    }
+    const externalTree = await loadStudioTree();
     if (externalTree && externalTree.root) {
       data.studioTree = normalizeStudioTreeNode(externalTree.root);
     }
-    const validationReport = await fetchJson("validation-report.json");
+    const validationReport = await loadValidationReport();
     if (validationReport) {
       data.validationReport = validationReport;
     }
@@ -3132,7 +3153,7 @@
             '<div class="map-validation-stat"><b>' + countText(summary.unmappedOutsideAiStudio) + '</b><span>unmapped outside</span></div>' +
           '</div>' +
           categories.map((entry) => renderCategory(entry[0], entry[1])).join("") +
-          '<p class="map-validation-note">Source: <a href="validation-report.json">validation-report.json</a>. Scanner only audits; tree ownership stays in ai_studio/tree.json.</p>' +
+          '<p class="map-validation-note">Source: <a href="/api/architecture-validation">/api/architecture-validation</a> (live). Scanner only audits; tree ownership stays in ai_studio/tree.json.</p>' +
         '</div>';
       if (!host.parentNode) document.body.appendChild(host);
     }

@@ -1,0 +1,235 @@
+{
+  "id": "runtime-automation",
+  "title": "Runtime Automation",
+  "subtitle": "DevAPI proof helpers",
+  "kind": "module",
+  "moduleId": "runtime-automation",
+  "color": "#7c3aed",
+  "description": "AI Studio module for local runtime proof automation: DevAPI client/CLI, native iteration helper, screenshots, video capture, PNG codec, pixel health, UI readability, and live-state capture matrices.",
+  "tags": [
+    "runtime",
+    "devapi",
+    "automation",
+    "proof"
+  ],
+  "children": [
+    {
+      "id": "runtime-automation:readme",
+      "kind": "doc",
+      "path": "ai_studio/runtime_automation/README.md",
+      "title": "README.md",
+      "description": "Runtime Automation module contract: local DevAPI client, screenshot capture, runtime proof helpers, pixel health, UI readability, and module boundaries.",
+      "role": "runtime automation entrypoint",
+      "tags": [
+        "runtime-automation",
+        "tool"
+      ]
+    },
+    {
+      "id": "runtime-automation:skill",
+      "kind": "skill",
+      "path": ".codex/skills/nt-runtime-automation/SKILL.md",
+      "title": "nt-runtime-automation",
+      "description": "Runtime Automation skill router for DevAPI discovery, native iteration, screenshots, recordings, pixel health, UI readability, and live-state evidence collection.",
+      "role": "runtime automation skill entrypoint",
+      "tags": [
+        "runtime-automation",
+        "skill"
+      ],
+      "children": [
+        {
+          "id": "runtime-automation:skill-runtime-workflow-rules",
+          "kind": "doc",
+          "path": ".codex/skills/nt-runtime-automation/references/runtime-workflow-rules.md",
+          "title": "runtime-workflow-rules.md",
+          "description": "Reference for runtime launch/reuse rhythm, evidence paths, shared AI Studio runtime helpers, and module boundaries.",
+          "role": "runtime automation workflow reference",
+          "tags": [
+            "runtime-automation",
+            "skill-reference"
+          ]
+        },
+        {
+          "id": "runtime-automation:skill-devapi-pattern",
+          "kind": "doc",
+          "path": ".codex/skills/nt-runtime-automation/references/devapi-pattern.md",
+          "title": "devapi-pattern.md",
+          "description": "Reference for DevAPI discovery, command metadata, UI/input, frame.wait sequencing, shared client usage, capture flow, and release gate boundaries.",
+          "role": "DevAPI skill reference",
+          "tags": [
+            "runtime-automation",
+            "skill-reference"
+          ]
+        },
+        {
+          "id": "runtime-automation:skill-visual-evidence",
+          "kind": "doc",
+          "path": ".codex/skills/nt-runtime-automation/references/visual-qa-checklist.md",
+          "title": "visual-qa-checklist.md",
+          "description": "Reference for collecting visual runtime evidence with screenshots, recordings, pixel health, readability checks, and stable-frame proof.",
+          "role": "runtime visual evidence reference",
+          "tags": [
+            "runtime-automation",
+            "skill-reference"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "runtime-automation:devapi-client",
+      "kind": "tool",
+      "path": "ai_studio/runtime_automation/devapi_client.py",
+      "title": "devapi_client.py",
+      "description": "Synchronous Python harness for the game DevAPI TCP command bus, native launch/reuse, screenshot capture, frame waits, and recording helpers.",
+      "role": "DevAPI Python client",
+      "tags": [
+        "runtime-automation",
+        "tool"
+      ]
+    },
+    {
+      "id": "runtime-automation:devapi-client-test",
+      "kind": "test",
+      "path": "ai_studio/runtime_automation/devapi_client_test.py",
+      "title": "devapi_client_test.py",
+      "description": "Regression tests for engine default DevAPI port handling and engine-native PNG capture payload decoding.",
+      "role": "DevAPI client tests",
+      "tags": [
+        "runtime-automation",
+        "test"
+      ]
+    },
+    {
+      "id": "runtime-automation:devapi-cli",
+      "kind": "tool",
+      "path": "ai_studio/runtime_automation/devapi_cli.py",
+      "title": "devapi_cli.py",
+      "description": "Minimal JSON command-line client for the game DevAPI TCP command bus.",
+      "role": "DevAPI CLI",
+      "tags": [
+        "runtime-automation",
+        "tool"
+      ]
+    },
+    {
+      "id": "runtime-automation:iterate",
+      "kind": "tool",
+      "path": "ai_studio/runtime_automation/iterate.py",
+      "title": "iterate.py",
+      "description": "One-command native visual iteration loop: build if stale, launch/reuse game, capture screenshot, and run UI readability audit.",
+      "role": "runtime visual iteration helper",
+      "tags": [
+        "runtime-automation",
+        "tool"
+      ]
+    },
+    {
+      "id": "runtime-automation:state-capture",
+      "kind": "tool",
+      "path": "ai_studio/runtime_automation/state_capture.py",
+      "title": "state_capture.py",
+      "description": "Universal multi-state screenshot capture helper that writes game.live_state_acceptance_matrix evidence JSON.",
+      "role": "live-state capture helper",
+      "tags": [
+        "runtime-automation",
+        "tool"
+      ]
+    },
+    {
+      "id": "runtime-automation:state-capture-test",
+      "kind": "test",
+      "path": "ai_studio/runtime_automation/state_capture_test.py",
+      "title": "state_capture_test.py",
+      "description": "Tests for StateCapture coverage, debt, idempotent recapture, and review-tool shot arguments.",
+      "role": "live-state capture tests",
+      "tags": [
+        "runtime-automation",
+        "test"
+      ]
+    },
+    {
+      "id": "runtime-automation:pixel-health",
+      "kind": "tool",
+      "path": "ai_studio/runtime_automation/pixel_health.py",
+      "title": "pixel_health.py",
+      "description": "Lightweight PNG pixel-health checks for blank, flat, or malformed screenshot evidence.",
+      "role": "screenshot health checker",
+      "tags": [
+        "runtime-automation",
+        "tool"
+      ]
+    },
+    {
+      "id": "runtime-automation:ui-readability",
+      "kind": "tool",
+      "path": "ai_studio/runtime_automation/ui_readability.py",
+      "title": "ui_readability.py",
+      "description": "UI/text readability zoom audit that crops and upscales screenshot bands and flags text-on-bright-background risks.",
+      "role": "UI readability screenshot audit",
+      "tags": [
+        "runtime-automation",
+        "tool"
+      ]
+    },
+    {
+      "id": "runtime-automation:png-io",
+      "kind": "tool",
+      "path": "ai_studio/runtime_automation/png_io.py",
+      "title": "png_io.py",
+      "description": "Dependency-free PNG encode/decode utility shared by capture, framebuffer conversion, and pixel health.",
+      "role": "PNG utility",
+      "tags": [
+        "runtime-automation",
+        "tool"
+      ]
+    },
+    {
+      "id": "runtime-automation:png-io-test",
+      "kind": "test",
+      "path": "ai_studio/runtime_automation/png_io_test.py",
+      "title": "png_io_test.py",
+      "description": "Tests for the dependency-free PNG codec.",
+      "role": "PNG utility tests",
+      "tags": [
+        "runtime-automation",
+        "test"
+      ]
+    },
+    {
+      "id": "runtime-automation:capture-window",
+      "kind": "tool",
+      "path": "ai_studio/runtime_automation/capture_window.py",
+      "title": "capture_window.py",
+      "description": "Windows window screenshot capture helper with PNG output.",
+      "role": "window capture helper",
+      "tags": [
+        "runtime-automation",
+        "tool"
+      ]
+    },
+    {
+      "id": "runtime-automation:capture-screen",
+      "kind": "tool",
+      "path": "ai_studio/runtime_automation/capture_screen.ps1",
+      "title": "capture_screen.ps1",
+      "description": "PowerShell screenshot capture fallback for still screenshots.",
+      "role": "screen capture helper",
+      "tags": [
+        "runtime-automation",
+        "tool"
+      ]
+    },
+    {
+      "id": "runtime-automation:record-screen",
+      "kind": "tool",
+      "path": "ai_studio/runtime_automation/record_screen_ffmpeg.ps1",
+      "title": "record_screen_ffmpeg.ps1",
+      "description": "PowerShell/ffmpeg screen recording helper for gameplay video evidence.",
+      "role": "screen recording helper",
+      "tags": [
+        "runtime-automation",
+        "tool"
+      ]
+    }
+  ]
+}

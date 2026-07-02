@@ -1,0 +1,282 @@
+{
+  "id": "module:game-design",
+  "title": "Game Design",
+  "subtitle": "GDD and design knowledge workflows",
+  "kind": "module",
+  "moduleId": "game_design",
+  "color": "#7c3aed",
+  "path": "ai_studio/game_design",
+  "description": "Reviewed AI Studio game-design workflow module. Owns primary GDD workflow, source routing, and knowledge workflow docs; shared reusable knowledge remains in ai_studio/game_design/knowledge_base/ while each game owns private design knowledge under games/<game-id>/design/knowledge/.",
+  "role": "game-design workflow module",
+  "tags": [
+    "game-design",
+    "gdd",
+    "knowledge",
+    "workflow"
+  ],
+  "children": [
+    {
+      "id": "game-design:readme",
+      "kind": "doc",
+      "path": "ai_studio/game_design/README.md",
+      "title": "README.md",
+      "description": "Game Design module contract: workflow ownership and boundary between shared reusable knowledge and private game knowledge.",
+      "role": "game-design module entrypoint",
+      "tags": [
+        "source",
+        "contract"
+      ]
+    },
+    {
+      "id": "game-design:knowledge-base",
+      "kind": "dir",
+      "path": "ai_studio/game_design/knowledge_base",
+      "title": "knowledge_base/",
+      "description": "Shared reusable game-development knowledge base: reusable knowledge pages and source notes. Per-game design knowledge remains under games/<game-id>/design/knowledge/.",
+      "role": "shared reusable game-development knowledge base",
+      "tags": [
+        "knowledge",
+        "sources",
+        "game-design"
+      ]
+    },
+    {
+      "id": "game-design:gdd",
+      "title": "Primary GDD Workflow",
+      "subtitle": "concept to first playable",
+      "kind": "workflow",
+      "path": "ai_studio/game_design/gdd",
+      "description": "Workflow docs for turning a game idea into scoped GDD gates, gameplay loop data, visual proof, web GDD surfaces, and implementation handoff.",
+      "role": "primary GDD workflow",
+      "tags": [
+        "gdd",
+        "concept",
+        "first-playable",
+        "workflow"
+      ],
+      "children": [
+        {
+          "id": "game-design:gdd-readme",
+          "kind": "doc",
+          "path": "ai_studio/game_design/gdd/README.md",
+          "title": "README.md",
+          "description": "Primary GDD Workflow contract: role, use cases, flow, files, and skill surface.",
+          "role": "primary GDD workflow entrypoint",
+          "tags": [
+            "source",
+            "contract"
+          ]
+        },
+        {
+          "id": "game-design:gdd-core-workflow",
+          "kind": "doc",
+          "path": "ai_studio/game_design/gdd/core_workflow.md",
+          "title": "core_workflow.md",
+          "description": "Core GDD gates, minimum artifacts, start checklist, rehydrate protocol, report shape, and stop rules.",
+          "role": "GDD core workflow",
+          "tags": [
+            "gdd",
+            "gates"
+          ]
+        },
+        {
+          "id": "game-design:gdd-creative-intake",
+          "kind": "doc",
+          "path": "ai_studio/game_design/gdd/creative_intake.md",
+          "title": "creative_intake.md",
+          "description": "Short intake loop for unclear taste, meme anchors, visual targets, gameplay fantasy, or acceptance criteria.",
+          "role": "GDD creative intake workflow",
+          "tags": [
+            "gdd",
+            "intake"
+          ]
+        },
+        {
+          "id": "game-design:gdd-design-stewardship",
+          "kind": "doc",
+          "path": "ai_studio/game_design/gdd/design_stewardship.md",
+          "title": "design_stewardship.md",
+          "description": "Rules for updating existing design docs without drift and keeping specs implementation-facing.",
+          "role": "GDD design stewardship workflow",
+          "tags": [
+            "gdd",
+            "stewardship"
+          ]
+        },
+        {
+          "id": "game-design:gdd-gameplay-systems",
+          "kind": "doc",
+          "path": "ai_studio/game_design/gdd/gameplay_systems.md",
+          "title": "gameplay_systems.md",
+          "description": "Player verbs, core loop, UI minimum, first slice, economy, and challenge contract guidance.",
+          "role": "GDD gameplay systems workflow",
+          "tags": [
+            "gdd",
+            "gameplay"
+          ]
+        },
+        {
+          "id": "game-design:gdd-visual-proof",
+          "kind": "doc",
+          "path": "ai_studio/game_design/gdd/visual_proof.md",
+          "title": "visual_proof.md",
+          "description": "Visual proof tiers, fake shot requirements, runtime asset proof, and review packet guidance.",
+          "role": "GDD visual proof workflow",
+          "tags": [
+            "gdd",
+            "visual"
+          ]
+        },
+        {
+          "id": "game-design:gdd-implementation-handoff",
+          "kind": "doc",
+          "path": "ai_studio/game_design/gdd/implementation_handoff.md",
+          "title": "implementation_handoff.md",
+          "description": "Source order, first playable packet, task breakdown, acceptance gates, and next prompt shape.",
+          "role": "GDD implementation handoff workflow",
+          "tags": [
+            "gdd",
+            "handoff"
+          ]
+        },
+        {
+          "id": "game-design:gdd-web-site",
+          "kind": "doc",
+          "path": "ai_studio/game_design/gdd/web_gdd_site.md",
+          "title": "web_gdd_site.md",
+          "description": "Visual GDD website requirements, sections, source-of-truth rules, and validation.",
+          "role": "web GDD workflow",
+          "tags": [
+            "gdd",
+            "web"
+          ]
+        },
+        {
+          "id": "game-design:gdd-review",
+          "kind": "doc",
+          "path": "ai_studio/game_design/gdd/review.md",
+          "title": "review.md",
+          "description": "GDD-specific review stance, gate review, and routing to Quality rules.",
+          "role": "GDD review workflow",
+          "tags": [
+            "gdd",
+            "review",
+            "quality"
+          ]
+        },
+        {
+          "id": "game-design:gdd-templates",
+          "kind": "doc",
+          "path": "ai_studio/game_design/gdd/templates.md",
+          "title": "templates.md",
+          "description": "Small templates for Definition of Done, design decisions, reference rows, risk gates, and final status.",
+          "role": "GDD templates",
+          "tags": [
+            "gdd",
+            "templates"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "game-design:knowledge",
+      "title": "Design Knowledge Workflow",
+      "subtitle": "source routing and promotion",
+      "kind": "workflow",
+      "path": "ai_studio/game_design/knowledge",
+      "description": "Workflow docs for design source routing, source intake, reference-backed work, reusable knowledge promotion, and file templates.",
+      "role": "design knowledge workflow",
+      "tags": [
+        "knowledge",
+        "sources",
+        "workflow"
+      ],
+      "children": [
+        {
+          "id": "game-design:knowledge-readme",
+          "kind": "doc",
+          "path": "ai_studio/game_design/knowledge/README.md",
+          "title": "README.md",
+          "description": "Design Knowledge Workflow contract: data boundaries and file roles.",
+          "role": "design knowledge workflow contract",
+          "tags": [
+            "source",
+            "contract"
+          ]
+        },
+        {
+          "id": "game-design:source-routing",
+          "kind": "doc",
+          "path": "ai_studio/game_design/knowledge/source_routing.md",
+          "title": "source_routing.md",
+          "description": "Routing rules for reusable source notes, reusable knowledge, private game knowledge, game design folders, tasks, and temporary scratch data.",
+          "role": "design source routing rules",
+          "tags": [
+            "sources",
+            "routing"
+          ]
+        },
+        {
+          "id": "game-design:source-intake-promotion",
+          "kind": "doc",
+          "path": "ai_studio/game_design/knowledge/source_intake_promotion.md",
+          "title": "source_intake_promotion.md",
+          "description": "Source intake and promotion workflow: source quality, evidence labels, and when to update knowledge indexes/logs.",
+          "role": "design source intake workflow",
+          "tags": [
+            "sources",
+            "evidence"
+          ]
+        },
+        {
+          "id": "game-design:reference-work-review",
+          "kind": "doc",
+          "path": "ai_studio/game_design/knowledge/reference_work_review.md",
+          "title": "reference_work_review.md",
+          "description": "Reference-driven design work and review checklist for named references that guide gameplay, UI, economy, balance, art, or implementation decisions.",
+          "role": "reference work review workflow",
+          "tags": [
+            "references",
+            "review"
+          ]
+        },
+        {
+          "id": "game-design:knowledge-templates",
+          "kind": "doc",
+          "path": "ai_studio/game_design/knowledge/templates.md",
+          "title": "templates.md",
+          "description": "Templates for reusable source notes, reusable knowledge pages, game source notes, and source review reports.",
+          "role": "design knowledge templates",
+          "tags": [
+            "templates"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "game-design:nt-primary-gdd-skill",
+      "kind": "skill",
+      "path": ".codex/skills/nt-primary-gdd/SKILL.md",
+      "title": "nt-primary-gdd",
+      "description": "Skill surface for turning game concepts into scoped first playable GDDs through AI Studio Game Design workflow docs.",
+      "role": "primary GDD skill",
+      "tags": [
+        "skill",
+        "gdd",
+        "game-design"
+      ]
+    },
+    {
+      "id": "game-design:nt-design-knowledge-skill",
+      "kind": "skill",
+      "path": ".codex/skills/nt-design-knowledge/SKILL.md",
+      "title": "nt-design-knowledge",
+      "description": "Skill surface for routing design sources and reusable game-design knowledge through the AI Studio Game Design workflow.",
+      "role": "design knowledge skill",
+      "tags": [
+        "skill",
+        "knowledge"
+      ]
+    }
+  ]
+}
