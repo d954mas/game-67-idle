@@ -48,3 +48,4 @@ and T0207 (cleanup tools).
 
 ## Log
 - 2026-07-02: Created from lead's live handover; decisions on WIP/viewer/layout recorded. Reconnaissance dispatched (read-only).
+- 2026-07-02: Recon complete (plan tmp/t0218_image_tools_recon_2026-07-02.md): June system fully alive at HEAD in cutout/ (key_matte=prod default since 12354465, key_to_alpha DELETED; dual_plate Smith&Blinn projection + pair gate; route soft_score 0.11). WIP verdicts: KEEP scipy-fallback+tests, ADAPT bundled-python discovery into shared _bridge, DROP viewer preview endpoint. Locked: chroma_key_alpha owned by alpha_matte (source_sheets cross-imports, documented); public HTTP URLs /api/asset-tools/raster2d/* + tmp prefix STAY (frozen viewer keeps working). 6 increments: _bridge extract -> alpha move -> raster2d move -> api split -> arch-map/docs -> canvas seam (gated on T0217).
