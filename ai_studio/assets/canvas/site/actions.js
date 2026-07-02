@@ -291,13 +291,13 @@ export async function exportElementIds(ids) {
   }
 }
 
-// ---- group (screen) ops ------------------------------------------------------
+// ---- group ops ------------------------------------------------------
 
 export async function createGroupFromSelection(name) {
   const ids = [...state.selectedIds];
   if (ids.length < 2) return;
   try {
-    const result = await api("POST", `/projects/${pid()}/groups`, { name: name || "New screen", fromElements: ids });
+    const result = await api("POST", `/projects/${pid()}/groups`, { name: name || "New group", fromElements: ids });
     clearSelection();
     state.selectedGroupId = result.group.id;
     await reloadProject(`Grouped ${ids.length} element(s) into "${result.group.name}".`);
@@ -308,9 +308,9 @@ export async function createGroupFromSelection(name) {
 
 const DEFAULT_GROUP_SIZE = { w: 960, h: 540 };
 
-// "+ Screen" (layers panel header): group the current selection into a screen
-// exactly like Ctrl/Cmd+G, or — when nothing is selected — create an empty
-// default-size screen centered on the current viewport via the same createGroup
+// Group the current selection (Ctrl/Cmd+G, layers/canvas context menus), or —
+// when nothing is selected — create an empty default-size group centered on
+// the current viewport via the same createGroup
 // op the CLI's group-create (no --elements) already uses.
 export async function createGroupOrDefault(name) {
   if (state.selectedIds.size > 0) {
@@ -320,7 +320,7 @@ export async function createGroupOrDefault(name) {
   try {
     const center = screenToImagePoint({ x: state.cssWidth / 2, y: state.cssHeight / 2 }, state.viewport);
     const body = {
-      name: name || "New screen",
+      name: name || "New group",
       x: Math.round(center.x - DEFAULT_GROUP_SIZE.w / 2),
       y: Math.round(center.y - DEFAULT_GROUP_SIZE.h / 2),
       w: DEFAULT_GROUP_SIZE.w,
@@ -328,20 +328,20 @@ export async function createGroupOrDefault(name) {
     };
     const result = await api("POST", `/projects/${pid()}/groups`, body);
     state.selectedGroupId = result.group.id;
-    await reloadProject(`Created screen "${result.group.name}".`);
+    await reloadProject(`Created group "${result.group.name}".`);
   } catch (error) {
     setStatus(error.message, true);
   }
 }
 
-// Move elements into a screen (groupId) or out to top level (null). Used by the
-// "Move to screen" context submenu and the layers-panel row drag.
+// Move elements into a group (groupId) or out to top level (null). Used by the
+// "Move to group" context submenu and the layers-panel row drag.
 export async function assignElementsToGroup(elementIds, groupId) {
   const ids = [...elementIds];
   if (!ids.length) return;
   try {
     await api("POST", `/projects/${pid()}/assign-group`, { elementIds: ids, groupId: groupId ?? null });
-    await reloadProject(groupId ? "Moved to screen." : "Moved out of screen.");
+    await reloadProject(groupId ? "Moved to group." : "Moved out of group.");
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -366,12 +366,12 @@ export async function setGroupVisible(groupId, visible) {
 
 export async function renderScreen(groupId, { scale = 1, background } = {}) {
   try {
-    setStatus("Rendering screen...");
+    setStatus("Rendering group...");
     const body = { scale };
     if (background) body.background = background;
     const result = await api("POST", `/projects/${pid()}/groups/${groupId}/render`, body);
     setStatusLinks(
-      `Rendered ${result.manifest.width}x${result.manifest.height} screen:`,
+      `Rendered ${result.manifest.width}x${result.manifest.height} group:`,
       exportLinks(result.folder, [result.file]),
     );
   } catch (error) {
@@ -386,7 +386,7 @@ export async function ungroup(groupId) {
     if (memberIds.length) await api("POST", `/projects/${pid()}/assign-group`, { elementIds: memberIds, groupId: null });
     await api("DELETE", `/projects/${pid()}/groups/${groupId}`);
     state.selectedGroupId = null;
-    await reloadProject("Ungrouped screen.");
+    await reloadProject("Ungrouped.");
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -396,7 +396,7 @@ export async function deleteGroupAction(groupId) {
   try {
     await api("DELETE", `/projects/${pid()}/groups/${groupId}`);
     state.selectedGroupId = null;
-    await reloadProject("Deleted screen (elements kept).");
+    await reloadProject("Deleted group (elements kept).");
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -406,6 +406,17 @@ export async function deleteGroupAction(groupId) {
 
 export async function undo() {
   if (!state.project || !state.history.canUndo) return;
+  // In region-edit isolation undo is clamped to the mode's own edits: never past
+  // the journal seq captured at entry (lead's rule — Esc first for older ops).
+  if (
+    state.regionEditId &&
+    state.regionEditBaseSeq != null &&
+    state.history.seq != null &&
+    state.history.seq <= state.regionEditBaseSeq
+  ) {
+    setStatus("Nothing to undo inside region editing — press Esc to exit first.");
+    return;
+  }
   try {
     await api("POST", `/projects/${pid()}/undo`);
     await reloadProject("Undid last change.");

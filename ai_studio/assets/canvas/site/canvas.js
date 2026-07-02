@@ -134,7 +134,7 @@ function onKeyDown(event) {
   }
   if (meta && code === "KeyG") {
     event.preventDefault();
-    createGroupFromSelection("New screen");
+    createGroupFromSelection("New group");
     return;
   }
   // Z-order by physical key (event.code so it works on any layout): Ctrl+] forward,

@@ -151,7 +151,7 @@ function drawGroupFrame(group, vp) {
   ctx.strokeStyle = selected ? "#d7a14a" : "#77a7ff";
   ctx.strokeRect(origin.x, origin.y, w, h);
 
-  const label = group.name || "Screen";
+  const label = group.name || "Group";
   ctx.font = "12px system-ui, 'Segoe UI', sans-serif";
   const padX = 6;
   const labelH = 16;
@@ -600,7 +600,7 @@ function commitGroupDrag(finished) {
         x: Math.round(finished.group.x),
         y: Math.round(finished.group.y),
       });
-      await reloadProject("Moved screen.");
+      await reloadProject("Moved group.");
     } catch (error) {
       setStatus(error.message, true);
     }

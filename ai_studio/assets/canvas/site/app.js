@@ -29,6 +29,9 @@ export const state = {
   expandedElements: new Set(), // element ids whose region tree is expanded in layers (page-only)
   cssWidth: 0, // stage size in CSS pixels (backing store is dpr-scaled)
   cssHeight: 0,
+  // Journal seq recorded at region-edit entry: in-mode Ctrl+Z never undoes past
+  // it (pre-mode ops need Esc first — lead's rule). Page-only, like regionEditId.
+  regionEditBaseSeq: null,
 };
 
 // Panel renderers are registered by their modules during init; refresh() fans out
@@ -220,6 +223,7 @@ export function enterRegionEdit(elementId) {
   if (!element) return;
   state.selectedGroupId = null;
   state.selectedIds = new Set([elementId]);
+  if (state.regionEditId !== elementId) state.regionEditBaseSeq = state.history.seq ?? null;
   state.regionEditId = elementId;
   state.expandedElements.add(elementId);
 }
@@ -227,6 +231,7 @@ export function enterRegionEdit(elementId) {
 // Leave isolation: clears region selection AND the mode (one Escape step).
 export function exitRegionEdit() {
   state.regionEditId = null;
+  state.regionEditBaseSeq = null;
   state.selectedRegionIds = new Set();
 }
 
@@ -259,6 +264,7 @@ export function reconcileRegionEdit(project, regionEditId, selectedRegionIds) {
 export function selectRegion(elementId, regionId, additive = false) {
   state.selectedGroupId = null;
   state.selectedIds = new Set([elementId]);
+  if (state.regionEditId !== elementId) state.regionEditBaseSeq = state.history.seq ?? null;
   state.regionEditId = elementId;
   if (additive) {
     if (state.selectedRegionIds.has(regionId)) state.selectedRegionIds.delete(regionId);
@@ -306,14 +312,16 @@ export async function loadProjects() {
 
 export async function refreshHistory() {
   if (!state.project) {
-    state.history = { canUndo: false, canRedo: false };
+    state.history = { canUndo: false, canRedo: false, seq: null };
     return;
   }
   try {
     const history = await api("GET", `/projects/${state.project.id}/history`);
-    state.history = { canUndo: history.canUndo, canRedo: history.canRedo };
+    // history_seq = current journal head; the region-edit undo clamp compares
+    // against the seq captured at mode entry.
+    state.history = { canUndo: history.canUndo, canRedo: history.canRedo, seq: history.history_seq ?? null };
   } catch {
-    state.history = { canUndo: false, canRedo: false };
+    state.history = { canUndo: false, canRedo: false, seq: null };
   }
 }
 
@@ -331,6 +339,7 @@ export async function reloadProject(message) {
   const region = reconcileRegionEdit(state.project, state.regionEditId, state.selectedRegionIds);
   state.regionEditId = region.regionEditId;
   state.selectedRegionIds = region.selectedRegionIds;
+  if (!state.regionEditId) state.regionEditBaseSeq = null;
   await refreshHistory();
   refresh();
   if (message !== undefined) setStatus(message);

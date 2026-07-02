@@ -376,7 +376,7 @@ function renderGroupInspector(group, root) {
   layout.appendChild(visRow);
   layout.appendChild(readOnly("Members", String(memberElements(group.id).length)));
 
-  const render = collapsible(root, "render", "Render screen");
+  const render = collapsible(root, "render", "Render group");
   const controls = document.createElement("div");
   controls.className = "insp-render";
 
@@ -413,7 +413,7 @@ function renderGroupInspector(group, root) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "primary insp-btn";
-  button.textContent = "Render screen";
+  button.textContent = "Render group";
   button.addEventListener("click", () => {
     renderScreen(group.id, {
       scale: Number(scale.value),

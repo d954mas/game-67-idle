@@ -480,7 +480,7 @@ export function createGroup(root, { projectId, name, x, y, w, h, fromElements } 
   const startedAt = performance.now();
   const before = getProject(root, projectId);
   const groupId = `grp_${randomUUID().slice(0, 8)}`;
-  const cleanName = String(name || "").trim() || "Screen";
+  const cleanName = String(name || "").trim() || "Group";
 
   let bounds;
   let memberIds = [];

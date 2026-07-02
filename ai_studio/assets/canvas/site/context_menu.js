@@ -1,14 +1,15 @@
 // Right-click context menu. Its items depend on the target (an element, a region
-// on the selected element, a group label/frame, or empty canvas); every item calls
-// an existing action. The menu is positioned at the pointer, clamped to the
-// viewport, supports one level of hover submenu ("Move to screen"), and closes on
-// click-away or Escape. Pure rendering/input.
+// on the selected element, a group label/frame, empty canvas, or the layers-panel
+// background); every item calls an existing action. The menu is positioned at the
+// pointer, clamped to the viewport, supports one level of hover submenu ("Move to
+// group"), and closes on click-away or Escape. Pure rendering/input.
 import { el, elementById, enterRegionEdit, groupById, groups, refresh, setStatus, state } from "./app.js";
 import {
   assignElementsToGroup,
   bringElementForward,
   bringElementToFront,
   createGroupFromSelection,
+  createGroupOrDefault,
   deleteElements,
   deleteGroupAction,
   deleteRegion,
@@ -89,11 +90,11 @@ function targetElementIds(elementId) {
   return [elementId];
 }
 
-// "Move to screen ▸" submenu items: every screen + "None" (top level).
+// "Move to group ▸" submenu items: every group + "None" (top level).
 function moveToScreenItems(elementId) {
   const ids = targetElementIds(elementId);
   const items = groups().map((group) => ({
-    label: group.name || "Screen",
+    label: group.name || "Group",
     onClick: () => assignElementsToGroup(ids, group.id),
   }));
   items.push({ separator: true });
@@ -135,12 +136,12 @@ function itemsFor(target) {
     // workspace.js onContextMenu): a 2+ selection offers grouping; a single element
     // offers z-order (ambiguous across a multi-selection, so hidden there).
     if (state.selectedIds.size >= 2) {
-      items.push({ label: "Group into screen", onClick: () => createGroupFromSelection("New screen") });
+      items.push({ label: "Group selection", onClick: () => createGroupFromSelection("New group") });
     } else {
       items.push({ label: "Order", submenu: orderItems(element.id) });
     }
     if (groups().length || element.groupId) {
-      items.push({ label: "Move to screen", submenu: moveToScreenItems(element.id) });
+      items.push({ label: "Move to group", submenu: moveToScreenItems(element.id) });
     }
     items.push(
       { separator: true },
@@ -161,7 +162,7 @@ function itemsFor(target) {
     if (!group) return [];
     const visible = group.visible !== false;
     return [
-      { label: "Render screen", onClick: () => renderScreen(group.id, { scale: 1 }) },
+      { label: "Render group", onClick: () => renderScreen(group.id, { scale: 1 }) },
       { label: "Rename", onClick: () => focusInspectorName() },
       { label: visible ? "Hide" : "Show", onClick: () => setGroupVisible(group.id, !visible) },
       { label: "Ungroup", onClick: () => ungroup(group.id) },
@@ -169,10 +170,16 @@ function itemsFor(target) {
       { label: "Delete group", danger: true, onClick: () => deleteGroupAction(group.id) },
     ];
   }
+  if (target.kind === "layers-empty") {
+    // Layers-panel background: group creation lives here (the "+ Screen" header
+    // button was removed — lead unified the naming on "group").
+    return [{ label: "Create group", onClick: () => createGroupOrDefault("New group") }];
+  }
   // empty canvas
   return [
     { label: "Add image", onClick: () => el("file-input").click() },
     { label: "Paste", onClick: () => pasteFromClipboard() },
+    { label: "Create group", onClick: () => createGroupOrDefault("New group") },
     { label: "Fit", onClick: () => el("zoom-fit").click() },
   ];
 }

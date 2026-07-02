@@ -25,7 +25,6 @@ import {
 } from "./app.js";
 import {
   assignElementsToGroup,
-  createGroupOrDefault,
   renameElement,
   renameGroup,
   reorderElementTo,
@@ -148,7 +147,7 @@ function groupSection(group) {
 
   const name = document.createElement("span");
   name.className = "group-name";
-  name.textContent = group.name || "Screen";
+  name.textContent = group.name || "Group";
   name.title = "Double-click to rename";
   head.appendChild(name);
   head.addEventListener("dblclick", (event) => {
@@ -428,10 +427,14 @@ function setLayersCollapsed(collapsed) {
 
 export function initLayers() {
   hooks.renderLayers = renderLayers;
-  // "+ Screen": groups the current selection (same as Ctrl/Cmd+G), or creates an
-  // empty default-size screen when nothing is selected.
-  const newGroupBtn = el("layers-new-group");
-  if (newGroupBtn) newGroupBtn.addEventListener("click", () => createGroupOrDefault("New screen"));
+  // Right-click on the empty area of the list: create a group (groups the current
+  // selection like Ctrl/Cmd+G, or creates an empty default-size one). Row/group
+  // rows own their contextmenu handlers, so only background clicks land here.
+  el("layers-list")?.addEventListener("contextmenu", (event) => {
+    if (event.target.closest(".layer-row, .group-head, button")) return;
+    event.preventDefault();
+    openContextMenu(event.clientX, event.clientY, { kind: "layers-empty" });
+  });
 
   // Collapse to a slim rail (header ☰) / re-open from the rail (icon button).
   const panel = el("layers-panel");

@@ -20,7 +20,7 @@
 //   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h]
 //   node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
-//   node ai_studio/assets/canvas/cli.mjs render-screen <id> --group g [--scale 2] [--background '#rrggbb']
+//   node ai_studio/assets/canvas/cli.mjs render-group <id> --group g [--scale 2] [--background "#rrggbb"]
 //   node ai_studio/assets/canvas/cli.mjs undo|redo|history <id>
 import { readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
@@ -76,7 +76,7 @@ function print(value) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|element-reorder|regions-set|regions-show|slice|export|group-create|group-move|group-set|group-assign|group-delete|render-screen|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|element-reorder|regions-set|regions-show|slice|export|group-create|group-move|group-set|group-assign|group-delete|render-group|undo|redo|history>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -97,7 +97,7 @@ function usage() {
   group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>]
   group-assign <id> --elements e1,e2 --group <gid>|none
   group-delete <id> --group <gid>
-  render-screen <id> --group <gid> [--scale <n>] [--background '#rrggbb']
+  render-group <id> --group <gid>  (alias: render-screen) [--scale <n>] [--background '#rrggbb']
   undo <id>
   redo <id>
   history <id>`);
@@ -244,9 +244,10 @@ async function runCommand(command, id, positional, flags) {
       if (!flags.group) fail("group-delete requires --group <gid>");
       return print(deleteGroup(repoRoot, { projectId: id, groupId: flags.group }));
     }
+    case "render-group":
     case "render-screen": {
-      if (!id) fail("render-screen requires <id>");
-      if (!flags.group) fail("render-screen requires --group <gid>");
+      if (!id) fail("render-group requires <id>");
+      if (!flags.group) fail("render-group requires --group <gid>");
       const args = { projectId: id, groupId: flags.group };
       if (flags.scale !== undefined) args.scale = Number(flags.scale);
       if (flags.background !== undefined && flags.background !== "true") args.background = flags.background;
