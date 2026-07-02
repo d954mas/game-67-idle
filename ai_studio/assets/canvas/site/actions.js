@@ -396,6 +396,13 @@ export async function setGroupVisible(groupId, visible) {
   await patchGroupBox(groupId, { visible });
 }
 
+// Set/clear a group's background fill (one journaled patchGroup): null = None,
+// {type:"color", color:"#rrggbb"} = Solid. Canvas + render honor it (render-time bg
+// arg still overrides). The op validates the value (no silent fallback).
+export async function setGroupBackground(groupId, background) {
+  await patchGroupBox(groupId, { background });
+}
+
 export async function renderScreen(groupId, { scale = 1, background } = {}) {
   try {
     setStatus("Rendering group...");

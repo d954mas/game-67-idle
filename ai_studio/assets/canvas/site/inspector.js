@@ -35,6 +35,7 @@ import {
   renameRegion,
   renderScreen,
   setExportRows,
+  setGroupBackground,
   setGroupVisible,
   sliceRegionsFor,
 } from "./actions.js";
@@ -495,6 +496,51 @@ function renderElement(element, root) {
   renderExport(element, root);
 }
 
+// The group's BACKGROUND section: mode None/Solid + a color input (enabled for Solid).
+// A change persists via patchGroup({background}) through the actions -> applyMutation
+// flow (canvas + render honor it). The render-time bg dropdown in "Render group" stays
+// a separate one-shot override.
+function renderGroupBackground(group, root) {
+  const body = collapsible(root, "background", "Background");
+  const controls = document.createElement("div");
+  controls.className = "insp-render";
+  const current = group.background && group.background.type === "color" ? group.background : null;
+
+  const mode = document.createElement("select");
+  mode.className = "insp-input";
+  for (const [value, text] of [["none", "None"], ["color", "Solid"]]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    if ((current ? "color" : "none") === value) option.selected = true;
+    mode.appendChild(option);
+  }
+
+  const color = document.createElement("input");
+  color.type = "color";
+  color.value = current ? current.color : "#1a1f2b";
+  color.className = "insp-color";
+  color.disabled = !current;
+
+  mode.addEventListener("change", () => {
+    if (mode.value === "color") {
+      color.disabled = false;
+      setGroupBackground(group.id, { type: "color", color: color.value });
+    } else {
+      color.disabled = true;
+      setGroupBackground(group.id, null);
+    }
+  });
+  color.addEventListener("change", () => {
+    if (mode.value === "color") setGroupBackground(group.id, { type: "color", color: color.value });
+  });
+
+  const row = field("Background", mode);
+  row.appendChild(color);
+  controls.appendChild(row);
+  body.appendChild(controls);
+}
+
 function renderGroupInspector(group, root) {
   const name = field("Name", textInput(group.name, (next) => renameGroup(group.id, next)));
   name.classList.add("insp-name");
@@ -514,6 +560,8 @@ function renderGroupInspector(group, root) {
   visRow.append(check, visLabel);
   layout.appendChild(visRow);
   layout.appendChild(readOnly("Members", String(memberElements(group.id).length)));
+
+  renderGroupBackground(group, root);
 
   const render = collapsible(root, "render", "Render group");
   const controls = document.createElement("div");
@@ -616,7 +664,7 @@ function inspectorSig() {
   const group = state.selectedGroupId ? groupById(state.selectedGroupId) : null;
   const selected = selectedElements();
   if (group) {
-    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${memberElements(group.id).length}`;
+    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}`;
   }
   if (selected.length === 1) {
     const e = selected[0];

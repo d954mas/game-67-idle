@@ -7,6 +7,8 @@
 // their renderers into `hooks` and read state/helpers from here. It contains no
 // canvas/business logic beyond fetching and re-rendering.
 
+import { childrenOf, isNodeHidden } from "../tree.mjs";
+
 export const el = (id) => document.getElementById(id);
 
 export const state = {
@@ -143,17 +145,24 @@ export function hiddenGroupIds() {
   return new Set(groups().filter((group) => group.visible === false).map((group) => group.id));
 }
 
-export function isElementHidden(element, hidden) {
-  if (element.visible === false) return true;
-  return Boolean(element.groupId) && (hidden || hiddenGroupIds()).has(element.groupId);
+// Ancestor-aware visibility: hidden when the element itself or ANY ancestor group is
+// hidden (delegates to the shared tree walk so canvas + panel agree, and nested groups
+// cascade correctly). The `hidden` arg is kept for call-site compatibility (a precomputed
+// set of directly-hidden group ids) but the tree walk is the source of truth now.
+export function isElementHidden(element) {
+  return isNodeHidden(state.project, element);
 }
 
+// Direct member elements of a group (its scope's elements), backed by the shared
+// tree so the panel + canvas read one source. Native array order (== paint order for
+// a v1 project), which the reorder/z-order math relies on.
 export function memberElements(groupId) {
-  return elements().filter((element) => element.groupId === groupId);
+  return childrenOf(state.project, groupId).elements;
 }
 
+// Root-scope (ungrouped) elements, backed by the same tree walk.
 export function ungroupedElements() {
-  return elements().filter((element) => !element.groupId);
+  return childrenOf(state.project, null).elements;
 }
 
 export function regionCount(element) {

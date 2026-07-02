@@ -983,6 +983,19 @@
           ]
         },
         {
+          "id": "assets:canvas-tree",
+          "kind": "tool",
+          "path": "ai_studio/assets/canvas/tree.mjs",
+          "title": "tree.mjs",
+          "description": "Pure, dependency-free scene-tree math shared by ops.mjs (node) AND the site (static /ai_studio/ import), so paint order itself obeys tool parity — one implementation, two clients. Over the flat Defold-style model (elements[]/groups[] with additive optional group.parentId and per-node numeric order fields, no stored tree) it computes per-scope children (childrenOf), back-to-front z-order (orderedChildren: the explicit numeric order when every sibling has it, else a v1 fallback where an element keys on its elements[] index and a group anchors at its backmost subtree member so legacy projects paint unchanged, empty group to front), subtree collection (descendantsOf), the ancestor chain (ancestorsOf, cycle-capped), the visibility cascade (isNodeHidden: self or any ancestor group hidden), and the reparent cycle guard (wouldCycle). All downward/upward walks are cycle-safe and resolve a dangling/corrupt parent to root so a bad project never hangs or hides content.",
+          "role": "canvas scene-tree math",
+          "tags": [
+            "assets",
+            "canvas",
+            "tool-parity"
+          ]
+        },
+        {
           "id": "assets:canvas-ops",
           "kind": "tool",
           "path": "ai_studio/assets/canvas/ops.mjs",

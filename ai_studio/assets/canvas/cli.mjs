@@ -18,7 +18,7 @@
 //   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --suffix --resample] [--to <dir>]
 //   node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h]
 //   node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
-//   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h]
+//   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none]
 //   node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs render-group <id> --group g [--scale 2] [--background "#rrggbb"]
@@ -130,7 +130,7 @@ function usage() {
   export <id> --elements e1,e2 | --all | --project [--scale <t> --format <f> --quality <n> --suffix <s> --resample <r>] [--to <dir>]
   group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>]
   group-move <id> --group <gid> --x <n> --y <n>
-  group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>]
+  group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>] [--background '#rrggbb'|none]
   group-assign <id> --elements e1,e2 --group <gid>|none
   group-delete <id> --group <gid>
   render-group <id> --group <gid>  (alias: render-screen) [--scale <n>] [--background '#rrggbb']
@@ -317,6 +317,11 @@ async function runCommand(command, id, positional, flags) {
       if (flags.h !== undefined) args.h = Number(flags.h);
       if (flags.x !== undefined) args.x = Number(flags.x);
       if (flags.y !== undefined) args.y = Number(flags.y);
+      // --background '#rrggbb' sets a solid group fill; --background none clears it.
+      // Any other value reaches the op and fails loudly (no silent fallback).
+      if (flags.background !== undefined) {
+        args.background = flags.background === "none" ? null : { type: "color", color: flags.background };
+      }
       return print(patchGroup(repoRoot, args));
     }
     case "group-assign": {

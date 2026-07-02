@@ -137,6 +137,60 @@ test("deleteGroup deletes member elements (undo restores); ungroup keeps them", 
   assert.equal(ungrouped.elements.every((e) => e.groupId === null), true);
 });
 
+test("patchGroup background sets a color, journals one entry, undo restores; invalid throws", (t) => {
+  tempProjects(t);
+  const { projectId, red } = seedScreen(ROOT);
+  const { group } = createGroup(ROOT, { projectId, name: "Screen", fromElements: [red.id] });
+
+  const seqBefore = Number(getProject(ROOT, projectId).history_seq);
+  patchGroup(ROOT, { projectId, groupId: group.id, background: { type: "color", color: "#112233" } });
+  const after = getProject(ROOT, projectId);
+  assert.deepEqual(after.groups[0].background, { type: "color", color: "#112233" });
+  assert.equal(Number(after.history_seq), seqBefore + 1, "exactly one journal entry");
+
+  // undo removes the background (the prior group had none).
+  undoOp(ROOT, { projectId });
+  assert.equal(getProject(ROOT, projectId).groups[0].background, undefined, "undo clears the fill");
+
+  // Invalid color, shape, and type all throw loudly (no silent fallback).
+  assert.throws(() => patchGroup(ROOT, { projectId, groupId: group.id, background: { type: "color", color: "red" } }), /#rrggbb/);
+  assert.throws(() => patchGroup(ROOT, { projectId, groupId: group.id, background: { type: "image" } }), /type must be "color"/);
+  assert.throws(() => patchGroup(ROOT, { projectId, groupId: group.id, background: "#112233" }), /must be null or/);
+});
+
+test("patchGroup background=null on a plain group is a no-op (no journal entry)", (t) => {
+  tempProjects(t);
+  const { projectId, red } = seedScreen(ROOT);
+  const { group } = createGroup(ROOT, { projectId, name: "Screen", fromElements: [red.id] });
+  const seqBefore = Number(getProject(ROOT, projectId).history_seq);
+  patchGroup(ROOT, { projectId, groupId: group.id, background: null });
+  assert.equal(Number(getProject(ROOT, projectId).history_seq), seqBefore, "None on already-none = no change");
+});
+
+test("renderGroup fills group.background and an explicit arg overrides it (skips without Python)", async (t) => {
+  tempProjects(t);
+  const { projectId, red, green } = seedScreen(REPO_ROOT);
+  const { group } = createGroup(REPO_ROOT, { projectId, name: "BG", fromElements: [red.id, green.id] });
+  patchGroup(REPO_ROOT, { projectId, groupId: group.id, background: { type: "color", color: "#112233" } });
+
+  let result;
+  try {
+    result = await renderGroup(REPO_ROOT, { projectId, groupId: group.id, scale: 1 });
+  } catch (error) {
+    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
+    return;
+  }
+  // group.background composited as the bottom fill (no explicit arg). (1,1) is a
+  // corner of the padded group box, well outside every member.
+  let png = decodePng(readFileSync(result.path));
+  assert.deepEqual(png.at(1, 1), [17, 34, 51, 255], "group.background fill");
+
+  // An explicit render-time background overrides group.background.
+  const overridden = await renderGroup(REPO_ROOT, { projectId, groupId: group.id, scale: 1, background: "#445566" });
+  png = decodePng(readFileSync(overridden.path));
+  assert.deepEqual(png.at(1, 1), [68, 85, 102, 255], "explicit arg overrides group.background");
+});
+
 test("renderGroup composites members at the right pixels (skips without Python)", async (t) => {
   tempProjects(t);
   const { projectId, red, green } = seedScreen(REPO_ROOT);

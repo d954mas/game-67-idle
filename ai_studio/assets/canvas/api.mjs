@@ -13,7 +13,7 @@
 //   POST   /api/canvas/projects/<id>/export         {elementIds, rows?} | {project:true}
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/export {rows}  (export settings)
 //   POST   /api/canvas/projects/<id>/groups         {name, x?,y?,w?,h?, fromElements?}
-//   PATCH  /api/canvas/projects/<id>/groups/<gid>   {name?,x?,y?,w?,h?,visible?}
+//   PATCH  /api/canvas/projects/<id>/groups/<gid>   {name?,x?,y?,w?,h?,visible?,background?}
 //   DELETE /api/canvas/projects/<id>/groups/<gid>
 //   POST   /api/canvas/projects/<id>/groups/<gid>/render {scale?, background?}
 //   POST   /api/canvas/projects/<id>/assign-group   {elementIds, groupId|null}

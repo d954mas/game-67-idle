@@ -13,6 +13,7 @@
 import {
   el,
   elementById,
+  elements,
   fileUrl,
   groups,
   hooks,
@@ -23,6 +24,7 @@ import {
   toggleSelect,
   ungroupedElements,
 } from "./app.js";
+import { orderedChildren } from "../tree.mjs";
 import {
   assignElementsToGroup,
   renameElement,
@@ -106,17 +108,17 @@ function selectRange(targetId) {
   state.selectedIds = new Set(order.slice(lo, hi + 1));
 }
 
-function elementRow(element, indented) {
+function elementRow(element, depth) {
   const row = document.createElement("div");
   row.className = "layer-row";
   row.dataset.elementId = element.id;
   row.dataset.groupId = element.groupId || "";
-  if (indented) row.classList.add("indented");
+  if (depth > 0) row.classList.add("indented");
   if (state.selectedIds.has(element.id)) row.classList.add("selected");
 
-  // Group members carry a caret-width spacer (indent under their group head);
-  // top-level rows sit flush left — a spacer there reads as fake group membership.
-  if (indented) {
+  // One caret-width spacer per nesting level (indent under the ancestor group heads);
+  // top-level rows (depth 0) sit flush left — a spacer there reads as fake membership.
+  for (let i = 0; i < depth; i += 1) {
     const spacer = document.createElement("span");
     spacer.className = "caret empty";
     row.appendChild(spacer);
@@ -183,7 +185,7 @@ function elementRow(element, indented) {
   return row;
 }
 
-function groupSection(group) {
+function groupSection(group, depth) {
   const wrap = document.createElement("div");
   wrap.className = "layer-group";
   const collapsed = state.collapsedGroups.has(group.id);
@@ -191,7 +193,16 @@ function groupSection(group) {
   const head = document.createElement("div");
   head.className = "group-head";
   head.dataset.groupId = group.id;
+  if (depth > 0) head.classList.add("indented");
   if (state.selectedGroupId === group.id) head.classList.add("selected");
+
+  // Indent a nested group head one spacer per ancestor level (its own caret button
+  // provides the baseline indent for its members).
+  for (let i = 0; i < depth; i += 1) {
+    const spacer = document.createElement("span");
+    spacer.className = "caret empty";
+    head.appendChild(spacer);
+  }
 
   const caret = document.createElement("button");
   caret.className = "caret";
@@ -242,10 +253,20 @@ function groupSection(group) {
   wrap.appendChild(head);
 
   if (!collapsed) {
-    // Front-at-top inside the group too (paint order reversed).
-    for (const element of [...members].reverse()) wrap.appendChild(elementRow(element, true));
+    // Recurse into the group's children (elements AND subgroups), one level deeper.
+    renderScope(group.id, wrap, depth + 1);
   }
   return wrap;
+}
+
+// Render one scope's children into `container`, FRONT-at-top (reverse of the
+// back-to-front computed order): a group row expands into its own subtree; an element
+// is a leaf row indented by its depth. Recursive — the whole hierarchy from any scope.
+function renderScope(scopeId, container, depth) {
+  for (const child of [...orderedChildren(state.project, scopeId)].reverse()) {
+    if (child.kind === "group") container.appendChild(groupSection(child.ref, depth));
+    else container.appendChild(elementRow(child.ref, depth));
+  }
 }
 
 // ---- structure-signature guarded render --------------------------------------
@@ -257,18 +278,20 @@ let lastLayersSig = null;
 // never rebuild the DOM out from under a pending double-click).
 function layersSignature() {
   const parts = [];
-  for (const e of ungroupedElements()) {
-    parts.push(`e:${e.id}:${e.name || ""}:${e.visible !== false ? 1 : 0}:${(e.regions || []).length}`);
-  }
-  for (const g of groups()) {
-    const collapsed = state.collapsedGroups.has(g.id);
-    parts.push(`g:${g.id}:${g.name || ""}:${g.visible !== false ? 1 : 0}:${collapsed ? 1 : 0}`);
-    if (!collapsed) {
-      for (const m of memberElements(g.id)) {
-        parts.push(` m:${m.id}:${m.name || ""}:${m.visible !== false ? 1 : 0}:${(m.regions || []).length}`);
+  const walk = (scopeId, depth) => {
+    for (const child of orderedChildren(state.project, scopeId)) {
+      if (child.kind === "group") {
+        const g = child.ref;
+        const collapsed = state.collapsedGroups.has(g.id);
+        parts.push(`g:${depth}:${g.id}:${g.name || ""}:${g.visible !== false ? 1 : 0}:${collapsed ? 1 : 0}`);
+        if (!collapsed) walk(g.id, depth + 1);
+      } else {
+        const e = child.ref;
+        parts.push(`e:${depth}:${e.id}:${e.name || ""}:${e.visible !== false ? 1 : 0}:${(e.regions || []).length}`);
       }
     }
-  }
+  };
+  walk(null, 0);
   return parts.join("\n");
 }
 
@@ -299,19 +322,17 @@ export function renderLayers() {
   lastLayersSig = sig;
   pruneThumbCache();
   list.replaceChildren();
-  const ungrouped = ungroupedElements();
-  const groupList = groups();
-  if (!ungrouped.length && !groupList.length) {
+  if (!elements().length && !groups().length) {
     const empty = document.createElement("div");
     empty.className = "layers-empty";
     empty.textContent = "No layers yet.";
     list.appendChild(empty);
     return;
   }
-  // Figma orientation (lead 2026-07-02): top row = front of the canvas (painted
-  // last). Arrays store back-to-front paint order, so the panel renders reversed.
-  for (const group of [...groupList].reverse()) list.appendChild(groupSection(group));
-  for (const element of [...ungrouped].reverse()) list.appendChild(elementRow(element, false));
+  // Figma orientation (lead 2026-07-02): top row = front of the canvas (painted last).
+  // Render the whole scene tree from root, front-at-top, recursively (renderScope
+  // reverses the back-to-front computed order at each scope).
+  renderScope(null, list, 0);
   applyLayersSelection();
 }
 

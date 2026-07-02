@@ -142,19 +142,30 @@ Every capability is one op in `ops.mjs`:
 A group is a Figma-frame-like named region — a game **screen mockup** that owns
 elements, can be hidden/shown, moved as a whole, and exported as one composited
 PNG. Groups are additive to `ai_studio.canvas.project.v1` (no migration): a
-project gains `groups: [{id, name, x, y, w, h, visible}]` (one level, no nesting)
-and elements gain optional `groupId` (absent/`null` = ungrouped) and optional
-`visible` (default `true`). Every group/visibility mutation is journaled exactly
-like an element op — the metadata-only snapshot now also carries `groups`, so
-undo/redo restore groups, elements, and tool runs together.
+project gains `groups: [{id, name, x, y, w, h, visible}]` and elements gain
+optional `groupId` (absent/`null` = ungrouped) and optional `visible` (default
+`true`). Every group/visibility mutation is journaled exactly like an element op —
+the metadata-only snapshot now also carries `groups`, so undo/redo restore groups,
+elements, and tool runs together.
+
+The model is a **flat Defold-style graph** (no stored tree): the source of truth
+is the two arrays, and nesting/z-order are expressed by additive optional fields —
+`group.parentId` (its parent group; absent/`null` = a top-level screen), a numeric
+`order` z-key (on elements AND groups, among same-scope siblings), and
+`group.background` (an optional solid fill; see below). Paint order is **computed**,
+never persisted (see **Scene tree & paint order**). `parentId`/`order` are read by
+the scene-tree math now (so a project that carries them paints correctly); the ops
+that WRITE them — group z-order and nesting — land in the next increments.
 
 - `createGroup({projectId, name, x?, y?, w?, h?, fromElements?})` — explicit
   bounds, **or** `fromElements: [elementIds]` = the bounding box of those
   elements + 24px padding, assigning them to the new group. One journal entry.
-- `patchGroup({projectId, groupId, name?, x?, y?, w?, h?, visible?})` — when
-  `x`/`y` change, **all member elements translate by the same delta** atomically
+- `patchGroup({projectId, groupId, name?, x?, y?, w?, h?, visible?, background?})` —
+  when `x`/`y` change, **all member elements translate by the same delta** atomically
   (one journal entry; undo restores the frame and every member). Resize (`w`/`h`)
-  never moves members.
+  never moves members. `background` sets the optional solid fill (see below): `null`
+  clears it, `{type:"color", color:"#rrggbb"}` sets it — validated (invalid = a loud
+  error, no silent fallback). `None` on an already-unfilled group is a no-op.
 - `assignToGroup({projectId, elementIds, groupId|null})` — set or clear the group
   of the given elements. Journaled.
 - `deleteGroup({projectId, groupId})` — remove the group **and its member
@@ -165,7 +176,37 @@ undo/redo restore groups, elements, and tool runs together.
 - `renderGroup({projectId, groupId, scale?, background?})` — composite all
   **visible** member elements (`element.visible !== false`), in element array
   order (z-order), clipped to the group bounds, into one PNG at `scale`
-  (default 1) over a transparent background or an optional solid `#rrggbb`.
+  (default 1). Background precedence: an explicit `background` arg (`#rrggbb`)
+  **overrides** the group's own `background`; else the group's stored fill; else
+  transparent.
+
+### Scene tree & paint order
+
+Paint/composite/layer order is **computed per scope** by the shared pure module
+`tree.mjs` (imported by `ops.mjs` in node AND served statically to the site, so
+ordering itself obeys tool parity — one implementation, two clients). A "scope" is a
+group id (or root): its children are the elements with that `groupId` plus the groups
+with that `parentId`, merged and sorted **back → front**. When EVERY sibling carries a
+finite numeric `order`, that is the key; otherwise the **v1 fallback** keys an element
+on its `elements[]` index and a group on the MIN `elements[]`-index across its subtree
+members (the group is anchored at its backmost member; an empty group sorts to the
+front). So a legacy project (no `order`/`parentId`) paints exactly as before, except a
+group's members now form one contiguous band anchored at the backmost member. The
+canvas paints in two passes — artwork (recursive scope walk: element draws, a visible
+group fills its background then recurses) then a chrome overlay (frame borders + labels
++ selection). Visibility cascades: a node is hidden when it or any ancestor group is
+hidden. All tree walks are cycle-safe (a corrupt `parentId` ring is capped; a dangling
+parent resolves to root).
+
+### Group background
+
+`group.background` is an additive optional field: `null`/absent (transparent) or
+`{type:"color", color:"#rrggbb"}` (solid). It fills **behind** the group's children on
+the canvas AND is composited as the bottom layer by `render_group.py` (canvas + export
+parity), while the hairline frame outline + label ALWAYS draw so an empty screen stays
+visible. Set it with `patchGroup({background})` (HTTP `PATCH .../groups/<gid>`,
+inspector Background section, group context-menu **Background ▸**) or the CLI
+`group-set --background '#rrggbb'|none`.
 
 ### Render contract
 
@@ -369,7 +410,7 @@ node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all, 
 node ai_studio/assets/canvas/cli.mjs export <id> --all [--scale 2x --format jpg --quality 80 --suffix @2x --resample lanczos] [--to <dir>]
 node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h]
 node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
-node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h]
+node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none]
 node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 node ai_studio/assets/canvas/cli.mjs render-screen <id> --group g [--scale 2] [--background '#rrggbb']

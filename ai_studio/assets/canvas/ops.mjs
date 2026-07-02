@@ -693,6 +693,22 @@ function findGroup(project, groupId) {
   return group;
 }
 
+// Validate + normalize an optional group background (additive field). Accepts null
+// (clear) or {type:"color", color:"#rrggbb"}; anything else throws a loud error (no
+// silent fallback). Returns null or the normalized {type:"color", color} object.
+function normalizeGroupBackground(background) {
+  if (background === null) return null;
+  if (typeof background !== "object" || Array.isArray(background)) {
+    throw new Error(`group background must be null or {type:"color", color:"#rrggbb"}, got ${JSON.stringify(background)}`);
+  }
+  if (background.type !== "color") {
+    throw new Error(`group background type must be "color", got ${JSON.stringify(background.type)}`);
+  }
+  const color = hexColor(background.color);
+  if (!color) throw new Error(`group background color must be #rrggbb, got ${JSON.stringify(background.color)}`);
+  return { type: "color", color };
+}
+
 function elementsBBox(elements) {
   let minX = Infinity;
   let minY = Infinity;
@@ -755,10 +771,12 @@ export function createGroup(root, { projectId, name, x, y, w, h, fromElements } 
   return { project, group: (project.groups || []).find((item) => item.id === groupId) };
 }
 
-// Patch a group's name/bounds/visibility. When x or y change, translate ALL
-// member elements by the same delta so the whole screen moves as one; resize
-// (w/h) never moves members. One journal entry restores everything on undo.
-export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible } = {}) {
+// Patch a group's name/bounds/visibility/background. When x or y change, translate
+// ALL member elements by the same delta so the whole screen moves as one; resize
+// (w/h) never moves members. `background` is the optional solid fill (null clears it;
+// {type:"color", color:"#rrggbb"} sets it — validated, no silent fallback). One
+// journal entry restores everything on undo.
+export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible, background } = {}) {
   if (!projectId) throw new Error("patchGroup requires projectId");
   if (!groupId) throw new Error("patchGroup requires groupId");
   const startedAt = performance.now();
@@ -767,6 +785,9 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
 
   const dx = finite(x) ? Number(x) - Number(current.x || 0) : 0;
   const dy = finite(y) ? Number(y) - Number(current.y || 0) : 0;
+  // Validate the background BEFORE any write so an invalid value throws atomically.
+  const bgProvided = background !== undefined;
+  const bgResolved = bgProvided ? normalizeGroupBackground(background) : undefined;
 
   const nextGroups = groupsOf(before).map((group) => {
     if (group.id !== groupId) return group;
@@ -777,6 +798,10 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
     if (finite(w)) patched.w = Number(w);
     if (finite(h)) patched.h = Number(h);
     if (visible !== undefined) patched.visible = !(visible === false || visible === "false");
+    if (bgProvided) {
+      if (bgResolved === null) delete patched.background; // "None" -> absent field
+      else patched.background = bgResolved;
+    }
     return patched;
   });
 
@@ -791,7 +816,7 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
   const after = updateProject(root, projectId, { groups: nextGroups, elements: nextElements });
   const project = commitMutation(root, projectId, {
     op: "patchGroup",
-    args_summary: { groupId, name, x, y, w, h, visible, dx, dy },
+    args_summary: { groupId, name, x, y, w, h, visible, dx, dy, background: bgProvided ? bgResolved : undefined },
     before,
     after,
     startedAt,
@@ -1431,8 +1456,13 @@ function hexColor(value) {
 // canvas tools; the T0218 canvas seam flips these to the config-only interpreter.
 async function compositeGroup(root, projectId, project, group, { scale, background, outputAbs, specAbs, reportAbs } = {}) {
   const renderScale = finite(scale) && Number(scale) > 0 ? Number(scale) : 1;
-  const bg = background === undefined || background === null || background === "" ? null : hexColor(background);
-  if (background && bg === null) throw new Error(`background must be #rrggbb, got ${JSON.stringify(background)}`);
+  // Precedence: an explicit render-time background arg OVERRIDES group.background;
+  // else the group's own stored background; else transparent. render_group.py fills
+  // this hex as the bottom layer, so the group background composites behind children.
+  const explicit = background === undefined || background === null || background === "" ? null : hexColor(background);
+  if (background && explicit === null) throw new Error(`background must be #rrggbb, got ${JSON.stringify(background)}`);
+  const groupBg = group.background && group.background.type === "color" ? hexColor(group.background.color) : null;
+  const bg = explicit || groupBg || null;
 
   // Visible member elements, in element array order (z-order).
   const members = (project.elements || []).filter(

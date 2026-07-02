@@ -17,6 +17,7 @@ import {
   renderScreen,
   sendElementBackward,
   sendElementToBack,
+  setGroupBackground,
   setGroupVisible,
   sliceRegionsFor,
   ungroup,
@@ -171,6 +172,33 @@ function moveToScreenItems(elementId) {
   return items;
 }
 
+// "Background ▸" quick submenu for a group: None clears the fill; Pick color opens a
+// native color input and sets a solid background (both journaled via setGroupBackground).
+function backgroundItems(groupId) {
+  return [
+    { label: "None", onClick: () => setGroupBackground(groupId, null) },
+    { label: "Pick color…", onClick: () => pickGroupColor(groupId) },
+  ];
+}
+
+// A throwaway native <input type="color"> so the menu can set a group background
+// without depending on the inspector DOM. Seeds from the current fill when present.
+function pickGroupColor(groupId) {
+  const group = groupById(groupId);
+  const input = document.createElement("input");
+  input.type = "color";
+  input.value = group && group.background && group.background.color ? group.background.color : "#1a1f2b";
+  input.style.position = "fixed";
+  input.style.left = "-9999px";
+  document.body.appendChild(input);
+  input.addEventListener("change", () => {
+    setGroupBackground(groupId, { type: "color", color: input.value });
+    input.remove();
+  });
+  input.addEventListener("blur", () => setTimeout(() => input.remove(), 0));
+  input.click();
+}
+
 // "Order ▸" submenu: the four Figma z-order moves for one element (same actions as
 // the Ctrl+]/[ shortcuts; each no-ops harmlessly when already at that edge).
 function orderItems(elementId) {
@@ -242,6 +270,7 @@ function itemsFor(target) {
     const visible = group.visible !== false;
     return [
       { label: "Render group", onClick: () => renderScreen(group.id, { scale: 1 }) },
+      { label: "Background", submenu: backgroundItems(group.id) },
       { label: "Rename", onClick: () => focusInspectorName() },
       { label: visible ? "Hide" : "Show", onClick: () => setGroupVisible(group.id, !visible) },
       { label: "Ungroup", onClick: () => ungroup(group.id) },

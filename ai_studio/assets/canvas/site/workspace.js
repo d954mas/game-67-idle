@@ -23,7 +23,6 @@ import {
   exitRegionEdit,
   groupById,
   groups,
-  hiddenGroupIds,
   hooks,
   isElementHidden,
   isSelected,
@@ -58,6 +57,7 @@ import {
   screenToImagePoint,
   zoomViewportAt,
 } from "./viewport.mjs";
+import { isNodeHidden, orderedChildren } from "../tree.mjs";
 
 let canvas = null;
 let ctx = null;
@@ -108,39 +108,17 @@ export function render() {
   // Crisp sprite pixels when zoomed in (>= 2x); smooth when zoomed out.
   ctx.imageSmoothingEnabled = vp.scale < 2;
 
-  const hidden = hiddenGroupIds();
   const editEl = regionEditElement(); // mode B element, or null (mode A)
-  for (const element of elements()) {
-    if (isElementHidden(element, hidden)) continue;
-    const isEdit = editEl && element.id === editEl.id;
-    // Mode B dims every other element to focus the isolated one.
-    ctx.globalAlpha = editEl && !isEdit ? 0.3 : 1;
-    const img = imageFor(element);
-    const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
-    const w = element.w * vp.scale;
-    const h = element.h * vp.scale;
-    if (img.complete && img.naturalWidth) {
-      ctx.drawImage(img, origin.x, origin.y, w, h);
-    } else {
-      ctx.strokeStyle = "#596774";
-      ctx.strokeRect(origin.x, origin.y, w, h);
-    }
-    ctx.globalAlpha = 1;
-    if (isSelected(element)) {
-      ctx.strokeStyle = isEdit ? "#3fc7ba" : "#77a7ff";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(origin.x, origin.y, w, h);
-      // Passive numbered hint in mode A; strong strokes + handles in mode B.
-      drawRegionsOverlay(ctx, element, vp, {
-        selectedRegionIds: state.selectedRegionIds,
-        interactive: Boolean(isEdit),
-      });
-    }
-  }
+  // Pass 1 — artwork: recurse the scene tree from root in computed z-order, so a
+  // group's members paint as one contiguous band and a group's background fills
+  // behind its children. No clip yet (that is increment 4) — recursion order + fill.
+  paintScope(null, vp, editEl);
 
+  // Pass 2 — chrome overlay: group frame borders + labels (+ selection) drawn on top
+  // of ALL artwork; groupLabelRects feeds label hit-testing (unchanged).
   groupLabelRects = [];
   for (const group of groups()) {
-    if (group.visible === false) continue;
+    if (isNodeHidden(state.project, group)) continue;
     drawGroupFrame(group, vp);
   }
   drawGestureOverlay();
@@ -152,6 +130,59 @@ export function render() {
   updateRegionTools(editEl);
   updateZoomIndicator();
   updateEmptyHint();
+}
+
+// Recursive artwork paint for one scope (null = root): each child in computed
+// back-to-front order — an element draws in place; a visible group fills its
+// background then recurses into its own children.
+function paintScope(scopeId, vp, editEl) {
+  for (const child of orderedChildren(state.project, scopeId)) {
+    if (isNodeHidden(state.project, child.ref)) continue;
+    if (child.kind === "group") {
+      fillGroupBackground(child.ref, vp);
+      paintScope(child.id, vp, editEl);
+    } else {
+      paintElement(child.ref, vp, editEl);
+    }
+  }
+}
+
+function paintElement(element, vp, editEl) {
+  const isEdit = editEl && element.id === editEl.id;
+  // Mode B dims every other element to focus the isolated one.
+  ctx.globalAlpha = editEl && !isEdit ? 0.3 : 1;
+  const img = imageFor(element);
+  const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
+  const w = element.w * vp.scale;
+  const h = element.h * vp.scale;
+  if (img.complete && img.naturalWidth) {
+    ctx.drawImage(img, origin.x, origin.y, w, h);
+  } else {
+    ctx.strokeStyle = "#596774";
+    ctx.strokeRect(origin.x, origin.y, w, h);
+  }
+  ctx.globalAlpha = 1;
+  if (isSelected(element)) {
+    ctx.strokeStyle = isEdit ? "#3fc7ba" : "#77a7ff";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(origin.x, origin.y, w, h);
+    // Passive numbered hint in mode A; strong strokes + handles in mode B.
+    drawRegionsOverlay(ctx, element, vp, {
+      selectedRegionIds: state.selectedRegionIds,
+      interactive: Boolean(isEdit),
+    });
+  }
+}
+
+// Solid group background fill behind the group's children (§ group background). Only a
+// valid {type:"color"} background paints; the hairline frame + label ALWAYS draw in
+// pass 2, so an empty screen stays visible even with no fill.
+function fillGroupBackground(group, vp) {
+  const bg = group.background;
+  if (!bg || bg.type !== "color" || !/^#[0-9a-fA-F]{6}$/.test(String(bg.color || ""))) return;
+  const origin = imageToScreenPoint({ x: group.x, y: group.y }, vp);
+  ctx.fillStyle = bg.color;
+  ctx.fillRect(origin.x, origin.y, group.w * vp.scale, group.h * vp.scale);
 }
 
 function updateBreadcrumb(editEl) {
@@ -238,10 +269,9 @@ function updateEmptyHint() {
 // ---- viewport ----------------------------------------------------------------
 
 function contentBounds() {
-  const hidden = hiddenGroupIds();
   const boxes = [
-    ...elements().filter((element) => !isElementHidden(element, hidden)),
-    ...groups().filter((group) => group.visible !== false),
+    ...elements().filter((element) => !isElementHidden(element)),
+    ...groups().filter((group) => !isNodeHidden(state.project, group)),
   ];
   if (!boxes.length) return { x: 0, y: 0, width: 1024, height: 768 };
   let minX = Infinity;
@@ -313,10 +343,9 @@ function setCursor(name) {
 
 function hitElement(world) {
   const items = elements();
-  const hidden = hiddenGroupIds();
   for (let i = items.length - 1; i >= 0; i -= 1) {
     const e = items[i];
-    if (isElementHidden(e, hidden)) continue;
+    if (isElementHidden(e)) continue;
     if (world.x >= e.x && world.x <= e.x + e.w && world.y >= e.y && world.y <= e.y + e.h) return e;
   }
   return null;
@@ -500,10 +529,9 @@ function applyMarquee() {
   const ry = Math.min(a.y, b.y);
   const rw = Math.abs(b.x - a.x);
   const rh = Math.abs(b.y - a.y);
-  const hidden = hiddenGroupIds();
   const inside = new Set(drag.base);
   for (const element of elements()) {
-    if (isElementHidden(element, hidden)) continue;
+    if (isElementHidden(element)) continue;
     const outside = element.x + element.w < rx || element.x > rx + rw || element.y + element.h < ry || element.y > ry + rh;
     if (!outside) inside.add(element.id);
   }
