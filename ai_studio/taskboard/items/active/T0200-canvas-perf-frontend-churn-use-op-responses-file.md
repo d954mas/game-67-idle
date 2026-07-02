@@ -26,3 +26,4 @@ Cut the per-op frontend churn found by the perf research: mutating actions re-fe
 
 ## Log
 - 2026-07-02: Scoped in ai_studio/assets/canvas/PLAN.md (2026-07-02); perf items anchored to bench tmp/canvas_bench_2026-07-02.json + perf research
+- 2026-07-02: Undo audit: marquee-move and multi-delete journal N entries per gesture (undo steps one element at a time) - batched ops (patchElements/removeElements) land here.

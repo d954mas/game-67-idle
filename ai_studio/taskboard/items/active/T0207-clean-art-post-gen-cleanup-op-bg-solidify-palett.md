@@ -42,13 +42,19 @@ detect just reads with the same distance math) — these NEVER write a modified
 source file. The lead never has to remember pass ordering.
 
 NOT one monolithic "Clean up" (lead corrected 2026-07-02): a small Cleanup
-section of three separate tools, each with the UX its decision needs.
+section of separate tools, each with the UX its decision needs.
 Quantize = INTERACTIVE tool: color-count slider (+ optional dither), LIVE
 before/after compare (split or hold-to-see-original), preview recomputed
 debounced with nothing written to disk; Apply = journaled new file, Cancel =
-no trace. Denoise = same pattern with a strength slider. Bg-solidify = one
-click (nothing to preview-tune). CLI parity: `quantize --colors N --preview
-<out>` to try, without --preview to apply.
+no trace. Denoise = same pattern with a strength slider. CLI parity:
+`quantize --colors N --preview <out>` to try, without --preview to apply.
+
+Bg-solidify CUT as a standalone tool (lead challenged 2026-07-02, subtract-
+not-add): keying auto-snaps internally, detect only reads with the distance
+math, and art-with-background is quantize's job — no real friction case
+remains. It stays an INTERNAL shared function of the alpha keyer only (no op,
+no button, no CLI). Reinstate as a full op (button + CLI together, parity) if
+a real case shows up. Cleanup section = Quantize + Denoise.
 
 ## Open questions
 
