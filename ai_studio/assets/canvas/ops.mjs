@@ -347,6 +347,56 @@ export function addImage(root, projectId, args = {}) {
   return { project, element };
 }
 
+// Add SEVERAL images in ONE journaled gesture — the page's multi-file drop/paste. Each
+// image is {name, bytes, x?, y?}; they append in array order and, when the destination
+// (root) scope is already explicitly ordered, land stacked at the FRONT in add order (so
+// a reordered scope stays explicit — the same front hook addImage uses, extended to a
+// batch). Loud + atomic: EVERY image's bytes are validated up front (non-empty + a
+// parseable header), so a bad image in the batch throws before any element is appended;
+// an empty list is a loud error (the page only calls this with real files). The
+// content-addressed file writes are harmless even on a later throw (immutable storage
+// keeps orphan files; only project.json state matters, and it stays at `before`). One
+// commitMutation, so a single undo removes every added image. Single adds stay on addImage.
+export function addImages(root, projectId, { images } = {}) {
+  if (!projectId) throw new Error("addImages requires projectId");
+  if (!Array.isArray(images) || !images.length) throw new Error("addImages requires a non-empty images array");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  // Validate every image FIRST (atomic like patchElements): coerce bytes to a non-empty
+  // Buffer and parse the header (imageSize throws on a corrupt/unsupported image).
+  const prepared = images.map((image, index) => {
+    if (!image || typeof image !== "object") throw new Error(`image ${index} is not an object`);
+    const bytes = Buffer.isBuffer(image.bytes) ? image.bytes : Buffer.from(image.bytes || []);
+    if (!bytes.length) throw new Error(`image ${index} (${image.name || "unnamed"}) has empty bytes`);
+    imageSize(bytes); // throws on an unsupported/corrupt header
+    return { name: image.name, bytes, x: image.x, y: image.y };
+  });
+  const added = [];
+  for (const image of prepared) added.push(storeAddImage(root, projectId, image).element.id);
+  // Front-order hook (addImage's, extended to a batch): stack the fresh images at the
+  // front of the root scope in add order when that scope is already explicit; a no-op on
+  // a never-reordered scope.
+  let after = getProject(root, projectId);
+  let fo = frontOrder(before, null);
+  if (fo !== null) {
+    const orderById = new Map(added.map((id) => [id, fo++]));
+    after = updateProject(root, projectId, {
+      elements: (after.elements || []).map((element) =>
+        orderById.has(element.id) ? { ...element, order: orderById.get(element.id) } : element,
+      ),
+    });
+  }
+  const project = commitMutation(root, projectId, {
+    op: "addImages",
+    args_summary: { count: added.length, elementIds: added },
+    before,
+    after,
+    startedAt,
+  });
+  const idSet = new Set(added);
+  return { project, elements: (project.elements || []).filter((item) => idSet.has(item.id)), count: added.length };
+}
+
 // Add a TEXT element (Figma text node). Mirrors addImage: builds the element via the
 // store, gives it a FRONT order when its destination scope is already explicit (so a
 // reordered scope stays explicit), and journals ONE undoable entry. `style` is merged
@@ -1186,6 +1236,55 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
     startedAt,
   });
   return { project, group: (project.groups || []).find((item) => item.id === groupId) };
+}
+
+// Patch several groups with the SAME shared field(s) in ONE journaled gesture — the
+// multi-group inspector's shared toggles (Visible / Clip). Only fields that make sense to
+// set uniformly across a selection are honored here: `visible` and `clip`. Per-group
+// geometry (x/y/w/h/name/background) is intentionally NOT batched (moves would need the
+// subtree cascade; a shared name/color is meaningless across a selection). Loud + atomic:
+// every id must resolve (throws before any write), `clip` is validated once, and at least
+// one of visible/clip must be provided. The whole batch is ONE commitMutation, so a single
+// undo restores every group. `clip:false` clears the flag to an ABSENT field (mirrors
+// patchGroup), so a no-op toggle on already-unclipped groups changes nothing.
+export function patchGroups(root, { projectId, groupIds, visible, clip } = {}) {
+  if (!projectId) throw new Error("patchGroups requires projectId");
+  if (!Array.isArray(groupIds) || !groupIds.length) throw new Error("patchGroups requires a non-empty groupIds array");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const ids = groupIds.map((value) => String(value));
+  for (const groupId of ids) findGroup(before, groupId); // atomic: throws on an unknown id
+  const idSet = new Set(ids);
+
+  const visProvided = visible !== undefined;
+  const clipProvided = clip !== undefined;
+  if (!visProvided && !clipProvided) throw new Error("patchGroups requires at least one of visible, clip");
+  const clipResolved = clipProvided ? normalizeGroupClip(clip) : undefined; // validate before any write
+
+  const nextGroups = groupsOf(before).map((group) => {
+    if (!idSet.has(group.id)) return group;
+    const patched = { ...group };
+    if (visProvided) patched.visible = !(visible === false || visible === "false");
+    if (clipProvided) {
+      if (clipResolved === false) delete patched.clip;
+      else patched.clip = true;
+    }
+    return patched;
+  });
+  const after = updateProject(root, projectId, { groups: nextGroups });
+  const project = commitMutation(root, projectId, {
+    op: "patchGroups",
+    args_summary: {
+      groupIds: ids,
+      count: ids.length,
+      visible: visProvided ? !(visible === false || visible === "false") : undefined,
+      clip: clipProvided ? clipResolved : undefined,
+    },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, groups: (project.groups || []).filter((group) => idSet.has(group.id)), count: ids.length };
 }
 
 // Resize a group's frame to fit its content (Figma "Resize to fit"). The new frame is

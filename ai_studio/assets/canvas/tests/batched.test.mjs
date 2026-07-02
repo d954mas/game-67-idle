@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import {
   addImage,
+  addImages,
   createProject,
   getProject,
   patchElements,
@@ -137,4 +138,46 @@ test("an empty batch is a no-op (no journal entry)", (t) => {
   removeElements(ROOT, { projectId, elementIds: [] });
   assert.equal(getProject(ROOT, projectId).history_seq, seqBefore);
   assert.equal(readHistory(ROOT, { projectId }).history_seq, seqBefore);
+});
+
+// ---- addImages (batched multi-image add: multi-file drop/paste) ------------------
+
+test("addImages adds N images in ONE journal entry; a single undo removes all", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Drop" });
+  const seqBefore = getProject(ROOT, project.id).history_seq; // 0 (fresh)
+
+  const result = addImages(ROOT, project.id, {
+    images: [
+      { name: "a.png", bytes: solidPng(4, 4, [10, 0, 0]), x: 1, y: 2 },
+      { name: "b.png", bytes: solidPng(4, 4, [0, 10, 0]), x: 3, y: 4 },
+      { name: "c.png", bytes: solidPng(4, 4, [0, 0, 10]), x: 5, y: 6 },
+    ],
+  });
+  assert.equal(result.count, 3);
+  assert.equal(result.elements.length, 3);
+  assert.deepEqual(result.elements.map((e) => [e.x, e.y]), [[1, 2], [3, 4], [5, 6]]);
+
+  const after = getProject(ROOT, project.id);
+  assert.equal(after.history_seq, seqBefore + 1, "exactly one entry for the whole drop");
+  assert.equal(after.elements.length, 3);
+
+  // One undo removes every added image; redo re-adds all three.
+  const undone = undoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(undone.elements.length, 0);
+  const redone = redoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(redone.elements.length, 3);
+});
+
+test("addImages rejects a bad image atomically (no partial add) and an empty list", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Bad drop" });
+  assert.throws(() => addImages(ROOT, project.id, { images: [] }), /non-empty images array/);
+  // A good image followed by an empty-bytes one must NOT half-add the good one.
+  assert.throws(
+    () => addImages(ROOT, project.id, { images: [{ name: "ok.png", bytes: solidPng(4, 4, [1, 2, 3]) }, { name: "bad.png", bytes: Buffer.alloc(0) }] }),
+    /empty bytes/,
+  );
+  assert.equal(getProject(ROOT, project.id).elements.length, 0, "no element added on a rejected batch");
+  assert.equal(getProject(ROOT, project.id).history_seq, 0);
 });

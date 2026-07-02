@@ -15,12 +15,13 @@ import {
   elementById,
   focusStage,
   groupById,
-  groups,
   hooks,
   memberElements,
+  rangeSelectIds,
   refresh,
   selectedElements,
   selectRegion,
+  selectRegionRange,
   state,
 } from "./app.js";
 import {
@@ -39,10 +40,11 @@ import {
   setExportRows,
   setGroupBackground,
   setGroupClip,
+  setGroupsShared,
   setGroupVisible,
   sliceRegionsFor,
 } from "./actions.js";
-import { descendantsOf } from "../tree.mjs";
+import { childrenOf, descendantsOf } from "../tree.mjs";
 import { fontFamilies, fontWeights } from "./fonts.js";
 import { lastDestinationName } from "./export_dest.mjs";
 import { openContextMenu } from "./context_menu.js";
@@ -62,14 +64,21 @@ function field(label, node) {
 // Enter commits + returns focus to the stage (so Ctrl+Z hits the canvas op, not the
 // input's text-undo); Escape reverts + blurs. Commit itself fires on the change
 // event (also on blur), so a click-away still commits.
-function textInput(value, onCommit) {
+//
+// `allowEmpty` (default false) keeps the RENAME guard: an empty value never clobbers a
+// name (element/group/text-name/scale all rely on this). Fields where clearing IS
+// meaningful — the Export row suffix — pass allowEmpty:true so an explicit empty commit
+// goes through in place (T0224 item 3), instead of being silently dropped.
+function textInput(value, onCommit, { allowEmpty = false } = {}) {
   const input = document.createElement("input");
   input.type = "text";
   input.className = "insp-input";
   input.value = value == null ? "" : String(value);
   const commit = () => {
     const next = input.value.trim();
-    if (next && next !== String(value)) onCommit(next);
+    if (next === String(value == null ? "" : value)) return; // unchanged: no commit
+    if (!next && !allowEmpty) return; // empty is blocked unless the field opts in
+    onCommit(next);
   };
   input.addEventListener("change", commit);
   input.addEventListener("keydown", (event) => {
@@ -207,6 +216,29 @@ function smallBtn(label, onClick) {
 
 // ---- regions -----------------------------------------------------------------
 
+// Anchor for Shift range-selection in the Regions list (mirrors the layers panel's own
+// anchor). Module-local, page-only.
+let regionAnchorId = null;
+
+// Click-select a region row with Figma modifiers: Shift = the contiguous run from the last
+// plain-clicked row (shared rangeSelectIds helper — same math as the layers panel, T0224
+// item 5), Ctrl/Cmd = toggle one, plain = select only + set the anchor. Regions are always
+// rendered, so the element.regions array order IS the visual (row) order.
+function selectRegionRow(element, regionId, event) {
+  if (event.shiftKey) {
+    const order = (element.regions || []).map((region) => region.id);
+    const ids = rangeSelectIds(order, regionAnchorId, regionId);
+    if (ids) {
+      selectRegionRange(element.id, ids);
+      return; // Shift extends the range; the anchor stays put (like layers).
+    }
+    // No usable anchor: fall through to a plain single select below.
+  }
+  const additive = event.ctrlKey || event.metaKey;
+  selectRegion(element.id, regionId, additive);
+  regionAnchorId = regionId; // plain AND Ctrl clicks move the anchor (matches layers)
+}
+
 // Compact region row: index + name + delete. Rect/coords live in the row
 // tooltip to keep the panel calm; double-click the label to rename (journaled via
 // setRegions), click to select on canvas, right-click for the region menu. The ×
@@ -247,7 +279,7 @@ function regionRowInspector(element, region, index) {
   row.append(idx, label, del);
   row.addEventListener("click", (event) => {
     if (event.target.closest("button")) return;
-    selectRegion(element.id, region.id, event.shiftKey || event.ctrlKey || event.metaKey);
+    selectRegionRow(element, region.id, event);
     refresh();
   });
   row.addEventListener("dblclick", (event) => {
@@ -379,7 +411,9 @@ function exportRowNode(element, rows, index) {
     input.setAttribute("list", "insp-scale-presets");
     return input;
   })()));
-  head.appendChild(field("Suffix", textInput(row.suffix || "", (value) => commit({ suffix: value }))));
+  // Suffix is clearable in place (allowEmpty): removing "@2x" commits "" without deleting
+  // and re-adding the row (T0224 item 3). The op accepts an empty suffix (filename-safe).
+  head.appendChild(field("Suffix", textInput(row.suffix || "", (value) => commit({ suffix: value }), { allowEmpty: true })));
   head.appendChild(field("Format", selectInput(row.format || "png", EXPORT_FORMATS, (value) => commit({ format: value }))));
   wrap.appendChild(head);
 
@@ -747,6 +781,57 @@ function renderGroupInspector(group, root) {
   render.appendChild(controls);
 }
 
+// A tri-state shared checkbox for the multi-group inspector: CHECKED when every value
+// agrees true, UNCHECKED when every value agrees false, INDETERMINATE when they disagree
+// (an honest mixed state, not a lie). A click drives ALL selected groups to the box's
+// resulting state — from indeterminate the browser resolves to checked on the first click
+// (Figma), so onCommit(true) sets them all. Pure UI; onCommit(boolean) does the batched write.
+function sharedToggle(label, values, onCommit) {
+  const allTrue = values.length > 0 && values.every((value) => value === true);
+  const allFalse = values.length > 0 && values.every((value) => value === false);
+  const row = document.createElement("label");
+  row.className = "insp-check";
+  const check = document.createElement("input");
+  check.type = "checkbox";
+  check.checked = allTrue;
+  check.indeterminate = !allTrue && !allFalse;
+  check.addEventListener("change", () => onCommit(check.checked));
+  const span = document.createElement("span");
+  span.textContent = label;
+  row.append(check, span);
+  return row;
+}
+
+// Multi-GROUP selection (2+ groups, no loose elements): an honest shared-toggle inspector
+// (T0224 item 1). Count header + shared Visible / Clip checkboxes editable when the groups
+// agree, indeterminate when they disagree; clicking sets that field on EVERY selected group
+// in ONE journaled patchGroups op (one undo). Per-group geometry stays out (it is not a
+// shared value).
+function renderMultiGroup(groupIds, root) {
+  const selected = groupIds.map((id) => groupById(id)).filter(Boolean);
+  const title = document.createElement("div");
+  title.className = "insp-multi-title";
+  title.textContent = `${selected.length} ${selected.length === 1 ? "group" : "groups"}`;
+  root.appendChild(title);
+
+  const shared = collapsible(root, "multigroup", "Shared");
+  shared.appendChild(
+    sharedToggle("Visible", selected.map((group) => group.visible !== false), (value) =>
+      setGroupsShared(groupIds, { visible: value }),
+    ),
+  );
+  shared.appendChild(
+    sharedToggle("Clip content", selected.map((group) => group.clip === true), (value) =>
+      setGroupsShared(groupIds, { clip: value }),
+    ),
+  );
+
+  const note = document.createElement("div");
+  note.className = "insp-export-note";
+  note.textContent = "Shared toggles apply to all selected groups in one step.";
+  root.appendChild(note);
+}
+
 // Multi-select: keep it simple — each element exports with its OWN persisted rows
 // (no shared row editing). The section just states that and offers one Export.
 function renderMulti(selected, root) {
@@ -770,6 +855,15 @@ function renderMulti(selected, root) {
   root.appendChild(button);
 }
 
+// Top-level VISIBLE screens — exactly what exportProject renders (every parentId-less
+// visible group). Computed via the shared tree helper (childrenOf(root).groups), not a
+// hand-rolled scan, so the button label never counts nested component groups (T0224 item 9:
+// "Export project (N screens)" must match exportProject, which is top-level only).
+function visibleScreenCount() {
+  if (!state.project) return 0;
+  return childrenOf(state.project, null).groups.filter((group) => group.visible !== false).length;
+}
+
 // Nothing selected: still offer a project-level export of every visible screen.
 function renderEmpty(root) {
   const empty = document.createElement("div");
@@ -777,15 +871,15 @@ function renderEmpty(root) {
   empty.textContent = "Nothing selected";
   root.appendChild(empty);
 
-  const visibleGroups = groups().filter((group) => group.visible !== false);
-  if (!visibleGroups.length) return;
+  const screens = visibleScreenCount();
+  if (!screens) return;
 
   root.appendChild(exportDestinationHint(state.project ? state.project.id : ""));
 
   const button = document.createElement("button");
   button.type = "button";
   button.className = "primary insp-btn";
-  button.textContent = `Export project (${visibleGroups.length} ${visibleGroups.length === 1 ? "screen" : "screens"})`;
+  button.textContent = `Export project (${screens} ${screens === 1 ? "screen" : "screens"})`;
   button.addEventListener("click", () => exportProjectAction(button));
   root.appendChild(button);
 }
@@ -802,6 +896,12 @@ function inspectorSig() {
   if (group) {
     return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}`;
   }
+  // Multi-group selection (2+ groups, no loose elements): the signature carries each
+  // group's id + shared toggle state so a batched visible/clip change rebuilds the panel.
+  if (state.selectedIds.size === 0 && state.selectedGroupIds.size >= 2) {
+    const gs = [...state.selectedGroupIds].map((id) => groupById(id)).filter(Boolean);
+    return `mg:${gs.map((g) => `${g.id}~${g.visible !== false ? 1 : 0}~${g.clip === true ? 1 : 0}`).join("|")}`;
+  }
   if (selected.length === 1) {
     const e = selected[0];
     // A text element's structure is its content + style (family/size/align/stroke/
@@ -816,8 +916,8 @@ function inspectorSig() {
     return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.export || [])}|${JSON.stringify(e.meta || {})}`;
   }
   if (selected.length > 1) return `m:${selected.map((e) => e.id).join(",")}`;
-  // Empty state carries a project-export button gated by the visible-screen count.
-  return `empty:${groups().filter((group) => group.visible !== false).length}`;
+  // Empty state carries a project-export button gated by the top-level visible-screen count.
+  return `empty:${visibleScreenCount()}`;
 }
 
 // Re-apply region selection to the already-built DOM (used on a skipped rebuild):
@@ -865,8 +965,12 @@ export function renderInspector() {
 
   const group = state.selectedGroupId ? groupById(state.selectedGroupId) : null;
   const selected = selectedElements();
+  const groupIds = [...state.selectedGroupIds];
+  const multiGroup = selected.length === 0 && groupIds.length >= 2;
   if (group) {
     renderGroupInspector(group, root);
+  } else if (multiGroup) {
+    renderMultiGroup(groupIds, root);
   } else if (selected.length === 1) {
     if (selected[0].type === "text") renderTextElement(selected[0], root);
     else renderElement(selected[0], root);

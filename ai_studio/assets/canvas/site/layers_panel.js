@@ -19,13 +19,14 @@ import {
   groups,
   hooks,
   memberElements,
+  rangeSelectIds,
   refresh,
   selectOnly,
   state,
   toggleSelect,
   ungroupedElements,
 } from "./app.js";
-import { descendantsOf, nodeScope, orderedChildren } from "../tree.mjs";
+import { ancestorsOf, descendantsOf, nodeScope, orderedChildren } from "../tree.mjs";
 import {
   assignElementsToGroup,
   renameElement,
@@ -95,22 +96,21 @@ let selectAnchorId = null;
 // Figma-style Shift+click: select the contiguous run of VISIBLE rows between the
 // anchor and the clicked row, in the panel's visual front-at-top order (collapsed
 // group members aren't rendered, so they never silently join a range). Without a
-// usable anchor it degrades to a plain click.
+// usable anchor it degrades to a plain click. The range MATH is the shared
+// rangeSelectIds helper (T0224 item 5 — one helper, also used by the inspector Regions).
 function selectRange(targetId) {
   const rows = el("layers-list")?.querySelectorAll(".layer-row") || [];
   const order = [...rows].map((row) => row.dataset.elementId);
-  const from = order.indexOf(selectAnchorId);
-  const to = order.indexOf(targetId);
-  if (from === -1 || to === -1) {
+  const ids = rangeSelectIds(order, selectAnchorId, targetId);
+  if (!ids) {
     selectOnly(targetId);
     selectAnchorId = targetId;
     return;
   }
-  const [lo, hi] = from <= to ? [from, to] : [to, from];
   state.selectedGroupId = null;
   state.selectedRegionIds = new Set();
   state.regionEditId = null;
-  state.selectedIds = new Set(order.slice(lo, hi + 1));
+  state.selectedIds = new Set(ids);
 }
 
 function elementRow(element, depth) {
@@ -119,6 +119,9 @@ function elementRow(element, depth) {
   row.dataset.elementId = element.id;
   row.dataset.groupId = element.groupId || "";
   if (depth > 0) row.classList.add("indented");
+  // --depth drives the CSS indent guides (thin vertical level lines, VS Code style —
+  // T0224 item 8b): one guide per ancestor level, aligned with the 8px/level step.
+  row.style.setProperty("--depth", String(depth));
   if (state.selectedIds.has(element.id)) row.classList.add("selected");
 
   // One caret-width spacer per nesting level (indent under the ancestor group heads);
@@ -203,12 +206,15 @@ function elementRow(element, depth) {
 function groupSection(group, depth) {
   const wrap = document.createElement("div");
   wrap.className = "layer-group";
-  const collapsed = state.collapsedGroups.has(group.id);
+  // Groups collapse by DEFAULT now (Figma reveal, T0224 item 8a): a group is expanded only
+  // when its id is in state.expandedGroups (the selection's ancestor path is auto-added).
+  const collapsed = !state.expandedGroups.has(group.id);
 
   const head = document.createElement("div");
   head.className = "group-head";
   head.dataset.groupId = group.id;
   if (depth > 0) head.classList.add("indented");
+  head.style.setProperty("--depth", String(depth)); // CSS indent guides (item 8b)
   if (state.selectedGroupId === group.id) head.classList.add("selected");
 
   // Indent a nested group head one spacer per ancestor level (its own caret button
@@ -226,8 +232,8 @@ function groupSection(group, depth) {
   caret.addEventListener("mousedown", (event) => event.stopPropagation());
   caret.addEventListener("click", (event) => {
     event.stopPropagation();
-    if (collapsed) state.collapsedGroups.delete(group.id);
-    else state.collapsedGroups.add(group.id);
+    if (collapsed) state.expandedGroups.add(group.id);
+    else state.expandedGroups.delete(group.id);
     hooks.renderLayers();
   });
   head.appendChild(caret);
@@ -313,7 +319,7 @@ function layersSignature() {
     for (const child of orderedChildren(state.project, scopeId)) {
       if (child.kind === "group") {
         const g = child.ref;
-        const collapsed = state.collapsedGroups.has(g.id);
+        const collapsed = !state.expandedGroups.has(g.id);
         parts.push(`g:${depth}:${g.id}:${g.name || ""}:${g.visible !== false ? 1 : 0}:${collapsed ? 1 : 0}`);
         if (!collapsed) walk(g.id, depth + 1);
       } else {
@@ -337,6 +343,29 @@ function applyLayersSelection() {
   }
 }
 
+// Figma reveal (T0224 item 8a): when the SELECTION changes, auto-expand the ancestor group
+// path of every selected node so the selection is visible — without disturbing the user's
+// manual expand/collapse otherwise (we only add on a genuine selection change, tracked by
+// lastRevealKey, so re-collapsing a group with the selection unchanged sticks). A selected
+// group reveals its OWN row (we expand its ancestors, not the group itself), so it shows
+// collapsed until the user opens it.
+let lastRevealKey = null;
+function revealSelectionPath() {
+  const selIds = [
+    ...state.selectedIds,
+    ...(state.selectedGroupId ? [state.selectedGroupId] : []),
+    ...state.selectedGroupIds,
+  ];
+  const key = [...new Set(selIds)].sort().join(",");
+  if (key === lastRevealKey) return;
+  lastRevealKey = key;
+  for (const id of selIds) {
+    const node = elementById(id) || groupById(id);
+    if (!node) continue;
+    for (const ancestor of ancestorsOf(state.project, node)) state.expandedGroups.add(ancestor.id);
+  }
+}
+
 export function renderLayers() {
   const list = el("layers-list");
   if (!list) return;
@@ -345,6 +374,7 @@ export function renderLayers() {
   const editing = list.querySelector(".inline-input");
   if (editing && document.activeElement === editing) return;
 
+  revealSelectionPath(); // expand the selection's ancestor path before signing/rebuilding
   const sig = layersSignature();
   if (sig === lastLayersSig && list.childElementCount) {
     applyLayersSelection();
@@ -628,6 +658,60 @@ function setLayersCollapsed(collapsed) {
   hooks.renderCanvas(); // the stage width changed — resize + repaint the canvas
 }
 
+// ---- draggable panel width (T0224 item 8c) -----------------------------------
+//
+// The layers panel width is a persisted VIEW pref (localStorage, like
+// canvas.layersCollapsed — the established view prefs here are GLOBAL, not per-project,
+// so this follows that convention for a consistent panel across projects). Dragging the
+// right-edge handle resizes it live (clamped) and saves on release.
+const LAYERS_WIDTH_KEY = "canvas.layersWidth";
+const LAYERS_MIN_W = 170;
+const LAYERS_MAX_W = 520;
+
+function applyLayersWidth(width) {
+  const panel = el("layers-panel");
+  if (!panel) return null;
+  const w = Math.max(LAYERS_MIN_W, Math.min(LAYERS_MAX_W, Math.round(width)));
+  panel.style.width = `${w}px`;
+  return w;
+}
+
+function initLayersResize() {
+  const handle = el("layers-resize");
+  const panel = el("layers-panel");
+  if (!handle || !panel) return;
+  try {
+    const saved = Number(localStorage.getItem(LAYERS_WIDTH_KEY));
+    if (Number.isFinite(saved) && saved > 0) applyLayersWidth(saved);
+  } catch {
+    // Private mode / disabled storage: default width, no persist.
+  }
+
+  let resizing = null;
+  handle.addEventListener("mousedown", (event) => {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    resizing = { startX: event.clientX, startW: panel.getBoundingClientRect().width, applied: null };
+    document.body.classList.add("layers-resizing");
+  });
+  window.addEventListener("mousemove", (event) => {
+    if (!resizing) return;
+    resizing.applied = applyLayersWidth(resizing.startW + (event.clientX - resizing.startX));
+    hooks.renderCanvas(); // the stage width changed — repaint crisp
+  });
+  window.addEventListener("mouseup", () => {
+    if (!resizing) return;
+    const finalW = resizing.applied ?? panel.getBoundingClientRect().width;
+    resizing = null;
+    document.body.classList.remove("layers-resizing");
+    try {
+      localStorage.setItem(LAYERS_WIDTH_KEY, String(Math.round(finalW)));
+    } catch {
+      // Private mode / disabled storage: this session keeps the width, just no persist.
+    }
+  });
+}
+
 export function initLayers() {
   hooks.renderLayers = renderLayers;
   // Right-click on the empty area of the list: create a group (groups the current
@@ -648,6 +732,8 @@ export function initLayers() {
   }
   el("layers-collapse")?.addEventListener("click", () => setLayersCollapsed(true));
   el("layers-expand")?.addEventListener("click", () => setLayersCollapsed(false));
+
+  initLayersResize();
 
   window.addEventListener("mousemove", onLayerMouseMove);
   window.addEventListener("mouseup", onLayerMouseUp);

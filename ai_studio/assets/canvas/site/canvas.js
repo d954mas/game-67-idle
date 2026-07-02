@@ -126,6 +126,15 @@ function onKeyDown(event) {
   // Home view: nothing to do beyond letting inputs work.
   if (!state.project) return;
 
+  // Alt-hold peeks at the clip-ghost of a selected element's clipped-out portion — hidden
+  // by default (T0224 item 6). View-state only (never journaled/persisted); onKeyUp clears
+  // it. Repaint so the ghost appears immediately. Falls through (no preventDefault) so Alt
+  // still composes with the z-order shortcuts (Ctrl+Alt+[ / ]).
+  if (event.altKey && !state.clipGhostPeek) {
+    state.clipGhostPeek = true;
+    hooks.renderCanvas();
+  }
+
   // A polygon draft owns Ctrl+Z / Backspace / Delete (pop the last placed vertex) and
   // Enter (close). This MUST run before global undo AND its region-edit clamp so a draft
   // edit never reaches the journal — the draft is pure UI state.
@@ -258,6 +267,11 @@ function onKeyUp(event) {
   if (event.code === "Space") {
     state.spacePan = false;
     el("stage").classList.remove("space-pan");
+  }
+  // Alt released: drop the clip-ghost peek (view-state only) and repaint so it hides.
+  if (!event.altKey && state.clipGhostPeek) {
+    state.clipGhostPeek = false;
+    hooks.renderCanvas();
   }
 }
 

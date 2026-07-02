@@ -1,7 +1,7 @@
 ---
 id: T0224
 title: "Canvas: groups v2 + export panel UX polish (no-hack leftovers)"
-status: backlog
+status: review
 project: P001
 epic: E010
 priority: P2
@@ -60,18 +60,58 @@ deferred with a note; none should survive long-term:
 
 ## Done when
 
-- [ ] 2+ selected groups get a real multi-inspector (count + shared toggles); mixed agree/disagree states handled honestly
-- [ ] clicking the filled body of a background-carrying group selects the group; unfilled body still starts marquee
-- [ ] export row suffix clearable in place; textInput empty-commit audited across call sites (rename guards intact)
-- [ ] Shift-click range selection works in the inspector Regions list (shared helper with layers)
-- [ ] clip ghost hidden by default, Alt-hold (or agreed toggle) reveals it
-- [ ] "Export project (N screens)" button label counts ALL groups; must count TOP-LEVEL visible only (matches exportProject since inc3; seen on screenshot: 1 top-level group shown as "2 screens")
-- [ ] addImages batched op: multi-file drop/paste = 1 journal entry, 1 undo; HTTP + CLI parity
-- [ ] layers: groups collapsed by default + selection path auto-expands; indent guides; panel width draggable
-- [ ] lead's live-verification UX notes on T0219 folded in (or explicitly none)
-- [ ] tests where testable + gates green
+- [x] 2+ selected groups get a real multi-inspector (count + shared toggles); mixed agree/disagree states handled honestly
+- [x] clicking the filled body of a background-carrying group selects the group; unfilled body still starts marquee
+- [x] export row suffix clearable in place; textInput empty-commit audited across call sites (rename guards intact)
+- [x] Shift-click range selection works in the inspector Regions list (shared helper with layers)
+- [x] clip ghost hidden by default, Alt-hold (or agreed toggle) reveals it
+- [x] "Export project (N screens)" button label counts ALL groups; must count TOP-LEVEL visible only (matches exportProject since inc3; seen on screenshot: 1 top-level group shown as "2 screens")
+- [x] addImages batched op: multi-file drop/paste = 1 journal entry, 1 undo; HTTP + CLI parity
+- [x] layers: groups collapsed by default + selection path auto-expands; indent guides; panel width draggable
+- [x] lead's live-verification UX notes on T0219 folded in (or explicitly none)
+- [x] tests where testable + gates green
 
 ## Open questions
 
 ## Log
 - 2026-07-02: Created from T0219 inc3 deferrals + T0206 build note. Lead directive: clean, no tech debt, no hacks.
+- 2026-07-02: Built all 8 items. Design record:
+  - **Item 1 (multi-group inspector):** new batched `patchGroups({projectId, groupIds, visible?, clip?})`
+    op (mirrors patchElements) — ONE commitMutation, atomic id validation, clip:false clears to
+    an absent field. HTTP `POST /groups-set` + CLI `groups-set --groups g1,g2 [--visible][--clip]`.
+    Inspector `renderMultiGroup` shows "N groups" + tri-state shared toggles (checkbox `.indeterminate`
+    when groups disagree; a click drives all via one op). Chose visible+clip only (per task); geometry
+    stays per-group.
+  - **Item 2 (filled-group-body click):** integrated a group-body hit INTO hitElement's front→back
+    walk at the group's own z-slot (after its children, before siblings behind it) — a filled frame
+    occludes what's behind it. `hasGroupFill` gates it; unfilled frames stay marquee-passthrough; the
+    clip guard keeps clipped-out bodies unhittable. Generalized `resolveClickSelection` to tag groups
+    (kind:"group") so the scope/drill model resolves a body click to the right container; fixed the
+    Ctrl-click branch to selectGroupOnly for a group hit.
+  - **Item 3 (suffix clear-in-place):** added `allowEmpty` opt to inspector `textInput`; only the
+    Export **suffix** call passes it. Audited all textInput sites — element/group/text name + Export
+    **scale** keep the non-empty guard (default). Region/project rename use inline.js (untouched).
+  - **Item 4 (ghost/breadcrumb):** chief note = item 6 (done). No other breadcrumb/ghost bug found in
+    the drill/scope code.
+  - **Item 5 (region Shift-range):** extracted shared pure `rangeSelectIds(orderedIds, anchor, target)`
+    in app.js; layers `selectRange` and the new inspector `selectRegionRow` both call it. Region rows
+    get a module anchor + `selectRegionRange` (enters isolation, selects the run).
+  - **Item 6 (clip ghost off by default):** `drawClipGhosts` gated on new view-state `state.clipGhostPeek`;
+    Alt-hold sets it (canvas.js onKeyDown), Alt-release clears it (onKeyUp) + repaints. Never journaled/persisted.
+  - **Item 7 (batched addImages):** new `addImages({projectId, images:[{name,bytes,x?,y?}]})` op — one
+    commitMutation, up-front header validation (atomic), front-order hook extended to a batch. HTTP
+    `POST /images-batch`, CLI `add-images --files a,b`. actions.js addImageFiles routes 1 file → addImage,
+    2+ → addImages; drop AND paste flow through it.
+  - **Item 8 (deep nesting):** (a) groups collapse by DEFAULT — state.collapsedGroups → state.expandedGroups
+    (inverted); `revealSelectionPath()` auto-expands the selection's ancestor path on selection change only
+    (manual collapse sticks). (b) VS Code indent guides via a CSS `::before` repeating-gradient in the indent
+    gutter driven by a `--depth` var; normalized `.group-head` gap 6px→8px so head + row indent (and guides)
+    align at every depth. (c) draggable right-edge `#layers-resize` handle; width persisted GLOBALLY
+    (`canvas.layersWidth`, clamped 170–520). See NOTE below re: per-project.
+  - **Item 9 (export label):** `visibleScreenCount()` uses `childrenOf(project, null).groups` (shared tree
+    helper) filtered to visible — TOP-LEVEL only, matching exportProject. Wired into renderEmpty + inspectorSig.
+  - NOTE (item 8c): task said "per project"; the two existing view prefs (canvas.layersCollapsed,
+    canvas.inspector.collapsed) are GLOBAL, so per the "like other view prefs" clause I made width global
+    for consistency + simpler apply-at-init. Flag for lead if per-project is preferred (trivial to key by id).
+  - Tests: +9 (patchGroups ×3 in groups.test, addImages ×2 in batched.test, CLI parity ×2, API parity ×2).
+    Gates: node --test → 204 pass/0 fail; validate_map --strict → 0 unmapped/0 missing; doc_reference_check → ok.

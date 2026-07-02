@@ -8,6 +8,7 @@
 //   PATCH  /api/canvas/projects/<id>               {title}          (rename)
 //   DELETE /api/canvas/projects/<id>                                (move to .trash)
 //   POST   /api/canvas/projects/<id>/images        {name, bytes_base64, x?, y?}
+//   POST   /api/canvas/projects/<id>/images-batch  {images:[{name, bytes_base64, x?, y?}]} (one entry)
 //   POST   /api/canvas/projects/<id>/text          {x?, y?, content?, style?, groupId?}
 //   POST   /api/canvas/projects/<id>/detect-regions {elementId, params?}
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
@@ -15,6 +16,7 @@
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/export {rows}  (export settings)
 //   POST   /api/canvas/projects/<id>/groups         {name, x?,y?,w?,h?, fromElements?, parentId?}
 //   PATCH  /api/canvas/projects/<id>/groups/<gid>   {name?,x?,y?,w?,h?,visible?,background?}
+//   POST   /api/canvas/projects/<id>/groups-set     {groupIds, visible?, clip?} (batched shared toggles)
 //   DELETE /api/canvas/projects/<id>/groups/<gid>
 //   POST   /api/canvas/projects/<id>/groups/<gid>/render {scale?, background?}
 //   POST   /api/canvas/projects/<id>/groups/<gid>/fit {padding?}   (resize frame to content)
@@ -38,6 +40,7 @@ import { basename, extname } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
   addImage,
+  addImages,
   addText,
   assignToGroup,
   createGroup,
@@ -56,6 +59,7 @@ import {
   patchElement,
   patchElements,
   patchGroup,
+  patchGroups,
   patchProject,
   readHistory,
   recordOpFailure,
@@ -212,6 +216,22 @@ export function createCanvasApi(root) {
         return true;
       }
 
+      // /api/canvas/projects/<id>/images-batch   (batched multi-image add)
+      // One journal entry for the whole gesture (multi-file drop / paste of several
+      // images); each image is {name, bytes_base64, x?, y?}. A single-image add stays on
+      // POST /images.
+      if (parts.length === 5 && sub === "images-batch" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        const images = (Array.isArray(body.images) ? body.images : []).map((image) => ({
+          name: image && image.name,
+          bytes: Buffer.from(String((image && image.bytes_base64) || ""), "base64"),
+          x: image && image.x,
+          y: image && image.y,
+        }));
+        sendMutation(201, addImages(root, id, { images }));
+        return true;
+      }
+
       // /api/canvas/projects/<id>/text  (add a text element)
       // x/y place it at a world point; content/style/groupId are optional (style is
       // validated against the fonts manifest by the op — a loud 400 on bad input).
@@ -327,6 +347,20 @@ export function createCanvasApi(root) {
           nodeIds: Array.isArray(body.nodeIds) ? body.nodeIds : [],
           direction: body.direction,
           index: body.index,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/groups-set   (batched shared group toggles)
+      // One journal entry for the whole gesture: set Visible / Clip on several groups at
+      // once (the multi-group inspector's shared toggles). A single undo restores all.
+      if (parts.length === 5 && sub === "groups-set" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(200, patchGroups(root, {
+          projectId: id,
+          groupIds: Array.isArray(body.groupIds) ? body.groupIds : [],
+          visible: body.visible,
+          clip: body.clip,
         }));
         return true;
       }

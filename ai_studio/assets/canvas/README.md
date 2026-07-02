@@ -628,6 +628,7 @@ node ai_studio/assets/canvas/cli.mjs show <id>
 node ai_studio/assets/canvas/cli.mjs rename <id> --title "New title"
 node ai_studio/assets/canvas/cli.mjs delete <id>          # moves to .trash
 node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
+node ai_studio/assets/canvas/cli.mjs add-images <id> --files a.png,b.png   # batched multi-image add; one undo step
 node ai_studio/assets/canvas/cli.mjs add-text <id> [--x 40 --y 40] [--content "Заголовок"] [--style-json style.json] [--group <gid>]
 node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--content "New text"] [--style-json style.json]   # text edits (validated vs fonts.json)
 node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
@@ -651,6 +652,7 @@ node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e
 node ai_studio/assets/canvas/cli.mjs group-reparent <id> --group g --parent <gid>|none [--index n]   # nest a group; none = top level
 node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
 node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none] [--clip true|false]
+node ai_studio/assets/canvas/cli.mjs groups-set <id> --groups g1,g2 [--visible true|false] [--clip true|false]   # batched shared toggles (multi-group inspector); one undo step
 node ai_studio/assets/canvas/cli.mjs group-fit <id> --group g [--padding n]   # resize the frame to fit its content (padding default 24)
 node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g   # dissolve one level; children keep the group's z-slot; one undo step

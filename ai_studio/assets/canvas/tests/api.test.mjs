@@ -584,3 +584,56 @@ test("canvas API batched elements-set / elements-remove = one journal entry + si
   await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`);
   assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project.elements.length, 2);
 });
+
+test("canvas API images-batch = one journal entry for a multi-file drop (single undo)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Drop API" })).json().project.id;
+
+  const batch = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images-batch`, {
+    images: [
+      { name: "a.png", bytes_base64: solidPng(4, 4, [10, 0, 0]).toString("base64"), x: 1, y: 2 },
+      { name: "b.png", bytes_base64: solidPng(4, 4, [0, 10, 0]).toString("base64"), x: 3, y: 4 },
+    ],
+  });
+  assert.equal(batch.status, 201);
+  assert.equal(batch.json().count, 2);
+  const after = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.equal(after.elements.length, 2);
+  const history = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/history`)).json();
+  assert.equal(history.entries.filter((e) => e.op === "addImages").length, 1);
+  assert.equal(history.entries.filter((e) => e.op === "addImage").length, 0, "not N per-image entries");
+
+  await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`);
+  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project.elements.length, 0);
+});
+
+test("canvas API groups-set = one journal entry for batched shared toggles (single undo)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "GroupsSet API" })).json().project.id;
+  const makeGroup = async (name) =>
+    (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups`, { name, x: 0, y: 0, w: 60, h: 40 })).json().group.id;
+  const g1 = await makeGroup("A");
+  const g2 = await makeGroup("B");
+
+  const set = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups-set`, {
+    groupIds: [g1, g2],
+    visible: false,
+    clip: true,
+  });
+  assert.equal(set.status, 200);
+  assert.equal(set.json().count, 2);
+  const after = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  for (const id of [g1, g2]) {
+    const g = after.groups.find((group) => group.id === id);
+    assert.equal(g.visible, false);
+    assert.equal(g.clip, true);
+  }
+  const history = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/history`)).json();
+  assert.equal(history.entries.filter((e) => e.op === "patchGroups").length, 1);
+
+  await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`);
+  const undone = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.equal(undone.groups.filter((g) => g.visible === false).length, 0);
+});

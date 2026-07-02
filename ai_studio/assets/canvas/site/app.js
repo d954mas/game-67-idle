@@ -49,7 +49,14 @@ export const state = {
   viewport: { scale: 1, offsetX: 0, offsetY: 0 },
   tool: "select", // "select" | "pan"
   spacePan: false, // Space-hold temporarily activates pan
-  collapsedGroups: new Set(), // group ids collapsed in the layers panel (page-only)
+  // Alt-hold peeks at the clip-ghost of a selected element's clipped-out portion. View-
+  // state only (never journaled/persisted) — the ghost is hidden by default (T0224 item 6).
+  clipGhostPeek: false,
+  // Group ids EXPANDED in the layers panel. Figma reveal model: groups collapse by
+  // DEFAULT (only ids in this set show their children), the selection's ancestor path
+  // auto-expands (revealSelectionPath), and the caret toggles membership. Page-only, kept
+  // while the page lives (T0224 item 8a).
+  expandedGroups: new Set(),
   expandedElements: new Set(), // element ids whose region tree is expanded in layers (page-only)
   cssWidth: 0, // stage size in CSS pixels (backing store is dpr-scaled)
   cssHeight: 0,
@@ -320,6 +327,30 @@ export function selectRegion(elementId, regionId, additive = false) {
   } else {
     state.selectedRegionIds = new Set([regionId]);
   }
+  state.expandedElements.add(elementId);
+}
+
+// The contiguous run of ids between `anchorId` and `targetId` (inclusive) in the given
+// visual order, or null when either id is absent (the caller then falls back to a plain
+// select). PURE — shared by the layers panel and the inspector Regions list so Shift-range
+// behaves identically in both (T0224 item 5: one helper, no copy).
+export function rangeSelectIds(orderedIds, anchorId, targetId) {
+  const from = orderedIds.indexOf(anchorId);
+  const to = orderedIds.indexOf(targetId);
+  if (from === -1 || to === -1) return null;
+  const [lo, hi] = from <= to ? [from, to] : [to, from];
+  return orderedIds.slice(lo, hi + 1);
+}
+
+// Select a SET of regions on one element (Shift-range in the inspector Regions list):
+// enters region-edit isolation on the element (like selectRegion) and replaces the region
+// selection with the given ids. Page-only.
+export function selectRegionRange(elementId, regionIds) {
+  state.selectedGroupId = null;
+  state.selectedIds = new Set([elementId]);
+  if (state.regionEditId !== elementId) state.regionEditBaseSeq = state.history.seq ?? null;
+  state.regionEditId = elementId;
+  state.selectedRegionIds = new Set(regionIds);
   state.expandedElements.add(elementId);
 }
 

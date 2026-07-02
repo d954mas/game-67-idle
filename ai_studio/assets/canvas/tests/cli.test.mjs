@@ -128,6 +128,53 @@ test("cli group-set --clip toggles the frame clip flag (no python)", (t) => {
   assert.equal("clip" in run(env, "show", projectId).project.groups[0], false, "clip false removes the field");
 });
 
+test("cli add-images batched multi-image add parity (one undo restores all)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-addimgs-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const a = join(dir, "a.png");
+  const b = join(dir, "b.png");
+  const c = join(dir, "c.png");
+  writeFileSync(a, solidPng(4, 4, [10, 0, 0]));
+  writeFileSync(b, solidPng(4, 4, [0, 10, 0]));
+  writeFileSync(c, solidPng(4, 4, [0, 0, 10]));
+
+  const projectId = run(env, "create", "--title", "CLI AddImages").project.id;
+  const added = run(env, "add-images", projectId, "--files", `${a},${b},${c}`);
+  assert.equal(added.count, 3);
+  assert.equal(run(env, "show", projectId).project.elements.length, 3);
+  // One journal entry for the whole batch; one undo removes all three.
+  const h = run(env, "history", projectId);
+  assert.equal(h.entries.filter((e) => e.op === "addImages").length, 1);
+  run(env, "undo", projectId);
+  assert.equal(run(env, "show", projectId).project.elements.length, 0);
+});
+
+test("cli groups-set batched shared toggles parity (one undo restores all)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-groupsset-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const projectId = run(env, "create", "--title", "CLI GroupsSet").project.id;
+  const g1 = run(env, "group-create", projectId, "--name", "A", "--x", "0", "--y", "0", "--w", "50", "--h", "50").group.id;
+  const g2 = run(env, "group-create", projectId, "--name", "B", "--x", "0", "--y", "0", "--w", "50", "--h", "50").group.id;
+
+  const set = run(env, "groups-set", projectId, "--groups", `${g1},${g2}`, "--visible", "false", "--clip", "true");
+  assert.equal(set.count, 2);
+  const shown = run(env, "show", projectId).project;
+  for (const id of [g1, g2]) {
+    const g = shown.groups.find((group) => group.id === id);
+    assert.equal(g.visible, false);
+    assert.equal(g.clip, true);
+  }
+  const h = run(env, "history", projectId);
+  assert.equal(h.entries.filter((e) => e.op === "patchGroups").length, 1);
+  run(env, "undo", projectId);
+  const undone = run(env, "show", projectId).project;
+  assert.equal(undone.groups.filter((g) => g.visible === false).length, 0, "one undo restores all");
+});
+
 test("cli group-fit resizes the frame to content (no python)", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-fit-"));
   const env = { CANVAS_PROJECTS_ROOT: dir };

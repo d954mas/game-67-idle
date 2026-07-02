@@ -50,27 +50,33 @@ function fileToBase64(file) {
 // ---- images ------------------------------------------------------------------
 
 // Add one or more image files. When `worldPoint` is given (a drop point), files
-// are placed there, each offset by +20px so multiples don't stack exactly.
+// are placed there, each offset by +20px so multiples don't stack exactly. A single
+// file goes through addImage (POST /images); MULTIPLE files go through the batched
+// addImages op (POST /images-batch) so one drop/paste gesture = ONE journal entry / one
+// undo (T0224 item 7 — the last gesture-audit fix from T0223's one-entry law).
 export async function addImageFiles(files, worldPoint) {
   const list = [...files].filter((file) => file && file.type && file.type.startsWith("image/"));
   if (!list.length || !state.project) return;
-  let lastResult = null;
+  const placement = (i) => (worldPoint ? { x: Math.round(worldPoint.x + i * 20), y: Math.round(worldPoint.y + i * 20) } : {});
   try {
-    for (let i = 0; i < list.length; i += 1) {
-      const file = list[i];
-      setStatus(`Uploading ${file.name}...`);
-      const bytes_base64 = await fileToBase64(file);
-      const body = { name: file.name, bytes_base64 };
-      if (worldPoint) {
-        body.x = Math.round(worldPoint.x + i * 20);
-        body.y = Math.round(worldPoint.y + i * 20);
-      }
-      // Each addImage response returns the full cumulative project, so the LAST one
-      // reflects every added image — apply it once (no reload GET).
-      lastResult = await api("POST", `/projects/${pid()}/images`, body);
+    if (list.length === 1) {
+      setStatus(`Uploading ${list[0].name}...`);
+      const bytes_base64 = await fileToBase64(list[0]);
+      const result = await api("POST", `/projects/${pid()}/images`, { name: list[0].name, bytes_base64, ...placement(0) });
+      selectOnly(result.element.id);
+      applyMutation(result, "Added 1 image.");
+      return;
     }
-    if (lastResult) selectOnly(lastResult.element.id);
-    applyMutation(lastResult, `Added ${list.length} image(s).`);
+    setStatus(`Uploading ${list.length} images...`);
+    const images = [];
+    for (let i = 0; i < list.length; i += 1) {
+      images.push({ name: list[i].name, bytes_base64: await fileToBase64(list[i]), ...placement(i) });
+    }
+    const result = await api("POST", `/projects/${pid()}/images-batch`, { images });
+    // Select the LAST added image (parity with the old loop's trailing selectOnly).
+    const last = result.elements && result.elements[result.elements.length - 1];
+    if (last) selectOnly(last.id);
+    applyMutation(result, `Added ${list.length} images.`);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -554,6 +560,19 @@ export async function setGroupBackground(groupId, background) {
 // op validates it is a boolean (no silent fallback).
 export async function setGroupClip(groupId, clip) {
   await patchGroupBox(groupId, { clip });
+}
+
+// Set a shared field (visible/clip) on SEVERAL groups in ONE journaled patchGroups op —
+// the multi-group inspector's shared toggles. One HTTP call, one undo restores every
+// group. `patch` is {visible?} or {clip?}.
+export async function setGroupsShared(groupIds, patch) {
+  const ids = [...groupIds];
+  if (!ids.length) return;
+  try {
+    applyMutation(await api("POST", `/projects/${pid()}/groups-set`, { groupIds: ids, ...patch }));
+  } catch (error) {
+    setStatus(error.message, true);
+  }
 }
 
 // Resize a group's frame to fit its content (Figma "Resize to fit"): one journaled

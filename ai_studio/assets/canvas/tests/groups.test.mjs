@@ -18,6 +18,7 @@ import {
   getProject,
   patchElement,
   patchGroup,
+  patchGroups,
   redoOp,
   renderGroup,
   undoOp,
@@ -166,6 +167,66 @@ test("patchGroup background=null on a plain group is a no-op (no journal entry)"
   const seqBefore = Number(getProject(ROOT, projectId).history_seq);
   patchGroup(ROOT, { projectId, groupId: group.id, background: null });
   assert.equal(Number(getProject(ROOT, projectId).history_seq), seqBefore, "None on already-none = no change");
+});
+
+// ---- patchGroups (batched shared toggles: multi-group inspector) ----------------
+
+test("patchGroups sets visible+clip across N groups in ONE entry; a single undo restores all", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Multi" });
+  const g1 = createGroup(ROOT, { projectId: project.id, name: "A", x: 0, y: 0, w: 100, h: 100 }).group;
+  const g2 = createGroup(ROOT, { projectId: project.id, name: "B", x: 0, y: 0, w: 100, h: 100 }).group;
+  const g3 = createGroup(ROOT, { projectId: project.id, name: "C", x: 0, y: 0, w: 100, h: 100 }).group;
+  const seqBefore = Number(getProject(ROOT, project.id).history_seq);
+
+  const result = patchGroups(ROOT, { projectId: project.id, groupIds: [g1.id, g2.id, g3.id], visible: false, clip: true });
+  assert.equal(result.count, 3);
+  const after = getProject(ROOT, project.id);
+  assert.equal(Number(after.history_seq), seqBefore + 1, "exactly one entry for the whole batch");
+  for (const id of [g1.id, g2.id, g3.id]) {
+    const g = after.groups.find((group) => group.id === id);
+    assert.equal(g.visible, false);
+    assert.equal(g.clip, true);
+  }
+
+  // One undo steps back the whole batch (visible back to true/absent, clip cleared).
+  const undone = undoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(Number(undone.history_seq), seqBefore);
+  for (const id of [g1.id, g2.id, g3.id]) {
+    const g = undone.groups.find((group) => group.id === id);
+    assert.notEqual(g.visible, false);
+    assert.equal(g.clip, undefined, "clip cleared to an absent field on undo");
+  }
+});
+
+test("patchGroups clip:false clears the flag to an absent field", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Clip" });
+  const g1 = createGroup(ROOT, { projectId: project.id, name: "A", x: 0, y: 0, w: 100, h: 100 }).group;
+  const g2 = createGroup(ROOT, { projectId: project.id, name: "B", x: 0, y: 0, w: 100, h: 100 }).group;
+  patchGroups(ROOT, { projectId: project.id, groupIds: [g1.id, g2.id], clip: true });
+  patchGroups(ROOT, { projectId: project.id, groupIds: [g1.id, g2.id], clip: false });
+  const after = getProject(ROOT, project.id);
+  assert.equal(after.groups.find((g) => g.id === g1.id).clip, undefined);
+  assert.equal(after.groups.find((g) => g.id === g2.id).clip, undefined);
+});
+
+test("patchGroups rejects bad input atomically (unknown id, empty list, no field)", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Bad" });
+  const g1 = createGroup(ROOT, { projectId: project.id, name: "A", x: 0, y: 0, w: 100, h: 100 }).group;
+  const seqBefore = Number(getProject(ROOT, project.id).history_seq);
+  assert.throws(() => patchGroups(ROOT, { projectId: project.id, groupIds: [] }), /non-empty groupIds/);
+  assert.throws(() => patchGroups(ROOT, { projectId: project.id, groupIds: [g1.id] }), /at least one of visible, clip/);
+  assert.throws(
+    () => patchGroups(ROOT, { projectId: project.id, groupIds: [g1.id, "grp_missing"], visible: false }),
+    /group not found/,
+  );
+  assert.throws(() => patchGroups(ROOT, { projectId: project.id, groupIds: [g1.id], clip: "yes" }), /clip must be a boolean/);
+  // No write happened on any rejected call.
+  const after = getProject(ROOT, project.id);
+  assert.equal(Number(after.history_seq), seqBefore);
+  assert.notEqual(after.groups.find((g) => g.id === g1.id).visible, false);
 });
 
 // ---- fitGroup (resize frame to content) ----------------------------------------

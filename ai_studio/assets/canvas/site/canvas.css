@@ -290,6 +290,32 @@ button:disabled {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  position: relative; /* anchors the right-edge resize handle */
+}
+
+/* Draggable right-edge resize handle (T0224 item 8c). Sits over the panel's right border;
+   hidden when the panel is collapsed to its rail. */
+#layers-resize {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 5px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 4;
+}
+
+#layers-resize:hover {
+  background: rgba(119, 167, 255, 0.28);
+}
+
+#layers-panel.collapsed #layers-resize {
+  display: none;
+}
+
+body.layers-resizing {
+  cursor: col-resize;
+  user-select: none;
 }
 
 /* Collapsed = a slim vertical rail with an obvious re-open control (not an empty
@@ -392,6 +418,29 @@ button:disabled {
   padding: 4px 6px;
   border-radius: 6px;
   cursor: pointer;
+  position: relative; /* anchors the indent guides */
+}
+
+/* Indent guides (T0224 item 8b): thin vertical level lines, VS Code style. One 1px line
+   at the left of each ancestor indent column (8px/level, matching the row's flex-gap step).
+   The pseudo-element spans only the indent GUTTER (width = depth * 8px), which the row's
+   width-0 caret spacers occupy — so it never overlaps the thumb/name/eye. Decorative only. */
+.layer-row::before,
+.layer-group .group-head::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 6px; /* == row padding-left, so guide x=0 aligns with the first indent column */
+  width: calc(var(--depth, 0) * 8px);
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to right,
+    rgba(154, 168, 178, 0.22) 0,
+    rgba(154, 168, 178, 0.22) 1px,
+    transparent 1px,
+    transparent 8px
+  );
 }
 
 .layer-row:hover {
@@ -459,11 +508,12 @@ button:disabled {
 .layer-group .group-head {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px; /* match .layer-row so indent (spacer + gap) and its guides align at every depth */
   padding: 4px 6px;
   border-radius: 6px;
   cursor: pointer;
   font-weight: 600;
+  position: relative; /* anchors the indent guides */
 }
 
 .layer-group .group-head:hover {

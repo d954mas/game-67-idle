@@ -9,6 +9,7 @@
 //   node ai_studio/assets/canvas/cli.mjs rename <id> --title "New title"
 //   node ai_studio/assets/canvas/cli.mjs delete <id>
 //   node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
+//   node ai_studio/assets/canvas/cli.mjs add-images <id> --files a.png,b.png   (batched; one undo)
 //   node ai_studio/assets/canvas/cli.mjs add-text <id> [--x n --y n] [--content "..."] [--style-json path] [--group gid]
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
@@ -25,6 +26,7 @@
 //   node ai_studio/assets/canvas/cli.mjs group-reparent <id> --group g --parent <gid>|none [--index n]
 //   node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
 //   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none] [--clip true|false]
+//   node ai_studio/assets/canvas/cli.mjs groups-set <id> --groups g1,g2 [--visible true|false] [--clip true|false]   (batched shared toggles; one undo)
 //   node ai_studio/assets/canvas/cli.mjs group-fit <id> --group g [--padding n]
 //   node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 //   node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g
@@ -38,6 +40,7 @@ import { fileURLToPath } from "node:url";
 import { fail, isMain } from "../../core_harness/tool_lib/cli.mjs";
 import {
   addImage,
+  addImages,
   addText,
   assignToGroup,
   createGroup,
@@ -55,6 +58,7 @@ import {
   patchElement,
   patchElements,
   patchGroup,
+  patchGroups,
   patchProject,
   readHistory,
   recordOpFailure,
@@ -124,13 +128,14 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
   rename <id> --title <title>
   delete <id>
   add-image <id> --file <path>
+  add-images <id> --files a.png,b.png   (batched multi-image add; one undo step)
   add-text <id> [--x <n> --y <n>] [--content "<text>"] [--style-json <path>] [--group <gid>]
   detect-regions <id> --element <eid>
   move <id> --element <eid> --x <n> --y <n>
@@ -151,6 +156,7 @@ function usage() {
   group-reparent <id> --group <gid> --parent <gid>|none [--index <n>]   (nest a group; none = top level)
   group-move <id> --group <gid> --x <n> --y <n>
   group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>] [--background '#rrggbb'|none] [--clip true|false]
+  groups-set <id> --groups g1,g2 [--visible true|false] [--clip true|false]   (batched shared toggles; one undo step)
   group-fit <id> --group <gid> [--padding <n>]   (resize the frame to fit its content; padding default 24)
   group-assign <id> --elements e1,e2 --group <gid>|none
   group-ungroup <id> --group <gid>   (dissolve one level; children keep the group's z-slot; one undo step)
@@ -185,6 +191,18 @@ async function runCommand(command, id, positional, flags) {
       const filePath = resolve(flags.file);
       const bytes = readFileSync(filePath);
       return print(addImage(repoRoot, id, { name: basename(filePath), bytes }));
+    }
+    case "add-images": {
+      // Batched multi-image add (one journal entry; one undo restores all) — the CLI
+      // parity for the page's multi-file drop/paste. --files is a comma-separated list.
+      if (!id) fail("add-images requires <id>");
+      if (!flags.files || flags.files === "true") fail("add-images requires --files a.png,b.png");
+      const paths = String(flags.files).split(",").map((value) => value.trim()).filter(Boolean);
+      const images = paths.map((p) => {
+        const filePath = resolve(p);
+        return { name: basename(filePath), bytes: readFileSync(filePath) };
+      });
+      return print(addImages(repoRoot, id, { images }));
     }
     case "add-text": {
       if (!id) fail("add-text requires <id>");
@@ -410,6 +428,24 @@ async function runCommand(command, id, positional, flags) {
         args.clip = flags.clip === "true";
       }
       return print(patchGroup(repoRoot, args));
+    }
+    case "groups-set": {
+      // Batched shared-toggle set across several groups (one journal entry; one undo) —
+      // the CLI parity for the multi-group inspector. Only Visible / Clip are shared.
+      if (!id) fail("groups-set requires <id>");
+      if (!flags.groups || flags.groups === "true") fail("groups-set requires --groups g1,g2");
+      const groupIds = String(flags.groups).split(",").map((value) => value.trim()).filter(Boolean);
+      const args = { projectId: id, groupIds };
+      if (flags.visible !== undefined) {
+        if (flags.visible !== "true" && flags.visible !== "false") fail("groups-set --visible must be true or false");
+        args.visible = flags.visible === "true";
+      }
+      if (flags.clip !== undefined) {
+        if (flags.clip !== "true" && flags.clip !== "false") fail("groups-set --clip must be true or false");
+        args.clip = flags.clip === "true";
+      }
+      if (args.visible === undefined && args.clip === undefined) fail("groups-set requires --visible and/or --clip");
+      return print(patchGroups(repoRoot, args));
     }
     case "group-fit": {
       if (!id) fail("group-fit requires <id>");

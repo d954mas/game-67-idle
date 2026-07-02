@@ -473,8 +473,11 @@ function drawClipGhost(element, vp) {
 
 // Ghost every selected element and every image element inside a selected group that a
 // clipping ancestor crops. Deduped so an element selected directly and via its group ghosts
-// once. Hidden nodes are skipped (they never paint).
+// once. Hidden nodes are skipped (they never paint). HIDDEN by default (T0224 item 6): the
+// ghost only paints while Alt is held (state.clipGhostPeek) — a view-state peek, never
+// journaled/persisted — so a clipped sprite doesn't permanently show its cropped-away half.
 function drawClipGhosts(vp) {
+  if (!state.clipGhostPeek) return;
   const seen = new Set();
   const ghost = (element) => {
     if (!element || seen.has(element.id) || isNodeHidden(state.project, element)) return;
@@ -655,9 +658,22 @@ function setCursor(name) {
   if (canvas) canvas.style.cursor = name;
 }
 
-// Top-most VISIBLE image element under a world point, in COMPUTED paint order (front =
+// Does a group carry a valid solid background fill? (mirrors fillGroupBackground's guard.)
+// A filled frame is click-selectable by its body; an unfilled one stays passthrough.
+function hasGroupFill(group) {
+  const bg = group.background;
+  return !!bg && bg.type === "color" && /^#[0-9a-fA-F]{6}$/.test(String(bg.color || ""));
+}
+
+// Top-most VISIBLE hittable NODE under a world point, in COMPUTED paint order (front =
 // painted last = on top). Walks the scene tree front-to-back so z-order + nesting agree
-// with what is drawn (replaces the old elements[]-reverse hit test).
+// with what is drawn. Returns an image/text element, OR a GROUP when the point lands on the
+// empty BODY of a group that carries a background fill (T0224 item 2): a Figma frame with a
+// fill occludes what is behind it, so its fill sits at the group's own z-slot — checked
+// AFTER its children (which paint on top of the fill) and before the siblings behind it. An
+// UNFILLED frame stays passthrough (deliberate: a marquee still starts on empty frame
+// interior). Clipped-out areas stay unhittable (the clip guard skips the whole subtree AND
+// the fill when the point is outside a clipping ancestor's box).
 function hitElement(world) {
   const inBox = (e) => world.x >= e.x && world.x <= e.x + e.w && world.y >= e.y && world.y <= e.y + e.h;
   const walk = (scopeId) => {
@@ -673,6 +689,9 @@ function hitElement(world) {
         if (child.ref.clip === true && !inBox(child.ref)) continue;
         const found = walk(child.id);
         if (found) return found;
+        // No child hit: a FILLED group's body is selectable (occludes behind it); an
+        // unfilled frame is transparent to the click (falls through to siblings/marquee).
+        if (hasGroupFill(child.ref) && inBox(child.ref)) return child.ref;
       } else if (inBox(child.ref)) {
         return child.ref;
       }
@@ -682,20 +701,24 @@ function hitElement(world) {
   return walk(null);
 }
 
-// Resolve a Figma single-click on element `e` given the entered scope: select the
-// element itself when it lives directly in that scope, else the TOP-MOST ancestor group
-// that is a child of that scope. Returns { kind, id, scope } — `scope` becomes the new
-// enteredGroupId (clicking outside the entered group resolves at root, i.e. steps out).
+// Resolve a Figma single-click on NODE `e` (an element OR a filled group body) given the
+// entered scope: select the node itself when it lives directly in that scope, else the
+// TOP-MOST ancestor group that is a child of that scope. Returns { kind, id, scope } —
+// `scope` becomes the new enteredGroupId (clicking outside the entered group resolves at
+// root, i.e. steps out). `kind` is "group" when the resolved node is a group (a filled
+// group body hit, or an ancestor container), else "element" (T0224 item 2 generalized it
+// from element-only to any node).
 function resolveClickSelection(e, enteredGroupId) {
   const project = state.project;
+  const isGroup = groupById(e.id) != null;
   const chain = ancestorsOf(project, e).map((group) => group.id); // nearest ... top-level
   const scope = enteredGroupId && chain.includes(enteredGroupId) ? enteredGroupId : null;
-  if (nodeScope(project, e) === scope) return { kind: "element", id: e.id, scope };
+  if (nodeScope(project, e) === scope) return { kind: isGroup ? "group" : "element", id: e.id, scope };
   for (const gid of chain) {
     const group = groupById(gid);
     if (group && (group.parentId || null) === scope) return { kind: "group", id: gid, scope };
   }
-  return { kind: "element", id: e.id, scope };
+  return { kind: isGroup ? "group" : "element", id: e.id, scope };
 }
 
 // A drag item for a selected group: its full descendant closure captured at grab time so
@@ -880,8 +903,11 @@ function onMouseDown(event) {
   const hit = hitElement(world);
   if (hit) {
     if (event.ctrlKey || event.metaKey) {
+      // Deep-select the leaf under the cursor and enter its scope. A filled group body has
+      // no deeper leaf — it selects the group itself (as a unit) at its parent scope.
       state.enteredGroupId = nodeScope(state.project, hit);
-      selectOnly(hit.id);
+      if (groupById(hit.id)) selectGroupOnly(hit.id);
+      else selectOnly(hit.id);
     } else {
       const res = resolveClickSelection(hit, state.enteredGroupId);
       state.enteredGroupId = res.scope;
