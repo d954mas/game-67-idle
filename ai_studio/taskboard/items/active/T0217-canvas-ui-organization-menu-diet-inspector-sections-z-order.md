@@ -31,7 +31,19 @@ event.code (layout-independent). Needs a journaled reorder op in ops.mjs
 agent if ops.mjs is still in flight. (4) LAYERS PANEL COLLAPSE is broken UX
 ("layer плохо скрывается. я вижу просто пустую линию"): collapsed state must be
 a proper slim rail with a visible re-open control (icon + tooltip), not an
-empty strip; same collapse quality bar for the inspector.
+empty strip; same collapse quality bar for the inspector. (5) REGION TREE
+LEAVES THE LAYERS PANEL (lead 2026-07-02: duplicates region-edit mode, "давай
+список регионов уберем из левой панели"): layers shows only elements/groups;
+region rename lives in the inspector only. (6) RENAME BUG HUNT (live report):
+dblclick rename dead for layers and regions; "Rename region" menu editor
+accepts text but value not applied/displayed; region names invisible (sizes
+only) — root-cause the inline.js finish/blur + layers render-guard interplay
+and verify setRegions {name} persistence + inspector display. (7) REGION ROW
+ERGONOMICS (live report): × delete on a region row does not work (must commit
+journaled setRegions); × hit target too small and hovering it causes a
+scrollbar to appear that shifts the target (reserve space, no hover layout
+shift); long region lists need an EXPLICIT project-styled scrollbar
+(scrollbar-gutter stable).
 
 ## Done when
 
