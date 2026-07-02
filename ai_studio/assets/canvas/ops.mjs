@@ -651,6 +651,10 @@ export function assignToGroup(root, { projectId, elementIds, groupId } = {}) {
 
 // Remove a group. Members keep their positions and have groupId cleared. One
 // journal entry.
+// Deleting a group deletes its MEMBER ELEMENTS with it (lead 2026-07-02: a group
+// is a container — dissolving one without deleting content is Ungroup, i.e.
+// assignToGroup(null)). One journal entry; undo restores the group and every
+// member. Member image files stay in files/ (non-destructive storage).
 export function deleteGroup(root, { projectId, groupId } = {}) {
   if (!projectId) throw new Error("deleteGroup requires projectId");
   if (!groupId) throw new Error("deleteGroup requires groupId");
@@ -658,18 +662,17 @@ export function deleteGroup(root, { projectId, groupId } = {}) {
   const before = getProject(root, projectId);
   findGroup(before, groupId);
   const nextGroups = groupsOf(before).filter((group) => group.id !== groupId);
-  const nextElements = (before.elements || []).map((element) =>
-    element.groupId === groupId ? { ...element, groupId: null } : element,
-  );
+  const removedElements = (before.elements || []).filter((element) => element.groupId === groupId);
+  const nextElements = (before.elements || []).filter((element) => element.groupId !== groupId);
   const after = updateProject(root, projectId, { groups: nextGroups, elements: nextElements });
   const project = commitMutation(root, projectId, {
     op: "deleteGroup",
-    args_summary: { groupId },
+    args_summary: { groupId, deletedElements: removedElements.map((element) => element.id) },
     before,
     after,
     startedAt,
   });
-  return { project, removed: groupId };
+  return { project, removed: groupId, removedElements: removedElements.map((element) => element.id) };
 }
 
 // ---- undo / redo / history ---------------------------------------------------
@@ -959,16 +962,37 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
     rmSync(workDir, { recursive: true, force: true });
   }
 
+  // Wrap every crop in a fresh "<sheet name> slices" group so a big slice never
+  // dumps N loose elements onto the scene (lead 2026-07-02). Same journal entry:
+  // one undo removes the group AND every crop together.
+  const pad = 24;
+  const { minX, minY, maxX, maxY } = elementsBBox(created);
+  const group = {
+    id: `grp_${randomUUID().slice(0, 8)}`,
+    name: `${String(parent.name || "sheet").trim()} slices`,
+    x: minX - pad,
+    y: minY - pad,
+    w: maxX - minX + pad * 2,
+    h: maxY - minY + pad * 2,
+    visible: true,
+  };
+  const createdIds = new Set(created.map((element) => element.id));
+
   const run = {
     id: `run_${randomUUID().slice(0, 8)}`,
     op: "slice_regions",
     elementId,
     at: new Date().toISOString(),
     params: { regionIds: selected.map((region) => String(region.id)) },
-    result_summary: { slice_count: created.length },
+    result_summary: { slice_count: created.length, group_id: group.id },
   };
+  const current = getProject(root, projectId);
   const withRun = updateProject(root, projectId, {
-    tool_runs: capToolRuns(root, projectId, [...(getProject(root, projectId).tool_runs || []), run]),
+    groups: [...groupsOf(current), group],
+    elements: (current.elements || []).map((element) =>
+      createdIds.has(element.id) ? { ...element, groupId: group.id } : element,
+    ),
+    tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
   });
   const project = commitMutation(root, projectId, {
     op: "slice",
@@ -977,12 +1001,21 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
       regionIds: selected.map((region) => String(region.id)),
       created: created.map((element) => element.id),
       count: created.length,
+      groupId: group.id,
     },
     before,
     after: withRun,
     startedAt,
   });
-  return { project, created, run, regions: selected };
+  // Hand back the STORED crops (they now carry groupId), not the pre-group copies.
+  const fresh = (project.elements || []).filter((element) => createdIds.has(element.id));
+  return {
+    project,
+    created: created.map((element) => fresh.find((item) => item.id === element.id) || element),
+    group: (project.groups || []).find((item) => item.id === group.id),
+    run,
+    regions: selected,
+  };
 }
 
 // ---- exportElements ----------------------------------------------------------

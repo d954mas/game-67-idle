@@ -95,8 +95,10 @@ Every capability is one op in `ops.mjs`:
   `element.regions` (errors clearly otherwise). Default: all regions. Each crop is
   a new image element named `<parent-name>#<region-id>`, placed in a grid to the
   right of the parent (16px gap in source pixels), with `meta.parent =
-  { elementId, regionId, sheetSrc }`. One journal entry per slice (undo removes
-  every created crop) plus a `slice_regions` `tool_runs` entry. Requires Python
+  { elementId, regionId, sheetSrc }`. All crops land in a fresh
+  `"<sheet name> slices"` group so a big slice never dumps N loose elements onto
+  the scene. One journal entry per slice (undo removes the group and every
+  created crop) plus a `slice_regions` `tool_runs` entry. Requires Python
   (Pillow) via our own `tools/crop_regions.py`.
 - `exportElements({ projectId, elementIds, format? })` — copies each element's
   current image file into `<project>/export/<utc-stamp>/` under a sanitized,
@@ -126,8 +128,11 @@ undo/redo restore groups, elements, and tool runs together.
   never moves members.
 - `assignToGroup({projectId, elementIds, groupId|null})` — set or clear the group
   of the given elements. Journaled.
-- `deleteGroup({projectId, groupId})` — remove the group; members keep their
-  positions with `groupId` cleared. Journaled.
+- `deleteGroup({projectId, groupId})` — remove the group **and its member
+  elements** (a group is a container; deleting it deletes the content). One
+  journal entry — undo restores the group and every member; image files stay in
+  `files/` (non-destructive). Dissolving a group while keeping the elements is
+  `assignToGroup(..., null)` (the page's Ungroup).
 - `renderGroup({projectId, groupId, scale?, background?})` — composite all
   **visible** member elements (`element.visible !== false`), in element array
   order (z-order), clipped to the group bounds, into one PNG at `scale`

@@ -108,7 +108,7 @@ test("patchGroup resize does not move members; visible toggle is journaled", (t)
   assert.equal(getProject(ROOT, projectId).groups[0].visible, true);
 });
 
-test("assignToGroup and deleteGroup keep element positions; delete clears groupId", (t) => {
+test("deleteGroup deletes member elements (undo restores); ungroup keeps them", (t) => {
   tempProjects(t);
   const { projectId, red, green } = seedScreen(ROOT);
   const { group } = createGroup(ROOT, { projectId, name: "Screen", x: 0, y: 0, w: 200, h: 200 });
@@ -116,16 +116,25 @@ test("assignToGroup and deleteGroup keep element positions; delete clears groupI
   assignToGroup(ROOT, { projectId, elementIds: [red.id, green.id], groupId: group.id });
   assert.equal(getProject(ROOT, projectId).elements.every((e) => e.groupId === group.id), true);
 
-  const positionsBefore = getProject(ROOT, projectId).elements.map((e) => ({ x: e.x, y: e.y }));
-  deleteGroup(ROOT, { projectId, groupId: group.id });
+  // Delete = group AND its content go together (dissolving is Ungroup's job).
+  const result = deleteGroup(ROOT, { projectId, groupId: group.id });
   const afterDelete = getProject(ROOT, projectId);
   assert.equal(afterDelete.groups.length, 0);
-  assert.deepEqual(afterDelete.elements.map((e) => ({ x: e.x, y: e.y })), positionsBefore, "members keep positions");
-  assert.equal(afterDelete.elements.every((e) => e.groupId === null), true, "members' groupId cleared");
+  assert.equal(afterDelete.elements.length, 0, "member elements deleted with the group");
+  assert.deepEqual(result.removedElements.sort(), [red.id, green.id].sort());
 
-  // Ungroup via assignToGroup(null) also works.
-  assignToGroup(ROOT, { projectId, elementIds: [red.id], groupId: null });
-  assert.equal(getProject(ROOT, projectId).elements.find((e) => e.id === red.id).groupId, null);
+  // ONE undo restores the group and every member.
+  undoOp(ROOT, { projectId });
+  const restored = getProject(ROOT, projectId);
+  assert.equal(restored.groups.length, 1);
+  assert.equal(restored.elements.length, 2, "undo restores members with the group");
+  assert.equal(restored.elements.every((e) => e.groupId === group.id), true);
+
+  // Ungroup (assignToGroup null) is the non-destructive path: members survive.
+  assignToGroup(ROOT, { projectId, elementIds: [red.id, green.id], groupId: null });
+  const ungrouped = getProject(ROOT, projectId);
+  assert.equal(ungrouped.elements.length, 2, "ungroup keeps the elements");
+  assert.equal(ungrouped.elements.every((e) => e.groupId === null), true);
 });
 
 test("renderGroup composites members at the right pixels (skips without Python)", async (t) => {

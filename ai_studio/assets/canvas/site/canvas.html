@@ -4,26 +4,54 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Canvas</title>
+    <link rel="stylesheet" href="/ai_studio/studio_shell/studio_shell.css" />
     <link rel="stylesheet" href="canvas.css" />
   </head>
   <body>
-    <!-- Shared AI Studio strip: keeps Canvas inside the studio shell instead of
-         being a bare standalone page. Deliberately quiet (a thin recessed bar,
-         muted text) so it never fights the canvas top-bar directly below it. -->
-    <nav id="studio-strip" aria-label="AI Studio">
-      <a class="ss-brand" href="/" title="AI Studio home">
-        <span class="ss-mark">AI</span>
-        <span class="ss-name">Studio</span>
-      </a>
-      <span class="ss-sep">/</span>
-      <span class="ss-here">Canvas</span>
-      <span class="ss-spacer"></span>
-      <a class="ss-link" href="/">Home</a>
-      <a class="ss-link" href="/taskboard/">Taskboard</a>
-      <a class="ss-link" href="/architecture_map/">Map</a>
-      <a class="ss-link" href="/asset_viewer/">Gallery</a>
-    </nav>
+    <div class="studio-shell">
+    <!-- The SAME collapsible left sidebar every AI Studio page carries
+         (studio_shell.css/.js own layout, collapse state, and styling). -->
+    <aside class="studio-sidebar" aria-label="AI Studio navigation">
+      <div class="studio-sidebar-brand">
+        <span class="studio-brand-mark">AI</span>
+        <div class="studio-brand-copy">
+          <strong>AI Studio</strong>
+          <span>game pipeline</span>
+        </div>
+        <button class="studio-sidebar-toggle" type="button" data-studio-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true">&lsaquo;</button>
+      </div>
 
+      <nav class="studio-side-nav" aria-label="Primary">
+        <p class="studio-nav-section">Workspace</p>
+        <a class="studio-nav-item" href="/">
+          <span class="studio-nav-icon">S</span>
+          <span class="studio-nav-label">Studio Home</span>
+        </a>
+        <a class="studio-nav-item" href="/architecture_map/">
+          <span class="studio-nav-icon map">M</span>
+          <span class="studio-nav-label">Architecture Map</span>
+        </a>
+        <a class="studio-nav-item" href="/taskboard/">
+          <span class="studio-nav-icon tasks">T</span>
+          <span class="studio-nav-label">Taskboard</span>
+        </a>
+        <a class="studio-nav-item" href="/asset_viewer/">
+          <span class="studio-nav-icon assets">A</span>
+          <span class="studio-nav-label">Asset Viewer</span>
+        </a>
+        <a class="studio-nav-item is-active" href="/canvas">
+          <span class="studio-nav-icon prep">C</span>
+          <span class="studio-nav-label">Canvas</span>
+        </a>
+        <a class="studio-nav-item" href="/quality/">
+          <span class="studio-nav-icon quality">Q</span>
+          <span class="studio-nav-label">Quality Checks</span>
+        </a>
+
+      </nav>
+    </aside>
+
+    <main class="studio-content canvas-content">
     <!-- HOME: full-page project card grid (shown when no project is open). -->
     <section id="home-view" class="view">
       <header id="home-bar">
@@ -98,10 +126,13 @@
       <div id="status" class="status-line">Ready.</div>
       <input id="file-input" type="file" accept="image/*" multiple class="hidden" />
     </section>
+    </main>
+    </div>
 
     <!-- Right-click context menu (positioned at the pointer, hidden by default). -->
     <div id="context-menu" class="hidden"></div>
 
+    <script src="/ai_studio/studio_shell/studio_shell.js"></script>
     <script type="module" src="canvas.js"></script>
   </body>
 </html>

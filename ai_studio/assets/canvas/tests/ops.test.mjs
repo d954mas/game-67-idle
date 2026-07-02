@@ -118,11 +118,18 @@ test("sliceRegions crops detected regions into new elements with provenance; und
   const run = sliced.project.tool_runs.find((entry) => entry.op === "slice_regions");
   assert.ok(run, "a slice_regions tool_run was recorded");
 
-  // One journal entry for the whole slice: undo removes every created crop.
+  // Crops land in a fresh "<sheet name> slices" group, never loose on the scene.
+  assert.ok(sliced.group, "slice returns the wrapping group");
+  assert.equal(sliced.group.name, "sheet.png slices");
+  assert.ok(sliced.created.every((crop) => crop.groupId === sliced.group.id), "every crop is a member");
+  assert.equal(sliced.project.groups.length, 1);
+
+  // One journal entry for the whole slice: undo removes the group + every crop.
   const before = getProject(REPO_ROOT, project.id).elements.length;
   const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
   assert.equal(undone.elements.length, before - sliced.created.length);
   assert.equal(undone.elements.length, 1, "only the parent sheet remains after undo");
+  assert.equal((undone.groups || []).length, 0, "the slice group is undone with its crops");
 });
 
 test("sliceRegions crops the STORED rects verbatim (edited + hand-drawn regions)", async (t) => {

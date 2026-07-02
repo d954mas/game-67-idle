@@ -364,11 +364,14 @@ export async function ungroup(groupId) {
   }
 }
 
+// Delete = the group AND its content go together (one journal entry, one undo);
+// dissolving a group while keeping the elements is Ungroup's job.
 export async function deleteGroupAction(groupId) {
   try {
-    await api("DELETE", `/projects/${pid()}/groups/${groupId}`);
+    const result = await api("DELETE", `/projects/${pid()}/groups/${groupId}`);
     state.selectedGroupId = null;
-    await reloadProject("Deleted group (elements kept).");
+    const count = (result.removedElements || []).length;
+    await reloadProject(count ? `Deleted group + ${count} element(s). Undo restores both.` : "Deleted empty group.");
   } catch (error) {
     setStatus(error.message, true);
   }

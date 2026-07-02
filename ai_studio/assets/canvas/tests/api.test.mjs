@@ -284,14 +284,17 @@ test("canvas API group routes: create/patch/assign/delete round-trip", async (t)
   const afterMove = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
   assert.equal(afterMove.elements.find((e) => e.id === elA).x, 110);
 
-  // assign-group clears a member, delete keeps elements.
+  // assign-group clears a member; delete then removes the group AND its
+  // remaining members (elB was ungrouped first, so it survives).
   await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/assign-group`, { elementIds: [elB], groupId: null });
   assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project.elements.find((e) => e.id === elB).groupId, null);
   const deleted = await invokeApi(handler, "DELETE", `/api/canvas/projects/${projectId}/groups/${groupId}`);
   assert.equal(deleted.status, 200);
+  assert.deepEqual(deleted.json().removedElements, [elA]);
   const afterDelete = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
   assert.equal(afterDelete.groups.length, 0);
-  assert.equal(afterDelete.elements.length, 2);
+  assert.equal(afterDelete.elements.length, 1, "member elA deleted with the group");
+  assert.equal(afterDelete.elements[0].id, elB);
 });
 
 test("canvas API render-screen route composites a group PNG (skips without Python)", async (t) => {

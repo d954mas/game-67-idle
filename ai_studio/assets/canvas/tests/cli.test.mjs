@@ -90,12 +90,13 @@ test("cli group-create/move/set/assign/delete smoke (no python)", (t) => {
   assert.equal(shown.groups[0].name, "Hidden");
   assert.equal(shown.groups[0].visible, false);
 
-  // group-assign none clears a member's group; group-delete keeps elements.
+  // group-assign none clears a member's group; group-delete then removes the
+  // group AND its remaining members (elB was ungrouped first, so it survives).
   run(env, "group-assign", projectId, "--elements", elB, "--group", "none");
   assert.equal(run(env, "show", projectId).project.elements.find((e) => e.id === elB).groupId, null);
   run(env, "group-delete", projectId, "--group", groupId);
   shown = run(env, "show", projectId).project;
   assert.equal(shown.groups.length, 0);
-  assert.equal(shown.elements.length, 2, "delete keeps elements");
-  assert.equal(shown.elements.find((e) => e.id === elA).groupId, null);
+  assert.equal(shown.elements.length, 1, "member elA deleted with the group");
+  assert.equal(shown.elements[0].id, elB);
 });
