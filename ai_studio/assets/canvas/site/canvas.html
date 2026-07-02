@@ -7,37 +7,68 @@
     <link rel="stylesheet" href="canvas.css" />
   </head>
   <body>
-    <div id="app">
-      <aside id="sidebar">
-        <header>
-          <h1>Canvas</h1>
-          <button id="new-project" class="primary" type="button">New</button>
-        </header>
-        <ul id="project-list"></ul>
-      </aside>
-      <section id="main">
-        <div id="stage-bar">
-          <span class="title" id="project-title">No project</span>
-          <span class="spacer"></span>
-          <button id="add-image" type="button" disabled>Add image</button>
-          <button id="detect-regions" type="button" disabled>Detect regions</button>
-          <button id="slice" type="button" disabled>Slice</button>
-          <button id="group-selection" type="button" disabled>Group selection</button>
-          <button id="render-screen" type="button" disabled>Render screen</button>
-          <button id="group-toggle" type="button" disabled>Hide/Show</button>
-          <button id="undo" type="button" disabled>Undo</button>
-          <button id="redo" type="button" disabled>Redo</button>
-          <button id="export-selected" type="button" disabled>Export selected</button>
-          <button id="delete-element" type="button" disabled>Delete selected</button>
-          <button id="fit" type="button" disabled>Fit</button>
-          <input id="file-input" type="file" accept="image/*" class="hidden" />
+    <!-- HOME: full-page project card grid (shown when no project is open). -->
+    <section id="home-view" class="view">
+      <header id="home-bar">
+        <h1>Canvas</h1>
+        <span class="home-sub">Multi-image projects</span>
+      </header>
+      <div id="home-grid"></div>
+    </section>
+
+    <!-- WORKSPACE: full-width editor for one open project. -->
+    <section id="workspace-view" class="view hidden">
+      <div id="top-bar">
+        <button id="back-projects" type="button" title="Back to projects">&larr; Projects</button>
+        <span id="ws-title" class="title" title="Double-click to rename">Untitled</span>
+        <span class="spacer"></span>
+        <button id="add-image" type="button">Add image</button>
+        <button id="undo" type="button" disabled>Undo</button>
+        <button id="redo" type="button" disabled>Redo</button>
+        <span class="divider"></span>
+        <button id="zoom-fit" type="button" title="Fit (0)">Fit</button>
+        <button id="zoom-100" type="button" title="100% (1)">100%</button>
+      </div>
+
+      <div id="ws-body">
+        <!-- Left tool rail: thin icon buttons with tooltips + hotkeys. -->
+        <div id="tool-rail">
+          <button class="tool" data-tool="select" title="Select (V)" aria-label="Select">
+            <svg viewBox="0 0 16 16" width="18" height="18"><path d="M3 2l9 4.5-3.7 1.2L7 12z" fill="currentColor"/></svg>
+          </button>
+          <button class="tool" data-tool="pan" title="Hand / pan (H, hold Space)" aria-label="Hand">
+            <svg viewBox="0 0 16 16" width="18" height="18"><path d="M5 7V3.6a1 1 0 0 1 2 0V6h.6V3a1 1 0 0 1 2 0v3.2h.6V4.2a1 1 0 0 1 2 0V9c0 2.5-1.6 4.5-4 4.5S5.4 12 4.6 10.6L3.3 8.4a1 1 0 0 1 1.5-1.3z" fill="currentColor"/></svg>
+          </button>
         </div>
+
+        <!-- Left layers panel (collapsible). -->
+        <aside id="layers-panel">
+          <header>
+            <button id="layers-collapse" type="button" title="Collapse layers">&#9776;</button>
+            <span class="panel-title">Layers</span>
+          </header>
+          <div id="layers-list"></div>
+        </aside>
+
+        <!-- Stage: the pan/zoom canvas plus overlays. -->
         <div id="stage">
           <canvas id="canvas"></canvas>
+          <div id="empty-hint" class="hidden">Drop images here or press <b>Add image</b></div>
+          <div id="drop-overlay" class="hidden"><span>Drop image(s) here</span></div>
+          <div id="zoom-indicator">100%</div>
         </div>
-        <div id="status">Ready.</div>
-      </section>
-    </div>
+
+        <!-- Right inspector panel. -->
+        <aside id="inspector"></aside>
+      </div>
+
+      <div id="status">Ready.</div>
+      <input id="file-input" type="file" accept="image/*" multiple class="hidden" />
+    </section>
+
+    <!-- Right-click context menu (positioned at the pointer, hidden by default). -->
+    <div id="context-menu" class="hidden"></div>
+
     <script type="module" src="canvas.js"></script>
   </body>
 </html>

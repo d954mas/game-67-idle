@@ -6,6 +6,8 @@
 //   node ai_studio/assets/canvas/cli.mjs list
 //   node ai_studio/assets/canvas/cli.mjs create --title "My canvas"
 //   node ai_studio/assets/canvas/cli.mjs show <id>
+//   node ai_studio/assets/canvas/cli.mjs rename <id> --title "New title"
+//   node ai_studio/assets/canvas/cli.mjs delete <id>
 //   node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
@@ -28,12 +30,14 @@ import {
   createGroup,
   createProject,
   deleteGroup,
+  deleteProject,
   detectRegions,
   exportElements,
   getProject,
   listProjects,
   patchElement,
   patchGroup,
+  patchProject,
   readHistory,
   redoOp,
   renderGroup,
@@ -64,10 +68,12 @@ function print(value) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|add-image|detect-regions|move|slice|export|group-create|group-move|group-set|group-assign|group-delete|render-screen|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|slice|export|group-create|group-move|group-set|group-assign|group-delete|render-screen|undo|redo|history>
   list
   create --title <title>
   show <id>
+  rename <id> --title <title>
+  delete <id>
   add-image <id> --file <path>
   detect-regions <id> --element <eid>
   move <id> --element <eid> --x <n> --y <n>
@@ -98,6 +104,13 @@ async function main(argv) {
     case "show":
       if (!id) fail("show requires <id>");
       return print({ project: getProject(repoRoot, id) });
+    case "rename":
+      if (!id) fail("rename requires <id>");
+      if (!flags.title || flags.title === "true") fail("rename requires --title <title>");
+      return print(patchProject(repoRoot, { projectId: id, title: flags.title }));
+    case "delete":
+      if (!id) fail("delete requires <id>");
+      return print(deleteProject(repoRoot, { projectId: id }));
     case "add-image": {
       if (!id) fail("add-image requires <id>");
       if (!flags.file) fail("add-image requires --file <path>");

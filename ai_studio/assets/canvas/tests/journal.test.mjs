@@ -11,6 +11,7 @@ import {
   exportElements,
   getProject,
   patchElement,
+  patchProject,
   readHistory,
   redoOp,
   removeElement,
@@ -99,6 +100,26 @@ test("a new op after undo invalidates the redo tail", (t) => {
   assert.equal(getProject(ROOT, project.id).elements[0].x, 0);
   const redone = redoOp(ROOT, { projectId: project.id }).project;
   assert.equal(redone.elements[0].x, 99);
+});
+
+test("patchProject renames the project and is journaled (undo/redo restore the title)", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Old Name" });
+
+  const renamed = patchProject(ROOT, { projectId: project.id, title: "  New Name  " }).project;
+  assert.equal(renamed.title, "New Name", "title trimmed and applied");
+
+  // The rename is a journal mutation, so undo restores the previous title.
+  const ops = readHistory(ROOT, { projectId: project.id }).entries.map((entry) => entry.op);
+  assert.deepEqual(ops, ["patchProject"]);
+  const undone = undoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(undone.title, "Old Name", "undo restores the old title");
+  const redone = redoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(redone.title, "New Name", "redo re-applies the rename");
+
+  // A no-op rename (blank -> keeps current) writes no new journal entry.
+  patchProject(ROOT, { projectId: project.id, title: "   " });
+  assert.equal(getProject(ROOT, project.id).title, "New Name");
 });
 
 test("exportElements writes a stamped folder with copied files + manifest", (t) => {

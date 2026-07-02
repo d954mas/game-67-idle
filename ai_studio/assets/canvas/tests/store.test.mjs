@@ -8,6 +8,7 @@ import { tmpdir } from "node:os";
 import {
   addImage,
   createProject,
+  deleteProject,
   getProject,
   imageSize,
   listProjects,
@@ -104,6 +105,30 @@ test("removeElement drops the element but keeps the file on disk", (t) => {
   removeElement(ROOT, project.id, element.id);
   assert.equal(getProject(ROOT, project.id).elements.length, 0);
   assert.equal(existsSync(filePath), true, "backing image file must remain on disk");
+});
+
+test("deleteProject moves the folder to .trash and drops it from listProjects", (t) => {
+  const projectsRoot = tempProjects(t);
+  const keep = createProject(ROOT, { title: "Keep" });
+  const doomed = createProject(ROOT, { title: "Doomed" });
+  addImage(ROOT, doomed.id, { name: "a.png", bytes: solidPng() });
+
+  const result = deleteProject(ROOT, doomed.id);
+  assert.equal(result.id, doomed.id);
+  // The live folder is gone; a recoverable copy lives under <root>/.trash/<id>-<stamp>/.
+  assert.equal(existsSync(join(projectsRoot, doomed.id)), false, "live folder moved out");
+  assert.equal(existsSync(result.trashed), true, "trash copy exists");
+  assert.equal(existsSync(join(result.trashed, "project.json")), true, "trash keeps project.json");
+  assert.ok(result.trashed.includes(join(projectsRoot, ".trash")), "trash lives under the projects root");
+
+  // listProjects ignores the dot-prefixed .trash and no longer shows the project.
+  const ids = listProjects(ROOT).map((p) => p.id);
+  assert.deepEqual(ids, [keep.id]);
+  assert.throws(() => getProject(ROOT, doomed.id), /not found/);
+
+  // Deleting a missing project errors clearly; unsafe ids are still confined.
+  assert.throws(() => deleteProject(ROOT, "does-not-exist"), /not found/);
+  assert.throws(() => deleteProject(ROOT, "../evil"), /unsafe project id|escapes/);
 });
 
 test("updateProject preserves id/created/schema, bumps updated, writes atomically", async (t) => {

@@ -1140,7 +1140,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/ops.mjs",
           "title": "ops.mjs",
-          "description": "The one operation layer both clients call: journaled store wrappers (addImage/patchElement/removeElement), group (screen) ops (createGroup/patchGroup/assignToGroup/deleteGroup) whose metadata-only snapshots also carry groups so undo restores frames and members together, linear undo/redo/history over the append-only journal, the bridged detectRegions and sliceRegions (which reuse the raster2d upload/detect/slice functions unmodified), exportElements, and renderGroup (spawns tools/render_group.py to composite a screen PNG). Records regions, slice crops with provenance, and tool_runs entries on the project.",
+          "description": "The one operation layer both clients call: journaled store wrappers (addImage/patchElement/removeElement), project-level patchProject (journaled rename; title carried in the snapshot) and deleteProject (moves the folder to the projects-root .trash, not journaled), group (screen) ops (createGroup/patchGroup/assignToGroup/deleteGroup) whose metadata-only snapshots also carry groups so undo restores frames and members together, linear undo/redo/history over the append-only journal, the bridged detectRegions and sliceRegions (which reuse the raster2d upload/detect/slice functions unmodified), exportElements, and renderGroup (spawns tools/render_group.py to composite a screen PNG). Records regions, slice crops with provenance, and tool_runs entries on the project.",
           "role": "canvas operation layer",
           "tags": [
             "assets",
@@ -1154,7 +1154,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/api.mjs",
           "title": "api.mjs",
-          "description": "Studio Shell HTTP adapter for canvas projects, elements, base64 image upload, region detection, region slicing, element export, group create/patch/assign/delete and screen render, undo/redo/history, and confined image-file serving under the /api/canvas/ prefix. Marshals HTTP to the ops layer only.",
+          "description": "Studio Shell HTTP adapter for canvas projects (list/create/get/rename via PATCH/delete-to-trash via DELETE), elements, base64 image upload with optional drop x/y, region detection, region slicing, element export, group create/patch/assign/delete and screen render, undo/redo/history, confined image-file serving, and a confined export-file download route (export/<stamp>/<file>) under the /api/canvas/ prefix. Marshals HTTP to the ops layer only.",
           "role": "canvas HTTP API adapter",
           "tags": [
             "assets",
@@ -1167,7 +1167,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/cli.mjs",
           "title": "cli.mjs",
-          "description": "Agent client over the same ops layer: list, create, show, add-image, detect-regions, move, slice, export, group-create/move/set/assign/delete, render-screen, undo, redo, and history commands printing compact JSON.",
+          "description": "Agent client over the same ops layer: list, create, show, rename, delete, add-image, detect-regions, move, slice, export, group-create/move/set/assign/delete, render-screen, undo, redo, and history commands printing compact JSON.",
           "role": "canvas agent CLI",
           "tags": [
             "assets",
@@ -1213,13 +1213,123 @@
           "kind": "surface",
           "path": "ai_studio/assets/canvas/site",
           "color": "#7c3aed",
-          "description": "Thin browser page served via the /ai_studio/ static route. Left project list plus a pan/zoom/fit canvas that reuses the Asset Tools viewport module, renders project elements with source-scaled region overlays, draws visible groups as Figma-like screen frames with a name label, supports multi-select (click/shift/escape), drag-move, delete, slice, export, group-selection, screen render, group hide/show, label click-select and drag-move of a whole screen, and keyboard undo/redo, and calls one API per action. No logic beyond rendering/input.",
+          "description": "Thin Figma/Recraft-like browser page served via the /ai_studio/ static route. One HTML document swaps a home view (project card grid + inline new/rename/delete) and a workspace view (DPR-crisp pan/zoom canvas, left tool rail, collapsible group-aware layers panel, right inspector, right-click context menu, OS drag&drop + clipboard paste, zoom controls, and export/render download links). Behavior is split into small ES modules; every action is one HTTP API call and there is no logic beyond rendering/input.",
           "role": "canvas browser page",
           "tags": [
             "assets",
             "canvas",
             "surface",
             "ui"
+          ],
+          "children": [
+            {
+              "id": "assets:canvas-site-html",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/canvas.html",
+              "title": "canvas.html",
+              "description": "Single page document holding both the home (project card grid) and workspace (top bar, tool rail, layers panel, stage, inspector, status) views that the controller swaps between.",
+              "role": "canvas page document",
+              "tags": ["assets", "canvas", "ui"]
+            },
+            {
+              "id": "assets:canvas-site-css",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/canvas.css",
+              "title": "canvas.css",
+              "description": "Dark-theme styling for the home card grid, workspace top bar, tool rail, layers panel, stage overlays, inspector, status download links, inline editors, and context menu.",
+              "role": "canvas page styling",
+              "tags": ["assets", "canvas", "ui", "style"]
+            },
+            {
+              "id": "assets:canvas-site-controller",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/canvas.js",
+              "title": "canvas.js",
+              "description": "Page controller: boots the feature modules, owns view routing (deep link ?project=, last-opened localStorage restore, ?select= debug hook) and the global keyboard shortcuts. No rendering/business logic of its own.",
+              "role": "canvas page controller",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-app",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/app.js",
+              "title": "app.js",
+              "description": "Shared page state, the fetch API helper, read-only view helpers over project.json, the image cache, selection helpers, deep-link/localStorage plumbing, and a refresh bus every panel renders through.",
+              "role": "canvas page shared state",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-actions",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/actions.js",
+              "title": "actions.js",
+              "description": "The one place UI intents become a single HTTP API call: add/drop/paste image, patch/rename/hide/delete element, detect/slice/export, group create/patch/render/ungroup/delete, undo/redo, and rename project. Panels never call the API directly.",
+              "role": "canvas page action layer",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-home",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/home.js",
+              "title": "home.js",
+              "description": "Home view: a full-page grid of project cards (cover thumbnail, title, image count, updated date) plus a + New project card with an inline title input, and hover rename/delete.",
+              "role": "canvas home screen",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-workspace",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/workspace.js",
+              "title": "workspace.js",
+              "description": "Workspace view: the devicePixelRatio-crisp pan/zoom canvas (imageSmoothing off at >=2x), the tool rail (Select/Hand), zoom controls + indicator, top bar sync, group frame drawing, and all pointer interaction (select, drag-move, pan with tool/Space/middle-mouse).",
+              "role": "canvas workspace and rendering",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-layers",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/layers_panel.js",
+              "title": "layers_panel.js",
+              "description": "Collapsible, group-aware layers list: ungrouped elements at top level, groups as collapsible sections with eye toggle and inline-rename name, indented member rows with 24px thumbnail, region-count badge, and eye toggle; selection syncs both ways with the canvas.",
+              "role": "canvas layers panel",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-inspector",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/inspector.js",
+              "title": "inspector.js",
+              "description": "Right inspector for the selection: single element (name, X/Y/W/H, source size, provenance, regions, meta), group/screen (name, X/Y/W/H, visible, member count, Render screen with scale + background), multi-select (count + export), or an empty state.",
+              "role": "canvas inspector panel",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-context-menu",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/context_menu.js",
+              "title": "context_menu.js",
+              "description": "Right-click context menu whose items depend on the target (element / group label / empty canvas); every item calls an existing action and the menu closes on click-away or Escape.",
+              "role": "canvas context menu",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-dnd",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/dnd.js",
+              "title": "dnd.js",
+              "description": "OS drag & drop (drop images at the drop point with a drop highlight, offsetting multiples) and Ctrl/Cmd+V clipboard paste at the viewport center, over the shared actions.",
+              "role": "canvas drag-drop and paste",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-inline",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/inline.js",
+              "title": "inline.js",
+              "description": "Inline text-editing helper: swaps a label for a text input that commits on Enter/blur and cancels on Escape, used to rename projects, elements, and groups without a browser prompt().",
+              "role": "canvas inline edit helper",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            }
           ]
         },
         {
@@ -1227,7 +1337,7 @@
           "kind": "test",
           "path": "ai_studio/assets/canvas/tests",
           "title": "tests",
-          "description": "Regression tests for the canvas store round-trip and confinement, studio config resolution, the operation journal with undo/redo and redo-tail invalidation, element export folder/manifest, group create-from-elements bbox, group move + member translation with undo, delete-keeps-elements, visibility, renderGroup composite pixel checks via a tiny PNG decoder, the HTTP API lifecycle plus undo/slice/export/group/render routes, a CLI smoke incl. group commands, and the bridged detectRegions/sliceRegions/renderGroup ops (skips cleanly when the Python pipeline is unavailable).",
+          "description": "Regression tests for the canvas store round-trip and confinement, deleteProject trash-move, studio config resolution, the operation journal with undo/redo and redo-tail invalidation, journaled patchProject rename, element export folder/manifest, group create-from-elements bbox, group move + member translation with undo, delete-keeps-elements, visibility, renderGroup composite pixel checks via a tiny PNG decoder, the HTTP API lifecycle plus rename/delete/undo/slice/export/group/render routes and the confined export-download route (rejecting traversal), a CLI smoke incl. group commands, and the bridged detectRegions/sliceRegions/renderGroup ops (skips cleanly when the Python pipeline is unavailable).",
           "role": "canvas module tests",
           "tags": [
             "assets",

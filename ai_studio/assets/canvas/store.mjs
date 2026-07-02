@@ -251,6 +251,23 @@ export function patchElement(root, id, elementId, patch = {}) {
   return { project: saved, element };
 }
 
+// Move a project folder to <projectsRoot>/.trash/<id>-<stamp>/ instead of deleting
+// it (safety: the folder is recoverable, never rm'd). listProjects skips
+// dot-prefixed entries, so a trashed project disappears from the list. This is a
+// project-level action and is intentionally not journaled (the per-project journal
+// lives inside the folder being moved).
+export function deleteProject(root, id) {
+  const dir = projectDir(root, id);
+  if (!existsSync(dir)) throw new Error(`canvas project not found: ${id}`);
+  const base = projectsRoot(root);
+  const trashDir = join(base, ".trash");
+  mkdirSync(trashDir, { recursive: true });
+  const stamp = nowIso().replace(/[:.]/g, "-");
+  const dest = join(trashDir, `${id}-${stamp}`);
+  renameSync(dir, dest);
+  return { id, trashed: dest };
+}
+
 // Remove the element from project.json. The backing file under files/ stays on
 // disk on purpose (immutability + prior tool_runs may still reference it).
 export function removeElement(root, id, elementId) {

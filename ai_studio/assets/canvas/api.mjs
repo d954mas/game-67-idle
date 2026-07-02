@@ -5,7 +5,9 @@
 //   GET    /api/canvas/projects
 //   POST   /api/canvas/projects                    {title}
 //   GET    /api/canvas/projects/<id>
-//   POST   /api/canvas/projects/<id>/images        {name, bytes_base64}
+//   PATCH  /api/canvas/projects/<id>               {title}          (rename)
+//   DELETE /api/canvas/projects/<id>                                (move to .trash)
+//   POST   /api/canvas/projects/<id>/images        {name, bytes_base64, x?, y?}
 //   POST   /api/canvas/projects/<id>/detect-regions {elementId, params?}
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
 //   POST   /api/canvas/projects/<id>/export         {elementIds}
@@ -20,6 +22,7 @@
 //   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible}
 //   DELETE /api/canvas/projects/<id>/elements/<eid>
 //   GET    /api/canvas/projects/<id>/files/<name>  (image bytes, path-confined)
+//   GET    /api/canvas/projects/<id>/export/<...>  (export files, path-confined)
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname } from "node:path";
 import {
@@ -28,17 +31,20 @@ import {
   createGroup,
   createProject,
   deleteGroup,
+  deleteProject,
   detectRegions,
   exportElements,
   getProject,
   listProjects,
   patchElement,
   patchGroup,
+  patchProject,
   readHistory,
   redoOp,
   removeElement,
   renderGroup,
   resolveProjectFile,
+  resolveProjectPath,
   sliceRegions,
   undoOp,
 } from "./ops.mjs";
@@ -127,6 +133,15 @@ export function createCanvasApi(root) {
           sendJson(res, 200, { project: getProject(root, id) });
           return true;
         }
+        if (req.method === "PATCH") {
+          const body = await readJsonBody(req);
+          sendJson(res, 200, patchProject(root, { projectId: id, title: body.title }));
+          return true;
+        }
+        if (req.method === "DELETE") {
+          sendJson(res, 200, deleteProject(root, { projectId: id }));
+          return true;
+        }
         sendJson(res, 405, { error: "method not allowed" });
         return true;
       }
@@ -137,7 +152,8 @@ export function createCanvasApi(root) {
       if (parts.length === 5 && sub === "images" && req.method === "POST") {
         const body = await readJsonBody(req);
         const bytes = Buffer.from(String(body.bytes_base64 || ""), "base64");
-        sendJson(res, 201, addImage(root, id, { name: body.name, bytes }));
+        // x/y let the page drop an image at a world point; addImage defaults to 0,0.
+        sendJson(res, 201, addImage(root, id, { name: body.name, bytes, x: body.x, y: body.y }));
         return true;
       }
 
@@ -250,6 +266,16 @@ export function createCanvasApi(root) {
       // /api/canvas/projects/<id>/files/<name>
       if (parts.length === 6 && sub === "files" && req.method === "GET") {
         const filePath = resolveProjectFile(root, id, decodeURIComponent(parts[5]));
+        serveFile(res, filePath);
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/export/<stamp>/<file>  (download an export)
+      // Each URL segment is confined individually by resolveProjectPath, so ".."
+      // or separators in any segment throw before a file is read.
+      if (parts.length >= 6 && sub === "export" && req.method === "GET") {
+        const segments = parts.slice(5).map((part) => decodeURIComponent(part));
+        const filePath = resolveProjectPath(root, id, "export", ...segments);
         serveFile(res, filePath);
         return true;
       }

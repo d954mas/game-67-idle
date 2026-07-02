@@ -22,9 +22,11 @@ browser and an agent get identical pixels/regions.
 - `api.mjs` — HTTP adapter (`createCanvasApi`) mounted by Studio Shell on
   `/api/canvas/`.
 - `cli.mjs` — agent client over the same ops.
-- `site/` — the thin page (`canvas.html` / `canvas.js` / `canvas.css`), served via
-  the existing `/ai_studio/` static route. It reuses the Asset Tools viewport
-  module for pan/zoom/fit and holds no logic beyond rendering/input.
+- `site/` — the thin page, served via the existing `/ai_studio/` static route. One
+  HTML document (`canvas.html`) that swaps a **home** view and a **workspace** view;
+  the behavior is split into small ES modules (see **Page** below). It reuses the
+  Asset Tools viewport module for pan/zoom/fit and holds no logic beyond
+  rendering/input — every action is one HTTP API call.
 - `tests/` — `node:test` suites for the store, ops, API, and studio config.
 
 ## Projects root
@@ -40,6 +42,12 @@ config so tests and one-off runs never touch the configured location.
 Every capability is one op in `ops.mjs`:
 
 - `listProjects` / `createProject` / `getProject` / `updateProject`
+- `patchProject({ projectId, title })` — rename a project. Journaled: the title
+  lives in the metadata snapshot, so undo/redo restore it with everything else.
+- `deleteProject({ projectId })` — move the whole project folder to
+  `<projectsRoot>/.trash/<id>-<stamp>/` instead of deleting it (safety: recoverable,
+  never `rm`'d). A project-level action, so it is **not** journaled (the per-project
+  journal moves with the folder). `listProjects` skips the dot-prefixed `.trash`.
 - `addImage` (parses real PNG/JPEG/GIF dimensions, persists `source_w`/`source_h`,
   writes an immutable file) — journaled
 - `patchElement` (move/resize/rename/`visible`) / `removeElement` (element only;
@@ -160,6 +168,8 @@ element name (sanitized, collision-suffixed) plus `manifest.json`:
 node ai_studio/assets/canvas/cli.mjs list
 node ai_studio/assets/canvas/cli.mjs create --title "My canvas"
 node ai_studio/assets/canvas/cli.mjs show <id>
+node ai_studio/assets/canvas/cli.mjs rename <id> --title "New title"
+node ai_studio/assets/canvas/cli.mjs delete <id>          # moves to .trash
 node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
 node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
@@ -178,14 +188,63 @@ node ai_studio/assets/canvas/cli.mjs history <id>
 
 `show <id>` includes `groups` in its project output.
 
-The page mirrors these: click selects, Shift+click toggles, Escape clears, Delete
-removes selected, Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z (or Ctrl+Y) redo, plus Slice
-and Export selected buttons. Visible groups draw as Figma-like frames with a name
-label above the top-left corner; clicking the label selects the group and
-dragging it moves the whole screen, a selected group offers **Render screen** and
-**Hide/Show**, and **Group selection** turns 2+ selected elements into a screen.
-Elements that are `visible:false` or inside a hidden group are neither drawn nor
-hit-testable.
+## Page
+
+The browser page is a thin, Figma/Recraft-like local interface. `canvas.html` is
+one document that swaps two views; the JS is split into focused ES modules under
+`site/`:
+
+- `app.js` — shared page state, the `fetch` API helper, read-only view helpers over
+  `project.json`, the image cache, and a small refresh bus every module renders
+  through.
+- `actions.js` — the one place UI intents become a single HTTP API call (add/drop/
+  paste image, patch/rename/hide/delete element, detect/slice/export, group create/
+  patch/render/ungroup/delete, undo/redo, rename project). No module talks to the
+  API directly.
+- `home.js` — the **home** view: a full-page grid of project cards (cover thumbnail,
+  title, image count, updated date) plus a `+ New project` card with an inline title
+  input (no `prompt()`); card hover reveals inline rename and delete.
+- `workspace.js` — the **workspace** view: the DPR-crisp pan/zoom canvas, the left
+  tool rail (Select/Hand), zoom controls + indicator, top bar sync, and all pointer
+  interaction (select, drag-move, pan). `imageSmoothingEnabled` is off at ≥2× zoom.
+- `layers_panel.js` — the collapsible, group-aware layers list (ungrouped elements at
+  top level; groups as collapsible sections with an eye toggle and inline-rename
+  name; member rows indented; 24px thumbnail, region-count badge, eye toggle;
+  selection syncs both ways with the canvas).
+- `inspector.js` — the right panel for the selection: element (name, X/Y/W/H,
+  source size, provenance, regions, meta), group/screen (name, X/Y/W/H, visible,
+  member count, **Render screen** with scale + background), multi-select (count +
+  Export selected), or "Nothing selected".
+- `context_menu.js` — the right-click menu (per element / group / empty canvas);
+  every item calls an action; closes on click-away or Escape.
+- `dnd.js` — OS drag & drop (drop images at the drop point with a drop highlight)
+  and Ctrl/Cmd+V clipboard paste at the viewport center.
+- `canvas.js` — the controller: boots the modules, owns view routing (deep link
+  `?project=<id>`, last-opened restore via `localStorage`) and the global keyboard.
+
+A debug hook `?select=<elementId>` pre-selects one element on open (handy for
+screenshots); it may stay. Downloads: after **export** / **Render screen** the
+status area shows clickable links served by the confined
+`GET /api/canvas/projects/<id>/export/<stamp>/<file>` route.
+
+Visible groups draw as Figma-like frames with a name label above the top-left
+corner; clicking the label selects the group and dragging it moves the whole
+screen. Elements that are `visible:false` or inside a hidden group are neither
+drawn nor hit-testable.
+
+### Shortcuts
+
+| Key | Action |
+| --- | --- |
+| `V` / `H` | Select tool / Hand (pan) tool |
+| Space (hold) | Temporary pan; middle-mouse always pans |
+| Click / Shift+Click / Ctrl+Click | Select / add-to-selection on canvas and in layers |
+| `0` / `1` / `2` | Fit / 100% / 200% zoom (wheel also zooms) |
+| `Ctrl/Cmd`+`Z` / `Ctrl/Cmd`+`Shift`+`Z` or `Ctrl`+`Y` | Undo / Redo |
+| `Ctrl/Cmd`+`G` | Group 2+ selected elements into a screen |
+| `Delete` / `Backspace` | Remove selected elements (image files kept on disk) |
+| `Escape` | Close menu / clear selection (never leaves the project) |
+| Right-click | Context menu; double-click a name to inline-rename |
 
 ## Validation
 

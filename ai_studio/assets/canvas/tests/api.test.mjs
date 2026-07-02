@@ -120,6 +120,60 @@ test("canvas API supports the full project + element lifecycle", async (t) => {
   assert.equal(afterRemove.json().project.elements.length, 0);
 });
 
+test("canvas API renames a project (PATCH) and trashes it (DELETE)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const keep = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Keep" })).json().project.id;
+  const created = await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Before" });
+  const projectId = created.json().project.id;
+
+  const renamed = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}`, { title: "After" });
+  assert.equal(renamed.status, 200);
+  assert.equal(renamed.json().project.title, "After");
+  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project.title, "After");
+
+  const deleted = await invokeApi(handler, "DELETE", `/api/canvas/projects/${projectId}`);
+  assert.equal(deleted.status, 200);
+  assert.equal(deleted.json().id, projectId);
+  assert.ok(deleted.json().trashed.includes(".trash"), "response reports the trash location");
+
+  // The project is gone from the list (only the untouched one remains) and 400s on GET.
+  assert.deepEqual((await invokeApi(handler, "GET", "/api/canvas/projects")).json().projects.map((p) => p.id), [keep]);
+  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).status, 400);
+});
+
+test("canvas API export download route serves a confined file and rejects traversal", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const created = await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Export DL" });
+  const projectId = created.json().project.id;
+  const png = solidPng(6, 6, [11, 22, 33]);
+  const elementId = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "hero.png",
+    bytes_base64: png.toString("base64"),
+  })).json().element.id;
+
+  const exported = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/export`, { elementIds: [elementId] });
+  assert.equal(exported.status, 200);
+  const stamp = exported.json().folder.replace(/[\\/]+$/, "").split(/[\\/]/).at(-1);
+  const file = exported.json().items[0].file;
+
+  // The GET download route serves the exported bytes back, path-confined per segment.
+  const download = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/export/${stamp}/${file}`);
+  assert.equal(download.status, 200);
+  assert.equal(download.headers["content-type"], "image/png");
+  assert.ok(download.buffer.equals(png), "downloaded bytes match the exported image");
+
+  // manifest.json is downloadable too.
+  const manifest = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/export/${stamp}/manifest.json`);
+  assert.equal(manifest.status, 200);
+
+  // A traversal segment is rejected before any file is read.
+  const bad = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/export/${encodeURIComponent("../../secret")}`);
+  assert.equal(bad.status, 400);
+  assert.match(bad.json().error, /unsafe path segment|escapes/);
+});
+
 test("canvas API undo/redo/history routes round-trip an element move", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(ROOT);

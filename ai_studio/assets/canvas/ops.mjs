@@ -38,6 +38,7 @@ import {
   addImage as storeAddImage,
   appendJournal,
   createProject,
+  deleteProject as storeDeleteProject,
   getProject,
   imageSize,
   listProjects,
@@ -56,6 +57,7 @@ export {
   getProject,
   listProjects,
   resolveProjectFile,
+  resolveProjectPath,
   updateProject,
 };
 
@@ -80,6 +82,9 @@ function slug(value) {
 
 function snapshotOf(project) {
   return {
+    // The project title is metadata like elements/groups, so carrying it in the
+    // before/after snapshot makes a rename (patchProject) fully undoable too.
+    title: project.title,
     elements: JSON.parse(JSON.stringify(project.elements || [])),
     // Groups are metadata like elements, so the same before/after snapshot makes
     // every group + visibility mutation fully undoable with no file changes.
@@ -141,6 +146,33 @@ export function removeElement(root, projectId, elementId) {
     after: result.project,
   });
   return { project, removed: result.removed };
+}
+
+// ---- project-level ops -------------------------------------------------------
+
+// Rename a project. Journaled like any metadata mutation: the title lives in the
+// snapshot, so undo/redo restore it together with elements/groups/tool_runs.
+export function patchProject(root, { projectId, title } = {}) {
+  if (!projectId) throw new Error("patchProject requires projectId");
+  if (title === undefined) throw new Error("patchProject requires a title");
+  const before = getProject(root, projectId);
+  const cleanTitle = String(title).trim() || before.title;
+  const after = updateProject(root, projectId, { title: cleanTitle });
+  const project = commitMutation(root, projectId, {
+    op: "patchProject",
+    args_summary: { title: cleanTitle },
+    before,
+    after,
+  });
+  return { project };
+}
+
+// Move a project to the projects-root .trash (safety: recoverable, never rm'd).
+// A project-level action, not journaled — the whole folder (journal included)
+// moves as one.
+export function deleteProject(root, { projectId } = {}) {
+  if (!projectId) throw new Error("deleteProject requires projectId");
+  return storeDeleteProject(root, projectId);
 }
 
 // ---- groups (screens) --------------------------------------------------------
@@ -322,12 +354,16 @@ export function undoOp(root, { projectId } = {}) {
   if (!head) throw new Error("nothing to undo");
   const entry = readJournal(root, projectId).find((item) => Number(item.seq) === head && item.undo_patch);
   if (!entry) throw new Error(`no undoable journal entry for seq ${head}`);
-  const saved = updateProject(root, projectId, {
+  const restore = {
     elements: entry.undo_patch.elements || [],
     groups: entry.undo_patch.groups || [],
     tool_runs: entry.undo_patch.tool_runs || [],
     history_seq: Number(entry.parent) || 0,
-  });
+  };
+  // Older journals predate title-in-snapshot; only restore title when present so
+  // updateProject never clobbers the live title with undefined.
+  if (entry.undo_patch.title !== undefined) restore.title = entry.undo_patch.title;
+  const saved = updateProject(root, projectId, restore);
   appendJournal(root, projectId, { op: "undo", target_seq: head });
   return { project: saved, undone_seq: head, history_seq: saved.history_seq };
 }
@@ -339,12 +375,14 @@ export function redoOp(root, { projectId } = {}) {
   const candidates = readJournal(root, projectId).filter((item) => item.state && (Number(item.parent) || 0) === head);
   if (!candidates.length) throw new Error("nothing to redo");
   const entry = candidates.reduce((best, item) => (Number(item.seq) > Number(best.seq) ? item : best));
-  const saved = updateProject(root, projectId, {
+  const restore = {
     elements: entry.state.elements || [],
     groups: entry.state.groups || [],
     tool_runs: entry.state.tool_runs || [],
     history_seq: Number(entry.seq),
-  });
+  };
+  if (entry.state.title !== undefined) restore.title = entry.state.title;
+  const saved = updateProject(root, projectId, restore);
   appendJournal(root, projectId, { op: "redo", target_seq: entry.seq });
   return { project: saved, redone_seq: entry.seq, history_seq: saved.history_seq };
 }
