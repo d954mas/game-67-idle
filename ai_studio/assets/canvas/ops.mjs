@@ -726,6 +726,15 @@ export function opsStats(root, { projectId } = {}) {
 
 // ---- detectRegions (bridged) -------------------------------------------------
 
+// Meaningful numbered names for freshly detected regions: "<base> 1..N" (base =
+// element name, else "Region"). Regions that already carry a name keep it.
+export function nameDetectedRegions(regions, baseName) {
+  const base = String(baseName || "").trim() || "Region";
+  return (regions || []).map((region, index) =>
+    region && !region.name ? { ...region, name: `${base} ${index + 1}` } : region,
+  );
+}
+
 // Read the element's stored image, run it through the existing raster2d upload +
 // detect pipeline (imported unmodified from ../tools/raster2d/api.mjs), then
 // persist the detected regions on the element and record a tool_runs entry. One
@@ -743,7 +752,7 @@ export async function detectRegions(root, { projectId, elementId, params = {} } 
     sourcePath: uploaded.sourcePath,
     options: params || {},
   });
-  const regions = Array.isArray(detected.regions && detected.regions.regions)
+  const rawRegions = Array.isArray(detected.regions && detected.regions.regions)
     ? detected.regions.regions
     : [];
 
@@ -754,7 +763,7 @@ export async function detectRegions(root, { projectId, elementId, params = {} } 
     at: new Date().toISOString(),
     params: params || {},
     result_summary: {
-      region_count: regions.length,
+      region_count: rawRegions.length,
       session_id: detected.sessionId,
       background_mode: (detected.regions && detected.regions.mode) || "",
     },
@@ -763,9 +772,13 @@ export async function detectRegions(root, { projectId, elementId, params = {} } 
   // Re-read to avoid clobbering concurrent edits, snapshot before, then persist
   // regions (and backfill source dimensions) + the tool_runs entry atomically.
   const before = getProject(root, projectId);
-  if (!(before.elements || []).some((item) => item.id === elementId)) {
+  const target = (before.elements || []).find((item) => item.id === elementId);
+  if (!target) {
     throw new Error(`element not found: ${elementId}`);
   }
+  // Detected regions get meaningful numbered names ("<element name> 1..N") so
+  // region rows read as content instead of raw sizes; sliced crops inherit them.
+  const regions = nameDetectedRegions(rawRegions, target.name);
   const nextElements = (before.elements || []).map((item) =>
     item.id === elementId
       ? { ...item, source_w: item.source_w || dims.width, source_h: item.source_h || dims.height, regions }

@@ -105,10 +105,11 @@ test("sliceRegions crops detected regions into new elements with provenance; und
   assert.ok(expected >= 1, "detection found regions to slice");
   assert.equal(sliced.created.length, expected, "one new element per region");
 
-  // Provenance + placement: each crop names its parent#region, links meta.parent,
-  // records intrinsic source size, and sits to the right of the parent sheet.
+  // Provenance + placement: each crop inherits its region's numbered name
+  // ("<element name> N" assigned at detect), links meta.parent, records
+  // intrinsic source size, and sits to the right of the parent sheet.
   for (const crop of sliced.created) {
-    assert.match(crop.name, /#region_/);
+    assert.match(crop.name, / \d+$/);
     assert.equal(crop.meta.parent.elementId, element.id);
     assert.equal(crop.meta.parent.sheetSrc, element.src);
     assert.ok(crop.source_w >= 1 && crop.source_h >= 1);

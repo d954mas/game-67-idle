@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
 import { URL, fileURLToPath } from "node:url";
-import { addImage, createProject, getProject, setRegions, undoOp, redoOp } from "../ops.mjs";
+import { addImage, createProject, getProject, nameDetectedRegions, setRegions, undoOp, redoOp } from "../ops.mjs";
 import { createCanvasApi } from "../api.mjs";
 import { magentaSheetPng, solidPng } from "./png_fixture.mjs";
 
@@ -214,4 +214,15 @@ test("cli regions-set/regions-show round-trip through a JSON file", (t) => {
 
   const shown = runCli("regions-show", projectId, "--element", elementId);
   assert.deepEqual(shown.regions.map((r) => r.id), ["r1", "r2"]);
+});
+
+test("nameDetectedRegions numbers unnamed regions from the element name", () => {
+  const named = nameDetectedRegions(
+    [{ id: "r1", rect: [0, 0, 4, 4] }, { id: "r2", rect: [5, 0, 4, 4], name: "Kept" }, { id: "r3", rect: [0, 5, 4, 4] }],
+    "Wings",
+  );
+  assert.equal(named[0].name, "Wings 1");
+  assert.equal(named[1].name, "Kept");
+  assert.equal(named[2].name, "Wings 3");
+  assert.equal(nameDetectedRegions([{ id: "a", rect: [0, 0, 1, 1] }], "  ")[0].name, "Region 1");
 });
