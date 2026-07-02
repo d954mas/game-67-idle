@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import { createTaskboardApi } from "../taskboard/api.mjs";
 import { findRoot } from "../taskboard/lib.mjs";
 import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/viewer/api.mjs";
+import { createRaster2dAssetToolsApi, resolveRaster2dTmpPath } from "../assets/tools/raster2d/api.mjs";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
 
 const repoGuess = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -18,11 +19,11 @@ const root = findRoot(repoGuess);
 const aiStudioRoot = join(root, "ai_studio");
 const taskboardPublic = join(aiStudioRoot, "taskboard", "public");
 const assetViewerRoot = join(aiStudioRoot, "assets", "viewer");
-const assetPrepRoot = join(aiStudioRoot, "assets", "tools", "manual");
 const assetPreviewRoot = join(aiStudioRoot, "assets", "backlog", "storage", "previews");
 const port = Number.parseInt(process.argv[2] || process.env.AI_STUDIO_PORT || "8765", 10);
 const handleTaskboardApi = createTaskboardApi(root);
 const handleAssetViewerApi = createAssetViewerApi(root);
+const handleRaster2dAssetToolsApi = createRaster2dAssetToolsApi(root);
 const stateDir = join(root, "tmp", "ai_studio");
 const pidFile = join(stateDir, `studio_shell_${port}.pid`);
 
@@ -89,10 +90,10 @@ function staticPath(pathname) {
   }
 
   if (pathname === "/asset_prep" || pathname === "/asset_prep/") {
-    return join(assetPrepRoot, "index.html");
+    return join(assetViewerRoot, "asset_tools.html");
   }
   if (pathname.startsWith("/asset_prep/")) {
-    return safeResolve(assetPrepRoot, pathname.slice("/asset_prep/".length));
+    return safeResolve(assetViewerRoot, pathname.slice("/asset_prep/".length));
   }
 
   if (pathname === "/quality" || pathname === "/quality/") {
@@ -104,6 +105,10 @@ function staticPath(pathname) {
 
   if (pathname.startsWith("/ai_studio/")) {
     return safeResolve(root, pathname.slice(1));
+  }
+
+  if (pathname.startsWith("/tmp/")) {
+    return resolveRaster2dTmpPath(root, pathname);
   }
 
   return null;
@@ -133,8 +138,11 @@ const server = createServer((req, res) => {
       return;
     }
 
-    handleAssetViewerApi(req, res, url).then((handled) => {
-      if (!handled) handleTaskboardApi(req, res, url);
+    handleRaster2dAssetToolsApi(req, res, url).then((handled) => {
+      if (handled) return;
+      handleAssetViewerApi(req, res, url).then((assetHandled) => {
+        if (!assetHandled) handleTaskboardApi(req, res, url);
+      });
     });
   } else {
     serveStatic(req, res, url);

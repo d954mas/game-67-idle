@@ -460,7 +460,7 @@
             "kind": "server",
             "path": "ai_studio/studio_shell/server.mjs",
             "title": "server.mjs",
-            "description": "Unified local server for AI Studio home, Architecture Map surface, Taskboard surface, Asset Viewer, Manual Asset Prep, tree.json, validation report, and API routes.",
+            "description": "Unified local server for AI Studio home, Architecture Map surface, Taskboard surface, Asset Viewer, Asset Tools, tree.json, validation report, and API routes.",
             "role": "AI Studio local server",
             "tags": [
               "server",
@@ -1834,6 +1834,22 @@
                 ]
               },
               {
+                "id": "assets:asset-tools-surface",
+                "title": "Asset Tools",
+                "subtitle": "image workspace",
+                "kind": "surface",
+                "path": "ai_studio/assets/viewer/asset_tools.html",
+                "color": "#0891b2",
+                "description": "Browser Asset Tools surface hosted at /asset_prep/. It presents one raster2d image workspace with source loading, explicit background mode selection, region detection, pan/zoom region review, close selected-region source/alpha preview, rect and polygon manual fixes, region naming, per-region alpha mode, review sheet preview, ZIP export, single selected-region PNG export, and a separate Slice 9 test mode for whole-image or selected-region scalable UI images.",
+                "role": "asset tools browser surface",
+                "tags": [
+                  "surface",
+                  "assets",
+                  "tool-picker",
+                  "raster2d"
+                ]
+              },
+              {
                 "id": "assets:asset-viewer-build",
                 "kind": "tool",
                 "path": "ai_studio/assets/viewer/build_review.mjs",
@@ -1940,10 +1956,10 @@
               {
                 "id": "assets:asset-viewer-implementation",
                 "title": "Surface Implementation",
-                "subtitle": "viewer js/css",
+                "subtitle": "viewer and tools js/css",
                 "kind": "group",
                 "color": "#0891b2",
-                "description": "Static browser files copied into generated gallery outputs. Hidden from the default graph so Asset Viewer remains readable as one surface.",
+                "description": "Static browser files for Asset Viewer and Asset Tools. Hidden from the default graph so the viewer module remains readable as one surface.",
                 "role": "asset viewer browser implementation details",
                 "tags": [
                   "ui",
@@ -1975,6 +1991,126 @@
                       "ui",
                       "style",
                       "assets"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-js",
+                    "kind": "ui-component",
+                    "path": "ai_studio/assets/viewer/asset_tools.js",
+                    "title": "asset_tools.js",
+                    "description": "Browser-only behavior for Asset Tools: upload, workspace mode selection, central review-sheet or canvas stage selection, explicit background mode selection, region overlay editing with visible region names, close region inspection, region naming, per-region alpha mode, selected-region PNG downloads, whole-image or selected-region Slice 9 preview wiring, review sheet refresh, and export requests.",
+                    "role": "asset tools browser behavior",
+                    "tags": [
+                      "ui",
+                      "browser-js",
+                      "assets",
+                      "raster2d"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-css",
+                    "kind": "ui-component",
+                    "path": "ai_studio/assets/viewer/asset_tools.css",
+                    "title": "asset_tools.css",
+                    "description": "Asset Tools page styling for the pipeline rail, canvas toolbar, pan/zoom editor, region list, inspector, close region preview, Slice 9 preview, and review preview.",
+                    "role": "asset tools styling",
+                    "tags": [
+                      "ui",
+                      "style",
+                      "assets",
+                      "raster2d"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-viewport",
+                    "kind": "ui-component",
+                    "path": "ai_studio/assets/viewer/asset_tools_viewport.mjs",
+                    "title": "asset_tools_viewport.mjs",
+                    "description": "Pure viewport and rect geometry helpers for Asset Tools canvas pan, zoom, hit testing, move, and resize behavior.",
+                    "role": "asset tools canvas geometry",
+                    "tags": [
+                      "ui",
+                      "browser-js",
+                      "assets",
+                      "raster2d",
+                      "testable-logic"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-history",
+                    "kind": "ui-component",
+                    "path": "ai_studio/assets/viewer/asset_tools_history.mjs",
+                    "title": "asset_tools_history.mjs",
+                    "description": "Pure undo/redo history helper for Asset Tools region review snapshots.",
+                    "role": "asset tools region history helper",
+                    "tags": [
+                      "ui",
+                      "browser-js",
+                      "assets",
+                      "raster2d",
+                      "testable-logic"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-alpha-preview",
+                    "kind": "ui-component",
+                    "path": "ai_studio/assets/viewer/asset_tools_alpha_preview.mjs",
+                    "title": "asset_tools_alpha_preview.mjs",
+                    "description": "Pure alpha-preview helper for Asset Tools selected-region preview: key-color parsing, magenta spill cleanup near transparent matte edges, generation-mode diagnostic overlays, and region-local polygon masking.",
+                    "role": "asset tools alpha preview helper",
+                    "tags": [
+                      "ui",
+                      "browser-js",
+                      "assets",
+                      "raster2d",
+                      "alpha",
+                      "testable-logic"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-region-label",
+                    "kind": "ui-component",
+                    "path": "ai_studio/assets/viewer/asset_tools_region_label.mjs",
+                    "title": "asset_tools_region_label.mjs",
+                    "description": "Pure region overlay label helper for Asset Tools canvas badges: prefer explicit region names, fall back to visible numbers, and trim long labels to the badge width.",
+                    "role": "asset tools region overlay label helper",
+                    "tags": [
+                      "ui",
+                      "browser-js",
+                      "assets",
+                      "raster2d",
+                      "testable-logic"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-stage-view",
+                    "kind": "ui-component",
+                    "path": "ai_studio/assets/viewer/asset_tools_stage_view.mjs",
+                    "title": "asset_tools_stage_view.mjs",
+                    "description": "Pure stage-view helper for Asset Tools deciding whether the central workspace shows the review sheet or the canvas editor across Regions and Slice 9 modes.",
+                    "role": "asset tools central stage view helper",
+                    "tags": [
+                      "ui",
+                      "browser-js",
+                      "assets",
+                      "raster2d",
+                      "testable-logic"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-slice9",
+                    "kind": "ui-component",
+                    "path": "ai_studio/assets/viewer/asset_tools_slice9.mjs",
+                    "title": "asset_tools_slice9.mjs",
+                    "description": "Pure Slice 9 geometry helper for clamping fixed edges and mapping full-image or offset region source patches to stretched preview patches.",
+                    "role": "asset tools slice 9 geometry",
+                    "tags": [
+                      "ui",
+                      "browser-js",
+                      "assets",
+                      "raster2d",
+                      "slice9",
+                      "testable-logic"
                     ]
                   }
                 ]
@@ -2014,6 +2150,92 @@
                     "tags": [
                       "test",
                       "assets"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-viewport-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/viewer/tests/asset_tools_viewport.test.mjs",
+                    "title": "asset_tools_viewport.test.mjs",
+                    "description": "Regression tests for Asset Tools viewport transforms, zoom-to-cursor, rect hit handles, movement, and resize clamping.",
+                    "role": "asset tools viewport tests",
+                    "tags": [
+                      "test",
+                      "assets",
+                      "raster2d",
+                      "ui"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-history-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/viewer/tests/asset_tools_history.test.mjs",
+                    "title": "asset_tools_history.test.mjs",
+                    "description": "Regression tests for Asset Tools region undo/redo snapshots and redo clearing.",
+                    "role": "asset tools history tests",
+                    "tags": [
+                      "test",
+                      "assets",
+                      "raster2d",
+                      "ui"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-alpha-preview-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/viewer/tests/asset_tools_alpha_preview.test.mjs",
+                    "title": "asset_tools_alpha_preview.test.mjs",
+                    "description": "Regression tests for Asset Tools selected-region alpha preview key-color removal, magenta spill cleanup, isolated purple preservation, and polygon masks.",
+                    "role": "asset tools alpha preview tests",
+                    "tags": [
+                      "test",
+                      "assets",
+                      "raster2d",
+                      "alpha",
+                      "ui"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-region-label-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/viewer/tests/asset_tools_region_label.test.mjs",
+                    "title": "asset_tools_region_label.test.mjs",
+                    "description": "Regression tests for Asset Tools canvas overlay labels using region names, numeric fallbacks, and width fitting.",
+                    "role": "asset tools region overlay label tests",
+                    "tags": [
+                      "test",
+                      "assets",
+                      "raster2d",
+                      "ui"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-stage-view-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/viewer/tests/asset_tools_stage_view.test.mjs",
+                    "title": "asset_tools_stage_view.test.mjs",
+                    "description": "Regression tests for Asset Tools central stage selection between the review sheet, canvas editor, and Slice 9 canvas workspace.",
+                    "role": "asset tools central stage view tests",
+                    "tags": [
+                      "test",
+                      "assets",
+                      "raster2d",
+                      "ui"
+                    ]
+                  },
+                  {
+                    "id": "assets:asset-tools-slice9-test",
+                    "kind": "test",
+                    "path": "ai_studio/assets/viewer/tests/asset_tools_slice9.test.mjs",
+                    "title": "asset_tools_slice9.test.mjs",
+                    "description": "Regression tests for Asset Tools Slice 9 insets, target clamping, and patch mapping.",
+                    "role": "asset tools slice 9 tests",
+                    "tags": [
+                      "test",
+                      "assets",
+                      "raster2d",
+                      "slice9",
+                      "ui"
                     ]
                   }
                 ]
@@ -2226,6 +2448,22 @@
                 ]
               },
               {
+                "id": "assets:tools-raster2d",
+                "title": "Raster 2D Image Tools",
+                "subtitle": "sources, regions, slicing, alpha, review",
+                "kind": "group",
+                "path": "ai_studio/assets/tools/raster2d",
+                "color": "#0d9488",
+                "description": "New Python-first staged structure and API bridge for generated or sourced 2D image work: source-image conventions, background normalization, region detection, slicing, single-region PNG export, per-region alpha policy, and review outputs used by the Asset Tools surface.",
+                "role": "2D image workflow tools",
+                "tags": [
+                  "assets",
+                  "tools",
+                  "raster2d",
+                  "image-pipeline"
+                ]
+              },
+              {
                 "id": "assets:tools-conversion",
                 "title": "Conversion Tools",
                 "subtitle": "format conversion",
@@ -2267,23 +2505,6 @@
                       "model"
                     ]
                   }
-                ]
-              },
-              {
-                "id": "assets:tools-manual",
-                "title": "Manual Asset Prep",
-                "subtitle": "browser slicing and alpha preview",
-                "kind": "surface",
-                "path": "ai_studio/assets/tools/manual",
-                "color": "#0d9488",
-                "description": "Browser surface for local source-image upload, grid/tile slicing, simple alpha transforms, crop-plan JSON export, and PNG/ZIP downloads without writing to backlog storage.",
-                "role": "manual asset preparation surface",
-                "tags": [
-                  "assets",
-                  "tools",
-                  "surface",
-                  "crop",
-                  "alpha"
                 ]
               },
               {

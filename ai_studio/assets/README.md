@@ -8,8 +8,10 @@ Top-level groups:
   browsing registered asset sources, inspecting packs/assets, reviewing
   game-local assets, promoting keepers, pulling reusable assets into a game,
   and recording gallery sessions.
-- `tools/`: concrete asset work utilities: source-sheet checks, crop planning,
-  alpha/cutout cleanup, conversion, texture checks, and manual local prep UI.
+- `tools/`: concrete asset work utilities. New 2D image-pipeline tools live in
+  `tools/raster2d/` and are used by agents plus the browser Asset Tools surface.
+  The browser surface itself is owned by `viewer/`. Older source-sheet, crop,
+  cutout, and review tools stay in place until replaced stage by stage.
 - `backlog/`: temporary holding area for asset modules that still need a better
   decomposition. Storage, source registry, manifests, index, preview cache, and
   license guard live there until they are split into clearer groups.

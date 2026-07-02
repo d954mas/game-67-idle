@@ -4,8 +4,8 @@
 
 It is not the owner of the tools it hosts. `architecture_map/` owns the map
 surface and map data. `taskboard/` owns the board surface and task state.
-`assets/viewer/` owns the asset browsing launcher and galleries.
-`assets/tools/manual/` owns the manual source-image prep surface.
+`assets/viewer/` owns the asset browsing launcher, galleries, and the Asset
+Tools browser surface.
 
 ## Owned Here
 
@@ -71,5 +71,5 @@ Current hosted surfaces:
 - `/architecture_map/` -> Architecture Map surface.
 - `/taskboard/` -> Taskboard surface.
 - `/asset_viewer/` -> Asset Viewer launcher.
-- `/asset_prep/` -> Manual Asset Prep surface.
+- `/asset_prep/` -> Asset Tools surface.
 - `/quality/` -> Quality Checks surface.

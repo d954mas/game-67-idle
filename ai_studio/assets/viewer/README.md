@@ -29,6 +29,30 @@ The gallery header lets the user choose which source to display:
 The generated static-gallery command remains for review exports and standalone
 sharing, but it is not the normal browser entry.
 
+The same viewer module also owns the browser Asset Tools surface at:
+
+```text
+http://127.0.0.1:8765/asset_prep/
+```
+
+That surface presents one image workspace with pipeline stages: load a source
+image, choose how the background step should run, detect regions, review and
+name rect or polygon regions in a pan/zoom canvas, choose per-region alpha mode,
+preview the selected region crop and alpha result, preview the review sheet, and
+export slices as a ZIP or save one selected region as a PNG from the inspector
+or region context menu. The background choice is applied when `Run Detect` runs:
+`Auto sheet background` normalizes a sheet background before region detection,
+while `Whole image / no background` skips normalization and creates one
+full-image region. It also includes a separate Slice 9 test mode that can use
+either the whole loaded image or the selected region as the fixed-edge/
+stretch-center source. The processing code lives in `../tools/raster2d/`; this
+module owns only the browser surface.
+
+In the selected-region inspector, `key_matte` alpha preview shows the local
+matte result. `generation` alpha preview is a diagnostic view: it shows the
+matte approximation and marks edge pixels that the later generated/dual-plate
+alpha pass needs to solve.
+
 New games created through `games/new_game.mjs --id <game-id>` are
 registered automatically as `<game-id>/assets`. Asset Viewer does not scan root
 folders to guess games.

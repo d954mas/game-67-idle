@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Asset Tools</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/ai_studio/studio_shell/studio_shell.css">
+  <link rel="stylesheet" href="/asset_prep/asset_tools.css">
+</head>
+<body>
+  <div class="studio-shell">
+    <aside class="studio-sidebar" aria-label="AI Studio navigation">
+      <div class="studio-sidebar-brand">
+        <span class="studio-brand-mark">AI</span>
+        <div class="studio-brand-copy">
+          <strong>AI Studio</strong>
+          <span>game pipeline</span>
+        </div>
+        <button class="studio-sidebar-toggle" type="button" data-studio-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true">&lt;</button>
+      </div>
+
+      <nav class="studio-side-nav" aria-label="Primary">
+        <p class="studio-nav-section">Workspace</p>
+        <a class="studio-nav-item" href="/">
+          <span class="studio-nav-icon">S</span>
+          <span class="studio-nav-label">Studio Home</span>
+        </a>
+        <a class="studio-nav-item" href="/architecture_map/">
+          <span class="studio-nav-icon map">M</span>
+          <span class="studio-nav-label">Architecture Map</span>
+        </a>
+        <a class="studio-nav-item" href="/taskboard/">
+          <span class="studio-nav-icon tasks">T</span>
+          <span class="studio-nav-label">Taskboard</span>
+        </a>
+        <a class="studio-nav-item" href="/asset_viewer/">
+          <span class="studio-nav-icon assets">A</span>
+          <span class="studio-nav-label">Asset Viewer</span>
+        </a>
+        <a class="studio-nav-item is-active" href="/asset_prep/">
+          <span class="studio-nav-icon prep">P</span>
+          <span class="studio-nav-label">Asset Tools</span>
+        </a>
+        <a class="studio-nav-item" href="/quality/">
+          <span class="studio-nav-icon quality">Q</span>
+          <span class="studio-nav-label">Quality Checks</span>
+        </a>
+      </nav>
+    </aside>
+
+    <main class="studio-content asset-tools-content">
+      <header class="asset-tools-header">
+        <div>
+          <p class="asset-eyebrow">Raster 2D</p>
+          <h1>Image Workspace</h1>
+        </div>
+        <div id="assetToolStatus" class="asset-status" role="status" aria-live="polite">No image loaded</div>
+      </header>
+
+      <div class="image-workflow-layout">
+        <aside class="pipeline-rail" aria-label="Image pipeline">
+          <section class="pipeline-card source-card">
+            <h2>Source</h2>
+            <label id="dropZone" class="drop-zone">
+              <input id="imageInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif">
+              <span>
+                <span class="drop-main">Load image</span>
+                <span class="drop-sub">PNG, JPG, WEBP, GIF</span>
+              </span>
+            </label>
+            <div id="imageMeta" class="meta-line">No file selected</div>
+          </section>
+
+          <ol class="pipeline-steps">
+            <li class="pipeline-step is-current" data-step="source">
+              <span class="step-index">1</span>
+              <span>
+                <strong>Source</strong>
+                <small id="sourceStepStatus">empty</small>
+              </span>
+            </li>
+            <li class="pipeline-step" data-step="background">
+              <span class="step-index">2</span>
+              <span>
+                <strong>Background</strong>
+                <small id="backgroundStepStatus">auto</small>
+              </span>
+            </li>
+            <li class="pipeline-step" data-step="regions">
+              <span class="step-index">3</span>
+              <span>
+                <strong>Regions</strong>
+                <small id="regionsStepStatus">not detected</small>
+              </span>
+            </li>
+            <li class="pipeline-step" data-step="review">
+              <span class="step-index">4</span>
+              <span>
+                <strong>Region Review</strong>
+                <small id="reviewStepStatus">pending</small>
+              </span>
+            </li>
+            <li class="pipeline-step" data-step="alpha">
+              <span class="step-index">5</span>
+              <span>
+                <strong>Alpha</strong>
+                <small id="alphaStepStatus">pending</small>
+              </span>
+            </li>
+            <li class="pipeline-step" data-step="export">
+              <span class="step-index">6</span>
+              <span>
+                <strong>Export</strong>
+                <small id="exportStepStatus">locked</small>
+              </span>
+            </li>
+            <li class="pipeline-step is-disabled" data-step="promote">
+              <span class="step-index">7</span>
+              <span>
+                <strong>Promote</strong>
+                <small>later</small>
+              </span>
+            </li>
+          </ol>
+
+          <section class="pipeline-card">
+            <h2>Detect</h2>
+            <div class="field-row">
+              <label for="backgroundMode">Background</label>
+              <select id="backgroundMode">
+                <option value="auto">Auto sheet background</option>
+                <option value="whole_image">Whole image / no background</option>
+              </select>
+            </div>
+            <button id="detectRegions" type="button" disabled>Run Detect</button>
+            <details class="advanced-panel">
+              <summary>Advanced</summary>
+              <div class="field-grid">
+                <div class="field-row">
+                  <label for="keyTolerance">Tolerance <span id="toleranceValue">32</span></label>
+                  <input id="keyTolerance" type="range" min="0" max="160" value="32">
+                </div>
+                <div class="field-row">
+                  <label for="minArea">Min area</label>
+                  <input id="minArea" type="number" min="1" value="256">
+                </div>
+                <div class="field-row">
+                  <label for="padding">Padding</label>
+                  <input id="padding" type="number" min="0" value="8">
+                </div>
+                <div class="field-row">
+                  <label for="mergeDistance">Merge gap</label>
+                  <input id="mergeDistance" type="number" min="0" value="0">
+                </div>
+                <div class="field-row wide">
+                  <label for="rowTolerance">Row tolerance</label>
+                  <input id="rowTolerance" type="number" min="0" value="32">
+                </div>
+              </div>
+            </details>
+          </section>
+
+          <section class="pipeline-card">
+            <h2>Export</h2>
+            <div class="field-row">
+              <label for="prefix">Name prefix</label>
+              <input id="prefix" type="text" value="asset" autocomplete="off">
+            </div>
+            <label class="check-row">
+              <input id="includeReviewSheet" type="checkbox" checked>
+              <span>Review sheet</span>
+            </label>
+            <button id="downloadZip" type="button" disabled>Download ZIP</button>
+          </section>
+        </aside>
+
+        <section class="workspace-stage" aria-label="Image editor">
+          <div class="canvas-toolbar" aria-label="Canvas tools">
+            <div class="toolbar-group" role="group" aria-label="Workspace mode">
+              <button id="regionsWorkspaceMode" type="button" class="icon-button is-active" title="Regions workspace">Regions</button>
+              <button id="slice9WorkspaceMode" type="button" class="icon-button" title="Slice 9 workspace">Slice 9</button>
+            </div>
+            <div class="toolbar-group" role="group" aria-label="Stage view">
+              <button id="reviewStageMode" type="button" class="icon-button is-active" title="Review sheet">Review</button>
+              <button id="editStageMode" type="button" class="icon-button" title="Canvas editor">Edit</button>
+            </div>
+            <div class="toolbar-group" role="group" aria-label="Edit mode">
+              <button id="selectMode" type="button" class="icon-button is-active" title="Select">Select</button>
+              <button id="rectMode" type="button" class="icon-button" title="Rect">Rect</button>
+              <button id="polygonMode" type="button" class="icon-button" title="Polygon">Poly</button>
+              <button id="panMode" type="button" class="icon-button" title="Pan">Pan</button>
+            </div>
+            <div class="toolbar-group" role="group" aria-label="Zoom">
+              <button id="fitView" type="button" class="icon-button" title="Fit">Fit</button>
+              <button id="zoomOut" type="button" class="icon-button" title="Zoom out">-</button>
+              <output id="zoomValue">100%</output>
+              <button id="zoomIn" type="button" class="icon-button" title="Zoom in">+</button>
+              <button id="actualSize" type="button" class="icon-button" title="100%">100%</button>
+            </div>
+            <div class="toolbar-spacer"></div>
+            <div class="toolbar-group" role="group" aria-label="Region actions">
+              <button id="undoRegions" type="button" class="ghost" disabled>Undo</button>
+              <button id="redoRegions" type="button" class="ghost" disabled>Redo</button>
+              <button id="deleteRegion" type="button" class="ghost" disabled>Delete</button>
+              <button id="clearRegions" type="button" class="ghost" disabled>Clear</button>
+            </div>
+          </div>
+
+          <div id="canvasFrame" class="canvas-frame">
+            <div id="emptyState" class="canvas-empty">Load an image to start.</div>
+            <canvas id="regionCanvas" class="hidden"></canvas>
+          </div>
+          <div id="stageReviewFrame" class="stage-review-frame hidden" aria-label="Review sheet main view">
+            <img id="stageReviewImage" alt="Region review sheet main view" hidden>
+            <div id="stageReviewEmpty" class="stage-review-empty">Review sheet appears after regions are ready.</div>
+          </div>
+          <div class="stage-footer">
+            <span id="canvasMeta">0 x 0</span>
+            <span id="cursorMeta">x 0, y 0</span>
+            <span id="regionMeta">0 regions</span>
+          </div>
+        </section>
+
+        <aside class="workspace-sidebar" aria-label="Workspace details">
+          <div class="tabs" role="tablist" aria-label="Details">
+            <button id="regionsTab" type="button" role="tab" aria-selected="true" class="is-active">Regions</button>
+            <button id="reviewTab" type="button" role="tab" aria-selected="false">Review</button>
+            <button id="slice9Tab" type="button" role="tab" aria-selected="false">Slice 9</button>
+          </div>
+
+          <section id="regionsPanel" class="details-panel" role="tabpanel" aria-labelledby="regionsTab">
+            <div class="panel-toolbar">
+              <h2>Regions</h2>
+              <span id="regionCount" class="count-pill">0</span>
+            </div>
+
+            <div id="regionList" class="region-list">
+              <div class="empty-list">No regions.</div>
+            </div>
+
+            <div class="inspector">
+              <h2>Selected Region</h2>
+              <div id="inspectorEmpty" class="empty-list">No region selected.</div>
+              <div id="inspectorFields" class="inspector-fields hidden">
+                <div class="field-row">
+                  <label for="selectedName">Name</label>
+                  <input id="selectedName" type="text" autocomplete="off">
+                </div>
+                <div class="field-row">
+                  <label for="selectedAlphaMode">Alpha mode</label>
+                  <select id="selectedAlphaMode">
+                    <option value="key_matte">Key matte</option>
+                    <option value="generation">Generation</option>
+                  </select>
+                </div>
+                <div class="field-grid compact">
+                  <div class="field-row">
+                    <label for="selectedX">X</label>
+                    <input id="selectedX" type="number" min="0">
+                  </div>
+                  <div class="field-row">
+                    <label for="selectedY">Y</label>
+                    <input id="selectedY" type="number" min="0">
+                  </div>
+                  <div class="field-row">
+                    <label for="selectedW">W</label>
+                    <input id="selectedW" type="number" min="1">
+                  </div>
+                  <div class="field-row">
+                    <label for="selectedH">H</label>
+                    <input id="selectedH" type="number" min="1">
+                  </div>
+                </div>
+                <div id="selectedMeta" class="meta-line"></div>
+                <div class="region-preview-panel">
+                  <div class="region-preview-toolbar">
+                    <button id="fitSelectedRegion" type="button" class="ghost">Fit</button>
+                    <button id="downloadSelectedRegion" type="button" class="ghost" disabled>Download PNG</button>
+                    <select id="selectedPreviewMode" aria-label="Selected region preview mode">
+                      <option value="source">Source</option>
+                      <option value="alpha">Alpha</option>
+                    </select>
+                  </div>
+                  <div class="region-preview-wrap">
+                    <canvas id="selectedRegionPreviewCanvas" aria-label="Selected region preview"></canvas>
+                  </div>
+                  <div id="selectedPreviewMeta" class="meta-line">empty</div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section id="reviewPanel" class="details-panel hidden" role="tabpanel" aria-labelledby="reviewTab">
+            <div class="panel-toolbar">
+              <h2>Review Sheet</h2>
+              <span id="reviewMeta" class="count-pill">empty</span>
+            </div>
+            <div class="review-canvas-wrap">
+              <img id="reviewImage" alt="Region review sheet" hidden>
+              <div id="reviewEmpty" class="empty-list">No review sheet.</div>
+            </div>
+          </section>
+
+          <section id="slice9Panel" class="details-panel hidden" role="tabpanel" aria-labelledby="slice9Tab">
+            <div class="panel-toolbar">
+              <h2>Slice 9</h2>
+              <span id="slice9Meta" class="count-pill">empty</span>
+            </div>
+            <div class="slice9-controls">
+              <div class="field-row">
+                <label>Source</label>
+                <div class="slice9-source-toggle" role="group" aria-label="Slice 9 source">
+                  <button id="slice9WholeSource" type="button" class="is-active">Whole image</button>
+                  <button id="slice9RegionSource" type="button" disabled>Selected region</button>
+                </div>
+                <div id="slice9SourceMeta" class="meta-line">0 x 0</div>
+              </div>
+              <div class="field-grid compact">
+                <div class="field-row">
+                  <label for="slice9Left">Left</label>
+                  <input id="slice9Left" type="number" min="0" value="0" disabled>
+                </div>
+                <div class="field-row">
+                  <label for="slice9Right">Right</label>
+                  <input id="slice9Right" type="number" min="0" value="0" disabled>
+                </div>
+                <div class="field-row">
+                  <label for="slice9Top">Top</label>
+                  <input id="slice9Top" type="number" min="0" value="0" disabled>
+                </div>
+                <div class="field-row">
+                  <label for="slice9Bottom">Bottom</label>
+                  <input id="slice9Bottom" type="number" min="0" value="0" disabled>
+                </div>
+              </div>
+              <div class="field-grid compact">
+                <div class="field-row">
+                  <label for="slice9PreviewW">Preview W</label>
+                  <input id="slice9PreviewW" type="number" min="1" value="128" disabled>
+                </div>
+                <div class="field-row">
+                  <label for="slice9PreviewH">Preview H</label>
+                  <input id="slice9PreviewH" type="number" min="1" value="128" disabled>
+                </div>
+              </div>
+            </div>
+            <div class="slice9-preview-wrap">
+              <canvas id="slice9PreviewCanvas" class="hidden" aria-label="Slice 9 preview"></canvas>
+              <div id="slice9Empty" class="empty-list">No image loaded.</div>
+            </div>
+          </section>
+        </aside>
+      </div>
+    </main>
+  </div>
+
+  <div id="regionContextMenu" class="region-context-menu hidden" role="menu" aria-label="Region actions">
+    <button id="contextDownloadRegion" type="button" role="menuitem">Download PNG</button>
+  </div>
+
+  <script type="module" src="/asset_prep/asset_tools.js"></script>
+  <script src="/ai_studio/studio_shell/studio_shell.js"></script>
+</body>
+</html>
