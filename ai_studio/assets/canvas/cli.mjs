@@ -19,6 +19,9 @@
 //   node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>
 //   node ai_studio/assets/canvas/cli.mjs nodes-move <id> --json moves.json
 //   node ai_studio/assets/canvas/cli.mjs nodes-reorder <id> --nodes n1,n2 --direction front|back|forward|backward | --index <n>
+//   node ai_studio/assets/canvas/cli.mjs nodes-paste <id> --spec spec.json [--dx n --dy n] [--group <gid>|none]
+//   node ai_studio/assets/canvas/cli.mjs nodes-duplicate <id> --nodes id1,id2 [--dx n --dy n] [--group <gid>|none]
+//   node ai_studio/assets/canvas/cli.mjs nodes-delete <id> --nodes id1,id2
 //   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 //   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --suffix --resample]
 //   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --suffix --resample] [--to <dir>]
@@ -46,8 +49,10 @@ import {
   createGroup,
   createProject,
   deleteGroup,
+  deleteNodes,
   deleteProject,
   detectRegions,
+  duplicateNodes,
   exportElements,
   exportProject,
   fitGroup,
@@ -55,6 +60,7 @@ import {
   listProjects,
   moveNodes,
   opsStats,
+  pasteNodes,
   patchElement,
   patchElements,
   patchGroup,
@@ -128,7 +134,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -147,6 +153,9 @@ function usage() {
   node-reorder <id> --node <id> --index <n>   (z-order of an element OR group among merged siblings; 0 = back)
   nodes-move <id> --json <path>   (batched mixed element+group move: [{nodeId,x,y}] or {moves:[...]}; one undo step)
   nodes-reorder <id> --nodes n1,n2 --direction front|back|forward|backward | --index <n>   (multi-node z-order block; one undo step)
+  nodes-paste <id> --spec <path> [--dx <n> --dy <n>] [--group <gid>|none]   (instantiate a copied node spec; new ids; one undo step)
+  nodes-duplicate <id> --nodes id1,id2 [--dx <n> --dy <n>] [--group <gid>|none]   (duplicate live nodes in place +offset; one undo step)
+  nodes-delete <id> --nodes id1,id2   (batched mixed element+group subtree delete; one undo step)
   regions-set <id> --element <eid> --json <path>   (JSON: a regions array or {regions:[...]})
   regions-show <id> --element <eid>
   slice <id> --element <eid> [--regions r1,r2]
@@ -298,6 +307,39 @@ async function runCommand(command, id, positional, flags) {
       if (flags.direction && flags.direction !== "true") args.direction = flags.direction;
       if (flags.index !== undefined && flags.index !== "true") args.index = Number(flags.index);
       return print(reorderNodes(repoRoot, args));
+    }
+    case "nodes-paste": {
+      // Instantiate a copied node spec (one journal entry; new ids). --spec is a JSON file
+      // in the tree.buildNodesSpec shape ({schema, nodes:[...]}). --group <gid> pastes into
+      // that group; --group none (or omitted) = root. --dx/--dy shift the paste (default 0).
+      if (!id) fail("nodes-paste requires <id>");
+      if (!flags.spec || flags.spec === "true") fail("nodes-paste requires --spec <path>");
+      const spec = JSON.parse(readFileSync(resolve(flags.spec), "utf8"));
+      const args = { projectId: id, spec };
+      if (flags.dx !== undefined && flags.dx !== "true") args.dx = Number(flags.dx);
+      if (flags.dy !== undefined && flags.dy !== "true") args.dy = Number(flags.dy);
+      if (flags.group !== undefined && flags.group !== "true") args.scopeId = flags.group === "none" ? null : flags.group;
+      return print(pasteNodes(repoRoot, args));
+    }
+    case "nodes-duplicate": {
+      // Duplicate live nodes in place +offset (one journal entry; new ids). --nodes is a
+      // comma list of element/group ids. Default offset +16,+16; default destination = the
+      // originals' common scope. --group <gid>|none overrides the destination scope.
+      if (!id) fail("nodes-duplicate requires <id>");
+      if (!flags.nodes || flags.nodes === "true") fail("nodes-duplicate requires --nodes id1,id2");
+      const nodeIds = String(flags.nodes).split(",").map((value) => value.trim()).filter(Boolean);
+      const args = { projectId: id, nodeIds };
+      if (flags.dx !== undefined && flags.dx !== "true") args.dx = Number(flags.dx);
+      if (flags.dy !== undefined && flags.dy !== "true") args.dy = Number(flags.dy);
+      if (flags.group !== undefined && flags.group !== "true") args.scopeId = flags.group === "none" ? null : flags.group;
+      return print(duplicateNodes(repoRoot, args));
+    }
+    case "nodes-delete": {
+      // Batched mixed element+group subtree delete (one journal entry; one undo restores all).
+      if (!id) fail("nodes-delete requires <id>");
+      if (!flags.nodes || flags.nodes === "true") fail("nodes-delete requires --nodes id1,id2");
+      const nodeIds = String(flags.nodes).split(",").map((value) => value.trim()).filter(Boolean);
+      return print(deleteNodes(repoRoot, { projectId: id, nodeIds }));
     }
     case "regions-set": {
       if (!id) fail("regions-set requires <id>");

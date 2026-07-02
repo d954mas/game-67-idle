@@ -637,3 +637,67 @@ test("canvas API groups-set = one journal entry for batched shared toggles (sing
   const undone = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
   assert.equal(undone.groups.filter((g) => g.visible === false).length, 0);
 });
+
+test("canvas API nodes-duplicate / nodes-paste / nodes-delete parity (one entry each)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Nodes" })).json().project.id;
+  const png = solidPng(4, 4, [10, 20, 30]);
+  const el = (
+    await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+      name: "a.png",
+      bytes_base64: png.toString("base64"),
+      x: 2,
+      y: 3,
+    })
+  ).json().element;
+
+  // nodes-duplicate: 201, fresh id, +offset, one entry.
+  const dup = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/nodes-duplicate`, {
+    nodeIds: [el.id],
+    dx: 16,
+    dy: 16,
+    scopeId: null,
+  });
+  assert.equal(dup.status, 201);
+  const dupId = dup.json().elementIds[0];
+  assert.notEqual(dupId, el.id);
+  let project = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.equal(project.elements.length, 2);
+
+  // nodes-paste: a captured spec referencing the same immutable file.
+  const spec = {
+    schema: "ai_studio.canvas.nodes_spec.v1",
+    nodes: [{ kind: "element", element: { type: "image", x: 0, y: 0, w: 4, h: 4, src: el.src, name: "pasted" } }],
+  };
+  const pasted = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/nodes-paste`, {
+    spec,
+    dx: 4,
+    dy: 4,
+    scopeId: null,
+  });
+  assert.equal(pasted.status, 201);
+  project = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.equal(project.elements.length, 3);
+
+  // A bad file ref is a loud 400 (no silent fallback), no write.
+  const bad = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/nodes-paste`, {
+    spec: { nodes: [{ kind: "element", element: { type: "image", x: 0, y: 0, w: 4, h: 4, src: "files/nope.png", name: "x" } }] },
+  });
+  assert.equal(bad.status, 400);
+  assert.match(bad.json().error, /unknown file/);
+
+  // nodes-delete: batched delete of both copies; one undo restores.
+  const del = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/nodes-delete`, {
+    nodeIds: [dupId, pasted.json().elementIds[0]],
+  });
+  assert.equal(del.status, 200);
+  assert.equal(del.json().removedElements.length, 2);
+  assert.ok(del.json().history && typeof del.json().history.canUndo === "boolean", "history folded into the response");
+  project = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.equal(project.elements.length, 1);
+
+  await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`);
+  project = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.equal(project.elements.length, 3, "one undo restores the batched delete");
+});

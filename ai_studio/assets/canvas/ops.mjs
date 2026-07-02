@@ -54,7 +54,7 @@ import { uploadImageSource } from "../tools/image/sources/api.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
-import { ancestorsOf, blockReorder, descendantsOf, frontOrder, isNodeHidden, nodeScope, orderedChildren, wouldCycle } from "./tree.mjs";
+import { ancestorsOf, blockReorder, buildNodesSpec, descendantsOf, frontOrder, isNodeHidden, nodeScope, orderedChildren, wouldCycle } from "./tree.mjs";
 // Shared, pure text/font contract (imported by the site too — see fonts.mjs). ops.mjs
 // owns the node-only disk read of the manifest; all validation/merge/resolution logic
 // lives in fonts.mjs so the browser and the agent normalize a style identically.
@@ -1549,6 +1549,180 @@ export function ungroupGroup(root, { projectId, groupId } = {}) {
     movedElements: [...childElementIds],
     movedGroups: [...childGroupIds],
   };
+}
+
+// ---- clipboard: paste / duplicate / delete nodes (T0227) ---------------------
+//
+// Figma-like copy/paste/duplicate for canvas objects (elements AND groups, mixed OK) and
+// a batched mixed delete. The COPY BUFFER is page view-state (never journaled — see the
+// site); the journaled gesture is the PASTE/DUPLICATE/DELETE op here. Each is ONE
+// commitMutation (one undo). Ids are minted server-side; specs are validated LOUDLY
+// before any write (unknown file ref / malformed node throws atomically).
+
+// Instantiate a node spec (tree.buildNodesSpec shape) into the CURRENT scope as ONE
+// journaled gesture — the page's Ctrl+V and the CLI nodes-paste. Every node gets a FRESH
+// id; the internal structure (nesting) and relative back->front order are preserved, and
+// the whole paste is shifted by (dx, dy). `scopeId` (null/absent = root) is the
+// destination group (the page's enteredGroupId). Loud + atomic: the spec is fully
+// validated (structure + every image `src` must resolve in this project's immutable
+// files/) BEFORE any id is minted or written; an unknown scope, non-finite offset, or an
+// empty/malformed spec throws before any write. Top-level roots keep an explicitly-ordered
+// destination scope explicit (front orders in spec order) and stay implicit otherwise
+// (array-append order); nested pasted scopes are fresh, so their children get explicit
+// contiguous order (exact internal z-order). Returns the new TOP-LEVEL node ids so the
+// caller can select the pasted copy.
+export function pasteNodes(root, { projectId, spec, dx, dy, scopeId } = {}) {
+  if (!projectId) throw new Error("pasteNodes requires projectId");
+  if (!spec || typeof spec !== "object" || Array.isArray(spec)) throw new Error("pasteNodes requires a spec object");
+  const nodes = spec.nodes;
+  if (!Array.isArray(nodes) || !nodes.length) throw new Error("pasteNodes spec has no nodes to paste");
+  const offX = dx === undefined || dx === null || dx === "" ? 0 : Number(dx);
+  const offY = dy === undefined || dy === null || dy === "" ? 0 : Number(dy);
+  if (!Number.isFinite(offX) || !Number.isFinite(offY)) throw new Error("pasteNodes dx/dy must be finite numbers");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const scope = scopeId == null || scopeId === "" ? null : String(scopeId);
+  if (scope != null) findGroup(before, scope); // loud on an unknown destination scope
+
+  // Validate the WHOLE spec loudly before any mint/write (atomic): structure + every
+  // image file ref must resolve in this project's immutable files/.
+  const validateNode = (node, path) => {
+    if (!node || typeof node !== "object") throw new Error(`paste node ${path} is not an object`);
+    if (node.kind === "element") {
+      const def = node.element;
+      if (!def || typeof def !== "object") throw new Error(`paste node ${path} has no element def`);
+      if (!Number.isFinite(Number(def.x)) || !Number.isFinite(Number(def.y))) {
+        throw new Error(`paste node ${path} element has non-finite x/y`);
+      }
+      if ((def.type || "image") === "image") {
+        if (!def.src || typeof def.src !== "string") throw new Error(`paste node ${path} image element has no src`);
+        if (!existsSync(resolveProjectFile(root, projectId, def.src))) {
+          throw new Error(`paste node ${path} references an unknown file: ${def.src}`);
+        }
+      }
+    } else if (node.kind === "group") {
+      if (!node.group || typeof node.group !== "object") throw new Error(`paste node ${path} has no group def`);
+      const children = node.children || [];
+      if (!Array.isArray(children)) throw new Error(`paste node ${path} group children must be an array`);
+      children.forEach((child, index) => validateNode(child, `${path}.${index}`));
+    } else {
+      throw new Error(`paste node ${path} has unknown kind: ${JSON.stringify(node.kind)}`);
+    }
+  };
+  nodes.forEach((node, index) => validateNode(node, String(index)));
+
+  const newElements = [];
+  const newGroups = [];
+  const instantiate = (node, parentScope, orderVal) => {
+    if (node.kind === "element") {
+      const def = JSON.parse(JSON.stringify(node.element)); // isolate from the (page-held) spec
+      const rec = { ...def, id: `el_${randomUUID().slice(0, 8)}`, x: Number(def.x) + offX, y: Number(def.y) + offY };
+      delete rec.order;
+      if (parentScope != null) rec.groupId = parentScope;
+      else delete rec.groupId;
+      if (orderVal != null) rec.order = orderVal;
+      newElements.push(rec);
+      return { kind: "element", id: rec.id };
+    }
+    const gdef = JSON.parse(JSON.stringify(node.group));
+    const grec = { ...gdef, id: `grp_${randomUUID().slice(0, 8)}`, x: Number(gdef.x || 0) + offX, y: Number(gdef.y || 0) + offY };
+    delete grec.parentId;
+    delete grec.order;
+    if (parentScope != null) grec.parentId = parentScope;
+    if (orderVal != null) grec.order = orderVal;
+    newGroups.push(grec);
+    // A fresh pasted scope: assign contiguous 0..N-1 order so internal z-order is exact.
+    (node.children || []).forEach((child, index) => instantiate(child, grec.id, index));
+    return { kind: "group", id: grec.id };
+  };
+
+  let fo = frontOrder(before, scope); // null on a never-reordered (implicit) destination
+  const roots = nodes.map((node) => instantiate(node, scope, fo === null ? null : fo++));
+
+  const after = updateProject(root, projectId, {
+    elements: [...(before.elements || []), ...newElements],
+    groups: [...groupsOf(before), ...newGroups],
+  });
+  const project = commitMutation(root, projectId, {
+    op: "pasteNodes",
+    args_summary: {
+      count: roots.length,
+      scope,
+      nodeIds: roots.map((node) => node.id),
+      elements: newElements.length,
+      groups: newGroups.length,
+    },
+    before,
+    after,
+    startedAt,
+  });
+  const elementIds = roots.filter((node) => node.kind === "element").map((node) => node.id);
+  const groupIds = roots.filter((node) => node.kind === "group").map((node) => node.id);
+  return { project, nodeIds: roots.map((node) => node.id), elementIds, groupIds, count: roots.length };
+}
+
+// Duplicate LIVE nodes in place (+offset) in ONE journaled gesture — the page's Ctrl+D and
+// the CLI nodes-duplicate convenience. Builds the spec from the current project (pure
+// tree.buildNodesSpec, throws on an unknown id) and delegates to pasteNodes (so it stays
+// ONE op = one undo). Default offset +16,+16; default destination = the originals' COMMON
+// scope (a duplicate lands beside its source), overridable by an explicit scopeId
+// (including null for root).
+export function duplicateNodes(root, { projectId, nodeIds, dx, dy, scopeId } = {}) {
+  if (!projectId) throw new Error("duplicateNodes requires projectId");
+  if (!Array.isArray(nodeIds) || !nodeIds.length) throw new Error("duplicateNodes requires a non-empty nodeIds array");
+  const before = getProject(root, projectId);
+  const spec = buildNodesSpec(before, nodeIds); // throws on an unknown id
+  const offX = dx === undefined || dx === null || dx === "" ? 16 : Number(dx);
+  const offY = dy === undefined || dy === null || dy === "" ? 16 : Number(dy);
+  let scope = scopeId;
+  if (scope === undefined) {
+    const scopes = new Set(nodeIds.map((id) => {
+      const node = findNode(before, id);
+      return node.scopeId == null ? null : node.scopeId;
+    }));
+    scope = scopes.size === 1 ? [...scopes][0] : null;
+  }
+  return pasteNodes(root, { projectId, spec, dx: offX, dy: offY, scopeId: scope });
+}
+
+// Delete a MIXED set of nodes (loose elements AND whole group subtrees) in ONE journaled
+// gesture — the page's Delete key on a multi-group or mixed selection, and the CLI
+// nodes-delete. A group id deletes its FULL closure (nested subgroups AND every element in
+// the subtree), de-duplicated against any directly-selected member. Loud + atomic: an
+// unknown id throws before any write; an empty list is a loud error (the page only calls
+// this for 2+ selections). One commitMutation, so a single undo deep-restores every group
+// and element at its exact z-slot (the before/after snapshot). Backing image files stay in
+// files/ (non-destructive storage).
+export function deleteNodes(root, { projectId, nodeIds } = {}) {
+  if (!projectId) throw new Error("deleteNodes requires projectId");
+  if (!Array.isArray(nodeIds) || !nodeIds.length) throw new Error("deleteNodes requires a non-empty nodeIds array");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const ids = [...new Set(nodeIds.map((value) => String(value)))];
+  const removedGroupIds = new Set();
+  const removedElementIds = new Set();
+  for (const id of ids) {
+    const node = findNode(before, id); // throws on an unknown id (atomic)
+    if (node.kind === "element") {
+      removedElementIds.add(id);
+    } else {
+      removedGroupIds.add(id);
+      const descendants = descendantsOf(before, id);
+      for (const group of descendants.groups) removedGroupIds.add(group.id);
+      for (const element of descendants.elements) removedElementIds.add(element.id);
+    }
+  }
+  const nextGroups = groupsOf(before).filter((group) => !removedGroupIds.has(group.id));
+  const nextElements = (before.elements || []).filter((element) => !removedElementIds.has(element.id));
+  const after = updateProject(root, projectId, { groups: nextGroups, elements: nextElements });
+  const project = commitMutation(root, projectId, {
+    op: "deleteNodes",
+    args_summary: { nodeIds: ids, deletedGroups: [...removedGroupIds], deletedElements: [...removedElementIds] },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, removedGroups: [...removedGroupIds], removedElements: [...removedElementIds], nodeIds: ids };
 }
 
 // ---- undo / redo / history ---------------------------------------------------

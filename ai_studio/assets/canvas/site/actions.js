@@ -14,7 +14,7 @@ import {
   setStatus,
   state,
 } from "./app.js";
-import { orderedChildren, nodeScope } from "../tree.mjs";
+import { buildNodesSpec, orderedChildren, nodeScope } from "../tree.mjs";
 import { mergeTextStyle } from "../fonts.mjs";
 import { getFontManifest, measureTextBox } from "./fonts.js";
 import { screenToImagePoint } from "./viewport.mjs";
@@ -172,6 +172,101 @@ export async function deleteElements(ids) {
 
 export function deleteSelectedElements() {
   return deleteElements([...state.selectedIds]);
+}
+
+// Batched mixed delete (elements + whole group subtrees) in ONE journaled deleteNodes op —
+// the Delete key on a multi-group or mixed selection. One HTTP call, one undo deep-restores
+// every group and element at its exact z-slot.
+export async function deleteNodes(ids) {
+  if (!ids.length) return;
+  try {
+    const result = await api("POST", `/projects/${pid()}/nodes-delete`, { nodeIds: ids });
+    clearSelection();
+    const g = (result.removedGroups || []).length;
+    const e = (result.removedElements || []).length;
+    applyMutation(result, `Deleted ${g} group(s) + ${e} element(s). Undo restores all.`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// ---- clipboard: copy / paste / duplicate of nodes (T0227) --------------------
+//
+// Figma-like copy/paste/duplicate for canvas objects. The COPY BUFFER (state.clipboard) is
+// PAGE VIEW-STATE (never journaled): Ctrl+C serializes the current selection's deep subtree
+// via the shared pure tree.buildNodesSpec. The journaled gesture is the PASTE/DUPLICATE
+// (pasteNodes/duplicateNodes op) — one HTTP call, one undo. Ctrl+V is owned by the window
+// "paste" event (dnd.js) so the OS-image path and the node buffer never both fire.
+
+const PASTE_OFFSET = 16;
+
+// Ctrl+C: snapshot the selection (elements AND groups, mixed) into the page copy buffer.
+// Image element specs reference their immutable content-addressed file, so the buffer stays
+// valid even after the source nodes are deleted. Nothing is written to disk here.
+export function copySelection() {
+  if (!state.project) return;
+  const ids = selectedNodeIds();
+  if (!ids.length) return;
+  try {
+    const spec = buildNodesSpec(state.project, ids);
+    state.clipboard = { spec, pastes: 0 };
+    setStatus(`Copied ${spec.nodes.length} item(s). Ctrl+V to paste.`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Ctrl+V (from the dnd.js paste-event owner): instantiate the copy buffer as ONE journaled
+// op into the CURRENT scope (enteredGroupId). Each repeat paste steps the offset again so
+// stacked pastes don't overlap exactly; the pasted copy is selected (Figma behavior).
+export async function pasteClipboard() {
+  if (!state.project || !state.clipboard || !state.clipboard.spec) return;
+  state.clipboard.pastes += 1;
+  const step = PASTE_OFFSET * state.clipboard.pastes;
+  try {
+    const result = await api("POST", `/projects/${pid()}/nodes-paste`, {
+      spec: state.clipboard.spec,
+      dx: step,
+      dy: step,
+      scopeId: state.enteredGroupId ?? null,
+    });
+    selectPastedNodes(result);
+    applyMutation(result, `Pasted ${result.count} item(s).`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Ctrl+D: duplicate the current selection in place (+offset) as ONE journaled op. Builds
+// the spec server-side from the live node ids (duplicateNodes) and selects the copy.
+export async function duplicateSelection() {
+  if (!state.project) return;
+  const ids = selectedNodeIds();
+  if (!ids.length) return;
+  try {
+    const result = await api("POST", `/projects/${pid()}/nodes-duplicate`, {
+      nodeIds: ids,
+      dx: PASTE_OFFSET,
+      dy: PASTE_OFFSET,
+      scopeId: state.enteredGroupId ?? null,
+    });
+    selectPastedNodes(result);
+    applyMutation(result, `Duplicated ${result.count} item(s).`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Select the pasted/duplicated ROOTS (top-level new nodes) so the copy is ready to move.
+// Runs before applyMutation, whose ingestProject prunes to still-alive ids (the new ids
+// survive). Elements and groups split into the two selection sets.
+function selectPastedNodes(result) {
+  state.regionEditId = null;
+  state.selectedRegionIds = new Set();
+  state.selectedIds = new Set(result.elementIds || []);
+  state.selectedGroupIds = new Set(result.groupIds || []);
+  state.selectedGroupId =
+    state.selectedGroupIds.size === 1 && state.selectedIds.size === 0 ? [...state.selectedGroupIds][0] : null;
 }
 
 // ---- z-order (element + group ordering) --------------------------------------

@@ -24,6 +24,9 @@
 //   POST   /api/canvas/projects/<id>/groups/<gid>/ungroup  (dissolve one level, keep children)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
 //   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
+//   POST   /api/canvas/projects/<id>/nodes-paste     {spec, dx?, dy?, scopeId?}   (instantiate a node spec; one entry)
+//   POST   /api/canvas/projects/<id>/nodes-duplicate {nodeIds, dx?, dy?, scopeId?} (duplicate live nodes; one entry)
+//   POST   /api/canvas/projects/<id>/nodes-delete    {nodeIds}                     (mixed element+group subtree delete)
 //   POST   /api/canvas/projects/<id>/assign-group   {elementIds, groupId|null}
 //   POST   /api/canvas/projects/<id>/undo
 //   POST   /api/canvas/projects/<id>/redo
@@ -46,8 +49,10 @@ import {
   createGroup,
   createProject,
   deleteGroup,
+  deleteNodes,
   deleteProject,
   detectRegions,
+  duplicateNodes,
   exportElements,
   exportProject,
   fitGroup,
@@ -56,6 +61,7 @@ import {
   listProjects,
   moveNodes,
   opsStats,
+  pasteNodes,
   patchElement,
   patchElements,
   patchGroup,
@@ -347,6 +353,48 @@ export function createCanvasApi(root) {
           nodeIds: Array.isArray(body.nodeIds) ? body.nodeIds : [],
           direction: body.direction,
           index: body.index,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/nodes-paste   (instantiate a copied node spec)
+      // One journal entry: new ids for the whole subtree, internal structure + relative
+      // order preserved, shifted by dx/dy, pasted into scopeId (null/absent = root).
+      if (parts.length === 5 && sub === "nodes-paste" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(201, pasteNodes(root, {
+          projectId: id,
+          spec: body.spec,
+          dx: body.dx,
+          dy: body.dy,
+          scopeId: body.scopeId,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/nodes-duplicate   (duplicate live nodes in place)
+      // One journal entry: builds the spec from the current project, then pastes it at
+      // +offset (default +16,+16) into scopeId (default = the originals' common scope).
+      if (parts.length === 5 && sub === "nodes-duplicate" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(201, duplicateNodes(root, {
+          projectId: id,
+          nodeIds: Array.isArray(body.nodeIds) ? body.nodeIds : [],
+          dx: body.dx,
+          dy: body.dy,
+          scopeId: body.scopeId,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/nodes-delete   (batched mixed element+group subtree delete)
+      // One journal entry deleting loose elements AND whole group subtrees together; a
+      // single undo deep-restores everything at its exact z-slot.
+      if (parts.length === 5 && sub === "nodes-delete" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(200, deleteNodes(root, {
+          projectId: id,
+          nodeIds: Array.isArray(body.nodeIds) ? body.nodeIds : [],
         }));
         return true;
       }

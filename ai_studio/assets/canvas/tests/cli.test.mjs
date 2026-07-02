@@ -128,6 +128,49 @@ test("cli group-set --clip toggles the frame clip flag (no python)", (t) => {
   assert.equal("clip" in run(env, "show", projectId).project.groups[0], false, "clip false removes the field");
 });
 
+test("cli nodes-duplicate / nodes-delete / nodes-paste parity (one undo each)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-nodes-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const a = join(dir, "a.png");
+  writeFileSync(a, solidPng(4, 4, [10, 20, 30]));
+  const projectId = run(env, "create", "--title", "CLI Nodes").project.id;
+  const elA = run(env, "add-image", projectId, "--file", a).element.id;
+
+  // nodes-duplicate: one new element in place (+16); one undo restores.
+  const dup = run(env, "nodes-duplicate", projectId, "--nodes", elA, "--dx", "16", "--dy", "16");
+  assert.equal(dup.count, 1);
+  const dupId = dup.elementIds[0];
+  assert.notEqual(dupId, elA);
+  assert.equal(run(env, "show", projectId).project.elements.length, 2);
+  const h1 = run(env, "history", projectId);
+  assert.equal(h1.entries.filter((e) => e.op === "pasteNodes").length, 1, "duplicate journals one pasteNodes entry");
+
+  // nodes-delete: batched delete; one undo restores.
+  const del = run(env, "nodes-delete", projectId, "--nodes", dupId);
+  assert.deepEqual(del.removedElements, [dupId]);
+  assert.equal(run(env, "show", projectId).project.elements.length, 1);
+  run(env, "undo", projectId);
+  assert.equal(run(env, "show", projectId).project.elements.length, 2);
+
+  // nodes-paste via a hand-authored spec referencing the immutable file.
+  const src = run(env, "show", projectId).project.elements[0].src;
+  const specPath = join(dir, "spec.json");
+  writeFileSync(
+    specPath,
+    JSON.stringify({
+      schema: "ai_studio.canvas.nodes_spec.v1",
+      nodes: [{ kind: "element", element: { type: "image", x: 0, y: 0, w: 4, h: 4, src, name: "pasted" } }],
+    }),
+  );
+  const pasted = run(env, "nodes-paste", projectId, "--spec", specPath, "--dx", "5", "--dy", "5");
+  assert.equal(pasted.count, 1);
+  const proj = run(env, "show", projectId).project;
+  assert.equal(proj.elements.length, 3);
+  assert.ok(proj.elements.some((e) => e.name === "pasted"), "hand-authored spec pasted");
+});
+
 test("cli add-images batched multi-image add parity (one undo restores all)", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-addimgs-"));
   const env = { CANVAS_PROJECTS_ROOT: dir };

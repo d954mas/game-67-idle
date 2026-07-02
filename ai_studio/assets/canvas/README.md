@@ -106,6 +106,24 @@ Every capability is one op in `ops.mjs`:
   internal order; a single undo restores the group exactly.
   All three throw **loudly** on bad input (unknown id / empty set / bad direction), never
   half-apply, and back both clients (HTTP + CLI `nodes-move`/`nodes-reorder`/`group-ungroup`).
+- `pasteNodes({ projectId, spec, dx?, dy?, scopeId? })` / `duplicateNodes({ projectId,
+  nodeIds, dx?, dy?, scopeId? })` / `deleteNodes({ projectId, nodeIds })` — Figma-like
+  **copy / paste / duplicate / batched-delete** for canvas objects (elements AND groups,
+  mixed OK), each ONE journal entry. **Copy** itself is not an op — it is a page-held
+  serialized `spec` of the selection's deep subtree (group defs + member/element defs with
+  geometry, style, meta, regions, text content; image elements reference their immutable
+  content-addressed file, so a paste stays valid even after the source was deleted), built
+  by the pure shared `tree.buildNodesSpec` (page copy buffer AND the CLI). `pasteNodes`
+  **instantiates** a spec into the current scope (`scopeId` null/absent = root): fresh ids
+  for everything, internal nesting + relative back→front order preserved, shifted by
+  `dx`/`dy`; it **validates the spec loudly before any write** (unknown file ref / malformed
+  node / empty spec throws atomically) and mints ids server-side. `duplicateNodes` is the
+  convenience that builds the spec from live ids and pastes at +offset (default `+16,+16`)
+  into the originals' common scope. `deleteNodes` removes loose elements AND whole group
+  subtrees together (de-duplicated), one undo deep-restoring every node at its exact z-slot.
+  Both clients: the page's **Ctrl+C/V/D** + the multi/mixed **Delete** key, and the CLI
+  `nodes-paste`/`nodes-duplicate`/`nodes-delete`. The copy buffer is **view-state** (never
+  journaled); the journaled gesture is the paste/duplicate/delete.
 - `setRegions({ projectId, elementId, regions })` — replace an element's regions
   array (the ADJUST/SELECT step before slicing). Validates each region has an id
   and an in-source-bounds integer `rect`, while **preserving any extra fields**
@@ -641,6 +659,9 @@ node ai_studio/assets/canvas/cli.mjs element-reorder <id> --element <eid> --inde
 node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>          # reorder an element OR group among merged siblings; 0 = back (strict)
 node ai_studio/assets/canvas/cli.mjs nodes-move <id> --json moves.json                  # batched mixed element+group move [{nodeId,x,y}]; group subtrees cascade; one undo step
 node ai_studio/assets/canvas/cli.mjs nodes-reorder <id> --nodes n1,n2 --direction front|back|forward|backward   # (or --index n) multi-node z-order block, relative order kept; one undo step
+node ai_studio/assets/canvas/cli.mjs nodes-paste <id> --spec spec.json [--dx 16 --dy 16] [--group <gid>|none]   # instantiate a copied node spec (new ids); one undo step
+node ai_studio/assets/canvas/cli.mjs nodes-duplicate <id> --nodes id1,id2 [--dx 16 --dy 16] [--group <gid>|none]   # duplicate live nodes in place +offset; one undo step
+node ai_studio/assets/canvas/cli.mjs nodes-delete <id> --nodes id1,id2   # batched mixed element+group subtree delete; one undo step
 node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json   # a regions array or {regions:[...]}
 node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
@@ -687,7 +708,9 @@ one document that swaps two views; the JS is split into focused ES modules under
   **mixed** marquee move (loose elements + group frames) is one `nodes-move` (`moveNodes`)
   call with the group subtrees cascaded server-side; a multi-selection **z-order** (Ctrl+[/],
   Order menu) is one `nodes-reorder` (`reorderNodes`) block move; **Ungroup** is one
-  `groups/<id>/ungroup` (`ungroupGroup`) call.
+  `groups/<id>/ungroup` (`ungroupGroup`) call; **copy/paste/duplicate** (Ctrl+C/V/D) are the
+  page copy buffer (`buildNodesSpec`, view-state) plus one `nodes-paste`/`nodes-duplicate`
+  call, and a mixed/multi-group **Delete** is one `nodes-delete` (`deleteNodes`) call.
 - `home.js` — the **home** view: a full-page grid of project cards (cover thumbnail,
   title, image count, updated date) plus a `+ New project` card that creates a
   project instantly (random default title, Figma-style — no name prompt) and opens
@@ -751,8 +774,11 @@ one document that swaps two views; the JS is split into focused ES modules under
   too) the same element/group menus; every item calls an action; closes on
   click-away or Escape. (Export left the context menu for the inspector Export
   section in T0206.)
-- `dnd.js` — OS drag & drop (drop images at the drop point with a drop highlight)
-  and Ctrl/Cmd+V clipboard paste at the viewport center.
+- `dnd.js` — OS drag & drop (drop images at the drop point with a drop highlight) and the
+  **single owner** of the window `paste` event (Ctrl/Cmd+V). Deterministic rule: if the
+  paste carries an OS image FILE the existing image path wins (dropped at viewport center);
+  only otherwise does the internal node copy buffer paste (`pasteClipboard`). `canvas.js`
+  keydown deliberately leaves Ctrl+V alone, so a node paste never double-fires.
 - `canvas.js` — the controller: boots the modules, owns view routing (deep link
   `?project=<id>`, last-opened restore via `localStorage`) and the global keyboard.
 
@@ -836,8 +862,9 @@ context-menu **Clip content** item, or the CLI `group-set --clip`.
 | `0` / `1` / `2` | Fit / 100% / 200% zoom (wheel also zooms) |
 | `Ctrl/Cmd`+`Z` / `Ctrl/Cmd`+`Shift`+`Z` or `Ctrl`+`Y` | Undo / Redo |
 | `Ctrl/Cmd`+`G` | Group 2+ selected elements into a screen |
+| `Ctrl/Cmd`+`C` / `Ctrl/Cmd`+`V` / `Ctrl/Cmd`+`D` | Copy the selection (elements/groups/mixed) to the page buffer / paste it into the current scope (repeat paste offsets again) / duplicate in place (+offset) — one journal entry per paste/duplicate |
 | `Ctrl/Cmd`+`]` / `Ctrl/Cmd`+`[` (`+Alt` = to front / to back) | Z-order the single selected node (a group, or one element) among its merged siblings |
-| `Delete` / `Backspace` | Region-edit mode: remove selected regions; else remove selected elements |
+| `Delete` / `Backspace` | Region-edit mode: remove selected regions; else remove the selection — elements only, a single group + its subtree, or a mixed/multi-group selection (batched `deleteNodes`), always one journal entry |
 | `Escape` | Close menu, then exit region-edit isolation, then step UP one entered-group scope, then clear selection |
 | Right-click | Context menu (element / region / group / empty); double-click a name to inline-rename |
 

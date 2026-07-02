@@ -27,10 +27,13 @@ import {
 import {
   bringNodeForward,
   bringNodeToFront,
+  copySelection,
   createGroupFromSelection,
   deleteGroupAction,
+  deleteNodes,
   deleteSelectedElements,
   deleteSelectedRegions,
+  duplicateSelection,
   redo,
   reorderNodesBy,
   selectedNodeIds,
@@ -168,6 +171,22 @@ function onKeyDown(event) {
     createGroupFromSelection("New group");
     return;
   }
+  // Clipboard for canvas NODES (T0227). Ctrl+C snapshots the selection into the page copy
+  // buffer; Ctrl+D duplicates it in place. Ctrl+V is deliberately NOT handled here — the
+  // window "paste" event (dnd.js) is its single owner so the OS-image path and the node
+  // buffer never double-paste. Not in region-edit (regions aren't nodes).
+  if (meta && code === "KeyC") {
+    if (state.regionEditId) return; // let the browser copy handle region-edit
+    if (!selectedNodeIds().length) return; // nothing selected: leave native copy alone
+    event.preventDefault();
+    copySelection();
+    return;
+  }
+  if (meta && code === "KeyD") {
+    event.preventDefault(); // always swallow the browser bookmark shortcut
+    if (!state.regionEditId) duplicateSelection();
+    return;
+  }
   // Z-order by physical key (event.code so it works on any layout): Ctrl+] forward,
   // Ctrl+[ backward, add Alt for to-front / to-back. Acts on the selected NODES — one
   // element or group nudges via its single-node op; a 2+ selection moves as ONE block
@@ -250,24 +269,25 @@ function onKeyDown(event) {
     return;
   }
   if (key === "delete" || key === "backspace") {
-    // In region-edit mode, Delete only removes selected regions (never the image
-    // being edited); otherwise it removes selected elements.
+    // In region-edit mode, Delete only removes selected regions (never the image being
+    // edited).
     if (state.regionEditId) {
       if (state.selectedRegionIds.size) {
         event.preventDefault();
         deleteSelectedRegions();
       }
-    } else if (state.selectedIds.size) {
-      event.preventDefault();
-      deleteSelectedElements();
-    } else if (state.selectedGroupIds.size === 1) {
-      // A group selected as a unit: Delete removes it with its content — the same
-      // op the context menu uses (one journal entry, one undo). Multi-group and
-      // mixed selections wait on the batched deleteNodes op (T0227): a loop here
-      // would break the one-gesture-one-entry law.
-      event.preventDefault();
-      deleteGroupAction([...state.selectedGroupIds][0]);
+      return;
     }
+    // Object mode: delete the selection for ANY shape in ONE journal entry. Elements-only
+    // and a single group stay on their existing ops; a MIXED or MULTI-group selection goes
+    // through the batched deleteNodes op (T0227) so it is still one gesture / one undo.
+    const elemCount = state.selectedIds.size;
+    const groupCount = state.selectedGroupIds.size;
+    if (!elemCount && !groupCount) return;
+    event.preventDefault();
+    if (elemCount && !groupCount) deleteSelectedElements();
+    else if (!elemCount && groupCount === 1) deleteGroupAction([...state.selectedGroupIds][0]);
+    else deleteNodes(selectedNodeIds());
   }
 }
 

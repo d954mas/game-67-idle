@@ -3,7 +3,7 @@
 // (screen -> world), offsetting multiples. Ctrl/Cmd+V pastes a clipboard image at
 // the viewport center. Pure input wiring over the shared actions.
 import { el, state } from "./app.js";
-import { addImageFiles, pasteImageBlob } from "./actions.js";
+import { addImageFiles, pasteClipboard, pasteImageBlob } from "./actions.js";
 import { screenToImagePoint } from "./viewport.mjs";
 
 function dropWorldPoint(event) {
@@ -37,17 +37,30 @@ export function initDnd() {
     if (files.length) addImageFiles(files, dropWorldPoint(event));
   });
 
-  // Clipboard paste (Ctrl/Cmd+V): drop the first pasted image at viewport center.
+  // Clipboard paste (Ctrl/Cmd+V) — the SINGLE owner of paste (canvas.js keydown leaves
+  // Ctrl+V alone, so a node paste never double-fires). Deterministic rule (T0227): if the
+  // paste carries an OS image FILE, the existing image path wins (dropped at viewport
+  // center); ONLY otherwise does the internal node copy buffer paste. No ambiguity, no
+  // silent fallback.
   window.addEventListener("paste", (event) => {
     if (!state.project) return;
     const items = event.clipboardData && event.clipboardData.items;
-    if (!items) return;
-    for (const item of items) {
-      if (item.kind === "file" && item.type.startsWith("image/")) {
-        event.preventDefault();
-        pasteImageBlob(item.getAsFile());
-        return;
+    if (items) {
+      for (const item of items) {
+        if (item.kind === "file" && item.type.startsWith("image/")) {
+          event.preventDefault();
+          pasteImageBlob(item.getAsFile());
+          return;
+        }
       }
+    }
+    // No OS image: fall through to the internal node buffer. Not while typing in a field
+    // (let text paste normally) and not in region-edit (regions aren't nodes).
+    const tag = event.target && event.target.tagName ? event.target.tagName : "";
+    if (/^(input|textarea|select)$/i.test(tag) || state.regionEditId) return;
+    if (state.clipboard && state.clipboard.spec) {
+      event.preventDefault();
+      pasteClipboard();
     }
   });
 }

@@ -263,3 +263,85 @@ export function wouldCycle(project, groupId, newParentId) {
   if (newParentId === groupId) return true;
   return subtreeGroupIds(project, groupId).has(newParentId);
 }
+
+// ---- copy/paste node spec (T0227) --------------------------------------------
+//
+// The serialized shape a Ctrl+C snapshot / CLI nodes-duplicate builds and the paste
+// op (ops.pasteNodes) instantiates. PURE spec math, so the page and the agent capture
+// a subtree identically — tool parity for the copy buffer too.
+export const NODES_SPEC_SCHEMA = "ai_studio.canvas.nodes_spec.v1";
+
+// Resolve a node id to a tagged {kind, ref} using the op layer's disjoint-namespace rule
+// (element ids and group ids never collide). null when the id is unknown.
+function taggedNode(project, nodeId) {
+  const element = elementsArr(project).find((item) => item.id === nodeId);
+  if (element) return { kind: "element", ref: element };
+  const group = groupsArr(project).find((item) => item.id === nodeId);
+  if (group) return { kind: "group", ref: group };
+  return null;
+}
+
+// Serialize ONE node into a paste-spec entry: a deep clone of the stored record MINUS
+// the identity/placement keys the paste re-mints (id, groupId/parentId, order). A group
+// carries its children (orderedChildren, back -> front) so the whole subtree round-trips
+// with its internal z-order preserved. Image element clones keep `src` — files/ is
+// immutable and content-addressed, so the spec stays valid even after the source is
+// deleted (paste references the same immutable file).
+function serializeNode(project, node) {
+  if (node.kind === "element") {
+    const element = JSON.parse(JSON.stringify(node.ref));
+    delete element.id;
+    delete element.groupId;
+    delete element.order;
+    return { kind: "element", element };
+  }
+  const group = JSON.parse(JSON.stringify(node.ref));
+  delete group.id;
+  delete group.parentId;
+  delete group.order;
+  const children = orderedChildren(project, node.ref.id).map((child) =>
+    serializeNode(project, { kind: child.kind, ref: child.ref }),
+  );
+  return { kind: "group", group, children };
+}
+
+// Build a serializable spec of the deep subtree(s) under the given node ids (elements
+// AND groups, mixed OK). PURE — reads the project only, never mutates. Roots are emitted
+// back -> front within each scope (grouped by first-seen scope), so paste preserves the
+// selection's relative z-order. Throws on an unknown id. Backs the page's Ctrl+C copy
+// buffer and the op layer's duplicateNodes.
+export function buildNodesSpec(project, nodeIds) {
+  const wanted = [...new Set((nodeIds || []).map((value) => String(value)))];
+  const roots = wanted.map((id) => {
+    const node = taggedNode(project, id);
+    if (!node) throw new Error(`node not found: ${id}`);
+    return node;
+  });
+  const scopeKey = (node) => {
+    const scope = nodeScope(project, node.ref);
+    return scope == null ? " root" : scope;
+  };
+  const orderCache = new Map();
+  const zIndex = (node) => {
+    const key = scopeKey(node);
+    if (!orderCache.has(key)) {
+      const scope = key === " root" ? null : key;
+      orderCache.set(key, orderedChildren(project, scope).map((child) => child.id));
+    }
+    const idx = orderCache.get(key).indexOf(node.ref.id);
+    return idx === -1 ? Number.MAX_SAFE_INTEGER : idx;
+  };
+  const scopeOrder = [];
+  const scopeRank = (node) => {
+    const key = scopeKey(node);
+    let rank = scopeOrder.indexOf(key);
+    if (rank === -1) {
+      rank = scopeOrder.length;
+      scopeOrder.push(key);
+    }
+    return rank;
+  };
+  const decorated = roots.map((node, index) => ({ node, index, rank: scopeRank(node), z: zIndex(node) }));
+  decorated.sort((a, b) => (a.rank !== b.rank ? a.rank - b.rank : a.z !== b.z ? a.z - b.z : a.index - b.index));
+  return { schema: NODES_SPEC_SCHEMA, nodes: decorated.map((entry) => serializeNode(project, entry.node)) };
+}

@@ -46,6 +46,11 @@ export const state = {
   // painting this element's glyphs while it is being edited.
   editingTextId: null,
   history: { canUndo: false, canRedo: false },
+  // Copy buffer for Ctrl+C/Ctrl+V of canvas nodes (T0227) — PAGE VIEW-STATE, never
+  // journaled or persisted. { spec: <tree.buildNodesSpec output>, pastes: <count> };
+  // null when nothing has been copied. Each repeat paste steps the offset again. The
+  // journaled gesture is the pasteNodes op, not this buffer. Cleared on nothing.
+  clipboard: null,
   viewport: { scale: 1, offsetX: 0, offsetY: 0 },
   tool: "select", // "select" | "pan"
   spacePan: false, // Space-hold temporarily activates pan
