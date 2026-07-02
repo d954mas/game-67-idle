@@ -28,6 +28,7 @@ import {
   bringNodeForward,
   bringNodeToFront,
   createGroupFromSelection,
+  deleteGroupAction,
   deleteSelectedElements,
   deleteSelectedRegions,
   redo,
@@ -259,6 +260,13 @@ function onKeyDown(event) {
     } else if (state.selectedIds.size) {
       event.preventDefault();
       deleteSelectedElements();
+    } else if (state.selectedGroupIds.size === 1) {
+      // A group selected as a unit: Delete removes it with its content — the same
+      // op the context menu uses (one journal entry, one undo). Multi-group and
+      // mixed selections wait on the batched deleteNodes op (T0227): a loop here
+      // would break the one-gesture-one-entry law.
+      event.preventDefault();
+      deleteGroupAction([...state.selectedGroupIds][0]);
     }
   }
 }
