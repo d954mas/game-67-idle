@@ -36,9 +36,11 @@ releases canvas/**.
 - [ ] no client of /api/asset-tools/raster2d/* remains, handler+wiring removed (or renamed with a named client)
 - [ ] canvas seam closed: ops.mjs on image/ bridges, bench.mjs repointed, raster2d/ folder + seam arch node deleted
 - [ ] repo-wide grep for raster2d|cutout|asset_prep shows only historical records (taskboard/PLAN logs, tmp reports); skills reference image/ paths
+- [ ] studio nav links the canvas prominently; the canvas page carries the shared AI Studio panel (nav to home/taskboard/map), no bare standalone page
 - [ ] full suites green: canvas tests, image bridge tests, python suite, validate_map --strict, doc_reference_check; studio shell serves canvas + taskboard + map as before
 
 ## Open questions
 
 ## Log
 - 2026-07-02: Created; scan agent dispatched (read-only). Viewer preview WIP already discarded by lead same day.
+- 2026-07-02: Lead addition: studio site gets a clear path to the NEW canvas, and the canvas page itself must carry the AI Studio panel (shared studio shell header/nav like other surfaces) - canvas stops being a bare standalone page ("на канвасе нужно сделать мою панель от ии студии"). Fold into the sweep execution (studio_shell + canvas.html header).
