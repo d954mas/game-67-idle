@@ -201,6 +201,60 @@ export function frontOrder(project, scopeId) {
   return Math.max(...all.map((node) => node.order)) + 1;
 }
 
+// Arrange a scope's MERGED siblings (the tagged {kind, id, ref} nodes orderedChildren
+// yields, back -> front) after moving the SELECTED ones as ONE block that keeps their
+// relative order — the multi-node z-order math behind reorderNodes. `spec` is either
+// { index } (insert the block at an absolute slot among the UNSELECTED siblings) or
+// { direction } where direction is:
+//   - "front": the block jumps to the very front (painted last / on top);
+//   - "back":  the block jumps to the very back (painted first / behind);
+//   - "forward"/"backward": the block nudges ONE step past its nearest unselected
+//     neighbor, never passing selected items through each other (Figma bring-forward /
+//     send-backward for a multi-selection).
+// Pure: consumes and returns tagged-node arrays, never touches the project, so a block
+// reorder is computed identically wherever it runs. Throws on a spec with neither a
+// numeric index nor a known direction (no silent fallback).
+export function blockReorder(siblings, selectedIds, spec = {}) {
+  const selectedSet = selectedIds instanceof Set ? selectedIds : new Set(selectedIds);
+  if (spec.index !== undefined && spec.index !== null && Number.isFinite(Number(spec.index))) {
+    const selected = siblings.filter((node) => selectedSet.has(node.id));
+    const others = siblings.filter((node) => !selectedSet.has(node.id));
+    const at = Math.max(0, Math.min(others.length, Math.round(Number(spec.index))));
+    return [...others.slice(0, at), ...selected, ...others.slice(at)];
+  }
+  const direction = String(spec.direction || "");
+  if (direction === "front") {
+    return [...siblings.filter((node) => !selectedSet.has(node.id)), ...siblings.filter((node) => selectedSet.has(node.id))];
+  }
+  if (direction === "back") {
+    return [...siblings.filter((node) => selectedSet.has(node.id)), ...siblings.filter((node) => !selectedSet.has(node.id))];
+  }
+  const arranged = siblings.slice();
+  if (direction === "forward") {
+    // Walk front -> back so the whole block shifts up by one as a unit.
+    for (let i = arranged.length - 2; i >= 0; i -= 1) {
+      if (selectedSet.has(arranged[i].id) && !selectedSet.has(arranged[i + 1].id)) {
+        const swap = arranged[i];
+        arranged[i] = arranged[i + 1];
+        arranged[i + 1] = swap;
+      }
+    }
+    return arranged;
+  }
+  if (direction === "backward") {
+    // Walk back -> front so the whole block shifts down by one as a unit.
+    for (let i = 1; i < arranged.length; i += 1) {
+      if (selectedSet.has(arranged[i].id) && !selectedSet.has(arranged[i - 1].id)) {
+        const swap = arranged[i];
+        arranged[i] = arranged[i - 1];
+        arranged[i - 1] = swap;
+      }
+    }
+    return arranged;
+  }
+  throw new Error("blockReorder requires a numeric index or a direction (front|back|forward|backward)");
+}
+
 // Would reparenting `groupId` under `newParentId` create a cycle? True when the new
 // parent is the group itself or any group in its subtree; false for root (null) or an
 // unrelated/ancestor target. Used by the (later) reparent op's guard.

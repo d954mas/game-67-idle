@@ -95,6 +95,17 @@ Every capability is one op in `ops.mjs`:
   `patchElement`; a bad/missing/unknown id throws **before any write** (atomic — no
   partial batch), and an empty batch is a no-op. Both clients call these: the page's
   drag/delete commits and the CLI `elements-set`/`elements-remove`.
+- `moveNodes({ projectId, moves:[{nodeId,x,y}...] })` — the **mixed** marquee/multi-select
+  move: loose elements AND group frames in ONE entry, each group cascading its full subtree
+  (overlap-safe — a node inside a moved group shifts once, with the topmost moved ancestor).
+- `reorderNodes({ projectId, nodeIds, direction|index })` — multi-node z-order: the selected
+  same-scope siblings move as ONE block (Figma `front|back|forward|backward`, relative order
+  kept); a cross-scope selection applies per scope but stays ONE entry.
+- `ungroupGroup({ projectId, groupId })` — dissolve one group level in ONE entry: direct
+  children (elements + subgroups) land in the parent scope at the group's former z-slot in
+  internal order; a single undo restores the group exactly.
+  All three throw **loudly** on bad input (unknown id / empty set / bad direction), never
+  half-apply, and back both clients (HTTP + CLI `nodes-move`/`nodes-reorder`/`group-ungroup`).
 - `setRegions({ projectId, elementId, regions })` — replace an element's regions
   array (the ADJUST/SELECT step before slicing). Validates each region has an id
   and an in-source-bounds integer `rect`, while **preserving any extra fields**
@@ -224,12 +235,12 @@ scope-crossing walk (render, move cascade, delete, visibility) is cycle-safe.
   own bounds, into one PNG at `scale` (default 1). Background precedence: an explicit
   `background` arg (`#rrggbb`) **overrides** the group's own `background`; else the group's
   stored fill; else transparent.
-- **Ungroup** (page action `ungroup`, composed from the shared ops) — dissolve **one
-  level**: the group's direct child elements AND direct child subgroups move up to the
-  group's **own parent** (not unconditionally to root, so nesting depth is preserved),
-  then the now-empty group is deleted. Because `deleteGroup` cascades, the children are
-  reparented out first. Kept composed (multiple journal entries); children land at the
-  front of the parent scope.
+- **Ungroup** (op `ungroupGroup`; page action `ungroup`, CLI `group-ungroup`) — dissolve
+  **one level** in **ONE** journal entry: the group's direct child elements AND direct
+  child subgroups move up to the group's **own parent** (not unconditionally to root, so
+  nesting depth is preserved), landing **at the group's former z-slot** in their internal
+  relative order, and the now-empty group is removed — all atomically, so a single undo
+  restores the group exactly. Grandchildren stay under the surviving subgroups.
 
 HTTP: `POST /api/canvas/projects/<id>/groups/<gid>/fit {padding?}` (resize to content);
 `POST /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null, index?}`;
@@ -627,6 +638,8 @@ node ai_studio/assets/canvas/cli.mjs elements-set <id> --json patches.json    # 
 node ai_studio/assets/canvas/cli.mjs elements-remove <id> --elements e1,e2    # batched delete; one undo step
 node ai_studio/assets/canvas/cli.mjs element-reorder <id> --element <eid> --index <n>   # z-order among merged siblings; 0 = back (clamps)
 node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>          # reorder an element OR group among merged siblings; 0 = back (strict)
+node ai_studio/assets/canvas/cli.mjs nodes-move <id> --json moves.json                  # batched mixed element+group move [{nodeId,x,y}]; group subtrees cascade; one undo step
+node ai_studio/assets/canvas/cli.mjs nodes-reorder <id> --nodes n1,n2 --direction front|back|forward|backward   # (or --index n) multi-node z-order block, relative order kept; one undo step
 node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json   # a regions array or {regions:[...]}
 node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
@@ -640,6 +653,7 @@ node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
 node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none] [--clip true|false]
 node ai_studio/assets/canvas/cli.mjs group-fit <id> --group g [--padding n]   # resize the frame to fit its content (padding default 24)
 node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
+node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g   # dissolve one level; children keep the group's z-slot; one undo step
 node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 node ai_studio/assets/canvas/cli.mjs render-screen <id> --group g [--scale 2] [--background '#rrggbb']
 node ai_studio/assets/canvas/cli.mjs undo <id>
@@ -666,8 +680,12 @@ one document that swaps two views; the JS is split into focused ES modules under
 - `actions.js` — the one place UI intents become a single HTTP API call (add/drop/
   paste image, patch/rename/hide/delete element, detect/slice/export, group create/
   patch/render/ungroup/delete, undo/redo, rename project). No module talks to the
-  API directly. Multi-select **delete** is one batched `elements-remove` call (one undo
-  step); the marquee/multi-select **move** commit is one batched `elements-set` call.
+  API directly. Every gesture is exactly one journal entry: multi-select **delete** is one
+  `elements-remove` call; a pure-element marquee **move** is one `elements-set` call; a
+  **mixed** marquee move (loose elements + group frames) is one `nodes-move` (`moveNodes`)
+  call with the group subtrees cascaded server-side; a multi-selection **z-order** (Ctrl+[/],
+  Order menu) is one `nodes-reorder` (`reorderNodes`) block move; **Ungroup** is one
+  `groups/<id>/ungroup` (`ungroupGroup`) call.
 - `home.js` — the **home** view: a full-page grid of project cards (cover thumbnail,
   title, image count, updated date) plus a `+ New project` card that creates a
   project instantly (random default title, Figma-style — no name prompt) and opens

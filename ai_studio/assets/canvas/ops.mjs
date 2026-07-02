@@ -54,7 +54,7 @@ import { uploadImageSource } from "../tools/image/sources/api.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
-import { descendantsOf, frontOrder, isNodeHidden, nodeScope, orderedChildren, wouldCycle } from "./tree.mjs";
+import { ancestorsOf, blockReorder, descendantsOf, frontOrder, isNodeHidden, nodeScope, orderedChildren, wouldCycle } from "./tree.mjs";
 // Shared, pure text/font contract (imported by the site too — see fonts.mjs). ops.mjs
 // owns the node-only disk read of the manifest; all validation/merge/resolution logic
 // lives in fonts.mjs so the browser and the agent normalize a style identically.
@@ -564,6 +564,144 @@ export function reorderElement(root, { projectId, elementId, index } = {}) {
   const clamped = Math.max(0, Math.min(count - 1, Math.round(Number(index))));
   const result = reorderNode(root, { projectId, nodeId: elementId, index: clamped });
   return { project: result.project, element: (result.project.elements || []).find((item) => item.id === elementId), index: clamped };
+}
+
+// Move several NODES (elements AND/OR groups) to absolute positions in ONE journaled
+// gesture — the page's mixed marquee/multi-select move commit (loose elements + one or
+// more group frames). Each move is {nodeId, x, y} (the node's new top-left). A group move
+// cascades its FULL descendant closure (nested subgroup frames AND every element in the
+// subtree) by the same delta, exactly like the single patchGroup move path; an element
+// move just repositions that element. Overlap-safe: when the selection holds a group AND a
+// node inside its subtree, the node shifts by the TOPMOST moved ancestor's delta only (once,
+// with the parent), never twice. Loud + atomic: an unknown nodeId, a non-object move, or a
+// non-finite x/y throws before any write; an empty moves list is a loud error (the page only
+// calls this with real moves). One commitMutation, so a single undo restores every position.
+export function moveNodes(root, { projectId, moves } = {}) {
+  if (!projectId) throw new Error("moveNodes requires projectId");
+  if (!Array.isArray(moves) || !moves.length) throw new Error("moveNodes requires a non-empty moves array");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+
+  // Resolve + validate every move against `before` FIRST (atomic). directDelta maps a
+  // moved node id -> the {dx, dy} it shifts by (absolute target minus current position),
+  // so an element lands exactly on x/y and a group carries that delta across its subtree.
+  const directDelta = new Map();
+  const nodeIds = [];
+  moves.forEach((move, index) => {
+    if (!move || typeof move !== "object") throw new Error(`move ${index} is not an object`);
+    const nodeId = String(move.nodeId == null ? "" : move.nodeId).trim();
+    if (!nodeId) throw new Error(`move ${index} is missing a nodeId`);
+    if (!Number.isFinite(Number(move.x)) || !Number.isFinite(Number(move.y))) {
+      throw new Error(`move ${index} (${nodeId}) requires finite x and y`);
+    }
+    const node = findNode(before, nodeId); // throws on an unknown id
+    directDelta.set(nodeId, { dx: Number(move.x) - (Number(node.ref.x) || 0), dy: Number(move.y) - (Number(node.ref.y) || 0) });
+    nodeIds.push(nodeId);
+  });
+
+  // The delta a node actually shifts by = the delta of the TOPMOST moved node in its
+  // ancestor-or-self chain (ancestorsOf is nearest-first, so overwriting ends on the
+  // topmost). null = the node is untouched.
+  const effectiveDelta = (node) => {
+    let best = directDelta.has(node.id) ? directDelta.get(node.id) : null;
+    for (const ancestor of ancestorsOf(before, node)) {
+      if (directDelta.has(ancestor.id)) best = directDelta.get(ancestor.id);
+    }
+    return best;
+  };
+
+  const nextElements = (before.elements || []).map((element) => {
+    const delta = effectiveDelta(element);
+    return delta ? { ...element, x: (Number(element.x) || 0) + delta.dx, y: (Number(element.y) || 0) + delta.dy } : element;
+  });
+  const nextGroups = groupsOf(before).map((group) => {
+    const delta = effectiveDelta(group);
+    return delta ? { ...group, x: (Number(group.x) || 0) + delta.dx, y: (Number(group.y) || 0) + delta.dy } : group;
+  });
+
+  const after = updateProject(root, projectId, { elements: nextElements, groups: nextGroups });
+  const project = commitMutation(root, projectId, {
+    op: "moveNodes",
+    args_summary: { count: nodeIds.length, nodeIds },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, count: nodeIds.length, nodeIds };
+}
+
+// Move a SET of nodes (elements AND/OR groups) as ONE journaled z-order gesture — the
+// page's multi-selection Ctrl+[/] and the Order menu on a multi-selection. The selected
+// same-scope siblings move together as a BLOCK preserving their relative order (Figma
+// semantics: front/back jump to the edge, forward/backward nudge one step past the nearest
+// unselected neighbor). A CROSS-scope selection applies the same block move independently
+// per scope but stays ONE commitMutation (one undo). `direction` is front|back|forward|
+// backward; `index` is an absolute slot among the unselected siblings (single-scope only).
+// Exactly one of direction|index is required. Assigning contiguous order to each touched
+// scope makes it explicit (the reorderNode normalization; scopes never go half-explicit).
+// Loud + atomic: an unknown nodeId, an empty set, both/neither of direction|index, an
+// unknown direction, or an index on a cross-scope selection throws before any write.
+export function reorderNodes(root, { projectId, nodeIds, direction, index } = {}) {
+  if (!projectId) throw new Error("reorderNodes requires projectId");
+  if (!Array.isArray(nodeIds) || !nodeIds.length) throw new Error("reorderNodes requires a non-empty nodeIds array");
+  const hasDirection = direction !== undefined && direction !== null && direction !== "";
+  const hasIndex = index !== undefined && index !== null && index !== "" && Number.isFinite(Number(index));
+  if (hasDirection === hasIndex) {
+    throw new Error("reorderNodes requires exactly one of direction (front|back|forward|backward) or index");
+  }
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+
+  // Resolve every node (throws on an unknown id) and record its scope. Ids in one scope
+  // move as a block; a selection spanning several scopes applies per scope.
+  const ids = nodeIds.map((value) => String(value));
+  const idSet = new Set(ids);
+  const scopeById = new Map();
+  for (const id of ids) {
+    const node = findNode(before, id);
+    scopeById.set(id, node.scopeId == null ? null : node.scopeId);
+  }
+  const scopes = [...new Set(scopeById.values())];
+  if (hasIndex && scopes.length > 1) {
+    throw new Error("reorderNodes index is only valid for a single-scope selection; use direction across scopes");
+  }
+  const spec = hasIndex ? { index: Math.round(Number(index)) } : { direction: String(direction) };
+
+  // Per scope: reorder its merged siblings with the selected ones moved as a block, then
+  // assign contiguous 0..N-1 order across that scope (makes it explicit). A gesture that
+  // doesn't change any scope's sequence (e.g. "bring forward" already at the front) is a
+  // no-op that writes nothing — matching the single-node reorderNode guard.
+  const orderByNodeId = new Map();
+  let changed = false;
+  for (const scope of scopes) {
+    const siblings = orderedChildren(before, scope);
+    const arranged = blockReorder(siblings, idSet, spec); // throws on a bad spec
+    if (arranged.some((node, position) => node.id !== siblings[position].id)) changed = true;
+    arranged.forEach((node, order) => orderByNodeId.set(node.id, order));
+  }
+  if (!changed) return { project: before, nodeIds: ids, count: ids.length };
+
+  const nextElements = (before.elements || []).map((element) =>
+    orderByNodeId.has(element.id) ? { ...element, order: orderByNodeId.get(element.id) } : element,
+  );
+  const nextGroups = groupsOf(before).map((group) =>
+    orderByNodeId.has(group.id) ? { ...group, order: orderByNodeId.get(group.id) } : group,
+  );
+
+  const after = updateProject(root, projectId, { elements: nextElements, groups: nextGroups });
+  const project = commitMutation(root, projectId, {
+    op: "reorderNodes",
+    args_summary: {
+      nodeIds: ids,
+      direction: hasDirection ? String(direction) : undefined,
+      index: hasIndex ? Math.round(Number(index)) : undefined,
+      scopes: scopes.map((scope) => (scope == null ? null : scope)),
+    },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, nodeIds: ids, count: ids.length };
 }
 
 // Replace an element's regions array (the ADJUST/SELECT step before slicing).
@@ -1235,6 +1373,83 @@ export function reparentGroup(root, { projectId, groupId, parentId, index } = {}
     startedAt,
   });
   return { project, group: (project.groups || []).find((item) => item.id === groupId) };
+}
+
+// Dissolve ONE group level in ONE journaled gesture (Figma Ungroup): the group's DIRECT
+// children — elements AND direct subgroups — move up into the group's OWN parent scope
+// (root when the group was top-level, preserving nesting depth otherwise), landing AT the
+// group's former sibling z-slot in their internal relative order, and the now-empty group
+// is removed. The parent scope is rewritten with contiguous order (the children occupy the
+// vacated slot, everything else keeps its relative order), so z-order is exact — not the
+// old page-composed "children jump to the front". Grandchildren keep pointing at the
+// surviving subgroups (only one level dissolves). One commitMutation; a single undo
+// restores the group and every child's scope + order exactly. Backing image files stay on
+// disk. A loud error on an unknown group; an empty group simply dissolves (its slot closes).
+export function ungroupGroup(root, { projectId, groupId } = {}) {
+  if (!projectId) throw new Error("ungroupGroup requires projectId");
+  if (!groupId) throw new Error("ungroupGroup requires groupId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const group = findGroup(before, groupId); // loud error on an unknown group
+  // The group's resolved parent scope (null = root; a dangling parent resolves to root,
+  // mirroring tree scope resolution) — where the children land.
+  const scope = nodeScope(before, group);
+
+  // Parent-scope arrangement with the group node REPLACED by its direct children (kept in
+  // their own internal back->front order), so the children take the group's exact z-slot.
+  const parentSiblings = orderedChildren(before, scope);
+  const children = orderedChildren(before, groupId);
+  const slot = parentSiblings.findIndex((node) => node.id === groupId);
+  const arranged = parentSiblings.slice();
+  arranged.splice(slot, 1, ...children);
+  const orderByNodeId = new Map(arranged.map((node, order) => [node.id, order]));
+
+  const childElementIds = new Set(children.filter((node) => node.kind === "element").map((node) => node.id));
+  const childGroupIds = new Set(children.filter((node) => node.kind === "group").map((node) => node.id));
+
+  const nextGroups = groupsOf(before)
+    .filter((item) => item.id !== groupId) // remove the dissolved group
+    .map((item) => {
+      if (!childGroupIds.has(item.id) && !orderByNodeId.has(item.id)) return item;
+      const next = { ...item };
+      if (childGroupIds.has(item.id)) {
+        if (scope == null) delete next.parentId;
+        else next.parentId = scope;
+      }
+      if (orderByNodeId.has(item.id)) next.order = orderByNodeId.get(item.id);
+      return next;
+    });
+  const nextElements = (before.elements || []).map((item) => {
+    if (!childElementIds.has(item.id) && !orderByNodeId.has(item.id)) return item;
+    const next = { ...item };
+    if (childElementIds.has(item.id)) {
+      if (scope == null) delete next.groupId;
+      else next.groupId = scope;
+    }
+    if (orderByNodeId.has(item.id)) next.order = orderByNodeId.get(item.id);
+    return next;
+  });
+
+  const after = updateProject(root, projectId, { groups: nextGroups, elements: nextElements });
+  const project = commitMutation(root, projectId, {
+    op: "ungroupGroup",
+    args_summary: {
+      groupId,
+      parentId: scope,
+      movedElements: [...childElementIds],
+      movedGroups: [...childGroupIds],
+    },
+    before,
+    after,
+    startedAt,
+  });
+  return {
+    project,
+    ungrouped: groupId,
+    parentId: scope,
+    movedElements: [...childElementIds],
+    movedGroups: [...childGroupIds],
+  };
 }
 
 // ---- undo / redo / history ---------------------------------------------------

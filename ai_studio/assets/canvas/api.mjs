@@ -19,6 +19,9 @@
 //   POST   /api/canvas/projects/<id>/groups/<gid>/render {scale?, background?}
 //   POST   /api/canvas/projects/<id>/groups/<gid>/fit {padding?}   (resize frame to content)
 //   POST   /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null, index?}
+//   POST   /api/canvas/projects/<id>/groups/<gid>/ungroup  (dissolve one level, keep children)
+//   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
+//   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
 //   POST   /api/canvas/projects/<id>/assign-group   {elementIds, groupId|null}
 //   POST   /api/canvas/projects/<id>/undo
 //   POST   /api/canvas/projects/<id>/redo
@@ -48,6 +51,7 @@ import {
   getProject,
   historyFlags,
   listProjects,
+  moveNodes,
   opsStats,
   patchElement,
   patchElements,
@@ -61,6 +65,7 @@ import {
   renderGroup,
   reorderElement,
   reorderNode,
+  reorderNodes,
   reparentGroup,
   resolveProjectFile,
   resolveProjectPath,
@@ -68,6 +73,7 @@ import {
   setRegions,
   sliceRegions,
   undoOp,
+  ungroupGroup,
 } from "./ops.mjs";
 
 // Images are the big payload here; allow up to ~20MB for a base64 upload body.
@@ -299,6 +305,32 @@ export function createCanvasApi(root) {
         return true;
       }
 
+      // /api/canvas/projects/<id>/nodes-move   (batched mixed element+group move)
+      // One journal entry for the whole gesture (marquee/multi-select move of loose
+      // elements AND group frames); group moves cascade their subtree.
+      if (parts.length === 5 && sub === "nodes-move" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(200, moveNodes(root, {
+          projectId: id,
+          moves: Array.isArray(body.moves) ? body.moves : [],
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/nodes-reorder   (batched multi-node z-order)
+      // One journal entry: the selected same-scope siblings move as a block (Figma
+      // semantics) via {direction} or an absolute {index}; cross-scope applies per scope.
+      if (parts.length === 5 && sub === "nodes-reorder" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(200, reorderNodes(root, {
+          projectId: id,
+          nodeIds: Array.isArray(body.nodeIds) ? body.nodeIds : [],
+          direction: body.direction,
+          index: body.index,
+        }));
+        return true;
+      }
+
       // /api/canvas/projects/<id>/assign-group
       if (parts.length === 5 && sub === "assign-group" && req.method === "POST") {
         const body = await readJsonBody(req);
@@ -359,6 +391,15 @@ export function createCanvasApi(root) {
           parentId: body.parentId ?? null,
           index: body.index,
         }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/groups/<gid>/ungroup  (dissolve one level: direct
+      // children land in the parent scope at the group's former z-slot; one journal entry).
+      if (parts.length === 7 && sub === "groups" && parts[6] === "ungroup" && req.method === "POST") {
+        const groupId = decodeURIComponent(parts[5]);
+        await readJsonBody(req);
+        sendMutation(200, ungroupGroup(root, { projectId: id, groupId }));
         return true;
       }
 

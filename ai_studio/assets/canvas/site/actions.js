@@ -9,7 +9,6 @@ import {
   elementById,
   elements,
   groupById,
-  groups,
   regionEditElement,
   selectOnly,
   setStatus,
@@ -229,6 +228,39 @@ export function bringNodeToFront(id) {
 }
 export function sendNodeToBack(id) {
   return edgeZ(id, "back");
+}
+
+// The current multi-node selection as one id list (loose elements + whole groups) — the
+// unit z-order and mixed-move gestures act on. Elements and groups share one id namespace.
+export function selectedNodeIds() {
+  return [...state.selectedIds, ...state.selectedGroupIds];
+}
+
+// Multi-selection z-order: move the selected same-scope siblings as ONE block (Figma
+// semantics; relative order preserved), cross-scope applied per scope — ONE journaled
+// reorderNodes op (one undo). `direction` is front|back|forward|backward. Backs the
+// multi-select Ctrl+[/] shortcuts and the Order menu on a multi-selection.
+export async function reorderNodesBy(direction) {
+  const ids = selectedNodeIds();
+  if (ids.length < 2) return;
+  try {
+    applyMutation(await api("POST", `/projects/${pid()}/nodes-reorder`, { nodeIds: ids, direction }));
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Commit a mixed selection move (loose elements + one or more group frames) as ONE
+// journaled moveNodes op: each group cascades its subtree, one HTTP call, one undo restores
+// every position. `moves` is [{nodeId, x, y}] of absolute top-lefts. Backs the canvas
+// marquee/multi-select drag commit (workspace.js).
+export async function moveNodesTo(moves) {
+  if (!moves.length) return;
+  try {
+    applyMutation(await api("POST", `/projects/${pid()}/nodes-move`, { moves }), "Moved selection.");
+  } catch (error) {
+    setStatus(error.message, true);
+  }
 }
 
 // Detect is a long (python-backed) op: it runs through the limiter so at most N=2
@@ -559,27 +591,14 @@ export async function renderScreen(groupId, { scale = 1, background } = {}, cont
   );
 }
 
-// Ungroup = dissolve ONE level: the group's direct child elements AND direct child
-// subgroups move up to the group's OWN parent (not unconditionally to root, so nesting
-// depth is preserved), then the now-empty group is deleted. Composed from the shared ops
-// so it stays a page action. deleteGroup now cascades over the whole subtree, so the
-// children MUST be reparented out FIRST — otherwise ungroup would delete them. Multiple
-// journal entries is the known trade of keeping this composed (see PLAN); children land
-// at the front of the parent scope (exact former z-slot is not preserved).
+// Ungroup = dissolve ONE level in ONE journaled ungroupGroup op: the group's direct child
+// elements AND direct child subgroups move up to the group's OWN parent (nesting depth
+// preserved), landing AT the group's former z-slot in their internal order, and the empty
+// group is removed. One HTTP call, one undo restores the group exactly (the op owns the
+// z-slot + reparent + delete atomically — no page-composed multi-call sequence).
 export async function ungroup(groupId) {
   try {
-    const group = groupById(groupId);
-    if (!group) return;
-    const parentId = group.parentId ?? null;
-    const childElementIds = elements().filter((e) => (e.groupId || null) === groupId).map((e) => e.id);
-    const childGroupIds = groups().filter((g) => (g.parentId || null) === groupId).map((g) => g.id);
-    if (childElementIds.length) {
-      await api("POST", `/projects/${pid()}/assign-group`, { elementIds: childElementIds, groupId: parentId });
-    }
-    for (const childGroupId of childGroupIds) {
-      await api("POST", `/projects/${pid()}/groups/${childGroupId}/reparent`, { parentId });
-    }
-    const result = await api("DELETE", `/projects/${pid()}/groups/${groupId}`);
+    const result = await api("POST", `/projects/${pid()}/groups/${groupId}/ungroup`, {});
     state.selectedGroupId = null;
     state.selectedGroupIds = new Set();
     applyMutation(result, "Ungrouped.");

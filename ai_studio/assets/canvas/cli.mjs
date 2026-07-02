@@ -16,6 +16,8 @@
 //   node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs element-reorder <id> --element <eid> --index <n>
 //   node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>
+//   node ai_studio/assets/canvas/cli.mjs nodes-move <id> --json moves.json
+//   node ai_studio/assets/canvas/cli.mjs nodes-reorder <id> --nodes n1,n2 --direction front|back|forward|backward | --index <n>
 //   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 //   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --suffix --resample]
 //   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --suffix --resample] [--to <dir>]
@@ -25,6 +27,7 @@
 //   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none] [--clip true|false]
 //   node ai_studio/assets/canvas/cli.mjs group-fit <id> --group g [--padding n]
 //   node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
+//   node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs render-group <id> --group g [--scale 2] [--background "#rrggbb"]
 //   node ai_studio/assets/canvas/cli.mjs undo|redo|history <id>
@@ -47,6 +50,7 @@ import {
   fitGroup,
   getProject,
   listProjects,
+  moveNodes,
   opsStats,
   patchElement,
   patchElements,
@@ -60,11 +64,13 @@ import {
   renderGroup,
   reorderElement,
   reorderNode,
+  reorderNodes,
   reparentGroup,
   setExportSettings,
   setRegions,
   sliceRegions,
   undoOp,
+  ungroupGroup,
 } from "./ops.mjs";
 
 const repoRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -118,7 +124,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|group-fit|group-assign|group-delete|render-group|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -134,6 +140,8 @@ function usage() {
   elements-remove <id> --elements e1,e2   (batched delete; one undo step)
   element-reorder <id> --element <eid> --index <n>   (z-order among siblings; 0 = back)
   node-reorder <id> --node <id> --index <n>   (z-order of an element OR group among merged siblings; 0 = back)
+  nodes-move <id> --json <path>   (batched mixed element+group move: [{nodeId,x,y}] or {moves:[...]}; one undo step)
+  nodes-reorder <id> --nodes n1,n2 --direction front|back|forward|backward | --index <n>   (multi-node z-order block; one undo step)
   regions-set <id> --element <eid> --json <path>   (JSON: a regions array or {regions:[...]})
   regions-show <id> --element <eid>
   slice <id> --element <eid> [--regions r1,r2]
@@ -145,6 +153,7 @@ function usage() {
   group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>] [--background '#rrggbb'|none] [--clip true|false]
   group-fit <id> --group <gid> [--padding <n>]   (resize the frame to fit its content; padding default 24)
   group-assign <id> --elements e1,e2 --group <gid>|none
+  group-ungroup <id> --group <gid>   (dissolve one level; children keep the group's z-slot; one undo step)
   group-delete <id> --group <gid>
   render-group <id> --group <gid>  (alias: render-screen) [--scale <n>] [--background '#rrggbb']
   undo <id>
@@ -251,6 +260,26 @@ async function runCommand(command, id, positional, flags) {
       if (!flags.node || flags.node === "true") fail("node-reorder requires --node <id>");
       if (flags.index === undefined || flags.index === "true") fail("node-reorder requires --index <n>");
       return print(reorderNode(repoRoot, { projectId: id, nodeId: flags.node, index: Number(flags.index) }));
+    }
+    case "nodes-move": {
+      // Batched mixed element+group move (one journal entry). --json is a moves array
+      // or a { moves: [...] } wrapper; each move is {nodeId, x, y} (absolute top-left).
+      if (!id) fail("nodes-move requires <id>");
+      if (!flags.json || flags.json === "true") fail("nodes-move requires --json <path> (a moves array or {moves:[...]})");
+      const raw = JSON.parse(readFileSync(resolve(flags.json), "utf8"));
+      const moves = Array.isArray(raw) ? raw : raw.moves;
+      return print(moveNodes(repoRoot, { projectId: id, moves }));
+    }
+    case "nodes-reorder": {
+      // Batched multi-node z-order (one journal entry): the selected same-scope siblings
+      // move as a block via --direction, or to an absolute --index (single scope only).
+      if (!id) fail("nodes-reorder requires <id>");
+      if (!flags.nodes || flags.nodes === "true") fail("nodes-reorder requires --nodes n1,n2");
+      const nodeIds = String(flags.nodes).split(",").map((value) => value.trim()).filter(Boolean);
+      const args = { projectId: id, nodeIds };
+      if (flags.direction && flags.direction !== "true") args.direction = flags.direction;
+      if (flags.index !== undefined && flags.index !== "true") args.index = Number(flags.index);
+      return print(reorderNodes(repoRoot, args));
     }
     case "regions-set": {
       if (!id) fail("regions-set requires <id>");
@@ -397,6 +426,11 @@ async function runCommand(command, id, positional, flags) {
       const elementIds = String(flags.elements).split(",").map((value) => value.trim()).filter(Boolean);
       const groupId = !flags.group || flags.group === "none" ? null : flags.group;
       return print(assignToGroup(repoRoot, { projectId: id, elementIds, groupId }));
+    }
+    case "group-ungroup": {
+      if (!id) fail("group-ungroup requires <id>");
+      if (!flags.group) fail("group-ungroup requires --group <gid>");
+      return print(ungroupGroup(repoRoot, { projectId: id, groupId: flags.group }));
     }
     case "group-delete": {
       if (!id) fail("group-delete requires <id>");

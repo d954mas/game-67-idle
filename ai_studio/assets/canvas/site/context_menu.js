@@ -15,6 +15,8 @@ import {
   deleteGroupAction,
   deleteRegion,
   pasteImageBlob,
+  reorderNodesBy,
+  selectedNodeIds,
   sendNodeBackward,
   sendNodeToBack,
   sliceRegionsFor,
@@ -146,10 +148,21 @@ function copyIdItemFor(target) {
   };
 }
 
-// "Order ▸" submenu: the four Figma z-order moves for one NODE — an element OR a group
-// (same actions as the Ctrl+]/[ shortcuts, computed over MERGED same-scope siblings; each
-// no-ops harmlessly when already at that edge).
+// "Order ▸" submenu: the four Figma z-order moves (same actions as the Ctrl+]/[ shortcuts,
+// computed over MERGED same-scope siblings; each no-ops harmlessly at the edge). Selection-
+// aware: when `nodeId` is part of a 2+ selection the moves act on the whole selection as
+// ONE block (reorderNodes, one undo); otherwise they nudge the single node.
 function orderItems(nodeId) {
+  const ids = selectedNodeIds();
+  const block = ids.length >= 2 && ids.includes(nodeId);
+  if (block) {
+    return [
+      { label: "Bring to front", onClick: () => reorderNodesBy("front") },
+      { label: "Bring forward", onClick: () => reorderNodesBy("forward") },
+      { label: "Send backward", onClick: () => reorderNodesBy("backward") },
+      { label: "Send to back", onClick: () => reorderNodesBy("back") },
+    ];
+  }
   return [
     { label: "Bring to front", onClick: () => bringNodeToFront(nodeId) },
     { label: "Bring forward", onClick: () => bringNodeForward(nodeId) },
@@ -178,13 +191,12 @@ function itemsFor(target) {
       },
     ];
     // Right-clicking a selected element keeps the whole multi-selection (see
-    // workspace.js onContextMenu): a 2+ selection offers grouping; a single element
-    // offers z-order (ambiguous across a multi-selection, so hidden there).
+    // workspace.js onContextMenu): a 2+ selection also offers grouping, and Order acts on
+    // the whole selection as one block; a single element orders just itself.
     if (state.selectedIds.size >= 2) {
       items.push({ label: "Group selection", onClick: () => createGroupFromSelection("New group") });
-    } else {
-      items.push({ label: "Order", submenu: orderItems(element.id) });
     }
+    items.push({ label: "Order", submenu: orderItems(element.id) });
     // "Move to group" removed everywhere (lead 2026-07-02: with many groups the
     // submenu is unusable) — reparenting lives in the layers drag.
     items.push(

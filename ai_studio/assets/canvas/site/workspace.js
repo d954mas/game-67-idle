@@ -37,7 +37,7 @@ import {
   syncPrimaryGroup,
   toggleSelect,
 } from "./app.js";
-import { addTextAt, patchTextElement, renameProject, setRegionsFor, undo, redo } from "./actions.js";
+import { addTextAt, moveNodesTo, patchTextElement, renameProject, setRegionsFor, undo, redo } from "./actions.js";
 import { canvasFontString } from "../fonts.mjs";
 import { areFontsReady, measureTextLines } from "./fonts.js";
 import { inlineEdit } from "./inline.js";
@@ -1161,13 +1161,12 @@ function commitGroupDrag(finished) {
   })();
 }
 
-// Commit a mixed selection move (loose elements + one or more groups). Loose elements
-// go in ONE batched elements-set entry; each moved group is its OWN patchGroup entry
-// (the op cascades over its subtree). A mixed move is therefore N+1 journal entries —
-// a known compromise; a single batched mixed-move op is a future follow-up. Reparent-on-
-// drop is intentionally NOT applied to a mixed selection (only single-element drags).
+// Commit a mixed selection move (loose elements + one or more group frames) as ONE
+// journaled moveNodes op: loose elements AND group frames go in a single {nodeId,x,y}
+// batch, each group cascading its subtree on the server — one HTTP call, one journal
+// entry, one undo (no more N+1). Reparent-on-drop is intentionally NOT applied to a mixed
+// selection (membership stays explicit: layers drag, Ctrl+G, Ungroup, CLI).
 function commitSelectionDrag(finished) {
-  const projectId = state.project.id;
   const changed = (a, bx, by) => Math.round(a.x) !== Math.round(bx) || Math.round(a.y) !== Math.round(by);
   const movedEls = finished.elItems.filter((it) => changed(it.element, it.origX, it.origY));
   const movedGroups = finished.grpItems.filter((g) => changed(g.group, g.origX, g.origY));
@@ -1175,24 +1174,11 @@ function commitSelectionDrag(finished) {
     refresh();
     return;
   }
-  (async () => {
-    try {
-      let last = null;
-      for (const g of movedGroups) {
-        last = await api("PATCH", `/projects/${projectId}/groups/${g.group.id}`, {
-          x: Math.round(g.group.x),
-          y: Math.round(g.group.y),
-        });
-      }
-      if (movedEls.length) {
-        const patches = movedEls.map((it) => ({ elementId: it.element.id, x: Math.round(it.element.x), y: Math.round(it.element.y) }));
-        last = await api("POST", `/projects/${projectId}/elements-set`, { patches });
-      }
-      applyMutation(last, "Moved selection.");
-    } catch (error) {
-      setStatus(error.message, true);
-    }
-  })();
+  const moves = [
+    ...movedEls.map((it) => ({ nodeId: it.element.id, x: Math.round(it.element.x), y: Math.round(it.element.y) })),
+    ...movedGroups.map((g) => ({ nodeId: g.group.id, x: Math.round(g.group.x), y: Math.round(g.group.y) })),
+  ];
+  moveNodesTo(moves);
 }
 
 function commitRegionCreate(finished) {
