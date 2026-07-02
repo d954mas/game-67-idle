@@ -1,13 +1,16 @@
-// Right-click context menu. Its items depend on the target (an element, a group
-// label/frame, or empty canvas); every item calls an existing action. The menu is
-// positioned at the pointer, clamped to the viewport, and closes on click-away or
-// Escape. Pure rendering/input.
-import { el, elementById, groupById, regionCount, setStatus, state } from "./app.js";
+// Right-click context menu. Its items depend on the target (an element, a region
+// on the selected element, a group label/frame, or empty canvas); every item calls
+// an existing action. The menu is positioned at the pointer, clamped to the
+// viewport, supports one level of hover submenu ("Move to screen"), and closes on
+// click-away or Escape. Pure rendering/input.
+import { el, elementById, enterRegionEdit, groupById, groups, refresh, regionCount, setStatus, state } from "./app.js";
 import {
   addImageFiles,
+  assignElementsToGroup,
   createGroupFromSelection,
   deleteElements,
   deleteGroupAction,
+  deleteRegion,
   detectRegionsFor,
   exportElementIds,
   pasteImageBlob,
@@ -19,10 +22,13 @@ import {
 } from "./actions.js";
 
 let open = false;
+let submenu = null;
+let submenuTimer = null;
 
 export function closeContextMenu() {
   if (!open) return;
   open = false;
+  closeSubmenu();
   const menu = el("context-menu");
   menu.classList.add("hidden");
   menu.replaceChildren();
@@ -65,21 +71,51 @@ async function pasteFromClipboard() {
   }
 }
 
+// The element ids a per-element action applies to: the whole current selection when
+// the right-clicked element is part of a 2+ selection, else just that element.
+function targetElementIds(elementId) {
+  if (state.selectedIds.size > 1 && state.selectedIds.has(elementId)) return [...state.selectedIds];
+  return [elementId];
+}
+
+// "Move to screen ▸" submenu items: every screen + "None" (top level).
+function moveToScreenItems(elementId) {
+  const ids = targetElementIds(elementId);
+  const items = groups().map((group) => ({
+    label: group.name || "Screen",
+    onClick: () => assignElementsToGroup(ids, group.id),
+  }));
+  items.push({ separator: true });
+  items.push({ label: "None (top level)", onClick: () => assignElementsToGroup(ids, null) });
+  return items;
+}
+
 function itemsFor(target) {
   if (target.kind === "element") {
     const element = elementById(target.elementId);
     if (!element) return [];
     const visible = element.visible !== false;
-    // Right-clicking a selected element keeps the whole multi-selection (see
-    // workspace.js onContextMenu), so a 2+ selection offers the same grouping
-    // shortcut as Ctrl/Cmd+G here too.
+    const hasRegions = regionCount(element) > 0;
     const items = [
       { label: "Detect regions", onClick: () => detectRegionsFor(element.id) },
-      { label: "Slice regions", disabled: regionCount(element) === 0, onClick: () => sliceRegionsFor(element.id) },
+      {
+        label: "Edit regions",
+        disabled: !hasRegions,
+        onClick: () => {
+          enterRegionEdit(element.id);
+          refresh();
+        },
+      },
+      { label: "Slice regions", disabled: !hasRegions, onClick: () => sliceRegionsFor(element.id) },
       { label: "Export", onClick: () => exportElementIds([element.id]) },
     ];
+    // Right-clicking a selected element keeps the whole multi-selection (see
+    // workspace.js onContextMenu), so a 2+ selection offers the grouping shortcut.
     if (state.selectedIds.size >= 2) {
       items.push({ label: "Group into screen", onClick: () => createGroupFromSelection("New screen") });
+    }
+    if (groups().length || element.groupId) {
+      items.push({ label: "Move to screen", submenu: moveToScreenItems(element.id) });
     }
     items.push(
       { label: "Rename", onClick: () => focusInspectorName() },
@@ -88,6 +124,13 @@ function itemsFor(target) {
       { label: "Delete", danger: true, onClick: () => deleteElements([element.id]) },
     );
     return items;
+  }
+  if (target.kind === "region") {
+    return [
+      { label: "Slice this region", onClick: () => sliceRegionsFor(target.elementId, [target.regionId]) },
+      { separator: true },
+      { label: "Delete region", danger: true, onClick: () => deleteRegion(target.elementId, target.regionId) },
+    ];
   }
   if (target.kind === "group") {
     const group = groupById(target.groupId);
@@ -110,9 +153,83 @@ function itemsFor(target) {
   ];
 }
 
+function closeSubmenu() {
+  clearTimeout(submenuTimer);
+  if (submenu) {
+    submenu.remove();
+    submenu = null;
+  }
+}
+
+function buildButton(item, onActivate) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "ctx-item";
+  if (item.danger) button.classList.add("danger");
+  button.textContent = item.label;
+  button.disabled = Boolean(item.disabled);
+  if (item.submenu) {
+    button.classList.add("has-sub");
+    const arrow = document.createElement("span");
+    arrow.className = "ctx-arrow";
+    arrow.textContent = "▸";
+    button.appendChild(arrow);
+    button.addEventListener("mouseenter", () => openSubmenu(button, item.submenu));
+    button.addEventListener("click", (event) => event.stopPropagation());
+  } else {
+    button.addEventListener("mouseenter", () => {
+      clearTimeout(submenuTimer);
+      submenuTimer = setTimeout(closeSubmenu, 120);
+    });
+    button.addEventListener("click", () => {
+      if (button.disabled) return;
+      closeContextMenu();
+      item.onClick();
+    });
+  }
+  return button;
+}
+
+function openSubmenu(anchor, items) {
+  clearTimeout(submenuTimer);
+  if (submenu && submenu.dataset.anchor === anchor.dataset.key) return;
+  closeSubmenu();
+  const menu = el("context-menu");
+  submenu = document.createElement("div");
+  submenu.className = "ctx-submenu";
+  submenu.dataset.anchor = anchor.dataset.key || "";
+  submenu.addEventListener("mouseenter", () => clearTimeout(submenuTimer));
+  submenu.addEventListener("mouseleave", () => {
+    submenuTimer = setTimeout(closeSubmenu, 120);
+  });
+  for (const item of items) {
+    if (item.separator) {
+      const sep = document.createElement("div");
+      sep.className = "ctx-sep";
+      submenu.appendChild(sep);
+      continue;
+    }
+    submenu.appendChild(buildButton(item));
+  }
+  menu.appendChild(submenu);
+  // Position to the right of the anchor within the (fixed) menu; flip left if it
+  // would overflow the viewport.
+  let left = anchor.offsetLeft + anchor.offsetWidth + 2;
+  submenu.style.left = `${left}px`;
+  submenu.style.top = `${anchor.offsetTop}px`;
+  const menuRect = menu.getBoundingClientRect();
+  const subRect = submenu.getBoundingClientRect();
+  if (menuRect.left + left + subRect.width > window.innerWidth - 8) {
+    left = anchor.offsetLeft - subRect.width - 2;
+    submenu.style.left = `${Math.max(-subRect.width, left)}px`;
+  }
+}
+
 export function openContextMenu(clientX, clientY, target) {
   const menu = el("context-menu");
+  closeSubmenu();
   menu.replaceChildren();
+  let key = 0;
   for (const item of itemsFor(target)) {
     if (item.separator) {
       const sep = document.createElement("div");
@@ -120,16 +237,8 @@ export function openContextMenu(clientX, clientY, target) {
       menu.appendChild(sep);
       continue;
     }
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "ctx-item";
-    if (item.danger) button.classList.add("danger");
-    button.textContent = item.label;
-    button.disabled = Boolean(item.disabled);
-    button.addEventListener("click", () => {
-      closeContextMenu();
-      item.onClick();
-    });
+    const button = buildButton(item);
+    button.dataset.key = String((key += 1));
     menu.appendChild(button);
   }
   menu.classList.remove("hidden");

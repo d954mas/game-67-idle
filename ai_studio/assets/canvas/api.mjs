@@ -20,6 +20,7 @@
 //   POST   /api/canvas/projects/<id>/redo
 //   GET    /api/canvas/projects/<id>/history
 //   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible}
+//   PUT    /api/canvas/projects/<id>/elements/<eid>/regions {regions}   (replace)
 //   DELETE /api/canvas/projects/<id>/elements/<eid>
 //   GET    /api/canvas/projects/<id>/files/<name>  (image bytes, path-confined)
 //   GET    /api/canvas/projects/<id>/export/<...>  (export files, path-confined)
@@ -45,6 +46,7 @@ import {
   renderGroup,
   resolveProjectFile,
   resolveProjectPath,
+  setRegions,
   sliceRegions,
   undoOp,
 } from "./ops.mjs";
@@ -277,6 +279,15 @@ export function createCanvasApi(root) {
         const segments = parts.slice(5).map((part) => decodeURIComponent(part));
         const filePath = resolveProjectPath(root, id, "export", ...segments);
         serveFile(res, filePath);
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/regions  (replace regions)
+      if (parts.length === 7 && sub === "elements" && parts[6] === "regions" && req.method === "PUT") {
+        const elementId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        const regions = Array.isArray(body) ? body : body.regions;
+        sendJson(res, 200, setRegions(root, { projectId: id, elementId, regions }));
         return true;
       }
 

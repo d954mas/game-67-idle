@@ -6,12 +6,15 @@ import {
   api,
   clearSelection,
   elements,
+  enterRegionEdit,
+  regionEditElement,
   reloadProject,
   selectOnly,
   setStatus,
   setStatusLinks,
   state,
 } from "./app.js";
+import { newRegionId } from "./regions.js";
 import { screenToImagePoint } from "../../viewer/asset_tools_viewport.mjs";
 
 function pid() {
@@ -119,13 +122,103 @@ export async function detectRegionsFor(id) {
   }
 }
 
-export async function sliceRegionsFor(id) {
+// Slice all of an element's regions, or only `regionIds` when given (per-region
+// slice from the region menu / inspector "Slice selected region(s)"). The op crops
+// the STORED region rects verbatim, so edited and hand-drawn regions crop exactly.
+export async function sliceRegionsFor(id, regionIds) {
   try {
     setStatus("Slicing regions...");
-    const result = await api("POST", `/projects/${pid()}/slice`, { elementId: id });
+    const body = { elementId: id };
+    if (Array.isArray(regionIds) && regionIds.length) body.regionIds = regionIds;
+    const result = await api("POST", `/projects/${pid()}/slice`, body);
     state.selectedGroupId = null;
+    state.selectedRegionIds = new Set();
     state.selectedIds = new Set(result.created.map((element) => element.id));
     await reloadProject(`Sliced ${result.created.length} region(s) into new elements.`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// ---- regions -----------------------------------------------------------------
+
+// Replace an element's regions in one journaled setRegions op. Region edits
+// (move/resize/rubber-band) accumulate locally during the gesture and commit here
+// exactly once, so undo steps back a whole gesture rather than every mouse move.
+export async function setRegionsFor(elementId, regions, message) {
+  try {
+    await api("PUT", `/projects/${pid()}/elements/${elementId}/regions`, { regions });
+    await reloadProject(message);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Add a default centered region to an element and enter region-edit mode with it
+// selected, so "+ Add region" is discoverable without knowing the draw gesture.
+export async function addCenteredRegion(elementId) {
+  const element = elements().find((item) => item.id === elementId);
+  if (!element) return;
+  const sw = element.source_w || element.w;
+  const sh = element.source_h || element.h;
+  const w = Math.max(4, Math.round(sw / 3));
+  const h = Math.max(4, Math.round(sh / 3));
+  const x = Math.round((sw - w) / 2);
+  const y = Math.round((sh - h) / 2);
+  const id = newRegionId();
+  enterRegionEdit(elementId);
+  state.selectedRegionIds = new Set([id]);
+  try {
+    await api("PUT", `/projects/${pid()}/elements/${elementId}/regions`, {
+      regions: [...(element.regions || []), { id, rect: [x, y, w, h] }],
+    });
+    await reloadProject("Added region.");
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Rename a region (inline edit in the layers tree / inspector). Journaled via
+// setRegions; an empty name is dropped by the op.
+export async function renameRegion(elementId, regionId, name) {
+  const element = elements().find((item) => item.id === elementId);
+  if (!element) return;
+  const regions = (element.regions || []).map((region) =>
+    region.id === regionId ? { ...region, name } : region,
+  );
+  try {
+    await api("PUT", `/projects/${pid()}/elements/${elementId}/regions`, { regions });
+    await reloadProject();
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Delete the selected regions from the isolated (mode B) element (Delete key /
+// inspector ×). One setRegions op with the survivors; stays in mode B.
+export async function deleteSelectedRegions() {
+  const element = regionEditElement();
+  if (!element) return;
+  const ids = new Set(state.selectedRegionIds);
+  if (!ids.size) return;
+  const remaining = (element.regions || []).filter((region) => !ids.has(region.id));
+  try {
+    await api("PUT", `/projects/${pid()}/elements/${element.id}/regions`, { regions: remaining });
+    state.selectedRegionIds = new Set();
+    await reloadProject(`Removed ${ids.size} region(s).`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+export async function deleteRegion(elementId, regionId) {
+  const element = elements().find((item) => item.id === elementId);
+  if (!element) return;
+  const remaining = (element.regions || []).filter((region) => region.id !== regionId);
+  try {
+    await api("PUT", `/projects/${pid()}/elements/${elementId}/regions`, { regions: remaining });
+    state.selectedRegionIds.delete(regionId);
+    await reloadProject("Removed region.");
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -180,6 +273,19 @@ export async function createGroupOrDefault(name) {
     const result = await api("POST", `/projects/${pid()}/groups`, body);
     state.selectedGroupId = result.group.id;
     await reloadProject(`Created screen "${result.group.name}".`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Move elements into a screen (groupId) or out to top level (null). Used by the
+// "Move to screen" context submenu and the layers-panel row drag.
+export async function assignElementsToGroup(elementIds, groupId) {
+  const ids = [...elementIds];
+  if (!ids.length) return;
+  try {
+    await api("POST", `/projects/${pid()}/assign-group`, { elementIds: ids, groupId: groupId ?? null });
+    await reloadProject(groupId ? "Moved to screen." : "Moved out of screen.");
   } catch (error) {
     setStatus(error.message, true);
   }

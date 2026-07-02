@@ -14,11 +14,19 @@ export const state = {
   project: null,
   selectedIds: new Set(),
   selectedGroupId: null,
+  // Region isolation mode (increment 6). regionEditId is the element currently in
+  // region-edit mode (mode B / Figma-style isolation); null = object mode (mode A,
+  // regions are passive, non-hit-testable overlays). selectedRegionIds are the
+  // regions selected WITHIN mode B. Both are page-only, like the tool state, and
+  // reset whenever the element selection changes.
+  regionEditId: null,
+  selectedRegionIds: new Set(),
   history: { canUndo: false, canRedo: false },
   viewport: { scale: 1, offsetX: 0, offsetY: 0 },
   tool: "select", // "select" | "pan"
   spacePan: false, // Space-hold temporarily activates pan
   collapsedGroups: new Set(), // group ids collapsed in the layers panel (page-only)
+  expandedElements: new Set(), // element ids whose region tree is expanded in layers (page-only)
   cssWidth: 0, // stage size in CSS pixels (backing store is dpr-scaled)
   cssHeight: 0,
 };
@@ -165,11 +173,15 @@ export function clearImageCache() {
 
 export function selectOnly(elementId) {
   state.selectedGroupId = null;
+  state.selectedRegionIds = new Set();
+  state.regionEditId = null;
   state.selectedIds = elementId ? new Set([elementId]) : new Set();
 }
 
 export function toggleSelect(elementId) {
   state.selectedGroupId = null;
+  state.selectedRegionIds = new Set();
+  state.regionEditId = null;
   if (state.selectedIds.has(elementId)) state.selectedIds.delete(elementId);
   else state.selectedIds.add(elementId);
 }
@@ -177,6 +189,53 @@ export function toggleSelect(elementId) {
 export function clearSelection() {
   state.selectedIds = new Set();
   state.selectedGroupId = null;
+  state.selectedRegionIds = new Set();
+  state.regionEditId = null;
+}
+
+// The element currently in region-edit isolation (mode B): its regions become the
+// only hit-testable things on the canvas. Null in object mode (mode A).
+export function regionEditElement() {
+  if (!state.regionEditId) return null;
+  const element = elementById(state.regionEditId);
+  if (!element || isElementHidden(element)) {
+    state.regionEditId = null;
+    return null;
+  }
+  return element;
+}
+
+// Enter region-edit isolation for an element (double-click / "Edit regions" menu /
+// "+ Add region"). Like Figma enter-group: nothing region-selected yet.
+export function enterRegionEdit(elementId) {
+  const element = elementById(elementId);
+  if (!element) return;
+  state.selectedGroupId = null;
+  state.selectedIds = new Set([elementId]);
+  state.regionEditId = elementId;
+  state.expandedElements.add(elementId);
+}
+
+// Leave isolation: clears region selection AND the mode (one Escape step).
+export function exitRegionEdit() {
+  state.regionEditId = null;
+  state.selectedRegionIds = new Set();
+}
+
+// Select a region on its parent element (inspector rows / layers tree). Selecting a
+// region implies entering mode B on that element; Shift toggles multi. The parent's
+// region tree is auto-expanded so the row stays visible.
+export function selectRegion(elementId, regionId, additive = false) {
+  state.selectedGroupId = null;
+  state.selectedIds = new Set([elementId]);
+  state.regionEditId = elementId;
+  if (additive) {
+    if (state.selectedRegionIds.has(regionId)) state.selectedRegionIds.delete(regionId);
+    else state.selectedRegionIds.add(regionId);
+  } else {
+    state.selectedRegionIds = new Set([regionId]);
+  }
+  state.expandedElements.add(elementId);
 }
 
 // ---- project lifecycle -------------------------------------------------------
@@ -205,6 +264,7 @@ export function setProjectParam(id) {
   if (id) url.searchParams.set("project", id);
   else url.searchParams.delete("project");
   url.searchParams.delete("select"); // the debug select hook is one-shot
+  url.searchParams.delete("regions"); // the debug region-edit hook is one-shot
   window.history.replaceState(null, "", url);
 }
 

@@ -27,11 +27,11 @@
 //     picks the stale branch — the redo tail is invalidated automatically.
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, extname, join } from "node:path";
 import {
   detectRaster2dRegions,
-  exportRaster2dRegions,
   uploadRaster2dSource,
 } from "../tools/raster2d/api.mjs";
 import {
@@ -145,6 +145,66 @@ export function removeElement(root, projectId, elementId) {
     after: result.project,
   });
   return { project, removed: result.removed };
+}
+
+// Replace an element's regions array (the ADJUST/SELECT step before slicing).
+// Validates each region carries an id and an in-source-bounds integer rect while
+// preserving any extra fields the detector/slicer attach (content_bbox, area_px,
+// merged_from, ...). Journaled like any metadata mutation, so the before/after
+// snapshot restores the previous regions on undo/redo. This is the one op behind
+// both the page's region editing (drag/resize/rubber-band) and the CLI regions-set.
+export function setRegions(root, { projectId, elementId, regions } = {}) {
+  if (!projectId) throw new Error("setRegions requires projectId");
+  if (!elementId) throw new Error("setRegions requires elementId");
+  if (!Array.isArray(regions)) throw new Error("setRegions requires a regions array");
+  const before = getProject(root, projectId);
+  const element = (before.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  const boundsW = Number(element.source_w) || Number(element.w) || 0;
+  const boundsH = Number(element.source_h) || Number(element.h) || 0;
+
+  const seen = new Set();
+  const clean = regions.map((region, index) => {
+    if (!region || typeof region !== "object") throw new Error(`region ${index} is not an object`);
+    const id = String(region.id == null ? "" : region.id).trim();
+    if (!id) throw new Error(`region ${index} is missing an id`);
+    if (seen.has(id)) throw new Error(`duplicate region id: ${id}`);
+    seen.add(id);
+    const rect = region.rect;
+    if (!Array.isArray(rect) || rect.length !== 4 || !rect.every((value) => Number.isFinite(Number(value)))) {
+      throw new Error(`region ${id} rect must be [x, y, w, h] numbers`);
+    }
+    const x = Math.round(Number(rect[0]));
+    const y = Math.round(Number(rect[1]));
+    const w = Math.round(Number(rect[2]));
+    const h = Math.round(Number(rect[3]));
+    if (w <= 0 || h <= 0) throw new Error(`region ${id} rect must have positive width and height`);
+    if (x < 0 || y < 0 || x + w > boundsW || y + h > boundsH) {
+      throw new Error(`region ${id} rect [${x}, ${y}, ${w}, ${h}] is out of source bounds ${boundsW}x${boundsH}`);
+    }
+    // Preserve extra detector/slicer fields (content_bbox, area_px, future shape);
+    // normalize id + rect and the optional first-class `name` (trimmed string).
+    const out = { ...region, id, rect: [x, y, w, h] };
+    if (out.name !== undefined && out.name !== null) {
+      const name = String(out.name).trim();
+      if (name) out.name = name;
+      else delete out.name;
+    }
+    return out;
+  });
+
+  const nextElements = (before.elements || []).map((item) =>
+    item.id === elementId ? { ...item, regions: clean } : item,
+  );
+  const after = updateProject(root, projectId, { elements: nextElements });
+  const project = commitMutation(root, projectId, {
+    op: "setRegions",
+    args_summary: { elementId, region_count: clean.length },
+    before,
+    after,
+  });
+  const updated = (project.elements || []).find((item) => item.id === elementId);
+  return { project, element: updated, regions: (updated && updated.regions) || [] };
 }
 
 // ---- project-level ops -------------------------------------------------------
@@ -492,16 +552,20 @@ export async function detectRegions(root, { projectId, elementId, params = {} } 
   return { project, element, run, regions };
 }
 
-// ---- sliceRegions (bridged) --------------------------------------------------
+// ---- sliceRegions (own crop tool) --------------------------------------------
 
-// Slice an element's detected regions into new immutable image elements. Bridges
-// to the raster2d pipeline exactly as the Asset Tools surface does: stage the
-// element bytes as a session source, normalize + detect to get a clean keyed
-// image, then export the SELECTED region rects in one slice call. Cropping PNGs
-// in pure Node has no dependency-free path, so we reuse the Python slicer; no
-// raster2d code is modified. Each crop becomes a content-addressed file + a new
-// image element placed in a grid to the right of the parent, with provenance in
-// meta.parent. The whole slice is one journal entry (undo removes every crop).
+// Slice an element's stored regions into new immutable image elements. Cropping is
+// done by our OWN Python tool (tools/crop_regions.py, PIL): ops writes a crop spec
+// (absolute source path + the element's regions with their exact rects) and spawns
+// the script once. Each region is cropped from the element's own pixels by the
+// STORED rect — verbatim, no re-detection — so user-moved, resized, and hand-drawn
+// regions all crop exactly where they sit (unlike a detect-then-export bridge,
+// which would key/normalize the pixels and re-derive geometry). Each crop becomes a
+// content-addressed file + a new image element placed in a grid to the right of the
+// parent, with provenance in meta.parent. The whole slice is one journal entry
+// (undo removes every crop). detectRegions still uses the raster2d bridge; only
+// slice is ours. Per-region spec entries are objects, so a future polygon shape
+// slots in additively.
 export async function sliceRegions(root, { projectId, elementId, regionIds } = {}) {
   if (!projectId) throw new Error("sliceRegions requires projectId");
   if (!elementId) throw new Error("sliceRegions requires elementId");
@@ -524,48 +588,66 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
   }
   if (!selected.length) throw new Error("no regions selected to slice");
 
-  const { buffer, fileName } = readElementBytes(root, projectId, elementId);
-  const dataUrl = `data:${mimeForExt(fileName)};base64,${buffer.toString("base64")}`;
-  const uploaded = await uploadRaster2dSource(root, { fileName, dataUrl });
-  const detected = await detectRaster2dRegions(root, { sourcePath: uploaded.sourcePath, options: {} });
-  const prefix = slug(parent.name || "sheet");
-  const exported = await exportRaster2dRegions(root, {
-    imagePath: detected.normalizedPath,
-    regions: selected,
-    prefix,
-    includeReviewSheet: false,
-  });
-  const slices = (exported.manifest && exported.manifest.slices) || [];
-  if (!slices.length) throw new Error("raster2d produced no slices");
-
-  // Place crops in a neat grid to the right of the parent (gap in source pixels).
-  const gap = 16;
-  const startX = parent.x + parent.w + gap;
-  const columns = Math.max(1, Math.ceil(Math.sqrt(slices.length)));
+  const sourceAbs = resolveProjectFile(root, projectId, parent.src);
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-slice-"));
   const created = [];
-  let col = 0;
-  let cursorX = startX;
-  let rowY = parent.y;
-  let rowMaxH = 0;
-  for (const sliceItem of slices) {
-    const bytes = readFileSync(join(root, sliceItem.path));
-    const added = storeAddImage(root, projectId, {
-      name: `${parent.name}#${sliceItem.id}`,
-      bytes,
-      x: cursorX,
-      y: rowY,
-      meta: { parent: { elementId, regionId: sliceItem.id, sheetSrc: parent.src } },
-    });
-    created.push(added.element);
-    cursorX += added.element.w + gap;
-    rowMaxH = Math.max(rowMaxH, added.element.h);
-    col += 1;
-    if (col >= columns) {
-      col = 0;
-      cursorX = startX;
-      rowY += rowMaxH + gap;
-      rowMaxH = 0;
+  try {
+    const specPath = join(workDir, "crop_spec.json");
+    const reportPath = join(workDir, "crop_report.json");
+    const spec = {
+      schema: "ai_studio.canvas.crop_regions_spec.v1",
+      source: sourceAbs,
+      output_dir: workDir,
+      report: reportPath,
+      // Objects (not bare rects) so a future {shape:{type:"polygon",points}} slots in.
+      regions: selected.map((region) => {
+        const rect = region.rect || region.content_bbox;
+        if (!Array.isArray(rect) || rect.length !== 4) {
+          throw new Error(`region ${region.id} has no rect to slice`);
+        }
+        return { id: String(region.id), rect };
+      }),
+    };
+    writeFileSync(specPath, `${JSON.stringify(spec, null, 2)}\n`);
+    await runPython(root, ["ai_studio/assets/canvas/tools/crop_regions.py", "--spec", specPath]);
+    const report = JSON.parse(readFileSync(reportPath, "utf8"));
+    const crops = (report && report.crops) || [];
+    if (!crops.length) throw new Error("crop_regions produced no crops");
+
+    // Place crops in a neat grid to the right of the parent (gap in source pixels).
+    const gap = 16;
+    const startX = parent.x + parent.w + gap;
+    const columns = Math.max(1, Math.ceil(Math.sqrt(crops.length)));
+    let col = 0;
+    let cursorX = startX;
+    let rowY = parent.y;
+    let rowMaxH = 0;
+    for (const crop of crops) {
+      const bytes = readFileSync(join(workDir, crop.file));
+      // Name the crop after the region's name when set (sanitized/trimmed), else
+      // fall back to the <parent-name>#<region-id> provenance scheme.
+      const region = selected.find((item) => String(item.id) === String(crop.id));
+      const cropName = region && region.name ? String(region.name).trim() : "";
+      const added = storeAddImage(root, projectId, {
+        name: cropName || `${parent.name}#${crop.id}`,
+        bytes,
+        x: cursorX,
+        y: rowY,
+        meta: { parent: { elementId, regionId: crop.id, sheetSrc: parent.src } },
+      });
+      created.push(added.element);
+      cursorX += added.element.w + gap;
+      rowMaxH = Math.max(rowMaxH, added.element.h);
+      col += 1;
+      if (col >= columns) {
+        col = 0;
+        cursorX = startX;
+        rowY += rowMaxH + gap;
+        rowMaxH = 0;
+      }
     }
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
   }
 
   const run = {
@@ -574,7 +656,7 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
     elementId,
     at: new Date().toISOString(),
     params: { regionIds: selected.map((region) => String(region.id)) },
-    result_summary: { slice_count: created.length, session_id: detected.sessionId },
+    result_summary: { slice_count: created.length },
   };
   const withRun = updateProject(root, projectId, {
     tool_runs: [...(getProject(root, projectId).tool_runs || []), run],

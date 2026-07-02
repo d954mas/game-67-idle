@@ -9,6 +9,8 @@ import {
   clearSelection,
   el,
   elementById,
+  enterRegionEdit,
+  exitRegionEdit,
   hooks,
   lastProjectId,
   loadProjects,
@@ -23,6 +25,7 @@ import {
 import {
   createGroupFromSelection,
   deleteSelectedElements,
+  deleteSelectedRegions,
   redo,
   undo,
 } from "./actions.js";
@@ -54,8 +57,10 @@ async function showHome() {
 }
 
 // Open a project into the workspace. `select` is the optional ?select=<id> debug
-// hook (documented in the README) that pre-selects one element for screenshots.
-async function openProject(id, { select } = {}) {
+// hook (documented in the README) that pre-selects one element for screenshots;
+// `regions` is the sibling ?regions=<id> hook that opens straight into region-edit
+// isolation (mode B) with the element's first region selected, for screenshots.
+async function openProject(id, { select, regions } = {}) {
   closeContextMenu();
   try {
     state.project = (await api("GET", `/projects/${id}`)).project;
@@ -66,7 +71,15 @@ async function openProject(id, { select } = {}) {
   }
   clearSelection();
   clearImageCache();
-  if (select && elementById(select)) selectOnly(select);
+  if (regions) {
+    const element = elementById(regions);
+    if (element && (element.regions || []).length) {
+      enterRegionEdit(regions);
+      state.selectedRegionIds = new Set([element.regions[0].id]);
+    }
+  } else if (select && elementById(select)) {
+    selectOnly(select);
+  }
   await refreshHistory();
   rememberLastProject(id);
   setProjectParam(id);
@@ -134,14 +147,28 @@ function onKeyDown(event) {
     return zoomTo(2);
   }
   if (key === "escape") {
-    // Escape never leaves the project — it only closes the menu / clears selection.
+    // Escape never leaves the project. It unwinds one level at a time: close the
+    // menu, then exit region-edit isolation (clearing region selection + mode),
+    // then clear element/group selection.
     closeContextMenu();
+    if (state.regionEditId) {
+      exitRegionEdit();
+      refresh();
+      return;
+    }
     clearSelection();
     refresh();
     return;
   }
   if (key === "delete" || key === "backspace") {
-    if (state.selectedIds.size) {
+    // In region-edit mode, Delete only removes selected regions (never the image
+    // being edited); otherwise it removes selected elements.
+    if (state.regionEditId) {
+      if (state.selectedRegionIds.size) {
+        event.preventDefault();
+        deleteSelectedRegions();
+      }
+    } else if (state.selectedIds.size) {
       event.preventDefault();
       deleteSelectedElements();
     }
@@ -178,10 +205,11 @@ window.addEventListener("keyup", onKeyUp);
   const params = new URLSearchParams(window.location.search);
   const projectParam = params.get("project");
   const selectParam = params.get("select") || undefined;
+  const regionsParam = params.get("regions") || undefined;
   const known = (id) => state.projects.some((project) => project.id === id);
 
   if (projectParam && known(projectParam)) {
-    await openProject(projectParam, { select: selectParam });
+    await openProject(projectParam, { select: selectParam, regions: regionsParam });
   } else if (lastProjectId() && known(lastProjectId())) {
     await openProject(lastProjectId());
   } else {

@@ -429,17 +429,16 @@ button:disabled {
   min-height: 0;
 }
 
+/* Cursor is driven by JS (workspace.js) on hover/drag: default arrow in Select,
+   move over elements/regions, resize over region handles, and grab/grabbing ONLY
+   while panning. These rules are just the pre-first-move fallbacks. */
 #canvas {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
-  cursor: grab;
+  cursor: default;
   display: block;
-}
-
-#canvas.dragging {
-  cursor: grabbing;
 }
 
 #stage.pan-tool #canvas,
@@ -674,4 +673,233 @@ button:disabled {
   height: 1px;
   background: var(--line);
   margin: 4px 2px;
+}
+
+/* Context submenu ("Move to screen ▸"). */
+.ctx-item.has-sub {
+  position: relative;
+  padding-right: 22px;
+}
+
+.ctx-arrow {
+  position: absolute;
+  right: 8px;
+  color: var(--muted);
+}
+
+.ctx-submenu {
+  position: absolute;
+  z-index: 51;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px;
+  min-width: 150px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ---- region workbench (increment 6) --------------------------------------- */
+
+/* Element region tree rows in the layers panel. */
+.caret.empty {
+  visibility: hidden;
+}
+
+.region-row {
+  margin-left: 30px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.region-row.in-group {
+  margin-left: 46px;
+}
+
+.region-num {
+  min-width: 16px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--cyan);
+  background: rgba(63, 199, 186, 0.16);
+  border-radius: 4px;
+  padding: 1px 4px;
+  flex: none;
+}
+
+.region-row.selected {
+  background: #24405f;
+  color: var(--text);
+}
+
+.region-row.selected .region-num {
+  color: #ffca6a;
+  background: rgba(215, 161, 74, 0.2);
+}
+
+/* Inspector REGIONS section. */
+.insp-region-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.insp-region-head .badge {
+  color: var(--cyan);
+}
+
+.insp-regions {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-bottom: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.insp-region-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 6px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.insp-region-row:hover {
+  background: var(--panel-soft);
+}
+
+.insp-region-row.selected {
+  background: #24405f;
+}
+
+.insp-region-row .region-idx {
+  min-width: 16px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--cyan);
+  background: rgba(63, 199, 186, 0.16);
+  border-radius: 4px;
+  padding: 1px 4px;
+  flex: none;
+}
+
+.insp-region-row.selected .region-idx {
+  color: #ffca6a;
+  background: rgba(215, 161, 74, 0.2);
+}
+
+.insp-region-row .region-label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.region-del {
+  padding: 0;
+  width: 18px;
+  height: 18px;
+  line-height: 1;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  flex: none;
+  opacity: 0;
+}
+
+.insp-region-row:hover .region-del,
+.insp-region-row.selected .region-del {
+  opacity: 1;
+}
+
+.region-del:hover {
+  color: var(--red);
+}
+
+.insp-region-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.insp-region-hint {
+  font-size: 11px;
+  color: var(--muted);
+  padding: 2px 2px 0;
+}
+
+.insp-region-empty {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 2px 0 6px;
+}
+
+/* Region-edit isolation (mode B) breadcrumb chip. */
+#region-breadcrumb {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(16, 18, 20, 0.9);
+  border: 1px solid var(--cyan);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--cyan);
+  pointer-events: none;
+  z-index: 6;
+  white-space: nowrap;
+}
+
+/* Layers reparent drag hints. The panel never text-selects during a row drag. */
+#layers-panel {
+  user-select: none;
+}
+
+.group-head.drop-target {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+  background: rgba(39, 100, 189, 0.18);
+}
+
+/* "Drop to top level" indicator: highlight the whole panel. */
+#layers-panel.drop-root {
+  box-shadow: inset 0 0 0 2px var(--blue);
+}
+
+.layer-row.dragging {
+  opacity: 0.5;
+  outline: 1px dashed var(--blue);
+  outline-offset: -1px;
+}
+
+.layer-drag-ghost {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  background: var(--panel-soft);
+  border: 1px solid var(--blue);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 12px;
+  color: var(--text);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+body.layer-dragging {
+  user-select: none;
+  cursor: grabbing;
+}
+
+body.layer-dragging .layer-row {
+  cursor: grabbing;
 }

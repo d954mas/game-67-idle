@@ -1,13 +1,25 @@
 // Workspace view: the pan/zoom canvas, its crisp DPR-aware rendering, tool rail,
-// zoom controls, top bar sync, and all pointer interaction (select, drag-move,
-// pan). Geometry is reused from the Asset Tools viewport module. Every persisted
-// change goes through the shared actions/API; this module only renders and turns
-// input into those calls.
+// zoom controls, top bar sync, and all pointer interaction. Geometry is reused
+// from the Asset Tools viewport module and the region helpers in regions.js. Every
+// persisted change goes through the shared actions/API; this module only renders
+// and turns input into those calls.
+//
+// Pointer model (increment 6):
+//   * Panning is EXCLUSIVELY Hand tool / Space-hold / middle-mouse.
+//   * Select tool, empty canvas drag -> marquee element select (Shift adds).
+//   * A single selected element shows its regions as bright numbered overlays;
+//     clicking a region selects it, dragging moves it, corner/edge handles resize,
+//     and (while a region is selected) dragging the element's empty area rubber-
+//     bands a NEW region. Every region gesture commits ONCE via setRegions.
+//   * Dropping an element with its centre inside another screen frame reparents it
+//     (assignToGroup); positions persist ONCE on mouseup (no mid-drag journal spam).
 import {
   api,
   clearSelection,
   el,
   elements,
+  enterRegionEdit,
+  exitRegionEdit,
   groupById,
   groups,
   hiddenGroupIds,
@@ -17,15 +29,25 @@ import {
   imageFor,
   memberElements,
   refresh,
+  regionEditElement,
+  reloadProject,
   selectedElements,
   selectOnly,
   setStatus,
   state,
   toggleSelect,
 } from "./app.js";
-import { renameProject, undo, redo } from "./actions.js";
+import { renameProject, setRegionsFor, undo, redo } from "./actions.js";
 import { inlineEdit } from "./inline.js";
 import { openContextMenu } from "./context_menu.js";
+import {
+  drawRegionsOverlay,
+  hitRegion,
+  hitRegionHandle,
+  newRegionId,
+  regionRect,
+  scaleFactors,
+} from "./regions.js";
 import {
   clamp,
   fitViewport,
@@ -65,8 +87,12 @@ export function render() {
   ctx.imageSmoothingEnabled = vp.scale < 2;
 
   const hidden = hiddenGroupIds();
+  const editEl = regionEditElement(); // mode B element, or null (mode A)
   for (const element of elements()) {
     if (isElementHidden(element, hidden)) continue;
+    const isEdit = editEl && element.id === editEl.id;
+    // Mode B dims every other element to focus the isolated one.
+    ctx.globalAlpha = editEl && !isEdit ? 0.3 : 1;
     const img = imageFor(element);
     const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
     const w = element.w * vp.scale;
@@ -77,11 +103,16 @@ export function render() {
       ctx.strokeStyle = "#596774";
       ctx.strokeRect(origin.x, origin.y, w, h);
     }
+    ctx.globalAlpha = 1;
     if (isSelected(element)) {
-      ctx.strokeStyle = "#77a7ff";
+      ctx.strokeStyle = isEdit ? "#3fc7ba" : "#77a7ff";
       ctx.lineWidth = 2;
       ctx.strokeRect(origin.x, origin.y, w, h);
-      drawRegions(element, vp);
+      // Passive numbered hint in mode A; strong strokes + handles in mode B.
+      drawRegionsOverlay(ctx, element, vp, {
+        selectedRegionIds: state.selectedRegionIds,
+        interactive: Boolean(isEdit),
+      });
     }
   }
 
@@ -90,8 +121,21 @@ export function render() {
     if (group.visible === false) continue;
     drawGroupFrame(group, vp);
   }
+  drawGestureOverlay();
+  updateBreadcrumb(editEl);
   updateZoomIndicator();
   updateEmptyHint();
+}
+
+function updateBreadcrumb(editEl) {
+  const node = el("region-breadcrumb");
+  if (!node) return;
+  if (editEl) {
+    node.textContent = `Regions: ${editEl.name || editEl.id} — Esc to exit`;
+    node.classList.remove("hidden");
+  } else {
+    node.classList.add("hidden");
+  }
 }
 
 function drawGroupFrame(group, vp) {
@@ -117,20 +161,24 @@ function drawGroupFrame(group, vp) {
   groupLabelRects.push(rect);
 }
 
-function drawRegions(element, vp) {
-  const regions = element.regions || [];
-  const sx = element.w / (element.source_w || element.w);
-  const sy = element.h / (element.source_h || element.h);
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = "#3fc7ba";
-  ctx.fillStyle = "rgba(63, 199, 186, 0.12)";
-  for (const region of regions) {
-    const rect = region.rect || region.content_bbox;
-    if (!rect) continue;
-    const p = imageToScreenPoint({ x: element.x + rect[0] * sx, y: element.y + rect[1] * sy }, vp);
-    ctx.fillRect(p.x, p.y, rect[2] * sx * vp.scale, rect[3] * sy * vp.scale);
-    ctx.strokeRect(p.x, p.y, rect[2] * sx * vp.scale, rect[3] * sy * vp.scale);
-  }
+function normScreenRect(a, b) {
+  return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
+}
+
+// Live rubber-band overlays for the marquee and new-region gestures.
+function drawGestureOverlay() {
+  if (!drag) return;
+  if (drag.mode !== "marquee" && drag.mode !== "region-create") return;
+  const rect = normScreenRect(drag.startScreen, drag.lastScreen);
+  const marquee = drag.mode === "marquee";
+  ctx.save();
+  ctx.setLineDash([4, 3]);
+  ctx.fillStyle = marquee ? "rgba(119, 167, 255, 0.12)" : "rgba(63, 199, 186, 0.18)";
+  ctx.strokeStyle = marquee ? "#77a7ff" : "#3fc7ba";
+  ctx.lineWidth = marquee ? 1 : 1.5;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w, rect.h);
+  ctx.restore();
 }
 
 function updateZoomIndicator() {
@@ -209,11 +257,14 @@ export function syncTopBar() {
 // ---- pointer interaction -----------------------------------------------------
 
 let drag = null;
-let moveSaveTimer = null;
 
 function pointer(event) {
   const rect = canvas.getBoundingClientRect();
   return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+
+function setCursor(name) {
+  if (canvas) canvas.style.cursor = name;
 }
 
 function hitElement(world) {
@@ -235,23 +286,65 @@ function hitGroupLabel(screen) {
   return null;
 }
 
-function scheduleMoveSave() {
-  clearTimeout(moveSaveTimer);
-  moveSaveTimer = setTimeout(saveDraggedPositions, 300);
+// Topmost visible screen frame whose bounds contain the world point (for reparent).
+function groupAtCenter(cx, cy) {
+  const list = groups();
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const g = list[i];
+    if (g.visible === false) continue;
+    if (cx >= g.x && cx <= g.x + g.w && cy >= g.y && cy <= g.y + g.h) return g.id;
+  }
+  return null;
 }
 
-async function saveDraggedPositions() {
-  if (!drag || !drag.items) return;
-  for (const item of drag.items) {
-    try {
-      await api("PATCH", `/projects/${state.project.id}/elements/${item.element.id}`, {
-        x: Math.round(item.element.x),
-        y: Math.round(item.element.y),
-      });
-    } catch (error) {
-      setStatus(error.message, true);
-    }
+// ---- region gesture starts ---------------------------------------------------
+
+function beginRegionResize(element, grabbed, screen) {
+  const { sx, sy } = scaleFactors(element);
+  drag = {
+    mode: "region-resize",
+    element,
+    region: grabbed.region,
+    handle: grabbed.handle,
+    orig: [...regionRect(grabbed.region)],
+    startX: screen.x,
+    startY: screen.y,
+    sx,
+    sy,
+    cursor: grabbed.handle.cursor,
+    changed: false,
+  };
+  setCursor(grabbed.handle.cursor);
+}
+
+function beginRegionSelectMove(element, region, screen, shift) {
+  if (shift) {
+    if (state.selectedRegionIds.has(region.id)) state.selectedRegionIds.delete(region.id);
+    else state.selectedRegionIds.add(region.id);
+  } else if (!state.selectedRegionIds.has(region.id)) {
+    state.selectedRegionIds = new Set([region.id]);
   }
+  state.expandedElements.add(element.id);
+  if (state.selectedRegionIds.has(region.id)) {
+    const { sx, sy } = scaleFactors(element);
+    const items = (element.regions || [])
+      .filter((r) => state.selectedRegionIds.has(r.id) && regionRect(r))
+      .map((r) => ({ region: r, orig: [...regionRect(r)] }));
+    drag = { mode: "region-move", element, items, startX: screen.x, startY: screen.y, sx, sy, changed: false };
+    setCursor("move");
+  } else {
+    drag = null;
+  }
+  refresh();
+}
+
+function beginRegionCreate(element, screen, world) {
+  drag = { mode: "region-create", element, startScreen: screen, lastScreen: screen, startWorld: world };
+  setCursor("crosshair");
+}
+
+function pointInElement(world, element) {
+  return world.x >= element.x && world.x <= element.x + element.w && world.y >= element.y && world.y <= element.y + element.h;
 }
 
 function onMouseDown(event) {
@@ -262,22 +355,50 @@ function onMouseDown(event) {
 
   if (wantPan) {
     drag = { mode: "pan", startX: screen.x, startY: screen.y, origOffset: { ...state.viewport } };
-    canvas.classList.add("dragging");
+    setCursor("grabbing");
     return;
+  }
+
+  // MODE B (region-edit isolation): only the isolated element's regions respond.
+  const editEl = regionEditElement();
+  if (editEl) {
+    if (state.selectedRegionIds.size) {
+      const grabbed = hitRegionHandle(screen, editEl, state.selectedRegionIds, state.viewport);
+      if (grabbed) {
+        beginRegionResize(editEl, grabbed, screen);
+        return;
+      }
+    }
+    if (pointInElement(world, editEl)) {
+      const region = hitRegion(world, editEl);
+      if (region) {
+        beginRegionSelectMove(editEl, region, screen, event.shiftKey);
+        return;
+      }
+      // Empty area of the isolated (locked) image -> rubber-band a NEW region.
+      beginRegionCreate(editEl, screen, world);
+      return;
+    }
+    // Clicked outside the isolated image -> exit isolation, then handle as mode A.
+    exitRegionEdit();
+    refresh();
   }
 
   const labelGroupId = hitGroupLabel(screen);
   if (labelGroupId) {
     state.selectedGroupId = labelGroupId;
     state.selectedIds = new Set();
+    state.selectedRegionIds = new Set();
+    state.regionEditId = null;
     const group = groupById(labelGroupId);
     const members = memberElements(labelGroupId).map((element) => ({ element, origX: element.x, origY: element.y }));
     drag = { mode: "group", startX: screen.x, startY: screen.y, group, origGroup: { x: group.x, y: group.y }, members };
-    canvas.classList.add("dragging");
+    setCursor("move");
     refresh();
     return;
   }
 
+  // MODE A (object mode): regions are passive; drag always moves the whole element.
   const hit = hitElement(world);
   if (hit) {
     state.selectedGroupId = null;
@@ -285,86 +406,300 @@ function onMouseDown(event) {
     else if (!state.selectedIds.has(hit.id)) selectOnly(hit.id);
     const items = selectedElements().map((element) => ({ element, origX: element.x, origY: element.y }));
     drag = { mode: "element", startX: screen.x, startY: screen.y, items };
-    canvas.classList.add("dragging");
-  } else {
-    if (!event.shiftKey) clearSelection();
-    drag = { mode: "pan", startX: screen.x, startY: screen.y, origOffset: { ...state.viewport } };
-    canvas.classList.add("dragging");
+    setCursor("move");
+    refresh();
+    return;
   }
+
+  // Empty canvas -> marquee select (panning is Hand/Space/middle-mouse only).
+  drag = {
+    mode: "marquee",
+    startScreen: screen,
+    lastScreen: screen,
+    base: event.shiftKey ? new Set(state.selectedIds) : new Set(),
+  };
+  if (!event.shiftKey) clearSelection();
+  setCursor("crosshair");
   refresh();
+}
+
+function applyMarquee() {
+  const a = screenToImagePoint(drag.startScreen, state.viewport);
+  const b = screenToImagePoint(drag.lastScreen, state.viewport);
+  const rx = Math.min(a.x, b.x);
+  const ry = Math.min(a.y, b.y);
+  const rw = Math.abs(b.x - a.x);
+  const rh = Math.abs(b.y - a.y);
+  const hidden = hiddenGroupIds();
+  const inside = new Set(drag.base);
+  for (const element of elements()) {
+    if (isElementHidden(element, hidden)) continue;
+    const outside = element.x + element.w < rx || element.x > rx + rw || element.y + element.h < ry || element.y > ry + rh;
+    if (!outside) inside.add(element.id);
+  }
+  state.selectedGroupId = null;
+  state.selectedRegionIds = new Set();
+  state.selectedIds = inside;
+}
+
+function dragRegionMove(screen) {
+  const el2 = drag.element;
+  const sw = el2.source_w || el2.w;
+  const sh = el2.source_h || el2.h;
+  const dxSrc = Math.round((screen.x - drag.startX) / (state.viewport.scale * drag.sx));
+  const dySrc = Math.round((screen.y - drag.startY) / (state.viewport.scale * drag.sy));
+  for (const item of drag.items) {
+    const [ox, oy, w, h] = item.orig;
+    item.region.rect = [clamp(ox + dxSrc, 0, Math.max(0, sw - w)), clamp(oy + dySrc, 0, Math.max(0, sh - h)), w, h];
+  }
+  if (dxSrc !== 0 || dySrc !== 0) drag.changed = true;
+}
+
+function dragRegionResize(screen) {
+  const el2 = drag.element;
+  const sw = el2.source_w || el2.w;
+  const sh = el2.source_h || el2.h;
+  const MIN = 2;
+  const dx = Math.round((screen.x - drag.startX) / (state.viewport.scale * drag.sx));
+  const dy = Math.round((screen.y - drag.startY) / (state.viewport.scale * drag.sy));
+  const [ox, oy, ow, oh] = drag.orig;
+  let x = ox;
+  let y = oy;
+  let w = ow;
+  let h = oh;
+  if (drag.handle.fx === 0) {
+    x = clamp(ox + dx, 0, ox + ow - MIN);
+    w = ox + ow - x;
+  } else if (drag.handle.fx === 1) {
+    w = clamp(ow + dx, MIN, sw - ox);
+  }
+  if (drag.handle.fy === 0) {
+    y = clamp(oy + dy, 0, oy + oh - MIN);
+    h = oy + oh - y;
+  } else if (drag.handle.fy === 1) {
+    h = clamp(oh + dy, MIN, sh - oy);
+  }
+  drag.region.rect = [x, y, w, h];
+  if (x !== ox || y !== oy || w !== ow || h !== oh) drag.changed = true;
 }
 
 function onMouseMove(event) {
   if (!drag) return;
   const screen = pointer(event);
-  if (drag.mode === "pan") {
-    state.viewport = {
-      ...state.viewport,
-      offsetX: drag.origOffset.offsetX + (screen.x - drag.startX),
-      offsetY: drag.origOffset.offsetY + (screen.y - drag.startY),
-    };
-    render();
-  } else if (drag.mode === "group") {
-    const dx = (screen.x - drag.startX) / state.viewport.scale;
-    const dy = (screen.y - drag.startY) / state.viewport.scale;
-    drag.group.x = drag.origGroup.x + dx;
-    drag.group.y = drag.origGroup.y + dy;
-    for (const item of drag.members) {
-      item.element.x = item.origX + dx;
-      item.element.y = item.origY + dy;
+  const vp = state.viewport;
+  switch (drag.mode) {
+    case "pan":
+      state.viewport = {
+        ...vp,
+        offsetX: drag.origOffset.offsetX + (screen.x - drag.startX),
+        offsetY: drag.origOffset.offsetY + (screen.y - drag.startY),
+      };
+      render();
+      break;
+    case "group": {
+      const dx = (screen.x - drag.startX) / vp.scale;
+      const dy = (screen.y - drag.startY) / vp.scale;
+      drag.group.x = drag.origGroup.x + dx;
+      drag.group.y = drag.origGroup.y + dy;
+      for (const item of drag.members) {
+        item.element.x = item.origX + dx;
+        item.element.y = item.origY + dy;
+      }
+      render();
+      break;
     }
-    render();
-  } else {
-    const dx = (screen.x - drag.startX) / state.viewport.scale;
-    const dy = (screen.y - drag.startY) / state.viewport.scale;
-    for (const item of drag.items) {
-      item.element.x = item.origX + dx;
-      item.element.y = item.origY + dy;
+    case "element": {
+      const dx = (screen.x - drag.startX) / vp.scale;
+      const dy = (screen.y - drag.startY) / vp.scale;
+      for (const item of drag.items) {
+        item.element.x = item.origX + dx;
+        item.element.y = item.origY + dy;
+      }
+      render();
+      break;
     }
-    render();
-    scheduleMoveSave();
+    case "marquee":
+      drag.lastScreen = screen;
+      applyMarquee();
+      refresh();
+      break;
+    case "region-move":
+      dragRegionMove(screen);
+      render();
+      break;
+    case "region-resize":
+      dragRegionResize(screen);
+      render();
+      break;
+    case "region-create":
+      drag.lastScreen = screen;
+      render();
+      break;
+    default:
+      break;
   }
+}
+
+function commitElementDrag(finished) {
+  const projectId = state.project.id;
+  const moved = finished.items.filter(
+    (it) => Math.round(it.element.x) !== Math.round(it.origX) || Math.round(it.element.y) !== Math.round(it.origY),
+  );
+  // Reparent: an element whose centre lands inside a frame it doesn't belong to
+  // joins that screen; landing outside every frame while belonging to one clears it.
+  // Group elements by target so it is ONE assign call per target group.
+  const reassign = new Map();
+  for (const it of finished.items) {
+    const element = it.element;
+    const target = groupAtCenter(element.x + element.w / 2, element.y + element.h / 2);
+    const current = element.groupId || null;
+    if (target !== current) {
+      if (!reassign.has(target)) reassign.set(target, []);
+      reassign.get(target).push(element.id);
+    }
+  }
+  if (!moved.length && !reassign.size) {
+    refresh();
+    return;
+  }
+  (async () => {
+    try {
+      // Reparent FIRST, then persist positions LAST, so a single Ctrl+Z restores the
+      // pre-drag position in ONE step (the newest journal entry is the position patch).
+      for (const [groupId, ids] of reassign) {
+        await api("POST", `/projects/${projectId}/assign-group`, { elementIds: ids, groupId });
+      }
+      for (const it of moved) {
+        await api("PATCH", `/projects/${projectId}/elements/${it.element.id}`, {
+          x: Math.round(it.element.x),
+          y: Math.round(it.element.y),
+        });
+      }
+      await reloadProject();
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  })();
+}
+
+function commitGroupDrag(finished) {
+  const moved =
+    Math.round(finished.group.x) !== Math.round(finished.origGroup.x) ||
+    Math.round(finished.group.y) !== Math.round(finished.origGroup.y);
+  if (!moved) {
+    refresh();
+    return;
+  }
+  (async () => {
+    try {
+      await api("PATCH", `/projects/${state.project.id}/groups/${finished.group.id}`, {
+        x: Math.round(finished.group.x),
+        y: Math.round(finished.group.y),
+      });
+      await reloadProject("Moved screen.");
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  })();
+}
+
+function commitRegionCreate(finished) {
+  const element = finished.element;
+  const a = screenToImagePoint(finished.startScreen, state.viewport);
+  const b = screenToImagePoint(finished.lastScreen, state.viewport);
+  const { sx, sy } = scaleFactors(element);
+  const sw = element.source_w || element.w;
+  const sh = element.source_h || element.h;
+  const toSrcX = (wx) => clamp(Math.round((wx - element.x) / sx), 0, sw);
+  const toSrcY = (wy) => clamp(Math.round((wy - element.y) / sy), 0, sh);
+  const x0 = toSrcX(Math.min(a.x, b.x));
+  const y0 = toSrcY(Math.min(a.y, b.y));
+  const w = toSrcX(Math.max(a.x, b.x)) - x0;
+  const h = toSrcY(Math.max(a.y, b.y)) - y0;
+  if (w < 3 || h < 3) {
+    refresh(); // too small: treat as a click, no region created
+    return;
+  }
+  const id = newRegionId();
+  state.selectedRegionIds = new Set([id]);
+  state.expandedElements.add(element.id);
+  setRegionsFor(element.id, [...(element.regions || []), { id, rect: [x0, y0, w, h] }], "Added region.");
 }
 
 function onMouseUp() {
   if (!drag) return;
   const finished = drag;
-  const mode = drag.mode;
   drag = null;
-  canvas.classList.remove("dragging");
-  if (mode === "element") {
-    clearTimeout(moveSaveTimer);
-    (async () => {
-      for (const item of finished.items) {
-        try {
-          await api("PATCH", `/projects/${state.project.id}/elements/${item.element.id}`, {
-            x: Math.round(item.element.x),
-            y: Math.round(item.element.y),
-          });
-        } catch (error) {
-          setStatus(error.message, true);
-        }
+  switch (finished.mode) {
+    case "element":
+      commitElementDrag(finished);
+      break;
+    case "group":
+      commitGroupDrag(finished);
+      break;
+    case "marquee":
+      refresh(); // selection already applied live
+      break;
+    case "region-move":
+    case "region-resize":
+      if (finished.changed) setRegionsFor(finished.element.id, finished.element.regions);
+      else refresh();
+      break;
+    case "region-create":
+      commitRegionCreate(finished);
+      break;
+    default:
+      render();
+      break;
+  }
+  updateCursorAt(finished.lastScreen || { x: finished.startX || 0, y: finished.startY || 0 });
+}
+
+// Idle hover cursor. Mode A: default arrow, move over elements. Mode B: resize over
+// handles, move over regions, crosshair over the isolated image's empty area (draw),
+// default elsewhere. Grab/grabbing appear ONLY while panning.
+function updateCursorAt(screen) {
+  if (drag || !canvas) return;
+  if (state.tool === "pan" || state.spacePan) {
+    setCursor("grab");
+    return;
+  }
+  const world = screenToImagePoint(screen, state.viewport);
+  const editEl = regionEditElement();
+  if (editEl) {
+    if (state.selectedRegionIds.size) {
+      const grabbed = hitRegionHandle(screen, editEl, state.selectedRegionIds, state.viewport);
+      if (grabbed) {
+        setCursor(grabbed.handle.cursor);
+        return;
       }
-      const { refreshHistory, reloadProject } = await import("./app.js");
-      await refreshHistory();
-      await reloadProject();
-    })();
-  } else if (mode === "group") {
-    const moved = Math.round(finished.group.x) !== Math.round(finished.origGroup.x)
-      || Math.round(finished.group.y) !== Math.round(finished.origGroup.y);
-    if (!moved) return;
-    (async () => {
-      try {
-        await api("PATCH", `/projects/${state.project.id}/groups/${finished.group.id}`, {
-          x: Math.round(finished.group.x),
-          y: Math.round(finished.group.y),
-        });
-        const { reloadProject } = await import("./app.js");
-        await reloadProject("Moved screen.");
-      } catch (error) {
-        setStatus(error.message, true);
-      }
-    })();
+    }
+    if (pointInElement(world, editEl)) {
+      setCursor(hitRegion(world, editEl) ? "move" : "crosshair");
+      return;
+    }
+    setCursor("default");
+    return;
+  }
+  if (hitGroupLabel(screen) || hitElement(world)) {
+    setCursor("move");
+    return;
+  }
+  setCursor("default");
+}
+
+function onHover(event) {
+  if (drag) return;
+  updateCursorAt(pointer(event));
+}
+
+// Double-click an image that has regions -> enter region-edit isolation (mode B).
+function onDblClick(event) {
+  const world = screenToImagePoint(pointer(event), state.viewport);
+  const hit = hitElement(world);
+  if (hit && (hit.regions || []).length) {
+    enterRegionEdit(hit.id);
+    refresh();
   }
 }
 
@@ -385,9 +720,21 @@ function onContextMenu(event) {
   if (labelGroupId) {
     state.selectedGroupId = labelGroupId;
     state.selectedIds = new Set();
+    state.selectedRegionIds = new Set();
     refresh();
     openContextMenu(event.clientX, event.clientY, { kind: "group", groupId: labelGroupId });
     return;
+  }
+  // Mode B: right-click a region on the isolated element -> region menu.
+  const editEl = regionEditElement();
+  if (editEl && pointInElement(world, editEl)) {
+    const region = hitRegion(world, editEl);
+    if (region) {
+      if (!state.selectedRegionIds.has(region.id)) state.selectedRegionIds = new Set([region.id]);
+      refresh();
+      openContextMenu(event.clientX, event.clientY, { kind: "region", elementId: editEl.id, regionId: region.id });
+      return;
+    }
   }
   const hit = hitElement(world);
   if (hit) {
@@ -408,6 +755,8 @@ export function initWorkspace() {
   hooks.syncTopBar = syncTopBar;
 
   canvas.addEventListener("mousedown", onMouseDown);
+  canvas.addEventListener("mousemove", onHover);
+  canvas.addEventListener("dblclick", onDblClick);
   window.addEventListener("mousemove", onMouseMove);
   window.addEventListener("mouseup", onMouseUp);
   canvas.addEventListener("wheel", onWheel, { passive: false });
@@ -451,5 +800,6 @@ export function setTool(tool) {
   state.tool = tool === "pan" ? "pan" : "select";
   const stage = el("stage");
   if (stage) stage.classList.toggle("pan-tool", state.tool === "pan");
+  if (canvas) canvas.style.cursor = state.tool === "pan" ? "grab" : "default";
   syncTopBar();
 }

@@ -9,19 +9,26 @@ import {
   groupById,
   hooks,
   memberElements,
-  regionCount,
+  refresh,
   selectedElements,
+  selectRegion,
   state,
 } from "./app.js";
 import {
+  addCenteredRegion,
+  deleteRegion,
   exportElementIds,
   patchElementBox,
   patchGroupBox,
   renameElement,
   renameGroup,
+  renameRegion,
   renderScreen,
   setGroupVisible,
+  sliceRegionsFor,
 } from "./actions.js";
+import { openContextMenu } from "./context_menu.js";
+import { inlineEdit } from "./inline.js";
 
 function field(label, node) {
   const row = document.createElement("label");
@@ -98,12 +105,117 @@ function section(title) {
   return node;
 }
 
+// Compact region row: index + name-or-size + delete. Rect/coords live in the row
+// tooltip to keep the panel calm; double-click the label to rename (journaled via
+// setRegions), click to select on canvas, right-click for the region menu.
+function regionRowInspector(element, region, index) {
+  const rect = region.rect || region.content_bbox || [0, 0, 0, 0];
+  const row = document.createElement("div");
+  row.className = "insp-region-row";
+  if (state.regionEditId === element.id && state.selectedRegionIds.has(region.id)) row.classList.add("selected");
+  row.title = `${rect[2]}×${rect[3]} @ (${rect[0]}, ${rect[1]})`;
+
+  const idx = document.createElement("span");
+  idx.className = "region-idx";
+  idx.textContent = String(index + 1);
+
+  const label = document.createElement("span");
+  label.className = "region-label";
+  label.textContent = region.name || `${rect[2]}×${rect[3]}`;
+
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "region-del";
+  del.title = "Delete region";
+  del.textContent = "×";
+  del.addEventListener("click", (event) => {
+    event.stopPropagation();
+    deleteRegion(element.id, region.id);
+  });
+
+  row.append(idx, label, del);
+  row.addEventListener("click", (event) => {
+    if (event.target.closest("button")) return;
+    selectRegion(element.id, region.id, event.shiftKey || event.ctrlKey || event.metaKey);
+    refresh();
+  });
+  row.addEventListener("dblclick", (event) => {
+    if (event.target.closest("button")) return;
+    event.stopPropagation();
+    inlineEdit(label, region.name || "", (next) => renameRegion(element.id, region.id, next));
+  });
+  row.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    selectRegion(element.id, region.id, false);
+    refresh();
+    openContextMenu(event.clientX, event.clientY, { kind: "region", elementId: element.id, regionId: region.id });
+  });
+  return row;
+}
+
+// The REGIONS section: a header with a count badge, one compact row per region
+// (numbers match the canvas badges + layers tree), discoverable + Add / Slice
+// buttons, and a single muted placeholder line for the future matte pipeline.
+function renderRegions(element, root) {
+  const regions = element.regions || [];
+
+  const head = document.createElement("div");
+  head.className = "insp-section insp-region-head";
+  const title = document.createElement("span");
+  title.textContent = "Regions";
+  const badge = document.createElement("span");
+  badge.className = "badge";
+  badge.textContent = String(regions.length);
+  head.append(title, badge);
+  root.appendChild(head);
+
+  if (regions.length) {
+    const list = document.createElement("div");
+    list.className = "insp-regions";
+    regions.forEach((region, index) => list.appendChild(regionRowInspector(element, region, index)));
+    root.appendChild(list);
+  } else {
+    const empty = document.createElement("div");
+    empty.className = "insp-region-empty";
+    empty.textContent = "No regions yet.";
+    root.appendChild(empty);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "insp-region-actions";
+
+  const addBtn = document.createElement("button");
+  addBtn.type = "button";
+  addBtn.className = "insp-btn";
+  addBtn.textContent = "+ Add region";
+  addBtn.addEventListener("click", () => addCenteredRegion(element.id));
+  actions.appendChild(addBtn);
+
+  const selectedIds = [...state.selectedRegionIds].filter(
+    (id) => state.regionEditId === element.id && regions.some((region) => region.id === id),
+  );
+  const sliceBtn = document.createElement("button");
+  sliceBtn.type = "button";
+  sliceBtn.className = "primary insp-btn";
+  sliceBtn.textContent = selectedIds.length ? `Slice selected (${selectedIds.length})` : "Slice selected region(s)";
+  sliceBtn.disabled = selectedIds.length === 0;
+  sliceBtn.addEventListener("click", () => sliceRegionsFor(element.id, selectedIds));
+  actions.appendChild(sliceBtn);
+
+  const future = document.createElement("div");
+  future.className = "insp-region-hint";
+  future.textContent = "Alpha / Generate — with the matte pipeline";
+  actions.appendChild(future);
+  root.appendChild(actions);
+}
+
 function renderElement(element, root) {
   root.appendChild(section("Element"));
   root.appendChild(field("Name", textInput(element.name, (next) => renameElement(element.id, next))));
   root.appendChild(boxGrid(element, (patch) => patchElementBox(element.id, patch)));
   root.appendChild(readOnly("Source", `${element.source_w || element.w} x ${element.source_h || element.h}`));
-  root.appendChild(readOnly("Regions", String(regionCount(element))));
+
+  renderRegions(element, root);
 
   if (element.meta && element.meta.parent) {
     root.appendChild(section("Provenance"));

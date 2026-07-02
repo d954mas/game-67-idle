@@ -27,11 +27,15 @@ and design decisions.
   journal undo/redo, groups=screens with composite render, full UI redesign
   (home cards, workspace panels, dnd), instant create, `/canvas` route,
   delete confirm, layers dblclick rename, CLI parity commands.
-- Increment 6 in flight: region workbench — journaled `setRegions`, bright
-  numbered overlays, region select/edit/draw, per-region slice **cropping the
-  stored (edited) geometry, not a re-detect**, layers region tree, marquee
-  select, drag-into-screen reparenting, one-journal-entry drags, cursor fix.
-  Regions stay extensible for future polygonal shapes (`T0209`).
+- Increment 6 shipped (2026-07-02): region workbench — journaled `setRegions`
+  (+ optional region `name`, inherited by sliced crops), two-mode interaction
+  (object mode: regions passive; double-click = isolation region-edit mode
+  with handles/draw/delete, Esc exits), per-region slice **cropping the
+  stored (edited) geometry verbatim** via our own `tools/crop_regions.py`
+  (one Python spawn, ~130 ms vs ~830 ms re-detect before), layers region
+  tree, marquee select, drag-into-screen reparenting with drop-to-root,
+  one-journal-entry drags, cursor fix. Regions stay extensible for future
+  polygonal shapes (`T0209`).
 - Benchmark harness landed (`9544f6c7`): `tests/bench.mjs`, baseline in
   `tmp/canvas_bench_2026-07-02.json`.
 
@@ -120,5 +124,8 @@ questions: micro costs vs. real-project feel.
 - Lead's unified Python matte (uncommitted `raster2d`/`cutout` work) gates
   `T0207` and per-region alpha (`T0210`), and should be coordinated with the
   Python worker (`T0202`).
-- Increment 6 report will confirm the single-spawn slice fix; if it kept the
-  raster2d bridge, fold the crop-tool change into `T0202`.
+- Single-spawn slice landed with increment 6 (`tools/crop_regions.py`);
+  `T0202`'s worker now targets detect/render only.
+- Canvas slice crops WITHOUT alpha (verified on the wings test 2026-07-02):
+  the alpha step is not bridged to canvas yet — it arrives with the matte as
+  a first-class per-element op (regions optional), wings = acceptance asset.

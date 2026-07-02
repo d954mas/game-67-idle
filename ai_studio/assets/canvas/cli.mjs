@@ -11,6 +11,8 @@
 //   node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
+//   node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json
+//   node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 //   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all
 //   node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h]
@@ -42,6 +44,7 @@ import {
   redoOp,
   removeElement,
   renderGroup,
+  setRegions,
   sliceRegions,
   undoOp,
 } from "./ops.mjs";
@@ -69,7 +72,7 @@ function print(value) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|slice|export|group-create|group-move|group-set|group-assign|group-delete|render-screen|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|regions-set|regions-show|slice|export|group-create|group-move|group-set|group-assign|group-delete|render-screen|undo|redo|history>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -80,6 +83,8 @@ function usage() {
   move <id> --element <eid> --x <n> --y <n>
   element-set <id> --element <eid> [--name <name>] [--visible true|false]
   element-remove <id> --element <eid>
+  regions-set <id> --element <eid> --json <path>   (JSON: a regions array or {regions:[...]})
+  regions-show <id> --element <eid>
   slice <id> --element <eid> [--regions r1,r2]
   export <id> --elements e1,e2 | --all
   group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>]
@@ -148,6 +153,23 @@ async function main(argv) {
       if (!id) fail("element-remove requires <id>");
       if (!flags.element) fail("element-remove requires --element <eid>");
       return print(removeElement(repoRoot, id, flags.element));
+    }
+    case "regions-set": {
+      if (!id) fail("regions-set requires <id>");
+      if (!flags.element) fail("regions-set requires --element <eid>");
+      if (!flags.json || flags.json === "true") fail("regions-set requires --json <path>");
+      // The JSON file may be a bare regions array or a { regions: [...] } wrapper
+      // (e.g. a detect-regions dump), so accept either shape.
+      const raw = JSON.parse(readFileSync(resolve(flags.json), "utf8"));
+      const regions = Array.isArray(raw) ? raw : raw.regions;
+      return print(setRegions(repoRoot, { projectId: id, elementId: flags.element, regions }));
+    }
+    case "regions-show": {
+      if (!id) fail("regions-show requires <id>");
+      if (!flags.element) fail("regions-show requires --element <eid>");
+      const element = (getProject(repoRoot, id).elements || []).find((item) => item.id === flags.element);
+      if (!element) fail(`element not found: ${flags.element}`);
+      return print({ elementId: element.id, regions: element.regions || [] });
     }
     case "slice": {
       if (!id) fail("slice requires <id>");

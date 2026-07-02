@@ -55,6 +55,11 @@ Every capability is one op in `ops.mjs`:
   writes an immutable file) — journaled
 - `patchElement` (move/resize/rename/`visible`) / `removeElement` (element only;
   file stays) — journaled
+- `setRegions({ projectId, elementId, regions })` — replace an element's regions
+  array (the ADJUST/SELECT step before slicing). Validates each region has an id
+  and an in-source-bounds integer `rect`, while **preserving any extra fields**
+  the detector/slicer attach (`content_bbox`, `area_px`, `merged_from`, and any
+  future shape field). Journaled, so undo/redo restore the previous regions.
 - `createGroup` / `patchGroup` / `assignToGroup` / `deleteGroup` — group (screen)
   mutations, journaled; `renderGroup` — composited screen PNG export, not
   journaled. See **Groups = screens** below.
@@ -63,12 +68,15 @@ Every capability is one op in `ops.mjs`:
   `source_w`/`source_h`), records a `tool_runs` entry — journaled. Requires Python
   (numpy + Pillow), as the rest of the raster2d pipeline.
 - `sliceRegions({ projectId, elementId, regionIds? })` — crops the element's
-  detected regions into new immutable content-addressed image elements. Requires
+  **stored** regions into new immutable content-addressed image elements, cropping
+  each region's rect **verbatim** from the element's own pixels (so moved, resized,
+  and hand-drawn regions all crop exactly where they sit). Requires
   `element.regions` (errors clearly otherwise). Default: all regions. Each crop is
   a new image element named `<parent-name>#<region-id>`, placed in a grid to the
   right of the parent (16px gap in source pixels), with `meta.parent =
   { elementId, regionId, sheetSrc }`. One journal entry per slice (undo removes
-  every created crop) plus a `slice_regions` `tool_runs` entry. Requires Python.
+  every created crop) plus a `slice_regions` `tool_runs` entry. Requires Python
+  (Pillow) via our own `tools/crop_regions.py`.
 - `exportElements({ projectId, elementIds, format? })` — copies each element's
   current image file into `<project>/export/<utc-stamp>/` under a sanitized,
   collision-suffixed name plus a `manifest.json`. Not journaled (it makes no
@@ -118,14 +126,23 @@ Each element is drawn at its display box (`element.w`/`h`) scaled by `scale`,
 offset relative to the group origin, and alpha-composited so overlap and
 transparency stay correct; anything outside the group box is clipped.
 
-### Slice bridge choice
+### Slice crop tool
 
-Cropping PNGs has no dependency-free pure-Node path, so `sliceRegions` reuses the
-raster2d Python slicer unmodified, exactly as the Asset Tools surface does: it
-stages the element bytes as a raster2d session (`uploadRaster2dSource`), normalizes
-+ detects to get a clean keyed image (`detectRaster2dRegions`), then slices the
-SELECTED region rects in one `exportRaster2dRegions` call and re-imports each crop
-PNG as a canvas element. No raster2d code is modified.
+Cropping PNGs has no dependency-free pure-Node path, so `sliceRegions` uses our
+OWN Python tool `tools/crop_regions.py` (PIL), spawned the same way as
+`tools/render_group.py`: `ops.sliceRegions` writes a crop spec (absolute source
+path + the element's selected regions with their exact rects) and spawns the
+script once. Each region is cropped from the element's own pixels by its **stored**
+rect — no re-detection — so user-moved, resized, and hand-drawn regions (ids that
+never came from any detect run) all crop exactly where they sit. This replaced the
+earlier detect-then-export raster2d bridge, which re-normalized/keyed the pixels
+and re-derived geometry (two Python spawns); `detectRegions` still uses the
+raster2d bridge, only slice is ours.
+
+Each per-region spec entry is an **object** (`{ id, rect }`), not a bare rect, so a
+future polygonal shape (`{ shape: { type: "polygon", points: [...] } }`) slots in
+additively without changing the spec contract — and `setRegions` preserves unknown
+region fields so that geometry survives a round-trip through the op layer today.
 
 ## Journal, undo, and redo
 
@@ -178,6 +195,8 @@ node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
 node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--name "X"] [--visible true|false]
 node ai_studio/assets/canvas/cli.mjs element-remove <id> --element <eid>
+node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json   # a regions array or {regions:[...]}
+node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all
 node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h]
@@ -214,24 +233,38 @@ one document that swaps two views; the JS is split into focused ES modules under
   workspace top bar.
 - `workspace.js` — the **workspace** view: the DPR-crisp pan/zoom canvas, the left
   tool rail (Select/Hand), zoom controls + indicator, top bar sync, and all pointer
-  interaction (select, drag-move, pan). `imageSmoothingEnabled` is off at ≥2× zoom.
+  interaction (marquee select, drag-move + drop-to-reparent, region select/edit,
+  pan). `imageSmoothingEnabled` is off at ≥2× zoom.
+- `regions.js` — region workbench geometry: source-pixel rects → world/screen boxes,
+  region body + resize-handle hit-testing, and the bright numbered overlay drawing.
+  Pure helpers; edits persist through the shared `setRegions` op.
 - `layers_panel.js` — the collapsible, group-aware layers list (ungrouped elements at
   top level; groups as collapsible sections with an eye toggle and inline-rename
   name; member rows indented; 24px thumbnail, region-count badge, eye toggle;
-  selection syncs both ways with the canvas).
+  region-bearing elements expand into indented region rows; element rows drag onto a
+  group header / top level to reparent; selection syncs both ways with the canvas).
 - `inspector.js` — the right panel for the selection: element (name, X/Y/W/H,
-  source size, provenance, regions, meta), group/screen (name, X/Y/W/H, visible,
-  member count, **Render screen** with scale + background), multi-select (count +
-  Export selected), or "Nothing selected".
-- `context_menu.js` — the right-click menu (per element / group / empty canvas);
-  every item calls an action; closes on click-away or Escape.
+  source size, provenance, meta, and a calm **Regions** section: a count badge,
+  compact per-region rows — number + name/size + delete, coords in the tooltip —
+  that select/enter region-edit on the canvas and inline-rename on double-click,
+  plus **+ Add region**, **Slice selected region(s)**, and one muted matte-pipeline
+  placeholder line), group/screen (name, X/Y/W/H, visible, member count,
+  **Render screen** with scale + background), multi-select (count + Export
+  selected), or "Nothing selected".
+- `context_menu.js` — the right-click menu (per element / region / group / empty
+  canvas), including **Edit regions** + a **Move to screen ▸** submenu on elements,
+  **Slice this region** / **Delete region** on a region, and (from the layers panel
+  too) the same element/group menus; every item calls an action; closes on
+  click-away or Escape.
 - `dnd.js` — OS drag & drop (drop images at the drop point with a drop highlight)
   and Ctrl/Cmd+V clipboard paste at the viewport center.
 - `canvas.js` — the controller: boots the modules, owns view routing (deep link
   `?project=<id>`, last-opened restore via `localStorage`) and the global keyboard.
 
 A debug hook `?select=<elementId>` pre-selects one element on open (handy for
-screenshots); it may stay. Downloads: after **export** / **Render screen** the
+screenshots); its sibling `?regions=<elementId>` opens straight into region-edit
+isolation (mode B) with the first region selected; both may stay. Downloads: after
+**export** / **Render screen** the
 status area shows clickable links served by the confined
 `GET /api/canvas/projects/<id>/export/<stamp>/<file>` route.
 
@@ -245,14 +278,37 @@ drawn nor hit-testable.
 | Key | Action |
 | --- | --- |
 | `V` / `H` | Select tool / Hand (pan) tool |
-| Space (hold) | Temporary pan; middle-mouse always pans |
+| Space (hold) / middle-mouse | Pan (panning is Hand tool / Space-hold / middle-mouse only) |
+| Drag on empty canvas | Marquee-select elements (Shift adds to the selection) |
 | Click / Shift+Click / Ctrl+Click | Select / add-to-selection on canvas and in layers |
 | `0` / `1` / `2` | Fit / 100% / 200% zoom (wheel also zooms) |
 | `Ctrl/Cmd`+`Z` / `Ctrl/Cmd`+`Shift`+`Z` or `Ctrl`+`Y` | Undo / Redo |
 | `Ctrl/Cmd`+`G` | Group 2+ selected elements into a screen |
-| `Delete` / `Backspace` | Remove selected elements (image files kept on disk) |
-| `Escape` | Close menu / clear selection (never leaves the project) |
-| Right-click | Context menu; double-click a name to inline-rename |
+| `Delete` / `Backspace` | Region-edit mode: remove selected regions; else remove selected elements |
+| `Escape` | Close menu, then exit region-edit isolation, then clear element/group selection |
+| Right-click | Context menu (element / region / group / empty); double-click a name to inline-rename |
+
+**Region workbench (isolation mode)** — regions use a Figma-style edit-in-place
+pattern with two modes:
+
+- **Object mode (default).** Selecting an element draws its regions as a passive,
+  numbered hint. Regions are NOT hit-testable — a click or drag always moves the
+  whole image, so region drags can't happen by accident.
+- **Region-edit mode (isolation).** Enter by double-clicking an image that has
+  regions, via **Edit regions** in its context menu, via **+ Add region** in the
+  inspector, or by clicking a region row in the layers tree / inspector. The
+  isolated image is locked, other elements dim out, and a breadcrumb shows the mode
+  ("Regions: <name> — Esc to exit"). Now regions are the only hit-testable things:
+  click a region to select (Shift multi), drag inside it to move, drag its
+  corner/edge handles to resize, drag the image's empty area to rubber-band a NEW
+  region, `Delete` removes the selected regions. Every gesture commits once via
+  `setRegions`. `Esc` (or clicking outside the image) exits back to object mode.
+
+Regions carry an optional first-class `name` (inline-rename a region row in the
+layers tree or inspector; shown in place of the size hint, and used to name the
+crop element on slice). Dropping an element with its centre inside another screen
+frame reparents it; drag element rows in the layers panel onto a group header (or
+the panel's top-level area) to reassign, with a ghost + drop highlight.
 
 ## Validation
 

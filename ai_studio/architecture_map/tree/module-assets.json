@@ -1123,6 +1123,19 @@
           ]
         },
         {
+          "id": "assets:canvas-plan",
+          "kind": "doc",
+          "path": "ai_studio/assets/canvas/PLAN.md",
+          "title": "PLAN.md",
+          "description": "Lead-owned working plan for the canvas module: the non-negotiable laws (tool parity, thin page, non-destructive art), the increment order, design decisions, and the narrative state that the taskboard epic E010 tasks are scoped against.",
+          "role": "canvas module plan",
+          "tags": [
+            "assets",
+            "canvas",
+            "doc"
+          ]
+        },
+        {
           "id": "assets:canvas-store",
           "kind": "tool",
           "path": "ai_studio/assets/canvas/store.mjs",
@@ -1328,6 +1341,15 @@
               "title": "inline.js",
               "description": "Inline text-editing helper: swaps a label for a text input that commits on Enter/blur and cancels on Escape, used to rename projects, elements, and groups without a browser prompt().",
               "role": "canvas inline edit helper",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-regions",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/regions.js",
+              "title": "regions.js",
+              "description": "Region workbench geometry: convert an element's source-pixel region rects to world/screen boxes, hit-test region bodies and resize handles, and draw the bright numbered overlays. Pure DOM-free helpers for the workspace; region edits still persist through the shared setRegions op.",
+              "role": "canvas region geometry",
               "tags": ["assets", "canvas", "ui", "browser-js"]
             }
           ]

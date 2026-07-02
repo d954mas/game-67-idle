@@ -6,12 +6,12 @@
 // instead of failing.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { addImage, createProject, detectRegions, getProject, sliceRegions, undoOp } from "../ops.mjs";
-import { magentaSheetPng } from "./png_fixture.mjs";
+import { addImage, createProject, detectRegions, getProject, resolveProjectFile, setRegions, sliceRegions, undoOp } from "../ops.mjs";
+import { decodePng, magentaSheetPng } from "./png_fixture.mjs";
 
 // raster2d runs Python with cwd = repo root and writes its session under
 // <repoRoot>/tmp, so the ops layer must be driven with the real repo root.
@@ -122,6 +122,50 @@ test("sliceRegions crops detected regions into new elements with provenance; und
   const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
   assert.equal(undone.elements.length, before - sliced.created.length);
   assert.equal(undone.elements.length, 1, "only the parent sheet remains after undo");
+});
+
+test("sliceRegions crops the STORED rects verbatim (edited + hand-drawn regions)", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Verbatim" });
+  // 64x48 magenta sheet: red blob (8,8)-(28,28), green blob (36,16)-(56,40).
+  const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
+
+  // No detect run at all: an EDITED rect (covers the red blob exactly) and a
+  // brand-NEW hand-drawn rect (fully inside the green blob) whose ids never came
+  // from any detect. Slicing MUST crop exactly these rects from the raw pixels.
+  setRegions(REPO_ROOT, {
+    projectId: project.id,
+    elementId: element.id,
+    regions: [
+      { id: "edited_red", rect: [8, 8, 20, 20] },
+      { id: "drawn_green", name: "Hero", rect: [40, 20, 10, 10] },
+    ],
+  });
+
+  let sliced;
+  try {
+    sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
+  } catch (error) {
+    t.skip(`crop_regions.py / PIL unavailable: ${error.message}`);
+    return;
+  }
+
+  assert.equal(sliced.created.length, 2, "one crop per stored region, in order");
+  const [red, green] = sliced.created;
+
+  // Dimensions match the stored rects exactly (verbatim geometry).
+  assert.deepEqual([red.w, red.h], [20, 20]);
+  assert.deepEqual([green.w, green.h], [10, 10]);
+  // Unnamed region falls back to <parent>#<id>; named region uses its name.
+  assert.match(red.name, /#edited_red$/);
+  assert.equal(green.name, "Hero");
+
+  // Pixels come from the element's OWN bytes at the rect (not a re-detected/keyed
+  // image): the red crop is the red blob, the green crop is solid green blob pixels.
+  const redPng = decodePng(readFileSync(resolveProjectFile(REPO_ROOT, project.id, red.src)));
+  const greenPng = decodePng(readFileSync(resolveProjectFile(REPO_ROOT, project.id, green.src)));
+  assert.deepEqual(redPng.at(10, 10).slice(0, 3), [220, 40, 40], "red crop centre = red blob");
+  assert.deepEqual(greenPng.at(5, 5).slice(0, 3), [40, 180, 60], "green crop centre = green blob");
 });
 
 test("sliceRegions errors clearly when the element has no regions", (t) => {
