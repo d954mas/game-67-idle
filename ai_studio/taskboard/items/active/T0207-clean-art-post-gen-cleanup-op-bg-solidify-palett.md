@@ -41,6 +41,15 @@ pre-pass inside other ops (alpha keying snaps near-bg before cutting; region
 detect just reads with the same distance math) — these NEVER write a modified
 source file. The lead never has to remember pass ordering.
 
+NOT one monolithic "Clean up" (lead corrected 2026-07-02): a small Cleanup
+section of three separate tools, each with the UX its decision needs.
+Quantize = INTERACTIVE tool: color-count slider (+ optional dither), LIVE
+before/after compare (split or hold-to-see-original), preview recomputed
+debounced with nothing written to disk; Apply = journaled new file, Cancel =
+no trace. Denoise = same pattern with a strength slider. Bg-solidify = one
+click (nothing to preview-tune). CLI parity: `quantize --colors N --preview
+<out>` to try, without --preview to apply.
+
 ## Open questions
 
 ## Log
