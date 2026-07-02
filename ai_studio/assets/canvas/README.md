@@ -166,13 +166,16 @@ scope-crossing walk (render, move cascade, delete, visibility) is cycle-safe.
   `fromElements`, a missing `parentId` defaults to the members' **common** `groupId`
   (nest a widget group inside the screen it was built from), root when they differ. One
   journal entry.
-- `patchGroup({projectId, groupId, name?, x?, y?, w?, h?, visible?, background?})` —
+- `patchGroup({projectId, groupId, name?, x?, y?, w?, h?, visible?, background?, clip?})` —
   when `x`/`y` change, the group's **full descendant closure** translates by the same
   delta — nested subgroup frames AND every element in the subtree — atomically (one
   journal entry; undo restores the frame and the whole closure). Resize (`w`/`h`) never
   moves members. `background` sets the optional solid fill (see below): `null` clears it,
   `{type:"color", color:"#rrggbb"}` sets it — validated (invalid = a loud error, no
-  silent fallback). `None` on an already-unfilled group is a no-op.
+  silent fallback). `None` on an already-unfilled group is a no-op. `clip` is the optional
+  Figma-frame clip flag (see **Group clip** below): a real `true` clips the group's members
+  to its bounds, `false` clears it (stored as an **absent** field, so `clip:false` on an
+  already-unclipped group is a no-op); any non-boolean is a loud error.
 - `reparentGroup({projectId, groupId, parentId|null, index?})` — move a group under a new
   parent (`null` = top level) at an optional **merged-sibling** `index` (default = front
   of the destination scope). **Cycle guard**: a parent that is the group itself or any
@@ -192,11 +195,13 @@ scope-crossing walk (render, move cascade, delete, visibility) is cycle-safe.
   **visible subtree** (`isNodeHidden` prunes hidden nodes), in **computed z-order** per
   scope (the scope's `order`, else the v1 array-order fallback). The painter is
   **recursive**: a nested subgroup composites its own background band then its children
-  inside the parent band (no clip yet — overflow is preserved; the clip branch is
-  structured to slot in). Clipped to the top group bounds, into one PNG at `scale`
-  (default 1). Background precedence: an explicit `background` arg (`#rrggbb`)
-  **overrides** the group's own `background`; else the group's stored fill; else
-  transparent.
+  inside the parent band. A `clip:false` subgroup paints into the parent layer (overflow
+  preserved); a `clip:true` subgroup composites its band + subtree onto its **own box-sized
+  layer** (cropping overflow) then pastes that cropped layer into the parent, so nested
+  clips intersect naturally (see **Group clip**). The top group is always clipped to its
+  own bounds, into one PNG at `scale` (default 1). Background precedence: an explicit
+  `background` arg (`#rrggbb`) **overrides** the group's own `background`; else the group's
+  stored fill; else transparent.
 - **Ungroup** (page action `ungroup`, composed from the shared ops) — dissolve **one
   level**: the group's direct child elements AND direct child subgroups move up to the
   group's **own parent** (not unconditionally to root, so nesting depth is preserved),
@@ -277,6 +282,39 @@ visible. Set it with `patchGroup({background})` (HTTP `PATCH .../groups/<gid>`,
 inspector Background section, group context-menu **Background ▸**) or the CLI
 `group-set --background '#rrggbb'|none`.
 
+### Group clip
+
+`group.clip` is an additive optional boolean (absent/`false` = no clip, the default;
+`true` = clip). It is the Figma frame-clip behavior — members that stick out past the group
+bounds are cropped at the frame — and it governs both the on-canvas display and the
+**subgroup** render:
+
+- **Canvas**: entering a `clip:true` group pushes a rectangular clip region (its screen
+  box) before painting its background + children and pops it after; nested clips intersect
+  through the canvas clip stack. Frames/labels/selection are a separate chrome pass outside
+  every clip, so an empty or overflowing screen is never hidden.
+- **Render / export** (`render_group.py`): a `clip:true` subgroup composites its subtree
+  onto its own box-sized layer (cropping overflow) then pastes that cropped layer into the
+  parent — nested clips intersect because each cropped layer pastes into the next. The
+  **top** group is always cropped at its own bounds regardless of the flag, so **export
+  bounds are unchanged**: the flag only governs subgroup overflow *inside* a screen (and the
+  on-canvas view). A clipping group's background fills only its box (already true).
+- **Hit-test**: a clipped-out pixel is not hit-testable — a canvas point outside a
+  `clip:true` group's box skips that group's whole subtree (so "outside ANY clipping
+  ancestor" is excluded). The layers panel is unaffected — a fully clipped-out element stays
+  selectable there.
+- **Marquee**: an element is tested by its **visible** box (its box intersected with every
+  clipping ancestor), so a member cropped away by a frame isn't rubber-band-selected where
+  it no longer shows.
+- **Ghost hint** (anti "lost my sprite"): when a **selected** element (or a selected
+  group's member) has geometry outside a clipping ancestor, the chrome pass redraws the
+  clipped-away part of the image at low alpha (`0.25`) via an even-odd clip that subtracts
+  the visible box — showing *what* is hidden and *where*, without touching the artwork.
+
+Toggle it with `patchGroup({clip})` (HTTP `PATCH .../groups/<gid>`, inspector Position &
+Size **Clip content** checkbox, group context-menu **Clip content** toggle) or the CLI
+`group-set --clip true|false`.
+
 ### Render contract
 
 `renderGroup` writes `<project>/export/<utc-stamp>/screen_<sanitized-name>.png`
@@ -294,9 +332,11 @@ offset relative to the top group origin, and alpha-composited so overlap and
 transparency stay correct; anything outside the top group box is clipped. The spec
 carries a **recursive** z-ordered `children` tree (built by `compositeGroup` /
 `buildRenderNodes`): a nested subgroup contributes its background band + its own
-children, painted inside the parent band at absolute offsets (no clip yet, so overflow
-is preserved; the flatten step in `render_group.py` leaves a clean seam for the clip
-branch). A hidden node prunes its whole subtree.
+children painted inside the parent band. `render_group.py`'s recursive `paint_children`
+paints a `clip:false` subgroup directly onto the parent layer (overflow preserved) and a
+`clip:true` subgroup onto its own box-sized layer that it then pastes into the parent
+(overflow cropped; nested clips intersect — see **Group clip**). A hidden node prunes its
+whole subtree.
 
 ### Slice crop tool
 
@@ -487,7 +527,7 @@ node ai_studio/assets/canvas/cli.mjs export <id> --all [--scale 2x --format jpg 
 node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h] [--parent <gid>|none]
 node ai_studio/assets/canvas/cli.mjs group-reparent <id> --group g --parent <gid>|none [--index n]   # nest a group; none = top level
 node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
-node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none]
+node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none] [--clip true|false]
 node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 node ai_studio/assets/canvas/cli.mjs render-screen <id> --group g [--scale 2] [--background '#rrggbb']
@@ -552,8 +592,9 @@ one document that swaps two views; the JS is split into focused ES modules under
   compact per-region rows — number + name/size + delete, coords in the tooltip —
   that select/enter region-edit on the canvas and inline-rename on double-click,
   plus **+ Add region**, **Slice selected region(s)**, and one muted matte-pipeline
-  placeholder line), group/screen (name, X/Y/W/H, visible, member count,
-  **Render screen** with scale + background), multi-select (count + "each exports
+  placeholder line), group/screen (name, X/Y/W/H, **Visible** + **Clip content**
+  checkboxes, member count, Background, **Render screen** with scale + background),
+  multi-select (count + "each exports
   its own settings" + Export), or "Nothing selected" (with a project-export button
   when there are visible screens). A single element also gets an **Export** section
   at the BOTTOM (Figma-style): a collapsible list of rows (scale + suffix + format,
@@ -593,8 +634,13 @@ selects that group; clicking empty canvas clears the selection **and** exits to 
 z-order (top-most first). Dragging a selected group moves its **whole subtree**; a hovered
 group at the current scope shows a subtle outline (what a click will select). A marquee
 selects nodes **at the current scope** (top-level groups + loose elements at root, a
-group's own children once entered). Elements that are `visible:false` or inside a hidden
-group are neither drawn nor hit-testable.
+group's own children once entered), by each element's **visible (clipped) box**. Elements
+that are `visible:false` or inside a hidden group are neither drawn nor hit-testable. A
+`clip:true` group crops its members to its bounds on canvas: clipped-out pixels are not
+hit-testable (the layers panel still lists them), and a selected element whose geometry
+overflows a clipping frame shows its cropped-away part **ghosted** at low alpha so it never
+looks lost. Toggle a group's clip with the inspector **Clip content** checkbox, the group
+context-menu **Clip content** item, or the CLI `group-set --clip`.
 
 ### Shortcuts
 

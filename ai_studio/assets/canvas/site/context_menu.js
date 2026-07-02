@@ -20,6 +20,7 @@ import {
   sendNodeBackward,
   sendNodeToBack,
   setGroupBackground,
+  setGroupClip,
   setGroupVisible,
   sliceRegionsFor,
   ungroup,
@@ -311,6 +312,9 @@ function itemsFor(target) {
       { label: "Render group", onClick: () => renderScreen(group.id, { scale: 1 }) },
       { label: "Order", submenu: orderItems(group.id) },
       { label: "Background", submenu: backgroundItems(group.id) },
+      // Checkmark via label prefix (the menu has no checkbox item type; mirrors the
+      // Hide/Show label toggle). Toggles the Figma frame clip via patchGroup({clip}).
+      { label: `${group.clip === true ? "✓ " : ""}Clip content`, onClick: () => setGroupClip(group.id, group.clip !== true) },
     ];
     // Nest this group under another (or out to top level) when there is a valid target.
     if (groupTree(group.id).length || group.parentId) {

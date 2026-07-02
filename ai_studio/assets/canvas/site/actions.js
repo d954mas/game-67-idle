@@ -433,6 +433,13 @@ export async function setGroupBackground(groupId, background) {
   await patchGroupBox(groupId, { background });
 }
 
+// Toggle a group's clip-to-bounds flag (one journaled patchGroup): true clips members to
+// the frame on canvas AND in the subgroup render; false clears it (stored as absent). The
+// op validates it is a boolean (no silent fallback).
+export async function setGroupClip(groupId, clip) {
+  await patchGroupBox(groupId, { clip });
+}
+
 export async function renderScreen(groupId, { scale = 1, background } = {}) {
   try {
     setStatus("Rendering group...");

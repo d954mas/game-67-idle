@@ -12,8 +12,10 @@ ops.compositeGroup:
     (element.w/h) scaled by `scale`, offset relative to the top group origin, and
     alpha-composited so overlap + transparency are correct; a nested group paints
     its own background band (if any) then its children at absolute offsets
-  * nested groups have NO clip yet — they paint into the same layer so overflow is
-    preserved; a clipped group (increment 4) will render into its own sized layer
+  * a clip:false subgroup paints into the parent layer so overflow is preserved; a
+    clip:true subgroup composites its background band + subtree onto its OWN box-sized
+    layer (cropping overflow) then pastes that cropped layer into the parent at its
+    offset — nested clips intersect naturally as each cropped layer pastes into the next
   * anything outside the top group box is clipped (the canvas IS the group box)
 
 Outputs are written atomically; a small JSON report is emitted for provenance.
@@ -50,22 +52,65 @@ def scaled_len(value: float, scale: float) -> int:
     return max(1, round(float(value) * scale))
 
 
-def flatten(nodes: Any, ops: list[tuple[str, dict[str, Any]]]) -> None:
-    """Flatten the recursive z-ordered child tree into a paint-op list (back -> front).
+def paint_element(out: Image.Image, node: dict[str, Any], origin: tuple[float, float], scale: float) -> None:
+    """Paste one element image onto `out` at its scaled offset (relative to `origin`).
 
-    Since nested groups have no clip yet, everything paints into the same layer at
-    absolute offsets, so the tree collapses to an ordered list of fill/element ops.
-    A clipped group (increment 4) would instead render its children into its own
-    sized layer here, before its siblings continue — the branch slots in cleanly.
+    Pasting onto a same-size transparent layer clips negative/overflow offsets to `out`'s
+    bounds, then alpha-composites for correct z-order blending — so a clip layer (which is
+    the group's own box size) crops any child that sticks out."""
+    source = Path(node["src"])
+    if not source.exists():
+        raise FileNotFoundError(f"element image missing: {source}")
+    image = Image.open(source).convert("RGBA")
+    box_w = scaled_len(node.get("w") or image.width, scale)
+    box_h = scaled_len(node.get("h") or image.height, scale)
+    if (image.width, image.height) != (box_w, box_h):
+        image = image.resize((box_w, box_h), Image.Resampling.LANCZOS)
+    px = round((float(node.get("x") or 0) - origin[0]) * scale)
+    py = round((float(node.get("y") or 0) - origin[1]) * scale)
+    layer = Image.new("RGBA", out.size, (0, 0, 0, 0))
+    layer.paste(image, (px, py), image)
+    out.alpha_composite(layer)
+
+
+def paint_children(out: Image.Image, children: Any, origin: tuple[float, float], scale: float) -> int:
+    """Paint `children` BACK -> FRONT directly onto `out`, an RGBA layer whose (0,0) maps to
+    world `origin`. Returns the count of image elements drawn.
+
+    A clip:true subgroup composites its background band + subtree onto its OWN box-sized
+    layer (so descendants outside the box are cropped), then pastes that cropped layer into
+    `out` at the group offset. A clip:false subgroup fills its band + paints its children
+    directly onto `out` at absolute offsets (overflow preserved). Nested clips intersect
+    naturally: an inner clip layer pastes into the outer clip layer, which pastes into `out`.
     """
-    for node in nodes or []:
+    ox, oy = origin
+    drawn = 0
+    for node in children or []:
         kind = node.get("kind")
-        if kind == "group":
-            if node.get("background"):
-                ops.append(("fill", node))
-            flatten(node.get("children"), ops)
-        elif kind == "element":
-            ops.append(("element", node))
+        if kind == "element":
+            paint_element(out, node, origin, scale)
+            drawn += 1
+        elif kind == "group":
+            gx = round((float(node.get("x") or 0) - ox) * scale)
+            gy = round((float(node.get("y") or 0) - oy) * scale)
+            gw = scaled_len(node.get("w") or 1, scale)
+            gh = scaled_len(node.get("h") or 1, scale)
+            if node.get("clip"):
+                # The clip box IS the sub-layer: its background fills it, children paint in
+                # the group's local coords, and anything past its edges is cropped.
+                sub = Image.new("RGBA", (gw, gh), parse_background(node.get("background")))
+                drawn += paint_children(sub, node.get("children"), (float(node.get("x") or 0), float(node.get("y") or 0)), scale)
+                layer = Image.new("RGBA", out.size, (0, 0, 0, 0))
+                layer.paste(sub, (gx, gy))  # paste clips the cropped sub-layer to out's bounds
+                out.alpha_composite(layer)
+            else:
+                if node.get("background"):
+                    band = Image.new("RGBA", (gw, gh), parse_background(node.get("background")))
+                    layer = Image.new("RGBA", out.size, (0, 0, 0, 0))
+                    layer.paste(band, (gx, gy))
+                    out.alpha_composite(layer)
+                drawn += paint_children(out, node.get("children"), origin, scale)
+    return drawn
 
 
 def render(spec: dict[str, Any]) -> dict[str, Any]:
@@ -79,39 +124,12 @@ def render(spec: dict[str, Any]) -> dict[str, Any]:
     canvas = Image.new("RGBA", (width, height), parse_background(spec.get("background")))
 
     # Accept the recursive `children` tree; fall back to a flat `elements` list for any
-    # older/simple spec (each element becomes an element op).
+    # older/simple spec (each element becomes an element node). The top group is always
+    # cropped to its bounds (the canvas IS the group box); subgroup clip is per-node.
     children = spec.get("children")
     if children is None:
         children = [{"kind": "element", **element} for element in spec.get("elements") or []]
-    ops: list[tuple[str, dict[str, Any]]] = []
-    flatten(children, ops)
-
-    drawn = 0
-    for kind, node in ops:
-        # Paste onto a full-canvas transparent layer (paste clips negative/overflow
-        # offsets to the group box), then alpha-composite for correct z-order blending.
-        layer = Image.new("RGBA", (width, height), (0, 0, 0, 0))
-        if kind == "fill":
-            gx = round((float(node.get("x") or 0) - origin_x) * scale)
-            gy = round((float(node.get("y") or 0) - origin_y) * scale)
-            gw = scaled_len(node.get("w") or 1, scale)
-            gh = scaled_len(node.get("h") or 1, scale)
-            band = Image.new("RGBA", (gw, gh), parse_background(node.get("background")))
-            layer.paste(band, (gx, gy))
-        else:
-            source = Path(node["src"])
-            if not source.exists():
-                raise FileNotFoundError(f"element image missing: {source}")
-            image = Image.open(source).convert("RGBA")
-            box_w = scaled_len(node.get("w") or image.width, scale)
-            box_h = scaled_len(node.get("h") or image.height, scale)
-            if (image.width, image.height) != (box_w, box_h):
-                image = image.resize((box_w, box_h), Image.Resampling.LANCZOS)
-            px = round((float(node.get("x") or 0) - origin_x) * scale)
-            py = round((float(node.get("y") or 0) - origin_y) * scale)
-            layer.paste(image, (px, py), image)
-            drawn += 1
-        canvas = Image.alpha_composite(canvas, layer)
+    drawn = paint_children(canvas, children, (origin_x, origin_y), scale)
 
     output = Path(spec["output"])
     save_image_atomic(canvas, output)

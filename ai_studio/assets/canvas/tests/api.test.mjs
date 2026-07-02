@@ -303,6 +303,27 @@ test("canvas API group routes: create/patch/assign/delete round-trip", async (t)
   assert.equal(afterDelete.elements[0].id, elB);
 });
 
+test("canvas API PATCH group sets and clears the clip flag", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Clip API" })).json().project.id;
+  const groupId = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups`, {
+    name: "Frame", x: 0, y: 0, w: 100, h: 100,
+  })).json().group.id;
+
+  const clipped = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/groups/${groupId}`, { clip: true });
+  assert.equal(clipped.status, 200);
+  assert.equal(clipped.json().group.clip, true);
+
+  const unclipped = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/groups/${groupId}`, { clip: false });
+  assert.equal("clip" in unclipped.json().group, false, "clip:false removes the field over HTTP too");
+
+  // Invalid clip is a loud 400 (no silent coercion).
+  const bad = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/groups/${groupId}`, { clip: "yes" });
+  assert.equal(bad.status, 400);
+  assert.match(bad.json().error, /clip must be a boolean/);
+});
+
 test("canvas API groups reparent route nests a group and rejects a cycle", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(ROOT);

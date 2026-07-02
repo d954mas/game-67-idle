@@ -113,6 +113,21 @@ test("cli group-reparent / group-create --parent nesting smoke (no python)", (t)
   assert.equal(shown.groups.find((g) => g.id === widget).parentId, undefined, "reparent to none = top level");
 });
 
+test("cli group-set --clip toggles the frame clip flag (no python)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-clip-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const projectId = run(env, "create", "--title", "CLI Clip").project.id;
+  const groupId = run(env, "group-create", projectId, "--name", "Frame", "--x", "0", "--y", "0", "--w", "80", "--h", "60").group.id;
+
+  run(env, "group-set", projectId, "--group", groupId, "--clip", "true");
+  assert.equal(run(env, "show", projectId).project.groups[0].clip, true, "clip true set");
+
+  run(env, "group-set", projectId, "--group", groupId, "--clip", "false");
+  assert.equal("clip" in run(env, "show", projectId).project.groups[0], false, "clip false removes the field");
+});
+
 test("cli group-create/move/set/assign/delete smoke (no python)", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-groups-"));
   const env = { CANVAS_PROJECTS_ROOT: dir };

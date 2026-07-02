@@ -121,6 +121,9 @@ export function render() {
     if (isNodeHidden(state.project, group)) continue;
     drawGroupFrame(group, vp);
   }
+  // Ghost the clipped-out part of any selected element (or selected group's members) so a
+  // clipped sprite never reads as "lost". Chrome pass = never affects the artwork pixels.
+  drawClipGhosts(vp);
   drawGestureOverlay();
   // Live polygon draft on the isolated element (page-only state, never journaled).
   if (editEl && state.regionTool === "polygon" && state.polygonDraft.length) {
@@ -159,13 +162,27 @@ function updateScopeBreadcrumb(editEl) {
 
 // Recursive artwork paint for one scope (null = root): each child in computed
 // back-to-front order — an element draws in place; a visible group fills its
-// background then recurses into its own children.
+// background then recurses into its own children. A group with clip=true pushes a
+// rectangular clip region (its screen box) before painting its background + children
+// and pops it after, so members outside the frame are cropped; nested clips intersect
+// naturally through the canvas clip stack. Chrome (frames/labels/ghost hints) is pass 2,
+// outside every clip, so an empty or overflowing screen is never hidden.
 function paintScope(scopeId, vp, editEl) {
   for (const child of orderedChildren(state.project, scopeId)) {
     if (isNodeHidden(state.project, child.ref)) continue;
     if (child.kind === "group") {
-      fillGroupBackground(child.ref, vp);
+      const group = child.ref;
+      const clip = group.clip === true;
+      if (clip) {
+        ctx.save();
+        const origin = imageToScreenPoint({ x: group.x, y: group.y }, vp);
+        ctx.beginPath();
+        ctx.rect(origin.x, origin.y, group.w * vp.scale, group.h * vp.scale);
+        ctx.clip();
+      }
+      fillGroupBackground(group, vp);
       paintScope(child.id, vp, editEl);
+      if (clip) ctx.restore();
     } else {
       paintElement(child.ref, vp, editEl);
     }
@@ -208,6 +225,88 @@ function fillGroupBackground(group, vp) {
   const origin = imageToScreenPoint({ x: group.x, y: group.y }, vp);
   ctx.fillStyle = bg.color;
   ctx.fillRect(origin.x, origin.y, group.w * vp.scale, group.h * vp.scale);
+}
+
+// The intersection (in world coords) of every clip=true ANCESTOR group's box for a node,
+// or null when the node has no clipping ancestor. This is the region a clipped node is
+// actually visible within — used for hit-testing, marquee, and the ghost hint. Nested
+// clips intersect into one box.
+function clipIntersection(node) {
+  let has = false;
+  let x0 = -Infinity;
+  let y0 = -Infinity;
+  let x1 = Infinity;
+  let y1 = Infinity;
+  for (const ancestor of ancestorsOf(state.project, node)) {
+    if (ancestor.clip !== true) continue;
+    has = true;
+    x0 = Math.max(x0, ancestor.x);
+    y0 = Math.max(y0, ancestor.y);
+    x1 = Math.min(x1, ancestor.x + ancestor.w);
+    y1 = Math.min(y1, ancestor.y + ancestor.h);
+  }
+  return has ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}
+
+// A node's visible (clipped) box: its own box intersected with every clip=true ancestor,
+// or null when a clip crops it away entirely. Equals the raw box when there is no clipping
+// ancestor. Backs the marquee's "select what is actually visible" test.
+function visibleBox(node) {
+  const clip = clipIntersection(node);
+  if (!clip) return { x: node.x, y: node.y, w: node.w, h: node.h };
+  const x0 = Math.max(node.x, clip.x);
+  const y0 = Math.max(node.y, clip.y);
+  const x1 = Math.min(node.x + node.w, clip.x + clip.w);
+  const y1 = Math.min(node.y + node.h, clip.y + clip.h);
+  return x1 > x0 && y1 > y0 ? { x: x0, y: y0, w: x1 - x0, h: y1 - y0 } : null;
+}
+
+// Ghost the portion of a selected image element that a clipping ancestor crops away: the
+// image redrawn at low alpha OUTSIDE the clip box (an even-odd clip subtracts the visible
+// region, so only the cropped-away part shows). Redrawing the image (vs. a dashed box) is
+// chosen because it shows WHAT is hidden and exactly where, which is the whole point of the
+// anti-"lost my sprite" hint; it stays cheap (selection-only) and, being pass-2 chrome over
+// an even-odd clip, never repaints the visible artwork.
+function drawClipGhost(element, vp) {
+  const clip = clipIntersection(element);
+  if (!clip) return; // no clipping ancestor -> nothing is cropped
+  const inside =
+    element.x >= clip.x &&
+    element.y >= clip.y &&
+    element.x + element.w <= clip.x + clip.w &&
+    element.y + element.h <= clip.y + clip.h;
+  if (inside) return; // fully within the clip -> nothing cropped away
+  const img = imageFor(element);
+  if (!(img.complete && img.naturalWidth)) return;
+  const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
+  const clipOrigin = imageToScreenPoint({ x: clip.x, y: clip.y }, vp);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, state.cssWidth, state.cssHeight);
+  ctx.rect(clipOrigin.x, clipOrigin.y, clip.w * vp.scale, clip.h * vp.scale);
+  ctx.clip("evenodd"); // region = viewport MINUS the visible clip box (the cropped-away area)
+  ctx.globalAlpha = 0.25;
+  ctx.drawImage(img, origin.x, origin.y, element.w * vp.scale, element.h * vp.scale);
+  ctx.globalAlpha = 1;
+  ctx.restore();
+}
+
+// Ghost every selected element and every image element inside a selected group that a
+// clipping ancestor crops. Deduped so an element selected directly and via its group ghosts
+// once. Hidden nodes are skipped (they never paint).
+function drawClipGhosts(vp) {
+  const seen = new Set();
+  const ghost = (element) => {
+    if (!element || seen.has(element.id) || isNodeHidden(state.project, element)) return;
+    seen.add(element.id);
+    drawClipGhost(element, vp);
+  };
+  for (const element of selectedElements()) ghost(element);
+  const groupIds = new Set(state.selectedGroupIds);
+  if (state.selectedGroupId) groupIds.add(state.selectedGroupId);
+  for (const gid of groupIds) {
+    for (const element of descendantsOf(state.project, gid).elements) ghost(element);
+  }
 }
 
 function updateBreadcrumb(editEl) {
@@ -387,6 +486,11 @@ function hitElement(world) {
       const child = children[i];
       if (isNodeHidden(state.project, child.ref)) continue;
       if (child.kind === "group") {
+        // A clip=true group makes its interior the only hit-testable region: a point
+        // outside its box can't hit anything in its (clipped-away) subtree. This also
+        // enforces "outside ANY clipping ancestor" — an excluded outer group's whole
+        // subtree, including nested groups, is skipped.
+        if (child.ref.clip === true && !inBox(child.ref)) continue;
         const found = walk(child.id);
         if (found) return found;
       } else if (inBox(child.ref)) {
@@ -670,7 +774,11 @@ function applyMarquee() {
   const inside = new Set(drag.base);
   for (const element of scope.elements) {
     if (isElementHidden(element)) continue;
-    if (intersects(element)) inside.add(element.id);
+    // Test the element's VISIBLE (clipped) box: intersect it with every clipping ancestor
+    // so a member cropped away by a clip frame isn't grabbed where it no longer shows. A
+    // fully clipped-out element (clip null) is skipped.
+    const box = visibleBox(element);
+    if (box && intersects(box)) inside.add(element.id);
   }
   const insideGroups = new Set(drag.baseGroups || []);
   for (const group of scope.groups) {

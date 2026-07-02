@@ -757,6 +757,17 @@ function normalizeGroupBackground(background) {
   return { type: "color", color };
 }
 
+// Validate an optional group clip flag (additive field). Accepts only a real boolean;
+// anything else is a loud error (no silent coercion — the CLI converts its string flag
+// before calling). Returns the boolean; `false` is the "unclipped" default that patchGroup
+// stores as an ABSENT field (mirrors background:null), so an untouched group stays clean.
+function normalizeGroupClip(clip) {
+  if (typeof clip !== "boolean") {
+    throw new Error(`group clip must be a boolean (true|false), got ${JSON.stringify(clip)}`);
+  }
+  return clip;
+}
+
 function elementsBBox(elements) {
   let minX = Infinity;
   let minY = Infinity;
@@ -846,13 +857,17 @@ export function createGroup(root, { projectId, name, x, y, w, h, fromElements, p
   return { project, group: (project.groups || []).find((item) => item.id === groupId) };
 }
 
-// Patch a group's name/bounds/visibility/background. When x or y change, translate
+// Patch a group's name/bounds/visibility/background/clip. When x or y change, translate
 // the group's FULL descendant closure by the same delta — nested subgroup frames AND
 // every element in the subtree — so the whole screen (and its nested widget groups)
 // moves as one; resize (w/h) never moves members. `background` is the optional solid
 // fill (null clears it; {type:"color", color:"#rrggbb"} sets it — validated, no silent
-// fallback). One journal entry restores everything on undo.
-export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible, background } = {}) {
+// fallback). `clip` is the optional Figma-frame clip flag: `true` clips members to the
+// group bounds on canvas AND in the subgroup render; `false` (the default) clears it and
+// is stored as an ABSENT field, so an untouched group stays clean and clip:false on an
+// already-unclipped group makes no change (no journal entry). One journal entry restores
+// everything on undo.
+export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible, background, clip } = {}) {
   if (!projectId) throw new Error("patchGroup requires projectId");
   if (!groupId) throw new Error("patchGroup requires groupId");
   const startedAt = performance.now();
@@ -861,9 +876,11 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
 
   const dx = finite(x) ? Number(x) - Number(current.x || 0) : 0;
   const dy = finite(y) ? Number(y) - Number(current.y || 0) : 0;
-  // Validate the background BEFORE any write so an invalid value throws atomically.
+  // Validate background + clip BEFORE any write so an invalid value throws atomically.
   const bgProvided = background !== undefined;
   const bgResolved = bgProvided ? normalizeGroupBackground(background) : undefined;
+  const clipProvided = clip !== undefined;
+  const clipResolved = clipProvided ? normalizeGroupClip(clip) : undefined;
 
   // On a move, gather the FULL descendant closure once: nested subgroup frames AND
   // every element in the subtree translate with the group.
@@ -884,6 +901,10 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
       if (bgProvided) {
         if (bgResolved === null) delete patched.background; // "None" -> absent field
         else patched.background = bgResolved;
+      }
+      if (clipProvided) {
+        if (clipResolved === false) delete patched.clip; // unclipped -> absent field
+        else patched.clip = true;
       }
       return patched;
     }
@@ -906,7 +927,7 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
   const after = updateProject(root, projectId, { groups: nextGroups, elements: nextElements });
   const project = commitMutation(root, projectId, {
     op: "patchGroup",
-    args_summary: { groupId, name, x, y, w, h, visible, dx, dy, background: bgProvided ? bgResolved : undefined },
+    args_summary: { groupId, name, x, y, w, h, visible, dx, dy, background: bgProvided ? bgResolved : undefined, clip: clipProvided ? clipResolved : undefined },
     before,
     after,
     startedAt,
@@ -1641,9 +1662,10 @@ function hexColor(value) {
 // an element paint node (absolute box) or a group node (its background fill + its own
 // recursively-built children painted inside the parent band). Hidden subtrees are
 // pruned (isNodeHidden cascade). `leaves` accumulates every painted image element ref
-// for the manifest + member count. `clip` rides along per group so the (increment-4)
-// clip branch slots into the painter without a spec change; today every group paints
-// into the same layer at absolute offsets (overflow preserved).
+// for the manifest + member count. `clip` rides along per group: render_group.py composites
+// a clip:true subgroup's subtree onto its OWN box-sized layer (cropping overflow) before
+// pasting it into the parent; a clip:false subgroup paints into the same layer at absolute
+// offsets (overflow preserved).
 function buildRenderNodes(root, projectId, project, scopeId, leaves) {
   const nodes = [];
   for (const child of orderedChildren(project, scopeId)) {

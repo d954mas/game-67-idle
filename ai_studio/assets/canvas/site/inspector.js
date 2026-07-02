@@ -36,6 +36,7 @@ import {
   renderScreen,
   setExportRows,
   setGroupBackground,
+  setGroupClip,
   setGroupVisible,
   sliceRegionsFor,
 } from "./actions.js";
@@ -559,6 +560,20 @@ function renderGroupInspector(group, root) {
   visLabel.textContent = "Visible";
   visRow.append(check, visLabel);
   layout.appendChild(visRow);
+
+  // Clip content: Figma frame clip — members outside the group bounds are cropped on
+  // canvas AND in the subgroup render (journaled via patchGroup({clip}); default off).
+  const clipRow = document.createElement("label");
+  clipRow.className = "insp-check";
+  const clipCheck = document.createElement("input");
+  clipCheck.type = "checkbox";
+  clipCheck.checked = group.clip === true;
+  clipCheck.addEventListener("change", () => setGroupClip(group.id, clipCheck.checked));
+  const clipLabel = document.createElement("span");
+  clipLabel.textContent = "Clip content";
+  clipRow.append(clipCheck, clipLabel);
+  layout.appendChild(clipRow);
+
   layout.appendChild(readOnly("Members", String(memberElements(group.id).length)));
 
   renderGroupBackground(group, root);
@@ -664,7 +679,7 @@ function inspectorSig() {
   const group = state.selectedGroupId ? groupById(state.selectedGroupId) : null;
   const selected = selectedElements();
   if (group) {
-    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}`;
+    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}`;
   }
   if (selected.length === 1) {
     const e = selected[0];

@@ -21,7 +21,7 @@
 //   node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h] [--parent <gid>|none]
 //   node ai_studio/assets/canvas/cli.mjs group-reparent <id> --group g --parent <gid>|none [--index n]
 //   node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
-//   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none]
+//   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none] [--clip true|false]
 //   node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs render-group <id> --group g [--scale 2] [--background "#rrggbb"]
@@ -137,7 +137,7 @@ function usage() {
   group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]
   group-reparent <id> --group <gid> --parent <gid>|none [--index <n>]   (nest a group; none = top level)
   group-move <id> --group <gid> --x <n> --y <n>
-  group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>] [--background '#rrggbb'|none]
+  group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>] [--background '#rrggbb'|none] [--clip true|false]
   group-assign <id> --elements e1,e2 --group <gid>|none
   group-delete <id> --group <gid>
   render-group <id> --group <gid>  (alias: render-screen) [--scale <n>] [--background '#rrggbb']
@@ -348,6 +348,12 @@ async function runCommand(command, id, positional, flags) {
       // Any other value reaches the op and fails loudly (no silent fallback).
       if (flags.background !== undefined) {
         args.background = flags.background === "none" ? null : { type: "color", color: flags.background };
+      }
+      // --clip true|false toggles the Figma frame clip. Convert the string flag to a real
+      // boolean here; the op validates strictly (a boolean, no silent coercion).
+      if (flags.clip !== undefined) {
+        if (flags.clip !== "true" && flags.clip !== "false") fail("group-set --clip must be true or false");
+        args.clip = flags.clip === "true";
       }
       return print(patchGroup(repoRoot, args));
     }
