@@ -414,6 +414,16 @@ button:disabled {
   flex: none;
 }
 
+/* Text elements have no image file: a "T" glyph placeholder stands in for the thumb. */
+.layer-row .thumb-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--cyan, #3fc7ba);
+}
+
 .layer-name,
 .group-name {
   flex: 1;
@@ -500,6 +510,25 @@ button:disabled {
   height: 100%;
   cursor: default;
   display: block;
+}
+
+/* Inline text editor: a textarea positioned over the text element's box while editing
+   (T tool / double-click). Styled to sit on the artwork with a thin accent outline; the
+   font/size/color are set inline by workspace.js to match the element. */
+.text-edit-overlay {
+  position: absolute;
+  z-index: 6;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--accent, #77a7ff);
+  outline: none;
+  background: rgba(13, 16, 19, 0.55);
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
+  box-sizing: content-box;
+  min-width: 24px;
+  caret-color: var(--accent, #77a7ff);
 }
 
 #stage.pan-tool #canvas,
@@ -1019,9 +1048,11 @@ button:disabled {
 /* Element region tree rows in the layers panel. */
 .caret.empty {
   visibility: hidden;
-  /* Indent spacer only (the real caret keeps its width for the glyph): a full
-     caret-width per level read too wide — lead asked for a tighter step. */
-  width: 10px;
+  /* Indent spacer: zero width — the row's flex GAP (8px) alone is the per-level
+     step. Lead (live verify): the previous spacer+gap step (~18-26px) read 3-4x
+     too wide at depth. The empty span still occupies a gap slot, so depth N
+     indents N*gap without multiplying spacer widths. */
+  width: 0;
 }
 
 .region-row {
