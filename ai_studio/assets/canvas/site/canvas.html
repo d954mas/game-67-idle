@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Canvas</title>
+    <link rel="stylesheet" href="canvas.css" />
+  </head>
+  <body>
+    <div id="app">
+      <aside id="sidebar">
+        <header>
+          <h1>Canvas</h1>
+          <button id="new-project" class="primary" type="button">New</button>
+        </header>
+        <ul id="project-list"></ul>
+      </aside>
+      <section id="main">
+        <div id="stage-bar">
+          <span class="title" id="project-title">No project</span>
+          <span class="spacer"></span>
+          <button id="add-image" type="button" disabled>Add image</button>
+          <button id="detect-regions" type="button" disabled>Detect regions</button>
+          <button id="delete-element" type="button" disabled>Delete element</button>
+          <button id="fit" type="button" disabled>Fit</button>
+          <input id="file-input" type="file" accept="image/*" class="hidden" />
+        </div>
+        <div id="stage">
+          <canvas id="canvas"></canvas>
+        </div>
+        <div id="status">Ready.</div>
+      </section>
+    </div>
+    <script type="module" src="canvas.js"></script>
+  </body>
+</html>

@@ -1093,6 +1093,120 @@
       "coverage": "self"
     },
     {
+      "id": "assets:canvas",
+      "title": "Canvas",
+      "subtitle": "multi-image projects, agent + browser parity",
+      "kind": "module",
+      "path": "ai_studio/assets/canvas",
+      "color": "#7c3aed",
+      "coverage": "self",
+      "description": "Figma/Recraft-like multi-image canvas projects. Every capability is one operation in a shared ops layer with two equal clients: the agent (CLI/import) and the thin browser page. Owns project persistence and the ops/API/CLI/page; bridges detect_regions to the raster2d pipeline unmodified.",
+      "role": "canvas projects module",
+      "tags": [
+        "assets",
+        "canvas",
+        "tool-parity",
+        "raster2d"
+      ],
+      "children": [
+        {
+          "id": "assets:canvas-readme",
+          "kind": "doc",
+          "path": "ai_studio/assets/canvas/README.md",
+          "title": "README.md",
+          "description": "Canvas module contract: owner/boundary, layout, projects-root resolution, the one operation layer, CLI usage, and validation commands.",
+          "role": "canvas module entrypoint",
+          "tags": [
+            "assets",
+            "canvas",
+            "source"
+          ]
+        },
+        {
+          "id": "assets:canvas-store",
+          "kind": "tool",
+          "path": "ai_studio/assets/canvas/store.mjs",
+          "title": "store.mjs",
+          "description": "Canvas project persistence: one folder per project with project.json (schema ai_studio.canvas.project.v1) plus an immutable content-addressed files/. Atomic writes, path-confined ids/filenames, pure PNG/JPEG/GIF dimension parsing, and lazy projects-root creation.",
+          "role": "canvas project store",
+          "tags": [
+            "assets",
+            "canvas",
+            "storage"
+          ]
+        },
+        {
+          "id": "assets:canvas-ops",
+          "kind": "tool",
+          "path": "ai_studio/assets/canvas/ops.mjs",
+          "title": "ops.mjs",
+          "description": "The one operation layer both clients call: thin wrappers over the store plus the bridged detectRegions, which reuses the raster2d upload + detect functions unmodified and records regions and a tool_runs entry on the project.",
+          "role": "canvas operation layer",
+          "tags": [
+            "assets",
+            "canvas",
+            "tool-parity",
+            "raster2d"
+          ]
+        },
+        {
+          "id": "assets:canvas-api",
+          "kind": "tool",
+          "path": "ai_studio/assets/canvas/api.mjs",
+          "title": "api.mjs",
+          "description": "Studio Shell HTTP adapter for canvas projects, elements, base64 image upload, region detection, and confined image-file serving under the /api/canvas/ prefix. Marshals HTTP to the ops layer only.",
+          "role": "canvas HTTP API adapter",
+          "tags": [
+            "assets",
+            "canvas",
+            "surface-adapter"
+          ]
+        },
+        {
+          "id": "assets:canvas-cli",
+          "kind": "tool",
+          "path": "ai_studio/assets/canvas/cli.mjs",
+          "title": "cli.mjs",
+          "description": "Agent client over the same ops layer: list, create, show, add-image, detect-regions, and move commands printing compact JSON.",
+          "role": "canvas agent CLI",
+          "tags": [
+            "assets",
+            "canvas",
+            "cli"
+          ]
+        },
+        {
+          "id": "assets:canvas-site",
+          "title": "Canvas Page",
+          "subtitle": "thin local interface",
+          "kind": "surface",
+          "path": "ai_studio/assets/canvas/site",
+          "color": "#7c3aed",
+          "description": "Thin browser page served via the /ai_studio/ static route. Left project list plus a pan/zoom/fit canvas that reuses the Asset Tools viewport module, renders project elements, drags to move, and calls one API per action. No logic beyond rendering/input.",
+          "role": "canvas browser page",
+          "tags": [
+            "assets",
+            "canvas",
+            "surface",
+            "ui"
+          ]
+        },
+        {
+          "id": "assets:canvas-tests",
+          "kind": "test",
+          "path": "ai_studio/assets/canvas/tests",
+          "title": "tests",
+          "description": "Regression tests for the canvas store round-trip and confinement, studio config resolution, the HTTP API lifecycle, and the bridged detectRegions op (skips cleanly when the raster2d Python pipeline is unavailable).",
+          "role": "canvas module tests",
+          "tags": [
+            "assets",
+            "canvas",
+            "test"
+          ]
+        }
+      ]
+    },
+    {
       "id": "assets:backlog",
       "title": "Asset Backlog",
       "subtitle": "needs decomposition",

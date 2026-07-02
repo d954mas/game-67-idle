@@ -530,6 +530,31 @@
           ]
         },
         {
+          "id": "core-harness:tool-lib-studio-config",
+          "kind": "tool",
+          "path": "ai_studio/core_harness/tool_lib/studio_config.mjs",
+          "title": "studio_config.mjs",
+          "description": "Shared reader for studio-wide settings: merges the committed ai_studio/studio.config.json with an optional gitignored studio.config.local.json override and resolves the canvas projects root (CANVAS_PROJECTS_ROOT env overrides for tests). Creates nothing on disk.",
+          "role": "studio config reader",
+          "tags": [
+            "core-harness",
+            "helper",
+            "config"
+          ]
+        },
+        {
+          "id": "core-harness:studio-config-data",
+          "kind": "config",
+          "path": "ai_studio/studio.config.json",
+          "title": "studio.config.json",
+          "description": "Committed studio-wide configuration (schema ai_studio.studio_config.v1). Currently sets canvasProjectsRoot, the on-disk home for canvas projects. A per-machine studio.config.local.json (gitignored) overrides fields.",
+          "role": "studio configuration data",
+          "tags": [
+            "core-harness",
+            "config"
+          ]
+        },
+        {
           "id": "core-harness:tool-lib-cli",
           "kind": "tool",
           "path": "ai_studio/core_harness/tool_lib/cli.mjs",

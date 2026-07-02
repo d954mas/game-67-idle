@@ -12,6 +12,10 @@ Top-level groups:
   `tools/raster2d/` and are used by agents plus the browser Asset Tools surface.
   The browser surface itself is owned by `viewer/`. Older source-sheet, crop,
   cutout, and review tools stay in place until replaced stage by stage.
+- `canvas/`: multi-image canvas projects (Figma/Recraft-like). Every capability
+  is one operation in a shared ops layer with two equal clients, the agent
+  (CLI/import) and the thin browser page; `detect_regions` bridges to
+  `tools/raster2d/` unmodified. See `canvas/README.md`.
 - `backlog/`: temporary holding area for asset modules that still need a better
   decomposition. Storage, source registry, manifests, index, preview cache, and
   license guard live there until they are split into clearer groups.

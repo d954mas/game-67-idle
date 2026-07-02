@@ -13,6 +13,7 @@ import { findRoot } from "../taskboard/lib.mjs";
 import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/viewer/api.mjs";
 import { createRaster2dAssetToolsApi, resolveRaster2dTmpPath } from "../assets/tools/raster2d/api.mjs";
 import { createArchitectureMapApi } from "../architecture_map/api.mjs";
+import { createCanvasApi } from "../assets/canvas/api.mjs";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
 
 const repoGuess = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -26,6 +27,7 @@ const handleTaskboardApi = createTaskboardApi(root);
 const handleAssetViewerApi = createAssetViewerApi(root);
 const handleRaster2dAssetToolsApi = createRaster2dAssetToolsApi(root);
 const handleArchitectureMapApi = createArchitectureMapApi(root);
+const handleCanvasApi = createCanvasApi(root);
 const stateDir = join(root, "tmp", "ai_studio");
 const pidFile = join(stateDir, `studio_shell_${port}.pid`);
 
@@ -141,6 +143,10 @@ const server = createServer((req, res) => {
     }
     if (url.pathname === "/api/architecture-tree" || url.pathname === "/api/architecture-validation") {
       handleArchitectureMapApi(req, res, url);
+      return;
+    }
+    if (url.pathname.startsWith("/api/canvas/")) {
+      handleCanvasApi(req, res, url);
       return;
     }
 

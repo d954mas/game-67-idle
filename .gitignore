@@ -17,6 +17,10 @@ __pycache__/
 # The validate_map.mjs CLI still writes it locally for offline inspection.
 ai_studio/architecture_map/validation-report.json
 
+# Per-machine studio config override (points canvas projects at a local/YandexDisk
+# path). Only the committed ai_studio/studio.config.json defaults are tracked.
+ai_studio/studio.config.local.json
+
 # Restricted paid/licensed asset binaries: never commit to an open repo.
 # Only catalog/license metadata is committed; binaries live locally and in the
 # private library. See ai_studio/assets/storage/license/.
