@@ -63,26 +63,29 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **Export panel** (`T0206`, P1) — Figma-style Export section at the bottom
-   of the inspector (see "Export design" below); absorbs export-destination
-   from T0203 (lead re-confirmed live: export must ASK where — today it
-   silently writes `<project>/export/<stamp>/`); export leaves the context
-   menu.
-2. **Perf: frontend churn** (`T0200`, P1) — use op responses instead of
+1. **Perf: frontend churn** (`T0200`, P1) — use op responses instead of
    reload+history GETs, immutable cache headers + `<img>` reuse, rAF drag,
    batched multi-ops (also collapses marquee-move/multi-delete to one journal
    entry per gesture — audit finding).
-3. **Groups** (`T0219`, P1, design first) — sibling z-order for groups,
+2. **Groups** (`T0219`, P1, design first) — sibling z-order for groups,
    NESTED groups (model change), clip-to-bounds flag, group background
    (color; canvas draw + render parity). Slice-group + delete-group already
    landed ahead of it (`59eb9df0`).
-4. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
+3. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
    busy spinner, input never blocked, max-N concurrent long ops with a
    visible queue.
-5. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
+4. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
    journal + `jumpHistory` op (CLI parity).
-6. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
+5. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
    builds on T0218's `_bridge` + pinned venv `pythonPath`.
+
+T0206 export panel LANDED `6620d2a6` (2026-07-02 night): journaled per-element
+export rows, one-python-spawn batches, scale syntax + Lanczos/nearest,
+png/jpg/webp + quality, project-level export of visible groups, CLI
+export-set / export --to, destination = Figma behavior (picker every export,
+opens at last-used folder, per-project IndexedDB handle). Remaining checks in
+the task: live Chrome picker click-through; supersampling before/after on a
+real generated sheet.
 
 DONE 2026-07-02: T0201 + T0205 (journal O(n²) + observability, `4db81a07`);
 undo/journal audit fix pass (`cf538516`); layout-independent shortcuts
