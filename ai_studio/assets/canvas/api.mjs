@@ -12,6 +12,7 @@
 //   POST   /api/canvas/projects/<id>/text          {x?, y?, content?, style?, groupId?}
 //   POST   /api/canvas/projects/<id>/detect-regions {elementId, params?}
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
+//   POST   /api/canvas/projects/<id>/alpha          {elementId, method?, regions?}
 //   POST   /api/canvas/projects/<id>/export         {elementIds, rows?} | {project:true}
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/export {rows}  (export settings)
 //   POST   /api/canvas/projects/<id>/groups         {name, x?,y?,w?,h?, fromElements?, parentId?}
@@ -46,6 +47,7 @@ import {
   addImage,
   addImages,
   addText,
+  alphaCutout,
   assignToGroup,
   createGroup,
   createProject,
@@ -276,6 +278,21 @@ export function createCanvasApi(root) {
           projectId: id,
           elementId: body.elementId,
           regionIds: body.regionIds,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/alpha
+      // Alpha-cutout the element's current pixels (whole element, or only the given stored
+      // region ids) via the image-tools matte pipeline; swaps the element to a new alpha PNG
+      // (one journal entry). method "auto" (route) or "matte" (force key_matte).
+      if (parts.length === 5 && sub === "alpha" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(200, await alphaCutout(root, {
+          projectId: id,
+          elementId: body.elementId,
+          method: body.method,
+          regions: body.regions,
         }));
         return true;
       }

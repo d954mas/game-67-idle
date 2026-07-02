@@ -197,24 +197,34 @@ function finiteOr(value, fallback) {
   return value !== undefined && value !== null && Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
-export function addImage(root, id, { name, bytes, x = 0, y = 0, meta } = {}) {
+// Content-addressed write of image bytes into files/ WITHOUT creating an element.
+// Returns { src, fileName, width, height }. Immutable + deduped exactly like addImage's
+// own file write (identical bytes reuse the same file, so this never mutates or orphans
+// an existing file). The alphaCutout op uses this to point an element at a NEW alpha PNG
+// while the previous file stays on disk (the non-destructive src-swap pattern). Shared by
+// addImage below so there is one content-addressing path.
+export function addFile(root, id, { bytes, name } = {}) {
   const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || []);
-  if (!buffer.length) throw new Error("addImage requires non-empty image bytes");
+  if (!buffer.length) throw new Error("addFile requires non-empty image bytes");
   const { width, height } = imageSize(buffer);
   const ext = imageExtension(name, buffer);
   const fileName = `${sha256Hex(buffer)}.${ext}`;
-  const dir = projectDir(root, id);
-  const filesDir = join(dir, "files");
+  const filesDir = join(projectDir(root, id), "files");
   mkdirSync(filesDir, { recursive: true });
   const filePath = join(filesDir, fileName);
   // Content-addressed and immutable: identical bytes reuse the same file.
   if (!existsSync(filePath)) writeAtomic(filePath, buffer);
+  return { src: `files/${fileName}`, fileName, width, height };
+}
+
+export function addImage(root, id, { name, bytes, x = 0, y = 0, meta } = {}) {
+  const { src, fileName, width, height } = addFile(root, id, { bytes, name });
 
   const project = readProjectFile(root, id);
   const element = {
     id: `el_${randomUUID().slice(0, 8)}`,
     type: "image",
-    src: `files/${fileName}`,
+    src,
     x: finiteOr(x, 0),
     y: finiteOr(y, 0),
     w: width,

@@ -1380,6 +1380,24 @@ body.layers-resizing {
   gap: 6px;
 }
 
+/* Alpha cutout row: method dropdown + run button on one line. */
+.insp-alpha-row {
+  display: flex;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.insp-alpha-row .insp-field {
+  flex: 1;
+  margin: 0;
+}
+
+.insp-alpha-btn {
+  flex: 0 0 auto;
+  width: auto;
+  white-space: nowrap;
+}
+
 .insp-btn-small {
   flex: 1;
   padding: 5px 6px;

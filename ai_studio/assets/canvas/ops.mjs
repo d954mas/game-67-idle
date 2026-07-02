@@ -69,6 +69,7 @@ import {
   splitTextLines,
 } from "./fonts.mjs";
 import {
+  addFile as storeAddFile,
   addImage as storeAddImage,
   addText as storeAddText,
   appendArchive,
@@ -1933,6 +1934,7 @@ export function historyEntryLabel(op, args = {}) {
     case "setRegions": return { label: "Edit regions", summary: a.region_count != null ? plural(count(a.region_count), "region") : "" };
     case "detectRegions": return { label: "Detect regions", summary: "" };
     case "sliceRegions": return { label: "Slice", summary: "" };
+    case "alphaCutout": return { label: "Alpha cutout", summary: a.region_count ? plural(count(a.region_count), "region") : String(a.method || "") };
     case "setExportSettings": return { label: "Export settings", summary: "" };
     case "patchProject": return { label: "Rename project", summary: String(a.title || "") };
     case "createGroup": return { label: "Group", summary: String(a.name || "") };
@@ -2312,6 +2314,140 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
     run,
     regions: selected,
   };
+}
+
+// ---- alphaCutout (own alpha tool) --------------------------------------------
+
+// Accepted alpha methods on the canvas: the auto route (soft_score router picks
+// key_matte, and refuses a wide soft zone that would need a dual-plate pair) and an
+// explicit key_matte force. alpha_dualplate needs a white+black plate PAIR — a single
+// element has one image, so it is OUT of canvas v1 scope; asking for it is a loud error
+// (where a pair source could come from later: a future "generate dual-plate pair" op).
+const ALPHA_METHODS = new Set(["auto", "matte"]);
+
+// Run the element's CURRENT pixels through the image-tools alpha pipeline and swap the
+// element to a NEW content-addressed alpha PNG in ONE journaled entry — the missing bridge
+// that puts the matte pipeline on the canvas ("готовый арт сразу в альфу"). Cutting is done
+// by our OWN Python tool (tools/alpha_cutout.py) which REUSES the image-tools route +
+// key_matte modules unmodified (no matte logic duplicated in node or a second python impl);
+// ops writes an alpha spec (absolute source path + method + the element's selected regions
+// with their exact rects) and spawns it once through the shared warm worker. `method` is
+// "auto" (route) or "matte" (force key_matte); a wide soft zone under "auto" is a loud error
+// (dual-plate pair needed — no silent single-plate fallback), as is a non-image element or an
+// unknown method. `regions` is an optional list of the element's stored region ids: given, the
+// alpha is applied ONLY inside those region masks and the rest is untouched (region-mask
+// composition happens IN python, one worker call); omitted, the whole element is keyed. Output
+// dimensions equal the source, so geometry never changes. The previous src file stays in
+// files/ (immutable), so undo restores the exact previous bytes; element.meta.alpha records the
+// run (method, params, parent src, routing metrics) like slice provenance, plus a tool_runs row.
+export async function alphaCutout(root, { projectId, elementId, method, regions } = {}) {
+  if (!projectId) throw new Error("alphaCutout requires projectId");
+  if (!elementId) throw new Error("alphaCutout requires elementId");
+  const chosen = method == null || method === "" ? "auto" : String(method).trim().toLowerCase();
+  if (!ALPHA_METHODS.has(chosen)) {
+    if (chosen === "dualplate" || chosen === "dual_plate" || chosen === "generation") {
+      throw new Error(
+        `alpha method ${JSON.stringify(method)} needs a white+black plate PAIR (dual-plate) — a single ` +
+          `canvas element has one image, so it is out of v1 scope. Use method "auto" or "matte".`,
+      );
+    }
+    throw new Error(`unknown alpha method ${JSON.stringify(method)} (expected "auto" or "matte")`);
+  }
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const element = (before.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
+
+  // Resolve the optional region-id selection against the element's STORED regions (same
+  // model as slice's regionIds), so moved/resized/hand-drawn regions key exactly where they
+  // sit. Each spec entry carries the rect and, for a polygonal region, its vertex ring.
+  const allRegions = Array.isArray(element.regions) ? element.regions : [];
+  let specRegions = null;
+  const requested = Array.isArray(regions) ? regions.map(String) : [];
+  if (requested.length) {
+    const wanted = new Set(requested);
+    const selected = allRegions.filter((region) => wanted.has(String(region.id)));
+    const found = new Set(selected.map((region) => String(region.id)));
+    const missing = requested.filter((id) => !found.has(id));
+    if (missing.length) throw new Error(`unknown region id(s): ${missing.join(", ")}`);
+    specRegions = selected.map((region) => {
+      const rect = region.rect || region.content_bbox;
+      if (!Array.isArray(rect) || rect.length !== 4) throw new Error(`region ${region.id} has no rect for alpha`);
+      const entry = { id: String(region.id), rect };
+      if (Array.isArray(region.polygon) && region.polygon.length >= 3) entry.polygon = region.polygon;
+      return entry;
+    });
+    if (!specRegions.length) throw new Error("no regions selected for alpha");
+  }
+
+  const sourceAbs = resolveProjectFile(root, projectId, element.src);
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-alpha-"));
+  let newSrc;
+  let report;
+  try {
+    const specPath = join(workDir, "alpha_spec.json");
+    const reportPath = join(workDir, "alpha_report.json");
+    const outPath = join(workDir, "alpha_out.png");
+    const spec = {
+      schema: "ai_studio.canvas.alpha_cutout_spec.v1",
+      source: sourceAbs,
+      output: outPath,
+      report: reportPath,
+      method: chosen,
+    };
+    if (specRegions) spec.regions = specRegions;
+    writeFileSync(specPath, `${JSON.stringify(spec, null, 2)}\n`);
+    await runToolPython(root, ["ai_studio/assets/canvas/tools/alpha_cutout.py", "--spec", specPath]);
+    report = JSON.parse(readFileSync(reportPath, "utf8"));
+    const bytes = readFileSync(outPath);
+    // Content-addressed write WITHOUT a new element: swap THIS element's src.
+    newSrc = storeAddFile(root, projectId, { bytes, name: `${slug(element.name)}.png` }).src;
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+
+  // Re-read to avoid clobbering concurrent edits, then swap src + record provenance on the
+  // SAME element (previous src file stays in files/, so undo restores the exact bytes).
+  const current = getProject(root, projectId);
+  const target = (current.elements || []).find((item) => item.id === elementId);
+  if (!target) throw new Error(`element not found: ${elementId}`);
+  const run = {
+    id: `run_${randomUUID().slice(0, 8)}`,
+    op: "alpha_cutout",
+    elementId,
+    at: new Date().toISOString(),
+    params: { method: chosen, regions: specRegions ? specRegions.map((region) => region.id) : [] },
+    result_summary: {
+      method: (report && report.method) || chosen,
+      key_color: report && report.key_color,
+      region_count: (report && report.region_count) || 0,
+    },
+  };
+  const alphaMeta = {
+    method: chosen,
+    tool: "alpha_cutout.py",
+    parentSrc: target.src,
+    at: run.at,
+    key_color: report && report.key_color,
+    regions: run.params.regions,
+    routing: (report && report.regions) || [],
+  };
+  const nextElements = (current.elements || []).map((item) =>
+    item.id === elementId ? { ...item, src: newSrc, meta: { ...(item.meta || {}), alpha: alphaMeta } } : item,
+  );
+  const after = updateProject(root, projectId, {
+    elements: nextElements,
+    tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
+  });
+  const project = commitMutation(root, projectId, {
+    op: "alphaCutout",
+    args_summary: { elementId, method: chosen, regions: run.params.regions, region_count: run.params.regions.length },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, element: (project.elements || []).find((item) => item.id === elementId), run, method: chosen };
 }
 
 // ---- exportElements (scale + encode) -----------------------------------------

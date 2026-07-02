@@ -1081,7 +1081,7 @@
           "kind": "group",
           "path": "ai_studio/assets/canvas/tools",
           "color": "#7c3aed",
-          "description": "The canvas module's own Python tools (not image-tools steps), run by the ops layer through the shared _bridge warm worker (config-only studio interpreter, kept warm across calls).",
+          "description": "The canvas module's own Python tools (not image-tools steps), run by the ops layer through the shared _bridge warm worker (config-only studio interpreter, kept warm across calls). render_group.py composites screens, crop_regions.py crops region rects, and alpha_cutout.py alpha-cuts an element (whole or per-region) by REUSING the image-tools route + key_matte modules unmodified.",
           "role": "canvas python tools",
           "tags": [
             "assets",
@@ -1115,6 +1115,20 @@
                 "canvas",
                 "tool",
                 "export"
+              ]
+            },
+            {
+              "id": "assets:canvas-tools-alpha-cutout",
+              "kind": "tool",
+              "path": "ai_studio/assets/canvas/tools/alpha_cutout.py",
+              "title": "alpha_cutout.py",
+              "description": "Alpha-cutout tool for ops.alphaCutout: reads one alpha spec JSON (absolute source path, method auto|matte, optional stored regions with their exact rects/polygons) and writes one RGBA PNG plus a report. REUSES the image-tools matte pipeline unmodified — route/route_cutout for the border key + soft/opaque routing (a wide soft zone under auto raises a loud dual-plate error, no silent single-plate fallback) and alpha_matte/key_matte for the keying. With regions it keys only inside each region mask and pastes back over the untouched original opaque pixels (composition in one worker call); without regions it keys the whole element. Output dimensions equal the source. Runs through the T0218 _bridge warm worker.",
+              "role": "canvas alpha cutout",
+              "tags": [
+                "assets",
+                "canvas",
+                "tool",
+                "alpha"
               ]
             }
           ]

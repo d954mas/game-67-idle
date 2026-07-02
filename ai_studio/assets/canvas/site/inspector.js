@@ -25,6 +25,7 @@ import {
   state,
 } from "./app.js";
 import {
+  alphaCutoutFor,
   deleteRegion,
   detectRegionsFor,
   exportElementIds,
@@ -355,9 +356,37 @@ function renderRegions(element, root) {
   });
   actions.appendChild(sliceBtn);
 
+  // Alpha cutout (T0210): a method dropdown + run button on the selected IMAGE element.
+  // Auto routes (and refuses a dual-plate soft zone loudly); Key matte forces key_matte.
+  // Scoped to the selected regions when any are selected in region-edit mode, else the
+  // whole element. Long-op via the queue + progress toast (mirrors Slice).
+  const alphaRow = document.createElement("div");
+  alphaRow.className = "insp-alpha-row";
+  const methodSel = document.createElement("select");
+  methodSel.className = "insp-input";
+  for (const [value, label] of [["auto", "Auto"], ["matte", "Key matte"]]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    methodSel.appendChild(option);
+  }
+  const alphaBtn = document.createElement("button");
+  alphaBtn.type = "button";
+  alphaBtn.className = "insp-btn insp-alpha-btn";
+  const alphaSelected = selectedRegionIdsFor(element);
+  alphaBtn.textContent = alphaSelected.length ? `Alpha cutout (${alphaSelected.length})` : "Alpha cutout";
+  // Recompute the region scope at click time so an overlay-updated selection is honored.
+  alphaBtn.addEventListener("click", () => {
+    const ids = selectedRegionIdsFor(element);
+    alphaCutoutFor(element.id, methodSel.value, ids.length ? ids : undefined, alphaBtn);
+  });
+  alphaRow.append(field("Alpha", methodSel), alphaBtn);
+  actions.appendChild(alphaRow);
+
+  // Generate (dual-plate) stays a muted placeholder — it needs a white+black plate pair.
   const future = document.createElement("div");
   future.className = "insp-region-hint";
-  future.textContent = "Coming soon: Alpha cutout / Generate (matte pipeline)";
+  future.textContent = "Coming soon: Generate (dual-plate pair)";
   actions.appendChild(future);
   body.appendChild(actions);
 }

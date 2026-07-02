@@ -23,6 +23,7 @@
 //   node ai_studio/assets/canvas/cli.mjs nodes-duplicate <id> --nodes id1,id2 [--dx n --dy n] [--group <gid>|none]
 //   node ai_studio/assets/canvas/cli.mjs nodes-delete <id> --nodes id1,id2
 //   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
+//   node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte] [--regions r1,r2]
 //   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --resample]
 //   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --resample] [--to <dir>] [--zip <path>]
 //   node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h] [--parent <gid>|none]
@@ -47,6 +48,7 @@ import {
   addImage,
   addImages,
   addText,
+  alphaCutout,
   assignToGroup,
   createGroup,
   createProject,
@@ -140,7 +142,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history|history-list|history-jump>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -165,6 +167,7 @@ function usage() {
   regions-set <id> --element <eid> --json <path>   (JSON: a regions array or {regions:[...]})
   regions-show <id> --element <eid>
   slice <id> --element <eid> [--regions r1,r2]
+  alpha <id> --element <eid> [--method auto|matte] [--regions r1,r2]   (alpha-cutout the element; auto routes, matte forces key_matte; one undo)
   export-set <id> --element <eid> --json <path> | --scale <t> [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest]
   export <id> --elements e1,e2 | --all | --project [--scale <t> --format <f> --quality <n> --resample <r>] [--to <dir>] [--zip <path>]
   group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]
@@ -380,6 +383,19 @@ async function runCommand(command, id, positional, flags) {
         ? String(flags.regions).split(",").map((value) => value.trim()).filter(Boolean)
         : undefined;
       return print(await sliceRegions(repoRoot, { projectId: id, elementId: flags.element, regionIds }));
+    }
+    case "alpha": {
+      // Alpha-cutout the element's current pixels (whole element, or only --regions r1,r2)
+      // via the image-tools matte pipeline; swaps the element to a new alpha PNG (one undo).
+      // --method auto (route; refuses a dual-plate soft zone) or matte (force key_matte).
+      if (!id) fail("alpha requires <id>");
+      if (!flags.element) fail("alpha requires --element <eid>");
+      const args = { projectId: id, elementId: flags.element };
+      if (flags.method && flags.method !== "true") args.method = flags.method;
+      if (flags.regions && flags.regions !== "true") {
+        args.regions = String(flags.regions).split(",").map((value) => value.trim()).filter(Boolean);
+      }
+      return print(await alphaCutout(repoRoot, args));
     }
     case "export-set": {
       if (!id) fail("export-set requires <id>");

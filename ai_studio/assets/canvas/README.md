@@ -148,6 +148,22 @@ Every capability is one op in `ops.mjs`:
   the scene. One journal entry per slice (undo removes the group and every
   created crop) plus a `slice_regions` `tool_runs` entry. Requires Python
   (Pillow) via our own `tools/crop_regions.py`.
+- `alphaCutout({ projectId, elementId, method?, regions? })` — run the element's
+  **current** pixels through the image-tools matte pipeline and **swap the element to a
+  NEW content-addressed alpha PNG** in ONE journaled entry (undo restores the previous
+  `src` byte-exact — the original file stays in `files/`). `method` is `"auto"` (the
+  soft-score router picks `key_matte`, and **refuses** a wide soft zone that would need a
+  dual-plate pair — a loud error, no silent single-plate fallback) or `"matte"` (force
+  `key_matte`, the prod keyer). `regions`, when given, is a list of the element's **stored
+  region ids**: the alpha is applied **only inside** those region masks (rect, or the
+  polygon when present) and the rest of the element is left untouched; omitted = the whole
+  element. `alpha_dualplate` (a white+black plate PAIR) is out of v1 scope on a single
+  element and is a loud error. Geometry is preserved (output size = source). Records
+  `element.meta.alpha` (method, params, parent src, routing metrics) like slice
+  provenance, plus an `alpha_cutout` `tool_runs` entry. Requires Python (numpy + scipy +
+  Pillow) via our own `tools/alpha_cutout.py`, which reuses the image-tools
+  `route`/`route_cutout` + `alpha_matte`/`key_matte` modules **unmodified**. Both clients:
+  the page's inspector **Alpha cutout** control and the CLI `alpha`.
 - `setExportSettings({ projectId, elementId, rows })` — replace an element's
   Figma-style export rows `[{scale, format, quality?, resample}]` (the Export section
   persisted on the layer). Validates + normalizes each row (scale token syntax,
@@ -422,6 +438,32 @@ Each per-region spec entry is an **object** (`{ id, rect }`), not a bare rect, s
 future polygonal shape (`{ shape: { type: "polygon", points: [...] } }`) slots in
 additively without changing the spec contract — and `setRegions` preserves unknown
 region fields so that geometry survives a round-trip through the op layer today.
+
+### Alpha cutout tool
+
+`alphaCutout` brings the image-tools matte pipeline onto the canvas as a first-class
+per-element op ("готовый арт сразу в альфу" — alpha is not a region workflow; regions are
+optional refinement). Like slice, it uses our OWN Python tool `tools/alpha_cutout.py`
+(spawned once through the shared warm worker), but that tool **reuses the image-tools
+alpha modules verbatim** — `route/route_cutout` (the soft-score router) for the border key
++ the `key_matte` vs `dual_plate` decision, and `alpha_matte/key_matte` (the prod keyer)
+for the keying — so there is **no matte logic duplicated** in node or in a second Python
+implementation, and a missing module is a loud import error.
+
+- **Method.** `"auto"` routes the source: opaque/flat-key art keys with `key_matte`; a WIDE
+  soft/semi-transparent zone (glow, glass, soft shadow) routes to `dual_plate`, which needs
+  a white+black plate PAIR — a single element has one image, so that is a **loud error**
+  (no silent single-plate fallback). `"matte"` forces `key_matte` regardless of the routing
+  recommendation. `dual_plate`/generation is out of v1 scope; a future "generate a
+  dual-plate pair" op is where a pair source could come from.
+- **Regions optional.** Without regions the whole element is keyed. With region ids, the
+  op keys **only inside** each region's mask (rect, or the polygon when present) and pastes
+  each keyed crop back over the **untouched original opaque pixels** — the region-mask
+  composition happens IN Python, in one worker call, never split across node.
+- **Non-destructive src swap.** The result is written as a new content-addressed file and
+  the element's `src` is swapped to it in one journal entry; the previous file stays in
+  `files/` (immutable), so undo restores the exact previous bytes. Output dimensions equal
+  the source, so the element box never changes. `element.meta.alpha` records the run.
 
 ## Text elements
 
@@ -706,6 +748,7 @@ node ai_studio/assets/canvas/cli.mjs nodes-delete <id> --nodes id1,id2   # batch
 node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json   # a regions array or {regions:[...]}
 node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
+node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte] [--regions r1,r2]   # alpha-cutout the element (auto routes; matte forces key_matte); one undo
 node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json      # persist export rows (journaled)
 node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --scale 2x [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest]
 node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all, or --project (all visible screens)
@@ -788,8 +831,10 @@ one document that swaps two views; the JS is split into focused ES modules under
   source size, provenance, meta, and a calm **Regions** section: a count badge,
   compact per-region rows — number + name/size + delete, coords in the tooltip —
   that select/enter region-edit on the canvas and inline-rename on double-click,
-  plus **+ Add region**, **Slice selected region(s)**, and one muted matte-pipeline
-  placeholder line), group/screen (name, X/Y/W/H + a **Fit to content** button that
+  plus **Detect**, **Slice** (selected regions, else all), an **Alpha cutout** control (a
+  method dropdown Auto / Key matte + a run button scoped to the selected regions when any
+  are selected, else the whole element — a long-op via the queue), and a muted Generate
+  (dual-plate) placeholder line), group/screen (name, X/Y/W/H + a **Fit to content** button that
   resizes the frame to its content, **Visible** + **Clip content**
   checkboxes, member count, Background, **Render screen** with scale + background),
   multi-select (count + "each exports
