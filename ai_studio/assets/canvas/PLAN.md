@@ -63,10 +63,14 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **Groups** (`T0219`, P1, design first) — sibling z-order for groups,
-   NESTED groups (model change), clip-to-bounds flag, group background
-   (color; canvas draw + render parity). Slice-group + delete-group already
-   landed ahead of it (`59eb9df0`).
+1. **Groups** (`T0219`, P1, DESIGN SETTLED 2026-07-02, building) — flat
+   Defold-style model (additive `parentId`/`order`/`clip`/`background`
+   fields, NO stored tree; paint order computed in shared `tree.mjs`; v1
+   projects open with zero converter), Figma selection (click = top-most
+   group, dbl-click drills, Ctrl+click deep-selects; lead's calls). Four
+   increments: foundation+background → group z-order → nesting+selection →
+   clip. Full design record in the T0219 task. Slice-group + delete-group
+   already landed ahead of it (`59eb9df0`).
 2. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
    busy spinner, input never blocked, max-N concurrent long ops with a
    visible queue.
