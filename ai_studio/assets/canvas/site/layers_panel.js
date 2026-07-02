@@ -2,7 +2,8 @@
 // level; each group is a collapsible section (eye toggle + inline-rename name)
 // with its member elements indented beneath. Every row has a 24px thumbnail, an
 // inline-rename name, an eye toggle, and a region-count badge. Clicking a row
-// selects on the canvas (selection syncs both ways through refresh()). Pure
+// selects on the canvas (selection syncs both ways through refresh()). The
+// header's "+ Screen" button is the discoverable counterpart to Ctrl/Cmd+G. Pure
 // rendering/input — all mutations go through actions.
 import {
   el,
@@ -17,7 +18,7 @@ import {
   toggleSelect,
   ungroupedElements,
 } from "./app.js";
-import { renameElement, setElementVisible, renameGroup, setGroupVisible } from "./actions.js";
+import { createGroupOrDefault, renameElement, setElementVisible, renameGroup, setGroupVisible } from "./actions.js";
 import { inlineEdit } from "./inline.js";
 
 function eyeButton(visible, onToggle) {
@@ -51,11 +52,14 @@ function elementRow(element, indented) {
   name.className = "layer-name";
   name.textContent = element.name || element.id;
   name.title = element.name || element.id;
-  name.addEventListener("dblclick", (event) => {
+  row.appendChild(name);
+  // Rename on double-click anywhere on the row (not just the narrow name span) —
+  // the eye/other buttons are excluded so toggling fast doesn't open an editor.
+  row.addEventListener("dblclick", (event) => {
+    if (event.target.closest("button")) return;
     event.stopPropagation();
     inlineEdit(name, element.name || "", (next) => renameElement(element.id, next));
   });
-  row.appendChild(name);
 
   const count = regionCount(element);
   if (count > 0) {
@@ -101,11 +105,12 @@ function groupSection(group) {
   name.className = "group-name";
   name.textContent = group.name || "Screen";
   name.title = "Double-click to rename";
-  name.addEventListener("dblclick", (event) => {
+  head.appendChild(name);
+  head.addEventListener("dblclick", (event) => {
+    if (event.target.closest("button")) return;
     event.stopPropagation();
     inlineEdit(name, group.name || "", (next) => renameGroup(group.id, next));
   });
-  head.appendChild(name);
 
   const members = memberElements(group.id);
   const count = document.createElement("span");
@@ -131,6 +136,9 @@ function groupSection(group) {
 export function renderLayers() {
   const list = el("layers-list");
   if (!list) return;
+  // An open inline rename must survive selection-driven re-renders: skip the
+  // rebuild while the editor is up — the commit's reload re-renders anyway.
+  if (list.querySelector(".inline-input")) return;
   list.replaceChildren();
   const ungrouped = ungroupedElements();
   const groupList = groups();
@@ -147,4 +155,8 @@ export function renderLayers() {
 
 export function initLayers() {
   hooks.renderLayers = renderLayers;
+  // "+ Screen": groups the current selection (same as Ctrl/Cmd+G), or creates an
+  // empty default-size screen when nothing is selected.
+  const newGroupBtn = el("layers-new-group");
+  if (newGroupBtn) newGroupBtn.addEventListener("click", () => createGroupOrDefault("New screen"));
 }

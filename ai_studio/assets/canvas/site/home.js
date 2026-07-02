@@ -1,9 +1,10 @@
-// Home screen: a full-page grid of project cards plus a "+ New project" card with
-// an inline title input (no browser prompt). Cards show a cover thumbnail, title,
-// image count, and updated date; hovering reveals inline rename and delete. Pure
-// rendering/input over the shared API.
+// Home screen: a full-page grid of project cards plus a "+ New project" card
+// that creates a project instantly (random default title, Figma-style — no
+// name prompt) and opens it straight into the workspace. Cards show a cover
+// thumbnail, title, image count, and updated date; hovering reveals a delete
+// button with a two-step in-place confirm (no browser confirm()). Renaming
+// lives only in the workspace top bar. Pure rendering/input over the shared API.
 import { api, coverUrl, el, hooks, loadProjects, setStatus, state } from "./app.js";
-import { inlineEdit, makeInlineInput } from "./inline.js";
 
 function formatDate(iso) {
   const date = new Date(iso);
@@ -27,16 +28,6 @@ function coverNode(project) {
   return cover;
 }
 
-async function renameProjectFromHome(project, nextTitle) {
-  try {
-    await api("PATCH", `/projects/${project.id}`, { title: nextTitle });
-    await loadProjects();
-    render();
-  } catch (error) {
-    setStatus(error.message, true);
-  }
-}
-
 async function deleteProjectFromHome(project) {
   try {
     await api("DELETE", `/projects/${project.id}`);
@@ -45,6 +36,71 @@ async function deleteProjectFromHome(project) {
   } catch (error) {
     setStatus(error.message, true);
   }
+}
+
+// Card actions: only Delete, gated by a lean two-step in-place confirm (no
+// browser confirm()). First click swaps the button row for a "Delete project?"
+// prompt with Delete/Cancel; it reverts on Cancel, Escape, or a click anywhere
+// outside the actions row. Trash-move is not undoable from the UI, so — unlike
+// element delete on the canvas, which is journaled and needs no confirmation —
+// this is the one place a confirm step earns its keep.
+function projectActions(project) {
+  const actions = document.createElement("div");
+  actions.className = "card-actions";
+
+  function onOutside(event) {
+    if (!actions.contains(event.target)) showDefault();
+  }
+  function onEscape(event) {
+    if (event.key === "Escape") showDefault();
+  }
+  function stopWatching() {
+    document.removeEventListener("mousedown", onOutside, true);
+    document.removeEventListener("keydown", onEscape, true);
+  }
+
+  function showDefault() {
+    stopWatching();
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "card-action danger";
+    del.title = "Delete (moves to .trash)";
+    del.textContent = "Delete";
+    del.addEventListener("click", (event) => {
+      event.stopPropagation();
+      showConfirm();
+    });
+    actions.replaceChildren(del);
+  }
+
+  function showConfirm() {
+    const label = document.createElement("span");
+    label.className = "card-confirm-label";
+    label.textContent = "Delete project?";
+    const confirmBtn = document.createElement("button");
+    confirmBtn.type = "button";
+    confirmBtn.className = "card-action danger";
+    confirmBtn.textContent = "Delete";
+    confirmBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      showDefault();
+      deleteProjectFromHome(project);
+    });
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.className = "card-action";
+    cancelBtn.textContent = "Cancel";
+    cancelBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      showDefault();
+    });
+    actions.replaceChildren(label, confirmBtn, cancelBtn);
+    document.addEventListener("mousedown", onOutside, true);
+    document.addEventListener("keydown", onEscape, true);
+  }
+
+  showDefault();
+  return actions;
 }
 
 function projectCard(project) {
@@ -68,37 +124,18 @@ function projectCard(project) {
   body.appendChild(meta);
 
   card.appendChild(body);
-
-  const actions = document.createElement("div");
-  actions.className = "card-actions";
-  const rename = document.createElement("button");
-  rename.type = "button";
-  rename.className = "card-action";
-  rename.title = "Rename";
-  rename.textContent = "Rename";
-  rename.addEventListener("click", (event) => {
-    event.stopPropagation();
-    inlineEdit(title, project.title, (next) => renameProjectFromHome(project, next));
-  });
-  const del = document.createElement("button");
-  del.type = "button";
-  del.className = "card-action danger";
-  del.title = "Delete (moves to .trash)";
-  del.textContent = "Delete";
-  del.addEventListener("click", (event) => {
-    event.stopPropagation();
-    deleteProjectFromHome(project);
-  });
-  actions.append(rename, del);
-  card.appendChild(actions);
+  card.appendChild(projectActions(project));
 
   card.addEventListener("click", () => hooks.openProject(project.id));
   return card;
 }
 
-async function createProject(title) {
+// Instant create (Figma-style): no name prompt. The op layer generates a
+// random default title; the project opens straight into the workspace, where
+// the top-bar title is the one place to rename it.
+async function createProject() {
   try {
-    const { project } = await api("POST", "/projects", { title });
+    const { project } = await api("POST", "/projects");
     await loadProjects();
     hooks.openProject(project.id);
   } catch (error) {
@@ -109,19 +146,6 @@ async function createProject(title) {
 function newProjectCard() {
   const card = document.createElement("div");
   card.className = "project-card new-card";
-
-  const showInput = () => {
-    card.replaceChildren();
-    const input = makeInlineInput({
-      value: "",
-      placeholder: "Project title",
-      onCommit: (title) => createProject(title),
-      onCancel: () => render(),
-    });
-    card.appendChild(input);
-    input.focus();
-  };
-
   const plus = document.createElement("div");
   plus.className = "new-plus";
   plus.textContent = "+";
@@ -129,7 +153,7 @@ function newProjectCard() {
   label.className = "new-label";
   label.textContent = "New project";
   card.append(plus, label);
-  card.addEventListener("click", showInput);
+  card.addEventListener("click", () => createProject());
   return card;
 }
 

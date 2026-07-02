@@ -14,6 +14,7 @@
         <span class="home-sub">Multi-image projects</span>
       </header>
       <div id="home-grid"></div>
+      <div id="home-status" class="status-line">Ready.</div>
     </section>
 
     <!-- WORKSPACE: full-width editor for one open project. -->
@@ -46,6 +47,7 @@
           <header>
             <button id="layers-collapse" type="button" title="Collapse layers">&#9776;</button>
             <span class="panel-title">Layers</span>
+            <button id="layers-new-group" type="button" title="Group selection into a screen, or create an empty screen (Ctrl/Cmd+G)">+ Screen</button>
           </header>
           <div id="layers-list"></div>
         </aside>
@@ -62,7 +64,7 @@
         <aside id="inspector"></aside>
       </div>
 
-      <div id="status">Ready.</div>
+      <div id="status" class="status-line">Ready.</div>
       <input id="file-input" type="file" accept="image/*" multiple class="hidden" />
     </section>
 

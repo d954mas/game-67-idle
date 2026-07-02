@@ -4,7 +4,7 @@
 //
 // usage:
 //   node ai_studio/assets/canvas/cli.mjs list
-//   node ai_studio/assets/canvas/cli.mjs create --title "My canvas"
+//   node ai_studio/assets/canvas/cli.mjs create [--title "My canvas"]
 //   node ai_studio/assets/canvas/cli.mjs show <id>
 //   node ai_studio/assets/canvas/cli.mjs rename <id> --title "New title"
 //   node ai_studio/assets/canvas/cli.mjs delete <id>
@@ -40,6 +40,7 @@ import {
   patchProject,
   readHistory,
   redoOp,
+  removeElement,
   renderGroup,
   sliceRegions,
   undoOp,
@@ -68,15 +69,17 @@ function print(value) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|slice|export|group-create|group-move|group-set|group-assign|group-delete|render-screen|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|slice|export|group-create|group-move|group-set|group-assign|group-delete|render-screen|undo|redo|history>
   list
-  create --title <title>
+  create [--title <title>]     (omit --title for a random default)
   show <id>
   rename <id> --title <title>
   delete <id>
   add-image <id> --file <path>
   detect-regions <id> --element <eid>
   move <id> --element <eid> --x <n> --y <n>
+  element-set <id> --element <eid> [--name <name>] [--visible true|false]
+  element-remove <id> --element <eid>
   slice <id> --element <eid> [--regions r1,r2]
   export <id> --elements e1,e2 | --all
   group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>]
@@ -99,7 +102,8 @@ async function main(argv) {
     case "list":
       return print({ projects: listProjects(repoRoot) });
     case "create":
-      if (!flags.title) fail("create requires --title");
+      // --title is optional: a missing/empty title gets a random default
+      // ("Amber Fox"-style) from the op layer, matching the page's instant-create.
       return print({ project: createProject(repoRoot, { title: flags.title }) });
     case "show":
       if (!id) fail("show requires <id>");
@@ -130,6 +134,20 @@ async function main(argv) {
       if (flags.x !== undefined) patch.x = Number(flags.x);
       if (flags.y !== undefined) patch.y = Number(flags.y);
       return print(patchElement(repoRoot, id, flags.element, patch));
+    }
+    case "element-set": {
+      if (!id) fail("element-set requires <id>");
+      if (!flags.element) fail("element-set requires --element <eid>");
+      const patch = {};
+      if (flags.name && flags.name !== "true") patch.name = flags.name;
+      if (flags.visible !== undefined) patch.visible = flags.visible === "true";
+      if (!Object.keys(patch).length) fail("element-set requires --name and/or --visible");
+      return print(patchElement(repoRoot, id, flags.element, patch));
+    }
+    case "element-remove": {
+      if (!id) fail("element-remove requires <id>");
+      if (!flags.element) fail("element-remove requires --element <eid>");
+      return print(removeElement(repoRoot, id, flags.element));
     }
     case "slice": {
       if (!id) fail("slice requires <id>");

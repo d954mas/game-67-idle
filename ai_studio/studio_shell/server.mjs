@@ -56,6 +56,13 @@ function safeResolve(base, relativePath) {
   return full;
 }
 
+// Short deep-link route: /canvas(/) redirects to the canvas site page, keeping
+// the query string so deep links like /canvas?project=<id> still land there.
+function canvasRedirectLocation(pathname, search) {
+  if (pathname !== "/canvas" && pathname !== "/canvas/") return null;
+  return `/ai_studio/assets/canvas/site/canvas.html${search || ""}`;
+}
+
 function staticPath(pathname) {
   if (pathname === "/" || pathname === "/index.html") return join(aiStudioRoot, "studio_shell", "index.html");
   if (pathname === "/home.css") return join(aiStudioRoot, "studio_shell", "home.css");
@@ -136,6 +143,12 @@ function serveJson(res, value) {
 
 const server = createServer((req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  const canvasRedirect = canvasRedirectLocation(url.pathname, url.search);
+  if (canvasRedirect) {
+    res.writeHead(302, { location: canvasRedirect });
+    res.end();
+    return;
+  }
   if (url.pathname.startsWith("/api/")) {
     if (url.pathname === "/api/quality-checks") {
       serveJson(res, loadQualityCatalog(root));

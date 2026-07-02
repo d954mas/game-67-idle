@@ -157,6 +157,34 @@ export async function createGroupFromSelection(name) {
   }
 }
 
+const DEFAULT_GROUP_SIZE = { w: 960, h: 540 };
+
+// "+ Screen" (layers panel header): group the current selection into a screen
+// exactly like Ctrl/Cmd+G, or — when nothing is selected — create an empty
+// default-size screen centered on the current viewport via the same createGroup
+// op the CLI's group-create (no --elements) already uses.
+export async function createGroupOrDefault(name) {
+  if (state.selectedIds.size > 0) {
+    await createGroupFromSelection(name);
+    return;
+  }
+  try {
+    const center = screenToImagePoint({ x: state.cssWidth / 2, y: state.cssHeight / 2 }, state.viewport);
+    const body = {
+      name: name || "New screen",
+      x: Math.round(center.x - DEFAULT_GROUP_SIZE.w / 2),
+      y: Math.round(center.y - DEFAULT_GROUP_SIZE.h / 2),
+      w: DEFAULT_GROUP_SIZE.w,
+      h: DEFAULT_GROUP_SIZE.h,
+    };
+    const result = await api("POST", `/projects/${pid()}/groups`, body);
+    state.selectedGroupId = result.group.id;
+    await reloadProject(`Created screen "${result.group.name}".`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 export async function patchGroupBox(groupId, patch) {
   try {
     await api("PATCH", `/projects/${pid()}/groups/${groupId}`, patch);

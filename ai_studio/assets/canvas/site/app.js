@@ -42,30 +42,37 @@ export function refresh() {
   hooks.syncTopBar();
 }
 
+// Both views carry a status line (#status in the workspace, #home-status on
+// home) so errors from home ops (create/delete) are never reported into a
+// hidden node.
+function statusNodes() {
+  return [el("status"), el("home-status")].filter(Boolean);
+}
+
 export function setStatus(message, isError = false) {
-  const node = el("status");
-  if (!node) return;
-  node.innerHTML = "";
-  node.textContent = message;
-  node.classList.toggle("error", isError);
+  for (const node of statusNodes()) {
+    node.innerHTML = "";
+    node.textContent = message;
+    node.classList.toggle("error", isError);
+  }
 }
 
 // Append a status line that also carries clickable download links (used after
 // export / render screen). `links` is [{ href, label }].
 export function setStatusLinks(message, links = []) {
-  const node = el("status");
-  if (!node) return;
-  node.classList.remove("error");
-  node.textContent = `${message} `;
-  for (const link of links) {
-    const a = document.createElement("a");
-    a.href = link.href;
-    a.textContent = link.label;
-    a.target = "_blank";
-    a.rel = "noreferrer";
-    a.className = "dl";
-    node.appendChild(a);
-    node.appendChild(document.createTextNode(" "));
+  for (const node of statusNodes()) {
+    node.classList.remove("error");
+    node.textContent = `${message} `;
+    for (const link of links) {
+      const a = document.createElement("a");
+      a.href = link.href;
+      a.textContent = link.label;
+      a.target = "_blank";
+      a.rel = "noreferrer";
+      a.className = "dl";
+      node.appendChild(a);
+      node.appendChild(document.createTextNode(" "));
+    }
   }
 }
 

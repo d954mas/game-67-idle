@@ -26,7 +26,10 @@ browser and an agent get identical pixels/regions.
   HTML document (`canvas.html`) that swaps a **home** view and a **workspace** view;
   the behavior is split into small ES modules (see **Page** below). It reuses the
   Asset Tools viewport module for pan/zoom/fit and holds no logic beyond
-  rendering/input — every action is one HTTP API call.
+  rendering/input — every action is one HTTP API call. Studio Shell also mounts a
+  short `/canvas` route (query string preserved, so `/canvas?project=<id>` deep
+  links work) that 302-redirects to `/ai_studio/assets/canvas/site/canvas.html`;
+  see `ai_studio/studio_shell/server.mjs`.
 - `tests/` — `node:test` suites for the store, ops, API, and studio config.
 
 ## Projects root
@@ -166,13 +169,15 @@ element name (sanitized, collision-suffixed) plus `manifest.json`:
 
 ```powershell
 node ai_studio/assets/canvas/cli.mjs list
-node ai_studio/assets/canvas/cli.mjs create --title "My canvas"
+node ai_studio/assets/canvas/cli.mjs create [--title "My canvas"]   # omit --title for a random default
 node ai_studio/assets/canvas/cli.mjs show <id>
 node ai_studio/assets/canvas/cli.mjs rename <id> --title "New title"
 node ai_studio/assets/canvas/cli.mjs delete <id>          # moves to .trash
 node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
 node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
+node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--name "X"] [--visible true|false]
+node ai_studio/assets/canvas/cli.mjs element-remove <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all
 node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h]
@@ -202,8 +207,11 @@ one document that swaps two views; the JS is split into focused ES modules under
   patch/render/ungroup/delete, undo/redo, rename project). No module talks to the
   API directly.
 - `home.js` — the **home** view: a full-page grid of project cards (cover thumbnail,
-  title, image count, updated date) plus a `+ New project` card with an inline title
-  input (no `prompt()`); card hover reveals inline rename and delete.
+  title, image count, updated date) plus a `+ New project` card that creates a
+  project instantly (random default title, Figma-style — no name prompt) and opens
+  it straight into the workspace. Card hover reveals only Delete, gated by a lean
+  two-step in-place confirm (no browser `confirm()`); renaming lives solely in the
+  workspace top bar.
 - `workspace.js` — the **workspace** view: the DPR-crisp pan/zoom canvas, the left
   tool rail (Select/Hand), zoom controls + indicator, top bar sync, and all pointer
   interaction (select, drag-move, pan). `imageSmoothingEnabled` is off at ≥2× zoom.

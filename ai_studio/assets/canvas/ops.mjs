@@ -37,7 +37,7 @@ import {
 import {
   addImage as storeAddImage,
   appendJournal,
-  createProject,
+  createProject as storeCreateProject,
   deleteProject as storeDeleteProject,
   getProject,
   imageSize,
@@ -53,7 +53,6 @@ import {
 } from "./store.mjs";
 
 export {
-  createProject,
   getProject,
   listProjects,
   resolveProjectFile,
@@ -149,6 +148,33 @@ export function removeElement(root, projectId, elementId) {
 }
 
 // ---- project-level ops -------------------------------------------------------
+
+// Instant-create default titles (Figma-style: no name prompt). Two small
+// game-flavored word lists; the generator lives here in the op layer, not the
+// page, so the CLI and the "+ New project" button get identical defaults.
+const TITLE_ADJECTIVES = [
+  "Amber", "Blazing", "Crimson", "Drifting", "Emerald", "Frosty", "Golden",
+  "Hidden", "Indigo", "Jade", "Lunar", "Mystic", "Neon", "Obsidian", "Radiant", "Velvet",
+];
+const TITLE_NOUNS = [
+  "Fox", "Griffin", "Nebula", "Phoenix", "Quest", "Raven", "Relic", "Rogue",
+  "Sentinel", "Talisman", "Voyager", "Wraith", "Wyvern", "Citadel", "Compass", "Portal",
+];
+
+function randomProjectTitle() {
+  const adjective = TITLE_ADJECTIVES[Math.floor(Math.random() * TITLE_ADJECTIVES.length)];
+  const noun = TITLE_NOUNS[Math.floor(Math.random() * TITLE_NOUNS.length)];
+  return `${adjective} ${noun}`;
+}
+
+// Create a project. `title` is optional: a missing/empty title gets a random
+// "Adjective Noun" default (Title Case) instead of a name prompt. The id still
+// derives from the (possibly generated) title via the store's existing slug
+// scheme, so a random title yields ids like amber-fox-a1b2c3.
+export function createProject(root, { title } = {}) {
+  const cleanTitle = String(title || "").trim() || randomProjectTitle();
+  return storeCreateProject(root, { title: cleanTitle });
+}
 
 // Rename a project. Journaled like any metadata mutation: the title lives in the
 // snapshot, so undo/redo restore it together with elements/groups/tool_runs.

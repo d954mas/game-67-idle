@@ -2,9 +2,10 @@
 // label/frame, or empty canvas); every item calls an existing action. The menu is
 // positioned at the pointer, clamped to the viewport, and closes on click-away or
 // Escape. Pure rendering/input.
-import { el, elementById, groupById, regionCount, setStatus } from "./app.js";
+import { el, elementById, groupById, regionCount, setStatus, state } from "./app.js";
 import {
   addImageFiles,
+  createGroupFromSelection,
   deleteElements,
   deleteGroupAction,
   detectRegionsFor,
@@ -69,15 +70,24 @@ function itemsFor(target) {
     const element = elementById(target.elementId);
     if (!element) return [];
     const visible = element.visible !== false;
-    return [
+    // Right-clicking a selected element keeps the whole multi-selection (see
+    // workspace.js onContextMenu), so a 2+ selection offers the same grouping
+    // shortcut as Ctrl/Cmd+G here too.
+    const items = [
       { label: "Detect regions", onClick: () => detectRegionsFor(element.id) },
       { label: "Slice regions", disabled: regionCount(element) === 0, onClick: () => sliceRegionsFor(element.id) },
       { label: "Export", onClick: () => exportElementIds([element.id]) },
+    ];
+    if (state.selectedIds.size >= 2) {
+      items.push({ label: "Group into screen", onClick: () => createGroupFromSelection("New screen") });
+    }
+    items.push(
       { label: "Rename", onClick: () => focusInspectorName() },
       { label: visible ? "Hide" : "Show", onClick: () => setElementVisible(element.id, !visible) },
       { separator: true },
       { label: "Delete", danger: true, onClick: () => deleteElements([element.id]) },
-    ];
+    );
+    return items;
   }
   if (target.kind === "group") {
     const group = groupById(target.groupId);

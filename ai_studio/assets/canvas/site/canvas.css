@@ -170,6 +170,16 @@ button:disabled {
   color: var(--red);
 }
 
+.card-confirm-label {
+  font-size: 11px;
+  color: var(--red);
+  background: rgba(16, 18, 20, 0.9);
+  border-radius: 6px;
+  padding: 3px 6px;
+  white-space: nowrap;
+  align-self: center;
+}
+
 .new-card {
   align-items: center;
   justify-content: center;
@@ -293,6 +303,17 @@ button:disabled {
 #layers-collapse {
   padding: 2px 7px;
   line-height: 1;
+}
+
+#layers-new-group {
+  margin-left: auto;
+  padding: 2px 7px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+#layers-panel.collapsed #layers-new-group {
+  display: none;
 }
 
 #layers-list {

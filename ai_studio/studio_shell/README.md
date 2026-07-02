@@ -72,4 +72,6 @@ Current hosted surfaces:
 - `/taskboard/` -> Taskboard surface.
 - `/asset_viewer/` -> Asset Viewer launcher.
 - `/asset_prep/` -> Asset Tools surface.
+- `/canvas` -> 302 redirect (query string preserved) to the Canvas surface
+  (`ai_studio/assets/canvas/site/canvas.html`), owned by `assets/canvas/`.
 - `/quality/` -> Quality Checks surface.

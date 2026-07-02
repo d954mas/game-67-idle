@@ -29,6 +29,13 @@ function tempProjects(t) {
   return dir;
 }
 
+test("createProject without a title generates a random default", (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, {});
+  assert.match(project.title, /^[A-Z][a-z]+ [A-Z][a-z]+$/);
+  assert.ok(project.id.length > 0);
+});
+
 test("detectRegions bridges raster2d and stores regions + a tool_run", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Detect" });
