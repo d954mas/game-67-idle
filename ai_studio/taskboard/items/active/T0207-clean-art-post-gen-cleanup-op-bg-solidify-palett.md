@@ -35,6 +35,12 @@ Painterly (mild denoise only), Keying prep (magenta solidify only); advanced
 sliders (threshold, palette N) live collapsed. Safe by construction: new file
 + journaled swap, before/after toggle in UI, Ctrl+Z reverts.
 
+Bg-solidify has TWO roles (lead clarified 2026-07-02): (a) explicit journaled
+op that mutates the asset — ONLY on explicit Clean up; (b) invisible in-memory
+pre-pass inside other ops (alpha keying snaps near-bg before cutting; region
+detect just reads with the same distance math) — these NEVER write a modified
+source file. The lead never has to remember pass ordering.
+
 ## Open questions
 
 ## Log
