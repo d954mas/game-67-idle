@@ -1,8 +1,82 @@
 ﻿import test from "node:test";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { localRecord, parseArgs, resolvePullTarget } from "../pull.mjs";
 import { isPublishable } from "../../backlog/storage/license/restricted.mjs";
+
+const PULL_MJS = resolve(dirname(fileURLToPath(import.meta.url)), "..", "pull.mjs");
+
+function makeLibrary(root, { withFile = true } = {}) {
+  const packDir = join(root, "library", "packs", "test-pack");
+  mkdirSync(join(packDir, "files"), { recursive: true });
+  writeFileSync(join(packDir, "pack.json"), JSON.stringify({
+    pack: "test-pack",
+    title: "Test Pack",
+    origin: "sourced",
+    license: "CC0-1.0",
+    license_kind: "cc0",
+  }));
+  writeFileSync(join(packDir, "assets.jsonl"), JSON.stringify({
+    asset_id: "test__icon__cc0-1-0",
+    title: "Icon",
+    kind: "ui",
+    resource: "files/icon.png",
+    license: "CC0-1.0",
+    license_kind: "cc0",
+    origin: "sourced",
+  }) + "\n");
+  if (withFile) writeFileSync(join(packDir, "files", "icon.png"), Buffer.from("png-bytes-for-pull-test"));
+  return join(root, "library");
+}
+
+function runPull(cwd, library, extra = []) {
+  return spawnSync(process.execPath, [
+    PULL_MJS,
+    "--ids", "test__icon__cc0-1-0",
+    "--library", library,
+    "--to", "gameassets",
+    ...extra,
+  ], { cwd, encoding: "utf8" });
+}
+
+test("pull --apply copies non-model files into the target pack", () => {
+  const root = mkdtempSync(join(tmpdir(), "pull-e2e-"));
+  try {
+    const library = makeLibrary(root);
+    const result = runPull(root, library, ["--apply"]);
+    assert.equal(result.status, 0, result.stderr);
+
+    const dst = join(root, "gameassets", "packs", "library-pulls", "files", "test__icon__cc0-1-0", "icon.png");
+    assert.ok(existsSync(dst), "pulled file must exist in the game pack");
+    assert.equal(readFileSync(dst, "utf8"), "png-bytes-for-pull-test");
+
+    const rows = readFileSync(join(root, "gameassets", "packs", "library-pulls", "assets.jsonl"), "utf8")
+      .split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].asset_id, "test__icon__cc0-1-0");
+    assert.equal(rows[0].resource, "files/test__icon__cc0-1-0/icon.png");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("pull --apply fails loudly when the library file is missing", () => {
+  const root = mkdtempSync(join(tmpdir(), "pull-e2e-missing-"));
+  try {
+    const library = makeLibrary(root, { withFile: false });
+    const result = runPull(root, library, ["--apply"]);
+    assert.notEqual(result.status, 0, "must exit non-zero when the source file is absent");
+    assert.match(result.stderr, /library file missing for test__icon__cc0-1-0/);
+    assert.ok(!existsSync(join(root, "gameassets", "packs", "library-pulls", "assets.jsonl")),
+      "no manifest row may be written for a missing file");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
 
 test("parseArgs requires ids and target asset root", () => {
   assert.throws(() => parseArgs(["--to", "templates/template/assets"]), /missing --ids/);

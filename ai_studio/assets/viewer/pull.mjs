@@ -133,15 +133,22 @@ async function main() {
     const resource = `files/${r.asset_id}/${fileName}`;
     const preview = r.preview ? `previews/${r.asset_id}/${basename(r.preview)}` : "";
     const filesDst = join(packDir, "files", r.asset_id, fileName);
+    const srcFile = r.modelPath && existsSync(r.modelPath)
+      ? r.modelPath
+      : r.resource
+        ? join(library, r.resource)
+        : "";
+    const srcMissing = !srcFile || !existsSync(srcFile);
     const exists = existsSync(filesDst);
-    console.log(`  ${r.asset_id}  (${r.kind})${publish ? "" : " [RESTRICTED]"}${exists ? " [exists]" : ""} -> ${relPosix(to, filesDst)}`);
+    console.log(`  ${r.asset_id}  (${r.kind})${publish ? "" : " [RESTRICTED]"}${exists ? " [exists]" : ""}${srcMissing ? " [MISSING SOURCE]" : ""} -> ${relPosix(to, filesDst)}`);
     if (exists && !a.overwrite) throw new Error(`already in game (pass --overwrite): ${r.asset_id}`);
     if (!a.apply) continue;
-    await ensurePack(packDir, !publish);
-    if (r.modelPath && existsSync(r.modelPath)) {
-      await mkdir(dirname(filesDst), { recursive: true });
-      await cp(r.modelPath, filesDst, { force: true });
+    if (srcMissing) {
+      throw new Error(`library file missing for ${r.asset_id}: ${srcFile || "(no resource recorded)"}`);
     }
+    await ensurePack(packDir, !publish);
+    await mkdir(dirname(filesDst), { recursive: true });
+    await cp(srcFile, filesDst, { recursive: true, force: true });
     if (r.preview && existsSync(r.preview)) {
       const pdst = join(packDir, "previews", r.asset_id);
       await mkdir(pdst, { recursive: true });
