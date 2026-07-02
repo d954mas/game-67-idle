@@ -44,6 +44,23 @@ The same config carries `canvasHistoryDepth` (default 200) — the retained undo
 cap read via `canvasHistoryDepth(root)`; `CANVAS_HISTORY_DEPTH` overrides it for
 tests. See **History depth cap + compaction** below.
 
+## Object references (`canvas://`)
+
+The page's right-click "Copy ID" copies a paste-into-chat reference so the lead
+can point an agent at an exact object:
+
+```
+canvas://<projectId>                          — the project
+canvas://<projectId>/group/<groupId>          — a group
+canvas://<projectId>/element/<elementId>      — an element
+canvas://<projectId>/element/<eId>/region/<rId> — a region on an element
+```
+
+A human-readable tail follows after ` — ` (project/element/region names); it is
+display sugar only. When you receive such a reference, take the bare ids out of
+the URI part and drive the normal CLI/ops (`show <projectId>`, element/region
+ids as-is). Multi-selection copies one reference per line.
+
 ## Operations
 
 Every capability is one op in `ops.mjs`:

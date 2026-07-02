@@ -90,6 +90,76 @@ function targetElementIds(elementId) {
   return [elementId];
 }
 
+// ---- Copy ID -------------------------------------------------------------------
+// A paste-into-agent-chat reference: the canvas://<project>/<kind>/<id> part is
+// canonical (bare ids the API/CLI take verbatim), the tail names the project and
+// object so a human can tell references apart at a glance.
+function projectRefBase() {
+  const project = state.project;
+  return project ? { uri: `canvas://${project.id}`, title: project.title || project.id } : null;
+}
+
+function elementRef(elementId) {
+  const base = projectRefBase();
+  const element = elementById(elementId);
+  if (!base || !element) return null;
+  return `${base.uri}/element/${element.id} — project "${base.title}", element "${element.name || element.id}"`;
+}
+
+async function copyRefs(refs) {
+  const text = refs.filter(Boolean).join("\n");
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    setStatus(refs.length > 1 ? `Copied ${refs.length} ids.` : `Copied: ${text}`);
+  } catch {
+    setStatus("Clipboard write blocked by the browser.", true);
+  }
+}
+
+function copyIdItemFor(target) {
+  if (target.kind === "element") {
+    const ids = targetElementIds(target.elementId);
+    return {
+      label: ids.length > 1 ? `Copy IDs (${ids.length})` : "Copy ID",
+      onClick: () => copyRefs(ids.map((id) => elementRef(id))),
+    };
+  }
+  if (target.kind === "region") {
+    return {
+      label: "Copy ID",
+      onClick: () => {
+        const base = projectRefBase();
+        const element = elementById(target.elementId);
+        const region = (element?.regions || []).find((item) => item.id === target.regionId);
+        if (!base || !element || !region) return;
+        copyRefs([
+          `${base.uri}/element/${element.id}/region/${region.id} — project "${base.title}", element "${element.name || element.id}", region "${region.name || region.id}"`,
+        ]);
+      },
+    };
+  }
+  if (target.kind === "group") {
+    return {
+      label: "Copy ID",
+      onClick: () => {
+        const base = projectRefBase();
+        const group = groupById(target.groupId);
+        if (!base || !group) return;
+        copyRefs([`${base.uri}/group/${group.id} — project "${base.title}", group "${group.name || "Group"}"`]);
+      },
+    };
+  }
+  // Empty canvas / layers background: the project itself.
+  return {
+    label: "Copy project ID",
+    onClick: () => {
+      const base = projectRefBase();
+      if (base) copyRefs([`${base.uri} — project "${base.title}"`]);
+    },
+  };
+}
+
 // "Move to group ▸" submenu items: every group + "None" (top level).
 function moveToScreenItems(elementId) {
   const ids = targetElementIds(elementId);
@@ -145,6 +215,7 @@ function itemsFor(target) {
     }
     items.push(
       { separator: true },
+      copyIdItemFor(target),
       { label: "Delete", danger: true, onClick: () => deleteElements(targetElementIds(element.id)) },
     );
     return items;
@@ -162,6 +233,7 @@ function itemsFor(target) {
       },
       { label: "Rename region", onClick: () => focusInspectorRegion() },
       { separator: true },
+      copyIdItemFor(target),
       { label: "Delete region", danger: true, onClick: () => deleteRegion(target.elementId, target.regionId) },
     ];
   }
@@ -175,13 +247,17 @@ function itemsFor(target) {
       { label: visible ? "Hide" : "Show", onClick: () => setGroupVisible(group.id, !visible) },
       { label: "Ungroup", onClick: () => ungroup(group.id) },
       { separator: true },
+      copyIdItemFor(target),
       { label: "Delete group", danger: true, onClick: () => deleteGroupAction(group.id) },
     ];
   }
   if (target.kind === "layers-empty") {
     // Layers-panel background: group creation lives here (the "+ Screen" header
     // button was removed — lead unified the naming on "group").
-    return [{ label: "Create group", onClick: () => createGroupOrDefault("New group") }];
+    return [
+      { label: "Create group", onClick: () => createGroupOrDefault("New group") },
+      copyIdItemFor(target),
+    ];
   }
   // empty canvas
   return [
@@ -189,6 +265,8 @@ function itemsFor(target) {
     { label: "Paste", onClick: () => pasteFromClipboard() },
     { label: "Create group", onClick: () => createGroupOrDefault("New group") },
     { label: "Fit", onClick: () => el("zoom-fit").click() },
+    { separator: true },
+    copyIdItemFor(target),
   ];
 }
 
