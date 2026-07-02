@@ -21,7 +21,22 @@ Deterministic post-generation cleanup op (Python, ours) for noisy AI art - lead:
 - [ ] each pass has pixel tests on fixtures proving it only touches what it should (bg pass never alters foreground pixels beyond the distance threshold)
 - [ ] before/after report saved with each run; UI shows it; CLI prints it
 
+## Invocation design (proposed to lead 2026-07-02, pending his ок)
+
+Explicit one-click, zero mandatory tuning. Inspector "Clean up" button on the
+element (+ `cleanup` CLI). NOT automatic on everything: painterly grain can be
+intentional; quantization can kill gradients. Generation-agent convention
+(encode in the imagegen skill when this op lands): flat/UI generations MUST be
+cleaned by the agent with a before/after in the report; painterly is left
+alone unless asked. Auto-everything defaults: bg color detected from
+corners/edges, snap threshold from the lead's matte color-distance math,
+palette size auto. Three presets instead of knobs: Flat/UI (snap+quantize),
+Painterly (mild denoise only), Keying prep (magenta solidify only); advanced
+sliders (threshold, palette N) live collapsed. Safe by construction: new file
++ journaled swap, before/after toggle in UI, Ctrl+Z reverts.
+
 ## Open questions
 
 ## Log
 - 2026-07-02: Scoped in ai_studio/assets/canvas/PLAN.md (2026-07-02); perf items anchored to bench tmp/canvas_bench_2026-07-02.json + perf research
+- 2026-07-02: Invocation design proposed (explicit one-click + presets, agent auto-clean for flat/UI with report).
