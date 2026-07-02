@@ -38,6 +38,7 @@
 //   DELETE /api/canvas/projects/<id>/elements/<eid>
 //   GET    /api/canvas/projects/<id>/files/<name>  (image bytes, path-confined)
 //   GET    /api/canvas/projects/<id>/export/<...>  (export files, path-confined)
+//   GET    /api/canvas/projects/<id>/export-zip/<stamp>  (STORE-mode zip of the run's images)
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -86,6 +87,7 @@ import {
   sliceRegions,
   undoOp,
   ungroupGroup,
+  zipExport,
 } from "./ops.mjs";
 
 // Images are the big payload here; allow up to ~20MB for a base64 upload body.
@@ -97,6 +99,7 @@ const mimeByExt = {
   ".jpeg": "image/jpeg",
   ".gif": "image/gif",
   ".webp": "image/webp",
+  ".zip": "application/zip",
 };
 
 function sendJson(res, status, data) {
@@ -539,6 +542,22 @@ export function createCanvasApi(root) {
         const segments = parts.slice(5).map((part) => decodeURIComponent(part));
         const filePath = resolveProjectPath(root, id, "export", ...segments);
         serveFile(res, filePath);
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/export-zip/<stamp>  (STORE-mode zip of the run's images)
+      // The page's "several outputs -> one .zip" save-dialog delivery: builds the archive
+      // in memory from the run's manifest (zipExport confines each file name) and returns
+      // application/zip. A bad/unknown stamp throws -> the outer catch turns it into a 400.
+      if (parts.length === 6 && sub === "export-zip" && req.method === "GET") {
+        const stamp = decodeURIComponent(parts[5]);
+        const { bytes } = zipExport(root, { projectId: id, stamp });
+        res.writeHead(200, {
+          "content-type": "application/zip",
+          "content-length": bytes.length,
+          "content-disposition": `attachment; filename="export-${stamp}.zip"`,
+        });
+        res.end(bytes);
         return true;
       }
 

@@ -149,21 +149,34 @@ Every capability is one op in `ops.mjs`:
   created crop) plus a `slice_regions` `tool_runs` entry. Requires Python
   (Pillow) via our own `tools/crop_regions.py`.
 - `setExportSettings({ projectId, elementId, rows })` — replace an element's
-  Figma-style export rows `[{scale, suffix, format, quality?, resample}]` (the
-  Export section persisted on the layer). Validates + normalizes each row (scale
-  token syntax, `format` png/jpg/webp, `resample` lanczos/nearest, filename-safe
-  `suffix`; `quality` 1-100 only for the lossy formats, default 90). Journaled like
-  `setRegions`, so undo/redo restore the previous rows. Both the page's Export
-  section and the CLI `export-set` drive this one op.
+  Figma-style export rows `[{scale, format, quality?, resample}]` (the Export section
+  persisted on the layer). Validates + normalizes each row (scale token syntax,
+  `format` png/jpg/webp, `resample` lanczos/nearest; `quality` 1-100 only for the lossy
+  formats, default 90). **Suffix is removed (T0229)**: a NEW write carrying a `suffix`
+  field is rejected **loudly** (a stale client), while the export readers **ignore** a
+  legacy stored `suffix` (additive schema; journal untouched) and derive file names
+  automatically. Journaled like `setRegions`, so undo/redo restore the previous rows.
+  Both the page's Export section and the CLI `export-set` drive this one op.
 - `exportElements({ projectId, elementIds, rows? })` — export each element ×
   each of its rows into `<project>/export/<utc-stamp>/` plus a `manifest.json`.
   Each row scales (`resolveExportScale`) + encodes (png/jpg/webp) via **one** Python
   spawn for the whole batch (`tools/export_images.py`, spec-file pattern). A 1x-png
   export of a png source is a **byte-identical file COPY** done in Node (no
-  re-encode, no spawn), so the lead's original pixels are preserved exactly. When no
-  `rows` are set on an element it exports the implicit default `1x png`. `rows`, when
-  passed, overrides every element's settings for that one run (agent one-shots / the
-  CLI `--scale` flags). Not journaled (no project mutation), recorded in `tool_runs`.
+  re-encode, no spawn), so the lead's original pixels are preserved exactly. **File
+  naming is automatic (T0229)**: base = the element/screen name (slugged); a single row
+  is the clean `name.<ext>`, several rows get a Figma **scale marker** (`name@2x.png`,
+  `name@0.5x.png`, `name@512w.png`; a `1x` row stays clean), and any remaining collision
+  (same scale+format twice, or two elements sharing a name) gets a deterministic numeric
+  `_NN`. When no `rows` are set on an element it exports the implicit default `1x png`.
+  `rows`, when passed, overrides every element's settings for that one run (agent
+  one-shots / the CLI `--scale` flags). Not journaled (no project mutation), recorded in
+  `tool_runs`.
+- `zipExport({ projectId, stamp })` — bundle a finished export run's image files into ONE
+  **STORE-mode** `.zip` (no compression — PNG/JPG/WebP are already compressed) via the
+  minimal `zip.mjs` writer (node built-ins only). Reads the run's `manifest.json` to learn
+  the produced file names; loud on a bad stamp / corrupt manifest / missing file. Backs the
+  page's multi-output save dialog (served over `GET export-zip/<stamp>`) and the CLI
+  `--zip` flag. No project mutation.
 - `exportProject({ projectId })` — no-selection project export: composite **every
   visible TOP-LEVEL group** (`parentId` null/absent) at its own default 1x png into ONE
   `<project>/export/<utc-stamp>/` folder plus a combined manifest, reusing the
@@ -615,10 +628,9 @@ short recent tail).
 Export always produces files in the path-confined automation default
 `<project>/export/<utc-stamp>/` (each URL segment confined by `resolveProjectPath`).
 Both `exportElements` and `exportProject` write one `manifest.json`
-(`ai_studio.canvas.export.v1`) alongside the images. Delivering those bytes to a
-folder the lead chose is a separate delivery-to-disk layer (page dir-picker / CLI
-`--to`) on top of this one shared op output — the op itself never writes to an
-arbitrary path.
+(`ai_studio.canvas.export.v1`) alongside the images. Delivering those bytes to where the
+lead chose is a separate delivery-to-disk layer (page save-file dialog / CLI `--to`) on
+top of this one shared op output — the op itself never writes to an arbitrary path.
 
 **Element export** (`exportElements`): one file per element × export row.
 
@@ -634,8 +646,10 @@ arbitrary path.
 - **Format** `png` (lossless), `jpg` (flattened onto white, no alpha), `webp`;
   `quality` (1-100) applies to jpg/webp only. **Resample** `lanczos` (smooth,
   default) or `nearest` (pixel art).
-- **Suffix** is appended to the filename (`wing@2x.png`), filename-safe and
-  collision-suffixed.
+- **File name** is automatic (T0229 — no suffix column): base = the element/screen
+  name (slugged); a single row = clean `name.<ext>`; several rows on one element get a
+  Figma **scale marker** (`wing@2x.png`; a `1x` row stays clean); any remaining collision
+  gets a deterministic numeric `_NN`.
 - **Fast path**: a 1x-png export of a png source is a byte-identical Node copy — no
   Python, no re-encode. Everything else is one batched `tools/export_images.py`
   spawn. That tool uses the T0218 `_bridge` **config-only** Python
@@ -650,15 +664,19 @@ at 1x png into one folder, with a combined manifest (`kind: "project"`, `items` 
 
 ### Destinations
 
-- **Page**: on Export the picker (`showDirectoryPicker`) opens **every time**,
-  starting at the last-used folder for the project (`startIn` = a handle remembered
-  per project in IndexedDB), and the new choice is stored after each export. Cancel
-  cancels the export (visible status, no fallback). The browser-download fallback
-  runs ONLY when the File System Access API is unavailable — files are never silently
-  dropped. This lives in `site/export_dest.mjs` (delivery-to-disk only).
+- **Page (T0229, Figma-style)**: delivery is a **save-FILE dialog** with an editable
+  name, not a directory picker (Chrome refused `showDirectoryPicker` for
+  Downloads/системные папки). **One** output → the image is saved under its own suggested
+  `name.<ext>`; **several** outputs → ONE **STORE-mode `.zip`** built server-side (fetched
+  over `GET export-zip/<stamp>`) saved as `<project/selection>.zip`. Dialog **abort** = a
+  quiet cancel (info toast "Отмена в диалоге = отмена экспорта"); any **other** picker/write
+  failure is loud (error toast) with **no** silent fallback; a plain browser download runs
+  ONLY when `showSaveFilePicker` is absent. `site/export_dest.mjs` (`saveBlobToFile`,
+  delivery-to-disk only) owns the dialog; `actions.js` fetches the bytes.
 - **CLI**: `--to <dir>` copies the produced files (+ manifest) to that exact path;
-  without `--to` the confined `<project>/export/<stamp>/` default stays (agents rely
-  on it).
+  `--zip <path>` writes ONE STORE-mode `.zip` of the run's images (the same archive the
+  page builds). Without either, the confined `<project>/export/<stamp>/` default stays
+  (agents rely on it) — unchanged.
 
 ## CLI
 
@@ -689,9 +707,9 @@ node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json pat
 node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json      # persist export rows (journaled)
-node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --scale 2x [--suffix @2x] [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest]
+node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --scale 2x [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest]
 node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all, or --project (all visible screens)
-node ai_studio/assets/canvas/cli.mjs export <id> --all [--scale 2x --format jpg --quality 80 --suffix @2x --resample lanczos] [--to <dir>]
+node ai_studio/assets/canvas/cli.mjs export <id> --all [--scale 2x --format jpg --quality 80 --resample lanczos] [--to <dir>] [--zip out.zip]   # --zip = one STORE-mode archive of the run
 node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h] [--parent <gid>|none]
 node ai_studio/assets/canvas/cli.mjs group-reparent <id> --group g --parent <gid>|none [--index n]   # nest a group; none = top level
 node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
@@ -777,14 +795,15 @@ one document that swaps two views; the JS is split into focused ES modules under
   multi-select (count + "each exports
   its own settings" + Export), or "Nothing selected" (with a project-export button
   when there are visible screens). A single element also gets an **Export** section
-  at the BOTTOM (Figma-style): a collapsible list of rows (scale + suffix + format,
-  a quality slider only for jpg/webp, a resample toggle), **+ Add export setting**, a
-  destination hint line, and an Export button labeled by the target. Row edits commit
-  through `setExportSettings` (one journal entry per change).
-- `export_dest.mjs` — export destination delivery (delivery-to-disk only): the File
-  System Access dir picker opens every time starting at the last-used folder (handle
-  remembered per project in IndexedDB), cancel aborts the export, and a browser-
-  download fallback runs only when the API is unavailable.
+  at the BOTTOM (Figma-style): a collapsible list of rows (scale + format, a quality
+  slider only for jpg/webp, a resample toggle — **no suffix column** as of T0229, file
+  names are automatic), **+ Add export setting**, and an Export button labeled by the
+  target. Row edits commit through `setExportSettings` (one journal entry per change).
+- `export_dest.mjs` — export destination delivery (delivery-to-disk only): `saveBlobToFile`
+  hands a Blob to a **save-FILE dialog** (`showSaveFilePicker`) with an editable suggested
+  name (T0229, replacing the T0206 dir picker Chrome refused for Downloads). Dialog abort =
+  a quiet cancel; any other failure is loud (no silent fallback); a plain browser download
+  runs only when `showSaveFilePicker` is absent.
 - `history_panel.js` — the Photoshop-style **History** palette: a hideable floating
   list of journal steps (Base + the applied undo chain + the dimmed, still-clickable
   redo tail), toggled from the top-bar **History** button or the **`** key, hidden by
@@ -821,8 +840,9 @@ one document that swaps two views; the JS is split into focused ES modules under
 A debug hook `?select=<elementId>` pre-selects one element on open (handy for
 screenshots); its sibling `?regions=<elementId>` opens straight into region-edit
 isolation (mode B) with the first region selected; both may stay. Downloads: after
-**export** / **Render screen** a **pinned-result toast** shows clickable links served
-by the confined `GET /api/canvas/projects/<id>/export/<stamp>/<file>` route.
+**export** / **Render screen** a **pinned-result toast** names what was saved (the file
+name from the save dialog, not a directory handle) and keeps clickable per-file links
+served by the confined `GET /api/canvas/projects/<id>/export/<stamp>/<file>` route.
 
 ### Feedback layer
 

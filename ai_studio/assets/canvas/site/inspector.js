@@ -46,7 +46,6 @@ import {
 } from "./actions.js";
 import { childrenOf, descendantsOf } from "../tree.mjs";
 import { fontFamilies, fontWeights } from "./fonts.js";
-import { lastDestinationName } from "./export_dest.mjs";
 import { openContextMenu } from "./context_menu.js";
 import { inlineEdit } from "./inline.js";
 
@@ -65,11 +64,10 @@ function field(label, node) {
 // input's text-undo); Escape reverts + blurs. Commit itself fires on the change
 // event (also on blur), so a click-away still commits.
 //
-// `allowEmpty` (default false) keeps the RENAME guard: an empty value never clobbers a
-// name (element/group/text-name/scale all rely on this). Fields where clearing IS
-// meaningful — the Export row suffix — pass allowEmpty:true so an explicit empty commit
-// goes through in place (T0224 item 3), instead of being silently dropped.
-function textInput(value, onCommit, { allowEmpty = false } = {}) {
+// An empty value never commits — the RENAME guard every text field here relies on
+// (element/group/text-name/scale never get clobbered by a blank). (The Export row suffix
+// was the one field that opted out of this via allowEmpty; it is gone in T0229.)
+function textInput(value, onCommit) {
   const input = document.createElement("input");
   input.type = "text";
   input.className = "insp-input";
@@ -77,7 +75,7 @@ function textInput(value, onCommit, { allowEmpty = false } = {}) {
   const commit = () => {
     const next = input.value.trim();
     if (next === String(value == null ? "" : value)) return; // unchanged: no commit
-    if (!next && !allowEmpty) return; // empty is blocked unless the field opts in
+    if (!next) return; // empty is always blocked (rename/scale guard)
     onCommit(next);
   };
   input.addEventListener("change", commit);
@@ -373,7 +371,7 @@ const EXPORT_FORMATS = ["png", "jpg", "webp"];
 // layer with no settings yet (matches Figma + the op's default).
 function exportRowsOf(element) {
   const rows = Array.isArray(element.export) ? element.export : [];
-  return rows.length ? rows.map((row) => ({ ...row })) : [{ scale: "1x", suffix: "", format: "png", resample: "lanczos" }];
+  return rows.length ? rows.map((row) => ({ ...row })) : [{ scale: "1x", format: "png", resample: "lanczos" }];
 }
 
 function selectInput(value, options, onCommit) {
@@ -390,9 +388,11 @@ function selectInput(value, options, onCommit) {
   return select;
 }
 
-// One export-setting row: scale + suffix + format on the header line, a quality
-// slider only for the lossy formats, and a resample toggle. Every committed edit
-// rebuilds ALL rows and calls setExportRows once (one journal entry per change).
+// One export-setting row: scale + format on the header line, a quality slider only for
+// the lossy formats, and a resample toggle. (T0229 removed the Suffix column — file
+// names are automatic: element/screen name + a Figma scale marker only when several
+// rows collide.) Every committed edit rebuilds ALL rows and calls setExportRows once
+// (one journal entry per change).
 function exportRowNode(element, rows, index) {
   const row = rows[index];
   const commit = (patch) => {
@@ -411,9 +411,6 @@ function exportRowNode(element, rows, index) {
     input.setAttribute("list", "insp-scale-presets");
     return input;
   })()));
-  // Suffix is clearable in place (allowEmpty): removing "@2x" commits "" without deleting
-  // and re-adding the row (T0224 item 3). The op accepts an empty suffix (filename-safe).
-  head.appendChild(field("Suffix", textInput(row.suffix || "", (value) => commit({ suffix: value }), { allowEmpty: true })));
   head.appendChild(field("Format", selectInput(row.format || "png", EXPORT_FORMATS, (value) => commit({ format: value }))));
   wrap.appendChild(head);
 
@@ -453,21 +450,10 @@ function exportRowNode(element, rows, index) {
   return wrap;
 }
 
-// A small always-visible line showing WHERE the last export landed (info only; the
-// picker opens at this folder every time). Filled asynchronously from IndexedDB.
-function exportDestinationHint(projectId) {
-  const hint = document.createElement("div");
-  hint.className = "insp-export-dest";
-  hint.textContent = "Destination: chosen on export";
-  lastDestinationName(projectId).then((name) => {
-    if (name) hint.textContent = `Last folder: ${name}`;
-  }).catch(() => {});
-  return hint;
-}
-
 // The Export section at the BOTTOM of the inspector: a list of rows, "+ Add export
-// setting", the destination hint, and an Export button labeled by the target. Edits
-// persist per element through setExportSettings (journaled/undoable).
+// setting", and an Export button labeled by the target. Edits persist per element
+// through setExportSettings (journaled/undoable). The destination is chosen in the
+// save-file dialog at export time (T0229), so there is no destination hint line.
 function renderExport(element, root) {
   const rows = exportRowsOf(element);
   const body = collapsible(root, "export", "Export");
@@ -488,12 +474,10 @@ function renderExport(element, root) {
   body.appendChild(list);
 
   const add = smallBtn("+ Add export setting", () => {
-    setExportRows(element.id, [...rows, { scale: "1x", suffix: "", format: "png", resample: "lanczos" }]);
+    setExportRows(element.id, [...rows, { scale: "1x", format: "png", resample: "lanczos" }]);
   });
   add.classList.add("insp-export-add");
   body.appendChild(add);
-
-  body.appendChild(exportDestinationHint(state.project ? state.project.id : ""));
 
   const button = document.createElement("button");
   button.type = "button";
@@ -845,8 +829,6 @@ function renderMulti(selected, root) {
   note.textContent = "Each element exports its own settings (1x png by default).";
   root.appendChild(note);
 
-  root.appendChild(exportDestinationHint(state.project ? state.project.id : ""));
-
   const button = document.createElement("button");
   button.type = "button";
   button.className = "primary insp-btn";
@@ -873,8 +855,6 @@ function renderEmpty(root) {
 
   const screens = visibleScreenCount();
   if (!screens) return;
-
-  root.appendChild(exportDestinationHint(state.project ? state.project.id : ""));
 
   const button = document.createElement("button");
   button.type = "button";

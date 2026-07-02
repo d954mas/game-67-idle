@@ -79,14 +79,15 @@ test("setExportSettings persists rows, journals one entry, and round-trips undo/
     projectId: project.id,
     elementId: element.id,
     rows: [
-      { scale: "2x", suffix: "@2x", format: "jpg", quality: 80, resample: "nearest" },
+      { scale: "2x", format: "jpg", quality: 80, resample: "nearest" },
       { scale: "1x", format: "png" },
     ],
   });
-  // png rows drop quality; lossy rows keep a clamped quality; defaults filled in.
+  // png rows drop quality; lossy rows keep a clamped quality; defaults filled in. No
+  // suffix field (T0229 removed it — file names are automatic).
   assert.deepEqual(set.rows, [
-    { scale: "2x", suffix: "@2x", format: "jpg", resample: "nearest", quality: 80 },
-    { scale: "1x", suffix: "", format: "png", resample: "lanczos" },
+    { scale: "2x", format: "jpg", resample: "nearest", quality: 80 },
+    { scale: "1x", format: "png", resample: "lanczos" },
   ]);
   assert.equal(getProject(REPO_ROOT, project.id).elements[0].export.length, 2);
 
@@ -100,7 +101,7 @@ test("setExportSettings persists rows, journals one entry, and round-trips undo/
   assert.equal(getProject(REPO_ROOT, project.id).elements[0].export.length, 2);
 });
 
-test("setExportSettings rejects unknown format/scale and unsafe suffix", (t) => {
+test("setExportSettings rejects unknown format/scale and a removed suffix field", (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Validate" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "a.png", bytes: solidPng() });
@@ -108,8 +109,10 @@ test("setExportSettings rejects unknown format/scale and unsafe suffix", (t) => 
   assert.throws(set([{ scale: "1x", format: "tiff" }]), /format must be png\/jpg\/webp/);
   assert.throws(set([{ scale: "bogus", format: "png" }]), /invalid export scale/);
   assert.throws(set([{ scale: "1x", format: "png", resample: "bicubic" }]), /resample must be/);
-  assert.throws(set([{ scale: "1x", format: "png", suffix: "../evil" }]), /unsafe characters/);
-  assert.throws(set([{ scale: "1x", format: "png", suffix: "..dots" }]), /unsafe characters/);
+  // T0229: suffix is gone — a NEW write carrying it is rejected LOUDLY (a stale client),
+  // whatever the value (even an empty string), so bad rows never persist.
+  assert.throws(set([{ scale: "1x", format: "png", suffix: "@2x" }]), /removed "suffix" field/);
+  assert.throws(set([{ scale: "1x", format: "png", suffix: "" }]), /removed "suffix" field/);
 });
 
 // ---- export execution --------------------------------------------------------
@@ -140,9 +143,9 @@ test("exportElements scales to the requested pixels per format (skips without Py
       projectId: project.id,
       elementIds: [element.id],
       rows: [
-        { scale: "2x", format: "png", suffix: "@2x" },
-        { scale: "0.5x", format: "png", suffix: "@half" },
-        { scale: "128w", format: "png", suffix: "@w" },
+        { scale: "2x", format: "png" },
+        { scale: "0.5x", format: "png" },
+        { scale: "128w", format: "png" },
       ],
     });
   } catch (error) {
@@ -150,42 +153,58 @@ test("exportElements scales to the requested pixels per format (skips without Py
     return;
   }
 
+  // Several rows on one element -> automatic Figma scale markers (T0229): @2x, @0.5x, @128w.
+  const base = slugName("sheet.png");
   const byName = Object.fromEntries(result.items.map((item) => [item.file, item]));
-  const two = decodePng(readFileSync(join(result.folder, `${slugName("sheet.png")}@2x.png`)));
-  const half = decodePng(readFileSync(join(result.folder, `${slugName("sheet.png")}@half.png`)));
-  const wide = decodePng(readFileSync(join(result.folder, `${slugName("sheet.png")}@w.png`)));
+  const two = decodePng(readFileSync(join(result.folder, `${base}@2x.png`)));
+  const half = decodePng(readFileSync(join(result.folder, `${base}@0.5x.png`)));
+  const wide = decodePng(readFileSync(join(result.folder, `${base}@128w.png`)));
   assert.deepEqual([two.width, two.height], [128, 96], "2x doubles both axes");
   assert.deepEqual([half.width, half.height], [32, 24], "0.5x halves both axes");
   assert.deepEqual([wide.width, wide.height], [128, 96], "128w sets width, keeps aspect");
   // Manifest records the same target pixels the op computed.
-  assert.deepEqual([byName[`${slugName("sheet.png")}@2x.png`].w, byName[`${slugName("sheet.png")}@2x.png`].h], [128, 96]);
+  assert.deepEqual([byName[`${base}@2x.png`].w, byName[`${base}@2x.png`].h], [128, 96]);
 });
 
 test("exportElements JPEG/WebP quality changes the encoded file size (skips without Python)", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Quality" });
-  const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
+  // Without a suffix column (T0229), distinct file names come from distinct element names;
+  // each element carries one row so it exports to a clean per-element name.
+  const hi = addImage(REPO_ROOT, project.id, { name: "hi.png", bytes: magentaSheetPng() }).element;
+  const lo = addImage(REPO_ROOT, project.id, { name: "lo.png", bytes: magentaSheetPng() }).element;
+  const wp = addImage(REPO_ROOT, project.id, { name: "wp.png", bytes: magentaSheetPng() }).element;
+  setExportSettings(REPO_ROOT, { projectId: project.id, elementId: hi.id, rows: [{ scale: "1x", format: "jpg", quality: 92 }] });
+  setExportSettings(REPO_ROOT, { projectId: project.id, elementId: lo.id, rows: [{ scale: "1x", format: "jpg", quality: 12 }] });
+  setExportSettings(REPO_ROOT, { projectId: project.id, elementId: wp.id, rows: [{ scale: "1x", format: "webp", quality: 90 }] });
 
   let result;
   try {
-    result = await exportElements(REPO_ROOT, {
-      projectId: project.id,
-      elementIds: [element.id],
-      rows: [
-        { scale: "1x", format: "jpg", quality: 92, suffix: "_hi" },
-        { scale: "1x", format: "jpg", quality: 12, suffix: "_lo" },
-        { scale: "1x", format: "webp", quality: 90, suffix: "_wp" },
-      ],
-    });
+    result = await exportElements(REPO_ROOT, { projectId: project.id, elementIds: [hi.id, lo.id, wp.id] });
   } catch (error) {
     t.skip(`export_images.py / PIL unavailable: ${error.message}`);
     return;
   }
 
   const size = (file) => statSync(join(result.folder, file)).size;
-  const base = slugName("sheet.png");
-  assert.ok(size(`${base}_lo.jpg`) < size(`${base}_hi.jpg`), "lower JPEG quality = smaller file");
-  assert.ok(existsSync(join(result.folder, `${base}_wp.webp`)), "webp row encoded a .webp file");
+  assert.ok(size(`${slugName("lo.png")}.jpg`) < size(`${slugName("hi.png")}.jpg`), "lower JPEG quality = smaller file");
+  assert.ok(existsSync(join(result.folder, `${slugName("wp.png")}.webp`)), "webp row encoded a .webp file");
+});
+
+// Automatic disambiguation (T0229): two elements sharing a name collide on the same base
+// file; the second gets a deterministic numeric "_02". Pure copy, so no Python needed.
+test("exportElements auto-disambiguates same-named elements with a numeric suffix", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Names" });
+  const png = magentaSheetPng();
+  const a = addImage(REPO_ROOT, project.id, { name: "hero.png", bytes: png }).element;
+  const b = addImage(REPO_ROOT, project.id, { name: "hero.png", bytes: png }).element;
+  const result = await exportElements(REPO_ROOT, { projectId: project.id, elementIds: [a.id, b.id] });
+  assert.deepEqual(
+    result.items.map((item) => item.file),
+    ["hero_png.png", "hero_png_02.png"],
+    "the second same-named element gets a deterministic _02",
+  );
 });
 
 // ---- project-level export ----------------------------------------------------
@@ -291,15 +310,24 @@ test("canvas API sets export rows and exports with them (no Python for 1x png)",
   })).json().element.id;
 
   const put = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/export`, {
-    rows: [{ scale: "1x", format: "png", suffix: "_a" }],
+    rows: [{ scale: "1x", format: "png" }],
   });
   assert.equal(put.status, 200);
-  assert.equal(put.json().rows[0].suffix, "_a");
+  assert.equal(put.json().rows[0].suffix, undefined); // T0229: no suffix field persisted
+  assert.equal(put.json().rows[0].scale, "1x");
 
-  // Export honors the stored rows: a 1x png copy, so no Python is required.
+  // A stale client PUTting a suffix is rejected LOUDLY (400), not silently dropped.
+  const rejected = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/export`, {
+    rows: [{ scale: "1x", format: "png", suffix: "_a" }],
+  });
+  assert.equal(rejected.status, 400);
+  assert.match(rejected.json().error, /removed "suffix" field/);
+
+  // Export honors the stored rows: a 1x png copy, so no Python is required. The single
+  // row gives the clean automatic name (slug of "pic.png").
   const exported = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/export`, { elementIds: [elementId] });
   assert.equal(exported.status, 200);
-  assert.match(exported.json().items[0].file, /_a\.png$/);
+  assert.equal(exported.json().items[0].file, "pic_png.png");
 });
 
 // The op's filename base = the store slug of the element name (mirror of ops.slug):

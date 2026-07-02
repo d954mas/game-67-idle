@@ -18,7 +18,7 @@ import { buildNodesSpec, orderedChildren, nodeScope } from "../tree.mjs";
 import { mergeTextStyle } from "../fonts.mjs";
 import { getFontManifest, measureTextBox } from "./fonts.js";
 import { screenToImagePoint } from "./viewport.mjs";
-import { downloadFiles, pickDestination, supportsFsa, writeFilesToDir } from "./export_dest.mjs";
+import { saveBlobToFile } from "./export_dest.mjs";
 import { runLongOp } from "./toasts.js";
 
 function pid() {
@@ -471,34 +471,63 @@ export async function setExportRows(elementId, rows) {
   }
 }
 
+// A filesystem-friendly base for the save dialog's suggested name (the lead can still
+// rename in the dialog). Drops a trailing image extension (an element named "sheet.png"
+// should suggest "sheet.zip", not "sheet.png.zip") and strips characters Windows/macOS
+// reject in a file name.
+function suggestedBase(name) {
+  const cleaned = String(name || "")
+    .trim()
+    .replace(/\.(png|jpe?g|webp|gif)$/i, "")
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return cleaned || "export";
+}
+
 // Deliver a finished export to disk and return the RESULT TOAST spec (the caller's
-// runLongOp resolves the progress toast into it). Figma-style destination: always open
-// the directory picker (starting at the last-used folder); cancel aborts the export with
-// a visible info toast; only a browser without the File System Access API falls back to
-// per-file downloads. Never silently drops files. A genuine failure throws (runLongOp
-// turns it into an error toast — never swallowed).
-async function deliverExport(result, label) {
-  const files = (result.items || result.screens || []).map((entry) => entry.file);
+// runLongOp resolves the progress toast into it). Figma-style destination (T0229):
+//   - ONE output  -> a save-FILE dialog seeded with the file's own name (editable);
+//   - 2+ outputs  -> ONE STORE-mode .zip (built server-side over the export-zip route),
+//     saved via the same dialog, suggested "<zipBaseName>.zip".
+// A dialog CANCEL is a quiet info toast; any other failure throws (runLongOp turns it
+// into an error toast — never swallowed); a browser without showSaveFilePicker downloads
+// with the same suggested name. The pinned result names what was saved (no directory
+// handle) and keeps the still-valid per-file server links.
+async function deliverExport(result, { zipBaseName } = {}) {
+  const files = (result.items || result.screens || []).map((entry) => entry.file).filter(Boolean);
   const stamp = baseName(result.folder);
   if (!files.length) return { kind: "info", message: "Nothing to export." };
   const links = exportLinks(result.folder, files);
-  if (!supportsFsa()) {
-    downloadFiles(pid(), stamp, files);
-    return { kind: "pinned", message: `${label} — ${files.length} file(s) downloaded`, links };
+  const canceled = { kind: "info", message: "Отмена в диалоге — экспорт отменён." };
+
+  if (files.length === 1) {
+    // Single output: fetch the one image and save it under its own (editable) name.
+    const file = files[0];
+    const url = `/api/canvas/projects/${pid()}/export/${encodeURIComponent(stamp)}/${encodeURIComponent(file)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`could not fetch ${file} (${response.status})`);
+    const blob = await response.blob();
+    const dot = file.lastIndexOf(".");
+    const ext = dot >= 0 ? file.slice(dot) : "";
+    const types = ext
+      ? [{ description: `${ext.slice(1).toUpperCase()} file`, accept: { [blob.type || "application/octet-stream"]: [ext] } }]
+      : [];
+    const saved = await saveBlobToFile(blob, file, types);
+    if (saved.canceled) return canceled;
+    return { kind: "pinned", message: `Saved “${saved.name}”`, links };
   }
-  let dir;
-  try {
-    dir = await pickDestination(pid());
-  } catch (error) {
-    if (error && error.name === "AbortError") return { kind: "info", message: "Export canceled — no folder chosen." };
-    throw new Error(`Could not open a destination folder: ${error.message}`);
-  }
-  try {
-    await writeFilesToDir(dir, pid(), stamp, files);
-  } catch (error) {
-    throw new Error(`Export failed writing to “${dir.name}”: ${error.message}`);
-  }
-  return { kind: "pinned", message: `${label} — ${files.length} file(s) saved to “${dir.name}”`, links };
+
+  // Several outputs: build ONE zip server-side, then save it via the same dialog.
+  const zipUrl = `/api/canvas/projects/${pid()}/export-zip/${encodeURIComponent(stamp)}`;
+  const response = await fetch(zipUrl);
+  if (!response.ok) throw new Error(`could not build the zip archive (${response.status})`);
+  const blob = await response.blob();
+  const suggestedName = `${suggestedBase(zipBaseName)}.zip`;
+  const types = [{ description: "ZIP archive", accept: { "application/zip": [".zip"] } }];
+  const saved = await saveBlobToFile(blob, suggestedName, types);
+  if (saved.canceled) return canceled;
+  return { kind: "pinned", message: `Saved “${saved.name}” (${files.length} files)`, links };
 }
 
 // Export the given elements, each honoring its own persisted export rows (or the
@@ -507,11 +536,14 @@ async function deliverExport(result, label) {
 // inspector Export button (`control`) disabled while in flight.
 export async function exportElementIds(ids, control) {
   if (!ids.length) return;
+  // The multi-output zip name: a single selected element's name, else the project title.
+  const one = ids.length === 1 ? elementById(ids[0]) : null;
+  const zipBaseName = (one && one.name) || (state.project && state.project.title) || "export";
   await runLongOp(
     "Exporting…",
     async () => {
       const result = await api("POST", `/projects/${pid()}/export`, { elementIds: ids });
-      return deliverExport(result, `Exported ${ids.length} element(s)`);
+      return deliverExport(result, { zipBaseName });
     },
     { control },
   );
@@ -519,11 +551,12 @@ export async function exportElementIds(ids, control) {
 
 // No selection -> project export: render every visible screen at 1x png. Long op.
 export async function exportProjectAction(control) {
+  const zipBaseName = (state.project && state.project.title) || "export";
   await runLongOp(
     "Exporting project…",
     async () => {
       const result = await api("POST", `/projects/${pid()}/export`, { project: true });
-      return deliverExport(result, `Exported ${result.screens.length} screen(s)`);
+      return deliverExport(result, { zipBaseName });
     },
     { control },
   );

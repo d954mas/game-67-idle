@@ -965,7 +965,6 @@ body.layers-resizing {
   margin-bottom: 8px;
 }
 
-.insp-export-dest,
 .insp-export-note {
   color: var(--muted);
   font-size: 11px;

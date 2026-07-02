@@ -100,6 +100,10 @@ import {
   writeProjectBytes,
   writeSnapshot,
 } from "./store.mjs";
+// Minimal STORE-mode zip writer (node built-ins only) for the page's "several outputs
+// -> one .zip" save-dialog flow and the CLI --zip flag. Pure; ops.zipExport gathers the
+// run's files from the confined export folder and hands them here.
+import { zipStore } from "./zip.mjs";
 
 export {
   getProject,
@@ -860,19 +864,20 @@ export function setRegions(root, { projectId, elementId, regions } = {}) {
 // ---- per-element export settings (Figma-style rows) --------------------------
 //
 // An element carries an optional `export` array of rows
-// [{scale, suffix, format, quality?, resample}] — the Figma Export section persisted
-// on the layer. setExportSettings validates + normalizes the rows and journals them
+// [{scale, format, quality?, resample}] — the Figma Export section persisted on the
+// layer (T0229 removed the per-row suffix; file names are automatic at export time).
+// setExportSettings validates + normalizes the rows and journals them
 // like any metadata mutation (undo/redo restore the previous rows). The scale math
 // (resolveExportScale) also runs at export time; validated here so an unknown
 // scale/format/resample is a clear error the moment it is set, from either client.
 
 const EXPORT_FORMATS = new Set(["png", "jpg", "webp"]);
 const EXPORT_RESAMPLE = new Set(["lanczos", "nearest"]);
-// Suffix is appended to the export filename (e.g. "@2x"); keep it filename-safe (no
-// separators/traversal) so it can never escape the confined export folder.
-const EXPORT_SUFFIX_RE = /^[A-Za-z0-9@._ -]*$/;
 const MAX_EXPORT_DIM = 16384;
-const DEFAULT_EXPORT_ROW = { scale: "1x", suffix: "", format: "png", resample: "lanczos" };
+// T0229: the per-row filename suffix was removed — file naming is now automatic
+// (element/screen name + a Figma-style scale marker only when several rows would
+// collide). The default row therefore carries no suffix.
+const DEFAULT_EXPORT_ROW = { scale: "1x", format: "png", resample: "lanczos" };
 
 // Parse a Figma-style scale token into a spec: a multiplier ("0.5x", "1x", "2x",
 // "3x", "4x", or a bare "2") or a fixed target dimension ("512w" = 512px wide,
@@ -921,13 +926,24 @@ export function resolveExportScale(token, srcW, srcH) {
   return { width, height };
 }
 
-// Validate + normalize export rows to {scale, suffix, format, resample, quality?}.
+// Validate + normalize export rows to {scale, format, resample, quality?}.
 // quality (1-100) is kept only for the lossy formats (jpg/webp), defaulting to 90;
 // a png row never carries a quality. Throws on any invalid field.
-function cleanExportRows(rows) {
+//
+// Suffix (T0229): the field is GONE. `rejectSuffix` splits the two callers by the
+// additive-schema stance: setExportSettings (a NEW WRITE) rejects any row carrying a
+// `suffix` LOUDLY (a stale client) so bad rows never persist; the export READERS
+// (rowsForElement / override rows) leave it false and simply ignore a legacy stored
+// `suffix` — no silent write-back, filenames come from the automatic namer instead.
+function cleanExportRows(rows, { rejectSuffix = false } = {}) {
   if (!Array.isArray(rows)) throw new Error("export rows must be an array");
   return rows.map((row, index) => {
     if (!row || typeof row !== "object") throw new Error(`export row ${index} is not an object`);
+    if (rejectSuffix && row.suffix !== undefined) {
+      throw new Error(
+        `export row ${index} carries a removed "suffix" field — export file names are automatic now (T0229); drop suffix`,
+      );
+    }
     const scale = String(row.scale == null ? "" : row.scale).trim() || "1x";
     parseScaleSpec(scale); // validate syntax now (throws on invalid)
     const format = String(row.format == null ? "png" : row.format).trim().toLowerCase();
@@ -938,11 +954,7 @@ function cleanExportRows(rows) {
     if (!EXPORT_RESAMPLE.has(resample)) {
       throw new Error(`export row ${index} resample must be lanczos/nearest, got ${JSON.stringify(row.resample)}`);
     }
-    const suffix = String(row.suffix == null ? "" : row.suffix).trim();
-    if (!EXPORT_SUFFIX_RE.test(suffix) || suffix.includes("..")) {
-      throw new Error(`export row ${index} suffix has unsafe characters: ${JSON.stringify(row.suffix)}`);
-    }
-    const clean = { scale, suffix, format, resample };
+    const clean = { scale, format, resample };
     if (format === "jpg" || format === "webp") {
       const raw = row.quality === undefined || row.quality === null || row.quality === "" ? 90 : Number(row.quality);
       if (!Number.isFinite(raw)) throw new Error(`export row ${index} quality must be a number 1-100`);
@@ -962,7 +974,7 @@ export function setExportSettings(root, { projectId, elementId, rows } = {}) {
   const before = getProject(root, projectId);
   const element = (before.elements || []).find((item) => item.id === elementId);
   if (!element) throw new Error(`element not found: ${elementId}`);
-  const clean = cleanExportRows(rows);
+  const clean = cleanExportRows(rows, { rejectSuffix: true });
   const nextElements = (before.elements || []).map((item) =>
     item.id === elementId ? { ...item, export: clean } : item,
   );
@@ -2314,6 +2326,17 @@ function formatExt(format) {
   return format; // png -> png, jpg -> jpg, webp -> webp (already normalized)
 }
 
+// Figma-style scale marker for an export file name (T0229 replaces the manual suffix).
+// A 1x multiplier is the baseline -> no marker (clean "name.png"); any other scale gets
+// "@<token>" (e.g. "@2x", "@0.5x", "@512w"). Only applied when an element has SEVERAL
+// rows (a single row is always the clean base name); the tokens are filename-safe
+// (digits, "x"/"w"/"h", "." and "@"), so they never escape the confined export folder.
+function scaleMarker(scaleToken) {
+  const spec = parseScaleSpec(scaleToken);
+  if (spec.kind === "mul" && spec.value === 1) return "";
+  return `@${spec.token}`;
+}
+
 // The rows an element exports with: its persisted export settings, an explicit
 // override applied to every element (CLI ad-hoc / one-off), or the default single
 // 1x-png row when the layer has no settings — matching Figma's implicit 1x.
@@ -2368,14 +2391,20 @@ export async function exportElements(root, { projectId, elementIds, rows } = {})
     const srcFmt = sourceFormat(element);
     const sourceW = Number(element.source_w) || Number(element.w) || 0;
     const sourceH = Number(element.source_h) || Number(element.h) || 0;
+    const base = slug(element.name || element.id);
+    // Automatic naming (T0229): a single row is the clean base name; several rows get a
+    // Figma scale marker ("name@2x.png") so they never overwrite each other. Any name
+    // that still collides (same scale+format twice, or two elements sharing a name) is
+    // disambiguated deterministically with a numeric "_NN" against the run-wide `used`.
+    const multiRow = elementRows.length > 1;
 
     for (const row of elementRows) {
       const { width, height } = resolveExportScale(row.scale, sourceW, sourceH);
-      const base = slug(element.name || element.id);
-      let file = `${base}${row.suffix}.${formatExt(row.format)}`;
+      const marker = multiRow ? scaleMarker(row.scale) : "";
+      let file = `${base}${marker}.${formatExt(row.format)}`;
       let counter = 2;
       while (used.has(file)) {
-        file = `${base}${row.suffix}_${String(counter).padStart(2, "0")}.${formatExt(row.format)}`;
+        file = `${base}${marker}_${String(counter).padStart(2, "0")}.${formatExt(row.format)}`;
         counter += 1;
       }
       used.add(file);
@@ -2456,6 +2485,46 @@ export async function exportElements(root, { projectId, elementIds, rows } = {})
   };
   updateProject(root, projectId, { tool_runs: capToolRuns(root, projectId, [...(getProject(root, projectId).tool_runs || []), run]) });
   return { folder, stamp, items, manifest, run };
+}
+
+// ---- zipExport (bundle a finished run into one .zip) -------------------------
+
+// Bundle a finished export run's image files into ONE STORE-mode zip — the page's
+// "several outputs -> one archive" save-dialog delivery (Figma behavior) and the CLI
+// --zip flag, so both clients archive identically (tool parity). The run already
+// materialized its files under the confined <project>/export/<stamp>/; this reads that
+// run's manifest.json to learn the produced file names, reads each file, and hands them
+// to the pure zip writer. STORE mode = no compression (PNG/JPG/WebP are already
+// compressed). Loud on a bad/unknown stamp, a corrupt manifest, or a file gone missing
+// (never a silent empty archive). Makes no project mutation.
+export function zipExport(root, { projectId, stamp } = {}) {
+  if (!projectId) throw new Error("zipExport requires projectId");
+  if (!stamp) throw new Error("zipExport requires stamp");
+  const manifestPath = resolveProjectPath(root, projectId, "export", stamp, "manifest.json");
+  if (!existsSync(manifestPath)) throw new Error(`export run not found: ${stamp}`);
+  let manifest;
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8").replace(/^﻿/, ""));
+  } catch (error) {
+    throw new Error(`export manifest is not valid JSON (${stamp}): ${error.message}`);
+  }
+  // Collect the run's output image files: a single-screen render carries manifest.file;
+  // element/project runs list them under manifest.items[].file. De-duplicate, preserving
+  // order, and archive nothing else (specs/reports/manifest stay out of the bundle).
+  const files = [];
+  if (manifest.file) files.push(manifest.file);
+  for (const item of manifest.items || []) if (item && item.file) files.push(item.file);
+  const seen = new Set();
+  const entries = [];
+  for (const file of files) {
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const abs = resolveProjectPath(root, projectId, "export", stamp, file); // confines each segment
+    if (!existsSync(abs)) throw new Error(`export file missing for zip: ${file}`);
+    entries.push({ name: file, data: readFileSync(abs) });
+  }
+  if (!entries.length) throw new Error(`export run ${stamp} has no files to zip`);
+  return { bytes: zipStore(entries), files: entries.map((entry) => entry.name) };
 }
 
 // ---- renderGroup (screen compositing) ----------------------------------------

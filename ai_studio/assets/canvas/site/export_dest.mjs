@@ -1,113 +1,67 @@
-// Export destination delivery — the page's "where do the files land" layer.
+// Export destination delivery — the page's "where does the saved file land" layer.
 //
-// This is delivery-to-disk only (an allowed page concern, like rendering/input):
-// the shared export op already produced the bytes in the confined
-// <project>/export/<stamp>/ folder and the server serves them back over the
-// download route. Here we hand those bytes to the lead's chosen folder.
+// This is delivery-to-disk only (an allowed page concern, like rendering/input): the
+// shared export op already produced the bytes server-side (a single image over the
+// download route, or one STORE-mode .zip over the export-zip route). Here we hand a
+// Blob to the lead's chosen location via a SAVE-FILE dialog with an editable name.
 //
-// Behavior (Figma-style, lead-confirmed 2026-07-02):
-//   - Export ALWAYS opens the directory picker (showDirectoryPicker), every time.
-//   - The picker OPENS AT the last-used folder for this project via `startIn`; the
-//     newly picked handle is remembered per project in IndexedDB after each export.
-//   - Cancel in the picker cancels the export (the caller shows a status message);
-//     there is NO silent fallback on cancel.
-//   - The browser-download fallback runs ONLY when the File System Access API is
-//     unavailable in this browser (never as a cancel path) so files are never
-//     silently dropped.
+// Behavior (Figma-style, T0229 — replaces the T0206 directory picker that Chrome
+// refused for Downloads/системные папки):
+//   - showSaveFilePicker with suggestedName = "<element/screen name>.<ext>" (single) or
+//     "<project/selection>.zip" (multiple) — the lead can rename in the dialog.
+//   - User ABORT (Cancel in the dialog) = a quiet cancel (the caller shows an info toast:
+//     "Отмена в диалоге = отмена экспорта"); nothing is written.
+//   - Any OTHER picker/write failure is LOUD (thrown → error toast); there is NO silent
+//     download fallback on an error.
+//   - The plain browser-download fallback runs ONLY when showSaveFilePicker is absent in
+//     this browser (never as a cancel/error path), so files are never silently dropped.
 //
 // No node/business logic lives here; it is 100% browser plumbing.
 
-const DB_NAME = "canvas-export";
-const STORE = "dirHandles";
-
-export function supportsFsa() {
-  return typeof window !== "undefined" && typeof window.showDirectoryPicker === "function";
+// True when this browser has the File System Access save-file picker.
+export function supportsSaveDialog() {
+  return typeof window !== "undefined" && typeof window.showSaveFilePicker === "function";
 }
 
-function openDb() {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = () => request.result.createObjectStore(STORE);
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+// Trigger a real browser download of a Blob under `name` (the FSA-absent fallback).
+function triggerDownload(blob, name) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = name;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  // Give the download a beat to start before releasing the object URL.
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
 }
 
-// FileSystemDirectoryHandle is structured-cloneable, so IndexedDB persists it across
-// reloads. Any storage failure is non-fatal: the picker just won't pre-open at the
-// last folder.
-async function loadHandle(projectId) {
-  try {
-    const db = await openDb();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, "readonly");
-      const request = tx.objectStore(STORE).get(projectId);
-      request.onsuccess = () => resolve(request.result || null);
-      request.onerror = () => reject(request.error);
-    });
-  } catch {
-    return null;
+// Save a Blob to disk via the save-file dialog. `suggestedName` seeds the (editable)
+// file name; `types` is an optional showSaveFilePicker accept-filter array. Returns:
+//   { saved: true,  name }           — written (FSA) or downloaded (fallback)
+//   { saved: false, canceled: true } — the lead aborted the dialog (quiet cancel)
+// Throws LOUDLY on any non-abort failure (no silent fallback).
+export async function saveBlobToFile(blob, suggestedName, types) {
+  if (!supportsSaveDialog()) {
+    // Only fallback path: the browser has no save picker, so download with the name.
+    triggerDownload(blob, suggestedName);
+    return { saved: true, name: suggestedName, method: "download" };
   }
-}
-
-async function saveHandle(projectId, handle) {
+  let handle;
   try {
-    const db = await openDb();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction(STORE, "readwrite");
-      tx.objectStore(STORE).put(handle, projectId);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  } catch {
-    // Non-fatal: the next export simply won't start at the last folder.
+    const options = { suggestedName };
+    if (Array.isArray(types) && types.length) options.types = types;
+    handle = await window.showSaveFilePicker(options);
+  } catch (error) {
+    if (error && error.name === "AbortError") return { saved: false, canceled: true };
+    throw new Error(`could not open the save dialog: ${error.message}`); // LOUD, no fallback
   }
-}
-
-// The remembered folder name (info only) for the panel's destination hint line.
-export async function lastDestinationName(projectId) {
-  const handle = await loadHandle(projectId);
-  return handle ? handle.name : null;
-}
-
-// Open the picker (starting at the last folder) and remember the new choice.
-// Rejects with an AbortError when the lead cancels — the caller treats that as
-// "cancel the export", not a fallback.
-export async function pickDestination(projectId) {
-  const options = { mode: "readwrite", id: "canvas-export" };
-  const remembered = await loadHandle(projectId);
-  if (remembered) options.startIn = remembered;
-  const handle = await window.showDirectoryPicker(options);
-  await saveHandle(projectId, handle);
-  return handle;
-}
-
-const downloadRoute = (projectId, stamp, file) =>
-  `/api/canvas/projects/${projectId}/export/${encodeURIComponent(stamp)}/${encodeURIComponent(file)}`;
-
-// Write each exported file into the picked directory, fetching the bytes from the
-// confined server download route.
-export async function writeFilesToDir(dirHandle, projectId, stamp, files) {
-  for (const file of files) {
-    const response = await fetch(downloadRoute(projectId, stamp, file));
-    if (!response.ok) throw new Error(`could not fetch ${file}`);
-    const bytes = await response.arrayBuffer();
-    const fileHandle = await dirHandle.getFileHandle(file, { create: true });
-    const writable = await fileHandle.createWritable();
-    await writable.write(bytes);
+  try {
+    const writable = await handle.createWritable();
+    await writable.write(blob);
     await writable.close();
+  } catch (error) {
+    throw new Error(`could not save “${handle.name || suggestedName}”: ${error.message}`);
   }
-}
-
-// Fallback when the File System Access API is unavailable: trigger a real browser
-// download per file (multiple files = one download each). No fake zip.
-export function downloadFiles(projectId, stamp, files) {
-  for (const file of files) {
-    const anchor = document.createElement("a");
-    anchor.href = downloadRoute(projectId, stamp, file);
-    anchor.download = file;
-    document.body.appendChild(anchor);
-    anchor.click();
-    anchor.remove();
-  }
+  return { saved: true, name: handle.name || suggestedName, method: "fsa" };
 }

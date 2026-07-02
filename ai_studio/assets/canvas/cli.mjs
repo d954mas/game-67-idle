@@ -23,8 +23,8 @@
 //   node ai_studio/assets/canvas/cli.mjs nodes-duplicate <id> --nodes id1,id2 [--dx n --dy n] [--group <gid>|none]
 //   node ai_studio/assets/canvas/cli.mjs nodes-delete <id> --nodes id1,id2
 //   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
-//   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --suffix --resample]
-//   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --suffix --resample] [--to <dir>]
+//   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --resample]
+//   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --resample] [--to <dir>] [--zip <path>]
 //   node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h] [--parent <gid>|none]
 //   node ai_studio/assets/canvas/cli.mjs group-reparent <id> --group g --parent <gid>|none [--index n]
 //   node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
@@ -38,7 +38,7 @@
 //   node ai_studio/assets/canvas/cli.mjs undo|redo|history <id>
 //   node ai_studio/assets/canvas/cli.mjs history-list <id>
 //   node ai_studio/assets/canvas/cli.mjs history-jump <id> --seq <n>   (0 = base; like N undos/redos, undoable)
-import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
@@ -86,6 +86,7 @@ import {
   sliceRegions,
   undoOp,
   ungroupGroup,
+  zipExport,
 } from "./ops.mjs";
 
 const repoRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -112,11 +113,11 @@ function print(value) {
 
 // A single ad-hoc export row from inline flags (--scale is the trigger). Returns
 // undefined when no --scale is given, so `export` then honors each element's stored
-// rows and `export-set` demands an explicit source.
+// rows and `export-set` demands an explicit source. (T0229: --suffix is gone — export
+// file names are automatic.)
 function exportRowFromFlags(flags) {
   if (!flags.scale || flags.scale === "true") return undefined;
   const row = { scale: flags.scale };
-  if (flags.suffix && flags.suffix !== "true") row.suffix = flags.suffix;
   if (flags.format && flags.format !== "true") row.format = flags.format;
   if (flags.quality && flags.quality !== "true") row.quality = Number(flags.quality);
   if (flags.resample && flags.resample !== "true") row.resample = flags.resample;
@@ -164,8 +165,8 @@ function usage() {
   regions-set <id> --element <eid> --json <path>   (JSON: a regions array or {regions:[...]})
   regions-show <id> --element <eid>
   slice <id> --element <eid> [--regions r1,r2]
-  export-set <id> --element <eid> --json <path> | --scale <t> [--suffix <s>] [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest]
-  export <id> --elements e1,e2 | --all | --project [--scale <t> --format <f> --quality <n> --suffix <s> --resample <r>] [--to <dir>]
+  export-set <id> --element <eid> --json <path> | --scale <t> [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest]
+  export <id> --elements e1,e2 | --all | --project [--scale <t> --format <f> --quality <n> --resample <r>] [--to <dir>] [--zip <path>]
   group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]
   group-reparent <id> --group <gid> --parent <gid>|none [--index <n>]   (nest a group; none = top level)
   group-move <id> --group <gid> --x <n> --y <n>
@@ -390,7 +391,7 @@ async function runCommand(command, id, positional, flags) {
         rows = Array.isArray(raw) ? raw : raw.rows;
       } else {
         rows = exportRowFromFlags(flags);
-        if (!rows) fail("export-set requires --json <path> or --scale <t> [--suffix --format --quality --resample]");
+        if (!rows) fail("export-set requires --json <path> or --scale <t> [--format --quality --resample]");
       }
       return print(setExportSettings(repoRoot, { projectId: id, elementId: flags.element, rows }));
     }
@@ -416,6 +417,14 @@ async function runCommand(command, id, positional, flags) {
       if (flags.to && flags.to !== "true") {
         const toDir = resolve(flags.to);
         result = { ...result, to: toDir, copied: copyExportTo(result, toDir) };
+      }
+      // --zip writes ONE STORE-mode .zip of the run's images (the same archive the page's
+      // multi-output save-dialog builds) to an explicit path — tool parity, optional.
+      if (flags.zip && flags.zip !== "true") {
+        const zipPath = resolve(flags.zip);
+        const { bytes, files } = zipExport(repoRoot, { projectId: id, stamp: result.stamp });
+        writeFileSync(zipPath, bytes);
+        result = { ...result, zip: zipPath, zipped: files };
       }
       return print(result);
     }
