@@ -230,6 +230,29 @@ export function exitRegionEdit() {
   state.selectedRegionIds = new Set();
 }
 
+// Reconcile region-edit isolation (page-only state) against a (re)loaded project.
+// Undo/redo/reload can invalidate the mode: the edited element or some of its
+// regions may be gone. Figma-style rule — undo/redo act on the document journal, not
+// the mode, so this only fixes up the mode + region selection: exit the mode when the
+// element is missing or hidden (nothing editable to isolate); otherwise STAY in it
+// (even with zero regions — the empty-state hint shows) and prune the region
+// selection to ids that still exist. Pure (no DOM / module state), so it is
+// unit-testable in node and mirrors isElementHidden's visibility rule.
+export function reconcileRegionEdit(project, regionEditId, selectedRegionIds) {
+  const exited = { regionEditId: null, selectedRegionIds: new Set() };
+  if (!regionEditId) return exited;
+  const items = (project && project.elements) || [];
+  const groupList = (project && project.groups) || [];
+  const element = items.find((item) => item.id === regionEditId);
+  if (!element) return exited;
+  const hiddenGroups = new Set(groupList.filter((group) => group.visible === false).map((group) => group.id));
+  const hidden = element.visible === false || (Boolean(element.groupId) && hiddenGroups.has(element.groupId));
+  if (hidden) return exited;
+  const liveRegionIds = new Set((element.regions || []).map((region) => region.id));
+  const pruned = new Set([...(selectedRegionIds || [])].filter((id) => liveRegionIds.has(id)));
+  return { regionEditId, selectedRegionIds: pruned };
+}
+
 // Select a region on its parent element (inspector rows / layers tree). Selecting a
 // region implies entering mode B on that element; Shift toggles multi. The parent's
 // region tree is auto-expanded so the row stays visible.
@@ -302,6 +325,12 @@ export async function reloadProject(message) {
   const alive = new Set(elements().map((element) => element.id));
   state.selectedIds = new Set([...state.selectedIds].filter((id) => alive.has(id)));
   if (state.selectedGroupId && !groupById(state.selectedGroupId)) state.selectedGroupId = null;
+  // Region isolation is page-only, so an undo/redo/reload that changed the edited
+  // element (or its regions) must reconcile the mode + region selection here — the
+  // canvas then re-reads regions fresh, no stale rects, no dead mode.
+  const region = reconcileRegionEdit(state.project, state.regionEditId, state.selectedRegionIds);
+  state.regionEditId = region.regionEditId;
+  state.selectedRegionIds = region.selectedRegionIds;
   await refreshHistory();
   refresh();
   if (message !== undefined) setStatus(message);

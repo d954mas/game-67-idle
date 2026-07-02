@@ -250,9 +250,13 @@ function groupSection(group) {
 export function renderLayers() {
   const list = el("layers-list");
   if (!list) return;
-  // An open inline rename must survive selection-driven re-renders: skip the
-  // rebuild while the editor is up — the commit's reload re-renders anyway.
-  if (list.querySelector(".inline-input")) return;
+  // An open inline rename must survive selection-driven re-renders, but a COMMITTED
+  // edit blurs the input and hands focus back to the stage; only skip the rebuild
+  // while the editor is still FOCUSED. (Skipping on mere presence froze the tree: the
+  // committed input is never removed, so every later render — including undo's —
+  // short-circuited and the layers/region rows never reflected the change.)
+  const editing = list.querySelector(".inline-input");
+  if (editing && document.activeElement === editing) return;
   list.replaceChildren();
   const ungrouped = ungroupedElements();
   const groupList = groups();
