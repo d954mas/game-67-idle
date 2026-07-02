@@ -63,12 +63,24 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
-   busy spinner, input never blocked, max-N concurrent long ops with a
-   visible queue.
-2. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
+1. **Feedback layer** (`T0203`, P1, building) — toasts replace the bottom
+   status line, busy spinner, input never blocked, max-N concurrent long ops
+   with a visible queue.
+2. **Fit group** (`T0221`, P1) — `fitGroup` op: frame = union of descendant
+   boxes + padding; inspector button + context menu + CLI.
+3. **Text elements** (`T0222`, P1, research running) — Figma-like text node
+   type (font/stroke/shadow, OFL font bundle, canvas-2D + PIL parity);
+   build from the research report.
+4. **Multi-gesture op integrity** (`T0223`, P1, debt) — batched `moveNodes`
+   (mixed groups+elements = 1 entry), `reorderNodes` (multi-select Ctrl+[/]),
+   true `ungroupGroup` op (exact z-slot restore). Law: every gesture = one
+   journal entry, no exceptions.
+5. **UX polish leftovers** (`T0224`, P2, debt) — multi-group inspector,
+   filled-body click-select, export suffix clear-in-place, lead's live-check
+   notes.
+6. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
    journal + `jumpHistory` op (CLI parity).
-3. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
+7. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
    builds on T0218's `_bridge` + pinned venv `pythonPath`.
 
 T0219 groups v2 COMPLETE (2026-07-02 night, → review): flat Defold-style
