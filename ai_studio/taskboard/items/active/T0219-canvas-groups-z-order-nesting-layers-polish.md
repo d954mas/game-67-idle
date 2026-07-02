@@ -41,3 +41,4 @@ don't).
 
 ## Log
 - 2026-07-02: Created from live feedback during T0217 review.
+- 2026-07-02: Lead: inspector Regions section "Edit" and "+ Add" buttons are redundant ("избыточно") - dblclick/context menu enter the mode, drag draws a rect (and T0209 brings the tool row). REMOVE both in the bug-fix acceptance pass; Detect and Slice buttons stay (no other UI path). Same pass: kill the fake left indent on top-level rows (item 3 of What).
