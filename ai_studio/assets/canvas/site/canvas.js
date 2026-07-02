@@ -16,7 +16,8 @@ const ctx = canvas.getContext("2d");
 const state = {
   projects: [],
   project: null,
-  selectedId: null,
+  selectedIds: new Set(),
+  history: { canUndo: false, canRedo: false },
   viewport: { scale: 1, offsetX: 0, offsetY: 0 },
 };
 const imageCache = new Map(); // element.src -> HTMLImageElement
@@ -55,8 +56,12 @@ function elements() {
   return (state.project && state.project.elements) || [];
 }
 
-function selectedElement() {
-  return elements().find((e) => e.id === state.selectedId) || null;
+function selectedElements() {
+  return elements().filter((e) => state.selectedIds.has(e.id));
+}
+
+function isSelected(element) {
+  return state.selectedIds.has(element.id);
 }
 
 // ---- rendering ---------------------------------------------------------------
@@ -82,7 +87,7 @@ function render() {
       ctx.strokeStyle = "#596774";
       ctx.strokeRect(origin.x, origin.y, w, h);
     }
-    if (element.id === state.selectedId) {
+    if (isSelected(element)) {
       ctx.strokeStyle = "#77a7ff";
       ctx.lineWidth = 2;
       ctx.strokeRect(origin.x, origin.y, w, h);
@@ -93,15 +98,19 @@ function render() {
 
 function drawRegions(element, vp) {
   const regions = element.regions || [];
+  // Region rects are in intrinsic source pixels; scale by the element box so the
+  // overlay stays aligned even after the element is resized (source_w != w).
+  const sx = element.w / (element.source_w || element.w);
+  const sy = element.h / (element.source_h || element.h);
   ctx.lineWidth = 1;
   ctx.strokeStyle = "#3fc7ba";
   ctx.fillStyle = "rgba(63, 199, 186, 0.12)";
   for (const region of regions) {
     const rect = region.rect || region.content_bbox;
     if (!rect) continue;
-    const p = imageToScreenPoint({ x: element.x + rect[0], y: element.y + rect[1] }, vp);
-    const w = rect[2] * vp.scale;
-    const h = rect[3] * vp.scale;
+    const p = imageToScreenPoint({ x: element.x + rect[0] * sx, y: element.y + rect[1] * sy }, vp);
+    const w = rect[2] * sx * vp.scale;
+    const h = rect[3] * sy * vp.scale;
     ctx.fillRect(p.x, p.y, w, h);
     ctx.strokeRect(p.x, p.y, w, h);
   }
@@ -161,12 +170,17 @@ function renderProjectList() {
 
 function syncToolbar() {
   const hasProject = Boolean(state.project);
-  const hasSelection = Boolean(selectedElement());
+  const selected = selectedElements();
+  const single = selected.length === 1 ? selected[0] : null;
   el("project-title").textContent = state.project ? state.project.title : "No project";
   el("add-image").disabled = !hasProject;
   el("fit").disabled = !hasProject;
-  el("detect-regions").disabled = !hasSelection;
-  el("delete-element").disabled = !hasSelection;
+  el("detect-regions").disabled = !single;
+  el("slice").disabled = !(single && Array.isArray(single.regions) && single.regions.length > 0);
+  el("delete-element").disabled = selected.length === 0;
+  el("export-selected").disabled = selected.length === 0;
+  el("undo").disabled = !state.history.canUndo;
+  el("redo").disabled = !state.history.canRedo;
 }
 
 async function loadProjects() {
@@ -174,26 +188,47 @@ async function loadProjects() {
   renderProjectList();
 }
 
+async function refreshHistory() {
+  if (!state.project) {
+    state.history = { canUndo: false, canRedo: false };
+    return;
+  }
+  try {
+    const history = await api("GET", `/projects/${state.project.id}/history`);
+    state.history = { canUndo: history.canUndo, canRedo: history.canRedo };
+  } catch {
+    state.history = { canUndo: false, canRedo: false };
+  }
+}
+
 async function openProject(id) {
   state.project = (await api("GET", `/projects/${id}`)).project;
-  state.selectedId = null;
+  state.selectedIds = new Set();
   imageCache.clear();
+  await refreshHistory();
   renderProjectList();
   syncToolbar();
   fit();
   setStatus(`Opened ${state.project.title}.`);
 }
 
-function refreshProject(project) {
-  state.project = project;
+// Re-fetch the project from disk (source of truth after any mutating op) and
+// re-render. Selection is pruned to still-existing elements.
+async function reloadProject(message) {
+  if (!state.project) return;
+  state.project = (await api("GET", `/projects/${state.project.id}`)).project;
+  const alive = new Set(elements().map((e) => e.id));
+  state.selectedIds = new Set([...state.selectedIds].filter((id) => alive.has(id)));
+  await refreshHistory();
   renderProjectList();
   syncToolbar();
   render();
+  if (message) setStatus(message);
 }
 
 // ---- pointer interaction -----------------------------------------------------
 
-let drag = null; // { mode: "pan"|"element", startX, startY, origOffset, element, origX, origY }
+let drag = null; // { mode, startX, startY, origOffset?, items?: [{element, origX, origY}] }
 let moveSaveTimer = null;
 
 function pointer(event) {
@@ -217,22 +252,20 @@ function hitElement(worldPoint) {
 
 function scheduleMoveSave() {
   clearTimeout(moveSaveTimer);
-  moveSaveTimer = setTimeout(saveSelectedPosition, 300);
+  moveSaveTimer = setTimeout(saveDraggedPositions, 300);
 }
 
-async function saveSelectedPosition() {
-  const element = selectedElement();
-  if (!element) return;
-  try {
-    const result = await api("PATCH", `/projects/${state.project.id}/elements/${element.id}`, {
-      x: Math.round(element.x),
-      y: Math.round(element.y),
-    });
-    // Keep the local element in sync without clobbering an in-progress drag.
-    const stored = elements().find((e) => e.id === element.id);
-    if (stored && !drag) Object.assign(stored, result.element);
-  } catch (error) {
-    setStatus(error.message, true);
+async function saveDraggedPositions() {
+  if (!drag || !drag.items) return;
+  for (const item of drag.items) {
+    try {
+      await api("PATCH", `/projects/${state.project.id}/elements/${item.element.id}`, {
+        x: Math.round(item.element.x),
+        y: Math.round(item.element.y),
+      });
+    } catch (error) {
+      setStatus(error.message, true);
+    }
   }
 }
 
@@ -241,18 +274,23 @@ canvas.addEventListener("mousedown", (event) => {
   const world = screenToImagePoint(screen, state.viewport);
   const hit = hitElement(world);
   if (hit) {
-    state.selectedId = hit.id;
-    drag = { mode: "element", startX: screen.x, startY: screen.y, element: hit, origX: hit.x, origY: hit.y };
+    if (event.shiftKey) {
+      if (state.selectedIds.has(hit.id)) state.selectedIds.delete(hit.id);
+      else state.selectedIds.add(hit.id);
+    } else if (!state.selectedIds.has(hit.id)) {
+      state.selectedIds = new Set([hit.id]);
+    }
+    // Drag all currently-selected elements together.
+    const items = selectedElements().map((element) => ({ element, origX: element.x, origY: element.y }));
+    drag = { mode: "element", startX: screen.x, startY: screen.y, items };
     canvas.classList.add("dragging");
-    syncToolbar();
-    render();
   } else {
-    state.selectedId = null;
+    if (!event.shiftKey) state.selectedIds = new Set();
     drag = { mode: "pan", startX: screen.x, startY: screen.y, origOffset: { ...state.viewport } };
     canvas.classList.add("dragging");
-    syncToolbar();
-    render();
   }
+  syncToolbar();
+  render();
 });
 
 window.addEventListener("mousemove", (event) => {
@@ -268,8 +306,10 @@ window.addEventListener("mousemove", (event) => {
   } else {
     const dx = (screen.x - drag.startX) / state.viewport.scale;
     const dy = (screen.y - drag.startY) / state.viewport.scale;
-    drag.element.x = drag.origX + dx;
-    drag.element.y = drag.origY + dy;
+    for (const item of drag.items) {
+      item.element.x = item.origX + dx;
+      item.element.y = item.origY + dy;
+    }
     render();
     scheduleMoveSave();
   }
@@ -278,11 +318,26 @@ window.addEventListener("mousemove", (event) => {
 window.addEventListener("mouseup", () => {
   if (!drag) return;
   const wasElement = drag.mode === "element";
+  const finished = drag;
   drag = null;
   canvas.classList.remove("dragging");
   if (wasElement) {
     clearTimeout(moveSaveTimer);
-    saveSelectedPosition();
+    // Save on the finished drag, then refresh history so undo/redo enable.
+    (async () => {
+      for (const item of finished.items) {
+        try {
+          await api("PATCH", `/projects/${state.project.id}/elements/${item.element.id}`, {
+            x: Math.round(item.element.x),
+            y: Math.round(item.element.y),
+          });
+        } catch (error) {
+          setStatus(error.message, true);
+        }
+      }
+      await refreshHistory();
+      syncToolbar();
+    })();
   }
 });
 
@@ -323,43 +378,123 @@ el("file-input").addEventListener("change", async (event) => {
     setStatus(`Uploading ${file.name}...`);
     const bytes_base64 = await fileToBase64(file);
     const result = await api("POST", `/projects/${state.project.id}/images`, { name: file.name, bytes_base64 });
-    refreshProject(result.project);
-    state.selectedId = result.element.id;
-    syncToolbar();
+    state.selectedIds = new Set([result.element.id]);
+    await reloadProject(`Added ${file.name} (${result.element.w}x${result.element.h}).`);
     fit();
-    setStatus(`Added ${file.name} (${result.element.w}x${result.element.h}).`);
   } catch (error) {
     setStatus(error.message, true);
   }
 });
 
 el("detect-regions").addEventListener("click", async () => {
-  const element = selectedElement();
+  const [element] = selectedElements();
   if (!element) return;
   try {
     setStatus("Detecting regions...");
     const result = await api("POST", `/projects/${state.project.id}/detect-regions`, { elementId: element.id });
-    refreshProject(result.project);
-    setStatus(`Detected ${result.regions.length} region(s).`);
+    await reloadProject(`Detected ${result.regions.length} region(s).`);
   } catch (error) {
     setStatus(error.message, true);
   }
 });
 
-el("delete-element").addEventListener("click", async () => {
-  const element = selectedElement();
+el("slice").addEventListener("click", async () => {
+  const [element] = selectedElements();
   if (!element) return;
   try {
-    const result = await api("DELETE", `/projects/${state.project.id}/elements/${element.id}`);
-    state.selectedId = null;
-    refreshProject(result.project);
-    setStatus("Element removed (image file kept on disk).");
+    setStatus("Slicing regions...");
+    const result = await api("POST", `/projects/${state.project.id}/slice`, { elementId: element.id });
+    state.selectedIds = new Set(result.created.map((e) => e.id));
+    await reloadProject(`Sliced ${result.created.length} region(s) into new elements.`);
   } catch (error) {
     setStatus(error.message, true);
   }
 });
 
+el("delete-element").addEventListener("click", () => deleteSelected());
+
+async function deleteSelected() {
+  const selected = selectedElements();
+  if (!selected.length) return;
+  try {
+    for (const element of selected) {
+      await api("DELETE", `/projects/${state.project.id}/elements/${element.id}`);
+    }
+    state.selectedIds = new Set();
+    await reloadProject(`Removed ${selected.length} element(s) (image files kept on disk).`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+el("export-selected").addEventListener("click", async () => {
+  const selected = selectedElements();
+  if (!selected.length) return;
+  try {
+    setStatus("Exporting...");
+    const result = await api("POST", `/projects/${state.project.id}/export`, {
+      elementIds: selected.map((e) => e.id),
+    });
+    setStatus(`Exported ${result.items.length} element(s) to ${result.folder}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+});
+
+el("undo").addEventListener("click", () => runUndo());
+el("redo").addEventListener("click", () => runRedo());
+
+async function runUndo() {
+  if (!state.project || !state.history.canUndo) return;
+  try {
+    await api("POST", `/projects/${state.project.id}/undo`);
+    await reloadProject("Undid last change.");
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+async function runRedo() {
+  if (!state.project || !state.history.canRedo) return;
+  try {
+    await api("POST", `/projects/${state.project.id}/redo`);
+    await reloadProject("Redid change.");
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 el("fit").addEventListener("click", fit);
+
+// ---- keyboard ----------------------------------------------------------------
+
+window.addEventListener("keydown", (event) => {
+  const key = event.key.toLowerCase();
+  const meta = event.ctrlKey || event.metaKey;
+  if (meta && key === "z") {
+    event.preventDefault();
+    if (event.shiftKey) runRedo();
+    else runUndo();
+    return;
+  }
+  if (meta && key === "y") {
+    event.preventDefault();
+    runRedo();
+    return;
+  }
+  if (key === "escape") {
+    state.selectedIds = new Set();
+    syncToolbar();
+    render();
+    return;
+  }
+  if (key === "delete" || key === "backspace") {
+    if (state.selectedIds.size) {
+      event.preventDefault();
+      deleteSelected();
+    }
+  }
+});
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {

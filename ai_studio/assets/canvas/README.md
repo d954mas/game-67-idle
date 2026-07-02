@@ -40,11 +40,73 @@ config so tests and one-off runs never touch the configured location.
 Every capability is one op in `ops.mjs`:
 
 - `listProjects` / `createProject` / `getProject` / `updateProject`
-- `addImage` (parses real PNG/JPEG/GIF dimensions, writes an immutable file)
+- `addImage` (parses real PNG/JPEG/GIF dimensions, persists `source_w`/`source_h`,
+  writes an immutable file) — journaled
 - `patchElement` (move/resize/rename) / `removeElement` (element only; file stays)
+  — journaled
 - `detectRegions` — reads the element image, runs it through the raster2d
-  upload + detect pipeline, stores `element.regions`, and records a `tool_runs`
-  entry. Requires Python (numpy + Pillow), as the rest of the raster2d pipeline.
+  upload + detect pipeline, stores `element.regions` (and backfills
+  `source_w`/`source_h`), records a `tool_runs` entry — journaled. Requires Python
+  (numpy + Pillow), as the rest of the raster2d pipeline.
+- `sliceRegions({ projectId, elementId, regionIds? })` — crops the element's
+  detected regions into new immutable content-addressed image elements. Requires
+  `element.regions` (errors clearly otherwise). Default: all regions. Each crop is
+  a new image element named `<parent-name>#<region-id>`, placed in a grid to the
+  right of the parent (16px gap in source pixels), with `meta.parent =
+  { elementId, regionId, sheetSrc }`. One journal entry per slice (undo removes
+  every created crop) plus a `slice_regions` `tool_runs` entry. Requires Python.
+- `exportElements({ projectId, elementIds, format? })` — copies each element's
+  current image file into `<project>/export/<utc-stamp>/` under a sanitized,
+  collision-suffixed name plus a `manifest.json`. Not journaled (it makes no
+  project mutation), but recorded in `tool_runs`.
+- `undoOp` / `redoOp` / `readHistory` — see Journal below.
+
+### Slice bridge choice
+
+Cropping PNGs has no dependency-free pure-Node path, so `sliceRegions` reuses the
+raster2d Python slicer unmodified, exactly as the Asset Tools surface does: it
+stages the element bytes as a raster2d session (`uploadRaster2dSource`), normalizes
++ detects to get a clean keyed image (`detectRaster2dRegions`), then slices the
+SELECTED region rects in one `exportRaster2dRegions` call and re-imports each crop
+PNG as a canvas element. No raster2d code is modified.
+
+## Journal, undo, and redo
+
+Each project folder has an append-only `journal.jsonl` next to `project.json`.
+Every mutating op appends one line
+`{ seq, at, op, args_summary, undo_patch, state, parent }`:
+
+- `undo_patch` is the `{ elements, tool_runs }` snapshot **before** the op (undo
+  restores it); `state` is the snapshot **after** (redo re-applies it). Files are
+  immutable, so a metadata-only snapshot always fully restores `project.json`.
+- `parent` is the history head that was current when the op ran, linking the log
+  into a chain; `seq` is monotonic and unique per physical line.
+- Undo and redo append audit markers `{ seq, at, op: "undo"|"redo", target_seq }`.
+
+`project.json` carries one pointer, `history_seq` (the applied head; `0` = base).
+Undo restores the head entry's `undo_patch` and moves the head to `entry.parent`.
+Redo picks the greatest-`seq` mutation whose `parent` equals the current head,
+restores its `state`, and advances the head. A new mutation after an undo attaches
+to the current head as its newest child, so redo (greatest-`seq` child) never
+re-picks the stale branch — the redo tail is invalidated automatically (standard
+linear history). Append is a single `O_APPEND` write (atomic for this
+single-writer local tool); a torn last line is tolerated on read.
+
+Note: because `exportElements` is intentionally not journaled, its `tool_runs`
+entry is not protected by the undo chain — undoing past the point where the export
+ran can drop that provenance row. Export creates no element/geometry change, so
+this only affects the audit row.
+
+## Export contract
+
+`exportElements` writes `<project>/export/<utc-stamp>/` (path-confined under the
+project folder) containing each element's current image file copied under its
+element name (sanitized, collision-suffixed) plus `manifest.json`:
+
+```json
+{ "schema": "ai_studio.canvas.export.v1", "project": "<id>", "at": "<iso>",
+  "items": [ { "elementId": "...", "name": "...", "file": "...", "src": "...", "meta": {} } ] }
+```
 
 ## CLI
 
@@ -55,7 +117,16 @@ node ai_studio/assets/canvas/cli.mjs show <id>
 node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
 node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
+node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
+node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all
+node ai_studio/assets/canvas/cli.mjs undo <id>
+node ai_studio/assets/canvas/cli.mjs redo <id>
+node ai_studio/assets/canvas/cli.mjs history <id>
 ```
+
+The page mirrors these: click selects, Shift+click toggles, Escape clears, Delete
+removes selected, Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z (or Ctrl+Y) redo, plus Slice
+and Export selected buttons.
 
 ## Validation
 

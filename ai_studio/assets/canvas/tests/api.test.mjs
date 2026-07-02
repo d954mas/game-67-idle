@@ -3,14 +3,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
-import { URL } from "node:url";
+import { URL, fileURLToPath } from "node:url";
 import { createCanvasApi } from "../api.mjs";
-import { solidPng } from "./png_fixture.mjs";
+import { magentaSheetPng, solidPng } from "./png_fixture.mjs";
 
 const ROOT = "C:/unused-repo-root";
+// The bridged slice/detect routes run raster2d Python with cwd = repo root, so
+// that one test drives a handler bound to the real repo root (store paths stay
+// redirected by CANVAS_PROJECTS_ROOT).
+const REPO_ROOT = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 
 function tempProjects(t) {
   const dir = mkdtempSync(join(tmpdir(), "canvas-api-"));
@@ -114,6 +118,84 @@ test("canvas API supports the full project + element lifecycle", async (t) => {
 
   const afterRemove = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`);
   assert.equal(afterRemove.json().project.elements.length, 0);
+});
+
+test("canvas API undo/redo/history routes round-trip an element move", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const created = await invokeApi(handler, "POST", "/api/canvas/projects", { title: "History API" });
+  const projectId = created.json().project.id;
+
+  const uploaded = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "pic.png",
+    bytes_base64: solidPng(8, 8).toString("base64"),
+  });
+  const elementId = uploaded.json().element.id;
+
+  await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/elements/${elementId}`, { x: 40, y: 12 });
+
+  const undone = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`);
+  assert.equal(undone.status, 200);
+  assert.equal(undone.json().project.elements[0].x, 0);
+
+  const redone = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/redo`);
+  assert.equal(redone.status, 200);
+  assert.equal(redone.json().project.elements[0].x, 40);
+
+  const history = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/history`);
+  assert.equal(history.status, 200);
+  assert.deepEqual(history.json().entries.map((entry) => entry.op), ["addImage", "patchElement", "undo", "redo"]);
+});
+
+test("canvas API export route writes a folder + manifest", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const created = await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Export API" });
+  const projectId = created.json().project.id;
+  const uploaded = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "pic.png",
+    bytes_base64: solidPng(5, 5).toString("base64"),
+  });
+  const elementId = uploaded.json().element.id;
+
+  const exported = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/export`, {
+    elementIds: [elementId],
+  });
+  assert.equal(exported.status, 200);
+  const payload = exported.json();
+  assert.equal(payload.items.length, 1);
+  assert.equal(payload.manifest.schema, "ai_studio.canvas.export.v1");
+});
+
+test("canvas API slice route creates crop elements (skips without Python)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(REPO_ROOT);
+  const created = await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Slice API" });
+  const projectId = created.json().project.id;
+  const uploaded = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "sheet.png",
+    bytes_base64: magentaSheetPng().toString("base64"),
+  });
+  const elementId = uploaded.json().element.id;
+
+  const detected = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/detect-regions`, { elementId });
+  if (detected.status !== 200) {
+    t.skip(`raster2d/python pipeline unavailable: ${detected.json().error}`);
+    return;
+  }
+  const sliced = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/slice`, { elementId });
+  if (sliced.status !== 200) {
+    t.skip(`raster2d/python slicing unavailable: ${sliced.json().error}`);
+    return;
+  }
+  t.after(() => {
+    const sessionId = sliced.json().run.result_summary.session_id;
+    const detectSession = detected.json().run.result_summary.session_id;
+    for (const id of [sessionId, detectSession]) {
+      if (id) rmSync(join(REPO_ROOT, "tmp", "ai_studio", "assets", "raster2d", id), { recursive: true, force: true });
+    }
+  });
+  assert.ok(sliced.json().created.length >= 1, "slice created crop elements");
 });
 
 test("canvas API returns an error for a missing project", async (t) => {

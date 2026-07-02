@@ -13,6 +13,7 @@
 // env overrides for tests) and is only created on first project create.
 import { randomUUID } from "node:crypto";
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -20,7 +21,7 @@ import {
   renameSync,
   writeFileSync,
 } from "node:fs";
-import { basename, extname, join, resolve, sep } from "node:path";
+import { basename, dirname, extname, join, resolve, sep } from "node:path";
 import { canvasProjectsRoot } from "../../core_harness/tool_lib/studio_config.mjs";
 import { sha256Hex } from "../../core_harness/tool_lib/hash.mjs";
 
@@ -141,6 +142,10 @@ export function createProject(root, { title } = {}) {
     title: cleanTitle,
     created: now,
     updated: now,
+    // history_seq is the undo/redo head: the seq of the currently applied journal
+    // mutation (0 = base/empty). The op layer owns the journal semantics; the
+    // store just carries this pointer through updateProject like any other field.
+    history_seq: 0,
     elements: [],
     tool_runs: [],
   };
@@ -178,7 +183,11 @@ export function updateProject(root, id, patch = {}) {
   return writeProjectFile(root, next);
 }
 
-export function addImage(root, id, { name, bytes } = {}) {
+function finiteOr(value, fallback) {
+  return value !== undefined && value !== null && Number.isFinite(Number(value)) ? Number(value) : fallback;
+}
+
+export function addImage(root, id, { name, bytes, x = 0, y = 0, meta } = {}) {
   const buffer = Buffer.isBuffer(bytes) ? bytes : Buffer.from(bytes || []);
   if (!buffer.length) throw new Error("addImage requires non-empty image bytes");
   const { width, height } = imageSize(buffer);
@@ -196,12 +205,16 @@ export function addImage(root, id, { name, bytes } = {}) {
     id: `el_${randomUUID().slice(0, 8)}`,
     type: "image",
     src: `files/${fileName}`,
-    x: 0,
-    y: 0,
+    x: finiteOr(x, 0),
+    y: finiteOr(y, 0),
     w: width,
     h: height,
+    // Intrinsic source pixels, kept immutable so region overlays and future
+    // resizes can scale by w/source_w even after the element box is resized.
+    source_w: width,
+    source_h: height,
     name: String(name || fileName),
-    meta: {},
+    meta: meta && typeof meta === "object" ? meta : {},
   };
   project.elements = [...(project.elements || []), element];
   const saved = updateProject(root, id, { elements: project.elements });
@@ -259,4 +272,65 @@ export function readElementBytes(root, id, elementId) {
   const filePath = resolveProjectFile(root, id, element.src);
   if (!existsSync(filePath)) throw new Error(`image file missing for element ${elementId}`);
   return { buffer: readFileSync(filePath), fileName: basename(filePath), element };
+}
+
+// ---- operation journal -------------------------------------------------------
+//
+// One append-only journal.jsonl sits next to project.json. Each line is a JSON
+// object; the op layer writes mutation entries ({seq, at, op, args_summary,
+// undo_patch, state, parent}) and undo/redo markers ({seq, at, op, target_seq}).
+// The store only owns the plumbing: read, atomic append, monotonic seq.
+
+function journalPath(root, id) {
+  return join(projectDir(root, id), "journal.jsonl");
+}
+
+export function readJournal(root, id) {
+  const path = journalPath(root, id);
+  if (!existsSync(path)) return [];
+  const text = readFileSync(path, "utf8").replace(/^\uFEFF/, "");
+  const entries = [];
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    try {
+      entries.push(JSON.parse(trimmed));
+    } catch {
+      // Tolerate a torn/foreign line rather than losing the whole history.
+    }
+  }
+  return entries;
+}
+
+// Append one journal line. `seq` is assigned monotonically (max existing + 1) so
+// every physical entry has a unique, ever-increasing id. The append is a single
+// O_APPEND write, which is atomic for this single-writer local tool; the whole
+// file is never rewritten, so a crash can at worst drop the last partial line
+// (tolerated by readJournal).
+export function appendJournal(root, id, entry) {
+  const dir = projectDir(root, id);
+  mkdirSync(dir, { recursive: true });
+  const seq = readJournal(root, id).reduce((max, item) => Math.max(max, Number(item.seq) || 0), 0) + 1;
+  const line = { seq, at: nowIso(), ...entry };
+  appendFileSync(journalPath(root, id), `${JSON.stringify(line)}\n`);
+  return line;
+}
+
+// Confined absolute path built from nested project-relative segments (e.g.
+// "export", "<stamp>", "file.png"). Every segment is rejected if it contains a
+// separator, traversal, or dotfile, so export writes stay under the project dir.
+export function resolveProjectPath(root, id, ...segments) {
+  let full = projectDir(root, id);
+  for (const segment of segments) {
+    full = confineChild(full, segment, "path segment");
+  }
+  return full;
+}
+
+// Atomic write of arbitrary bytes to a confined absolute path, creating parent
+// dirs as needed. Used by the export op to copy immutable image files and write
+// the manifest without ever leaving a half-written file.
+export function writeProjectBytes(absPath, bytes) {
+  mkdirSync(dirname(absPath), { recursive: true });
+  writeAtomic(absPath, bytes);
 }

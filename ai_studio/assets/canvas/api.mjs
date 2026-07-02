@@ -7,6 +7,11 @@
 //   GET    /api/canvas/projects/<id>
 //   POST   /api/canvas/projects/<id>/images        {name, bytes_base64}
 //   POST   /api/canvas/projects/<id>/detect-regions {elementId, params?}
+//   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
+//   POST   /api/canvas/projects/<id>/export         {elementIds}
+//   POST   /api/canvas/projects/<id>/undo
+//   POST   /api/canvas/projects/<id>/redo
+//   GET    /api/canvas/projects/<id>/history
 //   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name}
 //   DELETE /api/canvas/projects/<id>/elements/<eid>
 //   GET    /api/canvas/projects/<id>/files/<name>  (image bytes, path-confined)
@@ -16,11 +21,16 @@ import {
   addImage,
   createProject,
   detectRegions,
+  exportElements,
   getProject,
   listProjects,
   patchElement,
+  readHistory,
+  redoOp,
   removeElement,
   resolveProjectFile,
+  sliceRegions,
+  undoOp,
 } from "./ops.mjs";
 
 // Images are the big payload here; allow up to ~20MB for a base64 upload body.
@@ -129,6 +139,46 @@ export function createCanvasApi(root) {
           elementId: body.elementId,
           params: body.params || {},
         }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/slice
+      if (parts.length === 5 && sub === "slice" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendJson(res, 200, await sliceRegions(root, {
+          projectId: id,
+          elementId: body.elementId,
+          regionIds: body.regionIds,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/export
+      if (parts.length === 5 && sub === "export" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendJson(res, 200, exportElements(root, {
+          projectId: id,
+          elementIds: Array.isArray(body.elementIds) ? body.elementIds : [],
+          format: body.format,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/undo | /redo
+      if (parts.length === 5 && sub === "undo" && req.method === "POST") {
+        await readJsonBody(req);
+        sendJson(res, 200, undoOp(root, { projectId: id }));
+        return true;
+      }
+      if (parts.length === 5 && sub === "redo" && req.method === "POST") {
+        await readJsonBody(req);
+        sendJson(res, 200, redoOp(root, { projectId: id }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/history
+      if (parts.length === 5 && sub === "history" && req.method === "GET") {
+        sendJson(res, 200, readHistory(root, { projectId: id }));
         return true;
       }
 

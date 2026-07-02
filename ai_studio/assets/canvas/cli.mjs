@@ -9,6 +9,9 @@
 //   node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
+//   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
+//   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all
+//   node ai_studio/assets/canvas/cli.mjs undo|redo|history <id>
 import { readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,9 +20,14 @@ import {
   addImage,
   createProject,
   detectRegions,
+  exportElements,
   getProject,
   listProjects,
   patchElement,
+  readHistory,
+  redoOp,
+  sliceRegions,
+  undoOp,
 } from "./ops.mjs";
 
 const repoRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
@@ -45,13 +53,18 @@ function print(value) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|add-image|detect-regions|move>
+  console.log(`usage: cli.mjs <list|create|show|add-image|detect-regions|move|slice|export|undo|redo|history>
   list
   create --title <title>
   show <id>
   add-image <id> --file <path>
   detect-regions <id> --element <eid>
-  move <id> --element <eid> --x <n> --y <n>`);
+  move <id> --element <eid> --x <n> --y <n>
+  slice <id> --element <eid> [--regions r1,r2]
+  export <id> --elements e1,e2 | --all
+  undo <id>
+  redo <id>
+  history <id>`);
 }
 
 async function main(argv) {
@@ -88,6 +101,35 @@ async function main(argv) {
       if (flags.y !== undefined) patch.y = Number(flags.y);
       return print(patchElement(repoRoot, id, flags.element, patch));
     }
+    case "slice": {
+      if (!id) fail("slice requires <id>");
+      if (!flags.element) fail("slice requires --element <eid>");
+      const regionIds = flags.regions && flags.regions !== "true"
+        ? String(flags.regions).split(",").map((value) => value.trim()).filter(Boolean)
+        : undefined;
+      return print(await sliceRegions(repoRoot, { projectId: id, elementId: flags.element, regionIds }));
+    }
+    case "export": {
+      if (!id) fail("export requires <id>");
+      let elementIds;
+      if (flags.all === "true") {
+        elementIds = (getProject(repoRoot, id).elements || []).map((element) => element.id);
+      } else if (flags.elements && flags.elements !== "true") {
+        elementIds = String(flags.elements).split(",").map((value) => value.trim()).filter(Boolean);
+      } else {
+        fail("export requires --elements <e1,e2> or --all");
+      }
+      return print(exportElements(repoRoot, { projectId: id, elementIds }));
+    }
+    case "undo":
+      if (!id) fail("undo requires <id>");
+      return print(undoOp(repoRoot, { projectId: id }));
+    case "redo":
+      if (!id) fail("redo requires <id>");
+      return print(redoOp(repoRoot, { projectId: id }));
+    case "history":
+      if (!id) fail("history requires <id>");
+      return print(readHistory(repoRoot, { projectId: id }));
     case "help":
     case "--help":
     case "-h":
