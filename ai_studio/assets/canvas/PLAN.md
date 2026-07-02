@@ -38,6 +38,15 @@ and design decisions.
   polygonal shapes (`T0209`).
 - Benchmark harness landed (`9544f6c7`): `tests/bench.mjs`, baseline in
   `tmp/canvas_bench_2026-07-02.json`.
+- Landed 2026-07-02 (afternoon): region-workbench fix pass (`07923dd3`),
+  layout-independent shortcuts by event.code (`8fca3d90` — Cyrillic layout
+  killed ALL hotkeys), undo/journal audit fixes (`cf538516`: region-mode
+  state reconcile + layers-tree freeze after rename; verdict: NOTHING
+  bypasses the journal; marquee-move/multi-delete = N entries per gesture →
+  batched ops queued in T0200), thin journal + sidecar snapshots +
+  observability (`4db81a07`, T0201+T0205 CLOSED: append 108→2.9 ms,
+  readHistory 109→0.9 ms @1000 ops; history cap 200; duration_ms +
+  errors.jsonl + ops-stats). Server on 8780 restarted with the new backend.
 
 ## Performance: measured facts (bench + research, 2026-07-02)
 
@@ -54,37 +63,56 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-0. **Undo/journal audit fix pass** (in flight 2026-07-02) — Ctrl+Z inside
-   region-edit mode must undo visibly (mode is pure UI state, Figma isolation
-   convention: undo works on the document, mode reconciles after reload, exits
-   only if the edited element vanished); full sweep of all site actions for
-   journal-bypassing mutations.
-1. **UI organization** (`T0217`, P1) — context-menu diet (no Rename/Hide/
-   Export, regions collapse to one entry), Figma-like titled collapsible
-   inspector sections with persisted state, z-order (layers sibling drag +
-   Bring forward/Send backward/front/back + Ctrl+[/] by event.code) on a new
-   journaled reorder op.
+1. **UI organization** (`T0217`, P1, AGENT IN FLIGHT) — context-menu diet (no
+   Rename/Hide, regions = one entry; Export stays until T0206), Figma-like
+   titled collapsible inspector sections with persisted state, z-order
+   (layers sibling drag + Bring forward/Send backward/front/back + Ctrl+[/]
+   by event.code) on a new journaled reorder op, proper layers-collapse rail.
+   Amendments folded in live: region tree LEAVES the layers panel (duplicate
+   of region-edit mode), rename bug hunt (dblclick layer/region + "Rename
+   region" not applying + names invisible), region row ergonomics (× delete
+   broken, bigger hit target, no hover layout shift, styled scrollbar).
+   ACCEPTANCE PASS after it lands (orchestrator, by hand): undo CLAMPS at the
+   region-edit entry seq (lead overruled pure-global undo: in-mode Ctrl+Z
+   only undoes in-mode region edits; pre-mode ops need Esc first).
 2. **Export panel** (`T0206`, P1) — Figma-style Export section at the bottom
    of the inspector (see "Export design" below); absorbs export-destination
    from T0203; export leaves the context menu.
 3. **Perf: frontend churn** (`T0200`, P1) — use op responses instead of
    reload+history GETs, immutable cache headers + `<img>` reuse, rAF drag,
-   batched multi-ops.
-4. **Perf: journal O(n²) + history limits** (`T0201`, P1) — sidecar snapshots,
-   O(1) seq, `tool_runs` cap, history depth cap (~200, `studio.config` knob) +
-   compaction on open. Industry norm: Photoshop caps steps, Figma checkpoints;
-   unlimited verbatim history is not kept anywhere. (Agent in flight.)
+   batched multi-ops (also collapses marquee-move/multi-delete to one journal
+   entry per gesture — audit finding).
+4. **Polygonal regions** (`T0209`) — legacy system mined, port plan ready:
+   `tmp/t0209_legacy_polygon_research_2026-07-02.md` (tool row Select/Draw
+   Rect/Draw Polygon replaces the centered-rect "+ Add region"; polygon =
+   rect + `polygon` points field; crop via ImageDraw.polygon mask).
 5. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
-   busy spinner, input never blocked, max-N concurrent long ops with a visible
-   queue.
-6. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker behind
-   the raster2d bridge; coordinate with the lead's in-flight matte work.
-7. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
+   busy spinner, input never blocked, max-N concurrent long ops with a
+   visible queue.
+6. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
    journal + `jumpHistory` op (CLI parity).
-8. **Observability** (`T0205`, P2) — `duration_ms` on journal entries,
-   per-project `errors.jsonl`, timings in API responses, `ops-stats` CLI.
-   Today the module logs successful ops only (journal), with no durations and
-   no error trail — this closes that gap. (Agent in flight, with T0201.)
+7. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
+   builds on T0218's `_bridge` + pinned venv `pythonPath`.
+
+DONE 2026-07-02: T0201 + T0205 (journal O(n²) + observability, `4db81a07`);
+undo/journal audit fix pass (`cf538516`); layout-independent shortcuts
+(`8fca3d90`); region fix pass (`07923dd3`).
+
+## Image tools track (T0218 — gates T0210 alpha + T0207 cleanup)
+
+The lead handed over his matte refactor 2026-07-02. Full plan:
+`tmp/t0218_image_tools_recon_2026-07-02.md` + decision log in the T0218 task.
+Target: `ai_studio/assets/tools/image/<tool>/` per-tool folders (_bridge,
+sources, bg_fix, regions, slice, alpha_matte, alpha_dualplate, route), each
+with own api.mjs + python + tests + README + architecture-map node. Laws:
+NO silent fallbacks (missing dep = loud error; scipy hard import; kill the
+quiet simple_key_matte_cutout fallback in slice); pinned studio venv +
+`pythonPath` in studio.config replaces ALL interpreter discovery; public
+HTTP URLs `/api/asset-tools/raster2d/*` stay (frozen viewer keeps working);
+canvas is THE editor, viewer frozen. 6 increments; canvas seam (ops.mjs
+imports, 2 functions) LAST and only after T0217 lands. Then T0210 (per-
+element alpha op, regions optional, wings = acceptance asset) and T0207
+(Quantize/Denoise interactive tools; bg-solidify is internal-only).
 
 ## Export design (Figma research, 2026-07-02)
 
@@ -154,11 +182,12 @@ questions: micro costs vs. real-project feel.
 
 ## Dependencies / open
 
-- Lead's unified Python matte (uncommitted `raster2d`/`cutout` work) gates
-  `T0207` and per-region alpha (`T0210`), and should be coordinated with the
-  Python worker (`T0202`).
+- The matte work was HANDED TO US 2026-07-02 (was: lead's uncommitted WIP) —
+  now the T0218 image-tools track above; it gates `T0207` and per-element
+  alpha (`T0210`), and feeds the Python worker (`T0202`).
 - Single-spawn slice landed with increment 6 (`tools/crop_regions.py`);
   `T0202`'s worker now targets detect/render only.
 - Canvas slice crops WITHOUT alpha (verified on the wings test 2026-07-02):
-  the alpha step is not bridged to canvas yet — it arrives with the matte as
-  a first-class per-element op (regions optional), wings = acceptance asset.
+  the alpha step is not bridged to canvas yet — it arrives with T0218's
+  `image/alpha_*` tools as a first-class per-element op (regions optional),
+  wings = acceptance asset.
