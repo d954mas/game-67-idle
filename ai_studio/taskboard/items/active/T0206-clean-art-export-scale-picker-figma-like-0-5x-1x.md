@@ -46,3 +46,4 @@ without --to keep writing to `<project>/export/<stamp>/`.
 ## Log
 - 2026-07-02: Scoped in ai_studio/assets/canvas/PLAN.md (2026-07-02); perf items anchored to bench tmp/canvas_bench_2026-07-02.json + perf research
 - 2026-07-02: Rewritten after lead direction + Figma research: export moves from context menu to a Figma-style inspector section; absorbs export-destination scope from T0203; P2 -> P1.
+- 2026-07-02: Lead hit the destination pain live ("экспорт идет непонятно куда, меня не спрашивает путь") - today export silently writes <project>/export/<stamp>/ with only a status-bar link. Confirms the ask-WHERE requirement; T0206 stays first in the canvas queue after the T0220 sweep.
