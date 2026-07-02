@@ -63,12 +63,20 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **History panel** (`T0204`, P2, IN FLIGHT) — Photoshop-style hideable
-   list over the journal + `jumpHistory` op (CLI parity).
-2. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
-   builds on T0218's `_bridge` + pinned venv `pythonPath`.
-3. **Alpha on canvas** (`T0210`, image-tools track) — per-element alpha op
+1. **Perf: warm Python worker** (`T0202`, P1, IN FLIGHT) — JSON-RPC stdio
+   worker; builds on T0218's `_bridge` + pinned venv `pythonPath`.
+2. **Alpha on canvas** (`T0210`, image-tools track) — per-element alpha op
    with method choice, regions optional; wings = acceptance asset.
+
+T0204 history panel LANDED `df8cfe09` (2026-07-03 night, → review):
+`jumpHistory` = history NAVIGATION over the existing sidecar snapshots
+(N-step jump ≡ N undos/redos in one call; nav marker like undo/redo, no
+compaction, loud off-spine validation); `listHistory` mirrors the exact
+undo/redo walks (stale branches never listed); pure exported
+`historyEntryLabel` = identical text on page and CLI. Page: floating
+Photoshop palette (History button + ` toggle, hidden by default,
+localStorage), row click = one jump action, signature-guarded refresh.
+HTTP history-list/history-jump + CLI parity. Tests 215→223.
 
 T0224 UX polish LANDED `d95fcf3b` (2026-07-03, → review): patchGroups
 batched op + tri-state multi-group inspector; filled-body click-select;
