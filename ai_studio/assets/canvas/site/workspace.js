@@ -1216,6 +1216,15 @@ function commitSelectionDrag(finished) {
 
 function commitRegionCreate(finished) {
   const element = finished.element;
+  // Click-vs-drag is decided in SCREEN pixels: at low zoom a few screen pixels of
+  // tap jitter map to tens of SOURCE pixels, so the source-space minimum below
+  // never caught an accidental tap (lead 2026-07-03).
+  const dxScreen = Math.abs(finished.lastScreen.x - finished.startScreen.x);
+  const dyScreen = Math.abs(finished.lastScreen.y - finished.startScreen.y);
+  if (dxScreen < 4 && dyScreen < 4) {
+    refresh(); // a tap, not a drag: no region
+    return;
+  }
   const a = screenToImagePoint(finished.startScreen, state.viewport);
   const b = screenToImagePoint(finished.lastScreen, state.viewport);
   const { sx, sy } = scaleFactors(element);
@@ -1437,10 +1446,12 @@ function updateHoverGroup(screen, editEl) {
   }
 }
 
-// Double-click any image -> enter region-edit isolation (mode B). Works on a fresh
-// image with no regions so the user can draw the FIRST region there. In polygon mode a
-// double-click closes the draft (handled in onMouseDown via event.detail), so it must
-// not re-enter isolation here.
+// Double-click an image WITH regions -> enter region-edit isolation (mode B).
+// An image with NO regions stays in object mode (lead 2026-07-03: dblclick kept
+// dropping him into region-edit where a stray tap created an accidental region);
+// creating the FIRST region is explicit only — context menu "Edit regions" or
+// inspector "+ Add region". In polygon mode a double-click closes the draft
+// (handled in onMouseDown via event.detail), so it must not re-enter isolation here.
 function onDblClick(event) {
   if (state.regionEditId && state.regionTool === "polygon") return;
   const world = screenToImagePoint(pointer(event), state.viewport);
@@ -1465,9 +1476,13 @@ function onDblClick(event) {
     refresh();
     return;
   }
-  // The click already resolves to the leaf element in the entered scope -> region-edit
-  // isolation (unchanged trigger path).
-  enterRegionEdit(hit.id);
+  // The click already resolves to the leaf element in the entered scope. Only an
+  // image that already HAS regions drills into region-edit; otherwise just select.
+  if ((hit.regions || []).length) {
+    enterRegionEdit(hit.id);
+  } else {
+    selectOnly(hit.id);
+  }
   refresh();
 }
 
