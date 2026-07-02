@@ -1,7 +1,7 @@
 ---
 id: T0218
 title: "Image tools decomposition: raster2d+cutout -> assets/tools/image/<tool>, two alpha modes"
-status: todo
+status: doing
 project: P001
 epic: E010
 priority: P1
@@ -51,3 +51,4 @@ and T0207 (cleanup tools).
 - 2026-07-02: Recon complete (plan tmp/t0218_image_tools_recon_2026-07-02.md): June system fully alive at HEAD in cutout/ (key_matte=prod default since 12354465, key_to_alpha DELETED; dual_plate Smith&Blinn projection + pair gate; route soft_score 0.11). WIP verdicts: KEEP scipy-fallback+tests, ADAPT bundled-python discovery into shared _bridge, DROP viewer preview endpoint. Locked: chroma_key_alpha owned by alpha_matte (source_sheets cross-imports, documented); public HTTP URLs /api/asset-tools/raster2d/* + tmp prefix STAY (frozen viewer keeps working). 6 increments: _bridge extract -> alpha move -> raster2d move -> api split -> arch-map/docs -> canvas seam (gated on T0217).
 - 2026-07-02: LAW from lead: NO silent fallbacks in image tools ("если нет инструментов нужно ошибку. Не нужно легаси и фаллбеков"). WIP scipy-numpy-fallback verdict flipped KEEP->DROP: scipy stays a hard import, missing dep = loud error naming interpreter+fix; portability solved in _bridge python discovery (that WIP hunk stays). Also kill the QUIET simple_key_matte_cutout fallback in slice_regions.py:226-235 -> hard error instead of silent quality degradation.
 - 2026-07-02: Python environment FIX-ON-PC (lead: "как будто ее просто нужно исправить на пк"): increment 1 gains a studio venv - image/requirements.txt (pinned numpy/scipy/Pillow), one-shot setup script creating repo-local .venv (gitignored), studio.config.json pythonPath -> that interpreter. _bridge uses ONLY pythonPath; missing venv/dep = loud error with the setup command. The WIP pythonCandidates chain is DROPPED too (candidate probing = fallback chain, violates the law). Kills mixed 3.12/3.14 pycache; T0202 warm worker starts from the same interpreter.
+- 2026-07-02: Increments 1-3 SHIPPED fe7b7e8a (accepted: 30 py + 5 bridge + 77 canvas tests, map strict clean). Venv live at .venv (numpy 2.1.1/scipy 1.17.1/Pillow 12.2.0), pythonPath in studio.config. Left: 4 (api split + server wiring), 5 (umbrella removal + doc polish), 6 (canvas seam + bench.mjs:325 stale detect path - MUST repoint with the seam).
