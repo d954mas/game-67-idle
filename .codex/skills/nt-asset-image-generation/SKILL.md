@@ -48,7 +48,21 @@ source, and record the source decision in the task or game-owned asset notes.
 - Clean source images are not enough: assembled screens still need selected
   quality-rule evidence.
 
+## Canvas Handoff (mandatory)
+
+Every ACCEPTED generation lands on a canvas project (`ai_studio/assets/canvas/`
+ops — CLI or direct import), never only in loose files:
+
+- Pick the task-appropriate canvas: the current game's draft canvas, or the
+  canvas the task names. If none fits, CREATE a new canvas project titled
+  after the task (`cli.mjs create --title "<task>"`).
+- Add with full provenance `meta`: `{origin: "ai", tool, prompt, refs,
+  generated, license}`. Sourced (non-generated) images get `{origin:
+  "sourced", source: <url/path>, license}` instead. The prompt must never be
+  lost — the canvas element is its durable home.
+- Raw rejects stay in `tmp/`; only accepted results go onto the canvas.
+
 ## Minimal Report
 
-State path used, output PNG, size/fake check, visual judgment, handoff path, and
-rejected attempts or fallbacks.
+State path used, output PNG, size/fake check, visual judgment, canvas project
+and element id, handoff path, and rejected attempts or fallbacks.
