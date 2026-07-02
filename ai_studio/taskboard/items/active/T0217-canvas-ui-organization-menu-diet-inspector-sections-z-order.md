@@ -1,7 +1,7 @@
 ---
 id: T0217
 title: "Canvas UI organization: context-menu diet, collapsible inspector sections, z-order"
-status: backlog
+status: doing
 project: P001
 epic: E010
 priority: P1
@@ -35,7 +35,7 @@ empty strip; same collapse quality bar for the inspector.
 
 ## Done when
 
-- [ ] context menu: no Rename, no Hide, no Export, regions = max one entry; everything removed stays reachable (dblclick rename, layers visibility dot, inspector export)
+- [ ] context menu: no Rename, no Hide, regions = max one entry; everything removed stays reachable (dblclick rename, layers visibility dot); Export STAYS in the menu until T0206's inspector panel lands (T0206 removes it)
 - [ ] inspector renders titled collapsible sections; collapsed state survives reload; regions section compact (not 3+ rows of noise)
 - [ ] z-order: layers drag reorders siblings, 4 menu actions + Ctrl+[/] shortcuts work on any keyboard layout, render order follows
 - [ ] collapsed layers panel is a slim rail with an obvious re-open icon (no empty dead strip)
