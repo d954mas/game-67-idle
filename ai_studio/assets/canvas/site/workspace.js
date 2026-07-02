@@ -921,7 +921,7 @@ function onMouseDown(event) {
       const res = resolveClickSelection(hit, state.enteredGroupId);
       state.enteredGroupId = res.scope;
       if (res.kind === "group") {
-        if (event.shiftKey && state.selectedIds.size === 0) {
+        if (event.shiftKey) {
           if (state.selectedGroupIds.has(res.id)) state.selectedGroupIds.delete(res.id);
           else state.selectedGroupIds.add(res.id);
           state.selectedRegionIds = new Set();

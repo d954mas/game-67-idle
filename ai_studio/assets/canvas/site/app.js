@@ -219,12 +219,14 @@ export function selectOnly(elementId) {
 }
 
 export function toggleSelect(elementId) {
-  state.selectedGroupId = null;
-  state.selectedGroupIds = new Set();
+  // Keeps any selected GROUPS: Ctrl/Shift-click builds a mixed element+group
+  // selection (lead 2026-07-03) — marquee already produces mixed selections and
+  // every node-batch op (move/reorder/delete/copy) handles them.
   state.selectedRegionIds = new Set();
   state.regionEditId = null;
   if (state.selectedIds.has(elementId)) state.selectedIds.delete(elementId);
   else state.selectedIds.add(elementId);
+  syncPrimaryGroup();
 }
 
 // Select a single group as the whole selection (label click, layers head, canvas

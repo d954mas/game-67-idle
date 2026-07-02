@@ -281,11 +281,11 @@ function groupSection(group, depth) {
   // selectGroupOnly (NOT hand-rolled state writes): it also fills the plural
   // selectedGroupIds set, which the Delete key and every node-batch action key on —
   // a hand-rolled write here left the set empty, so Delete from layers did nothing.
-  // Ctrl/Shift+click toggles the group in the multi selection (same rule as the
-  // canvas Shift-click on a group: group-toggle only while no elements are selected;
-  // range-select across mixed element+group rows is not supported yet).
+  // Ctrl/Shift+click toggles the group in the multi selection — mixed element+group
+  // selections are legal (canvas Shift-click parity; range-select across mixed
+  // element+group rows is not supported yet).
   head.addEventListener("click", (event) => {
-    if ((event.ctrlKey || event.metaKey || event.shiftKey) && state.selectedIds.size === 0) {
+    if (event.ctrlKey || event.metaKey || event.shiftKey) {
       if (state.selectedGroupIds.has(group.id)) state.selectedGroupIds.delete(group.id);
       else state.selectedGroupIds.add(group.id);
       state.selectedRegionIds = new Set();
