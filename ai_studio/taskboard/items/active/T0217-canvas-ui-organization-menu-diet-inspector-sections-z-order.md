@@ -58,3 +58,4 @@ shift); long region lists need an EXPLICIT project-styled scrollbar
 
 ## Log
 - 2026-07-02: Created from live lead feedback during region-workbench testing.
+- 2026-07-02: Lead overruled pure-global undo: in region-edit mode Ctrl+Z clamps at the mode-entry journal position (only in-mode region edits undo; pre-mode ops need Esc first). Implement in the orchestrator acceptance pass right after this task lands (record base seq on enterRegionEdit, clamp in onKeyDown; redo unaffected).
