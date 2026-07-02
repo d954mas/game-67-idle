@@ -68,7 +68,6 @@ async function showHome() {
   el("home-view").classList.remove("hidden");
   await loadProjects();
   renderHome();
-  setStatus("Ready.");
 }
 
 // Open a project into the workspace. `select` is the optional ?select=<id> debug
@@ -101,7 +100,6 @@ async function openProject(id, { select, regions } = {}) {
   enterWorkspace();
   fit();
   refresh();
-  setStatus(`Opened ${state.project.title}.`);
 }
 
 hooks.openProject = openProject;
@@ -298,6 +296,5 @@ window.addEventListener("keyup", onKeyUp);
     await openProject(lastProjectId());
   } else {
     renderHome();
-    setStatus("Ready. Create or open a project.");
   }
 })();

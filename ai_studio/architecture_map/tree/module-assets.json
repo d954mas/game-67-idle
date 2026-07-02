@@ -1087,7 +1087,7 @@
           "kind": "surface",
           "path": "ai_studio/assets/canvas/site",
           "color": "#7c3aed",
-          "description": "Thin Figma/Recraft-like browser page served via the /ai_studio/ static route. One HTML document swaps a home view (project card grid + inline new/rename/delete) and a workspace view (DPR-crisp pan/zoom canvas, left tool rail, collapsible group-aware layers panel, right inspector, right-click context menu, OS drag&drop + clipboard paste, zoom controls, and export/render download links). Behavior is split into small ES modules; every action is one HTTP API call and there is no logic beyond rendering/input.",
+          "description": "Thin Figma/Recraft-like browser page served via the /ai_studio/ static route. One HTML document swaps a home view (project card grid + inline new/rename/delete) and a workspace view (DPR-crisp pan/zoom canvas, left tool rail, collapsible group-aware layers panel, right inspector, right-click context menu, OS drag&drop + clipboard paste, zoom controls). Feedback is a Figma-like toast stack (there is no status bar): transient success/info, persistent errors, and pinned export/render results with download links, plus a busy spinner + client-side FIFO limiter for long python-backed ops. Behavior is split into small ES modules; every action is one HTTP API call and there is no logic beyond rendering/input.",
           "role": "canvas browser page",
           "tags": [
             "assets",
@@ -1101,7 +1101,7 @@
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/canvas.html",
               "title": "canvas.html",
-              "description": "Single page document holding both the home (project card grid) and workspace (top bar, tool rail, layers panel, stage, inspector, status) views that the controller swaps between.",
+              "description": "Single page document holding both the home (project card grid) and workspace (top bar, tool rail, layers panel, stage, inspector) views that the controller swaps between. Feedback is a toast stack appended at runtime (no status bar element).",
               "role": "canvas page document",
               "tags": ["assets", "canvas", "ui"]
             },
@@ -1110,7 +1110,7 @@
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/canvas.css",
               "title": "canvas.css",
-              "description": "Dark-theme styling for the home card grid, workspace top bar, tool rail, layers panel (incl. the collapsed slim rail + reorder drop-line and styled scrollbars), stage overlays, inspector (titled collapsible sections + stable-gutter region list), status download links, inline editors, and context menu.",
+              "description": "Dark-theme styling for the home card grid, workspace top bar, tool rail, layers panel (incl. the collapsed slim rail + reorder drop-line and styled scrollbars), stage overlays, inspector (titled collapsible sections + stable-gutter region list), the bottom-right toast/feedback stack (kind accents, CSS spinner, download links), inline editors, and context menu.",
               "role": "canvas page styling",
               "tags": ["assets", "canvas", "ui", "style"]
             },
@@ -1214,6 +1214,24 @@
               "tags": ["assets", "canvas", "ui", "browser-js"]
             },
             {
+              "id": "assets:canvas-site-toasts",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/toasts.js",
+              "title": "toasts.js",
+              "description": "Feedback layer that replaced the bottom status bar: a fixed bottom-right toast stack (clear of the inspector Export button + the breadcrumb chips) with kinds success/info (auto-hide ~3s, hover pauses), error (persists with op name + message, never swallowed), and pinned-result (export/render outcome with download links, persists). Toasts never block input (container pointer-events:none, cards only) and the stack caps at ~5, dropping the oldest transient toast first. Also hosts runLongOp: it wraps a python-backed op (detect/slice/render/export) with the long_op_queue limiter, shows a queued/running progress toast that resolves in place into the result, and disables the triggering control while in flight. Import-safe in node (no DOM at module load). setStatus/setStatusLinks in app.js are thin shims into this layer.",
+              "role": "canvas feedback layer",
+              "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-long-op-queue",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/long_op_queue.mjs",
+              "title": "long_op_queue.mjs",
+              "description": "Pure, DOM-free FIFO concurrency limiter for the page's long (python-backed) ops — detect/slice/render/export. Caps concurrent runs at N=2 so one browser never spawns a swarm of Python processes; extra requests queue and run FIFO as slots free, a failed op frees its slot, and a still-queued op can be cancelled before it fires (a running op cannot — no server cancellation). In-memory only: a page reload clears the queue. A page concern only (the CLI/ops path is unlimited). Node-unit-tested (slot accounting, FIFO order, failure-frees-slot, cancel-queued); toasts.js wraps it for the UI.",
+              "role": "canvas long-op limiter",
+              "tags": ["assets", "canvas", "ui", "browser-js", "testable-logic"]
+            },
+            {
               "id": "assets:canvas-site-regions",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/regions.js",
@@ -1238,7 +1256,7 @@
           "kind": "test",
           "path": "ai_studio/assets/canvas/tests",
           "title": "tests",
-          "description": "Regression tests for the canvas store round-trip and confinement, deleteProject trash-move, studio config resolution incl. canvasHistoryDepth, the operation journal with undo/redo and redo-tail invalidation, journaled patchProject rename, element export folder/manifest, group create-from-elements bbox, group move + member translation with undo, delete-keeps-elements, visibility, renderGroup composite pixel checks via a tiny PNG decoder, the z-order reorderElement op (root + group sibling reorder, index clamp, interleaved-scope preservation, one-entry undo, and CLI element-reorder + API reorder-route parity), the HTTP API lifecycle plus rename/delete/undo/slice/export/group/render/reorder routes and the confined export-download route (rejecting traversal), the T0200 perf pass (batched patchElements/removeElements = one journal entry + single-undo restore with atomic validation, mutation responses folding canUndo/canRedo/seq so the page needs no follow-up GET, and immutable Cache-Control + ETag on the content-addressed files route), a CLI smoke incl. group + ops-stats + batched elements-set/elements-remove commands, the bridged detectRegions/sliceRegions/renderGroup ops (skips cleanly when the Python pipeline is unavailable), and the journal restructure: thin sidecar-snapshot lines, tail-read seq, idempotent fat-journal migration, history-depth compaction with a clean undo horizon, tool_runs cap/spill, duration_ms, and the errors.jsonl failure sink.",
+          "description": "Regression tests for the canvas store round-trip and confinement, deleteProject trash-move, studio config resolution incl. canvasHistoryDepth, the operation journal with undo/redo and redo-tail invalidation, journaled patchProject rename, element export folder/manifest, group create-from-elements bbox, group move + member translation with undo, delete-keeps-elements, visibility, renderGroup composite pixel checks via a tiny PNG decoder, the z-order reorderElement op (root + group sibling reorder, index clamp, interleaved-scope preservation, one-entry undo, and CLI element-reorder + API reorder-route parity), the HTTP API lifecycle plus rename/delete/undo/slice/export/group/render/reorder routes and the confined export-download route (rejecting traversal), the T0200 perf pass (batched patchElements/removeElements = one journal entry + single-undo restore with atomic validation, mutation responses folding canUndo/canRedo/seq so the page needs no follow-up GET, and immutable Cache-Control + ETag on the content-addressed files route), a CLI smoke incl. group + ops-stats + batched elements-set/elements-remove commands, the bridged detectRegions/sliceRegions/renderGroup ops (skips cleanly when the Python pipeline is unavailable), and the journal restructure: thin sidecar-snapshot lines, tail-read seq, idempotent fat-journal migration, history-depth compaction with a clean undo horizon, tool_runs cap/spill, duration_ms, and the errors.jsonl failure sink, plus the page's pure long-op FIFO limiter (slot accounting at max 2, FIFO order, a failed op freeing its slot, and cancel of a still-queued op).",
           "role": "canvas module tests",
           "tags": [
             "assets",

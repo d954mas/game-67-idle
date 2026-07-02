@@ -8,6 +8,7 @@
 // canvas/business logic beyond fetching and re-rendering.
 
 import { childrenOf, isNodeHidden } from "../tree.mjs";
+import { toastError, toastInfo, toastPinned } from "./toasts.js";
 
 export const el = (id) => document.getElementById(id);
 
@@ -80,38 +81,23 @@ export function focusStage() {
   if (stage) stage.focus();
 }
 
-// Both views carry a status line (#status in the workspace, #home-status on
-// home) so errors from home ops (create/delete) are never reported into a
-// hidden node.
-function statusNodes() {
-  return [el("status"), el("home-status")].filter(Boolean);
-}
-
+// Feedback goes through the toast layer (T0203) — there is no permanent status bar.
+// setStatus/setStatusLinks stay as the shared vocabulary every module already speaks;
+// they just route to the right toast kind: a transient confirmation is an info toast
+// (auto-hides), a failure is an error toast (persists until dismissed, never swallowed),
+// and an export/render outcome with download links is a pinned-result toast. Long ops
+// (detect/slice/render/export) bypass this and use runLongOp so their progress toast
+// resolves in place — see actions.js + toasts.js.
 export function setStatus(message, isError = false) {
-  for (const node of statusNodes()) {
-    node.innerHTML = "";
-    node.textContent = message;
-    node.classList.toggle("error", isError);
-  }
+  if (!message) return;
+  if (isError) toastError(message);
+  else toastInfo(message);
 }
 
-// Append a status line that also carries clickable download links (used after
-// export / render screen). `links` is [{ href, label }].
+// A confirmation that also carries clickable download links (export / render result):
+// a pinned toast that stays until dismissed. `links` is [{ href, label }].
 export function setStatusLinks(message, links = []) {
-  for (const node of statusNodes()) {
-    node.classList.remove("error");
-    node.textContent = `${message} `;
-    for (const link of links) {
-      const a = document.createElement("a");
-      a.href = link.href;
-      a.textContent = link.label;
-      a.target = "_blank";
-      a.rel = "noreferrer";
-      a.className = "dl";
-      node.appendChild(a);
-      node.appendChild(document.createTextNode(" "));
-    }
-  }
+  toastPinned(message, links);
 }
 
 export async function api(method, path, body) {

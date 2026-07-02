@@ -297,7 +297,10 @@ function renderRegions(element, root) {
   // dblclick enters the mode, dragging on the image draws a rect).
   const btnRow = document.createElement("div");
   btnRow.className = "insp-region-btnrow";
-  btnRow.append(smallBtn("Detect", () => detectRegionsFor(element.id)));
+  // Pass the button as the triggering control so runLongOp disables it while detect is
+  // queued/in flight (the canvas stays interactive).
+  const detectBtn = smallBtn("Detect", () => detectRegionsFor(element.id, detectBtn));
+  btnRow.append(detectBtn);
   actions.appendChild(btnRow);
 
   const sliceBtn = document.createElement("button");
@@ -314,7 +317,7 @@ function renderRegions(element, root) {
   // is always honored without a stale closure.
   sliceBtn.addEventListener("click", () => {
     const ids = selectedRegionIdsFor(element);
-    sliceRegionsFor(element.id, ids.length ? ids : undefined);
+    sliceRegionsFor(element.id, ids.length ? ids : undefined, sliceBtn);
   });
   actions.appendChild(sliceBtn);
 
@@ -458,7 +461,7 @@ function renderExport(element, root) {
   button.type = "button";
   button.className = "primary insp-btn";
   button.textContent = `Export ${element.name || "element"}`;
-  button.addEventListener("click", () => exportElementIds([element.id]));
+  button.addEventListener("click", () => exportElementIds([element.id], button));
   body.appendChild(button);
 }
 
@@ -617,10 +620,14 @@ function renderGroupInspector(group, root) {
   button.className = "primary insp-btn";
   button.textContent = "Render group";
   button.addEventListener("click", () => {
-    renderScreen(group.id, {
-      scale: Number(scale.value),
-      background: bgMode.value === "color" ? color.value : undefined,
-    });
+    renderScreen(
+      group.id,
+      {
+        scale: Number(scale.value),
+        background: bgMode.value === "color" ? color.value : undefined,
+      },
+      button,
+    );
   });
   controls.appendChild(button);
   render.appendChild(controls);
@@ -645,7 +652,7 @@ function renderMulti(selected, root) {
   button.type = "button";
   button.className = "primary insp-btn";
   button.textContent = `Export ${selected.length} elements`;
-  button.addEventListener("click", () => exportElementIds(selected.map((element) => element.id)));
+  button.addEventListener("click", () => exportElementIds(selected.map((element) => element.id), button));
   root.appendChild(button);
 }
 
@@ -665,7 +672,7 @@ function renderEmpty(root) {
   button.type = "button";
   button.className = "primary insp-btn";
   button.textContent = `Export project (${visibleGroups.length} ${visibleGroups.length === 1 ? "screen" : "screens"})`;
-  button.addEventListener("click", () => exportProjectAction());
+  button.addEventListener("click", () => exportProjectAction(button));
   root.appendChild(button);
 }
 

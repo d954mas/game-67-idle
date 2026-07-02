@@ -788,27 +788,155 @@ button:disabled {
   font-size: 12px;
 }
 
-/* ---- status --------------------------------------------------------------- */
+/* ---- feedback layer (toasts, T0203) --------------------------------------- */
 
-#status {
-  padding: 6px 12px;
-  border-top: 1px solid var(--line);
-  color: var(--muted);
-  font-size: 12px;
-  min-height: 26px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* Fixed stack at the bottom-right of the CANVAS working area — inset past the 264px
+   inspector so a toast never covers its Export button, and clear of the top-center
+   breadcrumb chips. The container never eats input (pointer-events:none); only the
+   cards do. Cards stack newest at the bottom and grow upward. */
+#toast-stack {
+  position: fixed;
+  right: 288px;
+  bottom: 20px;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 320px;
+  max-width: calc(100vw - 32px);
+  pointer-events: none;
 }
 
-#status.error {
+.toast {
+  pointer-events: auto;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-left-width: 3px;
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-size: 12px;
+  line-height: 1.4;
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.toast-leaving {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.toast-info {
+  border-left-color: var(--blue);
+}
+.toast-success {
+  border-left-color: var(--green);
+}
+.toast-error {
+  border-left-color: var(--red);
+}
+.toast-pinned {
+  border-left-color: var(--cyan);
+}
+.toast-progress {
+  border-left-color: var(--amber);
+}
+
+.toast-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+  border-radius: 50%;
+}
+.toast-success .toast-icon {
+  color: var(--green);
+}
+.toast-error .toast-icon {
   color: var(--red);
 }
+.toast-pinned .toast-icon {
+  color: var(--cyan);
+}
+.toast-info .toast-icon {
+  color: var(--blue);
+}
 
-#status a.dl {
+/* Pure-CSS busy spinner for a long op in flight (no external asset). */
+.toast-spinner {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  border: 2px solid var(--line);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: toast-spin 0.7s linear infinite;
+}
+
+@keyframes toast-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.toast-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.toast-label {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 2px;
+}
+
+.toast-message {
+  word-break: break-word;
+}
+
+.toast-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 5px;
+}
+
+.toast-dl {
   color: var(--blue);
   text-decoration: underline;
-  margin-right: 8px;
+  word-break: break-all;
+}
+
+.toast-close {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  line-height: 1;
+  font-size: 15px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.toast-close:hover {
+  background: var(--panel-soft);
+  color: var(--text);
+  border-color: transparent;
 }
 
 /* ---- inline editing ------------------------------------------------------- */

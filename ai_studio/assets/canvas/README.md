@@ -605,6 +605,14 @@ one document that swaps two views; the JS is split into focused ES modules under
   System Access dir picker opens every time starting at the last-used folder (handle
   remembered per project in IndexedDB), cancel aborts the export, and a browser-
   download fallback runs only when the API is unavailable.
+- `toasts.js` — the feedback layer (there is no status bar; see **Feedback layer**
+  below). A fixed bottom-right toast stack with kinds success/info/error/pinned-result,
+  plus `runLongOp` (limiter + progress toast + control-disable) for the python-backed
+  ops. `app.js`'s `setStatus`/`setStatusLinks` are thin shims into it.
+- `long_op_queue.mjs` — the pure, DOM-free FIFO limiter behind `runLongOp` (max 2
+  concurrent long ops; extra requests queue; a failed op frees its slot; a still-queued
+  op can be cancelled). Node-unit-tested; a page concern only (the CLI/ops path is
+  unlimited).
 - `context_menu.js` — the right-click menu (per element / region / group / empty
   canvas), including **Edit regions** + a **Move to screen ▸** submenu on elements,
   **Slice this region** / **Delete region** on a region, and (from the layers panel
@@ -619,9 +627,51 @@ one document that swaps two views; the JS is split into focused ES modules under
 A debug hook `?select=<elementId>` pre-selects one element on open (handy for
 screenshots); its sibling `?regions=<elementId>` opens straight into region-edit
 isolation (mode B) with the first region selected; both may stay. Downloads: after
-**export** / **Render screen** the
-status area shows clickable links served by the confined
-`GET /api/canvas/projects/<id>/export/<stamp>/<file>` route.
+**export** / **Render screen** a **pinned-result toast** shows clickable links served
+by the confined `GET /api/canvas/projects/<id>/export/<stamp>/<file>` route.
+
+### Feedback layer
+
+There is no permanent status bar. All feedback is a Figma-like **toast stack** fixed at
+the bottom-right of the canvas working area (inset past the inspector so it never covers
+the Export button, and clear of the top-center breadcrumb chips). Toasts never block
+input (the container is `pointer-events:none`; only the cards are interactive) and never
+touch keyboard focus. Kinds:
+
+- **success / info** — a transient confirmation; auto-hides after ~3s (hovering a card
+  pauses its timer). Routine metadata confirmations (move/group/rename/assign) are info
+  toasts; a long op's completion is a success toast.
+- **error** — persists until dismissed (×); shows the op name + message. Every failure
+  that used to write a red status is now an error toast — errors are **never silently
+  swallowed**.
+- **pinned-result** — an export/render outcome ("Exported N files to …" + download
+  links); persists until dismissed and multiple results stack.
+
+The stack caps at ~5 visible; when a new toast would exceed that, the oldest **transient**
+(info/success) toast is dropped first, so errors and results are never auto-evicted.
+`setStatus(msg, isError)` / `setStatusLinks(msg, links)` in `app.js` are thin shims that
+route to the right kind, so every existing call site kept working.
+
+**Undo/redo** produce **no** toast: they are high-frequency and the change is already
+visible (the canvas updates and the Undo/Redo buttons enable/disable), so a toast per
+Ctrl+Z would be noise. (The region-edit undo-clamp still shows its explanatory info
+toast, and undo/redo failures still surface as an error toast.)
+
+**Long ops + the limiter.** The python-backed ops — **detect / slice / render / export**
+— run through `runLongOp`, which:
+
+- shows a **busy spinner** as a progress toast ("Detecting regions…"); on completion the
+  same toast **resolves in place** into the success / pinned-result / error toast;
+- **disables the triggering control** (the inspector Detect / Slice / Export / Render
+  button) while queued + in flight, while the canvas/page stays fully interactive;
+- runs at most **N=2 concurrently** via the pure `long_op_queue.mjs` FIFO limiter. Extra
+  requests **queue visibly** ("Queued: Slice… (#2)") and run in order as slots free. A
+  **still-queued** op can be cancelled from its toast's × (it never fires); a **running**
+  op has no cancel (there is no server-side cancellation). If an op fails, its slot frees
+  and the next starts. The queue is **in-memory**: a page reload clears it. The limiter is
+  a page concern only — the agent CLI / direct ops path is unlimited (an agent manages its
+  own concurrency). Mutating metadata ops (move/patch/undo) are near-instant and get no
+  spinner.
 
 Visible groups draw as Figma-like frames with a name label above the top-left corner.
 Selection is **Figma-nested**: a single click selects the **top-most container group** of

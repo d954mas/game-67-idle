@@ -13,12 +13,12 @@ import {
   regionEditElement,
   selectOnly,
   setStatus,
-  setStatusLinks,
   state,
 } from "./app.js";
 import { orderedChildren, nodeScope } from "../tree.mjs";
 import { screenToImagePoint } from "./viewport.mjs";
 import { downloadFiles, pickDestination, supportsFsa, writeFilesToDir } from "./export_dest.mjs";
+import { runLongOp } from "./toasts.js";
 
 function pid() {
   return state.project.id;
@@ -179,32 +179,41 @@ export function sendNodeToBack(id) {
   return edgeZ(id, "back");
 }
 
-export async function detectRegionsFor(id) {
-  try {
-    setStatus("Detecting regions...");
-    const result = await api("POST", `/projects/${pid()}/detect-regions`, { elementId: id });
-    applyMutation(result, `Detected ${result.regions.length} region(s).`);
-  } catch (error) {
-    setStatus(error.message, true);
-  }
+// Detect is a long (python-backed) op: it runs through the limiter so at most N=2
+// python spawns are ever in flight, its progress toast resolves into the result, and
+// the triggering `control` (the inspector Detect button) is disabled while in flight.
+// The canvas stays fully interactive throughout.
+export async function detectRegionsFor(id, control) {
+  await runLongOp(
+    "Detecting regions…",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/detect-regions`, { elementId: id });
+      applyMutation(result); // update the page; the result toast carries the confirmation
+      return { kind: "success", message: `Detected ${result.regions.length} region(s).` };
+    },
+    { control },
+  );
 }
 
 // Slice all of an element's regions, or only `regionIds` when given (per-region
 // slice from the region menu / inspector "Slice selected region(s)"). The op crops
 // the STORED region rects verbatim, so edited and hand-drawn regions crop exactly.
-export async function sliceRegionsFor(id, regionIds) {
-  try {
-    setStatus("Slicing regions...");
-    const body = { elementId: id };
-    if (Array.isArray(regionIds) && regionIds.length) body.regionIds = regionIds;
-    const result = await api("POST", `/projects/${pid()}/slice`, body);
-    state.selectedGroupId = null;
-    state.selectedRegionIds = new Set();
-    state.selectedIds = new Set(result.created.map((element) => element.id));
-    applyMutation(result, `Sliced ${result.created.length} region(s) into new elements.`);
-  } catch (error) {
-    setStatus(error.message, true);
-  }
+// Long (python-backed) op — same limiter/spinner/disable treatment as detect.
+export async function sliceRegionsFor(id, regionIds, control) {
+  await runLongOp(
+    "Slicing regions…",
+    async () => {
+      const body = { elementId: id };
+      if (Array.isArray(regionIds) && regionIds.length) body.regionIds = regionIds;
+      const result = await api("POST", `/projects/${pid()}/slice`, body);
+      state.selectedGroupId = null;
+      state.selectedRegionIds = new Set();
+      state.selectedIds = new Set(result.created.map((element) => element.id));
+      applyMutation(result);
+      return { kind: "success", message: `Sliced ${result.created.length} region(s) into new elements.` };
+    },
+    { control },
+  );
 }
 
 // ---- regions -----------------------------------------------------------------
@@ -277,64 +286,62 @@ export async function setExportRows(elementId, rows) {
   }
 }
 
-// Deliver a finished export to disk. Figma-style destination: always open the
-// directory picker (starting at the last-used folder); cancel aborts the export
-// with a visible message; only a browser without the File System Access API falls
-// back to per-file downloads. Never silently drops files.
+// Deliver a finished export to disk and return the RESULT TOAST spec (the caller's
+// runLongOp resolves the progress toast into it). Figma-style destination: always open
+// the directory picker (starting at the last-used folder); cancel aborts the export with
+// a visible info toast; only a browser without the File System Access API falls back to
+// per-file downloads. Never silently drops files. A genuine failure throws (runLongOp
+// turns it into an error toast — never swallowed).
 async function deliverExport(result, label) {
   const files = (result.items || result.screens || []).map((entry) => entry.file);
   const stamp = baseName(result.folder);
-  if (!files.length) {
-    setStatus("Nothing to export.");
-    return;
-  }
+  if (!files.length) return { kind: "info", message: "Nothing to export." };
   const links = exportLinks(result.folder, files);
   if (!supportsFsa()) {
     downloadFiles(pid(), stamp, files);
-    setStatusLinks(`${label} — ${files.length} file(s) downloaded:`, links);
-    return;
+    return { kind: "pinned", message: `${label} — ${files.length} file(s) downloaded`, links };
   }
   let dir;
   try {
     dir = await pickDestination(pid());
   } catch (error) {
-    if (error && error.name === "AbortError") {
-      setStatus("Export canceled — no folder chosen.");
-      return;
-    }
-    setStatus(`Could not open a destination folder: ${error.message}`, true);
-    return;
+    if (error && error.name === "AbortError") return { kind: "info", message: "Export canceled — no folder chosen." };
+    throw new Error(`Could not open a destination folder: ${error.message}`);
   }
   try {
     await writeFilesToDir(dir, pid(), stamp, files);
-    setStatusLinks(`${label} — ${files.length} file(s) saved to “${dir.name}”:`, links);
   } catch (error) {
-    setStatus(`Export failed writing to “${dir.name}”: ${error.message}`, true);
+    throw new Error(`Export failed writing to “${dir.name}”: ${error.message}`);
   }
+  return { kind: "pinned", message: `${label} — ${files.length} file(s) saved to “${dir.name}”`, links };
 }
 
 // Export the given elements, each honoring its own persisted export rows (or the
-// implicit 1x-png default), then deliver to the chosen destination.
-export async function exportElementIds(ids) {
+// implicit 1x-png default), then deliver to the chosen destination. Long op (the export
+// spawns Python for anything but the 1x-png copy fast path): limiter + spinner + the
+// inspector Export button (`control`) disabled while in flight.
+export async function exportElementIds(ids, control) {
   if (!ids.length) return;
-  try {
-    setStatus("Exporting...");
-    const result = await api("POST", `/projects/${pid()}/export`, { elementIds: ids });
-    await deliverExport(result, `Exported ${ids.length} element(s)`);
-  } catch (error) {
-    setStatus(error.message, true);
-  }
+  await runLongOp(
+    "Exporting…",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/export`, { elementIds: ids });
+      return deliverExport(result, `Exported ${ids.length} element(s)`);
+    },
+    { control },
+  );
 }
 
-// No selection -> project export: render every visible screen at 1x png.
-export async function exportProjectAction() {
-  try {
-    setStatus("Exporting project...");
-    const result = await api("POST", `/projects/${pid()}/export`, { project: true });
-    await deliverExport(result, `Exported ${result.screens.length} screen(s)`);
-  } catch (error) {
-    setStatus(error.message, true);
-  }
+// No selection -> project export: render every visible screen at 1x png. Long op.
+export async function exportProjectAction(control) {
+  await runLongOp(
+    "Exporting project…",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/export`, { project: true });
+      return deliverExport(result, `Exported ${result.screens.length} screen(s)`);
+    },
+    { control },
+  );
 }
 
 // ---- group ops ------------------------------------------------------
@@ -440,19 +447,24 @@ export async function setGroupClip(groupId, clip) {
   await patchGroupBox(groupId, { clip });
 }
 
-export async function renderScreen(groupId, { scale = 1, background } = {}) {
-  try {
-    setStatus("Rendering group...");
-    const body = { scale };
-    if (background) body.background = background;
-    const result = await api("POST", `/projects/${pid()}/groups/${groupId}/render`, body);
-    setStatusLinks(
-      `Rendered ${result.manifest.width}x${result.manifest.height} group:`,
-      exportLinks(result.folder, [result.file]),
-    );
-  } catch (error) {
-    setStatus(error.message, true);
-  }
+// Render a group to a composited screen PNG — long (python-backed) op. Resolves into a
+// pinned-result toast with the download link; the triggering `control` is disabled while
+// in flight (context-menu callers pass none — the menu already closed).
+export async function renderScreen(groupId, { scale = 1, background } = {}, control) {
+  await runLongOp(
+    "Rendering group…",
+    async () => {
+      const body = { scale };
+      if (background) body.background = background;
+      const result = await api("POST", `/projects/${pid()}/groups/${groupId}/render`, body);
+      return {
+        kind: "pinned",
+        message: `Rendered ${result.manifest.width}×${result.manifest.height} group`,
+        links: exportLinks(result.folder, [result.file]),
+      };
+    },
+    { control },
+  );
 }
 
 // Ungroup = dissolve ONE level: the group's direct child elements AND direct child
@@ -515,7 +527,10 @@ export async function undo() {
   try {
     // undo/redo responses carry the restored {project} + folded {history} flags too,
     // so the page reconciles from the response — no reload GET, no /history GET.
-    applyMutation(await api("POST", `/projects/${pid()}/undo`), "Undid last change.");
+    // No confirmation toast: undo/redo are high-frequency and the change is already
+    // visible (canvas updates + the enabled/disabled Undo/Redo buttons) — a toast per
+    // Ctrl+Z would be pure noise. Failures still surface as an error toast.
+    applyMutation(await api("POST", `/projects/${pid()}/undo`));
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -524,7 +539,7 @@ export async function undo() {
 export async function redo() {
   if (!state.project || !state.history.canRedo) return;
   try {
-    applyMutation(await api("POST", `/projects/${pid()}/redo`), "Redid change.");
+    applyMutation(await api("POST", `/projects/${pid()}/redo`));
   } catch (error) {
     setStatus(error.message, true);
   }
