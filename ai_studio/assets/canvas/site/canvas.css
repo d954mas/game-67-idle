@@ -1019,6 +1019,9 @@ button:disabled {
 /* Element region tree rows in the layers panel. */
 .caret.empty {
   visibility: hidden;
+  /* Indent spacer only (the real caret keeps its width for the glyph): a full
+     caret-width per level read too wide — lead asked for a tighter step. */
+  width: 10px;
 }
 
 .region-row {

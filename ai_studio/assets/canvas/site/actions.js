@@ -387,6 +387,31 @@ export async function createGroupOrDefault(name) {
   }
 }
 
+// Create a new empty group NESTED inside the given parent group (context-menu
+// "Create group inside"): a centered box at half the parent's size, so it lands
+// visibly within the frame. Same journaled createGroup op, with parentId.
+export async function createGroupInside(parentGroupId) {
+  const parent = state.project?.groups?.find((g) => g.id === parentGroupId);
+  if (!parent) return;
+  try {
+    const w = Math.max(80, Math.round(parent.w / 2));
+    const h = Math.max(80, Math.round(parent.h / 2));
+    const body = {
+      name: "New group",
+      x: Math.round(parent.x + (parent.w - w) / 2),
+      y: Math.round(parent.y + (parent.h - h) / 2),
+      w,
+      h,
+      parentId: parentGroupId,
+    };
+    const result = await api("POST", `/projects/${pid()}/groups`, body);
+    state.selectedGroupId = result.group.id;
+    applyMutation(result, `Created group "${result.group.name}" inside "${parent.name || "Group"}".`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 // Nest a group under another group (parentId), or move it to top level (null), at an
 // optional merged-sibling index (default = front of the destination scope). One
 // journaled reparentGroup op. Used by the layers-panel group-row drag-to-nest and the

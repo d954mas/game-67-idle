@@ -9,6 +9,7 @@ import {
   bringNodeForward,
   bringNodeToFront,
   createGroupFromSelection,
+  createGroupInside,
   createGroupOrDefault,
   deleteElements,
   deleteGroupAction,
@@ -218,6 +219,7 @@ function itemsFor(target) {
     // The menu keeps only what has no better home.
     return [
       { label: "Order", submenu: orderItems(group.id) },
+      { label: "Create group inside", onClick: () => createGroupInside(group.id) },
       { label: "Ungroup", onClick: () => ungroup(group.id) },
       { separator: true },
       copyIdItemFor(target),
