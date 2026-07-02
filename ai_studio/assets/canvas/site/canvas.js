@@ -73,9 +73,9 @@ async function openProject(id, { select, regions } = {}) {
   clearImageCache();
   if (regions) {
     const element = elementById(regions);
-    if (element && (element.regions || []).length) {
+    if (element) {
       enterRegionEdit(regions);
-      state.selectedRegionIds = new Set([element.regions[0].id]);
+      if ((element.regions || []).length) state.selectedRegionIds = new Set([element.regions[0].id]);
     }
   } else if (select && elementById(select)) {
     selectOnly(select);

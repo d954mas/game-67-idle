@@ -51,6 +51,16 @@ function focusInspectorName() {
   });
 }
 
+// Open the inline rename editor on the selected region's inspector row (mirrors the
+// element "Rename" flow). The region is already selected when its menu opens, so we
+// just re-trigger the row's dblclick inline editor.
+function focusInspectorRegion() {
+  requestAnimationFrame(() => {
+    const row = document.querySelector("#inspector .insp-region-row.selected");
+    if (row) row.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+  });
+}
+
 async function pasteFromClipboard() {
   try {
     if (!navigator.clipboard || !navigator.clipboard.read) {
@@ -99,8 +109,8 @@ function itemsFor(target) {
     const items = [
       { label: "Detect regions", onClick: () => detectRegionsFor(element.id) },
       {
+        // Enabled for ANY image so a fresh sheet can draw its FIRST region in mode B.
         label: "Edit regions",
-        disabled: !hasRegions,
         onClick: () => {
           enterRegionEdit(element.id);
           refresh();
@@ -128,6 +138,7 @@ function itemsFor(target) {
   if (target.kind === "region") {
     return [
       { label: "Slice this region", onClick: () => sliceRegionsFor(target.elementId, [target.regionId]) },
+      { label: "Rename region", onClick: () => focusInspectorRegion() },
       { separator: true },
       { label: "Delete region", danger: true, onClick: () => deleteRegion(target.elementId, target.regionId) },
     ];

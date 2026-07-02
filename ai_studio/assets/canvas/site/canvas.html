@@ -52,8 +52,10 @@
           <div id="layers-list"></div>
         </aside>
 
-        <!-- Stage: the pan/zoom canvas plus overlays. -->
-        <div id="stage">
+        <!-- Stage: the pan/zoom canvas plus overlays. tabindex lets a committed
+             inline/inspector edit hand focus back here so Ctrl+Z reaches the
+             global shortcut instead of the input's own text-undo. -->
+        <div id="stage" tabindex="-1">
           <canvas id="canvas"></canvas>
           <div id="empty-hint" class="hidden">Drop images here or press <b>Add image</b></div>
           <div id="drop-overlay" class="hidden"><span>Drop image(s) here</span></div>

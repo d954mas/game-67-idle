@@ -154,15 +154,17 @@ export async function setRegionsFor(elementId, regions, message) {
   }
 }
 
-// Add a default centered region to an element and enter region-edit mode with it
-// selected, so "+ Add region" is discoverable without knowing the draw gesture.
+// Immediately add a default centered region (~25% of the source, clamped in
+// bounds), select it, and enter region-edit mode so its handles are ready. This is
+// the discoverable path ("+ Add region"); the empty-area drag gesture is the power
+// path. Works even on a fresh image with no regions yet.
 export async function addCenteredRegion(elementId) {
   const element = elements().find((item) => item.id === elementId);
   if (!element) return;
   const sw = element.source_w || element.w;
   const sh = element.source_h || element.h;
-  const w = Math.max(4, Math.round(sw / 3));
-  const h = Math.max(4, Math.round(sh / 3));
+  const w = Math.min(sw, Math.max(4, Math.round(sw * 0.25)));
+  const h = Math.min(sh, Math.max(4, Math.round(sh * 0.25)));
   const x = Math.round((sw - w) / 2);
   const y = Math.round((sh - h) / 2);
   const id = newRegionId();

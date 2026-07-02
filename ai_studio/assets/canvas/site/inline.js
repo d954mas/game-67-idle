@@ -1,6 +1,7 @@
 // Inline text editing helper. Swaps a label's text for a text input, commits on
-// Enter/blur, cancels on Escape. Used for renaming projects, elements, and groups
-// without a browser prompt(). Pure DOM/input; no API knowledge.
+// Enter/blur, cancels on Escape. Used for renaming projects, elements, groups, and
+// regions without a browser prompt(). Pure DOM/input; no API knowledge.
+import { focusStage } from "./app.js";
 
 // Turn a container into an inline editor. `value` seeds the input; `onCommit` is
 // called with the trimmed new value only when it changed and is non-empty.
@@ -20,6 +21,10 @@ export function inlineEdit(container, value, onCommit) {
     const next = input.value.trim();
     input.removeEventListener("keydown", onKey);
     input.removeEventListener("blur", onBlur);
+    // Drop focus back to the stage BEFORE the commit re-renders, so a following
+    // Ctrl+Z reaches the global shortcut instead of the input's text-undo.
+    input.blur();
+    focusStage();
     if (commit && next && next !== value) onCommit(next);
     else if (typeof onCommit.cancel === "function") onCommit.cancel();
   };

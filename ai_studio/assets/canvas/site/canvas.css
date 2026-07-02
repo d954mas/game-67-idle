@@ -429,6 +429,12 @@ button:disabled {
   min-height: 0;
 }
 
+/* Focusable for the post-edit focus hand-off; never show a focus ring. */
+#stage:focus,
+#stage:focus-visible {
+  outline: none;
+}
+
 /* Cursor is driven by JS (workspace.js) on hover/drag: default arrow in Select,
    move over elements/regions, resize over region handles, and grab/grabbing ONLY
    while panning. These rules are just the pre-first-move fallbacks. */

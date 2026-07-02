@@ -131,7 +131,11 @@ function updateBreadcrumb(editEl) {
   const node = el("region-breadcrumb");
   if (!node) return;
   if (editEl) {
-    node.textContent = `Regions: ${editEl.name || editEl.id} — Esc to exit`;
+    const empty = !(editEl.regions || []).length;
+    // Empty-state hint inside the mode so a fresh image tells you what to do.
+    node.textContent = empty
+      ? `Regions: ${editEl.name || editEl.id} — drag on the image to draw a region (Esc to exit)`
+      : `Regions: ${editEl.name || editEl.id} — Esc to exit`;
     node.classList.remove("hidden");
   } else {
     node.classList.add("hidden");
@@ -693,11 +697,12 @@ function onHover(event) {
   updateCursorAt(pointer(event));
 }
 
-// Double-click an image that has regions -> enter region-edit isolation (mode B).
+// Double-click any image -> enter region-edit isolation (mode B). Works on a fresh
+// image with no regions so the user can draw the FIRST region there.
 function onDblClick(event) {
   const world = screenToImagePoint(pointer(event), state.viewport);
   const hit = hitElement(world);
-  if (hit && (hit.regions || []).length) {
+  if (hit) {
     enterRegionEdit(hit.id);
     refresh();
   }

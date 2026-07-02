@@ -81,6 +81,42 @@ test("setRegions is journaled: undo restores the previous regions, redo re-appli
   assert.ok(!baseRegions || baseRegions.length === 0, "regions cleared back to the base state");
 });
 
+test("setRegions renames a region (name-only change) while preserving its rect", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Rename region" });
+  const { element } = addImage(ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
+
+  setRegions(ROOT, { projectId: project.id, elementId: element.id, regions: [{ id: "r1", rect: [4, 4, 10, 10] }] });
+  // The page's inline rename replays the region with the SAME rect + a name.
+  const renamed = setRegions(ROOT, {
+    projectId: project.id,
+    elementId: element.id,
+    regions: [{ id: "r1", rect: [4, 4, 10, 10], name: "Hero" }],
+  });
+  assert.deepEqual(renamed.regions[0].rect, [4, 4, 10, 10], "rect unchanged by the rename");
+  assert.equal(renamed.regions[0].name, "Hero");
+
+  // Rename is journaled: undo restores the pre-name region (same rect, no name).
+  const undone = undoOp(ROOT, { projectId: project.id }).project.elements.find((el) => el.id === element.id);
+  assert.deepEqual(undone.regions[0].rect, [4, 4, 10, 10]);
+  assert.equal("name" in undone.regions[0], false);
+});
+
+test("the '+ Add region' default rect (25% centered) validates in bounds", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Add region" });
+  const { element } = addImage(ROOT, project.id, { name: "s.png", bytes: solidPng(40, 30, [10, 20, 30]) });
+  // Same computation as actions.addCenteredRegion for a 40x30 source.
+  const sw = 40;
+  const sh = 30;
+  const w = Math.min(sw, Math.max(4, Math.round(sw * 0.25)));
+  const h = Math.min(sh, Math.max(4, Math.round(sh * 0.25)));
+  const x = Math.round((sw - w) / 2);
+  const y = Math.round((sh - h) / 2);
+  const result = setRegions(ROOT, { projectId: project.id, elementId: element.id, regions: [{ id: "c1", rect: [x, y, w, h] }] });
+  assert.deepEqual(result.regions[0].rect, [15, 11, 10, 8], "centered ~25% default rect, in bounds");
+});
+
 test("setRegions rejects out-of-bounds, malformed, missing-id, and duplicate rects", (t) => {
   tempProjects(t);
   const project = createProject(ROOT, { title: "Reject" });

@@ -50,6 +50,14 @@ export function refresh() {
   hooks.syncTopBar();
 }
 
+// Return keyboard focus to the stage after a committed inline/inspector edit, so a
+// following Ctrl+Z reaches the global shortcut handler instead of the browser's
+// text-undo inside the (still-focused) input. #stage is tabindex="-1".
+export function focusStage() {
+  const stage = el("stage");
+  if (stage) stage.focus();
+}
+
 // Both views carry a status line (#status in the workspace, #home-status on
 // home) so errors from home ops (create/delete) are never reported into a
 // hidden node.

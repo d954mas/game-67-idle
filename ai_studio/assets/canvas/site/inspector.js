@@ -6,6 +6,7 @@
 import {
   el,
   elementById,
+  focusStage,
   groupById,
   hooks,
   memberElements,
@@ -41,6 +42,9 @@ function field(label, node) {
   return row;
 }
 
+// Enter commits + returns focus to the stage (so Ctrl+Z hits the canvas op, not the
+// input's text-undo); Escape reverts + blurs. Commit itself fires on the change
+// event (also on blur), so a click-away still commits.
 function textInput(value, onCommit) {
   const input = document.createElement("input");
   input.type = "text";
@@ -52,7 +56,16 @@ function textInput(value, onCommit) {
   };
   input.addEventListener("change", commit);
   input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") input.blur();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      input.blur();
+      focusStage();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      input.value = value == null ? "" : String(value);
+      input.blur();
+      focusStage();
+    }
   });
   return input;
 }
@@ -68,7 +81,16 @@ function numberInput(value, onCommit) {
   };
   input.addEventListener("change", commit);
   input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") input.blur();
+    if (event.key === "Enter") {
+      event.preventDefault();
+      input.blur();
+      focusStage();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      input.value = Number(value) || 0;
+      input.blur();
+      focusStage();
+    }
   });
   return input;
 }
