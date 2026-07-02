@@ -54,24 +54,57 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **Perf: frontend churn** (`T0200`, P1) — use op responses instead of
+0. **Undo/journal audit fix pass** (in flight 2026-07-02) — Ctrl+Z inside
+   region-edit mode must undo visibly (mode is pure UI state, Figma isolation
+   convention: undo works on the document, mode reconciles after reload, exits
+   only if the edited element vanished); full sweep of all site actions for
+   journal-bypassing mutations.
+1. **UI organization** (`T0217`, P1) — context-menu diet (no Rename/Hide/
+   Export, regions collapse to one entry), Figma-like titled collapsible
+   inspector sections with persisted state, z-order (layers sibling drag +
+   Bring forward/Send backward/front/back + Ctrl+[/] by event.code) on a new
+   journaled reorder op.
+2. **Export panel** (`T0206`, P1) — Figma-style Export section at the bottom
+   of the inspector (see "Export design" below); absorbs export-destination
+   from T0203; export leaves the context menu.
+3. **Perf: frontend churn** (`T0200`, P1) — use op responses instead of
    reload+history GETs, immutable cache headers + `<img>` reuse, rAF drag,
    batched multi-ops.
-2. **Perf: journal O(n²) + history limits** (`T0201`, P1) — sidecar snapshots,
+4. **Perf: journal O(n²) + history limits** (`T0201`, P1) — sidecar snapshots,
    O(1) seq, `tool_runs` cap, history depth cap (~200, `studio.config` knob) +
    compaction on open. Industry norm: Photoshop caps steps, Figma checkpoints;
-   unlimited verbatim history is not kept anywhere.
-3. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
+   unlimited verbatim history is not kept anywhere. (Agent in flight.)
+5. **Feedback layer** (`T0203`, P1) — toasts replace the bottom status line,
    busy spinner, input never blocked, max-N concurrent long ops with a visible
-   queue, export as downloads.
-4. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker behind
+   queue.
+6. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker behind
    the raster2d bridge; coordinate with the lead's in-flight matte work.
-5. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
+7. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
    journal + `jumpHistory` op (CLI parity).
-6. **Observability** (`T0205`, P2) — `duration_ms` on journal entries,
+8. **Observability** (`T0205`, P2) — `duration_ms` on journal entries,
    per-project `errors.jsonl`, timings in API responses, `ops-stats` CLI.
    Today the module logs successful ops only (journal), with no durations and
-   no error trail — this closes that gap.
+   no error trail — this closes that gap. (Agent in flight, with T0201.)
+
+## Export design (Figma research, 2026-07-02)
+
+How Figma does it (help-center verified): collapsible **Export** section at
+the bottom of the right sidebar; "+" adds export-setting rows; each row =
+scale + suffix + format; multiple rows per selection export together (that's
+how @1x+@2x+SVG ship in one click); settings persist on the layer; scale
+syntax `2x` / `512w` / `512h`; formats PNG/JPG/SVG/PDF (SVG/PDF locked to 1x);
+JPG quality is a preset, resampling bicubic ("Detailed") or nearest ("Basic");
+a Preview disclosure; bulk export modal on Ctrl+Shift+E.
+
+Our raster adaptation (T0206): same section/rows/persistence/scale syntax;
+formats PNG/JPG/WebP with an explicit quality slider for the lossy two (the
+lead wants visible "сжатие"); resample = Lanczos (smooth) / nearest (pixel
+art); per-element settings stored via a journaled op (agent parity — CLI can
+set them too); Export button asks WHERE (File System Access dir picker,
+remembered per project, zip/download fallback, CLI `--to`); no selection →
+project-level export of screens; `<project>/export/<stamp>/` stays the
+automation default. The clean-art supersampling (generate 2x → export 1x with
+Lanczos) lands with this panel.
 
 ## Clean art track (lead's 4-step ladder against AI noise)
 

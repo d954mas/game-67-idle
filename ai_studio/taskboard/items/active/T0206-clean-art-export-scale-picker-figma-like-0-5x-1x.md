@@ -1,10 +1,10 @@
 ---
 id: T0206
-title: "Clean art: export scale picker (Figma-like 0.5x/1x/2x) + resample filter choice"
+title: "Export panel in inspector (Figma-style): scale, format, quality, suffix, destination"
 status: backlog
 project: P001
 epic: E010
-priority: P2
+priority: P1
 tags: []
 created: 2026-07-02
 updated: 2026-07-02
@@ -12,16 +12,37 @@ updated: 2026-07-02
 
 ## What
 
-Figma-like export sizing (the lead's anti-noise supersampling lands here): export dialog + op parameter for scale (0.5x/1x/2x/custom width) with resample filter choice (auto: Lanczos for smooth art, nearest for pixel art; user-overridable). Non-destructive by definition - originals in files/ are never touched; scale=1 keeps the current pure-copy path, scaled exports go through PIL. CLI parity: export --scale 0.5 --filter lanczos.
+Replace context-menu export with a Figma-style Export section at the BOTTOM of
+the inspector (lead 2026-07-02: "Давай export как в figme. Справа внизу, в
+инспекторе... х размера и формат и сжатие"). Researched Figma behavior to
+mirror: collapsible "Export" section, "+" adds export-setting rows; each row =
+scale (0.5x/1x/2x/3x/4x or custom `2x`/`512w`/`512h`) + suffix (appended to
+filename, e.g. @2x) + format dropdown; multiple rows per selection export in
+one click; settings persist on the element; Export button labeled with the
+selection; no selection -> project-level export (all screens). Our raster
+adaptation: formats PNG (lossless) / JPG / WebP with a quality slider for the
+lossy two (Figma hides quality; we expose it - the lead asked for "сжатие если
+нужно"); resample filter choice (Lanczos smooth / nearest pixel-art) - the
+anti-noise supersampling from the clean-art ladder lands here (generate 2x ->
+export 1x). Destination (absorbed from T0203): the Export button asks WHERE via
+the File System Access directory picker (Chrome), remembers the last folder per
+project; fallback = browser download (zip when multiple files). Non-destructive:
+originals in files/ never touched; scale=1 PNG stays the pure-copy path.
+Parity: export settings stored on the element via journaled op; CLI
+`export --scale --format --quality --suffix --to <dir>`; agent-driven exports
+without --to keep writing to `<project>/export/<stamp>/`.
 
 ## Done when
 
-- [ ] export UI offers scale + filter; exported PNGs match requested dimensions
-- [ ] generate-big -> export-small workflow verified to visibly reduce AI noise on a real generated sheet (before/after saved to the task log)
-- [ ] scale=1 path unchanged (byte-identical copies); pixel tests for nearest vs lanczos at 0.5x
-- [ ] render-screen export honors the same scale/filter options
+- [ ] inspector bottom has a collapsible Export section: rows of scale+suffix+format(+quality for JPG/WebP), "+" adds rows, settings persist per element (journaled, undoable) and survive reload
+- [ ] Export button exports all rows for the selection; multi-select exports each element; no selection exports the project screens
+- [ ] export asks destination (dir picker, remembered per project) with zip/download fallback; CLI --to lands files at an explicit path; no --to keeps <project>/export/<stamp>/
+- [ ] custom scale syntax works (2x / 512w / 512h) with Lanczos/nearest filter choice; exported PNGs match requested dimensions; scale=1 PNG byte-identical copy
+- [ ] generate-big -> export-small verified to visibly reduce AI noise on a real generated sheet (before/after in task log)
+- [ ] export removed from the context menu
 
 ## Open questions
 
 ## Log
 - 2026-07-02: Scoped in ai_studio/assets/canvas/PLAN.md (2026-07-02); perf items anchored to bench tmp/canvas_bench_2026-07-02.json + perf research
+- 2026-07-02: Rewritten after lead direction + Figma research: export moves from context menu to a Figma-style inspector section; absorbs export-destination scope from T0203; P2 -> P1.
