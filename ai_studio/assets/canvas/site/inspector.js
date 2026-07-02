@@ -197,7 +197,7 @@ function smallBtn(label, onClick) {
 
 // ---- regions -----------------------------------------------------------------
 
-// Compact region row: index + name-or-size + delete. Rect/coords live in the row
+// Compact region row: index + name + delete. Rect/coords live in the row
 // tooltip to keep the panel calm; double-click the label to rename (journaled via
 // setRegions), click to select on canvas, right-click for the region menu. The ×
 // is a generous, always-present hit target (no hover-only reveal that would shift
@@ -216,7 +216,9 @@ function regionRowInspector(element, region, index) {
 
   const label = document.createElement("span");
   label.className = "region-label";
-  label.textContent = region.name || `${rect[2]}×${rect[3]}`;
+  // Regions are named at creation/detect; the sizes live in the tooltip, so an
+  // unnamed (legacy) region falls back to its badge number, never raw sizes.
+  label.textContent = region.name || `Region ${index + 1}`;
 
   const del = document.createElement("button");
   del.type = "button";
@@ -312,7 +314,7 @@ function renderRegions(element, root) {
 
   const future = document.createElement("div");
   future.className = "insp-region-hint";
-  future.textContent = "Alpha / Generate — with the matte pipeline";
+  future.textContent = "Coming soon: Alpha cutout / Generate (matte pipeline)";
   actions.appendChild(future);
   body.appendChild(actions);
 }

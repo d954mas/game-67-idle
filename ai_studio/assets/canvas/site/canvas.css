@@ -389,9 +389,8 @@ button:disabled {
   background: #24405f;
 }
 
-.layer-row.indented {
-  margin-left: 16px;
-}
+/* Group members are indented by their caret-width spacer alone (layers_panel.js);
+   an extra margin here doubled the indent and read as a whole missing column. */
 
 .layer-row .thumb {
   width: 24px;

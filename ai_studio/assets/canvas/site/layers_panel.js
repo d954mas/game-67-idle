@@ -52,6 +52,30 @@ function eyeButton(visible, onToggle) {
   return button;
 }
 
+// Anchor for Shift range-selection: the last plainly (or Ctrl-) clicked row.
+let selectAnchorId = null;
+
+// Figma-style Shift+click: select the contiguous run of VISIBLE rows between the
+// anchor and the clicked row, in the panel's visual front-at-top order (collapsed
+// group members aren't rendered, so they never silently join a range). Without a
+// usable anchor it degrades to a plain click.
+function selectRange(targetId) {
+  const rows = el("layers-list")?.querySelectorAll(".layer-row") || [];
+  const order = [...rows].map((row) => row.dataset.elementId);
+  const from = order.indexOf(selectAnchorId);
+  const to = order.indexOf(targetId);
+  if (from === -1 || to === -1) {
+    selectOnly(targetId);
+    selectAnchorId = targetId;
+    return;
+  }
+  const [lo, hi] = from <= to ? [from, to] : [to, from];
+  state.selectedGroupId = null;
+  state.selectedRegionIds = new Set();
+  state.regionEditId = null;
+  state.selectedIds = new Set(order.slice(lo, hi + 1));
+}
+
 function elementRow(element, indented) {
   const row = document.createElement("div");
   row.className = "layer-row";
@@ -110,8 +134,17 @@ function elementRow(element, indented) {
     };
   });
   row.addEventListener("click", (event) => {
-    if (event.shiftKey || event.ctrlKey || event.metaKey) toggleSelect(element.id);
-    else selectOnly(element.id);
+    // Figma-style: Shift = contiguous range from the last plain-clicked row,
+    // Ctrl/Cmd = toggle one row, plain click = select only (and set the anchor).
+    if (event.shiftKey) {
+      selectRange(element.id);
+    } else if (event.ctrlKey || event.metaKey) {
+      toggleSelect(element.id);
+      selectAnchorId = element.id;
+    } else {
+      selectOnly(element.id);
+      selectAnchorId = element.id;
+    }
     refresh();
   });
   // Same context menu as on the canvas (keeps the whole selection when the row is
