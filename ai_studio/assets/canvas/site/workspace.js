@@ -897,7 +897,9 @@ function onMouseDown(event) {
   // moves the whole subtree. Scope is unchanged (a label selects, it does not enter).
   const labelGroupId = hitGroupLabel(screen);
   if (labelGroupId) {
-    selectGroupOnly(labelGroupId);
+    // An already-selected group's label keeps the whole (multi) selection so a
+    // press-drag moves it all together; a fresh label click selects that group.
+    if (!state.selectedGroupIds.has(labelGroupId)) selectGroupOnly(labelGroupId);
     beginSelectionDrag(screen);
     setCursor("move");
     refresh();
@@ -925,7 +927,10 @@ function onMouseDown(event) {
           state.selectedRegionIds = new Set();
           state.regionEditId = null;
           syncPrimaryGroup();
-        } else {
+        } else if (!state.selectedGroupIds.has(res.id)) {
+          // A fresh group replaces the selection; an already-selected group keeps the
+          // whole (possibly mixed) selection so a press-drag moves it all together —
+          // same rule as the element branch below.
           selectGroupOnly(res.id);
         }
       } else if (event.shiftKey) {
