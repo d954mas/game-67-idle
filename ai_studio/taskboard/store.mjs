@@ -312,21 +312,45 @@ export function findDoc(root, id) {
   return all.find((doc) => doc.fields.id === docId) || null;
 }
 
-function nextId(docs, prefix, pad) {
-  let max = 0;
+function countersPath(root) {
+  return join(itemDir(root), ".counters.json");
+}
+
+function readCounters(root) {
+  const path = countersPath(root);
+  if (!existsSync(path)) return {};
+  try {
+    const parsed = JSON.parse(readFileSync(path, "utf8"));
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+// Ids must stay monotonic even after archive pruning: scanning files alone
+// rewinds the sequence when history is deleted (T0001 would be reissued while
+// old docs still reference it), so the high-water mark persists in
+// items/.counters.json and the scan only ever raises it.
+function nextId(root, docs, prefix, pad) {
+  const counters = readCounters(root);
+  let max = Number(counters[prefix]) || 0;
   for (const doc of docs) {
     const match = String(doc.fields.id || doc.name).match(new RegExp(`^${prefix}(\\d+)`));
     if (match) {
       max = Math.max(max, Number(match[1]));
     }
   }
-  return prefix + String(max + 1).padStart(pad, "0");
+  const next = max + 1;
+  counters[prefix] = next;
+  mkdirSync(itemDir(root), { recursive: true });
+  writeFileSync(countersPath(root), JSON.stringify(counters, null, 2) + "\n");
+  return prefix + String(next).padStart(pad, "0");
 }
 
 export function createProject(root, input = {}) {
   const dir = projectDir(root);
   mkdirSync(dir, { recursive: true });
-  const id = nextId(listProjects(root), "P", 3);
+  const id = nextId(root, listProjects(root), "P", 3);
   const fields = {
     id,
     title: input.title || "Untitled project",
@@ -380,7 +404,7 @@ Track work for \`${input.target || input.title || "this project"}\`.
 export function createEpic(root, input = {}) {
   const dir = epicDir(root);
   mkdirSync(dir, { recursive: true });
-  const id = nextId(listEpics(root), "E", 3);
+  const id = nextId(root, listEpics(root), "E", 3);
   const fields = {
     id,
     title: input.title || "Untitled epic",
@@ -400,7 +424,7 @@ export function createEpic(root, input = {}) {
 export function createTask(root, input = {}) {
   const dir = activeTaskDir(root);
   mkdirSync(dir, { recursive: true });
-  const id = nextId(listTasks(root, { includeArchive: true }), "T", 4);
+  const id = nextId(root, listTasks(root, { includeArchive: true }), "T", 4);
   const epic = input.epic ? findDoc(root, input.epic) : null;
   const fields = {
     id,

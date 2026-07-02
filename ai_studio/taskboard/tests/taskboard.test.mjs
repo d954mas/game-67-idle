@@ -447,3 +447,20 @@ test("markdown preview renders task syntax and escapes html", () => {
   assert.match(html, /&lt;tag&gt;/);
   assert.match(html, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
 });
+
+test("nextId stays monotonic across archive pruning via items/.counters.json", (t) => {
+  const root = tempRoot(t);
+  const itemsDir = join(root, "ai_studio", "taskboard", "items");
+  mkdirSync(itemsDir, { recursive: true });
+  writeFileSync(join(itemsDir, ".counters.json"), JSON.stringify({ T: 199 }));
+
+  const task = createTask(root, { title: "Fresh task" });
+  assert.equal(task.fields.id, "T0200", "counter must beat the empty file scan");
+
+  rmSync(task.file);
+  const second = createTask(root, { title: "Second task" });
+  assert.equal(second.fields.id, "T0201", "deleting task files must not rewind ids");
+
+  const counters = JSON.parse(readFileSync(join(itemsDir, ".counters.json"), "utf8"));
+  assert.equal(counters.T, 201);
+});
