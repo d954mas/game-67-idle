@@ -1,6 +1,6 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
-import { dirname, extname, join, resolve } from "node:path";
+import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   assetPreviewCacheStatus,
@@ -66,9 +66,16 @@ function walkSync(dir) {
   return out;
 }
 
-function assetIdFor(root, path) {
-  const rel = path.startsWith(root) ? path.slice(root.length).replace(/^[\\/]+/, "") : path;
-  return rel.replace(/[\\/]/g, "__");
+// Folder-scanned assets are identified by their path RELATIVE TO THE SOURCE
+// ROOT, exactly as the index does in scanFolderRecords (`path.sourceRel`), so
+// the rendered/copied preview cache is written under the same id the index
+// later looks it up by (assetPreviewCachePath). Deriving it from a repo-relative
+// slice broke on Windows when the roots differed in separator direction
+// (path.startsWith failed and the whole absolute path leaked into the id),
+// orphaning every folder-source model preview. path.relative normalizes both
+// sides, so this stays correct regardless of separator direction.
+function assetIdFor(sourceRoot, path) {
+  return relative(sourceRoot, path).replace(/[\\/]/g, "__");
 }
 
 function extensionTarget(ext) {
@@ -122,7 +129,7 @@ function collectFolderPreviewTargets(sourceRoot, root, source, force) {
   for (const path of walkSync(sourceRoot)) {
     const ext = extname(path).toLowerCase();
     if (!imageExt.has(ext) && !modelExt.has(ext)) continue;
-    const assetId = assetIdFor(root, path);
+    const assetId = assetIdFor(sourceRoot, path);
     const status = assetPreviewCacheStatus(root, source, assetId, path);
     if (!force && status === "clean") {
       if (imageExt.has(ext)) stats.skippedImages += 1;
