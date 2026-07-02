@@ -20,7 +20,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ai_studio.assets.tools.lib.atomic_io import write_json_atomic, write_text_atomic
-from ai_studio.assets.tools.cutout.chroma_key_alpha import (
+from ai_studio.assets.tools.image.alpha_matte.chroma_key_alpha import (
     key_fringe_mask_rgb,
     purple_halo_only_mask_rgb,
 )

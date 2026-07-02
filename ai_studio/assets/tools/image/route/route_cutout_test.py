@@ -8,11 +8,11 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[5]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from ai_studio.assets.tools.cutout.route_cutout import (
+from ai_studio.assets.tools.image.route.route_cutout import (
     DEPTH90_THRESHOLD,
     SCORE_THRESHOLD,
     route_cutout,

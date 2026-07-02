@@ -28,7 +28,7 @@ from time import perf_counter
 import numpy as np
 from PIL import Image
 
-from ai_studio.assets.tools.cutout.chroma_key_alpha import (
+from ai_studio.assets.tools.image.alpha_matte.chroma_key_alpha import (
     bleed_transparent_rgb,
     decontaminate_source_key_spill_image,
     repair_transparent_edge_rgb,

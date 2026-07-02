@@ -37,7 +37,7 @@ import numpy as np
 from PIL import Image
 from scipy import ndimage
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[5]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

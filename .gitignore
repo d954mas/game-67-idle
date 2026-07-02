@@ -1,5 +1,8 @@
 tmp/
 .cache/
+# Repo-local studio Python venv for the image asset tools (created by
+# ai_studio/assets/tools/image/_bridge/setup_python.mjs). Never committed.
+.venv/
 .vs/
 .vscode/.cmake/
 .claude/settings.local.json

@@ -201,19 +201,6 @@ def apply_polygon_mask(crop: Image.Image, region: dict[str, Any]) -> Image.Image
     return result
 
 
-def simple_key_matte_cutout(image: Image.Image, key_color: RGB, tolerance: int = 12) -> Image.Image:
-    rgba = image.convert("RGBA")
-    pixels = rgba.load()
-    for y in range(rgba.height):
-        for x in range(rgba.width):
-            red, green, blue, alpha = pixels[x, y]
-            if alpha == 0:
-                continue
-            if max(abs(red - key_color[0]), abs(green - key_color[1]), abs(blue - key_color[2])) <= tolerance:
-                pixels[x, y] = (0, 0, 0, 0)
-    return rgba
-
-
 def apply_alpha(crop: Image.Image, region: dict[str, Any], key_color: RGB) -> tuple[Image.Image, dict[str, Any]]:
     alpha = alpha_policy(region.get("alpha"))
     if alpha["mode"] == ALPHA_GENERATION:
@@ -223,22 +210,22 @@ def apply_alpha(crop: Image.Image, region: dict[str, Any], key_color: RGB) -> tu
             "status": "needs_generation",
             "reason": alpha.get("reason") or "selected for generated dual-plate alpha",
         }
+    # LAW (lead, 2026-07-02): no silent fallbacks. If the key-matte alpha tool is
+    # unavailable we raise loudly instead of degrading to a low-quality cutout.
     try:
-        from ai_studio.assets.tools.cutout.key_matte import key_matte_cutout
-
-        output = key_matte_cutout(crop, key_color)
-        status = "applied"
-        warning = None
-    except Exception as exc:
-        output = simple_key_matte_cutout(crop, key_color)
-        status = "applied_fallback"
-        warning = f"full key matte unavailable: {exc.__class__.__name__}"
+        from ai_studio.assets.tools.image.alpha_matte.key_matte import key_matte_cutout
+    except ImportError as exc:
+        raise RuntimeError(
+            "key_matte alpha tool is required for the key_matte alpha path but could not be "
+            "imported (ai_studio.assets.tools.image.alpha_matte.key_matte); install the studio "
+            f"Python deps and verify the module path: {exc}"
+        ) from exc
+    output = key_matte_cutout(crop, key_color)
     return output, {
         **alpha,
         "mode": ALPHA_KEY_MATTE,
-        "status": status,
+        "status": "applied",
         "key_color": format_color(key_color),
-        **({"warning": warning} if warning else {}),
     }
 
 

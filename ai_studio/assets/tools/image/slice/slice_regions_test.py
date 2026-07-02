@@ -10,7 +10,7 @@ from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[5]
-SCRIPT = ROOT / "ai_studio/assets/tools/raster2d/slicing/slice_regions.py"
+SCRIPT = ROOT / "ai_studio/assets/tools/image/slice/slice_regions.py"
 
 
 class SliceRegionsTest(unittest.TestCase):

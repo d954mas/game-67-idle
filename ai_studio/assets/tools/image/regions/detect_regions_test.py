@@ -9,7 +9,7 @@ from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[5]
-SCRIPT = ROOT / "ai_studio/assets/tools/raster2d/regions/detect_regions.py"
+SCRIPT = ROOT / "ai_studio/assets/tools/image/regions/detect_regions.py"
 
 
 class DetectRegionsTest(unittest.TestCase):

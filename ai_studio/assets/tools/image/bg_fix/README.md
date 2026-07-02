@@ -5,7 +5,7 @@ Normalize generated or sourced sheet backgrounds before region detection.
 Current tool:
 
 ```powershell
-py -3.12 ai_studio/assets/tools/raster2d/background/normalize_background.py `
+py -3.12 ai_studio/assets/tools/image/bg_fix/normalize_background.py `
   --source tmp/assets/source_sheets/raw.png `
   --output tmp/ai_studio/assets/raster2d/session/background/normalized.png `
   --key-tolerance 48 `

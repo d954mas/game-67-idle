@@ -1,8 +1,8 @@
-﻿import unittest
+import unittest
 
 from PIL import Image, ImageDraw
 
-from ai_studio.assets.tools.cutout.chroma_key_alpha import (
+from ai_studio.assets.tools.image.alpha_matte.chroma_key_alpha import (
     is_green_screen_spill_like,
     resize_rgba_premultiplied,
 )

@@ -13,12 +13,12 @@ from PIL import Image
 
 import sys
 
-ROOT = Path(__file__).resolve().parents[4]  # cutout -> prep -> assets -> ai_studio -> repo root
+ROOT = Path(__file__).resolve().parents[5]  # alpha_dualplate -> image -> tools -> assets -> ai_studio -> repo root
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ai_studio.assets.tools.lib.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
-from ai_studio.assets.tools.cutout.dual_plate_pair_gate import evaluate as evaluate_pair
+from ai_studio.assets.tools.image.alpha_dualplate.dual_plate_pair_gate import evaluate as evaluate_pair
 
 RGB = tuple[int, int, int]
 # "proj" = Smith & Blinn (1996) Theorem-4 joint-channel projection: the

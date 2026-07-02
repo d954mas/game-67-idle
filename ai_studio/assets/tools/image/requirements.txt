@@ -1,0 +1,10 @@
+# Studio Python dependencies for the image asset tools
+# (ai_studio/assets/tools/image/*). Installed into the repo-local .venv by
+# ai_studio/assets/tools/image/_bridge/setup_python.mjs. Pinned to the versions
+# currently validated on py -3.12 (Python 3.12.4) on the studio box.
+#
+# LAW: these are hard requirements. The tools do NOT fall back when a dep is
+# missing -- they raise a loud error pointing back at the setup script.
+numpy==2.1.1
+scipy==1.17.1
+Pillow==12.2.0

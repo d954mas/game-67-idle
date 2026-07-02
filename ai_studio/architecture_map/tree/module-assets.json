@@ -740,6 +740,149 @@
           ]
         },
         {
+          "id": "assets:tools-image",
+          "title": "Image Tools",
+          "subtitle": "media-type umbrella: sourcing, bg, regions, slice, alpha, route",
+          "kind": "group",
+          "path": "ai_studio/assets/tools/image",
+          "color": "#0d9488",
+          "description": "Media-type umbrella for raster image work, decomposed into per-tool folders (sourcing, background normalization, region detection, slicing, key-matte and dual-plate alpha, routing) over a shared _bridge. Peer tier to future model3d/audio tool umbrellas; runs against a repo-local studio Python venv resolved from studio.config.json pythonPath.",
+          "role": "2D image workflow tools",
+          "tags": [
+            "assets",
+            "tools",
+            "image",
+            "image-pipeline"
+          ],
+          "children": [
+            {
+              "id": "assets:tools-image-readme",
+              "kind": "doc",
+              "path": "ai_studio/assets/tools/image/README.md",
+              "title": "README.md",
+              "description": "Image Tools umbrella contract: per-tool decomposition, the studio Python venv, and the shared _bridge.",
+              "role": "image tools umbrella guide",
+              "tags": [
+                "assets",
+                "tools",
+                "image"
+              ]
+            },
+            {
+              "id": "assets:tools-image-bridge",
+              "kind": "group",
+              "path": "ai_studio/assets/tools/image/_bridge",
+              "title": "_bridge",
+              "description": "Shared image-tool plumbing: config-only Python interpreter resolution, tmp-path confinement, session dirs, JSON/image helpers, and the one-shot venv setup script. Not a tool.",
+              "role": "shared image tool plumbing",
+              "tags": [
+                "assets",
+                "tools",
+                "image",
+                "bridge"
+              ]
+            },
+            {
+              "id": "assets:tools-image-alpha-matte",
+              "kind": "group",
+              "path": "ai_studio/assets/tools/image/alpha_matte",
+              "title": "alpha_matte",
+              "description": "Single-background known-key cutout (path 1) for opaque art and flat-key holes: key_matte.py plus the chroma_key_alpha.py keying primitive and their tests.",
+              "role": "key-matte alpha extraction",
+              "tags": [
+                "assets",
+                "tools",
+                "image",
+                "alpha"
+              ]
+            },
+            {
+              "id": "assets:tools-image-alpha-dualplate",
+              "kind": "group",
+              "path": "ai_studio/assets/tools/image/alpha_dualplate",
+              "title": "alpha_dualplate",
+              "description": "Fractional alpha (glow, glass, soft shadow) from an aligned white/black plate pair (path 2): dual_plate_alpha.py Smith & Blinn projection plus the pair-consistency gate and tests.",
+              "role": "dual-plate alpha extraction",
+              "tags": [
+                "assets",
+                "tools",
+                "image",
+                "alpha"
+              ]
+            },
+            {
+              "id": "assets:tools-image-route",
+              "kind": "group",
+              "path": "ai_studio/assets/tools/image/route",
+              "title": "route",
+              "description": "Chooses key-matte vs dual-plate for a flat-key source crop from soft-alpha risk metrics before a generation is spent.",
+              "role": "cutout route helper",
+              "tags": [
+                "assets",
+                "tools",
+                "image",
+                "route"
+              ]
+            },
+            {
+              "id": "assets:tools-image-bg-fix",
+              "kind": "group",
+              "path": "ai_studio/assets/tools/image/bg_fix",
+              "title": "bg_fix",
+              "description": "Border-connected background chroma normalization: snap the source's border-connected background to the key colour without changing interior key-coloured art.",
+              "role": "background normalization",
+              "tags": [
+                "assets",
+                "tools",
+                "image",
+                "background"
+              ]
+            },
+            {
+              "id": "assets:tools-image-regions",
+              "kind": "group",
+              "path": "ai_studio/assets/tools/image/regions",
+              "title": "regions",
+              "description": "Region detection over a normalized source: find component rects, merge fragments, pad, and write a regions manifest plus an overlay.",
+              "role": "region detection",
+              "tags": [
+                "assets",
+                "tools",
+                "image",
+                "regions"
+              ]
+            },
+            {
+              "id": "assets:tools-image-slice",
+              "kind": "group",
+              "path": "ai_studio/assets/tools/image/slice",
+              "title": "slice",
+              "description": "Slice a source by reviewed regions, apply per-region alpha (key-matte by default; no silent fallback), optionally polygon-mask, and write PNGs, a manifest, a review sheet, and a ZIP.",
+              "role": "region slicing and export",
+              "tags": [
+                "assets",
+                "tools",
+                "image",
+                "slice"
+              ]
+            },
+            {
+              "id": "assets:tools-image-sources",
+              "kind": "group",
+              "path": "ai_studio/assets/tools/image/sources",
+              "title": "sources",
+              "description": "Source-image upload conventions for the image tools: where draft/generated images live before they become accepted assets.",
+              "role": "source image conventions",
+              "tags": [
+                "assets",
+                "tools",
+                "image",
+                "sources"
+              ]
+            }
+          ]
+        },
+        {
           "id": "assets:tools-conversion",
           "title": "Conversion Tools",
           "subtitle": "format conversion",
@@ -930,46 +1073,6 @@
               "title": "README.md",
               "description": "Cutout Tools contract: alpha extraction, key matte, dual plate, and edge cleanup ownership.",
               "role": "cutout tools guide",
-              "tags": [
-                "assets",
-                "tools",
-                "cutout"
-              ]
-            },
-            {
-              "id": "assets:tools-cutout-key-matte",
-              "kind": "tool",
-              "path": "ai_studio/assets/tools/cutout/key_matte.py",
-              "title": "key_matte.py",
-              "description": "Single-background known-key cutout for opaque art and flat-key holes.",
-              "role": "key-matte cutout",
-              "tags": [
-                "assets",
-                "tools",
-                "cutout"
-              ]
-            },
-            {
-              "id": "assets:tools-cutout-dual-plate",
-              "kind": "tool",
-              "path": "ai_studio/assets/tools/cutout/dual_plate_alpha.py",
-              "title": "dual_plate_alpha.py",
-              "description": "Extracts RGBA from aligned light/dark plate pairs for soft alpha, glow, glass, and shadow cases.",
-              "role": "dual-plate alpha extraction",
-              "tags": [
-                "assets",
-                "tools",
-                "cutout",
-                "alpha"
-              ]
-            },
-            {
-              "id": "assets:tools-cutout-route",
-              "kind": "tool",
-              "path": "ai_studio/assets/tools/cutout/route_cutout.py",
-              "title": "route_cutout.py",
-              "description": "Chooses key-matte vs dual-plate path for a crop based on soft-alpha risk metrics.",
-              "role": "cutout route helper",
               "tags": [
                 "assets",
                 "tools",

@@ -10,11 +10,11 @@ from pathlib import Path
 
 from PIL import Image
 
-from ai_studio.assets.tools.cutout.dual_plate_alpha import build_report, cleanup_alpha_blobs, extract_dual_plate_alpha, report_image_stats
+from ai_studio.assets.tools.image.alpha_dualplate.dual_plate_alpha import build_report, cleanup_alpha_blobs, extract_dual_plate_alpha, report_image_stats
 
 
-ROOT = Path(__file__).resolve().parents[4]
-SCRIPT = ROOT / "ai_studio/assets/tools/cutout/dual_plate_alpha.py"
+ROOT = Path(__file__).resolve().parents[5]
+SCRIPT = ROOT / "ai_studio/assets/tools/image/alpha_dualplate/dual_plate_alpha.py"
 
 
 def composite_pixel(foreground: tuple[int, int, int], alpha: int, background: tuple[int, int, int]) -> tuple[int, int, int, int]:

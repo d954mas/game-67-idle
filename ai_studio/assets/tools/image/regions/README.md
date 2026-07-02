@@ -6,7 +6,7 @@ for slicing.
 Current tool:
 
 ```powershell
-py -3.12 ai_studio/assets/tools/raster2d/regions/detect_regions.py `
+py -3.12 ai_studio/assets/tools/image/regions/detect_regions.py `
   --source tmp/ai_studio/assets/raster2d/session/background/normalized.png `
   --key-color "#ff00ff" `
   --key-tolerance 0 `

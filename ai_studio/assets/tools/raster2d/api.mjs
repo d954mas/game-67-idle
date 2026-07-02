@@ -1,170 +1,34 @@
-import { execFile } from "node:child_process";
+// Raster 2D asset tools HTTP bridge.
+//
+// The generic plumbing (Python interpreter resolution, tmp-path confinement,
+// session dirs, JSON/image-size helpers) lives in the shared image tools bridge;
+// this file keeps only the raster2d pipeline logic and the public HTTP handlers.
+// The endpoint URLs (/api/asset-tools/raster2d/*) and the tmp/ai_studio/assets/
+// raster2d/ path prefix are a stable public contract for the frozen Asset Tools
+// viewer and must not change here.
 import { randomUUID } from "node:crypto";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { basename, extname, join, normalize, relative, resolve, sep } from "node:path";
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 
-const maxBodyBytes = 64 * 1024 * 1024;
-
-function safeSlug(value, fallback = "asset") {
-  return String(value || fallback)
-    .trim()
-    .replace(/\.[^.]+$/, "")
-    .replace(/[^a-zA-Z0-9_.-]+/g, "_")
-    .replace(/^_+|_+$/g, "")
-    .slice(0, 90) || fallback;
-}
-
-function safeResolve(base, relativePath) {
-  const resolvedBase = resolve(base);
-  const full = resolve(resolvedBase, normalize(relativePath));
-  if (full !== resolvedBase && !full.startsWith(resolvedBase + sep)) return null;
-  return full;
-}
-
-function tmpRoot(root) {
-  return join(root, "tmp", "ai_studio", "assets", "raster2d");
-}
-
-function ensureInsideTmp(root, pathValue) {
-  if (!pathValue) throw new Error("missing tmp path");
-  const resolved = safeResolve(root, pathValue);
-  if (!resolved) throw new Error("path must stay inside repository");
-  const base = resolve(tmpRoot(root));
-  if (resolved !== base && !resolved.startsWith(base + sep)) {
-    throw new Error("asset tool files must stay under tmp/ai_studio/assets/raster2d");
-  }
-  return resolved;
-}
-
-function sessionDirForPath(root, absPath) {
-  const base = resolve(tmpRoot(root));
-  const rel = relative(base, absPath);
-  const [session] = rel.split(sep);
-  if (!session || session.startsWith("..")) throw new Error("invalid raster2d session path");
-  return join(base, session);
-}
-
-function workspaceRel(root, absPath) {
-  return relative(root, absPath).replaceAll("\\", "/");
-}
-
-function tmpUrl(root, absPath) {
-  const relToTmp = relative(join(root, "tmp"), absPath).split(sep).map(encodeURIComponent).join("/");
-  return `/tmp/${relToTmp}`;
-}
-
-function writeJson(res, status, data) {
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
-  res.end(JSON.stringify(data, null, 2));
-}
-
-function readJsonBody(req) {
-  return new Promise((resolveBody, rejectBody) => {
-    let size = 0;
-    let data = "";
-    req.setEncoding("utf8");
-    req.on("data", (chunk) => {
-      size += Buffer.byteLength(chunk);
-      if (size > maxBodyBytes) {
-        rejectBody(new Error("request body too large"));
-        req.destroy();
-        return;
-      }
-      data += chunk;
-    });
-    req.on("end", () => {
-      try {
-        resolveBody(data ? JSON.parse(data) : {});
-      } catch {
-        rejectBody(new Error("invalid JSON body"));
-      }
-    });
-    req.on("error", rejectBody);
-  });
-}
-
-function pythonCandidates() {
-  const candidates = [];
-  for (const command of [process.env.AI_STUDIO_PYTHON, process.env.PYTHON]) {
-    if (command && !candidates.some((candidate) => candidate.command === command)) {
-      candidates.push({ command, args: [] });
-    }
-  }
-  for (const command of ["C:\\Python312\\python.exe", "C:\\Python314\\python.exe"]) {
-    if (existsSync(command) && !candidates.some((candidate) => candidate.command === command)) {
-      candidates.push({ command, args: [] });
-    }
-  }
-  candidates.push({ command: "py", args: ["-3.12"] });
-  candidates.push({ command: "python", args: [] });
-  return candidates;
-}
-
-function runPython(root, args) {
-  return new Promise((resolveRun, rejectRun) => {
-    const candidates = pythonCandidates();
-    const failures = [];
-    const tryCandidate = (index) => {
-      const candidate = candidates[index];
-      execFile(candidate.command, [...candidate.args, ...args], { cwd: root, windowsHide: true }, (error, stdout, stderr) => {
-        if (!error) {
-          resolveRun(stdout);
-          return;
-        }
-        failures.push((stderr || stdout || error.message).trim());
-        if (index + 1 < candidates.length) {
-          tryCandidate(index + 1);
-          return;
-        }
-        rejectRun(new Error(failures.filter(Boolean).at(-1) || error.message));
-      });
-    };
-    tryCandidate(0);
-  });
-}
-
-function readJson(path) {
-  return JSON.parse(readFileSync(path, "utf8"));
-}
-
-function writeJsonFile(path, data) {
-  writeFileSync(path, JSON.stringify(data, null, 2) + "\n", "utf8");
-}
-
-function readImageSize(path) {
-  const buffer = readFileSync(path);
-  if (
-    buffer.length >= 24 &&
-    buffer[0] === 0x89 &&
-    buffer[1] === 0x50 &&
-    buffer[2] === 0x4e &&
-    buffer[3] === 0x47
-  ) {
-    return { width: buffer.readUInt32BE(16), height: buffer.readUInt32BE(20) };
-  }
-  if (buffer.length >= 10 && buffer.toString("ascii", 0, 3) === "GIF") {
-    return { width: buffer.readUInt16LE(6), height: buffer.readUInt16LE(8) };
-  }
-  if (buffer.length >= 4 && buffer[0] === 0xff && buffer[1] === 0xd8) {
-    let offset = 2;
-    while (offset + 9 < buffer.length) {
-      if (buffer[offset] !== 0xff) break;
-      const marker = buffer[offset + 1];
-      const length = buffer.readUInt16BE(offset + 2);
-      if (length < 2) break;
-      if (marker >= 0xc0 && marker <= 0xc3) {
-        return { width: buffer.readUInt16BE(offset + 7), height: buffer.readUInt16BE(offset + 5) };
-      }
-      offset += 2 + length;
-    }
-  }
-  throw new Error("whole image mode supports PNG, GIF, and JPEG dimensions");
-}
-
-function color(value, fallback = "#ff00ff") {
-  const text = String(value || fallback).trim();
-  return /^#[0-9a-fA-F]{6}$/.test(text) ? text : fallback;
-}
+import {
+  color,
+  decodeDataUrl,
+  ensureInsideTmp,
+  extensionForUpload,
+  intOption,
+  readImageSize,
+  readJson,
+  readJsonBody,
+  runPython,
+  safeResolve,
+  safeSlug,
+  sessionDirForPath,
+  tmpRoot,
+  tmpUrl,
+  workspaceRel,
+  writeJson,
+  writeJsonFile,
+} from "../image/_bridge/bridge.mjs";
 
 function sessionKeyColor(root, sessionDir) {
   const reportPath = join(sessionDir, "background", "normalize_report.json");
@@ -174,30 +38,6 @@ function sessionKeyColor(root, sessionDir) {
   } catch {
     return "";
   }
-}
-
-function intOption(value, fallback, max = 100000) {
-  const number = Number.parseInt(String(value ?? fallback), 10);
-  if (!Number.isFinite(number)) return fallback;
-  return Math.max(0, Math.min(max, number));
-}
-
-function decodeDataUrl(dataUrl) {
-  const match = /^data:([^;,]+)?;base64,(.+)$/s.exec(String(dataUrl || ""));
-  if (!match) throw new Error("source image must be a base64 data URL");
-  return {
-    mime: match[1] || "application/octet-stream",
-    buffer: Buffer.from(match[2], "base64"),
-  };
-}
-
-function extensionForUpload(fileName, mime) {
-  const ext = extname(String(fileName || "")).toLowerCase();
-  if ([".png", ".jpg", ".jpeg", ".webp", ".gif"].includes(ext)) return ext;
-  if (mime === "image/jpeg") return ".jpg";
-  if (mime === "image/webp") return ".webp";
-  if (mime === "image/gif") return ".gif";
-  return ".png";
 }
 
 export async function uploadRaster2dSource(root, body) {
@@ -298,7 +138,7 @@ export async function detectRaster2dRegions(root, body) {
   }
 
   const normalizeArgs = [
-    "ai_studio/assets/tools/raster2d/background/normalize_background.py",
+    "ai_studio/assets/tools/image/bg_fix/normalize_background.py",
     "--source", sourcePath,
     "--output", normalizedPath,
     "--mode", "auto",
@@ -312,7 +152,7 @@ export async function detectRaster2dRegions(root, body) {
   const normalizeReport = readJson(normalizeReportPath);
   const keyColor = color(normalizeReport.key_color);
   await runPython(root, [
-    "ai_studio/assets/tools/raster2d/regions/detect_regions.py",
+    "ai_studio/assets/tools/image/regions/detect_regions.py",
     "--source", normalizedPath,
     "--key-color", keyColor,
     "--key-tolerance", "0",
@@ -365,7 +205,7 @@ async function runSlice(root, body, { mode }) {
   const zipPath = mode === "export" ? join(outDir, `${prefix}_regions.zip`) : null;
   const keyColor = sessionKeyColor(root, sessionDir);
   const args = [
-    "ai_studio/assets/tools/raster2d/slicing/slice_regions.py",
+    "ai_studio/assets/tools/image/slice/slice_regions.py",
     "--source", imagePath,
     "--regions", regionsPath,
     "--output-dir", outDir,
