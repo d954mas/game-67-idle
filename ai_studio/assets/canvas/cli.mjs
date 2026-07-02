@@ -14,7 +14,8 @@
 //   node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json
 //   node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
-//   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all
+//   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --suffix --resample]
+//   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --suffix --resample] [--to <dir>]
 //   node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h]
 //   node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
 //   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h]
@@ -22,8 +23,8 @@
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs render-group <id> --group g [--scale 2] [--background "#rrggbb"]
 //   node ai_studio/assets/canvas/cli.mjs undo|redo|history <id>
-import { readFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { copyFileSync, mkdirSync, readFileSync } from "node:fs";
+import { basename, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { fail, isMain } from "../../core_harness/tool_lib/cli.mjs";
@@ -36,6 +37,7 @@ import {
   deleteProject,
   detectRegions,
   exportElements,
+  exportProject,
   getProject,
   listProjects,
   opsStats,
@@ -48,6 +50,7 @@ import {
   removeElement,
   renderGroup,
   reorderElement,
+  setExportSettings,
   setRegions,
   sliceRegions,
   undoOp,
@@ -75,8 +78,36 @@ function print(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
 }
 
+// A single ad-hoc export row from inline flags (--scale is the trigger). Returns
+// undefined when no --scale is given, so `export` then honors each element's stored
+// rows and `export-set` demands an explicit source.
+function exportRowFromFlags(flags) {
+  if (!flags.scale || flags.scale === "true") return undefined;
+  const row = { scale: flags.scale };
+  if (flags.suffix && flags.suffix !== "true") row.suffix = flags.suffix;
+  if (flags.format && flags.format !== "true") row.format = flags.format;
+  if (flags.quality && flags.quality !== "true") row.quality = Number(flags.quality);
+  if (flags.resample && flags.resample !== "true") row.resample = flags.resample;
+  return [row];
+}
+
+// Deliver-to-disk for the CLI: copy an export result's files (+ manifest) into an
+// explicit --to directory. The op already produced them in the confined
+// <project>/export/<stamp>/; this is the agent-side destination, uncofined by design.
+function copyExportTo(result, toDir) {
+  mkdirSync(toDir, { recursive: true });
+  const files = new Set(["manifest.json"]);
+  for (const entry of result.items || result.screens || []) if (entry.file) files.add(entry.file);
+  const copied = [];
+  for (const file of files) {
+    copyFileSync(join(result.folder, file), join(toDir, file));
+    copied.push(file);
+  }
+  return copied;
+}
+
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|element-reorder|regions-set|regions-show|slice|export|group-create|group-move|group-set|group-assign|group-delete|render-group|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|element-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-move|group-set|group-assign|group-delete|render-group|undo|redo|history>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -91,7 +122,8 @@ function usage() {
   regions-set <id> --element <eid> --json <path>   (JSON: a regions array or {regions:[...]})
   regions-show <id> --element <eid>
   slice <id> --element <eid> [--regions r1,r2]
-  export <id> --elements e1,e2 | --all
+  export-set <id> --element <eid> --json <path> | --scale <t> [--suffix <s>] [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest]
+  export <id> --elements e1,e2 | --all | --project [--scale <t> --format <f> --quality <n> --suffix <s> --resample <r>] [--to <dir>]
   group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>]
   group-move <id> --group <gid> --x <n> --y <n>
   group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>]
@@ -193,17 +225,44 @@ async function runCommand(command, id, positional, flags) {
         : undefined;
       return print(await sliceRegions(repoRoot, { projectId: id, elementId: flags.element, regionIds }));
     }
+    case "export-set": {
+      if (!id) fail("export-set requires <id>");
+      if (!flags.element) fail("export-set requires --element <eid>");
+      let rows;
+      if (flags.json && flags.json !== "true") {
+        // A bare rows array or a { rows: [...] } wrapper.
+        const raw = JSON.parse(readFileSync(resolve(flags.json), "utf8"));
+        rows = Array.isArray(raw) ? raw : raw.rows;
+      } else {
+        rows = exportRowFromFlags(flags);
+        if (!rows) fail("export-set requires --json <path> or --scale <t> [--suffix --format --quality --resample]");
+      }
+      return print(setExportSettings(repoRoot, { projectId: id, elementId: flags.element, rows }));
+    }
     case "export": {
       if (!id) fail("export requires <id>");
-      let elementIds;
-      if (flags.all === "true") {
-        elementIds = (getProject(repoRoot, id).elements || []).map((element) => element.id);
-      } else if (flags.elements && flags.elements !== "true") {
-        elementIds = String(flags.elements).split(",").map((value) => value.trim()).filter(Boolean);
+      const rows = exportRowFromFlags(flags); // undefined => honor each element's stored rows
+      let result;
+      if (flags.project === "true") {
+        result = await exportProject(repoRoot, { projectId: id });
       } else {
-        fail("export requires --elements <e1,e2> or --all");
+        let elementIds;
+        if (flags.all === "true") {
+          elementIds = (getProject(repoRoot, id).elements || []).map((element) => element.id);
+        } else if (flags.elements && flags.elements !== "true") {
+          elementIds = String(flags.elements).split(",").map((value) => value.trim()).filter(Boolean);
+        } else {
+          fail("export requires --elements <e1,e2>, --all, or --project");
+        }
+        result = await exportElements(repoRoot, { projectId: id, elementIds, rows });
       }
-      return print(exportElements(repoRoot, { projectId: id, elementIds }));
+      // --to writes the produced files to an explicit path; without it the confined
+      // <project>/export/<stamp>/ automation default stays (agents rely on it).
+      if (flags.to && flags.to !== "true") {
+        const toDir = resolve(flags.to);
+        result = { ...result, to: toDir, copied: copyExportTo(result, toDir) };
+      }
+      return print(result);
     }
     case "group-create": {
       if (!id) fail("group-create requires <id>");

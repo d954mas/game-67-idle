@@ -720,6 +720,74 @@ button:disabled {
   margin-top: 4px;
 }
 
+/* ---- export section ------------------------------------------------------- */
+
+.insp-export-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.insp-export-row {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 8px 4px;
+  background: var(--panel-soft);
+}
+
+.insp-export-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.insp-export-del {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.insp-export-del:hover {
+  background: var(--line);
+  color: var(--text);
+}
+
+.insp-export-add {
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+.insp-export-dest,
+.insp-export-note {
+  color: var(--muted);
+  font-size: 11px;
+  margin: 6px 0;
+  word-break: break-word;
+}
+
+.insp-range {
+  flex: 1;
+  min-width: 0;
+}
+
+.insp-range-value {
+  min-width: 26px;
+  text-align: right;
+  color: var(--text);
+  font-size: 12px;
+}
+
 /* ---- status --------------------------------------------------------------- */
 
 #status {

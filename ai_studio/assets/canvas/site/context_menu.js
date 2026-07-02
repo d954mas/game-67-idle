@@ -13,7 +13,6 @@ import {
   deleteElements,
   deleteGroupAction,
   deleteRegion,
-  exportElementIds,
   pasteImageBlob,
   renderScreen,
   sendElementBackward,
@@ -190,7 +189,8 @@ function itemsFor(target) {
     // Diet (T0217): a short menu of frequent object actions. Region work is one
     // "Edit regions" entry (double-click is the primary path; detect/slice/add live
     // in the inspector Regions section); rename is double-click, hide is the layers
-    // eye dot. Export stays until T0206's inspector panel lands.
+    // eye dot. Export moved to the inspector Export section (T0206), so it is no
+    // longer a context-menu item.
     const items = [
       {
         // Enabled for ANY image so a fresh sheet can draw its FIRST region in mode B.
@@ -200,7 +200,6 @@ function itemsFor(target) {
           refresh();
         },
       },
-      { label: "Export", onClick: () => exportElementIds(targetElementIds(element.id)) },
     ];
     // Right-clicking a selected element keeps the whole multi-selection (see
     // workspace.js onContextMenu): a 2+ selection offers grouping; a single element

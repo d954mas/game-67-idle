@@ -40,9 +40,15 @@ import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, extname, join } from "node:path";
+import { extname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { canvasHistoryDepth } from "../../core_harness/tool_lib/studio_config.mjs";
+// The export encoder (tools/export_images.py) is a NEW tool, so it uses the T0218
+// bridge's config-only Python resolution: interpreter from studio.config pythonPath
+// ONLY, no candidate probing, and a loud error naming the setup command when the
+// venv or a dependency (PIL) is missing. detect/slice/render keep the module's own
+// legacy runPython discovery until the T0218 canvas seam flips them over.
+import { runPython as runExportPython } from "../tools/image/_bridge/bridge.mjs";
 import { detectImageRegions } from "../tools/image/regions/api.mjs";
 import { uploadImageSource } from "../tools/image/sources/api.mjs";
 import {
@@ -436,6 +442,127 @@ export function setRegions(root, { projectId, elementId, regions } = {}) {
   });
   const updated = (project.elements || []).find((item) => item.id === elementId);
   return { project, element: updated, regions: (updated && updated.regions) || [] };
+}
+
+// ---- per-element export settings (Figma-style rows) --------------------------
+//
+// An element carries an optional `export` array of rows
+// [{scale, suffix, format, quality?, resample}] — the Figma Export section persisted
+// on the layer. setExportSettings validates + normalizes the rows and journals them
+// like any metadata mutation (undo/redo restore the previous rows). The scale math
+// (resolveExportScale) also runs at export time; validated here so an unknown
+// scale/format/resample is a clear error the moment it is set, from either client.
+
+const EXPORT_FORMATS = new Set(["png", "jpg", "webp"]);
+const EXPORT_RESAMPLE = new Set(["lanczos", "nearest"]);
+// Suffix is appended to the export filename (e.g. "@2x"); keep it filename-safe (no
+// separators/traversal) so it can never escape the confined export folder.
+const EXPORT_SUFFIX_RE = /^[A-Za-z0-9@._ -]*$/;
+const MAX_EXPORT_DIM = 16384;
+const DEFAULT_EXPORT_ROW = { scale: "1x", suffix: "", format: "png", resample: "lanczos" };
+
+// Parse a Figma-style scale token into a spec: a multiplier ("0.5x", "1x", "2x",
+// "3x", "4x", or a bare "2") or a fixed target dimension ("512w" = 512px wide,
+// "512h" = 512px tall; the other axis keeps aspect). Throws on anything else so an
+// unknown scale is a clear validation error, not a silent fallback.
+export function parseScaleSpec(token) {
+  const text = String(token == null ? "" : token).trim().toLowerCase();
+  if (!text) throw new Error("export scale is required (e.g. 1x, 2x, 512w, 512h)");
+  const mul = /^(\d+(?:\.\d+)?)x?$/.exec(text);
+  if (mul) {
+    const value = Number(mul[1]);
+    if (!(value > 0)) throw new Error(`export scale must be > 0: ${JSON.stringify(token)}`);
+    return { kind: "mul", value, token: `${mul[1]}x` };
+  }
+  const dim = /^(\d+(?:\.\d+)?)(w|h)$/.exec(text);
+  if (dim) {
+    const value = Number(dim[1]);
+    if (!(value > 0)) throw new Error(`export scale pixels must be > 0: ${JSON.stringify(token)}`);
+    return { kind: dim[2], value, token: text };
+  }
+  throw new Error(`invalid export scale ${JSON.stringify(token)} (use 0.5x/1x/2x, or 512w/512h)`);
+}
+
+// Resolve a scale token against a source size to the exact target pixels. A fixed
+// w/h target keeps aspect on the other axis. Guards against an accidentally huge
+// render (a bare multiplier like "512" would be 512x) by capping each axis.
+export function resolveExportScale(token, srcW, srcH) {
+  const spec = parseScaleSpec(token);
+  const w0 = Math.max(1, Number(srcW) || 0);
+  const h0 = Math.max(1, Number(srcH) || 0);
+  let width;
+  let height;
+  if (spec.kind === "mul") {
+    width = Math.max(1, Math.round(w0 * spec.value));
+    height = Math.max(1, Math.round(h0 * spec.value));
+  } else if (spec.kind === "w") {
+    width = Math.max(1, Math.round(spec.value));
+    height = Math.max(1, Math.round(h0 * (spec.value / w0)));
+  } else {
+    height = Math.max(1, Math.round(spec.value));
+    width = Math.max(1, Math.round(w0 * (spec.value / h0)));
+  }
+  if (width > MAX_EXPORT_DIM || height > MAX_EXPORT_DIM) {
+    throw new Error(`export scale ${JSON.stringify(token)} exceeds ${MAX_EXPORT_DIM}px (${width}x${height})`);
+  }
+  return { width, height };
+}
+
+// Validate + normalize export rows to {scale, suffix, format, resample, quality?}.
+// quality (1-100) is kept only for the lossy formats (jpg/webp), defaulting to 90;
+// a png row never carries a quality. Throws on any invalid field.
+function cleanExportRows(rows) {
+  if (!Array.isArray(rows)) throw new Error("export rows must be an array");
+  return rows.map((row, index) => {
+    if (!row || typeof row !== "object") throw new Error(`export row ${index} is not an object`);
+    const scale = String(row.scale == null ? "" : row.scale).trim() || "1x";
+    parseScaleSpec(scale); // validate syntax now (throws on invalid)
+    const format = String(row.format == null ? "png" : row.format).trim().toLowerCase();
+    if (!EXPORT_FORMATS.has(format)) {
+      throw new Error(`export row ${index} format must be png/jpg/webp, got ${JSON.stringify(row.format)}`);
+    }
+    const resample = String(row.resample == null ? "lanczos" : row.resample).trim().toLowerCase();
+    if (!EXPORT_RESAMPLE.has(resample)) {
+      throw new Error(`export row ${index} resample must be lanczos/nearest, got ${JSON.stringify(row.resample)}`);
+    }
+    const suffix = String(row.suffix == null ? "" : row.suffix).trim();
+    if (!EXPORT_SUFFIX_RE.test(suffix) || suffix.includes("..")) {
+      throw new Error(`export row ${index} suffix has unsafe characters: ${JSON.stringify(row.suffix)}`);
+    }
+    const clean = { scale, suffix, format, resample };
+    if (format === "jpg" || format === "webp") {
+      const raw = row.quality === undefined || row.quality === null || row.quality === "" ? 90 : Number(row.quality);
+      if (!Number.isFinite(raw)) throw new Error(`export row ${index} quality must be a number 1-100`);
+      clean.quality = Math.max(1, Math.min(100, Math.round(raw)));
+    }
+    return clean;
+  });
+}
+
+// Replace an element's export rows (the Figma Export section persisted on the layer).
+// Journaled like setRegions: the before/after snapshot restores the previous rows on
+// undo/redo. Both the page's Export section and the CLI export-set drive this one op.
+export function setExportSettings(root, { projectId, elementId, rows } = {}) {
+  if (!projectId) throw new Error("setExportSettings requires projectId");
+  if (!elementId) throw new Error("setExportSettings requires elementId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const element = (before.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  const clean = cleanExportRows(rows);
+  const nextElements = (before.elements || []).map((item) =>
+    item.id === elementId ? { ...item, export: clean } : item,
+  );
+  const after = updateProject(root, projectId, { elements: nextElements });
+  const project = commitMutation(root, projectId, {
+    op: "setExportSettings",
+    args_summary: { elementId, row_count: clean.length },
+    before,
+    after,
+    startedAt,
+  });
+  const updated = (project.elements || []).find((item) => item.id === elementId);
+  return { project, element: updated, rows: (updated && updated.export) || [] };
 }
 
 // ---- project-level ops -------------------------------------------------------
@@ -1018,17 +1145,42 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
   };
 }
 
-// ---- exportElements ----------------------------------------------------------
+// ---- exportElements (scale + encode) -----------------------------------------
 
-// Copy each selected element's current image file into
-// <project>/export/<utc-stamp>/ under its (sanitized, collision-suffixed) name
-// plus a manifest.json. Export creates no project mutation, so it is NOT
-// journaled/undoable; it only records a tool_runs entry for provenance.
-export function exportElements(root, { projectId, elementIds, format } = {}) {
+// The source image's on-disk format (png/jpg/webp/gif) from its element.src ext,
+// and the output file extension for an export format.
+function sourceFormat(element) {
+  const ext = extname(String(element.src || "")).toLowerCase().replace(/^\./, "");
+  return ext === "jpeg" ? "jpg" : ext || "png";
+}
+function formatExt(format) {
+  return format; // png -> png, jpg -> jpg, webp -> webp (already normalized)
+}
+
+// The rows an element exports with: its persisted export settings, an explicit
+// override applied to every element (CLI ad-hoc / one-off), or the default single
+// 1x-png row when the layer has no settings — matching Figma's implicit 1x.
+function rowsForElement(element, overrideRows) {
+  if (overrideRows) return overrideRows;
+  if (Array.isArray(element.export) && element.export.length) return cleanExportRows(element.export);
+  return [DEFAULT_EXPORT_ROW];
+}
+
+// Export selected elements to <project>/export/<utc-stamp>/, one file per element x
+// export row, plus a manifest.json. Each row scales (resolveExportScale) + encodes
+// (png/jpg/webp with quality/resample) via ONE Python spawn for the whole batch
+// (tools/export_images.py, spec-file pattern). A 1x-png export of a png source is a
+// byte-identical file COPY done in Node (no re-encode, no spawn) so the lead's
+// original pixels are preserved exactly. Export makes no project mutation, so it is
+// NOT journaled/undoable; it only records a tool_runs entry. `rows`, when given,
+// overrides every element's settings for this one run (agent one-shots / the CLI's
+// inline --scale/--format flags); omit it to honor each element's persisted rows.
+export async function exportElements(root, { projectId, elementIds, rows } = {}) {
   if (!projectId) throw new Error("exportElements requires projectId");
   const project = getProject(root, projectId);
   const ids = Array.isArray(elementIds) ? elementIds.map(String) : [];
   if (!ids.length) throw new Error("exportElements requires elementIds");
+  const overrideRows = rows === undefined || rows === null ? null : cleanExportRows(rows);
 
   const elements = [];
   for (const id of ids) {
@@ -1042,20 +1194,81 @@ export function exportElements(root, { projectId, elementIds, format } = {}) {
   const folder = resolveProjectPath(root, projectId, "export", stamp);
   const used = new Set();
   const items = [];
+  const copyJobs = []; // Node byte-copies (png -> png, no resize): verbatim originals.
+  const encodeJobs = []; // one batched Python spawn scales + encodes the rest.
+
   for (const element of elements) {
+    const elementRows = rowsForElement(element, overrideRows);
     const srcAbs = resolveProjectFile(root, projectId, element.src);
-    const bytes = readFileSync(srcAbs);
-    const ext = extname(basename(srcAbs)) || ".png";
-    const base = slug(element.name || element.id);
-    let file = `${base}${ext}`;
-    let counter = 2;
-    while (used.has(file)) {
-      file = `${base}_${String(counter).padStart(2, "0")}${ext}`;
-      counter += 1;
+    const srcFmt = sourceFormat(element);
+    const sourceW = Number(element.source_w) || Number(element.w) || 0;
+    const sourceH = Number(element.source_h) || Number(element.h) || 0;
+
+    for (const row of elementRows) {
+      const { width, height } = resolveExportScale(row.scale, sourceW, sourceH);
+      const base = slug(element.name || element.id);
+      let file = `${base}${row.suffix}.${formatExt(row.format)}`;
+      let counter = 2;
+      while (used.has(file)) {
+        file = `${base}${row.suffix}_${String(counter).padStart(2, "0")}.${formatExt(row.format)}`;
+        counter += 1;
+      }
+      used.add(file);
+      const outAbs = resolveProjectPath(root, projectId, "export", stamp, file);
+      const needsResize = width !== sourceW || height !== sourceH;
+      const pureCopy = !needsResize && row.format === "png" && srcFmt === "png";
+
+      const item = {
+        elementId: element.id,
+        name: element.name || element.id,
+        file,
+        src: element.src,
+        scale: row.scale,
+        format: row.format,
+        resample: row.resample,
+        w: width,
+        h: height,
+        meta: element.meta || {},
+      };
+      if (row.quality !== undefined) item.quality = row.quality;
+      items.push(item);
+
+      if (pureCopy) {
+        copyJobs.push({ srcAbs, outAbs });
+      } else {
+        encodeJobs.push({
+          src: srcAbs,
+          out: outAbs,
+          target_w: width,
+          target_h: height,
+          format: row.format,
+          quality: row.quality === undefined ? null : row.quality,
+          resample: row.resample,
+        });
+      }
     }
-    used.add(file);
-    writeProjectBytes(resolveProjectPath(root, projectId, "export", stamp, file), bytes);
-    items.push({ elementId: element.id, name: element.name || element.id, file, src: element.src, meta: element.meta || {} });
+  }
+
+  // Byte-identical copies never touch Python (offline + preserves the exact bytes).
+  for (const job of copyJobs) writeProjectBytes(job.outAbs, readFileSync(job.srcAbs));
+
+  // One Python spawn for the whole encode batch (spec-file pattern like slice). Uses
+  // the config-only bridge interpreter, so a missing venv/PIL is a loud named error.
+  if (encodeJobs.length) {
+    const workDir = mkdtempSync(join(tmpdir(), "canvas-export-"));
+    try {
+      const specPath = join(workDir, "export_spec.json");
+      const reportPath = join(workDir, "export_report.json");
+      const spec = {
+        schema: "ai_studio.canvas.export_images_spec.v1",
+        report: reportPath,
+        jobs: encodeJobs,
+      };
+      writeFileSync(specPath, `${JSON.stringify(spec, null, 2)}\n`);
+      await runExportPython(root, ["ai_studio/assets/canvas/tools/export_images.py", "--spec", specPath]);
+    } finally {
+      rmSync(workDir, { recursive: true, force: true });
+    }
   }
 
   const manifest = {
@@ -1073,11 +1286,11 @@ export function exportElements(root, { projectId, elementIds, format } = {}) {
     id: `run_${randomUUID().slice(0, 8)}`,
     op: "export_elements",
     at: new Date().toISOString(),
-    params: { elementIds: ids, format: format || "copy" },
-    result_summary: { item_count: items.length, folder },
+    params: { elementIds: ids, rows: overrideRows ? "override" : "per-element" },
+    result_summary: { item_count: items.length, encoded: encodeJobs.length, copied: copyJobs.length, folder },
   };
-  updateProject(root, projectId, { tool_runs: capToolRuns(root, projectId, [...(project.tool_runs || []), run]) });
-  return { folder, items, manifest, run };
+  updateProject(root, projectId, { tool_runs: capToolRuns(root, projectId, [...(getProject(root, projectId).tool_runs || []), run]) });
+  return { folder, stamp, items, manifest, run };
 }
 
 // ---- renderGroup (screen compositing) ----------------------------------------
@@ -1142,29 +1355,20 @@ function hexColor(value) {
   return /^#[0-9a-fA-F]{6}$/.test(text) ? text.toLowerCase() : null;
 }
 
-export async function renderGroup(root, { projectId, groupId, scale, background } = {}) {
-  if (!projectId) throw new Error("renderGroup requires projectId");
-  if (!groupId) throw new Error("renderGroup requires groupId");
-  const project = getProject(root, projectId);
-  const group = groupsOf(project).find((item) => item.id === groupId);
-  if (!group) throw new Error(`group not found: ${groupId}`);
-
+// Composite one group's visible members into a screen PNG at the given absolute
+// output/spec/report paths (spawns render_group.py once). Shared by renderGroup
+// (single screen, own folder) and exportProject (every visible screen into one
+// folder). Uses the module's legacy runPython discovery like the other bridged
+// canvas tools; the T0218 canvas seam flips these to the config-only interpreter.
+async function compositeGroup(root, projectId, project, group, { scale, background, outputAbs, specAbs, reportAbs } = {}) {
   const renderScale = finite(scale) && Number(scale) > 0 ? Number(scale) : 1;
   const bg = background === undefined || background === null || background === "" ? null : hexColor(background);
   if (background && bg === null) throw new Error(`background must be #rrggbb, got ${JSON.stringify(background)}`);
 
   // Visible member elements, in element array order (z-order).
   const members = (project.elements || []).filter(
-    (element) => element.groupId === groupId && element.visible !== false && element.type === "image" && element.src,
+    (element) => element.groupId === group.id && element.visible !== false && element.type === "image" && element.src,
   );
-
-  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-  const fileName = `screen_${slug(group.name || group.id)}.png`;
-  const outputAbs = resolveProjectPath(root, projectId, "export", stamp, fileName);
-  const reportAbs = resolveProjectPath(root, projectId, "export", stamp, "render_report.json");
-  const specAbs = resolveProjectPath(root, projectId, "export", stamp, "render_spec.json");
-  const folder = resolveProjectPath(root, projectId, "export", stamp);
-
   const specElements = members.map((element) => ({
     id: element.id,
     src: resolveProjectFile(root, projectId, element.src),
@@ -1183,7 +1387,6 @@ export async function renderGroup(root, { projectId, groupId, scale, background 
     elements: specElements,
   };
   writeProjectBytes(specAbs, `${JSON.stringify(spec, null, 2)}\n`);
-
   await runPython(root, ["ai_studio/assets/canvas/tools/render_group.py", "--spec", specAbs]);
 
   let report = {};
@@ -1192,6 +1395,30 @@ export async function renderGroup(root, { projectId, groupId, scale, background 
   } catch {
     // The PNG is the real product; a missing/foreign report is non-fatal.
   }
+  const width = report.width || Math.max(1, Math.round((Number(group.w) || 0) * renderScale));
+  const height = report.height || Math.max(1, Math.round((Number(group.h) || 0) * renderScale));
+  return { renderScale, bg, members, width, height };
+}
+
+export async function renderGroup(root, { projectId, groupId, scale, background } = {}) {
+  if (!projectId) throw new Error("renderGroup requires projectId");
+  if (!groupId) throw new Error("renderGroup requires groupId");
+  const project = getProject(root, projectId);
+  const group = groupsOf(project).find((item) => item.id === groupId);
+  if (!group) throw new Error(`group not found: ${groupId}`);
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const fileName = `screen_${slug(group.name || group.id)}.png`;
+  const folder = resolveProjectPath(root, projectId, "export", stamp);
+  const outputAbs = resolveProjectPath(root, projectId, "export", stamp, fileName);
+
+  const composited = await compositeGroup(root, projectId, project, group, {
+    scale,
+    background,
+    outputAbs,
+    specAbs: resolveProjectPath(root, projectId, "export", stamp, "render_spec.json"),
+    reportAbs: resolveProjectPath(root, projectId, "export", stamp, "render_report.json"),
+  });
 
   const manifest = {
     schema: "ai_studio.canvas.export.v1",
@@ -1199,12 +1426,12 @@ export async function renderGroup(root, { projectId, groupId, scale, background 
     project: project.id,
     at: new Date().toISOString(),
     group: { id: group.id, name: group.name || group.id },
-    scale: renderScale,
-    background: bg,
+    scale: composited.renderScale,
+    background: composited.bg,
     file: fileName,
-    width: report.width || Math.max(1, Math.round((Number(group.w) || 0) * renderScale)),
-    height: report.height || Math.max(1, Math.round((Number(group.h) || 0) * renderScale)),
-    items: members.map((element) => ({ elementId: element.id, name: element.name || element.id, src: element.src })),
+    width: composited.width,
+    height: composited.height,
+    items: composited.members.map((element) => ({ elementId: element.id, name: element.name || element.id, src: element.src })),
   };
   writeProjectBytes(
     resolveProjectPath(root, projectId, "export", stamp, "manifest.json"),
@@ -1215,9 +1442,76 @@ export async function renderGroup(root, { projectId, groupId, scale, background 
     id: `run_${randomUUID().slice(0, 8)}`,
     op: "render_group",
     at: new Date().toISOString(),
-    params: { groupId, scale: renderScale, background: bg },
-    result_summary: { file: fileName, folder, member_count: members.length, width: manifest.width, height: manifest.height },
+    params: { groupId, scale: composited.renderScale, background: composited.bg },
+    result_summary: { file: fileName, folder, member_count: composited.members.length, width: manifest.width, height: manifest.height },
   };
   updateProject(root, projectId, { tool_runs: capToolRuns(root, projectId, [...(getProject(root, projectId).tool_runs || []), run]) });
-  return { folder, file: fileName, path: outputAbs, manifest, run, members: members.length };
+  return { folder, file: fileName, path: outputAbs, manifest, run, members: composited.members.length };
+}
+
+// ---- exportProject (no selection -> export every screen) ---------------------
+
+// Project-level export used when nothing is selected: render EVERY visible group
+// (screen) at its own default 1x png into ONE <project>/export/<utc-stamp>/ folder
+// plus a combined manifest. Reuses the renderGroup compositor (compositeGroup) per
+// visible screen. Like the other export ops it makes no project mutation, so it is
+// NOT journaled; it records one export_project tool_runs entry.
+export async function exportProject(root, { projectId } = {}) {
+  if (!projectId) throw new Error("exportProject requires projectId");
+  const project = getProject(root, projectId);
+  const visibleGroups = groupsOf(project).filter((group) => group.visible !== false);
+  if (!visibleGroups.length) throw new Error("no visible screens to export (project export renders every visible group)");
+
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const folder = resolveProjectPath(root, projectId, "export", stamp);
+  const usedFiles = new Set();
+  const screens = [];
+  for (const group of visibleGroups) {
+    const base = `screen_${slug(group.name || group.id)}`;
+    let fileName = `${base}.png`;
+    let counter = 2;
+    while (usedFiles.has(fileName)) {
+      fileName = `${base}_${String(counter).padStart(2, "0")}.png`;
+      counter += 1;
+    }
+    usedFiles.add(fileName);
+    const stem = fileName.replace(/\.png$/, "");
+    const composited = await compositeGroup(root, projectId, project, group, {
+      scale: 1,
+      background: null,
+      outputAbs: resolveProjectPath(root, projectId, "export", stamp, fileName),
+      specAbs: resolveProjectPath(root, projectId, "export", stamp, `${stem}.spec.json`),
+      reportAbs: resolveProjectPath(root, projectId, "export", stamp, `${stem}.report.json`),
+    });
+    screens.push({
+      groupId: group.id,
+      name: group.name || group.id,
+      file: fileName,
+      w: composited.width,
+      h: composited.height,
+      members: composited.members.length,
+    });
+  }
+
+  const manifest = {
+    schema: "ai_studio.canvas.export.v1",
+    kind: "project",
+    project: project.id,
+    at: new Date().toISOString(),
+    items: screens,
+  };
+  writeProjectBytes(
+    resolveProjectPath(root, projectId, "export", stamp, "manifest.json"),
+    `${JSON.stringify(manifest, null, 2)}\n`,
+  );
+
+  const run = {
+    id: `run_${randomUUID().slice(0, 8)}`,
+    op: "export_project",
+    at: new Date().toISOString(),
+    params: { screenCount: screens.length },
+    result_summary: { screen_count: screens.length, folder },
+  };
+  updateProject(root, projectId, { tool_runs: capToolRuns(root, projectId, [...(getProject(root, projectId).tool_runs || []), run]) });
+  return { folder, stamp, screens, manifest, run };
 }

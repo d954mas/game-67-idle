@@ -100,10 +100,32 @@ Every capability is one op in `ops.mjs`:
   the scene. One journal entry per slice (undo removes the group and every
   created crop) plus a `slice_regions` `tool_runs` entry. Requires Python
   (Pillow) via our own `tools/crop_regions.py`.
-- `exportElements({ projectId, elementIds, format? })` — copies each element's
-  current image file into `<project>/export/<utc-stamp>/` under a sanitized,
-  collision-suffixed name plus a `manifest.json`. Not journaled (it makes no
-  project mutation), but recorded in `tool_runs`.
+- `setExportSettings({ projectId, elementId, rows })` — replace an element's
+  Figma-style export rows `[{scale, suffix, format, quality?, resample}]` (the
+  Export section persisted on the layer). Validates + normalizes each row (scale
+  token syntax, `format` png/jpg/webp, `resample` lanczos/nearest, filename-safe
+  `suffix`; `quality` 1-100 only for the lossy formats, default 90). Journaled like
+  `setRegions`, so undo/redo restore the previous rows. Both the page's Export
+  section and the CLI `export-set` drive this one op.
+- `exportElements({ projectId, elementIds, rows? })` — export each element ×
+  each of its rows into `<project>/export/<utc-stamp>/` plus a `manifest.json`.
+  Each row scales (`resolveExportScale`) + encodes (png/jpg/webp) via **one** Python
+  spawn for the whole batch (`tools/export_images.py`, spec-file pattern). A 1x-png
+  export of a png source is a **byte-identical file COPY** done in Node (no
+  re-encode, no spawn), so the lead's original pixels are preserved exactly. When no
+  `rows` are set on an element it exports the implicit default `1x png`. `rows`, when
+  passed, overrides every element's settings for that one run (agent one-shots / the
+  CLI `--scale` flags). Not journaled (no project mutation), recorded in `tool_runs`.
+- `exportProject({ projectId })` — no-selection project export: composite **every
+  visible group** (screen) at its own default 1x png into ONE
+  `<project>/export/<utc-stamp>/` folder plus a combined manifest, reusing the
+  `renderGroup` compositor. Not journaled; records an `export_project` `tool_runs`
+  entry. Errors clearly when there are no visible screens.
+- `resolveExportScale(token, srcW, srcH)` / `parseScaleSpec(token)` — the scale-token
+  parser (exported for reuse/tests): a multiplier (`0.5x`/`1x`/`2x`/`3x`/`4x` or a
+  bare `2`) or a fixed target dimension (`512w` = 512px wide, `512h` = 512px tall;
+  the other axis keeps aspect). Throws on anything else — an unknown scale is a clear
+  validation error, never a silent fallback.
 - `undoOp` / `redoOp` / `readHistory` — see Journal below.
 - `opsStats({ projectId })` — read-only per-op timing rollup (count/median/p95
   `duration_ms`) from the journal plus the `errors.jsonl` count. See Observability.
@@ -264,14 +286,53 @@ short recent tail).
 
 ## Export contract
 
-`exportElements` writes `<project>/export/<utc-stamp>/` (path-confined under the
-project folder) containing each element's current image file copied under its
-element name (sanitized, collision-suffixed) plus `manifest.json`:
+Export always produces files in the path-confined automation default
+`<project>/export/<utc-stamp>/` (each URL segment confined by `resolveProjectPath`).
+Both `exportElements` and `exportProject` write one `manifest.json`
+(`ai_studio.canvas.export.v1`) alongside the images. Delivering those bytes to a
+folder the lead chose is a separate delivery-to-disk layer (page dir-picker / CLI
+`--to`) on top of this one shared op output — the op itself never writes to an
+arbitrary path.
+
+**Element export** (`exportElements`): one file per element × export row.
 
 ```json
 { "schema": "ai_studio.canvas.export.v1", "project": "<id>", "at": "<iso>",
-  "items": [ { "elementId": "...", "name": "...", "file": "...", "src": "...", "meta": {} } ] }
+  "items": [ { "elementId": "...", "name": "...", "file": "wing@2x.png",
+              "src": "files/<hash>.png", "scale": "2x", "format": "png",
+              "resample": "lanczos", "w": 512, "h": 512, "quality": 90, "meta": {} } ] }
 ```
+
+- **Scale** `0.5x/1x/2x/3x/4x` (or custom `2x` / `512w` / `512h`); the clean-art
+  supersampling (generate 2x → export 1x with Lanczos) lives here.
+- **Format** `png` (lossless), `jpg` (flattened onto white, no alpha), `webp`;
+  `quality` (1-100) applies to jpg/webp only. **Resample** `lanczos` (smooth,
+  default) or `nearest` (pixel art).
+- **Suffix** is appended to the filename (`wing@2x.png`), filename-safe and
+  collision-suffixed.
+- **Fast path**: a 1x-png export of a png source is a byte-identical Node copy — no
+  Python, no re-encode. Everything else is one batched `tools/export_images.py`
+  spawn. That tool uses the T0218 `_bridge` **config-only** Python
+  (`studio.config pythonPath`); a missing venv/Pillow is a loud error naming
+  `node ai_studio/assets/tools/image/_bridge/setup_python.mjs` (no silent fallback).
+  `render_group.py`/`crop_regions.py` keep the module's legacy interpreter discovery
+  until the T0218 canvas seam flips them over.
+
+**Project export** (`exportProject`, no selection): every visible screen composited
+at 1x png into one folder, with a combined manifest (`kind: "project"`, `items` are
+`{groupId, name, file, w, h, members}`).
+
+### Destinations
+
+- **Page**: on Export the picker (`showDirectoryPicker`) opens **every time**,
+  starting at the last-used folder for the project (`startIn` = a handle remembered
+  per project in IndexedDB), and the new choice is stored after each export. Cancel
+  cancels the export (visible status, no fallback). The browser-download fallback
+  runs ONLY when the File System Access API is unavailable — files are never silently
+  dropped. This lives in `site/export_dest.mjs` (delivery-to-disk only).
+- **CLI**: `--to <dir>` copies the produced files (+ manifest) to that exact path;
+  without `--to` the confined `<project>/export/<stamp>/` default stays (agents rely
+  on it).
 
 ## CLI
 
@@ -289,7 +350,10 @@ node ai_studio/assets/canvas/cli.mjs element-remove <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json   # a regions array or {regions:[...]}
 node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
-node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all
+node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json      # persist export rows (journaled)
+node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --scale 2x [--suffix @2x] [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest]
+node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all, or --project (all visible screens)
+node ai_studio/assets/canvas/cli.mjs export <id> --all [--scale 2x --format jpg --quality 80 --suffix @2x --resample lanczos] [--to <dir>]
 node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h]
 node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
 node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h]
@@ -341,13 +405,23 @@ one document that swaps two views; the JS is split into focused ES modules under
   that select/enter region-edit on the canvas and inline-rename on double-click,
   plus **+ Add region**, **Slice selected region(s)**, and one muted matte-pipeline
   placeholder line), group/screen (name, X/Y/W/H, visible, member count,
-  **Render screen** with scale + background), multi-select (count + Export
-  selected), or "Nothing selected".
+  **Render screen** with scale + background), multi-select (count + "each exports
+  its own settings" + Export), or "Nothing selected" (with a project-export button
+  when there are visible screens). A single element also gets an **Export** section
+  at the BOTTOM (Figma-style): a collapsible list of rows (scale + suffix + format,
+  a quality slider only for jpg/webp, a resample toggle), **+ Add export setting**, a
+  destination hint line, and an Export button labeled by the target. Row edits commit
+  through `setExportSettings` (one journal entry per change).
+- `export_dest.mjs` — export destination delivery (delivery-to-disk only): the File
+  System Access dir picker opens every time starting at the last-used folder (handle
+  remembered per project in IndexedDB), cancel aborts the export, and a browser-
+  download fallback runs only when the API is unavailable.
 - `context_menu.js` — the right-click menu (per element / region / group / empty
   canvas), including **Edit regions** + a **Move to screen ▸** submenu on elements,
   **Slice this region** / **Delete region** on a region, and (from the layers panel
   too) the same element/group menus; every item calls an action; closes on
-  click-away or Escape.
+  click-away or Escape. (Export left the context menu for the inspector Export
+  section in T0206.)
 - `dnd.js` — OS drag & drop (drop images at the drop point with a drop highlight)
   and Ctrl/Cmd+V clipboard paste at the viewport center.
 - `canvas.js` — the controller: boots the modules, owns view routing (deep link

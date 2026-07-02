@@ -15,6 +15,7 @@ import {
   elementById,
   focusStage,
   groupById,
+  groups,
   hooks,
   memberElements,
   refresh,
@@ -26,15 +27,18 @@ import {
   deleteRegion,
   detectRegionsFor,
   exportElementIds,
+  exportProjectAction,
   patchElementBox,
   patchGroupBox,
   renameElement,
   renameGroup,
   renameRegion,
   renderScreen,
+  setExportRows,
   setGroupVisible,
   sliceRegionsFor,
 } from "./actions.js";
+import { lastDestinationName } from "./export_dest.mjs";
 import { openContextMenu } from "./context_menu.js";
 import { inlineEdit } from "./inline.js";
 
@@ -319,6 +323,143 @@ function renderRegions(element, root) {
   body.appendChild(actions);
 }
 
+// ---- export (Figma-style rows persisted on the element) ----------------------
+
+const SCALE_PRESETS = ["0.5x", "1x", "2x", "3x", "4x"];
+const EXPORT_FORMATS = ["png", "jpg", "webp"];
+
+// The element's export rows, or the implicit single 1x-png default shown for a
+// layer with no settings yet (matches Figma + the op's default).
+function exportRowsOf(element) {
+  const rows = Array.isArray(element.export) ? element.export : [];
+  return rows.length ? rows.map((row) => ({ ...row })) : [{ scale: "1x", suffix: "", format: "png", resample: "lanczos" }];
+}
+
+function selectInput(value, options, onCommit) {
+  const select = document.createElement("select");
+  select.className = "insp-input";
+  for (const option of options) {
+    const node = document.createElement("option");
+    node.value = option;
+    node.textContent = option;
+    if (option === value) node.selected = true;
+    select.appendChild(node);
+  }
+  select.addEventListener("change", () => onCommit(select.value));
+  return select;
+}
+
+// One export-setting row: scale + suffix + format on the header line, a quality
+// slider only for the lossy formats, and a resample toggle. Every committed edit
+// rebuilds ALL rows and calls setExportRows once (one journal entry per change).
+function exportRowNode(element, rows, index) {
+  const row = rows[index];
+  const commit = (patch) => {
+    const next = rows.map((item) => ({ ...item }));
+    next[index] = { ...next[index], ...patch };
+    setExportRows(element.id, next);
+  };
+
+  const wrap = document.createElement("div");
+  wrap.className = "insp-export-row";
+
+  const head = document.createElement("div");
+  head.className = "insp-export-head";
+  head.appendChild(field("Scale", (() => {
+    const input = textInput(row.scale, (value) => commit({ scale: value }));
+    input.setAttribute("list", "insp-scale-presets");
+    return input;
+  })()));
+  head.appendChild(field("Suffix", textInput(row.suffix || "", (value) => commit({ suffix: value }))));
+  head.appendChild(field("Format", selectInput(row.format || "png", EXPORT_FORMATS, (value) => commit({ format: value }))));
+  wrap.appendChild(head);
+
+  // Quality only applies to the lossy formats (the lead wants visible "сжатие").
+  if (row.format === "jpg" || row.format === "webp") {
+    const quality = document.createElement("input");
+    quality.type = "range";
+    quality.min = "1";
+    quality.max = "100";
+    quality.value = String(row.quality == null ? 90 : row.quality);
+    quality.className = "insp-range";
+    const value = document.createElement("span");
+    value.className = "insp-range-value";
+    value.textContent = quality.value;
+    quality.addEventListener("input", () => {
+      value.textContent = quality.value;
+    });
+    quality.addEventListener("change", () => commit({ quality: Number(quality.value) }));
+    const qRow = field("Quality", quality);
+    qRow.appendChild(value);
+    wrap.appendChild(qRow);
+  }
+
+  wrap.appendChild(field("Resample", selectInput(row.resample || "lanczos", ["lanczos", "nearest"], (value) => commit({ resample: value }))));
+
+  const del = document.createElement("button");
+  del.type = "button";
+  del.className = "insp-export-del";
+  del.title = "Remove export setting";
+  del.setAttribute("aria-label", "Remove export setting");
+  del.textContent = "×"; // ×
+  del.addEventListener("click", () => {
+    const next = rows.filter((_, i) => i !== index);
+    setExportRows(element.id, next);
+  });
+  head.appendChild(del);
+  return wrap;
+}
+
+// A small always-visible line showing WHERE the last export landed (info only; the
+// picker opens at this folder every time). Filled asynchronously from IndexedDB.
+function exportDestinationHint(projectId) {
+  const hint = document.createElement("div");
+  hint.className = "insp-export-dest";
+  hint.textContent = "Destination: chosen on export";
+  lastDestinationName(projectId).then((name) => {
+    if (name) hint.textContent = `Last folder: ${name}`;
+  }).catch(() => {});
+  return hint;
+}
+
+// The Export section at the BOTTOM of the inspector: a list of rows, "+ Add export
+// setting", the destination hint, and an Export button labeled by the target. Edits
+// persist per element through setExportSettings (journaled/undoable).
+function renderExport(element, root) {
+  const rows = exportRowsOf(element);
+  const body = collapsible(root, "export", "Export");
+
+  // Shared preset list for every row's scale input (0.5x/1x/2x/3x/4x + custom).
+  const presets = document.createElement("datalist");
+  presets.id = "insp-scale-presets";
+  for (const preset of SCALE_PRESETS) {
+    const option = document.createElement("option");
+    option.value = preset;
+    presets.appendChild(option);
+  }
+  body.appendChild(presets);
+
+  const list = document.createElement("div");
+  list.className = "insp-export-rows";
+  rows.forEach((_, index) => list.appendChild(exportRowNode(element, rows, index)));
+  body.appendChild(list);
+
+  const add = smallBtn("+ Add export setting", () => {
+    setExportRows(element.id, [...rows, { scale: "1x", suffix: "", format: "png", resample: "lanczos" }]);
+  });
+  add.classList.add("insp-export-add");
+  body.appendChild(add);
+
+  body.appendChild(exportDestinationHint(state.project ? state.project.id : ""));
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "primary insp-btn";
+  button.textContent = `Export ${element.name || "element"}`;
+  button.addEventListener("click", () => exportElementIds([element.id]));
+  body.appendChild(button);
+}
+
 // ---- element / group / multi views -------------------------------------------
 
 function renderElement(element, root) {
@@ -349,6 +490,9 @@ function renderElement(element, root) {
       );
     }
   }
+
+  // Export section stays LAST (Figma keeps it at the bottom of the sidebar).
+  renderExport(element, root);
 }
 
 function renderGroupInspector(group, root) {
@@ -419,16 +563,46 @@ function renderGroupInspector(group, root) {
   render.appendChild(controls);
 }
 
+// Multi-select: keep it simple — each element exports with its OWN persisted rows
+// (no shared row editing). The section just states that and offers one Export.
 function renderMulti(selected, root) {
   const title = document.createElement("div");
   title.className = "insp-multi-title";
   title.textContent = `${selected.length} elements selected`;
   root.appendChild(title);
+
+  const note = document.createElement("div");
+  note.className = "insp-export-note";
+  note.textContent = "Each element exports its own settings (1x png by default).";
+  root.appendChild(note);
+
+  root.appendChild(exportDestinationHint(state.project ? state.project.id : ""));
+
   const button = document.createElement("button");
   button.type = "button";
   button.className = "primary insp-btn";
-  button.textContent = "Export selected";
+  button.textContent = `Export ${selected.length} elements`;
   button.addEventListener("click", () => exportElementIds(selected.map((element) => element.id)));
+  root.appendChild(button);
+}
+
+// Nothing selected: still offer a project-level export of every visible screen.
+function renderEmpty(root) {
+  const empty = document.createElement("div");
+  empty.className = "insp-nothing";
+  empty.textContent = "Nothing selected";
+  root.appendChild(empty);
+
+  const visibleGroups = groups().filter((group) => group.visible !== false);
+  if (!visibleGroups.length) return;
+
+  root.appendChild(exportDestinationHint(state.project ? state.project.id : ""));
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "primary insp-btn";
+  button.textContent = `Export project (${visibleGroups.length} ${visibleGroups.length === 1 ? "screen" : "screens"})`;
+  button.addEventListener("click", () => exportProjectAction());
   root.appendChild(button);
 }
 
@@ -449,10 +623,12 @@ function inspectorSig() {
     const regions = (e.regions || [])
       .map((r) => `${r.id}~${r.name || ""}~${(r.rect || r.content_bbox || []).join(",")}`)
       .join("|");
-    return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.meta || {})}`;
+    // element.export is part of the structure: a row add/remove/edit must rebuild.
+    return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.export || [])}|${JSON.stringify(e.meta || {})}`;
   }
   if (selected.length > 1) return `m:${selected.map((e) => e.id).join(",")}`;
-  return "empty";
+  // Empty state carries a project-export button gated by the visible-screen count.
+  return `empty:${groups().filter((group) => group.visible !== false).length}`;
 }
 
 // Re-apply region selection to the already-built DOM (used on a skipped rebuild):
@@ -507,10 +683,7 @@ export function renderInspector() {
   } else if (selected.length > 1) {
     renderMulti(selected, root);
   } else {
-    const empty = document.createElement("div");
-    empty.className = "insp-nothing";
-    empty.textContent = "Nothing selected";
-    root.appendChild(empty);
+    renderEmpty(root);
   }
   applyInspectorRegionSelection();
 }

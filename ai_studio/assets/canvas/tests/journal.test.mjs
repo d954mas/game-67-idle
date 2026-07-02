@@ -122,14 +122,14 @@ test("patchProject renames the project and is journaled (undo/redo restore the t
   assert.equal(getProject(ROOT, project.id).title, "New Name");
 });
 
-test("exportElements writes a stamped folder with copied files + manifest", (t) => {
+test("exportElements writes a stamped folder with copied files + manifest", async (t) => {
   tempProjects(t);
   const project = createProject(ROOT, { title: "Export" });
   const png = solidPng(6, 6, [10, 20, 30]);
   const a = addImage(ROOT, project.id, { name: "Hero Sprite.png", bytes: png }).element;
   const b = addImage(ROOT, project.id, { name: "Hero Sprite.png", bytes: solidPng(7, 7, [40, 50, 60]) }).element;
 
-  const result = exportElements(ROOT, { projectId: project.id, elementIds: [a.id, b.id] });
+  const result = await exportElements(ROOT, { projectId: project.id, elementIds: [a.id, b.id] });
   assert.equal(result.items.length, 2);
   assert.equal(result.manifest.schema, "ai_studio.canvas.export.v1");
   assert.equal(result.manifest.project, project.id);

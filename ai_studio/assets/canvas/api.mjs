@@ -10,7 +10,8 @@
 //   POST   /api/canvas/projects/<id>/images        {name, bytes_base64, x?, y?}
 //   POST   /api/canvas/projects/<id>/detect-regions {elementId, params?}
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
-//   POST   /api/canvas/projects/<id>/export         {elementIds}
+//   POST   /api/canvas/projects/<id>/export         {elementIds, rows?} | {project:true}
+//   PUT    /api/canvas/projects/<id>/elements/<eid>/export {rows}  (export settings)
 //   POST   /api/canvas/projects/<id>/groups         {name, x?,y?,w?,h?, fromElements?}
 //   PATCH  /api/canvas/projects/<id>/groups/<gid>   {name?,x?,y?,w?,h?,visible?}
 //   DELETE /api/canvas/projects/<id>/groups/<gid>
@@ -37,6 +38,7 @@ import {
   deleteProject,
   detectRegions,
   exportElements,
+  exportProject,
   getProject,
   listProjects,
   opsStats,
@@ -51,6 +53,7 @@ import {
   reorderElement,
   resolveProjectFile,
   resolveProjectPath,
+  setExportSettings,
   setRegions,
   sliceRegions,
   undoOp,
@@ -192,12 +195,19 @@ export function createCanvasApi(root) {
       }
 
       // /api/canvas/projects/<id>/export
+      // {project:true} exports every visible screen; otherwise the selected
+      // elements, each honoring its persisted export rows (or an explicit rows
+      // override applied to every element for this run).
       if (parts.length === 5 && sub === "export" && req.method === "POST") {
         const body = await readJsonBody(req);
-        sendMutation(200, exportElements(root, {
+        if (body.project === true || body.project === "true") {
+          sendMutation(200, await exportProject(root, { projectId: id }));
+          return true;
+        }
+        sendMutation(200, await exportElements(root, {
           projectId: id,
           elementIds: Array.isArray(body.elementIds) ? body.elementIds : [],
-          format: body.format,
+          rows: body.rows,
         }));
         return true;
       }
@@ -304,6 +314,15 @@ export function createCanvasApi(root) {
         const body = await readJsonBody(req);
         const regions = Array.isArray(body) ? body : body.regions;
         sendMutation(200, setRegions(root, { projectId: id, elementId, regions }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/export  (replace export rows)
+      if (parts.length === 7 && sub === "elements" && parts[6] === "export" && req.method === "PUT") {
+        const elementId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        const rows = Array.isArray(body) ? body : body.rows;
+        sendMutation(200, setExportSettings(root, { projectId: id, elementId, rows }));
         return true;
       }
 

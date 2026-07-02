@@ -14,6 +14,7 @@ import {
   state,
 } from "./app.js";
 import { screenToImagePoint } from "./viewport.mjs";
+import { downloadFiles, pickDestination, supportsFsa, writeFilesToDir } from "./export_dest.mjs";
 
 function pid() {
   return state.project.id;
@@ -252,12 +253,74 @@ export async function deleteRegion(elementId, regionId) {
   }
 }
 
+// ---- export ------------------------------------------------------------------
+
+// Replace an element's Figma-style export rows via the journaled setExportSettings
+// op (the inspector Export section commits one entry per edit; undoable).
+export async function setExportRows(elementId, rows) {
+  try {
+    await api("PUT", `/projects/${pid()}/elements/${elementId}/export`, { rows });
+    await reloadProject();
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Deliver a finished export to disk. Figma-style destination: always open the
+// directory picker (starting at the last-used folder); cancel aborts the export
+// with a visible message; only a browser without the File System Access API falls
+// back to per-file downloads. Never silently drops files.
+async function deliverExport(result, label) {
+  const files = (result.items || result.screens || []).map((entry) => entry.file);
+  const stamp = baseName(result.folder);
+  if (!files.length) {
+    setStatus("Nothing to export.");
+    return;
+  }
+  const links = exportLinks(result.folder, files);
+  if (!supportsFsa()) {
+    downloadFiles(pid(), stamp, files);
+    setStatusLinks(`${label} — ${files.length} file(s) downloaded:`, links);
+    return;
+  }
+  let dir;
+  try {
+    dir = await pickDestination(pid());
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      setStatus("Export canceled — no folder chosen.");
+      return;
+    }
+    setStatus(`Could not open a destination folder: ${error.message}`, true);
+    return;
+  }
+  try {
+    await writeFilesToDir(dir, pid(), stamp, files);
+    setStatusLinks(`${label} — ${files.length} file(s) saved to “${dir.name}”:`, links);
+  } catch (error) {
+    setStatus(`Export failed writing to “${dir.name}”: ${error.message}`, true);
+  }
+}
+
+// Export the given elements, each honoring its own persisted export rows (or the
+// implicit 1x-png default), then deliver to the chosen destination.
 export async function exportElementIds(ids) {
   if (!ids.length) return;
   try {
     setStatus("Exporting...");
     const result = await api("POST", `/projects/${pid()}/export`, { elementIds: ids });
-    setStatusLinks(`Exported ${result.items.length} element(s):`, exportLinks(result.folder, result.items.map((item) => item.file)));
+    await deliverExport(result, `Exported ${ids.length} element(s)`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// No selection -> project export: render every visible screen at 1x png.
+export async function exportProjectAction() {
+  try {
+    setStatus("Exporting project...");
+    const result = await api("POST", `/projects/${pid()}/export`, { project: true });
+    await deliverExport(result, `Exported ${result.screens.length} screen(s)`);
   } catch (error) {
     setStatus(error.message, true);
   }
