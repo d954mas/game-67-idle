@@ -1,7 +1,7 @@
 ---
 id: T0209
 title: "Polygonal regions: extensible shape model + editor (mine legacy impl)"
-status: idea
+status: review
 project: P001
 epic: E010
 priority: P3
@@ -21,3 +21,4 @@ updated: 2026-07-02
 ## Log
 - 2026-07-02: Future phase; scoped in ai_studio/assets/canvas/PLAN.md (2026-07-02)
 - 2026-07-02: Legacy system mined (report tmp/t0209_legacy_polygon_research_2026-07-02.md): polygon = rect + `polygon` [[x,y]...] >=3 pts (no shape field), slice = bbox crop + ImageDraw.polygon mask; editor = tool row select/rect/polygon, click-to-place vertices, dblclick/Enter closes, Ctrl+Z pops last vertex, bbox resize rescales points. Add-region UX decision: replace centered-rect button with Select/Draw Rect/Draw Polygon tool row - shape lands under the pointer. Do-not-port list and risks in the report.
+- 2026-07-02: SHIPPED ead8f099 (accepted: 87/87 tests incl. +10 polygon; live CDP verification). Tool row Select/Rect/Polygon in region-edit mode; polygon = rect + points, bbox auto-derived; slice masks alpha outside the polygon; draft Ctrl+Z pops vertices pre-journal. Not done (per research): per-vertex drag, rect<->polygon convert - follow-up on demand. Server restarted onto the new backend.
