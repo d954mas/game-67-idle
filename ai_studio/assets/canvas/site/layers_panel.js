@@ -24,6 +24,7 @@ import {
   selectGroupOnly,
   selectOnly,
   state,
+  syncPrimaryGroup,
   toggleSelect,
   ungroupedElements,
 } from "./app.js";
@@ -278,8 +279,19 @@ function groupSection(group, depth) {
   // selectGroupOnly (NOT hand-rolled state writes): it also fills the plural
   // selectedGroupIds set, which the Delete key and every node-batch action key on —
   // a hand-rolled write here left the set empty, so Delete from layers did nothing.
-  head.addEventListener("click", () => {
-    selectGroupOnly(group.id);
+  // Ctrl/Shift+click toggles the group in the multi selection (same rule as the
+  // canvas Shift-click on a group: group-toggle only while no elements are selected;
+  // range-select across mixed element+group rows is not supported yet).
+  head.addEventListener("click", (event) => {
+    if ((event.ctrlKey || event.metaKey || event.shiftKey) && state.selectedIds.size === 0) {
+      if (state.selectedGroupIds.has(group.id)) state.selectedGroupIds.delete(group.id);
+      else state.selectedGroupIds.add(group.id);
+      state.selectedRegionIds = new Set();
+      state.regionEditId = null;
+      syncPrimaryGroup();
+    } else {
+      selectGroupOnly(group.id);
+    }
     refresh();
   });
   head.addEventListener("contextmenu", (event) => {
