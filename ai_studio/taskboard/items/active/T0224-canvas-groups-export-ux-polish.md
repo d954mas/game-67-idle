@@ -45,7 +45,13 @@ deferred with a note; none should survive long-term:
    hidden by default with an on-demand reveal (proposal: hold Alt to peek
    while an element is selected; view-state only, not journaled). Touches
    workspace.js drawClipGhosts.
-7. **Layers deep-nesting readability >4 levels** (lead question, answered
+7. **Batched addImages op** (found by T0223's gesture audit, 2026-07-02):
+   multi-file image drop (`addImageFiles`, site/actions.js) issues one
+   POST /images per file = N journal entries for ONE drop gesture - the
+   only remaining violation of the one-entry law. New op
+   `addImages({projectId, images:[...]})` (one commitMutation), HTTP + CLI
+   parity; page drop/paste path rewired; single-image add stays on addImage.
+8. **Layers deep-nesting readability >4 levels** (lead question, answered
    with Figma/analog survey): adopt (a) collapse-by-default for group rows +
    auto-expand only the selection's ancestor path (Figma reveal pattern),
    (b) indent GUIDES - thin vertical level lines a la VS Code so a 10px step
@@ -60,6 +66,7 @@ deferred with a note; none should survive long-term:
 - [ ] Shift-click range selection works in the inspector Regions list (shared helper with layers)
 - [ ] clip ghost hidden by default, Alt-hold (or agreed toggle) reveals it
 - [ ] "Export project (N screens)" button label counts ALL groups; must count TOP-LEVEL visible only (matches exportProject since inc3; seen on screenshot: 1 top-level group shown as "2 screens")
+- [ ] addImages batched op: multi-file drop/paste = 1 journal entry, 1 undo; HTTP + CLI parity
 - [ ] layers: groups collapsed by default + selection path auto-expands; indent guides; panel width draggable
 - [ ] lead's live-verification UX notes on T0219 folded in (or explicitly none)
 - [ ] tests where testable + gates green

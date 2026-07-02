@@ -63,19 +63,16 @@ Full research: `tmp/canvas_perf_research_2026-07-02.md` (copy; distilled here).
 
 ## Increment queue (order approved by lead; adjust as needed)
 
-1. **Multi-gesture op integrity** (`T0223`, P1, debt) — batched `moveNodes`
-   (mixed groups+elements = 1 entry), `reorderNodes` (multi-select Ctrl+[/]),
-   true `ungroupGroup` op (exact z-slot restore). Law: every gesture = one
-   journal entry, no exceptions.
-2. **UX polish leftovers** (`T0224`, P2, debt) — multi-group inspector,
+1. **UX polish leftovers** (`T0224`, P2, debt) — multi-group inspector,
    filled-body click-select, export suffix clear-in-place, shift-range in
    region lists, clip ghost off-by-default + Alt peek, layers deep-nesting
-   pack, export button label count, lead's live-check notes.
-3. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
+   pack, export button label count, batched addImages (multi-drop = 1
+   entry), lead's live-check notes.
+2. **History panel** (`T0204`, P2) — Photoshop-style hideable list over the
    journal + `jumpHistory` op (CLI parity).
-4. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
+3. **Perf: warm Python worker** (`T0202`, P1) — JSON-RPC stdio worker; now
    builds on T0218's `_bridge` + pinned venv `pythonPath`.
-5. **Agent skill** (`T0226`, P2) — thin `nt-canvas-operations` skill so any
+4. **Agent skill** (`T0226`, P2) — thin `nt-canvas-operations` skill so any
    agent resolves `canvas://` refs and acts via CLI (pointers to README,
    never duplicates).
 
@@ -108,6 +105,15 @@ newlines, NO wrap. v1.1 deferred: standalone text→PNG export, letter-spacing,
 shadow blur, italic, v-align, fixed box+wrap. Same commit: geometric
 drop-reparenting REMOVED (lead law: membership changes explicit-only; canvas
 drag never reparents) + parked-member marquee fix. Tests 172→181.
+
+T0223 op integrity LANDED `8869777d` (2026-07-02 night, → review): the
+one-gesture-one-entry law is now exception-free on the page except multi-file
+drop (→ T0224 addImages). `moveNodes` (mixed element+group move, overlap-safe
+via topmost-moved-ancestor delta), `reorderNodes` (multi-select block reorder,
+Figma semantics, per-scope but one entry), `ungroupGroup` (children land at the
+group's former z-slot, internal order kept, one undo deep-restores). Pure
+block math in `tree.mjs`; HTTP + CLI `nodes-move`/`nodes-reorder`/
+`group-ungroup`; full gesture audit table in the task log. Tests 181→195.
 
 T0200 perf frontend-churn LANDED `e37d8a5a` (2026-07-02 night): op responses
 carry `history{seq,canUndo,canRedo}` and drive the page (zero follow-up GETs,

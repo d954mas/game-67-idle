@@ -1,7 +1,7 @@
 ---
 id: T0223
 title: "Canvas: multi-gesture op integrity - batched mixed move, batched reorder, true ungroup op"
-status: backlog
+status: review
 project: P001
 epic: E010
 priority: P1
