@@ -146,6 +146,10 @@ export function createProject(root, { title } = {}) {
     // mutation (0 = base/empty). The op layer owns the journal semantics; the
     // store just carries this pointer through updateProject like any other field.
     history_seq: 0,
+    // Groups are Figma-frame-like named screen regions (one level, no nesting).
+    // Additive to ai_studio.canvas.project.v1: older projects load with no groups
+    // and every reader tolerates a missing/empty groups array.
+    groups: [],
     elements: [],
     tool_runs: [],
   };
@@ -238,6 +242,11 @@ export function patchElement(root, id, elementId, patch = {}) {
     }
   }
   if (patch.name !== undefined) element.name = String(patch.name);
+  // Optional per-element visibility (default true). Store an explicit boolean so
+  // renderGroup and the page can hide the element with `element.visible !== false`.
+  if (patch.visible !== undefined) {
+    element.visible = !(patch.visible === false || patch.visible === "false");
+  }
   const saved = updateProject(root, id, { elements: project.elements });
   return { project: saved, element };
 }

@@ -42,8 +42,11 @@ Every capability is one op in `ops.mjs`:
 - `listProjects` / `createProject` / `getProject` / `updateProject`
 - `addImage` (parses real PNG/JPEG/GIF dimensions, persists `source_w`/`source_h`,
   writes an immutable file) — journaled
-- `patchElement` (move/resize/rename) / `removeElement` (element only; file stays)
-  — journaled
+- `patchElement` (move/resize/rename/`visible`) / `removeElement` (element only;
+  file stays) — journaled
+- `createGroup` / `patchGroup` / `assignToGroup` / `deleteGroup` — group (screen)
+  mutations, journaled; `renderGroup` — composited screen PNG export, not
+  journaled. See **Groups = screens** below.
 - `detectRegions` — reads the element image, runs it through the raster2d
   upload + detect pipeline, stores `element.regions` (and backfills
   `source_w`/`source_h`), records a `tool_runs` entry — journaled. Requires Python
@@ -60,6 +63,49 @@ Every capability is one op in `ops.mjs`:
   collision-suffixed name plus a `manifest.json`. Not journaled (it makes no
   project mutation), but recorded in `tool_runs`.
 - `undoOp` / `redoOp` / `readHistory` — see Journal below.
+
+## Groups = screens
+
+A group is a Figma-frame-like named region — a game **screen mockup** that owns
+elements, can be hidden/shown, moved as a whole, and exported as one composited
+PNG. Groups are additive to `ai_studio.canvas.project.v1` (no migration): a
+project gains `groups: [{id, name, x, y, w, h, visible}]` (one level, no nesting)
+and elements gain optional `groupId` (absent/`null` = ungrouped) and optional
+`visible` (default `true`). Every group/visibility mutation is journaled exactly
+like an element op — the metadata-only snapshot now also carries `groups`, so
+undo/redo restore groups, elements, and tool runs together.
+
+- `createGroup({projectId, name, x?, y?, w?, h?, fromElements?})` — explicit
+  bounds, **or** `fromElements: [elementIds]` = the bounding box of those
+  elements + 24px padding, assigning them to the new group. One journal entry.
+- `patchGroup({projectId, groupId, name?, x?, y?, w?, h?, visible?})` — when
+  `x`/`y` change, **all member elements translate by the same delta** atomically
+  (one journal entry; undo restores the frame and every member). Resize (`w`/`h`)
+  never moves members.
+- `assignToGroup({projectId, elementIds, groupId|null})` — set or clear the group
+  of the given elements. Journaled.
+- `deleteGroup({projectId, groupId})` — remove the group; members keep their
+  positions with `groupId` cleared. Journaled.
+- `renderGroup({projectId, groupId, scale?, background?})` — composite all
+  **visible** member elements (`element.visible !== false`), in element array
+  order (z-order), clipped to the group bounds, into one PNG at `scale`
+  (default 1) over a transparent background or an optional solid `#rrggbb`.
+
+### Render contract
+
+`renderGroup` writes `<project>/export/<utc-stamp>/screen_<sanitized-name>.png`
+plus `manifest.json` (schema `ai_studio.canvas.export.v1`, `kind: "screen"`), the
+handed-over `render_spec.json`, and a small `render_report.json`. It records a
+`render_group` `tool_runs` entry and, like `exportElements`, makes no project
+geometry change so it is **not** journaled. Compositing is done by our own Python
+tool `tools/render_group.py` (PIL): `ops.renderGroup` writes a render spec
+(absolute file paths, group bounds, scale, background, output/report paths) and
+spawns the script directly with the same robust Python discovery the raster2d
+bridge uses (`AI_STUDIO_PYTHON`/`PYTHON` env, bundled runtime, `py -3.12`, then
+`python`). A direct child-process call is fine here because this tool is ours.
+Each element is drawn at its display box (`element.w`/`h`) scaled by `scale`,
+offset relative to the group origin, and alpha-composited so overlap and
+transparency stay correct; anything outside the group box is clipped.
 
 ### Slice bridge choice
 
@@ -119,14 +165,27 @@ node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all
+node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h]
+node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
+node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h]
+node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
+node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
+node ai_studio/assets/canvas/cli.mjs render-screen <id> --group g [--scale 2] [--background '#rrggbb']
 node ai_studio/assets/canvas/cli.mjs undo <id>
 node ai_studio/assets/canvas/cli.mjs redo <id>
 node ai_studio/assets/canvas/cli.mjs history <id>
 ```
 
+`show <id>` includes `groups` in its project output.
+
 The page mirrors these: click selects, Shift+click toggles, Escape clears, Delete
 removes selected, Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z (or Ctrl+Y) redo, plus Slice
-and Export selected buttons.
+and Export selected buttons. Visible groups draw as Figma-like frames with a name
+label above the top-left corner; clicking the label selects the group and
+dragging it moves the whole screen, a selected group offers **Render screen** and
+**Hide/Show**, and **Group selection** turns 2+ selected elements into a screen.
+Elements that are `visible:false` or inside a hidden group are neither drawn nor
+hit-testable.
 
 ## Validation
 

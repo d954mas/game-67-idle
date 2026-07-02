@@ -1100,7 +1100,7 @@
       "path": "ai_studio/assets/canvas",
       "color": "#7c3aed",
       "coverage": "self",
-      "description": "Figma/Recraft-like multi-image canvas projects. Every capability is one operation in a shared ops layer with two equal clients: the agent (CLI/import) and the thin browser page. Owns project persistence, an append-only operation journal with linear undo/redo, region slicing into new elements, and selected-element export; bridges detect_regions and slice to the raster2d pipeline unmodified.",
+      "description": "Figma/Recraft-like multi-image canvas projects. Every capability is one operation in a shared ops layer with two equal clients: the agent (CLI/import) and the thin browser page. Owns project persistence, an append-only operation journal with linear undo/redo, groups as named game screens (Figma-frame regions that own elements, hide/show, move as a whole, and export as one composited PNG), region slicing into new elements, and selected-element export; bridges detect_regions and slice to the raster2d pipeline unmodified and composites screens with its own render_group.py tool.",
       "role": "canvas projects module",
       "tags": [
         "assets",
@@ -1140,7 +1140,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/ops.mjs",
           "title": "ops.mjs",
-          "description": "The one operation layer both clients call: journaled store wrappers (addImage/patchElement/removeElement), linear undo/redo/history over the append-only journal, the bridged detectRegions and sliceRegions (which reuse the raster2d upload/detect/slice functions unmodified), and exportElements. Records regions, slice crops with provenance, and tool_runs entries on the project.",
+          "description": "The one operation layer both clients call: journaled store wrappers (addImage/patchElement/removeElement), group (screen) ops (createGroup/patchGroup/assignToGroup/deleteGroup) whose metadata-only snapshots also carry groups so undo restores frames and members together, linear undo/redo/history over the append-only journal, the bridged detectRegions and sliceRegions (which reuse the raster2d upload/detect/slice functions unmodified), exportElements, and renderGroup (spawns tools/render_group.py to composite a screen PNG). Records regions, slice crops with provenance, and tool_runs entries on the project.",
           "role": "canvas operation layer",
           "tags": [
             "assets",
@@ -1154,7 +1154,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/api.mjs",
           "title": "api.mjs",
-          "description": "Studio Shell HTTP adapter for canvas projects, elements, base64 image upload, region detection, region slicing, element export, undo/redo/history, and confined image-file serving under the /api/canvas/ prefix. Marshals HTTP to the ops layer only.",
+          "description": "Studio Shell HTTP adapter for canvas projects, elements, base64 image upload, region detection, region slicing, element export, group create/patch/assign/delete and screen render, undo/redo/history, and confined image-file serving under the /api/canvas/ prefix. Marshals HTTP to the ops layer only.",
           "role": "canvas HTTP API adapter",
           "tags": [
             "assets",
@@ -1167,12 +1167,43 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/cli.mjs",
           "title": "cli.mjs",
-          "description": "Agent client over the same ops layer: list, create, show, add-image, detect-regions, move, slice, export, undo, redo, and history commands printing compact JSON.",
+          "description": "Agent client over the same ops layer: list, create, show, add-image, detect-regions, move, slice, export, group-create/move/set/assign/delete, render-screen, undo, redo, and history commands printing compact JSON.",
           "role": "canvas agent CLI",
           "tags": [
             "assets",
             "canvas",
             "cli"
+          ]
+        },
+        {
+          "id": "assets:canvas-tools",
+          "title": "Canvas Tools",
+          "subtitle": "screen compositor",
+          "kind": "group",
+          "path": "ai_studio/assets/canvas/tools",
+          "color": "#7c3aed",
+          "description": "The canvas module's own Python tools (not raster2d steps), spawned directly by the ops layer with the shared Python discovery.",
+          "role": "canvas python tools",
+          "tags": [
+            "assets",
+            "canvas",
+            "tool"
+          ],
+          "children": [
+            {
+              "id": "assets:canvas-tools-render-group",
+              "kind": "tool",
+              "path": "ai_studio/assets/canvas/tools/render_group.py",
+              "title": "render_group.py",
+              "description": "PIL compositor for renderGroup: reads a render spec JSON (absolute element paths, group bounds, scale, background), alpha-composites the visible member elements in z-order clipped to the group box, and writes one screen PNG plus a JSON report atomically.",
+              "role": "canvas screen compositor",
+              "tags": [
+                "assets",
+                "canvas",
+                "tool",
+                "render"
+              ]
+            }
           ]
         },
         {
@@ -1182,7 +1213,7 @@
           "kind": "surface",
           "path": "ai_studio/assets/canvas/site",
           "color": "#7c3aed",
-          "description": "Thin browser page served via the /ai_studio/ static route. Left project list plus a pan/zoom/fit canvas that reuses the Asset Tools viewport module, renders project elements with source-scaled region overlays, supports multi-select (click/shift/escape), drag-move, delete, slice, export, and keyboard undo/redo, and calls one API per action. No logic beyond rendering/input.",
+          "description": "Thin browser page served via the /ai_studio/ static route. Left project list plus a pan/zoom/fit canvas that reuses the Asset Tools viewport module, renders project elements with source-scaled region overlays, draws visible groups as Figma-like screen frames with a name label, supports multi-select (click/shift/escape), drag-move, delete, slice, export, group-selection, screen render, group hide/show, label click-select and drag-move of a whole screen, and keyboard undo/redo, and calls one API per action. No logic beyond rendering/input.",
           "role": "canvas browser page",
           "tags": [
             "assets",
@@ -1196,7 +1227,7 @@
           "kind": "test",
           "path": "ai_studio/assets/canvas/tests",
           "title": "tests",
-          "description": "Regression tests for the canvas store round-trip and confinement, studio config resolution, the operation journal with undo/redo and redo-tail invalidation, element export folder/manifest, the HTTP API lifecycle plus undo/slice/export routes, a CLI smoke, and the bridged detectRegions/sliceRegions ops (skips cleanly when the raster2d Python pipeline is unavailable).",
+          "description": "Regression tests for the canvas store round-trip and confinement, studio config resolution, the operation journal with undo/redo and redo-tail invalidation, element export folder/manifest, group create-from-elements bbox, group move + member translation with undo, delete-keeps-elements, visibility, renderGroup composite pixel checks via a tiny PNG decoder, the HTTP API lifecycle plus undo/slice/export/group/render routes, a CLI smoke incl. group commands, and the bridged detectRegions/sliceRegions/renderGroup ops (skips cleanly when the Python pipeline is unavailable).",
           "role": "canvas module tests",
           "tags": [
             "assets",

@@ -47,3 +47,47 @@ test("cli create/add-image/undo/redo/history/export smoke", (t) => {
   assert.equal(exported.items.length, 1);
   assert.equal(exported.manifest.schema, "ai_studio.canvas.export.v1");
 });
+
+test("cli group-create/move/set/assign/delete smoke (no python)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-groups-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const a = join(dir, "a.png");
+  const b = join(dir, "b.png");
+  writeFileSync(a, solidPng(8, 8, [10, 20, 30]));
+  writeFileSync(b, solidPng(6, 6, [30, 40, 50]));
+
+  const projectId = run(env, "create", "--title", "CLI Groups").project.id;
+  const elA = run(env, "add-image", projectId, "--file", a).element.id;
+  const elB = run(env, "add-image", projectId, "--file", b).element.id;
+  run(env, "move", projectId, "--element", elA, "--x", "10", "--y", "10");
+  run(env, "move", projectId, "--element", elB, "--x", "30", "--y", "20");
+
+  // group-create from two elements -> a bbox-padded group owning both.
+  const created = run(env, "group-create", projectId, "--name", "Main Menu", "--elements", `${elA},${elB}`);
+  const groupId = created.group.id;
+  assert.equal(created.group.visible, true);
+  assert.equal(created.project.elements.every((e) => e.groupId === groupId), true);
+
+  // group-move translates members (verified via show).
+  const g0 = created.group;
+  run(env, "group-move", projectId, "--group", groupId, "--x", String(g0.x + 40), "--y", String(g0.y + 40));
+  let shown = run(env, "show", projectId).project;
+  assert.equal(shown.elements.find((e) => e.id === elA).x, 50); // 10 + 40
+
+  // group-set renames + hides.
+  run(env, "group-set", projectId, "--group", groupId, "--name", "Hidden", "--visible", "false");
+  shown = run(env, "show", projectId).project;
+  assert.equal(shown.groups[0].name, "Hidden");
+  assert.equal(shown.groups[0].visible, false);
+
+  // group-assign none clears a member's group; group-delete keeps elements.
+  run(env, "group-assign", projectId, "--elements", elB, "--group", "none");
+  assert.equal(run(env, "show", projectId).project.elements.find((e) => e.id === elB).groupId, null);
+  run(env, "group-delete", projectId, "--group", groupId);
+  shown = run(env, "show", projectId).project;
+  assert.equal(shown.groups.length, 0);
+  assert.equal(shown.elements.length, 2, "delete keeps elements");
+  assert.equal(shown.elements.find((e) => e.id === elA).groupId, null);
+});

@@ -198,6 +198,71 @@ test("canvas API slice route creates crop elements (skips without Python)", asyn
   assert.ok(sliced.json().created.length >= 1, "slice created crop elements");
 });
 
+test("canvas API group routes: create/patch/assign/delete round-trip", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Group API" })).json().project.id;
+  const elA = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "a.png",
+    bytes_base64: solidPng(8, 8).toString("base64"),
+  })).json().element.id;
+  const elB = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "b.png",
+    bytes_base64: solidPng(6, 6).toString("base64"),
+  })).json().element.id;
+  await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/elements/${elA}`, { x: 10, y: 10 });
+  await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/elements/${elB}`, { x: 30, y: 20 });
+
+  const created = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups`, {
+    name: "Main Menu",
+    fromElements: [elA, elB],
+  });
+  assert.equal(created.status, 201);
+  const groupId = created.json().group.id;
+  assert.deepEqual(
+    { x: created.json().group.x, y: created.json().group.y, w: created.json().group.w, h: created.json().group.h },
+    { x: -14, y: -14, w: 74, h: 64 },
+  );
+
+  // patchGroup move translates members.
+  const moved = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/groups/${groupId}`, { x: 86, y: 36 });
+  assert.equal(moved.status, 200);
+  const afterMove = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.equal(afterMove.elements.find((e) => e.id === elA).x, 110);
+
+  // assign-group clears a member, delete keeps elements.
+  await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/assign-group`, { elementIds: [elB], groupId: null });
+  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project.elements.find((e) => e.id === elB).groupId, null);
+  const deleted = await invokeApi(handler, "DELETE", `/api/canvas/projects/${projectId}/groups/${groupId}`);
+  assert.equal(deleted.status, 200);
+  const afterDelete = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.equal(afterDelete.groups.length, 0);
+  assert.equal(afterDelete.elements.length, 2);
+});
+
+test("canvas API render-screen route composites a group PNG (skips without Python)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(REPO_ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Render API" })).json().project.id;
+  const elA = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "red.png",
+    bytes_base64: solidPng(8, 8, [220, 40, 40]).toString("base64"),
+  })).json().element.id;
+  await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/elements/${elA}`, { x: 10, y: 10 });
+  const groupId = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups`, {
+    name: "Screen",
+    fromElements: [elA],
+  })).json().group.id;
+
+  const rendered = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups/${groupId}/render`, { scale: 1 });
+  if (rendered.status !== 200) {
+    t.skip(`render_group.py / PIL unavailable: ${rendered.json().error}`);
+    return;
+  }
+  assert.equal(rendered.json().manifest.kind, "screen");
+  assert.equal(rendered.json().members, 1);
+});
+
 test("canvas API returns an error for a missing project", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(ROOT);

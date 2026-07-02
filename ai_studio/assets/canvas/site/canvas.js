@@ -17,10 +17,12 @@ const state = {
   projects: [],
   project: null,
   selectedIds: new Set(),
+  selectedGroupId: null,
   history: { canUndo: false, canRedo: false },
   viewport: { scale: 1, offsetX: 0, offsetY: 0 },
 };
 const imageCache = new Map(); // element.src -> HTMLImageElement
+let groupLabelRects = []; // {groupId, x, y, w, h} in screen space, rebuilt each render
 
 function setStatus(message, isError = false) {
   const node = el("status");
@@ -56,12 +58,36 @@ function elements() {
   return (state.project && state.project.elements) || [];
 }
 
+function groups() {
+  return (state.project && state.project.groups) || [];
+}
+
+function groupById(id) {
+  return groups().find((g) => g.id === id) || null;
+}
+
 function selectedElements() {
   return elements().filter((e) => state.selectedIds.has(e.id));
 }
 
 function isSelected(element) {
   return state.selectedIds.has(element.id);
+}
+
+// A set of group ids whose frame (and members) are hidden.
+function hiddenGroupIds() {
+  return new Set(groups().filter((g) => g.visible === false).map((g) => g.id));
+}
+
+// An element is hidden if it is explicitly invisible or lives in a hidden group.
+// Hidden elements are neither drawn nor hit-testable.
+function isElementHidden(element, hiddenGroups) {
+  if (element.visible === false) return true;
+  return Boolean(element.groupId) && (hiddenGroups || hiddenGroupIds()).has(element.groupId);
+}
+
+function memberElements(groupId) {
+  return elements().filter((e) => e.groupId === groupId);
 }
 
 // ---- rendering ---------------------------------------------------------------
@@ -76,7 +102,10 @@ function render() {
   resizeCanvas();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const vp = state.viewport;
+  const hidden = hiddenGroupIds();
+  // Elements first (in z-order), skipping hidden ones.
   for (const element of elements()) {
+    if (isElementHidden(element, hidden)) continue;
     const img = imageFor(element);
     const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
     const w = element.w * vp.scale;
@@ -94,6 +123,38 @@ function render() {
       drawRegions(element, vp);
     }
   }
+  // Group frames + labels on top. Hidden groups are skipped entirely.
+  groupLabelRects = [];
+  for (const group of groups()) {
+    if (group.visible === false) continue;
+    drawGroupFrame(group, vp);
+  }
+}
+
+// One Figma-like frame per visible group: a thin outline plus a name label just
+// ABOVE the top-left corner. The label rect (screen space) is cached so clicks
+// and drags on it can select/move the group.
+function drawGroupFrame(group, vp) {
+  const origin = imageToScreenPoint({ x: group.x, y: group.y }, vp);
+  const w = group.w * vp.scale;
+  const h = group.h * vp.scale;
+  const selected = state.selectedGroupId === group.id;
+  ctx.lineWidth = selected ? 2 : 1;
+  ctx.strokeStyle = selected ? "#d7a14a" : "#77a7ff";
+  ctx.strokeRect(origin.x, origin.y, w, h);
+
+  const label = group.name || "Screen";
+  ctx.font = "12px system-ui, 'Segoe UI', sans-serif";
+  const padX = 6;
+  const labelH = 16;
+  const textW = Math.ceil(ctx.measureText(label).width);
+  const rect = { groupId: group.id, x: origin.x, y: origin.y - labelH - 2, w: textW + padX * 2, h: labelH };
+  ctx.fillStyle = selected ? "#d7a14a" : "#2764bd";
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+  ctx.fillStyle = "#f8fbff";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, rect.x + padX, rect.y + labelH / 2 + 0.5);
+  groupLabelRects.push(rect);
 }
 
 function drawRegions(element, vp) {
@@ -117,13 +178,17 @@ function drawRegions(element, vp) {
 }
 
 function elementBounds() {
-  const items = elements();
-  if (!items.length) return { x: 0, y: 0, width: 1024, height: 768 };
+  const hidden = hiddenGroupIds();
+  const boxes = [
+    ...elements().filter((e) => !isElementHidden(e, hidden)),
+    ...groups().filter((g) => g.visible !== false),
+  ];
+  if (!boxes.length) return { x: 0, y: 0, width: 1024, height: 768 };
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const e of items) {
+  for (const e of boxes) {
     minX = Math.min(minX, e.x);
     minY = Math.min(minY, e.y);
     maxX = Math.max(maxX, e.x + e.w);
@@ -179,6 +244,11 @@ function syncToolbar() {
   el("slice").disabled = !(single && Array.isArray(single.regions) && single.regions.length > 0);
   el("delete-element").disabled = selected.length === 0;
   el("export-selected").disabled = selected.length === 0;
+  el("group-selection").disabled = selected.length < 2;
+  const group = state.selectedGroupId ? groupById(state.selectedGroupId) : null;
+  el("render-screen").disabled = !group;
+  el("group-toggle").disabled = !group;
+  el("group-toggle").textContent = group && group.visible === false ? "Show" : "Hide";
   el("undo").disabled = !state.history.canUndo;
   el("redo").disabled = !state.history.canRedo;
 }
@@ -204,6 +274,7 @@ async function refreshHistory() {
 async function openProject(id) {
   state.project = (await api("GET", `/projects/${id}`)).project;
   state.selectedIds = new Set();
+  state.selectedGroupId = null;
   imageCache.clear();
   await refreshHistory();
   renderProjectList();
@@ -219,6 +290,7 @@ async function reloadProject(message) {
   state.project = (await api("GET", `/projects/${state.project.id}`)).project;
   const alive = new Set(elements().map((e) => e.id));
   state.selectedIds = new Set([...state.selectedIds].filter((id) => alive.has(id)));
+  if (state.selectedGroupId && !groupById(state.selectedGroupId)) state.selectedGroupId = null;
   await refreshHistory();
   renderProjectList();
   syncToolbar();
@@ -238,13 +310,26 @@ function pointer(event) {
 
 function hitElement(worldPoint) {
   const items = elements();
+  const hidden = hiddenGroupIds();
   for (let i = items.length - 1; i >= 0; i -= 1) {
     const e = items[i];
+    if (isElementHidden(e, hidden)) continue;
     if (
       worldPoint.x >= e.x && worldPoint.x <= e.x + e.w &&
       worldPoint.y >= e.y && worldPoint.y <= e.y + e.h
     ) {
       return e;
+    }
+  }
+  return null;
+}
+
+// Hit-test the cached group name labels (screen space); returns a group id or null.
+function hitGroupLabel(screenPoint) {
+  for (let i = groupLabelRects.length - 1; i >= 0; i -= 1) {
+    const r = groupLabelRects[i];
+    if (screenPoint.x >= r.x && screenPoint.x <= r.x + r.w && screenPoint.y >= r.y && screenPoint.y <= r.y + r.h) {
+      return r.groupId;
     }
   }
   return null;
@@ -272,8 +357,23 @@ async function saveDraggedPositions() {
 canvas.addEventListener("mousedown", (event) => {
   const screen = pointer(event);
   const world = screenToImagePoint(screen, state.viewport);
+  const labelGroupId = hitGroupLabel(screen);
+  if (labelGroupId) {
+    // Click the label = select the group; drag it = move the whole screen. Group
+    // selection is exclusive of element selection.
+    state.selectedGroupId = labelGroupId;
+    state.selectedIds = new Set();
+    const group = groupById(labelGroupId);
+    const members = memberElements(labelGroupId).map((element) => ({ element, origX: element.x, origY: element.y }));
+    drag = { mode: "group", startX: screen.x, startY: screen.y, group, origGroup: { x: group.x, y: group.y }, members };
+    canvas.classList.add("dragging");
+    syncToolbar();
+    render();
+    return;
+  }
   const hit = hitElement(world);
   if (hit) {
+    state.selectedGroupId = null;
     if (event.shiftKey) {
       if (state.selectedIds.has(hit.id)) state.selectedIds.delete(hit.id);
       else state.selectedIds.add(hit.id);
@@ -286,6 +386,7 @@ canvas.addEventListener("mousedown", (event) => {
     canvas.classList.add("dragging");
   } else {
     if (!event.shiftKey) state.selectedIds = new Set();
+    state.selectedGroupId = null;
     drag = { mode: "pan", startX: screen.x, startY: screen.y, origOffset: { ...state.viewport } };
     canvas.classList.add("dragging");
   }
@@ -303,6 +404,18 @@ window.addEventListener("mousemove", (event) => {
       offsetY: drag.origOffset.offsetY + (screen.y - drag.startY),
     };
     render();
+  } else if (drag.mode === "group") {
+    // Preview: move the frame and all members together. The move is persisted on
+    // drop via a single patchGroup, which translates members server-side.
+    const dx = (screen.x - drag.startX) / state.viewport.scale;
+    const dy = (screen.y - drag.startY) / state.viewport.scale;
+    drag.group.x = drag.origGroup.x + dx;
+    drag.group.y = drag.origGroup.y + dy;
+    for (const item of drag.members) {
+      item.element.x = item.origX + dx;
+      item.element.y = item.origY + dy;
+    }
+    render();
   } else {
     const dx = (screen.x - drag.startX) / state.viewport.scale;
     const dy = (screen.y - drag.startY) / state.viewport.scale;
@@ -317,11 +430,11 @@ window.addEventListener("mousemove", (event) => {
 
 window.addEventListener("mouseup", () => {
   if (!drag) return;
-  const wasElement = drag.mode === "element";
+  const mode = drag.mode;
   const finished = drag;
   drag = null;
   canvas.classList.remove("dragging");
-  if (wasElement) {
+  if (mode === "element") {
     clearTimeout(moveSaveTimer);
     // Save on the finished drag, then refresh history so undo/redo enable.
     (async () => {
@@ -337,6 +450,23 @@ window.addEventListener("mouseup", () => {
       }
       await refreshHistory();
       syncToolbar();
+    })();
+  } else if (mode === "group") {
+    // One patchGroup on drop: the server translates the (still-persisted) members
+    // by the same delta, so we send only the new frame origin and then reload.
+    const moved = Math.round(finished.group.x) !== Math.round(finished.origGroup.x)
+      || Math.round(finished.group.y) !== Math.round(finished.origGroup.y);
+    if (!moved) return;
+    (async () => {
+      try {
+        await api("PATCH", `/projects/${state.project.id}/groups/${finished.group.id}`, {
+          x: Math.round(finished.group.x),
+          y: Math.round(finished.group.y),
+        });
+        await reloadProject("Moved screen.");
+      } catch (error) {
+        setStatus(error.message, true);
+      }
     })();
   }
 });
@@ -464,6 +594,47 @@ async function runRedo() {
   }
 }
 
+el("group-selection").addEventListener("click", async () => {
+  const selected = selectedElements();
+  if (selected.length < 2) return;
+  const name = prompt("Screen name", "New screen");
+  if (name === null) return;
+  try {
+    const result = await api("POST", `/projects/${state.project.id}/groups`, {
+      name,
+      fromElements: selected.map((e) => e.id),
+    });
+    state.selectedIds = new Set();
+    state.selectedGroupId = result.group.id;
+    await reloadProject(`Grouped ${selected.length} element(s) into "${result.group.name}".`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+});
+
+el("render-screen").addEventListener("click", async () => {
+  const group = state.selectedGroupId ? groupById(state.selectedGroupId) : null;
+  if (!group) return;
+  try {
+    setStatus(`Rendering "${group.name}"...`);
+    const result = await api("POST", `/projects/${state.project.id}/groups/${group.id}/render`, {});
+    setStatus(`Rendered ${result.manifest.width}x${result.manifest.height} screen to ${result.folder}\\${result.file}`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+});
+
+el("group-toggle").addEventListener("click", async () => {
+  const group = state.selectedGroupId ? groupById(state.selectedGroupId) : null;
+  if (!group) return;
+  try {
+    await api("PATCH", `/projects/${state.project.id}/groups/${group.id}`, { visible: group.visible === false });
+    await reloadProject(group.visible === false ? "Showed screen." : "Hid screen.");
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+});
+
 el("fit").addEventListener("click", fit);
 
 // ---- keyboard ----------------------------------------------------------------
@@ -484,6 +655,7 @@ window.addEventListener("keydown", (event) => {
   }
   if (key === "escape") {
     state.selectedIds = new Set();
+    state.selectedGroupId = null;
     syncToolbar();
     render();
     return;

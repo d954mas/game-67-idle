@@ -9,25 +9,35 @@
 //   POST   /api/canvas/projects/<id>/detect-regions {elementId, params?}
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
 //   POST   /api/canvas/projects/<id>/export         {elementIds}
+//   POST   /api/canvas/projects/<id>/groups         {name, x?,y?,w?,h?, fromElements?}
+//   PATCH  /api/canvas/projects/<id>/groups/<gid>   {name?,x?,y?,w?,h?,visible?}
+//   DELETE /api/canvas/projects/<id>/groups/<gid>
+//   POST   /api/canvas/projects/<id>/groups/<gid>/render {scale?, background?}
+//   POST   /api/canvas/projects/<id>/assign-group   {elementIds, groupId|null}
 //   POST   /api/canvas/projects/<id>/undo
 //   POST   /api/canvas/projects/<id>/redo
 //   GET    /api/canvas/projects/<id>/history
-//   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name}
+//   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible}
 //   DELETE /api/canvas/projects/<id>/elements/<eid>
 //   GET    /api/canvas/projects/<id>/files/<name>  (image bytes, path-confined)
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname } from "node:path";
 import {
   addImage,
+  assignToGroup,
+  createGroup,
   createProject,
+  deleteGroup,
   detectRegions,
   exportElements,
   getProject,
   listProjects,
   patchElement,
+  patchGroup,
   readHistory,
   redoOp,
   removeElement,
+  renderGroup,
   resolveProjectFile,
   sliceRegions,
   undoOp,
@@ -160,6 +170,61 @@ export function createCanvasApi(root) {
           projectId: id,
           elementIds: Array.isArray(body.elementIds) ? body.elementIds : [],
           format: body.format,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/groups  (create)
+      if (parts.length === 5 && sub === "groups" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendJson(res, 201, createGroup(root, {
+          projectId: id,
+          name: body.name,
+          x: body.x,
+          y: body.y,
+          w: body.w,
+          h: body.h,
+          fromElements: body.fromElements,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/assign-group
+      if (parts.length === 5 && sub === "assign-group" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendJson(res, 200, assignToGroup(root, {
+          projectId: id,
+          elementIds: Array.isArray(body.elementIds) ? body.elementIds : [],
+          groupId: body.groupId,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/groups/<gid>  (patch/delete)
+      if (parts.length === 6 && sub === "groups") {
+        const groupId = decodeURIComponent(parts[5]);
+        if (req.method === "PATCH") {
+          const body = await readJsonBody(req);
+          sendJson(res, 200, patchGroup(root, { projectId: id, groupId, ...body }));
+          return true;
+        }
+        if (req.method === "DELETE") {
+          sendJson(res, 200, deleteGroup(root, { projectId: id, groupId }));
+          return true;
+        }
+        sendJson(res, 405, { error: "method not allowed" });
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/groups/<gid>/render
+      if (parts.length === 7 && sub === "groups" && parts[6] === "render" && req.method === "POST") {
+        const groupId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendJson(res, 200, await renderGroup(root, {
+          projectId: id,
+          groupId,
+          scale: body.scale,
+          background: body.background,
         }));
         return true;
       }

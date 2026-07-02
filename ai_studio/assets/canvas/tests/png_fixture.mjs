@@ -2,7 +2,7 @@
 // is a small inline table. Produces 8-bit RGB PNGs whose header bytes match the
 // store's pure imageSize() parser, and whose flat-magenta background + solid
 // colored blobs give the raster2d detector real regions to find.
-import { deflateSync } from "node:zlib";
+import { deflateSync, inflateSync } from "node:zlib";
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -80,4 +80,77 @@ export function magentaSheetPng() {
 // A trivial solid 4x3 PNG for store round-trip tests where content does not matter.
 export function solidPng(width = 4, height = 3, color = [10, 20, 30]) {
   return encodePng(width, height, () => color);
+}
+
+// Minimal PNG decoder for pixel assertions on render output. Handles 8-bit
+// truecolor (RGB, type 2) and truecolor+alpha (RGBA, type 6), no interlace —
+// which covers both this file's fixtures and PIL's renderGroup output. Reverses
+// the five PNG scanline filters after zlib inflate. Returns { width, height,
+// channels, at(x, y) -> [r, g, b, a] }.
+function paeth(a, b, c) {
+  const p = a + b - c;
+  const pa = Math.abs(p - a);
+  const pb = Math.abs(p - b);
+  const pc = Math.abs(p - c);
+  if (pa <= pb && pa <= pc) return a;
+  if (pb <= pc) return b;
+  return c;
+}
+
+export function decodePng(buffer) {
+  let offset = 8; // skip 8-byte signature
+  let header = null;
+  const idat = [];
+  while (offset + 12 <= buffer.length) {
+    const length = buffer.readUInt32BE(offset);
+    const type = buffer.toString("ascii", offset + 4, offset + 8);
+    const data = buffer.subarray(offset + 8, offset + 8 + length);
+    if (type === "IHDR") {
+      header = { width: data.readUInt32BE(0), height: data.readUInt32BE(4), bitDepth: data[8], colorType: data[9], interlace: data[12] };
+    } else if (type === "IDAT") {
+      idat.push(Buffer.from(data));
+    } else if (type === "IEND") {
+      break;
+    }
+    offset += 12 + length;
+  }
+  if (!header) throw new Error("decodePng: no IHDR");
+  if (header.bitDepth !== 8 || ![2, 6].includes(header.colorType) || header.interlace !== 0) {
+    throw new Error(`decodePng: unsupported PNG (bitDepth ${header.bitDepth}, colorType ${header.colorType}, interlace ${header.interlace})`);
+  }
+  const channels = header.colorType === 6 ? 4 : 3;
+  const { width, height } = header;
+  const stride = width * channels;
+  const raw = inflateSync(Buffer.concat(idat));
+  const out = new Uint8Array(height * stride);
+  let pos = 0;
+  for (let y = 0; y < height; y += 1) {
+    const filter = raw[pos];
+    pos += 1;
+    for (let i = 0; i < stride; i += 1) {
+      const value = raw[pos];
+      pos += 1;
+      const a = i >= channels ? out[y * stride + i - channels] : 0;
+      const b = y > 0 ? out[(y - 1) * stride + i] : 0;
+      const c = i >= channels && y > 0 ? out[(y - 1) * stride + i - channels] : 0;
+      let recon = value;
+      if (filter === 1) recon = value + a;
+      else if (filter === 2) recon = value + b;
+      else if (filter === 3) recon = value + ((a + b) >> 1);
+      else if (filter === 4) recon = value + paeth(a, b, c);
+      else if (filter !== 0) throw new Error(`decodePng: bad filter ${filter}`);
+      out[y * stride + i] = recon & 0xff;
+    }
+  }
+  return {
+    width,
+    height,
+    channels,
+    at(x, y) {
+      const idx = (y * width + x) * channels;
+      return channels === 4
+        ? [out[idx], out[idx + 1], out[idx + 2], out[idx + 3]]
+        : [out[idx], out[idx + 1], out[idx + 2], 255];
+    },
+  };
 }

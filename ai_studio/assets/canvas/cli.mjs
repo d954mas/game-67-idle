@@ -11,6 +11,12 @@
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
 //   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 //   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all
+//   node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h]
+//   node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
+//   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h]
+//   node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
+//   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
+//   node ai_studio/assets/canvas/cli.mjs render-screen <id> --group g [--scale 2] [--background '#rrggbb']
 //   node ai_studio/assets/canvas/cli.mjs undo|redo|history <id>
 import { readFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
@@ -18,14 +24,19 @@ import { fileURLToPath } from "node:url";
 import { fail, isMain } from "../../core_harness/tool_lib/cli.mjs";
 import {
   addImage,
+  assignToGroup,
+  createGroup,
   createProject,
+  deleteGroup,
   detectRegions,
   exportElements,
   getProject,
   listProjects,
   patchElement,
+  patchGroup,
   readHistory,
   redoOp,
+  renderGroup,
   sliceRegions,
   undoOp,
 } from "./ops.mjs";
@@ -53,7 +64,7 @@ function print(value) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|add-image|detect-regions|move|slice|export|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|add-image|detect-regions|move|slice|export|group-create|group-move|group-set|group-assign|group-delete|render-screen|undo|redo|history>
   list
   create --title <title>
   show <id>
@@ -62,6 +73,12 @@ function usage() {
   move <id> --element <eid> --x <n> --y <n>
   slice <id> --element <eid> [--regions r1,r2]
   export <id> --elements e1,e2 | --all
+  group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>]
+  group-move <id> --group <gid> --x <n> --y <n>
+  group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>]
+  group-assign <id> --elements e1,e2 --group <gid>|none
+  group-delete <id> --group <gid>
+  render-screen <id> --group <gid> [--scale <n>] [--background '#rrggbb']
   undo <id>
   redo <id>
   history <id>`);
@@ -120,6 +137,60 @@ async function main(argv) {
         fail("export requires --elements <e1,e2> or --all");
       }
       return print(exportElements(repoRoot, { projectId: id, elementIds }));
+    }
+    case "group-create": {
+      if (!id) fail("group-create requires <id>");
+      if (!flags.name) fail("group-create requires --name <name>");
+      const args = { projectId: id, name: flags.name };
+      if (flags.elements && flags.elements !== "true") {
+        args.fromElements = String(flags.elements).split(",").map((value) => value.trim()).filter(Boolean);
+      } else {
+        if (flags.x !== undefined) args.x = Number(flags.x);
+        if (flags.y !== undefined) args.y = Number(flags.y);
+        if (flags.w !== undefined) args.w = Number(flags.w);
+        if (flags.h !== undefined) args.h = Number(flags.h);
+      }
+      return print(createGroup(repoRoot, args));
+    }
+    case "group-move": {
+      if (!id) fail("group-move requires <id>");
+      if (!flags.group) fail("group-move requires --group <gid>");
+      const args = { projectId: id, groupId: flags.group };
+      if (flags.x !== undefined) args.x = Number(flags.x);
+      if (flags.y !== undefined) args.y = Number(flags.y);
+      return print(patchGroup(repoRoot, args));
+    }
+    case "group-set": {
+      if (!id) fail("group-set requires <id>");
+      if (!flags.group) fail("group-set requires --group <gid>");
+      const args = { projectId: id, groupId: flags.group };
+      if (flags.name !== undefined && flags.name !== "true") args.name = flags.name;
+      if (flags.visible !== undefined) args.visible = flags.visible;
+      if (flags.w !== undefined) args.w = Number(flags.w);
+      if (flags.h !== undefined) args.h = Number(flags.h);
+      if (flags.x !== undefined) args.x = Number(flags.x);
+      if (flags.y !== undefined) args.y = Number(flags.y);
+      return print(patchGroup(repoRoot, args));
+    }
+    case "group-assign": {
+      if (!id) fail("group-assign requires <id>");
+      if (!flags.elements || flags.elements === "true") fail("group-assign requires --elements e1,e2");
+      const elementIds = String(flags.elements).split(",").map((value) => value.trim()).filter(Boolean);
+      const groupId = !flags.group || flags.group === "none" ? null : flags.group;
+      return print(assignToGroup(repoRoot, { projectId: id, elementIds, groupId }));
+    }
+    case "group-delete": {
+      if (!id) fail("group-delete requires <id>");
+      if (!flags.group) fail("group-delete requires --group <gid>");
+      return print(deleteGroup(repoRoot, { projectId: id, groupId: flags.group }));
+    }
+    case "render-screen": {
+      if (!id) fail("render-screen requires <id>");
+      if (!flags.group) fail("render-screen requires --group <gid>");
+      const args = { projectId: id, groupId: flags.group };
+      if (flags.scale !== undefined) args.scale = Number(flags.scale);
+      if (flags.background !== undefined && flags.background !== "true") args.background = flags.background;
+      return print(await renderGroup(repoRoot, args));
     }
     case "undo":
       if (!id) fail("undo requires <id>");
