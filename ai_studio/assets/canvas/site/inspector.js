@@ -13,7 +13,6 @@
 import {
   el,
   elementById,
-  enterRegionEdit,
   focusStage,
   groupById,
   hooks,
@@ -24,7 +23,6 @@ import {
   state,
 } from "./app.js";
 import {
-  addCenteredRegion,
   deleteRegion,
   detectRegionsFor,
   exportElementIds,
@@ -287,16 +285,11 @@ function renderRegions(element, root) {
 
   const actions = document.createElement("div");
   actions.className = "insp-region-actions";
+  // Only ops with no other UI path get buttons (lead: Edit/+Add were redundant —
+  // dblclick enters the mode, dragging on the image draws a rect).
   const btnRow = document.createElement("div");
   btnRow.className = "insp-region-btnrow";
-  btnRow.append(
-    smallBtn("Edit", () => {
-      enterRegionEdit(element.id);
-      refresh();
-    }),
-    smallBtn("Detect", () => detectRegionsFor(element.id)),
-    smallBtn("+ Add", () => addCenteredRegion(element.id)),
-  );
+  btnRow.append(smallBtn("Detect", () => detectRegionsFor(element.id)));
   actions.appendChild(btnRow);
 
   const sliceBtn = document.createElement("button");

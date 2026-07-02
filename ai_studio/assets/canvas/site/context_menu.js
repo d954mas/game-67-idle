@@ -150,8 +150,16 @@ function itemsFor(target) {
     return items;
   }
   if (target.kind === "region") {
+    // Count-aware slice (lead): a right-click inside a multi-selection slices the
+    // whole selection; otherwise just the clicked region.
+    const selected = state.regionEditId === target.elementId ? [...state.selectedRegionIds] : [];
+    const multi = selected.length > 1 && selected.includes(target.regionId);
+    const sliceIds = multi ? selected : [target.regionId];
     return [
-      { label: "Slice this region", onClick: () => sliceRegionsFor(target.elementId, [target.regionId]) },
+      {
+        label: multi ? `Slice selected (${selected.length})` : "Slice region",
+        onClick: () => sliceRegionsFor(target.elementId, sliceIds),
+      },
       { label: "Rename region", onClick: () => focusInspectorRegion() },
       { separator: true },
       { label: "Delete region", danger: true, onClick: () => deleteRegion(target.elementId, target.regionId) },
@@ -192,7 +200,17 @@ function closeSubmenu() {
   }
 }
 
-function buildButton(item, onActivate) {
+// Submenu hover timing. A diagonal pointer path from a has-sub item to its open
+// submenu momentarily clips a NEIGHBORING item, so: a click on a has-sub item opens
+// its submenu immediately (the reliable path); hovering a DIFFERENT has-sub item
+// while one is open swaps only after a short beat (clipping it in passing does not
+// yank the submenu away); a plain TOP-LEVEL item closes the submenu only after a
+// longer beat — long enough for the pointer to reach the submenu. A submenu's own
+// items never arm a close; the submenu container owns its open/close lifecycle.
+const SUBMENU_SWAP_MS = 150;
+const SUBMENU_CLOSE_MS = 300;
+
+function buildButton(item, inSubmenu = false) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "ctx-item";
@@ -205,12 +223,23 @@ function buildButton(item, onActivate) {
     arrow.className = "ctx-arrow";
     arrow.textContent = "▸";
     button.appendChild(arrow);
-    button.addEventListener("mouseenter", () => openSubmenu(button, item.submenu));
-    button.addEventListener("click", (event) => event.stopPropagation());
+    button.addEventListener("mouseenter", () => {
+      clearTimeout(submenuTimer);
+      if (submenu && submenu.dataset.anchor === (button.dataset.key || "")) return; // already open
+      if (submenu) submenuTimer = setTimeout(() => openSubmenu(button, item.submenu), SUBMENU_SWAP_MS);
+      else openSubmenu(button, item.submenu); // nothing open yet — open immediately
+    });
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      clearTimeout(submenuTimer);
+      openSubmenu(button, item.submenu); // reliable path: pin it open on click
+    });
   } else {
     button.addEventListener("mouseenter", () => {
       clearTimeout(submenuTimer);
-      submenuTimer = setTimeout(closeSubmenu, 120);
+      // Only a top-level plain item closes an open submenu; a submenu's own items
+      // must not arm a close (that is what made "Send to back" unreachable).
+      if (!inSubmenu) submenuTimer = setTimeout(closeSubmenu, SUBMENU_CLOSE_MS);
     });
     button.addEventListener("click", () => {
       if (button.disabled) return;
@@ -231,7 +260,7 @@ function openSubmenu(anchor, items) {
   submenu.dataset.anchor = anchor.dataset.key || "";
   submenu.addEventListener("mouseenter", () => clearTimeout(submenuTimer));
   submenu.addEventListener("mouseleave", () => {
-    submenuTimer = setTimeout(closeSubmenu, 120);
+    submenuTimer = setTimeout(closeSubmenu, SUBMENU_CLOSE_MS);
   });
   for (const item of items) {
     if (item.separator) {
@@ -240,18 +269,19 @@ function openSubmenu(anchor, items) {
       submenu.appendChild(sep);
       continue;
     }
-    submenu.appendChild(buildButton(item));
+    submenu.appendChild(buildButton(item, true));
   }
   menu.appendChild(submenu);
   // Position to the right of the anchor within the (fixed) menu; flip left if it
-  // would overflow the viewport.
-  let left = anchor.offsetLeft + anchor.offsetWidth + 2;
+  // would overflow the viewport. The submenu OVERLAPS the anchor by a few px (no
+  // gap) so the pointer never has to cross empty space to reach it.
+  let left = anchor.offsetLeft + anchor.offsetWidth - 4;
   submenu.style.left = `${left}px`;
   submenu.style.top = `${anchor.offsetTop}px`;
   const menuRect = menu.getBoundingClientRect();
   const subRect = submenu.getBoundingClientRect();
   if (menuRect.left + left + subRect.width > window.innerWidth - 8) {
-    left = anchor.offsetLeft - subRect.width - 2;
+    left = anchor.offsetLeft - subRect.width + 4;
     submenu.style.left = `${Math.max(-subRect.width, left)}px`;
   }
 }

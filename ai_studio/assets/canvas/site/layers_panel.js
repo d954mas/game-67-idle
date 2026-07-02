@@ -60,10 +60,13 @@ function elementRow(element, indented) {
   if (indented) row.classList.add("indented");
   if (state.selectedIds.has(element.id)) row.classList.add("selected");
 
-  // Spacer keeps element names aligned with group rows (which carry a caret).
-  const spacer = document.createElement("span");
-  spacer.className = "caret empty";
-  row.appendChild(spacer);
+  // Group members carry a caret-width spacer (indent under their group head);
+  // top-level rows sit flush left — a spacer there reads as fake group membership.
+  if (indented) {
+    const spacer = document.createElement("span");
+    spacer.className = "caret empty";
+    row.appendChild(spacer);
+  }
 
   const thumb = document.createElement("img");
   thumb.className = "thumb";

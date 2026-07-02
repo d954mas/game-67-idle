@@ -6,7 +6,6 @@ import {
   api,
   clearSelection,
   elements,
-  enterRegionEdit,
   regionEditElement,
   reloadProject,
   selectOnly,
@@ -14,7 +13,6 @@ import {
   setStatusLinks,
   state,
 } from "./app.js";
-import { newRegionId } from "./regions.js";
 import { screenToImagePoint } from "../../viewer/asset_tools_viewport.mjs";
 
 function pid() {
@@ -203,32 +201,6 @@ export async function setRegionsFor(elementId, regions, message) {
   try {
     await api("PUT", `/projects/${pid()}/elements/${elementId}/regions`, { regions });
     await reloadProject(message);
-  } catch (error) {
-    setStatus(error.message, true);
-  }
-}
-
-// Immediately add a default centered region (~25% of the source, clamped in
-// bounds), select it, and enter region-edit mode so its handles are ready. This is
-// the discoverable path ("+ Add region"); the empty-area drag gesture is the power
-// path. Works even on a fresh image with no regions yet.
-export async function addCenteredRegion(elementId) {
-  const element = elements().find((item) => item.id === elementId);
-  if (!element) return;
-  const sw = element.source_w || element.w;
-  const sh = element.source_h || element.h;
-  const w = Math.min(sw, Math.max(4, Math.round(sw * 0.25)));
-  const h = Math.min(sh, Math.max(4, Math.round(sh * 0.25)));
-  const x = Math.round((sw - w) / 2);
-  const y = Math.round((sh - h) / 2);
-  const id = newRegionId();
-  enterRegionEdit(elementId);
-  state.selectedRegionIds = new Set([id]);
-  try {
-    await api("PUT", `/projects/${pid()}/elements/${elementId}/regions`, {
-      regions: [...(element.regions || []), { id, rect: [x, y, w, h] }],
-    });
-    await reloadProject("Added region.");
   } catch (error) {
     setStatus(error.message, true);
   }
