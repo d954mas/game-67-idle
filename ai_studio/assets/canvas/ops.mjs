@@ -67,12 +67,14 @@ import {
   listProjects,
   nextJournalSeq,
   patchElement as storePatchElement,
+  patchElements as storePatchElements,
   projectExists,
   readElementBytes,
   readErrors,
   readJournal,
   readSnapshot,
   removeElement as storeRemoveElement,
+  removeElements as storeRemoveElements,
   resolveProjectFile,
   resolveProjectPath,
   rewriteJournal,
@@ -292,6 +294,55 @@ export function removeElement(root, projectId, elementId) {
   const project = commitMutation(root, projectId, {
     op: "removeElement",
     args_summary: { elementId },
+    before,
+    after: result.project,
+    startedAt,
+  });
+  return { project, removed: result.removed };
+}
+
+// Patch several elements in ONE journaled gesture — the marquee/multi-select
+// move commit and any agent multi-move. Each patch is {elementId, x?, y?, w?, h?,
+// name?, visible?} with the SAME per-field rules as patchElement. A bad/missing
+// elementId throws before any write (atomic — no partial batch), and the whole batch
+// is ONE commitMutation, so a single undo restores the entire gesture (not N steps).
+// An empty batch is a no-op (no journal entry), like the other no-op-guarded ops.
+export function patchElements(root, { projectId, patches } = {}) {
+  if (!projectId) throw new Error("patchElements requires projectId");
+  if (!Array.isArray(patches)) throw new Error("patchElements requires a patches array");
+  const clean = patches.map((patch, index) => {
+    if (!patch || typeof patch !== "object") throw new Error(`patch ${index} is not an object`);
+    const elementId = String(patch.elementId == null ? "" : patch.elementId).trim();
+    if (!elementId) throw new Error(`patch ${index} is missing an elementId`);
+    return { ...patch, elementId };
+  });
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const result = storePatchElements(root, projectId, clean);
+  const project = commitMutation(root, projectId, {
+    op: "patchElements",
+    args_summary: { count: clean.length, elementIds: clean.map((patch) => patch.elementId) },
+    before,
+    after: result.project,
+    startedAt,
+  });
+  const ids = new Set(clean.map((patch) => patch.elementId));
+  return { project, elements: (project.elements || []).filter((item) => ids.has(item.id)), count: clean.length };
+}
+
+// Remove several elements in ONE journaled gesture — the multi-select delete. All
+// ids must exist (throws before any write — atomic; no partial delete), duplicates
+// are de-duplicated, and the whole batch is ONE commitMutation, so a single undo
+// restores every removed element. Backing files stay on disk (immutable storage).
+export function removeElements(root, { projectId, elementIds } = {}) {
+  if (!projectId) throw new Error("removeElements requires projectId");
+  if (!Array.isArray(elementIds)) throw new Error("removeElements requires an elementIds array");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const result = storeRemoveElements(root, projectId, elementIds.map((value) => String(value)));
+  const project = commitMutation(root, projectId, {
+    op: "removeElements",
+    args_summary: { elementIds: result.removed, count: result.removed.length },
     before,
     after: result.project,
     startedAt,
@@ -857,13 +908,31 @@ export function redoOp(root, { projectId } = {}) {
 // snapshots (thin lines carry no snapshot, so this is a cheap metadata scan). Back-
 // compatible: canUndo/canRedo are computed from metadata only (no snapshot loads)
 // and existing fields are unchanged; duration_ms is added, never removed/renamed.
+// Undo/redo availability for a project from its history head + journal: canUndo iff
+// the head entry (seq === history_seq) is a live mutation; canRedo iff any mutation's
+// parent is the current head. Shared by readHistory (full view) and historyFlags (the
+// lightweight summary folded into mutation responses).
+function historyAvailability(project, journal) {
+  const head = Number(project.history_seq) || 0;
+  const canUndo = head > 0 && journal.some((item) => Number(item.seq) === head && isMutation(item));
+  const canRedo = journal.some((item) => isMutation(item) && (Number(item.parent) || 0) === head);
+  return { seq: head, canUndo, canRedo };
+}
+
+// The undo/redo summary { seq, canUndo, canRedo } for a project — the same flags
+// readHistory computes, minus the (capped) entries list. Cheap on the thin journal,
+// and folded into every mutating API response (api.mjs sendMutation) so the page
+// updates state.history straight from the op result with ZERO extra /history GET.
+export function historyFlags(root, { projectId } = {}) {
+  if (!projectId) throw new Error("historyFlags requires projectId");
+  return historyAvailability(getProject(root, projectId), readJournal(root, projectId));
+}
+
 export function readHistory(root, { projectId } = {}) {
   if (!projectId) throw new Error("readHistory requires projectId");
   const project = getProject(root, projectId);
   const journal = readJournal(root, projectId);
-  const head = Number(project.history_seq) || 0;
-  const canUndo = head > 0 && journal.some((item) => Number(item.seq) === head && isMutation(item));
-  const canRedo = journal.some((item) => isMutation(item) && (Number(item.parent) || 0) === head);
+  const { seq: head, canUndo, canRedo } = historyAvailability(project, journal);
   const entries = journal.map((item) => ({
     seq: item.seq,
     at: item.at,

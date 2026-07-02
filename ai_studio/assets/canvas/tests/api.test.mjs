@@ -363,3 +363,91 @@ test("canvas API rejects a path-traversal file request", async (t) => {
   assert.equal(bad.status, 400);
   assert.match(bad.json().error, /unsafe file name|escapes/);
 });
+
+// ---- T0200: op responses drive the page (no reload double-GET) ----------------
+
+test("canvas API folds history flags into every mutating response (no separate /history GET)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Hist Fold" })).json().project.id;
+
+  // A fresh mutation is undoable with nothing to redo; seq matches the project head.
+  const created = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "a.png",
+    bytes_base64: solidPng(4, 4).toString("base64"),
+  });
+  assert.ok(created.json().history, "response carries folded history flags");
+  assert.equal(created.json().history.canUndo, true);
+  assert.equal(created.json().history.canRedo, false);
+  assert.equal(created.json().history.seq, created.json().project.history_seq);
+
+  const elementId = created.json().element.id;
+  await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/elements/${elementId}`, { x: 5 });
+
+  // After undo, the response ITSELF reports canRedo=true — the page needs no /history GET.
+  const undone = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`);
+  assert.equal(undone.json().history.canRedo, true);
+  assert.equal(undone.json().history.seq, undone.json().project.history_seq);
+});
+
+test("canvas API files route sends immutable cache headers + ETag", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Cache" })).json().project.id;
+  const png = solidPng(5, 5, [1, 2, 3]);
+  const element = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "c.png",
+    bytes_base64: png.toString("base64"),
+  })).json().element;
+  const fileName = element.src.replace(/^files\//, "");
+
+  const file = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/files/${fileName}`);
+  assert.equal(file.status, 200);
+  assert.equal(file.headers["cache-control"], "public, max-age=31536000, immutable");
+  assert.ok(file.headers.etag, "an ETag validator is present");
+  assert.ok(file.headers["last-modified"], "a Last-Modified validator is present");
+  assert.ok(file.buffer.equals(png), "served bytes still match the content-addressed file");
+});
+
+test("canvas API batched elements-set / elements-remove = one journal entry + single undo", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Batch API" })).json().project.id;
+  const add = async (name) =>
+    (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+      name,
+      bytes_base64: solidPng(4, 4).toString("base64"),
+    })).json().element.id;
+  const a = await add("a.png");
+  const b = await add("b.png");
+
+  // Batched move of two elements: ONE call, one journal entry named patchElements.
+  const moved = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/elements-set`, {
+    patches: [{ elementId: a, x: 50 }, { elementId: b, x: 60 }],
+  });
+  assert.equal(moved.status, 200);
+  assert.equal(moved.json().count, 2);
+  const afterMove = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.deepEqual(afterMove.elements.map((e) => e.x), [50, 60]);
+
+  let history = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/history`)).json();
+  assert.equal(history.entries.filter((e) => e.op === "patchElements").length, 1);
+  assert.equal(history.entries.filter((e) => e.op === "patchElement").length, 0, "not N per-element entries");
+
+  // One undo restores BOTH positions.
+  await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`);
+  const undone = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.deepEqual(undone.elements.map((e) => e.x), [0, 0]);
+
+  // Batched delete of two elements: ONE call, one entry, one undo restores both.
+  const removed = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/elements-remove`, {
+    elementIds: [a, b],
+  });
+  assert.equal(removed.status, 200);
+  assert.deepEqual(removed.json().removed.slice().sort(), [a, b].sort());
+  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project.elements.length, 0);
+  history = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/history`)).json();
+  assert.equal(history.entries.filter((e) => e.op === "removeElements").length, 1);
+  await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`);
+  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project.elements.length, 2);
+});

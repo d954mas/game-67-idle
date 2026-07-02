@@ -15,6 +15,7 @@
 //     (assignToGroup); positions persist ONCE on mouseup (no mid-drag journal spam).
 import {
   api,
+  applyMutation,
   clearSelection,
   el,
   elements,
@@ -30,7 +31,6 @@ import {
   memberElements,
   refresh,
   regionEditElement,
-  reloadProject,
   selectedElements,
   selectOnly,
   setStatus,
@@ -72,14 +72,33 @@ function resizeCanvas() {
   state.cssWidth = Math.max(1, Math.floor(rect.width));
   state.cssHeight = Math.max(1, Math.floor(rect.height));
   // Backing store is scaled by devicePixelRatio; CSS keeps the element at rect
-  // size (width/height:100%). setTransform then lets us draw in CSS pixels while
-  // the extra backing resolution keeps lines and sprite edges crisp.
-  canvas.width = Math.max(1, Math.round(state.cssWidth * dpr));
-  canvas.height = Math.max(1, Math.round(state.cssHeight * dpr));
+  // size (width/height:100%). Assigning canvas.width/height REALLOCATES and clears
+  // the backing store even when the value is unchanged, so only assign when the
+  // stage size or DPR actually changed — otherwise every drag frame paid a needless
+  // realloc + clear. setTransform is cheap and re-applied each render to stay correct.
+  const backingW = Math.max(1, Math.round(state.cssWidth * dpr));
+  const backingH = Math.max(1, Math.round(state.cssHeight * dpr));
+  if (canvas.width !== backingW || canvas.height !== backingH) {
+    canvas.width = backingW;
+    canvas.height = backingH;
+  }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 }
 
 // ---- rendering ---------------------------------------------------------------
+
+// Coalesce burst render() calls (many mousemoves in one frame during a drag) into a
+// SINGLE repaint per animation frame. render() reads live state, so the frame always
+// paints the latest positions; extra calls within the same frame are dropped.
+let renderScheduled = false;
+export function requestRender() {
+  if (renderScheduled) return;
+  renderScheduled = true;
+  requestAnimationFrame(() => {
+    renderScheduled = false;
+    render();
+  });
+}
 
 export function render() {
   if (!canvas || !state.project) return;
@@ -551,7 +570,7 @@ function onMouseMove(event) {
         offsetX: drag.origOffset.offsetX + (screen.x - drag.startX),
         offsetY: drag.origOffset.offsetY + (screen.y - drag.startY),
       };
-      render();
+      requestRender();
       break;
     case "group": {
       const dx = (screen.x - drag.startX) / vp.scale;
@@ -562,7 +581,7 @@ function onMouseMove(event) {
         item.element.x = item.origX + dx;
         item.element.y = item.origY + dy;
       }
-      render();
+      requestRender();
       break;
     }
     case "element": {
@@ -572,7 +591,7 @@ function onMouseMove(event) {
         item.element.x = item.origX + dx;
         item.element.y = item.origY + dy;
       }
-      render();
+      requestRender();
       break;
     }
     case "marquee":
@@ -582,15 +601,15 @@ function onMouseMove(event) {
       break;
     case "region-move":
       dragRegionMove(screen);
-      render();
+      requestRender();
       break;
     case "region-resize":
       dragRegionResize(screen);
-      render();
+      requestRender();
       break;
     case "region-create":
       drag.lastScreen = screen;
-      render();
+      requestRender();
       break;
     default:
       break;
@@ -621,18 +640,23 @@ function commitElementDrag(finished) {
   }
   (async () => {
     try {
-      // Reparent FIRST, then persist positions LAST, so a single Ctrl+Z restores the
-      // pre-drag position in ONE step (the newest journal entry is the position patch).
+      // Reparent FIRST, then persist ALL positions LAST as ONE batched op, so a
+      // single Ctrl+Z restores every element's pre-drag position in one step (the
+      // newest journal entry is the position batch). A pure multi-move is now exactly
+      // one HTTP call + one journal entry (was N sequential PATCHes / N entries).
+      let last = null;
       for (const [groupId, ids] of reassign) {
-        await api("POST", `/projects/${projectId}/assign-group`, { elementIds: ids, groupId });
+        last = await api("POST", `/projects/${projectId}/assign-group`, { elementIds: ids, groupId });
       }
-      for (const it of moved) {
-        await api("PATCH", `/projects/${projectId}/elements/${it.element.id}`, {
+      if (moved.length) {
+        const patches = moved.map((it) => ({
+          elementId: it.element.id,
           x: Math.round(it.element.x),
           y: Math.round(it.element.y),
-        });
+        }));
+        last = await api("POST", `/projects/${projectId}/elements-set`, { patches });
       }
-      await reloadProject();
+      applyMutation(last);
     } catch (error) {
       setStatus(error.message, true);
     }
@@ -649,11 +673,11 @@ function commitGroupDrag(finished) {
   }
   (async () => {
     try {
-      await api("PATCH", `/projects/${state.project.id}/groups/${finished.group.id}`, {
+      const result = await api("PATCH", `/projects/${state.project.id}/groups/${finished.group.id}`, {
         x: Math.round(finished.group.x),
         y: Math.round(finished.group.y),
       });
-      await reloadProject("Moved group.");
+      applyMutation(result, "Moved group.");
     } catch (error) {
       setStatus(error.message, true);
     }

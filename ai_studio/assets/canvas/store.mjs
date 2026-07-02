@@ -239,22 +239,44 @@ function findElement(project, elementId) {
 
 const NUMERIC_ELEMENT_FIELDS = ["x", "y", "w", "h"];
 
-export function patchElement(root, id, elementId, patch = {}) {
-  const project = readProjectFile(root, id);
-  const element = findElement(project, elementId);
+// Apply the mutable element fields from a patch onto an element IN PLACE: numeric
+// x/y/w/h (finite values only), name (string), and the optional explicit visibility
+// boolean (stored so renderGroup/the page can hide with `element.visible !== false`).
+// Shared by patchElement and the batched patchElements so both honor identical rules.
+function applyElementFields(element, patch = {}) {
   for (const field of NUMERIC_ELEMENT_FIELDS) {
     if (patch[field] !== undefined && patch[field] !== null && Number.isFinite(Number(patch[field]))) {
       element[field] = Number(patch[field]);
     }
   }
   if (patch.name !== undefined) element.name = String(patch.name);
-  // Optional per-element visibility (default true). Store an explicit boolean so
-  // renderGroup and the page can hide the element with `element.visible !== false`.
   if (patch.visible !== undefined) {
     element.visible = !(patch.visible === false || patch.visible === "false");
   }
+  return element;
+}
+
+export function patchElement(root, id, elementId, patch = {}) {
+  const project = readProjectFile(root, id);
+  const element = findElement(project, elementId);
+  applyElementFields(element, patch);
   const saved = updateProject(root, id, { elements: project.elements });
   return { project: saved, element };
+}
+
+// Patch several elements in ONE project write. Every patch's `elementId` must
+// resolve (findElement throws before updateProject, so a bad id aborts the batch
+// with NO partial write). Returns the saved project and the touched elements.
+export function patchElements(root, id, patches = []) {
+  const project = readProjectFile(root, id);
+  const touched = [];
+  for (const patch of patches) {
+    const element = findElement(project, patch.elementId);
+    applyElementFields(element, patch);
+    touched.push(element);
+  }
+  const saved = updateProject(root, id, { elements: project.elements });
+  return { project: saved, elements: touched };
 }
 
 // Move a project folder to <projectsRoot>/.trash/<id>-<stamp>/ instead of deleting
@@ -282,6 +304,18 @@ export function removeElement(root, id, elementId) {
   project.elements = (project.elements || []).filter((item) => item.id !== elementId);
   const saved = updateProject(root, id, { elements: project.elements });
   return { project: saved, removed: elementId };
+}
+
+// Remove several elements in ONE project write. Every id must exist (findElement
+// throws before updateProject, so a bad id aborts the batch with NO partial delete);
+// duplicate ids are de-duplicated. Backing files stay on disk (immutable storage).
+export function removeElements(root, id, elementIds = []) {
+  const project = readProjectFile(root, id);
+  const wanted = new Set(elementIds.map(String));
+  for (const elementId of wanted) findElement(project, elementId);
+  project.elements = (project.elements || []).filter((item) => !wanted.has(item.id));
+  const saved = updateProject(root, id, { elements: project.elements });
+  return { project: saved, removed: [...wanted] };
 }
 
 // Confined absolute path for a project-relative file reference (e.g. an element

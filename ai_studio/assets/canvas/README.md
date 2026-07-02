@@ -76,6 +76,13 @@ Every capability is one op in `ops.mjs`:
   writes an immutable file) — journaled
 - `patchElement` (move/resize/rename/`visible`) / `removeElement` (element only;
   file stays) — journaled
+- `patchElements({ projectId, patches })` / `removeElements({ projectId, elementIds })`
+  — the **batched** multi-element ops behind marquee/multi-select move and multi-delete.
+  Each applies the whole gesture in ONE `commitMutation`, so it is **one journal entry**
+  and a single undo restores everything (not N steps). Same per-field rules as
+  `patchElement`; a bad/missing/unknown id throws **before any write** (atomic — no
+  partial batch), and an empty batch is a no-op. Both clients call these: the page's
+  drag/delete commits and the CLI `elements-set`/`elements-remove`.
 - `setRegions({ projectId, elementId, regions })` — replace an element's regions
   array (the ADJUST/SELECT step before slicing). Validates each region has an id
   and an in-source-bounds integer `rect`, while **preserving any extra fields**
@@ -271,9 +278,13 @@ append one row to `<project>/errors.jsonl`
 (`{ at, op, args_summary, error, duration_ms }`); this is wired from both clients
 (the API adapter's central catch and the CLI's top-level catch), so a project-not-
 found failure — which has no folder to write to — is simply not logged. API mutating
-responses **add** a `duration_ms` field (existing fields are untouched, so the
-running page keeps working), and `/history` still returns `canUndo`/`canRedo`
-(computed from metadata only, no snapshot loads) plus a `duration_ms` on each entry.
+responses **add** a `duration_ms` field AND, whenever the op returned a project, a
+folded `history: { seq, canUndo, canRedo }` (existing fields untouched, so the running
+page keeps working). That history fold is what lets the page drive its re-render from
+the op response alone — no reload GET, no separate `/history` GET (see **Page**).
+`/history` still returns `canUndo`/`canRedo` (computed from metadata only, no snapshot
+loads) plus a `duration_ms` on each entry; the `historyFlags(root, { projectId })` op
+is the lightweight summary (same flags, no entries list) the adapter folds in.
 
 Per-project observability files (all under the project folder, alongside
 `project.json`): `journal.jsonl` (thin op log), `snapshots/<seq>.json` (fat
@@ -347,6 +358,8 @@ node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
 node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--name "X"] [--visible true|false]
 node ai_studio/assets/canvas/cli.mjs element-remove <id> --element <eid>
+node ai_studio/assets/canvas/cli.mjs elements-set <id> --json patches.json    # batched patch [{elementId,x?,y?,w?,h?,name?,visible?}]; one undo step
+node ai_studio/assets/canvas/cli.mjs elements-remove <id> --elements e1,e2    # batched delete; one undo step
 node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json   # a regions array or {regions:[...]}
 node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
@@ -376,11 +389,16 @@ one document that swaps two views; the JS is split into focused ES modules under
 
 - `app.js` — shared page state, the `fetch` API helper, read-only view helpers over
   `project.json`, the image cache, and a small refresh bus every module renders
-  through.
+  through. Mutating actions drive the page from the op **response** via `applyMutation`
+  (adopt the returned `{project}`, set `state.history` from the folded `{history}`
+  flags, reconcile region-edit, render) — **zero follow-up GETs**. `reloadProject`
+  (full GET + `/history` GET) is kept only for genuine resync (initial open, or a
+  response that carried no project).
 - `actions.js` — the one place UI intents become a single HTTP API call (add/drop/
   paste image, patch/rename/hide/delete element, detect/slice/export, group create/
   patch/render/ungroup/delete, undo/redo, rename project). No module talks to the
-  API directly.
+  API directly. Multi-select **delete** is one batched `elements-remove` call (one undo
+  step); the marquee/multi-select **move** commit is one batched `elements-set` call.
 - `home.js` — the **home** view: a full-page grid of project cards (cover thumbnail,
   title, image count, updated date) plus a `+ New project` card that creates a
   project instantly (random default title, Figma-style — no name prompt) and opens
@@ -390,7 +408,10 @@ one document that swaps two views; the JS is split into focused ES modules under
 - `workspace.js` — the **workspace** view: the DPR-crisp pan/zoom canvas, the left
   tool rail (Select/Hand), zoom controls + indicator, top bar sync, and all pointer
   interaction (marquee select, drag-move + drop-to-reparent, region select/edit,
-  pan). `imageSmoothingEnabled` is off at ≥2× zoom.
+  pan). `imageSmoothingEnabled` is off at ≥2× zoom. Drag renders are **rAF-coalesced**
+  (many mousemoves per frame → one repaint), and `resizeCanvas` only reallocates the
+  backing store when the stage size or DPR actually changed (assigning
+  `canvas.width/height` clears the backing store, so it must not run every frame).
 - `regions.js` — region workbench geometry: source-pixel rects → world/screen boxes,
   region body + resize-handle hit-testing, and the bright numbered overlay drawing.
   Pure helpers; edits persist through the shared `setRegions` op.
@@ -398,7 +419,13 @@ one document that swaps two views; the JS is split into focused ES modules under
   top level; groups as collapsible sections with an eye toggle and inline-rename
   name; member rows indented; 24px thumbnail, region-count badge, eye toggle;
   region-bearing elements expand into indented region rows; element rows drag onto a
-  group header / top level to reparent; selection syncs both ways with the canvas).
+  group header / top level to reparent; selection syncs both ways with the canvas). A
+  structure-signature guard skips the DOM rebuild on selection-only changes, and
+  thumbnail `<img>` nodes are **reused** across rebuilds (keyed by element id, guarded
+  on `src`), so an unrelated op never re-downloads or re-decodes a thumbnail. The
+  `files/` route serves those images with `Cache-Control: public, max-age=31536000,
+  immutable` + an ETag (the sha256 filename), since they are content-addressed and
+  never rewritten.
 - `inspector.js` — the right panel for the selection: element (name, X/Y/W/H,
   source size, provenance, meta, and a calm **Regions** section: a count badge,
   compact per-region rows — number + name/size + delete, coords in the tooltip —

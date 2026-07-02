@@ -340,17 +340,16 @@ export async function refreshHistory() {
   }
 }
 
-// Re-fetch the project from disk (the source of truth after any mutating op) and
-// re-render. Selection is pruned to still-existing elements/groups.
-export async function reloadProject(message) {
-  if (!state.project) return;
-  state.project = (await api("GET", `/projects/${state.project.id}`)).project;
+// Adopt a new project object into page state: prune the selection to still-existing
+// elements/groups and reconcile region-edit isolation (page-only state that undo/
+// redo/reload can invalidate — the canvas then re-reads regions fresh, no stale rects,
+// no dead mode). Shared by reloadProject (GET) and applyMutation (op response) so both
+// paths treat the incoming project identically.
+function ingestProject(project) {
+  state.project = project;
   const alive = new Set(elements().map((element) => element.id));
   state.selectedIds = new Set([...state.selectedIds].filter((id) => alive.has(id)));
   if (state.selectedGroupId && !groupById(state.selectedGroupId)) state.selectedGroupId = null;
-  // Region isolation is page-only, so an undo/redo/reload that changed the edited
-  // element (or its regions) must reconcile the mode + region selection here — the
-  // canvas then re-reads regions fresh, no stale rects, no dead mode.
   const region = reconcileRegionEdit(state.project, state.regionEditId, state.selectedRegionIds);
   state.regionEditId = region.regionEditId;
   state.selectedRegionIds = region.selectedRegionIds;
@@ -361,6 +360,35 @@ export async function reloadProject(message) {
     state.polygonDraft = [];
     state.polygonHover = null;
   }
+}
+
+// Drive the page from a mutating op's RESPONSE — the fast path with ZERO follow-up
+// GETs. Every mutating API response carries the updated {project} and the folded
+// {history} flags, so the page applies both straight from the result instead of the
+// old reload double-GET (GET project + GET /history). A response missing a project
+// (or a null result) falls back to a full reloadProject resync. Returns a promise so
+// callers can `await` it uniformly with reloadProject.
+export function applyMutation(result, message) {
+  if (!result || !result.project) return reloadProject(message);
+  ingestProject(result.project);
+  if (result.history) {
+    state.history = {
+      canUndo: !!result.history.canUndo,
+      canRedo: !!result.history.canRedo,
+      seq: result.history.seq ?? null,
+    };
+  }
+  refresh();
+  if (message !== undefined) setStatus(message);
+  return Promise.resolve();
+}
+
+// Re-fetch the project from disk (the source of truth) and re-render — the resync
+// path for genuine reloads (initial open, or a response that carried no project).
+// Mutating actions use applyMutation instead, so no op triggers this double-GET.
+export async function reloadProject(message) {
+  if (!state.project) return;
+  ingestProject((await api("GET", `/projects/${state.project.id}`)).project);
   await refreshHistory();
   refresh();
   if (message !== undefined) setStatus(message);

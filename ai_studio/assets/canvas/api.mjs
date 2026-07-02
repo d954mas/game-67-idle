@@ -27,7 +27,7 @@
 //   GET    /api/canvas/projects/<id>/files/<name>  (image bytes, path-confined)
 //   GET    /api/canvas/projects/<id>/export/<...>  (export files, path-confined)
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { extname } from "node:path";
+import { basename, extname } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
   addImage,
@@ -40,15 +40,18 @@ import {
   exportElements,
   exportProject,
   getProject,
+  historyFlags,
   listProjects,
   opsStats,
   patchElement,
+  patchElements,
   patchGroup,
   patchProject,
   readHistory,
   recordOpFailure,
   redoOp,
   removeElement,
+  removeElements,
   renderGroup,
   reorderElement,
   resolveProjectFile,
@@ -100,14 +103,24 @@ function readJsonBody(req) {
   });
 }
 
-function serveFile(res, filePath) {
+function serveFile(res, filePath, { immutable = false } = {}) {
   if (!existsSync(filePath) || !statSync(filePath).isFile()) {
     sendJson(res, 404, { error: "file not found" });
     return;
   }
   // Local single-user tool: read the confined project image into memory and end.
   // Files here are small canvas assets, so streaming is unnecessary complexity.
-  res.writeHead(200, { "content-type": mimeByExt[extname(filePath).toLowerCase()] || "application/octet-stream" });
+  const headers = { "content-type": mimeByExt[extname(filePath).toLowerCase()] || "application/octet-stream" };
+  if (immutable) {
+    // files/ are content-addressed (sha256 filename) and never rewritten, so the
+    // browser may cache them for a year and reuse the decoded image across ops — no
+    // re-download of unrelated layer thumbnails on every mutation. The sha256 file
+    // name is itself a strong validator (ETag); Last-Modified is a secondary one.
+    headers["cache-control"] = "public, max-age=31536000, immutable";
+    headers.etag = `"${basename(filePath)}"`;
+    headers["last-modified"] = statSync(filePath).mtime.toUTCString();
+  }
+  res.writeHead(200, headers);
   res.end(readFileSync(filePath));
 }
 
@@ -115,10 +128,23 @@ export function createCanvasApi(root) {
   return async function handleCanvasApi(req, res, url) {
     const parts = url.pathname.split("/").filter(Boolean); // ["api","canvas","projects", id, ...]
     const t0 = performance.now();
-    // Mutating responses carry the API-observed duration_ms (additive: existing
-    // fields are untouched, so the running page keeps working unchanged).
-    const sendMutation = (status, data) =>
-      sendJson(res, status, { ...data, duration_ms: Math.round((performance.now() - t0) * 1000) / 1000 });
+    // Mutating responses carry the API-observed duration_ms AND the folded history
+    // flags (canUndo/canRedo/seq) whenever the op returned a project, so the page
+    // drives its re-render from the response alone — no reload GET, no /history GET.
+    // Additive transport enrichment (like duration_ms): existing fields are untouched
+    // and history never fails an otherwise-successful mutation.
+    const sendMutation = (status, data) => {
+      const payload = { ...data, duration_ms: Math.round((performance.now() - t0) * 1000) / 1000 };
+      const project = data && data.project;
+      if (project && project.id) {
+        try {
+          payload.history = historyFlags(root, { projectId: project.id });
+        } catch {
+          // history is a convenience; a successful mutation must still 200.
+        }
+      }
+      sendJson(res, status, payload);
+    };
     try {
       if (parts[0] !== "api" || parts[1] !== "canvas" || parts[2] !== "projects") {
         sendJson(res, 404, { error: "not found" });
@@ -227,6 +253,28 @@ export function createCanvasApi(root) {
         return true;
       }
 
+      // /api/canvas/projects/<id>/elements-set   (batched multi-element patch)
+      // One journal entry for the whole gesture (marquee/multi-select move commit).
+      if (parts.length === 5 && sub === "elements-set" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(200, patchElements(root, {
+          projectId: id,
+          patches: Array.isArray(body.patches) ? body.patches : [],
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements-remove   (batched multi-element delete)
+      // One journal entry for the whole gesture; a single undo restores every element.
+      if (parts.length === 5 && sub === "elements-remove" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(200, removeElements(root, {
+          projectId: id,
+          elementIds: Array.isArray(body.elementIds) ? body.elementIds : [],
+        }));
+        return true;
+      }
+
       // /api/canvas/projects/<id>/assign-group
       if (parts.length === 5 && sub === "assign-group" && req.method === "POST") {
         const body = await readJsonBody(req);
@@ -291,10 +339,10 @@ export function createCanvasApi(root) {
         return true;
       }
 
-      // /api/canvas/projects/<id>/files/<name>
+      // /api/canvas/projects/<id>/files/<name>  (content-addressed, immutable-cached)
       if (parts.length === 6 && sub === "files" && req.method === "GET") {
         const filePath = resolveProjectFile(root, id, decodeURIComponent(parts[5]));
-        serveFile(res, filePath);
+        serveFile(res, filePath, { immutable: true });
         return true;
       }
 

@@ -42,12 +42,14 @@ import {
   listProjects,
   opsStats,
   patchElement,
+  patchElements,
   patchGroup,
   patchProject,
   readHistory,
   recordOpFailure,
   redoOp,
   removeElement,
+  removeElements,
   renderGroup,
   reorderElement,
   setExportSettings,
@@ -107,7 +109,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|element-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-move|group-set|group-assign|group-delete|render-group|undo|redo|history>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|regions-set|regions-show|slice|export-set|export|group-create|group-move|group-set|group-assign|group-delete|render-group|undo|redo|history>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -118,6 +120,8 @@ function usage() {
   move <id> --element <eid> --x <n> --y <n>
   element-set <id> --element <eid> [--name <name>] [--visible true|false]
   element-remove <id> --element <eid>
+  elements-set <id> --json <path>   (batched patch: [{elementId,x?,y?,w?,h?,name?,visible?}] or {patches:[...]}; one undo step)
+  elements-remove <id> --elements e1,e2   (batched delete; one undo step)
   element-reorder <id> --element <eid> --index <n>   (z-order among siblings; 0 = back)
   regions-set <id> --element <eid> --json <path>   (JSON: a regions array or {regions:[...]})
   regions-show <id> --element <eid>
@@ -186,6 +190,23 @@ async function runCommand(command, id, positional, flags) {
       if (!id) fail("element-remove requires <id>");
       if (!flags.element) fail("element-remove requires --element <eid>");
       return print(removeElement(repoRoot, id, flags.element));
+    }
+    case "elements-set": {
+      // Batched multi-element patch (one journal entry). --json is a patches array
+      // or a { patches: [...] } wrapper; each patch is {elementId, x?, y?, w?, h?,
+      // name?, visible?} — same fields as `move`/`element-set`, applied together.
+      if (!id) fail("elements-set requires <id>");
+      if (!flags.json || flags.json === "true") fail("elements-set requires --json <path> (a patches array or {patches:[...]})");
+      const raw = JSON.parse(readFileSync(resolve(flags.json), "utf8"));
+      const patches = Array.isArray(raw) ? raw : raw.patches;
+      return print(patchElements(repoRoot, { projectId: id, patches }));
+    }
+    case "elements-remove": {
+      // Batched multi-element delete (one journal entry; one undo restores all).
+      if (!id) fail("elements-remove requires <id>");
+      if (!flags.elements || flags.elements === "true") fail("elements-remove requires --elements e1,e2");
+      const elementIds = String(flags.elements).split(",").map((value) => value.trim()).filter(Boolean);
+      return print(removeElements(repoRoot, { projectId: id, elementIds }));
     }
     case "element-reorder": {
       if (!id) fail("element-reorder requires <id>");

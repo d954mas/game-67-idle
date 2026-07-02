@@ -4,10 +4,10 @@
 // request and reloads the project from disk (the source of truth).
 import {
   api,
+  applyMutation,
   clearSelection,
   elements,
   regionEditElement,
-  reloadProject,
   selectOnly,
   setStatus,
   setStatusLinks,
@@ -49,7 +49,7 @@ function fileToBase64(file) {
 export async function addImageFiles(files, worldPoint) {
   const list = [...files].filter((file) => file && file.type && file.type.startsWith("image/"));
   if (!list.length || !state.project) return;
-  let lastId = null;
+  let lastResult = null;
   try {
     for (let i = 0; i < list.length; i += 1) {
       const file = list[i];
@@ -60,11 +60,12 @@ export async function addImageFiles(files, worldPoint) {
         body.x = Math.round(worldPoint.x + i * 20);
         body.y = Math.round(worldPoint.y + i * 20);
       }
-      const result = await api("POST", `/projects/${pid()}/images`, body);
-      lastId = result.element.id;
+      // Each addImage response returns the full cumulative project, so the LAST one
+      // reflects every added image — apply it once (no reload GET).
+      lastResult = await api("POST", `/projects/${pid()}/images`, body);
     }
-    if (lastId) selectOnly(lastId);
-    await reloadProject(`Added ${list.length} image(s).`);
+    if (lastResult) selectOnly(lastResult.element.id);
+    applyMutation(lastResult, `Added ${list.length} image(s).`);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -81,8 +82,7 @@ export async function pasteImageBlob(blob) {
 
 export async function patchElementBox(id, patch) {
   try {
-    await api("PATCH", `/projects/${pid()}/elements/${id}`, patch);
-    await reloadProject();
+    applyMutation(await api("PATCH", `/projects/${pid()}/elements/${id}`, patch));
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -99,9 +99,11 @@ export async function setElementVisible(id, visible) {
 export async function deleteElements(ids) {
   if (!ids.length) return;
   try {
-    for (const id of ids) await api("DELETE", `/projects/${pid()}/elements/${id}`);
+    // ONE batched op = one HTTP call + one journal entry (a single Ctrl+Z restores
+    // the whole multi-delete), instead of the old N sequential DELETEs.
+    const result = await api("POST", `/projects/${pid()}/elements-remove`, { elementIds: ids });
     clearSelection();
-    await reloadProject(`Removed ${ids.length} element(s) (image files kept on disk).`);
+    applyMutation(result, `Removed ${ids.length} element(s) (image files kept on disk).`);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -125,8 +127,7 @@ function siblingsOf(element) {
 // journaled op; undo restores the exact previous order.
 export async function reorderElementTo(id, index) {
   try {
-    await api("POST", `/projects/${pid()}/elements/${id}/reorder`, { index });
-    await reloadProject();
+    applyMutation(await api("POST", `/projects/${pid()}/elements/${id}/reorder`, { index }));
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -169,7 +170,7 @@ export async function detectRegionsFor(id) {
   try {
     setStatus("Detecting regions...");
     const result = await api("POST", `/projects/${pid()}/detect-regions`, { elementId: id });
-    await reloadProject(`Detected ${result.regions.length} region(s).`);
+    applyMutation(result, `Detected ${result.regions.length} region(s).`);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -187,7 +188,7 @@ export async function sliceRegionsFor(id, regionIds) {
     state.selectedGroupId = null;
     state.selectedRegionIds = new Set();
     state.selectedIds = new Set(result.created.map((element) => element.id));
-    await reloadProject(`Sliced ${result.created.length} region(s) into new elements.`);
+    applyMutation(result, `Sliced ${result.created.length} region(s) into new elements.`);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -200,8 +201,7 @@ export async function sliceRegionsFor(id, regionIds) {
 // exactly once, so undo steps back a whole gesture rather than every mouse move.
 export async function setRegionsFor(elementId, regions, message) {
   try {
-    await api("PUT", `/projects/${pid()}/elements/${elementId}/regions`, { regions });
-    await reloadProject(message);
+    applyMutation(await api("PUT", `/projects/${pid()}/elements/${elementId}/regions`, { regions }), message);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -216,8 +216,7 @@ export async function renameRegion(elementId, regionId, name) {
     region.id === regionId ? { ...region, name } : region,
   );
   try {
-    await api("PUT", `/projects/${pid()}/elements/${elementId}/regions`, { regions });
-    await reloadProject();
+    applyMutation(await api("PUT", `/projects/${pid()}/elements/${elementId}/regions`, { regions }));
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -232,9 +231,9 @@ export async function deleteSelectedRegions() {
   if (!ids.size) return;
   const remaining = (element.regions || []).filter((region) => !ids.has(region.id));
   try {
-    await api("PUT", `/projects/${pid()}/elements/${element.id}/regions`, { regions: remaining });
+    const result = await api("PUT", `/projects/${pid()}/elements/${element.id}/regions`, { regions: remaining });
     state.selectedRegionIds = new Set();
-    await reloadProject(`Removed ${ids.size} region(s).`);
+    applyMutation(result, `Removed ${ids.size} region(s).`);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -245,9 +244,9 @@ export async function deleteRegion(elementId, regionId) {
   if (!element) return;
   const remaining = (element.regions || []).filter((region) => region.id !== regionId);
   try {
-    await api("PUT", `/projects/${pid()}/elements/${elementId}/regions`, { regions: remaining });
+    const result = await api("PUT", `/projects/${pid()}/elements/${elementId}/regions`, { regions: remaining });
     state.selectedRegionIds.delete(regionId);
-    await reloadProject("Removed region.");
+    applyMutation(result, "Removed region.");
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -259,8 +258,7 @@ export async function deleteRegion(elementId, regionId) {
 // op (the inspector Export section commits one entry per edit; undoable).
 export async function setExportRows(elementId, rows) {
   try {
-    await api("PUT", `/projects/${pid()}/elements/${elementId}/export`, { rows });
-    await reloadProject();
+    applyMutation(await api("PUT", `/projects/${pid()}/elements/${elementId}/export`, { rows }));
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -335,7 +333,7 @@ export async function createGroupFromSelection(name) {
     const result = await api("POST", `/projects/${pid()}/groups`, { name: name || "New group", fromElements: ids });
     clearSelection();
     state.selectedGroupId = result.group.id;
-    await reloadProject(`Grouped ${ids.length} element(s) into "${result.group.name}".`);
+    applyMutation(result, `Grouped ${ids.length} element(s) into "${result.group.name}".`);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -363,7 +361,7 @@ export async function createGroupOrDefault(name) {
     };
     const result = await api("POST", `/projects/${pid()}/groups`, body);
     state.selectedGroupId = result.group.id;
-    await reloadProject(`Created group "${result.group.name}".`);
+    applyMutation(result, `Created group "${result.group.name}".`);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -375,8 +373,8 @@ export async function assignElementsToGroup(elementIds, groupId) {
   const ids = [...elementIds];
   if (!ids.length) return;
   try {
-    await api("POST", `/projects/${pid()}/assign-group`, { elementIds: ids, groupId: groupId ?? null });
-    await reloadProject(groupId ? "Moved to group." : "Moved out of group.");
+    const result = await api("POST", `/projects/${pid()}/assign-group`, { elementIds: ids, groupId: groupId ?? null });
+    applyMutation(result, groupId ? "Moved to group." : "Moved out of group.");
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -384,8 +382,7 @@ export async function assignElementsToGroup(elementIds, groupId) {
 
 export async function patchGroupBox(groupId, patch) {
   try {
-    await api("PATCH", `/projects/${pid()}/groups/${groupId}`, patch);
-    await reloadProject();
+    applyMutation(await api("PATCH", `/projects/${pid()}/groups/${groupId}`, patch));
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -419,9 +416,9 @@ export async function ungroup(groupId) {
   try {
     const memberIds = elements().filter((element) => element.groupId === groupId).map((element) => element.id);
     if (memberIds.length) await api("POST", `/projects/${pid()}/assign-group`, { elementIds: memberIds, groupId: null });
-    await api("DELETE", `/projects/${pid()}/groups/${groupId}`);
+    const result = await api("DELETE", `/projects/${pid()}/groups/${groupId}`);
     state.selectedGroupId = null;
-    await reloadProject("Ungrouped.");
+    applyMutation(result, "Ungrouped.");
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -434,7 +431,7 @@ export async function deleteGroupAction(groupId) {
     const result = await api("DELETE", `/projects/${pid()}/groups/${groupId}`);
     state.selectedGroupId = null;
     const count = (result.removedElements || []).length;
-    await reloadProject(count ? `Deleted group + ${count} element(s). Undo restores both.` : "Deleted empty group.");
+    applyMutation(result, count ? `Deleted group + ${count} element(s). Undo restores both.` : "Deleted empty group.");
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -456,8 +453,9 @@ export async function undo() {
     return;
   }
   try {
-    await api("POST", `/projects/${pid()}/undo`);
-    await reloadProject("Undid last change.");
+    // undo/redo responses carry the restored {project} + folded {history} flags too,
+    // so the page reconciles from the response — no reload GET, no /history GET.
+    applyMutation(await api("POST", `/projects/${pid()}/undo`), "Undid last change.");
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -466,8 +464,7 @@ export async function undo() {
 export async function redo() {
   if (!state.project || !state.history.canRedo) return;
   try {
-    await api("POST", `/projects/${pid()}/redo`);
-    await reloadProject("Redid change.");
+    applyMutation(await api("POST", `/projects/${pid()}/redo`), "Redid change.");
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -475,8 +472,7 @@ export async function redo() {
 
 export async function renameProject(title) {
   try {
-    await api("PATCH", `/projects/${pid()}`, { title });
-    await reloadProject("Renamed project.");
+    applyMutation(await api("PATCH", `/projects/${pid()}`, { title }), "Renamed project.");
   } catch (error) {
     setStatus(error.message, true);
   }

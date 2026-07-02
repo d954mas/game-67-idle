@@ -56,6 +56,41 @@ test("cli create/add-image/undo/redo/history/export smoke", (t) => {
   assert.equal(stats.errors.count, 0);
 });
 
+test("cli batched elements-set / elements-remove parity (one undo each)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-batch-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const a = join(dir, "a.png");
+  const b = join(dir, "b.png");
+  writeFileSync(a, solidPng(4, 4, [10, 0, 0]));
+  writeFileSync(b, solidPng(4, 4, [0, 10, 0]));
+
+  const projectId = run(env, "create", "--title", "CLI Batch").project.id;
+  const elA = run(env, "add-image", projectId, "--file", a).element.id;
+  const elB = run(env, "add-image", projectId, "--file", b).element.id;
+
+  // elements-set: batched move via a JSON patches file -> one journal entry.
+  const patchesPath = join(dir, "patches.json");
+  writeFileSync(patchesPath, JSON.stringify([{ elementId: elA, x: 40 }, { elementId: elB, x: 60 }]));
+  const set = run(env, "elements-set", projectId, "--json", patchesPath);
+  assert.equal(set.count, 2);
+  assert.deepEqual(run(env, "show", projectId).project.elements.map((e) => e.x), [40, 60]);
+  const h1 = run(env, "history", projectId);
+  assert.equal(h1.entries.filter((e) => e.op === "patchElements").length, 1);
+  run(env, "undo", projectId);
+  assert.deepEqual(run(env, "show", projectId).project.elements.map((e) => e.x), [0, 0]);
+
+  // elements-remove: batched delete -> one journal entry, one undo restores both.
+  const removed = run(env, "elements-remove", projectId, "--elements", `${elA},${elB}`);
+  assert.deepEqual(removed.removed.slice().sort(), [elA, elB].sort());
+  assert.equal(run(env, "show", projectId).project.elements.length, 0);
+  const h2 = run(env, "history", projectId);
+  assert.equal(h2.entries.filter((e) => e.op === "removeElements").length, 1);
+  run(env, "undo", projectId);
+  assert.equal(run(env, "show", projectId).project.elements.length, 2);
+});
+
 test("cli group-create/move/set/assign/delete smoke (no python)", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-groups-"));
   const env = { CANVAS_PROJECTS_ROOT: dir };

@@ -37,6 +37,36 @@ import { openContextMenu } from "./context_menu.js";
 // Pointer-based element-row drag (reparent OR reorder; kept deliberately simple).
 let layerDrag = null; // { id, name, rowEl, startX, startY, active }
 
+// Reused thumbnail <img> nodes, keyed by element id (with the src it was built for).
+// A full layers rebuild (replaceChildren) detaches the old rows but we re-append the
+// SAME img node, so its src is never reset and the browser neither re-downloads nor
+// re-decodes an unrelated thumbnail on every op. Keyed by id (not src) so two elements
+// sharing one content-addressed file each get their own node; the src guard rebuilds
+// only when an element's image actually changes. serveFile marks files/ immutable, so
+// even the first paint is cache-friendly.
+const thumbCache = new Map(); // element.id -> { img, src }
+
+function thumbFor(element) {
+  let entry = thumbCache.get(element.id);
+  if (!entry || entry.src !== element.src) {
+    const img = document.createElement("img");
+    img.className = "thumb";
+    img.alt = "";
+    img.draggable = false; // never start a native image drag when dragging a row
+    img.src = fileUrl(element);
+    entry = { img, src: element.src };
+    thumbCache.set(element.id, entry);
+  }
+  return entry.img;
+}
+
+// Drop cached thumbnails for elements no longer in the project (keeps the map bounded
+// across deletes / project switches; ids are globally unique so this is exact).
+function pruneThumbCache() {
+  const live = new Set([...ungroupedElements(), ...groups().flatMap((g) => memberElements(g.id))].map((e) => e.id));
+  for (const id of thumbCache.keys()) if (!live.has(id)) thumbCache.delete(id);
+}
+
 function eyeButton(visible, onToggle) {
   const button = document.createElement("button");
   button.className = "eye";
@@ -92,12 +122,7 @@ function elementRow(element, indented) {
     row.appendChild(spacer);
   }
 
-  const thumb = document.createElement("img");
-  thumb.className = "thumb";
-  thumb.src = fileUrl(element);
-  thumb.alt = "";
-  thumb.draggable = false; // never start a native image drag when dragging a row
-  row.appendChild(thumb);
+  row.appendChild(thumbFor(element)); // reused node — no re-download / re-decode on rebuild
 
   const name = document.createElement("span");
   name.className = "layer-name";
@@ -272,6 +297,7 @@ export function renderLayers() {
     return;
   }
   lastLayersSig = sig;
+  pruneThumbCache();
   list.replaceChildren();
   const ungrouped = ungroupedElements();
   const groupList = groups();
