@@ -34,12 +34,33 @@ deferred with a note; none should survive long-term:
 4. **Ghost-hint & breadcrumb sanity pass** after the lead's live verification
    of T0219: collect his notes on the drill/breadcrumb/ghost UX and fold
    fixes here.
+5. **Shift-range selection in REGION lists** (lead, live verify 2026-07-02:
+   "в layers да, а в других местах нет(regions)") - the inspector Regions
+   rows (and any other multi-selectable list) must support Shift-click range
+   from the last plain click, exactly like the layers panel. One shared
+   range-select helper, not a copy.
+6. **Clip ghost hint OFF by default** (lead, live verify: "вот это я бы не
+   хотел видеть по умолчанию. Но чтобы была возможность увидеть") - the
+   0.25-alpha ghost of a selected element's clipped-out portion must be
+   hidden by default with an on-demand reveal (proposal: hold Alt to peek
+   while an element is selected; view-state only, not journaled). Touches
+   workspace.js drawClipGhosts.
+7. **Layers deep-nesting readability >4 levels** (lead question, answered
+   with Figma/analog survey): adopt (a) collapse-by-default for group rows +
+   auto-expand only the selection's ancestor path (Figma reveal pattern),
+   (b) indent GUIDES - thin vertical level lines a la VS Code so a 10px step
+   stays readable at depth, (c) resizable layers panel width. Indent step
+   already tightened to 10px (6b585ee5).
 
 ## Done when
 
 - [ ] 2+ selected groups get a real multi-inspector (count + shared toggles); mixed agree/disagree states handled honestly
 - [ ] clicking the filled body of a background-carrying group selects the group; unfilled body still starts marquee
 - [ ] export row suffix clearable in place; textInput empty-commit audited across call sites (rename guards intact)
+- [ ] Shift-click range selection works in the inspector Regions list (shared helper with layers)
+- [ ] clip ghost hidden by default, Alt-hold (or agreed toggle) reveals it
+- [ ] "Export project (N screens)" button label counts ALL groups; must count TOP-LEVEL visible only (matches exportProject since inc3; seen on screenshot: 1 top-level group shown as "2 screens")
+- [ ] layers: groups collapsed by default + selection path auto-expands; indent guides; panel width draggable
 - [ ] lead's live-verification UX notes on T0219 folded in (or explicitly none)
 - [ ] tests where testable + gates green
 
