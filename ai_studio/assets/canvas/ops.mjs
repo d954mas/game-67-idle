@@ -36,19 +36,19 @@
 //     the original kept as journal.jsonl.bak.
 //   - Observability: every journaled line carries duration_ms; failed ops append to
 //     <project>/errors.jsonl (see recordOpFailure, wired from the API + CLI clients).
-import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { canvasHistoryDepth } from "../../core_harness/tool_lib/studio_config.mjs";
-// The export encoder (tools/export_images.py) is a NEW tool, so it uses the T0218
-// bridge's config-only Python resolution: interpreter from studio.config pythonPath
-// ONLY, no candidate probing, and a loud error naming the setup command when the
-// venv or a dependency (PIL) is missing. detect/slice/render keep the module's own
-// legacy runPython discovery until the T0218 canvas seam flips them over.
-import { runPython as runExportPython } from "../tools/image/_bridge/bridge.mjs";
+// ALL canvas Python tools (export_images.py, crop_regions.py, render_group.py) run
+// through the shared image-tools bridge (T0218 config-only interpreter from
+// studio.config pythonPath) via its warm worker (T0202): one persistent Python process
+// serves every spawn site, so the second and later detect/slice/render/export calls skip
+// the interpreter-startup + numpy/PIL import floor. Interpreter/dependency problems are
+// loud errors naming the one-shot setup command; there is no cold-spawn fallback.
+import { runPython as runToolPython } from "../tools/image/_bridge/bridge.mjs";
 import { detectImageRegions } from "../tools/image/regions/api.mjs";
 import { uploadImageSource } from "../tools/image/sources/api.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
@@ -2178,7 +2178,7 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
       }),
     };
     writeFileSync(specPath, `${JSON.stringify(spec, null, 2)}\n`);
-    await runPython(root, ["ai_studio/assets/canvas/tools/crop_regions.py", "--spec", specPath]);
+    await runToolPython(root, ["ai_studio/assets/canvas/tools/crop_regions.py", "--spec", specPath]);
     const report = JSON.parse(readFileSync(reportPath, "utf8"));
     const crops = (report && report.crops) || [];
     if (!crops.length) throw new Error("crop_regions produced no crops");
@@ -2407,7 +2407,7 @@ export async function exportElements(root, { projectId, elementIds, rows } = {})
         jobs: encodeJobs,
       };
       writeFileSync(specPath, `${JSON.stringify(spec, null, 2)}\n`);
-      await runExportPython(root, ["ai_studio/assets/canvas/tools/export_images.py", "--spec", specPath]);
+      await runToolPython(root, ["ai_studio/assets/canvas/tools/export_images.py", "--spec", specPath]);
     } finally {
       rmSync(workDir, { recursive: true, force: true });
     }
@@ -2441,56 +2441,11 @@ export async function exportElements(root, { projectId, elementIds, rows } = {})
 // element array order (z-order), clipped to the group bounds, into ONE PNG at
 // the requested scale over a transparent (or solid) background. The pixel work
 // is done by our own Python tool (tools/render_group.py, PIL) because there is
-// no dependency-free pure-Node compositor. This tool is OURS, so ops spawns it
-// directly with the same robust Python discovery the image tools bridge uses; the
-// full render spec is handed over as one JSON file. renderGroup makes no
-// undoable geometry change, so like exportElements it is NOT journaled — it only
-// records a render_group tool_runs entry.
-
-function pythonCandidates() {
-  const candidates = [];
-  const add = (command, args = []) => {
-    if (command && !candidates.some((candidate) => candidate.command === command)) {
-      candidates.push({ command, args });
-    }
-  };
-  for (const command of [process.env.AI_STUDIO_PYTHON, process.env.PYTHON]) add(command);
-  const bundled = process.env.USERPROFILE
-    ? join(process.env.USERPROFILE, ".cache", "codex-runtimes", "codex-primary-runtime", "dependencies", "python", "python.exe")
-    : "";
-  if (bundled && existsSync(bundled)) add(bundled);
-  add("py", ["-3.12"]);
-  for (const command of ["C:\\Python312\\python.exe", "C:\\Python314\\python.exe"]) {
-    if (existsSync(command)) add(command);
-  }
-  add("python");
-  return candidates;
-}
-
-// Try each Python candidate in turn (cwd = repo root, so the script resolves by
-// its repo-relative path); reject with the last real error if all fail.
-function runPython(root, args) {
-  return new Promise((resolveRun, rejectRun) => {
-    const candidates = pythonCandidates();
-    const failures = [];
-    const tryCandidate = (index) => {
-      const candidate = candidates[index];
-      execFile(candidate.command, [...candidate.args, ...args], { cwd: root, windowsHide: true }, (error, stdout, stderr) => {
-        if (!error) {
-          resolveRun(stdout);
-          return;
-        }
-        failures.push((stderr || stdout || error.message).trim());
-        if (index + 1 < candidates.length) {
-          tryCandidate(index + 1);
-          return;
-        }
-        rejectRun(new Error(failures.filter(Boolean).at(-1) || error.message));
-      });
-    };
-    tryCandidate(0);
-  });
-}
+// no dependency-free pure-Node compositor. This tool is OURS, so ops hands the full
+// render spec to render_group.py through the shared bridge (runToolPython → warm
+// worker), the same path detect/slice/export use; renderGroup makes no undoable
+// geometry change, so like exportElements it is NOT journaled — it only records a
+// render_group tool_runs entry.
 
 function hexColor(value) {
   const text = String(value || "").trim();
@@ -2574,8 +2529,8 @@ function buildRenderNodes(root, projectId, project, scopeId, leaves, fonts) {
 // Composite one group's visible SUBTREE into a screen PNG at the given absolute
 // output/spec/report paths (spawns render_group.py once). Shared by renderGroup
 // (single screen, own folder) and exportProject (every visible top-level screen into
-// one folder). Uses the module's legacy runPython discovery like the other bridged
-// canvas tools; the T0218 canvas seam flips these to the config-only interpreter.
+// one folder). Runs render_group.py through the shared bridge warm worker (runToolPython),
+// the same config-only interpreter every canvas Python tool now uses.
 async function compositeGroup(root, projectId, project, group, { scale, background, outputAbs, specAbs, reportAbs } = {}) {
   const renderScale = finite(scale) && Number(scale) > 0 ? Number(scale) : 1;
   // Precedence: an explicit render-time background arg OVERRIDES group.background;
@@ -2604,7 +2559,7 @@ async function compositeGroup(root, projectId, project, group, { scale, backgrou
     children,
   };
   writeProjectBytes(specAbs, `${JSON.stringify(spec, null, 2)}\n`);
-  await runPython(root, ["ai_studio/assets/canvas/tools/render_group.py", "--spec", specAbs]);
+  await runToolPython(root, ["ai_studio/assets/canvas/tools/render_group.py", "--spec", specAbs]);
 
   let report = {};
   try {

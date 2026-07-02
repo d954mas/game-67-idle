@@ -14,11 +14,13 @@
 // The public HTTP contract for the frozen viewer keeps the historical
 // `tmp/ai_studio/assets/raster2d/` prefix (see `namespace` default below); new
 // tools may pass a different namespace, but the raster2d endpoints must not move.
-import { execFile } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 
 import { STUDIO_CONFIG_SCHEMA, loadStudioConfig } from "../../../../core_harness/tool_lib/studio_config.mjs";
+import { runPythonScript, shutdownImageWorkers } from "./worker.mjs";
+
+export { shutdownImageWorkers };
 
 const maxBodyBytes = 64 * 1024 * 1024;
 
@@ -143,31 +145,29 @@ export function resolvePythonPath(root) {
   return abs;
 }
 
-export function runPython(root, args) {
-  return new Promise((resolveRun, rejectRun) => {
-    let python;
-    try {
-      python = resolvePythonPath(root);
-    } catch (error) {
-      rejectRun(error);
-      return;
+// Run a Python tool script (args[0] = script path, rest = its argv) through the warm
+// worker for the studio interpreter. The worker is spawned lazily and kept warm, so the
+// second and later calls skip the interpreter-startup + numpy/PIL import floor; behavior
+// is identical to a cold `python script.py <argv>` spawn (same argv/argparse main). A
+// missing interpreter, a crashed worker, or a failing script are all LOUD errors — there
+// is no silent fallback to a cold spawn (no-fallbacks law). A missing dependency keeps
+// its historical, actionable message naming the venv + one-shot setup command.
+export async function runPython(root, args) {
+  const python = resolvePythonPath(root); // throws loud if the venv/interpreter is missing
+  const scriptAbs = looksAbsolute(args[0]) ? resolve(args[0]) : resolve(root, args[0]);
+  try {
+    const { stdout } = await runPythonScript(root, python, scriptAbs, args.slice(1));
+    return stdout;
+  } catch (error) {
+    const detail = String((error && (error.stderr || error.message)) || "").trim();
+    if (/ModuleNotFoundError|No module named|ImportError/.test(detail)) {
+      throw new Error(
+        `${detail}\nMissing Python dependency in the studio venv (${python}); ` +
+          `reinstall: ${IMAGE_PYTHON_SETUP_COMMAND}`,
+      );
     }
-    execFile(python, args, { cwd: root, windowsHide: true }, (error, stdout, stderr) => {
-      if (!error) {
-        resolveRun(stdout);
-        return;
-      }
-      const detail = (stderr || stdout || error.message).trim();
-      if (/ModuleNotFoundError|No module named|ImportError/.test(detail)) {
-        rejectRun(new Error(
-          `${detail}\nMissing Python dependency in the studio venv (${python}); ` +
-            `reinstall: ${IMAGE_PYTHON_SETUP_COMMAND}`,
-        ));
-        return;
-      }
-      rejectRun(new Error(detail || error.message));
-    });
-  });
+    throw new Error(detail || (error && error.message) || "python worker failed");
+  }
 }
 
 // ---------------------------------------------------------------------------

@@ -535,7 +535,7 @@
               "kind": "group",
               "path": "ai_studio/assets/tools/image/_bridge",
               "title": "_bridge",
-              "description": "Shared image-tool plumbing: config-only Python interpreter resolution, tmp-path confinement, session dirs, JSON/image helpers, and the one-shot venv setup script. Not a tool.",
+              "description": "Shared image-tool plumbing: config-only Python interpreter resolution, tmp-path confinement, session dirs, JSON/image helpers, and the one-shot venv setup script. Owns the warm Python worker (worker.mjs manager + worker.py process, T0202): runPython routes every image-tool AND canvas Python spawn through one long-lived interpreter that pays the numpy/scipy/PIL import floor once, so the second and later detect/slice/render/export calls skip the cold-spawn tax; lazy spawn, FIFO-serialized, loud crash → respawn on next request (no cold-spawn fallback), idle-kill, and a process-exit/signal hook so no Python child is orphaned. Not a tool.",
               "role": "shared image tool plumbing",
               "tags": [
                 "assets",
@@ -1068,7 +1068,7 @@
           "kind": "group",
           "path": "ai_studio/assets/canvas/tools",
           "color": "#7c3aed",
-          "description": "The canvas module's own Python tools (not image-tools steps), spawned directly by the ops layer with the shared Python discovery.",
+          "description": "The canvas module's own Python tools (not image-tools steps), run by the ops layer through the shared _bridge warm worker (config-only studio interpreter, kept warm across calls).",
           "role": "canvas python tools",
           "tags": [
             "assets",
