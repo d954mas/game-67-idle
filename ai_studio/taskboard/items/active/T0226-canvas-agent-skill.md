@@ -36,11 +36,24 @@ Keep it LEAN (lean-process law: skills grow from real friction, cut meta).
 
 ## Done when
 
-- [ ] skill exists in .codex/skills/nt-canvas-operations/ + synced Claude surface; discoverable by both harnesses
+- [x] skill exists in .codex/skills/nt-canvas-operations/ + synced Claude surface; discoverable by both harnesses
 - [ ] an agent given ONLY a canvas:// ref + the skill resolves it and performs a mutation correctly (live smoke via subagent)
-- [ ] no content duplicated from the canvas README (pointers only); doc_reference_check green
+- [x] no content duplicated from the canvas README (pointers only); doc_reference_check green
 
 ## Open questions
 
 ## Log
 - 2026-07-02: Created from lead question during live-verify session.
+- 2026-07-03: Authored `.codex/skills/nt-canvas-operations/SKILL.md` (58 lines,
+  thin router matching the `nt-taskboard-manager` convention). Verified the
+  `canvas://` ref format against `site/context_menu.js` (Copy ID) — matches
+  README exactly, incl. the bare `canvas://<projectId>` project form. Synced
+  `.claude/skills/nt-canvas-operations/` via `skills_sync.mjs` (drift check
+  caught it pre-sync). Added `assets:canvas-skill` node to
+  `module-assets.json` (same pattern as `taskboard:skill`) so the new skill
+  file isn't unmapped under strict validation. Gates green: doc_reference_check
+  (10 files), validate_map --strict (mapped=303 scanned=415, zero
+  unmapped/missing/duplicate). Sanity-verified every CLI command named in the
+  skill (list/create/show/rename/delete/add-image/add-text/element-set/
+  group-create/export/undo/redo/history) appears in the `cli.mjs` no-args
+  usage banner. Live-smoke box left unticked for the orchestrator.

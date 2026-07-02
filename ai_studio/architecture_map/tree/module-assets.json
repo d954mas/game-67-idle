@@ -1049,6 +1049,19 @@
           ]
         },
         {
+          "id": "assets:canvas-skill",
+          "kind": "skill",
+          "path": ".codex/skills/nt-canvas-operations/SKILL.md",
+          "title": "nt-canvas-operations",
+          "description": "Thin Codex skill router for canvas work: how to resolve a canvas:// ref (Copy ID) via the CLI show command, the CLI/HTTP surface pointer, the non-destructive/journaled/tool-parity/YandexDisk-root laws, and routing to the canvas README as the single source of truth.",
+          "role": "canvas agent skill entrypoint",
+          "tags": [
+            "skill",
+            "router",
+            "agent-facing"
+          ]
+        },
+        {
           "id": "assets:canvas-tools",
           "title": "Canvas Tools",
           "subtitle": "screen compositor",
