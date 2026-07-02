@@ -44,3 +44,4 @@ releases canvas/**.
 ## Log
 - 2026-07-02: Created; scan agent dispatched (read-only). Viewer preview WIP already discarded by lead same day.
 - 2026-07-02: Lead addition: studio site gets a clear path to the NEW canvas, and the canvas page itself must carry the AI Studio panel (shared studio shell header/nav like other surfaces) - canvas stops being a bare standalone page ("на канвасе нужно сделать мою панель от ии студии"). Fold into the sweep execution (studio_shell + canvas.html header).
+- 2026-07-02: Lead clarified SCOPE (terminology collision resolved): the ASSET LIBRARY VIEWER (просмотр ассетов, gallery/source-first browsing) is NEEDED and SURVIVES - it is unrelated to canvas. Delete ONLY the legacy asset_tools EDITOR (asset_prep page: region editing, old alpha preview). If the gallery shares the folder, it MOVES to its own module, never dies.
