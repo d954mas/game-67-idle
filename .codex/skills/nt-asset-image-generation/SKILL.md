@@ -47,6 +47,13 @@ source, and record the source decision in the task or game-owned asset notes.
 - Generate composable runtime parts unless the task asks for a fake shot/review.
 - Clean source images are not enough: assembled screens still need selected
   quality-rule evidence.
+- Resolution headroom (anti-noise supersampling): the asset's target in-game
+  size must be at most HALF the generated size — use the model's native large
+  sizes instead of requesting small ones, and record the target size in the
+  canvas element `meta`. Downscaled export (Lanczos) averages VAE noise away.
+  If the target is at or near the model's max (e.g. full-screen backgrounds),
+  headroom is impossible — say so in the report; the cleanup ladder applies
+  instead of silent as-is delivery.
 
 ## Canvas Handoff (mandatory)
 
