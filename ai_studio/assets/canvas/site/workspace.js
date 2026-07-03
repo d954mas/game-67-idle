@@ -227,6 +227,62 @@ function paintScope(scopeId, vp, editEl) {
   }
 }
 
+// ---- cleanup preview (T0207) --------------------------------------------------
+//
+// View-state-only on-canvas preview for the inspector's Quantize/Denoise controls —
+// same shape as the Alt-hold clip-ghost peek (state.clipGhostPeek): NEVER journaled or
+// persisted, a paint-time substitution only. Kept as MODULE-level state here (paintElement
+// below is the only reader) rather than on app.js's shared `state` object — the inspector
+// drives it entirely through the setters below, which own the repaint themselves (this
+// file calls render() directly internally, the same as every other page-state change in
+// here; hooks.renderCanvas() is only how code OUTSIDE this module reaches it).
+// { elementId, bitmap, tool, params, report } | null. `bitmap` is an already-loaded <img>
+// (see loadCleanupBitmap) so paintElement's existing `img.complete` gate just works.
+let cleanupPreview = null;
+// While true (the inspector's "Hold to compare" button held down), paint the element's
+// real source instead of the preview bitmap for this frame — the preview itself is
+// untouched, this only flips which image paintElement picks.
+let cleanupPreviewCompare = false;
+
+export function getCleanupPreview() {
+  return cleanupPreview;
+}
+
+export function setCleanupPreview(preview) {
+  cleanupPreview = preview;
+  cleanupPreviewCompare = false;
+  render();
+}
+
+export function clearCleanupPreview() {
+  if (!cleanupPreview) return;
+  cleanupPreview = null;
+  cleanupPreviewCompare = false;
+  render();
+}
+
+// `active` mirrors the compare button's pressed state (mousedown/touchstart..mouseup/
+// mouseleave/touchend); a no-op when there is nothing to compare against (the button is
+// hidden in that case anyway, but a stray event should never resurrect a cleared preview).
+export function setCleanupPreviewCompare(active) {
+  if (!cleanupPreview || cleanupPreviewCompare === active) return;
+  cleanupPreviewCompare = active;
+  render();
+}
+
+// Decode a cleanup-preview PNG (base64, from the cleanup-preview API response) into an
+// <img> ready for ctx.drawImage — the same Image() decode path app.js's imageFor uses,
+// just keyed by content instead of a project-file URL (a preview is never written to the
+// store, so it has no src of its own).
+export function loadCleanupBitmap(base64) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("could not decode the cleanup preview image"));
+    img.src = `data:image/png;base64,${base64}`;
+  });
+}
+
 function paintElement(element, vp, editEl) {
   if (element.type === "text") {
     paintTextElement(element, vp, editEl);
@@ -235,7 +291,12 @@ function paintElement(element, vp, editEl) {
   const isEdit = editEl && element.id === editEl.id;
   // Mode B dims every other element to focus the isolated one.
   ctx.globalAlpha = editEl && !isEdit ? 0.3 : 1;
-  const img = imageFor(element);
+  // T0207: a live Quantize/Denoise preview for THIS element, while "Hold to compare"
+  // isn't pressed, paints in place of the source — pure view-state substitution, nothing
+  // about `element` or the store changes.
+  const previewBitmap =
+    cleanupPreview && cleanupPreview.elementId === element.id && !cleanupPreviewCompare ? cleanupPreview.bitmap : null;
+  const img = previewBitmap || imageFor(element);
   const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
   const w = element.w * vp.scale;
   const h = element.h * vp.scale;

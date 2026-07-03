@@ -1871,6 +1871,60 @@ body.layers-resizing {
   opacity: 0.8;
 }
 
+/* Cleanup section (T0207): Quantize's range+number and Denoise's segmented strength each
+   sit in one row with a tiny spinner while their debounced preview computes; a report
+   line under each sub-block; one shared Hold-to-compare/Reset/Apply row below both. */
+.insp-cleanup-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.insp-cleanup-row .insp-segmented {
+  margin-bottom: 0;
+}
+
+.insp-cleanup-num {
+  flex: 0 0 56px;
+  width: 56px;
+  padding: 4px 6px;
+  font-size: 12px;
+  text-align: right;
+}
+
+/* Reuses the toast stack's spin keyframes (see .toast-spinner) at a smaller size — same
+   motif, own class so this section's layout stays independent of the toast stack. */
+.insp-cleanup-spinner {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--line);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: toast-spin 0.7s linear infinite;
+}
+
+.insp-cleanup-report {
+  font-size: 11px;
+  color: var(--muted);
+  min-height: 14px;
+  margin: 2px 0 8px;
+}
+
+.insp-cleanup-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.insp-cleanup-actions .insp-btn-small,
+.insp-cleanup-actions .insp-btn {
+  flex: 1;
+  width: auto;
+  margin: 0;
+}
+
 /* Style card (T0239 increment 3): the "ref" badge on the current ref row in the Style
    section's member list — mirrors .insp-align-badge's shape/sizing, style-accent fill. */
 .insp-style-ref-badge {

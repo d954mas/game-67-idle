@@ -540,6 +540,35 @@ export async function addPlateFromFile(src, name, placement, control) {
   }
 }
 
+// ---- cleanup: Quantize + Denoise (T0207) --------------------------------------
+//
+// Preview is a READ-ONLY probe against the element's CURRENT pixels — the server
+// (ops.cleanupPreview) writes nothing (no files/ entry, no journal line), so this is
+// safe to call on every debounced slider/segmented change from the inspector's Cleanup
+// section. Deliberately NOT a runLongOp: a progress toast per keystroke would be noise —
+// the inspector owns its own tiny spinner/disabled state instead. Throws on failure; the
+// caller decides how to surface it (setStatus + drop the preview, per the section's spec).
+export async function cleanupPreviewAction(elementId, tool, params) {
+  return api("POST", `/projects/${pid()}/elements/${elementId}/cleanup-preview`, { tool, params });
+}
+
+// Apply the given tool+params as ONE journaled mutation (new content-addressed file +
+// element.src swap + additive element.meta.cleanup) — same runLongOp limiter/spinner/
+// disable treatment as Alpha cutout. quantize/denoise carry no randomness, so this
+// reproduces byte-identical bytes to whatever the caller's last preview already showed.
+export async function cleanupApplyAction(elementId, tool, params, control) {
+  const label = tool === "denoise" ? "Denoise" : "Quantize";
+  await runLongOp(
+    `${label}…`,
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/elements/${elementId}/cleanup`, { tool, params });
+      applyMutation(result);
+      return { kind: "success", message: `${label} applied.` };
+    },
+    { control },
+  );
+}
+
 // ---- regions -----------------------------------------------------------------
 
 // Replace an element's regions in one journaled setRegions op. Region edits
