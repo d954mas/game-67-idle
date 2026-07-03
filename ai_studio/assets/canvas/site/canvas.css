@@ -1797,3 +1797,96 @@ body.layer-dragging {
 body.layer-dragging .layer-row {
   cursor: grabbing;
 }
+
+/* ---- prompt modal (T0250) -------------------------------------------------- */
+
+/* "Edit" button under the Recipe card's Prompt textarea, and the equivalent "View"
+   button in a minted element's Generation section — both open openPromptModal. */
+.insp-prompt-edit-btn {
+  margin-bottom: 8px;
+}
+
+/* Full-viewport dimmed overlay + centered panel. z-index is ABOVE every other floating
+   layer in this file (preset menu / toasts: 40, context menu: 50/51, layer-drag-ghost:
+   60) so the modal can always be opened on top of whatever else is showing. */
+.prompt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(8, 10, 12, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.prompt-modal-panel {
+  width: min(680px, 92vw);
+  height: 70vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+}
+
+.prompt-modal-head {
+  font-weight: 600;
+  font-size: 14px;
+  flex: none;
+}
+
+.prompt-modal-textarea {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.prompt-modal-textarea[readonly] {
+  opacity: 0.85;
+  cursor: text;
+}
+
+.prompt-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: none;
+}
+
+/* Un-stretch the reused .insp-btn-small (flex:1 only applies inside an insp-field row) —
+   here it would otherwise fill the whole footer width. */
+.prompt-modal-footer button {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 6px 14px;
+}
+
+/* ---- generation section (T0250) -------------------------------------------- */
+
+/* Prompt preview + View row: label + truncated preview (flex:1, ellipsis) + a
+   fixed-width button — same field-row-with-trailing-button shape as .insp-alpha-row. */
+.insp-generation-prompt-row .insp-generation-prompt-preview {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text);
+}
+
+.insp-generation-view-btn {
+  flex: 0 0 auto;
+  width: auto;
+  white-space: nowrap;
+}

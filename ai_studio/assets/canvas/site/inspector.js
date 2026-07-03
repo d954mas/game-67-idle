@@ -255,6 +255,89 @@ function smallBtn(label, onClick) {
   return button;
 }
 
+// ---- prompt modal (T0250) -----------------------------------------------------
+//
+// A full-viewport modal for reading/editing a long prompt string (lead: "промпт тяжело
+// вот так читать" — the 3-row Recipe textarea is too small to read a real prompt).
+// Reused for BOTH the Recipe card's LIVE prompt (editable — Save commits through the
+// caller's `onSave`, e.g. patchRecipeAction, so it is still just one journal entry) and a
+// minted element's FROZEN prompt_snapshot in the Generation section (read-only — pass
+// `{ readOnly: true }`; `onSave` is never called). Escape / a click on the dimmed
+// overlay / Cancel all close without committing; Ctrl+Enter is a Save shortcut in
+// editable mode. Positioned above every other floating layer in this file (preset menu /
+// toasts are z-index:40, the context menu is z-index:50/51, the layer-drag-ghost is
+// z-index:60) so it can always be opened on top of them.
+function openPromptModal(title, initialValue, onSave, { readOnly: viewOnly = false } = {}) {
+  const overlay = document.createElement("div");
+  overlay.className = "prompt-modal-overlay";
+
+  const panel = document.createElement("div");
+  panel.className = "prompt-modal-panel";
+
+  const head = document.createElement("div");
+  head.className = "prompt-modal-head";
+  head.textContent = title;
+
+  const textarea = document.createElement("textarea");
+  textarea.className = "prompt-modal-textarea";
+  textarea.value = initialValue == null ? "" : String(initialValue);
+  // readOnly, NOT disabled: a disabled textarea refuses focus (so the frozen prompt
+  // couldn't be selected/copied, and Escape would land on a non-typing target and fall
+  // through to the canvas handler below).
+  textarea.readOnly = viewOnly;
+
+  const footer = document.createElement("div");
+  footer.className = "prompt-modal-footer";
+
+  const close = () => {
+    document.removeEventListener("keydown", onKeydown, true);
+    overlay.remove();
+  };
+  const save = () => {
+    if (viewOnly) return;
+    // Match the inline textarea's change-event semantics: an unedited Save/Ctrl+Enter
+    // is a plain close, never a no-op journal entry.
+    if (textarea.value !== (initialValue == null ? "" : String(initialValue))) onSave(textarea.value);
+    close();
+  };
+
+  if (viewOnly) {
+    footer.appendChild(smallBtn("Close", close));
+  } else {
+    footer.append(smallBtn("Cancel", close), (() => {
+      const btn = smallBtn("Save", save);
+      btn.classList.add("primary");
+      return btn;
+    })());
+  }
+
+  // stopPropagation: this capture-phase handler runs before the canvas's window-level
+  // keydown (canvas.js) — without it, Escape would ALSO unwind canvas selection/scope
+  // behind the closing modal.
+  const onKeydown = (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    } else if (event.key === "Enter" && event.ctrlKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      save();
+    }
+  };
+  document.addEventListener("keydown", onKeydown, true);
+  overlay.addEventListener("mousedown", (event) => {
+    if (event.target === overlay) close();
+  });
+
+  panel.append(head, textarea, footer);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  textarea.focus();
+  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+  return overlay;
+}
+
 // ---- regions -----------------------------------------------------------------
 
 // Anchor for Shift range-selection in the Regions list (mirrors the layers panel's own
@@ -1128,6 +1211,71 @@ function transformBadge(element) {
   return badge;
 }
 
+// Generation section (T0250): additive, shown only when the element carries a frozen
+// meta.recipe run snapshot ({cardId, engine, at, prompt_snapshot, refs_snapshot,
+// params_snapshot} — minted by generateFromRecipeAction) — same "presence of the
+// additive field" pattern as Provenance/the raw Meta dump below. Lead: "в мете я вижу
+// названия и путь картинки хотелось бы и увидеть картинку визуально" — References gets
+// an actual thumbnail per ref (reuses the plate-row/thumb/role classes from the Alpha
+// plates list), not just the raw src string the Meta section already shows.
+function renderGeneration(element, root) {
+  const recipe = element.meta && element.meta.recipe;
+  if (!recipe || typeof recipe !== "object") return;
+  const body = collapsible(root, "generation", "Generation");
+
+  body.appendChild(readOnly("Engine", recipe.engine || "—"));
+  body.appendChild(readOnly("At", recipe.at ? new Date(recipe.at).toLocaleString() : "—"));
+
+  const promptText = String(recipe.prompt_snapshot || "");
+  const promptPreview = promptText.length > 60 ? `${promptText.slice(0, 60)}…` : promptText || "—"; // …
+
+  const promptRow = document.createElement("div");
+  promptRow.className = "insp-field insp-generation-prompt-row";
+  const promptLabel = document.createElement("span");
+  promptLabel.className = "insp-label";
+  promptLabel.textContent = "Prompt";
+  const promptPreviewEl = document.createElement("span");
+  promptPreviewEl.className = "insp-generation-prompt-preview";
+  promptPreviewEl.textContent = promptPreview;
+  promptPreviewEl.title = promptText;
+  const viewBtn = smallBtn("View", () => openPromptModal(element.name || "Prompt", promptText, null, { readOnly: true }));
+  viewBtn.classList.add("insp-generation-view-btn");
+  promptRow.append(promptLabel, promptPreviewEl, viewBtn);
+  body.appendChild(promptRow);
+
+  const refsTitle = document.createElement("div");
+  refsTitle.className = "insp-align-caption";
+  refsTitle.textContent = "References";
+  body.appendChild(refsTitle);
+
+  const refs = Array.isArray(recipe.refs_snapshot) ? recipe.refs_snapshot : [];
+  if (!refs.length) {
+    const empty = document.createElement("div");
+    empty.className = "insp-region-hint";
+    empty.textContent = "No reference images were sent.";
+    body.appendChild(empty);
+  } else {
+    const wrap = document.createElement("div");
+    wrap.className = "insp-alpha-plates"; // reuse: same stacked thumb-row layout as the Alpha plates list
+    refs.forEach((src) => {
+      const row = document.createElement("div");
+      row.className = "insp-plate-row";
+      const shortName = String(src).split("/").pop();
+      const img = document.createElement("img");
+      img.className = "insp-plate-thumb";
+      img.src = fileUrl({ src });
+      img.alt = shortName;
+      img.title = shortName;
+      const label = document.createElement("span");
+      label.className = "insp-plate-role";
+      label.textContent = shortName;
+      row.append(img, label);
+      wrap.appendChild(row);
+    });
+    body.appendChild(wrap);
+  }
+}
+
 function renderElement(element, root) {
   const name = field("Name", textInput(element.name, (next) => renameElement(element.id, next)));
   name.classList.add("insp-name");
@@ -1145,6 +1293,7 @@ function renderElement(element, root) {
 
   renderRegions(element, root);
   renderAlpha(element, root);
+  renderGeneration(element, root);
 
   if (element.meta && element.meta.parent) {
     const prov = collapsible(root, "provenance", "Provenance");
@@ -1331,6 +1480,16 @@ function renderRecipe(group, root) {
 
   const promptField = field("Prompt", textareaInput(recipe.prompt, (next) => patchRecipeAction(group.id, { prompt: next })));
   body.appendChild(promptField);
+
+  // T0250 (lead: "промпт тяжело вот так читать" — the 3-row textarea reads a real prompt
+  // badly). Opens the SAME prompt in a large centered modal; Save commits through the
+  // identical patchRecipeAction the inline textarea uses (one journal entry either way).
+  const editPromptBtn = smallBtn("Edit", () =>
+    openPromptModal(group.name || "Prompt", recipe.prompt, (next) => patchRecipeAction(group.id, { prompt: next })),
+  );
+  editPromptBtn.classList.add("insp-prompt-edit-btn");
+  editPromptBtn.title = "Open the prompt in a large editor";
+  body.appendChild(editPromptBtn);
 
   const engineField = field(
     "Engine",
