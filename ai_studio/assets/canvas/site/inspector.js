@@ -418,6 +418,56 @@ function selectInput(value, options, onCommit) {
   return select;
 }
 
+// Scale picker: a real <select> of presets + "Custom…". The previous datalist input
+// LOOKED like a picker but Chrome filters datalist options by the current value —
+// with "1x" in the field every other preset was hidden, so nothing but 1x was
+// selectable. A non-preset value ("512w") appears as its own selected option;
+// "Custom…" swaps the field to a text input for free-form entry (512w/0.75x/…).
+function scaleInput(row, commit) {
+  const holder = document.createElement("span");
+  holder.style.display = "contents";
+  const mount = (node) => {
+    holder.textContent = "";
+    holder.appendChild(node);
+  };
+  const showSelect = () => {
+    const current = row.scale == null ? "1x" : String(row.scale);
+    const values = SCALE_PRESETS.includes(current) ? [...SCALE_PRESETS] : [current, ...SCALE_PRESETS];
+    const select = document.createElement("select");
+    select.className = "insp-input";
+    for (const value of values) {
+      const node = document.createElement("option");
+      node.value = value;
+      node.textContent = value;
+      if (value === current) node.selected = true;
+      select.appendChild(node);
+    }
+    const custom = document.createElement("option");
+    custom.value = "__custom";
+    custom.textContent = "Custom…";
+    select.appendChild(custom);
+    select.addEventListener("change", () => {
+      if (select.value !== "__custom") {
+        commit({ scale: select.value });
+        return;
+      }
+      const input = textInput(current, (value) => commit({ scale: value }));
+      input.placeholder = "512w / 0.75x";
+      // Committed edits rebuild the whole panel; an aborted edit (Esc / blur with no
+      // change) falls back to the select so the row never strands a text field.
+      input.addEventListener("blur", () => {
+        if (holder.contains(input)) showSelect();
+      });
+      mount(input);
+      input.focus();
+      input.select();
+    });
+    mount(select);
+  };
+  showSelect();
+  return holder;
+}
+
 // One export-setting row: scale + format on the header line, a quality slider only for
 // the lossy formats, and a resample toggle. (T0229 removed the Suffix column — file
 // names are automatic: element/screen name + a Figma scale marker only when several
@@ -436,11 +486,7 @@ function exportRowNode(element, rows, index) {
 
   const head = document.createElement("div");
   head.className = "insp-export-head";
-  head.appendChild(field("Scale", (() => {
-    const input = textInput(row.scale, (value) => commit({ scale: value }));
-    input.setAttribute("list", "insp-scale-presets");
-    return input;
-  })()));
+  head.appendChild(field("Scale", scaleInput(row, commit)));
   head.appendChild(field("Format", selectInput(row.format || "png", EXPORT_FORMATS, (value) => commit({ format: value }))));
   wrap.appendChild(head);
 
@@ -487,16 +533,6 @@ function exportRowNode(element, rows, index) {
 function renderExport(element, root) {
   const rows = exportRowsOf(element);
   const body = collapsible(root, "export", "Export");
-
-  // Shared preset list for every row's scale input (0.5x/1x/2x/3x/4x + custom).
-  const presets = document.createElement("datalist");
-  presets.id = "insp-scale-presets";
-  for (const preset of SCALE_PRESETS) {
-    const option = document.createElement("option");
-    option.value = preset;
-    presets.appendChild(option);
-  }
-  body.appendChild(presets);
 
   const list = document.createElement("div");
   list.className = "insp-export-rows";

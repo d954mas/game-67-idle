@@ -965,6 +965,9 @@ body.layers-resizing {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* the absolutely-positioned × sits in the row's top-right corner — keep the
+     scale/format fields from stretching underneath it */
+  padding-right: 26px;
 }
 
 .insp-export-del {
