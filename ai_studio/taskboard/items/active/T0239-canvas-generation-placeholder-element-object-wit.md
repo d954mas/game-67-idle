@@ -1,7 +1,7 @@
 ---
 id: T0239
 title: "Canvas: generation placeholder element - object with prompt/refs/meta, generation invoked from it"
-status: idea
+status: doing
 project: P001
 epic: E010
 priority: P1
@@ -88,3 +88,4 @@ PROMPT TOOLS (lead, 2026-07-03, same discussion):
   no prior task covered this (T0211 is region regen only).
 - 2026-07-03: lead decision: card frame does NOT influence generation (cannot control model output size anyway) - result lands at native size; frame is just the card's own visual size, 'target footprint' framing dropped
 - 2026-07-03: lead decisions: refs = images dropped INSIDE the card (group-like membership = ref list, same canvas); style extraction v1 = element meta + re-extract + copy-to-clipboard; OPEN research question: style/description as first-class reusable canvas TYPES - how competitors model this (Recraft styles, MJ sref, Krea/Leonardo presets)
+- 2026-07-03: Design phase launched (deep-reasoner, doc-only): recipe card per settled lead decisions; style-library question folded in as the doc's open question.
