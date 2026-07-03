@@ -32,6 +32,8 @@
 //   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/expand    {}   (T0239 increment 4: Expand-prompt — ONE codex TEXT call; writes recipe.expanded only, no card minted; Generate sends it when use_expanded is true, else the short prompt)
 //   POST   /api/canvas/projects/<id>/style-cards           {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 3: mint a style card — a group with an additive `style` blob: prompt + ONE ref image; no generate route, style cards never generate)
 //   PATCH  /api/canvas/projects/<id>/style-cards/<gid>     {prompt?, ref?}                    (partial style blob update; ref must be null or a member IMAGE element id — the "Make ref" gesture; 400 on a group with no `style`)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/cleanup-preview {tool, params}  (T0207: quantize|denoise LIVE preview against CURRENT pixels; writes NOTHING to the store)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/cleanup        {tool, params}  (T0207: apply — new file + element.src swap; one journal entry)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/extract        {}   (T0239 increment 4: ONE codex VISION call -> element.meta.extracted {prompt_full, prompt_subject, style, description}; no card minted here — re-running overwrites)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/promote-recipe {}   (mint a RECIPE card BELOW the element from its ALREADY-STORED meta.extracted; NO codex call; loud without meta.extracted first)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/promote-style  {}   (mint a STYLE card RIGHT of the element from its ALREADY-STORED meta.extracted; NO codex call; loud without meta.extracted first)
@@ -69,6 +71,8 @@ import {
   alphaDualPlate,
   alphaDualPlateGenerate,
   assignToGroup,
+  cleanupApply,
+  cleanupPreview,
   createGroup,
   createProject,
   createRecipeCard,
@@ -680,6 +684,36 @@ export function createCanvasApi(root) {
         const groupId = decodeURIComponent(parts[5]);
         const body = await readJsonBody(req);
         sendMutation(200, patchStyle(root, { projectId: id, groupId, patch: body }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/cleanup-preview  (T0207)
+      // Quantize/Denoise LIVE preview: runs the tool against the element's CURRENT pixels
+      // and hands back the resulting PNG as base64 + the before/after report. Writes
+      // NOTHING to the store (no files/ entry, no journal line) — Cancel is free, nothing
+      // to undo. The inspector's slider calls this on every debounced param change.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "cleanup-preview" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        const result = await cleanupPreview(root, { projectId: id, elementId, tool: body.tool, params: body.params });
+        sendJson(res, 200, {
+          preview_base64: result.previewBase64,
+          report: result.report,
+          tool: result.tool,
+          params: result.params,
+        });
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/cleanup  (T0207)
+      // Apply: commits a FRESH deterministic run of the SAME tool+params (quantize/denoise
+      // carry no randomness, so this reproduces the exact bytes the last preview showed) as
+      // ONE journal entry — new content-addressed file + element.src swap + additive
+      // element.meta.cleanup; undo restores the previous src byte-exact, like alphaCutout.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "cleanup" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, await cleanupApply(root, { projectId: id, elementId, tool: body.tool, params: body.params }));
         return true;
       }
 

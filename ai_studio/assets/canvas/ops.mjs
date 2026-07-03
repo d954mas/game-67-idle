@@ -3126,6 +3126,7 @@ export function historyEntryLabel(op, args = {}) {
     }
     case "alphaDualPlate": return { label: "Dual-plate alpha", summary: "" };
     case "alphaDualPlateGenerate": return { label: "Dual-plate alpha (generated)", summary: "" };
+    case "cleanupApply": return { label: a.tool === "denoise" ? "Denoise" : "Quantize", summary: "" };
     case "setExportSettings": return { label: "Export settings", summary: "" };
     case "patchProject": return { label: "Rename project", summary: String(a.title || "") };
     case "createGroup": return { label: "Group", summary: String(a.name || "") };
@@ -3793,6 +3794,168 @@ export async function alphaCutout(root, { projectId, elementId, elementIds, meth
     return alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt);
   }
   return alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt);
+}
+
+// ---- cleanup: Quantize + Denoise (own Python tools, src-swap) ----------------
+//
+// T0207 (lead-settled 2026-07-02/03): the Cleanup section is TWO separate interactive
+// tools — Quantize (color-count + optional dither) and Denoise (strength) — never one
+// monolithic "Clean up" (bg-solidify was CUT as a standalone tool; it stays an internal
+// pre-pass of the alpha keyer only — no op, no button, no CLI here). Both follow the
+// exact alphaCutout non-destructive shape: Preview computes the result WITHOUT touching
+// the store at all (no files/ write, no journal entry, no tool_runs row) so the
+// inspector's slider can recompute on every debounced drag and Cancel is free; Apply
+// commits a FRESH deterministic run of the SAME tool+params (quantize/denoise carry no
+// randomness, so this reproduces byte-identical bytes to what the last preview showed)
+// as ONE journal entry — a new content-addressed file + the element's src swap +
+// additive element.meta.cleanup — exactly like alphaCutout's src-swap. Same R7
+// rotated/flipped refusal as alphaCutout/detectRegions/sliceRegions (source-space op).
+
+const CLEANUP_TOOLS = {
+  quantize: {
+    label: "Quantize",
+    script: "ai_studio/assets/tools/image/quantize/quantize.py",
+    // colors: integer 2..256 (Pillow's own quantize() range); dither: optional boolean
+    // (Floyd-Steinberg when true, else the default exact NONE mapping).
+    validate(params = {}) {
+      const colors = Math.round(Number(params.colors));
+      if (!Number.isFinite(colors) || colors < 2 || colors > 256) {
+        throw new Error(`quantize requires colors between 2 and 256, got ${JSON.stringify(params.colors)}`);
+      }
+      return { colors, dither: params.dither === true };
+    },
+    args(clean, sourceAbs, outPath, reportPath) {
+      const argv = ["--source", sourceAbs, "--out", outPath, "--colors", String(clean.colors), "--report", reportPath];
+      if (clean.dither) argv.push("--dither");
+      return argv;
+    },
+  },
+  denoise: {
+    label: "Denoise",
+    script: "ai_studio/assets/tools/image/denoise/denoise.py",
+    // strength: 1|2|3 — maps to a median-filter pass ladder in denoise.py (3px, 3px x2,
+    // 5px); the alpha channel is NEVER filtered there (the halo law).
+    validate(params = {}) {
+      const strength = Math.round(Number(params.strength));
+      if (![1, 2, 3].includes(strength)) {
+        throw new Error(`denoise requires strength 1, 2, or 3, got ${JSON.stringify(params.strength)}`);
+      }
+      return { strength };
+    },
+    args(clean, sourceAbs, outPath, reportPath) {
+      return ["--source", sourceAbs, "--out", outPath, "--strength", String(clean.strength), "--report", reportPath];
+    },
+  },
+};
+
+// Look up + normalize a cleanup tool name. Loud on anything else — validated BEFORE any
+// disk/project read (fail fast on bad shape, mirroring alphaCutout's method check).
+function resolveCleanupTool(tool) {
+  const name = String(tool || "").trim().toLowerCase();
+  const spec = CLEANUP_TOOLS[name];
+  if (!spec) throw new Error(`unknown cleanup tool ${JSON.stringify(tool)} (expected "quantize" or "denoise")`);
+  return { name, ...spec };
+}
+
+// Resolve + validate the element for a cleanup op: must be an image with a src, and
+// untransformed (R7 — cleanup reads/writes source-space pixels, same rule alphaCutout/
+// detectRegions/sliceRegions enforce, with the identical refusal message).
+function resolveCleanupElement(project, elementId) {
+  const element = (project.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
+  refuseIfTransformed(element, elementId);
+  return element;
+}
+
+// Run ONE cleanup tool over an element's CURRENT pixels (own worker spawn + own temp dir,
+// deleted before returning) and return the resulting bytes + the tool's report. WITHOUT
+// touching project.json — callers decide whether to mint a file (apply) or hand the bytes
+// straight back (preview). Shared so there is exactly one implementation of the actual
+// spawn for both paths (mirrors runAlphaCutoutTool).
+async function runCleanupToolOnElement(root, projectId, element, spec, clean) {
+  const sourceAbs = resolveProjectFile(root, projectId, element.src);
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-cleanup-"));
+  try {
+    const outPath = join(workDir, "cleanup_out.png");
+    const reportPath = join(workDir, "cleanup_report.json");
+    await runToolPython(root, [spec.script, ...spec.args(clean, sourceAbs, outPath, reportPath)]);
+    const report = JSON.parse(readFileSync(reportPath, "utf8"));
+    const bytes = readFileSync(outPath);
+    return { bytes, report };
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// Preview a cleanup tool's result on an element's CURRENT pixels — the inspector's live
+// param-slider path (debouncing is the caller's job). Computes bytes + report and hands
+// the PNG straight back as base64; NOTHING is written to the store (no files/ entry, no
+// journal line, no tool_runs row), so Cancel is free — there is nothing to undo.
+export async function cleanupPreview(root, { projectId, elementId, tool, params } = {}) {
+  if (!projectId) throw new Error("cleanupPreview requires projectId");
+  if (!elementId) throw new Error("cleanupPreview requires elementId");
+  const spec = resolveCleanupTool(tool);
+  const clean = spec.validate(params);
+  const project = getProject(root, projectId);
+  const element = resolveCleanupElement(project, elementId);
+  const { bytes, report } = await runCleanupToolOnElement(root, projectId, element, spec, clean);
+  return { elementId, tool: spec.name, params: clean, previewBase64: bytes.toString("base64"), report };
+}
+
+// Apply a cleanup tool's result as ONE journaled mutation: a new content-addressed file +
+// the element's src swap + additive element.meta.cleanup ({tool, params, report,
+// prev_src, at}); the previous src file stays in files/ (immutable), so undo restores the
+// exact previous bytes byte-for-byte, exactly like alphaCutout. `prev_src` is additive
+// provenance on top of the swap itself — the file the swap replaced never moves.
+export async function cleanupApply(root, { projectId, elementId, tool, params } = {}) {
+  if (!projectId) throw new Error("cleanupApply requires projectId");
+  if (!elementId) throw new Error("cleanupApply requires elementId");
+  const spec = resolveCleanupTool(tool);
+  const clean = spec.validate(params);
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const element = resolveCleanupElement(before, elementId);
+  const { bytes, report } = await runCleanupToolOnElement(root, projectId, element, spec, clean);
+  const newSrc = storeAddFile(root, projectId, { bytes, name: `${slug(element.name)}.png` }).src;
+
+  // Re-read to avoid clobbering concurrent edits, then swap src + record provenance
+  // ADDITIVELY on meta (alpha's meta, if any, is preserved alongside cleanup's).
+  const current = getProject(root, projectId);
+  const target = (current.elements || []).find((item) => item.id === elementId);
+  if (!target) throw new Error(`element not found: ${elementId}`);
+  const at = new Date().toISOString();
+  const cleanupMeta = { tool: spec.name, params: clean, report, prev_src: target.src, at };
+  const run = {
+    id: `run_${randomUUID().slice(0, 8)}`,
+    op: `cleanup_${spec.name}`,
+    elementId,
+    at,
+    params: clean,
+    result_summary: { changed_pixel_pct: report && report.changed_pixel_pct },
+  };
+  const nextElements = (current.elements || []).map((item) =>
+    item.id === elementId ? { ...item, src: newSrc, meta: { ...(item.meta || {}), cleanup: cleanupMeta } } : item,
+  );
+  const after = updateProject(root, projectId, {
+    elements: nextElements,
+    tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
+  });
+  const project = commitMutation(root, projectId, {
+    op: "cleanupApply",
+    args_summary: { elementId, tool: spec.name, params: clean },
+    before,
+    after,
+    startedAt,
+  });
+  return {
+    project,
+    element: (project.elements || []).find((item) => item.id === elementId),
+    run,
+    tool: spec.name,
+    params: clean,
+    report,
+  };
 }
 
 // ---- alphaDualPlate (white+black plate pair -> one new cut element) ----------

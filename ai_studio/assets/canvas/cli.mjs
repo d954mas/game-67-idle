@@ -30,6 +30,8 @@
 //   node ai_studio/assets/canvas/cli.mjs alpha <id> --elements e1,e2 [--method auto|matte]   (batch; one undo)
 //   node ai_studio/assets/canvas/cli.mjs alpha-dual <id> --elements a,b   (white+black plate pair -> new element; one undo)
 //   node ai_studio/assets/canvas/cli.mjs alpha-dual-generate <id> --element <el> [--prompt "..."]   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; one undo)
+//   node ai_studio/assets/canvas/cli.mjs quantize <id> --element <eid> --colors N [--dither] [--preview <out.png>]   (T0207: with --preview, writes the preview PNG + prints the report, NO journal entry; without it, applies — one undo step)
+//   node ai_studio/assets/canvas/cli.mjs denoise <id> --element <eid> --strength 1|2|3 [--preview <out.png>]   (T0207: same preview/apply split as quantize)
 //   node ai_studio/assets/canvas/cli.mjs add-image-from-file <id> --src files/<hash>.png [--name X] [--x n --y n]   (mint an element from an EXISTING project file, no re-upload)
 //   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --resample --base]
 //   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --resample --base] [--to <dir>] [--zip <path>]
@@ -75,6 +77,8 @@ import {
   alphaDualPlate,
   alphaDualPlateGenerate,
   assignToGroup,
+  cleanupApply,
+  cleanupPreview,
   createGroup,
   createProject,
   createRecipeCard,
@@ -179,7 +183,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|alpha-dual|alpha-dual-generate|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -211,6 +215,8 @@ function usage() {
   alpha <id> --elements e1,e2 [--method auto|matte]   (batch: 2+ images keyed into ONE journal entry/undo; no --regions with a batch)
   alpha-dual <id> --elements a,b   (white-plate + black-plate pair -> ONE new cut element; either order; plates untouched; one undo step)
   alpha-dual-generate <id> --element <eid> [--prompt "<extra subject description>"]   (AUTOMATIC: the element's current pixels are the LIGHT plate; generates the DARK plate via codex edit, gates it (one automatic retry), cuts -> ONE new element beside the source; source untouched; one undo step)
+  quantize <id> --element <eid> --colors <2-256> [--dither] [--preview <out.png>]   (T0207: palette-quantize the element's CURRENT pixels, alpha untouched; --preview writes the result PNG to <out.png> + prints the report, NO journal entry; without --preview, commits a new file + src swap as one undo step)
+  denoise <id> --element <eid> --strength <1|2|3> [--preview <out.png>]   (T0207: light median denoise, alpha NEVER filtered; same --preview/apply split as quantize)
   export-set <id> --element <eid> --json <path> | --scale <t> [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest] [--base source|canvas]
   export <id> --elements e1,e2 | --all | --project [--scale <t> --format <f> --quality <n> --resample <r> --base source|canvas] [--to <dir>] [--zip <path>]
   group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]
@@ -528,6 +534,39 @@ async function runCommand(command, id, positional, flags) {
       const args = { projectId: id, elementId: flags.element };
       if (flags.prompt && flags.prompt !== "true") args.prompt = flags.prompt;
       return print(await alphaDualPlateGenerate(repoRoot, args));
+    }
+    case "quantize": {
+      // T0207: palette-quantize the element's CURRENT pixels (alpha untouched). With
+      // --preview, computes the result and writes it to the given PNG path + prints the
+      // report — NOTHING is journaled (Cancel is free). Without --preview, applies: one
+      // new content-addressed file + one journaled src swap.
+      if (!id) fail("quantize requires <id>");
+      if (!flags.element || flags.element === "true") fail("quantize requires --element <eid>");
+      if (flags.colors === undefined || flags.colors === "true") fail("quantize requires --colors <n>");
+      const params = { colors: Number(flags.colors) };
+      if (flags.dither !== undefined && flags.dither !== "false") params.dither = true;
+      if (flags.preview && flags.preview !== "true") {
+        const result = await cleanupPreview(repoRoot, { projectId: id, elementId: flags.element, tool: "quantize", params });
+        const previewPath = resolve(flags.preview);
+        writeFileSync(previewPath, Buffer.from(result.previewBase64, "base64"));
+        return print({ preview: previewPath, tool: result.tool, params: result.params, report: result.report });
+      }
+      return print(await cleanupApply(repoRoot, { projectId: id, elementId: flags.element, tool: "quantize", params }));
+    }
+    case "denoise": {
+      // T0207: light median denoise (alpha NEVER filtered). Same --preview/apply split as
+      // quantize above.
+      if (!id) fail("denoise requires <id>");
+      if (!flags.element || flags.element === "true") fail("denoise requires --element <eid>");
+      if (flags.strength === undefined || flags.strength === "true") fail("denoise requires --strength 1|2|3");
+      const params = { strength: Number(flags.strength) };
+      if (flags.preview && flags.preview !== "true") {
+        const result = await cleanupPreview(repoRoot, { projectId: id, elementId: flags.element, tool: "denoise", params });
+        const previewPath = resolve(flags.preview);
+        writeFileSync(previewPath, Buffer.from(result.previewBase64, "base64"));
+        return print({ preview: previewPath, tool: result.tool, params: result.params, report: result.report });
+      }
+      return print(await cleanupApply(repoRoot, { projectId: id, elementId: flags.element, tool: "denoise", params }));
     }
     case "export-set": {
       if (!id) fail("export-set requires <id>");

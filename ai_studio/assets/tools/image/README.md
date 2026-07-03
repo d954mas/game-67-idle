@@ -39,4 +39,8 @@ Pinned dependency versions live in `requirements.txt`.
 - `regions/` — region detection over a normalized source.
 - `slice/` — slice a source by reviewed regions, apply per-region alpha, build
   review sheets and export ZIPs.
+- `quantize/` — palette quantization (RGB to N colors, alpha byte-identical),
+  the canvas Cleanup section's interactive quantize tool (T0207).
+- `denoise/` — light median denoise (RGB only, alpha never filtered), the
+  Cleanup section's second tool (T0207).
 - `sources/` — source-image upload conventions for the tools.
