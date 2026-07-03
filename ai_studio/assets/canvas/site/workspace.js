@@ -62,7 +62,11 @@ import {
   screenToImagePoint,
   zoomViewportAt,
 } from "./viewport.mjs";
-import { ancestorsOf, childrenOf, descendantsOf, isNodeHidden, nodeScope, orderedChildren } from "../tree.mjs";
+import { ancestorsOf, childrenOf, descendantsOf, isNodeHidden, nodeScope, orderedChildren, unionBBox } from "../tree.mjs";
+// T0244 smart guides: pure snap math, no DOM (see snap.mjs's own header). Imported here only
+// -- the drag-lifetime precompute + mousemove application + guide overlay all live in this
+// file; ops.mjs/api.mjs/cli.mjs are untouched (snapping commits through the EXISTING ops).
+import { SNAP_SCREEN_PX, collectSnapCandidates, snapDelta } from "./snap.mjs";
 
 let canvas = null;
 let ctx = null;
@@ -145,6 +149,7 @@ export function render() {
   // clipped sprite never reads as "lost". Chrome pass = never affects the artwork pixels.
   drawClipGhosts(vp);
   drawGestureOverlay();
+  drawSnapGuides(vp);
   // Live polygon draft on the isolated element (page-only state, never journaled).
   if (editEl && state.regionTool === "polygon" && state.polygonDraft.length) {
     drawPolygonDraft(ctx, editEl, state.polygonDraft, state.polygonHover, vp);
@@ -598,6 +603,33 @@ function drawGestureOverlay() {
   ctx.restore();
 }
 
+// T0244 Figma-pink alignment guides for the ACTIVE drag only: reads drag.activeGuides, set
+// fresh every mousemove by the snap match (onMouseMove's three move cases) and cleared to []
+// on bypass/no-match/mouseup. Early return keeps idle frames (no drag, or a drag with nothing
+// in tolerance) free of any draw call -- this pays nothing outside an active, matched drag.
+function drawSnapGuides(vp) {
+  if (!drag || !drag.activeGuides || !drag.activeGuides.length) return;
+  ctx.save();
+  ctx.strokeStyle = "#ff2d78";
+  ctx.lineWidth = 1;
+  for (const guide of drag.activeGuides) {
+    ctx.beginPath();
+    if (guide.axis === "x") {
+      const top = imageToScreenPoint({ x: guide.pos, y: guide.min }, vp);
+      const bottom = imageToScreenPoint({ x: guide.pos, y: guide.max }, vp);
+      ctx.moveTo(top.x, top.y);
+      ctx.lineTo(bottom.x, bottom.y);
+    } else {
+      const left = imageToScreenPoint({ x: guide.min, y: guide.pos }, vp);
+      const right = imageToScreenPoint({ x: guide.max, y: guide.pos }, vp);
+      ctx.moveTo(left.x, left.y);
+      ctx.lineTo(right.x, right.y);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function updateZoomIndicator() {
   const node = el("zoom-indicator");
   if (node) node.textContent = `${Math.round(state.viewport.scale * 100)}%`;
@@ -785,17 +817,30 @@ function groupDragItem(groupId) {
 function beginSelectionDrag(screen, world) {
   const groupIds = [...state.selectedGroupIds];
   const elItems = selectedElements().map((element) => ({ element, origX: element.x, origY: element.y }));
+
+  // T0244 smart-guide precompute -- ONCE per drag (T0236 perf law: no per-frame candidate
+  // collection, no getBoundingClientRect, no refresh() in the hot mousemove path). Candidates
+  // and the selection's ORIGINAL union bbox never change during a pure translate, so onMouseMove
+  // only ever re-runs the cheap snapDelta arithmetic against these precomputed arrays.
+  const draggedIds = [...state.selectedIds, ...state.selectedGroupIds];
+  const origFrames = [
+    ...elItems.map((it) => ({ x: it.element.x, y: it.element.y, w: it.element.w, h: it.element.h })),
+    ...groupIds.map((gid) => groupById(gid)).filter(Boolean).map((g) => ({ x: g.x, y: g.y, w: g.w, h: g.h })),
+  ];
+  const snapCandidates = collectSnapCandidates(state.project, draggedIds);
+  const snapBBox = unionBBox(origFrames);
+
   if (groupIds.length === 0) {
-    drag = { mode: "element", startX: screen.x, startY: screen.y, grabWorld: world, items: elItems };
+    drag = { mode: "element", startX: screen.x, startY: screen.y, grabWorld: world, items: elItems, snapCandidates, snapBBox, activeGuides: [] };
     return;
   }
   const grpItems = groupIds.map((gid) => groupDragItem(gid)).filter(Boolean);
   if (groupIds.length === 1 && elItems.length === 0) {
     const only = grpItems[0];
-    drag = { mode: "group", startX: screen.x, startY: screen.y, grabWorld: world, group: only.group, origGroup: { x: only.origX, y: only.origY }, members: only.members, subgroups: only.subgroups };
+    drag = { mode: "group", startX: screen.x, startY: screen.y, grabWorld: world, group: only.group, origGroup: { x: only.origX, y: only.origY }, members: only.members, subgroups: only.subgroups, snapCandidates, snapBBox, activeGuides: [] };
     return;
   }
-  drag = { mode: "selection", startX: screen.x, startY: screen.y, grabWorld: world, elItems, grpItems };
+  drag = { mode: "selection", startX: screen.x, startY: screen.y, grabWorld: world, elItems, grpItems, snapCandidates, snapBBox, activeGuides: [] };
 }
 
 function hitGroupLabel(screen) {
@@ -1138,36 +1183,65 @@ function onMouseMove(event) {
       // Delta = current pointer image point - grabbed world anchor (zoom/pan stable). Kept
       // fractional for smooth sub-pixel motion; commitGroupDrag rounds ONCE on mouseup.
       const { dx, dy } = dragWorldDelta(drag.grabWorld, screen, vp);
-      drag.group.x = drag.origGroup.x + dx;
-      drag.group.y = drag.origGroup.y + dy;
+      // T0244 §6: Ctrl/Cmd held mid-drag bypasses snap (Figma's own modifier) -- not read
+      // anywhere else during a move (see design doc §2 modifier audit), so this is safe.
+      const bypass = event.ctrlKey || event.metaKey;
+      let sdx = dx;
+      let sdy = dy;
+      if (!bypass && drag.snapCandidates) {
+        const tol = SNAP_SCREEN_PX / vp.scale; // screen px -> world tolerance (zoom-aware)
+        const raw = { x: drag.snapBBox.x + dx, y: drag.snapBBox.y + dy, w: drag.snapBBox.w, h: drag.snapBBox.h };
+        const snap = snapDelta(raw, drag.snapCandidates, tol);
+        sdx = dx + snap.dx;
+        sdy = dy + snap.dy;
+        drag.activeGuides = snap.guides;
+      } else {
+        drag.activeGuides = [];
+      }
+      drag.group.x = drag.origGroup.x + sdx;
+      drag.group.y = drag.origGroup.y + sdy;
       for (const item of drag.members) {
-        item.element.x = item.origX + dx;
-        item.element.y = item.origY + dy;
+        item.element.x = item.origX + sdx;
+        item.element.y = item.origY + sdy;
       }
       // The group drag moves its FULL subtree: nested frames translate too.
       for (const item of drag.subgroups || []) {
-        item.group.x = item.origX + dx;
-        item.group.y = item.origY + dy;
+        item.group.x = item.origX + sdx;
+        item.group.y = item.origY + sdy;
       }
       requestRender();
       break;
     }
     case "selection": {
       const { dx, dy } = dragWorldDelta(drag.grabWorld, screen, vp);
+      // T0244 §6: Ctrl/Cmd held mid-drag bypasses snap (Figma's own modifier).
+      const bypass = event.ctrlKey || event.metaKey;
+      let sdx = dx;
+      let sdy = dy;
+      if (!bypass && drag.snapCandidates) {
+        const tol = SNAP_SCREEN_PX / vp.scale; // screen px -> world tolerance (zoom-aware)
+        const raw = { x: drag.snapBBox.x + dx, y: drag.snapBBox.y + dy, w: drag.snapBBox.w, h: drag.snapBBox.h };
+        const snap = snapDelta(raw, drag.snapCandidates, tol);
+        sdx = dx + snap.dx;
+        sdy = dy + snap.dy;
+        drag.activeGuides = snap.guides;
+      } else {
+        drag.activeGuides = [];
+      }
       for (const item of drag.elItems) {
-        item.element.x = item.origX + dx;
-        item.element.y = item.origY + dy;
+        item.element.x = item.origX + sdx;
+        item.element.y = item.origY + sdy;
       }
       for (const g of drag.grpItems) {
-        g.group.x = g.origX + dx;
-        g.group.y = g.origY + dy;
+        g.group.x = g.origX + sdx;
+        g.group.y = g.origY + sdy;
         for (const m of g.members) {
-          m.element.x = m.origX + dx;
-          m.element.y = m.origY + dy;
+          m.element.x = m.origX + sdx;
+          m.element.y = m.origY + sdy;
         }
         for (const s of g.subgroups) {
-          s.group.x = s.origX + dx;
-          s.group.y = s.origY + dy;
+          s.group.x = s.origX + sdx;
+          s.group.y = s.origY + sdy;
         }
       }
       requestRender();
@@ -1175,9 +1249,23 @@ function onMouseMove(event) {
     }
     case "element": {
       const { dx, dy } = dragWorldDelta(drag.grabWorld, screen, vp);
+      // T0244 §6: Ctrl/Cmd held mid-drag bypasses snap (Figma's own modifier).
+      const bypass = event.ctrlKey || event.metaKey;
+      let sdx = dx;
+      let sdy = dy;
+      if (!bypass && drag.snapCandidates) {
+        const tol = SNAP_SCREEN_PX / vp.scale; // screen px -> world tolerance (zoom-aware)
+        const raw = { x: drag.snapBBox.x + dx, y: drag.snapBBox.y + dy, w: drag.snapBBox.w, h: drag.snapBBox.h };
+        const snap = snapDelta(raw, drag.snapCandidates, tol);
+        sdx = dx + snap.dx;
+        sdy = dy + snap.dy;
+        drag.activeGuides = snap.guides;
+      } else {
+        drag.activeGuides = [];
+      }
       for (const item of drag.items) {
-        item.element.x = item.origX + dx;
-        item.element.y = item.origY + dy;
+        item.element.x = item.origX + sdx;
+        item.element.y = item.origY + sdy;
       }
       requestRender();
       break;
