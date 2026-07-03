@@ -950,6 +950,24 @@ function renderAlignSection(nodeIds, root) {
 
 // ---- element / group / multi views -------------------------------------------
 
+// T0232 increment 2 (R5): a "Reset to source size" affordance for the scale gizmo's
+// unavoidable companion — once a sprite has been dragged away from its native pixels,
+// there needs to be a one-click way back. Image-only (renderElement is never called for a
+// text element — renderTextElement owns that view); commits patchElement({w:source_w,
+// h:source_h}) — x/y (top-left) stays fixed, same rule boxGrid's own W/H edits follow. No
+// new op: the CLI already covers this via `element-set --w <source_w> --h <source_h>`.
+function renderResetToSourceButton(element) {
+  const sw = element.source_w || element.w;
+  const sh = element.source_h || element.h;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "insp-btn";
+  button.textContent = "Reset to source size";
+  button.disabled = element.w === sw && element.h === sh;
+  button.addEventListener("click", () => patchElementBox(element.id, { w: sw, h: sh }));
+  return button;
+}
+
 function renderElement(element, root) {
   const name = field("Name", textInput(element.name, (next) => renameElement(element.id, next)));
   name.classList.add("insp-name");
@@ -958,6 +976,7 @@ function renderElement(element, root) {
   const layout = collapsible(root, "layout", "Position & Size");
   layout.appendChild(boxGrid(element, (patch) => patchElementBox(element.id, patch)));
   layout.appendChild(readOnly("Source", `${element.source_w || element.w} x ${element.source_h || element.h}`));
+  layout.appendChild(renderResetToSourceButton(element));
 
   // Single node inside a parent group (screen or widget): align-to-frame — the "center
   // this widget inside the screen" case (Figma-auto reference, T0232 increment 1).

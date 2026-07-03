@@ -58,8 +58,12 @@ import {
   dragWorldDelta,
   fitViewport,
   imageToScreenPoint,
+  mapItemBox,
   panOffsetFor,
+  resizeBox,
+  scaledFontSize,
   screenToImagePoint,
+  SCALE_HANDLES,
   zoomViewportAt,
 } from "./viewport.mjs";
 import { ancestorsOf, childrenOf, descendantsOf, isNodeHidden, nodeScope, orderedChildren, unionBBox } from "../tree.mjs";
@@ -150,6 +154,9 @@ export function render() {
   drawClipGhosts(vp);
   drawGestureOverlay();
   drawSnapGuides(vp);
+  // T0232 increment 2: 8 resize handles on the current selection's AABB -- topmost chrome,
+  // drawn last so a handle is never occluded by a frame/guide.
+  drawSelectionHandles(vp);
   // Live polygon draft on the isolated element (page-only state, never journaled).
   if (editEl && state.regionTool === "polygon" && state.polygonDraft.length) {
     drawPolygonDraft(ctx, editEl, state.polygonDraft, state.polygonHover, vp);
@@ -630,6 +637,168 @@ function drawSnapGuides(vp) {
   ctx.restore();
 }
 
+// ---- scale gizmo (T0232 increment 2 -- skeleton: move + 8 resize handles, NO rotation,
+// NO flip, NO rotate handle; those land in increment 3). Pure box math lives in
+// viewport.mjs (resizeBox/mapItemBox/scaledFontSize, SCALE_HANDLES) so it is DOM-free and
+// unit-testable; this section only wires screen-space drawing/hit-testing and the drag
+// lifecycle, mirroring regions.js's REGION_HANDLES/hitRegionHandle pattern one level up
+// (the SELECTION's AABB instead of one region's box). A resize gesture is NOT a T0244
+// snap-eligible drag (site/snap.mjs) -- these drag objects never carry
+// snapCandidates/snapBBox/activeGuides, so drawSnapGuides's early-return keeps it silent.
+const SCALE_HANDLE_HALF = 5; // half a handle square, CSS px
+const SCALE_HANDLE_TOL = 8; // hit tolerance around a handle centre, CSS px
+const SCALE_MIN_SIZE = 4; // floor for a resized element/group w or h
+
+// The nodes a scale gesture would resize: every selected element (image or text) plus
+// every selected group's OWN frame -- never a group's descendants (T0232 Q2 default:
+// "group-in-selection = frame-only resize", no subtree scale in v1). `box` is the node's
+// CURRENT frame; called fresh each frame for drawing/hit-testing, and ONCE at grab time to
+// seed a drag (drag.items then holds that frozen snapshot for the rest of the gesture).
+function collectResizeItems() {
+  const items = [];
+  for (const element of selectedElements()) {
+    const isText = element.type === "text";
+    items.push({
+      kind: "element",
+      id: element.id,
+      ref: element,
+      box: { x: element.x, y: element.y, w: element.w, h: element.h },
+      isText,
+      origFontSize: isText ? Number((element.style || {}).fontSize) || 24 : undefined,
+    });
+  }
+  for (const groupId of state.selectedGroupIds) {
+    const group = groupById(groupId);
+    if (!group) continue;
+    items.push({ kind: "group", id: group.id, ref: group, box: { x: group.x, y: group.y, w: group.w, h: group.h } });
+  }
+  return items;
+}
+
+function scaleHandlePoints(box) {
+  return SCALE_HANDLES.map((handle) => ({ ...handle, x: box.x + box.w * handle.fx, y: box.y + box.h * handle.fy }));
+}
+
+// The current selection's screen-space AABB handle points, or null when there is nothing to
+// resize. Shared by the draw pass and the hit-test so both agree on the exact same box.
+function scaleHandleScreenBox(items, vp) {
+  const box = unionBBox(items.map((item) => item.box));
+  const origin = imageToScreenPoint({ x: box.x, y: box.y }, vp);
+  return { x: origin.x, y: origin.y, w: box.w * vp.scale, h: box.h * vp.scale };
+}
+
+// Screen-space hit-test for the selection's resize handles -- checked BEFORE element
+// hit-test/move in onMouseDown (grab a handle before falling through to move), the same
+// precedence dragRegionResize takes over dragRegionMove; also backs the idle hover cursor.
+// Mode B (region-edit isolation) and the inline text editor own their own handles/overlay,
+// so neither shows the generic gizmo.
+function hitScaleHandle(screen) {
+  if (regionEditElement() || state.editingTextId) return null;
+  const items = collectResizeItems();
+  if (!items.length) return null;
+  const screenBox = scaleHandleScreenBox(items, state.viewport);
+  for (const point of scaleHandlePoints(screenBox)) {
+    if (Math.abs(screen.x - point.x) <= SCALE_HANDLE_TOL && Math.abs(screen.y - point.y) <= SCALE_HANDLE_TOL) return point;
+  }
+  return null;
+}
+
+// 8 resize handles on the current selection's AABB, drawn in the chrome pass (on top of
+// every group frame/selection stroke). Reads LIVE selection state every call (not cached),
+// so the handles track a scale drag's own live preview the same way the selection stroke
+// on each element does.
+function drawSelectionHandles(vp) {
+  if (regionEditElement() || state.editingTextId) return;
+  if (drag && drag.mode === "marquee") return;
+  const items = collectResizeItems();
+  if (!items.length) return;
+  const screenBox = scaleHandleScreenBox(items, vp);
+  ctx.save();
+  ctx.lineWidth = 1;
+  for (const point of scaleHandlePoints(screenBox)) {
+    ctx.fillStyle = "#77a7ff";
+    ctx.fillRect(point.x - SCALE_HANDLE_HALF, point.y - SCALE_HANDLE_HALF, SCALE_HANDLE_HALF * 2, SCALE_HANDLE_HALF * 2);
+    ctx.strokeStyle = "#1a1f2b";
+    ctx.strokeRect(point.x - SCALE_HANDLE_HALF, point.y - SCALE_HANDLE_HALF, SCALE_HANDLE_HALF * 2, SCALE_HANDLE_HALF * 2);
+  }
+  ctx.restore();
+}
+
+// Begin a "scale" drag: snapshot every resize target's box ONCE at grab (drag.items), plus
+// the selection's original AABB (drag.origAABB) the live preview and commit both key off of.
+// `proportionalDefault` is true only when EVERY target is a plain image element (single or a
+// pure multi-image block) -- "sprites keep proportions by default, Shift = free distort"
+// (the design doc's default); a group or a text element in the mix defaults to free resize
+// (Shift then LOCKS it), since neither has an intrinsic "aspect" the way a bitmap does.
+function beginScaleDrag(handle, screen, world) {
+  const items = collectResizeItems();
+  if (!items.length) return;
+  const origAABB = unionBBox(items.map((item) => item.box));
+  const proportionalDefault = items.every((item) => item.kind === "element" && !item.isText);
+  drag = { mode: "scale", startX: screen.x, startY: screen.y, grabWorld: world, handle, items, origAABB, proportionalDefault };
+}
+
+// Commit a finished scale drag. Element geometry (images + text) always batches through ONE
+// elements-set call -- one journal entry / one undo, whether 1 or N elements resized (mirrors
+// commitElementDrag, which does the same for a move). A selected GROUP's frame has no
+// batched-resize op (T0232 §2b: patchGroup is per-group, frame-only, no `patchGroups`-style
+// batch reused here) -- a gesture that resizes 2+ groups, or a MIX of elements and groups,
+// therefore lands as more than one journal entry (one Ctrl+Z per group patch); a pure
+// element-only block or a single solo group still commits as exactly one undo, matching the
+// doc's two documented cases. A future combined resize op (moveNodes's resize sibling) would
+// close that gap; out of scope here (no ops.mjs change in this increment).
+function commitScaleDrag(finished) {
+  const projectId = state.project.id;
+  const elementPatches = [];
+  const groupPatches = [];
+  for (const item of finished.items) {
+    const orig = item.box;
+    if (item.kind === "group") {
+      // No x/y here on purpose (see the mousemove "scale" case's group branch): only w/h
+      // ever moved, so patchGroup's move-cascade (triggered by ANY x/y change) never fires.
+      const w = Math.round(item.ref.w);
+      const h = Math.round(item.ref.h);
+      if (w !== Math.round(orig.w) || h !== Math.round(orig.h)) {
+        groupPatches.push({ groupId: item.id, w, h });
+      }
+      continue;
+    }
+    const x = Math.round(item.ref.x);
+    const y = Math.round(item.ref.y);
+    if (item.isText) {
+      const fontSize = Math.round(Number((item.ref.style || {}).fontSize) || item.origFontSize);
+      if (x !== Math.round(orig.x) || y !== Math.round(orig.y) || fontSize !== Math.round(item.origFontSize)) {
+        elementPatches.push({ elementId: item.id, x, y, style: { fontSize } });
+      }
+      continue;
+    }
+    const w = Math.round(item.ref.w);
+    const h = Math.round(item.ref.h);
+    if (x !== Math.round(orig.x) || y !== Math.round(orig.y) || w !== Math.round(orig.w) || h !== Math.round(orig.h)) {
+      elementPatches.push({ elementId: item.id, x, y, w, h });
+    }
+  }
+  if (!elementPatches.length && !groupPatches.length) {
+    refresh();
+    return;
+  }
+  (async () => {
+    try {
+      let result = null;
+      if (elementPatches.length) {
+        result = await api("POST", `/projects/${projectId}/elements-set`, { patches: elementPatches });
+      }
+      for (const patch of groupPatches) {
+        const { groupId, ...body } = patch;
+        result = await api("PATCH", `/projects/${projectId}/groups/${groupId}`, body);
+      }
+      applyMutation(result);
+    } catch (error) {
+      setStatus(error.message, true);
+    }
+  })();
+}
+
 function updateZoomIndicator() {
   const node = el("zoom-indicator");
   if (node) node.textContent = `${Math.round(state.viewport.scale * 100)}%`;
@@ -983,6 +1152,17 @@ function onMouseDown(event) {
     }
   }
 
+  // T0232 increment 2: grab a resize handle on the current selection's AABB BEFORE falling
+  // through to element hit-test/move or a group-label click -- same precedence
+  // dragRegionResize takes over dragRegionMove (a handle is always the most specific target
+  // under the cursor). No-op when nothing is selected (hitScaleHandle returns null).
+  const grabbedHandle = hitScaleHandle(screen);
+  if (grabbedHandle) {
+    beginScaleDrag(grabbedHandle, screen, world);
+    setCursor(grabbedHandle.cursor);
+    return;
+  }
+
   // A group LABEL always selects that group (chrome above the artwork) — dragging it
   // moves the whole subtree. Scope is unchanged (a label selects, it does not enter).
   const labelGroupId = hitGroupLabel(screen);
@@ -1288,6 +1468,43 @@ function onMouseMove(event) {
     case "region-create":
       requestRender();
       break;
+    case "scale": {
+      // World-anchored delta (see beginSelectionDrag) -- kept fractional for smooth live
+      // preview; commitScaleDrag rounds ONCE on mouseup (T0236 fractional-during/round-at-
+      // commit). NOT a T0244 snap-eligible drag -- no snapCandidates/activeGuides here.
+      const { dx, dy } = dragWorldDelta(drag.grabWorld, screen, vp);
+      const proportional = event.shiftKey ? !drag.proportionalDefault : drag.proportionalDefault;
+      const fromCenter = event.altKey;
+      const newAABB = resizeBox(drag.origAABB, drag.handle, { dx, dy }, { proportional, fromCenter, minSize: SCALE_MIN_SIZE });
+      for (const item of drag.items) {
+        const mapped = mapItemBox(item.box, drag.origAABB, newAABB);
+        if (item.kind === "group") {
+          // patchGroup translates its FULL descendant closure whenever x/y CHANGE (that is
+          // exactly right for a group MOVE drag, commitGroupDrag's own case) -- but a resize
+          // must NOT trigger that cascade, or "frame-only resize; children unchanged" (T0232
+          // §2b) would silently drag every member along with a moved corner/edge handle. So a
+          // group's origin stays PINNED at its grab-time x/y here; only w/h (still scaled by
+          // the same block factors as every other item) tracks the drag. A known v1 skeleton
+          // limitation: unlike an element, a solo/mixed group therefore only grows from its
+          // fixed top-left regardless of which handle is dragged (flagged in the packet report).
+          item.ref.w = Math.max(SCALE_MIN_SIZE, mapped.w);
+          item.ref.h = Math.max(SCALE_MIN_SIZE, mapped.h);
+          continue;
+        }
+        item.ref.x = mapped.x;
+        item.ref.y = mapped.y;
+        if (item.isText) {
+          // Never stretch the text box (PIL re-measures from fontSize+content) -- scale the
+          // font size by the same ratio the rest of the block is scaling by instead.
+          item.ref.style = { ...item.ref.style, fontSize: scaledFontSize(item.origFontSize, mapped.sy) };
+        } else {
+          item.ref.w = Math.max(1, mapped.w);
+          item.ref.h = Math.max(1, mapped.h);
+        }
+      }
+      requestRender();
+      break;
+    }
     default:
       break;
   }
@@ -1524,6 +1741,9 @@ function onMouseUp() {
     case "region-create":
       commitRegionCreate(finished);
       break;
+    case "scale":
+      commitScaleDrag(finished);
+      break;
     default:
       render();
       break;
@@ -1561,6 +1781,13 @@ function updateCursorAt(screen) {
       return;
     }
     setCursor("default");
+    return;
+  }
+  // T0232 increment 2: a resize handle takes cursor precedence over move (same order as
+  // the mousedown grab check above).
+  const handle = hitScaleHandle(screen);
+  if (handle) {
+    setCursor(handle.cursor);
     return;
   }
   if (hitGroupLabel(screen) || hitElement(world)) {
