@@ -59,3 +59,4 @@ increment plan, flagging what needs the lead's confirmation before build.
   (detect/slice/alpha/region-edit) refuse loudly while transformed. No new
   python tool; fields ride patchElement whitelist. Build starts with (1)
   after T0235 worker frees ops/cli/inspector (same files, one writer law).
+- 2026-07-03: Increment 1 (align/distribute) landed: reviewed, 282/282, committed f0f0c702. Increments 2-4 (gizmo, rotation+flip, rotate handle) remain.
