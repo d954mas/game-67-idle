@@ -40,6 +40,14 @@ export/undo/redo/history/...). Run it bare first to see the current command
 set — do not hardcode a command list here. An HTTP API (`api.mjs`) exists for
 page parity, but an agent should use the CLI.
 
+Background cleanup on already-landed art (a flat-light-bg element that needs a
+transparent background) does NOT need a separate white/black plate pair built
+by hand: `alpha-dual-generate <projectId> --element <eid> [--prompt "..."]`
+generates the missing dark plate, gates the pair, and mints one new cut
+element beside the source in a single call — see the README's **Automatic
+dual-plate generation** section for the full contract (retry, refusal
+messages, `meta.alpha` shape).
+
 ## History navigation (undo/redo/jump) — live-project guard
 
 The project may be live (a human editing it in the page) while an agent is also

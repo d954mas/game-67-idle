@@ -202,6 +202,39 @@ Every capability is one op in `ops.mjs`:
   same-color plates — a `SystemExit`, never a Python traceback). See **Dual-plate alpha
   tool** below. Both clients: the multi-selection inspector's **Dual-plate cutout**
   button (shown only for an exact 2-image selection) and the CLI `alpha-dual --elements`.
+- `alphaDualPlateGenerate({ projectId, elementId, prompt?, generator? })` — **(T0238)** the
+  AUTOMATIC dual-plate flow: an action on ONE existing image element ("сделай дуал-плейт
+  альфу этому арту") instead of a 2-element selection. The element's CURRENT pixels ARE
+  the dual-plate LIGHT plate (a loud refusal, no Python spawn wasted, unless its border
+  really is a flat light background); the DARK plate is generated as a codex EDIT of it
+  (the exact subject-lock chain `gen_dual_plate.sh`'s black-plate step uses); the pair then
+  runs through the SAME `alphaDualPlate` tool (role detection + T0243 align + the pair gate
+  + extraction, unmodified — one engine for both the manual and automatic paths), with ONE
+  automatic retry on a gate refusal. `prompt` is optional extra subject text appended to the
+  subject-lock prompt; `generator` is the injectable `{lightPngPath, prompt} -> Buffer|path`
+  dark-plate seam (defaults to `tools/dual_plate_generate.mjs`'s codex-backed
+  implementation — tests inject a fake one so codex never runs in the suite). On success,
+  mints ONE new cut element named `"<source name> alpha"`, placed to the RIGHT of the
+  source element's bbox (16px gap, mirroring `alphaDualPlate`'s own pair placement); its
+  `element.meta.alpha` carries `method: "dual_plate"`, `plates: [{src, role:"light"},
+  {src, role:"dark"}]` (fixed roles — light is the source element's own src, dark is the
+  stored generated plate), the `prompt`, the pair gate's verdict, and the T0243 `align`
+  delta. The source element is NEVER mutated (non-destructive, like the manual pair op);
+  ONE journal entry covers the whole gesture (generation itself runs outside the journal),
+  one undo removes just the new element. A refusal that survives the retry is loud and
+  names every preserved dark-plate attempt (`files/`, content-addressed) plus the manual
+  fallback (place both plates on the canvas, run `alphaDualPlate`). See **Dual-plate alpha
+  tool** below. Both clients: the inspector's per-plate **Add to canvas** buttons live
+  alongside the Alpha section's plate thumbnails once a result exists (no generate button
+  yet — the lead triggers this via agent/CLI) and the CLI `alpha-dual-generate --element`.
+- `addImageFromFile({ projectId, src, name?, x?, y? })` — mint a normal journaled image
+  element from an EXISTING project file `src` — no browser re-upload, no duplicate bytes
+  (content-addressing already dedupes identical bytes to the same `files/` entry, so this
+  is a plain disk read through the SAME `addImage` op every other add goes through: same
+  journaling/front-order shape). Backs the inspector's per-plate **Add to canvas** button
+  (T0238): promote a `alphaDualPlateGenerate` plate (light or dark) straight onto the
+  canvas as its own element. Loud when `src` is missing, unsafe, or not found on disk. Both
+  clients: the per-plate **Add to canvas** button and the CLI `add-image-from-file --src`.
 - `setExportSettings({ projectId, elementId, rows })` — replace an element's
   Figma-style export rows `[{scale, format, quality?, resample, base?}]` (the Export
   section persisted on the layer). Validates + normalizes each row (scale token syntax,
@@ -564,6 +597,55 @@ second Python implementation.
   cutout** button under the batch "Apply to N images" row, shown only when the selection is
   **exactly 2 images**; the CLI `alpha-dual --elements a,b`.
 
+### Automatic dual-plate generation
+
+`alphaDualPlateGenerate` (T0238, lead: "Генерировать пару, проверять, и делать") is an
+action on **ONE** existing image element instead of a 2-element selection — it generates
+the missing plate rather than asking the lead to build both by hand:
+
+- **The element's CURRENT pixels ARE the light plate.** No separate light-plate generation
+  step. This holds regardless of how the art got there — including a generation
+  placeholder's raw output, which per the T0239 reframe carries no alpha of its own. A
+  **loud, fail-fast refusal** (own Python tool `tools/check_flat_background.py`, reusing the
+  `pair_align` border-median idea — the outer few px on every edge) runs BEFORE any codex
+  spend: below a median border luma of ~200/255, or a "clearly non-flat" border (high pixel
+  spread — a gradient/texture/busy scene), refuses with a message telling the lead the art
+  needs a flat light background first. Nothing is written on refusal.
+- **The dark plate is generated as a codex EDIT of the light plate**, via the SAME
+  subject-lock chain `.codex/skills/nt-asset-image-generation/scripts/gen_dual_plate.sh`'s
+  black-plate step uses ("a BACKGROUND-COLOR SWAP only, not a redraw" + the pixel-identity
+  lock clause) — built and invoked from ONE place, `tools/dual_plate_generate.mjs`, so the
+  prompt text and the codex invocation never drift into a second copy. `prompt` (optional)
+  is extra subject text APPENDED after the locked clauses. The generator is an injectable
+  seam (`generator?` on the op; `{lightPngPath, prompt} -> Buffer|path`) — tests inject a
+  fake one, so codex never runs in the suite; the default spawns
+  `nt-asset-image-generation`'s `generate_image.py` exactly as the shell chain does.
+- **The pair runs through the SAME `alphaDualPlate` tool** (`tools/alpha_dualplate.py` —
+  role detection, T0243 translation-align, the pair gate, extraction — completely
+  unmodified: ONE engine backs both the manual pair op and this automatic flow). On a gate
+  `regenerate` verdict, the op retries **exactly once** (a fresh dark plate, same prompt).
+  If it still fails, the error is loud and names EVERY preserved dark-plate attempt (each
+  stored content-addressed in `files/` regardless of outcome, so nothing generated is ever
+  lost) plus the light plate and the manual fallback path (place both plates on the canvas,
+  run the `alphaDualPlate` pair op yourself).
+- **Non-destructive, always a NEW element** — the source element is never mutated (mirrors
+  the manual pair op's own stance, extended to a generated-not-selected second plate). The
+  new element is named `"<source name> alpha"`, placed to the **RIGHT of the source
+  element's bbox** (16px gap — mirrors `alphaDualPlate`'s own plate-pair placement).
+  `element.meta.alpha` carries `method: "dual_plate"`, `plates: [{src, role:"light"},
+  {src, role:"dark"}]` (FIXED roles — we already know which is which, unlike the manual
+  op's unordered 2-element input), the `prompt`, the pair gate's verdict, and the T0243
+  `align` delta, plus an `alpha_dualplate_generate` `tool_runs` row. The whole gesture
+  (generation + gating + retry) runs OUTSIDE the journal; only the final mint commits, so
+  ONE journal entry covers everything and one undo removes just the new element.
+- Both clients: the inspector's Alpha section shows the two plate thumbnails (served over
+  the existing project-files route) with role labels and a per-plate **Add to canvas**
+  button once `element.meta.alpha.plates` exists (`addImageFromFile` — mints a normal
+  journaled element from that plate's STORED file, no re-upload); the CLI
+  `alpha-dual-generate --element <eid> [--prompt "..."]`. There is no UI **generate**
+  button yet (the lead triggers generation via agent/CLI today) — the API route
+  (`POST /alpha-dual-generate`) exists for parity and a future button.
+
 ## Text elements
 
 A **text element** is a Figma-style text node in the flat model — `type: "text"` in
@@ -855,6 +937,7 @@ node ai_studio/assets/canvas/cli.mjs rename <id> --title "New title"
 node ai_studio/assets/canvas/cli.mjs delete <id>          # moves to .trash
 node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
 node ai_studio/assets/canvas/cli.mjs add-images <id> --files a.png,b.png   # batched multi-image add; one undo step
+node ai_studio/assets/canvas/cli.mjs add-image-from-file <id> --src files/<hash>.png [--name X] [--x 40 --y 40]   # mint an element from an EXISTING project file; no re-upload, no duplicate bytes
 node ai_studio/assets/canvas/cli.mjs add-text <id> [--x 40 --y 40] [--content "Заголовок"] [--style-json style.json] [--group <gid>]
 node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--content "New text"] [--style-json style.json]   # text edits (validated vs fonts.json)
 node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
@@ -878,6 +961,7 @@ node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2
 node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte] [--regions r1,r2]   # alpha-cutout the element (auto routes; matte forces key_matte); one undo
 node ai_studio/assets/canvas/cli.mjs alpha <id> --elements e1,e2 [--method auto|matte]   # batch: 2+ images keyed into ONE journal entry/undo; no --regions with a batch
 node ai_studio/assets/canvas/cli.mjs alpha-dual <id> --elements a,b   # white-plate + black-plate pair (either order) -> ONE new cut element; plates untouched; one undo
+node ai_studio/assets/canvas/cli.mjs alpha-dual-generate <id> --element <eid> [--prompt "extra subject text"]   # AUTOMATIC: element's current pixels = light plate; generates the dark plate, gates (one auto-retry), cuts -> ONE new element beside the source; source untouched; one undo
 node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json      # persist export rows (journaled)
 node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --scale 2x [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest] [--base source|canvas]
 node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all, or --project (all visible screens)
@@ -964,8 +1048,10 @@ one document that swaps two views; the JS is split into focused ES modules under
   that select/enter region-edit on the canvas and inline-rename on double-click,
   plus **Detect**, **Slice** (selected regions, else all), an **Alpha cutout** control (a
   method dropdown Auto / Key matte + a run button scoped to the selected regions when any
-  are selected, else the whole element — a long-op via the queue), and a muted Generate
-  (dual-plate) placeholder line), group/screen (name, X/Y/W/H + a **Fit to content** button that
+  are selected, else the whole element — a long-op via the queue), which additionally shows
+  two compact plate-thumbnail rows + role labels + a per-plate **Add to canvas** button
+  (T0238) once `element.meta.alpha.plates` exists (an `alphaDualPlateGenerate` result)),
+  group/screen (name, X/Y/W/H + a **Fit to content** button that
   resizes the frame to its content, **Visible** + **Clip content**
   checkboxes, member count, Background, **Render screen** with scale + background),
   multi-select (count + "each exports

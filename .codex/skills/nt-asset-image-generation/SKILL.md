@@ -61,6 +61,13 @@ ops — CLI or direct import), never only in loose files:
   "sourced", source: <url/path>, license}` instead. The prompt must never be
   lost — the canvas element is its durable home.
 - Raw rejects stay in `tmp/`; only accepted results go onto the canvas.
+- Generation placeholders land with NO alpha (raw art only). If the accepted
+  result needs a transparent background and it is on a flat light backdrop,
+  do NOT hand-build a white/black plate pair yourself — run the canvas op
+  `alpha-dual-generate <projectId> --element <eid>` (T0238): it generates the
+  missing dark plate via a codex edit, gates the pair, and mints one new cut
+  element beside the source in one call. See
+  `ai_studio/assets/canvas/README.md` ("Automatic dual-plate generation").
 
 ## Minimal Report
 

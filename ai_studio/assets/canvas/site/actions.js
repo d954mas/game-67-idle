@@ -489,6 +489,23 @@ export async function alphaDualPlateFor(ids, control) {
   );
 }
 
+// Mint a normal element from a dual-plate-generate plate's STORED file (T0238) — the
+// inspector's per-plate "Add to canvas" button. No re-upload/no re-fetch: the server reads
+// the existing content-addressed file directly (POST /images-from-file). Fast metadata op
+// (no python), so plain try/catch + applyMutation like patchElementBox, not runLongOp.
+export async function addPlateFromFile(src, name, placement, control) {
+  if (control) control.disabled = true;
+  try {
+    const result = await api("POST", `/projects/${pid()}/images-from-file`, { src, name, ...placement });
+    selectOnly(result.element.id);
+    applyMutation(result, `Added "${result.element.name}" to the canvas.`);
+  } catch (error) {
+    setStatus(error.message, true);
+  } finally {
+    if (control) control.disabled = false;
+  }
+}
+
 // ---- regions -----------------------------------------------------------------
 
 // Replace an element's regions in one journaled setRegions op. Region edits

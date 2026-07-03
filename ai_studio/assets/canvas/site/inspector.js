@@ -13,6 +13,7 @@
 import {
   el,
   elementById,
+  fileUrl,
   focusStage,
   groupById,
   hooks,
@@ -25,6 +26,7 @@ import {
   state,
 } from "./app.js";
 import {
+  addPlateFromFile,
   alignSelection,
   alphaCutoutBatchFor,
   alphaCutoutFor,
@@ -392,6 +394,61 @@ function renderAlpha(element, root) {
   });
   alphaRow.append(field("Method", methodSel), alphaBtn);
   body.appendChild(alphaRow);
+
+  renderAlphaPlates(element, body);
+}
+
+// Plate thumbnails (T0238 — the AUTOMATIC dual-plate-generate flow's fixed light/dark
+// roles; any future writer of the same additive `meta.alpha.plates` shape shows here too).
+// Compact: one row per plate — a small thumbnail (the file is served over the existing
+// project-files route, same as every other element image), its role label, and an
+// "Add to canvas" button that mints a normal journaled element from that plate's STORED
+// file (no re-upload — addPlateFromFile / POST images-from-file reuses the content-
+// addressed src). Placed stacked to the right of the source element so it never lands on
+// top of the cut result that already sits there.
+function renderAlphaPlates(element, root) {
+  const plates = element.meta && element.meta.alpha && Array.isArray(element.meta.alpha.plates) ? element.meta.alpha.plates : null;
+  if (!plates || !plates.length) return;
+
+  const wrap = document.createElement("div");
+  wrap.className = "insp-alpha-plates";
+  wrap.style.marginTop = "8px";
+  plates.forEach((plate, index) => {
+    if (!plate || !plate.src) return;
+    const row = document.createElement("div");
+    row.style.display = "flex";
+    row.style.alignItems = "center";
+    row.style.gap = "6px";
+    row.style.marginTop = index ? "4px" : "0";
+
+    const img = document.createElement("img");
+    img.src = fileUrl({ src: plate.src });
+    img.alt = plate.role || `plate ${index + 1}`;
+    img.title = plate.role || `plate ${index + 1}`;
+    img.style.width = "32px";
+    img.style.height = "32px";
+    img.style.objectFit = "cover";
+    img.style.borderRadius = "4px";
+    img.style.flex = "0 0 auto";
+
+    const label = document.createElement("span");
+    label.textContent = plate.role || `plate ${index + 1}`;
+    label.style.flex = "1 1 auto";
+    label.style.fontSize = "11px";
+    label.style.opacity = "0.8";
+
+    const addBtn = smallBtn("Add to canvas", () => {
+      const placement = {
+        x: Math.round(Number(element.x) + Number(element.w) + 16),
+        y: Math.round(Number(element.y) + index * (Number(element.h) + 16)),
+      };
+      addPlateFromFile(plate.src, `${element.name} ${plate.role || "plate"}`, placement, addBtn);
+    });
+
+    row.append(img, label, addBtn);
+    wrap.appendChild(row);
+  });
+  root.appendChild(wrap);
 }
 
 // ---- export (Figma-style rows persisted on the element) ----------------------

@@ -133,6 +133,19 @@ export function dualPlatePairPng({ offset = 0 } = {}) {
   return { white, black };
 }
 
+// A "not flat light" background fixture for T0238's automatic dual-plate flow: a DARK
+// gray border (median luma ~20, well under the check_flat_background.py 200 threshold)
+// with a subject blob — the fail-fast refusal case BEFORE any generation is attempted.
+// Same 40x30 dims as dualPlatePairPng so it drops straight into the same-shaped tests.
+export function darkBgPng() {
+  const width = 40;
+  const height = 30;
+  const blob = { x0: 12, y0: 8, x1: 28, y1: 22, color: [200, 60, 60] };
+  return encodePng(width, height, (x, y) =>
+    x >= blob.x0 && x < blob.x1 && y >= blob.y0 && y < blob.y1 ? blob.color : [20, 20, 20],
+  );
+}
+
 // Minimal PNG decoder for pixel assertions on render output. Handles 8-bit
 // truecolor (RGB, type 2) and truecolor+alpha (RGBA, type 6), no interlace —
 // which covers both this file's fixtures and PIL's renderGroup output. Reverses

@@ -9,11 +9,13 @@
 //   DELETE /api/canvas/projects/<id>                                (move to .trash)
 //   POST   /api/canvas/projects/<id>/images        {name, bytes_base64, x?, y?}
 //   POST   /api/canvas/projects/<id>/images-batch  {images:[{name, bytes_base64, x?, y?}]} (one entry)
+//   POST   /api/canvas/projects/<id>/images-from-file {src, name?, x?, y?}   (mint an element from an EXISTING project file; no re-upload)
 //   POST   /api/canvas/projects/<id>/text          {x?, y?, content?, style?, groupId?}
 //   POST   /api/canvas/projects/<id>/detect-regions {elementId, params?}
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
 //   POST   /api/canvas/projects/<id>/alpha          {elementId, method?, regions?} | {elementIds, method?} (batch, one entry)
 //   POST   /api/canvas/projects/<id>/alpha-dual     {elementIds:[a,b]}   (white+black plate pair -> new element; one entry)
+//   POST   /api/canvas/projects/<id>/alpha-dual-generate {elementId, prompt?}   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; new element; one entry)
 //   POST   /api/canvas/projects/<id>/export         {elementIds, rows?} | {project:true}
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/export {rows}  (export settings)
 //   POST   /api/canvas/projects/<id>/groups         {name, x?,y?,w?,h?, fromElements?, parentId?}
@@ -50,11 +52,13 @@ import { basename, extname } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
   addImage,
+  addImageFromFile,
   addImages,
   addText,
   alignNodes,
   alphaCutout,
   alphaDualPlate,
+  alphaDualPlateGenerate,
   assignToGroup,
   createGroup,
   createProject,
@@ -253,6 +257,15 @@ export function createCanvasApi(root) {
         return true;
       }
 
+      // /api/canvas/projects/<id>/images-from-file  (mint an element from an EXISTING
+      // project file src — no re-upload, no duplicate bytes; backs the inspector's
+      // per-plate "Add to canvas" button, T0238)
+      if (parts.length === 5 && sub === "images-from-file" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(201, addImageFromFile(root, id, { src: body.src, name: body.name, x: body.x, y: body.y }));
+        return true;
+      }
+
       // /api/canvas/projects/<id>/text  (add a text element)
       // x/y place it at a world point; content/style/groupId are optional (style is
       // validated against the fonts manifest by the op — a loud 400 on bad input).
@@ -318,6 +331,23 @@ export function createCanvasApi(root) {
         sendMutation(201, await alphaDualPlate(root, {
           projectId: id,
           elementIds: Array.isArray(body.elementIds) ? body.elementIds : [],
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/alpha-dual-generate
+      // AUTOMATIC dual-plate alpha (T0238): the element's CURRENT pixels are the LIGHT
+      // plate (loudly refused unless the border is flat + light); generates the DARK
+      // plate as a codex edit of it, gates the pair through the SAME alphaDualPlate tool
+      // (one automatic retry), and mints ONE new cut element beside the source. The
+      // source element stays untouched (non-destructive); one journal entry, one undo
+      // removes just the new element.
+      if (parts.length === 5 && sub === "alpha-dual-generate" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(201, await alphaDualPlateGenerate(root, {
+          projectId: id,
+          elementId: body.elementId,
+          prompt: body.prompt,
         }));
         return true;
       }
