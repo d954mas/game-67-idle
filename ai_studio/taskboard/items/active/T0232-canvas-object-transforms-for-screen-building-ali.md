@@ -48,3 +48,14 @@ increment plan, flagging what needs the lead's confirmation before build.
   вращать" — select-tool handles: drag body, corner scale, rotate handle) and
   a "вернуть размер к source" button (reset w/h to source_w/h). Design
   revision requested from the same designer.
+- 2026-07-03: REVISION DONE (doc section "REVISION 2026-07-03", R1-R10).
+  Four risk-sequenced increments: (1) align/distribute; (2) gizmo skeleton
+  (move + 8 scale handles + reset-to-source, patchElement(s) only);
+  (3a) rotation+flip data/render/parity — additive rotation (deg CW about
+  center) + flipH/flipV flags (NOT baked pixels), ctx.rotate vs PIL
+  Image.rotate(-deg, expand) center-paste, flip-then-rotate composition both
+  sides, headless parity test gates it; (3b) rotate handle in gizmo (Shift
+  15 snap, dblclick reset, rotation-aware hit-test/marquee). Region ops
+  (detect/slice/alpha/region-edit) refuse loudly while transformed. No new
+  python tool; fields ride patchElement whitelist. Build starts with (1)
+  after T0235 worker frees ops/cli/inspector (same files, one writer law).
