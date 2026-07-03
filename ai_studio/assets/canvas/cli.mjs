@@ -43,8 +43,10 @@
 //   node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs recipe-create <id> [--name X] [--x n --y n --w n --h n] [--parent <gid>|none]   (T0239 increment 1: mint a recipe card — a group with an additive `recipe` blob; no generation yet)
-//   node ai_studio/assets/canvas/cli.mjs recipe-set <id> --group g [--prompt "..."] [--engine codex|gemini|both] [--style <id>|none]
-//   node ai_studio/assets/canvas/cli.mjs recipe-generate <id> --group g   (T0239 increment 2: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one undo step; partial success allowed on engine=both)
+//   node ai_studio/assets/canvas/cli.mjs recipe-set <id> --group g [--prompt "..."] [--engine codex|gemini|both] [--style <id>|none]   (--style is a style-card group id from style-create; none clears it)
+//   node ai_studio/assets/canvas/cli.mjs recipe-generate <id> --group g   (T0239 increment 2/3: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one undo step; partial success allowed on engine=both; recipe.style_ref, when set, mixes the style card's prompt + ref image in)
+//   node ai_studio/assets/canvas/cli.mjs style-create <id> [--name X] [--x n --y n --w n --h n] [--parent <gid>|none]   (T0239 increment 3: mint a style card — a group with an additive `style` blob: prompt + ONE ref image; no generation, style cards never generate)
+//   node ai_studio/assets/canvas/cli.mjs style-set <id> --group g [--prompt "..."] [--ref <elementId>|none]   (partial style blob update; --ref must be a member IMAGE element id of THIS card, or none to clear — the "Make ref" gesture)
 //   node ai_studio/assets/canvas/cli.mjs render-group <id> --group g [--scale 2] [--background "#rrggbb"]
 //   node ai_studio/assets/canvas/cli.mjs undo <id> --expect-head <n>
 //   node ai_studio/assets/canvas/cli.mjs redo <id> --expect-head <n>
@@ -72,6 +74,7 @@ import {
   createGroup,
   createProject,
   createRecipeCard,
+  createStyleCard,
   deleteGroup,
   deleteNodes,
   deleteProject,
@@ -95,6 +98,7 @@ import {
   patchGroups,
   patchProject,
   patchRecipe,
+  patchStyle,
   readHistory,
   recordOpFailure,
   redoOp,
@@ -167,7 +171,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|alpha-dual|alpha-dual-generate|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|alpha-dual|alpha-dual-generate|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|style-create|style-set|render-group|undo|redo|history|history-list|history-jump>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -211,8 +215,10 @@ function usage() {
   group-ungroup <id> --group <gid>   (dissolve one level; children keep the group's z-slot; one undo step)
   group-delete <id> --group <gid>
   recipe-create <id> [--name <name>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0239 increment 1: mint a recipe card — a group with an additive 'recipe' blob; omitted w/h default to a 360x280 frame; no generation yet)
-  recipe-set <id> --group <gid> [--prompt "<text>"] [--engine codex|gemini|both] [--style <id>|none]   (partial recipe blob update; --style is a reserved by-id pointer, style cards land later)
-  recipe-generate <id> --group <gid>   (T0239 increment 2: generate from the card's prompt + member-image refs; engine codex|gemini|both per the card's own recipe.engine; mints 1 or 2 new RAW elements beside the card frame in its PARENT scope; one undo step; codex/agy run for real minutes — no --dry-run)
+  recipe-set <id> --group <gid> [--prompt "<text>"] [--engine codex|gemini|both] [--style <id>|none]   (partial recipe blob update; --style is an existing style-card group id from style-create, or none to clear)
+  recipe-generate <id> --group <gid>   (T0239 increment 2/3: generate from the card's prompt + member-image refs; engine codex|gemini|both per the card's own recipe.engine; mints 1 or 2 new RAW elements beside the card frame in its PARENT scope; one undo step; codex/agy run for real minutes — no --dry-run; when recipe.style_ref is set, the style card's prompt is appended and its ref image travels alongside the card's own refs)
+  style-create <id> [--name <name>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0239 increment 3: mint a style card — a group with an additive 'style' blob: prompt + ONE ref image; omitted w/h default to a 360x280 frame; style cards never generate)
+  style-set <id> --group <gid> [--prompt "<text>"] [--ref <elementId>|none]   (partial style blob update; --ref must be an existing member IMAGE element id of THIS card, or none to clear — the "Make ref" gesture; the first image dropped into an empty card auto-claims the ref)
   render-group <id> --group <gid>  (alias: render-screen) [--scale <n>] [--background '#rrggbb']
   undo <id> --expect-head <n>
   redo <id> --expect-head <n>
@@ -692,6 +698,30 @@ async function runCommand(command, id, positional, flags) {
       if (!id) fail("recipe-generate requires <id>");
       if (!flags.group) fail("recipe-generate requires --group <gid>");
       return print(await generateFromRecipe(repoRoot, { projectId: id, groupId: flags.group }));
+    }
+    case "style-create": {
+      if (!id) fail("style-create requires <id>");
+      const args = { projectId: id };
+      if (flags.name !== undefined && flags.name !== "true") args.name = flags.name;
+      if (flags.x !== undefined) args.x = Number(flags.x);
+      if (flags.y !== undefined) args.y = Number(flags.y);
+      if (flags.w !== undefined) args.w = Number(flags.w);
+      if (flags.h !== undefined) args.h = Number(flags.h);
+      // --parent <gid> nests the new card; --parent none (or omitted) = top level.
+      if (flags.parent !== undefined && flags.parent !== "true") {
+        args.parentId = flags.parent === "none" ? null : flags.parent;
+      }
+      return print(createStyleCard(repoRoot, args));
+    }
+    case "style-set": {
+      if (!id) fail("style-set requires <id>");
+      if (!flags.group) fail("style-set requires --group <gid>");
+      const patch = {};
+      if (flags.prompt !== undefined && flags.prompt !== "true") patch.prompt = flags.prompt;
+      // --ref <elementId> sets the ONE image sent to generation; --ref none clears it.
+      if (flags.ref !== undefined) patch.ref = flags.ref === "none" || flags.ref === "true" ? null : flags.ref;
+      if (!Object.keys(patch).length) fail("style-set requires --prompt and/or --ref");
+      return print(patchStyle(repoRoot, { projectId: id, groupId: flags.group, patch }));
     }
     case "render-group":
     case "render-screen": {

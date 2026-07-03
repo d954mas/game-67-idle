@@ -5,6 +5,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   ancestorsOf,
+  buildNodesSpec,
   childrenOf,
   descendantsOf,
   isNodeHidden,
@@ -238,6 +239,61 @@ test("nodeAABB wraps a rotated element's footprint so createGroup/fitGroup paddi
   assert.ok(Math.abs(box.h - diag) < 1e-9, `expected diagonal AABB height ~${diag}, got ${box.h}`);
   // Flip never changes the AABB (it mirrors pixels WITHIN the box, not the box itself).
   assert.deepEqual(nodeAABB({ x: 5, y: 5, w: 10, h: 6, flipH: true, flipV: true }), nodeAABB({ x: 5, y: 5, w: 10, h: 6 }));
+});
+
+// ---- buildNodesSpec / serializeNode (T0239-3 fix: ids are KEPT, not stripped) --------
+
+test("buildNodesSpec KEEPS element.id and group.id (T0239-3 fix — was stripped before); still strips groupId/parentId/order", () => {
+  const project = {
+    elements: [{ id: "el_a", type: "image", groupId: "grp_outer", order: 7, name: "a" }],
+    groups: [{ id: "grp_outer", parentId: null, order: 3, name: "Outer" }],
+  };
+  const spec = buildNodesSpec(project, ["grp_outer"]);
+  assert.equal(spec.nodes.length, 1);
+  const groupNode = spec.nodes[0];
+  assert.equal(groupNode.kind, "group");
+  // id KEPT (the fix); parentId/order (placement) still stripped.
+  assert.equal(groupNode.group.id, "grp_outer");
+  assert.equal("parentId" in groupNode.group, false);
+  assert.equal("order" in groupNode.group, false);
+  assert.equal(groupNode.group.name, "Outer");
+
+  assert.equal(groupNode.children.length, 1);
+  const elementNode = groupNode.children[0];
+  // id KEPT; groupId/order (placement) still stripped.
+  assert.equal(elementNode.element.id, "el_a");
+  assert.equal("groupId" in elementNode.element, false);
+  assert.equal("order" in elementNode.element, false);
+  assert.equal(elementNode.element.name, "a");
+});
+
+test("buildNodesSpec keeps ids through a nested subtree (deep children carry their own original ids too)", () => {
+  const project = {
+    elements: [
+      { id: "el_leaf", type: "image", groupId: "grp_inner" },
+    ],
+    groups: [
+      { id: "grp_outer", parentId: null },
+      { id: "grp_inner", parentId: "grp_outer" },
+    ],
+  };
+  const spec = buildNodesSpec(project, ["grp_outer"]);
+  const outerNode = spec.nodes[0];
+  assert.equal(outerNode.group.id, "grp_outer");
+  const innerNode = outerNode.children[0];
+  assert.equal(innerNode.kind, "group");
+  assert.equal(innerNode.group.id, "grp_inner");
+  const leafNode = innerNode.children[0];
+  assert.equal(leafNode.element.id, "el_leaf");
+});
+
+test("buildNodesSpec: a single plain element root also keeps its id", () => {
+  const project = {
+    elements: [{ id: "el_solo", type: "image", name: "solo" }],
+    groups: [],
+  };
+  const spec = buildNodesSpec(project, ["el_solo"]);
+  assert.equal(spec.nodes[0].element.id, "el_solo");
 });
 
 test("isNodeTransformed is true for a nonzero rotation or either flip flag, false for a plain box", () => {

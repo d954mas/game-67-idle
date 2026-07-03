@@ -897,6 +897,20 @@ export async function generateFromRecipeAction(groupId, control) {
   );
 }
 
+// ---- style cards (T0239 increment 3) -------------------------------------------
+
+// Partial update of a card's `style` blob (prompt/ref) — the Style inspector section's live
+// edits AND its "Make ref" buttons. One journaled patchStyle op; loud on a group without
+// `style` (the op layer's guard — a plain group is not a card). Mirrors patchRecipeAction
+// exactly, one route segment over.
+export async function patchStyleAction(groupId, patch) {
+  try {
+    applyMutation(await api("PATCH", `/projects/${pid()}/style-cards/${groupId}`, patch));
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 // Set a shared field (visible/clip) on SEVERAL groups in ONE journaled patchGroups op —
 // the multi-group inspector's shared toggles. One HTTP call, one undo restores every
 // group. `patch` is {visible?} or {clip?}.

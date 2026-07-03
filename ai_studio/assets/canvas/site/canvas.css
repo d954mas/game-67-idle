@@ -10,6 +10,9 @@
   --amber: #d7a14a;
   --red: #e16f6f;
   --green: #65bd81;
+  /* T0239 increment 3: style-card accent (workspace.js's STYLE_ACCENT #4aa9d7, duplicated
+     there for the same bare-2D-context reason RECIPE_ACCENT/--amber duplicate). */
+  --style-accent: #4aa9d7;
 }
 
 * {
@@ -1607,6 +1610,17 @@ body.layers-resizing {
   flex: 1 1 auto;
   font-size: 11px;
   opacity: 0.8;
+}
+
+/* Style card (T0239 increment 3): the "ref" badge on the current ref row in the Style
+   section's member list — mirrors .insp-align-badge's shape/sizing, style-accent fill. */
+.insp-style-ref-badge {
+  font-size: 10px;
+  color: #0a2430;
+  background: var(--style-accent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex: none;
 }
 
 .insp-btn-small {

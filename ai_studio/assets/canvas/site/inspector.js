@@ -42,6 +42,7 @@ import {
   patchElementBox,
   patchGroupBox,
   patchRecipeAction,
+  patchStyleAction,
   patchTextElement,
   renameElement,
   renameGroup,
@@ -1243,6 +1244,28 @@ function renderGeneration(element, root) {
   promptRow.append(promptLabel, promptPreviewEl, viewBtn);
   body.appendChild(promptRow);
 
+  // Style row (T0239 increment 3): shown only when this run mixed in a style card
+  // (meta.recipe.style_snapshot — additive, absent on a plain/no-style run). Read-only,
+  // same modal seam as the Prompt row above.
+  if (recipe.style_snapshot) {
+    const stylePrompt = String(recipe.style_snapshot.prompt || "");
+    const styleRow = document.createElement("div");
+    styleRow.className = "insp-field insp-generation-prompt-row";
+    const styleLabel = document.createElement("span");
+    styleLabel.className = "insp-label";
+    styleLabel.textContent = "Style";
+    const styleNameEl = document.createElement("span");
+    styleNameEl.className = "insp-generation-prompt-preview";
+    styleNameEl.textContent = recipe.style_snapshot.name || "—";
+    styleNameEl.title = stylePrompt;
+    const styleViewBtn = smallBtn("View", () =>
+      openPromptModal(recipe.style_snapshot.name || "Style prompt", stylePrompt, null, { readOnly: true }),
+    );
+    styleViewBtn.classList.add("insp-generation-view-btn");
+    styleRow.append(styleLabel, styleNameEl, styleViewBtn);
+    body.appendChild(styleRow);
+  }
+
   const refsTitle = document.createElement("div");
   refsTitle.className = "insp-align-caption";
   refsTitle.textContent = "References";
@@ -1471,8 +1494,9 @@ function renderGroupBackground(group, root) {
 // per commit, mirrors every other inspector field). Generate runs the T0239-2 flow via
 // generateFromRecipeAction (long-op queue, codex/agy = minutes; disabled on an empty
 // prompt — the op would refuse loudly anyway, the disable just says WHY up front). The
-// Style dropdown stays a visible-but-disabled placeholder until Style cards land in
-// increment 3 (recipe.style_ref stays a reserved null pointer until then).
+// Style dropdown (T0239 increment 3) lists every style-card group of THIS project by name;
+// picking one commits recipe.style_ref through the SAME patchRecipeAction the other fields
+// use — style cards mix their prompt + ref image into the next Generate (ops.mjs).
 function renderRecipe(group, root) {
   const recipe = group.recipe;
   if (!recipe || typeof recipe !== "object") return;
@@ -1499,15 +1523,22 @@ function renderRecipe(group, root) {
 
   const styleSelect = document.createElement("select");
   styleSelect.className = "insp-input";
-  styleSelect.disabled = true;
   const noneOption = document.createElement("option");
+  noneOption.value = "";
   noneOption.textContent = "None";
   styleSelect.appendChild(noneOption);
+  const styleCards = (state.project ? state.project.groups || [] : []).filter(
+    (candidate) => candidate.style && typeof candidate.style === "object",
+  );
+  for (const styleCard of styleCards) {
+    const option = document.createElement("option");
+    option.value = styleCard.id;
+    option.textContent = styleCard.name || styleCard.id;
+    styleSelect.appendChild(option);
+  }
+  styleSelect.value = recipe.style_ref || "";
+  styleSelect.addEventListener("change", () => patchRecipeAction(group.id, { style_ref: styleSelect.value || null }));
   body.appendChild(field("Style", styleSelect));
-  const styleHint = document.createElement("div");
-  styleHint.className = "insp-region-hint";
-  styleHint.textContent = "Style cards land in a later increment.";
-  body.appendChild(styleHint);
 
   const generateBtn = document.createElement("button");
   generateBtn.type = "button";
@@ -1518,6 +1549,70 @@ function renderRecipe(group, root) {
   generateBtn.title = emptyPrompt ? "Write a prompt first" : "Generate (codex/agy — takes minutes)";
   generateBtn.addEventListener("click", () => generateFromRecipeAction(group.id, generateBtn));
   body.appendChild(generateBtn);
+}
+
+// ---- style card (T0239 increment 3) --------------------------------------------
+
+// Style card surface: additive, shown only when the selected group carries a `style` blob
+// (same pattern as renderRecipe). Prompt is live-editable through patchStyleAction (+ the
+// SAME openPromptModal seam the Recipe prompt uses, reused verbatim for the large editor).
+// Members lists every IMAGE member (reuses the Generation section's plate-thumb row shape,
+// design R1): the current ref shows a "ref" badge, every other image gets a "Make ref"
+// button. Non-image members (text) never show here — a style card's ref/examples are images
+// only (design R1).
+function renderStyle(group, root) {
+  const style = group.style;
+  if (!style || typeof style !== "object") return;
+  const body = collapsible(root, "style", "Style");
+
+  const promptField = field("Prompt", textareaInput(style.prompt, (next) => patchStyleAction(group.id, { prompt: next })));
+  body.appendChild(promptField);
+
+  const editPromptBtn = smallBtn("Edit", () =>
+    openPromptModal(group.name || "Style prompt", style.prompt, (next) => patchStyleAction(group.id, { prompt: next })),
+  );
+  editPromptBtn.classList.add("insp-prompt-edit-btn");
+  editPromptBtn.title = "Open the style prompt in a large editor";
+  body.appendChild(editPromptBtn);
+
+  const membersTitle = document.createElement("div");
+  membersTitle.className = "insp-align-caption";
+  membersTitle.textContent = "Members";
+  body.appendChild(membersTitle);
+
+  const images = memberElements(group.id).filter((element) => element.type === "image");
+  if (!images.length) {
+    const empty = document.createElement("div");
+    empty.className = "insp-region-hint";
+    empty.textContent = "Drag images into this card — the first one auto-becomes the ref.";
+    body.appendChild(empty);
+  } else {
+    const wrap = document.createElement("div");
+    wrap.className = "insp-alpha-plates"; // reuse: same stacked thumb-row layout as the plate/reference lists
+    images.forEach((image) => {
+      const row = document.createElement("div");
+      row.className = "insp-plate-row";
+      const img = document.createElement("img");
+      img.className = "insp-plate-thumb";
+      img.src = fileUrl(image);
+      img.alt = image.name || "";
+      img.title = image.name || image.id;
+      const label = document.createElement("span");
+      label.className = "insp-plate-role";
+      label.textContent = image.name || image.id;
+      row.append(img, label);
+      if (style.ref === image.id) {
+        const badge = document.createElement("span");
+        badge.className = "insp-style-ref-badge";
+        badge.textContent = "ref";
+        row.appendChild(badge);
+      } else {
+        row.appendChild(smallBtn("Make ref", () => patchStyleAction(group.id, { ref: image.id })));
+      }
+      wrap.appendChild(row);
+    });
+    body.appendChild(wrap);
+  }
 }
 
 function renderGroupInspector(group, root) {
@@ -1572,6 +1667,7 @@ function renderGroupInspector(group, root) {
 
   renderGroupBackground(group, root);
   renderRecipe(group, root);
+  renderStyle(group, root);
 
   const render = collapsible(root, "render", "Render group");
   const controls = document.createElement("div");
@@ -1782,9 +1878,10 @@ function inspectorSig() {
   const group = state.selectedGroupId ? groupById(state.selectedGroupId) : null;
   const selected = selectedElements();
   if (group) {
-    // recipe rides in the signature so a prompt/engine commit (or a CLI edit) rebuilds
-    // the Recipe section — the Generate button's empty-prompt disable depends on it.
-    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}|${group.parentId || ""}|${JSON.stringify(group.recipe || null)}`;
+    // recipe/style ride in the signature so a prompt/engine/ref commit (or a CLI edit)
+    // rebuilds the Recipe/Style section — the Generate button's empty-prompt disable and
+    // the Style member/ref rows both depend on it.
+    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}|${group.parentId || ""}|${JSON.stringify(group.recipe || null)}|${JSON.stringify(group.style || null)}`;
   }
   // Multi-group selection (2+ groups, no loose elements): the signature carries each
   // group's id + shared toggle state so a batched visible/clip change rebuilds the panel.

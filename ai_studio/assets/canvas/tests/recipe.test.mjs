@@ -26,6 +26,7 @@ import {
   createGroup,
   createProject,
   createRecipeCard,
+  createStyleCard,
   duplicateNodes,
   exportProject,
   generateFromRecipe,
@@ -214,9 +215,12 @@ test("patchRecipe: prompt/engine/style_ref roundtrip; bad engine is loud; a plai
     /prompt must be a string/,
   );
 
-  // style_ref: null (default) -> a string id -> back to null.
-  const withStyle = patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { style_ref: "grp_style1" } }).group;
-  assert.equal(withStyle.recipe.style_ref, "grp_style1");
+  // style_ref: null (default) -> an existing style-card group id -> back to null. (T0239
+  // increment 3 tightened this from a free-form pointer to a validated one; see
+  // style.test.mjs for the "must resolve to a style card" coverage.)
+  const styleCard = createStyleCard(ROOT, { projectId: project.id, name: "A style" }).group;
+  const withStyle = patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { style_ref: styleCard.id } }).group;
+  assert.equal(withStyle.recipe.style_ref, styleCard.id);
   const clearedStyle = patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { style_ref: null } }).group;
   assert.equal(clearedStyle.recipe.style_ref, null);
   assert.throws(
@@ -262,9 +266,10 @@ test("patchRecipe is one journal entry per call; undo restores the prior recipe 
 test("copy/paste and duplicate carry the recipe blob through with a fresh group id", (t) => {
   tempProjects(t);
   const project = createProject(ROOT, { title: "Copy" });
+  const styleCard = createStyleCard(ROOT, { projectId: project.id, name: "A style" }).group;
   const { group: card } = createRecipeCard(ROOT, { projectId: project.id, name: "Hero card", x: 10, y: 20 });
-  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a knight", engine: "gemini", style_ref: "grp_style1" } });
-  const seeded = getProject(ROOT, project.id).groups[0];
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a knight", engine: "gemini", style_ref: styleCard.id } });
+  const seeded = getProject(ROOT, project.id).groups.find((g) => g.id === card.id);
 
   // buildNodesSpec (tree.mjs) is a deep clone of the group record minus id/parentId/order,
   // so `recipe` survives with no schema-aware carve-out needed.
@@ -322,8 +327,12 @@ test("CLI recipe-create / recipe-set parity with the ops layer", (t) => {
   assert.equal(patched.group.recipe.prompt, "a red fox");
   assert.equal(patched.group.recipe.engine, "both");
 
-  const withStyle = run(env, "recipe-set", projectId, "--group", groupId, "--style", "grp_style1");
-  assert.equal(withStyle.group.recipe.style_ref, "grp_style1");
+  // T0239 increment 3: --style must now resolve to a REAL style-card group id (a style-create
+  // smoke here; dedicated style-create/style-set CLI parity lives in style.test.mjs).
+  const styleCard = run(env, "style-create", projectId, "--name", "CLI style");
+  assert.equal(styleCard.group.name, "CLI style");
+  const withStyle = run(env, "recipe-set", projectId, "--group", groupId, "--style", styleCard.group.id);
+  assert.equal(withStyle.group.recipe.style_ref, styleCard.group.id);
   const clearedStyle = run(env, "recipe-set", projectId, "--group", groupId, "--style", "none");
   assert.equal(clearedStyle.group.recipe.style_ref, null);
 
@@ -331,8 +340,8 @@ test("CLI recipe-create / recipe-set parity with the ops layer", (t) => {
   assert.match(String(failure.stderr || failure.message), /engine must be one of/);
 
   const shown = run(env, "show", projectId).project;
-  assert.equal(shown.groups.length, 1);
-  assert.equal(shown.groups[0].recipe.prompt, "a red fox");
+  assert.equal(shown.groups.length, 2);
+  assert.equal(shown.groups.find((g) => g.id === groupId).recipe.prompt, "a red fox");
 });
 
 test("API POST recipe-cards / PATCH recipe-cards/<gid> parity with the ops layer", async (t) => {

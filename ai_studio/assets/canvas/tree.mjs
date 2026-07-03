@@ -493,22 +493,28 @@ function taggedNode(project, nodeId) {
   return null;
 }
 
-// Serialize ONE node into a paste-spec entry: a deep clone of the stored record MINUS
-// the identity/placement keys the paste re-mints (id, groupId/parentId, order). A group
-// carries its children (orderedChildren, back -> front) so the whole subtree round-trips
-// with its internal z-order preserved. Image element clones keep `src` — files/ is
-// immutable and content-addressed, so the spec stays valid even after the source is
-// deleted (paste references the same immutable file).
+// Serialize ONE node into a paste-spec entry: a deep clone of the stored record MINUS the
+// PLACEMENT keys the paste re-mints (groupId/parentId, order — a pasted node always lands
+// fresh into whatever scope/z-slot the paste call chooses). `id` is KEPT (T0239-3 fix, was
+// deleted before): pasteNodes always mints a FRESH id for every instantiated node regardless
+// (`{...def, id: fresh}` — the explicit id always wins the spread), so keeping the ORIGINAL
+// id here is purely additive — nothing downstream that reads a serialized node needs it. What
+// it buys: an id-carrying blob field (a style card's `style.ref`, a recipe card's
+// `recipe.style_ref` — both bare element/group id POINTERS, not placement) can be remapped
+// at paste time from "the original node's id" to "this paste's own fresh copy of that same
+// node" instead of dangling — see pasteNodes' pointer-remap step in ops.mjs. A group carries
+// its children (orderedChildren, back -> front) so the whole subtree round-trips with its
+// internal z-order preserved. Image element clones keep `src` — files/ is immutable and
+// content-addressed, so the spec stays valid even after the source is deleted (paste
+// references the same immutable file).
 function serializeNode(project, node) {
   if (node.kind === "element") {
     const element = JSON.parse(JSON.stringify(node.ref));
-    delete element.id;
     delete element.groupId;
     delete element.order;
     return { kind: "element", element };
   }
   const group = JSON.parse(JSON.stringify(node.ref));
-  delete group.id;
   delete group.parentId;
   delete group.order;
   const children = orderedChildren(project, node.ref.id).map((child) =>
@@ -521,7 +527,11 @@ function serializeNode(project, node) {
 // AND groups, mixed OK). PURE — reads the project only, never mutates. Roots are emitted
 // back -> front within each scope (grouped by first-seen scope), so paste preserves the
 // selection's relative z-order. Throws on an unknown id. Backs the page's Ctrl+C copy
-// buffer and the op layer's duplicateNodes.
+// buffer and the op layer's duplicateNodes. Every serialized node CARRIES its original id
+// (serializeNode) — pasteNodes still always mints a fresh one on instantiation, so this
+// is not identity leakage; it is what lets pasteNodes remap an id-pointer field (style.ref,
+// recipe.style_ref) from the original node to its own freshly-pasted copy instead of
+// leaving it dangling.
 export function buildNodesSpec(project, nodeIds) {
   const wanted = [...new Set((nodeIds || []).map((value) => String(value)))];
   const roots = wanted.map((id) => {

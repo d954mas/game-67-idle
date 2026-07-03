@@ -1530,7 +1530,17 @@ export function assignToGroup(root, { projectId, elementIds, groupId } = {}) {
     else moved.order = fo++;
     return moved;
   });
-  const after = updateProject(root, projectId, { elements: nextElements });
+  // Auto-ref (R1 increment 3, applyStyleAutoRef — defined in the style-card section below;
+  // hoisted): moving an IMAGE INTO a STYLE CARD whose ref is still null claims that ref, in
+  // this SAME commit. A no-op when leaving a group (target null) — leaving never sets a ref.
+  let nextGroups = groupsOf(before);
+  if (target) {
+    const membershipChanges = new Map(
+      ids.map((id) => [id, { groupId: target, type: (before.elements || []).find((item) => item.id === id).type }]),
+    );
+    nextGroups = applyStyleAutoRef(nextGroups, membershipChanges);
+  }
+  const after = updateProject(root, projectId, { elements: nextElements, groups: nextGroups });
   const project = commitMutation(root, projectId, {
     op: "assignToGroup",
     args_summary: { elementIds: ids, groupId: target },
@@ -1828,7 +1838,15 @@ export function createRecipeCard(root, { projectId, name, x, y, w, h, parentId }
   };
 
   const parentScope = parentId == null || parentId === "" ? null : String(parentId);
-  if (parentScope != null) findGroup(before, parentScope); // loud error on an unknown parent
+  if (parentScope != null) {
+    const parent = findGroup(before, parentScope); // loud error on an unknown parent
+    // Cards do not nest inside cards (R1 increment 3's symmetric guard, mirrored on
+    // createStyleCard below): a recipe card inside a style card frame would blur the two
+    // widget types, so it is refused loudly rather than silently allowed.
+    if (parent.style) {
+      throw new Error(`cannot create a recipe card inside a style card (parent ${parentScope} carries style) — cards do not nest inside cards`);
+    }
+  }
 
   const group = {
     id: groupId,
@@ -1870,7 +1888,16 @@ export function patchRecipe(root, { projectId, groupId, patch } = {}) {
   if (!current.recipe || typeof current.recipe !== "object") {
     throw new Error(`group is not a recipe card (no recipe blob): ${groupId}`);
   }
-  const resolved = normalizeRecipePatch(patch); // validates BEFORE any write
+  const resolved = normalizeRecipePatch(patch); // validates BEFORE any write (type-level)
+  // R1 increment 3: style_ref stopped being a free-form reserved pointer — a non-null value
+  // must now resolve to an actual STYLE CARD group in THIS project (loud otherwise). Project-
+  // aware, so it lives here rather than in normalizeRecipePatch (which stays a pure type check).
+  if (resolved.style_ref !== undefined && resolved.style_ref !== null) {
+    const styleCard = groupsOf(before).find((group) => group.id === resolved.style_ref);
+    if (!styleCard || !styleCard.style || typeof styleCard.style !== "object") {
+      throw new Error(`recipe style_ref must be null or the id of an existing style-card group, got ${JSON.stringify(resolved.style_ref)}`);
+    }
+  }
 
   const nextGroups = groupsOf(before).map((group) =>
     group.id === groupId ? { ...group, recipe: { ...group.recipe, ...resolved } } : group,
@@ -1886,6 +1913,169 @@ export function patchRecipe(root, { projectId, groupId, patch } = {}) {
   return { project, group: (project.groups || []).find((item) => item.id === groupId) };
 }
 
+// ---- style card (T0239 increment 3) -------------------------------------------
+//
+// A style card is a GROUP carrying an additive `style` object (design R1, lead-accepted
+// verbatim) — the SAME "group + additive blob" shape as a recipe card, not a new element
+// type. Blob: name (= group name) + a STYLE PROMPT + exactly ONE ref image (the only member
+// image SENT to generation) + any number of example images (member images that are NOT the
+// ref — eyes-only, never sent; see generateFromRecipe's style-mixing section below). A group
+// must never carry BOTH `recipe` and `style` (createRecipeCard/createStyleCard's symmetric
+// parent-nesting guards above/below); patchRecipe/patchStyle's own "no <blob>" checks make it
+// structurally impossible for the SAME group to answer to both patch ops. `updateProject`
+// spreads `groups` verbatim (store.mjs), so `group.style` round-trips through every snapshot/
+// undo/redo/buildNodesSpec copy-paste with zero store/tree changes, exactly like `recipe`.
+
+// Default style blob for a freshly-minted card (design R1): no prompt, no ref yet — the
+// FIRST image later dropped in auto-claims the ref (see applyStyleAutoRef below).
+function defaultStyle() {
+  return { v: 1, prompt: "", ref: null };
+}
+
+// Validate + normalize a PARTIAL style patch (loud, no silent coercion — mirrors
+// normalizeRecipePatch). Only `prompt` (a string) and `ref` (null, or the id of an IMAGE
+// element that is already a MEMBER of THIS card — the "Make ref" gesture) are patchable;
+// `ref` needs the project + this card's id to validate membership, so unlike
+// normalizeRecipePatch this helper is NOT pure of the project. Returns the subset of
+// resolved fields actually provided; throws before any write on anything else.
+function normalizeStylePatch(project, groupId, patch) {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+    throw new Error(`style patch must be an object, got ${JSON.stringify(patch)}`);
+  }
+  const out = {};
+  if (patch.prompt !== undefined) {
+    if (typeof patch.prompt !== "string") throw new Error(`style prompt must be a string, got ${JSON.stringify(patch.prompt)}`);
+    out.prompt = patch.prompt;
+  }
+  if (patch.ref !== undefined) {
+    if (patch.ref === null) {
+      out.ref = null;
+    } else {
+      const refId = String(patch.ref);
+      const element = (project.elements || []).find((item) => item.id === refId);
+      if (!element) throw new Error(`style ref must be null or an existing element id, got ${JSON.stringify(patch.ref)}`);
+      if (element.type !== "image") {
+        throw new Error(`style ref must be an IMAGE element, got type ${JSON.stringify(element.type)}: ${refId}`);
+      }
+      if (element.groupId !== groupId) {
+        throw new Error(`style ref must be a member of this style card (${groupId}): ${refId}`);
+      }
+      out.ref = refId;
+    }
+  }
+  if (!Object.keys(out).length) {
+    throw new Error("patchStyle requires at least one of prompt, ref");
+  }
+  return out;
+}
+
+// Same default frame as a recipe card — a workshop widget, purely cosmetic (the frame never
+// feeds generation, same as decision 4 for the recipe card).
+const DEFAULT_STYLE_CARD_SIZE = { w: 360, h: 280 };
+
+// Mint a style card: a group carrying a fresh `style` blob (defaultStyle). Mirrors
+// createRecipeCard exactly (bounds fallback, optional parentId, one journal entry) except
+// for the blob itself and its symmetric "no nesting inside a recipe card" guard.
+export function createStyleCard(root, { projectId, name, x, y, w, h, parentId } = {}) {
+  if (!projectId) throw new Error("createStyleCard requires projectId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const groupId = `grp_${randomUUID().slice(0, 8)}`;
+  const cleanName = String(name || "").trim() || "New style";
+
+  const bounds = {
+    x: finite(x) ? Number(x) : 0,
+    y: finite(y) ? Number(y) : 0,
+    w: finite(w) && Number(w) > 0 ? Number(w) : DEFAULT_STYLE_CARD_SIZE.w,
+    h: finite(h) && Number(h) > 0 ? Number(h) : DEFAULT_STYLE_CARD_SIZE.h,
+  };
+
+  const parentScope = parentId == null || parentId === "" ? null : String(parentId);
+  if (parentScope != null) {
+    const parent = findGroup(before, parentScope); // loud error on an unknown parent
+    // Symmetric to createRecipeCard's own guard: cards do not nest inside cards.
+    if (parent.recipe) {
+      throw new Error(`cannot create a style card inside a recipe card (parent ${parentScope} carries recipe) — cards do not nest inside cards`);
+    }
+  }
+
+  const group = {
+    id: groupId,
+    name: cleanName,
+    x: bounds.x,
+    y: bounds.y,
+    w: bounds.w,
+    h: bounds.h,
+    visible: true,
+    style: defaultStyle(),
+  };
+  if (parentScope != null) group.parentId = parentScope;
+  const groupFront = frontOrder(before, parentScope);
+  if (groupFront !== null) group.order = groupFront;
+
+  const after = updateProject(root, projectId, { groups: [...groupsOf(before), group] });
+  const project = commitMutation(root, projectId, {
+    op: "createStyleCard",
+    args_summary: { groupId, name: cleanName, bounds, parentId: parentScope },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, group: (project.groups || []).find((item) => item.id === groupId) };
+}
+
+// Partial update of a card's `style` blob (prompt/ref). Loud on a group that carries no
+// `style` at all — a plain group (or a recipe card) is not a style card. One journal entry;
+// undo restores the prior style blob byte-exact (free via the group snapshot). Mirrors
+// patchRecipe exactly, minus the reserved-pointer validation (ref validates against THIS
+// card's own membership instead, in normalizeStylePatch).
+export function patchStyle(root, { projectId, groupId, patch } = {}) {
+  if (!projectId) throw new Error("patchStyle requires projectId");
+  if (!groupId) throw new Error("patchStyle requires groupId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const current = findGroup(before, groupId);
+  if (!current.style || typeof current.style !== "object") {
+    throw new Error(`group is not a style card (no style blob): ${groupId}`);
+  }
+  const resolved = normalizeStylePatch(before, groupId, patch); // validates BEFORE any write
+
+  const nextGroups = groupsOf(before).map((group) =>
+    group.id === groupId ? { ...group, style: { ...group.style, ...resolved } } : group,
+  );
+  const after = updateProject(root, projectId, { groups: nextGroups });
+  const project = commitMutation(root, projectId, {
+    op: "patchStyle",
+    args_summary: { groupId, patch: resolved },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, group: (project.groups || []).find((item) => item.id === groupId) };
+}
+
+// Auto-ref (design R1: "первое изображение, попавшее в карточку, само становится ref"): the
+// FIRST image element that becomes a member of a STYLE CARD whose `ref` is still null
+// auto-claims that ref. Pure helper shared by every membership-change op (assignToGroup,
+// pasteNodes — the two real paths that can drop an image into an existing/freshly-copied
+// style card; addImage/addImageFromFile mint top-level only today, no groupId to cover).
+// `membershipChanges` is a Map<elementId, {groupId, type}> of elements that just landed at
+// their FINAL groupId in this SAME gesture; iteration order (Map preserves insertion order)
+// decides "first" when several land at once. Never overwrites an existing (non-null) ref, and
+// a non-style group (or a style card whose ref is already set) passes through unchanged.
+// Called from the SAME commit as the membership change — never a second journal entry.
+function applyStyleAutoRef(groups, membershipChanges) {
+  return groups.map((group) => {
+    if (!group.style || typeof group.style !== "object" || group.style.ref) return group;
+    for (const [elementId, change] of membershipChanges) {
+      if (change && change.groupId === group.id && change.type === "image") {
+        return { ...group, style: { ...group.style, ref: elementId } };
+      }
+    }
+    return group;
+  });
+}
+
 // ---- generateFromRecipe (T0239 increment 2: generation end-to-end) -----------
 //
 // The Recipe inspector's Generate button / `recipe-generate` CLI verb / POST .../generate
@@ -1896,9 +2086,10 @@ export function patchRecipe(root, { projectId, groupId, patch } = {}) {
 //
 // Refs (decision 3) = the card's member IMAGE elements (`groupId === cardId`, visible only),
 // resolved to abs paths at generate time — never the group's frame w/h (decision 4: never
-// read here). `recipe.style_ref` is a reserved pointer (R1's style-card link); it is NOT
-// resolved in this increment — increment 3 (style cards) teaches this op to also attach the
-// style ref's image + append its prompt. Ignored here on purpose.
+// read here). `recipe.style_ref`, when set, resolves to a STYLE CARD group in this project
+// (R1 increment 3): its prompt is APPENDED to the recipe prompt and its ref image (if any) is
+// attached ALONGSIDE the recipe card's own member refs, last — see resolveStyleMix below.
+// Example images (the style card's non-ref members) never travel (design R1).
 //
 // Placement (R1): the result(s) land in the card's PARENT scope (`groupId =
 // card.parentId ?? null`) — NEVER `groupId = cardId`, so a result can never become a ref
@@ -1961,6 +2152,38 @@ export async function generateFromRecipe(root, { projectId, groupId, generators 
   const refPaths = members.map((el) => resolveProjectFile(root, projectId, el.src));
   const refSrcs = members.map((el) => el.src);
 
+  // R1 increment 3: style mixing. `recipe.style_ref`, when set, MUST resolve to a style-card
+  // group in THIS project (patchRecipe already enforces this on write, but a hand-edited
+  // project.json is still possible — loud here too, defensively). A style card with a prompt
+  // but ref===null is valid (prompt-only style: append text, attach no extra image). A SET
+  // ref that no longer exists or left the card's membership is loud (never silently dropped).
+  let effectivePromptText = promptText;
+  let finalRefPaths = refPaths;
+  let finalRefSrcs = refSrcs;
+  let styleSnapshot; // stays undefined (key omitted, mirrors meta.alpha's "absent") when unset
+  if (recipe.style_ref) {
+    const styleCard = groupsOf(before).find((group) => group.id === recipe.style_ref);
+    if (!styleCard || !styleCard.style || typeof styleCard.style !== "object") {
+      throw new Error(
+        `recipe card "${cardLabel}" (${groupId}) has a style_ref that is not a style-card group: ${recipe.style_ref}`,
+      );
+    }
+    const styleLabel = styleCard.name || styleCard.id;
+    const stylePromptTrimmed = typeof styleCard.style.prompt === "string" ? styleCard.style.prompt.trim() : "";
+    if (stylePromptTrimmed) effectivePromptText = `${promptText}\n\nStyle: ${stylePromptTrimmed}`;
+    if (styleCard.style.ref) {
+      const refElement = (before.elements || []).find((el) => el.id === styleCard.style.ref);
+      if (!refElement || refElement.groupId !== styleCard.id) {
+        throw new Error(
+          `style card "${styleLabel}" (${styleCard.id}) ref points at a missing/non-member element: ${styleCard.style.ref}`,
+        );
+      }
+      finalRefPaths = [...refPaths, resolveProjectFile(root, projectId, refElement.src)];
+      finalRefSrcs = [...refSrcs, refElement.src];
+    }
+    styleSnapshot = { cardId: styleCard.id, name: styleLabel, prompt: stylePromptTrimmed };
+  }
+
   const requestedEngine = recipe.engine;
   if (!RECIPE_ENGINES.has(requestedEngine)) {
     // Defensive only — patchRecipe already validates on write; a hand-edited project.json
@@ -1990,7 +2213,7 @@ export async function generateFromRecipe(root, { projectId, groupId, generators 
       continue;
     }
     try {
-      const generated = await gens[attempt.engine]({ prompt: promptText, refPaths, params: recipe.params });
+      const generated = await gens[attempt.engine]({ prompt: effectivePromptText, refPaths: finalRefPaths, params: recipe.params });
       const bytes = Buffer.isBuffer(generated) ? generated : readFileSync(generated);
       results.push({ engine: attempt.engine, bytes });
     } catch (error) {
@@ -2029,9 +2252,10 @@ export async function generateFromRecipe(root, { projectId, groupId, generators 
           cardId: groupId,
           engine: result.engine,
           at,
-          prompt_snapshot: promptText,
-          refs_snapshot: refSrcs,
+          prompt_snapshot: effectivePromptText,
+          refs_snapshot: finalRefSrcs,
           params_snapshot: paramsSnapshot,
+          ...(styleSnapshot ? { style_snapshot: styleSnapshot } : {}),
         },
       },
     });
@@ -2068,9 +2292,9 @@ export async function generateFromRecipe(root, { projectId, groupId, generators 
     cardId: groupId,
     at,
     params: {
-      prompt_snapshot: promptText,
+      prompt_snapshot: effectivePromptText,
       engine: requestedEngine,
-      refs: refSrcs,
+      refs: finalRefSrcs,
       size: recipe.params.size,
       quality: recipe.params.quality,
       model: recipe.params.model,
@@ -2169,24 +2393,37 @@ export function pasteNodes(root, { projectId, spec, dx, dy, scopeId } = {}) {
 
   const newElements = [];
   const newGroups = [];
+  // Pointer-remap maps (T0239-3 fix): original spec id -> freshly-minted paste id, for
+  // every node this paste actually instantiates. buildNodesSpec (tree.mjs) now KEEPS each
+  // node's original id in the spec (`def.id`/`gdef.id` below) purely so it can be captured
+  // HERE before instantiate overwrites it with a fresh one (`{...def, id: fresh}` always
+  // wins) — every minted node still gets a brand-new id exactly as before. A hand-authored
+  // spec (CLI/API JSON with no `id` fields) simply never populates these maps, so every
+  // pointer normalized below falls through to the "not found" branch — never a throw.
+  const elementIdMap = new Map(); // old element id -> new element id
+  const groupIdMap = new Map(); // old group id -> new group id
   const instantiate = (node, parentScope, orderVal) => {
     if (node.kind === "element") {
       const def = JSON.parse(JSON.stringify(node.element)); // isolate from the (page-held) spec
+      const oldId = typeof def.id === "string" ? def.id : null;
       const rec = { ...def, id: `el_${randomUUID().slice(0, 8)}`, x: Number(def.x) + offX, y: Number(def.y) + offY };
       delete rec.order;
       if (parentScope != null) rec.groupId = parentScope;
       else delete rec.groupId;
       if (orderVal != null) rec.order = orderVal;
       newElements.push(rec);
+      if (oldId) elementIdMap.set(oldId, rec.id);
       return { kind: "element", id: rec.id };
     }
     const gdef = JSON.parse(JSON.stringify(node.group));
+    const oldGroupId = typeof gdef.id === "string" ? gdef.id : null;
     const grec = { ...gdef, id: `grp_${randomUUID().slice(0, 8)}`, x: Number(gdef.x || 0) + offX, y: Number(gdef.y || 0) + offY };
     delete grec.parentId;
     delete grec.order;
     if (parentScope != null) grec.parentId = parentScope;
     if (orderVal != null) grec.order = orderVal;
     newGroups.push(grec);
+    if (oldGroupId) groupIdMap.set(oldGroupId, grec.id);
     // A fresh pasted scope: assign contiguous 0..N-1 order so internal z-order is exact.
     (node.children || []).forEach((child, index) => instantiate(child, grec.id, index));
     return { kind: "group", id: grec.id };
@@ -2195,9 +2432,57 @@ export function pasteNodes(root, { projectId, spec, dx, dy, scopeId } = {}) {
   let fo = frontOrder(before, scope); // null on a never-reordered (implicit) destination
   const roots = nodes.map((node) => instantiate(node, scope, fo === null ? null : fo++));
 
+  // Pointer normalization (T0239-3 fix): a pasted style/recipe card's blob may carry a bare
+  // element/group id POINTER captured verbatim from the spec (style.ref -> an element id;
+  // recipe.style_ref -> a style-card group id) — those name the ORIGINAL nodes, not this
+  // paste's fresh copies, so every pointer on a NEWLY PASTED group is normalized here, BEFORE
+  // applyStyleAutoRef runs (so a pointer cleared to null can still be auto-claimed by a
+  // pasted member image in the SAME gesture). Existing (pre-paste) groups are untouched —
+  // nothing about a paste invalidates a pointer that was already valid before it ran.
+  //  - style.ref: remapped via elementIdMap when the ref element was ALSO pasted this
+  //    gesture (a whole-card copy) — the copy's ref can then only ever name one of ITS OWN
+  //    copied members, never the original card's. Otherwise NULLED (it can never resolve to
+  //    a member of the new card — dangling on a member that never came along).
+  //  - recipe.style_ref: remapped via groupIdMap when the linked style card was ALSO pasted
+  //    this gesture (recipe + its style card copied together). Otherwise KEPT AS-IS when it
+  //    still resolves to an existing style-card group IN THIS PROJECT — a same-project alias
+  //    to a SHARED style card is legitimate and desirable (R1's "one style card, many
+  //    recipes" reuse). Otherwise NULLED (a cross-project dangling pointer is never silently
+  //    kept — R1's cross-canvas reuse is copy-the-whole-card, not a stale cross-project id).
+  const newGroupIds = new Set(newGroups.map((group) => group.id));
+  const liveStyleCardIds = new Set(
+    groupsOf(before)
+      .filter((group) => group.style && typeof group.style === "object")
+      .map((group) => group.id),
+  );
+  const normalizedGroups = [...groupsOf(before), ...newGroups].map((group) => {
+    if (!newGroupIds.has(group.id)) return group;
+    let next = group;
+    if (next.style && typeof next.style === "object" && next.style.ref) {
+      const remapped = elementIdMap.get(next.style.ref) || null;
+      if (remapped !== next.style.ref) next = { ...next, style: { ...next.style, ref: remapped } };
+    }
+    if (next.recipe && typeof next.recipe === "object" && next.recipe.style_ref) {
+      const remapped = groupIdMap.get(next.recipe.style_ref);
+      const kept = remapped || (liveStyleCardIds.has(next.recipe.style_ref) ? next.recipe.style_ref : null);
+      if (kept !== next.recipe.style_ref) next = { ...next, recipe: { ...next.recipe, style_ref: kept } };
+    }
+    return next;
+  });
+
+  // Auto-ref (R1 increment 3, applyStyleAutoRef — style-card section): any IMAGE minted by
+  // this paste that lands as a member of a STYLE CARD whose ref is still null (including one
+  // just nulled by the pointer normalization above) claims that ref — covers BOTH pasting
+  // straight into an EXISTING style card (scope targets it) and a freshly-pasted style card
+  // whose own copied members include one. Folded into this commit.
+  const membershipChanges = new Map(
+    newElements.map((element) => [element.id, { groupId: element.groupId ?? null, type: element.type }]),
+  );
+  const nextGroups = applyStyleAutoRef(normalizedGroups, membershipChanges);
+
   const after = updateProject(root, projectId, {
     elements: [...(before.elements || []), ...newElements],
-    groups: [...groupsOf(before), ...newGroups],
+    groups: nextGroups,
   });
   const project = commitMutation(root, projectId, {
     op: "pasteNodes",
@@ -2511,6 +2796,8 @@ export function historyEntryLabel(op, args = {}) {
     case "createRecipeCard": return { label: "Recipe card", summary: String(a.name || "") };
     case "patchRecipe": return { label: "Edit recipe", summary: "" };
     case "generateFromRecipe": return { label: "Generate from recipe", summary: String(a.engine || "") };
+    case "createStyleCard": return { label: "Style card", summary: String(a.name || "") };
+    case "patchStyle": return { label: "Edit style", summary: "" };
     case "pasteNodes": return { label: "Paste", summary: plural(count(a.count), "item") };
     case "duplicateNodes": return { label: "Duplicate", summary: plural(count(a.count), "item") };
     case "deleteNodes": return { label: "Delete", summary: plural(items(a.deletedElements) + items(a.deletedGroups), "item") };
@@ -3991,15 +4278,15 @@ export async function renderGroup(root, { projectId, groupId, scale, background 
 // group (screen) at its own default 1x png into ONE <project>/export/<utc-stamp>/
 // folder plus a combined manifest. A nested group is a component INSIDE its root
 // screen (composited by compositeGroup's recursion), never a separate screen, so only
-// parentId-less groups are exported here. A recipe card (`group.recipe`, T0239) is a
-// workshop object, not a screen, so it is excluded here too. Like the other export ops
-// it makes no project mutation, so it is NOT journaled; it records one export_project
-// tool_runs entry.
+// parentId-less groups are exported here. A recipe card (`group.recipe`, T0239) or a
+// style card (`group.style`, T0239 increment 3) is a workshop object, not a screen, so
+// both are excluded here too. Like the other export ops it makes no project mutation,
+// so it is NOT journaled; it records one export_project tool_runs entry.
 export async function exportProject(root, { projectId } = {}) {
   if (!projectId) throw new Error("exportProject requires projectId");
   const project = getProject(root, projectId);
   const visibleGroups = groupsOf(project).filter(
-    (group) => group.parentId == null && group.visible !== false && !group.recipe,
+    (group) => group.parentId == null && group.visible !== false && !group.recipe && !group.style,
   );
   if (!visibleGroups.length) throw new Error("no visible screens to export (project export renders every visible top-level group)");
 

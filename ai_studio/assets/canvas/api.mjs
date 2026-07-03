@@ -27,8 +27,10 @@
 //   POST   /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null, index?}
 //   POST   /api/canvas/projects/<id>/groups/<gid>/ungroup  (dissolve one level, keep children)
 //   POST   /api/canvas/projects/<id>/recipe-cards          {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 1: mint a recipe card — a group with an additive `recipe` blob)
-//   PATCH  /api/canvas/projects/<id>/recipe-cards/<gid>    {prompt?, engine?, style_ref?}     (partial recipe blob update; 400 on a group with no `recipe`)
-//   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/generate  {}   (T0239 increment 2: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one entry; partial success allowed on engine=both)
+//   PATCH  /api/canvas/projects/<id>/recipe-cards/<gid>    {prompt?, engine?, style_ref?}     (partial recipe blob update; 400 on a group with no `recipe`; style_ref must be null or an existing style-card group id)
+//   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/generate  {}   (T0239 increment 2/3: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one entry; partial success allowed on engine=both; recipe.style_ref, when set, mixes the style card's prompt + ref image in)
+//   POST   /api/canvas/projects/<id>/style-cards           {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 3: mint a style card — a group with an additive `style` blob: prompt + ONE ref image; no generate route, style cards never generate)
+//   PATCH  /api/canvas/projects/<id>/style-cards/<gid>     {prompt?, ref?}                    (partial style blob update; ref must be null or a member IMAGE element id — the "Make ref" gesture; 400 on a group with no `style`)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
 //   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
 //   POST   /api/canvas/projects/<id>/nodes-align   {nodeIds, align, reference?} (align to selection bbox or parent frame; one entry)
@@ -66,6 +68,7 @@ import {
   createGroup,
   createProject,
   createRecipeCard,
+  createStyleCard,
   deleteGroup,
   deleteNodes,
   deleteProject,
@@ -90,6 +93,7 @@ import {
   patchGroups,
   patchProject,
   patchRecipe,
+  patchStyle,
   readHistory,
   recordOpFailure,
   redoOp,
@@ -630,6 +634,34 @@ export function createCanvasApi(root) {
         const groupId = decodeURIComponent(parts[5]);
         await readJsonBody(req);
         sendMutation(201, await generateFromRecipe(root, { projectId: id, groupId }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/style-cards  (create — T0239 increment 3)
+      // A style card is a group carrying an additive `style` blob (prompt + ONE ref image);
+      // it never generates on its own — no generate route here.
+      if (parts.length === 5 && sub === "style-cards" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(201, createStyleCard(root, {
+          projectId: id,
+          name: body.name,
+          x: body.x,
+          y: body.y,
+          w: body.w,
+          h: body.h,
+          parentId: body.parentId,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/style-cards/<gid>  (partial style blob update)
+      // Body is the style PATCH itself ({prompt?, ref?}), not wrapped — patchStyle validates
+      // loudly and 400s on a group with no `style` at all; `ref` must be null or a member
+      // IMAGE element id (the "Make ref" gesture).
+      if (parts.length === 6 && sub === "style-cards" && req.method === "PATCH") {
+        const groupId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, patchStyle(root, { projectId: id, groupId, patch: body }));
         return true;
       }
 
