@@ -1524,15 +1524,44 @@ body.layers-resizing {
   white-space: nowrap;
 }
 
+/* Plate thumbnails (T0238 dual-plate flow; inline styles moved here in T0245 bonus
+   cleanup, zero visual change). One row per plate: thumbnail, role label, add button. */
+.insp-alpha-plates {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.insp-plate-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.insp-plate-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex: 0 0 auto;
+}
+
+.insp-plate-role {
+  flex: 1 1 auto;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
 .insp-btn-small {
   flex: 1;
   padding: 5px 6px;
   font-size: 12px;
 }
 
-/* Align / distribute row (T0232 increment 1): a compact row of fixed-width icon buttons —
-   6 align keys, then a second row of 2 distribute keys. Disabled state reuses the generic
-   button:disabled opacity. */
+/* Align / distribute row (T0232 increment 1; icons redesigned pictographic in T0245): a
+   compact row of fixed-size icon buttons — 6 align keys, then a second row of 2 distribute
+   keys. Disabled state reuses the generic button:disabled opacity. */
 .insp-align-row {
   display: flex;
   gap: 4px;
@@ -1541,11 +1570,43 @@ body.layers-resizing {
 
 .insp-align-btn {
   flex: 0 0 auto;
-  width: 30px;
-  padding: 5px 0;
-  text-align: center;
-  font-size: 12px;
-  font-weight: 600;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.insp-align-btn svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.insp-align-btn:focus-visible {
+  outline: 1px solid var(--cyan);
+  outline-offset: 1px;
+}
+
+/* Row caption above each align/distribute row — kills the "broken half-row" read that
+   unlabeled icon rows had. */
+.insp-align-caption {
+  font-size: 11px;
+  color: var(--muted);
+  margin-bottom: 2px;
+}
+
+/* Mode badge in the Align section header: surfaces the invisible align-reference switch
+   ("to frame" for a single node, "to selection" for 2+). Same shape as .badge, muted
+   instead of cyan so it reads as informational, not a count/emphasis. */
+.insp-align-badge {
+  font-size: 10px;
+  color: var(--muted);
+  background: rgba(154, 168, 178, 0.14);
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex: none;
 }
 
 .insp-region-hint {

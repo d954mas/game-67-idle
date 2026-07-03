@@ -31,6 +31,7 @@ import {
   alphaCutoutBatchFor,
   alphaCutoutFor,
   alphaDualPlateFor,
+  alphaDualPlateGenerateFor,
   deleteRegion,
   detectRegionsFor,
   distributeSelection,
@@ -366,17 +367,20 @@ function renderRegions(element, root) {
 }
 
 // Alpha section (T0241 — lead: alpha is not a Regions concern, it gets its own section).
-// A method dropdown + run button on the selected IMAGE element. Auto routes (and refuses
-// a dual-plate soft zone loudly); Key matte forces key_matte. STILL region-aware: scoped
-// to the selected regions when any are selected in region-edit mode, else the whole
-// element. Long-op via the queue + progress toast (mirrors Slice).
+// T0247 (lead): the method choice is EXPLICIT — no "Auto" router in the UI ("я хочу явно
+// выбирать"; ops/CLI keep accepting auto additively for the agent). "Key matte" keys the
+// element's OWN pixels in place, region-aware (scoped to the selected regions when any
+// are selected in region-edit mode, else the whole element). "Dual-plate (generate)" runs
+// the automatic T0238 flow — flat-light-bg check -> generated dark plate (codex, minutes)
+// -> gate -> ONE NEW cut element beside the source; no region scoping (the pair tool cuts
+// the whole plate). Both long-op via the queue + progress toast (mirrors Slice).
 function renderAlpha(element, root) {
   const body = collapsible(root, "alpha", "Alpha");
   const alphaRow = document.createElement("div");
   alphaRow.className = "insp-alpha-row";
   const methodSel = document.createElement("select");
   methodSel.className = "insp-input";
-  for (const [value, label] of [["auto", "Auto"], ["matte", "Key matte"]]) {
+  for (const [value, label] of [["matte", "Key matte"], ["dual", "Dual-plate (generate)"]]) {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = label;
@@ -385,12 +389,26 @@ function renderAlpha(element, root) {
   const alphaBtn = document.createElement("button");
   alphaBtn.type = "button";
   alphaBtn.className = "insp-btn insp-alpha-btn";
-  const alphaSelected = selectedRegionIdsFor(element);
-  alphaBtn.textContent = alphaSelected.length ? `Alpha cutout (${alphaSelected.length})` : "Alpha cutout";
+  // The run button says what the chosen method will actually do (the matte label also
+  // carries the live region-scope count).
+  const relabel = () => {
+    if (methodSel.value === "dual") {
+      alphaBtn.textContent = "Generate";
+      return;
+    }
+    const ids = selectedRegionIdsFor(element);
+    alphaBtn.textContent = ids.length ? `Alpha cutout (${ids.length})` : "Alpha cutout";
+  };
+  relabel();
+  methodSel.addEventListener("change", relabel);
   // Recompute the region scope at click time so an overlay-updated selection is honored.
   alphaBtn.addEventListener("click", () => {
+    if (methodSel.value === "dual") {
+      alphaDualPlateGenerateFor(element.id, alphaBtn);
+      return;
+    }
     const ids = selectedRegionIdsFor(element);
-    alphaCutoutFor(element.id, methodSel.value, ids.length ? ids : undefined, alphaBtn);
+    alphaCutoutFor(element.id, "matte", ids.length ? ids : undefined, alphaBtn);
   });
   alphaRow.append(field("Method", methodSel), alphaBtn);
   body.appendChild(alphaRow);
@@ -412,30 +430,20 @@ function renderAlphaPlates(element, root) {
 
   const wrap = document.createElement("div");
   wrap.className = "insp-alpha-plates";
-  wrap.style.marginTop = "8px";
   plates.forEach((plate, index) => {
     if (!plate || !plate.src) return;
     const row = document.createElement("div");
-    row.style.display = "flex";
-    row.style.alignItems = "center";
-    row.style.gap = "6px";
-    row.style.marginTop = index ? "4px" : "0";
+    row.className = "insp-plate-row";
 
     const img = document.createElement("img");
+    img.className = "insp-plate-thumb";
     img.src = fileUrl({ src: plate.src });
     img.alt = plate.role || `plate ${index + 1}`;
     img.title = plate.role || `plate ${index + 1}`;
-    img.style.width = "32px";
-    img.style.height = "32px";
-    img.style.objectFit = "cover";
-    img.style.borderRadius = "4px";
-    img.style.flex = "0 0 auto";
 
     const label = document.createElement("span");
+    label.className = "insp-plate-role";
     label.textContent = plate.role || `plate ${index + 1}`;
-    label.style.flex = "1 1 auto";
-    label.style.fontSize = "11px";
-    label.style.opacity = "0.8";
 
     const addBtn = smallBtn("Add to canvas", () => {
       const placement = {
@@ -831,49 +839,113 @@ function renderExport(element, root) {
 // `reference` is left to the op's "auto" default in every caller here — auto already
 // resolves both the 2+ union-bbox case and the 1-node-in-a-group parent-frame case, so
 // the page never has to pick a mode itself.
+// Pictographic SVG glyphs (T0245 — two-Opus review synthesis: letters/arrows read as
+// unreadable noise, "по иконкам и буквам вообще ничего не понятно"). Consensus grammar
+// of Figma/Illustrator/Affinity/Sketch/PowerPoint/Penpot: align = thin anchor line at the
+// target edge/center + two rounded bars of unequal length flush to it; distribute = three
+// equal bars with equal gaps, no line. fill="currentColor" (theming-free), 16x16 viewBox.
 const ALIGN_BUTTONS = [
-  ["left", "L", "Align left"],
-  ["hcenter", "C", "Align horizontal centers"],
-  ["right", "R", "Align right"],
-  ["top", "T", "Align top"],
-  ["vcenter", "M", "Align vertical centers"],
-  ["bottom", "B", "Align bottom"],
+  [
+    "left",
+    '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="1.5" y="2" width="1.4" height="12" rx=".7"/><rect x="3.6" y="4" width="10" height="3" rx="1.5"/><rect x="3.6" y="9" width="6.5" height="3" rx="1.5"/></svg>',
+    "Align left",
+  ],
+  [
+    "hcenter",
+    '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="7.3" y="2" width="1.4" height="12" rx=".7"/><rect x="3" y="4" width="10" height="3" rx="1.5"/><rect x="4.75" y="9" width="6.5" height="3" rx="1.5"/></svg>',
+    "Align horizontal centers",
+  ],
+  [
+    "right",
+    '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="13.1" y="2" width="1.4" height="12" rx=".7"/><rect x="2.4" y="4" width="10" height="3" rx="1.5"/><rect x="5.9" y="9" width="6.5" height="3" rx="1.5"/></svg>',
+    "Align right",
+  ],
+  [
+    "top",
+    '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="2" y="1.5" width="12" height="1.4" rx=".7"/><rect x="4" y="3.6" width="3" height="10" rx="1.5"/><rect x="9" y="3.6" width="3" height="6.5" rx="1.5"/></svg>',
+    "Align top",
+  ],
+  [
+    "vcenter",
+    '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="2" y="7.3" width="12" height="1.4" rx=".7"/><rect x="4" y="3" width="3" height="10" rx="1.5"/><rect x="9" y="4.75" width="3" height="6.5" rx="1.5"/></svg>',
+    "Align vertical centers",
+  ],
+  [
+    "bottom",
+    '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="2" y="13.1" width="12" height="1.4" rx=".7"/><rect x="4" y="2.4" width="3" height="10" rx="1.5"/><rect x="9" y="5.9" width="3" height="6.5" rx="1.5"/></svg>',
+    "Align bottom",
+  ],
 ];
 const DISTRIBUTE_BUTTONS = [
-  ["h", "↔", "Distribute horizontally (needs 3+ objects)"],
-  ["v", "↕", "Distribute vertically (needs 3+ objects)"],
+  [
+    "h",
+    '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="2" y="3" width="2.5" height="10" rx="1.25"/><rect x="6.75" y="3" width="2.5" height="10" rx="1.25"/><rect x="11.5" y="3" width="2.5" height="10" rx="1.25"/></svg>',
+    "Distribute horizontally (needs 3+ objects)",
+  ],
+  [
+    "v",
+    '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3" y="2" width="10" height="2.5" rx="1.25"/><rect x="3" y="6.75" width="10" height="2.5" rx="1.25"/><rect x="3" y="11.5" width="10" height="2.5" rx="1.25"/></svg>',
+    "Distribute vertically (needs 3+ objects)",
+  ],
 ];
 
 function renderAlignSection(nodeIds, root) {
-  const body = collapsible(root, "align", "Align");
+  // Mode badge (T0245 UX critique): surfaces the invisible reference switch — auto
+  // resolves to the selection's union bbox at 2+ nodes, else the single node's parent
+  // frame. Muted like the Regions count badge's structure, not its cyan emphasis.
+  const badge = document.createElement("span");
+  badge.className = "insp-align-badge";
+  badge.textContent = nodeIds.length >= 2 ? "to selection" : "to frame";
+  const body = collapsible(root, "align", "Align", badge);
+
+  const alignCaption = document.createElement("div");
+  alignCaption.className = "insp-align-caption";
+  alignCaption.textContent = "Align";
+  body.appendChild(alignCaption);
 
   const alignRow = document.createElement("div");
   alignRow.className = "insp-align-row";
-  for (const [align, glyph, title] of ALIGN_BUTTONS) {
+  for (const [align, svg, title] of ALIGN_BUTTONS) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "insp-align-btn";
-    btn.textContent = glyph;
+    btn.innerHTML = svg; // trusted static string, not user data
     btn.title = title;
+    btn.setAttribute("aria-label", title);
     btn.addEventListener("click", () => alignSelection(nodeIds, align));
     alignRow.appendChild(btn);
   }
   body.appendChild(alignRow);
 
+  const distCaption = document.createElement("div");
+  distCaption.className = "insp-align-caption";
+  distCaption.textContent = "Distribute";
+  body.appendChild(distCaption);
+
   const distRow = document.createElement("div");
   distRow.className = "insp-align-row";
   const canDistribute = nodeIds.length >= 3;
-  for (const [axis, glyph, title] of DISTRIBUTE_BUTTONS) {
+  for (const [axis, svg, title] of DISTRIBUTE_BUTTONS) {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "insp-align-btn";
-    btn.textContent = glyph;
+    btn.innerHTML = svg; // trusted static string, not user data
     btn.title = title;
+    btn.setAttribute("aria-label", title);
     btn.disabled = !canDistribute;
     btn.addEventListener("click", () => distributeSelection(nodeIds, axis));
     distRow.appendChild(btn);
   }
   body.appendChild(distRow);
+
+  // Always-visible hint (not tooltip-only — a disabled button's title is not
+  // discoverable) telling the lead why the distribute row is greyed out.
+  if (!canDistribute) {
+    const hint = document.createElement("div");
+    hint.className = "insp-region-hint";
+    hint.textContent = "Select 3+ objects to distribute.";
+    body.appendChild(hint);
+  }
 }
 
 // ---- element / group / multi views -------------------------------------------
@@ -1232,25 +1304,18 @@ function renderMultiGroup(groupIds, root) {
 // runLongOp treatment; disabled/spun independently from the batch-alpha button above it.
 function renderMultiAlpha(selected, root) {
   const body = collapsible(root, "multialpha", "Alpha");
-  const alphaRow = document.createElement("div");
-  alphaRow.className = "insp-alpha-row";
-  const methodSel = document.createElement("select");
-  methodSel.className = "insp-input";
-  for (const [value, label] of [["auto", "Auto"], ["matte", "Key matte"]]) {
-    const option = document.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    methodSel.appendChild(option);
-  }
+  // T0247: no "Auto" router in the UI — the batch is always an explicit Key matte (the
+  // only batchable method; dual-plate generation is a per-element action on the single-
+  // element Alpha section). With one method there is nothing to select, so the row is
+  // just the labeled run button.
   const alphaBtn = document.createElement("button");
   alphaBtn.type = "button";
   alphaBtn.className = "insp-btn insp-alpha-btn";
-  alphaBtn.textContent = `Apply to ${selected.length} images`;
+  alphaBtn.textContent = `Key matte: apply to ${selected.length} images`;
   alphaBtn.addEventListener("click", () => {
-    alphaCutoutBatchFor(selected.map((element) => element.id), methodSel.value, alphaBtn);
+    alphaCutoutBatchFor(selected.map((element) => element.id), "matte", alphaBtn);
   });
-  alphaRow.append(field("Alpha", methodSel), alphaBtn);
-  body.appendChild(alphaRow);
+  body.appendChild(alphaBtn);
 
   if (selected.length === 2) {
     const dualBtn = document.createElement("button");
