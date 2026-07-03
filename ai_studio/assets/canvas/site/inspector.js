@@ -23,6 +23,7 @@ import {
   selectedElements,
   selectRegion,
   selectRegionRange,
+  setStatus,
   state,
 } from "./app.js";
 import {
@@ -35,8 +36,10 @@ import {
   deleteRegion,
   detectRegionsFor,
   distributeSelection,
+  expandRecipePromptAction,
   exportElementIds,
   exportProjectAction,
+  extractElementAction,
   fitGroupAction,
   generateFromRecipeAction,
   patchElementBox,
@@ -44,6 +47,8 @@ import {
   patchRecipeAction,
   patchStyleAction,
   patchTextElement,
+  promoteRecipeAction,
+  promoteStyleAction,
   renameElement,
   renameGroup,
   renameRegion,
@@ -1306,6 +1311,80 @@ function renderGeneration(element, root) {
   }
 }
 
+// "Extracted" section (T0239 increment 4, final shape): ONE codex vision call
+// (extractElementAction) writes element.meta.extracted — a complete standalone prompt, a
+// subject-only prompt, and a style breakdown, plus a one-line description. No card is
+// minted by the vision call itself; minting a card is a SEPARATE, cheap, non-codex
+// "promotion" gesture (promoteRecipeAction / promoteStyleAction) that just re-slices the
+// ALREADY-STORED blob, so the lead can extract once and mint as many cards as he likes at
+// zero extra codex cost. "Re-extract" re-runs the vision call and overwrites (the
+// regenerate ability). Absent meta.extracted, the section is just the "Extract" button.
+function renderExtracted(element, root) {
+  const extracted = element.meta && element.meta.extracted;
+  // "Extracted prompts", not bare "Extracted" (lead: "extracted не очевидное название").
+  const body = collapsible(root, "extracted", "Extracted prompts");
+
+  if (!extracted || typeof extracted !== "object") {
+    const extractBtn = document.createElement("button");
+    extractBtn.type = "button";
+    extractBtn.className = "insp-btn";
+    extractBtn.textContent = "Extract";
+    extractBtn.title = "Analyze this image with codex vision (~1 min): a standalone prompt, a subject-only prompt, and a style description";
+    extractBtn.addEventListener("click", () => extractElementAction(element.id, extractBtn));
+    body.appendChild(extractBtn);
+    return;
+  }
+
+  body.appendChild(readOnly("Description", extracted.description || "—"));
+
+  const copyText = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setStatus("Copied.");
+    } catch {
+      setStatus("Clipboard write blocked by the browser.", true);
+    }
+  };
+
+  const addPromptRow = (label, text, viewTitle) => {
+    const value = String(text || "");
+    const preview = value.length > 60 ? `${value.slice(0, 60)}…` : value || "—"; // …
+    const row = document.createElement("div");
+    row.className = "insp-field insp-generation-prompt-row";
+    const labelEl = document.createElement("span");
+    labelEl.className = "insp-label";
+    labelEl.textContent = label;
+    const previewEl = document.createElement("span");
+    previewEl.className = "insp-generation-prompt-preview";
+    previewEl.textContent = preview;
+    previewEl.title = value;
+    const viewBtn = smallBtn("View", () => openPromptModal(viewTitle, value, null, { readOnly: true }));
+    viewBtn.classList.add("insp-generation-view-btn");
+    const copyBtn = smallBtn("Copy", () => copyText(value));
+    row.append(labelEl, previewEl, viewBtn, copyBtn);
+    body.appendChild(row);
+  };
+
+  const elementLabel = element.name || "Element";
+  addPromptRow("Full prompt", extracted.prompt_full, `${elementLabel} — full prompt`);
+  addPromptRow("Subject", extracted.prompt_subject, `${elementLabel} — subject`);
+  const style = extracted.style || {};
+  const styleText = style.constraints_block ? `${style.style_block || ""}\n\n${style.constraints_block}` : style.style_block || "";
+  addPromptRow("Style", styleText, `${elementLabel} — style`);
+
+  const promoteRow = document.createElement("div");
+  promoteRow.className = "insp-alpha-row";
+  promoteRow.append(
+    smallBtn("→ Recipe card", () => promoteRecipeAction(element.id)),
+    smallBtn("→ Style card", () => promoteStyleAction(element.id)),
+  );
+  body.appendChild(promoteRow);
+
+  const reExtractBtn = smallBtn("Re-extract", () => extractElementAction(element.id, reExtractBtn));
+  reExtractBtn.title = "Re-run the vision call and overwrite the extracted data (~1 min, codex)";
+  body.appendChild(reExtractBtn);
+}
+
 function renderElement(element, root) {
   const name = field("Name", textInput(element.name, (next) => renameElement(element.id, next)));
   name.classList.add("insp-name");
@@ -1323,6 +1402,7 @@ function renderElement(element, root) {
 
   renderRegions(element, root);
   renderAlpha(element, root);
+  renderExtracted(element, root);
   renderGeneration(element, root);
 
   if (element.meta && element.meta.parent) {
@@ -1556,6 +1636,59 @@ function renderRecipe(group, root) {
   generateBtn.title = emptyPrompt ? "Write a prompt first" : "Generate (codex/agy — takes minutes)";
   generateBtn.addEventListener("click", () => generateFromRecipeAction(group.id, generateBtn));
   body.appendChild(generateBtn);
+
+  // ---- Expand-prompt (T0239 increment 4) ------------------------------------------
+  const expandBtn = document.createElement("button");
+  expandBtn.type = "button";
+  expandBtn.className = "insp-btn";
+  expandBtn.textContent = "Expand prompt";
+  expandBtn.disabled = emptyPrompt;
+  expandBtn.title = emptyPrompt ? "Write a prompt first" : "Expand into a labeled generation-prompt template (codex, ~1 min)";
+  expandBtn.addEventListener("click", () => expandRecipePromptAction(group.id, expandBtn));
+  body.appendChild(expandBtn);
+
+  // The Expanded block only renders once recipe.expanded exists: an editable textarea + a
+  // large-editor Edit modal (both commit through patchRecipeAction({expanded}), same
+  // pattern as the Prompt field above) + the "Send expanded" checkbox (defaults true,
+  // patchRecipeAction({use_expanded})) + Discard (patches {expanded: null} — "remove the
+  // stale expansion", one journal entry). The muted hint states which text Generate will
+  // ACTUALLY send right now, mirroring resolveRecipePromptText's own rule exactly
+  // (`use_expanded && expanded ? expanded : prompt`, unchanged by this increment).
+  if (recipe.expanded != null) {
+    const expandedField = field(
+      "Expanded",
+      textareaInput(recipe.expanded, (next) => patchRecipeAction(group.id, { expanded: next })),
+    );
+    body.appendChild(expandedField);
+
+    const editExpandedBtn = smallBtn("Edit", () =>
+      openPromptModal(`${group.name || "Recipe"} — expanded`, recipe.expanded, (next) => patchRecipeAction(group.id, { expanded: next })),
+    );
+    editExpandedBtn.classList.add("insp-prompt-edit-btn");
+    editExpandedBtn.title = "Open the expanded prompt in a large editor";
+    body.appendChild(editExpandedBtn);
+
+    const sendRow = document.createElement("label");
+    sendRow.className = "insp-check";
+    const sendCheck = document.createElement("input");
+    sendCheck.type = "checkbox";
+    sendCheck.checked = recipe.use_expanded !== false;
+    sendCheck.addEventListener("change", () => patchRecipeAction(group.id, { use_expanded: sendCheck.checked }));
+    const sendLabel = document.createElement("span");
+    sendLabel.textContent = "Send expanded";
+    sendRow.append(sendCheck, sendLabel);
+    body.appendChild(sendRow);
+
+    const discardBtn = smallBtn("Discard", () => patchRecipeAction(group.id, { expanded: null }));
+    discardBtn.title = "Remove the expanded text — Generate falls back to the short prompt";
+    body.appendChild(discardBtn);
+
+    const willSendExpanded = recipe.use_expanded !== false && recipe.expanded;
+    const hint = document.createElement("div");
+    hint.className = "insp-region-hint";
+    hint.textContent = willSendExpanded ? "Generate sends the expanded text." : "Generate sends the short prompt (expanded text kept, not sent).";
+    body.appendChild(hint);
+  }
 }
 
 // ---- style card (T0239 increment 3) --------------------------------------------

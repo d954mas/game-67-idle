@@ -22,19 +22,25 @@ import { EventEmitter } from "node:events";
 import { URL, fileURLToPath } from "node:url";
 import {
   addImage,
+  addText,
   assignToGroup,
   createGroup,
   createProject,
   createRecipeCard,
   createStyleCard,
   duplicateNodes,
+  expandRecipePrompt,
   exportProject,
+  extractFromElement,
   generateFromRecipe,
   getProject,
   historyEntryLabel,
   patchElement,
   patchRecipe,
+  patchStyle,
   pasteNodes,
+  promoteExtractedRecipe,
+  promoteExtractedStyle,
   redoOp,
   undoOp,
 } from "../ops.mjs";
@@ -863,4 +869,482 @@ test("recipe-generate: CLI and API reject a non-card group the same way (validat
   const missing = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/grp_missing/generate`, {});
   assert.equal(missing.status, 400);
   assert.match(missing.json().error, /group not found/);
+});
+
+// ================================================================================
+// T0239 increment 4: expandRecipePrompt / extractFromElement / promoteExtracted* — the
+// codex TEXT/VISION seam (tools/prompt_assist.mjs). Codex NEVER spawns in this suite —
+// every direct-ops test injects a fake `assistant` (the T0238 contract, extended to
+// text/vision); CLI/API parity tests stay VALIDATION-only (recipe-generate's own
+// precedent above) since the CLI has no fake-assistant injection seam.
+// ================================================================================
+
+// A fake assistant that returns a fixed value (or throws, if given an Error), counting
+// every call — the SAME shape fakeGen uses above, adapted to the prompt-assist seam's
+// single-arg calls ({prompt,styleBlock} for expand, {imagePath} for extract).
+function fakeAssistant(valueOrError) {
+  const calls = [];
+  const fn = async (args) => {
+    calls.push(args);
+    if (valueOrError instanceof Error) throw valueOrError;
+    return valueOrError;
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+// A well-formed extract result (the assistant.extract contract) with any field overridable.
+function extractResult(overrides = {}) {
+  return {
+    prompt_full: "a red fox on a rock, painterly oil style",
+    prompt_subject: "a red fox on a rock",
+    style_block: "painterly oil, warm palette",
+    palette: ["warm red", "brown"],
+    materials: "fur, stone",
+    lighting: "soft morning light",
+    composition: "centered, medium shot",
+    constraints_block: "no text, no watermark",
+    description: "A painterly red fox on a rock.",
+    ...overrides,
+  };
+}
+
+// Seed element.meta.extracted through the REAL op (a fake assistant, never codex) rather
+// than poking store state directly — exercises extractFromElement itself and keeps the
+// promotion tests black-box.
+async function seedExtracted(projectId, elementId, overrides = {}) {
+  const extract = fakeAssistant(extractResult(overrides));
+  return extractFromElement(ROOT, { projectId, elementId, assistant: { extract } });
+}
+
+// ---- expandRecipePrompt ---------------------------------------------------------
+
+test("expandRecipePrompt: writes recipe.expanded via a fake assistant, ONE history entry, undo restores the prior blob byte-exact", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Expand" });
+  const card = createRecipeCard(ROOT, { projectId: project.id, name: "Fox card" }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "  a red fox  " } });
+  const afterPatch = getProject(ROOT, project.id);
+  const seqBefore = afterPatch.history_seq;
+
+  const expand = fakeAssistant("[TASK]\nGenerate...\n[SUBJECT]\na red fox\n...");
+  const result = await expandRecipePrompt(ROOT, { projectId: project.id, groupId: card.id, assistant: { expand } });
+
+  assert.equal(expand.calls.length, 1);
+  assert.equal(expand.calls[0].prompt, "a red fox", "prompt is trimmed before it reaches the assistant");
+  assert.equal(expand.calls[0].styleBlock, "", "no style_ref -> empty styleBlock");
+  assert.equal(result.expanded, "[TASK]\nGenerate...\n[SUBJECT]\na red fox\n...");
+  assert.equal(result.group.recipe.expanded, result.expanded);
+
+  const after = getProject(ROOT, project.id);
+  assert.equal(after.history_seq, seqBefore + 1, "one journal entry");
+
+  const undone = undoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(undone.history_seq, seqBefore);
+  assert.equal(JSON.stringify(undone.groups), JSON.stringify(afterPatch.groups), "undo restores the recipe blob byte-exact");
+
+  const redone = redoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(redone.groups.find((g) => g.id === card.id).recipe.expanded, result.expanded);
+});
+
+test("expandRecipePrompt: style_ref set -> the assistant receives the style card's prompt as styleBlock", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Expand style" });
+  const styleCard = createStyleCard(ROOT, { projectId: project.id, name: "Painterly" }).group;
+  patchStyle(ROOT, { projectId: project.id, groupId: styleCard.id, patch: { prompt: "  painterly oil, warm gold  " } });
+  const card = createRecipeCard(ROOT, { projectId: project.id, name: "Knight card" }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a knight", style_ref: styleCard.id } });
+
+  const expand = fakeAssistant("expanded text");
+  await expandRecipePrompt(ROOT, { projectId: project.id, groupId: card.id, assistant: { expand } });
+
+  assert.equal(expand.calls[0].styleBlock, "painterly oil, warm gold");
+});
+
+test("expandRecipePrompt: empty prompt is loud, no entry, assistant never called", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Expand empty" });
+  const card = createRecipeCard(ROOT, { projectId: project.id }).group;
+  const seqBefore = getProject(ROOT, project.id).history_seq;
+  const expand = fakeAssistant("x");
+
+  await assert.rejects(
+    () => expandRecipePrompt(ROOT, { projectId: project.id, groupId: card.id, assistant: { expand } }),
+    /has an empty prompt/,
+  );
+  assert.equal(expand.calls.length, 0);
+  assert.equal(getProject(ROOT, project.id).history_seq, seqBefore);
+});
+
+test("expandRecipePrompt: an unknown group and a plain (non-card) group are loud, no entry, assistant never called", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Expand validate" });
+  const plain = createGroup(ROOT, { projectId: project.id, name: "Plain", x: 0, y: 0, w: 10, h: 10 }).group;
+  const seqBefore = getProject(ROOT, project.id).history_seq;
+  const expand = fakeAssistant("x");
+
+  await assert.rejects(
+    () => expandRecipePrompt(ROOT, { projectId: project.id, groupId: "grp_missing", assistant: { expand } }),
+    /group not found/,
+  );
+  await assert.rejects(
+    () => expandRecipePrompt(ROOT, { projectId: project.id, groupId: plain.id, assistant: { expand } }),
+    /not a recipe card/,
+  );
+  assert.equal(expand.calls.length, 0);
+  assert.equal(getProject(ROOT, project.id).history_seq, seqBefore);
+});
+
+test("expandRecipePrompt: a fake assistant returning an empty string is loud, no entry", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Expand blank result" });
+  const card = createRecipeCard(ROOT, { projectId: project.id }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a griffin" } });
+  const seqBefore = getProject(ROOT, project.id).history_seq;
+  const expand = fakeAssistant("   ");
+
+  await assert.rejects(
+    () => expandRecipePrompt(ROOT, { projectId: project.id, groupId: card.id, assistant: { expand } }),
+    /empty result/,
+  );
+  assert.equal(getProject(ROOT, project.id).history_seq, seqBefore);
+});
+
+// ---- patchRecipe: expanded/use_expanded (T0239 increment 4) --------------------
+
+test("patchRecipe: expanded/use_expanded accepted + validated; a fresh card defaults use_expanded true", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Patch expanded" });
+  const { group: card } = createRecipeCard(ROOT, { projectId: project.id });
+  assert.equal(card.recipe.use_expanded, true, "fresh card defaults to sending the expansion once one exists");
+
+  const withExpanded = patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { expanded: "a fine template" } }).group;
+  assert.equal(withExpanded.recipe.expanded, "a fine template");
+
+  const cleared = patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { expanded: null } }).group;
+  assert.equal(cleared.recipe.expanded, null);
+
+  const toggledOff = patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { use_expanded: false } }).group;
+  assert.equal(toggledOff.recipe.use_expanded, false);
+  const toggledOn = patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { use_expanded: true } }).group;
+  assert.equal(toggledOn.recipe.use_expanded, true);
+
+  assert.throws(
+    () => patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { expanded: 5 } }),
+    /expanded must be null or a string/,
+  );
+  assert.throws(
+    () => patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { use_expanded: "yes" } }),
+    /use_expanded must be a boolean/,
+  );
+});
+
+// ---- generateFromRecipe honoring the use_expanded toggle (lead, 2026-07-03 final spec) --
+
+test("generateFromRecipe: sends expanded/short prompt exactly per resolveRecipePromptText's rule (use_expanded && expanded ? expanded : prompt)", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Toggle" });
+  const card = createRecipeCard(ROOT, { projectId: project.id, name: "Toggle card" }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "short prompt" } });
+
+  // No expansion yet -> always the short prompt, regardless of use_expanded (still true by default).
+  {
+    const codex = fakeGen(solidPng());
+    await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex } });
+    assert.equal(codex.calls[0].prompt, "short prompt");
+  }
+
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { expanded: "long expanded text" } });
+
+  // use_expanded true (the default) + expanded set -> Generate sends the expanded text.
+  {
+    const codex = fakeGen(solidPng());
+    await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex } });
+    assert.equal(codex.calls[0].prompt, "long expanded text");
+  }
+
+  // Checkbox off -> Generate falls back to the short prompt even though expanded exists.
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { use_expanded: false } });
+  {
+    const codex = fakeGen(solidPng());
+    await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex } });
+    assert.equal(codex.calls[0].prompt, "short prompt");
+  }
+
+  // Discard (expanded -> null) -> Generate sends the short prompt regardless of the flag.
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { use_expanded: true, expanded: null } });
+  {
+    const codex = fakeGen(solidPng());
+    await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex } });
+    assert.equal(codex.calls[0].prompt, "short prompt");
+  }
+});
+
+// ---- extractFromElement ---------------------------------------------------------
+
+test("extractFromElement: writes element.meta.extracted via a fake assistant, ONE history entry, undo restores, re-run overwrites (two independent entries)", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Extract" });
+  const image = addImage(ROOT, project.id, { name: "art.png", bytes: solidPng(10, 8, [10, 20, 30]) }).element;
+  const seqBefore = getProject(ROOT, project.id).history_seq;
+
+  const fixture = extractResult();
+  const extract1 = fakeAssistant(fixture);
+  const result1 = await extractFromElement(ROOT, { projectId: project.id, elementId: image.id, assistant: { extract: extract1 } });
+
+  assert.equal(extract1.calls.length, 1);
+  assert.deepEqual(extract1.calls[0], { imagePath: resolveProjectFile(ROOT, project.id, image.src) });
+  assert.equal(result1.element.meta.extracted.prompt_full, fixture.prompt_full);
+  assert.equal(result1.element.meta.extracted.prompt_subject, fixture.prompt_subject);
+  assert.deepEqual(result1.element.meta.extracted.style, {
+    style_block: fixture.style_block,
+    palette: fixture.palette,
+    materials: fixture.materials,
+    lighting: fixture.lighting,
+    composition: fixture.composition,
+    constraints_block: fixture.constraints_block,
+  });
+  assert.equal(result1.element.meta.extracted.description, fixture.description);
+  assert.ok(result1.element.meta.extracted.at);
+  assert.deepEqual(result1.extracted, result1.element.meta.extracted);
+
+  const afterFirst = getProject(ROOT, project.id);
+  assert.equal(afterFirst.history_seq, seqBefore + 1, "one journal entry");
+
+  const undone = undoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(undone.history_seq, seqBefore);
+  assert.equal(undone.elements.find((el) => el.id === image.id).meta.extracted, undefined, "undo removes meta.extracted");
+
+  const redone = redoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(redone.elements.find((el) => el.id === image.id).meta.extracted.description, fixture.description, "redo restores it");
+
+  // Re-run OVERWRITES with a SECOND independent journal entry — asserted by comparing
+  // seqs BEFORE/AFTER this call directly (not seqBefore+N: undo/redo consume their own
+  // slots in the monotonic journal counter even though the DISPLAYED history_seq snaps
+  // back to the logical undo-chain position, so only a same-call delta is reliable here).
+  const seqBeforeRerun = getProject(ROOT, project.id).history_seq;
+  const extract2 = fakeAssistant(extractResult({ description: "A second look." }));
+  const result2 = await extractFromElement(ROOT, { projectId: project.id, elementId: image.id, assistant: { extract: extract2 } });
+  assert.equal(result2.element.meta.extracted.description, "A second look.");
+  const seqAfterRerun = getProject(ROOT, project.id).history_seq;
+  assert.ok(seqAfterRerun > seqBeforeRerun, "re-run is its own NEW journal entry, on top of the current head");
+});
+
+test("extractFromElement: a non-image (text) element is loud, no entry, assistant never called", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Extract non-image" });
+  const text = addText(REPO_ROOT, project.id, { content: "Hello" }).element;
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+  const extract = fakeAssistant(extractResult());
+
+  await assert.rejects(
+    () => extractFromElement(REPO_ROOT, { projectId: project.id, elementId: text.id, assistant: { extract } }),
+    /is not an image/,
+  );
+  assert.equal(extract.calls.length, 0);
+  assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore);
+});
+
+test("extractFromElement: an assistant result missing a non-empty required key is loud, no entry", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Extract missing key" });
+  const image = addImage(ROOT, project.id, { name: "art.png", bytes: solidPng() }).element;
+  const seqBefore = getProject(ROOT, project.id).history_seq;
+
+  const extract = fakeAssistant(extractResult({ style_block: "" }));
+  await assert.rejects(
+    () => extractFromElement(ROOT, { projectId: project.id, elementId: image.id, assistant: { extract } }),
+    /missing a non-empty "style_block"/,
+  );
+  assert.equal(getProject(ROOT, project.id).history_seq, seqBefore);
+});
+
+// ---- promoteExtractedRecipe / promoteExtractedStyle ------------------------------
+
+test("promoteExtractedRecipe: loud without meta.extracted (run Extract first)", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Promote recipe validate" });
+  const image = addImage(ROOT, project.id, { name: "art.png", bytes: solidPng() }).element;
+
+  assert.throws(
+    () => promoteExtractedRecipe(ROOT, { projectId: project.id, elementId: image.id }),
+    /has no extracted data — run Extract first/,
+  );
+});
+
+test("promoteExtractedRecipe: mints a RECIPE card BELOW the element with prompt_subject + a centered ref copy; ONE entry; undo removes card+copy; promoting twice mints two independent cards", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Promote recipe" });
+  const image = addImage(ROOT, project.id, { name: "art.png", bytes: solidPng(20, 16, [1, 2, 3]) }).element;
+  patchElement(ROOT, project.id, image.id, { x: 100, y: 50 });
+  await seedExtracted(project.id, image.id);
+  const seeded = getProject(ROOT, project.id).elements.find((el) => el.id === image.id);
+  const seqBefore = getProject(ROOT, project.id).history_seq;
+
+  const result = promoteExtractedRecipe(ROOT, { projectId: project.id, elementId: image.id });
+
+  assert.equal(result.card.recipe.prompt, "a red fox on a rock");
+  assert.equal(result.card.name, "a red fox on a rock");
+  assert.equal(result.card.x, seeded.x, "below the element: same x");
+  assert.equal(result.card.y, seeded.y + seeded.h + 16, "below the element: y+h+16");
+  assert.deepEqual({ w: result.card.w, h: result.card.h }, { w: 360, h: 280 });
+
+  assert.equal(result.refElement.src, seeded.src);
+  assert.equal(result.refElement.groupId, result.card.id);
+  assert.notEqual(result.refElement.id, image.id, "a fresh copy, not the original element");
+  assert.equal(result.refElement.x, result.card.x + (result.card.w - seeded.w) / 2, "centered in the frame");
+  assert.equal(result.refElement.y, result.card.y + (result.card.h - seeded.h) / 2);
+
+  const after = getProject(ROOT, project.id);
+  assert.equal(after.history_seq, seqBefore + 1, "one journal entry");
+
+  const undone = undoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(undone.history_seq, seqBefore);
+  assert.equal((undone.groups || []).length, 0, "undo removes the minted card");
+  assert.ok(!undone.elements.some((el) => el.id === result.refElement.id), "undo removes the ref copy");
+
+  redoOp(ROOT, { projectId: project.id });
+  const second = promoteExtractedRecipe(ROOT, { projectId: project.id, elementId: image.id });
+  assert.notEqual(second.card.id, result.card.id, "promoting twice mints a SECOND independent card");
+  assert.equal(getProject(ROOT, project.id).groups.length, 2);
+});
+
+test("promoteExtractedStyle: loud without meta.extracted (run Extract first)", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Promote style validate" });
+  const image = addImage(ROOT, project.id, { name: "art.png", bytes: solidPng() }).element;
+
+  assert.throws(
+    () => promoteExtractedStyle(ROOT, { projectId: project.id, elementId: image.id }),
+    /has no extracted data — run Extract first/,
+  );
+});
+
+test("promoteExtractedStyle: mints a STYLE card RIGHT of the element with style_block+constraints as the prompt and the copy as style.ref; ONE entry; undo removes card+copy; promoting twice mints two independent cards", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Promote style" });
+  const image = addImage(ROOT, project.id, { name: "art.png", bytes: solidPng(20, 16, [4, 5, 6]) }).element;
+  patchElement(ROOT, project.id, image.id, { x: 100, y: 50 });
+  await seedExtracted(project.id, image.id);
+  const seeded = getProject(ROOT, project.id).elements.find((el) => el.id === image.id);
+  const seqBefore = getProject(ROOT, project.id).history_seq;
+
+  const result = promoteExtractedStyle(ROOT, { projectId: project.id, elementId: image.id });
+
+  assert.equal(result.card.style.prompt, "painterly oil, warm palette\n\nno text, no watermark");
+  assert.equal(result.card.name, "A painterly red fox on a rock.");
+  assert.equal(result.card.x, seeded.x + seeded.w + 16, "right of the element: x+w+16");
+  assert.equal(result.card.y, seeded.y, "right of the element: same y");
+  assert.deepEqual({ w: result.card.w, h: result.card.h }, { w: 360, h: 280 });
+  assert.equal(result.card.style.ref, result.refElement.id);
+
+  assert.equal(result.refElement.src, seeded.src);
+  assert.equal(result.refElement.groupId, result.card.id);
+
+  const after = getProject(ROOT, project.id);
+  assert.equal(after.history_seq, seqBefore + 1, "one journal entry");
+
+  const undone = undoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(undone.history_seq, seqBefore);
+  assert.equal((undone.groups || []).length, 0);
+  assert.ok(!undone.elements.some((el) => el.id === result.refElement.id));
+
+  redoOp(ROOT, { projectId: project.id });
+  const second = promoteExtractedStyle(ROOT, { projectId: project.id, elementId: image.id });
+  assert.notEqual(second.card.id, result.card.id, "promoting twice mints a SECOND independent card");
+});
+
+test("promoteExtractedStyle: an empty constraints_block never adds a stray blank-line join", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Promote style no constraints" });
+  const image = addImage(ROOT, project.id, { name: "art.png", bytes: solidPng() }).element;
+  await seedExtracted(project.id, image.id, { constraints_block: "" });
+
+  const result = promoteExtractedStyle(ROOT, { projectId: project.id, elementId: image.id });
+  assert.equal(result.card.style.prompt, "painterly oil, warm palette");
+});
+
+// ---- historyEntryLabel -----------------------------------------------------------
+
+test("historyEntryLabel maps expandRecipePrompt/extractFromElement/promoteExtractedRecipe/promoteExtractedStyle to readable labels", () => {
+  assert.deepEqual(historyEntryLabel("expandRecipePrompt", {}), { label: "Expand prompt", summary: "" });
+  assert.deepEqual(historyEntryLabel("extractFromElement", {}), { label: "Extract", summary: "" });
+  assert.deepEqual(historyEntryLabel("promoteExtractedRecipe", {}), { label: "Recipe from extract", summary: "" });
+  assert.deepEqual(historyEntryLabel("promoteExtractedStyle", {}), { label: "Style from extract", summary: "" });
+});
+
+// ---- CLI + API validation parity (no codex spawn — the CLI has no fake-assistant seam,
+// mirroring recipe-generate's own established precedent above) -------------------------
+
+test("recipe-expand: CLI and API reject a missing --group / non-card group / empty prompt the same way (validation parity, no codex spawn)", async (t) => {
+  const dir = tempProjects(t);
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+
+  const projectId = run(env, "create", "--title", "Expand CLI parity").project.id;
+  const plain = run(env, "group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10").group;
+  const card = run(env, "recipe-create", projectId, "--name", "Blank card").group;
+
+  // CLI: recipe-expand <id> with no --group -> the CLI's own local guard.
+  assert.throws(() => execFileSync("node", [CLI, "recipe-expand", projectId], { env: { ...process.env, ...env }, encoding: "utf8" }));
+
+  const cliPlain = runFail(env, "recipe-expand", projectId, "--group", plain.id);
+  assert.match(String(cliPlain.stderr || cliPlain.message), /not a recipe card/);
+
+  const cliEmpty = runFail(env, "recipe-expand", projectId, "--group", card.id);
+  assert.match(String(cliEmpty.stderr || cliEmpty.message), /has an empty prompt/);
+
+  const handler = createCanvasApi(ROOT);
+  const rejectedPlain = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/${plain.id}/expand`, {});
+  assert.equal(rejectedPlain.status, 400);
+  assert.match(rejectedPlain.json().error, /not a recipe card/);
+
+  const rejectedMissing = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/grp_missing/expand`, {});
+  assert.equal(rejectedMissing.status, 400);
+  assert.match(rejectedMissing.json().error, /group not found/);
+});
+
+test("extract: CLI and API reject a missing --element / not-found element the same way (validation parity, no codex spawn)", async (t) => {
+  const dir = tempProjects(t);
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+
+  const projectId = run(env, "create", "--title", "Extract CLI parity").project.id;
+  const plain = run(env, "group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10").group;
+
+  // CLI: extract <id> with no --element -> the CLI's own local guard.
+  assert.throws(() => execFileSync("node", [CLI, "extract", projectId], { env: { ...process.env, ...env }, encoding: "utf8" }));
+
+  // A GROUP id is never an element id -> the op's own "element not found".
+  const cliFailure = runFail(env, "extract", projectId, "--element", plain.id);
+  assert.match(String(cliFailure.stderr || cliFailure.message), /element not found/);
+
+  const handler = createCanvasApi(ROOT);
+  const rejected = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/elements/${plain.id}/extract`, {});
+  assert.equal(rejected.status, 400);
+  assert.match(rejected.json().error, /element not found/);
+});
+
+test("promote-recipe / promote-style: CLI and API reject an element with no meta.extracted the same way (validation parity)", async (t) => {
+  const dir = tempProjects(t);
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+
+  const projectId = run(env, "create", "--title", "Promote CLI parity").project.id;
+  const filePath = join(dir, "art.png");
+  writeFileSync(filePath, solidPng());
+  const image = run(env, "add-image", projectId, "--file", filePath).element;
+
+  assert.throws(() => execFileSync("node", [CLI, "promote-recipe", projectId], { env: { ...process.env, ...env }, encoding: "utf8" }));
+  assert.throws(() => execFileSync("node", [CLI, "promote-style", projectId], { env: { ...process.env, ...env }, encoding: "utf8" }));
+
+  const cliRecipeFailure = runFail(env, "promote-recipe", projectId, "--element", image.id);
+  assert.match(String(cliRecipeFailure.stderr || cliRecipeFailure.message), /run Extract first/);
+  const cliStyleFailure = runFail(env, "promote-style", projectId, "--element", image.id);
+  assert.match(String(cliStyleFailure.stderr || cliStyleFailure.message), /run Extract first/);
+
+  const handler = createCanvasApi(ROOT);
+  const rejectedRecipe = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/elements/${image.id}/promote-recipe`, {});
+  assert.equal(rejectedRecipe.status, 400);
+  assert.match(rejectedRecipe.json().error, /run Extract first/);
+  const rejectedStyle = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/elements/${image.id}/promote-style`, {});
+  assert.equal(rejectedStyle.status, 400);
+  assert.match(rejectedStyle.json().error, /run Extract first/);
 });

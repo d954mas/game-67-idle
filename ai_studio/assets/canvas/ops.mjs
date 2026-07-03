@@ -63,6 +63,11 @@ import { buildBlackPlatePrompt, buildWhitePlatePrompt, generatePlate } from "./t
 // what keeps a ref from ever silently failing to reach agy, so ops.mjs just forwards refPaths
 // to whichever engine(s) are attempted, same as it always has for codex.
 import { generateImageCodex, generateImageGemini } from "./tools/recipe_generate.mjs";
+// Expand-prompt / Extract (T0239 increment 4): the ONE codex TEXT/VISION seam. See the
+// module doc for the exact codex-exec invocation shapes (mirrors this repo's other codex
+// spawns) and why raw stdout is never parsed (--output-last-message is the reliable,
+// noise-free answer file). Tests inject a fake `assistant`, so codex never spawns in the suite.
+import { expandPrompt, extractFromImage } from "./tools/prompt_assist.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
@@ -1777,12 +1782,15 @@ function defaultRecipe() {
 }
 
 // Validate + normalize a PARTIAL recipe patch (loud, no silent coercion — mirrors
-// normalizeGroupBackground/normalizeGroupClip). Only the increment-1 editable fields are
-// accepted here: `prompt` (a string; empty is fine — that is the "draft" state), `engine`
-// (one of RECIPE_ENGINES), `style_ref` (null, or a non-empty string id — the reserved R1
-// pointer; resolving/remapping it across canvases is increment 3, not this op). Returns
-// the subset of resolved fields actually provided; throws before any write on anything
-// else (bad type, unknown key value, or an empty patch).
+// normalizeGroupBackground/normalizeGroupClip). Editable fields: `prompt` (a string; empty
+// is fine — that is the "draft" state), `expanded` (T0239 increment 4: null, or a string —
+// the Expand-prompt result the lead edits by hand; null = no expansion / "discarded"),
+// `use_expanded` (a boolean — Generate sends `expanded` when this is true AND `expanded` is
+// set, else the short `prompt`; see resolveRecipePromptText, unchanged by increment 4),
+// `engine` (one of RECIPE_ENGINES), `style_ref` (null, or a non-empty string id — the
+// reserved R1 pointer; resolving/remapping it across canvases is increment 3, not this op).
+// Returns the subset of resolved fields actually provided; throws before any write on
+// anything else (bad type, unknown key value, or an empty patch).
 function normalizeRecipePatch(patch) {
   if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
     throw new Error(`recipe patch must be an object, got ${JSON.stringify(patch)}`);
@@ -1791,6 +1799,18 @@ function normalizeRecipePatch(patch) {
   if (patch.prompt !== undefined) {
     if (typeof patch.prompt !== "string") throw new Error(`recipe prompt must be a string, got ${JSON.stringify(patch.prompt)}`);
     out.prompt = patch.prompt;
+  }
+  if (patch.expanded !== undefined) {
+    if (patch.expanded !== null && typeof patch.expanded !== "string") {
+      throw new Error(`recipe expanded must be null or a string, got ${JSON.stringify(patch.expanded)}`);
+    }
+    out.expanded = patch.expanded;
+  }
+  if (patch.use_expanded !== undefined) {
+    if (typeof patch.use_expanded !== "boolean") {
+      throw new Error(`recipe use_expanded must be a boolean, got ${JSON.stringify(patch.use_expanded)}`);
+    }
+    out.use_expanded = patch.use_expanded;
   }
   if (patch.engine !== undefined) {
     if (!RECIPE_ENGINES.has(patch.engine)) {
@@ -1805,7 +1825,7 @@ function normalizeRecipePatch(patch) {
     out.style_ref = patch.style_ref;
   }
   if (!Object.keys(out).length) {
-    throw new Error("patchRecipe requires at least one of prompt, engine, style_ref");
+    throw new Error("patchRecipe requires at least one of prompt, expanded, use_expanded, engine, style_ref");
   }
   return out;
 }
@@ -1873,9 +1893,9 @@ export function createRecipeCard(root, { projectId, name, x, y, w, h, parentId }
   return { project, group: (project.groups || []).find((item) => item.id === groupId) };
 }
 
-// Partial update of a card's `recipe` blob (prompt/engine/style_ref today — see
-// normalizeRecipePatch; `expanded`/`last_run`/`params` are written by the increment-2/3
-// ops, not this general patch). Loud on a group that carries no `recipe` at all — a plain
+// Partial update of a card's `recipe` blob (prompt/expanded/use_expanded/engine/style_ref —
+// see normalizeRecipePatch; `last_run`/`params` are written by generateFromRecipe, not this
+// general patch). Loud on a group that carries no `recipe` at all — a plain
 // group is not a card, so patching one here is a caller bug, not a silent no-op. One
 // journal entry; undo restores the prior recipe blob byte-exact (free via the group
 // snapshot).
@@ -2329,6 +2349,320 @@ export async function generateFromRecipe(root, { projectId, groupId, generators 
   const elements = (project.elements || []).filter((el) => mintedIds.has(el.id));
   const group = (project.groups || []).find((g) => g.id === groupId);
   return { project, elements, group, failed, run };
+}
+
+// ---- expandRecipePrompt (T0239 increment 4: Expand-prompt, the codex TEXT half of the
+// prompt-assist seam) ------------------------------------------------------------------
+//
+// The Recipe inspector's "Expand prompt" button / `recipe-expand` CLI verb / POST
+// .../recipe-cards/<gid>/expand route. Reads the card's short `recipe.prompt`, resolves an
+// optional style block (recipe.style_ref, when set — same loud validation
+// generateFromRecipe's style-mixing section uses), calls the injectable
+// `assistant.expand` (default tools/prompt_assist.mjs's expandPrompt) BEFORE any write (the
+// slow codex call runs OUTSIDE the journal, mirrors alphaDualPlateGenerate's own shape),
+// then ONE commitMutation writes `recipe.expanded`. The lead edits the result himself in the
+// Expanded textarea/large-editor modal, or discards it back to null (patchRecipe); Generate
+// already resolves which text to send via resolveRecipePromptText (unchanged by this op —
+// `use_expanded && expanded ? expanded : prompt`). Loud on a non-card group, an empty
+// `recipe.prompt`, and an empty assistant result (no silent fallback to the un-expanded
+// prompt) — none of those write anything.
+export async function expandRecipePrompt(root, { projectId, groupId, assistant } = {}) {
+  if (!projectId) throw new Error("expandRecipePrompt requires projectId");
+  if (!groupId) throw new Error("expandRecipePrompt requires groupId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const card = findGroup(before, groupId); // loud "group not found" on an unknown id
+  if (!card.recipe || typeof card.recipe !== "object") {
+    throw new Error(`group is not a recipe card (no recipe blob): ${groupId}`);
+  }
+  const recipe = card.recipe;
+  const cardLabel = card.name || groupId;
+
+  const promptText = typeof recipe.prompt === "string" ? recipe.prompt.trim() : "";
+  if (!promptText) {
+    throw new Error(`recipe card "${cardLabel}" (${groupId}) has an empty prompt — set one before expanding`);
+  }
+
+  // Style-block resolution mirrors generateFromRecipe's own style-mixing validation exactly
+  // (a set style_ref MUST resolve to a real style-card group in this project) — only the
+  // PROMPT is used here (Expand embeds it as [STYLE] source material); no image ref travels
+  // with a text-only codex call.
+  let styleBlock = "";
+  if (recipe.style_ref) {
+    const styleCard = groupsOf(before).find((group) => group.id === recipe.style_ref);
+    if (!styleCard || !styleCard.style || typeof styleCard.style !== "object") {
+      throw new Error(`recipe card "${cardLabel}" (${groupId}) has a style_ref that is not a style-card group: ${recipe.style_ref}`);
+    }
+    styleBlock = typeof styleCard.style.prompt === "string" ? styleCard.style.prompt.trim() : "";
+  }
+
+  const expand = assistant && typeof assistant.expand === "function" ? assistant.expand : expandPrompt;
+  const expandedRaw = await expand({ prompt: promptText, styleBlock });
+  if (typeof expandedRaw !== "string" || !expandedRaw.trim()) {
+    throw new Error(`expandRecipePrompt: assistant returned an empty result for recipe card "${cardLabel}" (${groupId})`);
+  }
+  const expanded = expandedRaw.trim();
+
+  // Re-read to avoid clobbering a concurrent edit (mirrors generateFromRecipe/
+  // alphaDualPlateGenerate — the codex call above may have taken real time).
+  const current = getProject(root, projectId);
+  const currentCard = (current.groups || []).find((g) => g.id === groupId);
+  if (!currentCard) throw new Error(`group not found: ${groupId}`);
+
+  const nextGroups = (current.groups || []).map((group) =>
+    group.id === groupId ? { ...group, recipe: { ...group.recipe, expanded } } : group,
+  );
+  const after = updateProject(root, projectId, { groups: nextGroups });
+  const project = commitMutation(root, projectId, {
+    op: "expandRecipePrompt",
+    args_summary: { groupId },
+    before,
+    after,
+    startedAt,
+  });
+  const group = (project.groups || []).find((item) => item.id === groupId);
+  return { project, group, expanded };
+}
+
+// ---- extractFromElement / promoteExtractedRecipe / promoteExtractedStyle (T0239
+// increment 4: the codex VISION half of the prompt-assist seam) -------------------------
+//
+// FINAL shape (lead, 2026-07-03, supersedes two earlier drafts of this increment):
+// extraction is a SINGLE vision call that writes IMAGE META ONLY (`element.meta.extracted`)
+// — no card is minted by the vision call itself. Minting a card is a SEPARATE, CHEAP,
+// non-codex "promotion" gesture (promoteExtractedRecipe / promoteExtractedStyle) that just
+// re-slices the ALREADY-STORED `meta.extracted` blob, so the lead can extract ONCE and mint
+// as many recipe/style cards from the same extraction as he likes, at zero extra codex cost.
+// extractFromElement mirrors alphaDualPlateGenerate's own shape for the call itself: the
+// slow external call runs BEFORE the single commitMutation ("generation outside the
+// journal, only the mint commits"); the two promotion ops are plain synchronous mutations
+// (no external call at all — same speed class as createRecipeCard/createStyleCard).
+//
+// Division of labor: a promoted STYLE card feeds the COMPOSABLE style-card path (link it
+// into a recipe card's `style_ref` to reuse it across many generations); a promoted RECIPE
+// card's prompt is deliberately the SUBJECT-ONLY text (`prompt_subject`, not `prompt_full`)
+// so it composes cleanly with a separately-linked style card instead of doubling up style
+// wording. `prompt_full` (the complete, standalone, paste-elsewhere prompt — lead: "точный
+// промпт и уйти попробовать в другом месте") never lands in a card; it is a read/copy-only
+// row in the inspector. If the lead later links a style card into a promoted recipe card and
+// their style wording overlaps, that is his edit to make — neither op guards against it.
+
+// The Extract button / `extract` CLI verb / POST .../elements/<eid>/extract route. Loud on a
+// non-image element. Calls the injectable `assistant.extract` (default
+// tools/prompt_assist.mjs's extractFromImage) BEFORE any write, then loudly requires the
+// four keys the meta write depends on (mirrors the default impl's own validation — enforced
+// here too so a fake test assistant that skips a key is caught the same way). ONE
+// commitMutation writes `element.meta.extracted`; re-running OVERWRITES it (the regenerate
+// ability) — a fresh journal entry each time, never silently merged with the prior result.
+export async function extractFromElement(root, { projectId, elementId, assistant } = {}) {
+  if (!projectId) throw new Error("extractFromElement requires projectId");
+  if (!elementId) throw new Error("extractFromElement requires elementId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const element = (before.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
+
+  const imagePath = resolveProjectFile(root, projectId, element.src);
+  const extract = assistant && typeof assistant.extract === "function" ? assistant.extract : extractFromImage;
+  const result = await extract({ imagePath });
+  if (!result || typeof result !== "object") {
+    throw new Error(`extractFromElement: assistant returned no result for element ${elementId}`);
+  }
+  const requiredKeys = ["prompt_full", "prompt_subject", "style_block", "description"];
+  for (const key of requiredKeys) {
+    if (typeof result[key] !== "string" || !result[key].trim()) {
+      throw new Error(`extractFromElement: assistant result is missing a non-empty "${key}" for element ${elementId}`);
+    }
+  }
+
+  const at = new Date().toISOString();
+  const extracted = {
+    prompt_full: result.prompt_full.trim(),
+    prompt_subject: result.prompt_subject.trim(),
+    style: {
+      style_block: result.style_block.trim(),
+      palette: Array.isArray(result.palette) ? result.palette.map((item) => String(item)) : [],
+      materials: typeof result.materials === "string" ? result.materials.trim() : "",
+      lighting: typeof result.lighting === "string" ? result.lighting.trim() : "",
+      composition: typeof result.composition === "string" ? result.composition.trim() : "",
+      constraints_block: typeof result.constraints_block === "string" ? result.constraints_block.trim() : "",
+    },
+    description: result.description.trim(),
+    at,
+  };
+
+  // Re-read to avoid clobbering a concurrent edit (mirrors generateFromRecipe/
+  // alphaDualPlateGenerate — the vision call above may have taken real time).
+  const current = getProject(root, projectId);
+  const currentElement = (current.elements || []).find((item) => item.id === elementId);
+  if (!currentElement) throw new Error(`element not found: ${elementId}`);
+
+  const nextElements = (current.elements || []).map((el2) =>
+    el2.id === elementId ? { ...el2, meta: { ...(el2.meta || {}), extracted } } : el2,
+  );
+  const after = updateProject(root, projectId, { elements: nextElements });
+  const project = commitMutation(root, projectId, {
+    op: "extractFromElement",
+    args_summary: { elementId },
+    before,
+    after,
+    startedAt,
+  });
+  const resultElement = (project.elements || []).find((item) => item.id === elementId);
+  return { project, element: resultElement, extracted };
+}
+
+// Mint a RECIPE card BELOW the element (`y = element.y + element.h + 16`, `x = element.x`,
+// DEFAULT_RECIPE_CARD_SIZE) from its ALREADY-STORED `meta.extracted` — loud when absent (run
+// Extract first). NO codex call. `recipe.prompt` = the SUBJECT-ONLY text (`prompt_subject`,
+// see the division-of-labor note above); card name from the prompt's first ~40 chars,
+// fallback "Extracted prompt". The source element is copied in as a member (fresh id,
+// centered in the frame) — member images ARE a recipe card's refs (decision 3), so the copy
+// immediately feeds generation as a reference. Composed directly (never via
+// createRecipeCard/pasteNodes, each of which would commit its own journal entry) so the
+// whole mint is ONE journal entry; promoting the SAME element twice mints two independent
+// cards (no dedup — each promotion is its own gesture).
+export function promoteExtractedRecipe(root, { projectId, elementId } = {}) {
+  if (!projectId) throw new Error("promoteExtractedRecipe requires projectId");
+  if (!elementId) throw new Error("promoteExtractedRecipe requires elementId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const element = (before.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  const extracted = element.meta && element.meta.extracted;
+  if (!extracted || typeof extracted !== "object") {
+    throw new Error(`element ${elementId} has no extracted data — run Extract first`);
+  }
+
+  const promptSubject = String(extracted.prompt_subject || "").trim();
+  const cardName = promptSubject.slice(0, 40).trim() || "Extracted prompt";
+
+  const groupId = `grp_${randomUUID().slice(0, 8)}`;
+  const refElementId = `el_${randomUUID().slice(0, 8)}`;
+  const cardBounds = {
+    x: element.x,
+    y: element.y + element.h + 16,
+    w: DEFAULT_RECIPE_CARD_SIZE.w,
+    h: DEFAULT_RECIPE_CARD_SIZE.h,
+  };
+  const refCopy = {
+    id: refElementId,
+    type: "image",
+    src: element.src,
+    x: cardBounds.x + (cardBounds.w - element.w) / 2,
+    y: cardBounds.y + (cardBounds.h - element.h) / 2,
+    w: element.w,
+    h: element.h,
+    source_w: element.source_w,
+    source_h: element.source_h,
+    name: element.name,
+    groupId,
+    meta: {},
+  };
+  const recipeCardGroup = {
+    id: groupId,
+    name: cardName,
+    x: cardBounds.x,
+    y: cardBounds.y,
+    w: cardBounds.w,
+    h: cardBounds.h,
+    visible: true,
+    recipe: { ...defaultRecipe(), prompt: promptSubject },
+  };
+  const groupFront = frontOrder(before, null);
+  if (groupFront !== null) recipeCardGroup.order = groupFront;
+
+  const after = updateProject(root, projectId, {
+    elements: [...(before.elements || []), refCopy],
+    groups: [...groupsOf(before), recipeCardGroup],
+  });
+  const project = commitMutation(root, projectId, {
+    op: "promoteExtractedRecipe",
+    args_summary: { elementId, cardId: groupId, refElementId },
+    before,
+    after,
+    startedAt,
+  });
+  const card = (project.groups || []).find((g) => g.id === groupId);
+  const refElement = (project.elements || []).find((el2) => el2.id === refElementId);
+  return { project, card, refElement };
+}
+
+// Mint a STYLE card to the RIGHT of the element (`x = element.x + element.w + 16`, `y =
+// element.y`, DEFAULT_STYLE_CARD_SIZE) from its ALREADY-STORED `meta.extracted` — loud when
+// absent (run Extract first). NO codex call. `style.prompt` = `style_block` (+ "\n\n" +
+// `constraints_block` when non-empty); `style.ref` = the minted copy (the ONE ref image sent
+// to generation, R1). Mirrors promoteExtractedRecipe exactly except for placement side and
+// blob shape — see its own comment for the shared rationale (composed directly, ONE journal
+// entry, no dedup on repeated promotion).
+export function promoteExtractedStyle(root, { projectId, elementId } = {}) {
+  if (!projectId) throw new Error("promoteExtractedStyle requires projectId");
+  if (!elementId) throw new Error("promoteExtractedStyle requires elementId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const element = (before.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  const extracted = element.meta && element.meta.extracted;
+  if (!extracted || typeof extracted !== "object" || !extracted.style || typeof extracted.style !== "object") {
+    throw new Error(`element ${elementId} has no extracted data — run Extract first`);
+  }
+
+  const styleBlock = String(extracted.style.style_block || "").trim();
+  const constraintsBlock = String(extracted.style.constraints_block || "").trim();
+  const stylePrompt = constraintsBlock ? `${styleBlock}\n\n${constraintsBlock}` : styleBlock;
+  const description = String(extracted.description || "").trim();
+  const cardName = description.slice(0, 40).trim() || "Extracted style";
+
+  const groupId = `grp_${randomUUID().slice(0, 8)}`;
+  const refElementId = `el_${randomUUID().slice(0, 8)}`;
+  const cardBounds = {
+    x: element.x + element.w + 16,
+    y: element.y,
+    w: DEFAULT_STYLE_CARD_SIZE.w,
+    h: DEFAULT_STYLE_CARD_SIZE.h,
+  };
+  const refCopy = {
+    id: refElementId,
+    type: "image",
+    src: element.src,
+    x: cardBounds.x + (cardBounds.w - element.w) / 2,
+    y: cardBounds.y + (cardBounds.h - element.h) / 2,
+    w: element.w,
+    h: element.h,
+    source_w: element.source_w,
+    source_h: element.source_h,
+    name: element.name,
+    groupId,
+    meta: {},
+  };
+  const styleCardGroup = {
+    id: groupId,
+    name: cardName,
+    x: cardBounds.x,
+    y: cardBounds.y,
+    w: cardBounds.w,
+    h: cardBounds.h,
+    visible: true,
+    style: { ...defaultStyle(), prompt: stylePrompt, ref: refElementId },
+  };
+  const groupFront = frontOrder(before, null);
+  if (groupFront !== null) styleCardGroup.order = groupFront;
+
+  const after = updateProject(root, projectId, {
+    elements: [...(before.elements || []), refCopy],
+    groups: [...groupsOf(before), styleCardGroup],
+  });
+  const project = commitMutation(root, projectId, {
+    op: "promoteExtractedStyle",
+    args_summary: { elementId, cardId: groupId, refElementId },
+    before,
+    after,
+    startedAt,
+  });
+  const card = (project.groups || []).find((g) => g.id === groupId);
+  const refElement = (project.elements || []).find((el2) => el2.id === refElementId);
+  return { project, card, refElement };
 }
 
 // ---- clipboard: paste / duplicate / delete nodes (T0227) ---------------------
@@ -2798,6 +3132,10 @@ export function historyEntryLabel(op, args = {}) {
     case "generateFromRecipe": return { label: "Generate from recipe", summary: String(a.engine || "") };
     case "createStyleCard": return { label: "Style card", summary: String(a.name || "") };
     case "patchStyle": return { label: "Edit style", summary: "" };
+    case "expandRecipePrompt": return { label: "Expand prompt", summary: "" };
+    case "extractFromElement": return { label: "Extract", summary: "" };
+    case "promoteExtractedRecipe": return { label: "Recipe from extract", summary: "" };
+    case "promoteExtractedStyle": return { label: "Style from extract", summary: "" };
     case "pasteNodes": return { label: "Paste", summary: plural(count(a.count), "item") };
     case "duplicateNodes": return { label: "Duplicate", summary: plural(count(a.count), "item") };
     case "deleteNodes": return { label: "Delete", summary: plural(items(a.deletedElements) + items(a.deletedGroups), "item") };

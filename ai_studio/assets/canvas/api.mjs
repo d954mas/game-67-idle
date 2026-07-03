@@ -27,10 +27,14 @@
 //   POST   /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null, index?}
 //   POST   /api/canvas/projects/<id>/groups/<gid>/ungroup  (dissolve one level, keep children)
 //   POST   /api/canvas/projects/<id>/recipe-cards          {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 1: mint a recipe card — a group with an additive `recipe` blob)
-//   PATCH  /api/canvas/projects/<id>/recipe-cards/<gid>    {prompt?, engine?, style_ref?}     (partial recipe blob update; 400 on a group with no `recipe`; style_ref must be null or an existing style-card group id)
+//   PATCH  /api/canvas/projects/<id>/recipe-cards/<gid>    {prompt?, expanded?, use_expanded?, engine?, style_ref?}     (partial recipe blob update; 400 on a group with no `recipe`; style_ref must be null or an existing style-card group id)
 //   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/generate  {}   (T0239 increment 2/3: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one entry; partial success allowed on engine=both; recipe.style_ref, when set, mixes the style card's prompt + ref image in)
+//   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/expand    {}   (T0239 increment 4: Expand-prompt — ONE codex TEXT call; writes recipe.expanded only, no card minted; Generate sends it when use_expanded is true, else the short prompt)
 //   POST   /api/canvas/projects/<id>/style-cards           {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 3: mint a style card — a group with an additive `style` blob: prompt + ONE ref image; no generate route, style cards never generate)
 //   PATCH  /api/canvas/projects/<id>/style-cards/<gid>     {prompt?, ref?}                    (partial style blob update; ref must be null or a member IMAGE element id — the "Make ref" gesture; 400 on a group with no `style`)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/extract        {}   (T0239 increment 4: ONE codex VISION call -> element.meta.extracted {prompt_full, prompt_subject, style, description}; no card minted here — re-running overwrites)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/promote-recipe {}   (mint a RECIPE card BELOW the element from its ALREADY-STORED meta.extracted; NO codex call; loud without meta.extracted first)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/promote-style  {}   (mint a STYLE card RIGHT of the element from its ALREADY-STORED meta.extracted; NO codex call; loud without meta.extracted first)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
 //   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
 //   POST   /api/canvas/projects/<id>/nodes-align   {nodeIds, align, reference?} (align to selection bbox or parent frame; one entry)
@@ -75,8 +79,10 @@ import {
   detectRegions,
   distributeNodes,
   duplicateNodes,
+  expandRecipePrompt,
   exportElements,
   exportProject,
+  extractFromElement,
   fitGroup,
   generateFromRecipe,
   getProject,
@@ -94,6 +100,8 @@ import {
   patchProject,
   patchRecipe,
   patchStyle,
+  promoteExtractedRecipe,
+  promoteExtractedStyle,
   readHistory,
   recordOpFailure,
   redoOp,
@@ -637,6 +645,16 @@ export function createCanvasApi(root) {
         return true;
       }
 
+      // /api/canvas/projects/<id>/recipe-cards/<gid>/expand  (T0239 increment 4)
+      // Expand-prompt runs OUTSIDE the journal (a codex TEXT spawn); only the final write
+      // commits. Writes recipe.expanded only — no card is minted by this route.
+      if (parts.length === 7 && sub === "recipe-cards" && parts[6] === "expand" && req.method === "POST") {
+        const groupId = decodeURIComponent(parts[5]);
+        await readJsonBody(req);
+        sendMutation(200, await expandRecipePrompt(root, { projectId: id, groupId }));
+        return true;
+      }
+
       // /api/canvas/projects/<id>/style-cards  (create — T0239 increment 3)
       // A style card is a group carrying an additive `style` blob (prompt + ONE ref image);
       // it never generates on its own — no generate route here.
@@ -662,6 +680,37 @@ export function createCanvasApi(root) {
         const groupId = decodeURIComponent(parts[5]);
         const body = await readJsonBody(req);
         sendMutation(200, patchStyle(root, { projectId: id, groupId, patch: body }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/extract  (T0239 increment 4)
+      // ONE codex VISION call -> element.meta.extracted; runs OUTSIDE the journal, only the
+      // final meta write commits. No card is minted by this route — see promote-recipe/
+      // promote-style below.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "extract" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        await readJsonBody(req);
+        sendMutation(200, await extractFromElement(root, { projectId: id, elementId }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/promote-recipe  (T0239 increment 4)
+      // Mint a RECIPE card BELOW the element from its ALREADY-STORED meta.extracted; NO
+      // codex call (fast, metadata-only — 400s loudly when meta.extracted is absent).
+      if (parts.length === 7 && sub === "elements" && parts[6] === "promote-recipe" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        await readJsonBody(req);
+        sendMutation(201, promoteExtractedRecipe(root, { projectId: id, elementId }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/promote-style  (T0239 increment 4)
+      // Mint a STYLE card RIGHT of the element from its ALREADY-STORED meta.extracted; NO
+      // codex call (fast, metadata-only — 400s loudly when meta.extracted is absent).
+      if (parts.length === 7 && sub === "elements" && parts[6] === "promote-style" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        await readJsonBody(req);
+        sendMutation(201, promoteExtractedStyle(root, { projectId: id, elementId }));
         return true;
       }
 

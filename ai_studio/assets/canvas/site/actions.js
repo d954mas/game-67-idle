@@ -10,6 +10,7 @@ import {
   elements,
   groupById,
   regionEditElement,
+  selectGroupOnly,
   selectOnly,
   setStatus,
   state,
@@ -850,15 +851,36 @@ export async function createRecipeCardAction(worldPoint) {
   }
 }
 
-// Partial update of a card's `recipe` blob (prompt/engine/style_ref) — the Recipe
-// inspector section's live edits. One journaled patchRecipe op; loud on a group without
-// `recipe` (the op layer's guard — a plain group is not a card).
+// Partial update of a card's `recipe` blob (prompt/expanded/use_expanded/engine/style_ref)
+// — the Recipe inspector section's live edits. One journaled patchRecipe op; loud on a
+// group without `recipe` (the op layer's guard — a plain group is not a card). The
+// Expanded textarea, its Edit-modal Save, the "Send expanded" checkbox, and the Discard
+// button all go through this SAME action ({expanded}/{use_expanded} respectively).
 export async function patchRecipeAction(groupId, patch) {
   try {
     applyMutation(await api("PATCH", `/projects/${pid()}/recipe-cards/${groupId}`, patch));
   } catch (error) {
     setStatus(error.message, true);
   }
+}
+
+// ---- Expand-prompt (T0239 increment 4) -----------------------------------------
+
+// Expand a recipe card's short prompt into a labeled generation-prompt template via the
+// ONE codex TEXT seam (tools/prompt_assist.mjs). Same runLongOp treatment as
+// generateFromRecipeAction (codex = real seconds/minutes); writes recipe.expanded, one
+// journal entry. The lead edits/discards the result himself afterward (the Expanded
+// textarea/Edit modal/Discard button) — this action only produces the first draft.
+export async function expandRecipePromptAction(groupId, control) {
+  await runLongOp(
+    "Expanding prompt… (codex)",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/recipe-cards/${groupId}/expand`, {});
+      applyMutation(result);
+      return { kind: "success", message: "Prompt expanded." };
+    },
+    { control },
+  );
 }
 
 // ---- recipe generation (T0239 increment 2) -------------------------------------
@@ -926,6 +948,57 @@ export async function createStyleCardAction(worldPoint) {
 export async function patchStyleAction(groupId, patch) {
   try {
     applyMutation(await api("PATCH", `/projects/${pid()}/style-cards/${groupId}`, patch));
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// ---- Extract / promote (T0239 increment 4, final shape) ------------------------
+//
+// Extraction is ONE codex vision call that writes element.meta.extracted (no card minted
+// here); minting a card from that ALREADY-STORED data is a SEPARATE, cheap, non-codex
+// "promotion" gesture — so the lead can extract once and mint as many cards as he likes at
+// zero extra codex cost. The two promotion actions are plain try/catch (fast, metadata-only
+// mutations), not runLongOp — only extractElementAction spends real codex time.
+
+// The Extracted section's "Extract"/"Re-extract" button: a codex VISION call (real
+// seconds/minutes, same runLongOp treatment as generateFromRecipeAction). Re-running
+// overwrites the prior extraction — applyMutation just re-renders the new meta.extracted
+// blob, no special-case needed.
+export async function extractElementAction(elementId, control) {
+  await runLongOp(
+    "Extracting… (codex vision)",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/elements/${elementId}/extract`, {});
+      applyMutation(result);
+      return { kind: "success", message: "Extracted." };
+    },
+    { control },
+  );
+}
+
+// Mint a RECIPE card from an element's ALREADY-STORED meta.extracted — a plain, FAST
+// mutation (no codex call; the op 400s naming "run Extract first" when meta.extracted is
+// absent). Selects the new card so the lead sees it land immediately.
+export async function promoteRecipeAction(elementId) {
+  if (!state.project) return;
+  try {
+    const result = await api("POST", `/projects/${pid()}/elements/${elementId}/promote-recipe`, {});
+    if (result.card) selectGroupOnly(result.card.id);
+    applyMutation(result, `Created recipe card "${result.card ? result.card.name : "?"}".`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Mint a STYLE card from an element's ALREADY-STORED meta.extracted — mirrors
+// promoteRecipeAction exactly, one route segment over.
+export async function promoteStyleAction(elementId) {
+  if (!state.project) return;
+  try {
+    const result = await api("POST", `/projects/${pid()}/elements/${elementId}/promote-style`, {});
+    if (result.card) selectGroupOnly(result.card.id);
+    applyMutation(result, `Created style card "${result.card ? result.card.name : "?"}".`);
   } catch (error) {
     setStatus(error.message, true);
   }
