@@ -418,29 +418,83 @@ function selectInput(value, options, onCommit) {
   return select;
 }
 
-// Scale picker: a real <select> of presets + "Custom…". The previous datalist input
-// LOOKED like a picker but Chrome filters datalist options by the current value —
-// with "1x" in the field every other preset was hidden, so nothing but 1x was
-// selectable. A non-preset value ("512w") appears as its own selected option;
-// "Custom…" swaps the field to a text input for free-form entry (512w/0.75x/…).
-function scaleInput(row, commit) {
-  const holder = document.createElement("span");
-  holder.style.display = "contents";
+// Export size control (lead's spec 2026-07-03): a MODE switch Scale | W px | H px,
+// a value field per mode, and the computed result size ("→ 2048×1536") so the
+// source-pixel semantics are visible at a glance. Scale mode = preset select
+// (0.5x…4x) + "Custom…" for a free fractional multiplier; W/H modes = a pixel
+// number. All three write the same stored token ("0.75x"/"512w"/"512h") — the op
+// layer is untouched. Switching modes converts the current setting to the
+// EQUIVALENT token against the source pixels, so the output size never jumps.
+function parseScaleToken(token) {
+  const text = String(token == null ? "" : token).trim().toLowerCase();
+  let match = /^(\d+(?:\.\d+)?)x?$/.exec(text);
+  if (match && Number(match[1]) > 0) return { kind: "mul", value: Number(match[1]) };
+  match = /^(\d+(?:\.\d+)?)(w|h)$/.exec(text);
+  if (match && Number(match[1]) > 0) return { kind: match[2], value: Number(match[1]) };
+  return { kind: "mul", value: 1 }; // unparseable: display as 1x, ops will complain on commit
+}
+
+// Mirror of ops.mjs resolveExportScale (kept trivially small; the op stays the
+// authority — this only feeds the UI hint and mode conversion).
+function resolveScaleToken(spec, sw, sh) {
+  if (!(sw > 0) || !(sh > 0)) return null;
+  if (spec.kind === "mul") return { w: Math.max(1, Math.round(sw * spec.value)), h: Math.max(1, Math.round(sh * spec.value)) };
+  if (spec.kind === "w") return { w: Math.max(1, Math.round(spec.value)), h: Math.max(1, Math.round(sh * (spec.value / sw))) };
+  return { w: Math.max(1, Math.round(sw * (spec.value / sh))), h: Math.max(1, Math.round(spec.value)) };
+}
+
+function scaleInput(element, row, commit) {
+  const sw = Number(element.source_w) || Number(element.w) || 0;
+  const sh = Number(element.source_h) || Number(element.h) || 0;
+  const current = parseScaleToken(row.scale == null ? "1x" : row.scale);
+  const resolved = resolveScaleToken(current, sw, sh);
+
+  const wrap = document.createElement("div");
+  wrap.className = "insp-size-ctl";
+
+  // Mode switch. Changing it commits the EQUIVALENT token (same output pixels).
+  const mode = document.createElement("select");
+  mode.className = "insp-input insp-size-mode";
+  for (const [value, label] of [["mul", "Scale"], ["w", "W px"], ["h", "H px"]]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    if (value === current.kind) option.selected = true;
+    mode.appendChild(option);
+  }
+  mode.addEventListener("change", () => {
+    const target = mode.value;
+    if (target === current.kind) return;
+    if (target === "w") commit({ scale: `${resolved ? resolved.w : 512}w` });
+    else if (target === "h") commit({ scale: `${resolved ? resolved.h : 512}h` });
+    else {
+      const value = resolved && sw > 0 ? Math.round((resolved.w / sw) * 10000) / 10000 : 1;
+      commit({ scale: `${value}x` });
+    }
+  });
+  wrap.appendChild(mode);
+
   const mount = (node) => {
-    holder.textContent = "";
-    holder.appendChild(node);
+    wrap.insertBefore(node, hint);
   };
-  const showSelect = () => {
-    const current = row.scale == null ? "1x" : String(row.scale);
-    const values = SCALE_PRESETS.includes(current) ? [...SCALE_PRESETS] : [current, ...SCALE_PRESETS];
+
+  // Result-size hint: makes "scale multiplies the SOURCE pixels" visible.
+  const hint = document.createElement("span");
+  hint.className = "insp-size-hint";
+  hint.textContent = resolved ? `→ ${resolved.w}×${resolved.h}` : "";
+  wrap.appendChild(hint);
+
+  if (current.kind === "mul") {
+    const token = `${current.value}x`;
+    const values = SCALE_PRESETS.includes(token) ? [...SCALE_PRESETS] : [token, ...SCALE_PRESETS];
     const select = document.createElement("select");
     select.className = "insp-input";
     for (const value of values) {
-      const node = document.createElement("option");
-      node.value = value;
-      node.textContent = value;
-      if (value === current) node.selected = true;
-      select.appendChild(node);
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value;
+      if (value === token) option.selected = true;
+      select.appendChild(option);
     }
     const custom = document.createElement("option");
     custom.value = "__custom";
@@ -451,21 +505,32 @@ function scaleInput(row, commit) {
         commit({ scale: select.value });
         return;
       }
-      const input = textInput(current, (value) => commit({ scale: value }));
-      input.placeholder = "512w / 0.75x";
-      // Committed edits rebuild the whole panel; an aborted edit (Esc / blur with no
-      // change) falls back to the select so the row never strands a text field.
+      // Free fractional multiplier (0.75 → "0.75x"). Committed edits rebuild the
+      // panel; an aborted edit (Esc / blur, no change) falls back to the select.
+      const input = numberInput(current.value, (value) => commit({ scale: `${value}x` }));
+      input.step = "any";
+      input.min = "0";
       input.addEventListener("blur", () => {
-        if (holder.contains(input)) showSelect();
+        if (wrap.contains(input)) {
+          wrap.removeChild(input);
+          mount(select);
+        }
       });
+      wrap.removeChild(select);
       mount(input);
       input.focus();
       input.select();
     });
     mount(select);
-  };
-  showSelect();
-  return holder;
+  } else {
+    const input = numberInput(current.value, (value) => {
+      const px = Math.max(1, Math.round(value));
+      commit({ scale: `${px}${current.kind}` });
+    });
+    input.min = "1";
+    mount(input);
+  }
+  return wrap;
 }
 
 // One export-setting row: scale + format on the header line, a quality slider only for
@@ -486,7 +551,7 @@ function exportRowNode(element, rows, index) {
 
   const head = document.createElement("div");
   head.className = "insp-export-head";
-  head.appendChild(field("Scale", scaleInput(row, commit)));
+  head.appendChild(field("Size", scaleInput(element, row, commit)));
   head.appendChild(field("Format", selectInput(row.format || "png", EXPORT_FORMATS, (value) => commit({ format: value }))));
   wrap.appendChild(head);
 

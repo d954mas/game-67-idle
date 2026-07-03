@@ -970,6 +970,29 @@ body.layers-resizing {
   padding-right: 26px;
 }
 
+.insp-size-ctl {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+}
+
+.insp-size-ctl .insp-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.insp-size-mode {
+  flex: 0 1 auto;
+}
+
+.insp-size-hint {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .insp-export-del {
   position: absolute;
   top: 4px;
