@@ -38,6 +38,7 @@ import {
   exportElementIds,
   exportProjectAction,
   fitGroupAction,
+  generateFromRecipeAction,
   patchElementBox,
   patchGroupBox,
   patchRecipeAction,
@@ -1318,10 +1319,11 @@ function renderGroupBackground(group, root) {
 // carries a `recipe` blob (same "presence of the additive field" pattern as
 // renderGroupBackground/renderAlphaPlates — a plain group renders no Recipe section at
 // all). Prompt + Engine are live-editable through patchRecipeAction (one journal entry
-// per commit, mirrors every other inspector field). Generate and the Style dropdown are
-// visible-but-disabled placeholders so the surface reads complete now: Generate wires up
-// in increment 2 (the generation seam + long-op queue), Style cards land in increment 3
-// (recipe.style_ref stays a reserved null pointer until then).
+// per commit, mirrors every other inspector field). Generate runs the T0239-2 flow via
+// generateFromRecipeAction (long-op queue, codex/agy = minutes; disabled on an empty
+// prompt — the op would refuse loudly anyway, the disable just says WHY up front). The
+// Style dropdown stays a visible-but-disabled placeholder until Style cards land in
+// increment 3 (recipe.style_ref stays a reserved null pointer until then).
 function renderRecipe(group, root) {
   const recipe = group.recipe;
   if (!recipe || typeof recipe !== "object") return;
@@ -1352,12 +1354,11 @@ function renderRecipe(group, root) {
   generateBtn.type = "button";
   generateBtn.className = "primary insp-btn";
   generateBtn.textContent = "Generate";
-  generateBtn.disabled = true;
+  const emptyPrompt = !String(recipe.prompt || "").trim();
+  generateBtn.disabled = emptyPrompt;
+  generateBtn.title = emptyPrompt ? "Write a prompt first" : "Generate (codex/agy — takes minutes)";
+  generateBtn.addEventListener("click", () => generateFromRecipeAction(group.id, generateBtn));
   body.appendChild(generateBtn);
-  const generateHint = document.createElement("div");
-  generateHint.className = "insp-region-hint";
-  generateHint.textContent = "Generation lands in the next increment.";
-  body.appendChild(generateHint);
 }
 
 function renderGroupInspector(group, root) {
@@ -1622,7 +1623,9 @@ function inspectorSig() {
   const group = state.selectedGroupId ? groupById(state.selectedGroupId) : null;
   const selected = selectedElements();
   if (group) {
-    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}|${group.parentId || ""}`;
+    // recipe rides in the signature so a prompt/engine commit (or a CLI edit) rebuilds
+    // the Recipe section — the Generate button's empty-prompt disable depends on it.
+    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}|${group.parentId || ""}|${JSON.stringify(group.recipe || null)}`;
   }
   // Multi-group selection (2+ groups, no loose elements): the signature carries each
   // group's id + shared toggle state so a batched visible/clip change rebuilds the panel.
