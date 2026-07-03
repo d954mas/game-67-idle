@@ -64,3 +64,4 @@ increment plan, flagging what needs the lead's confirmation before build.
 - 2026-07-03: Increment 2 (scale gizmo skeleton) fast-worker launched in parallel with T0248 (disjoint files: site/ vs ops/tools).
 - 2026-07-03: Increment 2 (scale gizmo) landed + committed, 329/329. Known limitation flagged to lead: group handles resize from pinned top-left (anchored group resize needs a dedicated op - lead to decide if it matters). Increments 3 (rotation+flip) and 4 (rotate handle) remain.
 - 2026-07-03: Increment 3 (rotation+flip data/render/export-parity) fast-worker launched.
+- 2026-07-03: Increment 3a landed + committed 2d5407f7 (343/343), server restarted. Increment 4 (rotate handle + rotated hit-test/outline) fast-worker launched.
