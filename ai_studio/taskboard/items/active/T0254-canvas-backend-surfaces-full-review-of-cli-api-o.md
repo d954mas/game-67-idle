@@ -19,3 +19,4 @@ updated: 2026-07-03
 ## Open questions
 
 ## Log
+- 2026-07-03: All 3 dimension reviews landed (api_ops: NO cross-client write lock = top finding; cli: list overflow + python cold-start per call measured; python_tools: key_matte 2.8x free win, dead bleed+repair passes). Docs in tmp/review_T0254_*.md. Synthesis in flight.
