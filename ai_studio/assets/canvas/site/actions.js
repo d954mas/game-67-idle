@@ -899,6 +899,26 @@ export async function generateFromRecipeAction(groupId, control) {
 
 // ---- style cards (T0239 increment 3) -------------------------------------------
 
+// Create a new style card: a group carrying an additive `style` blob (prompt/ref — see
+// ops.createStyleCard). Mirrors createRecipeCardAction exactly, one route segment over:
+// `worldPoint` (the canvas context menu's click point) places the card there; omitted,
+// the op's own default (0,0) applies.
+export async function createStyleCardAction(worldPoint) {
+  if (!state.project) return;
+  try {
+    const body = {};
+    if (worldPoint) {
+      body.x = Math.round(worldPoint.x);
+      body.y = Math.round(worldPoint.y);
+    }
+    const result = await api("POST", `/projects/${pid()}/style-cards`, body);
+    state.selectedGroupId = result.group.id;
+    applyMutation(result, `Created style card "${result.group.name}".`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 // Partial update of a card's `style` blob (prompt/ref) — the Style inspector section's live
 // edits AND its "Make ref" buttons. One journaled patchStyle op; loud on a group without
 // `style` (the op layer's guard — a plain group is not a card). Mirrors patchRecipeAction

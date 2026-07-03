@@ -12,6 +12,7 @@ import {
   createGroupInside,
   createGroupOrDefault,
   createRecipeCardAction,
+  createStyleCardAction,
   deleteElements,
   deleteGroupAction,
   deleteRegion,
@@ -275,6 +276,9 @@ function itemsFor(target) {
     // T0239 increment 1: mint a recipe card at the click point (a group with an
     // additive `recipe` blob — no generation yet, that lands in increment 2).
     { label: "New recipe card", onClick: () => createRecipeCardAction(target.world) },
+    // T0239 increment 3: mint a style card at the click point (a group with an
+    // additive `style` blob — name + style prompt + ONE ref + examples).
+    { label: "New style card", onClick: () => createStyleCardAction(target.world) },
     { label: "Fit", onClick: () => el("zoom-fit").click() },
     { separator: true },
     copyIdItemFor(target),
