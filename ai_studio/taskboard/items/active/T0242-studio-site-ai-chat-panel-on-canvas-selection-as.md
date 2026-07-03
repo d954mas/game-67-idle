@@ -1,7 +1,7 @@
 ---
 id: T0242
 title: "Studio site: AI chat panel on canvas - selection as context, agent acts via ops"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P1
@@ -59,3 +59,4 @@ Concept sketch (design phase to settle):
 - 2026-07-03: Lead decisions (design R2): backend = codex exec EXPLICITLY (no claude branch; seam stays for tests). Permissions = any requested op EXCEPT destructive/non-undoable - project deletion denied by name; rule in system prompt + loud post-check (honest: no hard sandbox in v1, terminal-equivalent trust). Queue: after T0239. All design questions closed - ready to build when files free up.
 - 2026-07-03: Lead challenged spawn-per-message; verified codex exec resume exists on the box. Design R3: conversation = codex session (resume per message, no history replay, no resident daemon); clear context = new session; transcript jsonl = panel display only; replay window demoted to fallback.
 - 2026-07-03: Backend inc 1-3 LANDED+committed (chat/context+agent+api, codex sessions w/ live MANGO continuity proof, SSE, 51 chat tests, canvas 457 intact, :8780 restarted+smoked). Panel worker (inc 4-5) launched: site/chat_panel.js follows history_panel pattern, SSE via fetch stream, selection chips, Cancel keeps session, Clear rotates; README.
+- 2026-07-03: Inc 4-5 landed+committed: chat panel docked column (toggle, SSE stream, selection chips, ops range chips, Cancel keeps session, Clear two-step confirm) + chat/README. All 5 increments done. Suites canvas 457 / chat 51. :8780 restarted, smoke 200. Awaiting lead browser verify.
