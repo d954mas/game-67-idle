@@ -35,6 +35,21 @@ Concept sketch (to refine at design phase):
   the alpha-generation engine; T0239 = the on-canvas UI/workflow object that
   triggers both.
 
+PROMPT TOOLS (lead, 2026-07-03, same discussion):
+- "Expand prompt" button on the card: the lead writes a SIMPLE prompt
+  ("рыжий кот с мечом"), the button runs an LLM pass that produces the
+  production-ready generation prompt (style clauses, composition, bg-for-
+  keying, negative constraints) and shows it editable before generation.
+  Should weave in the active style preset (below) automatically.
+- "Extract style" action on any IMAGE element: a vision pass produces a
+  reusable STYLE + CONTENT description ("чтобы я потом переиспользовал") —
+  saved as a named style preset; placeholders reference a preset by name and
+  the expander weaves it into prompts. Ties directly into T0208 (style
+  locks: prefix/suffix + refs) — the preset IS the style lock, extracted
+  from an exemplar image instead of written by hand.
+- Both are agent-side LLM/vision calls surfaced as canvas actions (vision
+  via the codex -i path the visual gate already uses).
+
 ## Done when
 
 - [ ] Design phase: data model, card UI, run lifecycle, parity surface,
