@@ -1,7 +1,7 @@
 ---
 id: T0239
 title: "Canvas: generation placeholder element - object with prompt/refs/meta, generation invoked from it"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
@@ -102,3 +102,4 @@ PROMPT TOOLS (lead, 2026-07-03, same discussion):
 - 2026-07-03: Increment 3 landed 012c2afe after orchestrator fix round: style card component complete (blob+ops+auto-ref, generation mixing w/ style_snapshot, paste pointer remap via ids-in-spec, export filter, actions.js convention restored, blue chrome + ref chip). Suite 426. :8780 restarted, smoke 200. Increment 4 (expand/extract) remains -> back to doing after lead verifies cards.
 - 2026-07-03: Lead verified live: style card creation via context menu, auto-ref, Make ref semantics, style prompt set on his card (wings), layers RECIPE/STYLE chips, align 'center' one-click centering, in-card drag gestures explained - all 'работает' (2026-07-03). Launching increment 4 (expand/extract helpers).
 - 2026-07-03: Increment 4 landed (worker + orchestrator fixes): prompt_assist seam, expand/extract/promote ops, UI. My review caught 2 runtime bugs tests could not see (codex npm shim ENOENT under execFile -> spawn node codex.js; text path stalls unless stdin closed) - both live-verified fixed (real expand 1496 chars, real vision extract on wings, all 9 keys). Suite 457. Committed, :8780 restarted. Section renamed 'Extracted prompts' per lead.
+- 2026-07-03: Accepted by lead 2026-07-03 evening: all 4 increments verified live (cards, generation w/ style mixing, expand, extract->promote). 'вначале extract нужно - работает'. Suite 457.
