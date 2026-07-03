@@ -52,8 +52,9 @@ import {
   setGroupsShared,
   setGroupVisible,
   sliceRegionsFor,
+  toggleElementFlip,
 } from "./actions.js";
-import { childrenOf, descendantsOf } from "../tree.mjs";
+import { childrenOf, descendantsOf, isNodeTransformed } from "../tree.mjs";
 import { fontFamilies, fontWeights } from "./fonts.js";
 import { openContextMenu } from "./context_menu.js";
 import { inlineEdit } from "./inline.js";
@@ -311,12 +312,20 @@ function selectedRegionIdsFor(element) {
   );
 }
 
+// R7 (T0232 increment 3a, lead-approved refusal): the ONE reason shown wherever a
+// region-edit control is grayed out on a rotated/flipped element — mirrors the ops-layer
+// refusal message (ops.mjs refuseIfTransformed) and the page's region-edit-entry blocks
+// (workspace.js onDblClick, context_menu.js "Edit regions") so every surface explains the
+// same thing the same way.
+const TRANSFORM_GUARD_REASON = "Rotated/flipped — reset rotation/flip to edit regions or slice.";
+
 // The REGIONS section: a collapsible header + count badge, one compact row per
 // region (numbers match the canvas badges), and the entry points now that the
 // layers tree no longer duplicates this list: Edit (isolation mode), Detect, Add,
 // and Slice (selected in region-edit mode, else all).
 function renderRegions(element, root) {
   const regions = element.regions || [];
+  const transformed = isNodeTransformed(element);
   const badge = document.createElement("span");
   badge.className = "badge";
   badge.textContent = String(regions.length);
@@ -343,6 +352,7 @@ function renderRegions(element, root) {
   // Pass the button as the triggering control so runLongOp disables it while detect is
   // queued/in flight (the canvas stays interactive).
   const detectBtn = smallBtn("Detect", () => detectRegionsFor(element.id, detectBtn));
+  detectBtn.disabled = transformed;
   btnRow.append(detectBtn);
   actions.appendChild(btnRow);
 
@@ -350,7 +360,7 @@ function renderRegions(element, root) {
   sliceBtn.type = "button";
   sliceBtn.className = "primary insp-btn insp-slice-btn";
   const selectedIds = selectedRegionIdsFor(element);
-  sliceBtn.disabled = regions.length === 0;
+  sliceBtn.disabled = regions.length === 0 || transformed;
   sliceBtn.textContent = selectedIds.length
     ? `Slice selected (${selectedIds.length})`
     : regions.length
@@ -364,6 +374,13 @@ function renderRegions(element, root) {
   });
   actions.appendChild(sliceBtn);
   body.appendChild(actions);
+
+  if (transformed) {
+    const hint = document.createElement("div");
+    hint.className = "insp-region-hint";
+    hint.textContent = TRANSFORM_GUARD_REASON;
+    body.appendChild(hint);
+  }
 }
 
 // Alpha section (T0241 — lead: alpha is not a Regions concern, it gets its own section).
@@ -375,6 +392,7 @@ function renderRegions(element, root) {
 // -> gate -> ONE NEW cut element beside the source; no region scoping (the pair tool cuts
 // the whole plate). Both long-op via the queue + progress toast (mirrors Slice).
 function renderAlpha(element, root) {
+  const transformed = isNodeTransformed(element);
   const body = collapsible(root, "alpha", "Alpha");
   const alphaRow = document.createElement("div");
   alphaRow.className = "insp-alpha-row";
@@ -389,6 +407,7 @@ function renderAlpha(element, root) {
   const alphaBtn = document.createElement("button");
   alphaBtn.type = "button";
   alphaBtn.className = "insp-btn insp-alpha-btn";
+  alphaBtn.disabled = transformed;
   // The run button says what the chosen method will actually do (the matte label also
   // carries the live region-scope count).
   const relabel = () => {
@@ -412,6 +431,16 @@ function renderAlpha(element, root) {
   });
   alphaRow.append(field("Method", methodSel), alphaBtn);
   body.appendChild(alphaRow);
+
+  // R7 (T0232 increment 3a): alphaCutout (single AND the "Dual-plate generate" flow) both
+  // read the element's untransformed source pixels — same reason the Regions section grays
+  // out Detect/Slice.
+  if (transformed) {
+    const hint = document.createElement("div");
+    hint.className = "insp-region-hint";
+    hint.textContent = TRANSFORM_GUARD_REASON;
+    body.appendChild(hint);
+  }
 
   renderAlphaPlates(element, body);
 }
@@ -968,6 +997,39 @@ function renderResetToSourceButton(element) {
   return button;
 }
 
+// T0232 increment 3a: rotation (finite degrees, CW about the box center) + flip
+// (additive booleans, image-only). Both commit through the SAME patchElement path the
+// agent's element-set/elements-set use (strict tool parity — the op layer validates and
+// normalizes either way). NO rotate handle here — increment 3b adds the interactive
+// gizmo; this is a plain numeric input + two independent toggle buttons.
+function renderTransformControls(element) {
+  const wrap = document.createElement("div");
+  wrap.className = "insp-render";
+
+  wrap.appendChild(
+    field("Rotation", numberInput(element.rotation || 0, (v) => patchElementBox(element.id, { rotation: v }))),
+  );
+
+  const flipWrap = document.createElement("div");
+  flipWrap.className = "insp-segmented";
+  const flipH = document.createElement("button");
+  flipH.type = "button";
+  flipH.className = element.flipH ? "insp-seg-btn primary" : "insp-seg-btn";
+  flipH.textContent = "Flip H";
+  flipH.title = "Mirror the image left-right";
+  flipH.addEventListener("click", () => toggleElementFlip(element.id, "h"));
+  const flipV = document.createElement("button");
+  flipV.type = "button";
+  flipV.className = element.flipV ? "insp-seg-btn primary" : "insp-seg-btn";
+  flipV.textContent = "Flip V";
+  flipV.title = "Mirror the image top-bottom";
+  flipV.addEventListener("click", () => toggleElementFlip(element.id, "v"));
+  flipWrap.append(flipH, flipV);
+  wrap.appendChild(field("Flip", flipWrap));
+
+  return wrap;
+}
+
 function renderElement(element, root) {
   const name = field("Name", textInput(element.name, (next) => renameElement(element.id, next)));
   name.classList.add("insp-name");
@@ -977,6 +1039,7 @@ function renderElement(element, root) {
   layout.appendChild(boxGrid(element, (patch) => patchElementBox(element.id, patch)));
   layout.appendChild(readOnly("Source", `${element.source_w || element.w} x ${element.source_h || element.h}`));
   layout.appendChild(renderResetToSourceButton(element));
+  layout.appendChild(renderTransformControls(element));
 
   // Single node inside a parent group (screen or widget): align-to-frame — the "center
   // this widget inside the screen" case (Figma-auto reference, T0232 increment 1).

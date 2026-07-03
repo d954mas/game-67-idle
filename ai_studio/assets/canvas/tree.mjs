@@ -264,6 +264,73 @@ export function wouldCycle(project, groupId, newParentId) {
   return subtreeGroupIds(project, groupId).has(newParentId);
 }
 
+// ---- rotation-aware geometry (T0232 increment 3a) ------------------------------
+//
+// `element.rotation` is DEGREES CLOCKWISE ON SCREEN about the node's own box center
+// (x+w/2, y+h/2) — the one load-bearing convention the canvas (`ctx.rotate(+theta)`) and
+// the PIL exporter (`Image.rotate(-theta, expand=True)`, negated because PIL's own angle
+// is CCW-positive) must agree on; see README "Rotation & flip". `flipH`/`flipV` mirror
+// pixels WITHIN the box and never change it, so only rotation affects extent below.
+
+// The node's 4 world-space corners (top-left, top-right, bottom-right, bottom-left, in
+// that order), rotated about the box center when `rotation` is set. Absent/zero rotation
+// returns the plain box corners (cheap identity path — most nodes never rotate).
+export function rotatedCorners(node) {
+  const x = Number(node.x) || 0;
+  const y = Number(node.y) || 0;
+  const w = Number(node.w) || 0;
+  const h = Number(node.h) || 0;
+  const corners = [
+    { x, y },
+    { x: x + w, y },
+    { x: x + w, y: y + h },
+    { x, y: y + h },
+  ];
+  const rotation = Number(node.rotation) || 0;
+  if (!rotation) return corners;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const rad = (rotation * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  // World point = center + R(theta)*(local point - center), R(theta) matching
+  // ctx.rotate(+theta) on a Y-down canvas (CW-positive) — see the file header.
+  return corners.map((corner) => {
+    const dx = corner.x - cx;
+    const dy = corner.y - cy;
+    return { x: cx + dx * cos - dy * sin, y: cy + dx * sin + dy * cos };
+  });
+}
+
+// The axis-aligned bounding box of a node's (possibly rotated) corners — what
+// createGroup(fromElements)/fitGroup pad around (ops.elementsBBox), so a rotated child's
+// footprint is never clipped by a freshly-sized group frame. Identical to the node's own
+// x/y/w/h box when unrotated.
+export function nodeAABB(node) {
+  const corners = rotatedCorners(node);
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const corner of corners) {
+    minX = Math.min(minX, corner.x);
+    minY = Math.min(minY, corner.y);
+    maxX = Math.max(maxX, corner.x);
+    maxY = Math.max(maxY, corner.y);
+  }
+  return { minX, minY, maxX, maxY, x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+// True once a node carries a nonzero rotation or either flip flag — the R7 refusal
+// threshold: source-space ops (detectRegions/sliceRegions/alphaCutout, and the page's
+// region-edit entry points) read UNTRANSFORMED source pixels, so they refuse loudly while
+// this is true (reset rotation/flip first). Pure predicate shared by ops.mjs and the site
+// so both refuse/gray out on the exact same condition.
+export function isNodeTransformed(node) {
+  if (!node) return false;
+  return (Number(node.rotation) || 0) !== 0 || node.flipH === true || node.flipV === true;
+}
+
 // ---- align / distribute (T0232 increment 1) -----------------------------------
 //
 // Pure target-position math for the inspector's Align row + the CLI/API nodes-align /

@@ -153,6 +153,18 @@ export async function renameElement(id, name) {
   await patchElementBox(id, { name });
 }
 
+// Toggle one flip axis on an IMAGE element (T0232 increment 3a) — an additive boolean
+// flag (image-only; validated at the op layer). Both the inspector's Flip H/Flip V
+// buttons and the element context menu's "Flip horizontal"/"Flip vertical" drive this
+// one path, so they never drift out of sync with each other or with the CLI/agent
+// (element-set --flip-h/--flip-v flows through the SAME patchElement fields).
+export async function toggleElementFlip(id, axis) {
+  const element = elementById(id);
+  if (!element) return;
+  const key = axis === "v" ? "flipV" : "flipH";
+  await patchElementBox(id, { [key]: !element[key] });
+}
+
 export async function setElementVisible(id, visible) {
   await patchElementBox(id, { visible });
 }

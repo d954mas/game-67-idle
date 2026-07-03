@@ -8,7 +8,10 @@ import {
   childrenOf,
   descendantsOf,
   isNodeHidden,
+  isNodeTransformed,
+  nodeAABB,
   orderedChildren,
+  rotatedCorners,
   wouldCycle,
 } from "../tree.mjs";
 
@@ -191,4 +194,58 @@ test("a corrupt parent cycle does not hang isNodeHidden / orderedChildren / woul
   assert.equal(typeof isNodeHidden(project, project.elements[0]), "boolean");
   assert.deepEqual(orderedChildren(project, "g1").map((node) => node.id).sort(), ["g2", "leaf"]);
   assert.equal(wouldCycle(project, "g1", "g2"), true, "g2 is in g1's (cyclic) subtree");
+});
+
+// ---- rotatedCorners / nodeAABB / isNodeTransformed (T0232 increment 3a) --------
+
+test("rotatedCorners is the identity box when rotation is absent/0", () => {
+  const node = { x: 10, y: 20, w: 30, h: 40 };
+  assert.deepEqual(rotatedCorners(node), [
+    { x: 10, y: 20 },
+    { x: 40, y: 20 },
+    { x: 40, y: 60 },
+    { x: 10, y: 60 },
+  ]);
+  assert.deepEqual(rotatedCorners({ ...node, rotation: 0 }), rotatedCorners(node));
+  const box = nodeAABB(node);
+  assert.deepEqual(box, { minX: 10, minY: 20, maxX: 40, maxY: 60, x: 10, y: 20, w: 30, h: 40 });
+});
+
+test("rotatedCorners rotates 90 CW about the box center (matches the render parity contract)", () => {
+  // A 24x16 box at (0,0), center (12,8). 90 CW: local (dx,dy) -> (-dy,dx).
+  // TL local (-12,-8) -> (8,-12) -> world (12+8, 8-12) = (20,-4): the new TOP-RIGHT corner.
+  const node = { x: 0, y: 0, w: 24, h: 16, rotation: 90 };
+  const corners = rotatedCorners(node);
+  const round = (p) => ({ x: Math.round(p.x), y: Math.round(p.y) });
+  assert.deepEqual(round(corners[0]), { x: 20, y: -4 }, "TL -> new top-right");
+  assert.deepEqual(round(corners[1]), { x: 20, y: 20 }, "TR -> new bottom-right");
+  assert.deepEqual(round(corners[2]), { x: 4, y: 20 }, "BR -> new bottom-left");
+  assert.deepEqual(round(corners[3]), { x: 4, y: -4 }, "BL -> new top-left");
+  // Dims swap (24x16 -> 16x24), still centered on the SAME center (12,8).
+  const box = nodeAABB(node);
+  assert.equal(Math.round(box.w), 16);
+  assert.equal(Math.round(box.h), 24);
+  assert.equal(Math.round(box.x + box.w / 2), 12);
+  assert.equal(Math.round(box.y + box.h / 2), 8);
+});
+
+test("nodeAABB wraps a rotated element's footprint so createGroup/fitGroup padding never clips it", () => {
+  // A 45-degree rotation of a square box has a LARGER AABB than the unrotated box.
+  const node = { x: 0, y: 0, w: 20, h: 20, rotation: 45 };
+  const box = nodeAABB(node);
+  const diag = 20 * Math.SQRT2;
+  assert.ok(Math.abs(box.w - diag) < 1e-9, `expected diagonal AABB width ~${diag}, got ${box.w}`);
+  assert.ok(Math.abs(box.h - diag) < 1e-9, `expected diagonal AABB height ~${diag}, got ${box.h}`);
+  // Flip never changes the AABB (it mirrors pixels WITHIN the box, not the box itself).
+  assert.deepEqual(nodeAABB({ x: 5, y: 5, w: 10, h: 6, flipH: true, flipV: true }), nodeAABB({ x: 5, y: 5, w: 10, h: 6 }));
+});
+
+test("isNodeTransformed is true for a nonzero rotation or either flip flag, false for a plain box", () => {
+  assert.equal(isNodeTransformed({ x: 0, y: 0, w: 1, h: 1 }), false);
+  assert.equal(isNodeTransformed({ x: 0, y: 0, w: 1, h: 1, rotation: 0 }), false);
+  assert.equal(isNodeTransformed({ x: 0, y: 0, w: 1, h: 1, flipH: false, flipV: false }), false);
+  assert.equal(isNodeTransformed({ x: 0, y: 0, w: 1, h: 1, rotation: 90 }), true);
+  assert.equal(isNodeTransformed({ x: 0, y: 0, w: 1, h: 1, flipH: true }), true);
+  assert.equal(isNodeTransformed({ x: 0, y: 0, w: 1, h: 1, flipV: true }), true);
+  assert.equal(isNodeTransformed(null), false);
 });

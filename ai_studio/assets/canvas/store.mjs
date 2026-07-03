@@ -254,8 +254,14 @@ const NUMERIC_ELEMENT_FIELDS = ["x", "y", "w", "h"];
 // boolean (stored so renderGroup/the page can hide with `element.visible !== false`).
 // For a TEXT element it also applies `content` (string) and `style` (a fully
 // validated/normalized style OBJECT — the op layer does the fonts-manifest validation
-// before this runs, so the store only stores the object verbatim). Shared by
-// patchElement and the batched patchElements so both honor identical rules.
+// before this runs, so the store only stores the object verbatim). `rotation`/`flipH`/
+// `flipV` (T0232 increment 3a — additive transform schema) are likewise pre-validated by
+// the op layer (ops.sanitizeTransformPatch: finite degrees normalized to [0,360), real
+// booleans, flip rejected on a text element) — this just stores them, mirroring
+// `group.clip`'s "absent means the default" rule: `rotation === 0` and `flipH`/`flipV
+// === false` are stored as an ABSENT field (an untouched/reset element stays clean; the
+// stored shape never carries a redundant zero/false). Shared by patchElement and the
+// batched patchElements so both honor identical rules.
 function applyElementFields(element, patch = {}) {
   for (const field of NUMERIC_ELEMENT_FIELDS) {
     if (patch[field] !== undefined && patch[field] !== null && Number.isFinite(Number(patch[field]))) {
@@ -269,6 +275,18 @@ function applyElementFields(element, patch = {}) {
   if (patch.content !== undefined) element.content = String(patch.content);
   if (patch.style !== undefined && patch.style && typeof patch.style === "object") {
     element.style = patch.style;
+  }
+  if (patch.rotation !== undefined) {
+    if (Number(patch.rotation) === 0) delete element.rotation;
+    else element.rotation = Number(patch.rotation);
+  }
+  if (patch.flipH !== undefined) {
+    if (patch.flipH === false) delete element.flipH;
+    else element.flipH = true;
+  }
+  if (patch.flipV !== undefined) {
+    if (patch.flipV === false) delete element.flipV;
+    else element.flipV = true;
   }
   return element;
 }

@@ -59,7 +59,7 @@ import { buildBlackPlatePrompt, buildWhitePlatePrompt, generatePlate } from "./t
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
-import { alignMoves, ancestorsOf, blockReorder, buildNodesSpec, descendantsOf, distributeMoves, frontOrder, isNodeHidden, nodeScope, orderedChildren, wouldCycle } from "./tree.mjs";
+import { alignMoves, ancestorsOf, blockReorder, buildNodesSpec, descendantsOf, distributeMoves, frontOrder, isNodeHidden, isNodeTransformed, nodeAABB, nodeScope, orderedChildren, wouldCycle } from "./tree.mjs";
 // Shared, pure text/font contract (imported by the site too — see fonts.mjs). ops.mjs
 // owns the node-only disk read of the manifest; all validation/merge/resolution logic
 // lives in fonts.mjs so the browser and the agent normalize a style identically.
@@ -209,6 +209,48 @@ function sanitizeTextPatch(root, project, elementId, patch = {}) {
     const manifest = readFontsManifest(root);
     clean.style = mergeTextStyle(element.style || defaultTextStyle(), patch.style, manifest);
   }
+  return clean;
+}
+
+// Degrees, finite; normalized to [0,360) so 450 and -90 store identically to 90/270 —
+// the one canonical rotation value both renderers key off (see README "Rotation & flip").
+// Throws on a non-finite value (no silent NaN/Infinity write).
+function normalizeRotation(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) throw new Error(`rotation must be a finite number of degrees, got ${JSON.stringify(value)}`);
+  const wrapped = num % 360;
+  return wrapped < 0 ? wrapped + 360 : wrapped;
+}
+
+// A flip flag must be a real boolean (mirrors normalizeGroupClip below) — no silent
+// string coercion; the CLI/page convert their own string flags before calling.
+function normalizeFlipFlag(value, field) {
+  if (typeof value !== "boolean") {
+    throw new Error(`${field} must be a boolean (true|false), got ${JSON.stringify(value)}`);
+  }
+  return value;
+}
+
+// Sanitize a patch that may carry `rotation`/`flipH`/`flipV` (T0232 increment 3a —
+// additive transform schema on `patchElement`/`patchElements`, see README "Rotation &
+// flip"). `rotation` is validated + normalized to [0,360) for EITHER element type ("text
+// rotates the box" too); `flipH`/`flipV` are IMAGE-ONLY booleans (R7 — mirroring pixels
+// makes no sense for a text box), a loud error on a text element. A no-op fast path when
+// the patch carries none of the three fields, so an untouched patch never pays for the
+// element lookup (mirrors sanitizeTextPatch above).
+function sanitizeTransformPatch(project, elementId, patch = {}) {
+  if (patch.rotation === undefined && patch.flipH === undefined && patch.flipV === undefined) return patch;
+  const element = (project.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  const clean = { ...patch };
+  if (patch.rotation !== undefined) clean.rotation = normalizeRotation(patch.rotation);
+  if ((patch.flipH !== undefined || patch.flipV !== undefined) && element.type !== "image") {
+    throw new Error(
+      `element ${elementId} is a ${element.type} element — flip is image-only (flipH/flipV don't apply to type:"${element.type}")`,
+    );
+  }
+  if (patch.flipH !== undefined) clean.flipH = normalizeFlipFlag(patch.flipH, "flipH");
+  if (patch.flipV !== undefined) clean.flipV = normalizeFlipFlag(patch.flipV, "flipV");
   return clean;
 }
 
@@ -494,7 +536,7 @@ export function addText(root, projectId, args = {}) {
 export function patchElement(root, projectId, elementId, patch = {}) {
   const startedAt = performance.now();
   const before = getProject(root, projectId);
-  const clean = sanitizeTextPatch(root, before, elementId, patch);
+  const clean = sanitizeTransformPatch(before, elementId, sanitizeTextPatch(root, before, elementId, patch));
   const result = storePatchElement(root, projectId, elementId, clean);
   const project = commitMutation(root, projectId, {
     op: "patchElement",
@@ -535,9 +577,10 @@ export function patchElements(root, { projectId, patches } = {}) {
     if (!patch || typeof patch !== "object") throw new Error(`patch ${index} is not an object`);
     const elementId = String(patch.elementId == null ? "" : patch.elementId).trim();
     if (!elementId) throw new Error(`patch ${index} is missing an elementId`);
-    // Text content/style patches are validated + normalized against the manifest here
-    // (same as patchElement); image geometry patches skip the manifest entirely.
-    return { ...sanitizeTextPatch(root, before, elementId, patch), elementId };
+    // Text content/style AND rotation/flip patches are validated + normalized here (same
+    // as patchElement); plain geometry patches skip both fast paths entirely.
+    const textClean = sanitizeTextPatch(root, before, elementId, patch);
+    return { ...sanitizeTransformPatch(before, elementId, textClean), elementId };
   });
   const result = storePatchElements(root, projectId, clean);
   const project = commitMutation(root, projectId, {
@@ -1194,16 +1237,21 @@ function normalizeGroupClip(clip) {
   return clip;
 }
 
+// Union bbox of a set of elements/groups, per-node via tree.nodeAABB (T0232 increment
+// 3a) so a ROTATED element's footprint — not its stored x/y/w/h — is what createGroup
+// (fromElements) pads around and fitGroup fits to; unrotated nodes are unaffected
+// (nodeAABB is an identity pass-through when rotation is absent/0).
 function elementsBBox(elements) {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (const element of elements) {
-    minX = Math.min(minX, Number(element.x) || 0);
-    minY = Math.min(minY, Number(element.y) || 0);
-    maxX = Math.max(maxX, (Number(element.x) || 0) + (Number(element.w) || 0));
-    maxY = Math.max(maxY, (Number(element.y) || 0) + (Number(element.h) || 0));
+    const box = nodeAABB(element);
+    minX = Math.min(minX, box.minX);
+    minY = Math.min(minY, box.minY);
+    maxX = Math.max(maxX, box.maxX);
+    maxY = Math.max(maxY, box.maxY);
   }
   return { minX, minY, maxX, maxY };
 }
@@ -2215,6 +2263,21 @@ export function jumpHistory(root, { projectId, seq, expectHead } = {}) {
 
 // ---- detectRegions (bridged) -------------------------------------------------
 
+// R7 (T0232 increment 3a, lead-approved refusal): source-space ops read the element's
+// UNTRANSFORMED source pixels, so a rotated/flipped element's stored regions/crops no
+// longer line up with what is on screen. detectRegions/sliceRegions/alphaCutout (single
+// AND batch) all refuse loudly with this ONE message while the element carries a nonzero
+// rotation or either flip flag; the page mirrors the same reason as a grayed-out control
+// (inspector.js renderRegions/renderAlpha) and blocks the region-edit entry points
+// (workspace.js onDblClick, context_menu.js "Edit regions"). A future "bake transform
+// into pixels" op would lift this; out of v1 scope.
+function refuseIfTransformed(element, elementId) {
+  if (!isNodeTransformed(element)) return;
+  throw new Error(
+    `element ${elementId} is rotated/flipped — reset rotation/flip to edit regions or slice (the source is untransformed)`,
+  );
+}
+
 // Meaningful numbered names for freshly detected regions: "<base> 1..N" (base =
 // element name, else "Region"). Regions that already carry a name keep it.
 export function nameDetectedRegions(regions, baseName) {
@@ -2232,6 +2295,10 @@ export async function detectRegions(root, { projectId, elementId, params = {} } 
   if (!projectId) throw new Error("detectRegions requires projectId");
   if (!elementId) throw new Error("detectRegions requires elementId");
   const startedAt = performance.now();
+  // Fail fast (R7): check BEFORE reading bytes/spawning Python. A missing/non-image
+  // elementId is left to readElementBytes' own error below (no message drift).
+  const precheck = (getProject(root, projectId).elements || []).find((item) => item.id === elementId);
+  if (precheck) refuseIfTransformed(precheck, elementId);
   const { buffer, fileName } = readElementBytes(root, projectId, elementId);
   const dims = imageSize(buffer);
 
@@ -2311,6 +2378,7 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
   const parent = (before.elements || []).find((item) => item.id === elementId);
   if (!parent) throw new Error(`element not found: ${elementId}`);
   if (parent.type !== "image" || !parent.src) throw new Error(`element ${elementId} is not an image`);
+  refuseIfTransformed(parent, elementId);
   const allRegions = Array.isArray(parent.regions) ? parent.regions : [];
   if (!allRegions.length) {
     throw new Error(`element ${elementId} has no regions; run detectRegions first`);
@@ -2556,6 +2624,7 @@ async function alphaCutoutSingle(root, projectId, before, elementId, chosen, reg
   const element = (before.elements || []).find((item) => item.id === elementId);
   if (!element) throw new Error(`element not found: ${elementId}`);
   if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
+  refuseIfTransformed(element, elementId);
   const specRegions = resolveAlphaRegions(element, regions);
 
   const { newSrc, report } = await runAlphaCutoutTool(root, projectId, element, chosen, specRegions);
@@ -2600,6 +2669,7 @@ async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, sta
     const element = (before.elements || []).find((item) => item.id === elementId);
     if (!element) throw new Error(`element not found: ${elementId}`);
     if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
+    refuseIfTransformed(element, elementId);
     return element;
   });
 
@@ -3395,6 +3465,11 @@ function buildRenderNodes(root, projectId, project, scopeId, leaves, fonts) {
           kind: "text",
           x: Number(element.x) || 0,
           y: Number(element.y) || 0,
+          // T0232 increment 3a: rotation is a valid field on a text element ("rotates the
+          // box") and is forwarded here for forward-compat, but render_group.py's
+          // paint_text does not yet rotate glyph pixels — that lands in a follow-up
+          // increment; only IMAGE elements get real pixel rotation/flip in 3a.
+          rotation: Number(element.rotation) || 0,
           fontFile: resolveFontFileAbs(root, entry),
           fontSize: Number(style.fontSize) || 24,
           lineHeight: Number(style.lineHeight) || 1.2,
@@ -3415,6 +3490,12 @@ function buildRenderNodes(root, projectId, project, scopeId, leaves, fonts) {
         y: Number(element.y) || 0,
         w: Number(element.w) || 0,
         h: Number(element.h) || 0,
+        // T0232 increment 3a: rotation (degrees CW about the box center) + flip, forwarded
+        // verbatim for render_group.py's paint_element (R2 exact math) and the canvas's own
+        // paintElement — see README "Rotation & flip" for the shared parity contract.
+        rotation: Number(element.rotation) || 0,
+        flipH: element.flipH === true,
+        flipV: element.flipV === true,
       });
     }
   }

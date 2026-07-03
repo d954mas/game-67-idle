@@ -20,8 +20,15 @@ import {
   sendNodeBackward,
   sendNodeToBack,
   sliceRegionsFor,
+  toggleElementFlip,
   ungroup,
 } from "./actions.js";
+import { isNodeTransformed } from "../tree.mjs";
+
+// R7 (T0232 increment 3a): the same grayed-out reason the inspector shows on its
+// Detect/Slice/Alpha controls, here as a disabled-button title (mirrors the ops-layer
+// refusal message).
+const TRANSFORM_GUARD_TITLE = "Rotated/flipped — reset rotation/flip to edit regions or slice.";
 
 let open = false;
 let submenu = null;
@@ -175,6 +182,7 @@ function itemsFor(target) {
   if (target.kind === "element") {
     const element = elementById(target.elementId);
     if (!element) return [];
+    const transformed = isNodeTransformed(element);
     // Diet (T0217): a short menu of frequent object actions. Region work is one
     // "Edit regions" entry (double-click is the primary path; detect/slice/add live
     // in the inspector Regions section); rename is double-click, hide is the layers
@@ -183,13 +191,25 @@ function itemsFor(target) {
     const items = [
       {
         // Enabled for ANY image so a fresh sheet can draw its FIRST region in mode B.
+        // R7 (T0232 increment 3a): disabled on a rotated/flipped element — regions read
+        // untransformed source pixels (mirrors workspace.js's own dblclick guard).
         label: "Edit regions",
+        disabled: transformed,
+        title: transformed ? TRANSFORM_GUARD_TITLE : undefined,
         onClick: () => {
           enterRegionEdit(element.id);
           refresh();
         },
       },
     ];
+    // Flip (T0232 increment 3a) — image-only, additive boolean flags; toggling either
+    // is one patchElement (same path the inspector's Flip H/Flip V buttons use).
+    if (element.type === "image") {
+      items.push(
+        { label: "Flip horizontal", onClick: () => toggleElementFlip(element.id, "h") },
+        { label: "Flip vertical", onClick: () => toggleElementFlip(element.id, "v") },
+      );
+    }
     // Right-clicking a selected element keeps the whole multi-selection (see
     // workspace.js onContextMenu): a 2+ selection also offers grouping, and Order acts on
     // the whole selection as one block; a single element orders just itself.
@@ -282,6 +302,7 @@ function buildButton(item, inSubmenu = false) {
   if (item.danger) button.classList.add("danger");
   button.textContent = item.label;
   button.disabled = Boolean(item.disabled);
+  if (item.title) button.title = item.title;
   if (item.submenu) {
     button.classList.add("has-sub");
     const arrow = document.createElement("span");

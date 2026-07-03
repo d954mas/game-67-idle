@@ -13,6 +13,7 @@
 //   node ai_studio/assets/canvas/cli.mjs add-text <id> [--x n --y n] [--content "..."] [--style-json path] [--group gid]
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
+//   node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--rotation <deg>] [--flip-h true|false] [--flip-v true|false]   (T0232 3a: rotation = degrees CW about the box center, normalized to [0,360); flip is image-only)
 //   node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json
 //   node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs element-reorder <id> --element <eid> --index <n>
@@ -301,7 +302,16 @@ async function runCommand(command, id, positional, flags) {
       if (flags["style-json"] && flags["style-json"] !== "true") {
         patch.style = JSON.parse(readFileSync(resolve(flags["style-json"]), "utf8"));
       }
-      if (!Object.keys(patch).length) fail("element-set requires --name, --visible, --content, and/or --style-json");
+      // T0232 increment 3a: rotation (degrees CW about the box center; the op normalizes
+      // to [0,360) and throws on a non-finite value) + flip (image-only booleans; a loud
+      // error on a text element) — the SAME patchElement fields the page's inspector
+      // Rotation input / Flip H/Flip V buttons commit (strict tool parity).
+      if (flags.rotation !== undefined && flags.rotation !== "true") patch.rotation = Number(flags.rotation);
+      if (flags["flip-h"] !== undefined) patch.flipH = flags["flip-h"] === "true";
+      if (flags["flip-v"] !== undefined) patch.flipV = flags["flip-v"] === "true";
+      if (!Object.keys(patch).length) {
+        fail("element-set requires --name, --visible, --content, --style-json, --rotation, --flip-h, and/or --flip-v");
+      }
       return print(patchElement(repoRoot, id, flags.element, patch));
     }
     case "element-remove": {
@@ -312,7 +322,8 @@ async function runCommand(command, id, positional, flags) {
     case "elements-set": {
       // Batched multi-element patch (one journal entry). --json is a patches array
       // or a { patches: [...] } wrapper; each patch is {elementId, x?, y?, w?, h?,
-      // name?, visible?} — same fields as `move`/`element-set`, applied together.
+      // name?, visible?, rotation?, flipH?, flipV?} — same fields as `move`/`element-set`
+      // (incl. T0232 3a rotation/flip), applied together.
       if (!id) fail("elements-set requires <id>");
       if (!flags.json || flags.json === "true") fail("elements-set requires --json <path> (a patches array or {patches:[...]})");
       const raw = JSON.parse(readFileSync(resolve(flags.json), "utf8"));

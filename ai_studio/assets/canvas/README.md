@@ -87,7 +87,9 @@ Every capability is one op in `ops.mjs`:
   string and a **partial** `style` are shallow-merged over the element's current style
   and re-validated against the fonts manifest (nested `stroke`/`shadow` merge, so a
   width-only edit keeps the color); `content`/`style` on a non-text element is a loud
-  error. `patchElements` (batched) accepts the same text fields.
+  error. Also accepts `rotation` (finite degrees, normalized to `[0,360)`) and `flipH`/
+  `flipV` (image-only booleans) — see **Rotation & flip** below (T0232 increment 3a).
+  `patchElements` (batched) accepts the same text and transform fields.
 - `patchElements({ projectId, patches })` / `removeElements({ projectId, elementIds })`
   — the **batched** multi-element ops behind marquee/multi-select move and multi-delete.
   Each applies the whole gesture in ONE `commitMutation`, so it is **one journal entry**
@@ -762,6 +764,73 @@ drop-shadow toggle with dx/dy + color). The layers row shows a **"T"** glyph pla
 element parked outside its group's frame stays a member; joining/leaving a group is
 explicit (layers drag, Ctrl+G, Ungroup, CLI `group-assign`).
 
+## Rotation & flip
+
+**(T0232 increment 3a — data model, render, export parity; no interactive gizmo yet.)**
+`element.rotation` (finite degrees; absent/`0` = unrotated) and `element.flipH`/
+`element.flipV` (booleans; stored **absent** when `false`, like `group.clip`) are
+**additive whitelisted fields** on `patchElement`/`patchElements` — no new op. `rotation`
+is validated + normalized to `[0,360)` (a non-finite value is a loud error); `flipH`/
+`flipV` must be real booleans and are **image-only** (a loud error on a `type:"text"`
+element — mirroring pixels makes no sense for a text box). `rotation` itself **is**
+allowed on a text element ("rotates the box"), but **glyph pixel rotation is not yet
+applied** by either renderer in this increment — deferred to avoid touching the live
+auto-width measurement path; only **image** elements get real pixel rotation/flip.
+
+**The parity contract (load-bearing — both renderers MUST agree byte-for-byte on this):**
+the canvas is Y-down image space. `rotation` = **degrees clockwise on screen**, about the
+element's own box **center** `(x+w/2, y+h/2)`. Composition order is **resize → flip →
+rotate → paste centered** (flip is innermost, applied to the pixels first).
+
+- **Canvas** (`site/workspace.js` `paintElement`): translates to the element's screen-
+  space center, applies `ctx.rotate(+theta)` (CW-positive on a Y-down canvas) then
+  `ctx.scale(flipH?-1:1, flipV?-1:1)`, translates back, then draws the image at its
+  ORIGINAL (unrotated) screen box — algebraically identical to drawing in a box centered
+  at the origin, since pan/zoom never rotate (screen space and world space differ only by
+  a similarity transform).
+- **PIL** (`tools/render_group.py` `paint_element`): resizes to the display box, flips
+  (`Image.transpose`), then `image.rotate(-rotation, resample=BICUBIC, expand=True)` — PIL's
+  own angle is **CCW-positive**, so the sign is negated to match the canvas's CW-positive
+  convention. `expand=True` keeps the rotated image's own center at its pre-rotation
+  center, so pasting it centered on the element's box center reproduces "rotate about the
+  box center" exactly.
+- **PIL is the single source of rendered truth**; the canvas is a faithful same-transform
+  approximation (~1px edge-AA drift from differing resample kernels is the declared
+  acceptable gap — same stance as text). Geometry (center, angle, size) is exact by
+  construction on both sides.
+- `ops.buildRenderNodes` forwards `rotation`/`flipH`/`flipV` verbatim on an image paint
+  node (and `rotation` alone, unread by `paint_text`, on a text paint node); a `clip:true`
+  group crops the already-composited rotated pixels with no extra work (rotation/flip
+  happen before the paste, same as any other element).
+- `ops.elementsBBox` (createGroup `fromElements` padding, `fitGroup`) uses the ROTATED
+  footprint (`tree.nodeAABB`/`tree.rotatedCorners`) so a rotated child is never clipped by
+  a freshly-sized or fitted group frame.
+
+**Region ops refuse loudly on a transformed element (R7).** `detectRegions`,
+`sliceRegions`, and `alphaCutout` (single AND batch — the WHOLE batch refuses before any
+element is spawned, atomic) all read the element's **untransformed source pixels**, so
+they throw `element <id> is rotated/flipped — reset rotation/flip to edit regions or
+slice (the source is untransformed)` while `rotation !== 0 || flipH || flipV`
+(`tree.isNodeTransformed`). The page mirrors the same refusal: the inspector grays out
+Detect/Slice/Alpha with the reason, the canvas double-click region-edit entry is blocked
+(a status toast explains why), and the element context menu's "Edit regions" item is
+disabled with the same reason as its title. `setRegions` (hand-editing already-detected
+regions) is **not** guarded — only the four source-pixel entry points are.
+
+**Hit-test / selection stay AABB in this increment.** Every consumer other than
+`elementsBBox` (marquee, `hitElement`/`pointInElement`, the selection outline stroke) is
+**unchanged** — still the plain unrotated `x/y/w/h` box. Rotation-aware hit-testing, the
+rotated selection quad, and the interactive rotate handle are **increment 3b** (the one
+gizmo mode); this increment intentionally ships the parity-hazardous render/export math
+FIRST, proven by a headless test, before any interactive code depends on it.
+
+**Both clients (strict tool parity):** the page's inspector **Rotation** number input +
+**Flip H**/**Flip V** buttons (Position & Size section) and the element context menu's
+"Flip horizontal"/"Flip vertical" all commit through `patchElementBox` → the SAME
+`patchElement` fields the agent sets via `element-set --rotation <deg> --flip-h
+true|false --flip-v true|false` (or `elements-set`'s batched JSON patches) — whatever the
+page can set, the CLI/API can set identically.
+
 ## Journal, undo, and redo
 
 Each project folder has an append-only `journal.jsonl` next to `project.json`.
@@ -976,8 +1045,9 @@ node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--content
 node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
 node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--name "X"] [--visible true|false]
+node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--rotation <deg>] [--flip-h true|false] [--flip-v true|false]   # T0232 3a: rotation = degrees CW about the box center, normalized [0,360); flip is image-only
 node ai_studio/assets/canvas/cli.mjs element-remove <id> --element <eid>
-node ai_studio/assets/canvas/cli.mjs elements-set <id> --json patches.json    # batched patch [{elementId,x?,y?,w?,h?,name?,visible?}]; one undo step
+node ai_studio/assets/canvas/cli.mjs elements-set <id> --json patches.json    # batched patch [{elementId,x?,y?,w?,h?,name?,visible?,rotation?,flipH?,flipV?}]; one undo step
 node ai_studio/assets/canvas/cli.mjs elements-remove <id> --elements e1,e2    # batched delete; one undo step
 node ai_studio/assets/canvas/cli.mjs element-reorder <id> --element <eid> --index <n>   # z-order among merged siblings; 0 = back (clamps)
 node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>          # reorder an element OR group among merged siblings; 0 = back (strict)
@@ -1076,7 +1146,10 @@ one document that swaps two views; the JS is split into focused ES modules under
   immutable` + an ETag (the sha256 filename), since they are content-addressed and
   never rewritten.
 - `inspector.js` — the right panel for the selection: element (name, X/Y/W/H,
-  source size, provenance, meta, and a calm **Regions** section: a count badge,
+  source size, a **Reset to source size** button, a **Rotation** number input + **Flip
+  H**/**Flip V** toggle buttons (T0232 increment 3a — see **Rotation & flip**; Detect/
+  Slice/Alpha gray out with a reason while the element is rotated/flipped), provenance,
+  meta, and a calm **Regions** section: a count badge,
   compact per-region rows — number + name/size + delete, coords in the tooltip —
   that select/enter region-edit on the canvas and inline-rename on double-click,
   plus **Detect**, **Slice** (selected regions, else all), an **Alpha cutout** control (a

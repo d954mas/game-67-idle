@@ -53,11 +53,24 @@ def scaled_len(value: float, scale: float) -> int:
 
 
 def paint_element(out: Image.Image, node: dict[str, Any], origin: tuple[float, float], scale: float) -> None:
-    """Paste one element image onto `out` at its scaled offset (relative to `origin`).
+    """Paste one element image onto `out` at its scaled offset (relative to `origin`),
+    honoring an optional rotation/flip (T0232 increment 3a).
 
     Pasting onto a same-size transparent layer clips negative/overflow offsets to `out`'s
     bounds, then alpha-composites for correct z-order blending — so a clip layer (which is
-    the group's own box size) crops any child that sticks out."""
+    the group's own box size) crops any child that sticks out.
+
+    Rotation/flip parity contract (the ONE thing the canvas's own paintElement must agree
+    with byte-for-byte on the sign/center convention — see README "Rotation & flip"):
+      * composition order is resize -> flip -> rotate -> paste centered (flip innermost).
+      * `rotation` is DEGREES CLOCKWISE ON SCREEN, matching the canvas's `ctx.rotate(+theta)`
+        on a Y-down canvas; PIL's own `Image.rotate()` is CCW-positive, so this negates.
+      * `Image.rotate(angle, expand=True)` returns an image whose OWN center is the original
+        image's (pre-rotation) center — pasting that image so ITS center lands on the
+        element's box center therefore reproduces "rotate about the box center" exactly.
+      * geometry (center/angle/size) is exact by construction; PIL is the single source of
+        rendered truth, so a ~1px edge-AA difference from the canvas's own resample is the
+        declared acceptable approximation (same stance as text rendering)."""
     source = Path(node["src"])
     if not source.exists():
         raise FileNotFoundError(f"element image missing: {source}")
@@ -66,10 +79,17 @@ def paint_element(out: Image.Image, node: dict[str, Any], origin: tuple[float, f
     box_h = scaled_len(node.get("h") or image.height, scale)
     if (image.width, image.height) != (box_w, box_h):
         image = image.resize((box_w, box_h), Image.Resampling.LANCZOS)
-    px = round((float(node.get("x") or 0) - origin[0]) * scale)
-    py = round((float(node.get("y") or 0) - origin[1]) * scale)
+    if node.get("flipH"):
+        image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    if node.get("flipV"):
+        image = image.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
+    rotation = float(node.get("rotation") or 0)
+    if rotation:
+        image = image.rotate(-rotation, resample=Image.Resampling.BICUBIC, expand=True)
+    cx = round((float(node.get("x") or 0) + float(node.get("w") or 0) / 2 - origin[0]) * scale)
+    cy = round((float(node.get("y") or 0) + float(node.get("h") or 0) / 2 - origin[1]) * scale)
     layer = Image.new("RGBA", out.size, (0, 0, 0, 0))
-    layer.paste(image, (px, py), image)
+    layer.paste(image, (cx - image.width // 2, cy - image.height // 2), image)
     out.alpha_composite(layer)
 
 
@@ -87,6 +107,11 @@ def load_font(path: str, size: int) -> Any:
 
 def paint_text(out: Image.Image, node: dict[str, Any], origin: tuple[float, float], scale: float) -> None:
     """Draw a text node's lines onto `out` (an RGBA layer whose (0,0) maps to world `origin`).
+
+    NOTE (T0232 increment 3a): the spec forwards `rotation` on a text node too (a text
+    element's `rotation` field is valid, "rotates the box"), but glyph pixel rotation is
+    NOT yet applied here — deferred to a follow-up increment, scoped out to avoid touching
+    the auto-width live-measurement path. `node.get("rotation")` is intentionally unread.
 
     Parity with the browser canvas (the PIL side is the source of rendered truth):
       * textBaseline top / PIL anchor='la'; per-line origin y = top + i*(fontSize*lineHeight)

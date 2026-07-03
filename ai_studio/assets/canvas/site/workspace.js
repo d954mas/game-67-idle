@@ -66,7 +66,7 @@ import {
   SCALE_HANDLES,
   zoomViewportAt,
 } from "./viewport.mjs";
-import { ancestorsOf, childrenOf, descendantsOf, isNodeHidden, nodeScope, orderedChildren, unionBBox } from "../tree.mjs";
+import { ancestorsOf, childrenOf, descendantsOf, isNodeHidden, isNodeTransformed, nodeScope, orderedChildren, unionBBox } from "../tree.mjs";
 // T0244 smart guides: pure snap math, no DOM (see snap.mjs's own header). Imported here only
 // -- the drag-lifetime precompute + mousemove application + guide overlay all live in this
 // file; ops.mjs/api.mjs/cli.mjs are untouched (snapping commits through the EXISTING ops).
@@ -234,8 +234,31 @@ function paintElement(element, vp, editEl) {
   const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
   const w = element.w * vp.scale;
   const h = element.h * vp.scale;
+  const rotation = Number(element.rotation) || 0;
+  const flipH = element.flipH === true;
+  const flipV = element.flipV === true;
   if (img.complete && img.naturalWidth) {
-    ctx.drawImage(img, origin.x, origin.y, w, h);
+    if (rotation || flipH || flipV) {
+      // T0232 increment 3a — rotation/flip parity contract (must agree byte-for-byte with
+      // render_group.py's paint_element, see README "Rotation & flip"): rotate(+theta) is
+      // CW on this Y-down canvas, about the element's box CENTER; flip mirrors in the same
+      // rotated local frame (composition order resize -> flip -> rotate, flip innermost).
+      // Translating to the SCREEN-space center, applying rotate+scale(flip), then
+      // translating back lets drawImage keep using the ORIGINAL unrotated origin/w/h — pan
+      // and zoom never rotate, so "screen space" and "world space" differ only by a
+      // similarity transform, and this composition is algebraically identical to drawing
+      // the image in a box centered at the origin under the same rotate+flip.
+      const center = imageToScreenPoint({ x: element.x + element.w / 2, y: element.y + element.h / 2 }, vp);
+      ctx.save();
+      ctx.translate(center.x, center.y);
+      if (rotation) ctx.rotate((rotation * Math.PI) / 180);
+      if (flipH || flipV) ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+      ctx.translate(-center.x, -center.y);
+      ctx.drawImage(img, origin.x, origin.y, w, h);
+      ctx.restore();
+    } else {
+      ctx.drawImage(img, origin.x, origin.y, w, h);
+    }
   } else {
     ctx.strokeStyle = "#596774";
     ctx.strokeRect(origin.x, origin.y, w, h);
@@ -244,6 +267,8 @@ function paintElement(element, vp, editEl) {
   if (isSelected(element)) {
     ctx.strokeStyle = isEdit ? "#3fc7ba" : "#77a7ff";
     ctx.lineWidth = 2;
+    // Selection outline stays the unrotated AABB in increment 3a — a rotated-quad outline
+    // + rotation-aware hit-test/handles are increment 3b (the interactive gizmo).
     ctx.strokeRect(origin.x, origin.y, w, h);
     // Passive numbered hint in mode A; strong strokes + handles in mode B.
     drawRegionsOverlay(ctx, element, vp, {
@@ -1860,8 +1885,16 @@ function onDblClick(event) {
   }
   // The click already resolves to the leaf element in the entered scope. Only an
   // image that already HAS regions drills into region-edit; otherwise just select.
+  // R7 (T0232 increment 3a): a rotated/flipped element's regions read UNtransformed
+  // source pixels, so region-edit refuses to open on one (mirrors the inspector's
+  // grayed-out Detect/Slice/Alpha controls + the ops-layer refusal).
   if ((hit.regions || []).length) {
-    enterRegionEdit(hit.id);
+    if (isNodeTransformed(hit)) {
+      setStatus("Reset rotation/flip to edit regions — the source is untransformed.", true);
+      selectOnly(hit.id);
+    } else {
+      enterRegionEdit(hit.id);
+    }
   } else {
     selectOnly(hit.id);
   }

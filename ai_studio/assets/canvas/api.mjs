@@ -39,7 +39,7 @@
 //   GET    /api/canvas/projects/<id>/history
 //   GET    /api/canvas/projects/<id>/history-list
 //   POST   /api/canvas/projects/<id>/history-jump   {seq, expectHead?}
-//   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible}
+//   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible,rotation?,flipH?,flipV?} (T0232 3a: rotation = degrees CW about the box center; flip is image-only)
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/regions {regions}   (replace)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/reorder {index}     (z-order)
 //   POST   /api/canvas/projects/<id>/nodes/<nodeId>/reorder {index}     (z-order: element or group)
