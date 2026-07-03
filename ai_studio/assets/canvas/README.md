@@ -145,6 +145,12 @@ Every capability is one op in `ops.mjs`:
   and an in-source-bounds integer `rect`, while **preserving any extra fields**
   the detector/slicer attach (`content_bbox`, `area_px`, `merged_from`, and any
   future shape field). Journaled, so undo/redo restore the previous regions.
+- `setSlice9({ projectId, elementId, insets })` — **(T0233)** set or clear an image
+  element's 9-slice insets (`insets` an object `{left,top,right,bottom,scale?}` ->
+  validated + stored on `element.slice9`; `insets: null` clears it). Same
+  dedicated-op shape as `setRegions`/`setExportSettings` (not a `patchElement`
+  field): image-only, loud set-time validation, free undo/redo (slice9 rides the
+  elements snapshot). Journaled. See **9-slice elements** below.
 - `createGroup` / `patchGroup` / `fitGroup` / `assignToGroup` / `deleteGroup` — group
   (screen) mutations, journaled; `renderGroup` — composited screen PNG export, not
   journaled. See **Groups = screens** below.
@@ -982,6 +988,86 @@ FIRST, proven by a headless test, before any interactive code depends on it.
 `patchElement` fields the agent sets via `element-set --rotation <deg> --flip-h
 true|false --flip-v true|false` (or `elements-set`'s batched JSON patches) — whatever the
 page can set, the CLI/API can set identically.
+
+## 9-slice elements
+
+**(T0233 — data model, shared math, both renderers, op/API/CLI, inspector UI.)** Lead
+ask (verbatim): «Сделать что-то слайс9 картинкой (чтобы проверить а работает ли
+слайс9)» — give an image element 9-slice insets and prove corners stay a fixed size,
+edges stretch on one axis, and the center stretches both, when the element's box is
+resized (the UI-panel/button use case).
+
+**Model.** `element.slice9 = { left, top, right, bottom, scale? }` — an **additive**
+top-level field beside `regions`/`export` (not `meta`), insets in **source pixels**,
+non-negative integers. Absent = today's plain single-`drawImage`/resize behavior
+everywhere (zero migration). `scale` (lead: «важно чтобы я мог скейлить края, иногда
+мне нужно больше или меньше») is an optional multiplier `> 0`, capped at 16, that
+fattens/thins the DESTINATION corner/edge band **only** — the SOURCE crop never
+changes size — and is stored only when `!= 1` (mirrors the `rotation:0`/`flipH:false`
+absent-is-default convention already used elsewhere in this schema). Image elements
+only — a text element is a loud error (mirrors the flip image-only guard).
+
+**Loud invariant (set-time; mirrors the engine's `nt_sprite_renderer.c:697` check
+`sl+sr < source_w && st+sb < source_h`).** Each inset must be a non-negative integer;
+`left+right` must be `< source_w`; `top+bottom` must be `< source_h`; `scale` (when
+given) must be finite in `(0, 16]`. Any violation throws **before any write**, naming
+the exact numbers (e.g. `slice9 left+right (120) must be < source width 100`).
+
+**Op / API / CLI (strict tool parity).** The dedicated `setSlice9({ projectId,
+elementId, insets })` op — `insets` an object validates + stores; `insets: null`
+clears — the same shape as `setRegions`/`setExportSettings`, **not** a `patchElement`
+field, so the source-dim validation and the null-to-clear stay localized to one op.
+`PUT /api/canvas/projects/<id>/elements/<eid>/slice9 {insets}`. CLI: `slice9-set <id>
+--element <eid> [--left n --top n --right n --bottom n] [--scale n] | --clear`
+(omitted flags **merge** over the element's current slice9, so `--left 30` alone
+bumps just that inset; `--clear` sends `null`). Undo/redo are free — slice9 rides the
+whole `elements` array snapshot `commitMutation` already takes on every op.
+
+**Shared math (parity keystone): one algorithm, two hand-mirrored twins, pinned by a
+golden test.** `ai_studio/assets/canvas/slice9.mjs` (`validateSlice9`/
+`slice9Patches`) and its exact Python twin `ai_studio/assets/canvas/tools/slice9.py`
+(`validate`/`slice9_patches`) both compute the same `<=9` patches
+`{sx,sy,sw,sh,dx,dy,dw,dh}` from the identical proportional-clamp formula (CSS
+border-image style: each inset is scaled first, then clamped so corners never
+overlap when the box is smaller than their sum on an axis; a squished-to-zero band
+is dropped, never emitted negative). `slice9.mjs` is imported by `ops.mjs` (the loud
+set-time gate) **and** served to the page for `site/workspace.js`'s canvas paint —
+one module, two consumers, byte-identical math; `tools/slice9.py` is imported by
+`tools/render_group.py`'s PIL export. `tests/slice9.test.mjs`'s parity golden spawns
+the studio venv Python **once** against a fixture set of `(insets incl. scale, src,
+dst)` cases and asserts `slice9.mjs`'s patches deep-equal `tools/slice9.py`'s patches
+for every case — the two twins are pinned together directly, on top of the
+render-pixel tests that already pin them indirectly (an asymmetric 9-color fixture
+rendered through the real `render_group.py`, sampled per zone).
+
+**Render — composes with rotation/flip for free (T0232).** Both renderers replace the
+single "resize the whole image to the box" step with the 9-patch loop, **inside** the
+same rotate/flip transform each already carries, so a rotated/flipped slice-9 panel
+needs no new code: `site/workspace.js` `paintElement` draws the patches at the
+element's own (unrotated) screen box, inside the existing
+translate→rotate→scale(flip)→translate-back `ctx` wrapper; `tools/render_group.py`
+`paint_element` assembles the sliced `box_w x box_h` image and assigns it **before**
+the existing flip-transpose → `rotate(-rotation, expand=True)` → paste-centered
+chain. Corners are crisp by construction (an integer source crop pastes byte-exact
+onto an integer dst at export scale 1); **PIL stays the single source of rendered
+truth**, the page a same-pixels approximation (~1px edge-drift tolerance, the same
+stance text/rotation already take). Region ops (`detectRegions`/`sliceRegions`/
+`alphaCutout`) read the element's **untransformed source pixels** and never touch
+slice9 — no new guard, no interaction with the T0232 rotation/flip refusal either
+(slice-9 is not added to `isNodeTransformed`).
+
+**Inspector (page).** A collapsible **Slice-9** section — image elements only,
+placed after **Cleanup** and before **Extracted prompts** — shows the source size,
+then Left/Top/Right/Bottom + Scale. Absent slice9: draft fields (prefilled with a
+sensible default — a quarter of the smaller source dimension, floored, capped at
+24px, so the default itself is always a valid call) plus an **Enable** button that
+commits all four insets + scale as **one** `setSlice9`. Present: every field is
+live-bound — a commit per edit, one `setSlice9` per field (a settings tweak, not a
+drag gesture, so a per-field journal entry is fine, the same stance the Position &
+Size X/Y/W/H grid already takes) — plus a **Clear** button (`insets: null`). A
+rejected commit (insets too big for the source, an out-of-range scale) surfaces as
+an error toast, same as every other inspector action; there is no client-side
+re-validation beyond basic number parsing.
 
 ## Journal, undo, and redo
 

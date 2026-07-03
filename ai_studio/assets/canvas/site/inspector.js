@@ -61,6 +61,7 @@ import {
   setGroupClip,
   setGroupsShared,
   setGroupVisible,
+  setSlice9Action,
   sliceRegionsFor,
   toggleElementFlip,
 } from "./actions.js";
@@ -146,11 +147,14 @@ function textareaInput(value, onCommit) {
   return textarea;
 }
 
-function numberInput(value, onCommit) {
+// `step` (optional, T0233) sets the input's step attribute (e.g. 0.1 for the
+// Slice-9 Scale field) — every other caller keeps the browser default (1).
+function numberInput(value, onCommit, { step } = {}) {
   const input = document.createElement("input");
   input.type = "number";
   input.className = "insp-input num";
   input.value = Number(value) || 0;
+  if (step) input.step = String(step);
   const commit = () => {
     const next = Number(input.value);
     if (Number.isFinite(next) && next !== Number(value)) onCommit(next);
@@ -1478,6 +1482,103 @@ function transformBadge(element) {
   return badge;
 }
 
+// ---- Slice-9 (T0233 Packet 2) --------------------------------------------------
+//
+// Image-only inspector section (renderElement is only reached for a non-text
+// element — text goes through renderTextElement instead — so there is no extra
+// type gate here, same convention renderCleanup/renderAlpha already follow).
+// Placed after Cleanup, before Extracted prompts (renderElement below).
+
+const SLICE9_DEFAULT_CAP = 24;
+
+// A sensible starting inset for the "Enable" draft: 1/4 of the smaller source
+// dimension, FLOORED (never rounded up) and capped at 24px, so the default itself
+// is always a valid setSlice9 call no matter how small the source image is —
+// 2*floor(min/4) <= min/2 < min, so left+right/top+bottom always stay under the
+// source dimension, even for a tiny source.
+function defaultSlice9Inset(sourceW, sourceH) {
+  const min = Math.max(0, Math.min(Number(sourceW) || 0, Number(sourceH) || 0));
+  return Math.max(0, Math.min(SLICE9_DEFAULT_CAP, Math.floor(min / 4)));
+}
+
+// Absent element.slice9: four DRAFT number inputs (prefilled with
+// defaultSlice9Inset, NOT yet committed) + a Scale draft (default 1) + an Enable
+// button that commits all five as ONE setSlice9 op (one journal entry). Present:
+// every field is LIVE-bound via the shared numberInput commit-on-change/Enter
+// pattern — each edit is its own setSlice9 op (a settings tweak, not a drag
+// gesture, so a per-field journal entry is fine, same stance boxGrid's X/Y/W/H
+// takes) — plus a Clear button (insets: null). The op's own loud validation
+// (a corner pair that would consume the source axis, an out-of-range scale, a
+// non-image element) surfaces as an error toast via setStatus (setSlice9Action),
+// same as every other action here — no client-side re-validation beyond the
+// basic number parsing numberInput/raw inputs already do.
+function renderSlice9(element, root) {
+  const body = collapsible(root, "slice9", "Slice-9");
+  const sourceW = element.source_w || element.w;
+  const sourceH = element.source_h || element.h;
+  body.appendChild(readOnly("Source", `${sourceW} x ${sourceH}`));
+
+  const slice9 = element.slice9;
+  if (!slice9) {
+    const def = defaultSlice9Inset(sourceW, sourceH);
+    const draftInput = (value, step) => {
+      const input = document.createElement("input");
+      input.type = "number";
+      input.className = "insp-input num";
+      input.value = value;
+      if (step) input.step = String(step);
+      return input;
+    };
+    const left = draftInput(def);
+    const top = draftInput(def);
+    const right = draftInput(def);
+    const bottom = draftInput(def);
+    const scale = draftInput(1, 0.1);
+
+    const grid = document.createElement("div");
+    grid.className = "insp-grid";
+    grid.appendChild(field("Left", left));
+    grid.appendChild(field("Top", top));
+    grid.appendChild(field("Right", right));
+    grid.appendChild(field("Bottom", bottom));
+    body.appendChild(grid);
+    body.appendChild(field("Scale", scale));
+
+    const enableBtn = document.createElement("button");
+    enableBtn.type = "button";
+    enableBtn.className = "primary insp-btn";
+    enableBtn.textContent = "Enable";
+    enableBtn.addEventListener("click", () => {
+      const insets = {
+        left: Number(left.value) || 0,
+        top: Number(top.value) || 0,
+        right: Number(right.value) || 0,
+        bottom: Number(bottom.value) || 0,
+      };
+      const scaleValue = Number(scale.value);
+      if (Number.isFinite(scaleValue) && scaleValue !== 1) insets.scale = scaleValue;
+      setSlice9Action(element.id, insets);
+    });
+    body.appendChild(enableBtn);
+  } else {
+    const commitField = (key, value) => setSlice9Action(element.id, { ...slice9, [key]: value });
+    const grid = document.createElement("div");
+    grid.className = "insp-grid";
+    grid.appendChild(field("Left", numberInput(slice9.left, (v) => commitField("left", v))));
+    grid.appendChild(field("Top", numberInput(slice9.top, (v) => commitField("top", v))));
+    grid.appendChild(field("Right", numberInput(slice9.right, (v) => commitField("right", v))));
+    grid.appendChild(field("Bottom", numberInput(slice9.bottom, (v) => commitField("bottom", v))));
+    body.appendChild(grid);
+    body.appendChild(field("Scale", numberInput(slice9.scale != null ? slice9.scale : 1, (v) => commitField("scale", v), { step: 0.1 })));
+    body.appendChild(smallBtn("Clear slice-9", () => setSlice9Action(element.id, null)));
+  }
+
+  const hint = document.createElement("div");
+  hint.className = "insp-region-hint";
+  hint.textContent = "Corners stay fixed (× scale), edges stretch one axis, center stretches both.";
+  body.appendChild(hint);
+}
+
 // Generation section (T0250): additive, shown only when the element carries a frozen
 // meta.recipe run snapshot ({cardId, engine, at, prompt_snapshot, refs_snapshot,
 // params_snapshot} — minted by generateFromRecipeAction) — same "presence of the
@@ -1657,6 +1758,7 @@ function renderElement(element, root) {
   renderRegions(element, root);
   renderAlpha(element, root);
   renderCleanup(element, root);
+  renderSlice9(element, root);
   renderExtracted(element, root);
   renderGeneration(element, root);
 
@@ -2299,8 +2401,10 @@ function inspectorSig() {
       .join("|");
     // element.export is part of the structure: a row add/remove/edit must rebuild.
     // rotation/flipH/flipV (T0249): the badge + Reset button + flip active-state all
-    // depend on these, so they must rebuild the section too.
-    return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.export || [])}|${JSON.stringify(e.meta || {})}|${e.groupId || ""}|${e.rotation || 0},${e.flipH ? 1 : 0},${e.flipV ? 1 : 0}`;
+    // depend on these, so they must rebuild the section too. element.slice9 (T0233
+    // Packet 2): the Slice-9 section's Enable-vs-live-fields branch + every field's
+    // displayed value depend on it, so an Enable/Clear/field commit must rebuild too.
+    return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.export || [])}|${JSON.stringify(e.slice9 || null)}|${JSON.stringify(e.meta || {})}|${e.groupId || ""}|${e.rotation || 0},${e.flipH ? 1 : 0},${e.flipV ? 1 : 0}`;
   }
   // Group ids that ride along with a loose-element multi-selection are folded in too (the
   // Align row's nodeIds come from the FULL selectedNodeIds(), not just `selected`).

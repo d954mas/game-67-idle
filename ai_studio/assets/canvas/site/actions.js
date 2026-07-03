@@ -627,6 +627,23 @@ export async function deleteRegion(elementId, regionId) {
   }
 }
 
+// ---- slice-9 (T0233 Packet 2) --------------------------------------------------
+
+// Set or clear an image element's 9-slice insets in ONE journaled setSlice9 op — the
+// inspector Slice-9 section's Enable/Clear buttons and its per-field live edits all
+// commit through here (tool parity with the CLI's slice9-set). `insets` an object
+// {left,top,right,bottom,scale?} -> validated + stored on element.slice9;
+// `insets === null` clears the field. The op's loud validation (a corner pair that
+// would consume the source axis, an out-of-range scale, a non-image element)
+// surfaces as an error toast — mirrors setRegionsFor/setExportRows exactly.
+export async function setSlice9Action(elementId, insets) {
+  try {
+    applyMutation(await api("PUT", `/projects/${pid()}/elements/${elementId}/slice9`, { insets }));
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 // ---- export ------------------------------------------------------------------
 
 // Replace an element's Figma-style export rows via the journaled setExportSettings

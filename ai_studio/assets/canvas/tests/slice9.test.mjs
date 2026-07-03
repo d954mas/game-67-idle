@@ -15,7 +15,7 @@
 // is pure/store-level and never touches Python.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -33,6 +33,7 @@ import {
   undoOp,
 } from "../ops.mjs";
 import { slice9Patches, validateSlice9 } from "../slice9.mjs";
+import { runPython } from "../../tools/image/_bridge/bridge.mjs";
 import { decodePng, encodePng } from "./png_fixture.mjs";
 
 // Returns REPO_ROOT (not the temp dir) — renderGroup needs the REAL repo root to
@@ -409,4 +410,93 @@ test("transform composition: a slice9 element with rotation=90 + flipH renders t
     closeColor(actual, ZONE_COLORS[1][1]),
     `expected the MM zone color [${ZONE_COLORS[1][1]}] at the rotation-invariant box center (${cx},${cy}), got [${actual}]`,
   );
+});
+
+// ---- parity golden: slice9.mjs's patches == tools/slice9.py's patches (T0233 -----
+// ---- Packet 2, §7) — pins the two hand-mirrored twins together directly, on top --
+// ---- of the render-pixel proof above (which pins them only indirectly, through ---
+// ---- render_group.py's own separately-written call site). -----------------------
+//
+// Spawns the studio venv Python ONCE (a temp `runpy`-compatible script that imports
+// tools/slice9.py the SAME way render_group.py does — `sys.path` seeded from cwd,
+// which the warm worker sets to REPO_ROOT — and dumps every fixture case's patches
+// as one JSON array) through the SAME bridge/warm-worker path renderGroup already
+// uses above, so this reuses that already-warm process instead of a second cold
+// spawn. Skips cleanly (t.skip) when the studio venv is unavailable, same as every
+// other Python-backed test in this file.
+
+// (insets, srcW, srcH, dstW, dstH) fixtures: symmetric, asymmetric, a dst-clamp
+// case, a zero-area-drop case, scale variants (default/2x/0.5x/large), and the
+// lead's own acceptance-script panel (templates/template/assets/ui/panel.png is
+// 100x100 with 24px insets — see the T0233 design's §5.3 acceptance script).
+const PARITY_GOLDEN_CASES = [
+  { insets: { left: 4, top: 6, right: 10, bottom: 8 }, srcW: 40, srcH: 32, dstW: 100, dstH: 70 },
+  { insets: { left: 0, top: 0, right: 0, bottom: 0 }, srcW: 50, srcH: 50, dstW: 200, dstH: 10 },
+  { insets: { left: 4, top: 2, right: 4, bottom: 2 }, srcW: 20, srcH: 10, dstW: 8, dstH: 10 },
+  { insets: { left: 20, top: 0, right: 10, bottom: 0 }, srcW: 40, srcH: 10, dstW: 12, dstH: 10 },
+  { insets: { left: 4, top: 6, right: 10, bottom: 8, scale: 2 }, srcW: 40, srcH: 32, dstW: 100, dstH: 70 },
+  { insets: { left: 4, top: 6, right: 10, bottom: 8, scale: 0.5 }, srcW: 40, srcH: 32, dstW: 100, dstH: 70 },
+  { insets: { left: 12, top: 40, right: 6, bottom: 3, scale: 4 }, srcW: 64, srcH: 128, dstW: 40, dstH: 500 },
+  { insets: { left: 24, top: 24, right: 24, bottom: 24 }, srcW: 100, srcH: 100, dstW: 600, dstH: 120 },
+];
+
+// A patch's identity for order-independent comparison — both languages iterate the
+// same `for c: for r` nest, so order already agrees, but sorting is a cheap
+// insurance against relying on that incidentally.
+function sortPatches(patches) {
+  return [...patches].sort((a, b) => a.sx - b.sx || a.sy - b.sy);
+}
+
+const PARITY_GOLDEN_PY = `
+import json
+import os
+import sys
+
+# Same import shape render_group.py uses (T0233): cwd is REPO_ROOT (the warm
+# worker's cwd, set from the root this script is invoked with), seeded onto
+# sys.path so the package import below resolves.
+sys.path.insert(0, os.getcwd())
+from ai_studio.assets.canvas.tools.slice9 import slice9_patches
+
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    cases = json.load(fh)
+
+results = []
+for case in cases:
+    results.append(
+        slice9_patches(case["insets"], case["srcW"], case["srcH"], case["dstW"], case["dstH"])
+    )
+
+sys.stdout.write(json.dumps(results))
+`;
+
+test("parity golden: slice9.mjs's slice9Patches == tools/slice9.py's slice9_patches for every fixture case (JS==Python, pinned)", async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-slice9-golden-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const scriptPath = join(dir, "slice9_golden.py");
+  const casesPath = join(dir, "cases.json");
+  writeFileSync(scriptPath, PARITY_GOLDEN_PY, "utf8");
+  writeFileSync(casesPath, JSON.stringify(PARITY_GOLDEN_CASES), "utf8");
+
+  let stdout;
+  try {
+    stdout = await runPython(REPO_ROOT, [scriptPath, casesPath]);
+  } catch (error) {
+    t.skip(`studio Python venv unavailable: ${error.message}`);
+    return;
+  }
+  const pyResults = JSON.parse(stdout);
+  assert.equal(pyResults.length, PARITY_GOLDEN_CASES.length, "one patch list per fixture case");
+
+  PARITY_GOLDEN_CASES.forEach((fixture, i) => {
+    const jsPatches = sortPatches(
+      slice9Patches(fixture.insets, fixture.srcW, fixture.srcH, fixture.dstW, fixture.dstH),
+    );
+    const pyPatches = sortPatches(pyResults[i]);
+    assert.deepEqual(
+      pyPatches,
+      jsPatches,
+      `case ${i} (${JSON.stringify(fixture.insets)}, src ${fixture.srcW}x${fixture.srcH}, dst ${fixture.dstW}x${fixture.dstH}): Python patches must equal JS patches`,
+    );
+  });
 });
