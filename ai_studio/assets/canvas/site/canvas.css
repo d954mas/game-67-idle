@@ -946,6 +946,36 @@ body.layers-resizing {
 
 /* ---- export section ------------------------------------------------------- */
 
+/* Card-level Base [Source | Canvas] segmented control (T0235) — sits ABOVE the export
+   rows, reuses the generic `button`/`button.primary` tokens (same active-state blue as
+   the Export button) rather than inventing new colors. */
+.insp-segmented {
+  display: flex;
+  margin-bottom: 10px;
+}
+
+.insp-seg-btn {
+  flex: 1;
+  border-radius: 0;
+  font-size: 12px;
+  padding: 5px 7px;
+}
+
+.insp-seg-btn:first-child {
+  border-radius: 6px 0 0 6px;
+}
+
+.insp-seg-btn:last-child {
+  border-radius: 0 6px 6px 0;
+  border-left: none; /* one shared 1px seam between the two buttons, not a double line */
+}
+
+/* Dim but still visible/clickable when no row is a multiplier (×) row — reuses the same
+   opacity token as button:disabled, without actually disabling the control. */
+.insp-segmented.dim {
+  opacity: 0.45;
+}
+
 .insp-export-rows {
   display: flex;
   flex-direction: column;
@@ -966,10 +996,13 @@ body.layers-resizing {
   flex-direction: column;
   gap: 6px;
   /* the absolutely-positioned × sits in the row's top-right corner — keep the
-     scale/format fields from stretching underneath it */
+     scale/format fields and the size readout line from stretching underneath it */
   padding-right: 26px;
 }
 
+/* Size control (T0235 redesign): ONE composite line — a number input (typing is
+   primary) + a narrow unit select (×/W/H). The result readout (.insp-size-out) is its
+   OWN full-width line under the field(), never inline/clipped. */
 .insp-size-ctl {
   display: flex;
   gap: 4px;
@@ -978,19 +1011,21 @@ body.layers-resizing {
   min-width: 0;
 }
 
-.insp-size-ctl .insp-input {
-  flex: 1;
+.insp-size-num {
+  flex: 1 1 auto;
   min-width: 0;
 }
 
-.insp-size-mode {
-  flex: 0 1 auto;
+.insp-size-unit {
+  flex: 0 0 auto;
+  width: 44px;
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
-.insp-size-hint {
+.insp-size-out {
   color: var(--muted);
   font-size: 11px;
-  white-space: nowrap;
 }
 
 .insp-export-del {

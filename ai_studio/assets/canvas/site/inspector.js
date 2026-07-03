@@ -394,14 +394,23 @@ function renderRegions(element, root) {
 
 // ---- export (Figma-style rows persisted on the element) ----------------------
 
-const SCALE_PRESETS = ["0.5x", "1x", "2x", "3x", "4x"];
+// Additive multiplier suggestions for the Size number input's datalist — typing is
+// always primary (T0235: two independent UX reviews rated the old preset-select +
+// "Custom…" morph bad); a datalist is a hint the input never depends on.
+const SCALE_VALUE_PRESETS = [0.5, 1, 2, 3, 4];
 const EXPORT_FORMATS = ["png", "jpg", "webp"];
+const EXPORT_BASES = ["source", "canvas"];
 
 // The element's export rows, or the implicit single 1x-png default shown for a
 // layer with no settings yet (matches Figma + the op's default).
 function exportRowsOf(element) {
   const rows = Array.isArray(element.export) ? element.export : [];
   return rows.length ? rows.map((row) => ({ ...row })) : [{ scale: "1x", format: "png", resample: "lanczos" }];
+}
+
+// A row's effective base ("source" is the default/absent value — mirrors ops.mjs).
+function rowBase(row) {
+  return row && row.base === "canvas" ? "canvas" : "source";
 }
 
 function selectInput(value, options, onCommit) {
@@ -418,13 +427,8 @@ function selectInput(value, options, onCommit) {
   return select;
 }
 
-// Export size control (lead's spec 2026-07-03): a MODE switch Scale | W px | H px,
-// a value field per mode, and the computed result size ("→ 2048×1536") so the
-// source-pixel semantics are visible at a glance. Scale mode = preset select
-// (0.5x…4x) + "Custom…" for a free fractional multiplier; W/H modes = a pixel
-// number. All three write the same stored token ("0.75x"/"512w"/"512h") — the op
-// layer is untouched. Switching modes converts the current setting to the
-// EQUIVALENT token against the source pixels, so the output size never jumps.
+// Scale-token parser (mirrors ops.mjs parseScaleSpec; kept trivially small — the op
+// stays the authority, this only feeds the UI's live readout + unit conversion).
 function parseScaleToken(token) {
   const text = String(token == null ? "" : token).trim().toLowerCase();
   let match = /^(\d+(?:\.\d+)?)x?$/.exec(text);
@@ -434,8 +438,9 @@ function parseScaleToken(token) {
   return { kind: "mul", value: 1 }; // unparseable: display as 1x, ops will complain on commit
 }
 
-// Mirror of ops.mjs resolveExportScale (kept trivially small; the op stays the
-// authority — this only feeds the UI hint and mode conversion).
+// Mirror of ops.mjs resolveExportScale. `sw`/`sh` are the row's BASE dims (T0235):
+// the caller picks source_w/h or the live element w/h before calling this — the
+// function itself stays base-agnostic, just like the op.
 function resolveScaleToken(spec, sw, sh) {
   if (!(sw > 0) || !(sh > 0)) return null;
   if (spec.kind === "mul") return { w: Math.max(1, Math.round(sw * spec.value)), h: Math.max(1, Math.round(sh * spec.value)) };
@@ -443,92 +448,175 @@ function resolveScaleToken(spec, sw, sh) {
   return { w: Math.max(1, Math.round(sw * (spec.value / sh))), h: Math.max(1, Math.round(spec.value)) };
 }
 
+// Export Size control (T0235 redesign — synthesized from two independent UX reviews
+// that rated the old mode-select + preset-select + "Custom…" morph bad). ONE composite
+// line: [number][unit ×|W|H]. Typing is primary; the unit select is LOCAL UI-only state
+// that converts the DISPLAYED number to the output-equivalent when switched — it commits
+// nothing by itself ("unit browsing = zero journal entries"). A commit fires once a value
+// SETTLES (Enter / the number's native `change` / focusout of the whole composite), and
+// only when the resolved output pixels actually differ from what's currently stored — so
+// a plain unit switch (same output, different token string) never writes anything either.
+// Returns { control, out }: `control` is the composite line for the field() row; `out` is
+// the separate full-width result-readout line the caller mounts under it.
 function scaleInput(element, row, commit) {
-  const sw = Number(element.source_w) || Number(element.w) || 0;
-  const sh = Number(element.source_h) || Number(element.h) || 0;
-  const current = parseScaleToken(row.scale == null ? "1x" : row.scale);
-  const resolved = resolveScaleToken(current, sw, sh);
+  // The row's BASE dims (T0235): "canvas" resolves against the element's CURRENT
+  // on-canvas size; "source" (default) against the original source pixels — same
+  // dims ops.mjs's exportElements picks at export time.
+  const sw = rowBase(row) === "canvas" ? Number(element.w) || 0 : Number(element.source_w) || Number(element.w) || 0;
+  const sh = rowBase(row) === "canvas" ? Number(element.h) || 0 : Number(element.source_h) || Number(element.h) || 0;
+  const storedSpec = parseScaleToken(row.scale == null ? "1x" : row.scale);
+  const storedResolved = resolveScaleToken(storedSpec, sw, sh);
 
-  const wrap = document.createElement("div");
-  wrap.className = "insp-size-ctl";
+  let unit = storedSpec.kind; // "mul" | "w" | "h" — LOCAL UI-only state
+  let value = storedSpec.value; // the number shown, in the CURRENT unit
+  let lastSettledDims = storedResolved; // dedupes a same-gesture double-fire (change + focusout)
 
-  // Mode switch. Changing it commits the EQUIVALENT token (same output pixels).
-  const mode = document.createElement("select");
-  mode.className = "insp-input insp-size-mode";
-  for (const [value, label] of [["mul", "Scale"], ["w", "W px"], ["h", "H px"]]) {
+  const control = document.createElement("div");
+  control.className = "insp-size-ctl";
+
+  const number = document.createElement("input");
+  number.type = "number";
+  number.step = "any";
+  number.min = "0";
+  number.className = "insp-input insp-size-num";
+
+  const listId = `insp-size-presets-${Math.random().toString(36).slice(2, 8)}`;
+  const datalist = document.createElement("datalist");
+  datalist.id = listId;
+
+  const unitSelect = document.createElement("select");
+  unitSelect.className = "insp-input insp-size-unit";
+  for (const [key, label] of [["mul", "×"], ["w", "W"], ["h", "H"]]) {
     const option = document.createElement("option");
-    option.value = value;
+    option.value = key;
     option.textContent = label;
-    if (value === current.kind) option.selected = true;
-    mode.appendChild(option);
+    unitSelect.appendChild(option);
   }
-  mode.addEventListener("change", () => {
-    const target = mode.value;
-    if (target === current.kind) return;
-    if (target === "w") commit({ scale: `${resolved ? resolved.w : 512}w` });
-    else if (target === "h") commit({ scale: `${resolved ? resolved.h : 512}h` });
-    else {
-      const value = resolved && sw > 0 ? Math.round((resolved.w / sw) * 10000) / 10000 : 1;
-      commit({ scale: `${value}x` });
-    }
-  });
-  wrap.appendChild(mode);
 
-  const mount = (node) => {
-    wrap.insertBefore(node, hint);
+  const out = document.createElement("div");
+  out.className = "insp-size-out";
+
+  const specNow = () => ({ kind: unit, value });
+  const resolvedNow = () => resolveScaleToken(specNow(), sw, sh);
+  const tokenNow = () => (unit === "mul" ? `${value}x` : `${Math.max(1, Math.round(value))}${unit}`);
+
+  const syncOut = (dims) => {
+    out.textContent = dims ? `= ${dims.w} × ${dims.h} px` : "";
+  };
+  const syncDatalist = () => {
+    datalist.replaceChildren();
+    if (unit !== "mul") return; // pixel presets aren't meaningful for a fixed W/H target
+    for (const preset of SCALE_VALUE_PRESETS) {
+      const option = document.createElement("option");
+      option.value = String(preset);
+      datalist.appendChild(option);
+    }
   };
 
-  // Result-size hint: makes "scale multiplies the SOURCE pixels" visible.
-  const hint = document.createElement("span");
-  hint.className = "insp-size-hint";
-  hint.textContent = resolved ? `→ ${resolved.w}×${resolved.h}` : "";
-  wrap.appendChild(hint);
+  number.value = String(value);
+  number.setAttribute("list", listId);
+  unitSelect.value = unit;
+  syncDatalist();
+  syncOut(storedResolved);
 
-  if (current.kind === "mul") {
-    const token = `${current.value}x`;
-    const values = SCALE_PRESETS.includes(token) ? [...SCALE_PRESETS] : [token, ...SCALE_PRESETS];
-    const select = document.createElement("select");
-    select.className = "insp-input";
-    for (const value of values) {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = value;
-      if (value === token) option.selected = true;
-      select.appendChild(option);
+  // Unit switch: LOCAL state only. Converts the DISPLAYED number to the output-equivalent
+  // (same pixels, different token) — commits nothing.
+  unitSelect.addEventListener("change", () => {
+    const nextUnit = unitSelect.value;
+    if (nextUnit === unit) return;
+    const dims = resolvedNow(); // current output under the OLD unit/value
+    if (dims) {
+      if (nextUnit === "mul") value = sw > 0 ? Math.round((dims.w / sw) * 10000) / 10000 : value;
+      else if (nextUnit === "w") value = dims.w;
+      else value = dims.h;
     }
-    const custom = document.createElement("option");
-    custom.value = "__custom";
-    custom.textContent = "Custom…";
-    select.appendChild(custom);
-    select.addEventListener("change", () => {
-      if (select.value !== "__custom") {
-        commit({ scale: select.value });
-        return;
-      }
-      // Free fractional multiplier (0.75 → "0.75x"). Committed edits rebuild the
-      // panel; an aborted edit (Esc / blur, no change) falls back to the select.
-      const input = numberInput(current.value, (value) => commit({ scale: `${value}x` }));
-      input.step = "any";
-      input.min = "0";
-      input.addEventListener("blur", () => {
-        if (wrap.contains(input)) {
-          wrap.removeChild(input);
-          mount(select);
-        }
-      });
-      wrap.removeChild(select);
-      mount(input);
-      input.focus();
-      input.select();
-    });
-    mount(select);
+    unit = nextUnit;
+    number.value = String(value);
+    syncDatalist();
+    syncOut(resolvedNow());
+  });
+
+  number.addEventListener("input", () => {
+    const raw = Number(number.value);
+    if (Number.isFinite(raw) && raw > 0) {
+      value = raw;
+      syncOut(resolvedNow());
+    } else {
+      syncOut(null);
+    }
+  });
+
+  // Settle: fires the ONE commit for this gesture, and only when the resolved output
+  // pixels differ from what's already stored (a pure unit switch/re-display never
+  // qualifies — "unit browsing = zero entries"). `lastSettledDims` also dedupes the
+  // synchronous double-fire from `change` immediately followed by `focusout`.
+  const settle = () => {
+    const dims = resolvedNow();
+    if (!dims || !Number.isFinite(value) || !(value > 0)) return;
+    if (lastSettledDims && dims.w === lastSettledDims.w && dims.h === lastSettledDims.h) return;
+    lastSettledDims = dims;
+    commit({ scale: tokenNow() });
+  };
+
+  number.addEventListener("change", settle);
+  number.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      settle();
+      number.blur();
+      focusStage();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      unit = storedSpec.kind;
+      value = storedSpec.value;
+      number.value = String(value);
+      unitSelect.value = unit;
+      syncDatalist();
+      syncOut(storedResolved);
+      number.blur();
+      focusStage();
+    }
+  });
+  // Focusout of the WHOLE composite (not just tabbing between the number and the unit
+  // select — that stays internal) is the third settle point.
+  control.addEventListener("focusout", (event) => {
+    if (control.contains(event.relatedTarget)) return;
+    settle();
+  });
+
+  control.append(number, unitSelect, datalist);
+  return { control, out };
+}
+
+// Export base — card-level segmented [Source | Canvas] (T0235; NOT per row). Reflects
+// the rows' current base (mixed rows -> majority, ties -> the first row's value) and
+// writes the clicked value to EVERY row in ONE setExportRows call (one journal entry).
+// Dimmed (still visible/clickable) when no row is a multiplier (×) — a fixed W/H row's
+// PRIMARY axis ignores base, so the toggle has little to show for itself there.
+function baseSegmented(element, rows) {
+  const counts = { source: 0, canvas: 0 };
+  for (const row of rows) counts[rowBase(row)] += 1;
+  const active = counts.canvas > counts.source ? "canvas" : counts.source > counts.canvas ? "source" : rowBase(rows[0]);
+  const hasMultiplierRow = rows.some((row) => parseScaleToken(row.scale == null ? "1x" : row.scale).kind === "mul");
+
+  const wrap = document.createElement("div");
+  wrap.className = "insp-segmented";
+  if (!hasMultiplierRow) {
+    wrap.classList.add("dim");
+    wrap.title = "Base only matters for a multiplier (×) row — every row here targets a fixed W/H";
   } else {
-    const input = numberInput(current.value, (value) => {
-      const px = Math.max(1, Math.round(value));
-      commit({ scale: `${px}${current.kind}` });
+    wrap.title = "Export at the source image's pixels, or at the element's current on-canvas size";
+  }
+  for (const value of EXPORT_BASES) {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = value === active ? "insp-seg-btn primary" : "insp-seg-btn";
+    button.textContent = value === "source" ? "Source" : "Canvas";
+    button.addEventListener("click", () => {
+      if (value === active) return;
+      setExportRows(element.id, rows.map((row) => ({ ...row, base: value })));
     });
-    input.min = "1";
-    mount(input);
+    wrap.appendChild(button);
   }
   return wrap;
 }
@@ -551,7 +639,9 @@ function exportRowNode(element, rows, index) {
 
   const head = document.createElement("div");
   head.className = "insp-export-head";
-  head.appendChild(field("Size", scaleInput(element, row, commit)));
+  const size = scaleInput(element, row, commit);
+  head.appendChild(field("Size", size.control));
+  head.appendChild(size.out);
   head.appendChild(field("Format", selectInput(row.format || "png", EXPORT_FORMATS, (value) => commit({ format: value }))));
   wrap.appendChild(head);
 
@@ -591,13 +681,16 @@ function exportRowNode(element, rows, index) {
   return wrap;
 }
 
-// The Export section at the BOTTOM of the inspector: a list of rows, "+ Add export
-// setting", and an Export button labeled by the target. Edits persist per element
-// through setExportSettings (journaled/undoable). The destination is chosen in the
-// save-file dialog at export time (T0229), so there is no destination hint line.
+// The Export section at the BOTTOM of the inspector: the card-level Base toggle, a list
+// of rows, "+ Add export setting", and an Export button labeled by the target. Edits
+// persist per element through setExportSettings (journaled/undoable). The destination is
+// chosen in the save-file dialog at export time (T0229), so there is no destination hint
+// line.
 function renderExport(element, root) {
   const rows = exportRowsOf(element);
   const body = collapsible(root, "export", "Export");
+
+  body.appendChild(baseSegmented(element, rows));
 
   const list = document.createElement("div");
   list.className = "insp-export-rows";

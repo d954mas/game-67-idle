@@ -865,15 +865,21 @@ export function setRegions(root, { projectId, elementId, regions } = {}) {
 // ---- per-element export settings (Figma-style rows) --------------------------
 //
 // An element carries an optional `export` array of rows
-// [{scale, format, quality?, resample}] — the Figma Export section persisted on the
-// layer (T0229 removed the per-row suffix; file names are automatic at export time).
+// [{scale, format, quality?, resample, base?}] — the Figma Export section persisted on
+// the layer (T0229 removed the per-row suffix; file names are automatic at export time;
+// T0235 added the additive `base` field: "source" (default, absent) or "canvas").
 // setExportSettings validates + normalizes the rows and journals them
 // like any metadata mutation (undo/redo restore the previous rows). The scale math
 // (resolveExportScale) also runs at export time; validated here so an unknown
-// scale/format/resample is a clear error the moment it is set, from either client.
+// scale/format/resample/base is a clear error the moment it is set, from either client.
 
 const EXPORT_FORMATS = new Set(["png", "jpg", "webp"]);
 const EXPORT_RESAMPLE = new Set(["lanczos", "nearest"]);
+// T0235: export base — which dims a row's scale token resolves against. "source" (the
+// default, stored as an ABSENT field to keep old rows/JSON untouched) resolves against
+// the element's original source pixels (source_w/h); "canvas" resolves against the
+// element's CURRENT on-canvas w/h at export time (tracks later resizes).
+const EXPORT_BASES = new Set(["source", "canvas"]);
 const MAX_EXPORT_DIM = 16384;
 // T0229: the per-row filename suffix was removed — file naming is now automatic
 // (element/screen name + a Figma-style scale marker only when several rows would
@@ -927,9 +933,11 @@ export function resolveExportScale(token, srcW, srcH) {
   return { width, height };
 }
 
-// Validate + normalize export rows to {scale, format, resample, quality?}.
+// Validate + normalize export rows to {scale, format, resample, quality?, base?}.
 // quality (1-100) is kept only for the lossy formats (jpg/webp), defaulting to 90;
-// a png row never carries a quality. Throws on any invalid field.
+// a png row never carries a quality. base (T0235) is kept ONLY when it resolves to
+// "canvas" — the default "source" (absent or explicit) is dropped so stored JSON stays
+// minimal and old rows are untouched. Throws on any invalid field.
 //
 // Suffix (T0229): the field is GONE. `rejectSuffix` splits the two callers by the
 // additive-schema stance: setExportSettings (a NEW WRITE) rejects any row carrying a
@@ -960,6 +968,13 @@ function cleanExportRows(rows, { rejectSuffix = false } = {}) {
       const raw = row.quality === undefined || row.quality === null || row.quality === "" ? 90 : Number(row.quality);
       if (!Number.isFinite(raw)) throw new Error(`export row ${index} quality must be a number 1-100`);
       clean.quality = Math.max(1, Math.min(100, Math.round(raw)));
+    }
+    if (row.base !== undefined && row.base !== null && row.base !== "") {
+      const base = String(row.base).trim().toLowerCase();
+      if (!EXPORT_BASES.has(base)) {
+        throw new Error(`export row ${index} base must be source/canvas, got ${JSON.stringify(row.base)}`);
+      }
+      if (base === "canvas") clean.base = base; // "source" is the default: omit, keep JSON minimal
     }
     return clean;
   });
@@ -2603,15 +2618,19 @@ function formatExt(format) {
   return format; // png -> png, jpg -> jpg, webp -> webp (already normalized)
 }
 
-// Figma-style scale marker for an export file name (T0229 replaces the manual suffix).
-// A 1x multiplier is the baseline -> no marker (clean "name.png"); any other scale gets
-// "@<token>" (e.g. "@2x", "@0.5x", "@512w"). Only applied when an element has SEVERAL
-// rows (a single row is always the clean base name); the tokens are filename-safe
-// (digits, "x"/"w"/"h", "." and "@"), so they never escape the confined export folder.
-function scaleMarker(scaleToken) {
+// Figma-style scale marker for an export file name (T0229 replaces the manual suffix;
+// T0235 adds the "-canvas" base tag). A 1x SOURCE-base multiplier is the baseline -> no
+// marker (clean "name.png"); any other scale gets "@<token>" (e.g. "@2x", "@0.5x",
+// "@512w"). A CANVAS-base row always gets a marker, even at 1x ("@1x-canvas"), because
+// the source-base 1x row already claims the unmarked baseline name — a canvas-base row
+// must never collide with it. Only applied when an element has SEVERAL rows (a single
+// row is always the clean base name); the tokens are filename-safe (digits, "x"/"w"/"h",
+// "." and "@"), so they never escape the confined export folder.
+function scaleMarker(scaleToken, base) {
   const spec = parseScaleSpec(scaleToken);
-  if (spec.kind === "mul" && spec.value === 1) return "";
-  return `@${spec.token}`;
+  const isCanvas = base === "canvas";
+  if (spec.kind === "mul" && spec.value === 1 && !isCanvas) return "";
+  return isCanvas ? `@${spec.token}-canvas` : `@${spec.token}`;
 }
 
 // The rows an element exports with: its persisted export settings, an explicit
@@ -2623,6 +2642,21 @@ function rowsForElement(element, overrideRows) {
   return [DEFAULT_EXPORT_ROW];
 }
 
+// The element's on-canvas size (Math.round(w)/Math.round(h)) for a "canvas"-base export
+// row (T0235) — the CURRENT size on the canvas at export time, not frozen into the row's
+// scale token, so a later resize is picked up automatically. Loud when either dimension
+// is missing or rounds to zero: a canvas-base row can't resolve without real geometry.
+function canvasDimsFor(element) {
+  const w = Math.round(Number(element.w));
+  const h = Math.round(Number(element.h));
+  if (!(w > 0) || !(h > 0)) {
+    throw new Error(
+      `element ${element.id} (${element.name || element.id}) has no on-canvas size for a "canvas" base export row (w=${element.w}, h=${element.h})`,
+    );
+  }
+  return { w, h };
+}
+
 // Export selected elements to <project>/export/<utc-stamp>/, one file per element x
 // export row, plus a manifest.json. Each row scales (resolveExportScale) + encodes
 // (png/jpg/webp with quality/resample) via ONE Python spawn for the whole batch
@@ -2632,6 +2666,9 @@ function rowsForElement(element, overrideRows) {
 // NOT journaled/undoable; it only records a tool_runs entry. `rows`, when given,
 // overrides every element's settings for this one run (agent one-shots / the CLI's
 // inline --scale/--format flags); omit it to honor each element's persisted rows.
+// Each row's base (T0235, default "source") picks which dims its scale token resolves
+// against: "source" -> the element's original source_w/h (unchanged v1 behavior);
+// "canvas" -> the element's CURRENT on-canvas w/h (canvasDimsFor).
 export async function exportElements(root, { projectId, elementIds, rows } = {}) {
   if (!projectId) throw new Error("exportElements requires projectId");
   const project = getProject(root, projectId);
@@ -2676,8 +2713,9 @@ export async function exportElements(root, { projectId, elementIds, rows } = {})
     const multiRow = elementRows.length > 1;
 
     for (const row of elementRows) {
-      const { width, height } = resolveExportScale(row.scale, sourceW, sourceH);
-      const marker = multiRow ? scaleMarker(row.scale) : "";
+      const baseDims = row.base === "canvas" ? canvasDimsFor(element) : { w: sourceW, h: sourceH };
+      const { width, height } = resolveExportScale(row.scale, baseDims.w, baseDims.h);
+      const marker = multiRow ? scaleMarker(row.scale, row.base) : "";
       let file = `${base}${marker}.${formatExt(row.format)}`;
       let counter = 2;
       while (used.has(file)) {
@@ -2686,6 +2724,9 @@ export async function exportElements(root, { projectId, elementIds, rows } = {})
       }
       used.add(file);
       const outAbs = resolveProjectPath(root, projectId, "export", stamp, file);
+      // needsResize/pureCopy compare against the SOURCE FILE's actual pixels (sourceW/H,
+      // not baseDims) — that decides whether the on-disk bytes can be copied verbatim,
+      // regardless of which base the row's target dims were resolved against.
       const needsResize = width !== sourceW || height !== sourceH;
       const pureCopy = !needsResize && row.format === "png" && srcFmt === "png";
 
@@ -2695,6 +2736,7 @@ export async function exportElements(root, { projectId, elementIds, rows } = {})
         file,
         src: element.src,
         scale: row.scale,
+        base: row.base === "canvas" ? "canvas" : "source",
         format: row.format,
         resample: row.resample,
         w: width,
