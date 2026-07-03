@@ -1,7 +1,7 @@
 ---
 id: T0238
 title: "Canvas: auto dual-plate generation flow - generate pair, gate, cut, plates in meta"
-status: todo
+status: doing
 project: P001
 epic: E010
 priority: P1
@@ -61,3 +61,4 @@ later. Placement decision 1 (hybrid) collapses to "beside the source".
 - 2026-07-03: created; design settled with lead in one-by-one discussion.
   Depends on T0237 (pair op = engine); inspector part waits for inspector.js
   to free up.
+- 2026-07-03: Fast-worker launched: auto dual-plate flow (element = light plate, generated dark via codex edit seam, gate w/ 1 retry incl. T0243 align, plates in meta, cut beside source).
