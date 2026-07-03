@@ -1,7 +1,7 @@
 ---
 id: T0229
 title: "Canvas export: save-file dialog with name (single) / zip archive (multi), drop suffix"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
@@ -65,3 +65,4 @@ unchanged), no silent fallbacks, non-destructive. The
   - **Item 3 — suffix removed + automatic naming.** `cleanExportRows(rows, {rejectSuffix})`: `setExportSettings` passes `rejectSuffix:true` → any row carrying a `suffix` field (even "") is rejected LOUDLY; the export readers (rowsForElement / override rows) leave it false and simply DROP a legacy stored suffix (no write-back). **Naming rule** (documented): base = slug(element/screen name); a SINGLE row = clean `name.<ext>`; SEVERAL rows on one element get a Figma **scale marker** — `1x` → "" (stays clean), else `@<token>` (`@2x`, `@0.5x`, `@512w`); any remaining collision (same scale+format twice, or two elements sharing a name) gets a deterministic numeric `_NN` against the run-wide used-set (order-stable).
   - **Item 4 — directory-picker path removed.** `export_dest.mjs` rewritten (no IndexedDB, no `showDirectoryPicker`, no `writeFilesToDir`/`pickDestination`/`lastDestinationName`); `inspector.js` drops the Suffix column, the destination-hint line + its 3 call sites, and the now-unused `textInput` `allowEmpty` opt-out; dead `.insp-export-dest` CSS removed.
   - **Parity / laws.** CLI `export --to <dir>` and the confined `<project>/export/<stamp>/` default UNCHANGED; added optional `--zip <path>` (same `zipExport` archive) for parity; `--suffix` flag removed. Export runs stay un-journaled. No silent fallbacks. Files touched: `ops.mjs`, `api.mjs`, `cli.mjs`, `zip.mjs` (new), `site/{export_dest.mjs, actions.js, inspector.js, canvas.css}`, `tests/{export.test.mjs, zip.test.mjs (new)}`, architecture map, canvas README.
+- 2026-07-03: lead accepted live 2026-07-03: single-image save dialog + multi ZIP both work
