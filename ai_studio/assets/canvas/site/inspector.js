@@ -629,6 +629,44 @@ function renderAlphaPlates(element, root) {
   root.appendChild(wrap);
 }
 
+// T0207 UX (lead 2026-07-04 «я бы хотел видеть сколько сейчас цветов»): the element's CURRENT
+// unique-color count, computed client-side from the source bitmap with the SAME definition as
+// quantize.py's _count_unique_colors (unique RGB triples over ALL pixels, alpha ignored,
+// capped) so this number and the preview report's palette_size_before can never disagree.
+// Cached by content-addressed src — the src IS the pixels, so the cache cannot go stale.
+const paletteCountCache = new Map(); // element.src -> Promise<number>
+const PALETTE_COUNT_CAP = 100000; // mirrors quantize.py UNIQUE_COLOR_CAP
+
+function countElementColors(element) {
+  const key = element.src;
+  if (!paletteCountCache.has(key)) {
+    paletteCountCache.set(key, new Promise((resolveCount, rejectCount) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const cv = document.createElement("canvas");
+          cv.width = img.naturalWidth;
+          cv.height = img.naturalHeight;
+          const c2 = cv.getContext("2d", { willReadFrequently: true });
+          c2.drawImage(img, 0, 0);
+          const data = c2.getImageData(0, 0, cv.width, cv.height).data;
+          const seen = new Set();
+          for (let i = 0; i < data.length; i += 4) {
+            seen.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
+            if (seen.size >= PALETTE_COUNT_CAP) break;
+          }
+          resolveCount(seen.size);
+        } catch (error) {
+          rejectCount(error);
+        }
+      };
+      img.onerror = () => rejectCount(new Error(`could not load ${element.src} to count colors`));
+      img.src = fileUrl(element);
+    }));
+  }
+  return paletteCountCache.get(key);
+}
+
 // Cleanup section (T0207 — lead: NOT one monolithic "Clean up" button; a small section of
 // TWO separate interactive tools, Quantize and Denoise, each with its own controls and a
 // LIVE on-canvas preview recomputed debounced (~350ms) as the controls change — nothing is
@@ -688,8 +726,35 @@ function renderCleanup(element, root) {
   // ---- Quantize --------------------------------------------------------------
   const quantizeCaption = document.createElement("div");
   quantizeCaption.className = "insp-align-caption";
-  quantizeCaption.textContent = "Quantize";
+  quantizeCaption.textContent = "Quantize (reduce palette)";
   body.appendChild(quantizeCaption);
+
+  // Current palette size + the slider SEEDED from it (lead: «ползунок от текущего
+  // значения») — dragging left = fewer colors, and the number finally answers "does
+  // quantize even have anything to do here". Async once per src (cached above); seeding
+  // only happens while the control still shows the untouched default and no preview is
+  // live — never fights a value the lead already set.
+  const paletteLine = document.createElement("div");
+  paletteLine.className = "insp-cleanup-report";
+  paletteLine.textContent = "Current palette: counting…";
+  body.appendChild(paletteLine);
+  countElementColors(element)
+    .then((count) => {
+      if (!paletteLine.isConnected) return; // section rebuilt/collapsed meanwhile
+      paletteLine.textContent = count >= PALETTE_COUNT_CAP
+        ? `Current palette: ${PALETTE_COUNT_CAP.toLocaleString()}+ colors`
+        : `Current palette: ${count} colors`;
+      const preview = getCleanupPreview();
+      const untouched = quantizeNum.value === "32" && !(preview && preview.elementId === element.id);
+      if (untouched) {
+        const seeded = Math.min(256, Math.max(2, count));
+        quantizeNum.value = String(seeded);
+        quantizeRange.value = String(seeded);
+      }
+    })
+    .catch(() => {
+      if (paletteLine.isConnected) paletteLine.textContent = "Current palette: unavailable";
+    });
 
   const quantizeRow = document.createElement("div");
   quantizeRow.className = "insp-cleanup-row";
@@ -729,7 +794,7 @@ function renderCleanup(element, root) {
   // ---- Denoise -----------------------------------------------------------------
   const denoiseCaption = document.createElement("div");
   denoiseCaption.className = "insp-align-caption";
-  denoiseCaption.textContent = "Denoise";
+  denoiseCaption.textContent = "Denoise (remove speckle)";
   body.appendChild(denoiseCaption);
 
   const denoiseRow = document.createElement("div");
