@@ -29,25 +29,27 @@ function chunk(type, data) {
   return Buffer.concat([length, body, crc]);
 }
 
-// pixel(x, y) => [r, g, b]
-export function encodePng(width, height, pixel) {
+// pixel(x, y) => [r, g, b] (RGB) or [r, g, b, a] with {alpha: true} (RGBA)
+export function encodePng(width, height, pixel, { alpha = false } = {}) {
   const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const channels = alpha ? 4 : 3;
   const ihdr = Buffer.alloc(13);
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8; // bit depth
-  ihdr[9] = 2; // color type: truecolor RGB
-  const raw = Buffer.alloc(height * (1 + width * 3));
+  ihdr[9] = alpha ? 6 : 2; // color type: truecolor / truecolor+alpha
+  const raw = Buffer.alloc(height * (1 + width * channels));
   let p = 0;
   for (let y = 0; y < height; y += 1) {
     raw[p] = 0; // filter type: none
     p += 1;
     for (let x = 0; x < width; x += 1) {
-      const [r, g, b] = pixel(x, y);
-      raw[p] = r;
-      raw[p + 1] = g;
-      raw[p + 2] = b;
-      p += 3;
+      const value = pixel(x, y);
+      raw[p] = value[0];
+      raw[p + 1] = value[1];
+      raw[p + 2] = value[2];
+      if (alpha) raw[p + 3] = value.length > 3 ? value[3] : 255;
+      p += channels;
     }
   }
   const idat = deflateSync(raw);
@@ -84,6 +86,23 @@ export function magentaSheetPng() {
 export function softGlowPng() {
   return encodePng(64, 48, (x, y) =>
     x >= 16 && x < 48 && y >= 12 && y < 36 ? [255, 40, 255] : [255, 0, 255],
+  );
+}
+
+// A 64x48 polygon-sliced crop lookalike: magenta background + red blob like
+// magentaSheetPng, but the top-left corner is a HIDDEN orange chunk (alpha 0 with
+// bright RGB garbage underneath) — exactly what crop_regions leaves outside the
+// polygon. The alpha op must neither resurrect it nor let it skew the key estimate.
+export function slicedCropPng() {
+  return encodePng(
+    64,
+    48,
+    (x, y) => {
+      if (x < 20 && y < 16) return [234, 175, 98, 0]; // hidden garbage (neighbour sprite)
+      if (x >= 24 && x < 44 && y >= 16 && y < 36) return [220, 40, 40, 255]; // subject blob
+      return [255, 0, 255, 255]; // magenta key background
+    },
+    { alpha: true },
   );
 }
 

@@ -17,7 +17,7 @@ import { fileURLToPath, URL } from "node:url";
 import { addImage, addText, alphaCutout, createProject, getProject, setRegions, undoOp, redoOp } from "../ops.mjs";
 import { resolveProjectFile } from "../store.mjs";
 import { createCanvasApi } from "../api.mjs";
-import { magentaSheetPng, softGlowPng } from "./png_fixture.mjs";
+import { magentaSheetPng, slicedCropPng, softGlowPng } from "./png_fixture.mjs";
 import { decodePng } from "./png_fixture.mjs";
 
 // Python tools run with cwd = repo root, so the pipeline tests must use the real root.
@@ -189,6 +189,33 @@ test("alphaCutout (auto) refuses soft art with a CLEAN message — no Python tra
   // The refusal changed nothing: same src, no alpha meta, nothing to undo.
   const after = getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id);
   assert.deepEqual(after, original, "element untouched after a refusal");
+});
+
+test("alphaCutout never resurrects pixels hidden by a polygon slice", async (t) => {
+  tempProjects(t);
+  // slicedCropPng: hidden orange garbage (alpha 0) in the top-left corner, like the
+  // RGB a polygon slice leaves under transparency. After alpha: garbage STAYS hidden,
+  // the magenta bg is keyed out, the subject blob stays opaque.
+  const project = createProject(REPO_ROOT, { title: "Alpha sliced" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "crop.png", bytes: slicedCropPng() });
+  let result;
+  try {
+    result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "matte" });
+  } catch (error) {
+    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
+      t.skip(`alpha pipeline unavailable: ${error.message}`);
+      return;
+    }
+    throw error;
+  }
+  const png = decodePng(readFileSync(resolveProjectFile(REPO_ROOT, project.id, result.element.src)));
+  assert.equal(png.channels, 4);
+  assert.equal(png.at(5, 5)[3], 0, "hidden garbage pixel stays transparent (not resurrected)");
+  assert.equal(png.at(19, 15)[3], 0, "hidden garbage corner edge stays transparent");
+  assert.equal(png.at(34, 26)[3], 255, "subject blob stays opaque");
+  assert.equal(png.at(60, 44)[3], 0, "magenta background is keyed out");
+  // The key was estimated from the VISIBLE background, not skewed by hidden orange.
+  assert.deepEqual(result.element.meta.alpha.key_color, [255, 0, 255]);
 });
 
 // ---- API + CLI parity (real pipeline; skips without the venv) -----------------

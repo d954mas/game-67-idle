@@ -37,7 +37,9 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from PIL import Image, ImageDraw
+from scipy import ndimage
 
 ROOT = Path(__file__).resolve().parents[4]
 if str(ROOT) not in sys.path:
@@ -78,8 +80,28 @@ def clamp_rect(rect: list[Any], size: tuple[int, int]) -> tuple[int, int, int, i
 
 def alpha_one(image: Image.Image, method: str, label: str) -> tuple[Image.Image, dict[str, Any]]:
     """Key ONE image (whole element or a region crop). Routes for the key colour +
-    the dual-plate guard, then runs the prod key_matte keyer."""
-    decision = route_cutout(image)  # border-estimated key + soft/opaque routing
+    the dual-plate guard, then runs the prod key_matte keyer.
+
+    The source may already carry transparency (polygon-sliced crops keep the sheet's
+    RGB under alpha=0 — crop_regions masks alpha, not colour). Two laws here:
+    * hidden RGB never influences keying — invisible pixels are flattened to the
+      visible-frontier median (the background colour at the erased boundary) before
+      routing, so a neighbouring sprite's garbage can't skew the key or soft metrics;
+    * hidden pixels are never resurrected — the output alpha is min(source, keyed)."""
+    array = np.asarray(image.convert("RGBA"))
+    src_alpha = array[..., 3]
+    visible = src_alpha > 12
+    work = image
+    if not visible.all():
+        if not visible.any():
+            raise RuntimeError(f"{label}: every pixel is fully transparent — nothing to key")
+        frontier = visible & ndimage.binary_dilation(~visible)
+        sample = array[frontier if frontier.any() else visible][:, :3]
+        flattened = array.copy()
+        flattened[~visible, :3] = np.median(sample, axis=0).astype(np.uint8)
+        work = Image.fromarray(flattened)
+
+    decision = route_cutout(work)  # border-estimated key + soft/opaque routing
     if method == "auto" and decision.needs_dual:
         raise RuntimeError(
             f"{label}: auto routing selected dual_plate ({decision.reason}). A wide "
@@ -88,7 +110,12 @@ def alpha_one(image: Image.Image, method: str, label: str) -> tuple[Image.Image,
             "Re-run with method=matte to force key_matte, or regenerate the art with a "
             "dual-plate pair (gen_dual_plate.sh)."
         )
-    keyed = key_matte_cutout(image, decision.key)
+    keyed = key_matte_cutout(work, decision.key)
+    if not visible.all():
+        out = np.asarray(keyed.convert("RGBA")).copy()
+        out[..., 3] = np.minimum(out[..., 3], src_alpha)
+        out[out[..., 3] == 0, :3] = 0  # same atlas hygiene as zero_fully_transparent_rgb
+        keyed = Image.fromarray(out)
     return keyed, {
         "method": "key_matte",
         "routed": decision.method,
