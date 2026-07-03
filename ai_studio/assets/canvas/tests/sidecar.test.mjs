@@ -25,6 +25,7 @@ import {
   redoOp,
   undoOp,
 } from "../ops.mjs";
+import { projectCachePaths } from "../store.mjs"; // T0259: journal + snapshots now live in the local cache
 import { solidPng } from "./png_fixture.mjs";
 
 const ROOT = "C:/unused-repo-root";
@@ -48,8 +49,8 @@ function tempProjects(t, env = {}) {
   return dir;
 }
 
-function readJournalRaw(dir, id) {
-  return readFileSync(join(dir, id, "journal.jsonl"), "utf8")
+function readJournalRaw(id) {
+  return readFileSync(projectCachePaths(ROOT, id).journal, "utf8")
     .split("\n")
     .filter((line) => line.trim())
     .map((line) => JSON.parse(line));
@@ -61,7 +62,7 @@ test("mutation journal lines are thin metadata; snapshots live in sidecar files"
   const { element } = addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() });
   patchElement(ROOT, project.id, element.id, { x: 50 });
 
-  const lines = readJournalRaw(dir, project.id);
+  const lines = readJournalRaw(project.id);
   assert.deepEqual(lines.map((l) => l.op), ["addImage", "patchElement"]);
   for (const line of lines) {
     // Thin: op metadata + duration_ms, and NO fat snapshot inline.
@@ -70,7 +71,7 @@ test("mutation journal lines are thin metadata; snapshots live in sidecar files"
     assert.equal(line.state, undefined, "no inline state");
     assert.equal(typeof line.duration_ms, "number");
     // The sidecar snapshot holds both before/after and fully restores the project.
-    const snap = JSON.parse(readFileSync(join(dir, project.id, "snapshots", `${line.seq}.json`), "utf8"));
+    const snap = JSON.parse(readFileSync(join(projectCachePaths(ROOT, project.id).snapshots, `${line.seq}.json`), "utf8"));
     assert.ok(snap.undo_patch && snap.state, `snapshot ${line.seq}.json has undo_patch + state`);
   }
 
@@ -87,7 +88,7 @@ test("seq stays monotonic + unique across undo and a new branch (tail-read alloc
   undoOp(ROOT, { projectId: project.id });
   patchElement(ROOT, project.id, element.id, { x: 20 }); // new branch after undo
 
-  const seqs = readJournalRaw(dir, project.id).map((l) => Number(l.seq));
+  const seqs = readJournalRaw(project.id).map((l) => Number(l.seq));
   assert.deepEqual([...seqs].sort((a, b) => a - b), seqs, "seqs are strictly increasing in append order");
   assert.equal(new Set(seqs).size, seqs.length, "seqs are unique");
 });
@@ -118,13 +119,17 @@ test("legacy fat journal migrates to thin + sidecar on first mutating open, idem
   writeFileSync(join(projectDir, "journal.jsonl"), fatText);
   assert.equal(existsSync(join(projectDir, "snapshots")), false, "no sidecar dir before migration");
 
-  // First mutating open triggers a transparent migration, then appends seq 3.
+  // First mutating open triggers a transparent migration into the LOCAL cache (T0259:
+  // relocate legacy in-project history + fat->thin), then appends seq 3.
   patchElement(ROOT, id, "el_1", { x: 77 });
+  const cache = projectCachePaths(ROOT, id);
 
-  // .bak preserves the ORIGINAL fat journal byte-for-byte (non-destructive).
-  assert.equal(readFileSync(join(projectDir, "journal.jsonl.bak"), "utf8"), fatText, "original fat journal kept as .bak");
+  // Relocation removed the legacy journal from the (synced) project dir.
+  assert.equal(existsSync(join(projectDir, "journal.jsonl")), false, "legacy journal moved out of the project dir");
+  // .bak preserves the ORIGINAL fat journal byte-for-byte (non-destructive), now in the cache.
+  assert.equal(readFileSync(cache.backup, "utf8"), fatText, "original fat journal kept as .bak");
   // journal.jsonl is now thin (no inline snapshots) with 3 lines.
-  const thin = readJournalRaw(dir, id);
+  const thin = readJournalRaw(id);
   assert.deepEqual(thin.map((l) => l.seq), [1, 2, 3]);
   for (const line of thin) {
     assert.equal(line.undo_patch, undefined);
@@ -133,7 +138,7 @@ test("legacy fat journal migrates to thin + sidecar on first mutating open, idem
   }
   // Sidecar snapshots exist for every migrated + new entry.
   for (const seq of [1, 2, 3]) {
-    const s = JSON.parse(readFileSync(join(projectDir, "snapshots", `${seq}.json`), "utf8"));
+    const s = JSON.parse(readFileSync(join(cache.snapshots, `${seq}.json`), "utf8"));
     assert.ok(s.undo_patch && s.state, `snapshots/${seq}.json migrated`);
   }
 
@@ -148,8 +153,8 @@ test("legacy fat journal migrates to thin + sidecar on first mutating open, idem
   redoOp(ROOT, { projectId: id });
   redoOp(ROOT, { projectId: id });
   patchElement(ROOT, id, "el_1", { x: 88 });
-  assert.equal(readFileSync(join(projectDir, "journal.jsonl.bak"), "utf8"), fatText, ".bak unchanged after a second op");
-  assert.equal(readdirSync(projectDir).filter((n) => n === "journal.jsonl.bak").length, 1, "exactly one backup");
+  assert.equal(readFileSync(cache.backup, "utf8"), fatText, ".bak unchanged after a second op");
+  assert.equal(readdirSync(cache.dir).filter((n) => n === "journal.jsonl.bak").length, 1, "exactly one backup");
 });
 
 test("history depth cap compacts past the horizon and undo stops cleanly there", (t) => {
@@ -158,11 +163,11 @@ test("history depth cap compacts past the horizon and undo stops cleanly there",
   const { element } = addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() }); // seq1 (x:0)
   for (let x = 1; x <= 6; x += 1) patchElement(ROOT, project.id, element.id, { x }); // seq2..7 (x:1..6)
 
-  const snapDir = join(dir, project.id, "snapshots");
-  const kept = readdirSync(snapDir).map((n) => Number(n.replace(".json", ""))).sort((a, b) => a - b);
+  const cache = projectCachePaths(ROOT, project.id); // journal subsystem lives in the cache (T0259)
+  const kept = readdirSync(cache.snapshots).map((n) => Number(n.replace(".json", ""))).sort((a, b) => a - b);
   assert.deepEqual(kept, [5, 6, 7], "only the newest cap (3) snapshots survive");
-  assert.equal(existsSync(join(dir, project.id, "journal.archive.jsonl")), true, "dropped lines archived");
-  const archived = readFileSync(join(dir, project.id, "journal.archive.jsonl"), "utf8")
+  assert.equal(existsSync(cache.archive), true, "dropped lines archived");
+  const archived = readFileSync(cache.archive, "utf8")
     .split("\n").filter(Boolean).map((l) => Number(JSON.parse(l).seq)).sort((a, b) => a - b);
   assert.deepEqual(archived, [1, 2, 3, 4], "archive holds exactly the dropped seqs");
 

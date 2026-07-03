@@ -134,8 +134,10 @@ test("cli undo/redo/history-jump REQUIRE --expect-head (T0234); missing flag fai
   const projectId = run(env, "create", "--title", "CLI Expect Head").project.id;
   run(env, "add-image", projectId, "--file", pngPath); // seq1, head1
 
-  const journalPath = join(dir, projectId, "journal.jsonl");
-  const journalBefore = readFileSync(journalPath, "utf8");
+  // T0259: the journal now lives in the local cache (a path the subprocess resolves from its
+  // own env), so assert "wrote nothing" via the CLI's own history view rather than a hardcoded
+  // <project>/journal.jsonl path.
+  const historyBefore = run(env, "history", projectId);
 
   const undoFail = runFail(env, "undo", projectId);
   assert.equal(undoFail.status, 1);
@@ -154,7 +156,7 @@ test("cli undo/redo/history-jump REQUIRE --expect-head (T0234); missing flag fai
   assert.match(seqFail.stderr, /history-jump requires --seq/);
 
   // None of the above wrote anything.
-  assert.equal(readFileSync(journalPath, "utf8"), journalBefore);
+  assert.deepEqual(run(env, "history", projectId).entries, historyBefore.entries);
 });
 
 test("cli batched elements-set / elements-remove parity (one undo each)", (t) => {

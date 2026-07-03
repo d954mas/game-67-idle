@@ -28,7 +28,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
-import { canvasProjectsRoot } from "../../core_harness/tool_lib/studio_config.mjs";
+import { canvasLocalCacheRoot, canvasProjectsRoot } from "../../core_harness/tool_lib/studio_config.mjs";
 import { sha256Hex } from "../../core_harness/tool_lib/hash.mjs";
 
 export const CANVAS_PROJECT_SCHEMA = "ai_studio.canvas.project.v1";
@@ -72,6 +72,89 @@ function projectDir(root, id) {
 
 function projectJsonPath(root, id) {
   return join(projectDir(root, id), "project.json");
+}
+
+// ---- local cache location (T0259) --------------------------------------------
+//
+// The per-gesture history subsystem — journal.jsonl, sidecar snapshots/, the compaction
+// archive + fat-journal backup, and the cross-process .lock — lives in a LOCAL, per-machine
+// cache OFF the (cloud-synced) projects folder, so a gesture no longer churns ~0.5MB of sync
+// traffic. project.json and files/ STAY in the synced project dir (current state + assets
+// still travel); undo history deliberately does not. The cache is keyed by a short hash of
+// the RESOLVED projects root so two different store roots — including parallel tests reusing
+// one project id under different temp roots — can NEVER share a cache entry: collision is
+// impossible by construction, not by test discipline.
+function cacheProjectDir(root, id) {
+  const base = join(canvasLocalCacheRoot(root), sha256Hex(projectsRoot(root)).slice(0, 16));
+  return confineChild(base, id, "project id");
+}
+
+// Absolute cache paths for a project's per-machine history subsystem. Exported so tooling
+// and tests read the relocated layout through the store instead of re-deriving the rootHash
+// by hand — journal/snapshot/lock path knowledge stays in this one module.
+export function projectCachePaths(root, id) {
+  const dir = cacheProjectDir(root, id);
+  return {
+    dir,
+    journal: join(dir, "journal.jsonl"),
+    backup: join(dir, "journal.jsonl.bak"),
+    archive: join(dir, "journal.archive.jsonl"),
+    snapshots: join(dir, "snapshots"),
+    lock: join(dir, ".lock"),
+  };
+}
+
+// One-time move-on-first-access of any PRE-T0259 in-project history (journal.jsonl, sidecar
+// snapshots/, the archive, and the fat-journal .bak) into the local cache. Chosen over a
+// read-fallback because the journal is a SINGLE append-only file: split across two locations
+// it could neither seq-continue nor undo coherently. Idempotent + crash-safe + cross-volume
+// safe (the project dir may sit on a different drive than the cache): each file is copied
+// atomically (tmp+rename on the cache volume) and only THEN removed from the project dir; a
+// crash mid-move re-runs on next access (the O(1) gate still sees the leftover legacy files),
+// and an existing cache file is NEVER overwritten — a completed atomic copy or already-live
+// cache history wins, the stale legacy copy is just dropped. The .lock is deliberately not
+// migrated (locks are per-machine + transient; a synced one is meaningless here).
+const relocatedCacheDirs = new Set(); // cacheProjectDir paths reconciled with legacy layout this process
+
+function copyFileAtomic(from, to) {
+  const tmp = `${to}.tmp-${randomUUID().slice(0, 8)}`;
+  copyFileSync(from, tmp);
+  renameSync(tmp, to);
+}
+
+function relocateLegacyFile(from, to) {
+  if (!existsSync(from)) return;
+  // Never clobber an existing cache file: it is either this move's own completed atomic copy
+  // (crash retry) or newer live cache history — the legacy copy is stale either way.
+  if (!existsSync(to)) {
+    mkdirSync(dirname(to), { recursive: true });
+    copyFileAtomic(from, to);
+  }
+  rmSync(from, { force: true });
+}
+
+function relocateLegacyHistory(root, id) {
+  const cacheDir = cacheProjectDir(root, id);
+  if (relocatedCacheDirs.has(cacheDir)) return;
+  const pdir = projectDir(root, id);
+  const legacyJournal = join(pdir, "journal.jsonl");
+  const legacySnapshots = join(pdir, "snapshots");
+  // O(1) gate: no pre-T0259 history in the (synced) project dir → nothing to relocate. Never
+  // mkdir the cache here for an empty project — a lock/read on an id with no history must
+  // leave zero trace (mirrors acquireFileLock's "creates no folder" contract).
+  if (existsSync(legacyJournal) || existsSync(legacySnapshots)) {
+    mkdirSync(cacheDir, { recursive: true });
+    relocateLegacyFile(legacyJournal, join(cacheDir, "journal.jsonl"));
+    relocateLegacyFile(`${legacyJournal}.bak`, join(cacheDir, "journal.jsonl.bak"));
+    relocateLegacyFile(join(pdir, "journal.archive.jsonl"), join(cacheDir, "journal.archive.jsonl"));
+    if (existsSync(legacySnapshots)) {
+      const dest = join(cacheDir, "snapshots");
+      mkdirSync(dest, { recursive: true });
+      for (const name of readdirSync(legacySnapshots)) relocateLegacyFile(join(legacySnapshots, name), join(dest, name));
+      rmSync(legacySnapshots, { recursive: true, force: true });
+    }
+  }
+  relocatedCacheDirs.add(cacheDir);
 }
 
 function writeAtomic(filePath, contents) {
@@ -225,7 +308,9 @@ const LOCK_RETRY_TOTAL_MS = 2000; // total time a caller waits on a live lock be
 const LOCK_RETRY_INTERVAL_MS = 100;
 
 function lockFilePath(root, id) {
-  return join(projectDir(root, id), ".lock");
+  // Per-machine + transient, so the lock lives in the LOCAL cache (T0259): a synced lockfile
+  // from another machine would otherwise cause false cross-process refusals here.
+  return join(cacheProjectDir(root, id), ".lock");
 }
 
 function readLockInfo(path) {
@@ -245,8 +330,10 @@ function readLockInfo(path) {
 // to protect). Throws a loud, holder-naming error if the deadline passes with a REAL
 // lock still live.
 async function acquireFileLock(root, id) {
+  relocateLegacyHistory(root, id); // fold any pre-cache in-project history in before locking in the cache
   const dir = projectDir(root, id);
-  if (!existsSync(dir)) return null;
+  if (!existsSync(dir)) return null; // no project folder to lock → leave zero trace (no cache dir either)
+  mkdirSync(cacheProjectDir(root, id), { recursive: true }); // the .lock lives in the cache; ensure it exists
   const path = lockFilePath(root, id);
   const deadline = Date.now() + LOCK_RETRY_TOTAL_MS;
   let brokeStaleOnce = false; // never break a lock more than once per acquire: a lock
@@ -501,6 +588,12 @@ export function deleteProject(root, id) {
   const stamp = nowIso().replace(/[:.]/g, "-");
   const dest = join(trashDir, `${id}-${stamp}`);
   renameSync(dir, dest);
+  // The undo history is per-machine and local (not recoverable from the synced trash), so
+  // its cache entry is removed outright rather than trashed (T0259). Clearing the process
+  // memo lets a future project reusing this id re-check for legacy history cleanly.
+  const cacheDir = cacheProjectDir(root, id);
+  rmSync(cacheDir, { recursive: true, force: true });
+  relocatedCacheDirs.delete(cacheDir);
   return { id, trashed: dest };
 }
 
@@ -550,12 +643,13 @@ export function readElementBytes(root, id, elementId) {
 
 // ---- operation journal -------------------------------------------------------
 //
-// One append-only journal.jsonl sits next to project.json. Each line is a small
-// JSON object of op METADATA only: mutation entries
+// One append-only journal.jsonl lives in the project's LOCAL cache dir (T0259 —
+// cacheProjectDir, OFF the synced projects folder). Each line is a small JSON object of op
+// METADATA only: mutation entries
 // ({seq, at, op, args_summary, parent, duration_ms, has_snapshot:true}) and
 // undo/redo markers ({seq, at, op, target_seq, duration_ms}). The fat before/after
 // project snapshots live OUT of the line, one file per mutation under
-// <project>/snapshots/<seq>.json ({undo_patch, state}). This keeps every journal
+// <cacheProjectDir>/snapshots/<seq>.json ({undo_patch, state}). This keeps every journal
 // line O(1) in project size, so appendJournal, readHistory, and undo/redo scan
 // only tiny lines and load exactly the one snapshot they need by seq.
 //
@@ -565,11 +659,11 @@ export function readElementBytes(root, id, elementId) {
 // spill sidecar, and the per-project errors.jsonl sink.
 
 function journalPath(root, id) {
-  return join(projectDir(root, id), "journal.jsonl");
+  return join(cacheProjectDir(root, id), "journal.jsonl");
 }
 
 function snapshotsDir(root, id) {
-  return join(projectDir(root, id), "snapshots");
+  return join(cacheProjectDir(root, id), "snapshots");
 }
 
 function snapshotPath(root, id, seq) {
@@ -578,6 +672,7 @@ function snapshotPath(root, id, seq) {
 }
 
 export function readJournal(root, id) {
+  relocateLegacyHistory(root, id); // read-only history views must see relocated legacy history too
   const path = journalPath(root, id);
   if (!existsSync(path)) return [];
   const text = readFileSync(path, "utf8").replace(/^\uFEFF/, "");
@@ -602,6 +697,7 @@ export function readJournal(root, id) {
 const SEQ_TAIL_BYTES = 65536;
 
 function lastJournalSeq(root, id) {
+  relocateLegacyHistory(root, id);
   const path = journalPath(root, id);
   if (!existsSync(path)) return 0;
   const fd = openSync(path, "r");
@@ -629,8 +725,23 @@ function lastJournalSeq(root, id) {
   return readJournal(root, id).reduce((max, item) => Math.max(max, Number(item.seq) || 0), 0);
 }
 
+// The project's own head seq from project.json (0 when absent/unset). It is the FLOOR for
+// the next journal seq: on a machine where project.json arrived via sync but the local cache
+// journal is empty or stale, a fresh local mutation must continue from the SYNCED head, not
+// restart at 1 — the local journal legitimately begins mid-history there (T0259 cross-machine
+// semantics). Same-machine, the journal tail already dominates (lastSeq >= head after any
+// mutation, and after an undo the redo tail's seq still dominates), so this floor is a no-op.
+function projectHeadSeq(root, id) {
+  try {
+    const head = Number(readProjectFile(root, id).history_seq);
+    return Number.isFinite(head) && head > 0 ? head : 0;
+  } catch {
+    return 0; // no project.json yet: no head to continue from (nextJournalSeq is only called once it exists)
+  }
+}
+
 export function nextJournalSeq(root, id) {
-  return lastJournalSeq(root, id) + 1;
+  return Math.max(lastJournalSeq(root, id), projectHeadSeq(root, id)) + 1;
 }
 
 // Append one pre-built journal line verbatim (single O_APPEND write, atomic at the OS
@@ -639,8 +750,7 @@ export function nextJournalSeq(root, id) {
 // the seq-allocate + append + snapshot sequence are serialized by withProjectLock
 // above (T0254) \u2014 this function itself makes no locking assumption.
 export function appendJournalLine(root, id, line) {
-  const dir = projectDir(root, id);
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(cacheProjectDir(root, id), { recursive: true }); // the journal lives in the cache (T0259)
   appendFileSync(journalPath(root, id), `${JSON.stringify(line)}\n`);
   return line;
 }
@@ -661,6 +771,7 @@ export function writeSnapshot(root, id, seq, snapshot) {
 }
 
 export function readSnapshot(root, id, seq) {
+  relocateLegacyHistory(root, id);
   const path = snapshotPath(root, id, seq);
   if (!existsSync(path)) return null;
   try {
@@ -678,8 +789,7 @@ export function deleteSnapshot(root, id, seq) {
 // serialized in order; the last kept line still carries the max seq, so the tail
 // seq read stays correct afterward.
 export function rewriteJournal(root, id, lines) {
-  const dir = projectDir(root, id);
-  mkdirSync(dir, { recursive: true });
+  mkdirSync(cacheProjectDir(root, id), { recursive: true }); // journal lives in the cache (T0259)
   const body = lines.map((line) => JSON.stringify(line)).join("\n");
   writeAtomic(journalPath(root, id), body ? `${body}\n` : "");
 }
@@ -688,7 +798,7 @@ export function rewriteJournal(root, id, lines) {
 // of what fell past the history horizon; the fat snapshots themselves are dropped).
 export function appendArchive(root, id, lines) {
   if (!lines.length) return;
-  const dir = projectDir(root, id);
+  const dir = cacheProjectDir(root, id); // the archive rides with the journal in the cache (T0259)
   mkdirSync(dir, { recursive: true });
   const body = lines.map((line) => JSON.stringify(line)).join("\n");
   appendFileSync(join(dir, "journal.archive.jsonl"), `${body}\n`);
@@ -708,7 +818,10 @@ function lineHasInlineSnapshot(line) {
 }
 
 export function ensureThinJournal(root, id) {
-  const dir = projectDir(root, id);
+  // T0259: pull any pre-cache in-project history into the local cache FIRST, so the fat->thin
+  // gate below (and every read) sees it. A legacy fat journal is thus migrated in the cache,
+  // never orphaned in the synced project dir.
+  relocateLegacyHistory(root, id);
   // Fast O(1) gate: a snapshots/ dir means this project was already created or
   // migrated under the sidecar format; nothing to do.
   if (existsSync(snapshotsDir(root, id))) return;

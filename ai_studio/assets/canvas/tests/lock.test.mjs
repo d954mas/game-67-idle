@@ -7,12 +7,12 @@
 // Run: node --test ai_studio/assets/canvas/tests/lock.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
 import { URL } from "node:url";
-import { withProjectLock } from "../store.mjs";
+import { projectCachePaths, withProjectLock } from "../store.mjs";
 import {
   createProject,
   createRecipeCard,
@@ -172,9 +172,12 @@ test("stale-before race: a mutation landing during a slow op's external call is 
 // ---- cross-process: the advisory lockfile ---------------------------------------
 
 test("withProjectLock: a live cross-process lockfile blocks a second acquirer until it is released", async (t) => {
-  const dir = tempProjects(t);
+  tempProjects(t);
   const project = createProject(ROOT, { title: "File lock" });
-  const lockPath = join(dir, project.id, ".lock");
+  // T0259: the lock now lives in the LOCAL cache dir, not the synced project dir. createProject
+  // writes no history, so the cache dir may not exist yet — make it before planting the lock.
+  const lockPath = projectCachePaths(ROOT, project.id).lock;
+  mkdirSync(projectCachePaths(ROOT, project.id).dir, { recursive: true });
 
   // Simulate ANOTHER process (e.g. the CLI) holding the lock — a live, fresh lock,
   // not a stale/abandoned one. Released 300ms later, well inside the ~2s retry budget.
@@ -192,9 +195,10 @@ test("withProjectLock: a live cross-process lockfile blocks a second acquirer un
 });
 
 test("withProjectLock: a stale (abandoned) lockfile is broken with a warning, not waited out", async (t) => {
-  const dir = tempProjects(t);
+  tempProjects(t);
   const project = createProject(ROOT, { title: "Stale lock" });
-  const lockPath = join(dir, project.id, ".lock");
+  const lockPath = projectCachePaths(ROOT, project.id).lock; // lock lives in the cache dir (T0259)
+  mkdirSync(projectCachePaths(ROOT, project.id).dir, { recursive: true });
 
   // Older than LOCK_STALE_MS (30s) simulates a crashed holder that never released it —
   // backdate startedAt instead of actually waiting 30 real seconds.
@@ -233,5 +237,8 @@ test("withProjectLock: a falsy projectId runs fn unlocked (list/create have no p
 test("withProjectLock: locking an id with no project folder never creates one (a refused-not-found call leaves zero trace)", async (t) => {
   const dir = tempProjects(t);
   await assert.rejects(() => withProjectLock(ROOT, "ghost-xyz", async () => getProject(ROOT, "ghost-xyz")));
-  assert.equal(existsSync(join(dir, "ghost-xyz")), false, "no folder was created just to acquire a lock on it");
+  assert.equal(existsSync(join(dir, "ghost-xyz")), false, "no project folder was created just to acquire a lock on it");
+  // T0259: the lock moved to the cache — locking a nonexistent project must ALSO create no
+  // cache folder (acquireFileLock returns null before it mkdirs the cache dir).
+  assert.equal(existsSync(projectCachePaths(ROOT, "ghost-xyz").dir), false, "no cache folder was created either");
 });

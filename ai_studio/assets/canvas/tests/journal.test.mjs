@@ -21,6 +21,7 @@ import {
   removeElement,
   undoOp,
 } from "../ops.mjs";
+import { projectCachePaths } from "../store.mjs"; // T0259: journal now lives in the local cache
 import { solidPng } from "./png_fixture.mjs";
 
 const ROOT = "C:/unused-repo-root";
@@ -56,8 +57,8 @@ test("journal round-trip: op -> undo -> redo restores identical state", (t) => {
   const redone = redoOp(ROOT, { projectId: project.id }).project;
   assert.deepEqual(positions(redone), afterMove);
 
-  // A journal.jsonl exists next to project.json and holds mutation + marker lines.
-  assert.equal(existsSync(join(process.env.CANVAS_PROJECTS_ROOT, project.id, "journal.jsonl")), true);
+  // A journal.jsonl exists in the local cache and holds mutation + marker lines.
+  assert.equal(existsSync(projectCachePaths(ROOT, project.id).journal), true);
   const history = readHistory(ROOT, { projectId: project.id });
   assert.deepEqual(history.entries.map((entry) => entry.op), ["addImage", "patchElement", "undo", "redo"]);
 });
@@ -280,7 +281,7 @@ test("jumpHistory refuses a stale expectHead (drift) LOUDLY before any write; ma
   assert.equal(readHead, 1);
   patchElement(ROOT, project.id, element.id, { x: 50 }); // seq2, head2 — the lead keeps working live
 
-  const journalPath = join(dir, project.id, "journal.jsonl");
+  const journalPath = projectCachePaths(ROOT, project.id).journal; // journal moved to the cache (T0259)
   const projectPath = join(dir, project.id, "project.json");
   const journalBefore = readFileSync(journalPath, "utf8");
   const projectBefore = readFileSync(projectPath, "utf8");
@@ -310,7 +311,7 @@ test("undoOp / redoOp refuse a stale expectHead LOUDLY before any write; matchin
   const { element } = addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() }); // seq1, head1
   patchElement(ROOT, project.id, element.id, { x: 50 }); // seq2, head2
 
-  const journalPath = join(process.env.CANVAS_PROJECTS_ROOT, project.id, "journal.jsonl");
+  const journalPath = projectCachePaths(ROOT, project.id).journal; // journal moved to the cache (T0259)
   const journalBefore = readFileSync(journalPath, "utf8");
 
   // undoOp: stale expectHead (caller read head1 a while ago; actual head is now 2).

@@ -7,7 +7,8 @@
 // Nothing here creates directories on disk; callers create their own roots
 // lazily (e.g. the canvas store only makes canvasProjectsRoot on first create).
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { isAbsolute, join, resolve } from "node:path";
 
 export const STUDIO_CONFIG_SCHEMA = "ai_studio.studio_config.v1";
 
@@ -80,4 +81,37 @@ export function canvasHistoryDepth(root) {
   }
   const parsed = Number(configured);
   return Number.isFinite(parsed) ? parsed : DEFAULT_CANVAS_HISTORY_DEPTH;
+}
+
+// Per-machine LOCAL cache root for the canvas history subsystem — the journal, sidecar
+// snapshots, compaction archive, fat-journal backup, and cross-process lock (T0259). Kept
+// OFF the (cloud-synced) canvasProjectsRoot so a per-gesture write no longer churns sync
+// traffic; project.json and files/ stay in the synced folder, undo history deliberately
+// does not. Resolution precedence:
+//   1. CANVAS_LOCAL_CACHE_ROOT env — explicit override (a fast local disk in production;
+//      tests that assert the exact layout).
+//   2. When the projects root is itself redirected off its configured (synced) location via
+//      CANVAS_PROJECTS_ROOT — the test/one-off signal this module already documents — the
+//      cache follows into the OS temp area. A fake/nonexistent repo root then never litters
+//      the real filesystem, and parallel suites stay isolated (keyed downstream in store.mjs
+//      by a hash of the resolved projects root, so identical project ids never collide).
+//   3. Committed studio config `canvasLocalCacheRoot` (local override wins), relative to root.
+//   4. Default: <repoRoot>/tmp/canvas_cache — gitignored, local disk.
+// A missing config never throws here (like canvasHistoryDepth). An UNUSABLE resolved root is
+// NEVER silently swapped: it surfaces later as a loud mkdir/EACCES error from the store.
+export function canvasLocalCacheRoot(root) {
+  const fromEnv = String(process.env.CANVAS_LOCAL_CACHE_ROOT || "").trim();
+  if (fromEnv) return resolve(fromEnv);
+  if (String(process.env.CANVAS_PROJECTS_ROOT || "").trim()) {
+    return join(tmpdir(), "ai_studio_canvas_cache");
+  }
+  let configured;
+  try {
+    configured = loadStudioConfig(root).canvasLocalCacheRoot;
+  } catch {
+    configured = undefined; // no studio config yet → fall through to the repo-local default
+  }
+  const raw = String(configured || "").trim();
+  if (!raw) return resolve(root, "tmp", "canvas_cache");
+  return looksAbsolute(raw) ? resolve(raw) : resolve(root, raw);
 }
