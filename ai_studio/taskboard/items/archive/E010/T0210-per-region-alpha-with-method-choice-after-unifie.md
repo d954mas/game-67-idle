@@ -98,3 +98,4 @@ Scope (increment 1):
   - Deferred: dual_plate on canvas (needs a "generate white+black plate pair" op — noted as
     the future pair source); standalone dual-plate/generation method.
 - 2026-07-03: lead accepted: wings verdict ok 2026-07-03; live verify surfaced 3 alpha bugs (traceback, purple halo, hidden-px resurrection) - all fixed same morning (1d53a0c2, 7184fd92, c03a95d6)
+- 2026-07-03: lead verified region-scoped alpha live (ok) 2026-07-03 - checklist alpha section fully closed
