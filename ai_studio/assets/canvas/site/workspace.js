@@ -39,7 +39,7 @@ import {
 } from "./app.js";
 import { addTextAt, moveNodesTo, patchTextElement, renameProject, setRegionsFor, undo, redo } from "./actions.js";
 import { canvasFontString } from "../fonts.mjs";
-import { areFontsReady, measureTextLines } from "./fonts.js";
+import { areFontsReady, measureTextBox, measureTextLines } from "./fonts.js";
 import { inlineEdit } from "./inline.js";
 import { openContextMenu } from "./context_menu.js";
 import {
@@ -354,15 +354,19 @@ function positionTextEditor() {
   const style = element.style || {};
   const fontSize = Number(style.fontSize) || 24;
   const ta = textEditor.el;
+  // Live auto-width: re-measure the CURRENT textarea value with the same measureTextBox
+  // used by the commit path (actions.js patchTextElement), so the box grows/shrinks on
+  // every keystroke and never jumps on Enter/commit (identical math, not the browser's
+  // native scrollHeight autosize, which can drift from the font-metrics measurement).
+  const box = measureTextBox(ta.value, style);
   ta.style.left = `${origin.x}px`;
   ta.style.top = `${origin.y}px`;
   ta.style.font = canvasFontString(style, fontSize * vp.scale);
   ta.style.lineHeight = `${fontSize * (Number(style.lineHeight) || 1.2) * vp.scale}px`;
   ta.style.color = style.color || "#111111";
   ta.style.textAlign = style.align || "left";
-  ta.style.width = `${Math.max(48, (element.w || 48) * vp.scale + 12)}px`;
-  ta.style.height = "auto";
-  ta.style.height = `${Math.max((element.h || fontSize) * vp.scale, ta.scrollHeight)}px`;
+  ta.style.width = `${Math.max(48, box.w * vp.scale + 12)}px`;
+  ta.style.height = `${Math.max(box.h * vp.scale, fontSize * vp.scale)}px`;
 }
 
 async function commitTextEditor() {

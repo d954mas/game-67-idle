@@ -481,6 +481,33 @@ body.layers-resizing {
   text-overflow: ellipsis;
 }
 
+/* Text element rows (T0231): the name plus a dimmed truncated content preview, visually
+   distinct so "Text" (the default name) doesn't read as the actual content. The label
+   wraps just the name + preview so each keeps its own ellipsis independent of the other. */
+.layer-label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+}
+
+.layer-label .layer-name {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.layer-text-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .badge {
   font-size: 10px;
   color: var(--cyan);

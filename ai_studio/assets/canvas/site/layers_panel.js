@@ -116,6 +116,18 @@ function selectRange(targetId) {
   state.selectedIds = new Set(ids);
 }
 
+// Layers-row content preview for a text element (T0231): newlines collapsed to spaces,
+// trimmed, truncated to ~24 chars with an ellipsis. Empty/whitespace-only content yields
+// "" so the caller skips the preview entirely (no bare quotes on a still-blank element).
+const TEXT_PREVIEW_MAX = 24;
+function textPreview(content) {
+  const flat = String(content || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!flat) return "";
+  return flat.length > TEXT_PREVIEW_MAX ? `${flat.slice(0, TEXT_PREVIEW_MAX)}…` : flat;
+}
+
 function elementRow(element, depth) {
   const row = document.createElement("div");
   row.className = "layer-row";
@@ -150,8 +162,27 @@ function elementRow(element, depth) {
   name.className = "layer-name";
   name.textContent = element.name || element.id;
   name.title = element.name || element.id;
-  row.appendChild(name);
-  // Rename on double-click anywhere on the row (not the eye button).
+  // Text rows (T0231): show the name PLUS a dimmed truncated content preview, visually
+  // distinct so "Text" (the default name) doesn't read as the content. Both spans sit in
+  // a shared flexible label so each ellipsizes on its own; a non-text or empty-content
+  // element keeps the plain unwrapped name (unchanged from before).
+  const preview = element.type === "text" ? textPreview(element.content) : "";
+  if (preview) {
+    const label = document.createElement("span");
+    label.className = "layer-label";
+    label.appendChild(name);
+    const previewEl = document.createElement("span");
+    previewEl.className = "layer-text-preview";
+    previewEl.textContent = `"${preview}"`;
+    previewEl.title = element.content || "";
+    label.appendChild(previewEl);
+    row.appendChild(label);
+  } else {
+    row.appendChild(name);
+  }
+  // Rename on double-click anywhere on the row (not the eye button). inlineEdit replaces
+  // ONLY the `name` span's children, so it works the same whether `name` sits directly in
+  // the row or inside the text-preview label wrapper above.
   row.addEventListener("dblclick", (event) => {
     if (event.target.closest("button")) return;
     event.stopPropagation();
@@ -339,7 +370,12 @@ function layersSignature() {
         if (!collapsed) walk(g.id, depth + 1);
       } else {
         const e = child.ref;
-        parts.push(`e:${depth}:${e.id}:${e.name || ""}:${e.visible !== false ? 1 : 0}:${(e.regions || []).length}`);
+        // Text content rides in the signature too (T0231): the layers row shows a content
+        // preview for text elements, so an edit that only changes `content` (name/visible/
+        // regions unchanged) must still trigger a rebuild.
+        parts.push(
+          `e:${depth}:${e.id}:${e.name || ""}:${e.visible !== false ? 1 : 0}:${(e.regions || []).length}:${e.type === "text" ? e.content || "" : ""}`,
+        );
       }
     }
   };
