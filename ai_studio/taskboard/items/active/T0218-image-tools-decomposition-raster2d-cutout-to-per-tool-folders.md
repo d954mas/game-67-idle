@@ -1,13 +1,13 @@
 ---
 id: T0218
 title: "Image tools decomposition: raster2d+cutout -> assets/tools/image/<tool>, two alpha modes"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P1
 tags: []
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-07-03
 ---
 
 ## What
@@ -54,3 +54,4 @@ and T0207 (cleanup tools).
 - 2026-07-02: Increments 1-3 SHIPPED fe7b7e8a (accepted: 30 py + 5 bridge + 77 canvas tests, map strict clean). Venv live at .venv (numpy 2.1.1/scipy 1.17.1/Pillow 12.2.0), pythonPath in studio.config. Left: 4 (api split + server wiring), 5 (umbrella removal + doc polish), 6 (canvas seam + bench.mjs:325 stale detect path - MUST repoint with the seam).
 - 2026-07-02: Increments 4-5 SHIPPED (accepted: 6 bridge tests, 30 py, map strict 309, doc check, live HTTP smoke held the frozen URL contract). raster2d/ = seam shim only; cutout/ gone. Left: increment 6 (canvas ops.mjs imports -> image/{regions,sources}/api.mjs, bench.mjs:325 repoint, delete raster2d/ + its seam node) - orchestrator does it after T0209 lands. Server restart needed to pick up server.mjs wiring (bundle with T0209 restart).
 - 2026-07-02: Lead discarded his viewer preview WIP ("можно удалить, это старый легаси инструмент, мы уже делаем лучше preview") - reverted to HEAD; the frozen viewer keeps its 5 committed endpoints; canvas owns preview going forward. Working tree now holds ONLY the T0209 agent canvas WIP.
+- 2026-07-03: All 6 increments were completed 2026-07-02 (per-tool folders, two alpha modes, raster2d deleted in T0220); board status was stale 'doing'. Moving to review for formal lead acceptance - the tooling has been in daily production use since.

@@ -1,13 +1,13 @@
 ---
 id: T0221
 title: "Canvas: fitGroup op - resize group frame to fit its content"
-status: backlog
+status: done
 project: P001
 epic: E010
 priority: P1
 tags: []
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-07-03
 ---
 
 ## What
@@ -36,3 +36,4 @@ Position & Size, group context-menu item, CLI `group-fit <id> --group <gid>
 
 ## Log
 - 2026-07-02: Created from lead request during T0219 review window. Build right after T0203 lands (same site files in flight).
+- 2026-07-03: Already shipped: ops.fitGroup + CLI group-fit + inspector 'Fit to content' button all exist and are exercised (sliceRegions/group flows). Stale board entry - closing as delivered.
