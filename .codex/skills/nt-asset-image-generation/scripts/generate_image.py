@@ -21,6 +21,7 @@ import argparse, base64, hashlib, json, mimetypes, os, subprocess, sys, tempfile
 
 CODEX_RESPONSES = "https://chatgpt.com/backend-api/codex/responses"
 REST_IMAGES = "https://api.openai.com/v1/images/generations"
+REST_IMAGES_EDITS = "https://api.openai.com/v1/images/edits"
 AUTH_JSON = os.path.expanduser("~/.codex/auth.json")
 QUALITY_TIMEOUTS = {"low": 180, "medium": 300, "high": 480, "auto": 300}
 
@@ -73,6 +74,24 @@ def post_json(url, headers, body, timeout):
         return curl_post(url, headers, path, timeout)
     finally:
         os.unlink(path)
+
+
+def curl_post_multipart(url, headers, fields, files, timeout):
+    """POST multipart/form-data via curl -F (native multipart, no python requests).
+    fields: [(name, value), ...] scalar form fields.
+    files:  [(name, path), ...] file parts; repeat name for an array field (image[])."""
+    cmd = ["curl", "-sS", "-N", "--ssl-no-revoke", "--max-time", str(timeout), "-X", "POST", url]
+    for k, v in headers.items():
+        cmd += ["-H", f"{k}: {v}"]
+    for name, value in fields:
+        cmd += ["-F", f"{name}={value}"]
+    for name, path in files:
+        mime = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        cmd += ["-F", f"{name}=@{path};type={mime}"]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise SystemExit(f"curl exit {r.returncode}: {r.stderr.strip()[:400]}")
+    return r.stdout
 
 
 def parse_sse_images(raw):
@@ -141,13 +160,26 @@ def gen_rest(tok, a, timeout):
             model = "gpt-image-1.5"
         if fmt == "jpeg":
             fmt = "png"
-    body = {"model": model, "prompt": a.prompt, "size": a.size, "n": 1, "output_format": fmt}
-    if a.quality:
-        body["quality"] = a.quality
-    if a.background:
-        body["background"] = a.background
-    raw = post_json(REST_IMAGES, {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"},
-                    body, timeout)
+    if a.input_image:
+        # The generations endpoint takes NO image input; silently ignoring
+        # --input-image here would be the loud-errors law's cardinal sin. Route
+        # reference images to the official multipart edits endpoint instead.
+        fields = [("model", model), ("prompt", a.prompt), ("size", a.size),
+                  ("output_format", fmt), ("n", "1")]
+        if a.quality:
+            fields.append(("quality", a.quality))
+        if a.background:
+            fields.append(("background", a.background))
+        files = [("image[]", img) for img in a.input_image]
+        raw = curl_post_multipart(REST_IMAGES_EDITS, {"Authorization": f"Bearer {tok}"}, fields, files, timeout)
+    else:
+        body = {"model": model, "prompt": a.prompt, "size": a.size, "n": 1, "output_format": fmt}
+        if a.quality:
+            body["quality"] = a.quality
+        if a.background:
+            body["background"] = a.background
+        raw = post_json(REST_IMAGES, {"Authorization": f"Bearer {tok}", "Content-Type": "application/json"},
+                        body, timeout)
     try:
         data = json.loads(raw)
     except Exception:
