@@ -31,11 +31,20 @@ increment plan, flagging what needs the lead's confirmation before build.
 
 ## Open questions
 
-- Rotation: free angle vs 90-degree steps for v1 (lead undecided; designer to
-  recommend with costs).
-- Align target: selection bbox vs parent group frame (designer to recommend).
+- Align target: selection bbox vs parent group frame — designer default: auto
+  (Figma semantics), lead has not objected.
+- Group scale handle: frame-only (designer default) vs scale subtree.
+- Regions on a rotated element: designer to re-evaluate under FREE angle
+  (likely refuse region-edit while rotated in v1).
 
 ## Log
 
 - 2026-07-03: created from lead request during T0210 verification.
-- 2026-07-03: design phase delegated to deep-reasoner (Opus).
+- 2026-07-03: design phase delegated to deep-reasoner (Opus). Design doc:
+  tmp/design_T0232_transforms_2026-07-03.md (recommended 90-step v1).
+- 2026-07-03: LEAD ANSWERS override the 90-step default: "поворот нужен
+  любой" (FREE angle required), "отражать нужно" (flip required), wants an
+  interactive transform mode ("режим в котором я таскаю, могу скейлить, и
+  вращать" — select-tool handles: drag body, corner scale, rotate handle) and
+  a "вернуть размер к source" button (reset w/h to source_w/h). Design
+  revision requested from the same designer.
