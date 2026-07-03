@@ -6,7 +6,7 @@ import json
 from collections import deque
 from pathlib import Path
 from time import perf_counter
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 from PIL import Image
@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 
 from ai_studio.assets.tools.lib.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
 from ai_studio.assets.tools.image.alpha_dualplate.dual_plate_pair_gate import evaluate as evaluate_pair
+from ai_studio.assets.tools.image.alpha_dualplate.pair_align import align_pair
 
 RGB = tuple[int, int, int]
 # "proj" = Smith & Blinn (1996) Theorem-4 joint-channel projection: the
@@ -317,6 +318,11 @@ def main() -> int:
     parser.add_argument("--report", type=Path)
     parser.add_argument("--no-fail", action="store_true", help="Write diagnostic output even when the extraction report verdict is fail.")
     parser.add_argument("--skip-pair-gate", action="store_true", help="Do not run the white/black pair consistency gate (allow matteing a misaligned/redrawn pair).")
+    parser.add_argument(
+        "--skip-align",
+        action="store_true",
+        help="Do not translation-align the dark plate to the light plate before gating/extraction (T0243; on by default).",
+    )
     parser.add_argument("--profile", action="store_true", help="Record extraction, cleanup, save, and report timings.")
     args = parser.parse_args()
 
@@ -327,6 +333,26 @@ def main() -> int:
         # plate. Real subject misalignment is still caught by the pair gate below.
         dark_image = dark_image.resize(light_image.size, Image.Resampling.LANCZOS)
     started = perf_counter()
+    timings: dict[str, float] = {}
+
+    # T0243: chained gpt-image edits drift the subject a few px between plates —
+    # align the dark plate to the light plate BEFORE gating/extraction, using the
+    # gate's own inconsistency metric as the alignment objective. Never makes the
+    # pair worse; an already-aligned pair passes through unchanged.
+    align_report: dict[str, Any] | None = None
+    if not args.skip_align:
+        align_started = perf_counter()
+        fraction_before = evaluate_pair(light_image, dark_image)["inconsistent_fraction"]
+        align_dx, align_dy, fraction_after, dark_image = align_pair(light_image, dark_image)
+        align_report = {
+            "dx": align_dx,
+            "dy": align_dy,
+            "fraction_before": round(fraction_before, 4),
+            "fraction_after": round(fraction_after, 4),
+        }
+        if args.profile:
+            timings["align"] = round((perf_counter() - align_started) * 1000, 3)
+
     extract_started = perf_counter()
     result = extract_dual_plate_alpha(
         light_image,
@@ -338,7 +364,6 @@ def main() -> int:
         alpha_cutoff=args.alpha_cutoff,
         alpha_hardening=args.alpha_hardening,
     )
-    timings: dict[str, float] = {}
     if args.profile:
         timings["extract"] = round((perf_counter() - extract_started) * 1000, 3)
     cleanup_started = perf_counter()
@@ -372,9 +397,12 @@ def main() -> int:
             "keep_largest_blob": args.keep_largest_blob,
         }
     )
+    if align_report is not None:
+        report["align"] = align_report
     # Pipeline gate: a misaligned/redrawn white/black pair produces ghosted alpha,
     # so refuse it here (verdict fail -> exit 1) instead of letting a bad pair
-    # become a prepared asset. Bypass only with --skip-pair-gate.
+    # become a prepared asset. Bypass only with --skip-pair-gate. Gates the
+    # ALIGNED pair (dark_image was reassigned above when alignment ran).
     if not args.skip_pair_gate:
         pair = evaluate_pair(light_image.convert("RGBA"), dark_image.convert("RGBA"))
         report["pair_gate"] = {key: pair[key] for key in ("verdict", "inconsistent_fraction", "mean_edge_chroma")}

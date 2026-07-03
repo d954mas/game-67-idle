@@ -3,9 +3,16 @@
 
 This is the canvas module's OWN Python entry (not a raster2d step), parallel to
 tools/alpha_cutout.py. It REUSES the image-tools dual-plate modules verbatim — the
-pair-consistency gate (dual_plate_pair_gate.evaluate) and the Smith & Blinn (1996)
-projection extractor (dual_plate_alpha.extract_dual_plate_alpha / build_report) — so
-there is no matte logic duplication and no second implementation.
+translation aligner (pair_align.align_pair), the pair-consistency gate
+(dual_plate_pair_gate.evaluate), and the Smith & Blinn (1996) projection extractor
+(dual_plate_alpha.extract_dual_plate_alpha / build_report) — so there is no matte
+logic duplication and no second implementation.
+
+T0243: chained gpt-image edits (black = edit of the white plate) routinely drift the
+subject a few px between plates. Before gating, the dark plate is translation-aligned
+to the light plate (align_pair, searching the SAME inconsistency metric the gate
+uses) — a shift that never makes the pair worse and leaves an already-aligned pair
+unchanged. The gate below then judges the ALIGNED pair, not the raw input.
 
 ops.alphaDualPlate writes a spec JSON (the two plate elements' absolute source paths)
 and spawns this script once through the shared warm worker.
@@ -55,12 +62,14 @@ from ai_studio.assets.tools.lib.atomic_io import save_image_atomic, write_json_a
 try:
     from ai_studio.assets.tools.image.alpha_dualplate.dual_plate_alpha import build_report, extract_dual_plate_alpha
     from ai_studio.assets.tools.image.alpha_dualplate.dual_plate_pair_gate import evaluate as evaluate_pair
+    from ai_studio.assets.tools.image.alpha_dualplate.pair_align import align_pair
 except ImportError as exc:  # pragma: no cover - environment/setup failure
     raise RuntimeError(
         "canvas dual-plate alpha requires the image-tools dual-plate modules "
-        "(ai_studio.assets.tools.image.alpha_dualplate.dual_plate_alpha and "
-        ".dual_plate_pair_gate) but they could not be imported; install/repair the "
-        "studio Python deps: node ai_studio/assets/tools/image/_bridge/setup_python.mjs "
+        "(ai_studio.assets.tools.image.alpha_dualplate.dual_plate_alpha, "
+        ".dual_plate_pair_gate, and .pair_align) but they could not be imported; "
+        "install/repair the studio Python deps: "
+        "node ai_studio/assets/tools/image/_bridge/setup_python.mjs "
         f"({exc})"
     ) from exc
 
@@ -106,8 +115,19 @@ def run(spec: dict[str, Any]) -> dict[str, Any]:
         # misalignment is still caught by the pair gate below.
         dark_image = dark_image.resize(light_image.size, Image.Resampling.LANCZOS)
 
+    # T0243: chained gpt-image edits (black = edit of the white plate) routinely
+    # drift the subject a few px between plates — the pair gate's own "align"
+    # verdict says as much ("a translation align may rescue it"). Search for that
+    # rescue BEFORE gating: align_pair reuses the gate's own inconsistency metric
+    # as its objective, never returns a shift worse than (0, 0), and a pair that
+    # was already aligned comes back unchanged.
+    align_fraction_before = evaluate_pair(light_image, dark_image)["inconsistent_fraction"]
+    align_dx, align_dy, align_fraction_after, dark_image = align_pair(light_image, dark_image)
+
     # Pipeline gate (reused, unmodified): a misaligned/redrawn pair produces ghosted
     # alpha, so refuse it here instead of letting a bad pair become a "cut" element.
+    # Gates the ALIGNED pair — a shift that rescues an "align" verdict into "pass"
+    # proceeds; one that can't (subject actually redrawn) still refuses.
     pair = evaluate_pair(light_image, dark_image)
     if pair["verdict"] == "regenerate":
         raise RuntimeError(
@@ -137,6 +157,12 @@ def run(spec: dict[str, Any]) -> dict[str, Any]:
         "visible_pixels": stats_report["visible_pixels"],
         "alpha_bbox": stats_report["alpha_bbox"],
         "pair_gate": {key: pair[key] for key in ("verdict", "inconsistent_fraction", "mean_edge_chroma")},
+        "align": {
+            "dx": align_dx,
+            "dy": align_dy,
+            "fraction_before": round(align_fraction_before, 4),
+            "fraction_after": round(align_fraction_after, 4),
+        },
     }
     report_path = spec.get("report")
     if report_path:

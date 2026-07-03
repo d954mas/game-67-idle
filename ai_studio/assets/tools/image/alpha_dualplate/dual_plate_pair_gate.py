@@ -38,12 +38,12 @@ ALIGN_FRACTION = 0.20
 CHROMA_TOLERANCE = 40
 
 
-def evaluate(light: Image.Image, dark: Image.Image) -> dict:
-    if dark.size != light.size:
-        dark = dark.resize(light.size, Image.Resampling.LANCZOS)
-    light_rgb = np.asarray(light.convert("RGB"), dtype=np.float32)
-    dark_rgb = np.asarray(dark.convert("RGB"), dtype=np.float32)
-
+def compute_inconsistency(light_rgb: np.ndarray, dark_rgb: np.ndarray) -> dict:
+    """Core pair-consistency metric, factored out of `evaluate()` so alignment
+    search (pair_align.align_pair) can reuse the SAME objective instead of
+    inventing a second one. Takes float32 HxWx3 RGB arrays (already same size),
+    returns {fraction, mean_chroma, opaque_count} — see `evaluate()` for the
+    metric's rationale."""
     diff = light_rgb - dark_rgb
     alpha = np.clip(1.0 - diff.mean(axis=2) / 255.0, 0.0, 1.0)
     # channel spread of the difference: 0 when the difference is a flat
@@ -55,6 +55,19 @@ def evaluate(light: Image.Image, dark: Image.Image) -> dict:
     inconsistent = opaque & (diff_chroma > CHROMA_TOLERANCE)
     fraction = float(np.count_nonzero(inconsistent) / opaque_count) if opaque_count else 1.0
     mean_chroma = float(diff_chroma[opaque].mean()) if opaque_count else 0.0
+    return {"fraction": fraction, "mean_chroma": mean_chroma, "opaque_count": opaque_count}
+
+
+def evaluate(light: Image.Image, dark: Image.Image) -> dict:
+    if dark.size != light.size:
+        dark = dark.resize(light.size, Image.Resampling.LANCZOS)
+    light_rgb = np.asarray(light.convert("RGB"), dtype=np.float32)
+    dark_rgb = np.asarray(dark.convert("RGB"), dtype=np.float32)
+
+    metrics = compute_inconsistency(light_rgb, dark_rgb)
+    fraction = metrics["fraction"]
+    mean_chroma = metrics["mean_chroma"]
+    opaque_count = metrics["opaque_count"]
 
     if fraction <= PASS_FRACTION:
         verdict = "pass"
