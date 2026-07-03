@@ -35,10 +35,18 @@ handoff starts BEFORE generation, not after. nt-asset-image-generation
 skill must be updated when this builds.
 
 Concept sketch (to refine at design phase):
-- type:"genspec" element (additive): x/y/w/h box (the target footprint),
-  fields {prompt, refs: [src...], style?, status: draft|generating|done|
-  failed, runs: [{at, resultElementId}...]}. Rendered as a dashed card with
-  prompt excerpt; refs draggable onto it from the canvas.
+- type:"genspec" element (additive): x/y/w/h = the card's own visual size
+  ONLY (lead: frame does NOT influence generation — model output size is
+  not ours to control; results land at native size). Fields {prompt,
+  style?, status: draft|generating|done|failed, runs: [{at,
+  resultElementId}...]}.
+- REFS = IMAGES DROPPED INSIDE THE CARD (lead's design, 2026-07-03): the
+  card behaves like a group — the lead drops N image elements into it and
+  those members ARE the refs that ship with the generation (visible, live
+  on the canvas, reorder/remove = plain element ops). Same-canvas elements
+  only. Our generate path passes input images; the script currently wires
+  ONE input image — extending to N refs is part of this build. Ref roles
+  (style vs content) — see genart research before deciding.
 - "Generate" action on the card -> plain imagegen -> RAW result element
   minted at/beside the placeholder's box + linked in card runs; the card
   stays. Repeat = press again (new run, new element).
@@ -78,3 +86,5 @@ PROMPT TOOLS (lead, 2026-07-03, same discussion):
 
 - 2026-07-03: created from lead question during dual-plate flow discussion;
   no prior task covered this (T0211 is region regen only).
+- 2026-07-03: lead decision: card frame does NOT influence generation (cannot control model output size anyway) - result lands at native size; frame is just the card's own visual size, 'target footprint' framing dropped
+- 2026-07-03: lead decisions: refs = images dropped INSIDE the card (group-like membership = ref list, same canvas); style extraction v1 = element meta + re-extract + copy-to-clipboard; OPEN research question: style/description as first-class reusable canvas TYPES - how competitors model this (Recraft styles, MJ sref, Krea/Leonardo presets)

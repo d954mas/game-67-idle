@@ -1,7 +1,7 @@
 ---
 id: T0235
 title: "Canvas: export at on-canvas size - 'canvas' scale base alongside source pixels"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P1
@@ -66,3 +66,4 @@ Design (synthesized from both reviews):
 - 2026-07-03: scope grew to full Size-control redesign (2 Opus UX reviews synthesized); delegated to fast-worker (Sonnet)
 - 2026-07-03: landed: composite Size control + canvas base, suite 254->259, :8780 restarted; awaiting lead live check
 - 2026-07-03: lead round-2 feedback: order = [unit mode][value] (mode first), value field gets a dropdown of per-mode presets - scale: 0.5/1/1.5/2/4; W/H px: base size first then 32/64/128/256/512/1024/2048. Implement as custom preset menu button (NOT datalist - Chrome prefix-filter trap); queued behind T0237 worker (inspector.js one-writer law), orchestrator applies inline after
+- 2026-07-03: round-2+3 landed (mode-first + preset menu w/ current-canvas-size first) + BASE DEFAULT FLIPPED to canvas (lead: scale must be from on-canvas size); markers now @1x-source; suite 268; :8780 restarted
