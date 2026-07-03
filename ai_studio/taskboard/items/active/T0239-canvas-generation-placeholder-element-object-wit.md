@@ -19,21 +19,34 @@ the generation spec (prompt, ref images, size, style, alpha mode), and
 generation is INVOKED FROM the object. The placeholder is the design
 document of the future sprite living at its future position.
 
+ESSENCE (lead, 2026-07-03): "по сути я хочу сохранить промпт и рефы, чтобы
+потом легко повторять генерации" — the card is a SAVED GENERATION RECIPE.
+LEAD CORRECTIONS (same discussion): NO alpha in the placeholder — it
+produces RAW art ("Я получаю арт. И потом с артом уже делаю всё что
+захочу" — alpha/quantize/etc are his explicit manual steps after). The
+placeholder REMAINS on the canvas after generation ("Заглушка остаётся") —
+rerunnable anytime.
+
+SKILL MANDATE (lead): ANY generation goes THROUGH a canvas — when the agent
+works on a game it creates/uses generation canvases; the recipe (prompt +
+refs) is saved there, results land beside it. Extends the existing
+canvas-handoff convention (accepted art w/ meta) to the RECIPE itself:
+handoff starts BEFORE generation, not after. nt-asset-image-generation
+skill must be updated when this builds.
+
 Concept sketch (to refine at design phase):
 - type:"genspec" element (additive): x/y/w/h box (the target footprint),
-  fields {prompt, refs: [src...], style?, alpha: none|dual_plate|matte,
-  status: draft|generating|done|failed, result?: elementId}. Rendered as a
-  dashed card with prompt excerpt; refs draggable onto it from the canvas.
-- "Generate" action on the card -> runs the generation flow (T0238 engine
-  when alpha=dual_plate; plain imagegen otherwise) -> result element minted
-  AT the placeholder's box (this subsumes T0238's "hybrid placement": the
-  placeholder IS the placement) + linked in card meta; card keeps history of
-  runs (N candidates rail later = T0211 masked-regen sibling).
+  fields {prompt, refs: [src...], style?, status: draft|generating|done|
+  failed, runs: [{at, resultElementId}...]}. Rendered as a dashed card with
+  prompt excerpt; refs draggable onto it from the canvas.
+- "Generate" action on the card -> plain imagegen -> RAW result element
+  minted at/beside the placeholder's box + linked in card runs; the card
+  stays. Repeat = press again (new run, new element).
 - Agent parity: CLI/skill can create/fill/run placeholders (the lead can ask
   me to fill a screen with placeholders from a GDD list, then generate).
 - Relation: T0211 = masked REGEN of regions inside existing art; T0238 =
-  the alpha-generation engine; T0239 = the on-canvas UI/workflow object that
-  triggers both.
+  auto dual-plate alpha as an ACTION ON AN ART ELEMENT (not part of the
+  card); T0239 = the recipe object.
 
 PROMPT TOOLS (lead, 2026-07-03, same discussion):
 - "Expand prompt" button on the card: the lead writes a SIMPLE prompt

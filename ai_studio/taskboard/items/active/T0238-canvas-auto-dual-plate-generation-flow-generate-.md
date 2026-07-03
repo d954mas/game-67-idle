@@ -34,9 +34,14 @@ Inspector surface: element's Alpha/Provenance section shows both plate
 thumbnails (files served already); click = preview, "Add to canvas" mints a
 plain image element from that plate src (one journaled op).
 
-Trigger today = agent skill command ("сгенери X с альфой на канвас Y");
-canvas-UI trigger arrives with the generation-placeholder element (T0239) —
-this flow is its alpha mode, so keep the op layer UI-agnostic.
+REFRAMED per lead (2026-07-03, T0239 discussion): generation placeholders
+produce RAW art with NO alpha — this flow is therefore an ACTION ON AN
+EXISTING ART ELEMENT ("сделай дуал-плейт альфу этому арту"): the element's
+current pixels ARE the light plate (requires flat light bg — loud refusal
+otherwise), the dark plate is generated as an EDIT of it (subject-lock),
+then gate (1 retry) -> T0237 op -> NEW cut element BESIDE the source.
+Trigger today = agent skill command; a UI action on the element can come
+later. Placement decision 1 (hybrid) collapses to "beside the source".
 
 ## Done when
 
