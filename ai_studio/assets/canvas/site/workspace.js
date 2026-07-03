@@ -625,6 +625,57 @@ function paintElement(element, vp, editEl) {
     // element keeps the plain rect (identical pixels to increment 3a).
     if (rotation) strokeRotatedQuad(element, vp);
     else ctx.strokeRect(origin.x, origin.y, w, h);
+    // T0233 (lead 2026-07-04: «слайс9 нужно показывать линиями как и где растягивается сами
+    // зоны»): a selected slice9 element shows its band seams — dashed green lines where the
+    // fixed corners end and the stretch zones begin ON THE CURRENT BOX. Derived from the SAME
+    // slice9Patches call the draw itself uses (scale multiplier + proportional clamp
+    // included), so the lines sit exactly on the real seams at any box size. Drawn inside the
+    // same rotate/flip transform trick as the body, so a transformed panel shows truthful
+    // seams; like the selection outline, they ignore the animation-preview offset (static
+    // chrome by design).
+    if (element.slice9) {
+      const s9img = imageFor(element);
+      if (s9img.complete && s9img.naturalWidth) {
+        const s9patches = slice9Patches(element.slice9, s9img.naturalWidth, s9img.naturalHeight, element.w, element.h);
+        const seamXs = new Set();
+        const seamYs = new Set();
+        for (const p of s9patches) {
+          for (const v of [p.dx, p.dx + p.dw]) if (v > 0.01 && v < element.w - 0.01) seamXs.add(Math.round(v * 1000));
+          for (const v of [p.dy, p.dy + p.dh]) if (v > 0.01 && v < element.h - 0.01) seamYs.add(Math.round(v * 1000));
+        }
+        const drawSeams = () => {
+          ctx.save();
+          ctx.strokeStyle = "#65bd81";
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath();
+          for (const raw of seamXs) {
+            const sx = origin.x + (raw / 1000) * vp.scale;
+            ctx.moveTo(sx, origin.y);
+            ctx.lineTo(sx, origin.y + h);
+          }
+          for (const raw of seamYs) {
+            const sy = origin.y + (raw / 1000) * vp.scale;
+            ctx.moveTo(origin.x, sy);
+            ctx.lineTo(origin.x + w, sy);
+          }
+          ctx.stroke();
+          ctx.restore();
+        };
+        if (rotation || flipH || flipV) {
+          const center = imageToScreenPoint({ x: element.x + element.w / 2, y: element.y + element.h / 2 }, vp);
+          ctx.save();
+          ctx.translate(center.x, center.y);
+          if (rotation) ctx.rotate((rotation * Math.PI) / 180);
+          if (flipH || flipV) ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+          ctx.translate(-center.x, -center.y);
+          drawSeams();
+          ctx.restore();
+        } else {
+          drawSeams();
+        }
+      }
+    }
     // Passive numbered hint in mode A; strong strokes + handles in mode B.
     drawRegionsOverlay(ctx, element, vp, {
       selectedRegionIds: state.selectedRegionIds,
