@@ -1,7 +1,7 @@
 ---
 id: T0210
 title: "Canvas: per-element alpha cutout op (method choice, regions optional) - wings acceptance"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
@@ -97,3 +97,4 @@ Scope (increment 1):
     opaque. Visual verdict is the lead's (fake-shot direction law).
   - Deferred: dual_plate on canvas (needs a "generate white+black plate pair" op — noted as
     the future pair source); standalone dual-plate/generation method.
+- 2026-07-03: lead accepted: wings verdict ok 2026-07-03; live verify surfaced 3 alpha bugs (traceback, purple halo, hidden-px resurrection) - all fixed same morning (1d53a0c2, 7184fd92, c03a95d6)

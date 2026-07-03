@@ -1,7 +1,7 @@
 ---
 id: T0230
 title: "Canvas: batch alpha cutout on multi-selection (one op, one undo)"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
@@ -43,3 +43,4 @@ mutated). Whole-element scope only (regions stay single-element).
   API POST /alpha elementIds, CLI `alpha --elements` (loud on --regions/--element
   mix), inspector "Apply to N images" for all-image multi-selection; suite
   242->248 green; :8780 restart required (api/ops changed); awaiting lead check.
+- 2026-07-03: lead accepted live (массовая альфа ок) 2026-07-03
