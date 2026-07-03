@@ -453,7 +453,8 @@ function exportRowsOf(element) {
 
 // A row's effective base ("source" is the default/absent value — mirrors ops.mjs).
 function rowBase(row) {
-  return row && row.base === "canvas" ? "canvas" : "source";
+  // Canvas is the DEFAULT base (lead 2026-07-03): absent/anything-but-"source" = canvas.
+  return row && row.base === "source" ? "source" : "canvas";
 }
 
 function selectInput(value, options, onCommit) {

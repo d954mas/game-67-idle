@@ -123,27 +123,28 @@ test("setExportSettings whitelists + validates row.base and keeps stored JSON mi
   const project = createProject(REPO_ROOT, { title: "Base rows" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "hero.png", bytes: solidPng(8, 8) });
 
-  // "canvas" is kept; an explicit "source" and an absent base are both normalized away
-  // (the allowlist would otherwise silently DROP the field either way — here it must be
-  // whitelisted through, then minimized) so old/default rows stay minimal in storage.
+  // "source" is kept; an explicit "canvas" and an absent base are both normalized away
+  // (canvas is the DEFAULT base since the lead's flip — the allowlist would otherwise
+  // silently DROP the field either way; here it must be whitelisted through, then
+  // minimized) so old/default rows stay minimal in storage.
   const set = setExportSettings(REPO_ROOT, {
     projectId: project.id,
     elementId: element.id,
     rows: [
-      { scale: "2x", format: "png", base: "canvas" },
-      { scale: "1x", format: "png", base: "source" },
+      { scale: "2x", format: "png", base: "source" },
+      { scale: "1x", format: "png", base: "canvas" },
       { scale: "0.5x", format: "png" },
     ],
   });
   assert.deepEqual(set.rows, [
-    { scale: "2x", format: "png", resample: "lanczos", base: "canvas" },
+    { scale: "2x", format: "png", resample: "lanczos", base: "source" },
     { scale: "1x", format: "png", resample: "lanczos" },
     { scale: "0.5x", format: "png", resample: "lanczos" },
   ]);
   // What actually persisted to project.json carries the same minimal shape (no
-  // base:"source" ever written to disk).
+  // base:"canvas" ever written to disk).
   const stored = getProject(REPO_ROOT, project.id).elements[0].export;
-  assert.equal(stored[0].base, "canvas");
+  assert.equal(stored[0].base, "source");
   assert.equal(stored[1].base, undefined);
   assert.equal(stored[2].base, undefined);
   assert.equal("base" in stored[1], false);
@@ -255,14 +256,14 @@ test("exportElements auto-disambiguates same-named elements with a numeric suffi
 
 // ---- export base: "canvas" resolves against on-canvas size (T0235) -----------
 
-// File naming only (no Python needed): a canvas-base row must never collide with the
-// unmarked source 1x baseline, even at 1x — so it always carries the "-canvas" marker
-// in a multi-row set. A single row stays the clean base name regardless of its base.
-// The element is left at its default (unresized) size, so every row here resolves to
-// the same 64x48 as the source file -> pure byte copies, no Python required.
-test('exportElements: a canvas-base row gets a "-canvas"-tagged marker in a multi-row set, even at 1x; a single row stays clean', async (t) => {
+// File naming only (no Python needed): a source-base row must never collide with the
+// unmarked CANVAS 1x baseline (canvas is the default base), even at 1x — so it always
+// carries the "-source" marker in a multi-row set. A single row stays the clean base
+// name regardless of its base. The element is left at its default (unresized) size, so
+// every row here resolves to the same 64x48 as the source file -> pure byte copies.
+test('exportElements: a source-base row gets a "-source"-tagged marker in a multi-row set, even at 1x; a single row stays clean', async (t) => {
   tempProjects(t);
-  const project = createProject(REPO_ROOT, { title: "Canvas marker" });
+  const project = createProject(REPO_ROOT, { title: "Source marker" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() }); // 64x48, w/h == source_w/h
   const base = slugName("sheet.png");
 
@@ -270,19 +271,19 @@ test('exportElements: a canvas-base row gets a "-canvas"-tagged marker in a mult
     projectId: project.id,
     elementIds: [element.id],
     rows: [
-      { scale: "1x", format: "png" }, // default base "source" -> unmarked baseline
-      { scale: "1x", format: "png", base: "canvas" }, // must not collide with the baseline
+      { scale: "1x", format: "png" }, // default base "canvas" -> unmarked baseline
+      { scale: "1x", format: "png", base: "source" }, // must not collide with the baseline
     ],
   });
   assert.deepEqual(
     multi.items.map((item) => item.file),
-    [`${base}.png`, `${base}@1x-canvas.png`],
+    [`${base}.png`, `${base}@1x-source.png`],
   );
 
   const single = await exportElements(REPO_ROOT, {
     projectId: project.id,
     elementIds: [element.id],
-    rows: [{ scale: "1x", format: "png", base: "canvas" }],
+    rows: [{ scale: "1x", format: "png", base: "source" }],
   });
   assert.deepEqual(single.items.map((item) => item.file), [`${base}.png`], "a single row is always the clean base name");
 });
@@ -303,8 +304,8 @@ test("exportElements: canvas-base on a RESIZED element produces on-canvas pixels
       projectId: project.id,
       elementIds: [element.id],
       rows: [
-        { scale: "1x", format: "png", base: "canvas" },
-        { scale: "1x", format: "png" }, // default base "source"
+        { scale: "1x", format: "png" }, // default base "canvas"
+        { scale: "1x", format: "png", base: "source" },
       ],
     });
   } catch (error) {
@@ -421,19 +422,22 @@ test("cli export-set/export --base source|canvas: persists, exports, and rejects
   const projectId = run("create", "--title", "CLI Base").project.id;
   const elementId = run("add-image", projectId, "--file", pngPath).element.id;
 
-  // export-set --base canvas persists the field (round-trips through the store).
-  const set = run("export-set", projectId, "--element", elementId, "--scale", "1x", "--base", "canvas");
-  assert.equal(set.rows[0].base, "canvas");
+  // export-set --base source persists the field (round-trips through the store);
+  // --base canvas is the default and is normalized AWAY in storage.
+  const set = run("export-set", projectId, "--element", elementId, "--scale", "1x", "--base", "source");
+  assert.equal(set.rows[0].base, "source");
+  const setDefault = run("export-set", projectId, "--element", elementId, "--scale", "1x", "--base", "canvas");
+  assert.equal(setDefault.rows[0].base, undefined);
 
-  // export --base canvas (ad-hoc override) exports with it too — tool parity with the
+  // export --base source (ad-hoc override) exports with it too — tool parity with the
   // site's Base segmented control. The element was never resized, so canvas dims ==
   // source dims here (9x6) -> still a pure copy, no Python required.
-  const exported = run("export", projectId, "--elements", elementId, "--scale", "1x", "--base", "canvas");
-  assert.equal(exported.items[0].base, "canvas");
+  const exported = run("export", projectId, "--elements", elementId, "--scale", "1x", "--base", "source");
+  assert.equal(exported.items[0].base, "source");
   assert.deepEqual([exported.items[0].w, exported.items[0].h], [9, 6]);
 
   // An unknown --base value is rejected loudly (exit 1, the ops validation message on
-  // stderr), never silently coerced to "source".
+  // stderr), never silently coerced to a default.
   let failed;
   try {
     execFileSync(process.execPath, [CLI, "export-set", projectId, "--element", elementId, "--scale", "1x", "--base", "bogus"], {

@@ -875,10 +875,11 @@ export function setRegions(root, { projectId, elementId, regions } = {}) {
 
 const EXPORT_FORMATS = new Set(["png", "jpg", "webp"]);
 const EXPORT_RESAMPLE = new Set(["lanczos", "nearest"]);
-// T0235: export base — which dims a row's scale token resolves against. "source" (the
-// default, stored as an ABSENT field to keep old rows/JSON untouched) resolves against
-// the element's original source pixels (source_w/h); "canvas" resolves against the
-// element's CURRENT on-canvas w/h at export time (tracks later resizes).
+// T0235: export base — which dims a row's scale token resolves against. "canvas" (the
+// default since the lead's same-day flip, stored as an ABSENT field) resolves against
+// the element's CURRENT on-canvas w/h at export time (tracks later resizes — "2x" =
+// twice what you see); "source" resolves against the original source pixels
+// (source_w/h) for full-resolution export of a downscaled sprite.
 const EXPORT_BASES = new Set(["source", "canvas"]);
 const MAX_EXPORT_DIM = 16384;
 // T0229: the per-row filename suffix was removed — file naming is now automatic
@@ -974,7 +975,7 @@ function cleanExportRows(rows, { rejectSuffix = false } = {}) {
       if (!EXPORT_BASES.has(base)) {
         throw new Error(`export row ${index} base must be source/canvas, got ${JSON.stringify(row.base)}`);
       }
-      if (base === "canvas") clean.base = base; // "source" is the default: omit, keep JSON minimal
+      if (base === "source") clean.base = base; // "canvas" is the default: omit, keep JSON minimal
     }
     return clean;
   });
@@ -2763,18 +2764,20 @@ function formatExt(format) {
 }
 
 // Figma-style scale marker for an export file name (T0229 replaces the manual suffix;
-// T0235 adds the "-canvas" base tag). A 1x SOURCE-base multiplier is the baseline -> no
-// marker (clean "name.png"); any other scale gets "@<token>" (e.g. "@2x", "@0.5x",
-// "@512w"). A CANVAS-base row always gets a marker, even at 1x ("@1x-canvas"), because
-// the source-base 1x row already claims the unmarked baseline name — a canvas-base row
-// must never collide with it. Only applied when an element has SEVERAL rows (a single
-// row is always the clean base name); the tokens are filename-safe (digits, "x"/"w"/"h",
-// "." and "@"), so they never escape the confined export folder.
+// T0235 added the base tag; lead flipped the DEFAULT base to CANVAS same day — "я
+// поскейлил арт и хочу на выходе размер как на канвасе"). A 1x CANVAS-base multiplier
+// is the baseline -> no marker (clean "name.png"); any other scale gets "@<token>"
+// (e.g. "@2x", "@0.5x", "@512w"). A SOURCE-base row always gets a marker, even at 1x
+// ("@1x-source"), because the canvas-base 1x row already claims the unmarked baseline
+// name — a source-base row must never collide with it. Only applied when an element
+// has SEVERAL rows (a single row is always the clean base name); the tokens are
+// filename-safe (digits, "x"/"w"/"h", "." and "@"), so they never escape the confined
+// export folder.
 function scaleMarker(scaleToken, base) {
   const spec = parseScaleSpec(scaleToken);
-  const isCanvas = base === "canvas";
-  if (spec.kind === "mul" && spec.value === 1 && !isCanvas) return "";
-  return isCanvas ? `@${spec.token}-canvas` : `@${spec.token}`;
+  const isSource = base === "source";
+  if (spec.kind === "mul" && spec.value === 1 && !isSource) return "";
+  return isSource ? `@${spec.token}-source` : `@${spec.token}`;
 }
 
 // The rows an element exports with: its persisted export settings, an explicit
@@ -2857,7 +2860,9 @@ export async function exportElements(root, { projectId, elementIds, rows } = {})
     const multiRow = elementRows.length > 1;
 
     for (const row of elementRows) {
-      const baseDims = row.base === "canvas" ? canvasDimsFor(element) : { w: sourceW, h: sourceH };
+      // Lead 2026-07-03: CANVAS is the default base — a scaled-on-canvas sprite exports
+      // "as seen" unless the row explicitly asks for the source pixels.
+      const baseDims = row.base === "source" ? { w: sourceW, h: sourceH } : canvasDimsFor(element);
       const { width, height } = resolveExportScale(row.scale, baseDims.w, baseDims.h);
       const marker = multiRow ? scaleMarker(row.scale, row.base) : "";
       let file = `${base}${marker}.${formatExt(row.format)}`;
@@ -2880,7 +2885,7 @@ export async function exportElements(root, { projectId, elementIds, rows } = {})
         file,
         src: element.src,
         scale: row.scale,
-        base: row.base === "canvas" ? "canvas" : "source",
+        base: row.base === "source" ? "source" : "canvas",
         format: row.format,
         resample: row.resample,
         w: width,

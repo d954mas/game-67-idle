@@ -198,12 +198,13 @@ Every capability is one op in `ops.mjs`:
   and derive file names automatically. Journaled like `setRegions`, so undo/redo restore
   the previous rows. Both the page's Export section and the CLI `export-set` drive this
   one op.
-  - **`base` (T0235, additive)**: `"source"` (default — omitted/absent, so old rows are
-    untouched) or `"canvas"`. Picks which dims a row's scale token resolves against at
-    export time: `source` = the element's original `source_w`/`source_h` (v1 behavior,
-    frozen pixel dims); `canvas` = the element's **current** on-canvas `w`/`h`, resolved
-    fresh on every export (tracks a later resize — never frozen into the token). A stored
-    row only ever carries `base:"canvas"`; `"source"`/absent is normalized away so the
+  - **`base` (T0235, additive)**: `"canvas"` (the DEFAULT — omitted/absent; lead's
+    same-day flip: "2x" means twice what you SEE) or `"source"`. Picks which dims a
+    row's scale token resolves against at export time: `canvas` = the element's
+    **current** on-canvas `w`/`h`, resolved fresh on every export (tracks a later
+    resize — never frozen into the token); `source` = the element's original
+    `source_w`/`source_h` (full-resolution export of a downscaled sprite). A stored
+    row only ever carries `base:"source"`; `"canvas"`/absent is normalized away so the
     JSON stays minimal. Both the site's card-level **Source | Canvas** segmented control
     and the CLI `--base source|canvas` flag drive this field; an unknown value is a loud
     validation error, never a silent fallback.
@@ -217,12 +218,12 @@ Every capability is one op in `ops.mjs`:
   pixels match the source file's actual dims, so the lead's original pixels are preserved
   exactly. **File naming is automatic (T0229)**: base = the element/screen name (slugged);
   a single row is the clean `name.<ext>` regardless of its export `base`; several rows get
-  a Figma **scale marker** (`name@2x.png`, `name@0.5x.png`, `name@512w.png`; a source `1x`
-  row stays clean/unmarked). A **canvas-base** row in a multi-row set always gets a marker
-  tagged `-canvas` — even at `1x` (`name@1x-canvas.png`) — so it never collides with the
-  unmarked source `1x` baseline name. Any remaining collision (same scale+format+base
+  a Figma **scale marker** (`name@2x.png`, `name@0.5x.png`, `name@512w.png`; a canvas `1x`
+  row stays clean/unmarked). A **source-base** row in a multi-row set always gets a marker
+  tagged `-source` — even at `1x` (`name@1x-source.png`) — so it never collides with the
+  unmarked canvas `1x` baseline name. Any remaining collision (same scale+format+base
   twice, or two elements sharing a name) gets a deterministic numeric `_NN`. When no
-  `rows` are set on an element it exports the implicit default `1x png` (`base:"source"`).
+  `rows` are set on an element it exports the implicit default `1x png` (`base:"canvas"`).
   `rows`, when passed, overrides every element's settings for that one run (agent
   one-shots / the CLI `--scale`/`--base` flags). Not journaled (no project mutation),
   recorded in `tool_runs`.
