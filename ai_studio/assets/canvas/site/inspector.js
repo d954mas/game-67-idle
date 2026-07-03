@@ -360,11 +360,16 @@ function renderRegions(element, root) {
     sliceRegionsFor(element.id, ids.length ? ids : undefined, sliceBtn);
   });
   actions.appendChild(sliceBtn);
+  body.appendChild(actions);
+}
 
-  // Alpha cutout (T0210): a method dropdown + run button on the selected IMAGE element.
-  // Auto routes (and refuses a dual-plate soft zone loudly); Key matte forces key_matte.
-  // Scoped to the selected regions when any are selected in region-edit mode, else the
-  // whole element. Long-op via the queue + progress toast (mirrors Slice).
+// Alpha section (T0241 — lead: alpha is not a Regions concern, it gets its own section).
+// A method dropdown + run button on the selected IMAGE element. Auto routes (and refuses
+// a dual-plate soft zone loudly); Key matte forces key_matte. STILL region-aware: scoped
+// to the selected regions when any are selected in region-edit mode, else the whole
+// element. Long-op via the queue + progress toast (mirrors Slice).
+function renderAlpha(element, root) {
+  const body = collapsible(root, "alpha", "Alpha");
   const alphaRow = document.createElement("div");
   alphaRow.className = "insp-alpha-row";
   const methodSel = document.createElement("select");
@@ -385,15 +390,8 @@ function renderRegions(element, root) {
     const ids = selectedRegionIdsFor(element);
     alphaCutoutFor(element.id, methodSel.value, ids.length ? ids : undefined, alphaBtn);
   });
-  alphaRow.append(field("Alpha", methodSel), alphaBtn);
-  actions.appendChild(alphaRow);
-
-  // Generate (dual-plate) stays a muted placeholder — it needs a white+black plate pair.
-  const future = document.createElement("div");
-  future.className = "insp-region-hint";
-  future.textContent = "Coming soon: Generate (dual-plate pair)";
-  actions.appendChild(future);
-  body.appendChild(actions);
+  alphaRow.append(field("Method", methodSel), alphaBtn);
+  body.appendChild(alphaRow);
 }
 
 // ---- export (Figma-style rows persisted on the element) ----------------------
@@ -837,6 +835,7 @@ function renderElement(element, root) {
   if (element.groupId) renderAlignSection([element.id], root);
 
   renderRegions(element, root);
+  renderAlpha(element, root);
 
   if (element.meta && element.meta.parent) {
     const prov = collapsible(root, "provenance", "Provenance");

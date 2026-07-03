@@ -490,13 +490,14 @@ test("alphaDualPlate (happy pair) creates ONE new element in ONE journal entry; 
   const after = getProject(REPO_ROOT, project.id);
   assert.equal(after.history_seq, seqBefore + 1, "dual-plate keying is one journal entry");
 
-  // A brand-new element (never a src-swap of either plate), named/placed off plate A.
+  // A brand-new element (never a src-swap of either plate), named off plate A and placed
+  // to the RIGHT of both plates' union bbox (gap 16) — never on top of a plate.
   assert.notEqual(result.element.id, plateWhite.id);
   assert.notEqual(result.element.id, plateBlack.id);
   assert.equal(after.elements.length, 3, "2 plates + 1 new cut element");
   assert.equal(result.element.name, `${plateWhite.name} alpha`);
-  assert.equal(result.element.x, plateWhite.x);
-  assert.equal(result.element.y, plateWhite.y);
+  assert.equal(result.element.x, Math.max(plateWhite.x + plateWhite.w, plateBlack.x + plateBlack.w) + 16);
+  assert.equal(result.element.y, Math.min(plateWhite.y, plateBlack.y));
   assert.equal(result.element.meta.alpha.method, "dual_plate");
   assert.deepEqual(result.element.meta.alpha.parents, [plateWhite.src, plateBlack.src]);
   assert.equal(result.element.meta.alpha.pair_gate.verdict, "pass");

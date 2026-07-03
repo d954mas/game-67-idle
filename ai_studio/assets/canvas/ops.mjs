@@ -2780,6 +2780,11 @@ export async function alphaDualPlate(root, { projectId, elementIds } = {}) {
   if (!plateB) throw new Error(`element not found: ${idB}`);
 
   const { run, alphaMeta } = buildDualPlateProvenance(idA, idB, report, plateA.src, plateB.src);
+  // Placement: to the RIGHT of BOTH plates' union bbox (gap in canvas px, mirrors slice) —
+  // never on top of a plate, so the result is immediately visible (lead complaint T0237).
+  const gap = 16;
+  const pairRight = Math.max(plateA.x + plateA.w, plateB.x + plateB.w);
+  const pairTop = Math.min(plateA.y, plateB.y);
   // storeAddImage mints the new element (id/type/src/x/y/w/h/source_w/h/name/meta) the
   // SAME way every other add does — no hand-rolled element shape here. Like addImage, a
   // freshly minted image never carries a groupId, so the new element lands in the root
@@ -2787,8 +2792,8 @@ export async function alphaDualPlate(root, { projectId, elementIds } = {}) {
   const added = storeAddImage(root, projectId, {
     name: `${plateA.name} alpha`,
     bytes,
-    x: plateA.x,
-    y: plateA.y,
+    x: pairRight + gap,
+    y: pairTop,
     meta: { alpha: alphaMeta },
   });
 
