@@ -2390,24 +2390,30 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
     rmSync(workDir, { recursive: true, force: true });
   }
 
-  // Wrap every crop in a fresh "<sheet name> slices" group so a big slice never
-  // dumps N loose elements onto the scene (lead 2026-07-02). Same journal entry:
-  // one undo removes the group AND every crop together.
-  const pad = 24;
-  const { minX, minY, maxX, maxY } = elementsBBox(created);
-  const group = {
-    id: `grp_${randomUUID().slice(0, 8)}`,
-    name: `${String(parent.name || "sheet").trim()} slices`,
-    x: minX - pad,
-    y: minY - pad,
-    w: maxX - minX + pad * 2,
-    h: maxY - minY + pad * 2,
-    visible: true,
-  };
-  // Top-level slices group: front order keeps an explicitly-ordered root explicit
-  // (no-op on a never-reordered root). The crops sit in the group's own fresh scope.
-  const sliceGroupFront = frontOrder(before, null);
-  if (sliceGroupFront !== null) group.order = sliceGroupFront;
+  // Wrap the crops in a fresh "<sheet name> slices" group so a big slice never dumps N
+  // loose elements onto the scene (lead 2026-07-02) — but a SINGLE crop skips the wrapper
+  // entirely (T0246, lead 2026-07-03: "если я делаю один вырез региона из картинки, то
+  // группа не нужна" — a one-element group is noise) and stays a loose element at its
+  // grid spot. Same journal entry either way: one undo removes the group (when present)
+  // AND every crop together.
+  let group = null;
+  if (created.length > 1) {
+    const pad = 24;
+    const { minX, minY, maxX, maxY } = elementsBBox(created);
+    group = {
+      id: `grp_${randomUUID().slice(0, 8)}`,
+      name: `${String(parent.name || "sheet").trim()} slices`,
+      x: minX - pad,
+      y: minY - pad,
+      w: maxX - minX + pad * 2,
+      h: maxY - minY + pad * 2,
+      visible: true,
+    };
+    // Top-level slices group: front order keeps an explicitly-ordered root explicit
+    // (no-op on a never-reordered root). The crops sit in the group's own fresh scope.
+    const sliceGroupFront = frontOrder(before, null);
+    if (sliceGroupFront !== null) group.order = sliceGroupFront;
+  }
   const createdIds = new Set(created.map((element) => element.id));
 
   const run = {
@@ -2416,14 +2422,16 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
     elementId,
     at: new Date().toISOString(),
     params: { regionIds: selected.map((region) => String(region.id)) },
-    result_summary: { slice_count: created.length, group_id: group.id },
+    result_summary: { slice_count: created.length, group_id: group ? group.id : null },
   };
   const current = getProject(root, projectId);
   const withRun = updateProject(root, projectId, {
-    groups: [...groupsOf(current), group],
-    elements: (current.elements || []).map((element) =>
-      createdIds.has(element.id) ? { ...element, groupId: group.id } : element,
-    ),
+    groups: group ? [...groupsOf(current), group] : groupsOf(current),
+    elements: group
+      ? (current.elements || []).map((element) =>
+          createdIds.has(element.id) ? { ...element, groupId: group.id } : element,
+        )
+      : current.elements || [],
     tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
   });
   const project = commitMutation(root, projectId, {
@@ -2433,18 +2441,18 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
       regionIds: selected.map((region) => String(region.id)),
       created: created.map((element) => element.id),
       count: created.length,
-      groupId: group.id,
+      groupId: group ? group.id : null,
     },
     before,
     after: withRun,
     startedAt,
   });
-  // Hand back the STORED crops (they now carry groupId), not the pre-group copies.
+  // Hand back the STORED crops (they carry groupId when grouped), not the pre-group copies.
   const fresh = (project.elements || []).filter((element) => createdIds.has(element.id));
   return {
     project,
     created: created.map((element) => fresh.find((item) => item.id === element.id) || element),
-    group: (project.groups || []).find((item) => item.id === group.id),
+    group: group ? (project.groups || []).find((item) => item.id === group.id) : null,
     run,
     regions: selected,
   };

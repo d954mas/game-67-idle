@@ -209,6 +209,36 @@ test("sliceRegions masks alpha outside a polygon region (in-poly opaque, out tra
   assert.equal(crop.at(18, 18)[3], 0, "out-of-polygon pixel is transparent");
 });
 
+test("sliceRegions with ONE region mints a loose element - no wrapper group (T0246)", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Single slice" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
+  setRegions(REPO_ROOT, {
+    projectId: project.id,
+    elementId: element.id,
+    regions: [{ id: "only", name: "Hero", rect: [8, 8, 20, 20] }],
+  });
+
+  let sliced;
+  try {
+    sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
+  } catch (error) {
+    t.skip(`crop_regions.py / PIL unavailable: ${error.message}`);
+    return;
+  }
+
+  // One crop, loose on the scene: no group minted, no groupId stamped.
+  assert.equal(sliced.created.length, 1);
+  assert.equal(sliced.group, null, "single-crop slice returns no group");
+  assert.equal(sliced.created[0].groupId, undefined, "crop carries no groupId");
+  assert.equal((sliced.project.groups || []).length, 0, "no group in the project");
+
+  // Still one journal entry: undo removes exactly the crop.
+  const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.equal(undone.elements.length, 1, "only the parent sheet remains after undo");
+  assert.equal((undone.groups || []).length, 0);
+});
+
 test("sliceRegions errors clearly when the element has no regions", (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "NoRegions" });
