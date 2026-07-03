@@ -39,3 +39,4 @@ increment plan.
 - 2026-07-03: created from lead request during T0210 verification.
 - 2026-07-03: design phase delegated to deep-reasoner (Opus).
 - 2026-07-03: Design phase launched (deep-reasoner/Opus): reuse verdict on old viewer slice9, additive element.slice9 model, shared rect-math for page/PIL/export parity, UI v1 scope, increments. Doc -> tmp/design_T0233_slice9_2026-07-03.md. Implementation waits for lead confirmation per task gate.
+- 2026-07-03: Design phase COMPLETE: tmp/design_T0233_slice9_2026-07-03.md (synthesized w/ prior draft, rotation-composition flaw fixed). Verdict: viewer slice9 = phantom; adopt engine nt_atlas slice9_lrtb semantics, port no code. element.slice9 additive, shared rect-math JS+py twin, 2 increments. 2 open questions to lead in tmp/VERIFY_2026-07-03.md (corner convention, v1 UI depth). Implementation gated on lead confirmation.
