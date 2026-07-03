@@ -25,6 +25,7 @@
 //   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 //   node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte] [--regions r1,r2]
 //   node ai_studio/assets/canvas/cli.mjs alpha <id> --elements e1,e2 [--method auto|matte]   (batch; one undo)
+//   node ai_studio/assets/canvas/cli.mjs alpha-dual <id> --elements a,b   (white+black plate pair -> new element; one undo)
 //   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --resample --base]
 //   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --resample --base] [--to <dir>] [--zip <path>]
 //   node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h] [--parent <gid>|none]
@@ -55,6 +56,7 @@ import {
   addImages,
   addText,
   alphaCutout,
+  alphaDualPlate,
   assignToGroup,
   createGroup,
   createProject,
@@ -150,7 +152,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|alpha-dual|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history|history-list|history-jump>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -177,6 +179,7 @@ function usage() {
   slice <id> --element <eid> [--regions r1,r2]
   alpha <id> --element <eid> [--method auto|matte] [--regions r1,r2]   (alpha-cutout the element; auto routes, matte forces key_matte; one undo)
   alpha <id> --elements e1,e2 [--method auto|matte]   (batch: 2+ images keyed into ONE journal entry/undo; no --regions with a batch)
+  alpha-dual <id> --elements a,b   (white-plate + black-plate pair -> ONE new cut element; either order; plates untouched; one undo step)
   export-set <id> --element <eid> --json <path> | --scale <t> [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest] [--base source|canvas]
   export <id> --elements e1,e2 | --all | --project [--scale <t> --format <f> --quality <n> --resample <r> --base source|canvas] [--to <dir>] [--zip <path>]
   group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]
@@ -419,6 +422,15 @@ async function runCommand(command, id, positional, flags) {
         }
       }
       return print(await alphaCutout(repoRoot, args));
+    }
+    case "alpha-dual": {
+      // Dual-plate alpha cutout (T0237): the SAME art on a white plate + a black plate
+      // (either order — the tool auto-detects roles by overall brightness) -> ONE new
+      // cut element in ONE undo step. Both plate elements stay untouched (non-destructive).
+      if (!id) fail("alpha-dual requires <id>");
+      if (!flags.elements || flags.elements === "true") fail("alpha-dual requires --elements a,b");
+      const elementIds = String(flags.elements).split(",").map((value) => value.trim()).filter(Boolean);
+      return print(await alphaDualPlate(repoRoot, { projectId: id, elementIds }));
     }
     case "export-set": {
       if (!id) fail("export-set requires <id>");

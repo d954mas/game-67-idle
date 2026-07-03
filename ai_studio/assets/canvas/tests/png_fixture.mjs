@@ -111,6 +111,28 @@ export function solidPng(width = 4, height = 3, color = [10, 20, 30]) {
   return encodePng(width, height, () => color);
 }
 
+// A white-plate + black-plate dual-plate PAIR fixture (40x30): the SAME solid blob at the
+// SAME position (offset:0, default) on a flat white background and a flat black
+// background — exactly what ops.alphaDualPlate expects as its 2-element input. Hand-verified
+// against dual_plate_pair_gate's math: background pixels diff to a uniform (255,255,255)
+// (alpha 0, not "opaque"), blob pixels diff to (0,0,0) (alpha 1, chroma 0) — so
+// inconsistent_fraction is exactly 0.0, comfortably inside PASS_FRACTION (0.05).
+// A nonzero `offset` shifts the BLACK plate's blob by that many px (misaligned pair): with
+// offset:10 (blob width 16), the overlap/mismatch bands push inconsistent_fraction to
+// ~0.77 — well past ALIGN_FRACTION (0.20) into the gate's "regenerate" refusal.
+export function dualPlatePairPng({ offset = 0 } = {}) {
+  const width = 40;
+  const height = 30;
+  const blob = { x0: 12, y0: 8, x1: 28, y1: 22, color: [200, 60, 60] };
+  const white = encodePng(width, height, (x, y) =>
+    x >= blob.x0 && x < blob.x1 && y >= blob.y0 && y < blob.y1 ? blob.color : [255, 255, 255],
+  );
+  const black = encodePng(width, height, (x, y) =>
+    x >= blob.x0 + offset && x < blob.x1 + offset && y >= blob.y0 && y < blob.y1 ? blob.color : [0, 0, 0],
+  );
+  return { white, black };
+}
+
 // Minimal PNG decoder for pixel assertions on render output. Handles 8-bit
 // truecolor (RGB, type 2) and truecolor+alpha (RGBA, type 6), no interlace —
 // which covers both this file's fixtures and PIL's renderGroup output. Reverses

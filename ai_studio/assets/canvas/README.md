@@ -173,6 +173,21 @@ Every capability is one op in `ops.mjs`:
   single-element. Both clients: the page's inspector **Alpha cutout** control (single
   element or region scope) / multi-selection **Alpha** section ("Apply to N images") and
   the CLI `alpha --element`/`alpha --elements`.
+- `alphaDualPlate({ projectId, elementIds: [a, b] })` — **(T0237)** closes the loop
+  `alphaCutout` refuses: TWO image elements — the **same art** rendered on a white plate
+  and a black plate, in **either order** (`tools/alpha_dualplate.py` auto-detects which is
+  which by overall brightness) — key into **ONE NEW** content-addressed cut element in ONE
+  journaled entry. Unlike `alphaCutout`, this **never touches** the two source elements
+  (non-destructive; the lead deletes the plates himself once happy with the result); one
+  undo removes the new element. The new element is named `"<first plate's name> alpha"`
+  and placed at the **first plate's `x`/`y`**; `element.meta.alpha` records `method:
+  "dual_plate"`, both parent `src`s, and the pair gate's own verdict/metrics, plus an
+  `alpha_dualplate` `tool_runs` row. Requires **exactly 2** elementIds (a loud error
+  otherwise) and both must be image elements. Refusals are loud and specific: the pair
+  gate's own message travels through as a clean error (misaligned/redrawn plates,
+  same-color plates — a `SystemExit`, never a Python traceback). See **Dual-plate alpha
+  tool** below. Both clients: the multi-selection inspector's **Dual-plate cutout**
+  button (shown only for an exact 2-image selection) and the CLI `alpha-dual --elements`.
 - `setExportSettings({ projectId, elementId, rows })` — replace an element's
   Figma-style export rows `[{scale, format, quality?, resample, base?}]` (the Export
   section persisted on the layer). Validates + normalizes each row (scale token syntax,
@@ -496,6 +511,44 @@ implementation, and a missing module is a loud import error.
   rejects the whole batch with that element's message and mutates nothing — no partial
   swap. One undo restores every element byte-exact.
 
+### Dual-plate alpha tool
+
+`alphaDualPlate` (T0237) closes the loop `alphaCutout` refuses ("dual_plate... is out of
+v1 scope on a single element"): TWO selected image elements — the SAME art rendered once
+on a flat **white** plate and once on a flat **black** plate — key into ONE brand-new cut
+element. Like `alphaCutout`, it uses our OWN Python tool `tools/alpha_dualplate.py`
+(spawned once through the shared warm worker), but that tool **reuses the image-tools
+dual-plate modules verbatim** — `dual_plate_pair_gate.evaluate` (the pair-consistency
+gate) and `dual_plate_alpha.extract_dual_plate_alpha`/`build_report` (the Smith & Blinn
+1996 projection extractor) — so there is **no matte logic duplicated** in node or in a
+second Python implementation.
+
+- **Plate roles, auto-detected.** The two elements arrive as an unordered pair — nothing
+  on the canvas tags "this one is the white plate". The tool picks by comparing each
+  plate's **overall mean brightness** (the background fills most of the frame, so a
+  white-bg plate reads far brighter than a black-bg plate); a tie (both plates the same
+  brightness) is a loud, specific refusal. This is a thin ordering step, not a second
+  consistency implementation — the reused gate/extractor never change.
+- **The pair gate decides refusal.** `dual_plate_pair_gate.evaluate`'s own verdict gates
+  extraction: `pass`/`align` (plates agree) proceeds; `regenerate` (the subject was
+  redrawn or shifted between plates — ghosted alpha) is a **loud refusal**, surfaced as the
+  gate's own message (`SystemExit`, no Python traceback) — nothing is written. A
+  post-extraction sanity check (`build_report`, also reused) catches a degenerate result
+  (no visible alpha pixels) even when the pair gate passed.
+- **Non-destructive, always a NEW element.** Unlike `alphaCutout`'s src-swap, this never
+  touches the two plate elements — they stay on the canvas exactly as they were; the lead
+  deletes them himself once happy with the result. The new element is minted the same way
+  every other add is (`storeAddImage` — same id/type/src/x/y/w/h/meta shape as
+  `addImage`/`addImages`, no hand-rolled element), named `"<first plate's name> alpha"`,
+  placed at the **first plate's `x`/`y`**, sized to the extraction output (equals the plate
+  size). `element.meta.alpha` records `method: "dual_plate"`, both parent `src`s, and the
+  pair gate's verdict/metrics, plus an `alpha_dualplate` `tool_runs` row. ONE journal
+  entry; one undo removes the new element byte-exact — the plates are never part of the
+  undo (they were never mutated).
+- Both clients: the multi-selection inspector's **Alpha** section grows a **Dual-plate
+  cutout** button under the batch "Apply to N images" row, shown only when the selection is
+  **exactly 2 images**; the CLI `alpha-dual --elements a,b`.
+
 ## Text elements
 
 A **text element** is a Figma-style text node in the flat model — `type: "text"` in
@@ -807,6 +860,7 @@ node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte] [--regions r1,r2]   # alpha-cutout the element (auto routes; matte forces key_matte); one undo
 node ai_studio/assets/canvas/cli.mjs alpha <id> --elements e1,e2 [--method auto|matte]   # batch: 2+ images keyed into ONE journal entry/undo; no --regions with a batch
+node ai_studio/assets/canvas/cli.mjs alpha-dual <id> --elements a,b   # white-plate + black-plate pair (either order) -> ONE new cut element; plates untouched; one undo
 node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json      # persist export rows (journaled)
 node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --scale 2x [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest] [--base source|canvas]
 node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all, or --project (all visible screens)

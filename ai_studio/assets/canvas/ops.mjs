@@ -1977,6 +1977,7 @@ export function historyEntryLabel(op, args = {}) {
       if (a.count) return { label: "Alpha cutout", summary: plural(count(a.count), "image") };
       return { label: "Alpha cutout", summary: a.region_count ? plural(count(a.region_count), "region") : String(a.method || "") };
     }
+    case "alphaDualPlate": return { label: "Dual-plate alpha", summary: "" };
     case "setExportSettings": return { label: "Export settings", summary: "" };
     case "patchProject": return { label: "Rename project", summary: String(a.title || "") };
     case "createGroup": return { label: "Group", summary: String(a.name || "") };
@@ -2368,8 +2369,8 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
 // Accepted alpha methods on the canvas: the auto route (soft_score router picks
 // key_matte, and refuses a wide soft zone that would need a dual-plate pair) and an
 // explicit key_matte force. alpha_dualplate needs a white+black plate PAIR — a single
-// element has one image, so it is OUT of canvas v1 scope; asking for it is a loud error
-// (where a pair source could come from later: a future "generate dual-plate pair" op).
+// elementId call can't provide one, so asking for it here is a loud error that points
+// at the separate alphaDualPlate op (T0237), which takes 2 elementIds instead.
 const ALPHA_METHODS = new Set(["auto", "matte"]);
 
 // Resolve the optional region-id selection against the element's STORED regions (same
@@ -2592,7 +2593,8 @@ export async function alphaCutout(root, { projectId, elementId, elementIds, meth
     if (chosen === "dualplate" || chosen === "dual_plate" || chosen === "generation") {
       throw new Error(
         `alpha method ${JSON.stringify(method)} needs a white+black plate PAIR (dual-plate) — a single ` +
-          `canvas element has one image, so it is out of v1 scope. Use method "auto" or "matte".`,
+          `elementId call can't provide one. Select BOTH plate elements and use the alphaDualPlate op ` +
+          `(API POST /alpha-dual, CLI alpha-dual) instead, or use method "auto"/"matte" on a single image.`,
       );
     }
     throw new Error(`unknown alpha method ${JSON.stringify(method)} (expected "auto" or "matte")`);
@@ -2604,6 +2606,148 @@ export async function alphaCutout(root, { projectId, elementId, elementIds, meth
     return alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt);
   }
   return alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt);
+}
+
+// ---- alphaDualPlate (white+black plate pair -> one new cut element) ----------
+//
+// T0237 (lead, 2026-07-03): "до сих пор нет дуал пути для альфы?" — closes the loop the
+// alphaCutout doc points at ("a pair source could come from later"). Runs the canvas's
+// own tools/alpha_dualplate.py through the shared warm worker, which REUSES the
+// image-tools dual_plate_alpha + dual_plate_pair_gate modules unmodified (no matte logic
+// duplicated in node or a second python impl).
+
+// Run the two plate elements' CURRENT pixels through alpha_dualplate.py (own worker spawn
+// + own temp dir) and return the extracted RGBA bytes + the tool's report, WITHOUT
+// touching project.json — the caller mints the new element and commits.
+async function runAlphaDualPlateTool(root, projectId, elementA, elementB) {
+  const plateAAbs = resolveProjectFile(root, projectId, elementA.src);
+  const plateBAbs = resolveProjectFile(root, projectId, elementB.src);
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-dualplate-"));
+  try {
+    const specPath = join(workDir, "dualplate_spec.json");
+    const reportPath = join(workDir, "dualplate_report.json");
+    const outPath = join(workDir, "dualplate_out.png");
+    const spec = {
+      schema: "ai_studio.canvas.alpha_dualplate_spec.v1",
+      plateA: plateAAbs,
+      plateB: plateBAbs,
+      output: outPath,
+      report: reportPath,
+    };
+    writeFileSync(specPath, `${JSON.stringify(spec, null, 2)}\n`);
+    await runToolPython(root, ["ai_studio/assets/canvas/tools/alpha_dualplate.py", "--spec", specPath]);
+    const report = JSON.parse(readFileSync(reportPath, "utf8"));
+    const bytes = readFileSync(outPath);
+    return { bytes, report };
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// Build the tool_runs row + the new element's meta.alpha provenance from the tool's
+// report: method "dual_plate", both parent srcs, and the pair gate's own metrics (so the
+// lead can see exactly how clean the pair was) — mirrors buildAlphaProvenance's shape.
+function buildDualPlateProvenance(elementIdA, elementIdB, report, srcA, srcB) {
+  const at = new Date().toISOString();
+  const gate = (report && report.pair_gate) || {};
+  const run = {
+    id: `run_${randomUUID().slice(0, 8)}`,
+    op: "alpha_dualplate",
+    elementIds: [elementIdA, elementIdB],
+    at,
+    params: {},
+    result_summary: {
+      method: "dual_plate",
+      light_plate: report && report.light_plate,
+      dark_plate: report && report.dark_plate,
+      pair_gate: gate,
+      visible_pixels: report && report.visible_pixels,
+    },
+  };
+  const alphaMeta = {
+    method: "dual_plate",
+    tool: "alpha_dualplate.py",
+    parents: [srcA, srcB],
+    at,
+    light_plate: report && report.light_plate,
+    dark_plate: report && report.dark_plate,
+    pair_gate: gate,
+  };
+  return { run, alphaMeta };
+}
+
+// TWO selected image elements (the SAME art rendered on a white plate and a black plate,
+// in either order — the tool auto-detects which is which by overall brightness) -> ONE NEW
+// content-addressed cut element in ONE journaled entry. Both plate elements stay UNTOUCHED
+// (non-destructive; the lead deletes them himself once happy with the result) — unlike
+// alphaCutout, this never swaps an existing element's src. The new element is named
+// "<first plate's name> alpha", placed at the first plate's x/y, sized to the extracted
+// output (equals the plate size), and carries element.meta.alpha provenance (method,
+// both parent srcs, the pair gate's verdict/metrics) plus an alpha_dualplate tool_runs
+// row. Refusals are loud and specific: not exactly 2 ids, a non-image element, or the
+// pair gate's own "regenerate" message (misaligned/redrawn plates, ambiguous roles) —
+// travels the python worker's SystemExit path as a clean message, no traceback.
+export async function alphaDualPlate(root, { projectId, elementIds } = {}) {
+  if (!projectId) throw new Error("alphaDualPlate requires projectId");
+  if (!Array.isArray(elementIds)) throw new Error("alphaDualPlate requires an elementIds array");
+  const ids = elementIds.map((value) => String(value));
+  if (ids.length !== 2) {
+    throw new Error(`alphaDualPlate requires exactly 2 elementIds (a white-plate + black-plate pair), got ${ids.length}`);
+  }
+  const [idA, idB] = ids;
+  if (idA === idB) throw new Error("alphaDualPlate requires two DIFFERENT elementIds (a white-plate + black-plate pair)");
+
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const elementA = (before.elements || []).find((item) => item.id === idA);
+  if (!elementA) throw new Error(`element not found: ${idA}`);
+  if (elementA.type !== "image" || !elementA.src) throw new Error(`element ${idA} is not an image`);
+  const elementB = (before.elements || []).find((item) => item.id === idB);
+  if (!elementB) throw new Error(`element not found: ${idB}`);
+  if (elementB.type !== "image" || !elementB.src) throw new Error(`element ${idB} is not an image`);
+
+  const { bytes, report } = await runAlphaDualPlateTool(root, projectId, elementA, elementB);
+
+  // Re-read to avoid clobbering a concurrent edit (mirrors alphaCutout's re-read-before-write).
+  const current = getProject(root, projectId);
+  const plateA = (current.elements || []).find((item) => item.id === idA);
+  if (!plateA) throw new Error(`element not found: ${idA}`);
+  const plateB = (current.elements || []).find((item) => item.id === idB);
+  if (!plateB) throw new Error(`element not found: ${idB}`);
+
+  const { run, alphaMeta } = buildDualPlateProvenance(idA, idB, report, plateA.src, plateB.src);
+  // storeAddImage mints the new element (id/type/src/x/y/w/h/source_w/h/name/meta) the
+  // SAME way every other add does — no hand-rolled element shape here. Like addImage, a
+  // freshly minted image never carries a groupId, so the new element lands in the root
+  // scope regardless of the plates' own group membership.
+  const added = storeAddImage(root, projectId, {
+    name: `${plateA.name} alpha`,
+    bytes,
+    x: plateA.x,
+    y: plateA.y,
+    meta: { alpha: alphaMeta },
+  });
+
+  // Front-order hook (identical to addImage/addImages): the new element lands at the
+  // FRONT of the root scope when it is already explicitly ordered; a no-op otherwise.
+  const fo = frontOrder(before, null);
+  const nextElements = (added.project.elements || []).map((element) =>
+    fo !== null && element.id === added.element.id ? { ...element, order: fo } : element,
+  );
+  const after = updateProject(root, projectId, {
+    elements: nextElements,
+    tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
+  });
+
+  const project = commitMutation(root, projectId, {
+    op: "alphaDualPlate",
+    args_summary: { elementIds: [idA, idB], newElementId: added.element.id },
+    before,
+    after,
+    startedAt,
+  });
+  const element = (project.elements || []).find((item) => item.id === added.element.id) || added.element;
+  return { project, element, run };
 }
 
 // ---- exportElements (scale + encode) -----------------------------------------

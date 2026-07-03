@@ -441,6 +441,26 @@ export async function alphaCutoutBatchFor(ids, method, control) {
   );
 }
 
+// Dual-plate alpha cutout (T0237): TWO selected image elements — the SAME art rendered on
+// a white plate and a black plate, either order (the tool auto-detects roles by overall
+// brightness) — key into ONE NEW cut element via ops.alphaDualPlate. Non-destructive: both
+// plate elements stay on the canvas untouched (the lead deletes them himself once happy
+// with the result); one Ctrl+Z removes the new element. The new element is selected so the
+// lead sees the result immediately (mirrors addImageFiles' single-add selectOnly). Long
+// (python-backed) op — same runLongOp limiter/spinner/disable treatment as the other alpha rows.
+export async function alphaDualPlateFor(ids, control) {
+  await runLongOp(
+    "Dual-plate alpha…",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/alpha-dual`, { elementIds: ids });
+      selectOnly(result.element.id);
+      applyMutation(result);
+      return { kind: "success", message: `Dual-plate alpha created "${result.element.name}".` };
+    },
+    { control },
+  );
+}
+
 // ---- regions -----------------------------------------------------------------
 
 // Replace an element's regions in one journaled setRegions op. Region edits

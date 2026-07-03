@@ -14,10 +14,10 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath, URL } from "node:url";
 
-import { addImage, addText, alphaCutout, createProject, getProject, setRegions, undoOp, redoOp } from "../ops.mjs";
+import { addImage, addText, alphaCutout, alphaDualPlate, createProject, getProject, setRegions, undoOp, redoOp } from "../ops.mjs";
 import { resolveProjectFile } from "../store.mjs";
 import { createCanvasApi } from "../api.mjs";
-import { magentaSheetPng, slicedCropPng, softGlowPng } from "./png_fixture.mjs";
+import { dualPlatePairPng, magentaSheetPng, slicedCropPng, softGlowPng } from "./png_fixture.mjs";
 import { decodePng } from "./png_fixture.mjs";
 
 // Python tools run with cwd = repo root, so the pipeline tests must use the real root.
@@ -418,6 +418,184 @@ test("alpha API and CLI both drive elementIds batches, one journal entry each (p
   assert.match(parsed.elements[0].src, /^files\//);
   assert.match(parsed.elements[1].src, /^files\//);
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBeforeCli + 1, "CLI batch is one journal entry too");
+});
+
+// ---- alphaDualPlate (T0237: white+black plate pair -> ONE new cut element) ----
+
+// ---- validation (no Python) --------------------------------------------------
+
+test("alphaDualPlate validates arity/type before touching disk (fail-fast, no project needed)", async () => {
+  await assert.rejects(() => alphaDualPlate(UNUSED_ROOT, {}), /requires projectId/);
+  await assert.rejects(() => alphaDualPlate(UNUSED_ROOT, { projectId: "p" }), /requires an elementIds array/);
+  await assert.rejects(
+    () => alphaDualPlate(UNUSED_ROOT, { projectId: "p", elementIds: ["a"] }),
+    /exactly 2 elementIds/,
+  );
+  await assert.rejects(
+    () => alphaDualPlate(UNUSED_ROOT, { projectId: "p", elementIds: ["a", "b", "c"] }),
+    /exactly 2 elementIds/,
+  );
+  await assert.rejects(
+    () => alphaDualPlate(UNUSED_ROOT, { projectId: "p", elementIds: ["a", "a"] }),
+    /two DIFFERENT elementIds/,
+  );
+  // A NONEXISTENT project is never touched: the shape check throws before any getProject
+  // (disk) read — a bad shape fails fast regardless of whether the project even exists.
+  await assert.rejects(
+    () => alphaDualPlate(UNUSED_ROOT, { projectId: "nonexistent-project-xyz", elementIds: ["a"] }),
+    /exactly 2 elementIds/,
+  );
+});
+
+test("alphaDualPlate rejects a non-image element and an unknown id, before any python spawn", async (t) => {
+  // REPO_ROOT so addText finds the real fonts manifest; alphaDualPlate throws on the type
+  // check BEFORE any Python spawn, so this stays a pure-validation test.
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Dual plate validate" });
+  const { element: image } = addImage(REPO_ROOT, project.id, { name: "a.png", bytes: magentaSheetPng() });
+  const { element: text } = addText(REPO_ROOT, project.id, { content: "hi" });
+  await assert.rejects(
+    () => alphaDualPlate(REPO_ROOT, { projectId: project.id, elementIds: [image.id, text.id] }),
+    /is not an image/,
+  );
+  await assert.rejects(
+    () => alphaDualPlate(REPO_ROOT, { projectId: project.id, elementIds: [image.id, "el_missing"] }),
+    /element not found/,
+  );
+});
+
+// ---- pipeline (real warm worker; skips without the studio venv) ---------------
+
+test("alphaDualPlate (happy pair) creates ONE new element in ONE journal entry; plates stay untouched; undo removes it, redo restores it", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Dual plate happy" });
+  const { white, black } = dualPlatePairPng();
+  const { element: plateWhite } = addImage(REPO_ROOT, project.id, { name: "plate_white.png", bytes: white });
+  const { element: plateBlack } = addImage(REPO_ROOT, project.id, { name: "plate_black.png", bytes: black });
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq; // 2 addImage entries
+  const originals = getProject(REPO_ROOT, project.id).elements.map((element) => ({ ...element }));
+
+  let result;
+  try {
+    result = await alphaDualPlate(REPO_ROOT, { projectId: project.id, elementIds: [plateWhite.id, plateBlack.id] });
+  } catch (error) {
+    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
+      t.skip(`dual-plate pipeline unavailable: ${error.message}`);
+      return;
+    }
+    throw error;
+  }
+
+  // ONE new journal entry for the whole gesture.
+  const after = getProject(REPO_ROOT, project.id);
+  assert.equal(after.history_seq, seqBefore + 1, "dual-plate keying is one journal entry");
+
+  // A brand-new element (never a src-swap of either plate), named/placed off plate A.
+  assert.notEqual(result.element.id, plateWhite.id);
+  assert.notEqual(result.element.id, plateBlack.id);
+  assert.equal(after.elements.length, 3, "2 plates + 1 new cut element");
+  assert.equal(result.element.name, `${plateWhite.name} alpha`);
+  assert.equal(result.element.x, plateWhite.x);
+  assert.equal(result.element.y, plateWhite.y);
+  assert.equal(result.element.meta.alpha.method, "dual_plate");
+  assert.deepEqual(result.element.meta.alpha.parents, [plateWhite.src, plateBlack.src]);
+  assert.equal(result.element.meta.alpha.pair_gate.verdict, "pass");
+
+  // Both plates stay byte-exact untouched (non-destructive — no src swap, unlike alphaCutout).
+  for (const original of originals) {
+    assert.deepEqual(after.elements.find((el) => el.id === original.id), original, `plate ${original.id} untouched`);
+  }
+
+  // The extracted PNG: transparent background, opaque recovered blob at its original color.
+  const png = decodePng(readFileSync(resolveProjectFile(REPO_ROOT, project.id, result.element.src)));
+  assert.equal(png.channels, 4);
+  assert.equal(png.at(0, 0)[3], 0, "background is transparent");
+  assert.equal(png.at(18, 14)[3], 255, "blob is opaque");
+  assert.deepEqual(png.at(18, 14).slice(0, 3), [200, 60, 60], "blob color recovered");
+
+  // ONE undo removes ONLY the new element; the plates were never mutated in the first
+  // place, so they are trivially still there afterward.
+  const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.equal(undone.history_seq, seqBefore);
+  assert.equal(undone.elements.length, 2, "only the 2 plates remain after undo");
+  for (const original of originals) {
+    assert.deepEqual(undone.elements.find((el) => el.id === original.id), original);
+  }
+
+  // Redo re-creates the exact same element (same id/src).
+  const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.equal(redone.elements.find((el) => el.id === result.element.id).src, result.element.src);
+});
+
+test("alphaDualPlate refuses a misaligned pair with the pair gate's own message — no Python traceback, nothing mutated", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Dual plate refusal" });
+  const { white, black } = dualPlatePairPng({ offset: 10 }); // blob shifted several px on the black plate
+  const { element: plateWhite } = addImage(REPO_ROOT, project.id, { name: "plate_white.png", bytes: white });
+  const { element: plateBlack } = addImage(REPO_ROOT, project.id, { name: "plate_black.png", bytes: black });
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+  const originals = getProject(REPO_ROOT, project.id).elements.map((element) => ({ ...element }));
+
+  try {
+    await alphaDualPlate(REPO_ROOT, { projectId: project.id, elementIds: [plateWhite.id, plateBlack.id] });
+    assert.fail("a misaligned dual-plate pair must refuse (pair gate)");
+  } catch (error) {
+    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
+      t.skip(`dual-plate pipeline unavailable: ${error.message}`);
+      return;
+    }
+    // The gate's own message reaches the operator...
+    assert.match(error.message, /consistency gate|regenerate|redraw/i, `refusal message expected, got: ${error.message}`);
+    // ...WITHOUT the worker's crash formatting (raw traceback in the UI toast = bug).
+    assert.ok(!/Traceback|File "/.test(error.message), `traceback leaked to the operator: ${error.message}`);
+  }
+
+  // Nothing mutated: no journal entry, both plates untouched, no stray new element.
+  const after = getProject(REPO_ROOT, project.id);
+  assert.equal(after.history_seq, seqBefore, "no journal entry on a rejected pair");
+  assert.equal(after.elements.length, 2, "no new element created");
+  for (const original of originals) {
+    assert.deepEqual(after.elements.find((el) => el.id === original.id), original);
+  }
+});
+
+// ---- API + CLI parity (real pipeline; skips without the venv) -----------------
+
+test("alpha-dual API route and CLI drive the same op", async (t) => {
+  const dir = tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Dual plate parity" });
+  const { white, black } = dualPlatePairPng();
+  const { element: plateWhite } = addImage(REPO_ROOT, project.id, { name: "plate_white.png", bytes: white });
+  const { element: plateBlack } = addImage(REPO_ROOT, project.id, { name: "plate_black.png", bytes: black });
+
+  // API: POST /alpha-dual { elementIds } — mirror how the multi-selection inspector calls it.
+  const handler = createCanvasApi(REPO_ROOT);
+  const captured = { status: 0, body: null };
+  const res = {
+    writeHead(status) { captured.status = status; return this; },
+    end(payload) { captured.body = payload ? JSON.parse(payload) : null; },
+  };
+  const req = mockReq("POST", { elementIds: [plateWhite.id, plateBlack.id] });
+  await handler(req, res, new URL(`http://x/api/canvas/projects/${project.id}/alpha-dual`));
+  if (captured.status === 400 && /venv|Pillow|module/i.test(String(captured.body && captured.body.error))) {
+    t.skip(`dual-plate pipeline unavailable: ${captured.body.error}`);
+    return;
+  }
+  assert.equal(captured.status, 201, `API alpha-dual 201 (got ${captured.status}: ${JSON.stringify(captured.body)})`);
+  assert.equal(captured.body.element.meta.alpha.method, "dual_plate");
+  const apiElementId = captured.body.element.id;
+
+  // CLI: alpha-dual <id> --elements a,b — same ops layer, different transport. The plates
+  // are still on the canvas (non-destructive), so a second dual-plate run off the SAME
+  // pair is a valid op — it mints a SECOND new element.
+  const out = execFileSync("node", [CLI, "alpha-dual", project.id, "--elements", `${plateWhite.id},${plateBlack.id}`], {
+    env: { ...process.env, CANVAS_PROJECTS_ROOT: dir },
+    encoding: "utf8",
+  });
+  const parsed = JSON.parse(out.trim().split("\n").pop());
+  assert.equal(parsed.element.meta.alpha.method, "dual_plate");
+  assert.match(parsed.element.src, /^files\//);
+  assert.notEqual(parsed.element.id, apiElementId, "CLI run mints its own new element");
 });
 
 // Minimal request mock (a readable-body stub) for the API handler.

@@ -13,6 +13,7 @@
 //   POST   /api/canvas/projects/<id>/detect-regions {elementId, params?}
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
 //   POST   /api/canvas/projects/<id>/alpha          {elementId, method?, regions?} | {elementIds, method?} (batch, one entry)
+//   POST   /api/canvas/projects/<id>/alpha-dual     {elementIds:[a,b]}   (white+black plate pair -> new element; one entry)
 //   POST   /api/canvas/projects/<id>/export         {elementIds, rows?} | {project:true}
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/export {rows}  (export settings)
 //   POST   /api/canvas/projects/<id>/groups         {name, x?,y?,w?,h?, fromElements?, parentId?}
@@ -50,6 +51,7 @@ import {
   addImages,
   addText,
   alphaCutout,
+  alphaDualPlate,
   assignToGroup,
   createGroup,
   createProject,
@@ -298,6 +300,20 @@ export function createCanvasApi(root) {
           elementIds: Array.isArray(body.elementIds) ? body.elementIds : undefined,
           method: body.method,
           regions: body.regions,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/alpha-dual
+      // Dual-plate alpha cutout (T0237): exactly 2 image elements (the SAME art on a
+      // white plate and a black plate, either order) -> ONE new cut element via the
+      // image-tools dual_plate_alpha + pair-gate modules. Both plates stay untouched
+      // (non-destructive); one journal entry, one undo removes the new element.
+      if (parts.length === 5 && sub === "alpha-dual" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(201, await alphaDualPlate(root, {
+          projectId: id,
+          elementIds: Array.isArray(body.elementIds) ? body.elementIds : [],
         }));
         return true;
       }

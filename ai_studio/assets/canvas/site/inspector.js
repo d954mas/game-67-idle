@@ -27,6 +27,7 @@ import {
 import {
   alphaCutoutBatchFor,
   alphaCutoutFor,
+  alphaDualPlateFor,
   deleteRegion,
   detectRegionsFor,
   exportElementIds,
@@ -1046,6 +1047,11 @@ function renderMultiGroup(groupIds, root) {
 // region scoping here — regions stay single-element (select one image and use its own
 // Regions section). Long-op via the queue + progress toast (mirrors the single-element
 // row and Slice); the canvas stays interactive while it runs.
+//
+// Dual-plate cutout (T0237): when the selection is EXACTLY 2 images, a second button
+// offers ops.alphaDualPlate — the SAME art on a white plate + a black plate (either
+// order) -> ONE NEW cut element (non-destructive; both plates stay on the canvas). Same
+// runLongOp treatment; disabled/spun independently from the batch-alpha button above it.
 function renderMultiAlpha(selected, root) {
   const body = collapsible(root, "multialpha", "Alpha");
   const alphaRow = document.createElement("div");
@@ -1067,6 +1073,17 @@ function renderMultiAlpha(selected, root) {
   });
   alphaRow.append(field("Alpha", methodSel), alphaBtn);
   body.appendChild(alphaRow);
+
+  if (selected.length === 2) {
+    const dualBtn = document.createElement("button");
+    dualBtn.type = "button";
+    dualBtn.className = "insp-btn insp-alpha-btn";
+    dualBtn.textContent = "Dual-plate cutout";
+    dualBtn.addEventListener("click", () => {
+      alphaDualPlateFor(selected.map((element) => element.id), dualBtn);
+    });
+    body.appendChild(dualBtn);
+  }
 }
 
 // Multi-select: keep it simple — each element exports with its OWN persisted rows
