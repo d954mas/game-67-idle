@@ -1530,6 +1530,24 @@ body.layers-resizing {
   font-size: 12px;
 }
 
+/* Align / distribute row (T0232 increment 1): a compact row of fixed-width icon buttons —
+   6 align keys, then a second row of 2 distribute keys. Disabled state reuses the generic
+   button:disabled opacity. */
+.insp-align-row {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.insp-align-btn {
+  flex: 0 0 auto;
+  width: 30px;
+  padding: 5px 0;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .insp-region-hint {
   font-size: 11px;
   color: var(--muted);

@@ -26,6 +26,8 @@
 //   POST   /api/canvas/projects/<id>/groups/<gid>/ungroup  (dissolve one level, keep children)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
 //   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
+//   POST   /api/canvas/projects/<id>/nodes-align   {nodeIds, align, reference?} (align to selection bbox or parent frame; one entry)
+//   POST   /api/canvas/projects/<id>/nodes-distribute {nodeIds, axis} (equal-gap distribute; 3+ nodes; one entry)
 //   POST   /api/canvas/projects/<id>/nodes-paste     {spec, dx?, dy?, scopeId?}   (instantiate a node spec; one entry)
 //   POST   /api/canvas/projects/<id>/nodes-duplicate {nodeIds, dx?, dy?, scopeId?} (duplicate live nodes; one entry)
 //   POST   /api/canvas/projects/<id>/nodes-delete    {nodeIds}                     (mixed element+group subtree delete)
@@ -50,6 +52,7 @@ import {
   addImage,
   addImages,
   addText,
+  alignNodes,
   alphaCutout,
   alphaDualPlate,
   assignToGroup,
@@ -59,6 +62,7 @@ import {
   deleteNodes,
   deleteProject,
   detectRegions,
+  distributeNodes,
   duplicateNodes,
   exportElements,
   exportProject,
@@ -396,6 +400,32 @@ export function createCanvasApi(root) {
           nodeIds: Array.isArray(body.nodeIds) ? body.nodeIds : [],
           direction: body.direction,
           index: body.index,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/nodes-align   (align 2+ nodes, or 1 node inside a group)
+      // One journal entry: the reference frame defaults to "auto" (Figma semantics — union
+      // bbox of 2+ selected nodes, or the parent group frame for exactly 1 node).
+      if (parts.length === 5 && sub === "nodes-align" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(200, alignNodes(root, {
+          projectId: id,
+          nodeIds: Array.isArray(body.nodeIds) ? body.nodeIds : [],
+          align: body.align,
+          reference: body.reference,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/nodes-distribute   (equal-gap distribute; 3+ nodes)
+      // One journal entry: sorted by position along the axis, endpoints fixed.
+      if (parts.length === 5 && sub === "nodes-distribute" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(200, distributeNodes(root, {
+          projectId: id,
+          nodeIds: Array.isArray(body.nodeIds) ? body.nodeIds : [],
+          axis: body.axis,
         }));
         return true;
       }

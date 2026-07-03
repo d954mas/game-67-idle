@@ -106,6 +106,20 @@ Every capability is one op in `ops.mjs`:
   internal order; a single undo restores the group exactly.
   All three throw **loudly** on bad input (unknown id / empty set / bad direction), never
   half-apply, and back both clients (HTTP + CLI `nodes-move`/`nodes-reorder`/`group-ungroup`).
+- `alignNodes({ projectId, nodeIds, align, reference? })` / `distributeNodes({ projectId,
+  nodeIds, axis })` — **(T0232 increment 1)** align/distribute for screen assembly, each ONE
+  journaled entry. Target math is **pure** (`tree.alignMoves`/`tree.distributeMoves`) and
+  applied through the **same overlap-safe cascade `moveNodes` uses** (a moved group carries
+  its whole subtree; a node inside a moved group shifts once, with the topmost moved
+  ancestor). `align` is `left|hcenter|right|top|vcenter|bottom`; the reference frame is
+  **Figma-auto** by default (`reference: "auto"`): 2+ selected nodes align to the
+  **union bounding box** of the selection, exactly **1** node with a parent group aligns to
+  **that group's frame** (the "center this widget inside the screen" case); 1 node with no
+  parent is a loud error. `distributeNodes` needs **3+** nodes: sorted by position along
+  `axis` (`h`/`v`), gaps equalized, the two extreme boxes stay put. Already-aligned/-spaced
+  nodes write **no journal entry** (the existing before===after no-op guard). Both clients:
+  the inspector's **Align** row (multi-selection, multi-group selection, or a single node
+  inside a group) and the CLI `nodes-align`/`nodes-distribute`.
 - `pasteNodes({ projectId, spec, dx?, dy?, scopeId? })` / `duplicateNodes({ projectId,
   nodeIds, dx?, dy?, scopeId? })` / `deleteNodes({ projectId, nodeIds })` — Figma-like
   **copy / paste / duplicate / batched-delete** for canvas objects (elements AND groups,
@@ -853,6 +867,8 @@ node ai_studio/assets/canvas/cli.mjs element-reorder <id> --element <eid> --inde
 node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>          # reorder an element OR group among merged siblings; 0 = back (strict)
 node ai_studio/assets/canvas/cli.mjs nodes-move <id> --json moves.json                  # batched mixed element+group move [{nodeId,x,y}]; group subtrees cascade; one undo step
 node ai_studio/assets/canvas/cli.mjs nodes-reorder <id> --nodes n1,n2 --direction front|back|forward|backward   # (or --index n) multi-node z-order block, relative order kept; one undo step
+node ai_studio/assets/canvas/cli.mjs nodes-align <id> --nodes n1,n2 --align left|hcenter|right|top|vcenter|bottom [--reference auto|selection|parent]   # 2+ nodes -> selection bbox; 1 node in a group -> the group frame; one undo step
+node ai_studio/assets/canvas/cli.mjs nodes-distribute <id> --nodes n1,n2,n3 --axis h|v   # equal-gap distribute (3+ nodes; endpoints fixed); one undo step
 node ai_studio/assets/canvas/cli.mjs nodes-paste <id> --spec spec.json [--dx 16 --dy 16] [--group <gid>|none]   # instantiate a copied node spec (new ids); one undo step
 node ai_studio/assets/canvas/cli.mjs nodes-duplicate <id> --nodes id1,id2 [--dx 16 --dy 16] [--group <gid>|none]   # duplicate live nodes in place +offset; one undo step
 node ai_studio/assets/canvas/cli.mjs nodes-delete <id> --nodes id1,id2   # batched mixed element+group subtree delete; one undo step
@@ -909,7 +925,9 @@ one document that swaps two views; the JS is split into focused ES modules under
   Order menu) is one `nodes-reorder` (`reorderNodes`) block move; **Ungroup** is one
   `groups/<id>/ungroup` (`ungroupGroup`) call; **copy/paste/duplicate** (Ctrl+C/V/D) are the
   page copy buffer (`buildNodesSpec`, view-state) plus one `nodes-paste`/`nodes-duplicate`
-  call, and a mixed/multi-group **Delete** is one `nodes-delete` (`deleteNodes`) call.
+  call, and a mixed/multi-group **Delete** is one `nodes-delete` (`deleteNodes`) call; the
+  inspector's **Align** row is one `nodes-align`/`nodes-distribute` (`alignNodes`/
+  `distributeNodes`, T0232 increment 1) call per click.
 - `home.js` — the **home** view: a full-page grid of project cards (cover thumbnail,
   title, image count, updated date) plus a `+ New project` card that creates a
   project instantly (random default title, Figma-style — no name prompt) and opens

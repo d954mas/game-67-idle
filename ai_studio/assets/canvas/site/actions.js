@@ -364,6 +364,34 @@ export async function moveNodesTo(moves) {
   }
 }
 
+// ---- align / distribute (T0232 increment 1) ----------------------------------
+//
+// Align 2+ nodes (elements AND/OR groups, mixed OK) — or exactly 1 node that lives inside
+// a parent group — to a shared reference frame in ONE journaled alignNodes op (one undo
+// restores every moved node). `reference` is left to the op's "auto" default (Figma
+// semantics: 2+ nodes -> the selection's union bbox; 1 node inside a group -> that group's
+// frame), so the page never has to pick a mode itself. Backs the inspector's Align row.
+export async function alignSelection(nodeIds, align) {
+  if (!nodeIds || !nodeIds.length) return;
+  try {
+    applyMutation(await api("POST", `/projects/${pid()}/nodes-align`, { nodeIds, align }), "Aligned selection.");
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Distribute 3+ nodes (elements AND/OR groups, mixed OK) with equal gaps along an axis in
+// ONE journaled distributeNodes op (one undo restores every moved node). Backs the
+// inspector's Distribute buttons.
+export async function distributeSelection(nodeIds, axis) {
+  if (!nodeIds || nodeIds.length < 3) return;
+  try {
+    applyMutation(await api("POST", `/projects/${pid()}/nodes-distribute`, { nodeIds, axis }), "Distributed selection.");
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 // Detect is a long (python-backed) op: it runs through the limiter so at most N=2
 // python spawns are ever in flight, its progress toast resolves into the result, and
 // the triggering `control` (the inspector Detect button) is disabled while in flight.

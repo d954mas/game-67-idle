@@ -25,11 +25,13 @@ import {
   state,
 } from "./app.js";
 import {
+  alignSelection,
   alphaCutoutBatchFor,
   alphaCutoutFor,
   alphaDualPlateFor,
   deleteRegion,
   detectRegionsFor,
+  distributeSelection,
   exportElementIds,
   exportProjectAction,
   fitGroupAction,
@@ -40,6 +42,7 @@ import {
   renameGroup,
   renameRegion,
   renderScreen,
+  selectedNodeIds,
   setExportRows,
   setGroupBackground,
   setGroupClip,
@@ -763,6 +766,61 @@ function renderExport(element, root) {
   body.appendChild(button);
 }
 
+// ---- align / distribute (T0232 increment 1) -----------------------------------
+//
+// One Align row (6 align keys + a Distribute row of 2 keys, Figma layout) shared by every
+// selection context that can drive it: a multi-selection (2+ nodes -> the selection's
+// union bbox), a multi-GROUP selection, and a SINGLE node that lives inside a parent group
+// (align-to-frame — "center this widget inside the screen"). Each button is ONE API call
+// -> ONE journaled op (alignNodes/distributeNodes) -> one undo restores the whole gesture.
+// `reference` is left to the op's "auto" default in every caller here — auto already
+// resolves both the 2+ union-bbox case and the 1-node-in-a-group parent-frame case, so
+// the page never has to pick a mode itself.
+const ALIGN_BUTTONS = [
+  ["left", "L", "Align left"],
+  ["hcenter", "C", "Align horizontal centers"],
+  ["right", "R", "Align right"],
+  ["top", "T", "Align top"],
+  ["vcenter", "M", "Align vertical centers"],
+  ["bottom", "B", "Align bottom"],
+];
+const DISTRIBUTE_BUTTONS = [
+  ["h", "↔", "Distribute horizontally (needs 3+ objects)"],
+  ["v", "↕", "Distribute vertically (needs 3+ objects)"],
+];
+
+function renderAlignSection(nodeIds, root) {
+  const body = collapsible(root, "align", "Align");
+
+  const alignRow = document.createElement("div");
+  alignRow.className = "insp-align-row";
+  for (const [align, glyph, title] of ALIGN_BUTTONS) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "insp-align-btn";
+    btn.textContent = glyph;
+    btn.title = title;
+    btn.addEventListener("click", () => alignSelection(nodeIds, align));
+    alignRow.appendChild(btn);
+  }
+  body.appendChild(alignRow);
+
+  const distRow = document.createElement("div");
+  distRow.className = "insp-align-row";
+  const canDistribute = nodeIds.length >= 3;
+  for (const [axis, glyph, title] of DISTRIBUTE_BUTTONS) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "insp-align-btn";
+    btn.textContent = glyph;
+    btn.title = title;
+    btn.disabled = !canDistribute;
+    btn.addEventListener("click", () => distributeSelection(nodeIds, axis));
+    distRow.appendChild(btn);
+  }
+  body.appendChild(distRow);
+}
+
 // ---- element / group / multi views -------------------------------------------
 
 function renderElement(element, root) {
@@ -773,6 +831,10 @@ function renderElement(element, root) {
   const layout = collapsible(root, "layout", "Position & Size");
   layout.appendChild(boxGrid(element, (patch) => patchElementBox(element.id, patch)));
   layout.appendChild(readOnly("Source", `${element.source_w || element.w} x ${element.source_h || element.h}`));
+
+  // Single node inside a parent group (screen or widget): align-to-frame — the "center
+  // this widget inside the screen" case (Figma-auto reference, T0232 increment 1).
+  if (element.groupId) renderAlignSection([element.id], root);
 
   renderRegions(element, root);
 
@@ -888,6 +950,9 @@ function renderTextElement(element, root) {
   layout.appendChild(grid);
   layout.appendChild(readOnly("Size", `${element.w} x ${element.h} (auto-width)`));
 
+  // Single node inside a parent group: align-to-frame (same rule as an image element).
+  if (element.groupId) renderAlignSection([element.id], root);
+
   const hint = document.createElement("div");
   hint.className = "insp-region-hint";
   hint.textContent = "Double-click the text on the canvas to edit its content.";
@@ -987,6 +1052,10 @@ function renderGroupInspector(group, root) {
 
   layout.appendChild(readOnly("Members", String(memberElements(group.id).length)));
 
+  // A nested group (a widget frame inside a screen) aligns to ITS parent group's frame —
+  // same Figma-auto rule as a single element inside a group.
+  if (group.parentId) renderAlignSection([group.id], root);
+
   renderGroupBackground(group, root);
 
   const render = collapsible(root, "render", "Render group");
@@ -1074,6 +1143,8 @@ function renderMultiGroup(groupIds, root) {
   title.textContent = `${selected.length} ${selected.length === 1 ? "group" : "groups"}`;
   root.appendChild(title);
 
+  renderAlignSection(groupIds, root);
+
   const shared = collapsible(root, "multigroup", "Shared");
   shared.appendChild(
     sharedToggle("Visible", selected.map((group) => group.visible !== false), (value) =>
@@ -1147,6 +1218,8 @@ function renderMulti(selected, root) {
   title.textContent = `${selected.length} elements selected`;
   root.appendChild(title);
 
+  renderAlignSection(selectedNodeIds(), root);
+
   if (selected.every((element) => element.type === "image")) {
     renderMultiAlpha(selected, root);
   }
@@ -1201,7 +1274,7 @@ function inspectorSig() {
   const group = state.selectedGroupId ? groupById(state.selectedGroupId) : null;
   const selected = selectedElements();
   if (group) {
-    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}`;
+    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}|${group.parentId || ""}`;
   }
   // Multi-group selection (2+ groups, no loose elements): the signature carries each
   // group's id + shared toggle state so a batched visible/clip change rebuilds the panel.
@@ -1214,15 +1287,17 @@ function inspectorSig() {
     // A text element's structure is its content + style (family/size/align/stroke/
     // shadow) — any change must rebuild the Text section so the inputs reflect it.
     if (e.type === "text") {
-      return `t:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.content}|${JSON.stringify(e.style || {})}`;
+      return `t:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.content}|${JSON.stringify(e.style || {})}|${e.groupId || ""}`;
     }
     const regions = (e.regions || [])
       .map((r) => `${r.id}~${r.name || ""}~${(r.rect || r.content_bbox || []).join(",")}`)
       .join("|");
     // element.export is part of the structure: a row add/remove/edit must rebuild.
-    return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.export || [])}|${JSON.stringify(e.meta || {})}`;
+    return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.export || [])}|${JSON.stringify(e.meta || {})}|${e.groupId || ""}`;
   }
-  if (selected.length > 1) return `m:${selected.map((e) => e.id).join(",")}`;
+  // Group ids that ride along with a loose-element multi-selection are folded in too (the
+  // Align row's nodeIds come from the FULL selectedNodeIds(), not just `selected`).
+  if (selected.length > 1) return `m:${selected.map((e) => e.id).join(",")}|g:${[...state.selectedGroupIds].join(",")}`;
   // Empty state carries a project-export button gated by the top-level visible-screen count.
   return `empty:${visibleScreenCount()}`;
 }

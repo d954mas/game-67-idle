@@ -54,7 +54,7 @@ import { uploadImageSource } from "../tools/image/sources/api.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
-import { ancestorsOf, blockReorder, buildNodesSpec, descendantsOf, frontOrder, isNodeHidden, nodeScope, orderedChildren, wouldCycle } from "./tree.mjs";
+import { alignMoves, ancestorsOf, blockReorder, buildNodesSpec, descendantsOf, distributeMoves, frontOrder, isNodeHidden, nodeScope, orderedChildren, wouldCycle } from "./tree.mjs";
 // Shared, pure text/font contract (imported by the site too — see fonts.mjs). ops.mjs
 // owns the node-only disk read of the manifest; all validation/merge/resolution logic
 // lives in fonts.mjs so the browser and the agent normalize a style identically.
@@ -642,18 +642,21 @@ export function reorderElement(root, { projectId, elementId, index } = {}) {
 // with the parent), never twice. Loud + atomic: an unknown nodeId, a non-object move, or a
 // non-finite x/y throws before any write; an empty moves list is a loud error (the page only
 // calls this with real moves). One commitMutation, so a single undo restores every position.
-export function moveNodes(root, { projectId, moves } = {}) {
-  if (!projectId) throw new Error("moveNodes requires projectId");
-  if (!Array.isArray(moves) || !moves.length) throw new Error("moveNodes requires a non-empty moves array");
-  const startedAt = performance.now();
-  const before = getProject(root, projectId);
-
-  // Resolve + validate every move against `before` FIRST (atomic). directDelta maps a
-  // moved node id -> the {dx, dy} it shifts by (absolute target minus current position),
-  // so an element lands exactly on x/y and a group carries that delta across its subtree.
+// Shared overlap-safe move cascade (T0232 extraction — the core moveNodes always had,
+// reused by alignNodes/distributeNodes too): resolve each move's DIRECT delta against
+// `before`, then apply the EFFECTIVE delta (the delta of the TOPMOST moved node in a
+// node's ancestor-or-self chain — ancestorsOf is nearest-first, so overwriting ends on
+// the topmost) to every element AND group, so a group carries its delta across its whole
+// subtree and a selection holding both a group and one of its own descendants shifts that
+// descendant ONCE, with the parent, never twice. Pure w.r.t. `before` (no disk I/O);
+// returns the {nextElements, nextGroups, nodeIds} the caller feeds to updateProject. Loud:
+// an unknown nodeId or a non-finite x/y throws before anything is computed. `moves` may be
+// empty (align/distribute only pass the nodes that actually need to move — the caller's
+// own before===after journal guard then turns that into a no-op with no entry written).
+function applyNodeMoves(before, moves) {
   const directDelta = new Map();
   const nodeIds = [];
-  moves.forEach((move, index) => {
+  (moves || []).forEach((move, index) => {
     if (!move || typeof move !== "object") throw new Error(`move ${index} is not an object`);
     const nodeId = String(move.nodeId == null ? "" : move.nodeId).trim();
     if (!nodeId) throw new Error(`move ${index} is missing a nodeId`);
@@ -665,9 +668,6 @@ export function moveNodes(root, { projectId, moves } = {}) {
     nodeIds.push(nodeId);
   });
 
-  // The delta a node actually shifts by = the delta of the TOPMOST moved node in its
-  // ancestor-or-self chain (ancestorsOf is nearest-first, so overwriting ends on the
-  // topmost). null = the node is untouched.
   const effectiveDelta = (node) => {
     let best = directDelta.has(node.id) ? directDelta.get(node.id) : null;
     for (const ancestor of ancestorsOf(before, node)) {
@@ -685,6 +685,15 @@ export function moveNodes(root, { projectId, moves } = {}) {
     return delta ? { ...group, x: (Number(group.x) || 0) + delta.dx, y: (Number(group.y) || 0) + delta.dy } : group;
   });
 
+  return { nextElements, nextGroups, nodeIds };
+}
+
+export function moveNodes(root, { projectId, moves } = {}) {
+  if (!projectId) throw new Error("moveNodes requires projectId");
+  if (!Array.isArray(moves) || !moves.length) throw new Error("moveNodes requires a non-empty moves array");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const { nextElements, nextGroups, nodeIds } = applyNodeMoves(before, moves);
   const after = updateProject(root, projectId, { elements: nextElements, groups: nextGroups });
   const project = commitMutation(root, projectId, {
     op: "moveNodes",
@@ -694,6 +703,58 @@ export function moveNodes(root, { projectId, moves } = {}) {
     startedAt,
   });
   return { project, count: nodeIds.length, nodeIds };
+}
+
+// Align 2+ nodes (elements AND/OR groups, mixed OK) — or exactly 1 node that lives inside a
+// parent group — to a shared reference frame in ONE journaled gesture (T0232 increment 1):
+// the inspector's Align row / the agent's nodes-align. Target math is PURE (tree.alignMoves
+// — Figma-auto reference: the union bbox of 2+ selected nodes, or the PARENT GROUP frame for
+// exactly 1 node inside a group — see tree.mjs for the exact reference rules); this op only
+// resolves the targets and applies them through the SAME overlap-safe cascade moveNodes uses
+// (a moved group carries its whole subtree). Loud + atomic: an unknown nodeId, an unknown
+// align key, or an unresolvable reference throws before any write. Already-aligned nodes
+// write NO journal entry (commitMutation's own before===after no-op guard — an empty `moves`
+// list from alignMoves leaves `after` identical to `before`).
+export function alignNodes(root, { projectId, nodeIds, align, reference } = {}) {
+  if (!projectId) throw new Error("alignNodes requires projectId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const ids = (nodeIds || []).map((value) => String(value));
+  const moves = alignMoves(before, ids, align, reference); // throws on bad input
+  const { nextElements, nextGroups } = applyNodeMoves(before, moves);
+  const after = updateProject(root, projectId, { elements: nextElements, groups: nextGroups });
+  const project = commitMutation(root, projectId, {
+    op: "alignNodes",
+    args_summary: { count: ids.length, nodeIds: ids, align, reference: reference || "auto" },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, nodeIds: ids, moved: moves.map((move) => move.nodeId) };
+}
+
+// Distribute 3+ nodes (elements AND/OR groups, mixed OK) with equal gaps along an axis in
+// ONE journaled gesture (T0232 increment 1) — the inspector's Distribute buttons / the
+// agent's nodes-distribute. Target math is PURE (tree.distributeMoves — sorted by position
+// along the axis, endpoints fixed); applied through the SAME shared cascade + no-op guard as
+// alignNodes. Loud + atomic: an unknown nodeId, an unknown axis, or <3 nodes throws before
+// any write.
+export function distributeNodes(root, { projectId, nodeIds, axis } = {}) {
+  if (!projectId) throw new Error("distributeNodes requires projectId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const ids = (nodeIds || []).map((value) => String(value));
+  const moves = distributeMoves(before, ids, axis); // throws on bad input
+  const { nextElements, nextGroups } = applyNodeMoves(before, moves);
+  const after = updateProject(root, projectId, { elements: nextElements, groups: nextGroups });
+  const project = commitMutation(root, projectId, {
+    op: "distributeNodes",
+    args_summary: { count: ids.length, nodeIds: ids, axis },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, nodeIds: ids, moved: moves.map((move) => move.nodeId) };
 }
 
 // Move a SET of nodes (elements AND/OR groups) as ONE journaled z-order gesture — the
@@ -1968,6 +2029,8 @@ export function historyEntryLabel(op, args = {}) {
     case "removeElement": return { label: "Delete element", summary: "" };
     case "removeElements": return { label: "Delete elements", summary: plural(count(a.count), "element") };
     case "moveNodes": return { label: "Move", summary: plural(count(a.count), "item") };
+    case "alignNodes": return { label: "Align", summary: plural(items(a.nodeIds), "item") };
+    case "distributeNodes": return { label: "Distribute", summary: plural(items(a.nodeIds), "item") };
     case "reorderNode": return { label: "Reorder", summary: String(a.kind || "") };
     case "reorderElement": return { label: "Reorder", summary: "" };
     case "reorderNodes": return { label: "Reorder", summary: plural(items(a.nodeIds), "item") };

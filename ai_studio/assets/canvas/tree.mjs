@@ -264,6 +264,151 @@ export function wouldCycle(project, groupId, newParentId) {
   return subtreeGroupIds(project, groupId).has(newParentId);
 }
 
+// ---- align / distribute (T0232 increment 1) -----------------------------------
+//
+// Pure target-position math for the inspector's Align row + the CLI/API nodes-align /
+// nodes-distribute verbs. Both compute [{nodeId, x, y}] ABSOLUTE top-lefts for only the
+// nodes that actually need to move (an already-aligned/spaced node is omitted, so the op
+// layer's commitMutation no-op guard sees "nothing changed" and writes no journal entry).
+// Applying the moves — and cascading a moved GROUP over its subtree, overlap-safe — is the
+// op layer's job: ops.alignNodes/distributeNodes feed these results through the SAME
+// shared cascade moveNodes uses, so a group here behaves exactly like a group drag.
+
+const ALIGN_KEYS = new Set(["left", "hcenter", "right", "top", "vcenter", "bottom"]);
+const DISTRIBUTE_AXES = new Set(["h", "v"]);
+
+// A node's frame box — elements AND groups both carry x/y/w/h natively, so alignment
+// treats them uniformly.
+function nodeBox(node) {
+  return { x: Number(node.x) || 0, y: Number(node.y) || 0, w: Number(node.w) || 0, h: Number(node.h) || 0 };
+}
+
+// Union bounding box of one or more box-like {x,y,w,h} records (elements, groups, or plain
+// boxes) — also the shape the align reference frame is built from. Pure; throws on an
+// empty list (no box to speak of; every caller here already guards a non-empty set).
+export function unionBBox(boxes) {
+  if (!Array.isArray(boxes) || !boxes.length) throw new Error("unionBBox requires a non-empty array of boxes");
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const box of boxes) {
+    const b = nodeBox(box);
+    minX = Math.min(minX, b.x);
+    minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x + b.w);
+    maxY = Math.max(maxY, b.y + b.h);
+  }
+  return { minX, minY, maxX, maxY, x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+// Resolve a node id to its tagged {kind, ref}; throws on an unknown id (align/distribute
+// are always loud about a bad selection, never a silent skip).
+function resolveNode(project, nodeId) {
+  const node = taggedNode(project, nodeId);
+  if (!node) throw new Error(`node not found: ${nodeId}`);
+  return node;
+}
+
+// The ALIGN REFERENCE FRAME for a resolved node set (Figma-auto semantics — the lead's
+// call, T0232): 2+ nodes align to the UNION bounding box of the selection; EXACTLY 1 node
+// aligns to its PARENT GROUP's frame (the "center this widget inside the screen" case that
+// directly serves screen assembly); 1 node with no parent is a loud error (nothing to align
+// to). `reference` can force a mode: "selection" always wants the union bbox (2+ nodes — a
+// single node's own bbox is a no-op reference, not useful); "parent" always wants the
+// parent frame (a single node only — a multi-node "each to its own parent" is a different
+// feature, not v1).
+function resolveAlignReference(project, nodes, reference) {
+  const mode = reference == null || reference === "" ? "auto" : String(reference);
+  if (mode !== "auto" && mode !== "selection" && mode !== "parent") {
+    throw new Error(`alignNodes reference must be auto/selection/parent, got ${JSON.stringify(reference)}`);
+  }
+  if (mode === "selection" || (mode === "auto" && nodes.length >= 2)) {
+    if (nodes.length < 2) throw new Error('alignNodes reference "selection" requires 2+ nodes');
+    return unionBBox(nodes.map((node) => node.ref));
+  }
+  if (nodes.length !== 1) {
+    throw new Error('alignNodes reference "parent" requires exactly 1 node');
+  }
+  const [node] = nodes;
+  const scopeId = nodeScope(project, node.ref);
+  if (scopeId == null) {
+    throw new Error("alignNodes: select 2+ objects, or one object inside a screen (group)");
+  }
+  const group = groupsArr(project).find((item) => item.id === scopeId);
+  // nodeScope already resolves a dangling parent to root, so this should always hit;
+  // defensive throw keeps the error loud rather than silently returning an undefined box.
+  if (!group) throw new Error(`alignNodes: parent group not found: ${scopeId}`);
+  return unionBBox([group]);
+}
+
+// alignMoves(project, nodeIds, align, reference?) -> [{nodeId, x, y}]
+// Each node aligns by ITS OWN frame box against the resolved reference box: left ->
+// x=ref.minX; hcenter -> x=ref.x+ref.w/2-w/2; right -> x=ref.maxX-w; top/vcenter/bottom
+// analogous on y. Loud + pure: an empty nodeIds list, an unknown align key, an unknown
+// node id, or an unresolvable reference (see resolveAlignReference) throws before
+// returning anything.
+export function alignMoves(project, nodeIds, align, reference) {
+  const ids = (nodeIds || []).map((value) => String(value));
+  if (!ids.length) throw new Error("alignNodes requires a non-empty nodeIds array");
+  if (!ALIGN_KEYS.has(align)) {
+    throw new Error(`alignNodes align must be one of ${[...ALIGN_KEYS].join("/")}, got ${JSON.stringify(align)}`);
+  }
+  const nodes = ids.map((id) => ({ id, ref: resolveNode(project, id).ref }));
+  const ref = resolveAlignReference(project, nodes, reference);
+  const moves = [];
+  for (const node of nodes) {
+    const box = nodeBox(node.ref);
+    let x = box.x;
+    let y = box.y;
+    switch (align) {
+      case "left": x = ref.minX; break;
+      case "hcenter": x = ref.x + ref.w / 2 - box.w / 2; break;
+      case "right": x = ref.maxX - box.w; break;
+      case "top": y = ref.minY; break;
+      case "vcenter": y = ref.y + ref.h / 2 - box.h / 2; break;
+      case "bottom": y = ref.maxY - box.h; break;
+      default: break; // unreachable — align is validated above
+    }
+    if (x !== box.x || y !== box.y) moves.push({ nodeId: node.id, x, y });
+  }
+  return moves;
+}
+
+// distributeMoves(project, nodeIds, axis) -> [{nodeId, x, y}]
+// Sorts the nodes' boxes by their MIN edge along `axis` (x for "h", y for "v"), then
+// respaces them so every gap between adjacent boxes is equal — the two extreme boxes (by
+// sorted position) stay exactly where they are (Figma "distribute spacing"); only interior
+// boxes move. Needs 3+ nodes (2 boxes already have exactly one gap — nothing to equalize).
+// Loud + pure: <3 nodes, an unknown axis, or an unknown node id throws before returning
+// anything.
+export function distributeMoves(project, nodeIds, axis) {
+  const ids = (nodeIds || []).map((value) => String(value));
+  if (!DISTRIBUTE_AXES.has(axis)) {
+    throw new Error(`distributeNodes axis must be "h" or "v", got ${JSON.stringify(axis)}`);
+  }
+  if (ids.length < 3) throw new Error("distributeNodes requires 3+ nodes");
+  const posKey = axis === "h" ? "x" : "y";
+  const sizeKey = axis === "h" ? "w" : "h";
+  const boxed = ids.map((id) => ({ id, box: nodeBox(resolveNode(project, id).ref) })); // throws on an unknown id
+  const sorted = boxed.slice().sort((a, b) => a.box[posKey] - b.box[posKey]);
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+  const span = last.box[posKey] + last.box[sizeKey] - first.box[posKey];
+  const totalSize = sorted.reduce((sum, item) => sum + item.box[sizeKey], 0);
+  const gap = (span - totalSize) / (sorted.length - 1);
+  const moves = [];
+  let cursor = first.box[posKey];
+  for (const item of sorted) {
+    const target = cursor;
+    if (target !== item.box[posKey]) {
+      moves.push({ nodeId: item.id, x: axis === "h" ? target : item.box.x, y: axis === "h" ? item.box.y : target });
+    }
+    cursor = target + item.box[sizeKey] + gap;
+  }
+  return moves;
+}
+
 // ---- copy/paste node spec (T0227) --------------------------------------------
 //
 // The serialized shape a Ctrl+C snapshot / CLI nodes-duplicate builds and the paste

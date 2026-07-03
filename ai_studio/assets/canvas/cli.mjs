@@ -19,6 +19,8 @@
 //   node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>
 //   node ai_studio/assets/canvas/cli.mjs nodes-move <id> --json moves.json
 //   node ai_studio/assets/canvas/cli.mjs nodes-reorder <id> --nodes n1,n2 --direction front|back|forward|backward | --index <n>
+//   node ai_studio/assets/canvas/cli.mjs nodes-align <id> --nodes n1,n2 --align left|hcenter|right|top|vcenter|bottom [--reference auto|selection|parent]
+//   node ai_studio/assets/canvas/cli.mjs nodes-distribute <id> --nodes n1,n2,n3 --axis h|v
 //   node ai_studio/assets/canvas/cli.mjs nodes-paste <id> --spec spec.json [--dx n --dy n] [--group <gid>|none]
 //   node ai_studio/assets/canvas/cli.mjs nodes-duplicate <id> --nodes id1,id2 [--dx n --dy n] [--group <gid>|none]
 //   node ai_studio/assets/canvas/cli.mjs nodes-delete <id> --nodes id1,id2
@@ -55,6 +57,7 @@ import {
   addImage,
   addImages,
   addText,
+  alignNodes,
   alphaCutout,
   alphaDualPlate,
   assignToGroup,
@@ -64,6 +67,7 @@ import {
   deleteNodes,
   deleteProject,
   detectRegions,
+  distributeNodes,
   duplicateNodes,
   exportElements,
   exportProject,
@@ -152,7 +156,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|alpha-dual|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|alpha-dual|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history|history-list|history-jump>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -171,6 +175,8 @@ function usage() {
   node-reorder <id> --node <id> --index <n>   (z-order of an element OR group among merged siblings; 0 = back)
   nodes-move <id> --json <path>   (batched mixed element+group move: [{nodeId,x,y}] or {moves:[...]}; one undo step)
   nodes-reorder <id> --nodes n1,n2 --direction front|back|forward|backward | --index <n>   (multi-node z-order block; one undo step)
+  nodes-align <id> --nodes n1,n2 --align left|hcenter|right|top|vcenter|bottom [--reference auto|selection|parent]   (2+ nodes -> selection bbox; 1 node in a group -> the group frame; one undo step)
+  nodes-distribute <id> --nodes n1,n2,n3 --axis h|v   (equal-gap distribute; 3+ nodes; endpoints fixed; one undo step)
   nodes-paste <id> --spec <path> [--dx <n> --dy <n>] [--group <gid>|none]   (instantiate a copied node spec; new ids; one undo step)
   nodes-duplicate <id> --nodes id1,id2 [--dx <n> --dy <n>] [--group <gid>|none]   (duplicate live nodes in place +offset; one undo step)
   nodes-delete <id> --nodes id1,id2   (batched mixed element+group subtree delete; one undo step)
@@ -333,6 +339,28 @@ async function runCommand(command, id, positional, flags) {
       if (flags.direction && flags.direction !== "true") args.direction = flags.direction;
       if (flags.index !== undefined && flags.index !== "true") args.index = Number(flags.index);
       return print(reorderNodes(repoRoot, args));
+    }
+    case "nodes-align": {
+      // Align 2+ nodes (elements AND/OR groups), or exactly 1 node inside a parent group,
+      // to a shared reference frame in ONE journaled gesture. --reference forces auto
+      // (default)/selection/parent; auto already covers both the 2+ union-bbox case and the
+      // "1 node inside a group" parent-frame case, so it rarely needs to be set explicitly.
+      if (!id) fail("nodes-align requires <id>");
+      if (!flags.nodes || flags.nodes === "true") fail("nodes-align requires --nodes n1,n2");
+      if (!flags.align || flags.align === "true") fail("nodes-align requires --align left|hcenter|right|top|vcenter|bottom");
+      const nodeIds = String(flags.nodes).split(",").map((value) => value.trim()).filter(Boolean);
+      const args = { projectId: id, nodeIds, align: flags.align };
+      if (flags.reference && flags.reference !== "true") args.reference = flags.reference;
+      return print(alignNodes(repoRoot, args));
+    }
+    case "nodes-distribute": {
+      // Distribute 3+ nodes (elements AND/OR groups) with equal gaps along an axis in ONE
+      // journaled gesture; the two extreme (by sorted position) nodes stay put.
+      if (!id) fail("nodes-distribute requires <id>");
+      if (!flags.nodes || flags.nodes === "true") fail("nodes-distribute requires --nodes n1,n2,n3");
+      if (!flags.axis || flags.axis === "true") fail("nodes-distribute requires --axis h|v");
+      const nodeIds = String(flags.nodes).split(",").map((value) => value.trim()).filter(Boolean);
+      return print(distributeNodes(repoRoot, { projectId: id, nodeIds, axis: flags.axis }));
     }
     case "nodes-paste": {
       // Instantiate a copied node spec (one journal entry; new ids). --spec is a JSON file
