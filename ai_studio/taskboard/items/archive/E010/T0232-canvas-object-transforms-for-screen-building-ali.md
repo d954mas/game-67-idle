@@ -1,7 +1,7 @@
 ---
 id: T0232
 title: "Canvas: object transforms for screen building - align helpers, scale, rotate"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P2
@@ -66,3 +66,4 @@ increment plan, flagging what needs the lead's confirmation before build.
 - 2026-07-03: Increment 3 (rotation+flip data/render/export-parity) fast-worker launched.
 - 2026-07-03: Increment 3a landed + committed 2d5407f7 (343/343), server restarted. Increment 4 (rotate handle + rotated hit-test/outline) fast-worker launched.
 - 2026-07-03: ALL FOUR increments landed (align/distribute, scale gizmo, rotation+flip data/render/parity, rotate handle + rotated hit-test/resize). 373/373. Awaiting lead live verify; T0249 (flip/rotation inspector UX per lead complaint) launching now.
+- 2026-07-03: Accepted by lead 2026-07-03 (items 1-6 verify batch)

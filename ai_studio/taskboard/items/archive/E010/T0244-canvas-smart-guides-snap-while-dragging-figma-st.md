@@ -1,7 +1,7 @@
 ---
 id: T0244
 title: "Canvas: smart guides + snap while dragging (Figma-style alignment guides to edges/centers of siblings and parent frame)"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
@@ -25,3 +25,4 @@ updated: 2026-07-03
 - 2026-07-03: Lead delegated Q1/Q3 to orchestrator. Decisions: Q1 = all 6 parent-frame lines incl. centers (centering a widget in a screen is the primary use case; reversible filter if stickiness annoys). Q3 = Ctrl/Cmd bypass (Figma muscle memory; composes with deep-select). All design questions closed.
 - 2026-07-03: Increment 1 landed: snap.mjs + 16 headless tests, reviewed, committed. Increment 2 (workspace.js integration + guide overlay + Ctrl/Cmd bypass) launched.
 - 2026-07-03: Increment 2 landed + committed: snap live in all three move-drag branches, pink guides, Ctrl/Cmd bypass. 20/20 gate tests + syntax OK. Awaiting lead live verify (page reload only - site JS).
+- 2026-07-03: Accepted by lead 2026-07-03 (items 1-6 verify batch)

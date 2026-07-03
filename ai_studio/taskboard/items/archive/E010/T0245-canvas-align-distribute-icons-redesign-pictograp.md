@@ -1,7 +1,7 @@
 ---
 id: T0245
 title: "Canvas: align/distribute icons redesign - pictographic SVGs + captions + mode badge (two-Opus review synthesis)"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
@@ -77,3 +77,4 @@ outline-offset:1px; }`.
   per file).
 - 2026-07-03: Fast-worker launched now that T0238 freed inspector.js/canvas.css. Includes bonus cleanup: move T0238 plate-row inline styles into canvas.css classes.
 - 2026-07-03: Landed + committed da384adc (note: this commit also carries the T0247 inspector dropdown edits; actions.js part in b924aed4). Awaiting lead visual verify.
+- 2026-07-03: Accepted by lead 2026-07-03 (items 1-6 verify batch)
