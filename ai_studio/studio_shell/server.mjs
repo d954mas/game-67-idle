@@ -13,6 +13,7 @@ import { findRoot } from "../taskboard/lib.mjs";
 import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/gallery/api.mjs";
 import { createArchitectureMapApi } from "../architecture_map/api.mjs";
 import { createCanvasApi } from "../assets/canvas/api.mjs";
+import { createChatApi } from "./chat/api.mjs";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
 
 const repoGuess = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -26,6 +27,10 @@ const handleTaskboardApi = createTaskboardApi(root);
 const handleAssetViewerApi = createAssetViewerApi(root);
 const handleArchitectureMapApi = createArchitectureMapApi(root);
 const handleCanvasApi = createCanvasApi(root);
+// T0242: the chat panel's backend — spawns an UNSANDBOXED codex process per message
+// (agent.mjs), so this mount leans on the SAME 127.0.0.1-only trust boundary as the rest
+// of this server (see server.listen below); never widen the bind without revisiting that.
+const handleChatApi = createChatApi(root);
 const stateDir = join(root, "tmp", "ai_studio");
 const pidFile = join(stateDir, `studio_shell_${port}.pid`);
 
@@ -148,6 +153,10 @@ const server = createServer((req, res) => {
     }
     if (url.pathname.startsWith("/api/canvas/")) {
       handleCanvasApi(req, res, url);
+      return;
+    }
+    if (url.pathname.startsWith("/api/chat/")) {
+      handleChatApi(req, res, url);
       return;
     }
 
