@@ -51,10 +51,11 @@ import { canvasHistoryDepth } from "../../core_harness/tool_lib/studio_config.mj
 import { runPython as runToolPython } from "../tools/image/_bridge/bridge.mjs";
 import { detectImageRegions } from "../tools/image/regions/api.mjs";
 import { uploadImageSource } from "../tools/image/sources/api.mjs";
-// AUTOMATIC dual-plate generation (T0238): the dark-plate codex edit seam. Pure prompt/
-// command builders + the DEFAULT generator (spawns generate_image.py); see the module doc
-// for why this stays the ONE place that owns the subject-lock prompt + invocation.
-import { buildBlackPlatePrompt, generateDarkPlate } from "./tools/dual_plate_generate.mjs";
+// AUTOMATIC dual-plate generation (T0238/T0248): the white-plate + dark-plate codex edit
+// seam. Pure prompt/command builders + the DEFAULT generator (spawns generate_image.py,
+// GENERIC across both plates); see the module doc for why this stays the ONE place that
+// owns the subject-lock prompts + invocation.
+import { buildBlackPlatePrompt, buildWhitePlatePrompt, generatePlate } from "./tools/dual_plate_generate.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
@@ -2849,20 +2850,29 @@ export async function alphaDualPlate(root, { projectId, elementIds } = {}) {
   return { project, element, run };
 }
 
-// ---- alphaDualPlateGenerate (AUTOMATIC: one element -> generated dark plate -> cut) ------
+// ---- alphaDualPlateGenerate (AUTOMATIC: one element -> generated plate(s) -> cut) --------
 //
 // T0238 (lead, 2026-07-03): "Генерировать пару, проверять, и делать" — closes the manual
 // gap alphaDualPlate (T0237) still has: the lead had to run gen_dual_plate.sh himself and
 // drop both plates onto the canvas before running alpha-dual. This is an ACTION ON ONE
-// EXISTING image element ("сделай дуал-плейт альфу этому арту"): the element's CURRENT
-// pixels ARE the dual-plate LIGHT plate (loudly refused unless the border really is flat
-// and light — reused REGARDLESS of how that art got there, generated placeholders included,
-// per the T0239 reframe: "generation placeholders produce RAW art with NO alpha"). The
-// DARK plate is generated as a codex EDIT of that element (the exact subject-lock chain
-// gen_dual_plate.sh's black-plate step uses, see tools/dual_plate_generate.mjs), the pair
-// then runs through the SAME alphaDualPlate tool (T0237/T0243 — role detection,
-// translation-align, the pair gate, extraction — unmodified, ONE engine for both the
-// manual and automatic paths), with ONE automatic retry on a gate refusal. The whole
+// EXISTING image element ("сделай дуал-плейт альфу этому арту"), reused REGARDLESS of how
+// that art got there — generated placeholders included, per the T0239 reframe: "generation
+// placeholders produce RAW art with NO alpha".
+//
+// T0248 (lead, same day): T0238 wrongly collapsed the reference script's white-plate step —
+// it treated the element's CURRENT pixels as the light plate outright and loudly REFUSED
+// any art that wasn't already flat-light. gen_dual_plate.sh never assumes that: it
+// GENERATES the white plate from arbitrary source art FIRST, then generates the black plate
+// as an edit of THAT white plate. This op now does the same: check_flat_background.py is
+// REPORT-only (no refusal); a flat-light element skips straight to the original one-call
+// path (its own pixels ARE the light plate), while any other art generates the white plate
+// first (one codex call, no retry) and uses THAT as the light plate for the rest of the
+// flow. Either way, the DARK plate is generated as a codex EDIT of the light plate (the
+// exact subject-lock chain gen_dual_plate.sh's black-plate step uses, see
+// tools/dual_plate_generate.mjs), the pair then runs through the SAME alphaDualPlate tool
+// (T0237/T0243 — role detection, translation-align, the pair gate, extraction —
+// unmodified, ONE engine for both the manual and automatic paths), with ONE automatic
+// retry on a gate refusal (the white plate itself is generated exactly once). The whole
 // gesture (generation + gating + retry) is OUTSIDE the journal; only the final mint
 // commits, so ONE journal entry covers everything and one undo removes just the new
 // element — the source element is NEVER touched (mirrors alphaDualPlate's own
@@ -2871,11 +2881,13 @@ export async function alphaDualPlate(root, { projectId, elementIds } = {}) {
 const DUAL_PLATE_GENERATE_MAX_ATTEMPTS = 2; // 1 initial try + 1 automatic retry
 const ENV_ERROR_RE = /venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i;
 
-// Border-ring flat-light-background refusal (own Python tool, check_flat_background.py —
-// reuses the pair_align border-median idea) — a fail-fast LOUD refusal BEFORE any codex
-// spend. Throws the tool's own clean message on refusal (no traceback); the report is not
-// otherwise needed by the caller (the tool already decided pass/refuse).
-async function runFlatBackgroundCheck(root, projectId, element) {
+// Border-ring flat-light-background REPORT (own Python tool, check_flat_background.py —
+// reuses the pair_align border-median idea), run BEFORE any codex spend. T0248:
+// report-only — no refusal; returns {flat_light, median_luma, spread, ...} and the caller
+// (alphaDualPlateGenerate) ROUTES on `flat_light` instead of stopping the flow. Still
+// throws loudly on a genuine tool/environment failure (missing source, broken venv) — only
+// the flat/not-flat JUDGMENT stopped refusing.
+async function checkFlatBackground(root, projectId, element) {
   const sourceAbs = resolveProjectFile(root, projectId, element.src);
   const workDir = mkdtempSync(join(tmpdir(), "canvas-dualgen-flatcheck-"));
   try {
@@ -2884,6 +2896,7 @@ async function runFlatBackgroundCheck(root, projectId, element) {
     const spec = { schema: "ai_studio.canvas.check_flat_bg_spec.v1", source: sourceAbs, report: reportPath };
     writeFileSync(specPath, `${JSON.stringify(spec, null, 2)}\n`);
     await runToolPython(root, ["ai_studio/assets/canvas/tools/check_flat_background.py", "--spec", specPath]);
+    return JSON.parse(readFileSync(reportPath, "utf8"));
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
@@ -2892,10 +2905,13 @@ async function runFlatBackgroundCheck(root, projectId, element) {
 // Build the tool_runs row + the new element's meta.alpha provenance for the AUTOMATIC
 // flow. Additive to buildDualPlateProvenance's shape (method/tool/pair_gate/at stay the
 // same shape) plus the fields unique to generation: `plates` with FIXED roles (we already
-// KNOW which is which — the source element's own src is light, the stored generated file
-// is dark — unlike the manual pair op's unordered 2-element input), the `prompt` sent to
-// the generator, and `align` (T0243's translation-align delta, from the tool's own report).
-function buildDualPlateGenerateProvenance(elementId, lightSrc, darkSrc, prompt, report) {
+// KNOW which is which — the light plate is either the source element's own src (flat-light
+// path) or a freshly generated white plate (T0248, non-flat path), and the stored generated
+// file is always dark — unlike the manual pair op's unordered 2-element input), the
+// `prompt` sent to the dark-plate generator, and `align` (T0243's translation-align delta,
+// from the tool's own report). `lightGenerated` (T0248, additive) records whether the LIGHT
+// plate itself cost a codex call — the dark plate always does.
+function buildDualPlateGenerateProvenance(elementId, lightSrc, darkSrc, prompt, report, lightGenerated) {
   const at = new Date().toISOString();
   const gate = (report && report.pair_gate) || {};
   const align = (report && report.align) || null;
@@ -2916,8 +2932,8 @@ function buildDualPlateGenerateProvenance(elementId, lightSrc, darkSrc, prompt, 
     method: "dual_plate",
     tool: "alpha_dualplate.py",
     plates: [
-      { src: lightSrc, role: "light" },
-      { src: darkSrc, role: "dark" },
+      { src: lightSrc, role: "light", generated: !!lightGenerated },
+      { src: darkSrc, role: "dark", generated: true },
     ],
     prompt,
     pair_gate: gate,
@@ -2927,27 +2943,30 @@ function buildDualPlateGenerateProvenance(elementId, lightSrc, darkSrc, prompt, 
   return { run, alphaMeta };
 }
 
-// Generate + key a dark plate against the (already flat-light-verified) source element,
-// with ONE automatic retry on a gate/extraction refusal. `generate` is the injectable
-// {lightPngPath, prompt} -> Buffer|path seam (ops.alphaDualPlateGenerate's `generator`
-// arg, or the default tools/dual_plate_generate.mjs generator). Every generated dark-plate
-// attempt is stored content-addressed in files/ REGARDLESS of outcome (storeAddFile is
-// non-destructive/harmless even on a later throw — same law alphaCutoutBatch's atomic
-// comment documents), so a final refusal can name every attempt for a manual retry. An
-// environment failure (missing studio venv/Pillow — the SAME failure alpha_dualplate.py
-// itself would hit) is NEVER retried: regenerating against a broken interpreter just wastes
-// a codex call for the identical failure.
-async function generateAndKeyDualPlate(root, projectId, element, prompt, generate) {
-  const lightPngPath = resolveProjectFile(root, projectId, element.src);
+// Generate + key a dark plate against `lightElement` — either the source element itself
+// (flat-light path, its own pixels already verified as the light plate) or a freshly
+// generated white plate (T0248, non-flat path: `lightElement` is a `{src, name}` stand-in
+// for the stored generated file, not a real canvas element) — with ONE automatic retry on a
+// gate/extraction refusal. `generate` is the injectable {inputPngPath, prompt} -> Buffer|
+// path seam (ops.alphaDualPlateGenerate's `generator` arg, or the default
+// tools/dual_plate_generate.mjs generator; T0248 reuses the SAME seam for the white-plate
+// step too). Every generated dark-plate attempt is stored content-addressed in files/
+// REGARDLESS of outcome (storeAddFile is non-destructive/harmless even on a later throw —
+// same law alphaCutoutBatch's atomic comment documents), so a final refusal can name every
+// attempt for a manual retry. An environment failure (missing studio venv/Pillow — the SAME
+// failure alpha_dualplate.py itself would hit) is NEVER retried: regenerating against a
+// broken interpreter just wastes a codex call for the identical failure.
+async function generateAndKeyDualPlate(root, projectId, lightElement, prompt, generate) {
+  const inputPngPath = resolveProjectFile(root, projectId, lightElement.src);
   const preserved = [];
   let lastError = null;
   for (let attempt = 1; attempt <= DUAL_PLATE_GENERATE_MAX_ATTEMPTS; attempt += 1) {
-    const generated = await generate({ lightPngPath, prompt });
+    const generated = await generate({ inputPngPath, prompt });
     const darkBytes = Buffer.isBuffer(generated) ? generated : readFileSync(generated);
-    const darkFile = storeAddFile(root, projectId, { bytes: darkBytes, name: `${slug(element.name)}_dark_try${attempt}.png` });
+    const darkFile = storeAddFile(root, projectId, { bytes: darkBytes, name: `${slug(lightElement.name)}_dark_try${attempt}.png` });
     preserved.push(darkFile.src);
     try {
-      const { bytes, report } = await runAlphaDualPlateTool(root, projectId, { src: element.src }, { src: darkFile.src });
+      const { bytes, report } = await runAlphaDualPlateTool(root, projectId, { src: lightElement.src }, { src: darkFile.src });
       return { bytes, report, darkSrc: darkFile.src };
     } catch (error) {
       lastError = error;
@@ -2960,30 +2979,36 @@ async function generateAndKeyDualPlate(root, projectId, element, prompt, generat
   const attemptsList = preserved.map((src, index) => `dark_attempt_${index + 1}=${src}`).join("; ");
   throw new Error(
     `dual-plate generation failed after ${DUAL_PLATE_GENERATE_MAX_ATTEMPTS} attempt(s): ${lastError.message} — ` +
-      `preserved plate files for a manual retry: light=${element.src}; ${attemptsList}; ` +
+      `preserved plate files for a manual retry: light=${lightElement.src}; ${attemptsList}; ` +
       "manual path: place both plates on the canvas and run the alphaDualPlate pair op " +
       "(API POST /alpha-dual, CLI alpha-dual --elements <light>,<dark>).",
   );
 }
 
-// ONE existing image element -> a generated dark plate -> ONE new cut element, in ONE
+// ONE existing image element -> generated plate(s) -> ONE new cut element, in ONE
 // journaled entry (`elementId` required; `prompt?` is an optional extra subject
-// description APPENDED to the subject-lock prompt; `generator?` is the injectable
-// {lightPngPath, prompt} -> Buffer|path dark-plate generator, defaulting to
-// tools/dual_plate_generate.mjs's codex-backed implementation — tests inject a fake one so
-// codex NEVER runs in the suite). Validates like alphaCutout/alphaDualPlate (loud on a
-// missing project/element id or a non-image element) BEFORE any Python spawn, then refuses
-// loudly if the element's border is not a flat light background (runFlatBackgroundCheck),
-// then generates + keys with one automatic retry (generateAndKeyDualPlate). The new
-// element is named "<source name> alpha" and placed to the RIGHT of the source element's
-// bbox with a 16px gap (mirrors alphaDualPlate's own plate-pair placement); its
-// element.meta.alpha carries method "dual_plate", both plates (fixed light/dark roles),
-// the prompt, the pair gate's verdict, and the T0243 align delta. The source element is
-// NEVER mutated — non-destructive, exactly like the manual pair op.
+// description APPENDED to both the white-plate and black-plate subject-lock prompts;
+// `generator?` is the injectable {inputPngPath, prompt} -> Buffer|path GENERIC plate
+// generator, defaulting to tools/dual_plate_generate.mjs's codex-backed implementation —
+// tests inject a fake one so codex NEVER runs in the suite). Validates like
+// alphaCutout/alphaDualPlate (loud on a missing project/element id or a non-image element)
+// BEFORE any Python spawn, then gets a REPORT (not a refusal, T0248) on whether the
+// element's border is a flat light background (checkFlatBackground): flat -> the element's
+// own pixels ARE the light plate (today's one-codex-call path, unchanged); not flat -> the
+// white plate is generated FIRST from the element's own pixels (one codex call, no retry —
+// gen_dual_plate.sh's white-plate step) and stored content-addressed, becoming the light
+// plate for everything downstream. Either way the dark plate is generated + keyed with one
+// automatic retry (generateAndKeyDualPlate) against that light plate. The new element is
+// named "<source name> alpha" and placed to the RIGHT of the source element's bbox with a
+// 16px gap (mirrors alphaDualPlate's own plate-pair placement); its element.meta.alpha
+// carries method "dual_plate", both plates (fixed light/dark roles, each carrying an
+// additive `generated` flag — T0248), the prompt, the pair gate's verdict, and the T0243
+// align delta. The source element is NEVER mutated — non-destructive, exactly like the
+// manual pair op.
 export async function alphaDualPlateGenerate(root, { projectId, elementId, prompt, generator } = {}) {
   if (!projectId) throw new Error("alphaDualPlateGenerate requires projectId");
   if (!elementId) throw new Error("alphaDualPlateGenerate requires elementId");
-  const generate = typeof generator === "function" ? generator : generateDarkPlate;
+  const generate = typeof generator === "function" ? generator : generatePlate;
 
   const startedAt = performance.now();
   const before = getProject(root, projectId);
@@ -2991,21 +3016,40 @@ export async function alphaDualPlateGenerate(root, { projectId, elementId, promp
   if (!element) throw new Error(`element not found: ${elementId}`);
   if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
 
-  // Step 1: flat-light-background refusal — before any codex spend, nothing written.
-  await runFlatBackgroundCheck(root, projectId, element);
+  // Step 1: flat-light-background REPORT — before any codex spend; routes, never refuses.
+  const flatReport = await checkFlatBackground(root, projectId, element);
 
   const extraPrompt = prompt != null && String(prompt).trim() ? String(prompt).trim() : undefined;
-  const fullPrompt = buildBlackPlatePrompt(extraPrompt);
+  const blackPrompt = buildBlackPlatePrompt(extraPrompt);
 
-  // Steps 2-4: generate the dark plate + gate/extract (ONE automatic retry inside).
-  const { bytes, report, darkSrc } = await generateAndKeyDualPlate(root, projectId, element, fullPrompt, generate);
+  // Step 2 (non-flat only): generate the WHITE plate FIRST, as an edit of the ELEMENT's own
+  // (arbitrary) pixels — gen_dual_plate.sh's white-plate step. Generated exactly ONCE (no
+  // retry here; only the dark plate gets the automatic retry below) and stored
+  // content-addressed immediately, so it is preserved even if everything downstream fails.
+  // A flat-light element skips this and reuses its own pixels as the light plate.
+  let lightSrc = element.src;
+  let lightGenerated = false;
+  if (!flatReport.flat_light) {
+    const whitePrompt = buildWhitePlatePrompt(extraPrompt);
+    const elementPngPath = resolveProjectFile(root, projectId, element.src);
+    const generatedWhite = await generate({ inputPngPath: elementPngPath, prompt: whitePrompt });
+    const whiteBytes = Buffer.isBuffer(generatedWhite) ? generatedWhite : readFileSync(generatedWhite);
+    const whiteFile = storeAddFile(root, projectId, { bytes: whiteBytes, name: `${slug(element.name)}_white.png` });
+    lightSrc = whiteFile.src;
+    lightGenerated = true;
+  }
+  const lightElement = { src: lightSrc, name: element.name };
+
+  // Steps 3-4: generate the dark plate + gate/extract (ONE automatic retry inside), against
+  // the light plate resolved above (the element itself, or the freshly generated white one).
+  const { bytes, report, darkSrc } = await generateAndKeyDualPlate(root, projectId, lightElement, blackPrompt, generate);
 
   // Re-read to avoid clobbering a concurrent edit (mirrors alphaDualPlate's re-read).
   const current = getProject(root, projectId);
   const source = (current.elements || []).find((item) => item.id === elementId);
   if (!source) throw new Error(`element not found: ${elementId}`);
 
-  const { run, alphaMeta } = buildDualPlateGenerateProvenance(elementId, source.src, darkSrc, fullPrompt, report);
+  const { run, alphaMeta } = buildDualPlateGenerateProvenance(elementId, lightSrc, darkSrc, blackPrompt, report, lightGenerated);
 
   // Step 5: placement — to the RIGHT of the source element's bbox, 16px gap.
   const gap = 16;

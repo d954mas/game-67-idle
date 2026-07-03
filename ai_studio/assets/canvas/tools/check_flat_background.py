@@ -1,20 +1,30 @@
 #!/usr/bin/env python3
-"""Flat-light-background check for the AUTOMATIC dual-plate alpha flow (T0238).
+"""Flat-light-background REPORT for the AUTOMATIC dual-plate alpha flow (T0238/T0248).
 
-ops.alphaDualPlateGenerate treats an existing image element's CURRENT pixels as
-the dual-plate LIGHT plate — there is no separate light-plate generation step.
-That is only valid when the element's background really is flat and light: a
-subject already composited onto a busy scene, a gradient, or a dark backdrop
-would poison both the generated dark plate's subject lock AND the pair gate
-(dual_plate_pair_gate.py). This is the fail-fast refusal, run BEFORE any codex
-spend.
+ops.alphaDualPlateGenerate needs to know whether an existing image element's
+CURRENT pixels are already a usable dual-plate LIGHT plate (flat + light
+border) or need a white plate generated FIRST (arbitrary art — a subject
+already composited onto a busy scene, a gradient, a dark backdrop, ...). This
+tool answers that question; it does NOT decide the flow.
+
+T0248: this is REPORT-ONLY. Earlier (T0238) a non-flat/non-light border was a
+loud refusal (SystemExit) — the lead correctly called that wrong on real art:
+the reference script .codex/skills/nt-asset-image-generation/scripts/
+gen_dual_plate.sh never assumes a flat background either; it GENERATES the
+white plate from arbitrary source art first. So this tool always writes its
+verdict and exits 0; the caller (ops.alphaDualPlateGenerate) reads
+`flat_light` and ROUTES: true keeps the one-codex-call path (the element's own
+pixels are the light plate); false generates the white plate first, exactly
+like gen_dual_plate.sh's chain. A genuine tool/environment failure (missing or
+corrupt source image) still raises loudly — only the flat/not-flat JUDGMENT
+stopped refusing.
 
 Border-ring sampling mirrors the idea in
 ai_studio/assets/tools/image/alpha_dualplate/pair_align.py's _border_median: the
 outer few pixels on every edge are assumed to be pure background — the subject
 sits away from the frame edge, as every dual-plate/matte source in this repo
-does (a canvas element with the subject touching the frame would fail this
-check too, which is the intended behavior: there is no flat border to sample).
+does (a canvas element with the subject touching the frame reads as non-flat
+too, which is expected: there is no flat border to sample).
 
 Spec (schema ai_studio.canvas.check_flat_bg_spec.v1): {source, report?}
 
@@ -74,7 +84,7 @@ def run(spec: dict[str, Any]) -> dict[str, Any]:
     median_rgb = np.median(ring, axis=0)
     median_luma = float(median_rgb.mean())
     spread = float(ring.std())
-    flat = median_luma >= MEDIAN_LUMA_MIN and spread <= SPREAD_MAX
+    flat_light = median_luma >= MEDIAN_LUMA_MIN and spread <= SPREAD_MAX
 
     report = {
         "schema": "ai_studio.canvas.check_flat_bg_report.v1",
@@ -82,23 +92,17 @@ def run(spec: dict[str, Any]) -> dict[str, Any]:
         "median_rgb": [round(float(channel), 2) for channel in median_rgb],
         "median_luma": round(median_luma, 2),
         "spread": round(spread, 2),
-        "flat": flat,
+        "flat_light": flat_light,
     }
     report_path = spec.get("report")
     if report_path:
         write_json_atomic(Path(report_path), report)
-    if not flat:
-        raise RuntimeError(
-            "dual-plate generation needs the subject on a flat light background "
-            f"(border median luma {median_luma:.0f}/255, spread {spread:.1f}) — "
-            "put the art on a flat white/light backdrop before generating a dual-plate pair."
-        )
     return report
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Check an element's border ring is a flat light background before an automatic dual-plate generation."
+        description="Report whether an element's border ring reads as a flat light background (report-only, T0248 — the caller routes, this never refuses)."
     )
     parser.add_argument("--spec", required=True, type=Path, help="check spec JSON (ai_studio.canvas.check_flat_bg_spec.v1)")
     args = parser.parse_args()
@@ -106,12 +110,12 @@ def main() -> int:
     spec = json.loads(args.spec.read_text(encoding="utf-8"))
     try:
         report = run(spec)
-    except (RuntimeError, ValueError, FileNotFoundError) as exc:
-        # Deliberate refusal (not-flat / not-light border, missing source) travels the
+    except (ValueError, FileNotFoundError) as exc:
+        # Genuine usage/environment failure (missing or corrupt source) still travels the
         # worker's SystemExit path as ONE clean message — no Python traceback in the
-        # operator-facing toast. Unexpected bugs still traceback loudly.
+        # operator-facing toast. The flat/not-flat JUDGMENT itself no longer refuses (T0248).
         raise SystemExit(str(exc)) from exc
-    print(f"pass: flat light background (median luma {report['median_luma']:.0f}, spread {report['spread']:.1f})")
+    print(f"report: flat_light={report['flat_light']} (median luma {report['median_luma']:.0f}, spread {report['spread']:.1f})")
     return 0
 
 

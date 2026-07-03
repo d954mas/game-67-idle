@@ -336,12 +336,13 @@ export function createCanvasApi(root) {
       }
 
       // /api/canvas/projects/<id>/alpha-dual-generate
-      // AUTOMATIC dual-plate alpha (T0238): the element's CURRENT pixels are the LIGHT
-      // plate (loudly refused unless the border is flat + light); generates the DARK
-      // plate as a codex edit of it, gates the pair through the SAME alphaDualPlate tool
-      // (one automatic retry), and mints ONE new cut element beside the source. The
-      // source element stays untouched (non-destructive); one journal entry, one undo
-      // removes just the new element.
+      // AUTOMATIC dual-plate alpha (T0238/T0248): works from ANY art — a flat-light
+      // element's own pixels are the LIGHT plate; any other background generates the
+      // WHITE plate first (codex edit of the element), then the DARK plate as a codex
+      // edit of the light plate, gates the pair through the SAME alphaDualPlate tool
+      // (one automatic retry on the dark plate only), and mints ONE new cut element
+      // beside the source. The source element stays untouched (non-destructive); one
+      // journal entry, one undo removes just the new element.
       if (parts.length === 5 && sub === "alpha-dual-generate" && req.method === "POST") {
         const body = await readJsonBody(req);
         sendMutation(201, await alphaDualPlateGenerate(root, {

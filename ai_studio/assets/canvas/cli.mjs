@@ -479,11 +479,12 @@ async function runCommand(command, id, positional, flags) {
       return print(await alphaDualPlate(repoRoot, { projectId: id, elementIds }));
     }
     case "alpha-dual-generate": {
-      // AUTOMATIC dual-plate alpha (T0238): the element's CURRENT pixels are the LIGHT
-      // plate (loudly refused unless the border is flat + light); generates the DARK plate
-      // as a codex edit of it, gates the pair (one automatic retry), keys -> ONE new
-      // element beside the source. --prompt is an optional extra subject description
-      // appended to the subject-lock prompt.
+      // AUTOMATIC dual-plate alpha (T0238/T0248): works from ANY art — a flat-light
+      // element's own pixels are the LIGHT plate, any other background generates the
+      // WHITE plate first (codex edit of the element); then the DARK plate as a codex
+      // edit of the light plate, gate (one automatic retry on the dark only), key ->
+      // ONE new element beside the source. --prompt is an optional extra subject
+      // description appended to both subject-lock prompts.
       if (!id) fail("alpha-dual-generate requires <id>");
       if (!flags.element || flags.element === "true") fail("alpha-dual-generate requires --element <eid>");
       const args = { projectId: id, elementId: flags.element };
