@@ -1039,8 +1039,10 @@ function renderResetToSourceButton(element) {
 
 // Rotation row: the number input (commits on change/Enter, unchanged) plus quick -90/+90
 // step buttons and a Reset — each button is ONE journaled patchElementBox call, so a step
-// or reset is a single undo step. Reset renders ONLY when rotation != 0 (no dead control
-// sitting at 0). Shared by images (renderTransformControls) and text elements
+// or reset is a single undo step. Reset is ALWAYS rendered but disabled at rotation 0:
+// appearing/disappearing shifted the -90/+90 buttons mid-interaction and the lead's second
+// click missed ("нажал на -90 появился сброс кнопка -90 уехала") — reserved space beats a
+// hidden dead control. Shared by images (renderTransformControls) and text elements
 // (renderTextElement) — rotation applies to both, flip does not.
 function renderRotationRow(element) {
   const rotation = Number(element.rotation) || 0;
@@ -1060,13 +1062,12 @@ function renderRotationRow(element) {
   plus90.title = "Rotate +90°";
   row.appendChild(plus90);
 
-  if (rotation !== 0) {
-    const reset = smallBtn("↺", () => commit(0));
-    reset.classList.add("insp-rotation-btn", "insp-rotation-reset");
-    reset.title = "Reset rotation";
-    reset.setAttribute("aria-label", "Reset rotation");
-    row.appendChild(reset);
-  }
+  const reset = smallBtn("↺", () => commit(0));
+  reset.classList.add("insp-rotation-btn", "insp-rotation-reset");
+  reset.title = "Reset rotation";
+  reset.setAttribute("aria-label", "Reset rotation");
+  reset.disabled = rotation === 0;
+  row.appendChild(reset);
 
   return field("Rotation", row);
 }
