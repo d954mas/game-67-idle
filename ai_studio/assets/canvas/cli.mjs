@@ -24,6 +24,7 @@
 //   node ai_studio/assets/canvas/cli.mjs nodes-delete <id> --nodes id1,id2
 //   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 //   node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte] [--regions r1,r2]
+//   node ai_studio/assets/canvas/cli.mjs alpha <id> --elements e1,e2 [--method auto|matte]   (batch; one undo)
 //   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --resample]
 //   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --resample] [--to <dir>] [--zip <path>]
 //   node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h] [--parent <gid>|none]
@@ -168,6 +169,7 @@ function usage() {
   regions-show <id> --element <eid>
   slice <id> --element <eid> [--regions r1,r2]
   alpha <id> --element <eid> [--method auto|matte] [--regions r1,r2]   (alpha-cutout the element; auto routes, matte forces key_matte; one undo)
+  alpha <id> --elements e1,e2 [--method auto|matte]   (batch: 2+ images keyed into ONE journal entry/undo; no --regions with a batch)
   export-set <id> --element <eid> --json <path> | --scale <t> [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest]
   export <id> --elements e1,e2 | --all | --project [--scale <t> --format <f> --quality <n> --resample <r>] [--to <dir>] [--zip <path>]
   group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]
@@ -388,12 +390,23 @@ async function runCommand(command, id, positional, flags) {
       // Alpha-cutout the element's current pixels (whole element, or only --regions r1,r2)
       // via the image-tools matte pipeline; swaps the element to a new alpha PNG (one undo).
       // --method auto (route; refuses a dual-plate soft zone) or matte (force key_matte).
+      // --elements e1,e2 batches 2+ images into ONE journal entry/undo (regions are not
+      // allowed with a batch — regions stay single-element, use --element).
       if (!id) fail("alpha requires <id>");
-      if (!flags.element) fail("alpha requires --element <eid>");
-      const args = { projectId: id, elementId: flags.element };
+      const hasElements = flags.elements && flags.elements !== "true";
+      const hasElement = flags.element && flags.element !== "true";
+      if (!hasElement && !hasElements) fail("alpha requires --element <eid> or --elements e1,e2");
+      if (hasElement && hasElements) fail("alpha accepts --element or --elements, not both");
+      const args = { projectId: id };
       if (flags.method && flags.method !== "true") args.method = flags.method;
-      if (flags.regions && flags.regions !== "true") {
-        args.regions = String(flags.regions).split(",").map((value) => value.trim()).filter(Boolean);
+      if (hasElements) {
+        if (flags.regions) fail("--regions is not allowed with --elements (regions stay single-element, use --element)");
+        args.elementIds = String(flags.elements).split(",").map((value) => value.trim()).filter(Boolean);
+      } else {
+        args.elementId = flags.element;
+        if (flags.regions && flags.regions !== "true") {
+          args.regions = String(flags.regions).split(",").map((value) => value.trim()).filter(Boolean);
+        }
       }
       return print(await alphaCutout(repoRoot, args));
     }

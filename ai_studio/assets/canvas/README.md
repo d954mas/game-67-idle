@@ -162,8 +162,17 @@ Every capability is one op in `ops.mjs`:
   `element.meta.alpha` (method, params, parent src, routing metrics) like slice
   provenance, plus an `alpha_cutout` `tool_runs` entry. Requires Python (numpy + scipy +
   Pillow) via our own `tools/alpha_cutout.py`, which reuses the image-tools
-  `route`/`route_cutout` + `alpha_matte`/`key_matte` modules **unmodified**. Both clients:
-  the page's inspector **Alpha cutout** control and the CLI `alpha`.
+  `route`/`route_cutout` + `alpha_matte`/`key_matte` modules **unmodified**. `elementIds`
+  (2+ images), given INSTEAD of `elementId`, **batches** a multi-selection into ONE
+  journaled entry (T0230): each element keys its own current pixels sequentially (same
+  spec/pipeline as the single-element path), and only once EVERY element succeeds does the
+  whole batch swap srcs + write every element's `meta.alpha` in one commit — one undo
+  restores every element byte-exact. If ANY element refuses, the whole batch throws with
+  that element's message and nothing is mutated (atomic — no partial swap, no journal
+  entry). `regions` is not accepted with a batch — a loud error; regions stay
+  single-element. Both clients: the page's inspector **Alpha cutout** control (single
+  element or region scope) / multi-selection **Alpha** section ("Apply to N images") and
+  the CLI `alpha --element`/`alpha --elements`.
 - `setExportSettings({ projectId, elementId, rows })` — replace an element's
   Figma-style export rows `[{scale, format, quality?, resample}]` (the Export section
   persisted on the layer). Validates + normalizes each row (scale token syntax,
@@ -464,6 +473,13 @@ implementation, and a missing module is a loud import error.
   the element's `src` is swapped to it in one journal entry; the previous file stays in
   `files/` (immutable), so undo restores the exact previous bytes. Output dimensions equal
   the source, so the element box never changes. `element.meta.alpha` records the run.
+- **Batch (T0230).** A multi-selection of 2+ image elements keys as ONE operation: each
+  element runs through its own worker spawn sequentially (whole-element only — regions stay
+  single-element, so a batch call never accepts `regions`), and only after EVERY element
+  keys successfully does the op commit ONE journal entry swapping every src + writing every
+  element's `meta.alpha`. A refusal on any element (dual-plate guard, non-image, tool error)
+  rejects the whole batch with that element's message and mutates nothing — no partial
+  swap. One undo restores every element byte-exact.
 
 ## Text elements
 
@@ -749,6 +765,7 @@ node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json pat
 node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
 node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte] [--regions r1,r2]   # alpha-cutout the element (auto routes; matte forces key_matte); one undo
+node ai_studio/assets/canvas/cli.mjs alpha <id> --elements e1,e2 [--method auto|matte]   # batch: 2+ images keyed into ONE journal entry/undo; no --regions with a batch
 node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json      # persist export rows (journaled)
 node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --scale 2x [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest]
 node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2   # or --all, or --project (all visible screens)
@@ -838,8 +855,10 @@ one document that swaps two views; the JS is split into focused ES modules under
   resizes the frame to its content, **Visible** + **Clip content**
   checkboxes, member count, Background, **Render screen** with scale + background),
   multi-select (count + "each exports
-  its own settings" + Export), or "Nothing selected" (with a project-export button
-  when there are visible screens). A single element also gets an **Export** section
+  its own settings" + Export; when EVERY selected element is an image, an **Alpha**
+  section (T0230) — the same method dropdown + one button labeled "Apply to N images"
+  that keys the whole selection as ONE journaled op), or "Nothing selected" (with a
+  project-export button when there are visible screens). A single element also gets an **Export** section
   at the BOTTOM (Figma-style): a collapsible list of rows (scale + format, a quality
   slider only for jpg/webp, a resample toggle — **no suffix column** as of T0229, file
   names are automatic), **+ Add export setting**, and an Export button labeled by the

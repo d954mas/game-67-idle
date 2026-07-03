@@ -150,6 +150,54 @@ test("alphaCutout is ONE journal entry: undo restores the previous src byte-exac
   assert.equal(redone.elements.find((el) => el.id === elementId).src, result.element.src);
 });
 
+// ---- batch (T0230: multi-selection, ONE journal entry / undo) -----------------
+
+test("alphaCutout batch (elementIds) keys 2 images in ONE journal entry; one undo restores both byte-exact", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Alpha batch undo" });
+  const { element: e1 } = addImage(REPO_ROOT, project.id, { name: "sheet1.png", bytes: magentaSheetPng() });
+  const { element: e2 } = addImage(REPO_ROOT, project.id, { name: "sheet2.png", bytes: magentaSheetPng() });
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq; // 2 addImage entries
+  const originals = getProject(REPO_ROOT, project.id).elements.map((element) => ({ ...element }));
+
+  let result;
+  try {
+    result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementIds: [e1.id, e2.id], method: "matte" });
+  } catch (error) {
+    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
+      t.skip(`alpha pipeline unavailable: ${error.message}`);
+      return;
+    }
+    throw error;
+  }
+
+  // Exactly ONE new journal entry for the WHOLE batch (not one per element).
+  const after = getProject(REPO_ROOT, project.id);
+  assert.equal(after.history_seq, seqBefore + 1, "batch is one journal entry");
+  assert.equal(result.count, 2);
+  assert.equal(result.elements.length, 2);
+  for (const element of result.elements) {
+    const original = originals.find((item) => item.id === element.id);
+    assert.notEqual(element.src, original.src, `element ${element.id} swapped to a new alpha file`);
+    assert.equal(element.meta.alpha.method, "matte");
+    assert.equal(element.meta.alpha.parentSrc, original.src);
+  }
+
+  // ONE undo restores BOTH elements byte-exact (src + no alpha meta), in one step.
+  const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  for (const original of originals) {
+    const restored = undone.elements.find((element) => element.id === original.id);
+    assert.deepEqual(restored, original, `undo restores element ${original.id} exactly`);
+  }
+  assert.equal(undone.history_seq, seqBefore);
+
+  // Redo re-applies both swaps together.
+  const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
+  for (const element of result.elements) {
+    assert.equal(redone.elements.find((item) => item.id === element.id).src, element.src);
+  }
+});
+
 test("alphaCutout (regions) keys ONLY inside the region; outside stays untouched opaque", async (t) => {
   tempProjects(t);
   // Region [4,4,28,28] covers the red blob (8..28) plus a magenta margin; blob2 (36..56)
@@ -218,6 +266,83 @@ test("alphaCutout never resurrects pixels hidden by a polygon slice", async (t) 
   assert.deepEqual(result.element.meta.alpha.key_color, [255, 0, 255]);
 });
 
+test("alphaCutout batch is atomic: one refusing element rejects the WHOLE batch, nothing mutated", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Alpha batch refusal" });
+  const { element: good } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
+  const { element: soft } = addImage(REPO_ROOT, project.id, { name: "glow.png", bytes: softGlowPng() });
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+  const originals = getProject(REPO_ROOT, project.id).elements.map((element) => ({ ...element }));
+
+  try {
+    await alphaCutout(REPO_ROOT, { projectId: project.id, elementIds: [good.id, soft.id], method: "auto" });
+    assert.fail("a batch containing a soft-art element under auto must refuse (dual-plate guard)");
+  } catch (error) {
+    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
+      t.skip(`alpha pipeline unavailable: ${error.message}`);
+      return;
+    }
+    // The refusal reaches the operator as the tool's own message (that element's message),
+    // never a partial-batch summary or a raw traceback.
+    assert.match(error.message, /dual_plate|plate PAIR/, `refusal message expected, got: ${error.message}`);
+    assert.ok(!/Traceback|File "/.test(error.message), `traceback leaked to the operator: ${error.message}`);
+  }
+
+  // Atomic: NO journal entry, and NEITHER element changed — including `good`, which keyed
+  // successfully before `soft` refused (the whole batch is thrown away, not partially kept).
+  const after = getProject(REPO_ROOT, project.id);
+  assert.equal(after.history_seq, seqBefore, "no journal entry on a rejected batch");
+  for (const original of originals) {
+    assert.deepEqual(
+      after.elements.find((element) => element.id === original.id),
+      original,
+      `element ${original.id} untouched after the batch refusal`,
+    );
+  }
+});
+
+// ---- batch validation (no Python) ----------------------------------------------
+
+test("alphaCutout batch rejects regions (regions stay single-element) before any python spawn", async (t) => {
+  tempProjects(t);
+  const project = createProject(UNUSED_ROOT, { title: "Alpha batch regions" });
+  const { element: e1 } = addImage(UNUSED_ROOT, project.id, { name: "a.png", bytes: magentaSheetPng() });
+  const { element: e2 } = addImage(UNUSED_ROOT, project.id, { name: "b.png", bytes: magentaSheetPng() });
+  await assert.rejects(
+    () => alphaCutout(UNUSED_ROOT, { projectId: project.id, elementIds: [e1.id, e2.id], regions: ["r1"] }),
+    /does not support regions|stay single-element/,
+  );
+});
+
+test("alphaCutout batch rejects an unknown/non-image element before any write", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Alpha batch bad element" });
+  const { element: img } = addImage(REPO_ROOT, project.id, { name: "a.png", bytes: magentaSheetPng() });
+  const { element: text } = addText(REPO_ROOT, project.id, { content: "hi" });
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+
+  await assert.rejects(
+    () => alphaCutout(REPO_ROOT, { projectId: project.id, elementIds: [img.id, "el_missing"] }),
+    /element not found/,
+  );
+  await assert.rejects(
+    () => alphaCutout(REPO_ROOT, { projectId: project.id, elementIds: [img.id, text.id] }),
+    /is not an image/,
+  );
+  assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore, "no journal entry on rejected batch input");
+});
+
+test("alphaCutout rejects elementId and elementIds together, and an empty elementIds array", async () => {
+  await assert.rejects(
+    () => alphaCutout(UNUSED_ROOT, { projectId: "p", elementId: "e1", elementIds: ["e1", "e2"] }),
+    /either elementId or elementIds/,
+  );
+  await assert.rejects(
+    () => alphaCutout(UNUSED_ROOT, { projectId: "p", elementIds: [] }),
+    /non-empty elementIds array/,
+  );
+});
+
 // ---- API + CLI parity (real pipeline; skips without the venv) -----------------
 
 test("alpha API route and CLI drive the same op", async (t) => {
@@ -253,6 +378,46 @@ test("alpha API route and CLI drive the same op", async (t) => {
   assert.match(parsed.element.src, /^files\//);
   assert.notEqual(parsed.element.src, undefined);
   assert.ok(before, "had a src before the CLI run");
+});
+
+test("alpha API and CLI both drive elementIds batches, one journal entry each (parity)", async (t) => {
+  const dir = tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Alpha batch parity" });
+  const { element: e1 } = addImage(REPO_ROOT, project.id, { name: "sheet1.png", bytes: magentaSheetPng() });
+  const { element: e2 } = addImage(REPO_ROOT, project.id, { name: "sheet2.png", bytes: magentaSheetPng() });
+  const seqBeforeApi = getProject(REPO_ROOT, project.id).history_seq; // 2 addImage entries
+
+  // API: POST /alpha { elementIds, method } — mirror how the multi-selection inspector calls it.
+  const handler = createCanvasApi(REPO_ROOT);
+  const captured = { status: 0, body: null };
+  const res = {
+    writeHead(status) { captured.status = status; return this; },
+    end(payload) { captured.body = payload ? JSON.parse(payload) : null; },
+  };
+  const req = mockReq("POST", { elementIds: [e1.id, e2.id], method: "matte" });
+  await handler(req, res, new URL(`http://x/api/canvas/projects/${project.id}/alpha`));
+  if (captured.status === 400 && /venv|Pillow|module/i.test(String(captured.body && captured.body.error))) {
+    t.skip(`alpha pipeline unavailable: ${captured.body.error}`);
+    return;
+  }
+  assert.equal(captured.status, 200, `API alpha 200 (got ${captured.status}: ${JSON.stringify(captured.body)})`);
+  assert.equal(captured.body.method, "matte");
+  assert.equal(captured.body.count, 2);
+  assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBeforeApi + 1, "API batch is one journal entry");
+
+  // CLI: alpha <id> --elements e1,e2 --method matte — same ops layer, different transport.
+  // (A matte re-run of already-keyed pixels is a valid op — see the single-element parity test.)
+  const seqBeforeCli = getProject(REPO_ROOT, project.id).history_seq;
+  const out = execFileSync("node", [CLI, "alpha", project.id, "--elements", `${e1.id},${e2.id}`, "--method", "matte"], {
+    env: { ...process.env, CANVAS_PROJECTS_ROOT: dir },
+    encoding: "utf8",
+  });
+  const parsed = JSON.parse(out.trim().split("\n").pop());
+  assert.equal(parsed.method, "matte");
+  assert.equal(parsed.count, 2);
+  assert.match(parsed.elements[0].src, /^files\//);
+  assert.match(parsed.elements[1].src, /^files\//);
+  assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBeforeCli + 1, "CLI batch is one journal entry too");
 });
 
 // Minimal request mock (a readable-body stub) for the API handler.

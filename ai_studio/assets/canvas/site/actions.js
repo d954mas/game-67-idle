@@ -422,6 +422,25 @@ export async function alphaCutoutFor(id, method, regionIds, control) {
   );
 }
 
+// Alpha-cutout a MULTI-selection of image elements as ONE operation (T0230 — "Apply to N
+// images"): every element keys its own CURRENT pixels through the same pipeline as the
+// single-element Alpha row, but the whole batch swaps srcs in ONE journaled op (one
+// Ctrl+Z restores every element). No region scoping here — regions stay single-element
+// (select one image and use its own Regions section). Atomic: if any element refuses
+// (dual-plate guard, etc.) the whole batch is rejected and NOTHING changes. Long
+// (python-backed) op — same limiter/spinner/disable treatment as the single-element row.
+export async function alphaCutoutBatchFor(ids, method, control) {
+  await runLongOp(
+    "Alpha cutout…",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/alpha`, { elementIds: ids, method });
+      applyMutation(result);
+      return { kind: "success", message: `Alpha cutout applied to ${ids.length} images (${result.method}).` };
+    },
+    { control },
+  );
+}
+
 // ---- regions -----------------------------------------------------------------
 
 // Replace an element's regions in one journaled setRegions op. Region edits

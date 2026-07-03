@@ -147,6 +147,11 @@ test("listHistory renders a labeled linear spine (Base + undo chain), current at
   // A pure label mapping is exported for reuse; unknown ops fall back to the raw name.
   assert.equal(historyEntryLabel("removeElements", { count: 3 }).label, "Delete elements");
   assert.equal(historyEntryLabel("removeElements", { count: 3 }).summary, "3 elements");
+  // alphaCutout (T0230): a batch (count) shows "N images"; a single-element entry still
+  // falls back to its method/region-count summary.
+  assert.equal(historyEntryLabel("alphaCutout", { count: 2, method: "auto" }).label, "Alpha cutout");
+  assert.equal(historyEntryLabel("alphaCutout", { count: 2, method: "auto" }).summary, "2 images");
+  assert.equal(historyEntryLabel("alphaCutout", { method: "matte" }).summary, "matte");
   assert.equal(historyEntryLabel("zzz-unknown").label, "zzz-unknown");
 });
 

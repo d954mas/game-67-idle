@@ -25,6 +25,7 @@ import {
   state,
 } from "./app.js";
 import {
+  alphaCutoutBatchFor,
   alphaCutoutFor,
   deleteRegion,
   detectRegionsFor,
@@ -845,13 +846,48 @@ function renderMultiGroup(groupIds, root) {
   root.appendChild(note);
 }
 
+// Batch ALPHA cutout (T0230): when EVERY selected element is an IMAGE, offer the same
+// method dropdown as the single-element Alpha row plus one button that keys ALL of them
+// in ONE journaled op ("Apply to N images" — one Ctrl+Z restores every element). No
+// region scoping here — regions stay single-element (select one image and use its own
+// Regions section). Long-op via the queue + progress toast (mirrors the single-element
+// row and Slice); the canvas stays interactive while it runs.
+function renderMultiAlpha(selected, root) {
+  const body = collapsible(root, "multialpha", "Alpha");
+  const alphaRow = document.createElement("div");
+  alphaRow.className = "insp-alpha-row";
+  const methodSel = document.createElement("select");
+  methodSel.className = "insp-input";
+  for (const [value, label] of [["auto", "Auto"], ["matte", "Key matte"]]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = label;
+    methodSel.appendChild(option);
+  }
+  const alphaBtn = document.createElement("button");
+  alphaBtn.type = "button";
+  alphaBtn.className = "insp-btn insp-alpha-btn";
+  alphaBtn.textContent = `Apply to ${selected.length} images`;
+  alphaBtn.addEventListener("click", () => {
+    alphaCutoutBatchFor(selected.map((element) => element.id), methodSel.value, alphaBtn);
+  });
+  alphaRow.append(field("Alpha", methodSel), alphaBtn);
+  body.appendChild(alphaRow);
+}
+
 // Multi-select: keep it simple — each element exports with its OWN persisted rows
-// (no shared row editing). The section just states that and offers one Export.
+// (no shared row editing). The section just states that and offers one Export. When
+// EVERY selected element is an image, an Alpha section (T0230) offers one batched
+// alpha-cutout op ("Apply to N images") ahead of the export note.
 function renderMulti(selected, root) {
   const title = document.createElement("div");
   title.className = "insp-multi-title";
   title.textContent = `${selected.length} elements selected`;
   root.appendChild(title);
+
+  if (selected.every((element) => element.type === "image")) {
+    renderMultiAlpha(selected, root);
+  }
 
   const note = document.createElement("div");
   note.className = "insp-export-note";

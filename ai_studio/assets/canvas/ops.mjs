@@ -1934,7 +1934,10 @@ export function historyEntryLabel(op, args = {}) {
     case "setRegions": return { label: "Edit regions", summary: a.region_count != null ? plural(count(a.region_count), "region") : "" };
     case "detectRegions": return { label: "Detect regions", summary: "" };
     case "sliceRegions": return { label: "Slice", summary: "" };
-    case "alphaCutout": return { label: "Alpha cutout", summary: a.region_count ? plural(count(a.region_count), "region") : String(a.method || "") };
+    case "alphaCutout": {
+      if (a.count) return { label: "Alpha cutout", summary: plural(count(a.count), "image") };
+      return { label: "Alpha cutout", summary: a.region_count ? plural(count(a.region_count), "region") : String(a.method || "") };
+    }
     case "setExportSettings": return { label: "Export settings", summary: "" };
     case "patchProject": return { label: "Rename project", summary: String(a.title || "") };
     case "createGroup": return { label: "Group", summary: String(a.name || "") };
@@ -2325,66 +2328,37 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
 // (where a pair source could come from later: a future "generate dual-plate pair" op).
 const ALPHA_METHODS = new Set(["auto", "matte"]);
 
-// Run the element's CURRENT pixels through the image-tools alpha pipeline and swap the
-// element to a NEW content-addressed alpha PNG in ONE journaled entry — the missing bridge
-// that puts the matte pipeline on the canvas ("готовый арт сразу в альфу"). Cutting is done
-// by our OWN Python tool (tools/alpha_cutout.py) which REUSES the image-tools route +
-// key_matte modules unmodified (no matte logic duplicated in node or a second python impl);
-// ops writes an alpha spec (absolute source path + method + the element's selected regions
-// with their exact rects) and spawns it once through the shared warm worker. `method` is
-// "auto" (route) or "matte" (force key_matte); a wide soft zone under "auto" is a loud error
-// (dual-plate pair needed — no silent single-plate fallback), as is a non-image element or an
-// unknown method. `regions` is an optional list of the element's stored region ids: given, the
-// alpha is applied ONLY inside those region masks and the rest is untouched (region-mask
-// composition happens IN python, one worker call); omitted, the whole element is keyed. Output
-// dimensions equal the source, so geometry never changes. The previous src file stays in
-// files/ (immutable), so undo restores the exact previous bytes; element.meta.alpha records the
-// run (method, params, parent src, routing metrics) like slice provenance, plus a tool_runs row.
-export async function alphaCutout(root, { projectId, elementId, method, regions } = {}) {
-  if (!projectId) throw new Error("alphaCutout requires projectId");
-  if (!elementId) throw new Error("alphaCutout requires elementId");
-  const chosen = method == null || method === "" ? "auto" : String(method).trim().toLowerCase();
-  if (!ALPHA_METHODS.has(chosen)) {
-    if (chosen === "dualplate" || chosen === "dual_plate" || chosen === "generation") {
-      throw new Error(
-        `alpha method ${JSON.stringify(method)} needs a white+black plate PAIR (dual-plate) — a single ` +
-          `canvas element has one image, so it is out of v1 scope. Use method "auto" or "matte".`,
-      );
-    }
-    throw new Error(`unknown alpha method ${JSON.stringify(method)} (expected "auto" or "matte")`);
-  }
-  const startedAt = performance.now();
-  const before = getProject(root, projectId);
-  const element = (before.elements || []).find((item) => item.id === elementId);
-  if (!element) throw new Error(`element not found: ${elementId}`);
-  if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
-
-  // Resolve the optional region-id selection against the element's STORED regions (same
-  // model as slice's regionIds), so moved/resized/hand-drawn regions key exactly where they
-  // sit. Each spec entry carries the rect and, for a polygonal region, its vertex ring.
-  const allRegions = Array.isArray(element.regions) ? element.regions : [];
-  let specRegions = null;
+// Resolve the optional region-id selection against the element's STORED regions (same
+// model as slice's regionIds), so moved/resized/hand-drawn regions key exactly where they
+// sit. Each spec entry carries the rect and, for a polygonal region, its vertex ring.
+// Returns null for "whole element" (no regions requested).
+function resolveAlphaRegions(element, regions) {
   const requested = Array.isArray(regions) ? regions.map(String) : [];
-  if (requested.length) {
-    const wanted = new Set(requested);
-    const selected = allRegions.filter((region) => wanted.has(String(region.id)));
-    const found = new Set(selected.map((region) => String(region.id)));
-    const missing = requested.filter((id) => !found.has(id));
-    if (missing.length) throw new Error(`unknown region id(s): ${missing.join(", ")}`);
-    specRegions = selected.map((region) => {
-      const rect = region.rect || region.content_bbox;
-      if (!Array.isArray(rect) || rect.length !== 4) throw new Error(`region ${region.id} has no rect for alpha`);
-      const entry = { id: String(region.id), rect };
-      if (Array.isArray(region.polygon) && region.polygon.length >= 3) entry.polygon = region.polygon;
-      return entry;
-    });
-    if (!specRegions.length) throw new Error("no regions selected for alpha");
-  }
+  if (!requested.length) return null;
+  const allRegions = Array.isArray(element.regions) ? element.regions : [];
+  const wanted = new Set(requested);
+  const selected = allRegions.filter((region) => wanted.has(String(region.id)));
+  const found = new Set(selected.map((region) => String(region.id)));
+  const missing = requested.filter((id) => !found.has(id));
+  if (missing.length) throw new Error(`unknown region id(s): ${missing.join(", ")}`);
+  const specRegions = selected.map((region) => {
+    const rect = region.rect || region.content_bbox;
+    if (!Array.isArray(rect) || rect.length !== 4) throw new Error(`region ${region.id} has no rect for alpha`);
+    const entry = { id: String(region.id), rect };
+    if (Array.isArray(region.polygon) && region.polygon.length >= 3) entry.polygon = region.polygon;
+    return entry;
+  });
+  if (!specRegions.length) throw new Error("no regions selected for alpha");
+  return specRegions;
+}
 
+// Run ONE element's CURRENT pixels through alpha_cutout.py (own worker spawn + own temp
+// dir) and return the new content-addressed src + the tool's report, WITHOUT touching
+// project.json — the caller (single or batch) commits. Shared so there is exactly one
+// implementation of the actual keying step for both paths.
+async function runAlphaCutoutTool(root, projectId, element, chosen, specRegions) {
   const sourceAbs = resolveProjectFile(root, projectId, element.src);
   const workDir = mkdtempSync(join(tmpdir(), "canvas-alpha-"));
-  let newSrc;
-  let report;
   try {
     const specPath = join(workDir, "alpha_spec.json");
     const reportPath = join(workDir, "alpha_report.json");
@@ -2399,24 +2373,25 @@ export async function alphaCutout(root, { projectId, elementId, method, regions 
     if (specRegions) spec.regions = specRegions;
     writeFileSync(specPath, `${JSON.stringify(spec, null, 2)}\n`);
     await runToolPython(root, ["ai_studio/assets/canvas/tools/alpha_cutout.py", "--spec", specPath]);
-    report = JSON.parse(readFileSync(reportPath, "utf8"));
+    const report = JSON.parse(readFileSync(reportPath, "utf8"));
     const bytes = readFileSync(outPath);
-    // Content-addressed write WITHOUT a new element: swap THIS element's src.
-    newSrc = storeAddFile(root, projectId, { bytes, name: `${slug(element.name)}.png` }).src;
+    // Content-addressed write WITHOUT a new element: the caller swaps the element's src.
+    const newSrc = storeAddFile(root, projectId, { bytes, name: `${slug(element.name)}.png` }).src;
+    return { newSrc, report };
   } finally {
     rmSync(workDir, { recursive: true, force: true });
   }
+}
 
-  // Re-read to avoid clobbering concurrent edits, then swap src + record provenance on the
-  // SAME element (previous src file stays in files/, so undo restores the exact bytes).
-  const current = getProject(root, projectId);
-  const target = (current.elements || []).find((item) => item.id === elementId);
-  if (!target) throw new Error(`element not found: ${elementId}`);
+// Build the tool_runs row + element.meta.alpha provenance for one keyed element (shared by
+// the single and batch paths, so the recorded shape never drifts between them).
+function buildAlphaProvenance(elementId, chosen, specRegions, report, parentSrc) {
+  const at = new Date().toISOString();
   const run = {
     id: `run_${randomUUID().slice(0, 8)}`,
     op: "alpha_cutout",
     elementId,
-    at: new Date().toISOString(),
+    at,
     params: { method: chosen, regions: specRegions ? specRegions.map((region) => region.id) : [] },
     result_summary: {
       method: (report && report.method) || chosen,
@@ -2427,12 +2402,30 @@ export async function alphaCutout(root, { projectId, elementId, method, regions 
   const alphaMeta = {
     method: chosen,
     tool: "alpha_cutout.py",
-    parentSrc: target.src,
-    at: run.at,
+    parentSrc,
+    at,
     key_color: report && report.key_color,
     regions: run.params.regions,
     routing: (report && report.regions) || [],
   };
+  return { run, alphaMeta };
+}
+
+// Single-element path (unchanged behavior/journal shape from before batching landed).
+async function alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt) {
+  const element = (before.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
+  const specRegions = resolveAlphaRegions(element, regions);
+
+  const { newSrc, report } = await runAlphaCutoutTool(root, projectId, element, chosen, specRegions);
+
+  // Re-read to avoid clobbering concurrent edits, then swap src + record provenance on the
+  // SAME element (previous src file stays in files/, so undo restores the exact bytes).
+  const current = getProject(root, projectId);
+  const target = (current.elements || []).find((item) => item.id === elementId);
+  if (!target) throw new Error(`element not found: ${elementId}`);
+  const { run, alphaMeta } = buildAlphaProvenance(elementId, chosen, specRegions, report, target.src);
   const nextElements = (current.elements || []).map((item) =>
     item.id === elementId ? { ...item, src: newSrc, meta: { ...(item.meta || {}), alpha: alphaMeta } } : item,
   );
@@ -2448,6 +2441,125 @@ export async function alphaCutout(root, { projectId, elementId, method, regions 
     startedAt,
   });
   return { project, element: (project.elements || []).find((item) => item.id === elementId), run, method: chosen };
+}
+
+// Batch path — the multi-selection "Apply to N images" gesture. Every element is
+// validated up front (exists, is an image; regions are NOT allowed here — regions stay
+// single-element). Each element is then keyed SEQUENTIALLY through its own worker spawn;
+// if ANY element fails (dual-plate refusal, not an image mid-run, tool error), the error
+// propagates immediately and NOTHING is written to project.json — no partial swap, no
+// journal entry (any files/ bytes already written for earlier-succeeding elements are
+// inert content-addressed data, never referenced by any element, so nothing is
+// "mutated" in the non-destructive sense). Only once EVERY element has keyed
+// successfully does this commit ONE journal entry swapping every src + every
+// element.meta.alpha — one undo restores every element byte-exact.
+async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt) {
+  const ids = elementIds.map((value) => String(value));
+  const unique = [...new Set(ids)];
+  const elements = unique.map((elementId) => {
+    const element = (before.elements || []).find((item) => item.id === elementId);
+    if (!element) throw new Error(`element not found: ${elementId}`);
+    if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
+    return element;
+  });
+
+  const processed = [];
+  for (const element of elements) {
+    const { newSrc, report } = await runAlphaCutoutTool(root, projectId, element, chosen, null);
+    processed.push({ elementId: element.id, newSrc, report });
+  }
+
+  // Re-read once (defensive against a concurrent edit across the whole sequential run),
+  // then swap every src + write every element's meta.alpha off the SAME snapshot.
+  const current = getProject(root, projectId);
+  const runs = [];
+  const swapById = new Map();
+  for (const item of processed) {
+    const target = (current.elements || []).find((el) => el.id === item.elementId);
+    if (!target) throw new Error(`element not found: ${item.elementId}`);
+    const { run, alphaMeta } = buildAlphaProvenance(item.elementId, chosen, null, item.report, target.src);
+    runs.push(run);
+    swapById.set(item.elementId, { newSrc: item.newSrc, alphaMeta });
+  }
+  const nextElements = (current.elements || []).map((item) => {
+    const swap = swapById.get(item.id);
+    if (!swap) return item;
+    return { ...item, src: swap.newSrc, meta: { ...(item.meta || {}), alpha: swap.alphaMeta } };
+  });
+  const after = updateProject(root, projectId, {
+    elements: nextElements,
+    tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), ...runs]),
+  });
+  const project = commitMutation(root, projectId, {
+    op: "alphaCutout",
+    args_summary: { elementIds: unique, count: unique.length, method: chosen },
+    before,
+    after,
+    startedAt,
+  });
+  const resultIds = new Set(unique);
+  return {
+    project,
+    elements: (project.elements || []).filter((item) => resultIds.has(item.id)),
+    runs,
+    method: chosen,
+    count: unique.length,
+  };
+}
+
+// Run the element's CURRENT pixels through the image-tools alpha pipeline and swap the
+// element to a NEW content-addressed alpha PNG in ONE journaled entry — the missing bridge
+// that puts the matte pipeline on the canvas ("готовый арт сразу в альфу"). Cutting is done
+// by our OWN Python tool (tools/alpha_cutout.py) which REUSES the image-tools route +
+// key_matte modules unmodified (no matte logic duplicated in node or a second python impl);
+// ops writes an alpha spec (absolute source path + method + the element's selected regions
+// with their exact rects) and spawns it once through the shared warm worker. `method` is
+// "auto" (route) or "matte" (force key_matte); a wide soft zone under "auto" is a loud error
+// (dual-plate pair needed — no silent single-plate fallback), as is a non-image element or an
+// unknown method. `regions` is an optional list of the element's stored region ids: given, the
+// alpha is applied ONLY inside those region masks and the rest is untouched (region-mask
+// composition happens IN python, one worker call); omitted, the whole element is keyed. Output
+// dimensions equal the source, so geometry never changes. The previous src file stays in
+// files/ (immutable), so undo restores the exact previous bytes; element.meta.alpha records the
+// run (method, params, parent src, routing metrics) like slice provenance, plus a tool_runs row.
+// `elementIds` (2+ images), given INSTEAD of `elementId`, batches a multi-selection into ONE
+// journal entry (T0230) — see alphaCutoutBatch; `regions` is not accepted with a batch.
+export async function alphaCutout(root, { projectId, elementId, elementIds, method, regions } = {}) {
+  if (!projectId) throw new Error("alphaCutout requires projectId");
+  const batch = elementIds !== undefined && elementIds !== null;
+  if (batch && elementId != null) {
+    throw new Error("alphaCutout accepts either elementId or elementIds, not both");
+  }
+  if (!batch && !elementId) throw new Error("alphaCutout requires elementId");
+  if (batch) {
+    // Structural batch checks are cheap and belong before any disk read, mirroring the
+    // requires-elementId guard above (fail fast on bad shape, not on a missing project).
+    if (!Array.isArray(elementIds) || !elementIds.length) {
+      throw new Error("alphaCutout requires a non-empty elementIds array");
+    }
+    if (regions != null) {
+      throw new Error(
+        "alphaCutout batch (elementIds) does not support regions — regions stay single-element (pass a single elementId)",
+      );
+    }
+  }
+  const chosen = method == null || method === "" ? "auto" : String(method).trim().toLowerCase();
+  if (!ALPHA_METHODS.has(chosen)) {
+    if (chosen === "dualplate" || chosen === "dual_plate" || chosen === "generation") {
+      throw new Error(
+        `alpha method ${JSON.stringify(method)} needs a white+black plate PAIR (dual-plate) — a single ` +
+          `canvas element has one image, so it is out of v1 scope. Use method "auto" or "matte".`,
+      );
+    }
+    throw new Error(`unknown alpha method ${JSON.stringify(method)} (expected "auto" or "matte")`);
+  }
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+
+  if (batch) {
+    return alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt);
+  }
+  return alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt);
 }
 
 // ---- exportElements (scale + encode) -----------------------------------------
