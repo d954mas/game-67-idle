@@ -38,3 +38,4 @@ increment plan.
 
 - 2026-07-03: created from lead request during T0210 verification.
 - 2026-07-03: design phase delegated to deep-reasoner (Opus).
+- 2026-07-03: Design phase launched (deep-reasoner/Opus): reuse verdict on old viewer slice9, additive element.slice9 model, shared rect-math for page/PIL/export parity, UI v1 scope, increments. Doc -> tmp/design_T0233_slice9_2026-07-03.md. Implementation waits for lead confirmation per task gate.

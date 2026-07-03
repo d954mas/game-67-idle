@@ -1,7 +1,7 @@
 ---
 id: T0207
 title: "Clean art: post-gen cleanup op — bg solidify, palette quantize, denoise (non-destructive)"
-status: backlog
+status: doing
 project: P001
 epic: E010
 priority: P2
@@ -64,3 +64,4 @@ a real case shows up. Cleanup section = Quantize + Denoise.
 - 2026-07-03: lead asked for cleanup research (AI watermarks + color artifacts + quantization recap); deep-reasoner (Opus, web) launched -> tmp/research_art_cleanup_2026-07-03.md; findings will extend this spec
 - 2026-07-03: research landed: tmp/research_art_cleanup_2026-07-03.md - quantize IS the color-artifact fix (MEDIANCUT on split RGB + alpha reattached byte-exact, dither off, RGBA quantize is FASTOCTREE-only so always split; libimagequant absent from Pillow 12.2.0); denoise = median3 + YCbCr chroma only (no cv2 deps); ladder = key/alpha FIRST then quantize then optional denoise then export; watermark verdict: gpt-image path clean, C2PA metadata already stripped by any numpy re-encode, only exportElements 1x-png byte-copy preserves metadata; cut: opencv/skimage/ML restorers
 - 2026-07-03: lead decision 2026-07-03: quantize/denoise apply IN-PLACE (like alpha, byte-exact undo) but ONLY with a preview-before-apply: tool section shows params + live preview of the result (canvas renders preview bytes for the element at real zoom, before/after toggle), Apply commits the already-computed bytes as ONE journal entry; warm worker makes param-tweak previews interactive. Preview is a hard requirement, not polish
+- 2026-07-03: Backend worker launched (lead away, 'делай дальше'): quantize+denoise per-tool python folders, cleanupPreview (tmp, no store/journal) + cleanupApply (storeAddFile + one journaled src swap + meta.cleanup), api/cli parity, cleanup.test.mjs. Bg-solidify NOT built (cut per lead 2026-07-02). UI increment follows.
