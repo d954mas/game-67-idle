@@ -13,10 +13,11 @@
 //   node ai_studio/assets/canvas/cli.mjs add-text <id> [--x n --y n] [--content "..."] [--style-json path] [--group gid]
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
-//   node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--w n --h n] [--x n --y n] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false]   (T0232 3a: rotation = degrees CW about the box center, normalized to [0,360); flip is image-only; --w/--h/--x/--y are the same finite-number patchElement fields the API PATCH route accepts)
+//   node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--w n --h n] [--x n --y n] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>]   (T0232 3a: rotation = degrees CW about the box center, normalized to [0,360); flip is image-only; T0260: opacity in [0,1], stored only when != 1; --w/--h/--x/--y are the same finite-number patchElement fields the API PATCH route accepts)
 //   node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json
 //   node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs slice9-set <id> --element <eid> [--left n --top n --right n --bottom n] [--scale n] | --clear   (T0233: 9-slice insets, SOURCE pixels; missing flags merge over the element's current slice9 (or 0s); --scale multiplies the DESTINATION corner/edge band only, default 1; --clear sends null)
+//   node ai_studio/assets/canvas/cli.mjs animation-set <id> --element <eid> --json spec.json | --clear   (T0260: set the ai_studio.canvas.animation.v1 spec {channels:[...]} from a file, or --clear; image + text)
 //   node ai_studio/assets/canvas/cli.mjs element-reorder <id> --element <eid> --index <n>
 //   node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>
 //   node ai_studio/assets/canvas/cli.mjs nodes-move <id> --json moves.json
@@ -122,6 +123,7 @@ import {
   reorderNode,
   reorderNodes,
   reparentGroup,
+  setElementAnimation,
   setExportSettings,
   setOpsActor,
   setRegions,
@@ -203,7 +205,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
   list [--full]   (summary by default: [{id,title,created,updated,elements,groups,head}]; --full = every project in full, today's original dump)
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -215,7 +217,7 @@ function usage() {
   add-text <id> [--x <n> --y <n>] [--content "<text>"] [--style-json <path>] [--group <gid>]
   detect-regions <id> --element <eid>
   move <id> --element <eid> --x <n> --y <n>
-  element-set <id> --element <eid> [--name <name>] [--visible true|false] [--content "<text>"] [--style-json <path>] [--w <n> --h <n>] [--x <n> --y <n>] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false]   (--w/--h/--x/--y are the same finite-number fields the API PATCH route + move accept — single-element resize/reposition from the CLI, T0254)
+  element-set <id> --element <eid> [--name <name>] [--visible true|false] [--content "<text>"] [--style-json <path>] [--w <n> --h <n>] [--x <n> --y <n>] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>]   (--w/--h/--x/--y are the same finite-number fields the API PATCH route + move accept — single-element resize/reposition from the CLI, T0254; --opacity in [0,1] stored only when != 1, T0260)
   element-remove <id> --element <eid>
   elements-set <id> --json <path>   (batched patch: [{elementId,x?,y?,w?,h?,name?,visible?}] or {patches:[...]}; one undo step)
   elements-remove <id> --elements e1,e2   (batched delete; one undo step)
@@ -231,6 +233,7 @@ function usage() {
   regions-set <id> --element <eid> --json <path>   (JSON: a regions array or {regions:[...]})
   regions-show <id> --element <eid>
   slice9-set <id> --element <eid> [--left <n> --top <n> --right <n> --bottom <n>] [--scale <n>] | --clear   (T0233: 9-slice insets in SOURCE pixels; corners stay fixed size, edges stretch one axis, center stretches both, when the element is resized; image-only; omitted flags merge over the element's current slice9, or 0 if unset; --scale multiplies the DESTINATION corner/edge band only (default 1, source pixels never move); --clear sends insets:null)
+  animation-set <id> --element <eid> --json <path> | --clear   (T0260: set an element's procedural animation — the ai_studio.canvas.animation.v1 spec {channels:[...]} (a spec object or a bare channels array) from a file; --clear sends animation:null; image + text; validated loudly at set time)
   slice <id> --element <eid> [--regions r1,r2]
   alpha <id> --element <eid> [--method auto|matte] [--regions r1,r2]   (alpha-cutout the element; auto routes, matte forces key_matte; one undo)
   alpha <id> --elements e1,e2 [--method auto|matte]   (batch: 2+ images keyed into ONE journal entry/undo; no --regions with a batch)
@@ -390,8 +393,11 @@ async function runCommand(command, id, positional, flags) {
       if (flags.h !== undefined && flags.h !== "true") patch.h = Number(flags.h);
       if (flags.x !== undefined && flags.x !== "true") patch.x = Number(flags.x);
       if (flags.y !== undefined && flags.y !== "true") patch.y = Number(flags.y);
+      // T0260: --opacity in [0,1] (the op validates loudly, stores only when != 1) — the
+      // same patchElement field the inspector's Opacity input / the API PATCH route accept.
+      if (flags.opacity !== undefined && flags.opacity !== "true") patch.opacity = Number(flags.opacity);
       if (!Object.keys(patch).length) {
-        fail("element-set requires --name, --visible, --content, --style-json, --rotation, --flip-h, --flip-v, --w, --h, --x, and/or --y");
+        fail("element-set requires --name, --visible, --content, --style-json, --rotation, --flip-h, --flip-v, --opacity, --w, --h, --x, and/or --y");
       }
       return print(patchElement(repoRoot, id, flags.element, patch));
     }
@@ -555,6 +561,21 @@ async function runCommand(command, id, positional, flags) {
       const scale = flagOrCurrent("scale", current.scale);
       if (scale !== undefined) insets.scale = scale;
       return print(setSlice9(repoRoot, { projectId: id, elementId: flags.element, insets }));
+    }
+    case "animation-set": {
+      // T0260 Track A: set/clear an element's procedural animation spec — a DEDICATED op
+      // (matching slice9-set/export-set). --json reads the ai_studio.canvas.animation.v1
+      // spec (a {channels:[...]} object or a bare channels array) from a file and the op
+      // validates it loudly; --clear sends animation:null. Image AND text both accept one.
+      if (!id) fail("animation-set requires <id>");
+      if (!flags.element || flags.element === "true") fail("animation-set requires --element <eid>");
+      if (flags.clear === "true") {
+        return print(setElementAnimation(repoRoot, { projectId: id, elementId: flags.element, animation: null }));
+      }
+      if (!flags.json || flags.json === "true") fail("animation-set requires --json <path> or --clear");
+      const raw = JSON.parse(readFileSync(resolve(flags.json), "utf8"));
+      const animation = Array.isArray(raw) ? { channels: raw } : raw;
+      return print(setElementAnimation(repoRoot, { projectId: id, elementId: flags.element, animation }));
     }
     case "slice": {
       if (!id) fail("slice requires <id>");

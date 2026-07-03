@@ -292,8 +292,13 @@ function paintElement(element, vp, editEl) {
     return;
   }
   const isEdit = editEl && element.id === editEl.id;
-  // Mode B dims every other element to focus the isolated one.
-  ctx.globalAlpha = editEl && !isEdit ? 0.3 : 1;
+  // Mode B dims every other element to focus the isolated one. T0260: element.opacity
+  // (static, [0,1], absent = 1) multiplies into that dim, set BEFORE the rotate/flip/
+  // slice9 drawBody so the whole element draw is alpha-scaled — parity with
+  // render_group.py's paint_element alpha multiply. Reset to 1 below. (The opacity
+  // animation channel, sampled, will multiply in on top in a later increment.)
+  const opacity = element.opacity === undefined || element.opacity === null ? 1 : Number(element.opacity);
+  ctx.globalAlpha = (editEl && !isEdit ? 0.3 : 1) * opacity;
   // T0207: a live Quantize/Denoise preview for THIS element, while "Hold to compare"
   // isn't pressed, paints in place of the source — pure view-state substitution, nothing
   // about `element` or the store changes.

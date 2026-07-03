@@ -116,6 +116,16 @@ def paint_element(out: Image.Image, node: dict[str, Any], origin: tuple[float, f
     cy = round((float(node.get("y") or 0) + float(node.get("h") or 0) / 2 - origin[1]) * scale)
     layer = Image.new("RGBA", out.size, (0, 0, 0, 0))
     layer.paste(image, (cx - image.width // 2, cy - image.height // 2), image)
+    # T0260: static element.opacity ([0,1], absent = 1) scales the element alpha before
+    # compositing — parity with the canvas's ctx.globalAlpha. Scaled on the pasted LAYER
+    # (whose RGB is straight after a full-opacity paste), NOT on `image` beforehand: reducing
+    # image alpha first would make the paste's own alpha-mask premultiply the RGB and then
+    # alpha_composite would blend a second time. On the layer, alpha_composite blends exactly
+    # once = source-over at that alpha. Clamped defensively; ops.mjs is the loud gate.
+    opacity = node.get("opacity")
+    if opacity is not None and float(opacity) < 1:
+        factor = max(0.0, min(1.0, float(opacity)))
+        layer.putalpha(layer.getchannel("A").point(lambda a: round(a * factor)))
     out.alpha_composite(layer)
 
 

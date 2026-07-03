@@ -90,6 +90,12 @@ import {
 // consumed by the browser (workspace.js) and the Python twin (tools/slice9.py) that
 // render_group.py imports — see setSlice9 below and buildRenderNodes' forwarding.
 import { validateSlice9 } from "./slice9.mjs";
+// Shared, pure procedural-animation contract (imported by the site too — see
+// animation.mjs). ops.mjs calls validateAnimation (the loud gate at SET time in
+// setElementAnimation below); sampleAnimation is consumed by the browser preview
+// (increment 2) and, with tools/animation.py (its Python twin, landing in the bake
+// increment), by render_group.py at bake time — no renderer integration in increment 1.
+import { validateAnimation } from "./animation.mjs";
 import {
   addFile as storeAddFile,
   addImage as storeAddImage,
@@ -271,6 +277,22 @@ function sanitizeTransformPatch(project, elementId, patch = {}) {
   if (patch.flipH !== undefined) clean.flipH = normalizeFlipFlag(patch.flipH, "flipH");
   if (patch.flipV !== undefined) clean.flipV = normalizeFlipFlag(patch.flipV, "flipV");
   return clean;
+}
+
+// Validate a patch's optional `opacity` (T0260 Track A prerequisite): a finite number in
+// [0,1] (loud otherwise). Returns undefined when the patch carries no opacity (the fast
+// path — an untouched patch never pays for this). Unlike x/y/w/h etc, opacity is NOT a
+// store-handled field (store.applyElementFields owns geometry/name/visible/text/transform
+// only), so patchElement applies the stored-only-when-!=1 write itself — mirroring the
+// slice9.scale / rotation:0 "absent = default (1)" convention so an opaque element stays
+// byte-identical to a pre-T0260 save.
+function normalizeOpacityPatch(patch) {
+  if (patch.opacity === undefined) return undefined;
+  const num = Number(patch.opacity);
+  if (!Number.isFinite(num) || num < 0 || num > 1) {
+    throw new Error(`opacity must be a finite number in [0,1], got ${JSON.stringify(patch.opacity)}`);
+  }
+  return num;
 }
 
 // ---- journal core ------------------------------------------------------------
@@ -590,15 +612,31 @@ export function patchElement(root, projectId, elementId, patch = {}) {
   const startedAt = performance.now();
   const before = getProject(root, projectId);
   const clean = sanitizeTransformPatch(before, elementId, sanitizeTextPatch(root, before, elementId, patch));
+  // Validate opacity BEFORE any write so a bad value throws atomically (nothing applied).
+  const opacity = normalizeOpacityPatch(clean);
   const result = storePatchElement(root, projectId, elementId, clean);
+  // opacity is not a store field: apply the set/delete here (stored only when != 1) on top
+  // of the store's geometry write, so the single commit below captures the full change.
+  let after = result.project;
+  if (opacity !== undefined) {
+    after = updateProject(root, projectId, {
+      elements: (after.elements || []).map((item) => {
+        if (item.id !== elementId) return item;
+        const next = { ...item };
+        if (opacity === 1) delete next.opacity;
+        else next.opacity = opacity;
+        return next;
+      }),
+    });
+  }
   const project = commitMutation(root, projectId, {
     op: "patchElement",
     args_summary: { elementId, patch: clean },
     before,
-    after: result.project,
+    after,
     startedAt,
   });
-  return { project, element: result.element };
+  return { project, element: (project.elements || []).find((item) => item.id === elementId) || result.element };
 }
 
 export function removeElement(root, projectId, elementId) {
@@ -1095,6 +1133,49 @@ export function setSlice9(root, { projectId, elementId, insets } = {}) {
   const project = commitMutation(root, projectId, {
     op: "setSlice9",
     args_summary: { elementId, insets: slice9 },
+    before,
+    after,
+    startedAt,
+  });
+  const updated = (project.elements || []).find((item) => item.id === elementId);
+  return { project, element: updated };
+}
+
+// ---- procedural animation (T0260 Track A) -------------------------------------
+//
+// An element carries an optional `element.animation = { v:1, channels:[...] }` — the
+// shared `ai_studio.canvas.animation.v1` spec (see animation.mjs for the model, units,
+// and osc/keyframes semantics). Top-level, not `meta` — like regions/slice9/export it is
+// a live property, not provenance. A DEDICATED op (mirrors setSlice9/setExportSettings):
+// element-scoped, its own loud validation at set time, one journal entry, clean
+// null-to-clear. Image AND text elements both allowed (animation is geometry/opacity-
+// level, never pixel-level). No renderer integration in this increment — the preview
+// (increment 2) and bake (increment 3) consume it via animation.mjs's sampleAnimation.
+
+// Replace (or clear) an element's animation spec. `animation` an object -> validateAnimation
+// (loud on a bad kind/prop, a duplicate-property channel, non-increasing keyframes, period
+// 0, ...) then stores `element.animation`; `animation` null OR undefined clears the field.
+// Undo/redo: free (animation rides in the elements snapshot like any element field —
+// commitMutation's snapshotOf deep-clones the whole array).
+export function setElementAnimation(root, { projectId, elementId, animation } = {}) {
+  if (!projectId) throw new Error("setElementAnimation requires projectId");
+  if (!elementId) throw new Error("setElementAnimation requires elementId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const element = (before.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  const normalized = animation === null || animation === undefined ? null : validateAnimation(animation); // throws loudly
+  const nextElements = (before.elements || []).map((item) => {
+    if (item.id !== elementId) return item;
+    const clone = { ...item };
+    if (normalized) clone.animation = normalized;
+    else delete clone.animation;
+    return clone;
+  });
+  const after = updateProject(root, projectId, { elements: nextElements });
+  const project = commitMutation(root, projectId, {
+    op: "setElementAnimation",
+    args_summary: { elementId, channels: normalized ? normalized.channels.length : 0 },
     before,
     after,
     startedAt,
@@ -4826,6 +4907,13 @@ function buildRenderNodes(root, projectId, project, scopeId, leaves, fonts) {
         // when absent, so JSON.stringify drops the key entirely — zero shape change
         // for a non-slice9 element.
         slice9: element.slice9 || undefined,
+        // T0260: static element.opacity in [0,1] (absent = 1, JSON drops the key), so
+        // render_group.py's paint_element multiplies the element alpha by it before
+        // compositing — parity with the canvas's ctx.globalAlpha. `element.opacity`
+        // directly (NOT `|| undefined`) so a valid 0 is forwarded, not turned absent.
+        // Image-only render integration in increment 1: text nodes do not carry it (a
+        // translucent text element renders opaque in BOTH renderers today).
+        opacity: element.opacity,
       });
     }
   }
