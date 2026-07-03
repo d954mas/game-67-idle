@@ -542,13 +542,13 @@ function scaleInput(element, row, commit) {
   const syncOut = (dims) => {
     out.textContent = dims ? `= ${dims.w} × ${dims.h} px` : "";
   };
-  // Per-mode preset values for the ▾ menu (lead spec): scale multipliers, or the
-  // axis's own BASE size first + power-of-two pixel sizes (deduped).
+  // Per-mode preset values for the ▾ menu (lead spec): scale multipliers, or pixel
+  // sizes led by the element's CURRENT on-canvas size — "я поскейлил арт и хочу на
+  // выходе размер как на канвасе" (lead round 3; NOT the source size).
   const presetsNow = () => {
     if (unit === "mul") return SCALE_VALUE_PRESETS;
-    const axisBase = unit === "w" ? sw : sh;
-    const values = axisBase > 0 ? [axisBase, ...PX_VALUE_PRESETS.filter((px) => px !== axisBase)] : PX_VALUE_PRESETS;
-    return values;
+    const axisCanvas = Math.round(Number(unit === "w" ? element.w : element.h));
+    return axisCanvas > 0 ? [axisCanvas, ...PX_VALUE_PRESETS.filter((px) => px !== axisCanvas)] : PX_VALUE_PRESETS;
   };
 
   number.value = String(value);
