@@ -149,8 +149,10 @@ Every capability is one op in `ops.mjs`:
   (screen) mutations, journaled; `renderGroup` — composited screen PNG export, not
   journaled. See **Groups = screens** below.
 - `createRecipeCard({projectId, name?, x?, y?, w?, h?, parentId?})` / `patchRecipe({
-  projectId, groupId, patch})` — **(T0239 increment 1)** the generation recipe card: a
-  group carrying an additive `recipe` blob, no generation yet. See **Recipe card** below.
+  projectId, groupId, patch})` / `generateFromRecipe({projectId, groupId, generators?})` —
+  **(T0239 increments 1-2)** the generation recipe card: a group carrying an additive
+  `recipe` blob, plus generation end-to-end (codex/gemini/both engines, mints new RAW
+  element(s) beside the card). See **Recipe card** below.
 - `detectRegions` — reads the element image, runs it through the image tools
   upload + detect pipeline, stores `element.regions` (and backfills
   `source_w`/`source_h`), records a `tool_runs` entry — journaled. Requires Python
@@ -502,12 +504,15 @@ Size **Clip content** checkbox, group context-menu **Clip content** toggle) or t
 
 ### Recipe card
 
-**(T0239 increment 1 — the card object + `recipe` meta + inspector surface; no
-generation yet.)** A recipe card is a **group carrying an additive `group.recipe`
-object**, not a new element type — the group primitive already gives it a container, a
-framed render with a label, membership (drag an image in = a ref, via the existing
-`assignToGroup`), move-as-a-whole, z-order, marquee, and copy/paste for free. Design:
-`tmp/design_T0239_recipe_card_2026-07-03.md`.
+**(T0239 increments 1-2 — the card object + `recipe` meta + inspector surface, AND
+generation end-to-end.)** A recipe card is a **group carrying an additive
+`group.recipe` object**, not a new element type — the group primitive already gives it
+a container, a framed render with a label, membership (drag an image in = a ref, via the
+existing `assignToGroup`), move-as-a-whole, z-order, marquee, and copy/paste for free.
+Design: `tmp/design_T0239_recipe_card_2026-07-03.md` (read the full doc INCLUDING
+revisions R1-R3 — R1 replaces the original meta+clipboard style plan with an on-canvas
+STYLE CARD component, R2 adds the codex|gemini engine choice, R3 adds "both" compare
+mode).
 
 `group.recipe` shape (a fresh card via `createRecipeCard` gets this default):
 
@@ -523,9 +528,13 @@ framed render with a label, membership (drag an image in = a ref, via the existi
     "bg_key": "#ff00ff", "supersample": true, "n_candidates": 1
   },
   "style_ref": null,             // reserved nullable by-id pointer to a STYLE CARD (R1) — increment 3
-  "last_run": null                // set by increment 2's generate op; null = "draft", non-null = "done"
+  "last_run": null                // set by generateFromRecipe; null = "draft", non-null = "done"/"partial"
 }
 ```
+
+`last_run` (increment 2), when set: `{at, result_element_id, verdict}` where `verdict` is
+`"ok"` (every attempted engine landed) or `"partial"` (engine `"both"`, at least one engine
+failed/skipped but the other landed — see **Generation** below).
 
 Refs are **not** in `recipe` — they are the card's ordinary members (image elements with
 `groupId === cardId`), discovered at generate time (increment 2). A card is a **workshop
@@ -550,21 +559,95 @@ never appear in a "every visible screen" export run).
   carve-out needed**. A pasted/duplicated card keeps its recipe verbatim under a fresh
   group id; `style_ref` is copied as-is (no remap — it stays `null` until increment 3
   gives it something to point at across canvases).
-- Rendering: a card draws as a **plain group frame** today (label + frame, like any
-  group) — the canvas "Recipe" badge + one-line prompt preview are deferred to increment
-  2 alongside generation. Inspector: selecting a group with `recipe` shows an additive
-  **Recipe** section (above **Render group**, same "presence of the field" pattern as
-  **Group background**) with a Prompt textarea, an Engine select, and **disabled**
-  Generate / Style controls carrying a hint that they land in later increments.
+- Rendering: a card draws as a group frame that reads as a distinct "special container"
+  at a glance (lead, live: "сейчас выглядит как группа") — a **dashed amber** frame
+  stroke (`#d7a14a`, mirrors canvas.css's `--amber`) regardless of selection, a small
+  **"Recipe"** tag chip in the same accent beside the name label, and a truncated
+  (~40 char) prompt-preview line inside the frame. All pure chrome (`workspace.js`
+  `drawGroupFrame`) — nothing interactive is added; the existing name-label pill stays
+  the only click-selectable hit-area. Inspector: selecting a group with `recipe` shows an
+  additive **Recipe** section (above **Render group**, same "presence of the field"
+  pattern as **Group background**) with a Prompt textarea, an Engine select, and a
+  **Generate** button (Style controls stay disabled — increment 3).
 - HTTP: `POST /api/canvas/projects/<id>/recipe-cards {name?, x?,y?,w?,h?, parentId?}`;
   `PATCH /api/canvas/projects/<id>/recipe-cards/<gid>` — body **is** the recipe patch
-  itself (`{prompt?, engine?, style_ref?}`), not wrapped. CLI: `recipe-create <id> [--name
-  X] [--x --y --w --h] [--parent <gid>|none]`; `recipe-set <id> --group g [--prompt "..."]
-  [--engine codex|gemini|both] [--style <id>|none]`. Page: the canvas context menu's
-  **New recipe card** item (empty-canvas right-click; mints the card at the click point).
+  itself (`{prompt?, engine?, style_ref?}`), not wrapped; `POST
+  /api/canvas/projects/<id>/recipe-cards/<gid>/generate {}` (increment 2 — see
+  **Generation** below). CLI: `recipe-create <id> [--name X] [--x --y --w --h] [--parent
+  <gid>|none]`; `recipe-set <id> --group g [--prompt "..."] [--engine codex|gemini|both]
+  [--style <id>|none]`; `recipe-generate <id> --group g`. Page: the canvas context menu's
+  **New recipe card** item (empty-canvas right-click; mints the card at the click point);
+  the Recipe inspector's **Generate** button.
 
-Generation (`generateFromRecipe`), the STYLE CARD component, and the Expand-prompt /
-Extract-style helpers are later increments (2-4) of T0239 — see the design doc.
+The STYLE CARD component and the Expand-prompt / Extract-style helpers are later
+increments (3-4) of T0239 — see the design doc.
+
+#### Generation (`generateFromRecipe`, T0239 increment 2)
+
+`generateFromRecipe({projectId, groupId, generators?})` — the Recipe inspector's
+**Generate** button / `recipe-generate` CLI verb / `POST .../recipe-cards/<gid>/generate`.
+Validates loudly (in order): the group exists and carries `recipe`; the resolved prompt
+(`use_expanded && expanded ? expanded : prompt`, trimmed) is non-empty; the card's member
+IMAGE elements (`groupId === cardId`, visible only — decision 3's refs) number at most 5
+(`generate_image.py`'s `--input-image` cap). `recipe.style_ref` is **not** resolved this
+increment (reserved for increment 3's style cards) — the frame's `w`/`h` is never read
+either way (decision 4).
+
+Engine (`recipe.engine`, R2/R3):
+
+- `"codex"` (default) — one generation via `tools/recipe_generate.mjs`'s
+  `generateImageCodex`, which shells `generate_image.py` (the SAME script
+  `dual_plate_generate.mjs` uses) with `--prompt`, one `--input-image` per ref,
+  `--size`/`--quality`/`--model` from `recipe.params`.
+- `"gemini"` — one generation via `generateImageGemini`, which shells the **agy**
+  (Antigravity) CLI headless (skill Path B), verified by **output file existence, never
+  stdout**. agy ref support is **unverified** (R2): a card with **any** ref on
+  `engine="gemini"` **refuses loudly before any generation** — text-only gemini
+  generation is fine.
+- `"both"` (R3 compare mode) — runs BOTH engines and mints TWO result elements named
+  `"<card name> codex"` / `"<card name> agy"`, each with its own frozen `meta.recipe`
+  snapshot, in **ONE journal entry**. **Partial success is real success** here: one
+  engine failing still lands the other (`result.failed` names what didn't, e.g.
+  `[{engine, error}]`) and `recipe.last_run.verdict` becomes `"partial"`. A card with
+  refs on `engine="both"` **skips** the gemini attempt (never calls it) and reports the
+  skip in `failed` instead of refusing the whole run. Only when **every** attempted
+  engine fails (including a plain single-engine run) does the op throw loudly, and
+  nothing is written in that case — no journal entry, no card mutation.
+
+Placement (R1) — the result(s) land in the card's **PARENT** scope
+(`groupId = card.parentId ?? null`, **never** `groupId = cardId`, so a result can never
+become a ref feeding a future run of the same card), positioned to the **right** of the
+card frame (16px gap); a second result (`engine="both"`) stacks **below** the first
+(16px gap).
+
+Each minted element carries a frozen `element.meta.recipe` snapshot (no `element.meta.alpha`
+— raw art, decision 5):
+
+```jsonc
+element.meta.recipe = {
+  "cardId": "grp_…",
+  "engine": "codex",                     // per-element engine, even under recipe.engine "both"
+  "at": "2026-07-03T12:00:00.000Z",
+  "prompt_snapshot": "a red fox riding a dragon",
+  "refs_snapshot": ["files/<hash>.png", …],   // <=5, project-relative srcs
+  "params_snapshot": { "size": "1024x1024", "quality": "high", "model": "gpt-image-2",
+                        "bg_key": "#ff00ff", "supersample": true, "n_candidates": 1 }
+}
+```
+
+A `tool_runs` row (`op: "generate_from_recipe"`) records `cardId`, the sent prompt,
+`refs`, `size`/`quality`/`model`, and a `result_summary` of `{results: [{engine,
+elementId, bytes}], failed: [{engine, error}]}`. The card's own `recipe.last_run` is set
+in the SAME `commitMutation` as the mint(s) — one journal entry, one undo removes every
+minted element AND reverts `last_run` together. Generation itself runs **outside** the
+journal (a codex/agy spawn, minutes) — only the final mint commits, mirroring
+`alphaDualPlateGenerate` (T0238).
+
+The generator seam (`tools/recipe_generate.mjs`) is injectable per engine
+(`generators: {codex?, gemini?}`, mirrors `alphaDualPlateGenerate`'s `generator` arg) —
+tests inject fakes, so codex/agy **never** spawn in the suite. Pure argv/instruction
+builders (`buildGenerateCommand`, `buildAgyInstruction`, `buildAgyCommand`) are exported
+and tested directly, no spawn.
 
 ### Render contract
 
@@ -1149,6 +1232,7 @@ node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g   # dissolve o
 node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 node ai_studio/assets/canvas/cli.mjs recipe-create <id> [--name X] [--x --y --w --h] [--parent <gid>|none]   # T0239 increment 1: mint a recipe card (a group with an additive `recipe` blob); omitted w/h default to 360x280; no generation yet
 node ai_studio/assets/canvas/cli.mjs recipe-set <id> --group g [--prompt "a red fox"] [--engine codex|gemini|both] [--style <id>|none]   # partial recipe blob update; --style is a reserved by-id pointer (style cards land later)
+node ai_studio/assets/canvas/cli.mjs recipe-generate <id> --group g   # T0239 increment 2: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one undo step; real codex/agy spawn (minutes)
 node ai_studio/assets/canvas/cli.mjs render-screen <id> --group g [--scale 2] [--background '#rrggbb']
 node ai_studio/assets/canvas/cli.mjs undo <id> --expect-head <n>  # --expect-head required (T0234); read it from history-list first
 node ai_studio/assets/canvas/cli.mjs redo <id> --expect-head <n>

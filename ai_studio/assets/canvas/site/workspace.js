@@ -603,14 +603,45 @@ function updateRegionTools(editEl) {
   }
 }
 
+// T0239 increment 2 (lead, live: "сейчас выглядит как группа" — a recipe card must read as
+// a distinct "special container" at a glance, not a plain group). #d7a14a mirrors canvas.css's
+// --amber custom property — workspace.js draws on a bare 2D context (no CSS var access), so
+// the hex is duplicated here; keep it in sync if canvas.css ever changes --amber. This is the
+// SAME hex the frame already uses for a plain group's "selected" stroke (line below), so a
+// recipe card's stroke stays amber REGARDLESS of selection (dashed too, see drawGroupFrame)
+// — selection still reads via the thicker line width, exactly like a plain group.
+const RECIPE_ACCENT = "#d7a14a";
+
+// Recipe-card prompt preview (T0239 increment 2): mirrors layers_panel.js's textPreview
+// (T0231) — newlines collapsed to spaces, trimmed, truncated with an ellipsis. Empty/
+// whitespace-only prompt yields "" so the caller skips drawing it (no bare quotes on a
+// still-blank card).
+const RECIPE_PROMPT_PREVIEW_MAX = 40;
+function recipePromptPreview(prompt) {
+  const flat = String(prompt || "").replace(/\s+/g, " ").trim();
+  if (!flat) return "";
+  return flat.length > RECIPE_PROMPT_PREVIEW_MAX ? `${flat.slice(0, RECIPE_PROMPT_PREVIEW_MAX)}…` : flat;
+}
+
 function drawGroupFrame(group, vp) {
   const origin = imageToScreenPoint({ x: group.x, y: group.y }, vp);
   const w = group.w * vp.scale;
   const h = group.h * vp.scale;
   const selected = state.selectedGroupId === group.id || state.selectedGroupIds.has(group.id);
+  const isRecipeCard = !!group.recipe;
   ctx.lineWidth = selected ? 2 : 1;
-  ctx.strokeStyle = selected ? "#d7a14a" : "#77a7ff";
-  ctx.strokeRect(origin.x, origin.y, w, h);
+  ctx.strokeStyle = isRecipeCard ? RECIPE_ACCENT : selected ? "#d7a14a" : "#77a7ff";
+  if (isRecipeCard) {
+    // Dashed frame = "special container" (a recipe card is a workshop widget, not a plain
+    // group) — read at a glance regardless of selection state. Reset after so the marquee/
+    // guide overlays that draw later this same frame never inherit the dash pattern.
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(origin.x, origin.y, w, h);
+    ctx.restore();
+  } else {
+    ctx.strokeRect(origin.x, origin.y, w, h);
+  }
 
   // Hover affordance: a subtle outline on the group a plain click would select at the
   // current scope, so the user sees what a click will grab before pressing.
@@ -634,6 +665,29 @@ function drawGroupFrame(group, vp) {
   ctx.textBaseline = "middle";
   ctx.fillText(label, rect.x + padX, rect.y + labelH / 2 + 0.5);
   groupLabelRects.push(rect);
+
+  // Recipe-card chrome (T0239 increment 2): a "Recipe" tag chip beside the title (same
+  // accent as the frame stroke) + a truncated prompt preview inside the frame. Both are
+  // pure chrome — never pushed to groupLabelRects, so neither is click-selectable on its
+  // own (the existing name pill above stays the only interactive label hit-area).
+  if (isRecipeCard) {
+    const chipLabel = "Recipe";
+    const chipTextW = Math.ceil(ctx.measureText(chipLabel).width);
+    const chipX = rect.x + rect.w + 4;
+    ctx.fillStyle = RECIPE_ACCENT;
+    ctx.fillRect(chipX, rect.y, chipTextW + padX * 2, labelH);
+    ctx.fillStyle = "#241b0a"; // dark text for contrast against the amber fill
+    ctx.textBaseline = "middle";
+    ctx.fillText(chipLabel, chipX + padX, rect.y + labelH / 2 + 0.5);
+
+    const preview = recipePromptPreview(group.recipe.prompt);
+    if (preview) {
+      ctx.font = "11px system-ui, 'Segoe UI', sans-serif";
+      ctx.fillStyle = "rgba(248, 251, 255, 0.6)";
+      ctx.textBaseline = "top";
+      ctx.fillText(preview, origin.x + padX, origin.y + 4);
+    }
+  }
 }
 
 function normScreenRect(a, b) {

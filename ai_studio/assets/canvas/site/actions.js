@@ -861,6 +861,42 @@ export async function patchRecipeAction(groupId, patch) {
   }
 }
 
+// ---- recipe generation (T0239 increment 2) -------------------------------------
+
+// Generate from a recipe card (the Recipe inspector's Generate button): mints 1 new RAW
+// image element for engine codex/gemini, or 2 side-by-side for engine "both" (R3 compare
+// mode — "<card> codex" / "<card> agy"), beside the card frame, in the card's PARENT scope
+// (never inside the card — a result can never become a ref feeding a future run, decision
+// 8). Codex/agy generation runs minutes, not seconds — same runLongOp limiter/spinner/
+// disable treatment as alphaDualPlateGenerateFor, just a longer/engine-aware label. The
+// first minted element is selected on success (mirrors alphaDualPlateGenerateFor).
+// engine="both" allows PARTIAL success (one engine failing still lands the other; the op
+// does NOT throw) — `result.failed` names what did not land, surfaced as a pinned (sticky)
+// toast instead of the plain success toast so it does not auto-dismiss unnoticed. Only
+// EVERY engine failing throws, which runLongOp already renders as its own error toast.
+export async function generateFromRecipeAction(groupId, control) {
+  await runLongOp(
+    "Generating… (codex/agy, minutes)",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/recipe-cards/${groupId}/generate`, {});
+      const minted = result.elements || [];
+      if (minted[0]) selectOnly(minted[0].id);
+      applyMutation(result);
+      const names = minted.map((element) => `"${element.name}"`).join(", ");
+      if (result.failed && result.failed.length) {
+        const reasons = result.failed.map((f) => `${f.engine}: ${f.error}`).join("; ");
+        return {
+          kind: "pinned",
+          message: `Generated ${names} — ${result.failed.length} engine(s) failed (${reasons}).`,
+          links: [],
+        };
+      }
+      return { kind: "success", message: `Generated ${names}.` };
+    },
+    { control },
+  );
+}
+
 // Set a shared field (visible/clip) on SEVERAL groups in ONE journaled patchGroups op —
 // the multi-group inspector's shared toggles. One HTTP call, one undo restores every
 // group. `patch` is {visible?} or {clip?}.

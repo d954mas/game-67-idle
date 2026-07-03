@@ -28,6 +28,7 @@
 //   POST   /api/canvas/projects/<id>/groups/<gid>/ungroup  (dissolve one level, keep children)
 //   POST   /api/canvas/projects/<id>/recipe-cards          {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 1: mint a recipe card — a group with an additive `recipe` blob)
 //   PATCH  /api/canvas/projects/<id>/recipe-cards/<gid>    {prompt?, engine?, style_ref?}     (partial recipe blob update; 400 on a group with no `recipe`)
+//   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/generate  {}   (T0239 increment 2: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one entry; partial success allowed on engine=both)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
 //   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
 //   POST   /api/canvas/projects/<id>/nodes-align   {nodeIds, align, reference?} (align to selection bbox or parent frame; one entry)
@@ -74,6 +75,7 @@ import {
   exportElements,
   exportProject,
   fitGroup,
+  generateFromRecipe,
   getProject,
   historyFlags,
   jumpHistory,
@@ -616,6 +618,18 @@ export function createCanvasApi(root) {
         const groupId = decodeURIComponent(parts[5]);
         const body = await readJsonBody(req);
         sendMutation(200, patchRecipe(root, { projectId: id, groupId, patch: body }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/recipe-cards/<gid>/generate  (T0239 increment 2)
+      // Generation runs OUTSIDE the journal (a codex/agy spawn, minutes); only the final
+      // mint commits. Mints 1 element (engine codex/gemini) or 2 (engine both, R3 compare
+      // mode) beside the card frame, in its PARENT scope — one journal entry either way.
+      // Partial success on engine=both surfaces as 200 with a `failed` array, never a 4xx.
+      if (parts.length === 7 && sub === "recipe-cards" && parts[6] === "generate" && req.method === "POST") {
+        const groupId = decodeURIComponent(parts[5]);
+        await readJsonBody(req);
+        sendMutation(201, await generateFromRecipe(root, { projectId: id, groupId }));
         return true;
       }
 

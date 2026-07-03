@@ -1,8 +1,16 @@
-// Recipe card ops tests (T0239 increment 1: the card object + `recipe` meta + inspector
-// surface — no generation yet). Metadata-only ops (no Python), so any placeholder root
-// works for the direct-ops tests; CLI/API parity tests drive the real cli.mjs / api.mjs
-// exactly like tests/cli.test.mjs / tests/api.test.mjs do (duplicated here rather than
-// imported, matching every other *.test.mjs file's own tiny helpers).
+// Recipe card ops tests. Increment 1: the card object + `recipe` meta + inspector surface
+// (no generation). Increment 2 (T0239): generateFromRecipe end-to-end — codex/gemini/both
+// engines behind the tools/recipe_generate.mjs seam. Codex/agy NEVER spawn in this suite:
+// every generation test injects a fake `generators` map (the T0238 contract, extended to two
+// engines); only the pure argv/instruction builders exercise the DEFAULT generators' shape,
+// never spawned. Metadata-only ops (no Python for validation/refs-resolution), so the
+// placeholder ROOT works for every direct-ops test, including ones that add real ref image
+// bytes (addImage's imageSize parsing is pure JS); CLI/API parity tests drive the real
+// cli.mjs / api.mjs exactly like tests/cli.test.mjs / tests/api.test.mjs do (duplicated here
+// rather than imported, matching every other *.test.mjs file's own tiny helpers) but stay
+// VALIDATION-level only (T0238's dual_generate.test.mjs precedent) — a real generate call
+// through the CLI/API always spawns the DEFAULT (real) generators, which this suite never
+// triggers.
 // Run: node --test ai_studio/assets/canvas/tests/recipe.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -13,13 +21,17 @@ import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
 import { URL, fileURLToPath } from "node:url";
 import {
+  addImage,
+  assignToGroup,
   createGroup,
   createProject,
   createRecipeCard,
   duplicateNodes,
   exportProject,
+  generateFromRecipe,
   getProject,
   historyEntryLabel,
+  patchElement,
   patchRecipe,
   pasteNodes,
   redoOp,
@@ -27,6 +39,9 @@ import {
 } from "../ops.mjs";
 import { buildNodesSpec } from "../tree.mjs";
 import { createCanvasApi } from "../api.mjs";
+import { resolveProjectFile } from "../store.mjs";
+import { buildAgyCommand, buildAgyInstruction, buildGenerateCommand, GENERATE_IMAGE_SCRIPT } from "../tools/recipe_generate.mjs";
+import { solidPng } from "./png_fixture.mjs";
 
 // Metadata ops resolve store paths only, so any placeholder root works (no Python).
 const ROOT = "C:/unused-repo-root";
@@ -361,4 +376,396 @@ test("API POST recipe-cards / PATCH recipe-cards/<gid> parity with the ops layer
   const rejected = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/recipe-cards/${plainId}`, { prompt: "x" });
   assert.equal(rejected.status, 400);
   assert.match(rejected.json().error, /not a recipe card/);
+});
+
+// ================================================================================
+// T0239 increment 2: generateFromRecipe — end-to-end generation, engine seam, placement.
+// ================================================================================
+
+// A fake generator that returns fixed bytes (or throws, if given an Error), counting every
+// call for exact argument/order assertions — the SAME shape tests/dual_generate.test.mjs's
+// fakeGenerator uses, adapted to the recipe seam's {prompt, refPaths, params} args.
+function fakeGen(bytesOrError) {
+  const calls = [];
+  const fn = async (args) => {
+    calls.push(args);
+    if (bytesOrError instanceof Error) throw bytesOrError;
+    return bytesOrError;
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+// ---- pure builders (no spawn) --------------------------------------------------
+
+test("buildGenerateCommand: prompt, one --input-image per ref, size/quality/model, out — never spawns", () => {
+  const { command, args } = buildGenerateCommand({
+    prompt: "a red fox",
+    refPaths: ["C:/tmp/ref1.png", "C:/tmp/ref2.png"],
+    size: "1536x1024",
+    quality: "medium",
+    model: "gpt-image-2",
+    outPath: "C:/tmp/out.png",
+  });
+  assert.equal(command, "python");
+  assert.equal(args[0], GENERATE_IMAGE_SCRIPT);
+  assert.match(args[0], /generate_image\.py$/);
+  assert.deepEqual(args.slice(1), [
+    "--prompt", "a red fox",
+    "--input-image", "C:/tmp/ref1.png",
+    "--input-image", "C:/tmp/ref2.png",
+    "--size", "1536x1024",
+    "--quality", "medium",
+    "--model", "gpt-image-2",
+    "--out", "C:/tmp/out.png",
+  ]);
+});
+
+test("buildGenerateCommand: no refs -> no --input-image flags; defaults fill size/quality/model", () => {
+  const { args } = buildGenerateCommand({ prompt: "p", outPath: "o.png" });
+  assert.deepEqual(args.slice(1), ["--prompt", "p", "--size", "1024x1024", "--quality", "high", "--model", "gpt-image-2", "--out", "o.png"]);
+});
+
+test("buildGenerateCommand requires prompt/outPath", () => {
+  assert.throws(() => buildGenerateCommand({ outPath: "o" }), /requires prompt/);
+  assert.throws(() => buildGenerateCommand({ prompt: "p" }), /requires outPath/);
+});
+
+test("buildAgyInstruction: square/non-square aspect label, prompt + out path embedded, no-drawing-code clause", () => {
+  const square = buildAgyInstruction({ prompt: "a red fox", size: "1024x1024", outPath: "C:/tmp/a.png" });
+  assert.match(square, /square 1:1/);
+  assert.match(square, /a red fox/);
+  assert.match(square, /Save the PNG to C:\/tmp\/a\.png/);
+  assert.match(square, /Do not write or run any drawing code/);
+
+  const wide = buildAgyInstruction({ prompt: "a red fox", size: "1536x1024", outPath: "C:/tmp/b.png" });
+  assert.match(wide, /1536:1024 aspect ratio/);
+
+  // An unparseable size falls back to the common square default rather than a malformed
+  // instruction.
+  const fallback = buildAgyInstruction({ prompt: "a red fox", size: "not-a-size", outPath: "C:/tmp/c.png" });
+  assert.match(fallback, /square 1:1/);
+});
+
+test("buildAgyInstruction requires prompt/outPath", () => {
+  assert.throws(() => buildAgyInstruction({ outPath: "o" }), /requires prompt/);
+  assert.throws(() => buildAgyInstruction({ prompt: "p" }), /requires outPath/);
+});
+
+test("buildAgyCommand: shells the agy binary with --dangerously-skip-permissions -p <instruction>", () => {
+  const { command, args } = buildAgyCommand({ prompt: "a red fox", size: "1024x1024", outPath: "C:/tmp/a.png" });
+  assert.match(command, /agy(\.exe)?$/);
+  assert.deepEqual(args.slice(0, 2), ["--dangerously-skip-permissions", "-p"]);
+  assert.match(args[2], /a red fox/);
+});
+
+// ---- generateFromRecipe validation (no generation attempted) -------------------
+
+test("generateFromRecipe validates projectId/groupId before touching disk", async () => {
+  await assert.rejects(() => generateFromRecipe(ROOT, {}), /requires projectId/);
+  await assert.rejects(() => generateFromRecipe(ROOT, { projectId: "p" }), /requires groupId/);
+});
+
+test("generateFromRecipe: an unknown group, a plain (non-card) group, and an empty prompt are all loud — no generator call", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Generate validate" });
+  const plain = createGroup(ROOT, { projectId: project.id, name: "Plain", x: 0, y: 0, w: 10, h: 10 }).group;
+  const card = createRecipeCard(ROOT, { projectId: project.id, name: "Blank card" }).group;
+  const codex = fakeGen(solidPng());
+
+  await assert.rejects(
+    () => generateFromRecipe(ROOT, { projectId: project.id, groupId: "grp_missing", generators: { codex } }),
+    /group not found/,
+  );
+  await assert.rejects(
+    () => generateFromRecipe(ROOT, { projectId: project.id, groupId: plain.id, generators: { codex } }),
+    /not a recipe card/,
+  );
+  await assert.rejects(
+    () => generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex } }),
+    /has an empty prompt/,
+  );
+  assert.equal(codex.calls.length, 0, "the generator is never called before validation passes");
+});
+
+test("generateFromRecipe: more than 5 member-image refs is a loud error before any generation", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Generate refs cap" });
+  const card = createRecipeCard(ROOT, { projectId: project.id }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a red fox" } });
+  const imageIds = [];
+  for (let i = 0; i < 6; i += 1) {
+    imageIds.push(addImage(ROOT, project.id, { name: `ref${i}.png`, bytes: solidPng() }).element.id);
+  }
+  assignToGroup(ROOT, { projectId: project.id, elementIds: imageIds, groupId: card.id });
+  const codex = fakeGen(solidPng());
+
+  await assert.rejects(
+    () => generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex } }),
+    /at most 5/,
+  );
+  assert.equal(codex.calls.length, 0);
+});
+
+// ---- generateFromRecipe happy paths (fake generators; codex/agy never spawn) ---
+
+test("generateFromRecipe (codex, top-level card): ONE new element in the ROOT scope beside the frame, meta.recipe frozen snapshot, tool_runs row, card.last_run set, ONE journal entry; undo reverts everything", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Generate happy" });
+  const card = createRecipeCard(ROOT, { projectId: project.id, name: "Hero card", x: 100, y: 50, w: 300, h: 200 }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "  a red fox riding a dragon  " } });
+  const seqBefore = getProject(ROOT, project.id).history_seq;
+
+  const codex = fakeGen(solidPng(10, 8, [200, 40, 40]));
+  const result = await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex } });
+
+  assert.equal(codex.calls.length, 1);
+  assert.equal(codex.calls[0].prompt, "a red fox riding a dragon", "prompt is trimmed before it reaches the generator");
+  assert.deepEqual(codex.calls[0].refPaths, [], "prompt-only card: no refs");
+
+  assert.equal(result.elements.length, 1);
+  const el = result.elements[0];
+  assert.equal(el.name, "Hero card codex");
+  assert.equal(el.x, card.x + card.w + 16, "placed to the RIGHT of the card frame, 16px gap");
+  assert.equal(el.y, card.y);
+  assert.equal(el.groupId, undefined, "top-level card -> result lands in the ROOT scope, not inside the card");
+  assert.equal(result.failed.length, 0);
+
+  // meta.recipe: frozen per-run snapshot; meta.alpha absent (raw, no alpha — decision 5).
+  assert.deepEqual(el.meta.recipe, {
+    cardId: card.id,
+    engine: "codex",
+    at: result.run.at,
+    prompt_snapshot: "a red fox riding a dragon",
+    refs_snapshot: [],
+    params_snapshot: DEFAULT_RECIPE.params,
+  });
+  assert.equal(el.meta.alpha, undefined);
+
+  // ONE journal entry for the whole gesture (generation itself is outside it).
+  const after = getProject(ROOT, project.id);
+  assert.equal(after.history_seq, seqBefore + 1);
+
+  // tool_runs row.
+  const run = after.tool_runs.at(-1);
+  assert.equal(run.op, "generate_from_recipe");
+  assert.equal(run.cardId, card.id);
+  assert.equal(run.result_summary.results.length, 1);
+  assert.equal(run.result_summary.results[0].elementId, el.id);
+  assert.equal(run.result_summary.failed.length, 0);
+
+  // card.recipe.last_run set; the card itself otherwise unchanged.
+  const storedCard = after.groups.find((g) => g.id === card.id);
+  assert.deepEqual(storedCard.recipe.last_run, { at: result.run.at, result_element_id: el.id, verdict: "ok" });
+
+  // ONE undo removes the new element AND reverts recipe.last_run to null (byte-exact,
+  // free via the group snapshot).
+  const undone = undoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(undone.history_seq, seqBefore);
+  assert.equal(undone.elements.length, 0);
+  assert.equal(undone.groups.find((g) => g.id === card.id).recipe.last_run, null);
+
+  const redone = redoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(redone.elements.find((item) => item.id === el.id).name, "Hero card codex");
+});
+
+test("generateFromRecipe resolves refs from VISIBLE member IMAGE elements only, and passes their abs paths to the generator", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Generate refs" });
+  const card = createRecipeCard(ROOT, { projectId: project.id }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a knight" } });
+
+  const ref1 = addImage(ROOT, project.id, { name: "ref1.png", bytes: solidPng(4, 3, [1, 2, 3]) }).element;
+  const ref2 = addImage(ROOT, project.id, { name: "ref2.png", bytes: solidPng(4, 3, [4, 5, 6]) }).element;
+  const hidden = addImage(ROOT, project.id, { name: "hidden.png", bytes: solidPng(4, 3, [7, 8, 9]) }).element;
+  assignToGroup(ROOT, { projectId: project.id, elementIds: [ref1.id, ref2.id, hidden.id], groupId: card.id });
+  patchElement(ROOT, project.id, hidden.id, { visible: false });
+
+  const codex = fakeGen(solidPng());
+  const result = await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex } });
+
+  assert.equal(codex.calls[0].refPaths.length, 2, "the hidden member is excluded");
+  // Assert against the SAME resolveProjectFile the op itself calls, not a hand-rolled path,
+  // so this test can't silently drift from the real path-join rules.
+  assert.deepEqual(codex.calls[0].refPaths, [
+    resolveProjectFile(ROOT, project.id, ref1.src),
+    resolveProjectFile(ROOT, project.id, ref2.src),
+  ]);
+  assert.deepEqual(result.elements[0].meta.recipe.refs_snapshot, [ref1.src, ref2.src]);
+});
+
+test("generateFromRecipe (engine=both, nested card): mints TWO elements in the PARENT scope, second stacked BELOW the first, ONE journal entry", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Generate both nested" });
+  const outer = createGroup(ROOT, { projectId: project.id, name: "Outer", x: 0, y: 0, w: 1000, h: 1000 }).group;
+  const card = createRecipeCard(ROOT, { projectId: project.id, name: "Dragon", parentId: outer.id, x: 100, y: 50, w: 300, h: 200 }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a dragon", engine: "both" } });
+  const seqBefore = getProject(ROOT, project.id).history_seq;
+
+  const codex = fakeGen(solidPng(10, 8, [200, 40, 40]));
+  const gemini = fakeGen(solidPng(6, 5, [40, 200, 40]));
+  const result = await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex, gemini } });
+
+  assert.equal(result.elements.length, 2);
+  assert.equal(result.failed.length, 0);
+  const [first, second] = result.elements;
+  assert.equal(first.name, "Dragon codex");
+  assert.equal(second.name, "Dragon agy");
+  assert.equal(first.groupId, outer.id, "PARENT scope, never the card itself (decision 8)");
+  assert.equal(second.groupId, outer.id);
+  assert.equal(first.x, card.x + card.w + 16);
+  assert.equal(first.y, card.y);
+  assert.equal(second.x, first.x, "second result stacks BELOW the first, same x");
+  assert.equal(second.y, first.y + first.h + 16);
+  assert.equal(first.meta.recipe.engine, "codex");
+  assert.equal(second.meta.recipe.engine, "gemini");
+
+  const after = getProject(ROOT, project.id);
+  assert.equal(after.history_seq, seqBefore + 1, "one journal entry for the pair");
+  const run = after.tool_runs.at(-1);
+  assert.equal(run.result_summary.results.length, 2);
+
+  const undone = undoOp(ROOT, { projectId: project.id }).project;
+  assert.equal(undone.history_seq, seqBefore);
+  assert.equal((undone.elements || []).length, 0, "one undo removes BOTH minted elements");
+});
+
+test("generateFromRecipe (engine=both, partial success): one engine failing still lands the other; failed[] names it; op does not throw", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Generate both partial" });
+  const card = createRecipeCard(ROOT, { projectId: project.id, name: "Castle" }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a castle", engine: "both" } });
+
+  const codex = fakeGen(solidPng());
+  const gemini = fakeGen(new Error("agy timed out"));
+  const result = await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex, gemini } });
+
+  assert.equal(result.elements.length, 1);
+  assert.equal(result.elements[0].name, "Castle codex");
+  assert.equal(result.failed.length, 1);
+  assert.equal(result.failed[0].engine, "gemini");
+  assert.match(result.failed[0].error, /agy timed out/);
+
+  const stored = getProject(ROOT, project.id);
+  assert.equal(stored.groups.find((g) => g.id === card.id).recipe.last_run.verdict, "partial");
+});
+
+test("generateFromRecipe (engine=both, refs present): gemini is SKIPPED without being called; codex still lands; skip reported in failed[]", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Generate both refs skip" });
+  const card = createRecipeCard(ROOT, { projectId: project.id, name: "Griffin" }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a griffin", engine: "both" } });
+  const ref = addImage(ROOT, project.id, { name: "ref.png", bytes: solidPng() }).element;
+  assignToGroup(ROOT, { projectId: project.id, elementIds: [ref.id], groupId: card.id });
+
+  const codex = fakeGen(solidPng());
+  const gemini = fakeGen(solidPng());
+  const result = await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex, gemini } });
+
+  assert.equal(gemini.calls.length, 0, "gemini is never attempted when engine=both has refs (R3)");
+  assert.equal(codex.calls.length, 1);
+  assert.equal(result.elements.length, 1);
+  assert.equal(result.elements[0].name, "Griffin codex");
+  assert.equal(result.failed.length, 1);
+  assert.equal(result.failed[0].engine, "gemini");
+  assert.match(result.failed[0].error, /unverified/);
+});
+
+test("generateFromRecipe (engine=gemini, refs present): loud refusal BEFORE any generation — no silent text-only fallback", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Generate gemini refs refuse" });
+  const card = createRecipeCard(ROOT, { projectId: project.id }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a phoenix", engine: "gemini" } });
+  const ref = addImage(ROOT, project.id, { name: "ref.png", bytes: solidPng() }).element;
+  assignToGroup(ROOT, { projectId: project.id, elementIds: [ref.id], groupId: card.id });
+  const seqBefore = getProject(ROOT, project.id).history_seq;
+
+  const gemini = fakeGen(solidPng());
+  await assert.rejects(
+    () => generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { gemini } }),
+    /agy ref support is unverified/,
+  );
+  assert.equal(gemini.calls.length, 0);
+  assert.equal(getProject(ROOT, project.id).history_seq, seqBefore, "no journal entry on a rejected run");
+  assert.equal(getProject(ROOT, project.id).elements.length, 1, "no new element (only the ref image from setup)");
+});
+
+test("generateFromRecipe (engine=gemini, no refs): text-only generation is OK", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Generate gemini text only" });
+  const card = createRecipeCard(ROOT, { projectId: project.id, name: "Phoenix" }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a phoenix", engine: "gemini" } });
+
+  const gemini = fakeGen(solidPng());
+  const result = await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { gemini } });
+
+  assert.equal(gemini.calls.length, 1);
+  assert.equal(result.elements.length, 1);
+  assert.equal(result.elements[0].name, "Phoenix agy");
+  assert.equal(result.elements[0].meta.recipe.engine, "gemini");
+});
+
+test("generateFromRecipe: every attempted engine failing throws loud; nothing is written (single engine and both)", async (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Generate all fail" });
+  const card = createRecipeCard(ROOT, { projectId: project.id }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a griffin" } });
+  const seqBefore = getProject(ROOT, project.id).history_seq;
+
+  const codex = fakeGen(new Error("codex network error"));
+  await assert.rejects(
+    () => generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex } }),
+    /codex: codex network error/,
+  );
+  assert.equal(getProject(ROOT, project.id).history_seq, seqBefore, "no journal entry — single-engine failure stays loud-fail");
+  assert.equal(getProject(ROOT, project.id).elements.length, 0);
+
+  // patchRecipe itself IS a journal entry — re-baseline the expected seq off of it before
+  // the both-engines-fail assertion below (a bug in the test, not the op, would otherwise
+  // be off by one here).
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { engine: "both" } });
+  const seqBeforeBoth = getProject(ROOT, project.id).history_seq;
+  const codex2 = fakeGen(new Error("codex down"));
+  const gemini2 = fakeGen(new Error("agy down"));
+  await assert.rejects(
+    () => generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex: codex2, gemini: gemini2 } }),
+    /codex: codex down; gemini: agy down/,
+  );
+  assert.equal(getProject(ROOT, project.id).history_seq, seqBeforeBoth, "still no journal entry after the both-engines-fail case");
+  assert.equal(getProject(ROOT, project.id).elements.length, 0);
+});
+
+test("historyEntryLabel maps generateFromRecipe to a readable label", () => {
+  assert.deepEqual(historyEntryLabel("generateFromRecipe", { engine: "codex" }), { label: "Generate from recipe", summary: "codex" });
+  assert.deepEqual(historyEntryLabel("generateFromRecipe", {}), { label: "Generate from recipe", summary: "" });
+});
+
+// ---- recipe-generate CLI + API validation parity (no python; no real generation) -----
+
+test("recipe-generate: CLI and API reject a non-card group the same way (validation parity, no generation)", async (t) => {
+  // tempProjects sets process.env.CANVAS_PROJECTS_ROOT = dir (for the in-process API
+  // handler below) AND returns `dir` so the CLI subprocess calls can pass it explicitly.
+  const dir = tempProjects(t);
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+
+  const projectId = run(env, "create", "--title", "Generate CLI parity").project.id;
+  const plain = run(env, "group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10").group;
+
+  // CLI: recipe-generate <id> with no --group -> the CLI's own local guard.
+  assert.throws(() => execFileSync("node", [CLI, "recipe-generate", projectId], { env: { ...process.env, ...env }, encoding: "utf8" }));
+
+  // CLI: recipe-generate <id> --group <plain group> -> the OP's own "not a recipe card".
+  const failure = runFail(env, "recipe-generate", projectId, "--group", plain.id);
+  assert.match(String(failure.stderr || failure.message), /not a recipe card/);
+
+  // API: POST .../recipe-cards/<plain group>/generate -> 400 with the SAME op error.
+  const handler = createCanvasApi(ROOT);
+  const rejected = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/${plain.id}/generate`, {});
+  assert.equal(rejected.status, 400);
+  assert.match(rejected.json().error, /not a recipe card/);
+
+  // API: POST .../recipe-cards/<unknown group>/generate -> 400 "group not found".
+  const missing = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/grp_missing/generate`, {});
+  assert.equal(missing.status, 400);
+  assert.match(missing.json().error, /group not found/);
 });

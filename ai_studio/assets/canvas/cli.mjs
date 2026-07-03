@@ -44,6 +44,7 @@
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs recipe-create <id> [--name X] [--x n --y n --w n --h n] [--parent <gid>|none]   (T0239 increment 1: mint a recipe card — a group with an additive `recipe` blob; no generation yet)
 //   node ai_studio/assets/canvas/cli.mjs recipe-set <id> --group g [--prompt "..."] [--engine codex|gemini|both] [--style <id>|none]
+//   node ai_studio/assets/canvas/cli.mjs recipe-generate <id> --group g   (T0239 increment 2: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one undo step; partial success allowed on engine=both)
 //   node ai_studio/assets/canvas/cli.mjs render-group <id> --group g [--scale 2] [--background "#rrggbb"]
 //   node ai_studio/assets/canvas/cli.mjs undo <id> --expect-head <n>
 //   node ai_studio/assets/canvas/cli.mjs redo <id> --expect-head <n>
@@ -80,6 +81,7 @@ import {
   exportElements,
   exportProject,
   fitGroup,
+  generateFromRecipe,
   getProject,
   jumpHistory,
   listHistory,
@@ -165,7 +167,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|alpha-dual|alpha-dual-generate|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|alpha-dual|alpha-dual-generate|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|render-group|undo|redo|history|history-list|history-jump>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -210,6 +212,7 @@ function usage() {
   group-delete <id> --group <gid>
   recipe-create <id> [--name <name>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0239 increment 1: mint a recipe card — a group with an additive 'recipe' blob; omitted w/h default to a 360x280 frame; no generation yet)
   recipe-set <id> --group <gid> [--prompt "<text>"] [--engine codex|gemini|both] [--style <id>|none]   (partial recipe blob update; --style is a reserved by-id pointer, style cards land later)
+  recipe-generate <id> --group <gid>   (T0239 increment 2: generate from the card's prompt + member-image refs; engine codex|gemini|both per the card's own recipe.engine; mints 1 or 2 new RAW elements beside the card frame in its PARENT scope; one undo step; codex/agy run for real minutes — no --dry-run)
   render-group <id> --group <gid>  (alias: render-screen) [--scale <n>] [--background '#rrggbb']
   undo <id> --expect-head <n>
   redo <id> --expect-head <n>
@@ -682,6 +685,13 @@ async function runCommand(command, id, positional, flags) {
       if (flags.style !== undefined) patch.style_ref = flags.style === "none" || flags.style === "true" ? null : flags.style;
       if (!Object.keys(patch).length) fail("recipe-set requires --prompt, --engine, and/or --style");
       return print(patchRecipe(repoRoot, { projectId: id, groupId: flags.group, patch }));
+    }
+    case "recipe-generate": {
+      // T0239 increment 2: real codex/agy spawn (minutes) — no fake-generator injection
+      // from the CLI (that is a test-only seam), so this always runs the DEFAULT engine(s).
+      if (!id) fail("recipe-generate requires <id>");
+      if (!flags.group) fail("recipe-generate requires --group <gid>");
+      return print(await generateFromRecipe(repoRoot, { projectId: id, groupId: flags.group }));
     }
     case "render-group":
     case "render-screen": {

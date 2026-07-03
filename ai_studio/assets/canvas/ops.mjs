@@ -56,6 +56,11 @@ import { uploadImageSource } from "../tools/image/sources/api.mjs";
 // GENERIC across both plates); see the module doc for why this stays the ONE place that
 // owns the subject-lock prompts + invocation.
 import { buildBlackPlatePrompt, buildWhitePlatePrompt, generatePlate } from "./tools/dual_plate_generate.mjs";
+// Recipe-card generation (T0239 increment 2): TWO default engine generators (codex ->
+// generate_image.py, gemini -> the agy CLI) behind the SAME injectable seam shape. See the
+// module doc for the ref-support caveat (agy is unverified) that ops.generateFromRecipe
+// enforces as a loud refusal, never a silent text-only fallback.
+import { generateImageCodex, generateImageGemini } from "./tools/recipe_generate.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
@@ -1879,6 +1884,242 @@ export function patchRecipe(root, { projectId, groupId, patch } = {}) {
   return { project, group: (project.groups || []).find((item) => item.id === groupId) };
 }
 
+// ---- generateFromRecipe (T0239 increment 2: generation end-to-end) -----------
+//
+// The Recipe inspector's Generate button / `recipe-generate` CLI verb / POST .../generate
+// route. An action on a RECIPE CARD (`group.recipe`), not on an existing image element —
+// structurally it mirrors alphaDualPlateGenerate (validate loudly, generate OUTSIDE the
+// journal, mint via storeAddImage, ONE commitMutation) but the generator seam is
+// tools/recipe_generate.mjs's TWO engines (codex/gemini, R2) with an R3 "both" compare mode.
+//
+// Refs (decision 3) = the card's member IMAGE elements (`groupId === cardId`, visible only),
+// resolved to abs paths at generate time — never the group's frame w/h (decision 4: never
+// read here). `recipe.style_ref` is a reserved pointer (R1's style-card link); it is NOT
+// resolved in this increment — increment 3 (style cards) teaches this op to also attach the
+// style ref's image + append its prompt. Ignored here on purpose.
+//
+// Placement (R1): the result(s) land in the card's PARENT scope (`groupId =
+// card.parentId ?? null`) — NEVER `groupId = cardId`, so a result can never become a ref
+// feeding a future run of the SAME card. Positioned to the RIGHT of the card frame (16px
+// gap); a second result (engine="both") stacks BELOW the first (16px gap).
+//
+// Engine (R2/R3): "codex" (default) -> one generation; "gemini" -> one, TEXT-ONLY (agy ref
+// support is unverified — a card with refs on engine="gemini" REFUSES loudly before any
+// generation, no silent text-only fallback, no second T0240); "both" -> runs BOTH engines,
+// mints TWO elements ("<card> codex" / "<card> agy"), one journal entry for the pair, and
+// allows PARTIAL success (one engine failing still lands the other; a card with refs on
+// engine="both" skips gemini WITHOUT attempting it and reports the skip — R3). Only when
+// EVERY attempted engine fails (including a single-engine run) does the op throw; nothing is
+// written in that case (no journal entry, no card mutation) — mirrors alphaDualPlateGenerate's
+// atomic refusal.
+const MAX_RECIPE_REFS = 5; // generate_image.py --input-image cap (research: <=5)
+// R3: the minted element name suffix per engine ("<card> agy", never "<card> gemini" — the
+// agy/Antigravity CLI is what actually runs behind the "gemini" engine choice, R2).
+const RECIPE_ENGINE_SUFFIX = { codex: "codex", gemini: "agy" };
+
+// Resolve the text a generate call actually sends: `expanded` (increment 3's Expand-prompt
+// output) when present AND enabled, else the base `prompt` — trimmed either way. Returns ""
+// on an all-whitespace/missing value so the caller's emptiness check is a single truthiness
+// test.
+function resolveRecipePromptText(recipe) {
+  const source = recipe.use_expanded && recipe.expanded ? recipe.expanded : recipe.prompt;
+  return typeof source === "string" ? source.trim() : "";
+}
+
+// The card's member IMAGE elements (decision 3's refs), visible ones only — an explicitly
+// hidden member never travels with the call, mirroring how a hidden element is skipped
+// everywhere else in the renderer/exporter.
+function recipeCardMembers(project, cardId) {
+  return (project.elements || []).filter((el) => el.groupId === cardId && el.type === "image" && el.visible !== false);
+}
+
+export async function generateFromRecipe(root, { projectId, groupId, generators } = {}) {
+  if (!projectId) throw new Error("generateFromRecipe requires projectId");
+  if (!groupId) throw new Error("generateFromRecipe requires groupId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const card = findGroup(before, groupId); // loud "group not found" on an unknown id
+  if (!card.recipe || typeof card.recipe !== "object") {
+    throw new Error(`group is not a recipe card (no recipe blob): ${groupId}`);
+  }
+  const recipe = card.recipe;
+  const cardLabel = card.name || groupId;
+
+  const promptText = resolveRecipePromptText(recipe);
+  if (!promptText) {
+    throw new Error(`recipe card "${cardLabel}" (${groupId}) has an empty prompt — set one before generating`);
+  }
+
+  const members = recipeCardMembers(before, groupId);
+  if (members.length > MAX_RECIPE_REFS) {
+    throw new Error(
+      `recipe card "${cardLabel}" (${groupId}) has ${members.length} reference images — generate_image.py accepts at most ${MAX_RECIPE_REFS} (--input-image)`,
+    );
+  }
+  const refPaths = members.map((el) => resolveProjectFile(root, projectId, el.src));
+  const refSrcs = members.map((el) => el.src);
+
+  const requestedEngine = recipe.engine;
+  if (!RECIPE_ENGINES.has(requestedEngine)) {
+    // Defensive only — patchRecipe already validates on write; a hand-edited project.json
+    // is the only way to reach this. Loud, not a silent "codex" coercion.
+    throw new Error(`recipe card "${cardLabel}" (${groupId}) has an invalid engine: ${JSON.stringify(requestedEngine)}`);
+  }
+  // R2/R3 ref rule: agy ref support is UNVERIFIED. engine="gemini" with any ref refuses the
+  // WHOLE run loudly, before any generation is attempted (a single-engine run stays
+  // loud-fail — R3). engine="both" instead SKIPS the gemini attempt (never calls it) and
+  // reports the skip in `failed`, generating codex-only — handled below via `attempts`.
+  if (requestedEngine === "gemini" && refPaths.length) {
+    throw new Error(
+      `recipe card "${cardLabel}" (${groupId}) has ${refPaths.length} reference image(s) — agy ref support is unverified; ` +
+        "use engine codex for reference images, or drop the refs",
+    );
+  }
+
+  const gens = { codex: generateImageCodex, gemini: generateImageGemini, ...(generators || {}) };
+  const attempts = [];
+  if (requestedEngine === "both") {
+    attempts.push({ engine: "codex" });
+    if (refPaths.length) {
+      attempts.push({
+        engine: "gemini",
+        skip:
+          "agy ref support is unverified — engine=both generated codex-only; use engine codex for reference " +
+          "images, or drop the refs to include gemini",
+      });
+    } else {
+      attempts.push({ engine: "gemini" });
+    }
+  } else {
+    attempts.push({ engine: requestedEngine });
+  }
+
+  const at = new Date().toISOString();
+  const results = []; // {engine, bytes}
+  const failed = []; // {engine, error}
+  for (const attempt of attempts) {
+    if (attempt.skip) {
+      failed.push({ engine: attempt.engine, error: attempt.skip });
+      continue;
+    }
+    try {
+      const generated = await gens[attempt.engine]({ prompt: promptText, refPaths, params: recipe.params });
+      const bytes = Buffer.isBuffer(generated) ? generated : readFileSync(generated);
+      results.push({ engine: attempt.engine, bytes });
+    } catch (error) {
+      failed.push({ engine: attempt.engine, error: error.message });
+    }
+  }
+
+  if (!results.length) {
+    const reasons = failed.map((f) => `${f.engine}: ${f.error}`).join("; ");
+    throw new Error(`generateFromRecipe: every engine failed for recipe card "${cardLabel}" (${groupId}) — ${reasons}`);
+  }
+
+  // Re-read to avoid clobbering a concurrent edit (mirrors alphaDualPlateGenerate's re-read
+  // before the final mint) — generation above may have taken minutes.
+  const current = getProject(root, projectId);
+  const currentCard = (current.groups || []).find((g) => g.id === groupId);
+  if (!currentCard) throw new Error(`group not found: ${groupId}`);
+
+  // Placement (R1): PARENT scope of the card, right of the frame, second result stacks below.
+  const parentScope = currentCard.parentId == null || currentCard.parentId === "" ? null : String(currentCard.parentId);
+  const gap = 16;
+  const startX = currentCard.x + currentCard.w + gap;
+  let cursorY = currentCard.y;
+
+  const paramsSnapshot = { ...recipe.params };
+  let workingProject = current;
+  const minted = []; // {engine, element, bytes}
+  for (const result of results) {
+    const added = storeAddImage(root, projectId, {
+      name: `${cardLabel} ${RECIPE_ENGINE_SUFFIX[result.engine] || result.engine}`,
+      bytes: result.bytes,
+      x: startX,
+      y: cursorY,
+      meta: {
+        recipe: {
+          cardId: groupId,
+          engine: result.engine,
+          at,
+          prompt_snapshot: promptText,
+          refs_snapshot: refSrcs,
+          params_snapshot: paramsSnapshot,
+        },
+      },
+    });
+    workingProject = added.project;
+    minted.push({ engine: result.engine, element: added.element, bytes: result.bytes.length });
+    cursorY = added.element.y + added.element.h + gap;
+  }
+
+  // Front-order hook (mirrors addImages' multi-insert version): stack the minted element(s)
+  // at the FRONT of the destination scope, in mint order, when that scope is already
+  // explicitly ordered; a no-op on a never-reordered scope.
+  const mintedIds = new Set(minted.map((m) => m.element.id));
+  let fo = frontOrder(before, parentScope);
+  const nextElements = (workingProject.elements || []).map((element) => {
+    if (!mintedIds.has(element.id)) return element;
+    let next = element;
+    if (parentScope != null) next = { ...next, groupId: parentScope };
+    if (fo !== null) {
+      next = { ...next, order: fo };
+      fo += 1;
+    }
+    return next;
+  });
+
+  const verdict = failed.length ? "partial" : "ok";
+  const lastRun = { at, result_element_id: minted[0].element.id, verdict };
+  const nextGroups = (workingProject.groups || []).map((group) =>
+    group.id === groupId ? { ...group, recipe: { ...group.recipe, last_run: lastRun } } : group,
+  );
+
+  const run = {
+    id: `run_${randomUUID().slice(0, 8)}`,
+    op: "generate_from_recipe",
+    cardId: groupId,
+    at,
+    params: {
+      prompt_snapshot: promptText,
+      engine: requestedEngine,
+      refs: refSrcs,
+      size: recipe.params.size,
+      quality: recipe.params.quality,
+      model: recipe.params.model,
+    },
+    result_summary: {
+      results: minted.map((m) => ({ engine: m.engine, elementId: m.element.id, bytes: m.bytes })),
+      failed,
+    },
+  };
+
+  const after = updateProject(root, projectId, {
+    elements: nextElements,
+    groups: nextGroups,
+    tool_runs: capToolRuns(root, projectId, [...(workingProject.tool_runs || []), run]),
+  });
+
+  // ONE journal entry for the whole gesture (generation itself ran OUTSIDE the journal) —
+  // one undo removes every minted element AND reverts the card's recipe.last_run together.
+  const project = commitMutation(root, projectId, {
+    op: "generateFromRecipe",
+    args_summary: {
+      groupId,
+      engine: requestedEngine,
+      elementIds: minted.map((m) => m.element.id),
+      failedEngines: failed.map((f) => f.engine),
+    },
+    before,
+    after,
+    startedAt,
+  });
+
+  const elements = (project.elements || []).filter((el) => mintedIds.has(el.id));
+  const group = (project.groups || []).find((g) => g.id === groupId);
+  return { project, elements, group, failed, run };
+}
+
 // ---- clipboard: paste / duplicate / delete nodes (T0227) ---------------------
 //
 // Figma-like copy/paste/duplicate for canvas objects (elements AND groups, mixed OK) and
@@ -2282,6 +2523,7 @@ export function historyEntryLabel(op, args = {}) {
     case "ungroupGroup": return { label: "Ungroup", summary: "" };
     case "createRecipeCard": return { label: "Recipe card", summary: String(a.name || "") };
     case "patchRecipe": return { label: "Edit recipe", summary: "" };
+    case "generateFromRecipe": return { label: "Generate from recipe", summary: String(a.engine || "") };
     case "pasteNodes": return { label: "Paste", summary: plural(count(a.count), "item") };
     case "duplicateNodes": return { label: "Duplicate", summary: plural(count(a.count), "item") };
     case "deleteNodes": return { label: "Delete", summary: plural(items(a.deletedElements) + items(a.deletedGroups), "item") };
