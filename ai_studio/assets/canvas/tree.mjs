@@ -28,10 +28,117 @@ function elementsArr(project) {
   return Array.isArray(project && project.elements) ? project.elements : [];
 }
 
+// ---- per-project derived-structure cache (T0253 F3) ----------------------------
+//
+// groupMap/childrenOf/orderedChildren/subtreeGroupIds are read on every render frame,
+// every hitElement walk (mousemove), and every layersSignature refresh -- at a few
+// hundred elements spread over a few dozen groups this became the dominant per-frame
+// JS cost (T0253 measured 3.35ms just to WALK the tree at 800el/60groups, before a
+// single drawImage; superlinear -- 1000el/80groups nearly quadruples that). The lead
+// wants headroom for THOUSANDS of objects, so the walk itself must stop being
+// recomputed from scratch on every call.
+//
+// Design: memoize the STRUCTURAL indices (which ids exist, which scope each id
+// resolves to, the v1 array-index fallback, the group parent/child adjacency) keyed by
+// PROJECT OBJECT IDENTITY in a WeakMap. A fresh project object (a new JSON.parse, a new
+// server response, a new `{...before, ...patch}`) is automatically a cache miss, and
+// the old entry is simply unreachable and GC'd -- no explicit invalidation call needed
+// anywhere (in particular, app.js's ingestProject needs NO change: swapping in a new
+// project object IS the invalidation).
+//
+// WHY identity-keyed caching is SAFE here (T0253 audit of every tree.mjs caller, node
+// AND site, before choosing this over a site-only wrapper):
+//  - Node (ops.mjs): every op reads `before` via store.readProjectFile -- a FRESH
+//    JSON.parse per call (store.mjs never keeps an in-memory project cache), and every
+//    write goes through updateProject, which re-parses and spreads into a NEW object.
+//    No op mutates an existing element/group record in place -- every op that changes
+//    groupId/parentId/order builds its replacement via `{ ...node, ... }` before it
+//    lands in nextElements/nextGroups (grep-verified: zero `.groupId =`/`.parentId =`/
+//    `.order =` assignments anywhere in ops.mjs land on an object still reachable from
+//    `before`; the few in-place `group.parentId =`/`group.order =` writes are on a
+//    group object *freshly constructed a few lines earlier*, never yet part of any
+//    project graph a tree.mjs call has seen).
+//  - Site (workspace.js et al): `state.project` is replaced wholesale by ingestProject
+//    on every server round trip (a new object each time -- api.mjs/app.js never mutate
+//    a response in place). The ONLY in-place mutation of a LIVE project on the site is
+//    drag preview (`element.x =`/`.y =`/`.w =`/`.h =`/`.rotation =` in workspace.js) --
+//    geometry fields this cache never reads, so a mid-drag repaint still hits every
+//    cached index and only the drawImage placement (read straight off the live `ref`,
+//    same as before this change) moves.
+//  - The one spot a non-geometry field IS mutated in place on a held reference
+//    (tests/tree.test.mjs's "ancestor toggled visible" case, `project.groups[0].visible
+//    = true` between two isNodeHidden calls) stays correct: this cache never memoizes
+//    isNodeHidden's own boolean, only the id->object and scope->children INDICES.
+//    isNodeHidden/ancestorsOf still read `.visible` LIVE off the (cached) object
+//    references on every call, so a mutated flag is seen immediately -- see the
+//    "memoized cache still observes an in-place visible toggle" test.
+//  If a future caller starts mutating groupId/parentId/order/array membership in place
+//  on a project it keeps calling tree.mjs on, this cache goes stale for that caller --
+//  that pattern does not exist today (verified above); do not introduce it without
+//  revisiting this cache.
+const projectCaches = new WeakMap();
+
+// The cache slot for `project`, or null when `project` isn't a valid WeakMap key (the
+// existing null/undefined-project tolerance every helper below already has via
+// groupsArr/elementsArr) -- callers fall back to computing uncached in that case.
+function cacheFor(project) {
+  if (!project || typeof project !== "object") return null;
+  let cache = projectCaches.get(project);
+  if (!cache) {
+    cache = {
+      groupMap: null,
+      indexById: null, // v1 fallback: elementId -> elements[] index
+      childGroupsByParent: null, // parent scope (id or null) -> [childGroupId, ...]
+      childrenByScope: new Map(), // scope -> childrenOf() result
+      orderedByScope: new Map(), // scope -> orderedChildren() result
+      subtreeByGroup: new Map(), // groupId -> subtreeGroupIds() result Set
+    };
+    projectCaches.set(project, cache);
+  }
+  return cache;
+}
+
 function groupMap(project) {
+  const cache = cacheFor(project);
+  if (cache && cache.groupMap) return cache.groupMap;
   const map = new Map();
   for (const group of groupsArr(project)) map.set(group.id, group);
+  if (cache) cache.groupMap = map;
   return map;
+}
+
+// elementId -> its elements[] index, memoized per project. Backs the v1 (no explicit
+// `order`) fallback in orderedChildren; rebuilding this per orderedChildren call was
+// O(E) EVERY scope, which is the other half of F3's superlinear cost (a project with
+// many scopes paid the full element count once per scope, per frame).
+function elementIndexById(project) {
+  const cache = cacheFor(project);
+  if (cache && cache.indexById) return cache.indexById;
+  const map = new Map(elementsArr(project).map((element, index) => [element.id, index]));
+  if (cache) cache.indexById = map;
+  return map;
+}
+
+// Direct-child GROUP ids per parent scope (null = root), memoized per project. Backs
+// subtreeGroupIds below: the naive walk scanned ALL of groupsArr(project) per node
+// popped off the stack (O(G) per node, O(G^2) total for a subtree spanning most of the
+// project's groups -- T0253's measured 800el/60groups blowup traces straight to this).
+// With the adjacency built ONCE, each stack-pop is an O(1) lookup instead.
+function childGroupsIndex(project, gmap) {
+  const cache = cacheFor(project);
+  if (cache && cache.childGroupsByParent) return cache.childGroupsByParent;
+  const index = new Map();
+  for (const group of groupsArr(project)) {
+    const parent = groupParent(group, gmap);
+    let list = index.get(parent);
+    if (!list) {
+      list = [];
+      index.set(parent, list);
+    }
+    list.push(group.id);
+  }
+  if (cache) cache.childGroupsByParent = index;
+  return index;
 }
 
 // The scope an element actually lives in: its groupId when that group exists, else
@@ -53,30 +160,47 @@ function nodeIsGroup(project, node) {
 }
 
 // The set of group ids in a group's subtree INCLUDING the group itself. Cycle-safe
-// (a visited set stops a corrupt parentId ring), so it terminates on any input.
+// (a visited set stops a corrupt parentId ring), so it terminates on any input. Result
+// memoized per (project, groupId) -- callers only ever read it (`.has()`), never mutate
+// the returned Set, so sharing the cached instance across calls is safe (grep-verified:
+// wouldCycle/descendantsOf/orderedChildren's v1 fallback all treat it read-only).
 function subtreeGroupIds(project, groupId, gmap = groupMap(project)) {
+  const cache = cacheFor(project);
+  if (cache && cache.subtreeByGroup.has(groupId)) return cache.subtreeByGroup.get(groupId);
+  const adjacency = childGroupsIndex(project, gmap);
   const ids = new Set();
   const stack = [groupId];
   while (stack.length) {
     const current = stack.pop();
     if (current == null || ids.has(current)) continue;
     ids.add(current);
-    for (const group of groupsArr(project)) {
-      if (groupParent(group, gmap) === current && !ids.has(group.id)) stack.push(group.id);
+    const children = adjacency.get(current);
+    if (children) {
+      for (const childId of children) {
+        if (!ids.has(childId)) stack.push(childId);
+      }
     }
   }
+  if (cache) cache.subtreeByGroup.set(groupId, ids);
   return ids;
 }
 
 // Merged direct children of a scope (null/undefined = root): the elements and groups
 // whose parent resolves to that scope, each in its native array order. Backs the
-// site's memberElements/ungroupedElements and the paint/layers tree.
+// site's memberElements/ungroupedElements and the paint/layers tree. Result memoized
+// per (project, scope) -- callers only ever read the returned {elements, groups}
+// arrays (grep-verified across ops.mjs/site: filter/map/spread/length only, never
+// push/splice/sort in place), so sharing the cached arrays across calls is safe.
 export function childrenOf(project, scopeId) {
   const scope = scopeId == null ? null : scopeId;
+  const cache = cacheFor(project);
+  if (cache && cache.childrenByScope.has(scope)) return cache.childrenByScope.get(scope);
   const gmap = groupMap(project);
   const elements = elementsArr(project).filter((element) => elementScope(element, gmap) === scope);
   const groups = groupsArr(project).filter((group) => groupParent(group, gmap) === scope);
-  return { elements, groups };
+  const result = { elements, groups };
+  if (cache) cache.childrenByScope.set(scope, result);
+  return result;
 }
 
 function hasNumericOrder(node) {
@@ -90,42 +214,57 @@ function hasNumericOrder(node) {
 // (anchored at the backmost member; an empty group sorts to the front / on top). Ties
 // break by the merged array position (stable), so legacy projects reproduce v1 paint
 // order exactly.
+// Result memoized per (project, scope) -- same read-only-array contract as childrenOf
+// above (the tagged {kind,id,ref} nodes are only ever read/spread/reversed by every
+// caller, grep-verified, never mutated in place), so the cached array is shared safely.
 export function orderedChildren(project, scopeId) {
-  const { elements, groups } = childrenOf(project, scopeId);
+  const scope = scopeId == null ? null : scopeId;
+  const cache = cacheFor(project);
+  if (cache && cache.orderedByScope.has(scope)) return cache.orderedByScope.get(scope);
+
+  const { elements, groups } = childrenOf(project, scope);
   const merged = [
     ...elements.map((ref) => ({ kind: "element", id: ref.id, ref })),
     ...groups.map((ref) => ({ kind: "group", id: ref.id, ref })),
   ];
-  if (merged.length < 2) return merged;
-
-  let keyOf;
-  if (merged.every((node) => hasNumericOrder(node.ref))) {
-    keyOf = (node) => node.ref.order;
+  let result;
+  if (merged.length < 2) {
+    result = merged;
   } else {
-    const gmap = groupMap(project);
-    const indexById = new Map(elementsArr(project).map((element, index) => [element.id, index]));
-    keyOf = (node) => {
-      if (node.kind === "element") return indexById.has(node.id) ? indexById.get(node.id) : 0;
-      // Group key = backmost (min-index) subtree member; empty subtree => +Infinity
-      // so it sorts to the front (on top).
-      const ids = subtreeGroupIds(project, node.id, gmap);
-      let min = Infinity;
-      for (const element of elementsArr(project)) {
-        if (ids.has(elementScope(element, gmap))) {
-          const index = indexById.get(element.id);
-          if (index < min) min = index;
+    let keyOf;
+    if (merged.every((node) => hasNumericOrder(node.ref))) {
+      keyOf = (node) => node.ref.order;
+    } else {
+      const gmap = groupMap(project);
+      // Memoized per project (elementIndexById), not rebuilt per scope -- this used to
+      // be an O(E) Map allocation on EVERY orderedChildren call in the v1-fallback
+      // branch, paid once per scope per frame (T0253's superlinear-with-groups finding).
+      const indexById = elementIndexById(project);
+      keyOf = (node) => {
+        if (node.kind === "element") return indexById.has(node.id) ? indexById.get(node.id) : 0;
+        // Group key = backmost (min-index) subtree member; empty subtree => +Infinity
+        // so it sorts to the front (on top).
+        const ids = subtreeGroupIds(project, node.id, gmap);
+        let min = Infinity;
+        for (const element of elementsArr(project)) {
+          if (ids.has(elementScope(element, gmap))) {
+            const index = indexById.get(element.id);
+            if (index < min) min = index;
+          }
         }
-      }
-      return min;
-    };
-  }
+        return min;
+      };
+    }
 
-  return merged
-    .map((node, index) => ({ node, index, key: keyOf(node) }))
-    // Comparator avoids Infinity arithmetic (Infinity - Infinity = NaN would corrupt
-    // the sort): compare keys directly, then fall back to the stable merged index.
-    .sort((a, b) => (a.key === b.key ? a.index - b.index : a.key < b.key ? -1 : 1))
-    .map((decorated) => decorated.node);
+    result = merged
+      .map((node, index) => ({ node, index, key: keyOf(node) }))
+      // Comparator avoids Infinity arithmetic (Infinity - Infinity = NaN would corrupt
+      // the sort): compare keys directly, then fall back to the stable merged index.
+      .sort((a, b) => (a.key === b.key ? a.index - b.index : a.key < b.key ? -1 : 1))
+      .map((decorated) => decorated.node);
+  }
+  if (cache) cache.orderedByScope.set(scope, result);
+  return result;
 }
 
 // Everything nested under a group: the descendant groups (excluding the group itself)

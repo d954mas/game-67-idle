@@ -1257,6 +1257,20 @@ function hasGroupFill(group) {
   return !!bg && bg.type === "color" && /^#[0-9a-fA-F]{6}$/.test(String(bg.color || ""));
 }
 
+// T0253 F4: onHover (idle mousemove) calls hitElement TWICE with the SAME (world,
+// project) point -- once for the hover-group affordance (updateHoverGroup), once for
+// the cursor (updateCursorAt) -- each paying a full front-to-back tree walk. This
+// single-slot memo turns the second call into an O(1) lookup. Keyed on project
+// identity (not just x/y), so a fresh project object (any op/undo/redo/reload) always
+// misses -- it can never serve a stale result. A pure function of (state.project,
+// world.x, world.y), so an exact-key cache is always correct (not just "close enough"),
+// and safe to share across every call site (mousedown/dblclick/context-menu too), not
+// just the idle-hover pair.
+let hitCacheProject = null;
+let hitCacheX = NaN;
+let hitCacheY = NaN;
+let hitCacheResult = null;
+
 // Top-most VISIBLE hittable NODE under a world point, in COMPUTED paint order (front =
 // painted last = on top). Walks the scene tree front-to-back so z-order + nesting agree
 // with what is drawn. Returns an image/text element, OR a GROUP when the point lands on the
@@ -1267,6 +1281,9 @@ function hasGroupFill(group) {
 // interior). Clipped-out areas stay unhittable (the clip guard skips the whole subtree AND
 // the fill when the point is outside a clipping ancestor's box).
 function hitElement(world) {
+  if (hitCacheProject === state.project && hitCacheX === world.x && hitCacheY === world.y) {
+    return hitCacheResult;
+  }
   // T0232 increment 3b: rotation-aware -- a rotated element/group hit-tests by its TRUE
   // (rotated) footprint, not its stale unrotated box (pointInRotatedBox's identity fast
   // path keeps every unrotated node's hit-test byte-identical to before this increment;
@@ -1294,7 +1311,12 @@ function hitElement(world) {
     }
     return null;
   };
-  return walk(null);
+  const result = walk(null);
+  hitCacheProject = state.project;
+  hitCacheX = world.x;
+  hitCacheY = world.y;
+  hitCacheResult = result;
+  return result;
 }
 
 // Resolve a Figma single-click on NODE `e` (an element OR a filled group body) given the
@@ -2308,7 +2330,12 @@ function onWheel(event) {
   // its offset is DERIVED from the grabbed world point, so rebase that anchor to the wheel's
   // pointer (post-zoom) to keep panning seamless instead of snapping on the next move.
   if (drag && drag.mode === "pan") drag.grabWorld = screenToImagePoint(screen, state.viewport);
-  render();
+  // T0253 F2: the viewport math above stays synchronous (zoom anchor correctness — the
+  // NEXT wheel/move event must see the updated state.viewport), but the repaint itself
+  // routes through the same rAF coalescing every drag path uses. A high-res wheel/trackpad
+  // emits 30-100 events/s; without this, each one was a full synchronous repaint (tree walk
+  // + every drawImage + resizeCanvas), the one hot path the drag-rAF pass had missed.
+  requestRender();
 }
 
 function onContextMenu(event) {
