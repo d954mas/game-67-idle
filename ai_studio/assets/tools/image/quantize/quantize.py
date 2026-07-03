@@ -28,6 +28,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ai_studio.assets.tools.lib.atomic_io import save_image_atomic, write_json_atomic
+from ai_studio.assets.tools.lib.color import merge_alpha, split_alpha
 
 MIN_COLORS = 2
 MAX_COLORS = 256
@@ -55,10 +56,7 @@ def quantize_image(image: Image.Image, colors: int, *, dither: bool = False) -> 
         raise ValueError(f"colors must be an integer between {MIN_COLORS} and {MAX_COLORS}, got {colors!r}")
     colors = int(colors)
 
-    rgba = image.convert("RGBA")
-    array = np.asarray(rgba)
-    rgb_before = array[..., :3]
-    alpha = array[..., 3]
+    _rgba, rgb_before, alpha = split_alpha(image)
 
     palette_size_before = _count_unique_colors(rgb_before)
 
@@ -69,10 +67,7 @@ def quantize_image(image: Image.Image, colors: int, *, dither: bool = False) -> 
 
     palette_size_after = _count_unique_colors(quantized_rgb)
 
-    out = np.empty_like(array)
-    out[..., :3] = quantized_rgb
-    out[..., 3] = alpha  # byte-identical alpha, never touched by quantization
-    result = Image.fromarray(out, "RGBA")
+    result = merge_alpha(quantized_rgb, alpha)  # byte-identical alpha, never touched by quantization
 
     changed = np.any(quantized_rgb != rgb_before, axis=-1)
     changed_pixel_pct = float(np.count_nonzero(changed)) / float(changed.size) * 100.0 if changed.size else 0.0

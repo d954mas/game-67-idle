@@ -27,6 +27,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ai_studio.assets.tools.lib.atomic_io import save_image_atomic, write_json_atomic
+from ai_studio.assets.tools.lib.color import merge_alpha, split_alpha
 
 STRENGTHS = (1, 2, 3)
 
@@ -47,20 +48,14 @@ def denoise_image(image: Image.Image, strength: int) -> tuple[Image.Image, dict[
     BEFORE filtering and reattached byte-identical afterward (never filtered — the
     halo law). Returns (result_rgba, stats)."""
     passes = _median_passes(strength)
-    rgba = image.convert("RGBA")
-    array = np.asarray(rgba)
-    rgb_before = array[..., :3]
-    alpha = array[..., 3]
+    _rgba, rgb_before, alpha = split_alpha(image)
 
     rgb_image = Image.fromarray(rgb_before, "RGB")
     for size in passes:
         rgb_image = rgb_image.filter(ImageFilter.MedianFilter(size=size))
     rgb_after = np.asarray(rgb_image)
 
-    out = np.empty_like(array)
-    out[..., :3] = rgb_after
-    out[..., 3] = alpha  # byte-identical alpha, never filtered
-    result = Image.fromarray(out, "RGBA")
+    result = merge_alpha(rgb_after, alpha)  # byte-identical alpha, never filtered
 
     changed = np.any(rgb_after != rgb_before, axis=-1)
     changed_pixel_pct = float(np.count_nonzero(changed)) / float(changed.size) * 100.0 if changed.size else 0.0

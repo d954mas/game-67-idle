@@ -1,8 +1,10 @@
 ﻿#!/usr/bin/env python3
 from __future__ import annotations
 
+import hashlib
 import unittest
 
+import numpy as np
 from PIL import Image
 
 import ai_studio.assets.tools.image.alpha_matte.key_matte as key_matte
@@ -95,6 +97,45 @@ class KeyMatteTests(unittest.TestCase):
         # The subject interior keeps its own colour (extension must not flatten it).
         center = array.shape[0] // 2
         self.assertLess(float(np.abs(array[center, center, :3] - (30, 40, 90)).max()), 3.0)
+
+
+def _image_digest(image: Image.Image) -> str:
+    """sha256 over the raw RGBA bytes -- a byte-exact pin, cheaper than
+    checking in binary PNG fixtures (this repo's Python tools build every
+    other fixture procedurally too; see the two helpers above)."""
+    array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
+    return hashlib.sha256(array.tobytes()).hexdigest()
+
+
+class KeyMatteGoldenBytesTest(unittest.TestCase):
+    """T0254 F1/F7/F10: pins key_matte_cutout's exact output bytes on three
+    representative crops (opaque ring on both key colors, soft anti-aliased
+    edge on magenta). Nothing upstream of this asserted transparent-pixel RGB,
+    so a finalize-hygiene change (e.g. removing the bleed+repair passes the
+    T0254 review found were fully overwritten by zero_fully_transparent_rgb)
+    could previously change output silently. If this test goes red, the
+    output changed and that needs a decision, not a silent edit."""
+
+    GOLDEN = {
+        "ring_on_green": "2d9f52e02a84e8ce74152fb3bc9574c03e5438ebfa6dc14ac65a563b0f5b04c3",
+        "ring_on_magenta": "3af0cf8a00d0aaf45351441fa3050e5746b81ac58e782e3803a69e0696b7aa5d",
+        "soft_square_on_magenta": "e51c1df36ceff757b0a90787d35660f9105a237383a03d3a93df641bc4cb5ca0",
+    }
+
+    def test_golden_bytes_ring_on_green(self) -> None:
+        crop, _truth_alpha, _center = make_ring_on_key(64, key=(0, 255, 0))
+        result = key_matte_cutout(crop, (0, 255, 0))
+        self.assertEqual(_image_digest(result), self.GOLDEN["ring_on_green"])
+
+    def test_golden_bytes_ring_on_magenta(self) -> None:
+        crop, _truth_alpha, _center = make_ring_on_key(64, key=(255, 0, 255))
+        result = key_matte_cutout(crop, (255, 0, 255))
+        self.assertEqual(_image_digest(result), self.GOLDEN["ring_on_magenta"])
+
+    def test_golden_bytes_soft_square_on_magenta(self) -> None:
+        crop = make_dark_square_on_magenta(64)
+        result = key_matte_cutout(crop, (255, 0, 255))
+        self.assertEqual(_image_digest(result), self.GOLDEN["soft_square_on_magenta"])
 
 
 if __name__ == "__main__":

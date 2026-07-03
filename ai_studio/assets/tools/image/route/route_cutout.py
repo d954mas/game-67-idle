@@ -21,6 +21,22 @@ Calibrated 2026-06-18 on representative source sheets (key from the crop plan):
 => route to dual_plate when soft_score >= 0.11 OR depth90 >= 14px (the OR catches
 the thin-but-deep glow ring that has a modest area score but a long gradient).
 
+T0254 (python-tools review, F3) re-calibration 2026-07-04: the color-distance-
+to-key metric switched from Euclidean (this module's own prior copy) to
+Chebyshev (``lib/color.key_distance`` -- the majority metric, and the one
+key_matte/the actual keyer uses; the two disagreeing near the tolerance
+boundary was the bug). Chebyshev <= Euclidean always, so KEY_TOLERANCE (the
+color-distance scale that maps to alpha in [0,1]) is rescaled down to keep the
+SAME soft/hard separation: on this module's own soft-glow calibration fixture
+(key->glow delta (255,-105,0)) Euclidean/Chebyshev = 1.0815, so
+80.0 / 1.0815 = 74.0. Verified against route_cutout_test.py: soft_score goes
+0.3816->0.3759 and depth90 16.03->15.62 (Euclidean@80 -> Chebyshev@74),
+both still >> SCORE_THRESHOLD/DEPTH90_THRESHOLD with the same margin as before;
+the opaque fixture stays exactly 0.0/0px either way (it has zero soft band by
+construction). SCORE_THRESHOLD/DEPTH90_THRESHOLD themselves are unchanged --
+they compare the (now Chebyshev-based) score/depth90 outputs, not raw color
+distance, so they don't need adjusting once the distance scale is realigned.
+
 CPU + numpy only; no native code, no ML. The cutout is ~0.3% of one gpt-image-2
 generation, so this stays cheap by design.
 """
@@ -41,8 +57,10 @@ ROOT = Path(__file__).resolve().parents[5]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from ai_studio.assets.tools.lib.color import estimate_border_key, key_distance
+
 # --- routing constants (calibrated; see module docstring) -----------------
-KEY_TOLERANCE = 80.0  # color-distance scale that maps to alpha in [0,1]
+KEY_TOLERANCE = 74.0  # color-distance scale that maps to alpha in [0,1] (Chebyshev; see re-calibration note above)
 PARTIAL_LO = 0.15     # keyness band that counts as "soft/semi-transparent"
 PARTIAL_HI = 0.85
 SCORE_THRESHOLD = 0.11   # >= -> wide soft zone -> dual_plate
@@ -64,12 +82,6 @@ class RouteDecision:
     reason: str
 
 
-def _key_from_border(rgb: np.ndarray) -> RGB:
-    band = np.concatenate([rgb[0], rgb[-1], rgb[:, 0], rgb[:, -1]], axis=0)
-    median = np.median(band, axis=0)
-    return (int(median[0]), int(median[1]), int(median[2]))
-
-
 def soft_metrics(
     image: Image.Image,
     key: RGB | None = None,
@@ -79,11 +91,15 @@ def soft_metrics(
     hi: float = PARTIAL_HI,
 ) -> dict:
     """Per-source softness metrics used by the router (also handy standalone)."""
-    rgb = np.asarray(image.convert("RGB"), dtype=np.float64)
     if key is None:
-        key = _key_from_border(rgb)
+        # T0254 (F4): border-key auto-detect used to be a local median-of-border
+        # copy (`_key_from_border`); now shared with bg_fix's mode-of-opaque-
+        # border convention (lib/color.estimate_border_key) so the two modules
+        # can't resolve different keys for the same sheet.
+        key = estimate_border_key(image)
+    rgb = np.asarray(image.convert("RGB"), dtype=np.float64)
     key_arr = np.asarray(key, dtype=np.float64)
-    distance = np.sqrt(((rgb - key_arr) ** 2).sum(axis=2))
+    distance = key_distance(rgb, key_arr)
     # Cheap per-pixel alpha proxy: 0 at the key, 1 far from it.
     alpha = np.clip(distance / tolerance, 0.0, 1.0)
     partial = (alpha > lo) & (alpha < hi)

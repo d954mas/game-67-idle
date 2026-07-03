@@ -14,22 +14,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ai_studio.assets.tools.lib.atomic_io import save_image_atomic, write_json_atomic
+from ai_studio.assets.tools.lib.color import estimate_border_key, format_hex, key_distance, parse_hex
 
 RGB = tuple[int, int, int]
 
-
-def parse_color(value: str) -> RGB:
-    text = value.strip().lstrip("#")
-    if len(text) != 6:
-        raise argparse.ArgumentTypeError("color must be #rrggbb")
-    try:
-        return tuple(int(text[index : index + 2], 16) for index in (0, 2, 4))  # type: ignore[return-value]
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("color must be #rrggbb") from exc
-
-
-def format_color(value: RGB) -> str:
-    return "#{:02x}{:02x}{:02x}".format(*value)
+# T0254: parse_color/format_color used to be a local copy of the hex parse/format
+# duplicated across bg_fix/regions/route etc; now shared (lib/color.parse_hex,
+# format_hex). Kept as local aliases so this module's public names don't churn.
+parse_color = parse_hex
+format_color = format_hex
 
 
 def rel(path: Path) -> str:
@@ -76,15 +69,9 @@ def border_connected_iterative(mask: np.ndarray) -> np.ndarray:
 
 
 def estimate_border_key_color(image: Image.Image, *, alpha_threshold: int) -> RGB:
-    array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
-    border = np.concatenate([array[0, :, :], array[-1, :, :], array[:, 0, :], array[:, -1, :]], axis=0)
-    opaque = border[border[:, 3] > alpha_threshold]
-    if opaque.size == 0:
-        return 255, 0, 255
-    rgb = opaque[:, :3]
-    colors, counts = np.unique(rgb, axis=0, return_counts=True)
-    key = colors[int(np.argmax(counts))]
-    return int(key[0]), int(key[1]), int(key[2])
+    # T0254 (F4): this IS the shared mode-of-opaque-border convention -- other
+    # border-key call sites (route_cutout, etc) converge on lib/color's copy.
+    return estimate_border_key(image, alpha_threshold=alpha_threshold)
 
 
 def normalize_background_numpy(
@@ -99,8 +86,7 @@ def normalize_background_numpy(
     array = np.asarray(image.convert("RGBA"), dtype=np.uint8).copy()
     rgb = array[..., :3].astype(np.int16)
     alpha = array[..., 3]
-    key = np.asarray(key_color, dtype=np.int16)
-    key_like = (alpha <= alpha_threshold) | (np.max(np.abs(rgb - key), axis=2) <= key_tolerance)
+    key_like = (alpha <= alpha_threshold) | (key_distance(rgb, key_color) <= key_tolerance)
     background = border_connected(key_like)
     target = np.array([key_color[0], key_color[1], key_color[2], 255], dtype=np.uint8)
     changed = int(np.count_nonzero(background & np.any(array != target, axis=2)))

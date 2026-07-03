@@ -17,23 +17,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ai_studio.assets.tools.lib.atomic_io import save_image_atomic, write_json_atomic
+from ai_studio.assets.tools.lib.color import format_hex, key_distance, parse_hex
 
 RGB = tuple[int, int, int]
 Rect = tuple[int, int, int, int]
 
-
-def parse_color(value: str) -> RGB:
-    text = value.strip().lstrip("#")
-    if len(text) != 6:
-        raise argparse.ArgumentTypeError("color must be #rrggbb")
-    try:
-        return tuple(int(text[index : index + 2], 16) for index in (0, 2, 4))  # type: ignore[return-value]
-    except ValueError as exc:
-        raise argparse.ArgumentTypeError("color must be #rrggbb") from exc
-
-
-def format_color(value: RGB) -> str:
-    return "#{:02x}{:02x}{:02x}".format(*value)
+# T0254: local hex parse/format duplication -> shared lib/color (parse_hex,
+# format_hex). Kept as local aliases so this module's public names don't churn.
+parse_color = parse_hex
+format_color = format_hex
 
 
 def rel(path: Path) -> str:
@@ -53,9 +45,8 @@ def foreground_mask(
 ) -> np.ndarray:
     array = np.asarray(image.convert("RGBA"), dtype=np.uint8)
     rgb = array[..., :3].astype(np.int16)
-    key = np.asarray(key_color, dtype=np.int16)
     alpha = array[..., 3]
-    key_like = (alpha <= alpha_threshold) | (np.max(np.abs(rgb - key), axis=2) <= key_tolerance)
+    key_like = (alpha <= alpha_threshold) | (key_distance(rgb, key_color) <= key_tolerance)
     return np.asarray(~key_like, dtype=bool)
 
 

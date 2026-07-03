@@ -7,13 +7,14 @@ import numpy as np
 from PIL import Image, ImageFilter
 from scipy import ndimage
 
+from ai_studio.assets.tools.lib.color import key_distance
 
 RGB = tuple[int, int, int]
 NUMPY_FAST_PATH_MIN_PIXELS = 256 * 256
 
 
 def is_exact_key_like(red: int, green: int, blue: int, key: RGB = (255, 0, 255), tolerance: int = 10) -> bool:
-    return max(abs(red - key[0]), abs(green - key[1]), abs(blue - key[2])) <= tolerance
+    return bool(key_distance((red, green, blue), key) <= tolerance)
 
 
 def is_key_fringe_like(red: int, green: int, blue: int) -> bool:

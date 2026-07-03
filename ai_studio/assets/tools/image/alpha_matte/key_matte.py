@@ -36,6 +36,7 @@ from ai_studio.assets.tools.image.alpha_matte.chroma_key_alpha import (
     source_key_spill_mask,
     zero_fully_transparent_rgb,
 )
+from ai_studio.assets.tools.lib.color import key_distance
 
 RGB = tuple[int, int, int]
 
@@ -117,8 +118,7 @@ def _extend_clean_edge_colors(
     dominance = _key_dominance(original_rgb, key)
     if dominance is None:
         return foreground_full
-    key_array = np.asarray(key, dtype=np.float64)
-    distance = np.max(np.abs(original_rgb - key_array), axis=2)
+    distance = key_distance(original_rgb, key)
     sure = distance >= float(foreground_tolerance)
     if not sure.any():
         return foreground_full
@@ -163,7 +163,7 @@ def key_matte_cutout(
     array = np.asarray(work, dtype=np.float64) / 255.0
     rgb = array[..., :3]
     key_array = np.asarray(key, dtype=np.float64) / 255.0
-    distance = np.max(np.abs(rgb - key_array), axis=2) * 255.0
+    distance = key_distance(rgb, key_array) * 255.0
     trimap = np.full(distance.shape, 0.5, dtype=np.float64)
     trimap[distance <= exact_tolerance] = 0.0
     trimap[distance >= foreground_tolerance] = 1.0
@@ -222,8 +222,16 @@ def key_matte_cutout(
     # (expensive integral-image) decontamination unless visible spill remains.
     if _has_key_spill(result, key):
         decontaminate_source_key_spill_image(result, key=key, require_transparent_touch=False)
-    # Q2: a 4px bleed covers the anti-aliased halo under transparent pixels; the
-    # atlas packer's 2px extrude covers the rest. Only invisible RGB changes.
+    # T0254 F1: reviewer measured "0/147456 differing pixels" removing these two
+    # passes on flat/soft-square fixtures, but the golden-bytes test below caught
+    # a real divergence on RING/hole geometries: bleed_transparent_rgb also
+    # forces alpha<=12 pixels' alpha to exactly 0 (not just their RGB), which
+    # zero_fully_transparent_rgb alone does NOT do for alpha in (1..12] pixels.
+    # On a 384px ring crop this is 88/147456 pixels with alpha 1-12 becoming
+    # fully transparent instead of staying a faint visible rim. NOT provably
+    # dead work for hole geometries -- kept pending lead's re-decision (see
+    # T0254 fast-worker report). Q2: a 4px bleed covers the anti-aliased halo
+    # under transparent pixels; the atlas packer's 2px extrude covers the rest.
     bleed_transparent_rgb(result, key=key, passes=4)
     repair_transparent_edge_rgb(result, key=key)
     zero_fully_transparent_rgb(result)
