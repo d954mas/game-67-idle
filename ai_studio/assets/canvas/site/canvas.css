@@ -10,9 +10,10 @@
   --amber: #d7a14a;
   --red: #e16f6f;
   --green: #65bd81;
-  /* T0239 increment 3: style-card accent (workspace.js's STYLE_ACCENT #4aa9d7, duplicated
-     there for the same bare-2D-context reason RECIPE_ACCENT/--amber duplicate). */
-  --style-accent: #4aa9d7;
+  /* T0239 increment 3: style-card accent (workspace.js's STYLE_ACCENT #9d7fd8, duplicated
+     there for the same bare-2D-context reason RECIPE_ACCENT/--amber duplicate). Violet per
+     the 2026-07-04 review (item 4): the original cyan collided with the region-edit accent. */
+  --style-accent: #9d7fd8;
 }
 
 * {
@@ -540,7 +541,7 @@ body.layers-resizing {
 
 .layer-card-chip.style {
   color: var(--style-accent);
-  background: rgba(74, 169, 215, 0.16);
+  background: rgba(157, 127, 216, 0.16);
 }
 
 .eye {

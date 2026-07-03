@@ -724,8 +724,9 @@ const RECIPE_ACCENT = "#d7a14a";
 // T0239 increment 3 (design R1): style card chrome — the SAME "special container" contract
 // as the recipe card above, a distinct accent so the two card types read apart at a glance.
 // Hardcoded for the same bare-2D-context reason as RECIPE_ACCENT (no CSS var access here);
-// canvas.css also carries this as --style-accent for the DOM-side "ref" badge.
-const STYLE_ACCENT = "#4aa9d7";
+// canvas.css also carries this as --style-accent for the DOM-side "ref" badge. Violet per
+// the 2026-07-04 review (item 4): the original cyan collided with the region-edit accent.
+const STYLE_ACCENT = "#9d7fd8";
 
 // Recipe-card prompt preview (T0239 increment 2): mirrors layers_panel.js's textPreview
 // (T0231) — newlines collapsed to spaces, trimmed, truncated with an ellipsis. Empty/
