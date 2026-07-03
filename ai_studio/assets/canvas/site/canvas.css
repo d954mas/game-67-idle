@@ -970,6 +970,242 @@ body.layers-resizing {
   margin-top: 4px;
 }
 
+/* ---- chat panel (T0242, right-side sibling column) ------------------------ */
+
+#chat-toggle.active {
+  border-color: #91bbff;
+  background: var(--panel);
+}
+
+/* A real flex column (unlike #history-panel's stage overlay) so it can sit open
+   alongside the inspector and the history palette at once — "the inspector keeps the
+   right side; the chat panel slides in as a sibling column" (design doc section 4). */
+#chat-panel {
+  width: 300px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+#chat-panel header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+#chat-panel header .panel-title {
+  font-weight: 600;
+  font-size: 13px;
+  flex: 1;
+}
+
+#chat-clear {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+#chat-close {
+  padding: 1px 7px;
+  line-height: 1.2;
+  font-size: 15px;
+}
+
+#chat-clear-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(225, 111, 111, 0.1);
+  font-size: 11px;
+  color: var(--red);
+}
+
+#chat-clear-confirm .chat-danger,
+.chat-danger {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+#chat-clear-confirm .chat-danger:hover,
+.chat-danger:hover {
+  background: rgba(225, 111, 111, 0.16);
+}
+
+#chat-stream {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  scrollbar-gutter: stable;
+}
+
+.chat-empty,
+.chat-note {
+  color: var(--muted);
+  text-align: center;
+  font-size: 12px;
+  padding: 10px 4px;
+}
+
+.chat-turn {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 100%;
+}
+
+.chat-turn-user {
+  align-items: flex-end;
+}
+
+.chat-turn-assistant {
+  align-items: flex-start;
+}
+
+.chat-refs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: inherit;
+}
+
+.chat-ref-chip {
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 2px 7px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chat-bubble {
+  max-width: 92%;
+  border-radius: 10px;
+  padding: 7px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.chat-turn-user .chat-bubble {
+  background: #2764bd;
+  color: #f8fbff;
+  border-bottom-right-radius: 3px;
+}
+
+.chat-turn-assistant .chat-bubble {
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-bottom-left-radius: 3px;
+}
+
+.chat-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.chat-pending {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+}
+
+.chat-spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--line);
+  border-top-color: var(--blue, #77a7ff);
+  animation: chat-spin 0.7s linear infinite;
+  flex: none;
+}
+
+@keyframes chat-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.chat-turn.chat-error .chat-bubble {
+  border-color: var(--red);
+  color: var(--red);
+  background: rgba(225, 111, 111, 0.1);
+}
+
+.chat-turn.chat-cancelled .chat-bubble {
+  border-color: var(--line);
+  color: var(--muted);
+}
+
+.chat-cancel-note {
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.chat-ops-chip {
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--panel-soft);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+
+.chat-flag {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--red);
+  background: rgba(225, 111, 111, 0.14);
+  border: 1px solid var(--red);
+  border-radius: 5px;
+  padding: 4px 7px;
+  max-width: 92%;
+}
+
+#chat-composer {
+  border-top: 1px solid var(--line);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+#chat-input {
+  resize: vertical;
+  min-height: 40px;
+  max-height: 160px;
+  background: var(--panel-soft);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+}
+
+#chat-input:focus {
+  outline: none;
+  border-color: #91bbff;
+}
+
+#chat-composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 /* ---- transform: rotation + flip (T0249 — lead: "не видно есть ли флип, угол не
    удобно задавать и сбрасывать") ------------------------------------------------ */
 

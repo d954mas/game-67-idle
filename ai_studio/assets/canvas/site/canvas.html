@@ -71,6 +71,7 @@
         <button id="undo" type="button" disabled>Undo</button>
         <button id="redo" type="button" disabled>Redo</button>
         <button id="history-toggle" type="button" title="History (`) — jump to any step" aria-pressed="false">History</button>
+        <button id="chat-toggle" type="button" title="Chat — ask the AI agent to act on the selection" aria-pressed="false">Chat</button>
         <span class="divider"></span>
         <button id="zoom-fit" type="button" title="Fit (0)">Fit</button>
         <button id="zoom-100" type="button" title="100% (1)">100%</button>
@@ -139,6 +140,40 @@
 
         <!-- Right inspector panel. -->
         <aside id="inspector"></aside>
+
+        <!-- Right-side AI chat panel (T0242). Collapsible sibling column — mirrors the
+             history palette's toggle/localStorage/hidden-by-default state pattern, but
+             docks as a real flex column (not a stage overlay) so it can stay open
+             alongside the History palette AND the inspector at once. View-state only
+             (never journaled/persisted); one chat conversation = one codex session
+             (chat/api.mjs + chat/agent.mjs), this file only renders it. -->
+        <aside id="chat-panel" class="hidden" aria-label="Chat">
+          <header>
+            <span class="panel-title">Chat</span>
+            <button id="chat-clear" type="button" title="Clear context — start a new conversation">Clear</button>
+            <button id="chat-close" type="button" title="Hide chat" aria-label="Hide chat">&times;</button>
+          </header>
+          <!-- Two-step inline confirm (home.js's project-delete pattern) — Clear archives
+               the transcript and mints a new codex session, so it is loud but not a browser
+               confirm(). -->
+          <div id="chat-clear-confirm" class="hidden">
+            <span>Clear conversation? The transcript is archived, not deleted.</span>
+            <button id="chat-clear-yes" type="button" class="chat-danger">Clear</button>
+            <button id="chat-clear-no" type="button">Cancel</button>
+          </div>
+          <div id="chat-stream"></div>
+          <div id="chat-composer">
+            <textarea
+              id="chat-input"
+              rows="2"
+              placeholder="Ask the agent to act on the selection… (Enter to send, Shift+Enter for newline)"
+            ></textarea>
+            <div id="chat-composer-actions">
+              <button id="chat-cancel" type="button" class="hidden chat-danger">Cancel</button>
+              <button id="chat-send" type="button" class="primary">Send</button>
+            </div>
+          </div>
+        </aside>
       </div>
 
       <input id="file-input" type="file" accept="image/*" multiple class="hidden" />

@@ -55,6 +55,7 @@ import {
 import { initLayers } from "./layers_panel.js";
 import { initInspector } from "./inspector.js";
 import { initHistory, toggleHistoryPanel } from "./history_panel.js";
+import { initChat, renderChat } from "./chat_panel.js";
 import { closeContextMenu, initContextMenu } from "./context_menu.js";
 import { initDnd } from "./dnd.js";
 import { loadCanvasFonts } from "./fonts.js";
@@ -76,6 +77,7 @@ async function showHome() {
   el("home-view").classList.remove("hidden");
   await loadProjects();
   renderHome();
+  renderChat(); // no project open: the chat panel shows its empty state / drops the transcript
 }
 
 // Open a project into the workspace. `select` is the optional ?select=<id> debug
@@ -108,6 +110,7 @@ async function openProject(id, { select, regions } = {}) {
   enterWorkspace();
   fit();
   refresh();
+  renderChat(); // (re)load this project's transcript into the chat panel when it is open
 }
 
 hooks.openProject = openProject;
@@ -317,6 +320,7 @@ initWorkspace();
 initLayers();
 initInspector();
 initHistory();
+initChat();
 initContextMenu();
 initDnd();
 // Load the bundled text fonts (FontFace API); gate the first text paint on
