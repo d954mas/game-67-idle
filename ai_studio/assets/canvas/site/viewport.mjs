@@ -48,3 +48,27 @@ export function screenToImagePoint(point, viewport) {
     y: (point.y - viewport.offsetY) / viewport.scale,
   };
 }
+
+// The world-space delta of a move drag: the CURRENT pointer's image point minus the
+// image point grabbed when the drag began. The anchor is stored ONCE in world space, and
+// the pointer is re-projected through the LIVE viewport every move, so a mid-drag zoom or
+// pan is absorbed automatically — the grabbed image point stays under the cursor. (The old
+// path stored a SCREEN anchor and divided the raw screen delta by the current scale, which
+// re-interpreted the whole accumulated delta the instant the viewport changed.)
+export function dragWorldDelta(grabWorld, screenPoint, viewport) {
+  const current = screenToImagePoint(screenPoint, viewport);
+  return { dx: current.x - grabWorld.x, dy: current.y - grabWorld.y };
+}
+
+// The viewport offset that pins `grabWorld` under `screenPoint` at the viewport's current
+// scale — the pan equivalent of the world anchor. Panning is screen-space by nature, so its
+// anchor is re-solved every move from the grabbed world point; a mid-pan zoom (which changes
+// scale + offset) is therefore corrected on the next move without the pan handler having to
+// know a wheel happened. Keeps the rest of the viewport (scale) untouched.
+export function panOffsetFor(grabWorld, screenPoint, viewport) {
+  return {
+    ...viewport,
+    offsetX: screenPoint.x - grabWorld.x * viewport.scale,
+    offsetY: screenPoint.y - grabWorld.y * viewport.scale,
+  };
+}

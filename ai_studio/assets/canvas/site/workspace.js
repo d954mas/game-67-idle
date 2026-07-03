@@ -55,8 +55,10 @@ import {
 } from "./regions.js";
 import {
   clamp,
+  dragWorldDelta,
   fitViewport,
   imageToScreenPoint,
+  panOffsetFor,
   screenToImagePoint,
   zoomViewportAt,
 } from "./viewport.mjs";
@@ -65,12 +67,20 @@ import { ancestorsOf, childrenOf, descendantsOf, isNodeHidden, nodeScope, ordere
 let canvas = null;
 let ctx = null;
 let groupLabelRects = []; // {groupId, x, y, w, h} in screen (CSS) space, per render
+// Bounding rects cached for the duration of an active drag so the hot move path never
+// forces a synchronous layout. render() writes DOM (zoom chip / breadcrumb / textarea),
+// so a getBoundingClientRect READ in the following mousemove would flush a full reflow
+// every frame (read-after-write thrash) — the drag's main perf cost besides repaint. The
+// stage/canvas never resize mid-drag, so one capture at grab time is exact; both caches
+// are cleared on mouseup and on window resize (the only mid-drag geometry change).
+let dragCanvasRect = null; // canvas rect, used by pointer()
+let dragStageRect = null; // stage rect, used by resizeCanvas()
 
 // ---- crisp DPR-aware sizing --------------------------------------------------
 
 function resizeCanvas() {
   const stage = el("stage");
-  const rect = stage.getBoundingClientRect();
+  const rect = dragStageRect || stage.getBoundingClientRect();
   const dpr = window.devicePixelRatio || 1;
   state.cssWidth = Math.max(1, Math.floor(rect.width));
   state.cssHeight = Math.max(1, Math.floor(rect.height));
@@ -568,11 +578,15 @@ function normScreenRect(a, b) {
   return { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), w: Math.abs(b.x - a.x), h: Math.abs(b.y - a.y) };
 }
 
-// Live rubber-band overlays for the marquee and new-region gestures.
+// Live rubber-band overlays for the marquee and new-region gestures. The anchor corner is
+// derived from the world start point every frame (imageToScreenPoint), so the band stays
+// glued to the content point where the press began even if the user zooms mid-gesture; the
+// moving corner is the live pointer (lastScreen).
 function drawGestureOverlay() {
   if (!drag) return;
   if (drag.mode !== "marquee" && drag.mode !== "region-create") return;
-  const rect = normScreenRect(drag.startScreen, drag.lastScreen);
+  const start = imageToScreenPoint(drag.startWorld, state.viewport);
+  const rect = normScreenRect(start, drag.lastScreen);
   const marquee = drag.mode === "marquee";
   ctx.save();
   ctx.setLineDash([4, 3]);
@@ -661,8 +675,21 @@ export function syncTopBar() {
 let drag = null;
 
 function pointer(event) {
-  const rect = canvas.getBoundingClientRect();
+  const rect = dragCanvasRect || canvas.getBoundingClientRect();
   return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+}
+
+// Capture the stage/canvas rects for the life of a drag (see dragCanvasRect note). Called
+// once a mousedown has actually started a drag; cleared on mouseup / resize.
+function beginDragGeometryCache() {
+  const stage = el("stage");
+  dragStageRect = stage ? stage.getBoundingClientRect() : null;
+  dragCanvasRect = canvas ? canvas.getBoundingClientRect() : null;
+}
+
+function clearDragGeometryCache() {
+  dragStageRect = null;
+  dragCanvasRect = null;
 }
 
 function setCursor(name) {
@@ -751,20 +778,24 @@ function groupDragItem(groupId) {
 // Start a drag matching the current selection: a lone group moves its whole subtree; a
 // pure element set moves via the element batch; a mix (or 2+ groups) moves as a combined
 // "selection" drag (loose elements batched + each group cascaded).
-function beginSelectionDrag(screen) {
+// `world` is the grabbed point in IMAGE space (screenToImagePoint at grab time). It is the
+// drag anchor: every move recomputes the delta from the CURRENT pointer's image point minus
+// this fixed world anchor (dragWorldDelta), so a mid-drag wheel-zoom stays glued to the
+// cursor without any rebase. startX/startY are kept only for the mouseup cursor fallback.
+function beginSelectionDrag(screen, world) {
   const groupIds = [...state.selectedGroupIds];
   const elItems = selectedElements().map((element) => ({ element, origX: element.x, origY: element.y }));
   if (groupIds.length === 0) {
-    drag = { mode: "element", startX: screen.x, startY: screen.y, items: elItems };
+    drag = { mode: "element", startX: screen.x, startY: screen.y, grabWorld: world, items: elItems };
     return;
   }
   const grpItems = groupIds.map((gid) => groupDragItem(gid)).filter(Boolean);
   if (groupIds.length === 1 && elItems.length === 0) {
     const only = grpItems[0];
-    drag = { mode: "group", startX: screen.x, startY: screen.y, group: only.group, origGroup: { x: only.origX, y: only.origY }, members: only.members, subgroups: only.subgroups };
+    drag = { mode: "group", startX: screen.x, startY: screen.y, grabWorld: world, group: only.group, origGroup: { x: only.origX, y: only.origY }, members: only.members, subgroups: only.subgroups };
     return;
   }
-  drag = { mode: "selection", startX: screen.x, startY: screen.y, elItems, grpItems };
+  drag = { mode: "selection", startX: screen.x, startY: screen.y, grabWorld: world, elItems, grpItems };
 }
 
 function hitGroupLabel(screen) {
@@ -792,6 +823,9 @@ function beginRegionResize(element, grabbed, screen) {
     origPolygon: Array.isArray(grabbed.region.polygon) ? grabbed.region.polygon.map((p) => [...p]) : null,
     startX: screen.x,
     startY: screen.y,
+    // World-space grab anchor (see beginSelectionDrag): the source-pixel delta is derived
+    // from the CURRENT pointer's image point minus this, so a mid-drag zoom stays anchored.
+    grabWorld: screenToImagePoint(screen, state.viewport),
     sx,
     sy,
     cursor: grabbed.handle.cursor,
@@ -818,7 +852,7 @@ function beginRegionSelectMove(element, region, screen, shift) {
         // Capture the polygon ring so a move translates it with the bbox (one commit).
         origPolygon: Array.isArray(r.polygon) ? r.polygon.map((p) => [...p]) : null,
       }));
-    drag = { mode: "region-move", element, items, startX: screen.x, startY: screen.y, sx, sy, changed: false };
+    drag = { mode: "region-move", element, items, startX: screen.x, startY: screen.y, grabWorld: screenToImagePoint(screen, state.viewport), sx, sy, changed: false };
     setCursor("move");
   } else {
     drag = null;
@@ -837,12 +871,19 @@ function pointInElement(world, element) {
 
 function onMouseDown(event) {
   if (event.button !== 0 && event.button !== 1) return;
+  // Cache the stage/canvas rects for the whole gesture up front (cleared in onMouseUp): the
+  // pointer() below and every move frame then read the cache instead of forcing a reflow.
+  beginDragGeometryCache();
   const screen = pointer(event);
   const world = screenToImagePoint(screen, state.viewport);
   const wantPan = event.button === 1 || state.tool === "pan" || state.spacePan;
 
   if (wantPan) {
-    drag = { mode: "pan", startX: screen.x, startY: screen.y, origOffset: { ...state.viewport } };
+    // Pan grabs a WORLD point and keeps it under the cursor (panOffsetFor). Storing the
+    // grabbed world point (not the start offset) makes a mid-pan wheel-zoom self-correct:
+    // the next move re-solves the offset for the current scale. onWheel rebases grabWorld
+    // to the wheel's anchor so the zoom itself is seamless.
+    drag = { mode: "pan", startX: screen.x, startY: screen.y, grabWorld: world };
     setCursor("grabbing");
     return;
   }
@@ -904,7 +945,7 @@ function onMouseDown(event) {
     // An already-selected group's label keeps the whole (multi) selection so a
     // press-drag moves it all together; a fresh label click selects that group.
     if (!state.selectedGroupIds.has(labelGroupId)) selectGroupOnly(labelGroupId);
-    beginSelectionDrag(screen);
+    beginSelectionDrag(screen, world);
     setCursor("move");
     refresh();
     return;
@@ -945,7 +986,7 @@ function onMouseDown(event) {
         selectOnly(hit.id);
       }
     }
-    beginSelectionDrag(screen);
+    beginSelectionDrag(screen, world);
     setCursor("move");
     refresh();
     return;
@@ -956,7 +997,8 @@ function onMouseDown(event) {
   // selects within it; a plain click (no marquee drag) exits to root on mouseup.
   drag = {
     mode: "marquee",
-    startScreen: screen,
+    startScreen: screen, // kept only for the mouseup tap-vs-drag test (physical px)
+    startWorld: world, // the marquee's anchor CORNER in image space (zoom-stable)
     lastScreen: screen,
     shift: event.shiftKey,
     base: event.shiftKey ? new Set(state.selectedIds) : new Set(),
@@ -974,7 +1016,11 @@ function onMouseDown(event) {
 }
 
 function applyMarquee() {
-  const a = screenToImagePoint(drag.startScreen, state.viewport);
+  // Anchor corner is the FIXED world point grabbed at mousedown (drag.startWorld); only the
+  // moving corner is re-projected from the live pointer. Reconverting a stored SCREEN start
+  // point each frame (the old path) drifted the anchor the instant a mid-marquee zoom moved
+  // the offset, so the rectangle no longer started where the press landed.
+  const a = drag.startWorld;
   const b = screenToImagePoint(drag.lastScreen, state.viewport);
   const rx = Math.min(a.x, b.x);
   const ry = Math.min(a.y, b.y);
@@ -1025,8 +1071,13 @@ function dragRegionMove(screen) {
   const el2 = drag.element;
   const sw = el2.source_w || el2.w;
   const sh = el2.source_h || el2.h;
-  const dxSrc = Math.round((screen.x - drag.startX) / (state.viewport.scale * drag.sx));
-  const dySrc = Math.round((screen.y - drag.startY) / (state.viewport.scale * drag.sy));
+  // World-anchored delta (see beginSelectionDrag): the source-pixel delta is the CURRENT
+  // pointer's image-space offset from the grab anchor divided by the element's scale, so a
+  // mid-drag zoom stays anchored. Regions are source-pixel rects, so the delta is snapped to
+  // whole source pixels (deliberate precision, not the screen-space stepping T0236 fixes).
+  const { dx: dxWorld, dy: dyWorld } = dragWorldDelta(drag.grabWorld, screen, state.viewport);
+  const dxSrc = Math.round(dxWorld / drag.sx);
+  const dySrc = Math.round(dyWorld / drag.sy);
   for (const item of drag.items) {
     const [ox, oy, w, h] = item.orig;
     const nx = clamp(ox + dxSrc, 0, Math.max(0, sw - w));
@@ -1043,8 +1094,11 @@ function dragRegionResize(screen) {
   const sw = el2.source_w || el2.w;
   const sh = el2.source_h || el2.h;
   const MIN = 2;
-  const dx = Math.round((screen.x - drag.startX) / (state.viewport.scale * drag.sx));
-  const dy = Math.round((screen.y - drag.startY) / (state.viewport.scale * drag.sy));
+  // World-anchored source-pixel delta (see dragRegionMove): stays glued to the cursor across
+  // a mid-drag zoom instead of re-interpreting a stale screen anchor at the new scale.
+  const { dx: dxWorld, dy: dyWorld } = dragWorldDelta(drag.grabWorld, screen, state.viewport);
+  const dx = Math.round(dxWorld / drag.sx);
+  const dy = Math.round(dyWorld / drag.sy);
   const [ox, oy, ow, oh] = drag.orig;
   let x = ox;
   let y = oy;
@@ -1072,18 +1126,18 @@ function onMouseMove(event) {
   if (!drag) return;
   const screen = pointer(event);
   const vp = state.viewport;
+  drag.lastScreen = screen; // release-point cursor + rubber-band moving corner, every mode
   switch (drag.mode) {
     case "pan":
-      state.viewport = {
-        ...vp,
-        offsetX: drag.origOffset.offsetX + (screen.x - drag.startX),
-        offsetY: drag.origOffset.offsetY + (screen.y - drag.startY),
-      };
+      // Re-solve the offset from the grabbed world point each move: keeps that point under
+      // the cursor at the CURRENT scale, so a wheel-zoom mid-pan can't desync the content.
+      state.viewport = panOffsetFor(drag.grabWorld, screen, vp);
       requestRender();
       break;
     case "group": {
-      const dx = (screen.x - drag.startX) / vp.scale;
-      const dy = (screen.y - drag.startY) / vp.scale;
+      // Delta = current pointer image point - grabbed world anchor (zoom/pan stable). Kept
+      // fractional for smooth sub-pixel motion; commitGroupDrag rounds ONCE on mouseup.
+      const { dx, dy } = dragWorldDelta(drag.grabWorld, screen, vp);
       drag.group.x = drag.origGroup.x + dx;
       drag.group.y = drag.origGroup.y + dy;
       for (const item of drag.members) {
@@ -1099,8 +1153,7 @@ function onMouseMove(event) {
       break;
     }
     case "selection": {
-      const dx = (screen.x - drag.startX) / vp.scale;
-      const dy = (screen.y - drag.startY) / vp.scale;
+      const { dx, dy } = dragWorldDelta(drag.grabWorld, screen, vp);
       for (const item of drag.elItems) {
         item.element.x = item.origX + dx;
         item.element.y = item.origY + dy;
@@ -1121,8 +1174,7 @@ function onMouseMove(event) {
       break;
     }
     case "element": {
-      const dx = (screen.x - drag.startX) / vp.scale;
-      const dy = (screen.y - drag.startY) / vp.scale;
+      const { dx, dy } = dragWorldDelta(drag.grabWorld, screen, vp);
       for (const item of drag.items) {
         item.element.x = item.origX + dx;
         item.element.y = item.origY + dy;
@@ -1131,9 +1183,11 @@ function onMouseMove(event) {
       break;
     }
     case "marquee":
-      drag.lastScreen = screen;
       applyMarquee();
-      refresh();
+      // Live selection shows on the CANVAS (selected boxes stroke) via requestRender only —
+      // the layers/inspector panels are NOT rebuilt per frame (that full refresh() per
+      // mousemove was the marquee's stepping/perf cost); the panels sync once on mouseup.
+      requestRender();
       break;
     case "region-move":
       dragRegionMove(screen);
@@ -1144,7 +1198,6 @@ function onMouseMove(event) {
       requestRender();
       break;
     case "region-create":
-      drag.lastScreen = screen;
       requestRender();
       break;
     default:
@@ -1234,7 +1287,9 @@ function commitRegionCreate(finished) {
     refresh(); // a tap, not a drag: no region
     return;
   }
-  const a = screenToImagePoint(finished.startScreen, state.viewport);
+  // Anchor corner = the world point grabbed at mousedown (zoom-stable); moving corner is the
+  // live pointer re-projected through the current viewport — both correct after a mid-drag zoom.
+  const a = finished.startWorld;
   const b = screenToImagePoint(finished.lastScreen, state.viewport);
   const { sx, sy } = scaleFactors(element);
   const sw = element.source_w || element.w;
@@ -1349,6 +1404,9 @@ export function setRegionTool(tool) {
 }
 
 function onMouseUp() {
+  // Always drop the drag-geometry cache (mousedown captured it even for no-drag clicks like
+  // text placement / polygon vertices), so idle hover reads a fresh rect once the gesture ends.
+  clearDragGeometryCache();
   if (!drag) return;
   const finished = drag;
   drag = null;
@@ -1501,6 +1559,11 @@ function onWheel(event) {
   const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
   state.viewport = zoomViewportAt(state.viewport, factor, screen);
   state.viewport.scale = clamp(state.viewport.scale, 0.05, 12);
+  // Object/marquee/region drags anchor in WORLD space, so a mid-drag zoom needs no rebase —
+  // their next move re-projects through the new viewport automatically. Pan is the exception:
+  // its offset is DERIVED from the grabbed world point, so rebase that anchor to the wheel's
+  // pointer (post-zoom) to keep panning seamless instead of snapping on the next move.
+  if (drag && drag.mode === "pan") drag.grabWorld = screenToImagePoint(screen, state.viewport);
   render();
 }
 
@@ -1586,6 +1649,9 @@ export function initWorkspace() {
   // Layers-panel collapse/expand is owned by layers_panel.js (persisted + rail).
 
   window.addEventListener("resize", () => {
+    // A resize is the only mid-drag change to stage/canvas geometry; drop the cached rects
+    // so the next render/pointer re-reads them instead of mapping through a stale rect.
+    clearDragGeometryCache();
     if (state.project) render();
   });
 }
