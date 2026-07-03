@@ -398,7 +398,49 @@ function renderRegions(element, root) {
 // Additive multiplier suggestions for the Size number input's datalist — typing is
 // always primary (T0235: two independent UX reviews rated the old preset-select +
 // "Custom…" morph bad); a datalist is a hint the input never depends on.
-const SCALE_VALUE_PRESETS = [0.5, 1, 2, 3, 4];
+// Per-mode value presets for the Size control's dropdown (lead spec 2026-07-03):
+// scale multipliers, and power-of-two pixel sizes for the fixed W/H modes (the
+// element's own base dimension is prepended at runtime as the first suggestion).
+const SCALE_VALUE_PRESETS = [0.5, 1, 1.5, 2, 4];
+const PX_VALUE_PRESETS = [32, 64, 128, 256, 512, 1024, 2048];
+
+// One shared floating preset menu (a REAL menu, not a <datalist> — Chrome filters
+// datalist options by the typed prefix, which is exactly the "only 1x selectable"
+// trap this control started from). Closes on pick, Escape, or any outside press.
+let presetMenuEl = null;
+function closePresetMenu() {
+  if (!presetMenuEl) return;
+  presetMenuEl.remove();
+  presetMenuEl = null;
+}
+function openPresetMenu(anchor, values, onPick) {
+  closePresetMenu();
+  const menu = document.createElement("div");
+  menu.className = "insp-preset-menu";
+  for (const preset of values) {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.textContent = String(preset);
+    // mousedown would steal focus from the number input and fire its focusout
+    // settle before the pick lands — swallow it, act on click.
+    item.addEventListener("mousedown", (event) => event.preventDefault());
+    item.addEventListener("click", () => {
+      closePresetMenu();
+      onPick(preset);
+    });
+    menu.appendChild(item);
+  }
+  const rect = anchor.getBoundingClientRect();
+  menu.style.left = `${Math.round(rect.right - 78)}px`;
+  menu.style.top = `${Math.round(rect.bottom + 2)}px`;
+  document.body.appendChild(menu);
+  presetMenuEl = menu;
+  const onDown = (event) => {
+    if (presetMenuEl && !presetMenuEl.contains(event.target) && event.target !== anchor) closePresetMenu();
+    if (!presetMenuEl) document.removeEventListener("mousedown", onDown, true);
+  };
+  document.addEventListener("mousedown", onDown, true);
+}
 const EXPORT_FORMATS = ["png", "jpg", "webp"];
 const EXPORT_BASES = ["source", "canvas"];
 
@@ -481,10 +523,6 @@ function scaleInput(element, row, commit) {
   number.min = "0";
   number.className = "insp-input insp-size-num";
 
-  const listId = `insp-size-presets-${Math.random().toString(36).slice(2, 8)}`;
-  const datalist = document.createElement("datalist");
-  datalist.id = listId;
-
   const unitSelect = document.createElement("select");
   unitSelect.className = "insp-input insp-size-unit";
   for (const [key, label] of [["mul", "×"], ["w", "W"], ["h", "H"]]) {
@@ -504,20 +542,17 @@ function scaleInput(element, row, commit) {
   const syncOut = (dims) => {
     out.textContent = dims ? `= ${dims.w} × ${dims.h} px` : "";
   };
-  const syncDatalist = () => {
-    datalist.replaceChildren();
-    if (unit !== "mul") return; // pixel presets aren't meaningful for a fixed W/H target
-    for (const preset of SCALE_VALUE_PRESETS) {
-      const option = document.createElement("option");
-      option.value = String(preset);
-      datalist.appendChild(option);
-    }
+  // Per-mode preset values for the ▾ menu (lead spec): scale multipliers, or the
+  // axis's own BASE size first + power-of-two pixel sizes (deduped).
+  const presetsNow = () => {
+    if (unit === "mul") return SCALE_VALUE_PRESETS;
+    const axisBase = unit === "w" ? sw : sh;
+    const values = axisBase > 0 ? [axisBase, ...PX_VALUE_PRESETS.filter((px) => px !== axisBase)] : PX_VALUE_PRESETS;
+    return values;
   };
 
   number.value = String(value);
-  number.setAttribute("list", listId);
   unitSelect.value = unit;
-  syncDatalist();
   syncOut(storedResolved);
 
   // Unit switch: LOCAL state only. Converts the DISPLAYED number to the output-equivalent
@@ -533,7 +568,6 @@ function scaleInput(element, row, commit) {
     }
     unit = nextUnit;
     number.value = String(value);
-    syncDatalist();
     syncOut(resolvedNow());
   });
 
@@ -572,7 +606,6 @@ function scaleInput(element, row, commit) {
       value = storedSpec.value;
       number.value = String(value);
       unitSelect.value = unit;
-      syncDatalist();
       syncOut(storedResolved);
       number.blur();
       focusStage();
@@ -585,7 +618,24 @@ function scaleInput(element, row, commit) {
     settle();
   });
 
-  control.append(number, unitSelect, datalist);
+  // Preset dropdown (▾): a real always-full menu of per-mode values; picking one
+  // commits immediately (a pick IS a settled choice).
+  const presetBtn = document.createElement("button");
+  presetBtn.type = "button";
+  presetBtn.className = "insp-size-preset";
+  presetBtn.title = "Preset sizes";
+  presetBtn.textContent = "▾";
+  presetBtn.addEventListener("click", () => {
+    openPresetMenu(presetBtn, presetsNow(), (picked) => {
+      value = picked;
+      number.value = String(picked);
+      syncOut(resolvedNow());
+      settle();
+    });
+  });
+
+  // MODE FIRST, then the value (lead spec round 2): [×|W|H][number][▾].
+  control.append(unitSelect, number, presetBtn);
   return { control, out };
 }
 

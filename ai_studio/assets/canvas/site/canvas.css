@@ -1028,6 +1028,44 @@ body.layers-resizing {
   font-size: 11px;
 }
 
+/* ▾ preset-menu trigger next to the size number (lead spec round 2). */
+.insp-size-preset {
+  flex: 0 0 auto;
+  width: 20px;
+  padding: 4px 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+/* Floating always-full preset menu (NOT a datalist — Chrome prefix-filters those). */
+.insp-preset-menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 76px;
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+
+.insp-preset-menu button {
+  border: none;
+  background: transparent;
+  text-align: left;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.insp-preset-menu button:hover {
+  background: var(--panel-soft);
+}
+
 .insp-export-del {
   position: absolute;
   top: 4px;
