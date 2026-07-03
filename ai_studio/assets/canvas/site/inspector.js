@@ -1029,37 +1029,101 @@ function renderResetToSourceButton(element) {
   return button;
 }
 
-// T0232 increment 3a: rotation (finite degrees, CW about the box center) + flip
-// (additive booleans, image-only). Both commit through the SAME patchElement path the
-// agent's element-set/elements-set use (strict tool parity — the op layer validates and
-// normalizes either way). NO rotate handle here — increment 3b adds the interactive
-// gizmo; this is a plain numeric input + two independent toggle buttons.
+// T0232 increment 3a / T0249 (lead: "не видно есть ли флип, угол не удобно задавать и
+// сбрасывать" — you can't SEE whether flip is on, and the angle is awkward to set and
+// reset). Rotation (finite degrees, CW about the box center) + flip (additive booleans,
+// image-only) both commit through the SAME patchElement path the agent's element-set/
+// elements-set use (strict tool parity — the op layer validates and normalizes either
+// way). NO rotate handle here — the drag-to-rotate gizmo lives on the canvas; the
+// inspector stays the precise-entry path.
+
+// Rotation row: the number input (commits on change/Enter, unchanged) plus quick -90/+90
+// step buttons and a Reset — each button is ONE journaled patchElementBox call, so a step
+// or reset is a single undo step. Reset renders ONLY when rotation != 0 (no dead control
+// sitting at 0). Shared by images (renderTransformControls) and text elements
+// (renderTextElement) — rotation applies to both, flip does not.
+function renderRotationRow(element) {
+  const rotation = Number(element.rotation) || 0;
+  const commit = (next) => patchElementBox(element.id, { rotation: next });
+
+  const row = document.createElement("div");
+  row.className = "insp-rotation-row";
+  row.appendChild(numberInput(rotation, commit));
+
+  const minus90 = smallBtn("−90°", () => commit(rotation - 90));
+  minus90.classList.add("insp-rotation-btn");
+  minus90.title = "Rotate -90°";
+  row.appendChild(minus90);
+
+  const plus90 = smallBtn("+90°", () => commit(rotation + 90));
+  plus90.classList.add("insp-rotation-btn");
+  plus90.title = "Rotate +90°";
+  row.appendChild(plus90);
+
+  if (rotation !== 0) {
+    const reset = smallBtn("↺", () => commit(0));
+    reset.classList.add("insp-rotation-btn", "insp-rotation-reset");
+    reset.title = "Reset rotation";
+    reset.setAttribute("aria-label", "Reset rotation");
+    row.appendChild(reset);
+  }
+
+  return field("Rotation", row);
+}
+
+// Flip toggles (image-only): two INDEPENDENT buttons, each reflecting its own on/off
+// state — NOT a single-select segmented control (that was exactly the lead's complaint:
+// .insp-seg-btn only ever highlights ONE choice, so two simultaneously-on flips read
+// identically to zero flips). Active = accent border + tinted fill + aria-pressed; idle =
+// a normal button.
+function renderFlipRow(element) {
+  const row = document.createElement("div");
+  row.className = "insp-flip-row";
+
+  const makeFlip = (axis, label, title) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    const active = axis === "h" ? !!element.flipH : !!element.flipV;
+    btn.className = active ? "insp-flip-btn active" : "insp-flip-btn";
+    btn.textContent = label;
+    btn.title = title;
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+    btn.addEventListener("click", () => toggleElementFlip(element.id, axis));
+    return btn;
+  };
+  row.append(
+    makeFlip("h", "Flip H", "Mirror the image left-right"),
+    makeFlip("v", "Flip V", "Mirror the image top-bottom"),
+  );
+  return field("Flip", row);
+}
+
 function renderTransformControls(element) {
   const wrap = document.createElement("div");
   wrap.className = "insp-render";
-
-  wrap.appendChild(
-    field("Rotation", numberInput(element.rotation || 0, (v) => patchElementBox(element.id, { rotation: v }))),
-  );
-
-  const flipWrap = document.createElement("div");
-  flipWrap.className = "insp-segmented";
-  const flipH = document.createElement("button");
-  flipH.type = "button";
-  flipH.className = element.flipH ? "insp-seg-btn primary" : "insp-seg-btn";
-  flipH.textContent = "Flip H";
-  flipH.title = "Mirror the image left-right";
-  flipH.addEventListener("click", () => toggleElementFlip(element.id, "h"));
-  const flipV = document.createElement("button");
-  flipV.type = "button";
-  flipV.className = element.flipV ? "insp-seg-btn primary" : "insp-seg-btn";
-  flipV.textContent = "Flip V";
-  flipV.title = "Mirror the image top-bottom";
-  flipV.addEventListener("click", () => toggleElementFlip(element.id, "v"));
-  flipWrap.append(flipH, flipV);
-  wrap.appendChild(field("Flip", flipWrap));
-
+  wrap.appendChild(renderRotationRow(element));
+  wrap.appendChild(renderFlipRow(element));
   return wrap;
+}
+
+// Position & Size header badge: surfaces rotation/flip state even while the section is
+// collapsed (T0249 — the lead's "не видно" complaint applied to the whole section, not
+// just the open controls). Rendered ONLY when there's something to show — no dead "0°"
+// badge. Text elements have no flip, so they fall through to a rotation-only badge (or
+// none) via the same helper.
+function transformBadge(element) {
+  const rotation = Math.round(Number(element.rotation) || 0);
+  const parts = [];
+  if (rotation !== 0) parts.push(`${rotation}°`);
+  const flips = [];
+  if (element.flipH) flips.push("H");
+  if (element.flipV) flips.push("V");
+  if (flips.length) parts.push(`flip ${flips.join("+")}`);
+  if (!parts.length) return null;
+  const badge = document.createElement("span");
+  badge.className = "insp-align-badge";
+  badge.textContent = parts.join(" · ");
+  return badge;
 }
 
 function renderElement(element, root) {
@@ -1067,7 +1131,7 @@ function renderElement(element, root) {
   name.classList.add("insp-name");
   root.appendChild(name);
 
-  const layout = collapsible(root, "layout", "Position & Size");
+  const layout = collapsible(root, "layout", "Position & Size", transformBadge(element));
   layout.appendChild(boxGrid(element, (patch) => patchElementBox(element.id, patch)));
   layout.appendChild(readOnly("Source", `${element.source_w || element.w} x ${element.source_h || element.h}`));
   layout.appendChild(renderResetToSourceButton(element));
@@ -1184,13 +1248,14 @@ function renderTextElement(element, root) {
   name.classList.add("insp-name");
   root.appendChild(name);
 
-  const layout = collapsible(root, "layout", "Position & Size");
+  const layout = collapsible(root, "layout", "Position & Size", transformBadge(element));
   const grid = document.createElement("div");
   grid.className = "insp-grid";
   grid.appendChild(field("X", numberInput(element.x, (v) => patchElementBox(element.id, { x: v }))));
   grid.appendChild(field("Y", numberInput(element.y, (v) => patchElementBox(element.id, { y: v }))));
   layout.appendChild(grid);
   layout.appendChild(readOnly("Size", `${element.w} x ${element.h} (auto-width)`));
+  layout.appendChild(renderRotationRow(element));
 
   // Single node inside a parent group: align-to-frame (same rule as an image element).
   if (element.groupId) renderAlignSection([element.id], root);
@@ -1569,13 +1634,18 @@ function inspectorSig() {
     // A text element's structure is its content + style (family/size/align/stroke/
     // shadow) — any change must rebuild the Text section so the inputs reflect it.
     if (e.type === "text") {
-      return `t:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.content}|${JSON.stringify(e.style || {})}|${e.groupId || ""}`;
+      // T0249: rotation is part of the structure too (the Position & Size header badge
+      // + the rotation row's Reset button both depend on it) — a rotation-only change
+      // (e.g. the canvas rotate handle) must rebuild the section, not just skip.
+      return `t:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.content}|${JSON.stringify(e.style || {})}|${e.groupId || ""}|${e.rotation || 0}`;
     }
     const regions = (e.regions || [])
       .map((r) => `${r.id}~${r.name || ""}~${(r.rect || r.content_bbox || []).join(",")}`)
       .join("|");
     // element.export is part of the structure: a row add/remove/edit must rebuild.
-    return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.export || [])}|${JSON.stringify(e.meta || {})}|${e.groupId || ""}`;
+    // rotation/flipH/flipV (T0249): the badge + Reset button + flip active-state all
+    // depend on these, so they must rebuild the section too.
+    return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.export || [])}|${JSON.stringify(e.meta || {})}|${e.groupId || ""}|${e.rotation || 0},${e.flipH ? 1 : 0},${e.flipV ? 1 : 0}`;
   }
   // Group ids that ride along with a loose-element multi-selection are folded in too (the
   // Align row's nodeIds come from the FULL selectedNodeIds(), not just `selected`).
