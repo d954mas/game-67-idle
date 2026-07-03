@@ -1,7 +1,7 @@
 ---
 id: T0237
 title: "Canvas: dual-plate alpha path - pair of plate elements (white+black) -> one cut element"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P1
@@ -58,3 +58,4 @@ Design (settled by orchestrator, mirrors alphaCutout patterns):
 
 - 2026-07-03: created from lead question during live verify; design settled;
   delegated to fast-worker (Sonnet) after T0235 freed ops.mjs.
+- 2026-07-03: landed: alphaDualPlate op + tool + API/CLI/inspector, suite 263->268, :8780 restarted; awaiting lead live check (needs a real plate pair)
