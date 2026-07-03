@@ -1,13 +1,13 @@
 ---
 id: T0206
 title: "Export panel in inspector (Figma-style): scale, format, quality, suffix, destination"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
 tags: []
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-07-03
 ---
 
 ## What
@@ -49,3 +49,5 @@ without --to keep writing to `<project>/export/<stamp>/`.
 - 2026-07-02: Rewritten after lead direction + Figma research: export moves from context menu to a Figma-style inspector section; absorbs export-destination scope from T0203; P2 -> P1.
 - 2026-07-02: Lead hit the destination pain live ("экспорт идет непонятно куда, меня не спрашивает путь") - today export silently writes <project>/export/<stamp>/ with only a status-bar link. Confirms the ask-WHERE requirement; T0206 stays first in the canvas queue after the T0220 sweep.
 - 2026-07-02: BUILT (deep-reasoner agent) + ACCEPTED, commit 6620d2a6. Ops: setExportSettings (journaled rows), exportElements evolved async (element x row, ONE export_images.py spawn per batch via _bridge venv, 1x-png byte-copy fast path), exportProject (visible groups via extracted compositeGroup), resolveExportScale (0.5x-4x/512w/512h). CLI export-set + export --to. Destination UX corrected by lead mid-build ("в figma каждый раз спрашивается папка, просто открывается последнее место"): picker EVERY export, startIn=remembered per-project IndexedDB handle, cancel aborts, no Change button, download fallback only when FSA absent. Design calls: no zip (real downloads per file); multi-select exports each element's own rows; jpg/webp always re-encode so quality applies. Gates: canvas 100/0, map strict, doc check. REMAINING: live Chrome check of the picker; supersampling before/after on a real generated sheet (2x->1x Lanczos path unit-verified).
+- 2026-07-03: lead 2026-07-03: 0.5x Lanczos export mechanics verified live (output smaller, works); NOISE verdict vs direct-at-target-size generation still pending - the actual supersampling acceptance question
+- 2026-07-03: lead accepted 2026-07-03: export rows/scales/quality verified live (0.5x works, size smaller); supersampling-headroom question DROPPED by lead - no such rule needed, model sizes cannot be dialed and generation is already oversized vs targets; skill rule 0866e072 removed

@@ -1,7 +1,7 @@
 ---
 id: T0234
 title: "Canvas: history-jump/undo concurrency guard - refuse when head advanced since read"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P1
@@ -50,3 +50,4 @@ Design (settled by orchestrator):
 - 2026-07-03: created after the history-jump race incident (P1).
 - 2026-07-03: design settled by orchestrator; delegated implementation to
   fast-worker (Sonnet).
+- 2026-07-03: landed 1748f4c8: expectHead guard ops+CLI+API, suite 248->254; :8780 restarted; NOTE: sources were accidentally swept into a taskboard commit by orchestrator git add -A mid-run, history split into clean commits after
