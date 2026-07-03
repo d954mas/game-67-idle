@@ -20,7 +20,7 @@
 //   node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>
 //   node ai_studio/assets/canvas/cli.mjs nodes-move <id> --json moves.json
 //   node ai_studio/assets/canvas/cli.mjs nodes-reorder <id> --nodes n1,n2 --direction front|back|forward|backward | --index <n>
-//   node ai_studio/assets/canvas/cli.mjs nodes-align <id> --nodes n1,n2 --align left|hcenter|right|top|vcenter|bottom [--reference auto|selection|parent]
+//   node ai_studio/assets/canvas/cli.mjs nodes-align <id> --nodes n1,n2 --align left|hcenter|right|top|vcenter|bottom|center [--reference auto|selection|parent]
 //   node ai_studio/assets/canvas/cli.mjs nodes-distribute <id> --nodes n1,n2,n3 --axis h|v
 //   node ai_studio/assets/canvas/cli.mjs nodes-paste <id> --spec spec.json [--dx n --dy n] [--group <gid>|none]
 //   node ai_studio/assets/canvas/cli.mjs nodes-duplicate <id> --nodes id1,id2 [--dx n --dy n] [--group <gid>|none]
@@ -191,7 +191,7 @@ function usage() {
   node-reorder <id> --node <id> --index <n>   (z-order of an element OR group among merged siblings; 0 = back)
   nodes-move <id> --json <path>   (batched mixed element+group move: [{nodeId,x,y}] or {moves:[...]}; one undo step)
   nodes-reorder <id> --nodes n1,n2 --direction front|back|forward|backward | --index <n>   (multi-node z-order block; one undo step)
-  nodes-align <id> --nodes n1,n2 --align left|hcenter|right|top|vcenter|bottom [--reference auto|selection|parent]   (2+ nodes -> selection bbox; 1 node in a group -> the group frame; one undo step)
+  nodes-align <id> --nodes n1,n2 --align left|hcenter|right|top|vcenter|bottom|center [--reference auto|selection|parent]   (2+ nodes -> selection bbox; 1 node in a group -> the group frame; center = both axes at once; one undo step)
   nodes-distribute <id> --nodes n1,n2,n3 --axis h|v   (equal-gap distribute; 3+ nodes; endpoints fixed; one undo step)
   nodes-paste <id> --spec <path> [--dx <n> --dy <n>] [--group <gid>|none]   (instantiate a copied node spec; new ids; one undo step)
   nodes-duplicate <id> --nodes id1,id2 [--dx <n> --dy <n>] [--group <gid>|none]   (duplicate live nodes in place +offset; one undo step)

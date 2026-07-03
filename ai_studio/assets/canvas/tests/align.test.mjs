@@ -120,6 +120,11 @@ test("alignMoves: a single node inside a parent group aligns to the group's fram
   // ref = group frame (100,100,200,150); target x = 100 + 100 - 10 = 190.
   assert.deepEqual(hcenter, [{ nodeId: e.id, x: 190, y: 110 }]);
 
+  // "center" = both axes in one move (one journal entry downstream): x as hcenter above,
+  // y = 100 + 75 - 5 = 170. The one-click "drop a member into its card's center" gesture.
+  const center = alignMoves(project, [e.id], "center");
+  assert.deepEqual(center, [{ nodeId: e.id, x: 190, y: 170 }]);
+
   assert.throws(() => alignMoves(project, [root.id], "left"), /select 2\+ objects, or one object inside a screen/);
   assert.throws(() => alignMoves(project, [e.id], "left", "selection"), /reference "selection" requires 2\+ nodes/);
 });

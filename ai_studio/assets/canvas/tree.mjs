@@ -341,7 +341,7 @@ export function isNodeTransformed(node) {
 // op layer's job: ops.alignNodes/distributeNodes feed these results through the SAME
 // shared cascade moveNodes uses, so a group here behaves exactly like a group drag.
 
-const ALIGN_KEYS = new Set(["left", "hcenter", "right", "top", "vcenter", "bottom"]);
+const ALIGN_KEYS = new Set(["left", "hcenter", "right", "top", "vcenter", "bottom", "center"]);
 const DISTRIBUTE_AXES = new Set(["h", "v"]);
 
 // A node's frame box — elements AND groups both carry x/y/w/h natively, so alignment
@@ -435,6 +435,12 @@ export function alignMoves(project, nodeIds, align, reference) {
       case "top": y = ref.minY; break;
       case "vcenter": y = ref.y + ref.h / 2 - box.h / 2; break;
       case "bottom": y = ref.maxY - box.h; break;
+      // Both axes at once (one journal entry): a member dropped far from its card/group
+      // snaps to the frame's center in ONE gesture instead of hcenter+vcenter (= 2 undos).
+      case "center":
+        x = ref.x + ref.w / 2 - box.w / 2;
+        y = ref.y + ref.h / 2 - box.h / 2;
+        break;
       default: break; // unreachable — align is validated above
     }
     if (x !== box.x || y !== box.y) moves.push({ nodeId: node.id, x, y });

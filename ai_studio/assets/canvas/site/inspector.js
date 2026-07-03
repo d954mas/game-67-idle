@@ -1021,6 +1021,13 @@ const ALIGN_BUTTONS = [
     '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="2" y="13.1" width="12" height="1.4" rx=".7"/><rect x="4" y="2.4" width="3" height="10" rx="1.5"/><rect x="9" y="5.9" width="3" height="6.5" rx="1.5"/></svg>',
     "Align bottom",
   ],
+  // Both axes in ONE gesture (lead: art dropped into a card lands far away — wants one
+  // button to center it in the frame). Glyph = both anchor lines crossed + one centered bar.
+  [
+    "center",
+    '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="7.3" y="2" width="1.4" height="12" rx=".7"/><rect x="2" y="7.3" width="12" height="1.4" rx=".7"/><rect x="4.75" y="5.75" width="6.5" height="4.5" rx="1.5"/></svg>',
+    "Center (both axes)",
+  ],
 ];
 const DISTRIBUTE_BUTTONS = [
   [
