@@ -1921,6 +1921,13 @@ body.layers-resizing {
   margin: 2px 0 8px;
 }
 
+.insp-cleanup-hint {
+  font-size: 11px;
+  color: var(--muted);
+  align-self: center;
+  white-space: nowrap;
+}
+
 .insp-cleanup-actions {
   display: flex;
   gap: 6px;

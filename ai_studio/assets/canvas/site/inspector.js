@@ -660,6 +660,31 @@ function renderCleanup(element, root) {
     body.appendChild(hint);
   }
 
+  // T0207 UX (lead live-verify 2026-07-04: the preview contract was invisible — «не понятно
+  // что арт не меняется» / «как откатить обратно»): spell it out. The canvas paints the
+  // RESULT live (amber "preview" chip on the element, see workspace.js paintElement); the
+  // stored art never changes until Apply; Reset drops the preview; an applied cleanup is one
+  // journal entry — Ctrl+Z restores the original byte-for-byte.
+  const contractHint = document.createElement("div");
+  contractHint.className = "insp-region-hint";
+  contractHint.textContent =
+    "Live preview on canvas — the stored art does not change until Apply. Reset drops the preview; after Apply, Ctrl+Z reverts exactly.";
+  body.appendChild(contractHint);
+
+  // Rollback answer for an ALREADY-applied cleanup (same lead question): meta.cleanup is the
+  // op's own provenance record — surface it with the undo route.
+  if (element.meta && element.meta.cleanup) {
+    const applied = element.meta.cleanup;
+    const p = applied.params || {};
+    const what = applied.tool === "denoise"
+      ? `denoise strength ${p.strength}`
+      : `quantize ${p.colors} colors${p.dither ? " + dither" : ""}`;
+    const appliedLine = document.createElement("div");
+    appliedLine.className = "insp-cleanup-report";
+    appliedLine.textContent = `Applied: ${what} — Ctrl+Z reverts to the original.`;
+    body.appendChild(appliedLine);
+  }
+
   // ---- Quantize --------------------------------------------------------------
   const quantizeCaption = document.createElement("div");
   quantizeCaption.className = "insp-align-caption";
@@ -711,8 +736,10 @@ function renderCleanup(element, root) {
   denoiseRow.className = "insp-cleanup-row";
   const denoiseSeg = document.createElement("div");
   denoiseSeg.className = "insp-segmented";
-  let denoiseStrength = 1;
-  const denoiseButtons = [1, 2, 3].map((value) => {
+  // 0 = off (lead ask 2026-07-04 «нужна какая-то 0 сила?»): the default is a real OFF state
+  // instead of a false-active "1" — clicking 0 drops a live denoise preview. 1..3 preview.
+  let denoiseStrength = 0;
+  const denoiseButtons = [0, 1, 2, 3].map((value) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = value === denoiseStrength ? "insp-seg-btn primary" : "insp-seg-btn";
@@ -721,9 +748,12 @@ function renderCleanup(element, root) {
     denoiseSeg.appendChild(btn);
     return btn;
   });
+  const denoiseHint = document.createElement("span");
+  denoiseHint.className = "insp-cleanup-hint";
+  denoiseHint.textContent = "0 off · 1 light · 3 strong";
   const denoiseSpinner = document.createElement("span");
   denoiseSpinner.className = "insp-cleanup-spinner hidden";
-  denoiseRow.append(denoiseSeg, denoiseSpinner);
+  denoiseRow.append(denoiseSeg, denoiseHint, denoiseSpinner);
   body.appendChild(denoiseRow);
 
   const denoiseReport = document.createElement("div");
@@ -737,7 +767,9 @@ function renderCleanup(element, root) {
   const compareBtn = document.createElement("button");
   compareBtn.type = "button";
   compareBtn.className = "insp-btn-small hidden";
-  compareBtn.textContent = "Hold to compare";
+  // Direction made explicit (lead read it backwards): the canvas already shows the NEW
+  // result; holding this shows the ORIGINAL underneath.
+  compareBtn.textContent = "Hold to see original";
   const startCompare = (event) => {
     event.preventDefault();
     setCleanupPreviewCompare(true);
@@ -791,9 +823,18 @@ function renderCleanup(element, root) {
     applyBtn.textContent = active ? `Apply ${preview.tool === "denoise" ? "Denoise" : "Quantize"}` : "Apply";
   }
 
+  // Zero-change previews looked like "the tool does nothing" (lead 2026-07-04: «квантизация
+  // как будто ничего не меняет») — when nothing changed, SAY it and say why/what to try.
   function reportLine(tool, report) {
     if (!report) return "";
-    if (tool === "denoise") return `strength ${report.strength}, ${report.changed_pixel_pct}% pixels changed`;
+    const changed = Number(report.changed_pixel_pct) || 0;
+    if (tool === "denoise") {
+      if (changed === 0) return `strength ${report.strength}: 0% changed — art is already clean at this strength`;
+      return `strength ${report.strength}, ${report.changed_pixel_pct}% pixels changed`;
+    }
+    if (changed === 0) {
+      return `0% changed — art already has ${report.palette_size_before} colors; lower the count to see an effect`;
+    }
     return `palette ${report.palette_size_before} -> ${report.palette_size_after}, ${report.changed_pixel_pct}% pixels changed`;
   }
 
@@ -867,15 +908,36 @@ function renderCleanup(element, root) {
     if (!transformed) runPreview("quantize", quantizeParams());
   });
 
+  const setDenoiseHighlight = (value) => {
+    denoiseStrength = value;
+    for (const other of denoiseButtons) other.classList.toggle("primary", Number(other.textContent) === value);
+  };
+
   for (const btn of denoiseButtons) {
     btn.addEventListener("click", () => {
       const value = Number(btn.textContent);
       if (value === denoiseStrength) return;
-      denoiseStrength = value;
-      for (const other of denoiseButtons) other.classList.toggle("primary", Number(other.textContent) === denoiseStrength);
-      if (!transformed) runPreview("denoise", { strength: denoiseStrength });
+      setDenoiseHighlight(value);
+      if (transformed) return;
+      if (value === 0) {
+        // OFF: cancel any pending preview request and drop a live DENOISE preview (a live
+        // quantize preview is the other sub-block's state — 0 must not eat it).
+        clearTimeout(debounceTimer);
+        const preview = getCleanupPreview();
+        if (preview && preview.elementId === element.id && preview.tool === "denoise") {
+          clearCleanupPreview();
+          denoiseReport.textContent = "";
+          syncActions();
+        }
+        return;
+      }
+      runPreview("denoise", { strength: value });
     });
   }
+
+  // Reset drops the preview — the strength highlight must fall back to OFF with it, or the
+  // segmented control claims a strength that is no longer previewing anything.
+  resetBtn.addEventListener("click", () => setDenoiseHighlight(0));
 
   syncActions();
 }

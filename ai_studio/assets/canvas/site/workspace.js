@@ -574,6 +574,25 @@ function paintElement(element, vp, editEl) {
     ctx.strokeRect(origin.x, origin.y, w, h);
   }
   ctx.globalAlpha = 1;
+  // T0207 UX (lead live-verify 2026-07-04): while a cleanup preview paints in place of the
+  // source, the canvas itself must SAY so — an amber chip above the element's top-left,
+  // flipping to "original" while Hold-to-see-original is pressed. Pure view-state like the
+  // preview substitution above; same unrotated-chrome shortcut as the ref chip below. Sits
+  // within CULL_MARGIN, so culling math needs no change.
+  if (cleanupPreview && cleanupPreview.elementId === element.id) {
+    const label = cleanupPreviewCompare ? "original" : "preview — Apply to keep";
+    ctx.save();
+    ctx.font = "11px system-ui, 'Segoe UI', sans-serif";
+    const chipPadX = 4;
+    const chipH = 14;
+    const chipTextW = Math.ceil(ctx.measureText(label).width);
+    ctx.fillStyle = "#d7a14a";
+    ctx.fillRect(origin.x, origin.y - chipH - 2, chipTextW + chipPadX * 2, chipH);
+    ctx.fillStyle = "#231a08"; // dark text for contrast against the amber fill
+    ctx.textBaseline = "middle";
+    ctx.fillText(label, origin.x + chipPadX, origin.y - chipH / 2 - 2 + 0.5);
+    ctx.restore();
+  }
   // Ref marking (T0239 increment 3, design R1): the style card's ONE ref image gets a blue
   // outline + a small "ref" chip at its top-left, drawn regardless of selection — always
   // visible so it is clear at a glance which member actually travels with generation. Plain
