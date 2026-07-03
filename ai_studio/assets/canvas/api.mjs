@@ -39,6 +39,7 @@
 //   POST   /api/canvas/projects/<id>/elements/<eid>/cleanup-preview {tool, params}  (T0207: quantize|denoise LIVE preview against CURRENT pixels; writes NOTHING to the store)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/cleanup        {tool, params}  (T0207: apply — new file + element.src swap; one journal entry)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/extract        {}   (T0239 increment 4: ONE codex VISION call -> element.meta.extracted {prompt_full, prompt_subject, style, description}; no card minted here — re-running overwrites)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/animate        {text}   (T0264: ONE codex TEXT/VISION call -> element.animation (the ai_studio.canvas.animation.v1 spec); authors fresh or minimally patches an existing spec; image + text; loud on a non-JSON reply / invalid spec)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/promote-recipe {}   (mint a RECIPE card BELOW the element from its ALREADY-STORED meta.extracted; NO codex call; loud without meta.extracted first)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/promote-style  {}   (mint a STYLE card RIGHT of the element from its ALREADY-STORED meta.extracted; NO codex call; loud without meta.extracted first)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
@@ -76,6 +77,7 @@ import {
   alphaCutout,
   alphaDualPlate,
   alphaDualPlateGenerate,
+  animateElementFromText,
   assignToGroup,
   cleanupApply,
   cleanupPreview,
@@ -241,11 +243,11 @@ export function createCanvasApi(root) {
     // T0254 Tier 1 #1: serialize every mutating call for one project. Page + chat
     // share this one server process, and the CLI is a separate process — withProjectLock
     // covers both (in-process queue + cross-process lockfile), so two concurrent
-    // mutations on the SAME project queue instead of racing. The four slow codex/agy
-    // generation routes (recipe generate/expand, element extract, alpha-dual-generate)
-    // deliberately do NOT call `locked` here — they lock only their own final commit
-    // internally (ops.mjs), so a multi-minute generation never blocks other mutations
-    // on the project. See withProjectLock's doc in store.mjs.
+    // mutations on the SAME project queue instead of racing. The five slow codex/agy
+    // generation routes (recipe generate/expand, element extract, element animate,
+    // alpha-dual-generate) deliberately do NOT call `locked` here — they lock only their
+    // own final commit internally (ops.mjs), so a multi-minute generation never blocks
+    // other mutations on the project. See withProjectLock's doc in store.mjs.
     const locked = (projectId, fn) => withProjectLock(root, projectId, fn);
     try {
       if (parts[0] !== "api" || parts[1] !== "canvas" || parts[2] !== "projects") {
@@ -762,6 +764,17 @@ export function createCanvasApi(root) {
         const elementId = decodeURIComponent(parts[5]);
         await readJsonBody(req);
         sendMutation(200, await extractFromElement(root, { projectId: id, elementId }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/animate  {text}  (T0264: the text->animation
+      // bridge) — ONE codex TEXT/VISION call authors/minimally-patches element.animation; runs
+      // OUTSIDE the journal, only the final spec write commits. Action verb -> POST. EXCLUDED
+      // from `locked` like the other slow codex routes above (the op self-locks its own commit).
+      if (parts.length === 7 && sub === "elements" && parts[6] === "animate" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, await animateElementFromText(root, { projectId: id, elementId, text: body.text }));
         return true;
       }
 

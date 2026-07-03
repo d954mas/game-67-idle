@@ -68,6 +68,11 @@ import { generateImageCodex, generateImageGemini } from "./tools/recipe_generate
 // spawns) and why raw stdout is never parsed (--output-last-message is the reliable,
 // noise-free answer file). Tests inject a fake `assistant`, so codex never spawns in the suite.
 import { expandPrompt, extractFromImage } from "./tools/prompt_assist.mjs";
+// Text -> animation (T0264: the text->animation bridge). The ONE codex TEXT/VISION seam that
+// authors an ai_studio.canvas.animation.v1 spec from a natural-language description; same
+// slow-op shape as extractFromElement (codex OUTSIDE the lock, one commit inside it) and the
+// same injectable-runner test seam (tests inject a fake `runner`, codex never spawns).
+import { runAnimateFromText } from "./tools/animation_assist.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
@@ -2881,6 +2886,84 @@ export function promoteExtractedStyle(root, { projectId, elementId } = {}) {
   return { project, card, refElement };
 }
 
+// ---- animateElementFromText (T0264: the text->animation bridge) ----------------------------
+//
+// The Animation inspector's [Animate] input / `animate` CLI verb / POST .../elements/<eid>/animate
+// route. The lead selects art, types a description ("крылья медленно машут"), and the codex seam
+// authors (or minimally patches) the element's `ai_studio.canvas.animation.v1` spec so the preview
+// can play it immediately. Slow-op shape copied from extractFromElement: the codex call runs BEFORE
+// any write, OUTSIDE the journal (mirrors alphaDualPlateGenerate — a multi-minute call must never
+// hold the project lock); then ONE commitMutation writes the spec inside a re-read + refuseIfHeadMoved
+// locked tail. The write itself is setElementAnimation's shape (element.animation = the validated
+// spec). Additive provenance: element.meta.animation_request = {text, at} rides alongside so the NEXT
+// "make it slower" call can hand codex both the current spec AND the phrasing that produced it.
+//
+// Works on IMAGE and TEXT elements (animation is geometry/opacity-level, never pixel-level — same as
+// setElementAnimation). An image element passes its files/<src> absolute path so the codex call is a
+// VISION call (the model SEES the art and can size amplitudes to it); a text element has no source
+// image, so it is a TEXT-only call (the model still gets the name + w/h + description).
+//
+// Loud, no-fallback, atomic: an empty/whitespace `text`, a missing element, a non-image/text element,
+// a non-JSON codex reply, OR a reply that fails validateAnimation all throw and write NOTHING — no
+// element.animation, no meta, no journal entry. `runner` is the injectable codex-spawn seam
+// (default runAnimateFromText's own codex runner); tests pass a fake so codex never spawns.
+export async function animateElementFromText(root, { projectId, elementId, text, runner } = {}) {
+  if (!projectId) throw new Error("animateElementFromText requires projectId");
+  if (!elementId) throw new Error("animateElementFromText requires elementId");
+  const description = typeof text === "string" ? text.trim() : "";
+  if (!description) throw new Error("animateElementFromText requires a non-empty text");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const element = (before.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  if (element.type !== "image" && element.type !== "text") {
+    throw new Error(`element ${elementId} is not an image or text element (cannot animate)`);
+  }
+
+  // Image elements feed their source pixels to a VISION call; text elements have no source image, so
+  // imagePath stays null and the tool falls back to a TEXT-only call. `runner` is the injectable
+  // codex-SPAWN seam forwarded to runAnimateFromText (the prompt_assist precedent): the op ALWAYS
+  // runs the real instruction-build + strict JSON parse, only the codex call itself is faked in tests.
+  const imagePath = element.type === "image" && element.src ? resolveProjectFile(root, projectId, element.src) : null;
+  const currentSpec = element.animation && typeof element.animation === "object" ? element.animation : null;
+  const raw = await runAnimateFromText({
+    element: { name: element.name, w: element.w, h: element.h, type: element.type },
+    imagePath,
+    currentSpec,
+    text: description,
+    runner,
+  });
+  const animation = validateAnimation(raw); // loud: an invalid spec writes NOTHING, no journal entry
+
+  // Re-read + refuseIfHeadMoved + write inside the lock — see expandRecipePrompt's identical comment /
+  // withProjectLock's doc in store.mjs. The codex call above already ran OUTSIDE the lock, so a
+  // multi-minute authoring never blocks other mutations; a concurrent edit that landed during it is
+  // caught HERE, loud (HEAD_CONFLICT), BEFORE the write.
+  const at = new Date().toISOString();
+  const project = await withProjectLock(root, projectId, () => {
+    const current = getProject(root, projectId);
+    refuseIfHeadMoved("animateElementFromText", before, current);
+    const currentElement = (current.elements || []).find((item) => item.id === elementId);
+    if (!currentElement) throw new Error(`element not found: ${elementId}`);
+
+    const nextElements = (current.elements || []).map((el2) =>
+      el2.id === elementId
+        ? { ...el2, animation, meta: { ...(el2.meta || {}), animation_request: { text: description, at } } }
+        : el2,
+    );
+    const after = updateProject(root, projectId, { elements: nextElements });
+    return commitMutation(root, projectId, {
+      op: "animateElementFromText",
+      args_summary: { elementId, text: description.slice(0, 120), channels: animation.channels.length },
+      before,
+      after,
+      startedAt,
+    });
+  });
+  const resultElement = (project.elements || []).find((item) => item.id === elementId);
+  return { project, element: resultElement, animation };
+}
+
 // ---- clipboard: paste / duplicate / delete nodes (T0227) ---------------------
 //
 // Figma-like copy/paste/duplicate for canvas objects (elements AND groups, mixed OK) and
@@ -3358,6 +3441,7 @@ export function historyEntryLabel(op, args = {}) {
     case "extractFromElement": return { label: "Extract", summary: "" };
     case "promoteExtractedRecipe": return { label: "Recipe from extract", summary: "" };
     case "promoteExtractedStyle": return { label: "Style from extract", summary: "" };
+    case "animateElementFromText": return { label: "Animate", summary: String(a.text || "") };
     case "pasteNodes": return { label: "Paste", summary: plural(count(a.count), "item") };
     case "duplicateNodes": return { label: "Duplicate", summary: plural(count(a.count), "item") };
     case "deleteNodes": return { label: "Delete", summary: plural(items(a.deletedElements) + items(a.deletedGroups), "item") };

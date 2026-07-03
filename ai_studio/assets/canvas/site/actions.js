@@ -9,6 +9,7 @@ import {
   elementById,
   elements,
   groupById,
+  refresh,
   regionEditElement,
   selectGroupOnly,
   selectOnly,
@@ -21,6 +22,10 @@ import { getFontManifest, measureTextBox } from "./fonts.js";
 import { screenToImagePoint } from "./viewport.mjs";
 import { saveBlobToFile } from "./export_dest.mjs";
 import { runLongOp } from "./toasts.js";
+// T0264: auto-play the preview the moment a text->animation spec lands (the lead's demo
+// moment). workspace.js already imports from this module; both directions only use hoisted
+// function exports at call time, so the cycle resolves cleanly.
+import { startAnimationPreview } from "./workspace.js";
 
 function pid() {
   return state.project.id;
@@ -658,6 +663,28 @@ export async function setElementAnimationAction(elementId, animationOrNull) {
   } catch (error) {
     setStatus(error.message, true);
   }
+}
+
+// T0264: the text->animation bridge. The Animation section's [Animate] input describes the
+// motion ("крылья медленно машут"); ONE codex TEXT/VISION call authors a fresh spec or
+// minimally patches the existing one. Same runLongOp treatment as extractElementAction (codex
+// = real seconds/minutes; a failure surfaces as an error toast and the typed text survives
+// because no applyMutation re-renders the input). ON SUCCESS: applyMutation, then AUTO-PLAY the
+// preview so the result is immediately visible on the canvas — the lead's demo moment.
+export async function animateElementFromTextAction(elementId, text, control) {
+  await runLongOp(
+    "Animating… (codex)",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/elements/${elementId}/animate`, { text });
+      applyMutation(result); // rebuilds the inspector (Play button reads "not previewing" yet)
+      if (result.element) {
+        startAnimationPreview(result.element.id);
+        refresh(); // re-render so the Animation section's Play button now reads "Stop" (it IS playing)
+      }
+      return { kind: "success", message: "Animation applied." };
+    },
+    { control },
+  );
 }
 
 // ---- export ------------------------------------------------------------------

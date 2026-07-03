@@ -53,6 +53,7 @@
 //   node ai_studio/assets/canvas/cli.mjs style-create <id> [--name X] [--x n --y n --w n --h n] [--parent <gid>|none]   (T0239 increment 3: mint a style card — a group with an additive `style` blob: prompt + ONE ref image; no generation, style cards never generate)
 //   node ai_studio/assets/canvas/cli.mjs style-set <id> --group g [--prompt "..."] [--ref <elementId>|none]   (partial style blob update; --ref must be a member IMAGE element id of THIS card, or none to clear — the "Make ref" gesture)
 //   node ai_studio/assets/canvas/cli.mjs extract <id> --element el   (T0239 increment 4: ONE codex VISION call, real seconds/minutes -> element.meta.extracted {prompt_full, prompt_subject, style, description}; no card minted; re-running overwrites)
+//   node ai_studio/assets/canvas/cli.mjs animate <id> --element el --text "..."   (T0264: ONE codex TEXT/VISION call, real seconds/minutes -> element.animation (the ai_studio.canvas.animation.v1 spec); authors fresh or minimally patches an existing spec; image + text)
 //   node ai_studio/assets/canvas/cli.mjs promote-recipe <id> --element el   (mint a RECIPE card BELOW the element from its ALREADY-STORED meta.extracted; NO codex call; run extract first)
 //   node ai_studio/assets/canvas/cli.mjs promote-style <id> --element el   (mint a STYLE card RIGHT of the element from its ALREADY-STORED meta.extracted; NO codex call; run extract first)
 //   node ai_studio/assets/canvas/cli.mjs render-group <id> --group g [--scale 2] [--background "#rrggbb"]
@@ -78,6 +79,7 @@ import {
   alphaCutout,
   alphaDualPlate,
   alphaDualPlateGenerate,
+  animateElementFromText,
   assignToGroup,
   cleanupApply,
   cleanupPreview,
@@ -259,6 +261,7 @@ function usage() {
   style-create <id> [--name <name>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0239 increment 3: mint a style card — a group with an additive 'style' blob: prompt + ONE ref image; omitted w/h default to a 360x280 frame; style cards never generate)
   style-set <id> --group <gid> [--prompt "<text>"] [--ref <elementId>|none]   (partial style blob update; --ref must be an existing member IMAGE element id of THIS card, or none to clear — the "Make ref" gesture; the first image dropped into an empty card auto-claims the ref)
   extract <id> --element <eid>   (T0239 increment 4: ONE codex VISION call, real seconds/minutes -> element.meta.extracted {prompt_full, prompt_subject, style, description}; no card minted; re-running overwrites; no fake-assistant injection from the CLI)
+  animate <id> --element <eid> --text "<description>"   (T0264: ONE codex TEXT/VISION call, real seconds/minutes -> element.animation (the ai_studio.canvas.animation.v1 spec); authors fresh or minimally patches an existing spec; image (vision) + text; no fake-runner injection from the CLI)
   promote-recipe <id> --element <eid>   (mint a RECIPE card BELOW the element from its ALREADY-STORED meta.extracted; NO codex call; run extract first — loud otherwise)
   promote-style <id> --element <eid>   (mint a STYLE card RIGHT of the element from its ALREADY-STORED meta.extracted; NO codex call; run extract first — loud otherwise)
   render-group <id> --group <gid>  (alias: render-screen) [--scale <n>] [--background '#rrggbb']
@@ -876,6 +879,14 @@ async function runCommand(command, id, positional, flags) {
       if (!flags.element || flags.element === "true") fail("extract requires --element <eid>");
       return print(await extractFromElement(repoRoot, { projectId: id, elementId: flags.element }));
     }
+    case "animate": {
+      // T0264: the text->animation bridge — a real codex TEXT/VISION spawn (no fake-runner
+      // injection from the CLI, test-only seam), so this always runs the DEFAULT codex runner.
+      if (!id) fail("animate requires <id>");
+      if (!flags.element || flags.element === "true") fail("animate requires --element <eid>");
+      if (!flags.text || flags.text === "true") fail("animate requires --text \"<description>\"");
+      return print(await animateElementFromText(repoRoot, { projectId: id, elementId: flags.element, text: flags.text }));
+    }
     case "promote-recipe": {
       if (!id) fail("promote-recipe requires <id>");
       if (!flags.element || flags.element === "true") fail("promote-recipe requires --element <eid>");
@@ -950,16 +961,16 @@ async function runCommand(command, id, positional, flags) {
   }
 }
 
-// T0254 Tier 1 #1: the four slow codex/agy generation commands lock only their OWN
+// T0254 Tier 1 #1: the five slow codex/agy generation commands lock only their OWN
 // final commit internally (ops.mjs — generateFromRecipe/expandRecipePrompt/
-// extractFromElement/alphaDualPlateGenerate), so a multi-minute generation never
-// blocks other mutations on the project. Wrapping them AGAIN here would try to
+// extractFromElement/animateElementFromText/alphaDualPlateGenerate), so a multi-minute
+// generation never blocks other mutations on the project. Wrapping them AGAIN here would try to
 // acquire the SAME per-project lock twice in one call stack (the outer acquire would
 // never release until the inner one finishes, and the inner one waits on the outer)
 // — excluded on purpose. Every other project-scoped command is wrapped in main()
 // below so the CLI (a SEPARATE process from the server) respects the same
 // cross-process lockfile the API adapter does.
-const SELF_LOCKING_COMMANDS = new Set(["recipe-generate", "recipe-expand", "extract", "alpha-dual-generate"]);
+const SELF_LOCKING_COMMANDS = new Set(["recipe-generate", "recipe-expand", "extract", "animate", "alpha-dual-generate"]);
 
 async function main(argv) {
   const [command, ...rest] = argv;

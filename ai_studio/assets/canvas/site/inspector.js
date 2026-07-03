@@ -33,6 +33,7 @@ import {
   alphaCutoutFor,
   alphaDualPlateFor,
   alphaDualPlateGenerateFor,
+  animateElementFromTextAction,
   deleteRegion,
   detectRegionsFor,
   distributeSelection,
@@ -1419,8 +1420,44 @@ function renderSlice9(element, root) {
 // on off_y) — instantly visible, and a valid spec the sampler/op both accept as-is.
 const ANIMATION_SAMPLE_SPEC = { v: 1, channels: [{ prop: "off_y", kind: "osc", amplitude: 8, period_ms: 1200 }] };
 
+// T0264: the text->animation bridge — a one-line description + [Animate] that runs the codex op
+// (animateElementFromTextAction). Shown ABOVE the sample/Play/Edit row and in BOTH states: with
+// no spec it authors one from scratch, with an existing spec it minimally patches it ("медленнее"
+// = just the period). Enter submits too; the button disables while codex runs (~5-30s) via
+// runLongOp's `control`; a failure surfaces as an error toast and the typed text survives (no
+// applyMutation re-renders the input). On success the action auto-plays the preview.
+function renderAnimateFromText(element, body) {
+  const row = document.createElement("div");
+  row.className = "insp-alpha-row";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "insp-input";
+  input.placeholder = "describe the motion…";
+  input.title = "e.g. \"gently bobs up and down\" — or, with an animation set, \"make it slower\"";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "insp-btn-small";
+  btn.style.flex = "0 0 auto"; // hug the label so the description input keeps the row width
+  btn.textContent = "Animate";
+  const submit = () => {
+    const text = input.value.trim();
+    if (!text) return;
+    animateElementFromTextAction(element.id, text, btn);
+  };
+  btn.addEventListener("click", submit);
+  input.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      submit();
+    }
+  });
+  row.append(input, btn);
+  body.appendChild(row);
+}
+
 function renderAnimation(element, root) {
   const body = collapsible(root, "animation", "Animation");
+  renderAnimateFromText(element, body);
   const animation = element.animation;
   const hasSpec = animation && Array.isArray(animation.channels) && animation.channels.length > 0;
 
