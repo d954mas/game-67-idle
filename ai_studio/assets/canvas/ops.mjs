@@ -120,6 +120,7 @@ import {
   resolveProjectPath,
   rewriteJournal,
   updateProject,
+  withProjectLock,
   writeProjectBytes,
   writeSnapshot,
 } from "./store.mjs";
@@ -134,6 +135,7 @@ export {
   resolveProjectFile,
   resolveProjectPath,
   updateProject,
+  withProjectLock,
 };
 
 // Round a millisecond duration to 3 decimals for compact, stable journal/error rows.
@@ -317,8 +319,42 @@ export function setOpsActor(actor) {
   opsActor = actor;
 }
 
+// T0254 Tier 1 #1: `before` was read at the START of an op — for the ops that do slow
+// external work (codex/agy) before their final write, that could be minutes ago. If
+// another mutation landed on this project in the meantime, anything computed from
+// `before` was built on a state this op never actually saw: writing it anyway would
+// either lose that other mutation (lost update) or record a parent pointer the
+// journal chain never actually passed through. Refuse loudly instead (mirrors
+// checkExpectHead's shape, including the stable HEAD_CONFLICT code so api.mjs maps it
+// to 409, not prose-matched) — a stale-before refusal is a correct, safe v1 answer;
+// the remedy is simply to retry the whole gesture, which reads a fresh `before`.
+// `current` is whatever the caller just re-read as the ACTUAL live project — pass it
+// straight through (no extra disk read here) so this can run BEFORE a locked op's
+// first write, not just before its final commit (see generateFromRecipe and friends,
+// which call this immediately after their own re-read, before touching the store —
+// otherwise a refusal at commitMutation-time would still leave an earlier, unjournaled
+// updateProject write sitting on disk, which is exactly the silent corruption this
+// whole check exists to prevent). For ops whose ENTIRE read-modify-commit runs inside
+// withProjectLock (the common case, wrapped at the API/CLI layer), this never trips:
+// nothing else can have advanced the head in between.
+function refuseIfHeadMoved(op, before, current) {
+  const startedHead = Number(before.history_seq) || 0;
+  const actualHead = Number(current.history_seq) || 0;
+  if (actualHead !== startedHead) {
+    const error = new Error(
+      `canvas project ${current.id} changed underneath op "${op}" (started at head ${startedHead}, now ${actualHead}) — retry the operation`,
+    );
+    error.code = "HEAD_CONFLICT";
+    throw error;
+  }
+}
+
 function commitMutation(root, projectId, { op, args_summary, before, after, startedAt }) {
   ensureThinJournal(root, projectId); // one-time migration of a legacy fat journal
+  // Cheap insurance for every op (see refuseIfHeadMoved's doc above): for the common
+  // wrapped-at-the-client-layer case this never trips, since nothing could have
+  // advanced the head since `before` was read under the same lock.
+  refuseIfHeadMoved(op, before, getProject(root, projectId));
   const undoPatch = snapshotOf(before);
   const state = snapshotOf(after);
   if (JSON.stringify(undoPatch) === JSON.stringify(state)) return after; // no-op: no entry
@@ -2315,105 +2351,116 @@ export async function generateFromRecipe(root, { projectId, groupId, generators 
   }
 
   // Re-read to avoid clobbering a concurrent edit (mirrors alphaDualPlateGenerate's re-read
-  // before the final mint) — generation above may have taken minutes.
-  const current = getProject(root, projectId);
-  const currentCard = (current.groups || []).find((g) => g.id === groupId);
-  if (!currentCard) throw new Error(`group not found: ${groupId}`);
+  // before the final mint) — generation above may have taken minutes. Locked (T0254 Tier 1
+  // #1) around just this final critical section (re-read through commit): the slow codex/
+  // agy calls already ran OUTSIDE it above, so a multi-minute generate never blocks other
+  // mutations on this project — see withProjectLock's doc in store.mjs. refuseIfHeadMoved
+  // runs BEFORE the storeAddImage loop below (not just at commitMutation time) — see
+  // expandRecipePrompt's comment for why that matters (an intermediate write must never
+  // land un-journaled just because the FINAL commit refuses).
+  const { project, minted, run } = await withProjectLock(root, projectId, () => {
+    const current = getProject(root, projectId);
+    refuseIfHeadMoved("generateFromRecipe", before, current);
+    const currentCard = (current.groups || []).find((g) => g.id === groupId);
+    if (!currentCard) throw new Error(`group not found: ${groupId}`);
 
-  // Placement (R1): PARENT scope of the card, right of the frame, second result stacks below.
-  const parentScope = currentCard.parentId == null || currentCard.parentId === "" ? null : String(currentCard.parentId);
-  const gap = 16;
-  const startX = currentCard.x + currentCard.w + gap;
-  let cursorY = currentCard.y;
+    // Placement (R1): PARENT scope of the card, right of the frame, second result stacks below.
+    const parentScope = currentCard.parentId == null || currentCard.parentId === "" ? null : String(currentCard.parentId);
+    const gap = 16;
+    const startX = currentCard.x + currentCard.w + gap;
+    let cursorY = currentCard.y;
 
-  const paramsSnapshot = { ...recipe.params };
-  let workingProject = current;
-  const minted = []; // {engine, element, bytes}
-  for (const result of results) {
-    const added = storeAddImage(root, projectId, {
-      name: `${cardLabel} ${RECIPE_ENGINE_SUFFIX[result.engine] || result.engine}`,
-      bytes: result.bytes,
-      x: startX,
-      y: cursorY,
-      meta: {
-        recipe: {
-          cardId: groupId,
-          engine: result.engine,
-          at,
-          prompt_snapshot: effectivePromptText,
-          refs_snapshot: finalRefSrcs,
-          params_snapshot: paramsSnapshot,
-          ...(styleSnapshot ? { style_snapshot: styleSnapshot } : {}),
+    const paramsSnapshot = { ...recipe.params };
+    let workingProject = current;
+    const minted = []; // {engine, element, bytes}
+    for (const result of results) {
+      const added = storeAddImage(root, projectId, {
+        name: `${cardLabel} ${RECIPE_ENGINE_SUFFIX[result.engine] || result.engine}`,
+        bytes: result.bytes,
+        x: startX,
+        y: cursorY,
+        meta: {
+          recipe: {
+            cardId: groupId,
+            engine: result.engine,
+            at,
+            prompt_snapshot: effectivePromptText,
+            refs_snapshot: finalRefSrcs,
+            params_snapshot: paramsSnapshot,
+            ...(styleSnapshot ? { style_snapshot: styleSnapshot } : {}),
+          },
         },
-      },
-    });
-    workingProject = added.project;
-    minted.push({ engine: result.engine, element: added.element, bytes: result.bytes.length });
-    cursorY = added.element.y + added.element.h + gap;
-  }
-
-  // Front-order hook (mirrors addImages' multi-insert version): stack the minted element(s)
-  // at the FRONT of the destination scope, in mint order, when that scope is already
-  // explicitly ordered; a no-op on a never-reordered scope.
-  const mintedIds = new Set(minted.map((m) => m.element.id));
-  let fo = frontOrder(before, parentScope);
-  const nextElements = (workingProject.elements || []).map((element) => {
-    if (!mintedIds.has(element.id)) return element;
-    let next = element;
-    if (parentScope != null) next = { ...next, groupId: parentScope };
-    if (fo !== null) {
-      next = { ...next, order: fo };
-      fo += 1;
+      });
+      workingProject = added.project;
+      minted.push({ engine: result.engine, element: added.element, bytes: result.bytes.length });
+      cursorY = added.element.y + added.element.h + gap;
     }
-    return next;
+
+    // Front-order hook (mirrors addImages' multi-insert version): stack the minted element(s)
+    // at the FRONT of the destination scope, in mint order, when that scope is already
+    // explicitly ordered; a no-op on a never-reordered scope.
+    const mintedIds = new Set(minted.map((m) => m.element.id));
+    let fo = frontOrder(before, parentScope);
+    const nextElements = (workingProject.elements || []).map((element) => {
+      if (!mintedIds.has(element.id)) return element;
+      let next = element;
+      if (parentScope != null) next = { ...next, groupId: parentScope };
+      if (fo !== null) {
+        next = { ...next, order: fo };
+        fo += 1;
+      }
+      return next;
+    });
+
+    const verdict = failed.length ? "partial" : "ok";
+    const lastRun = { at, result_element_id: minted[0].element.id, verdict };
+    const nextGroups = (workingProject.groups || []).map((group) =>
+      group.id === groupId ? { ...group, recipe: { ...group.recipe, last_run: lastRun } } : group,
+    );
+
+    const run = {
+      id: `run_${randomUUID().slice(0, 8)}`,
+      op: "generate_from_recipe",
+      cardId: groupId,
+      at,
+      params: {
+        prompt_snapshot: effectivePromptText,
+        engine: requestedEngine,
+        refs: finalRefSrcs,
+        size: recipe.params.size,
+        quality: recipe.params.quality,
+        model: recipe.params.model,
+      },
+      result_summary: {
+        results: minted.map((m) => ({ engine: m.engine, elementId: m.element.id, bytes: m.bytes })),
+        failed,
+      },
+    };
+
+    const after = updateProject(root, projectId, {
+      elements: nextElements,
+      groups: nextGroups,
+      tool_runs: capToolRuns(root, projectId, [...(workingProject.tool_runs || []), run]),
+    });
+
+    // ONE journal entry for the whole gesture (generation itself ran OUTSIDE the journal) —
+    // one undo removes every minted element AND reverts the card's recipe.last_run together.
+    const project = commitMutation(root, projectId, {
+      op: "generateFromRecipe",
+      args_summary: {
+        groupId,
+        engine: requestedEngine,
+        elementIds: minted.map((m) => m.element.id),
+        failedEngines: failed.map((f) => f.engine),
+      },
+      before,
+      after,
+      startedAt,
+    });
+    return { project, minted, run };
   });
 
-  const verdict = failed.length ? "partial" : "ok";
-  const lastRun = { at, result_element_id: minted[0].element.id, verdict };
-  const nextGroups = (workingProject.groups || []).map((group) =>
-    group.id === groupId ? { ...group, recipe: { ...group.recipe, last_run: lastRun } } : group,
-  );
-
-  const run = {
-    id: `run_${randomUUID().slice(0, 8)}`,
-    op: "generate_from_recipe",
-    cardId: groupId,
-    at,
-    params: {
-      prompt_snapshot: effectivePromptText,
-      engine: requestedEngine,
-      refs: finalRefSrcs,
-      size: recipe.params.size,
-      quality: recipe.params.quality,
-      model: recipe.params.model,
-    },
-    result_summary: {
-      results: minted.map((m) => ({ engine: m.engine, elementId: m.element.id, bytes: m.bytes })),
-      failed,
-    },
-  };
-
-  const after = updateProject(root, projectId, {
-    elements: nextElements,
-    groups: nextGroups,
-    tool_runs: capToolRuns(root, projectId, [...(workingProject.tool_runs || []), run]),
-  });
-
-  // ONE journal entry for the whole gesture (generation itself ran OUTSIDE the journal) —
-  // one undo removes every minted element AND reverts the card's recipe.last_run together.
-  const project = commitMutation(root, projectId, {
-    op: "generateFromRecipe",
-    args_summary: {
-      groupId,
-      engine: requestedEngine,
-      elementIds: minted.map((m) => m.element.id),
-      failedEngines: failed.map((f) => f.engine),
-    },
-    before,
-    after,
-    startedAt,
-  });
-
+  const mintedIds = new Set(minted.map((m) => m.element.id));
   const elements = (project.elements || []).filter((el) => mintedIds.has(el.id));
   const group = (project.groups || []).find((g) => g.id === groupId);
   return { project, elements, group, failed, run };
@@ -2472,21 +2519,30 @@ export async function expandRecipePrompt(root, { projectId, groupId, assistant }
   const expanded = expandedRaw.trim();
 
   // Re-read to avoid clobbering a concurrent edit (mirrors generateFromRecipe/
-  // alphaDualPlateGenerate — the codex call above may have taken real time).
-  const current = getProject(root, projectId);
-  const currentCard = (current.groups || []).find((g) => g.id === groupId);
-  if (!currentCard) throw new Error(`group not found: ${groupId}`);
+  // alphaDualPlateGenerate — the codex call above may have taken real time). Locked
+  // (T0254 Tier 1 #1) around just this final critical section — the slow codex call
+  // above already ran OUTSIDE the lock, so a multi-minute expand never blocks other
+  // mutations on this project; see withProjectLock's doc in store.mjs. A concurrent
+  // edit that landed during the codex call is caught HERE, loud (HEAD_CONFLICT), BEFORE
+  // the write below — checking only at commitMutation time would be too late: the
+  // updateProject a few lines down would already have landed on disk, unjournaled.
+  const project = await withProjectLock(root, projectId, () => {
+    const current = getProject(root, projectId);
+    refuseIfHeadMoved("expandRecipePrompt", before, current);
+    const currentCard = (current.groups || []).find((g) => g.id === groupId);
+    if (!currentCard) throw new Error(`group not found: ${groupId}`);
 
-  const nextGroups = (current.groups || []).map((group) =>
-    group.id === groupId ? { ...group, recipe: { ...group.recipe, expanded } } : group,
-  );
-  const after = updateProject(root, projectId, { groups: nextGroups });
-  const project = commitMutation(root, projectId, {
-    op: "expandRecipePrompt",
-    args_summary: { groupId },
-    before,
-    after,
-    startedAt,
+    const nextGroups = (current.groups || []).map((group) =>
+      group.id === groupId ? { ...group, recipe: { ...group.recipe, expanded } } : group,
+    );
+    const after = updateProject(root, projectId, { groups: nextGroups });
+    return commitMutation(root, projectId, {
+      op: "expandRecipePrompt",
+      args_summary: { groupId },
+      before,
+      after,
+      startedAt,
+    });
   });
   const group = (project.groups || []).find((item) => item.id === groupId);
   return { project, group, expanded };
@@ -2561,21 +2617,28 @@ export async function extractFromElement(root, { projectId, elementId, assistant
   };
 
   // Re-read to avoid clobbering a concurrent edit (mirrors generateFromRecipe/
-  // alphaDualPlateGenerate — the vision call above may have taken real time).
-  const current = getProject(root, projectId);
-  const currentElement = (current.elements || []).find((item) => item.id === elementId);
-  if (!currentElement) throw new Error(`element not found: ${elementId}`);
+  // alphaDualPlateGenerate — the vision call above may have taken real time). Locked
+  // (T0254 Tier 1 #1) around just this final critical section — see
+  // expandRecipePrompt's identical comment / withProjectLock's doc in store.mjs. The
+  // refuseIfHeadMoved check runs BEFORE the write below (not just at commitMutation
+  // time) for the same reason expandRecipePrompt's does — see its comment.
+  const project = await withProjectLock(root, projectId, () => {
+    const current = getProject(root, projectId);
+    refuseIfHeadMoved("extractFromElement", before, current);
+    const currentElement = (current.elements || []).find((item) => item.id === elementId);
+    if (!currentElement) throw new Error(`element not found: ${elementId}`);
 
-  const nextElements = (current.elements || []).map((el2) =>
-    el2.id === elementId ? { ...el2, meta: { ...(el2.meta || {}), extracted } } : el2,
-  );
-  const after = updateProject(root, projectId, { elements: nextElements });
-  const project = commitMutation(root, projectId, {
-    op: "extractFromElement",
-    args_summary: { elementId },
-    before,
-    after,
-    startedAt,
+    const nextElements = (current.elements || []).map((el2) =>
+      el2.id === elementId ? { ...el2, meta: { ...(el2.meta || {}), extracted } } : el2,
+    );
+    const after = updateProject(root, projectId, { elements: nextElements });
+    return commitMutation(root, projectId, {
+      op: "extractFromElement",
+      args_summary: { elementId },
+      before,
+      after,
+      startedAt,
+    });
   });
   const resultElement = (project.elements || []).find((item) => item.id === elementId);
   return { project, element: resultElement, extracted };
@@ -2990,9 +3053,14 @@ function checkExpectHead(expectHead, head) {
     throw new Error(`expectHead must be a finite integer, got ${JSON.stringify(expectHead)}`);
   }
   if (expected !== head) {
-    throw new Error(
+    const error = new Error(
       `history advanced: head is now ${head}, you read ${expected} — the project is live; re-read history (history-list) and retry`,
     );
+    // T0254 Tier 1 #2: a stable marker (not prose-matching) so api.mjs's
+    // statusForError maps this to 409, same family as commitMutation's own
+    // stale-before refusal above.
+    error.code = "HEAD_CONFLICT";
+    throw error;
   }
 }
 
@@ -4363,44 +4431,53 @@ export async function alphaDualPlateGenerate(root, { projectId, elementId, promp
   const { bytes, report, darkSrc } = await generateAndKeyDualPlate(root, projectId, lightElement, blackPrompt, generate);
 
   // Re-read to avoid clobbering a concurrent edit (mirrors alphaDualPlate's re-read).
-  const current = getProject(root, projectId);
-  const source = (current.elements || []).find((item) => item.id === elementId);
-  if (!source) throw new Error(`element not found: ${elementId}`);
+  // Locked (T0254 Tier 1 #1) around just this final critical section — the slow codex
+  // plate generation above already ran OUTSIDE the lock, so a multi-minute generate
+  // never blocks other mutations on this project; see withProjectLock's doc in
+  // store.mjs. refuseIfHeadMoved runs BEFORE the storeAddImage write below (not just
+  // at commitMutation time) — see expandRecipePrompt's comment for why that matters.
+  const { project, run, addedElement } = await withProjectLock(root, projectId, () => {
+    const current = getProject(root, projectId);
+    refuseIfHeadMoved("alphaDualPlateGenerate", before, current);
+    const source = (current.elements || []).find((item) => item.id === elementId);
+    if (!source) throw new Error(`element not found: ${elementId}`);
 
-  const { run, alphaMeta } = buildDualPlateGenerateProvenance(elementId, lightSrc, darkSrc, blackPrompt, report, lightGenerated);
+    const { run, alphaMeta } = buildDualPlateGenerateProvenance(elementId, lightSrc, darkSrc, blackPrompt, report, lightGenerated);
 
-  // Step 5: placement — to the RIGHT of the source element's bbox, 16px gap.
-  const gap = 16;
-  const added = storeAddImage(root, projectId, {
-    name: `${source.name} alpha`,
-    bytes,
-    x: source.x + source.w + gap,
-    y: source.y,
-    meta: { alpha: alphaMeta },
+    // Step 5: placement — to the RIGHT of the source element's bbox, 16px gap.
+    const gap = 16;
+    const added = storeAddImage(root, projectId, {
+      name: `${source.name} alpha`,
+      bytes,
+      x: source.x + source.w + gap,
+      y: source.y,
+      meta: { alpha: alphaMeta },
+    });
+
+    // Front-order hook (identical to addImage/alphaDualPlate): the new element lands at the
+    // FRONT of the root scope when it is already explicitly ordered; a no-op otherwise.
+    const fo = frontOrder(before, null);
+    const nextElements = (added.project.elements || []).map((el2) =>
+      fo !== null && el2.id === added.element.id ? { ...el2, order: fo } : el2,
+    );
+    const after = updateProject(root, projectId, {
+      elements: nextElements,
+      tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
+    });
+
+    // Step 6: ONE journal entry for the whole gesture — the generation itself ran OUTSIDE
+    // the journal (before/after only bracket this final mint), so undo removes exactly the
+    // new element and never touches the source.
+    const committed = commitMutation(root, projectId, {
+      op: "alphaDualPlateGenerate",
+      args_summary: { elementId, newElementId: added.element.id },
+      before,
+      after,
+      startedAt,
+    });
+    return { project: committed, run, addedElement: added.element };
   });
-
-  // Front-order hook (identical to addImage/alphaDualPlate): the new element lands at the
-  // FRONT of the root scope when it is already explicitly ordered; a no-op otherwise.
-  const fo = frontOrder(before, null);
-  const nextElements = (added.project.elements || []).map((el2) =>
-    fo !== null && el2.id === added.element.id ? { ...el2, order: fo } : el2,
-  );
-  const after = updateProject(root, projectId, {
-    elements: nextElements,
-    tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
-  });
-
-  // Step 6: ONE journal entry for the whole gesture — the generation itself ran OUTSIDE
-  // the journal (before/after only bracket this final mint), so undo removes exactly the
-  // new element and never touches the source.
-  const project = commitMutation(root, projectId, {
-    op: "alphaDualPlateGenerate",
-    args_summary: { elementId, newElementId: added.element.id },
-    before,
-    after,
-    startedAt,
-  });
-  const resultElement = (project.elements || []).find((item) => item.id === added.element.id) || added.element;
+  const resultElement = (project.elements || []).find((item) => item.id === addedElement.id) || addedElement;
   return { project, element: resultElement, run };
 }
 

@@ -390,3 +390,109 @@ test("cli group-create/move/set/assign/delete smoke (no python)", (t) => {
   assert.equal(shown.elements.length, 1, "member elA deleted with the group");
   assert.equal(shown.elements[0].id, elB);
 });
+
+// ---- T0254 Tier 1 #3: `list` summary by default, `--full` restores the full dump --
+
+test("cli list: summary by default (id/title/created/updated/counts/head); --full restores the full project dump", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-list-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const pngPath = join(dir, "pic.png");
+  writeFileSync(pngPath, solidPng(4, 4, [1, 2, 3]));
+  const projectId = run(env, "create", "--title", "List Summary").project.id;
+  run(env, "add-image", projectId, "--file", pngPath);
+  run(env, "group-create", projectId, "--name", "Frame", "--x", "0", "--y", "0", "--w", "10", "--h", "10");
+
+  const summary = run(env, "list").projects;
+  assert.equal(summary.length, 1);
+  const row = summary[0];
+  assert.deepEqual(Object.keys(row).sort(), ["created", "elements", "groups", "head", "id", "title", "updated"].sort());
+  assert.equal(row.id, projectId);
+  assert.equal(row.title, "List Summary");
+  assert.equal(row.elements, 1);
+  assert.equal(row.groups, 1);
+  assert.equal(row.head, 2, "head matches the project's actual history_seq");
+  // Additive contract: the summary carries NO element/group bodies at all.
+  assert.equal(row.project, undefined);
+
+  const full = run(env, "list", "--full").projects;
+  assert.equal(full.length, 1);
+  assert.equal(full[0].id, projectId);
+  assert.equal(full[0].elements.length, 1, "--full restores today's exact full-project dump");
+  assert.equal(full[0].elements[0].w, 4);
+  assert.equal(full[0].groups.length, 1);
+});
+
+// ---- T0254 Tier 1 #4: strict boolean parser on every boolean flag site ------------
+
+test("cli parseBool: junk boolean values are a loud, flag-naming error on every boolean flag site (no silent coercion either direction)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-bool-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const pngPath = join(dir, "pic.png");
+  writeFileSync(pngPath, solidPng(4, 4, [1, 2, 3]));
+  const projectId = run(env, "create", "--title", "Bool Parity").project.id;
+  const elementId = run(env, "add-image", projectId, "--file", pngPath).element.id;
+  const groupId = run(env, "group-create", projectId, "--name", "G", "--x", "0", "--y", "0", "--w", "10", "--h", "10").group.id;
+
+  // Junk on EVERY boolean flag site is a loud, flag-naming refusal — not a silent
+  // guess (the bug this replaces: junk resolved to *false* in element-set but *true*
+  // in group-set for the exact same --visible flag).
+  const elementSetFail = runFail(env, "element-set", projectId, "--element", elementId, "--visible", "maybe");
+  assert.match(String(elementSetFail.stderr || elementSetFail.message), /--visible must be true, false, 1, or 0/);
+
+  const flipFail = runFail(env, "element-set", projectId, "--element", elementId, "--flip-h", "maybe");
+  assert.match(String(flipFail.stderr || flipFail.message), /--flip-h must be true, false, 1, or 0/);
+
+  const groupSetFail = runFail(env, "group-set", projectId, "--group", groupId, "--visible", "maybe");
+  assert.match(String(groupSetFail.stderr || groupSetFail.message), /--visible must be true, false, 1, or 0/);
+
+  const groupClipFail = runFail(env, "group-set", projectId, "--group", groupId, "--clip", "maybe");
+  assert.match(String(groupClipFail.stderr || groupClipFail.message), /--clip must be true, false, 1, or 0/);
+
+  const groupsSetFail = runFail(env, "groups-set", projectId, "--groups", groupId, "--visible", "maybe");
+  assert.match(String(groupsSetFail.stderr || groupsSetFail.message), /--visible must be true, false, 1, or 0/);
+
+  // Both directions resolve CONSISTENTLY once the value is valid: element-set and
+  // group-set --visible agree with each other, and 1/0 behave like true/false.
+  run(env, "element-set", projectId, "--element", elementId, "--visible", "false");
+  assert.equal(run(env, "show", projectId).project.elements[0].visible, false);
+  run(env, "element-set", projectId, "--element", elementId, "--visible", "1");
+  assert.equal(run(env, "show", projectId).project.elements[0].visible, true, "1 behaves like true");
+
+  run(env, "group-set", projectId, "--group", groupId, "--visible", "false");
+  assert.equal(run(env, "show", projectId).project.groups[0].visible, false);
+  run(env, "group-set", projectId, "--group", groupId, "--visible", "0");
+  assert.equal(run(env, "show", projectId).project.groups[0].visible, false, "0 behaves like false");
+});
+
+// ---- T0254 Tier 1 #5: element-set --w/--h (+ --x/--y) single-element resize -------
+
+test("cli element-set --w/--h/--x/--y: single-element resize/reposition lands and journals (parity with the API PATCH route)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-resize-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const pngPath = join(dir, "pic.png");
+  writeFileSync(pngPath, solidPng(8, 6, [4, 5, 6]));
+  const projectId = run(env, "create", "--title", "Resize CLI").project.id;
+  const elementId = run(env, "add-image", projectId, "--file", pngPath).element.id;
+
+  const resized = run(env, "element-set", projectId, "--element", elementId, "--w", "40", "--h", "30", "--x", "5", "--y", "7");
+  assert.equal(resized.element.w, 40);
+  assert.equal(resized.element.h, 30);
+  assert.equal(resized.element.x, 5);
+  assert.equal(resized.element.y, 7);
+
+  const shown = run(env, "show", projectId).project.elements[0];
+  assert.deepEqual({ w: shown.w, h: shown.h, x: shown.x, y: shown.y }, { w: 40, h: 30, x: 5, y: 7 });
+
+  // One journal entry (patchElement, same op move/the API PATCH route use); undo restores.
+  const history = run(env, "history", projectId);
+  assert.equal(history.entries.filter((e) => e.op === "patchElement").length, 1);
+  run(env, "undo", projectId, "--expect-head", String(resized.project.history_seq));
+  const undone = run(env, "show", projectId).project.elements[0];
+  assert.deepEqual({ w: undone.w, h: undone.h, x: undone.x, y: undone.y }, { w: 8, h: 6, x: 0, y: 0 });
+});

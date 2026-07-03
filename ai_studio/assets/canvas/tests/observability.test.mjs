@@ -107,9 +107,10 @@ test("a project-resolvable API failure appends to errors.jsonl; project-not-foun
   const handler = createCanvasApi(ROOT);
   const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Err" })).json().project.id;
 
-  // Induce an op failure on an existing project: patch a missing element.
+  // Induce an op failure on an existing project: patch a missing element. T0254 Tier 1
+  // #2: statusForError maps "not found" errors to 404, not the old catch-all 400.
   const failed = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/elements/nope`, { x: 1 });
-  assert.equal(failed.status, 400);
+  assert.equal(failed.status, 404);
   assert.match(failed.json().error, /element not found/);
 
   const errors = readErrorsFile(dir, projectId);
@@ -120,7 +121,7 @@ test("a project-resolvable API failure appends to errors.jsonl; project-not-foun
 
   // A failure on an unresolvable project can't be logged (no folder to write to).
   const missing = await invokeApi(handler, "PATCH", "/api/canvas/projects/ghost-xyz/elements/e1", { x: 1 });
-  assert.equal(missing.status, 400);
+  assert.equal(missing.status, 404);
   assert.equal(existsSync(join(dir, "ghost-xyz")), false, "no folder created for a missing project");
 });
 

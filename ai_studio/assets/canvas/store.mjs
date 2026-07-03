@@ -197,6 +197,154 @@ function finiteOr(value, fallback) {
   return value !== undefined && value !== null && Number.isFinite(Number(value)) ? Number(value) : fallback;
 }
 
+// ---- per-project write lock ---------------------------------------------------
+//
+// T0254 Tier 1 #1: page + chat (same Node server process) and the CLI (a SEPARATE
+// process) can now all mutate the same project.json concurrently — previously this
+// was a "single-writer local tool" (see appendJournalLine's old comment above); that
+// assumption is gone. withProjectLock(root, projectId, fn) serializes the CALLER-GIVEN
+// critical section per project with two layers:
+//   - in-process: a promise-chain mutex (projectLockQueues: projectDir -> tail
+//     promise) so two concurrent callers IN THIS PROCESS (a page request and a chat
+//     agent request, which share one server) queue instead of interleaving.
+//   - cross-process: an advisory lockfile <project>/.lock ({pid, startedAt}), created
+//     with O_EXCL so only one process can hold it at a time; a second process retries
+//     with a short backoff (LOCK_RETRY_TOTAL_MS) before refusing loudly (naming the
+//     holder pid + age); a lock older than LOCK_STALE_MS is treated as abandoned (its
+//     holder crashed without releasing it) and is broken with a loud console.warn
+//     rather than wedging the project forever.
+// Callers choose WHAT to lock: wrapping a whole (fast) op call queues it cleanly end
+// to end. A slow codex/agy generation op instead locks only its OWN final commit
+// section (see generateFromRecipe and friends in ops.mjs) so the lock is never held
+// across a multi-minute external call — see those ops' own comments. commitMutation
+// (ops.mjs) additionally re-checks the project's actual head against the op's
+// `before` snapshot; that check is what actually catches a race for the ops that
+// don't hold this lock the whole time (a loud refusal instead of a silent merge).
+const LOCK_STALE_MS = 30000; // an abandoned lock (crashed holder) this old is broken
+const LOCK_RETRY_TOTAL_MS = 2000; // total time a caller waits on a live lock before refusing
+const LOCK_RETRY_INTERVAL_MS = 100;
+
+function lockFilePath(root, id) {
+  return join(projectDir(root, id), ".lock");
+}
+
+function readLockInfo(path) {
+  try {
+    return JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null; // torn/foreign lock file: treat as an unknown holder, not a crash
+  }
+}
+
+// Acquire <project>/.lock exclusively (O_EXCL — only one process can ever hold it),
+// retrying a live lock with a short backoff and breaking an abandoned (stale) one with
+// a loud warning. Returns the lock path on success, or null when the project folder
+// doesn't exist — deliberately NEVER mkdir's one into existence (a locked call on an
+// unresolvable id must leave the same zero trace on disk it always did; the op itself
+// throws "not found" moments later for the identical reason, so there is nothing here
+// to protect). Throws a loud, holder-naming error if the deadline passes with a REAL
+// lock still live.
+async function acquireFileLock(root, id) {
+  const dir = projectDir(root, id);
+  if (!existsSync(dir)) return null;
+  const path = lockFilePath(root, id);
+  const deadline = Date.now() + LOCK_RETRY_TOTAL_MS;
+  let brokeStaleOnce = false; // never break a lock more than once per acquire: a lock
+  // that keeps reappearing stale is a bug worth a loud refusal, not an infinite loop.
+  for (;;) {
+    let fd;
+    try {
+      fd = openSync(path, "wx"); // O_EXCL: throws EEXIST iff another holder is live
+      writeFileSync(fd, JSON.stringify({ pid: process.pid, startedAt: Date.now() }));
+      ensureExitCleanup();
+      heldLockPaths.add(path);
+      return path;
+    } catch (error) {
+      if (error.code !== "EEXIST") throw error;
+      const info = readLockInfo(path);
+      const age = info && Number.isFinite(info.startedAt) ? Date.now() - info.startedAt : Infinity;
+      if (age > LOCK_STALE_MS && !brokeStaleOnce) {
+        console.warn(
+          `canvas: breaking stale project lock for ${id} (pid ${info && info.pid}, held ${Math.round(age / 1000)}s) at ${path}`,
+        );
+        rmSync(path, { force: true });
+        brokeStaleOnce = true;
+        continue;
+      }
+      if (Date.now() >= deadline) {
+        const holder = info ? `pid ${info.pid}, held ${Math.round(age / 1000)}s` : "unknown holder";
+        throw new Error(
+          `canvas project ${id} is locked by another process (${holder}) — retry, or delete ${path} if it is stale`,
+        );
+      }
+      await new Promise((resolveWait) => setTimeout(resolveWait, LOCK_RETRY_INTERVAL_MS));
+    } finally {
+      if (fd !== undefined) closeSync(fd);
+    }
+  }
+}
+
+function releaseFileLock(path) {
+  heldLockPaths.delete(path);
+  rmSync(path, { force: true });
+}
+
+// Safety net for the CLI's `fail()` (tool_lib/cli.mjs): it calls `process.exit(1)`
+// directly on a validation error, which — unlike a thrown Error — skips every pending
+// `finally` block, including runLocked's own release below. Without this, a CLI
+// command that holds the lock and then hits a validation `fail()` deep inside would
+// leak its lockfile, wedging the NEXT invocation on that project for up to
+// LOCK_RETRY_TOTAL_MS (or worse, confusingly, until LOCK_STALE_MS if that next call
+// also fails fast). `process.exit()` DOES still run synchronous "exit" listeners
+// before the process actually dies, so a synchronous rmSync here is reliable; this
+// only matters for the CLI (a one-shot process) — the long-lived server never calls
+// process.exit() mid-request.
+const heldLockPaths = new Set();
+let exitCleanupRegistered = false;
+function ensureExitCleanup() {
+  if (exitCleanupRegistered) return;
+  exitCleanupRegistered = true;
+  process.on("exit", () => {
+    for (const path of heldLockPaths) {
+      try {
+        rmSync(path, { force: true });
+      } catch {
+        // best-effort on shutdown — nothing left to report to
+      }
+    }
+  });
+}
+
+const projectLockQueues = new Map(); // projectDir -> tail promise (always resolves)
+
+async function runLocked(root, projectId, fn) {
+  const lockPath = await acquireFileLock(root, projectId); // null: no project folder to lock
+  try {
+    return await fn();
+  } finally {
+    if (lockPath) releaseFileLock(lockPath);
+  }
+}
+
+// Run `fn` (sync or async) exclusively for this project: queued in-process, then
+// gated by the cross-process lockfile. `projectId` may be falsy for project-less
+// calls (list/create) — those run immediately, unlocked, since there is no project
+// folder yet to confine a lock under. Returns/throws fn's own result/error; the lock
+// is always released (runLocked's finally), so a thrown error never wedges the
+// project for the next caller.
+export function withProjectLock(root, projectId, fn) {
+  if (!projectId) return Promise.resolve().then(fn);
+  const key = projectDir(root, projectId);
+  const previousTail = projectLockQueues.get(key) || Promise.resolve();
+  const run = previousTail.then(
+    () => runLocked(root, projectId, fn),
+    () => runLocked(root, projectId, fn), // an earlier caller's failure must not block this one
+  );
+  // The stored tail always resolves (never rejects) so it never poisons the queue.
+  projectLockQueues.set(key, run.then(() => {}, () => {}));
+  return run;
+}
+
 // Content-addressed write of image bytes into files/ WITHOUT creating an element.
 // Returns { src, fileName, width, height }. Immutable + deduped exactly like addImage's
 // own file write (identical bytes reuse the same file, so this never mutates or orphans
@@ -485,9 +633,11 @@ export function nextJournalSeq(root, id) {
   return lastJournalSeq(root, id) + 1;
 }
 
-// Append one pre-built journal line verbatim (single O_APPEND write, atomic for
-// this single-writer local tool; the file is never rewritten here, so a crash at
-// worst drops the last partial line \u2014 tolerated on read).
+// Append one pre-built journal line verbatim (single O_APPEND write, atomic at the OS
+// level regardless of writer count; the file is never rewritten here, so a crash at
+// worst drops the last partial line \u2014 tolerated on read). Concurrent WRITERS across
+// the seq-allocate + append + snapshot sequence are serialized by withProjectLock
+// above (T0254) \u2014 this function itself makes no locking assumption.
 export function appendJournalLine(root, id, line) {
   const dir = projectDir(root, id);
   mkdirSync(dir, { recursive: true });

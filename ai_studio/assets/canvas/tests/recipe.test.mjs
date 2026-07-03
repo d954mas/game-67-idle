@@ -865,9 +865,10 @@ test("recipe-generate: CLI and API reject a non-card group the same way (validat
   assert.equal(rejected.status, 400);
   assert.match(rejected.json().error, /not a recipe card/);
 
-  // API: POST .../recipe-cards/<unknown group>/generate -> 400 "group not found".
+  // API: POST .../recipe-cards/<unknown group>/generate -> 404 "group not found"
+  // (T0254 Tier 1 #2: statusForError maps "not found" to 404, not the old catch-all 400).
   const missing = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/grp_missing/generate`, {});
-  assert.equal(missing.status, 400);
+  assert.equal(missing.status, 404);
   assert.match(missing.json().error, /group not found/);
 });
 
@@ -1301,8 +1302,9 @@ test("recipe-expand: CLI and API reject a missing --group / non-card group / emp
   assert.equal(rejectedPlain.status, 400);
   assert.match(rejectedPlain.json().error, /not a recipe card/);
 
+  // T0254 Tier 1 #2: statusForError maps "not found" to 404, not the old catch-all 400.
   const rejectedMissing = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/grp_missing/expand`, {});
-  assert.equal(rejectedMissing.status, 400);
+  assert.equal(rejectedMissing.status, 404);
   assert.match(rejectedMissing.json().error, /group not found/);
 });
 
@@ -1320,9 +1322,10 @@ test("extract: CLI and API reject a missing --element / not-found element the sa
   const cliFailure = runFail(env, "extract", projectId, "--element", plain.id);
   assert.match(String(cliFailure.stderr || cliFailure.message), /element not found/);
 
+  // T0254 Tier 1 #2: statusForError maps "not found" to 404, not the old catch-all 400.
   const handler = createCanvasApi(ROOT);
   const rejected = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/elements/${plain.id}/extract`, {});
-  assert.equal(rejected.status, 400);
+  assert.equal(rejected.status, 404);
   assert.match(rejected.json().error, /element not found/);
 });
 

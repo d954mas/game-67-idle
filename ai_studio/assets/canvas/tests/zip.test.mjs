@@ -169,9 +169,10 @@ test("GET export-zip returns an application/zip bundle of the run's images", asy
   assert.equal(total, 2);
   assert.deepEqual(entries.map((e) => e.name).sort(), ["hero_png.png", "villain_png.png"]);
 
-  // A bad stamp is a loud 400, not an empty archive.
+  // A bad stamp is a loud 404 ("export run not found"), not an empty archive (T0254
+  // Tier 1 #2: statusForError maps "not found" to 404, not the old catch-all 400).
   const bad = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}/export-zip/nope`);
-  assert.equal(bad.status, 400);
+  assert.equal(bad.status, 404);
 });
 
 // ---- CLI --zip parity --------------------------------------------------------

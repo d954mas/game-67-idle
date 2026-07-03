@@ -7,7 +7,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
 import { URL, fileURLToPath } from "node:url";
-import { createCanvasApi } from "../api.mjs";
+import { createCanvasApi, statusForError } from "../api.mjs";
 import { orderedChildren } from "../tree.mjs";
 import { magentaSheetPng, solidPng } from "./png_fixture.mjs";
 
@@ -143,9 +143,10 @@ test("canvas API renames a project (PATCH) and trashes it (DELETE)", async (t) =
   assert.equal(deleted.json().id, projectId);
   assert.ok(deleted.json().trashed.includes(".trash"), "response reports the trash location");
 
-  // The project is gone from the list (only the untouched one remains) and 400s on GET.
+  // The project is gone from the list (only the untouched one remains) and 404s on GET
+  // (T0254 Tier 1 #2: statusForError maps "not found" to 404, not the old catch-all 400).
   assert.deepEqual((await invokeApi(handler, "GET", "/api/canvas/projects")).json().projects.map((p) => p.id), [keep]);
-  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).status, 400);
+  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).status, 404);
 });
 
 test("canvas API export download route serves a confined file and rejects traversal", async (t) => {
@@ -259,9 +260,11 @@ test("canvas API undo/redo/history-jump pass expectHead through (T0234 concurren
   const elementId = uploaded.json().element.id;
   await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/elements/${elementId}`, { x: 40 }); // seq2, head2
 
-  // A stale expectHead is a loud 4xx BEFORE any write; the head is unchanged after.
+  // A stale expectHead is a loud 409 BEFORE any write (T0254 Tier 1 #2: HEAD_CONFLICT
+  // maps to 409, not the old catch-all 400 — the page can tell "reload" from "bad
+  // input"); the head is unchanged after.
   const stale = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`, { expectHead: 1 });
-  assert.equal(stale.status, 400);
+  assert.equal(stale.status, 409);
   assert.match(stale.json().error, /history advanced: head is now 2, you read 1/);
   const afterRefusal = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`);
   assert.equal(afterRefusal.json().project.history_seq, 2, "refused undo left the head untouched");
@@ -273,14 +276,14 @@ test("canvas API undo/redo/history-jump pass expectHead through (T0234 concurren
 
   // redo takes the same guard.
   const redoBad = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/redo`, { expectHead: 99 });
-  assert.equal(redoBad.status, 400);
+  assert.equal(redoBad.status, 409);
   const redone = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/redo`, { expectHead: 1 });
   assert.equal(redone.status, 200);
   assert.equal(redone.json().project.elements[0].x, 40);
 
   // history-jump takes the same guard.
   const jumpBad = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/history-jump`, { seq: 1, expectHead: 0 });
-  assert.equal(jumpBad.status, 400);
+  assert.equal(jumpBad.status, 409);
   const jumped = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/history-jump`, { seq: 1, expectHead: 2 });
   assert.equal(jumped.status, 200);
   assert.equal(jumped.json().project.history_seq, 1);
@@ -567,8 +570,35 @@ test("canvas API returns an error for a missing project", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(ROOT);
   const missing = await invokeApi(handler, "GET", "/api/canvas/projects/does-not-exist");
-  assert.equal(missing.status, 400);
+  // T0254 Tier 1 #2: statusForError maps "not found" errors to 404.
+  assert.equal(missing.status, 404);
   assert.match(missing.json().error, /not found/);
+});
+
+// T0254 Tier 1 #2: statusForError's four classes, tested directly (not just indirectly
+// through whichever routes happen to throw each shape) — a 500 in particular is hard
+// to provoke honestly through the public HTTP surface (every op deliberately throws a
+// plain Error, per the "loud errors" law), so this is the reliable place to pin it.
+test("statusForError maps each error class to its status: HEAD_CONFLICT->409, not-found->404, TypeError->500, everything else->400", () => {
+  const conflict = new Error("history advanced: head is now 2, you read 1");
+  conflict.code = "HEAD_CONFLICT";
+  assert.equal(statusForError(conflict), 409);
+
+  assert.equal(statusForError(new Error("element not found: el_1")), 404);
+  assert.equal(statusForError(new Error("canvas project not found: p1")), 404);
+
+  assert.equal(statusForError(new TypeError("cannot read properties of undefined")), 500);
+  assert.equal(statusForError(new ReferenceError("x is not defined")), 500);
+
+  assert.equal(statusForError(new Error("rotation must be a finite number of degrees, got \"bad\"")), 400);
+  assert.equal(statusForError(new Error("clip must be a boolean (true|false), got \"yes\"")), 400);
+
+  // A HEAD_CONFLICT code wins even if the message ALSO happens to contain "not found"
+  // wording — the stable code, not prose, decides (this is exactly why the code marker
+  // exists instead of regex-matching "history advanced" prose).
+  const both = new Error("project not found and history advanced: head is now 2, you read 1");
+  both.code = "HEAD_CONFLICT";
+  assert.equal(statusForError(both), 409);
 });
 
 test("canvas API rejects a path-traversal file request", async (t) => {

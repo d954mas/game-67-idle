@@ -3,7 +3,7 @@
 // separate logic. Prints compact JSON so agents can pipe results.
 //
 // usage:
-//   node ai_studio/assets/canvas/cli.mjs list
+//   node ai_studio/assets/canvas/cli.mjs list [--full]   (summary by default: id/title/created/updated/counts/head; --full = every project in full)
 //   node ai_studio/assets/canvas/cli.mjs create [--title "My canvas"]
 //   node ai_studio/assets/canvas/cli.mjs show <id>
 //   node ai_studio/assets/canvas/cli.mjs rename <id> --title "New title"
@@ -13,7 +13,7 @@
 //   node ai_studio/assets/canvas/cli.mjs add-text <id> [--x n --y n] [--content "..."] [--style-json path] [--group gid]
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
-//   node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--rotation <deg>] [--flip-h true|false] [--flip-v true|false]   (T0232 3a: rotation = degrees CW about the box center, normalized to [0,360); flip is image-only)
+//   node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--w n --h n] [--x n --y n] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false]   (T0232 3a: rotation = degrees CW about the box center, normalized to [0,360); flip is image-only; --w/--h/--x/--y are the same finite-number patchElement fields the API PATCH route accepts)
 //   node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json
 //   node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs slice9-set <id> --element <eid> [--left n --top n --right n --bottom n] [--scale n] | --clear   (T0233: 9-slice insets, SOURCE pixels; missing flags merge over the element's current slice9 (or 0s); --scale multiplies the DESTINATION corner/edge band only, default 1; --clear sends null)
@@ -129,6 +129,7 @@ import {
   sliceRegions,
   undoOp,
   ungroupGroup,
+  withProjectLock,
   zipExport,
 } from "./ops.mjs";
 
@@ -152,6 +153,23 @@ function parseFlags(args) {
 
 function print(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
+}
+
+// Strict boolean flag parser (T0254 Tier 1 #4). Accepts true/false (case-insensitive)
+// or 1/0; anything else is a loud error naming the flag. Replaces the previous silent,
+// DIRECTION-DEPENDENT coercion: junk resolved to *false* in element-set (`=== "true"`)
+// but *true* in group-set (raw string forwarded to the op's own lenient check) — the
+// same flag, two opposite wrong answers, no error either way. Every boolean flag site
+// in this file routes through this one helper now, so junk is always a loud refusal,
+// never a guess. Call only when the flag IS present (`flags[x] !== undefined`); a
+// missing flag is the caller's own default-handling, not this function's concern.
+function parseBool(flag, value) {
+  if (typeof value === "boolean") return value;
+  const normalized = String(value).trim().toLowerCase();
+  if (normalized === "true" || normalized === "1") return true;
+  if (normalized === "false" || normalized === "0") return false;
+  fail(`--${flag} must be true, false, 1, or 0 (got ${JSON.stringify(value)})`);
+  return undefined; // unreachable: fail() exits the process
 }
 
 // A single ad-hoc export row from inline flags (--scale is the trigger). Returns
@@ -186,7 +204,7 @@ function copyExportTo(result, toDir) {
 
 function usage() {
   console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
-  list
+  list [--full]   (summary by default: [{id,title,created,updated,elements,groups,head}]; --full = every project in full, today's original dump)
   create [--title <title>]     (omit --title for a random default)
   show <id>
   rename <id> --title <title>
@@ -197,7 +215,7 @@ function usage() {
   add-text <id> [--x <n> --y <n>] [--content "<text>"] [--style-json <path>] [--group <gid>]
   detect-regions <id> --element <eid>
   move <id> --element <eid> --x <n> --y <n>
-  element-set <id> --element <eid> [--name <name>] [--visible true|false] [--content "<text>"] [--style-json <path>]
+  element-set <id> --element <eid> [--name <name>] [--visible true|false] [--content "<text>"] [--style-json <path>] [--w <n> --h <n>] [--x <n> --y <n>] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false]   (--w/--h/--x/--y are the same finite-number fields the API PATCH route + move accept — single-element resize/reposition from the CLI, T0254)
   element-remove <id> --element <eid>
   elements-set <id> --json <path>   (batched patch: [{elementId,x?,y?,w?,h?,name?,visible?}] or {patches:[...]}; one undo step)
   elements-remove <id> --elements e1,e2   (batched delete; one undo step)
@@ -253,8 +271,26 @@ function usage() {
 
 async function runCommand(command, id, positional, flags) {
   switch (command) {
-    case "list":
-      return print({ projects: listProjects(repoRoot) });
+    case "list": {
+      // T0254 Tier 1 #3: a summary by default — id/title/created/updated/counts/head,
+      // not every element+region+tool_run of every project (the CLI F1 95KB-overflow
+      // finding: `list` scales with total canvas content across ALL projects,
+      // unbounded, and no consumer parses element data out of it — that's what `show`
+      // is for). --full restores today's exact full-project dump (additive contract:
+      // nothing that worked before stops working).
+      const projects = listProjects(repoRoot);
+      if (flags.full === "true") return print({ projects });
+      const summary = projects.map((project) => ({
+        id: project.id,
+        title: project.title,
+        created: project.created,
+        updated: project.updated,
+        elements: (project.elements || []).length,
+        groups: (project.groups || []).length,
+        head: Number(project.history_seq) || 0,
+      }));
+      return print({ projects: summary });
+    }
     case "create":
       // --title is optional: a missing/empty title gets a random default
       // ("Amber Fox"-style) from the op layer, matching the page's instant-create.
@@ -331,7 +367,7 @@ async function runCommand(command, id, positional, flags) {
       if (!flags.element) fail("element-set requires --element <eid>");
       const patch = {};
       if (flags.name && flags.name !== "true") patch.name = flags.name;
-      if (flags.visible !== undefined) patch.visible = flags.visible === "true";
+      if (flags.visible !== undefined) patch.visible = parseBool("visible", flags.visible);
       // Text-element edits: --content sets the string (\n for newlines); --style-json is
       // a partial or full style object shallow-merged + validated against fonts.json.
       if (flags.content !== undefined && flags.content !== "true") patch.content = flags.content;
@@ -343,10 +379,19 @@ async function runCommand(command, id, positional, flags) {
       // error on a text element) — the SAME patchElement fields the page's inspector
       // Rotation input / Flip H/Flip V buttons commit (strict tool parity).
       if (flags.rotation !== undefined && flags.rotation !== "true") patch.rotation = Number(flags.rotation);
-      if (flags["flip-h"] !== undefined) patch.flipH = flags["flip-h"] === "true";
-      if (flags["flip-v"] !== undefined) patch.flipV = flags["flip-v"] === "true";
+      if (flags["flip-h"] !== undefined) patch.flipH = parseBool("flip-h", flags["flip-h"]);
+      if (flags["flip-v"] !== undefined) patch.flipV = parseBool("flip-v", flags["flip-v"]);
+      // T0254 Tier 1 #5: size/position — the SAME patchElement fields `move`/the API PATCH
+      // route already accept (finite numbers; the op layer applies no positivity check —
+      // export.test.mjs:338 relies on w:0/h:0 being acceptable at patch time, the export
+      // step is where a zero canvas size is refused — so the CLI stays byte-for-byte at
+      // parity with the API instead of inventing a stricter CLI-only rule).
+      if (flags.w !== undefined && flags.w !== "true") patch.w = Number(flags.w);
+      if (flags.h !== undefined && flags.h !== "true") patch.h = Number(flags.h);
+      if (flags.x !== undefined && flags.x !== "true") patch.x = Number(flags.x);
+      if (flags.y !== undefined && flags.y !== "true") patch.y = Number(flags.y);
       if (!Object.keys(patch).length) {
-        fail("element-set requires --name, --visible, --content, --style-json, --rotation, --flip-h, and/or --flip-v");
+        fail("element-set requires --name, --visible, --content, --style-json, --rotation, --flip-h, --flip-v, --w, --h, --x, and/or --y");
       }
       return print(patchElement(repoRoot, id, flags.element, patch));
     }
@@ -574,7 +619,7 @@ async function runCommand(command, id, positional, flags) {
       if (!flags.element || flags.element === "true") fail("quantize requires --element <eid>");
       if (flags.colors === undefined || flags.colors === "true") fail("quantize requires --colors <n>");
       const params = { colors: Number(flags.colors) };
-      if (flags.dither !== undefined && flags.dither !== "false") params.dither = true;
+      if (flags.dither !== undefined) params.dither = parseBool("dither", flags.dither);
       if (flags.preview && flags.preview !== "true") {
         const result = await cleanupPreview(repoRoot, { projectId: id, elementId: flags.element, tool: "quantize", params });
         const previewPath = resolve(flags.preview);
@@ -686,7 +731,7 @@ async function runCommand(command, id, positional, flags) {
       if (!flags.group) fail("group-set requires --group <gid>");
       const args = { projectId: id, groupId: flags.group };
       if (flags.name !== undefined && flags.name !== "true") args.name = flags.name;
-      if (flags.visible !== undefined) args.visible = flags.visible;
+      if (flags.visible !== undefined) args.visible = parseBool("visible", flags.visible);
       if (flags.w !== undefined) args.w = Number(flags.w);
       if (flags.h !== undefined) args.h = Number(flags.h);
       if (flags.x !== undefined) args.x = Number(flags.x);
@@ -697,11 +742,9 @@ async function runCommand(command, id, positional, flags) {
         args.background = flags.background === "none" ? null : { type: "color", color: flags.background };
       }
       // --clip true|false toggles the Figma frame clip. Convert the string flag to a real
-      // boolean here; the op validates strictly (a boolean, no silent coercion).
-      if (flags.clip !== undefined) {
-        if (flags.clip !== "true" && flags.clip !== "false") fail("group-set --clip must be true or false");
-        args.clip = flags.clip === "true";
-      }
+      // boolean here via the shared strict parser; the op validates strictly too (a
+      // boolean, no silent coercion) — belt and suspenders.
+      if (flags.clip !== undefined) args.clip = parseBool("clip", flags.clip);
       return print(patchGroup(repoRoot, args));
     }
     case "groups-set": {
@@ -711,14 +754,8 @@ async function runCommand(command, id, positional, flags) {
       if (!flags.groups || flags.groups === "true") fail("groups-set requires --groups g1,g2");
       const groupIds = String(flags.groups).split(",").map((value) => value.trim()).filter(Boolean);
       const args = { projectId: id, groupIds };
-      if (flags.visible !== undefined) {
-        if (flags.visible !== "true" && flags.visible !== "false") fail("groups-set --visible must be true or false");
-        args.visible = flags.visible === "true";
-      }
-      if (flags.clip !== undefined) {
-        if (flags.clip !== "true" && flags.clip !== "false") fail("groups-set --clip must be true or false");
-        args.clip = flags.clip === "true";
-      }
+      if (flags.visible !== undefined) args.visible = parseBool("visible", flags.visible);
+      if (flags.clip !== undefined) args.clip = parseBool("clip", flags.clip);
       if (args.visible === undefined && args.clip === undefined) fail("groups-set requires --visible and/or --clip");
       return print(patchGroups(repoRoot, args));
     }
@@ -892,12 +929,29 @@ async function runCommand(command, id, positional, flags) {
   }
 }
 
+// T0254 Tier 1 #1: the four slow codex/agy generation commands lock only their OWN
+// final commit internally (ops.mjs — generateFromRecipe/expandRecipePrompt/
+// extractFromElement/alphaDualPlateGenerate), so a multi-minute generation never
+// blocks other mutations on the project. Wrapping them AGAIN here would try to
+// acquire the SAME per-project lock twice in one call stack (the outer acquire would
+// never release until the inner one finishes, and the inner one waits on the outer)
+// — excluded on purpose. Every other project-scoped command is wrapped in main()
+// below so the CLI (a SEPARATE process from the server) respects the same
+// cross-process lockfile the API adapter does.
+const SELF_LOCKING_COMMANDS = new Set(["recipe-generate", "recipe-expand", "extract", "alpha-dual-generate"]);
+
 async function main(argv) {
   const [command, ...rest] = argv;
   const { positional, flags } = parseFlags(rest);
   const id = positional[0];
   const startedAt = performance.now();
   try {
+    // `id` is undefined for project-less commands (list/create/help/...) —
+    // withProjectLock is a no-op pass-through in that case (see its doc in
+    // store.mjs), so this is safe to apply unconditionally to everything else.
+    if (id && !SELF_LOCKING_COMMANDS.has(command)) {
+      return await withProjectLock(repoRoot, id, () => runCommand(command, id, positional, flags));
+    }
     return await runCommand(command, id, positional, flags);
   } catch (error) {
     // Mirror the API: a project-resolvable failure leaves a trail in
