@@ -7,7 +7,7 @@ epic: E010
 priority: P2
 tags: []
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-07-03
 ---
 
 ## What
@@ -61,3 +61,4 @@ a real case shows up. Cleanup section = Quantize + Denoise.
 ## Log
 - 2026-07-02: Scoped in ai_studio/assets/canvas/PLAN.md (2026-07-02); perf items anchored to bench tmp/canvas_bench_2026-07-02.json + perf research
 - 2026-07-02: Invocation design proposed (explicit one-click + presets, agent auto-clean for flat/UI with report).
+- 2026-07-03: lead asked for cleanup research (AI watermarks + color artifacts + quantization recap); deep-reasoner (Opus, web) launched -> tmp/research_art_cleanup_2026-07-03.md; findings will extend this spec
