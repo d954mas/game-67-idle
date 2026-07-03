@@ -285,6 +285,16 @@ function groupSection(group, depth) {
     inlineEdit(name, group.name || "", (next) => renameGroup(group.id, next));
   });
 
+  // Card-type chip (T0239-3 follow-up, lead: a recipe/style card row was indistinguishable
+  // from a plain group in the tree). Same accents as the canvas chrome; the two blobs are
+  // mutually exclusive by construction, so a plain either/or never shows two chips.
+  if (group.recipe || group.style) {
+    const chip = document.createElement("span");
+    chip.className = `layer-card-chip ${group.recipe ? "recipe" : "style"}`;
+    chip.textContent = group.recipe ? "Recipe" : "Style";
+    head.appendChild(chip);
+  }
+
   const members = memberElements(group.id);
   const count = document.createElement("span");
   count.className = "badge";
