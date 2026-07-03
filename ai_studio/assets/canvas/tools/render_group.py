@@ -35,6 +35,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from ai_studio.assets.tools.lib.atomic_io import save_image_atomic, write_json_atomic
+# T0233: the exact Python twin of slice9.mjs — see its module docstring for the
+# shared model/algorithm; paint_element's slice9 branch below calls slice9_patches.
+from ai_studio.assets.canvas.tools.slice9 import slice9_patches
 
 
 def parse_background(value: Any) -> tuple[int, int, int, int]:
@@ -70,14 +73,37 @@ def paint_element(out: Image.Image, node: dict[str, Any], origin: tuple[float, f
         element's box center therefore reproduces "rotate about the box center" exactly.
       * geometry (center/angle/size) is exact by construction; PIL is the single source of
         rendered truth, so a ~1px edge-AA difference from the canvas's own resample is the
-        declared acceptable approximation (same stance as text rendering)."""
+        declared acceptable approximation (same stance as text rendering).
+
+    Slice-9 (T0233): a `slice9` node REPLACES the plain resize with a 9-patch
+    assembly at the SAME box_w x box_h, so the result flows into the UNCHANGED
+    flip -> rotate -> paste chain below unmodified — the drop-in composition
+    contract (design section 4.0): `image` is assigned BEFORE those steps, exactly
+    like the plain resize it replaces, so a rotated/flipped slice9 panel composes
+    for free with no extra code here."""
     source = Path(node["src"])
     if not source.exists():
         raise FileNotFoundError(f"element image missing: {source}")
     image = Image.open(source).convert("RGBA")
     box_w = scaled_len(node.get("w") or image.width, scale)
     box_h = scaled_len(node.get("h") or image.height, scale)
-    if (image.width, image.height) != (box_w, box_h):
+    slice9 = node.get("slice9")
+    if slice9:
+        # Patches are computed in ELEMENT-LOCAL (unscaled) units against the node's
+        # display box, then each patch's crop/paste is scaled by the render `scale`
+        # individually — matching how the plain (non-slice9) resize above scales the
+        # whole box, and how the canvas's own paintElement scales each patch by
+        # vp.scale (see slice9.mjs / workspace.js).
+        patches = slice9_patches(slice9, image.width, image.height, node.get("w") or image.width, node.get("h") or image.height)
+        sliced = Image.new("RGBA", (box_w, box_h), (0, 0, 0, 0))
+        for p in patches:
+            crop = image.crop((round(p["sx"]), round(p["sy"]), round(p["sx"] + p["sw"]), round(p["sy"] + p["sh"])))
+            dw, dh = max(1, round(p["dw"] * scale)), max(1, round(p["dh"] * scale))
+            if (crop.width, crop.height) != (dw, dh):
+                crop = crop.resize((dw, dh), Image.Resampling.LANCZOS)
+            sliced.paste(crop, (round(p["dx"] * scale), round(p["dy"] * scale)), crop)
+        image = sliced
+    elif (image.width, image.height) != (box_w, box_h):
         image = image.resize((box_w, box_h), Image.Resampling.LANCZOS)
     if node.get("flipH"):
         image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)

@@ -16,6 +16,7 @@
 //   node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--rotation <deg>] [--flip-h true|false] [--flip-v true|false]   (T0232 3a: rotation = degrees CW about the box center, normalized to [0,360); flip is image-only)
 //   node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json
 //   node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
+//   node ai_studio/assets/canvas/cli.mjs slice9-set <id> --element <eid> [--left n --top n --right n --bottom n] [--scale n] | --clear   (T0233: 9-slice insets, SOURCE pixels; missing flags merge over the element's current slice9 (or 0s); --scale multiplies the DESTINATION corner/edge band only, default 1; --clear sends null)
 //   node ai_studio/assets/canvas/cli.mjs element-reorder <id> --element <eid> --index <n>
 //   node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>
 //   node ai_studio/assets/canvas/cli.mjs nodes-move <id> --json moves.json
@@ -124,6 +125,7 @@ import {
   setExportSettings,
   setOpsActor,
   setRegions,
+  setSlice9,
   sliceRegions,
   undoOp,
   ungroupGroup,
@@ -183,7 +185,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -210,6 +212,7 @@ function usage() {
   nodes-delete <id> --nodes id1,id2   (batched mixed element+group subtree delete; one undo step)
   regions-set <id> --element <eid> --json <path>   (JSON: a regions array or {regions:[...]})
   regions-show <id> --element <eid>
+  slice9-set <id> --element <eid> [--left <n> --top <n> --right <n> --bottom <n>] [--scale <n>] | --clear   (T0233: 9-slice insets in SOURCE pixels; corners stay fixed size, edges stretch one axis, center stretches both, when the element is resized; image-only; omitted flags merge over the element's current slice9, or 0 if unset; --scale multiplies the DESTINATION corner/edge band only (default 1, source pixels never move); --clear sends insets:null)
   slice <id> --element <eid> [--regions r1,r2]
   alpha <id> --element <eid> [--method auto|matte] [--regions r1,r2]   (alpha-cutout the element; auto routes, matte forces key_matte; one undo)
   alpha <id> --elements e1,e2 [--method auto|matte]   (batch: 2+ images keyed into ONE journal entry/undo; no --regions with a batch)
@@ -480,6 +483,33 @@ async function runCommand(command, id, positional, flags) {
         shape: Array.isArray(region.polygon) && region.polygon.length >= 3 ? `polygon(${region.polygon.length})` : "rect",
       }));
       return print({ elementId: element.id, regions, shapes });
+    }
+    case "slice9-set": {
+      // T0233: 9-slice insets — a DEDICATED op (not element-set), matching the
+      // regions-set/export-set precedent. --clear sends insets:null. Otherwise,
+      // omitted --left/--top/--right/--bottom/--scale flags merge over the
+      // element's CURRENT slice9 (or 0 for the insets / absent for --scale) —
+      // ergonomic partial edits (e.g. bump just --left), same contract as CLI
+      // partial merges elsewhere in this file.
+      if (!id) fail("slice9-set requires <id>");
+      if (!flags.element) fail("slice9-set requires --element <eid>");
+      if (flags.clear === "true") {
+        return print(setSlice9(repoRoot, { projectId: id, elementId: flags.element, insets: null }));
+      }
+      const element = (getProject(repoRoot, id).elements || []).find((item) => item.id === flags.element);
+      if (!element) fail(`element not found: ${flags.element}`);
+      const current = element.slice9 || {};
+      const flagOrCurrent = (flag, fallback) =>
+        flags[flag] !== undefined && flags[flag] !== "true" ? Number(flags[flag]) : fallback;
+      const insets = {
+        left: flagOrCurrent("left", current.left || 0),
+        top: flagOrCurrent("top", current.top || 0),
+        right: flagOrCurrent("right", current.right || 0),
+        bottom: flagOrCurrent("bottom", current.bottom || 0),
+      };
+      const scale = flagOrCurrent("scale", current.scale);
+      if (scale !== undefined) insets.scale = scale;
+      return print(setSlice9(repoRoot, { projectId: id, elementId: flags.element, insets }));
     }
     case "slice": {
       if (!id) fail("slice requires <id>");

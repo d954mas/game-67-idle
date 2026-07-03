@@ -52,6 +52,7 @@
 //   POST   /api/canvas/projects/<id>/history-jump   {seq, expectHead?}
 //   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible,rotation?,flipH?,flipV?} (T0232 3a: rotation = degrees CW about the box center; flip is image-only)
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/regions {regions}   (replace)
+//   PUT    /api/canvas/projects/<id>/elements/<eid>/slice9  {insets}    (T0233: set 9-slice insets {left,top,right,bottom,scale?}; {insets:null} clears; image-only)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/reorder {index}     (z-order)
 //   POST   /api/canvas/projects/<id>/nodes/<nodeId>/reorder {index}     (z-order: element or group)
 //   DELETE /api/canvas/projects/<id>/elements/<eid>
@@ -120,6 +121,7 @@ import {
   resolveProjectPath,
   setExportSettings,
   setRegions,
+  setSlice9,
   sliceRegions,
   undoOp,
   ungroupGroup,
@@ -828,6 +830,15 @@ export function createCanvasApi(root) {
         const body = await readJsonBody(req);
         const regions = Array.isArray(body) ? body : body.regions;
         sendMutation(200, setRegions(root, { projectId: id, elementId, regions }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/slice9  (T0233: set/clear 9-slice
+      // insets; isolated self-contained block — see setSlice9 in ops.mjs)
+      if (parts.length === 7 && sub === "elements" && parts[6] === "slice9" && req.method === "PUT") {
+        const elementId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, setSlice9(root, { projectId: id, elementId, insets: body.insets }));
         return true;
       }
 

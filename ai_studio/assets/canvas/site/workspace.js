@@ -39,6 +39,9 @@ import {
 } from "./app.js";
 import { addTextAt, moveNodesTo, patchElementBox, patchTextElement, renameProject, setRegionsFor, undo, redo } from "./actions.js";
 import { canvasFontString } from "../fonts.mjs";
+// T0233: the same pure 9-slice math ops.mjs/render_group.py use (see slice9.mjs) —
+// served over /ai_studio/ so the page normalizes a slice9 element identically.
+import { slice9Patches } from "../slice9.mjs";
 import { areFontsReady, measureTextBox, measureTextLines } from "./fonts.js";
 import { inlineEdit } from "./inline.js";
 import { openContextMenu } from "./context_menu.js";
@@ -304,6 +307,27 @@ function paintElement(element, vp, editEl) {
   const flipH = element.flipH === true;
   const flipV = element.flipV === true;
   if (img.complete && img.naturalWidth) {
+    // T0233: a slice9-configured element replaces the single "resize to box" draw
+    // with a loop of <=9 drawImage patches (dst in ELEMENT-LOCAL units, mapped to
+    // screen via origin + vp.scale below) — the drop-in replacement (design section
+    // 4.0) that lets slice9 compose with the T0232 rotate/flip wrapper for free: it
+    // sits INSIDE the same ctx transform the plain draw already relies on.
+    const patches = element.slice9
+      ? slice9Patches(element.slice9, img.naturalWidth, img.naturalHeight, element.w, element.h)
+      : null;
+    const drawBody = () => {
+      if (patches) {
+        for (const p of patches) {
+          ctx.drawImage(
+            img,
+            p.sx, p.sy, p.sw, p.sh,
+            origin.x + p.dx * vp.scale, origin.y + p.dy * vp.scale, p.dw * vp.scale, p.dh * vp.scale,
+          );
+        }
+      } else {
+        ctx.drawImage(img, origin.x, origin.y, w, h); // unchanged fallback
+      }
+    };
     if (rotation || flipH || flipV) {
       // T0232 increment 3a — rotation/flip parity contract (must agree byte-for-byte with
       // render_group.py's paint_element, see README "Rotation & flip"): rotate(+theta) is
@@ -320,10 +344,10 @@ function paintElement(element, vp, editEl) {
       if (rotation) ctx.rotate((rotation * Math.PI) / 180);
       if (flipH || flipV) ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
       ctx.translate(-center.x, -center.y);
-      ctx.drawImage(img, origin.x, origin.y, w, h);
+      drawBody();
       ctx.restore();
     } else {
-      ctx.drawImage(img, origin.x, origin.y, w, h);
+      drawBody();
     }
   } else {
     ctx.strokeStyle = "#596774";

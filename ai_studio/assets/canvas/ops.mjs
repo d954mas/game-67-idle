@@ -85,6 +85,11 @@ import {
   resolveFontEntry,
   splitTextLines,
 } from "./fonts.mjs";
+// Shared, pure 9-slice math (imported by the site too — see slice9.mjs). ops.mjs
+// only calls validateSlice9 (the loud gate at SET time); slice9Patches itself is
+// consumed by the browser (workspace.js) and the Python twin (tools/slice9.py) that
+// render_group.py imports — see setSlice9 below and buildRenderNodes' forwarding.
+import { validateSlice9 } from "./slice9.mjs";
 import {
   addFile as storeAddFile,
   addImage as storeAddImage,
@@ -998,6 +1003,68 @@ export function setRegions(root, { projectId, elementId, regions } = {}) {
   });
   const updated = (project.elements || []).find((item) => item.id === elementId);
   return { project, element: updated, regions: (updated && updated.regions) || [] };
+}
+
+// ---- 9-slice element display (T0233) ------------------------------------------
+//
+// An IMAGE element carries an optional `element.slice9 = {left, top, right,
+// bottom, scale?}` — insets in SOURCE PIXELS; corners paint at a FIXED size while
+// the box resizes (edges stretch one axis, the center stretches both). Absent =
+// today's single-drawImage/resize behavior everywhere (additive, zero migration).
+// Top-level, not `meta` — like `regions`/`export`, slice9 is a live render
+// property, not provenance. A DEDICATED op (not a `patchElement` field, T0233
+// design section 0/8 decision 0): matches the setRegions/setExportSettings
+// structural precedent (top-level, separately-validated render property with its
+// own inspector panel, Packet 2), localizes the source-dim loud validation, and
+// gives a clean null-to-clear. `scale` (T0233 scope addition, lead: «важно чтобы я
+// мог скейлить края, иногда мне нужно больше или меньше») multiplies the
+// DESTINATION corner/edge band only — see slice9.mjs for the exact math.
+
+// Replace (or clear) an element's slice9 insets — the page's inspector Slice-9
+// section (Packet 2) and the CLI's slice9-set both commit through here (tool
+// parity). `insets` an object -> validateSlice9 (loud on a non-int/negative inset,
+// a corner pair that would consume the source axis, or an out-of-range `scale`)
+// then stores `element.slice9`; `insets === null` clears the field. Undo/redo:
+// free (slice9 rides in the elements snapshot like any element field —
+// commitMutation's snapshotOf already deep-clones the whole array). Image-only: a
+// text element throws (mirrors the flipH/flipV image-only guard in
+// sanitizeTransformPatch above).
+export function setSlice9(root, { projectId, elementId, insets } = {}) {
+  if (!projectId) throw new Error("setSlice9 requires projectId");
+  if (!elementId) throw new Error("setSlice9 requires elementId");
+  if (insets === undefined) throw new Error("setSlice9 requires insets (an object) or null to clear");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const element = (before.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  if (element.type !== "image") {
+    throw new Error(`element ${elementId} is a ${element.type} element — slice9 is image-only (does not apply to type:"${element.type}")`);
+  }
+  let slice9 = null;
+  if (insets !== null) {
+    // source_w/source_h are persisted by addImage; fall back to w/h for a legacy
+    // element that predates that field (the same fallback setRegions uses above).
+    const sourceW = Number(element.source_w) || Number(element.w) || 0;
+    const sourceH = Number(element.source_h) || Number(element.h) || 0;
+    slice9 = validateSlice9(insets, sourceW, sourceH); // throws loudly
+  }
+  const nextElements = (before.elements || []).map((item) => {
+    if (item.id !== elementId) return item;
+    const clone = { ...item };
+    if (slice9) clone.slice9 = slice9;
+    else delete clone.slice9;
+    return clone;
+  });
+  const after = updateProject(root, projectId, { elements: nextElements });
+  const project = commitMutation(root, projectId, {
+    op: "setSlice9",
+    args_summary: { elementId, insets: slice9 },
+    before,
+    after,
+    startedAt,
+  });
+  const updated = (project.elements || []).find((item) => item.id === elementId);
+  return { project, element: updated };
 }
 
 // ---- per-element export settings (Figma-style rows) --------------------------
@@ -4677,6 +4744,11 @@ function buildRenderNodes(root, projectId, project, scopeId, leaves, fonts) {
         rotation: Number(element.rotation) || 0,
         flipH: element.flipH === true,
         flipV: element.flipV === true,
+        // T0233: forwarded verbatim so render_group.py's paint_element can build the
+        // sliced box BEFORE its flip/rotate chain (design section 4.2). `undefined`
+        // when absent, so JSON.stringify drops the key entirely — zero shape change
+        // for a non-slice9 element.
+        slice9: element.slice9 || undefined,
       });
     }
   }
