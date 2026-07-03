@@ -1835,6 +1835,11 @@ function normalizeRecipePatch(patch) {
 // 960x540). Purely cosmetic (decision 4: the frame never feeds generation).
 const DEFAULT_RECIPE_CARD_SIZE = { w: 360, h: 280 };
 
+// Padding around the copied image when a PROMOTION mints a card fit to its content (lead
+// 2026-07-03: "карточкам при создании можно сразу сделать fit to content") — the empty
+// context-menu/CLI cards above keep the fixed default size, they have no content to fit.
+const CARD_FIT_PADDING = 16;
+
 // Mint a recipe card: a group carrying a fresh `recipe` blob (defaultRecipe). Explicit
 // bounds are optional (unlike createGroup, a card is never `fromElements`) — omitted w/h
 // fall back to DEFAULT_RECIPE_CARD_SIZE so the context-menu/CLI entry point can mint one
@@ -2514,7 +2519,7 @@ export async function extractFromElement(root, { projectId, elementId, assistant
 }
 
 // Mint a RECIPE card BELOW the element (`y = element.y + element.h + 16`, `x = element.x`,
-// DEFAULT_RECIPE_CARD_SIZE) from its ALREADY-STORED `meta.extracted` — loud when absent (run
+// frame fit to the copied image) from its ALREADY-STORED `meta.extracted` — loud when absent (run
 // Extract first). NO codex call. `recipe.prompt` = the SUBJECT-ONLY text (`prompt_subject`,
 // see the division-of-labor note above); card name from the prompt's first ~40 chars,
 // fallback "Extracted prompt". The source element is copied in as a member (fresh id,
@@ -2540,18 +2545,21 @@ export function promoteExtractedRecipe(root, { projectId, elementId } = {}) {
 
   const groupId = `grp_${randomUUID().slice(0, 8)}`;
   const refElementId = `el_${randomUUID().slice(0, 8)}`;
+  // Fit-to-content (lead 2026-07-03: "карточкам при создании можно сразу сделать fit to
+  // content"): the frame hugs the copied image + padding instead of a fixed default size —
+  // a big source (e.g. 1254px) would otherwise overflow a 360x280 frame on every side.
   const cardBounds = {
     x: element.x,
     y: element.y + element.h + 16,
-    w: DEFAULT_RECIPE_CARD_SIZE.w,
-    h: DEFAULT_RECIPE_CARD_SIZE.h,
+    w: element.w + CARD_FIT_PADDING * 2,
+    h: element.h + CARD_FIT_PADDING * 2,
   };
   const refCopy = {
     id: refElementId,
     type: "image",
     src: element.src,
-    x: cardBounds.x + (cardBounds.w - element.w) / 2,
-    y: cardBounds.y + (cardBounds.h - element.h) / 2,
+    x: cardBounds.x + CARD_FIT_PADDING,
+    y: cardBounds.y + CARD_FIT_PADDING,
     w: element.w,
     h: element.h,
     source_w: element.source_w,
@@ -2590,7 +2598,7 @@ export function promoteExtractedRecipe(root, { projectId, elementId } = {}) {
 }
 
 // Mint a STYLE card to the RIGHT of the element (`x = element.x + element.w + 16`, `y =
-// element.y`, DEFAULT_STYLE_CARD_SIZE) from its ALREADY-STORED `meta.extracted` — loud when
+// element.y`, frame fit to the copied image) from its ALREADY-STORED `meta.extracted` — loud when
 // absent (run Extract first). NO codex call. `style.prompt` = `style_block` (+ "\n\n" +
 // `constraints_block` when non-empty); `style.ref` = the minted copy (the ONE ref image sent
 // to generation, R1). Mirrors promoteExtractedRecipe exactly except for placement side and
@@ -2616,18 +2624,19 @@ export function promoteExtractedStyle(root, { projectId, elementId } = {}) {
 
   const groupId = `grp_${randomUUID().slice(0, 8)}`;
   const refElementId = `el_${randomUUID().slice(0, 8)}`;
+  // Fit-to-content — same rationale as promoteExtractedRecipe above.
   const cardBounds = {
     x: element.x + element.w + 16,
     y: element.y,
-    w: DEFAULT_STYLE_CARD_SIZE.w,
-    h: DEFAULT_STYLE_CARD_SIZE.h,
+    w: element.w + CARD_FIT_PADDING * 2,
+    h: element.h + CARD_FIT_PADDING * 2,
   };
   const refCopy = {
     id: refElementId,
     type: "image",
     src: element.src,
-    x: cardBounds.x + (cardBounds.w - element.w) / 2,
-    y: cardBounds.y + (cardBounds.h - element.h) / 2,
+    x: cardBounds.x + CARD_FIT_PADDING,
+    y: cardBounds.y + CARD_FIT_PADDING,
     w: element.w,
     h: element.h,
     source_w: element.source_w,

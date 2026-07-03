@@ -1172,7 +1172,7 @@ test("promoteExtractedRecipe: loud without meta.extracted (run Extract first)", 
   );
 });
 
-test("promoteExtractedRecipe: mints a RECIPE card BELOW the element with prompt_subject + a centered ref copy; ONE entry; undo removes card+copy; promoting twice mints two independent cards", async (t) => {
+test("promoteExtractedRecipe: mints a RECIPE card BELOW the element, frame FIT to the copy + padding; ONE entry; undo removes card+copy; promoting twice mints two independent cards", async (t) => {
   tempProjects(t);
   const project = createProject(ROOT, { title: "Promote recipe" });
   const image = addImage(ROOT, project.id, { name: "art.png", bytes: solidPng(20, 16, [1, 2, 3]) }).element;
@@ -1187,13 +1187,15 @@ test("promoteExtractedRecipe: mints a RECIPE card BELOW the element with prompt_
   assert.equal(result.card.name, "a red fox on a rock");
   assert.equal(result.card.x, seeded.x, "below the element: same x");
   assert.equal(result.card.y, seeded.y + seeded.h + 16, "below the element: y+h+16");
-  assert.deepEqual({ w: result.card.w, h: result.card.h }, { w: 360, h: 280 });
+  // Fit-to-content (lead 2026-07-03): frame = copy + 16px padding on every side, never the
+  // fixed default card size.
+  assert.deepEqual({ w: result.card.w, h: result.card.h }, { w: seeded.w + 32, h: seeded.h + 32 });
 
   assert.equal(result.refElement.src, seeded.src);
   assert.equal(result.refElement.groupId, result.card.id);
   assert.notEqual(result.refElement.id, image.id, "a fresh copy, not the original element");
-  assert.equal(result.refElement.x, result.card.x + (result.card.w - seeded.w) / 2, "centered in the frame");
-  assert.equal(result.refElement.y, result.card.y + (result.card.h - seeded.h) / 2);
+  assert.equal(result.refElement.x, result.card.x + 16, "copy sits at the padding inset");
+  assert.equal(result.refElement.y, result.card.y + 16);
 
   const after = getProject(ROOT, project.id);
   assert.equal(after.history_seq, seqBefore + 1, "one journal entry");
@@ -1235,7 +1237,8 @@ test("promoteExtractedStyle: mints a STYLE card RIGHT of the element with style_
   assert.equal(result.card.name, "A painterly red fox on a rock.");
   assert.equal(result.card.x, seeded.x + seeded.w + 16, "right of the element: x+w+16");
   assert.equal(result.card.y, seeded.y, "right of the element: same y");
-  assert.deepEqual({ w: result.card.w, h: result.card.h }, { w: 360, h: 280 });
+  // Fit-to-content: frame = copy + 16px padding, same rule as promoteExtractedRecipe.
+  assert.deepEqual({ w: result.card.w, h: result.card.h }, { w: seeded.w + 32, h: seeded.h + 32 });
   assert.equal(result.card.style.ref, result.refElement.id);
 
   assert.equal(result.refElement.src, seeded.src);
