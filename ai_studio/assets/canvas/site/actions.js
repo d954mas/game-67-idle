@@ -828,6 +828,39 @@ export async function setGroupClip(groupId, clip) {
   await patchGroupBox(groupId, { clip });
 }
 
+// ---- recipe cards (T0239 increment 1) -----------------------------------------
+
+// Create a new recipe card: a group carrying an additive `recipe` blob (prompt/engine/
+// params/style_ref — see ops.createRecipeCard). `worldPoint`, when given (the canvas
+// context menu's click point), places the card there like addTextAt; omitted, the op's
+// own default (0,0) applies. Plain fast op — no long-op queue, no generation yet.
+export async function createRecipeCardAction(worldPoint) {
+  if (!state.project) return;
+  try {
+    const body = {};
+    if (worldPoint) {
+      body.x = Math.round(worldPoint.x);
+      body.y = Math.round(worldPoint.y);
+    }
+    const result = await api("POST", `/projects/${pid()}/recipe-cards`, body);
+    state.selectedGroupId = result.group.id;
+    applyMutation(result, `Created recipe card "${result.group.name}".`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Partial update of a card's `recipe` blob (prompt/engine/style_ref) — the Recipe
+// inspector section's live edits. One journaled patchRecipe op; loud on a group without
+// `recipe` (the op layer's guard — a plain group is not a card).
+export async function patchRecipeAction(groupId, patch) {
+  try {
+    applyMutation(await api("PATCH", `/projects/${pid()}/recipe-cards/${groupId}`, patch));
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 // Set a shared field (visible/clip) on SEVERAL groups in ONE journaled patchGroups op —
 // the multi-group inspector's shared toggles. One HTTP call, one undo restores every
 // group. `patch` is {visible?} or {clip?}.

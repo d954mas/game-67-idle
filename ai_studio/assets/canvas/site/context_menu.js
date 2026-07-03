@@ -11,6 +11,7 @@ import {
   createGroupFromSelection,
   createGroupInside,
   createGroupOrDefault,
+  createRecipeCardAction,
   deleteElements,
   deleteGroupAction,
   deleteRegion,
@@ -271,6 +272,9 @@ function itemsFor(target) {
     { label: "Add image", onClick: () => el("file-input").click() },
     { label: "Paste", onClick: () => pasteFromClipboard() },
     { label: "Create group", onClick: () => createGroupOrDefault("New group") },
+    // T0239 increment 1: mint a recipe card at the click point (a group with an
+    // additive `recipe` blob — no generation yet, that lands in increment 2).
+    { label: "New recipe card", onClick: () => createRecipeCardAction(target.world) },
     { label: "Fit", onClick: () => el("zoom-fit").click() },
     { separator: true },
     copyIdItemFor(target),

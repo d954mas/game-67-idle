@@ -42,6 +42,8 @@
 //   node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 //   node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
+//   node ai_studio/assets/canvas/cli.mjs recipe-create <id> [--name X] [--x n --y n --w n --h n] [--parent <gid>|none]   (T0239 increment 1: mint a recipe card — a group with an additive `recipe` blob; no generation yet)
+//   node ai_studio/assets/canvas/cli.mjs recipe-set <id> --group g [--prompt "..."] [--engine codex|gemini|both] [--style <id>|none]
 //   node ai_studio/assets/canvas/cli.mjs render-group <id> --group g [--scale 2] [--background "#rrggbb"]
 //   node ai_studio/assets/canvas/cli.mjs undo <id> --expect-head <n>
 //   node ai_studio/assets/canvas/cli.mjs redo <id> --expect-head <n>
@@ -68,6 +70,7 @@ import {
   assignToGroup,
   createGroup,
   createProject,
+  createRecipeCard,
   deleteGroup,
   deleteNodes,
   deleteProject,
@@ -89,6 +92,7 @@ import {
   patchGroup,
   patchGroups,
   patchProject,
+  patchRecipe,
   readHistory,
   recordOpFailure,
   redoOp,
@@ -161,7 +165,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|alpha-dual|alpha-dual-generate|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice|alpha|alpha-dual|alpha-dual-generate|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|render-group|undo|redo|history|history-list|history-jump>
   list
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -204,6 +208,8 @@ function usage() {
   group-assign <id> --elements e1,e2 --group <gid>|none
   group-ungroup <id> --group <gid>   (dissolve one level; children keep the group's z-slot; one undo step)
   group-delete <id> --group <gid>
+  recipe-create <id> [--name <name>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0239 increment 1: mint a recipe card — a group with an additive 'recipe' blob; omitted w/h default to a 360x280 frame; no generation yet)
+  recipe-set <id> --group <gid> [--prompt "<text>"] [--engine codex|gemini|both] [--style <id>|none]   (partial recipe blob update; --style is a reserved by-id pointer, style cards land later)
   render-group <id> --group <gid>  (alias: render-screen) [--scale <n>] [--background '#rrggbb']
   undo <id> --expect-head <n>
   redo <id> --expect-head <n>
@@ -651,6 +657,31 @@ async function runCommand(command, id, positional, flags) {
       if (!id) fail("group-delete requires <id>");
       if (!flags.group) fail("group-delete requires --group <gid>");
       return print(deleteGroup(repoRoot, { projectId: id, groupId: flags.group }));
+    }
+    case "recipe-create": {
+      if (!id) fail("recipe-create requires <id>");
+      const args = { projectId: id };
+      if (flags.name !== undefined && flags.name !== "true") args.name = flags.name;
+      if (flags.x !== undefined) args.x = Number(flags.x);
+      if (flags.y !== undefined) args.y = Number(flags.y);
+      if (flags.w !== undefined) args.w = Number(flags.w);
+      if (flags.h !== undefined) args.h = Number(flags.h);
+      // --parent <gid> nests the new card; --parent none (or omitted) = top level.
+      if (flags.parent !== undefined && flags.parent !== "true") {
+        args.parentId = flags.parent === "none" ? null : flags.parent;
+      }
+      return print(createRecipeCard(repoRoot, args));
+    }
+    case "recipe-set": {
+      if (!id) fail("recipe-set requires <id>");
+      if (!flags.group) fail("recipe-set requires --group <gid>");
+      const patch = {};
+      if (flags.prompt !== undefined && flags.prompt !== "true") patch.prompt = flags.prompt;
+      if (flags.engine !== undefined && flags.engine !== "true") patch.engine = flags.engine;
+      // --style <id> sets the reserved by-id pointer; --style none clears it.
+      if (flags.style !== undefined) patch.style_ref = flags.style === "none" || flags.style === "true" ? null : flags.style;
+      if (!Object.keys(patch).length) fail("recipe-set requires --prompt, --engine, and/or --style");
+      return print(patchRecipe(repoRoot, { projectId: id, groupId: flags.group, patch }));
     }
     case "render-group":
     case "render-screen": {

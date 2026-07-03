@@ -1722,6 +1722,163 @@ export function ungroupGroup(root, { projectId, groupId } = {}) {
   };
 }
 
+// ---- recipe card (T0239 increment 1) ------------------------------------------
+//
+// A recipe card is a GROUP carrying an additive `recipe` object — not a new element
+// type (see tmp/design_T0239_recipe_card_2026-07-03.md §3). Refs (member images) are
+// the group's ordinary members (assignToGroup, drag-in); the card object itself only
+// owns the recipe blob. `updateProject` spreads `groups` verbatim (store.mjs), so
+// `group.recipe` round-trips through every snapshot/undo/redo with zero store changes —
+// same additivity as `group.background`/`group.clip`. buildNodesSpec (tree.mjs) deep-
+// clones the whole group record for copy/paste/duplicate, so `recipe` (and a future
+// `style`) already survive that path with no tree.mjs change needed.
+
+const RECIPE_ENGINES = new Set(["codex", "gemini", "both"]); // R2/R3: engine choice + compare mode
+
+// Default recipe blob for a freshly-minted card (design doc §4.1). `engine` defaults to
+// "codex" (R2/R3 adds "gemini"/"both"); `style_ref` is a reserved nullable by-id pointer
+// (R1 — style cards land in increment 3); `expanded`/`use_expanded`/`last_run`/`params`
+// stay inert placeholders until increments 2-3 write/consume them.
+function defaultRecipe() {
+  return {
+    v: 1,
+    prompt: "",
+    expanded: null,
+    use_expanded: true,
+    engine: "codex",
+    params: {
+      size: "1024x1024",
+      quality: "high",
+      model: "gpt-image-2",
+      bg_key: "#ff00ff",
+      supersample: true,
+      n_candidates: 1,
+    },
+    style_ref: null,
+    last_run: null,
+  };
+}
+
+// Validate + normalize a PARTIAL recipe patch (loud, no silent coercion — mirrors
+// normalizeGroupBackground/normalizeGroupClip). Only the increment-1 editable fields are
+// accepted here: `prompt` (a string; empty is fine — that is the "draft" state), `engine`
+// (one of RECIPE_ENGINES), `style_ref` (null, or a non-empty string id — the reserved R1
+// pointer; resolving/remapping it across canvases is increment 3, not this op). Returns
+// the subset of resolved fields actually provided; throws before any write on anything
+// else (bad type, unknown key value, or an empty patch).
+function normalizeRecipePatch(patch) {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+    throw new Error(`recipe patch must be an object, got ${JSON.stringify(patch)}`);
+  }
+  const out = {};
+  if (patch.prompt !== undefined) {
+    if (typeof patch.prompt !== "string") throw new Error(`recipe prompt must be a string, got ${JSON.stringify(patch.prompt)}`);
+    out.prompt = patch.prompt;
+  }
+  if (patch.engine !== undefined) {
+    if (!RECIPE_ENGINES.has(patch.engine)) {
+      throw new Error(`recipe engine must be one of ${[...RECIPE_ENGINES].join("/")}, got ${JSON.stringify(patch.engine)}`);
+    }
+    out.engine = patch.engine;
+  }
+  if (patch.style_ref !== undefined) {
+    if (patch.style_ref !== null && typeof patch.style_ref !== "string") {
+      throw new Error(`recipe style_ref must be null or a string id, got ${JSON.stringify(patch.style_ref)}`);
+    }
+    out.style_ref = patch.style_ref;
+  }
+  if (!Object.keys(out).length) {
+    throw new Error("patchRecipe requires at least one of prompt, engine, style_ref");
+  }
+  return out;
+}
+
+// Default frame size for a freshly-minted card with no explicit bounds — a workshop
+// widget, comfortably smaller than a screen (DEFAULT_GROUP_SIZE-equivalent on the page is
+// 960x540). Purely cosmetic (decision 4: the frame never feeds generation).
+const DEFAULT_RECIPE_CARD_SIZE = { w: 360, h: 280 };
+
+// Mint a recipe card: a group carrying a fresh `recipe` blob (defaultRecipe). Explicit
+// bounds are optional (unlike createGroup, a card is never `fromElements`) — omitted w/h
+// fall back to DEFAULT_RECIPE_CARD_SIZE so the context-menu/CLI entry point can mint one
+// with just a placement point. Optional `parentId` nests the card like any group (null/
+// absent = top level; validated). Renders as a plain group frame today — the canvas
+// badge + prompt-preview land in increment 2 alongside generation. A card is a workshop
+// object, not an exportable screen: `exportProject` skips top-level groups that carry
+// `recipe` (see its filter below). One journal entry.
+export function createRecipeCard(root, { projectId, name, x, y, w, h, parentId } = {}) {
+  if (!projectId) throw new Error("createRecipeCard requires projectId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const groupId = `grp_${randomUUID().slice(0, 8)}`;
+  const cleanName = String(name || "").trim() || "Recipe card";
+
+  const bounds = {
+    x: finite(x) ? Number(x) : 0,
+    y: finite(y) ? Number(y) : 0,
+    w: finite(w) && Number(w) > 0 ? Number(w) : DEFAULT_RECIPE_CARD_SIZE.w,
+    h: finite(h) && Number(h) > 0 ? Number(h) : DEFAULT_RECIPE_CARD_SIZE.h,
+  };
+
+  const parentScope = parentId == null || parentId === "" ? null : String(parentId);
+  if (parentScope != null) findGroup(before, parentScope); // loud error on an unknown parent
+
+  const group = {
+    id: groupId,
+    name: cleanName,
+    x: bounds.x,
+    y: bounds.y,
+    w: bounds.w,
+    h: bounds.h,
+    visible: true,
+    recipe: defaultRecipe(),
+  };
+  if (parentScope != null) group.parentId = parentScope;
+  const groupFront = frontOrder(before, parentScope);
+  if (groupFront !== null) group.order = groupFront;
+
+  const after = updateProject(root, projectId, { groups: [...groupsOf(before), group] });
+  const project = commitMutation(root, projectId, {
+    op: "createRecipeCard",
+    args_summary: { groupId, name: cleanName, bounds, parentId: parentScope },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, group: (project.groups || []).find((item) => item.id === groupId) };
+}
+
+// Partial update of a card's `recipe` blob (prompt/engine/style_ref today — see
+// normalizeRecipePatch; `expanded`/`last_run`/`params` are written by the increment-2/3
+// ops, not this general patch). Loud on a group that carries no `recipe` at all — a plain
+// group is not a card, so patching one here is a caller bug, not a silent no-op. One
+// journal entry; undo restores the prior recipe blob byte-exact (free via the group
+// snapshot).
+export function patchRecipe(root, { projectId, groupId, patch } = {}) {
+  if (!projectId) throw new Error("patchRecipe requires projectId");
+  if (!groupId) throw new Error("patchRecipe requires groupId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const current = findGroup(before, groupId);
+  if (!current.recipe || typeof current.recipe !== "object") {
+    throw new Error(`group is not a recipe card (no recipe blob): ${groupId}`);
+  }
+  const resolved = normalizeRecipePatch(patch); // validates BEFORE any write
+
+  const nextGroups = groupsOf(before).map((group) =>
+    group.id === groupId ? { ...group, recipe: { ...group.recipe, ...resolved } } : group,
+  );
+  const after = updateProject(root, projectId, { groups: nextGroups });
+  const project = commitMutation(root, projectId, {
+    op: "patchRecipe",
+    args_summary: { groupId, patch: resolved },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, group: (project.groups || []).find((item) => item.id === groupId) };
+}
+
 // ---- clipboard: paste / duplicate / delete nodes (T0227) ---------------------
 //
 // Figma-like copy/paste/duplicate for canvas objects (elements AND groups, mixed OK) and
@@ -2123,6 +2280,8 @@ export function historyEntryLabel(op, args = {}) {
     case "fitGroup": return { label: "Fit group", summary: "" };
     case "reparentGroup": return { label: "Nest group", summary: "" };
     case "ungroupGroup": return { label: "Ungroup", summary: "" };
+    case "createRecipeCard": return { label: "Recipe card", summary: String(a.name || "") };
+    case "patchRecipe": return { label: "Edit recipe", summary: "" };
     case "pasteNodes": return { label: "Paste", summary: plural(count(a.count), "item") };
     case "duplicateNodes": return { label: "Duplicate", summary: plural(count(a.count), "item") };
     case "deleteNodes": return { label: "Delete", summary: plural(items(a.deletedElements) + items(a.deletedGroups), "item") };
@@ -3603,13 +3762,15 @@ export async function renderGroup(root, { projectId, groupId, scale, background 
 // group (screen) at its own default 1x png into ONE <project>/export/<utc-stamp>/
 // folder plus a combined manifest. A nested group is a component INSIDE its root
 // screen (composited by compositeGroup's recursion), never a separate screen, so only
-// parentId-less groups are exported here. Like the other export ops it makes no project
-// mutation, so it is NOT journaled; it records one export_project tool_runs entry.
+// parentId-less groups are exported here. A recipe card (`group.recipe`, T0239) is a
+// workshop object, not a screen, so it is excluded here too. Like the other export ops
+// it makes no project mutation, so it is NOT journaled; it records one export_project
+// tool_runs entry.
 export async function exportProject(root, { projectId } = {}) {
   if (!projectId) throw new Error("exportProject requires projectId");
   const project = getProject(root, projectId);
   const visibleGroups = groupsOf(project).filter(
-    (group) => group.parentId == null && group.visible !== false,
+    (group) => group.parentId == null && group.visible !== false && !group.recipe,
   );
   if (!visibleGroups.length) throw new Error("no visible screens to export (project export renders every visible top-level group)");
 

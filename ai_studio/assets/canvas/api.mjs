@@ -26,6 +26,8 @@
 //   POST   /api/canvas/projects/<id>/groups/<gid>/fit {padding?}   (resize frame to content)
 //   POST   /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null, index?}
 //   POST   /api/canvas/projects/<id>/groups/<gid>/ungroup  (dissolve one level, keep children)
+//   POST   /api/canvas/projects/<id>/recipe-cards          {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 1: mint a recipe card — a group with an additive `recipe` blob)
+//   PATCH  /api/canvas/projects/<id>/recipe-cards/<gid>    {prompt?, engine?, style_ref?}     (partial recipe blob update; 400 on a group with no `recipe`)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
 //   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
 //   POST   /api/canvas/projects/<id>/nodes-align   {nodeIds, align, reference?} (align to selection bbox or parent frame; one entry)
@@ -62,6 +64,7 @@ import {
   assignToGroup,
   createGroup,
   createProject,
+  createRecipeCard,
   deleteGroup,
   deleteNodes,
   deleteProject,
@@ -84,6 +87,7 @@ import {
   patchGroup,
   patchGroups,
   patchProject,
+  patchRecipe,
   readHistory,
   recordOpFailure,
   redoOp,
@@ -586,6 +590,32 @@ export function createCanvasApi(root) {
         const groupId = decodeURIComponent(parts[5]);
         await readJsonBody(req);
         sendMutation(200, ungroupGroup(root, { projectId: id, groupId }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/recipe-cards  (create — T0239 increment 1)
+      // A recipe card is a group carrying an additive `recipe` blob; no generation yet.
+      if (parts.length === 5 && sub === "recipe-cards" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(201, createRecipeCard(root, {
+          projectId: id,
+          name: body.name,
+          x: body.x,
+          y: body.y,
+          w: body.w,
+          h: body.h,
+          parentId: body.parentId,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/recipe-cards/<gid>  (partial recipe blob update)
+      // Body is the recipe PATCH itself ({prompt?, engine?, style_ref?}), not wrapped —
+      // patchRecipe validates loudly and 400s on a group with no `recipe` at all.
+      if (parts.length === 6 && sub === "recipe-cards" && req.method === "PATCH") {
+        const groupId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, patchRecipe(root, { projectId: id, groupId, patch: body }));
         return true;
       }
 

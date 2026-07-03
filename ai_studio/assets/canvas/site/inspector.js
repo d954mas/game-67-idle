@@ -40,6 +40,7 @@ import {
   fitGroupAction,
   patchElementBox,
   patchGroupBox,
+  patchRecipeAction,
   patchTextElement,
   renameElement,
   renameGroup,
@@ -102,6 +103,37 @@ function textInput(value, onCommit) {
     }
   });
   return input;
+}
+
+// Multi-line variant of textInput for the Recipe card's Prompt field. Commits on change
+// (blur/click-away) like textInput, plus Enter (Shift+Enter inserts a newline instead —
+// a prompt is often more than one line, unlike the rename/scale fields textInput guards).
+// Unlike textInput, an EMPTY commit is allowed: a cleared prompt is a valid draft state
+// (ops.patchRecipe's prompt validation only rejects a non-string, not an empty one).
+function textareaInput(value, onCommit) {
+  const textarea = document.createElement("textarea");
+  textarea.className = "insp-input";
+  textarea.rows = 3;
+  textarea.value = value == null ? "" : String(value);
+  const commit = () => {
+    const next = textarea.value;
+    if (next === String(value == null ? "" : value)) return; // unchanged: no commit
+    onCommit(next);
+  };
+  textarea.addEventListener("change", commit);
+  textarea.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      textarea.blur();
+      focusStage();
+    } else if (event.key === "Escape") {
+      event.preventDefault();
+      textarea.value = value == null ? "" : String(value);
+      textarea.blur();
+      focusStage();
+    }
+  });
+  return textarea;
 }
 
 function numberInput(value, onCommit) {
@@ -1216,6 +1248,52 @@ function renderGroupBackground(group, root) {
   body.appendChild(controls);
 }
 
+// Recipe card surface (T0239 increment 1): additive, shown only when the selected group
+// carries a `recipe` blob (same "presence of the additive field" pattern as
+// renderGroupBackground/renderAlphaPlates — a plain group renders no Recipe section at
+// all). Prompt + Engine are live-editable through patchRecipeAction (one journal entry
+// per commit, mirrors every other inspector field). Generate and the Style dropdown are
+// visible-but-disabled placeholders so the surface reads complete now: Generate wires up
+// in increment 2 (the generation seam + long-op queue), Style cards land in increment 3
+// (recipe.style_ref stays a reserved null pointer until then).
+function renderRecipe(group, root) {
+  const recipe = group.recipe;
+  if (!recipe || typeof recipe !== "object") return;
+  const body = collapsible(root, "recipe", "Recipe");
+
+  const promptField = field("Prompt", textareaInput(recipe.prompt, (next) => patchRecipeAction(group.id, { prompt: next })));
+  body.appendChild(promptField);
+
+  const engineField = field(
+    "Engine",
+    selectInput(recipe.engine || "codex", ["codex", "gemini", "both"], (next) => patchRecipeAction(group.id, { engine: next })),
+  );
+  body.appendChild(engineField);
+
+  const styleSelect = document.createElement("select");
+  styleSelect.className = "insp-input";
+  styleSelect.disabled = true;
+  const noneOption = document.createElement("option");
+  noneOption.textContent = "None";
+  styleSelect.appendChild(noneOption);
+  body.appendChild(field("Style", styleSelect));
+  const styleHint = document.createElement("div");
+  styleHint.className = "insp-region-hint";
+  styleHint.textContent = "Style cards land in a later increment.";
+  body.appendChild(styleHint);
+
+  const generateBtn = document.createElement("button");
+  generateBtn.type = "button";
+  generateBtn.className = "primary insp-btn";
+  generateBtn.textContent = "Generate";
+  generateBtn.disabled = true;
+  body.appendChild(generateBtn);
+  const generateHint = document.createElement("div");
+  generateHint.className = "insp-region-hint";
+  generateHint.textContent = "Generation lands in the next increment.";
+  body.appendChild(generateHint);
+}
+
 function renderGroupInspector(group, root) {
   const name = field("Name", textInput(group.name, (next) => renameGroup(group.id, next)));
   name.classList.add("insp-name");
@@ -1267,6 +1345,7 @@ function renderGroupInspector(group, root) {
   if (group.parentId) renderAlignSection([group.id], root);
 
   renderGroupBackground(group, root);
+  renderRecipe(group, root);
 
   const render = collapsible(root, "render", "Render group");
   const controls = document.createElement("div");

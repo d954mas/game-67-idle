@@ -148,6 +148,9 @@ Every capability is one op in `ops.mjs`:
 - `createGroup` / `patchGroup` / `fitGroup` / `assignToGroup` / `deleteGroup` — group
   (screen) mutations, journaled; `renderGroup` — composited screen PNG export, not
   journaled. See **Groups = screens** below.
+- `createRecipeCard({projectId, name?, x?, y?, w?, h?, parentId?})` / `patchRecipe({
+  projectId, groupId, patch})` — **(T0239 increment 1)** the generation recipe card: a
+  group carrying an additive `recipe` blob, no generation yet. See **Recipe card** below.
 - `detectRegions` — reads the element image, runs it through the image tools
   upload + detect pipeline, stores `element.regions` (and backfills
   `source_w`/`source_h`), records a `tool_runs` entry — journaled. Requires Python
@@ -496,6 +499,72 @@ bounds are cropped at the frame — and it governs both the on-canvas display an
 Toggle it with `patchGroup({clip})` (HTTP `PATCH .../groups/<gid>`, inspector Position &
 Size **Clip content** checkbox, group context-menu **Clip content** toggle) or the CLI
 `group-set --clip true|false`.
+
+### Recipe card
+
+**(T0239 increment 1 — the card object + `recipe` meta + inspector surface; no
+generation yet.)** A recipe card is a **group carrying an additive `group.recipe`
+object**, not a new element type — the group primitive already gives it a container, a
+framed render with a label, membership (drag an image in = a ref, via the existing
+`assignToGroup`), move-as-a-whole, z-order, marquee, and copy/paste for free. Design:
+`tmp/design_T0239_recipe_card_2026-07-03.md`.
+
+`group.recipe` shape (a fresh card via `createRecipeCard` gets this default):
+
+```jsonc
+{
+  "v": 1,
+  "prompt": "",                 // the lead's base prompt; "" is the draft state
+  "expanded": null,              // last Expand-prompt output — increment 3
+  "use_expanded": true,          // increment 2: generate sends `expanded` when present+enabled, else `prompt`
+  "engine": "codex",             // "codex" | "gemini" | "both" (R2/R3) — which generator(s) a run uses
+  "params": {                    // advisory in v1; increment 2's generate op consumes size/quality/model
+    "size": "1024x1024", "quality": "high", "model": "gpt-image-2",
+    "bg_key": "#ff00ff", "supersample": true, "n_candidates": 1
+  },
+  "style_ref": null,             // reserved nullable by-id pointer to a STYLE CARD (R1) — increment 3
+  "last_run": null                // set by increment 2's generate op; null = "draft", non-null = "done"
+}
+```
+
+Refs are **not** in `recipe` — they are the card's ordinary members (image elements with
+`groupId === cardId`), discovered at generate time (increment 2). A card is a **workshop
+object, not a screen**: `exportProject` skips top-level groups that carry `recipe` (they
+never appear in a "every visible screen" export run).
+
+- `createRecipeCard({projectId, name?, x?, y?, w?, h?, parentId?})` — mint a card: a
+  group with a fresh default `recipe` blob. Bounds are optional (unlike `createGroup`, a
+  card is never `fromElements`) — omitted `w`/`h` fall back to a 360x280 default frame
+  (purely cosmetic; the frame never feeds generation — decision 4). Optional `parentId`
+  nests it like any group. One journal entry.
+- `patchRecipe({projectId, groupId, patch})` — a **partial**, validated update of the
+  recipe blob. Increment 1 accepts `prompt` (a string; empty is a valid draft),
+  `engine` (`"codex"|"gemini"|"both"`), and `style_ref` (`null` or a string id — the
+  reserved R1 pointer; resolving it across canvases is increment 3, not this op).
+  Anything else, or a group with **no** `recipe` at all (a plain group is not a card),
+  is a **loud error** — no silent fallback. One journal entry; undo restores the prior
+  recipe blob byte-exact.
+- Copy/paste: `tree.buildNodesSpec` deep-clones the whole group record for its spec (only
+  `id`/`parentId`/`order` are stripped), so `recipe` — and a future `style` blob —
+  already survive `nodes-paste`/`nodes-duplicate`/`Ctrl+C/V/D` with **no schema-aware
+  carve-out needed**. A pasted/duplicated card keeps its recipe verbatim under a fresh
+  group id; `style_ref` is copied as-is (no remap — it stays `null` until increment 3
+  gives it something to point at across canvases).
+- Rendering: a card draws as a **plain group frame** today (label + frame, like any
+  group) — the canvas "Recipe" badge + one-line prompt preview are deferred to increment
+  2 alongside generation. Inspector: selecting a group with `recipe` shows an additive
+  **Recipe** section (above **Render group**, same "presence of the field" pattern as
+  **Group background**) with a Prompt textarea, an Engine select, and **disabled**
+  Generate / Style controls carrying a hint that they land in later increments.
+- HTTP: `POST /api/canvas/projects/<id>/recipe-cards {name?, x?,y?,w?,h?, parentId?}`;
+  `PATCH /api/canvas/projects/<id>/recipe-cards/<gid>` — body **is** the recipe patch
+  itself (`{prompt?, engine?, style_ref?}`), not wrapped. CLI: `recipe-create <id> [--name
+  X] [--x --y --w --h] [--parent <gid>|none]`; `recipe-set <id> --group g [--prompt "..."]
+  [--engine codex|gemini|both] [--style <id>|none]`. Page: the canvas context menu's
+  **New recipe card** item (empty-canvas right-click; mints the card at the click point).
+
+Generation (`generateFromRecipe`), the STYLE CARD component, and the Expand-prompt /
+Extract-style helpers are later increments (2-4) of T0239 — see the design doc.
 
 ### Render contract
 
@@ -1078,6 +1147,8 @@ node ai_studio/assets/canvas/cli.mjs group-fit <id> --group g [--padding n]   # 
 node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g   # dissolve one level; children keep the group's z-slot; one undo step
 node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
+node ai_studio/assets/canvas/cli.mjs recipe-create <id> [--name X] [--x --y --w --h] [--parent <gid>|none]   # T0239 increment 1: mint a recipe card (a group with an additive `recipe` blob); omitted w/h default to 360x280; no generation yet
+node ai_studio/assets/canvas/cli.mjs recipe-set <id> --group g [--prompt "a red fox"] [--engine codex|gemini|both] [--style <id>|none]   # partial recipe blob update; --style is a reserved by-id pointer (style cards land later)
 node ai_studio/assets/canvas/cli.mjs render-screen <id> --group g [--scale 2] [--background '#rrggbb']
 node ai_studio/assets/canvas/cli.mjs undo <id> --expect-head <n>  # --expect-head required (T0234); read it from history-list first
 node ai_studio/assets/canvas/cli.mjs redo <id> --expect-head <n>
