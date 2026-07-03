@@ -1,0 +1,58 @@
+---
+id: T0238
+title: "Canvas: auto dual-plate generation flow - generate pair, gate, cut, plates in meta"
+status: todo
+project: P001
+epic: E010
+priority: P1
+tags: []
+created: 2026-07-03
+updated: 2026-07-03
+---
+
+## What
+
+Lead (2026-07-03): the dual-plate path must be AUTOMATIC — "Генерировать
+пару, проверять, и делать". One flow: generate the white plate → black plate
+as an EDIT of the white (subject-lock — reuse
+.codex/skills/nt-asset-image-generation/scripts/gen_dual_plate.sh chain) →
+pair gate → dual_plate extraction (T0237 op as the engine) → ONE NEW element
+on the canvas with BOTH plates stored in meta.
+
+DECISIONS (lead, discussed one-by-one 2026-07-03):
+1. Placement = HYBRID: from a prompt -> viewport center; from an existing
+   element (edit/variation) -> beside the source element.
+2. Gate failure: ONE auto-retry of the black plate, then loud error; the
+   white plate + failed pair are preserved so the lead can retry from the
+   white plate or run the manual T0237 op on the pair himself.
+3. Plates stored ALWAYS in project files/ ("именно для этого папка и
+   задумана") — content-addressed refs in meta.alpha.plates
+   [{src, role: light|dark}] + prompt + gate verdict.
+4. Generation with alpha cleanup ALWAYS mints a NEW element (never replaces).
+
+Inspector surface: element's Alpha/Provenance section shows both plate
+thumbnails (files served already); click = preview, "Add to canvas" mints a
+plain image element from that plate src (one journaled op).
+
+Trigger today = agent skill command ("сгенери X с альфой на канвас Y");
+canvas-UI trigger arrives with the generation-placeholder element (T0239) —
+this flow is its alpha mode, so keep the op layer UI-agnostic.
+
+## Done when
+
+- [ ] One command generates pair -> gate (1 retry) -> cut -> new element with
+      plates+prompt+verdict in meta; hybrid placement per decision 1.
+- [ ] Gate failure is loud, preserves white plate + pair, names the retry
+      paths.
+- [ ] Inspector shows plate thumbnails + "Add to canvas"; added plates are
+      normal journaled elements.
+- [ ] Full canvas suite green; skill doc updated (generation-with-alpha
+      command).
+
+## Open questions
+
+## Log
+
+- 2026-07-03: created; design settled with lead in one-by-one discussion.
+  Depends on T0237 (pair op = engine); inspector part waits for inspector.js
+  to free up.

@@ -1,7 +1,7 @@
 ---
 id: T0236
 title: "Canvas: drag quality - zoom-mid-drag breaks cursor anchor; dragging is stepped, not smooth"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P1
@@ -46,3 +46,4 @@ inspector refresh on drag frames) despite T0200's rAF coalescing.
 - 2026-07-03: created from lead live reports; delegated to deep-reasoner
   (Opus) — diagnosis + fix in one packet (site drag/render path only;
   inspector.js/canvas.css belong to the T0235 worker right now).
+- 2026-07-03: landed: world-space anchors + reflow cache + marquee requestRender, 259->263; site-only, page reload enough; awaiting lead live check
