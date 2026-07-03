@@ -17,7 +17,7 @@ import { fileURLToPath, URL } from "node:url";
 import { addImage, addText, alphaCutout, createProject, getProject, setRegions, undoOp, redoOp } from "../ops.mjs";
 import { resolveProjectFile } from "../store.mjs";
 import { createCanvasApi } from "../api.mjs";
-import { magentaSheetPng } from "./png_fixture.mjs";
+import { magentaSheetPng, softGlowPng } from "./png_fixture.mjs";
 import { decodePng } from "./png_fixture.mjs";
 
 // Python tools run with cwd = repo root, so the pipeline tests must use the real root.
@@ -166,6 +166,29 @@ test("alphaCutout (regions) keys ONLY inside the region; outside stays untouched
   const outside = png.at(60, 4);
   assert.equal(outside[3], 255, "out-of-region pixel stays opaque");
   assert.deepEqual([outside[0], outside[1], outside[2]], [255, 0, 255], "out-of-region magenta is the original color");
+});
+
+test("alphaCutout (auto) refuses soft art with a CLEAN message — no Python traceback", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Alpha soft refusal" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "glow.png", bytes: softGlowPng() });
+  const original = getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id);
+  try {
+    await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "auto" });
+    assert.fail("auto on soft art must refuse (dual-plate guard)");
+  } catch (error) {
+    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
+      t.skip(`alpha pipeline unavailable: ${error.message}`);
+      return;
+    }
+    // The deliberate refusal reaches the operator as the tool's own message...
+    assert.match(error.message, /dual_plate|plate PAIR/, `refusal message expected, got: ${error.message}`);
+    // ...WITHOUT the worker's crash formatting (raw traceback in the UI toast = bug).
+    assert.ok(!/Traceback|File "/.test(error.message), `traceback leaked to the operator: ${error.message}`);
+  }
+  // The refusal changed nothing: same src, no alpha meta, nothing to undo.
+  const after = getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id);
+  assert.deepEqual(after, original, "element untouched after a refusal");
 });
 
 // ---- API + CLI parity (real pipeline; skips without the venv) -----------------

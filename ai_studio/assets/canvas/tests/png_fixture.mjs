@@ -77,6 +77,16 @@ export function magentaSheetPng() {
   });
 }
 
+// A 64x48 "soft glow" sheet: magenta background with a blob whose color sits INSIDE the
+// router's partial-alpha band (distance 40 of tolerance 80 from the key => alpha 0.5, no
+// opaque core). soft_metrics scores it 1.0 soft => route_cutout deterministically routes
+// to dual_plate, which the canvas alpha op refuses on method=auto.
+export function softGlowPng() {
+  return encodePng(64, 48, (x, y) =>
+    x >= 16 && x < 48 && y >= 12 && y < 36 ? [255, 40, 255] : [255, 0, 255],
+  );
+}
+
 // A trivial solid 4x3 PNG for store round-trip tests where content does not matter.
 export function solidPng(width = 4, height = 3, color = [10, 20, 30]) {
   return encodePng(width, height, () => color);

@@ -170,7 +170,13 @@ def main() -> int:
     args = parser.parse_args()
 
     spec = json.loads(args.spec.read_text(encoding="utf-8"))
-    report = run(spec)
+    try:
+        report = run(spec)
+    except (RuntimeError, ValueError, FileNotFoundError) as exc:
+        # Deliberate refusals (dual-plate guard, bad spec values, missing source) travel
+        # the worker's SystemExit path as ONE clean message — the operator-facing toast
+        # must not show a Python traceback. Unexpected bugs still traceback loudly.
+        raise SystemExit(str(exc)) from exc
     scope = f"{report['region_count']} region(s)" if report["region_count"] else "whole element"
     print(f"pass: alpha cutout ({report['method']}, {scope})")
     return 0
