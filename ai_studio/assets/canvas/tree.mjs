@@ -547,13 +547,13 @@ export function buildNodesSpec(project, nodeIds) {
   });
   const scopeKey = (node) => {
     const scope = nodeScope(project, node.ref);
-    return scope == null ? " root" : scope;
+    return scope == null ? "\u0000root" : scope;
   };
   const orderCache = new Map();
   const zIndex = (node) => {
     const key = scopeKey(node);
     if (!orderCache.has(key)) {
-      const scope = key === " root" ? null : key;
+      const scope = key === "\u0000root" ? null : key;
       orderCache.set(key, orderedChildren(project, scope).map((child) => child.id));
     }
     const idx = orderCache.get(key).indexOf(node.ref.id);

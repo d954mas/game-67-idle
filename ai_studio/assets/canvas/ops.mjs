@@ -2233,10 +2233,6 @@ export async function generateFromRecipe(root, { projectId, groupId, generators 
   const results = []; // {engine, bytes}
   const failed = []; // {engine, error}
   for (const attempt of attempts) {
-    if (attempt.skip) {
-      failed.push({ engine: attempt.engine, error: attempt.skip });
-      continue;
-    }
     try {
       const generated = await gens[attempt.engine]({ prompt: effectivePromptText, refPaths: finalRefPaths, params: recipe.params });
       const bytes = Buffer.isBuffer(generated) ? generated : readFileSync(generated);
