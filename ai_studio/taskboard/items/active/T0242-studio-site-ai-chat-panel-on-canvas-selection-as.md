@@ -1,7 +1,7 @@
 ---
 id: T0242
 title: "Studio site: AI chat panel on canvas - selection as context, agent acts via ops"
-status: idea
+status: doing
 project: P001
 epic: E010
 priority: P1
@@ -53,3 +53,4 @@ Concept sketch (design phase to settle):
 ## Log
 
 - 2026-07-03: created from lead proposal during live session.
+- 2026-07-03: Design phase launched (deep-reasoner, doc-only): AI chat panel on the studio site - select elements, command in text, agent drives the SAME ops layer.
