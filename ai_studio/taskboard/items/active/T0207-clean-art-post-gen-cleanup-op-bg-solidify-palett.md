@@ -1,7 +1,7 @@
 ---
 id: T0207
 title: "Clean art: post-gen cleanup op — bg solidify, palette quantize, denoise (non-destructive)"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P2
@@ -66,3 +66,4 @@ a real case shows up. Cleanup section = Quantize + Denoise.
 - 2026-07-03: lead decision 2026-07-03: quantize/denoise apply IN-PLACE (like alpha, byte-exact undo) but ONLY with a preview-before-apply: tool section shows params + live preview of the result (canvas renders preview bytes for the element at real zoom, before/after toggle), Apply commits the already-computed bytes as ONE journal entry; warm worker makes param-tweak previews interactive. Preview is a hard requirement, not polish
 - 2026-07-03: Backend worker launched (lead away, 'делай дальше'): quantize+denoise per-tool python folders, cleanupPreview (tmp, no store/journal) + cleanupApply (storeAddFile + one journaled src swap + meta.cleanup), api/cli parity, cleanup.test.mjs. Bg-solidify NOT built (cut per lead 2026-07-02). UI increment follows.
 - 2026-07-03: Backend landed+committed (quantize/denoise per-tool folders, preview/apply ops, parity, suite 470, python 11 tests, :8780 restarted). UI worker launched (inspector Cleanup section, on-canvas live preview via view-state override, hold-to-compare, Apply journaled).
+- 2026-07-03: UI landed+committed: Cleanup section (quantize slider+number+dither, denoise 1|2|3, debounced on-canvas preview via workspace view-state, hold-to-compare, shared Apply w/ tool label, stale-seq guard, transform-guard parity). Suites 470/51. No restart needed (site JS). Measured on 1254px: quantize ~1-2s, denoise <1s per preview. Awaiting lead verify - checklist in tmp/VERIFY_2026-07-03.md item 4.
