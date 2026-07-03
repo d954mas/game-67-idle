@@ -1,7 +1,7 @@
 ---
 id: T0238
 title: "Canvas: auto dual-plate generation flow - generate pair, gate, cut, plates in meta"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P1
@@ -62,3 +62,4 @@ later. Placement decision 1 (hybrid) collapses to "beside the source".
   Depends on T0237 (pair op = engine); inspector part waits for inspector.js
   to free up.
 - 2026-07-03: Fast-worker launched: auto dual-plate flow (element = light plate, generated dark via codex edit seam, gate w/ 1 retry incl. T0243 align, plates in meta, cut beside source).
+- 2026-07-03: Landed + committed 0bd5d944: alphaDualPlateGenerate (flat-bg check, codex seam, 1 retry, plates in meta), addImageFromFile, CLI/API, inspector plate thumbnails. 310/310 at landing. Awaiting lead live verify on wings.
