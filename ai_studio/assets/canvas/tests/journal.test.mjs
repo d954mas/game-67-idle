@@ -265,6 +265,102 @@ test("jumpHistory is loud on an unknown, stale-branch, or invalid seq", (t) => {
   assert.equal(jumpHistory(ROOT, { projectId: project.id, seq: live }).project.elements[0].x, 99);
 });
 
+// ---- T0234: concurrency guard (expectHead) on undo/redo/jumpHistory ----------
+//
+// Incident 2026-07-03: an agent read a project at head 823, the lead kept working
+// live to head 876, and the agent's jumpHistory forked the spine and orphaned the
+// lead's newest entries. expectHead makes the caller prove it read the CURRENT head
+// right before navigating.
+
+test("jumpHistory refuses a stale expectHead (drift) LOUDLY before any write; matching expectHead behaves exactly as without it", (t) => {
+  const dir = tempProjects(t);
+  const project = createProject(ROOT, { title: "Drift Jump" });
+  const { element } = addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() }); // seq1, head1
+  const readHead = getProject(ROOT, project.id).history_seq; // the agent "reads" head1 here
+  assert.equal(readHead, 1);
+  patchElement(ROOT, project.id, element.id, { x: 50 }); // seq2, head2 — the lead keeps working live
+
+  const journalPath = join(dir, project.id, "journal.jsonl");
+  const projectPath = join(dir, project.id, "project.json");
+  const journalBefore = readFileSync(journalPath, "utf8");
+  const projectBefore = readFileSync(projectPath, "utf8");
+
+  // A stale expectHead (the agent's read-head) refuses BEFORE any write; the error
+  // names both seqs and the remedy; journal and project.json are byte-for-byte untouched.
+  assert.throws(
+    () => jumpHistory(ROOT, { projectId: project.id, seq: 1, expectHead: readHead }),
+    /history advanced: head is now 2, you read 1 — the project is live; re-read history \(history-list\) and retry/,
+  );
+  assert.equal(readFileSync(journalPath, "utf8"), journalBefore, "journal untouched on refusal");
+  assert.equal(readFileSync(projectPath, "utf8"), projectBefore, "project.json untouched on refusal");
+  assert.equal(getProject(ROOT, project.id).history_seq, 2, "head unchanged on refusal");
+
+  // A matching expectHead (re-read the CURRENT head first) behaves exactly like the
+  // no-param call.
+  const jumped = jumpHistory(ROOT, { projectId: project.id, seq: 1, expectHead: 2 });
+  assert.equal(jumped.jumped_from, 2);
+  assert.equal(jumped.jumped_to, 1);
+  assert.equal(jumped.project.history_seq, 1);
+  assert.equal(jumped.project.elements[0].x, 0);
+});
+
+test("undoOp / redoOp refuse a stale expectHead LOUDLY before any write; matching expectHead behaves exactly as without it", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Drift Undo Redo" });
+  const { element } = addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() }); // seq1, head1
+  patchElement(ROOT, project.id, element.id, { x: 50 }); // seq2, head2
+
+  const journalPath = join(process.env.CANVAS_PROJECTS_ROOT, project.id, "journal.jsonl");
+  const journalBefore = readFileSync(journalPath, "utf8");
+
+  // undoOp: stale expectHead (caller read head1 a while ago; actual head is now 2).
+  assert.throws(
+    () => undoOp(ROOT, { projectId: project.id, expectHead: 1 }),
+    /history advanced: head is now 2, you read 1 — the project is live; re-read history \(history-list\) and retry/,
+  );
+  assert.equal(readFileSync(journalPath, "utf8"), journalBefore, "journal untouched on refusal");
+  assert.equal(getProject(ROOT, project.id).history_seq, 2, "head unchanged on refusal");
+
+  // Matching expectHead behaves exactly like the no-param call.
+  const undone = undoOp(ROOT, { projectId: project.id, expectHead: 2 });
+  assert.equal(undone.project.history_seq, 1);
+  assert.equal(undone.project.elements[0].x, 0);
+
+  // redoOp: stale expectHead (actual head is now 1, after the undo above).
+  assert.throws(
+    () => redoOp(ROOT, { projectId: project.id, expectHead: 99 }),
+    /history advanced: head is now 1, you read 99 — the project is live; re-read history \(history-list\) and retry/,
+  );
+  assert.equal(getProject(ROOT, project.id).history_seq, 1, "head unchanged on refusal");
+
+  // Matching expectHead behaves exactly like the no-param call.
+  const redone = redoOp(ROOT, { projectId: project.id, expectHead: 1 });
+  assert.equal(redone.project.history_seq, 2);
+  assert.equal(redone.project.elements[0].x, 50);
+});
+
+test("expectHead is absent (page path) -> unchanged behavior; a non-integer expectHead is a loud error", (t) => {
+  tempProjects(t);
+  const project = createProject(ROOT, { title: "Guard edges" });
+  const { element } = addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() }); // seq1, head1
+  patchElement(ROOT, project.id, element.id, { x: 50 }); // seq2, head2
+
+  // undefined/null/"" all mean "no guard" — identical to calling without the field.
+  assert.equal(jumpHistory(ROOT, { projectId: project.id, seq: 1, expectHead: undefined }).jumped_to, 1);
+  const back = jumpHistory(ROOT, { projectId: project.id, seq: 2, expectHead: null }).project;
+  assert.equal(back.history_seq, 2);
+
+  // A CLI value arrives as a string; a numeric string coerces and matches like a number.
+  const jumped = jumpHistory(ROOT, { projectId: project.id, seq: 1, expectHead: "2" });
+  assert.equal(jumped.jumped_to, 1);
+
+  // A non-numeric / non-integer expectHead is its own loud error (before any write),
+  // regardless of whether it happens to match the head.
+  assert.throws(() => jumpHistory(ROOT, { projectId: project.id, seq: 2, expectHead: "abc" }), /expectHead must be a finite integer/);
+  assert.throws(() => undoOp(ROOT, { projectId: project.id, expectHead: 1.5 }), /expectHead must be a finite integer/);
+  assert.throws(() => redoOp(ROOT, { projectId: project.id, expectHead: NaN }), /expectHead must be a finite integer/);
+});
+
 test("exportElements writes a stamped folder with copied files + manifest", async (t) => {
   tempProjects(t);
   const project = createProject(ROOT, { title: "Export" });

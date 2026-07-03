@@ -29,9 +29,11 @@
 //   POST   /api/canvas/projects/<id>/nodes-duplicate {nodeIds, dx?, dy?, scopeId?} (duplicate live nodes; one entry)
 //   POST   /api/canvas/projects/<id>/nodes-delete    {nodeIds}                     (mixed element+group subtree delete)
 //   POST   /api/canvas/projects/<id>/assign-group   {elementIds, groupId|null}
-//   POST   /api/canvas/projects/<id>/undo
-//   POST   /api/canvas/projects/<id>/redo
+//   POST   /api/canvas/projects/<id>/undo           {expectHead?}   (T0234 guard; page omits it)
+//   POST   /api/canvas/projects/<id>/redo           {expectHead?}
 //   GET    /api/canvas/projects/<id>/history
+//   GET    /api/canvas/projects/<id>/history-list
+//   POST   /api/canvas/projects/<id>/history-jump   {seq, expectHead?}
 //   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible}
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/regions {regions}   (replace)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/reorder {index}     (z-order)
@@ -510,15 +512,17 @@ export function createCanvasApi(root) {
         return true;
       }
 
-      // /api/canvas/projects/<id>/undo | /redo
+      // /api/canvas/projects/<id>/undo | /redo   {expectHead?}  (T0234: optional
+      // concurrency guard; the page does not send it today — undefined, so behavior
+      // is unchanged there. An agent driving the API directly can pass it like the CLI.)
       if (parts.length === 5 && sub === "undo" && req.method === "POST") {
-        await readJsonBody(req);
-        sendMutation(200, undoOp(root, { projectId: id }));
+        const body = await readJsonBody(req);
+        sendMutation(200, undoOp(root, { projectId: id, expectHead: body.expectHead }));
         return true;
       }
       if (parts.length === 5 && sub === "redo" && req.method === "POST") {
-        await readJsonBody(req);
-        sendMutation(200, redoOp(root, { projectId: id }));
+        const body = await readJsonBody(req);
+        sendMutation(200, redoOp(root, { projectId: id, expectHead: body.expectHead }));
         return true;
       }
 
@@ -534,11 +538,12 @@ export function createCanvasApi(root) {
         return true;
       }
 
-      // /api/canvas/projects/<id>/history-jump  (jump the applied head to a spine seq;
-      // one journaled nav marker, folds history flags like undo/redo)
+      // /api/canvas/projects/<id>/history-jump  {seq, expectHead?}  (jump the applied
+      // head to a spine seq; one journaled nav marker, folds history flags like undo/
+      // redo. expectHead is T0234's optional concurrency guard — see undo/redo above.)
       if (parts.length === 5 && sub === "history-jump" && req.method === "POST") {
         const body = await readJsonBody(req);
-        sendMutation(200, jumpHistory(root, { projectId: id, seq: body.seq }));
+        sendMutation(200, jumpHistory(root, { projectId: id, seq: body.seq, expectHead: body.expectHead }));
         return true;
       }
 

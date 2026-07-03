@@ -40,6 +40,25 @@ export/undo/redo/history/...). Run it bare first to see the current command
 set — do not hardcode a command list here. An HTTP API (`api.mjs`) exists for
 page parity, but an agent should use the CLI.
 
+## History navigation (undo/redo/jump) — live-project guard
+
+The project may be live (a human editing it in the page) while an agent is also
+acting on it, so `undo`, `redo`, and `history-jump` REQUIRE `--expect-head <n>`
+proving the agent read the CURRENT head first — a stale value refuses loudly and
+writes nothing (T0234, after an incident where an agent's jump forked history and
+orphaned the lead's newest edits). Workflow:
+
+```
+node ai_studio/assets/canvas/cli.mjs history-list <projectId>   # prints "head: N", then JSON
+node ai_studio/assets/canvas/cli.mjs undo <projectId> --expect-head N
+node ai_studio/assets/canvas/cli.mjs redo <projectId> --expect-head N
+node ai_studio/assets/canvas/cli.mjs history-jump <projectId> --seq <n> --expect-head N
+```
+
+Always re-run `history-list` immediately before navigating if any time has passed —
+`N` must be the head at the moment of the call, not a value read earlier in the
+session.
+
 ## Laws (non-negotiable — see PLAN.md)
 
 - **Non-destructive**: `files/` are immutable content-addressed originals;

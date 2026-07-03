@@ -37,9 +37,14 @@
 //   node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs render-group <id> --group g [--scale 2] [--background "#rrggbb"]
-//   node ai_studio/assets/canvas/cli.mjs undo|redo|history <id>
-//   node ai_studio/assets/canvas/cli.mjs history-list <id>
-//   node ai_studio/assets/canvas/cli.mjs history-jump <id> --seq <n>   (0 = base; like N undos/redos, undoable)
+//   node ai_studio/assets/canvas/cli.mjs undo <id> --expect-head <n>
+//   node ai_studio/assets/canvas/cli.mjs redo <id> --expect-head <n>
+//   node ai_studio/assets/canvas/cli.mjs history <id>
+//   node ai_studio/assets/canvas/cli.mjs history-list <id>   (prints "head: N" then the JSON; note N)
+//   node ai_studio/assets/canvas/cli.mjs history-jump <id> --seq <n> --expect-head <n>   (0 = base; like N undos/redos, undoable)
+//   (undo/redo/history-jump require --expect-head N: the project may be live, so read
+//   the current head from history-list right before acting — see README "History panel
+//   + jump" / T0234)
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -182,11 +187,14 @@ function usage() {
   group-ungroup <id> --group <gid>   (dissolve one level; children keep the group's z-slot; one undo step)
   group-delete <id> --group <gid>
   render-group <id> --group <gid>  (alias: render-screen) [--scale <n>] [--background '#rrggbb']
-  undo <id>
-  redo <id>
+  undo <id> --expect-head <n>
+  redo <id> --expect-head <n>
   history <id>
-  history-list <id>   (labeled linear history the panel shows: Base + undo chain + dimmed redo tail)
-  history-jump <id> --seq <n>   (jump the applied head to a spine seq; 0 = base; like N undos/redos, undoable)`);
+  history-list <id>   (labeled linear history the panel shows: Base + undo chain + dimmed redo tail; prints "head: N" first)
+  history-jump <id> --seq <n> --expect-head <n>   (jump the applied head to a spine seq; 0 = base; like N undos/redos, undoable)
+  (undo/redo/history-jump require --expect-head N — the project may be live; run
+  history-list to read the current head, then pass it right before acting; a stale
+  value refuses loudly and writes nothing)`);
 }
 
 async function runCommand(command, id, positional, flags) {
@@ -569,26 +577,47 @@ async function runCommand(command, id, positional, flags) {
       if (flags.background !== undefined && flags.background !== "true") args.background = flags.background;
       return print(await renderGroup(repoRoot, args));
     }
-    case "undo":
+    case "undo": {
       if (!id) fail("undo requires <id>");
-      return print(undoOp(repoRoot, { projectId: id }));
-    case "redo":
+      // T0234: the CLI is the agent transport — undo must prove it read the CURRENT
+      // head before applying (the project may be live; see history-jump below).
+      if (flags["expect-head"] === undefined || flags["expect-head"] === "true") {
+        fail("undo requires --expect-head <n> — the project may be live; run history-list to read the current head, then retry with it");
+      }
+      return print(undoOp(repoRoot, { projectId: id, expectHead: Number(flags["expect-head"]) }));
+    }
+    case "redo": {
       if (!id) fail("redo requires <id>");
-      return print(redoOp(repoRoot, { projectId: id }));
+      if (flags["expect-head"] === undefined || flags["expect-head"] === "true") {
+        fail("redo requires --expect-head <n> — the project may be live; run history-list to read the current head, then retry with it");
+      }
+      return print(redoOp(repoRoot, { projectId: id, expectHead: Number(flags["expect-head"]) }));
+    }
     case "history":
       if (!id) fail("history requires <id>");
       return print(readHistory(repoRoot, { projectId: id }));
-    case "history-list":
+    case "history-list": {
       // Labeled linear spine (Base + undo chain + redo tail) — the exact rows the page's
-      // history panel renders; the parity list for `history-jump`.
+      // history panel renders; the parity list for undo/redo/history-jump's --expect-head.
       if (!id) fail("history-list requires <id>");
-      return print(listHistory(repoRoot, { projectId: id }));
-    case "history-jump":
+      const list = listHistory(repoRoot, { projectId: id });
+      // T0234: print the current head prominently as its own line BEFORE the JSON, so
+      // an agent reading the output can't miss it — the value to pass as --expect-head.
+      console.log(`head: ${list.head}`);
+      return print(list);
+    }
+    case "history-jump": {
       // Jump the applied head to a spine seq (0 = base) — one call, behaves like N
       // undos/redos, undoable. Loud on an unknown/out-of-range seq.
       if (!id) fail("history-jump requires <id>");
       if (flags.seq === undefined || flags.seq === "true") fail("history-jump requires --seq <n>");
-      return print(jumpHistory(repoRoot, { projectId: id, seq: Number(flags.seq) }));
+      // T0234: same live-project guard as undo/redo — prove the caller read the
+      // CURRENT head (history-list) before the jump is allowed to apply.
+      if (flags["expect-head"] === undefined || flags["expect-head"] === "true") {
+        fail("history-jump requires --expect-head <n> — the project may be live; run history-list to read the current head, then retry with it");
+      }
+      return print(jumpHistory(repoRoot, { projectId: id, seq: Number(flags.seq), expectHead: Number(flags["expect-head"]) }));
+    }
     case "ops-stats":
       if (!id) fail("ops-stats requires <id>");
       return print(opsStats(repoRoot, { projectId: id }));

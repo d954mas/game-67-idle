@@ -672,6 +672,32 @@ reversible (`redo`/jump-forward after a back jump, and vice-versa). Loud on a no
 negative seq or a seq not on the current spine (unknown or stale-branch); a jump to the current
 head is a no-op (no marker).
 
+### Concurrency guard — `expectHead` (T0234)
+
+Incident 2026-07-03: an agent read a project's journal at head `823`, the lead kept
+working live to head `876`, and the agent's `history-jump` forked the spine at `817`
+and orphaned the lead's newest entries (recovered manually from sidecar snapshots).
+`undoOp`, `redoOp`, and `jumpHistory` accept an optional `expectHead` (a number; the
+CLI's `--expect-head` may arrive as a string and is coerced with `Number()` and
+validated as a finite integer — a bad value is a loud error). When given and it does
+not match the project's **actual current** `history_seq`, the call refuses LOUDLY
+**before any write** — the error names the current head, the caller's stale value, and
+the remedy (re-read `history-list` and retry). Nothing is written on refusal (journal
+and `project.json` untouched). When it matches, or when `expectHead` is omitted
+entirely, behavior is byte-identical to before T0234 — the page (which never sends it)
+is unaffected.
+
+The **CLI is the agent transport**, and every command it runs is agent-attributed
+(`setOpsActor("agent")` in its `isMain` guard), so `undo`, `redo`, and `history-jump`
+REQUIRE `--expect-head <n>` — omitting it is a loud `fail()` explaining the live-project
+race and pointing at `history-list`. `history-list`'s output carries the current head
+under both `history_seq` (existing field, unchanged) and the new additive `head` field,
+and the CLI additionally prints a `head: N` line before the JSON so it can't be missed.
+The agent workflow is: `history-list` → note `head` → `undo|redo|history-jump ... --expect-head <head>`.
+The HTTP API passes `expectHead` through from the JSON body (`{expectHead?}` on
+`/undo`, `/redo`, `/history-jump`) for a non-CLI agent; the page does not send it (v1 —
+two-tab page safety is a deferred follow-up).
+
 Per-project observability files (all under the project folder, alongside
 `project.json`): `journal.jsonl` (thin op log), `snapshots/<seq>.json` (fat
 before/after snapshots), `journal.archive.jsonl` (compacted-away lines),
@@ -780,11 +806,11 @@ node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group 
 node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g   # dissolve one level; children keep the group's z-slot; one undo step
 node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 node ai_studio/assets/canvas/cli.mjs render-screen <id> --group g [--scale 2] [--background '#rrggbb']
-node ai_studio/assets/canvas/cli.mjs undo <id>
-node ai_studio/assets/canvas/cli.mjs redo <id>
+node ai_studio/assets/canvas/cli.mjs undo <id> --expect-head <n>  # --expect-head required (T0234); read it from history-list first
+node ai_studio/assets/canvas/cli.mjs redo <id> --expect-head <n>
 node ai_studio/assets/canvas/cli.mjs history <id>
-node ai_studio/assets/canvas/cli.mjs history-list <id>            # labeled linear spine the panel shows (Base + undo chain + dimmed redo tail)
-node ai_studio/assets/canvas/cli.mjs history-jump <id> --seq <n>  # jump the head to a spine seq (0 = base); like N undos/redos, undoable
+node ai_studio/assets/canvas/cli.mjs history-list <id>            # labeled linear spine the panel shows (Base + undo chain + dimmed redo tail); prints "head: N" first
+node ai_studio/assets/canvas/cli.mjs history-jump <id> --seq <n> --expect-head <n>  # jump the head to a spine seq (0 = base); like N undos/redos, undoable
 node ai_studio/assets/canvas/cli.mjs ops-stats <id>   # per-op count/median/p95 + errors count
 ```
 

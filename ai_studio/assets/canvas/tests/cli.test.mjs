@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -21,6 +21,17 @@ function run(env, ...args) {
   return JSON.parse(line);
 }
 
+// Spawn the CLI expecting a non-zero exit (fail()'s contract: "error: <message>" to
+// stderr, exit 1) — used to assert the T0234 --expect-head guard's loud-failure path.
+function runFail(env, ...args) {
+  try {
+    execFileSync(process.execPath, [CLI, ...args], { env: { ...process.env, ...env }, encoding: "utf8" });
+    assert.fail(`expected "${args.join(" ")}" to fail`);
+  } catch (error) {
+    return error;
+  }
+}
+
 test("cli create/add-image/undo/redo/history/export smoke", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-"));
   const env = { CANVAS_PROJECTS_ROOT: dir };
@@ -34,10 +45,10 @@ test("cli create/add-image/undo/redo/history/export smoke", (t) => {
   const elementId = added.element.id;
   assert.equal(added.element.w, 9);
 
-  run(env, "move", projectId, "--element", elementId, "--x", "25", "--y", "10");
-  const undone = run(env, "undo", projectId);
+  const moved = run(env, "move", projectId, "--element", elementId, "--x", "25", "--y", "10");
+  const undone = run(env, "undo", projectId, "--expect-head", String(moved.project.history_seq));
   assert.equal(undone.project.elements[0].x, 0);
-  const redone = run(env, "redo", projectId);
+  const redone = run(env, "redo", projectId, "--expect-head", String(undone.project.history_seq));
   assert.equal(redone.project.elements[0].x, 25);
 
   const history = run(env, "history", projectId);
@@ -73,20 +84,77 @@ test("cli history-list + history-jump parity (Base spine + jump reaches panel st
   assert.deepEqual(list.entries.map((e) => e.label), ["Base", "🤖 Add image", "🤖 Move"]);
   assert.deepEqual(list.entries.map((e) => e.actor), ["user", "agent", "agent"]);
   assert.equal(list.entries.at(-1).current, true);
+  // T0234: head is prominent in the JSON too (additive; history_seq is unchanged).
+  assert.equal(list.head, 2);
+  assert.equal(list.history_seq, 2);
 
   // history-jump back to seq1 (== undo): the CLI reaches the same state as the panel.
-  const back = run(env, "history-jump", projectId, "--seq", "1");
+  // --expect-head proves the caller read the CURRENT head (T0234).
+  const back = run(env, "history-jump", projectId, "--seq", "1", "--expect-head", String(list.head));
   assert.equal(back.project.elements[0].x, 0);
   assert.equal(back.jumped_to, 1);
 
   // history-jump forward into the dimmed redo tail (seq2, == redo).
-  const forward = run(env, "history-jump", projectId, "--seq", "2");
+  const forward = run(env, "history-jump", projectId, "--seq", "2", "--expect-head", String(back.project.history_seq));
   assert.equal(forward.project.elements[0].x, 25);
 
   // history-jump to base (0): empty project.
-  const base = run(env, "history-jump", projectId, "--seq", "0");
+  const base = run(env, "history-jump", projectId, "--seq", "0", "--expect-head", String(forward.project.history_seq));
   assert.equal(base.project.elements.length, 0);
   assert.equal(base.project.history_seq, 0);
+});
+
+test("cli history-list prints the head prominently (\"head: N\" line before the JSON)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-head-line-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const pngPath = join(dir, "pic.png");
+  writeFileSync(pngPath, solidPng(4, 4, [1, 2, 3]));
+  const projectId = run(env, "create", "--title", "CLI Head Line").project.id;
+  run(env, "add-image", projectId, "--file", pngPath); // seq1, head1
+
+  const stdout = execFileSync(process.execPath, [CLI, "history-list", projectId], {
+    env: { ...process.env, ...env },
+    encoding: "utf8",
+  });
+  const lines = stdout.trim().split("\n").filter(Boolean);
+  assert.equal(lines[0], "head: 1", "the head line comes before the JSON row");
+  const parsed = JSON.parse(lines.at(-1));
+  assert.equal(parsed.head, 1);
+});
+
+test("cli undo/redo/history-jump REQUIRE --expect-head (T0234); missing flag fails loudly and writes nothing", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-expecthead-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const pngPath = join(dir, "pic.png");
+  writeFileSync(pngPath, solidPng(4, 4, [1, 2, 3]));
+  const projectId = run(env, "create", "--title", "CLI Expect Head").project.id;
+  run(env, "add-image", projectId, "--file", pngPath); // seq1, head1
+
+  const journalPath = join(dir, projectId, "journal.jsonl");
+  const journalBefore = readFileSync(journalPath, "utf8");
+
+  const undoFail = runFail(env, "undo", projectId);
+  assert.equal(undoFail.status, 1);
+  assert.match(undoFail.stderr, /undo requires --expect-head/);
+
+  const redoFail = runFail(env, "redo", projectId);
+  assert.equal(redoFail.status, 1);
+  assert.match(redoFail.stderr, /redo requires --expect-head/);
+
+  const jumpFail = runFail(env, "history-jump", projectId, "--seq", "0");
+  assert.equal(jumpFail.status, 1);
+  assert.match(jumpFail.stderr, /history-jump requires --expect-head/);
+
+  // history-jump still requires --seq first (unchanged existing check).
+  const seqFail = runFail(env, "history-jump", projectId);
+  assert.match(seqFail.stderr, /history-jump requires --seq/);
+
+  // None of the above wrote anything.
+  assert.equal(readFileSync(journalPath, "utf8"), journalBefore);
 });
 
 test("cli batched elements-set / elements-remove parity (one undo each)", (t) => {
@@ -111,7 +179,7 @@ test("cli batched elements-set / elements-remove parity (one undo each)", (t) =>
   assert.deepEqual(run(env, "show", projectId).project.elements.map((e) => e.x), [40, 60]);
   const h1 = run(env, "history", projectId);
   assert.equal(h1.entries.filter((e) => e.op === "patchElements").length, 1);
-  run(env, "undo", projectId);
+  run(env, "undo", projectId, "--expect-head", String(set.project.history_seq));
   assert.deepEqual(run(env, "show", projectId).project.elements.map((e) => e.x), [0, 0]);
 
   // elements-remove: batched delete -> one journal entry, one undo restores both.
@@ -120,7 +188,7 @@ test("cli batched elements-set / elements-remove parity (one undo each)", (t) =>
   assert.equal(run(env, "show", projectId).project.elements.length, 0);
   const h2 = run(env, "history", projectId);
   assert.equal(h2.entries.filter((e) => e.op === "removeElements").length, 1);
-  run(env, "undo", projectId);
+  run(env, "undo", projectId, "--expect-head", String(removed.project.history_seq));
   assert.equal(run(env, "show", projectId).project.elements.length, 2);
 });
 
@@ -184,7 +252,7 @@ test("cli nodes-duplicate / nodes-delete / nodes-paste parity (one undo each)", 
   const del = run(env, "nodes-delete", projectId, "--nodes", dupId);
   assert.deepEqual(del.removedElements, [dupId]);
   assert.equal(run(env, "show", projectId).project.elements.length, 1);
-  run(env, "undo", projectId);
+  run(env, "undo", projectId, "--expect-head", String(del.project.history_seq));
   assert.equal(run(env, "show", projectId).project.elements.length, 2);
 
   // nodes-paste via a hand-authored spec referencing the immutable file.
@@ -223,7 +291,7 @@ test("cli add-images batched multi-image add parity (one undo restores all)", (t
   // One journal entry for the whole batch; one undo removes all three.
   const h = run(env, "history", projectId);
   assert.equal(h.entries.filter((e) => e.op === "addImages").length, 1);
-  run(env, "undo", projectId);
+  run(env, "undo", projectId, "--expect-head", String(added.project.history_seq));
   assert.equal(run(env, "show", projectId).project.elements.length, 0);
 });
 
@@ -246,7 +314,7 @@ test("cli groups-set batched shared toggles parity (one undo restores all)", (t)
   }
   const h = run(env, "history", projectId);
   assert.equal(h.entries.filter((e) => e.op === "patchGroups").length, 1);
-  run(env, "undo", projectId);
+  run(env, "undo", projectId, "--expect-head", String(set.project.history_seq));
   const undone = run(env, "show", projectId).project;
   assert.equal(undone.groups.filter((g) => g.visible === false).length, 0, "one undo restores all");
 });

@@ -1751,12 +1751,35 @@ export function deleteNodes(root, { projectId, nodeIds } = {}) {
 
 // ---- undo / redo / history ---------------------------------------------------
 
-export function undoOp(root, { projectId } = {}) {
+// Agent-side concurrency guard (T0234, after the 2026-07-03 history-jump race: an
+// agent read a project at head 823, the lead kept working live to head 876, and the
+// agent's jump forked the spine and orphaned the lead's newest entries). undoOp/
+// redoOp/jumpHistory accept an optional `expectHead` the caller reads BEFORE calling
+// (from listHistory/history-list); when given, it must still match the ACTUAL current
+// head or the call refuses LOUDLY before any write. `expectHead` may arrive as a
+// string from the CLI, so it is coerced with Number() and validated as a finite
+// integer here (a non-numeric value is its own loud error). Absent/null/"" means no
+// guard was requested — the page path today, byte-identical to pre-T0234 behavior.
+function checkExpectHead(expectHead, head) {
+  if (expectHead === undefined || expectHead === null || expectHead === "") return;
+  const expected = Number(expectHead);
+  if (!Number.isFinite(expected) || !Number.isInteger(expected)) {
+    throw new Error(`expectHead must be a finite integer, got ${JSON.stringify(expectHead)}`);
+  }
+  if (expected !== head) {
+    throw new Error(
+      `history advanced: head is now ${head}, you read ${expected} — the project is live; re-read history (history-list) and retry`,
+    );
+  }
+}
+
+export function undoOp(root, { projectId, expectHead } = {}) {
   if (!projectId) throw new Error("undoOp requires projectId");
   const startedAt = performance.now();
   ensureThinJournal(root, projectId); // migrating open is a mutating open
   const project = getProject(root, projectId);
   const head = Number(project.history_seq) || 0;
+  checkExpectHead(expectHead, head);
   if (!head) throw new Error("nothing to undo");
   const entry = readJournal(root, projectId).find((item) => Number(item.seq) === head && isMutation(item));
   // The head entry can be absent once history has been compacted past this point
@@ -1777,12 +1800,13 @@ export function undoOp(root, { projectId } = {}) {
   return { project: saved, undone_seq: head, history_seq: saved.history_seq };
 }
 
-export function redoOp(root, { projectId } = {}) {
+export function redoOp(root, { projectId, expectHead } = {}) {
   if (!projectId) throw new Error("redoOp requires projectId");
   const startedAt = performance.now();
   ensureThinJournal(root, projectId);
   const project = getProject(root, projectId);
   const head = Number(project.history_seq) || 0;
+  checkExpectHead(expectHead, head);
   const candidates = readJournal(root, projectId).filter((item) => isMutation(item) && (Number(item.parent) || 0) === head);
   if (!candidates.length) throw new Error("nothing to redo");
   const entry = candidates.reduce((best, item) => (Number(item.seq) > Number(best.seq) ? item : best));
@@ -2026,7 +2050,10 @@ export function listHistory(root, { projectId } = {}) {
     ...undoChain.map((line) => rowOf(line, false)),
     ...redoChain.map((line) => rowOf(line, true)),
   ];
-  return { history_seq: head, canUndo: head > 0 && undoChain.length > 0, canRedo: redoChain.length > 0, entries };
+  // `head` duplicates `history_seq` under the same vocabulary the concurrency-guard
+  // error message uses ("head is now N") — additive (T0234); history_seq is unchanged
+  // and still the field both existing clients (page, API) read.
+  return { history_seq: head, head, canUndo: head > 0 && undoChain.length > 0, canRedo: redoChain.length > 0, entries };
 }
 
 // Jump the applied head to `seq` — any seq on the current spine (0 = base, an undo-chain
@@ -2036,8 +2063,9 @@ export function listHistory(root, { projectId } = {}) {
 // call; appends only a `jump` nav marker (no snapshot, not a mutation) so undo/redo stay
 // coherent and the jump is reversible. LOUD on a non-integer/negative seq or a seq that is
 // not on the current spine (an unknown or stale-branch seq). No-op (no marker) when already
-// there. Like undo/redo it never grows depth, so no compaction runs.
-export function jumpHistory(root, { projectId, seq } = {}) {
+// there. Like undo/redo it never grows depth, so no compaction runs. Optional `expectHead`
+// (T0234) is the caller's concurrency guard — see checkExpectHead above.
+export function jumpHistory(root, { projectId, seq, expectHead } = {}) {
   if (!projectId) throw new Error("jumpHistory requires projectId");
   if (seq === undefined || seq === null || seq === "") throw new Error("jumpHistory requires a target seq");
   const target = Number(seq);
@@ -2048,6 +2076,7 @@ export function jumpHistory(root, { projectId, seq } = {}) {
   ensureThinJournal(root, projectId); // a migrating open is a mutating open
   const project = getProject(root, projectId);
   const head = Number(project.history_seq) || 0;
+  checkExpectHead(expectHead, head);
   if (target === head) return { project, history_seq: head, jumped_from: head, jumped_to: head }; // already here
 
   const journal = readJournal(root, projectId);

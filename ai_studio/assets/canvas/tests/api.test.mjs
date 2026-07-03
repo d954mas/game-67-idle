@@ -246,6 +246,51 @@ test("canvas API history-list + history-jump routes drive the panel (jump folds 
   assert.equal(bad.status >= 400, true, "unknown seq is a loud error");
 });
 
+test("canvas API undo/redo/history-jump pass expectHead through (T0234 concurrency guard)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const created = await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Expect Head API" });
+  const projectId = created.json().project.id;
+
+  const uploaded = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/images`, {
+    name: "pic.png",
+    bytes_base64: solidPng(8, 8).toString("base64"),
+  });
+  const elementId = uploaded.json().element.id;
+  await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/elements/${elementId}`, { x: 40 }); // seq2, head2
+
+  // A stale expectHead is a loud 4xx BEFORE any write; the head is unchanged after.
+  const stale = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`, { expectHead: 1 });
+  assert.equal(stale.status, 400);
+  assert.match(stale.json().error, /history advanced: head is now 2, you read 1/);
+  const afterRefusal = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`);
+  assert.equal(afterRefusal.json().project.history_seq, 2, "refused undo left the head untouched");
+
+  // A matching expectHead succeeds exactly like the no-param path (existing test above).
+  const undone = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`, { expectHead: 2 });
+  assert.equal(undone.status, 200);
+  assert.equal(undone.json().project.elements[0].x, 0);
+
+  // redo takes the same guard.
+  const redoBad = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/redo`, { expectHead: 99 });
+  assert.equal(redoBad.status, 400);
+  const redone = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/redo`, { expectHead: 1 });
+  assert.equal(redone.status, 200);
+  assert.equal(redone.json().project.elements[0].x, 40);
+
+  // history-jump takes the same guard.
+  const jumpBad = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/history-jump`, { seq: 1, expectHead: 0 });
+  assert.equal(jumpBad.status, 400);
+  const jumped = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/history-jump`, { seq: 1, expectHead: 2 });
+  assert.equal(jumped.status, 200);
+  assert.equal(jumped.json().project.history_seq, 1);
+
+  // The page path (no expectHead at all) is untouched — undo/redo/jump without the
+  // field behave exactly as before T0234.
+  const pageUndo = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`);
+  assert.equal(pageUndo.status, 200);
+});
+
 test("canvas API export route writes a folder + manifest", async (t) => {
   tempProjects(t);
   const handler = createCanvasApi(ROOT);
