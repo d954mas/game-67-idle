@@ -1,7 +1,7 @@
 ---
 id: T0239
 title: "Canvas: generation placeholder element - object with prompt/refs/meta, generation invoked from it"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P1
@@ -99,3 +99,4 @@ PROMPT TOOLS (lead, 2026-07-03, same discussion):
 - 2026-07-03: Increment 2 LIVE-VERIFIED: lead's chest prompt on Demo card grp_a0f668ca generated via CLI recipe-generate -> el_bb322a00 'Recipe card codex' 1254x1254 beside the card, last_run ok, one journal entry. Generate button enabled in inspector (6204a28c), server restarted. Remaining: increment 3 (style card) + 4 (expand/extract).
 - 2026-07-03: Increment 3 (style card) launched: fast-worker owns ops/api/cli/inspector/workspace/css + new style.test.mjs. Spec: group.style blob {v,prompt,ref}, auto-ref on first image, Make ref, recipe style_ref dropdown linkage, effective prompt = recipe + '\n\nStyle: ' + style prompt, style ref appended to refPaths (last), examples never travel, style_snapshot in frozen meta. R2 gemini-refs caveat obsolete post-T0252.
 - 2026-07-03: Lead confirmed: generation works (2026-07-03 afternoon). Increment 3 worker mid-flight: ops/api/cli/inspector done, workspace/css/tests remain.
+- 2026-07-03: Increment 3 landed 012c2afe after orchestrator fix round: style card component complete (blob+ops+auto-ref, generation mixing w/ style_snapshot, paste pointer remap via ids-in-spec, export filter, actions.js convention restored, blue chrome + ref chip). Suite 426. :8780 restarted, smoke 200. Increment 4 (expand/extract) remains -> back to doing after lead verifies cards.
