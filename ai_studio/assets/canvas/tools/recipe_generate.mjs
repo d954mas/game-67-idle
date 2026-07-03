@@ -16,17 +16,24 @@
 // gemini -> shells the agy (Antigravity) CLI per the skill's Path B (references/
 // generation-paths.md): a headless, agentic image-gen call verified by OUTPUT FILE
 // EXISTENCE, never stdout (agy "can be quiet under non-TTY" per the skill notes; gen_both.sh
-// uses the same file-existence check). agy ref support is UNVERIFIED (R2) — ops.mjs is the
-// ONE place that enforces the loud refusal law for a card with refs on engine=gemini; this
-// module's `generateImageGemini` stays a plain "prompt -> image" generator with no ref
-// plumbing at all, so there is no way for a ref to silently reach agy from here.
+// uses the same file-existence check). agy ref support is VERIFIED (T0251, 2026-07-03 — a live
+// agy run + an independent codex vision judge, see tmp/research_agy_refs_2026-07-03.md): agy
+// has no image-attach flag, but as a multimodal AGENT it can open/view a local ref file (given
+// `--add-dir` on its parent dir) via its own tools and condition generation on it. Because agy
+// is an agent, not an API, it can ALSO generate from the text prompt alone and exit 0 even when
+// a ref was unreachable — the silent-divergence guard is this module's own responsibility, not
+// ops.mjs's: `buildAgyInstruction` requires agy to FIRST open/view each ref and write one
+// sentence to `<outPath>.seen.txt` before generating, and `generateImageGemini` refuses loudly
+// (verifyAgyRefProof) whenever refPaths were supplied but that proof file is missing/empty.
+// ops.mjs no longer refuses or skips a gemini card with refs; it forwards refPaths through the
+// SAME `{prompt, refPaths, params}` seam the codex generator already uses.
 //
 // Tests inject fake generators for BOTH engines, so neither codex nor agy ever spawns in the
 // suite (the T0238 contract, extended to two engines).
 import { execFile, spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { promisify } from "node:util";
 
@@ -104,25 +111,77 @@ function aspectLabel(size) {
   return wStr === hStr ? "square 1:1" : `${wStr}:${hStr} aspect ratio`;
 }
 
-// Pure instruction-text builder (no spawn) — verbatim template from gen_both.sh's agy call,
-// generalized with the aspect label + an explicit outPath. Never mentions reference images
-// (agy ref support is unverified; ops.mjs refuses loudly before this is ever reached on a
-// card with refs on engine=gemini).
-export function buildAgyInstruction({ prompt, size, outPath } = {}) {
+// Pure instruction-text builder (no spawn). With NO refs this is the verbatim template from
+// gen_both.sh's agy call, generalized with the aspect label + an explicit outPath — kept
+// byte-identical to the pre-T0251 text so the no-refs path never perturbs a known-working
+// prompt. With refs present (T0251-verified shape, tmp/research_agy_refs_2026-07-03.md's
+// "Exact working invocation shape"), a ref clause is PREPENDED that instructs agy to first
+// open/view each ref file with its own tools and write one sentence describing what it saw to
+// `<outPath>.seen.txt` — the proof `verifyAgyRefProof` checks after the run (silent-divergence
+// guard: agy can otherwise generate from the text prompt alone and exit 0 without ever having
+// looked at a ref).
+export function buildAgyInstruction({ prompt, size, outPath, refPaths = [] } = {}) {
   if (!prompt) throw new Error("buildAgyInstruction requires prompt");
   if (!outPath) throw new Error("buildAgyInstruction requires outPath");
   const aspect = aspectLabel(size);
-  return (
+  const genClause =
     `Use your built-in image generation to create one real raster image (not code-drawn), ${aspect}: ${prompt}. ` +
-    `Save the PNG to ${outPath} . Do not write or run any drawing code.`
+    `Save the PNG to ${outPath} . Do not write or run any drawing code.`;
+  if (!refPaths || !refPaths.length) return genClause;
+  const seenPath = `${outPath}.seen.txt`;
+  const refList = refPaths.join(" ; ");
+  return (
+    `You are given ${refPaths.length} reference image file(s) that define the desired subject/style. ` +
+    `FIRST open and view each with your tools: ${refList} . ` +
+    `Then write ONE sentence describing what you saw to ${seenPath} . ` +
+    `Then, using your built-in image generation, create one real raster image (not code-drawn), ${aspect}: ${prompt}. ` +
+    `Match the subject/style/palette of the reference image(s). Save the PNG to ${outPath} . Do not write or run any drawing code.`
   );
 }
 
 // Pure command-line builder (no spawn) — mirrors gen_both.sh's agy invocation:
-// `agy.exe --dangerously-skip-permissions -p "<instruction>"`.
-export function buildAgyCommand({ prompt, size, outPath } = {}) {
-  const instruction = buildAgyInstruction({ prompt, size, outPath });
-  return { command: AGY_PATH, args: ["--dangerously-skip-permissions", "-p", instruction] };
+// `agy.exe --dangerously-skip-permissions -p "<instruction>"`, prefixed with one --add-dir per
+// distinct ref parent directory (deduped) when refs are present. Refs live OUTSIDE the repo
+// (canvas_projects/.../files/), so --add-dir is mandatory for agy to be allowed to read them
+// (T0251's verified invocation shape) — omitting it is the failure mode the .seen.txt guard
+// below exists to catch.
+export function buildAgyCommand({ prompt, size, outPath, refPaths = [] } = {}) {
+  const instruction = buildAgyInstruction({ prompt, size, outPath, refPaths });
+  const args = [];
+  const seenDirs = new Set();
+  for (const ref of refPaths || []) {
+    const dir = dirname(ref);
+    if (seenDirs.has(dir)) continue;
+    seenDirs.add(dir);
+    args.push("--add-dir", dir);
+  }
+  args.push("--dangerously-skip-permissions", "-p", instruction);
+  return { command: AGY_PATH, args };
+}
+
+// Silent-divergence guard (T0251): agy is an AGENT, not an image API — if a ref path is
+// unreadable (outside every --add-dir, or permissions not skipped) it can still emit an image
+// from the text prompt alone and exit 0. File-existence alone would pass that case falsely, so
+// whenever refPaths were supplied this also requires the `<outPath>.seen.txt` sidecar
+// buildAgyInstruction asked agy to write (the "FIRST open and view + describe" step) to exist
+// and be non-empty — first-hand proof agy actually looked at the reference bytes. Pure I/O, no
+// spawn — callable and unit-testable on its own by writing/omitting the sidecar file by hand.
+export function verifyAgyRefProof(outPath, refPaths) {
+  if (!refPaths || !refPaths.length) return;
+  const seenPath = `${outPath}.seen.txt`;
+  let seenText = "";
+  try {
+    seenText = readFileSync(seenPath, "utf8");
+  } catch {
+    seenText = "";
+  }
+  if (!seenText.trim()) {
+    throw new Error(
+      `agy produced ${outPath} but no non-empty ${seenPath} proof it read the ${refPaths.length} reference image(s) — ` +
+        "silent-divergence guard (T0251, tmp/research_agy_refs_2026-07-03.md): agy can generate from the text prompt " +
+        "alone and exit 0 without ever opening a ref; file-existence alone would pass that case falsely",
+    );
+  }
 }
 
 // Run agy with stdin/stdout/stderr all redirected away (mirrors the reference script's
@@ -158,21 +217,25 @@ function runAgy(command, args, timeoutMs) {
 }
 
 // The DEFAULT gemini generator ops.generateFromRecipe falls back to for engine="gemini" (and
-// the gemini half of engine="both"). A plain "prompt -> image" seam — no ref plumbing at all
-// (see module doc). Verifies by output FILE EXISTENCE, never stdout; a missing file after
-// the run is the loud-error signal (names the reference doc for a human to diagnose further).
+// the gemini half of engine="both"). Same {prompt, refPaths, params} seam shape as
+// generateImageCodex above (T0251: refs are plumbed through, mirroring the codex generator).
+// Verifies by output FILE EXISTENCE first (never stdout — a missing file after the run is the
+// loud-error signal, naming the reference doc for a human to diagnose further), THEN, when
+// refPaths were supplied, the .seen.txt silent-divergence guard (verifyAgyRefProof) — file
+// existence alone is not sufficient proof agy actually read the refs.
 export async function generateImageGemini({ prompt, refPaths = [], params = {} } = {}) {
   if (!prompt) throw new Error("generateImageGemini requires prompt");
   const workDir = mkdtempSync(join(tmpdir(), "canvas-recipegen-agy-"));
   try {
     const outPath = join(workDir, "gen.png");
-    const { command, args } = buildAgyCommand({ prompt, size: params.size, outPath });
+    const { command, args } = buildAgyCommand({ prompt, size: params.size, outPath, refPaths });
     await runAgy(command, args, AGY_TIMEOUT_MS);
     if (!existsSync(outPath)) {
       throw new Error(
         `agy produced no output file (expected ${outPath}) — see .codex/skills/nt-asset-image-generation/references/generation-paths.md Path B`,
       );
     }
+    verifyAgyRefProof(outPath, refPaths);
     return readFileSync(outPath);
   } finally {
     rmSync(workDir, { recursive: true, force: true });

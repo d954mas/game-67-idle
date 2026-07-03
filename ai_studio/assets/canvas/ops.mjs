@@ -57,9 +57,11 @@ import { uploadImageSource } from "../tools/image/sources/api.mjs";
 // owns the subject-lock prompts + invocation.
 import { buildBlackPlatePrompt, buildWhitePlatePrompt, generatePlate } from "./tools/dual_plate_generate.mjs";
 // Recipe-card generation (T0239 increment 2): TWO default engine generators (codex ->
-// generate_image.py, gemini -> the agy CLI) behind the SAME injectable seam shape. See the
-// module doc for the ref-support caveat (agy is unverified) that ops.generateFromRecipe
-// enforces as a loud refusal, never a silent text-only fallback.
+// generate_image.py, gemini -> the agy CLI) behind the SAME injectable seam shape. agy ref
+// support is VERIFIED (T0251, 2026-07-03 — see tmp/research_agy_refs_2026-07-03.md); the
+// module's own .seen.txt silent-divergence guard (generateImageGemini/verifyAgyRefProof) is
+// what keeps a ref from ever silently failing to reach agy, so ops.mjs just forwards refPaths
+// to whichever engine(s) are attempted, same as it always has for codex.
 import { generateImageCodex, generateImageGemini } from "./tools/recipe_generate.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
@@ -1903,12 +1905,12 @@ export function patchRecipe(root, { projectId, groupId, patch } = {}) {
 // feeding a future run of the SAME card. Positioned to the RIGHT of the card frame (16px
 // gap); a second result (engine="both") stacks BELOW the first (16px gap).
 //
-// Engine (R2/R3): "codex" (default) -> one generation; "gemini" -> one, TEXT-ONLY (agy ref
-// support is unverified — a card with refs on engine="gemini" REFUSES loudly before any
-// generation, no silent text-only fallback, no second T0240); "both" -> runs BOTH engines,
-// mints TWO elements ("<card> codex" / "<card> agy"), one journal entry for the pair, and
-// allows PARTIAL success (one engine failing still lands the other; a card with refs on
-// engine="both" skips gemini WITHOUT attempting it and reports the skip — R3). Only when
+// Engine (R2/R3): "codex" (default) -> one generation; "gemini" -> one, refs plumbed through
+// exactly like codex (agy ref support is VERIFIED — T0251, 2026-07-03; the .seen.txt
+// silent-divergence guard lives in tools/recipe_generate.mjs's generateImageGemini, not here);
+// "both" -> runs BOTH engines with the SAME refPaths, mints TWO elements ("<card> codex" /
+// "<card> agy"), one journal entry for the pair, and allows PARTIAL success (one engine
+// failing — including agy's own .seen.txt guard tripping — still lands the other). Only when
 // EVERY attempted engine fails (including a single-engine run) does the op throw; nothing is
 // written in that case (no journal entry, no card mutation) — mirrors alphaDualPlateGenerate's
 // atomic refusal.
@@ -1965,31 +1967,16 @@ export async function generateFromRecipe(root, { projectId, groupId, generators 
     // is the only way to reach this. Loud, not a silent "codex" coercion.
     throw new Error(`recipe card "${cardLabel}" (${groupId}) has an invalid engine: ${JSON.stringify(requestedEngine)}`);
   }
-  // R2/R3 ref rule: agy ref support is UNVERIFIED. engine="gemini" with any ref refuses the
-  // WHOLE run loudly, before any generation is attempted (a single-engine run stays
-  // loud-fail — R3). engine="both" instead SKIPS the gemini attempt (never calls it) and
-  // reports the skip in `failed`, generating codex-only — handled below via `attempts`.
-  if (requestedEngine === "gemini" && refPaths.length) {
-    throw new Error(
-      `recipe card "${cardLabel}" (${groupId}) has ${refPaths.length} reference image(s) — agy ref support is unverified; ` +
-        "use engine codex for reference images, or drop the refs",
-    );
-  }
-
+  // R2/R3 ref rule: agy ref support is VERIFIED (T0251, 2026-07-03) — engine="gemini" and
+  // engine="both" both forward refPaths to the gemini generator exactly like codex always
+  // has; the silent-divergence guard (agy can generate from text alone and exit 0 without
+  // reading a ref) lives in tools/recipe_generate.mjs's generateImageGemini/verifyAgyRefProof,
+  // not here.
   const gens = { codex: generateImageCodex, gemini: generateImageGemini, ...(generators || {}) };
   const attempts = [];
   if (requestedEngine === "both") {
     attempts.push({ engine: "codex" });
-    if (refPaths.length) {
-      attempts.push({
-        engine: "gemini",
-        skip:
-          "agy ref support is unverified — engine=both generated codex-only; use engine codex for reference " +
-          "images, or drop the refs to include gemini",
-      });
-    } else {
-      attempts.push({ engine: "gemini" });
-    }
+    attempts.push({ engine: "gemini" });
   } else {
     attempts.push({ engine: requestedEngine });
   }

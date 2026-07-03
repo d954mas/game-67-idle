@@ -15,7 +15,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
@@ -40,7 +40,7 @@ import {
 import { buildNodesSpec } from "../tree.mjs";
 import { createCanvasApi } from "../api.mjs";
 import { resolveProjectFile } from "../store.mjs";
-import { buildAgyCommand, buildAgyInstruction, buildGenerateCommand, GENERATE_IMAGE_SCRIPT } from "../tools/recipe_generate.mjs";
+import { buildAgyCommand, buildAgyInstruction, buildGenerateCommand, GENERATE_IMAGE_SCRIPT, verifyAgyRefProof } from "../tools/recipe_generate.mjs";
 import { solidPng } from "./png_fixture.mjs";
 
 // Metadata ops resolve store paths only, so any placeholder root works (no Python).
@@ -452,11 +452,91 @@ test("buildAgyInstruction requires prompt/outPath", () => {
   assert.throws(() => buildAgyInstruction({ prompt: "p" }), /requires outPath/);
 });
 
+// T0251: refs-empty stays BYTE-IDENTICAL to the pre-T0251 gen_both.sh-verbatim template — no
+// ref clause perturbs the no-refs path, whether refPaths is omitted or explicitly [].
+test("buildAgyInstruction: no refs (omitted or []) is byte-identical to the verbatim gen_both.sh template", () => {
+  const omitted = buildAgyInstruction({ prompt: "a red fox", size: "1024x1024", outPath: "C:/tmp/a.png" });
+  const explicitEmpty = buildAgyInstruction({ prompt: "a red fox", size: "1024x1024", outPath: "C:/tmp/a.png", refPaths: [] });
+  const expected =
+    "Use your built-in image generation to create one real raster image (not code-drawn), square 1:1: a red fox. " +
+    "Save the PNG to C:/tmp/a.png . Do not write or run any drawing code.";
+  assert.equal(omitted, expected);
+  assert.equal(explicitEmpty, expected);
+});
+
+// T0251 (VERIFIED, tmp/research_agy_refs_2026-07-03.md): refs present prepends the "open and
+// view + write one sentence to <outPath>.seen.txt" proof clause, names every ref path, and
+// still carries the generation clause (match subject/style/palette).
+test("buildAgyInstruction: refs present prepend the open-and-view + .seen.txt proof clause, list every ref path", () => {
+  const withRefs = buildAgyInstruction({
+    prompt: "a dragon",
+    size: "1024x1024",
+    outPath: "C:/tmp/out.png",
+    refPaths: ["C:/refs/ref1.png", "C:/refs/ref2.png"],
+  });
+  assert.match(withRefs, /2 reference image/);
+  assert.match(withRefs, /FIRST open and view each with your tools/);
+  assert.match(withRefs, /C:\/refs\/ref1\.png/);
+  assert.match(withRefs, /C:\/refs\/ref2\.png/);
+  assert.match(withRefs, /write ONE sentence describing what you saw to C:\/tmp\/out\.png\.seen\.txt/);
+  assert.match(withRefs, /Match the subject\/style\/palette of the reference image\(s\)/);
+  assert.match(withRefs, /a dragon/);
+  assert.match(withRefs, /Save the PNG to C:\/tmp\/out\.png/);
+});
+
 test("buildAgyCommand: shells the agy binary with --dangerously-skip-permissions -p <instruction>", () => {
   const { command, args } = buildAgyCommand({ prompt: "a red fox", size: "1024x1024", outPath: "C:/tmp/a.png" });
   assert.match(command, /agy(\.exe)?$/);
   assert.deepEqual(args.slice(0, 2), ["--dangerously-skip-permissions", "-p"]);
   assert.match(args[2], /a red fox/);
+});
+
+// T0251: one --add-dir per DISTINCT ref parent dir, BEFORE --dangerously-skip-permissions;
+// two refs sharing a dir collapse to one --add-dir (dedupe).
+test("buildAgyCommand: one --add-dir per unique ref dir, deduped, before --dangerously-skip-permissions", () => {
+  const { args } = buildAgyCommand({
+    prompt: "a dragon",
+    size: "1024x1024",
+    outPath: "C:/tmp/out.png",
+    refPaths: ["C:/refs/a/ref1.png", "C:/refs/a/ref2.png", "C:/refs/b/ref3.png"],
+  });
+  assert.deepEqual(args.slice(0, 4), ["--add-dir", "C:/refs/a", "--add-dir", "C:/refs/b"], "deduped, one per distinct dir");
+  assert.deepEqual(args.slice(4, 6), ["--dangerously-skip-permissions", "-p"]);
+});
+
+test("buildAgyCommand: no refs -> no --add-dir args at all", () => {
+  const { args } = buildAgyCommand({ prompt: "a red fox", size: "1024x1024", outPath: "C:/tmp/a.png" });
+  assert.deepEqual(args.slice(0, 2), ["--dangerously-skip-permissions", "-p"]);
+  assert.ok(!args.includes("--add-dir"));
+});
+
+// ---- verifyAgyRefProof (pure I/O, no spawn): the silent-divergence guard on its own --------
+
+test("verifyAgyRefProof: no refs -> always passes, .seen.txt not even checked", () => {
+  assert.doesNotThrow(() => verifyAgyRefProof("C:/nonexistent/out.png", []));
+  assert.doesNotThrow(() => verifyAgyRefProof("C:/nonexistent/out.png", undefined));
+});
+
+test("verifyAgyRefProof: refs present but .seen.txt missing or empty -> throws loud (silent-divergence guard)", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-recipe-seenproof-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const outPath = join(dir, "out.png");
+
+  // .seen.txt never written.
+  assert.throws(() => verifyAgyRefProof(outPath, ["C:/refs/ref1.png"]), /no non-empty .*\.seen\.txt/);
+
+  // .seen.txt written but blank/whitespace-only.
+  writeFileSync(`${outPath}.seen.txt`, "   \n", "utf8");
+  assert.throws(() => verifyAgyRefProof(outPath, ["C:/refs/ref1.png"]), /no non-empty .*\.seen\.txt/);
+});
+
+test("verifyAgyRefProof: refs present and .seen.txt non-empty -> passes", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-recipe-seenproof-"));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const outPath = join(dir, "out.png");
+  writeFileSync(`${outPath}.seen.txt`, "A pair of gold and white angel wings.", "utf8");
+
+  assert.doesNotThrow(() => verifyAgyRefProof(outPath, ["C:/refs/ref1.png"]));
 });
 
 // ---- generateFromRecipe validation (no generation attempted) -------------------
@@ -650,9 +730,11 @@ test("generateFromRecipe (engine=both, partial success): one engine failing stil
   assert.equal(stored.groups.find((g) => g.id === card.id).recipe.last_run.verdict, "partial");
 });
 
-test("generateFromRecipe (engine=both, refs present): gemini is SKIPPED without being called; codex still lands; skip reported in failed[]", async (t) => {
+// T0251: agy ref support is now VERIFIED — engine="both" with refs runs BOTH engines (no more
+// skip-gemini-when-refs), same partial-success semantics as any other both/two-engine run.
+test("generateFromRecipe (engine=both, refs present): BOTH engines are called with the SAME refPaths; two elements land", async (t) => {
   tempProjects(t);
-  const project = createProject(ROOT, { title: "Generate both refs skip" });
+  const project = createProject(ROOT, { title: "Generate both refs" });
   const card = createRecipeCard(ROOT, { projectId: project.id, name: "Griffin" }).group;
   patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a griffin", engine: "both" } });
   const ref = addImage(ROOT, project.id, { name: "ref.png", bytes: solidPng() }).element;
@@ -662,32 +744,36 @@ test("generateFromRecipe (engine=both, refs present): gemini is SKIPPED without 
   const gemini = fakeGen(solidPng());
   const result = await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex, gemini } });
 
-  assert.equal(gemini.calls.length, 0, "gemini is never attempted when engine=both has refs (R3)");
-  assert.equal(codex.calls.length, 1);
-  assert.equal(result.elements.length, 1);
+  assert.equal(codex.calls.length, 1, "gemini having refs no longer skips codex's own attempt");
+  assert.equal(gemini.calls.length, 1, "gemini IS attempted now that agy ref support is verified (T0251)");
+  assert.equal(codex.calls[0].refPaths.length, 1);
+  assert.deepEqual(gemini.calls[0].refPaths, codex.calls[0].refPaths, "both engines receive the SAME refPaths");
+  assert.equal(result.elements.length, 2);
+  assert.equal(result.failed.length, 0);
   assert.equal(result.elements[0].name, "Griffin codex");
-  assert.equal(result.failed.length, 1);
-  assert.equal(result.failed[0].engine, "gemini");
-  assert.match(result.failed[0].error, /unverified/);
+  assert.equal(result.elements[1].name, "Griffin agy");
 });
 
-test("generateFromRecipe (engine=gemini, refs present): loud refusal BEFORE any generation — no silent text-only fallback", async (t) => {
+// T0251: engine="gemini" with refs now PROCEEDS (no loud refusal); the fake gemini generator
+// receives the resolved refPaths through the SAME seam shape codex has always used.
+test("generateFromRecipe (engine=gemini, refs present): proceeds — the gemini generator RECEIVES refPaths, no refusal", async (t) => {
   tempProjects(t);
-  const project = createProject(ROOT, { title: "Generate gemini refs refuse" });
-  const card = createRecipeCard(ROOT, { projectId: project.id }).group;
+  const project = createProject(ROOT, { title: "Generate gemini refs" });
+  const card = createRecipeCard(ROOT, { projectId: project.id, name: "Phoenix" }).group;
   patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "a phoenix", engine: "gemini" } });
   const ref = addImage(ROOT, project.id, { name: "ref.png", bytes: solidPng() }).element;
   assignToGroup(ROOT, { projectId: project.id, elementIds: [ref.id], groupId: card.id });
-  const seqBefore = getProject(ROOT, project.id).history_seq;
 
   const gemini = fakeGen(solidPng());
-  await assert.rejects(
-    () => generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { gemini } }),
-    /agy ref support is unverified/,
-  );
-  assert.equal(gemini.calls.length, 0);
-  assert.equal(getProject(ROOT, project.id).history_seq, seqBefore, "no journal entry on a rejected run");
-  assert.equal(getProject(ROOT, project.id).elements.length, 1, "no new element (only the ref image from setup)");
+  const result = await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { gemini } });
+
+  assert.equal(gemini.calls.length, 1);
+  assert.equal(gemini.calls[0].refPaths.length, 1, "the gemini generator receives the resolved ref abs path");
+  assert.deepEqual(gemini.calls[0].refPaths, [resolveProjectFile(ROOT, project.id, ref.src)]);
+  assert.equal(result.elements.length, 1);
+  assert.equal(result.elements[0].name, "Phoenix agy");
+  assert.equal(result.failed.length, 0);
+  assert.deepEqual(result.elements[0].meta.recipe.refs_snapshot, [ref.src]);
 });
 
 test("generateFromRecipe (engine=gemini, no refs): text-only generation is OK", async (t) => {
