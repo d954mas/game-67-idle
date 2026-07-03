@@ -16,8 +16,8 @@ fractional alpha (soft shadow, glow, glass, smoke) is mathematically
 unrecoverable from one background -- route those to dual-plate
 (``dual_plate_alpha.py``).
 
-Requires numpy. There is no dependency on JIT-backed matting packages in the
-default validation path.
+Requires numpy + scipy. There is no dependency on JIT-backed matting packages in
+the default validation path.
 A crop with no soft edge band (opaque art / flat-key holes) skips alpha-band
 work entirely.
 """
@@ -27,6 +27,7 @@ from time import perf_counter
 
 import numpy as np
 from PIL import Image
+from scipy import ndimage
 
 from ai_studio.assets.tools.image.alpha_matte.chroma_key_alpha import (
     bleed_transparent_rgb,
@@ -69,6 +70,67 @@ def _limit_despill(rgb_float: "np.ndarray", key: RGB) -> "np.ndarray":
         out[..., 1] = np.minimum(green, np.maximum(red, blue))
         out[..., 2] = np.minimum(blue, np.maximum(red, green))
     return out
+
+
+def _key_dominance(rgb_float: "np.ndarray", key: RGB) -> "np.ndarray | None":
+    """Per-pixel signed measure of 'this colour leans toward the key': the key's
+    own channel(s) minus the pixel's other channels — the direction every
+    key-contaminated blend moves in, whatever the foreground colour was. Uses the
+    same five screen families as ``_limit_despill``; returns None for other key
+    colours (callers treat that as feature-off)."""
+    red, green, blue = rgb_float[..., 0], rgb_float[..., 1], rgb_float[..., 2]
+    key_red, key_green, key_blue = key
+    bright, dim = 150, 120
+    if key_green > bright and key_red < dim and key_blue < dim:            # green
+        return green - np.maximum(red, blue)
+    if key_red > bright and key_blue > bright and key_green < dim:         # magenta
+        return np.minimum(red, blue) - green
+    if key_red > bright and key_green < dim and key_blue < dim:            # red
+        return red - np.maximum(green, blue)
+    if key_blue > bright and key_red < dim and key_green < dim:            # blue
+        return blue - np.maximum(red, green)
+    if key_green > bright and key_blue > bright and key_red < dim:         # cyan
+        return np.minimum(green, blue) - red
+    return None
+
+
+def _extend_clean_edge_colors(
+    foreground_full: "np.ndarray",
+    original_rgb: "np.ndarray",
+    alpha_full: "np.ndarray",
+    key: RGB,
+    *,
+    foreground_tolerance: float,
+    rim_depth: float = 4.0,
+    dominance_margin: float = 8.0,
+) -> "np.ndarray":
+    """Kill the key halo at its root. The key-DISTANCE trimap marks strongly
+    contaminated blends (dark art mixed with a bright key passes the foreground
+    tolerance) as SURE foreground, so a 1-4px opaque rim keeps its purple/green
+    blend colour — and a channel-limit despill can only pull it halfway back.
+    Replace the RGB of (a) every soft-band pixel and (b) key-leaning pixels in
+    the thin sure rim with the nearest CLEAN sure pixel's colour — the artist's
+    own edge colour. Alpha is untouched, interior art (including genuinely
+    key-coloured art away from the silhouette) is untouched, and the artist's
+    non-key outline stays a colour source. No-op for key colours outside the
+    five screen families and for degenerate masks."""
+    dominance = _key_dominance(original_rgb, key)
+    if dominance is None:
+        return foreground_full
+    key_array = np.asarray(key, dtype=np.float64)
+    distance = np.max(np.abs(original_rgb - key_array), axis=2)
+    sure = distance >= float(foreground_tolerance)
+    if not sure.any():
+        return foreground_full
+    rim = ndimage.distance_transform_edt(sure) <= rim_depth
+    contaminated_rim = sure & rim & (dominance > dominance_margin)
+    replace = ((alpha_full > 0.0) & ~sure) | contaminated_rim
+    clean_source = sure & ~contaminated_rim
+    if not replace.any() or not clean_source.any():
+        return foreground_full
+    _, nearest = ndimage.distance_transform_edt(~clean_source, return_indices=True)
+    extended = original_rgb[nearest[0], nearest[1]]
+    return np.where(replace[..., None], extended, foreground_full)
 
 
 def key_matte_cutout(
@@ -142,6 +204,9 @@ def key_matte_cutout(
     original_rgb = np.asarray(rgba, dtype=np.float64)[..., :3]
     keep_original = np.clip((alpha_full - 0.80) / 0.15, 0.0, 1.0)[..., None]
     foreground_full = keep_original * original_rgb + (1.0 - keep_original) * estimated_full
+    foreground_full = _extend_clean_edge_colors(
+        foreground_full, original_rgb, alpha_full, key, foreground_tolerance=foreground_tolerance
+    )
     # Sharp limit despill so the kept-original edge pixels can't carry a key halo
     # (e.g. green specks on the inner rim of a ring hole) without blurring detail.
     foreground_full = _limit_despill(foreground_full, key)
