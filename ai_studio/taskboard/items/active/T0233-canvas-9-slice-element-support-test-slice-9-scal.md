@@ -1,7 +1,7 @@
 ---
 id: T0233
 title: "Canvas: 9-slice element support (test slice-9 scaling with an image)"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P2
@@ -42,3 +42,4 @@ increment plan.
 - 2026-07-03: Design phase COMPLETE: tmp/design_T0233_slice9_2026-07-03.md (synthesized w/ prior draft, rotation-composition flaw fixed). Verdict: viewer slice9 = phantom; adopt engine nt_atlas slice9_lrtb semantics, port no code. element.slice9 additive, shared rect-math JS+py twin, 2 increments. 2 open questions to lead in tmp/VERIFY_2026-07-03.md (corner convention, v1 UI depth). Implementation gated on lead confirmation.
 - 2026-07-03: Lead away, 'работай': implementation started with the design's RECOMMENDED defaults (corners fixed at source-px = engine standard; dedicated setSlice9 op; UI = packet 2). Packet 1 worker launched (slice9.mjs + py twin, ops/render/page paint, PUT route + slice9-set CLI, pixel-parity + transform-composition tests). Lead can veto the defaults cheaply - additive schema. Noted in tmp/VERIFY_2026-07-03.md.
 - 2026-07-03: Packet 1 landed+committed: slice9.mjs + py twin (validateSlice9 w/ engine invariant, slice9Patches w/ scale multiplier per lead), setSlice9 op, PUT route, slice9-set CLI, both renderers compose inside rotate/flip wrappers; pixel-parity on 9-color asymmetric fixture scale 1+2 vs hand-derived boundaries + rotation/flip composition test. Suite 488. :8780 restarted. Packet 2 (inspector UI + parity golden + README) worker launched.
+- 2026-07-03: Packet 2 landed+committed: inspector Slice-9 section (draft defaults floor(min/4) cap 24, Enable one entry, live-bound fields, Clear, Scale step 0.1), element.slice9 in inspectorSig, JS==Python parity golden (8 cases incl clamp/drop/scale), README 9-slice section. Suite 489. Both packets done - awaiting lead verify (checklist in tmp/VERIFY_2026-07-03.md item 5).
