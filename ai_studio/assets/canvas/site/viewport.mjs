@@ -4,6 +4,11 @@
 // cursor stable. No DOM. Rect/polygon editing geometry is NOT here -- the region
 // workbench owns that in regions.js. Moved into the canvas module from the
 // retired asset_tools editor so the canvas owns its own viewport code.
+//
+// Imports tree.mjs's rotatedCorners for the rotate-gizmo section near the end of this file
+// (T0232 increment 3b) -- tree.mjs itself has zero imports, so this stays acyclic.
+import { rotatedCorners } from "../tree.mjs";
+
 const minScale = 0.05;
 const maxScale = 12;
 
@@ -203,4 +208,150 @@ export function scaledFontSize(origFontSize, ratio, minSize = 1) {
   const size = Number(origFontSize) || 0;
   const r = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
   return Math.max(minSize, size * r);
+}
+
+// ---- rotate gizmo math (T0232 increment 3b -- the interactive rotate handle + rotated
+// hit-test/scale, deferred out of increment 3a's data+render+parity packet; see README
+// "Rotation & flip"). Reuses tree.mjs's rotatedCorners (the SAME rotation convention:
+// degrees CW on a Y-down canvas, about the node's own box CENTER) so the page's gizmo
+// geometry and the pure hit-test math never diverge on the sign or pivot of a rotation.
+// Pure, DOM-free, unit-tested in tests/rotate.test.mjs -- workspace.js only wires
+// screen-space drawing/hit-testing and the drag lifecycle around these functions,
+// mirroring the scale gizmo section above.
+
+// The CW-positive angle (degrees, [0,360)) a `point` makes around `center`, measured from
+// straight UP (the direction an unrotated element's top-center handle points) -- the
+// INVERSE of rotatedCorners' own forward rotation: a point at rotation theta sits at
+// center + (sin(theta), -cos(theta))*r for some r>0 (apply rotatedCorners' corner formula to
+// a (0,-h/2) offset), so solving for theta from a raw (dx,dy) offset is atan2(dx, -dy).
+// Degenerate at point===center (dx=dy=0): atan2(0,0)=0, i.e. "no rotation" -- an acceptable
+// fallback since a zero-length grab vector carries no directional information.
+export function angleFromCenter(center, point) {
+  const dx = point.x - center.x;
+  const dy = point.y - center.y;
+  // Explicit zero-vector guard: Math.atan2(0, -0) is +PI (180deg) in JS, not 0 -- the
+  // IEEE754 signed-zero quirk (-dy is negative zero when dy is +0) would otherwise silently
+  // contradict this function's own documented degenerate-case behavior.
+  if (!dx && !dy) return 0;
+  const rad = Math.atan2(dx, -dy);
+  const deg = (rad * 180) / Math.PI;
+  return deg < 0 ? deg + 360 : deg;
+}
+
+// The unit "up" vector of an element rotated by `rotation` degrees -- where its own
+// top-center now points on screen (world/screen space differ only by scale+offset, never a
+// rotation, so this vector is valid in both). Used to place the rotate handle's stem a fixed
+// SCREEN-space distance beyond the (rotated) top-center point. Inverse of angleFromCenter:
+// angleFromCenter(c, {x: c.x + rotationUpVector(t).x, y: c.y + rotationUpVector(t).y}) === t.
+export function rotationUpVector(rotation) {
+  const rad = ((Number(rotation) || 0) * Math.PI) / 180;
+  return { x: Math.sin(rad), y: -Math.cos(rad) };
+}
+
+// rotationFromDrag(center, startPoint, currentPoint, baseRotation, opts) -> degrees [0,360)
+// The live rotation for a rotate-handle drag: `baseRotation` (the element's rotation when
+// the drag was grabbed) plus the CHANGE in angle-around-center between the grab point and
+// the current pointer -- not the current point's absolute angle alone, so grabbing the
+// handle slightly off-center (any point near the knob, not its exact pixel) never snaps the
+// element to a different starting angle. `opts.snap15` (Shift held) rounds the RESULT to the
+// nearest 15-degree step, Figma-style; both the delta and the snap are recomputed fresh from
+// the fixed grab point every call (no incremental accumulation), so a gesture is exact
+// regardless of how many mousemove frames fired. Normalized to [0,360) like the op layer's
+// own normalizeRotation (ops.mjs), so a live in-memory preview and the eventual committed
+// patch agree before rounding.
+export function rotationFromDrag(center, startPoint, currentPoint, baseRotation, opts = {}) {
+  const delta = angleFromCenter(center, currentPoint) - angleFromCenter(center, startPoint);
+  let rotation = (Number(baseRotation) || 0) + delta;
+  rotation = ((rotation % 360) + 360) % 360;
+  if (opts.snap15) rotation = (Math.round(rotation / 15) * 15) % 360;
+  return rotation;
+}
+
+// pointInRotatedBox(world, box) -> boolean
+// True when the world point falls inside `box` (an {x,y,w,h,rotation?} record -- an element
+// OR a group, rotation absent/0 on the latter), rotation-aware: the world point is
+// inverse-rotated into the box's own LOCAL frame about its center, then tested as a plain
+// AABB -- the exact local-point formula README "Rotation & flip" promises for 3b's hit-test
+// (the inverse of rotatedCorners' forward rotation). Absent/zero rotation takes a cheap
+// identity fast path -- the plain AABB test every OTHER node in the scene still uses, so an
+// unrotated element hit-tests byte-identically to before this increment.
+export function pointInRotatedBox(world, box) {
+  const x = Number(box.x) || 0;
+  const y = Number(box.y) || 0;
+  const w = Number(box.w) || 0;
+  const h = Number(box.h) || 0;
+  const rotation = Number(box.rotation) || 0;
+  if (!rotation) return world.x >= x && world.x <= x + w && world.y >= y && world.y <= y + h;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const rad = (rotation * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = world.x - cx;
+  const dy = world.y - cy;
+  const lx = dx * cos + dy * sin;
+  const ly = -dx * sin + dy * cos;
+  return Math.abs(lx) <= w / 2 && Math.abs(ly) <= h / 2;
+}
+
+// rotatedHandlePoints(box) -> SCALE_HANDLES shape, WORLD-space {key,fx,fy,cursor,x,y}[]
+// The 8 scale-handle points on a node's OWN rotated frame (its 4 rotatedCorners plus the 4
+// edge midpoints between adjacent corners) -- what a SOLO rotated element's handles sit on in
+// the interactive gizmo (R4: "8 scale handles at rotatedCorners/edge-mids"), vs. the plain
+// axis-aligned `box.x + box.w*fx` fan every OTHER selection (multi-select/group/unrotated
+// element) still uses. `box` needs `rotation`; absent/0 collapses to the same 8 points the
+// AABB fan would give (rotatedCorners' own identity fast path returns the plain box corners).
+export function rotatedHandlePoints(box) {
+  const [tl, tr, br, bl] = rotatedCorners(box);
+  const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  const at = { nw: tl, n: mid(tl, tr), ne: tr, e: mid(tr, br), se: br, s: mid(br, bl), sw: bl, w: mid(bl, tl) };
+  return SCALE_HANDLES.map((handle) => ({ ...handle, x: at[handle.key].x, y: at[handle.key].y }));
+}
+
+// resizeRotatedBox(box, handle, worldDelta, opts) -> {x, y, w, h, sx, sy}
+// resizeBox's rotation-aware sibling (R3/R4): scaling a SOLO rotated element must keep its
+// ROTATED anchor corner/edge fixed in WORLD space, not the plain unrotated one -- dragging a
+// rotated box's "se" handle should grow it along ITS OWN tilted edges, with the opposite
+// (rotated) "nw" corner pinned in place, not the AABB's nw corner. The trick: resize math is
+// rotation-agnostic if done in the box's own LOCAL frame (centered on the box's rotation
+// pivot, i.e. `{x:-w/2, y:-h/2, w, h}`), reusing resizeBox verbatim there -- its anchor
+// semantics (opposite edge/corner fixed, or the center under `fromCenter`) are then
+// automatically correct in WORLD space too, because rotating a rigid resized rectangle by the
+// SAME fixed theta around the SAME fixed pivot preserves whatever stayed put locally. So:
+// 1) rotate `worldDelta` into the local frame (inverse rotation -- pointInRotatedBox's same
+// dx*cos+dy*sin / -dx*sin+dy*cos formula, applied to a VECTOR instead of a point); 2)
+// resizeBox the local (center-relative) box with that local delta; 3) rotate the resized
+// box's own new CENTER (an offset from the ORIGINAL pivot) forward back into world space
+// (rotatedCorners' own forward formula); 4) re-derive the unrotated x/y/w/h element record
+// from that new world center (element geometry is always stored unrotated -- rotation is
+// applied at paint/hit-test time about the center). `box.rotation` absent/0 takes a fast path
+// identical to calling resizeBox directly (verified in tests/rotate.test.mjs), so an
+// unrotated element's scale gesture is untouched by this function's existence.
+export function resizeRotatedBox(box, handle, worldDelta, opts = {}) {
+  const rotation = Number(box.rotation) || 0;
+  if (!rotation) {
+    const resized = resizeBox(box, handle, worldDelta, opts);
+    return { ...resized, sx: box.w !== 0 ? resized.w / box.w : 1, sy: box.h !== 0 ? resized.h / box.h : 1 };
+  }
+  const rad = (rotation * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const localDelta = { dx: worldDelta.dx * cos + worldDelta.dy * sin, dy: -worldDelta.dx * sin + worldDelta.dy * cos };
+  const localBox = { x: -box.w / 2, y: -box.h / 2, w: box.w, h: box.h };
+  const resizedLocal = resizeBox(localBox, handle, localDelta, opts);
+  const localCenter = { x: resizedLocal.x + resizedLocal.w / 2, y: resizedLocal.y + resizedLocal.h / 2 };
+  const cx = box.x + box.w / 2;
+  const cy = box.y + box.h / 2;
+  // Forward rotation (rotatedCorners' own formula) of the local center OFFSET back to world.
+  const worldCenter = { x: cx + localCenter.x * cos - localCenter.y * sin, y: cy + localCenter.x * sin + localCenter.y * cos };
+  const w = resizedLocal.w;
+  const h = resizedLocal.h;
+  return {
+    x: worldCenter.x - w / 2,
+    y: worldCenter.y - h / 2,
+    w,
+    h,
+    sx: box.w !== 0 ? w / box.w : 1,
+    sy: box.h !== 0 ? h / box.h : 1,
+  };
 }

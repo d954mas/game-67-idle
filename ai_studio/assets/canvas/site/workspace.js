@@ -37,7 +37,7 @@ import {
   syncPrimaryGroup,
   toggleSelect,
 } from "./app.js";
-import { addTextAt, moveNodesTo, patchTextElement, renameProject, setRegionsFor, undo, redo } from "./actions.js";
+import { addTextAt, moveNodesTo, patchElementBox, patchTextElement, renameProject, setRegionsFor, undo, redo } from "./actions.js";
 import { canvasFontString } from "../fonts.mjs";
 import { areFontsReady, measureTextBox, measureTextLines } from "./fonts.js";
 import { inlineEdit } from "./inline.js";
@@ -60,13 +60,18 @@ import {
   imageToScreenPoint,
   mapItemBox,
   panOffsetFor,
+  pointInRotatedBox,
   resizeBox,
+  resizeRotatedBox,
+  rotatedHandlePoints,
+  rotationFromDrag,
+  rotationUpVector,
   scaledFontSize,
   screenToImagePoint,
   SCALE_HANDLES,
   zoomViewportAt,
 } from "./viewport.mjs";
-import { ancestorsOf, childrenOf, descendantsOf, isNodeHidden, isNodeTransformed, nodeScope, orderedChildren, unionBBox } from "../tree.mjs";
+import { ancestorsOf, childrenOf, descendantsOf, isNodeHidden, isNodeTransformed, nodeScope, orderedChildren, rotatedCorners, unionBBox } from "../tree.mjs";
 // T0244 smart guides: pure snap math, no DOM (see snap.mjs's own header). Imported here only
 // -- the drag-lifetime precompute + mousemove application + guide overlay all live in this
 // file; ops.mjs/api.mjs/cli.mjs are untouched (snapping commits through the EXISTING ops).
@@ -267,15 +272,30 @@ function paintElement(element, vp, editEl) {
   if (isSelected(element)) {
     ctx.strokeStyle = isEdit ? "#3fc7ba" : "#77a7ff";
     ctx.lineWidth = 2;
-    // Selection outline stays the unrotated AABB in increment 3a — a rotated-quad outline
-    // + rotation-aware hit-test/handles are increment 3b (the interactive gizmo).
-    ctx.strokeRect(origin.x, origin.y, w, h);
+    // T0232 increment 3b: a rotated element's selection outline is its ROTATED quad (the
+    // true footprint), matching the rotation-aware hit-test/handles below -- an unrotated
+    // element keeps the plain rect (identical pixels to increment 3a).
+    if (rotation) strokeRotatedQuad(element, vp);
+    else ctx.strokeRect(origin.x, origin.y, w, h);
     // Passive numbered hint in mode A; strong strokes + handles in mode B.
     drawRegionsOverlay(ctx, element, vp, {
       selectedRegionIds: state.selectedRegionIds,
       interactive: Boolean(isEdit),
     });
   }
+}
+
+// Stroke a node's ROTATED footprint (rotatedCorners, world -> screen) instead of the plain
+// AABB rect -- the selection outline for a single rotated element/text. Assumes
+// ctx.strokeStyle/lineWidth are already set by the caller (mirrors strokeRect's own
+// "caller sets style" convention throughout this file).
+function strokeRotatedQuad(node, vp) {
+  const corners = rotatedCorners(node).map((corner) => imageToScreenPoint(corner, vp));
+  ctx.beginPath();
+  ctx.moveTo(corners[0].x, corners[0].y);
+  for (let i = 1; i < corners.length; i += 1) ctx.lineTo(corners[i].x, corners[i].y);
+  ctx.closePath();
+  ctx.stroke();
 }
 
 // Paint a TEXT element: the page's same-font approximation of the PIL export (PIL is
@@ -299,7 +319,12 @@ function paintTextElement(element, vp, editEl) {
   if (isSelected(element)) {
     ctx.strokeStyle = "#77a7ff";
     ctx.lineWidth = 2;
-    ctx.strokeRect(origin.x, origin.y, element.w * vp.scale, element.h * vp.scale);
+    // T0232 increment 3b: same rotated-quad treatment as an image element's outline above --
+    // a text element's BOX can carry rotation even though its glyphs don't render rotated
+    // yet (README "Rotation & flip"), so the outline still shows the box's true footprint.
+    const rotation = Number(element.rotation) || 0;
+    if (rotation) strokeRotatedQuad(element, vp);
+    else ctx.strokeRect(origin.x, origin.y, element.w * vp.scale, element.h * vp.scale);
   }
 }
 
@@ -662,17 +687,23 @@ function drawSnapGuides(vp) {
   ctx.restore();
 }
 
-// ---- scale gizmo (T0232 increment 2 -- skeleton: move + 8 resize handles, NO rotation,
-// NO flip, NO rotate handle; those land in increment 3). Pure box math lives in
-// viewport.mjs (resizeBox/mapItemBox/scaledFontSize, SCALE_HANDLES) so it is DOM-free and
-// unit-testable; this section only wires screen-space drawing/hit-testing and the drag
-// lifecycle, mirroring regions.js's REGION_HANDLES/hitRegionHandle pattern one level up
-// (the SELECTION's AABB instead of one region's box). A resize gesture is NOT a T0244
-// snap-eligible drag (site/snap.mjs) -- these drag objects never carry
-// snapCandidates/snapBBox/activeGuides, so drawSnapGuides's early-return keeps it silent.
+// ---- scale + rotate gizmo (T0232 increment 2 skeleton -> increment 3b interactive rotation
+// -- see README "Rotation & flip"). Pure box math lives in viewport.mjs
+// (resizeBox/mapItemBox/scaledFontSize/SCALE_HANDLES for the plain AABB case;
+// resizeRotatedBox/rotatedHandlePoints/rotationFromDrag/pointInRotatedBox for a SOLO rotated
+// element, added in 3b) so it is DOM-free and unit-testable; this section only wires
+// screen-space drawing/hit-testing and the drag lifecycle, mirroring regions.js's
+// REGION_HANDLES/hitRegionHandle pattern one level up (the SELECTION's AABB, or -- for a
+// single rotated element -- its OWN rotated frame, instead of one region's box). A scale OR
+// rotate gesture is NOT a T0244 snap-eligible drag (site/snap.mjs) -- these drag objects
+// never carry snapCandidates/snapBBox/activeGuides, so drawSnapGuides's early-return keeps
+// it silent for both.
 const SCALE_HANDLE_HALF = 5; // half a handle square, CSS px
 const SCALE_HANDLE_TOL = 8; // hit tolerance around a handle centre, CSS px
 const SCALE_MIN_SIZE = 4; // floor for a resized element/group w or h
+const ROTATE_HANDLE_OFFSET = 24; // stem length beyond the (rotated) top-center handle, CSS px
+const ROTATE_HANDLE_RADIUS = 6; // knob glyph radius, CSS px
+const ROTATE_HANDLE_TOL = 8; // hit tolerance around the knob centre, CSS px (matches SCALE_HANDLE_TOL)
 
 // The nodes a scale gesture would resize: every selected element (image or text) plus
 // every selected group's OWN frame -- never a group's descendants (T0232 Q2 default:
@@ -700,16 +731,33 @@ function collectResizeItems() {
   return items;
 }
 
+// The lone selected ELEMENT (image or text), or null when the selection is empty, a group,
+// or a multi-selection -- the rotate handle (and a scale drag's rotation-aware math) only
+// ever act on exactly one element (T0232 R4/R10: rotate-as-a-block is explicitly deferred;
+// groups have no rotation field at all).
+function singleSelectedElement() {
+  if (state.selectedIds.size !== 1 || state.selectedGroupIds.size !== 0) return null;
+  const [element] = selectedElements();
+  return element || null;
+}
+
 function scaleHandlePoints(box) {
   return SCALE_HANDLES.map((handle) => ({ ...handle, x: box.x + box.w * handle.fx, y: box.y + box.h * handle.fy }));
 }
 
-// The current selection's screen-space AABB handle points, or null when there is nothing to
-// resize. Shared by the draw pass and the hit-test so both agree on the exact same box.
-function scaleHandleScreenBox(items, vp) {
-  const box = unionBBox(items.map((item) => item.box));
-  const origin = imageToScreenPoint({ x: box.x, y: box.y }, vp);
-  return { x: origin.x, y: origin.y, w: box.w * vp.scale, h: box.h * vp.scale };
+// The current resize target(s)' WORLD-space handle points -- a SOLO rotated element draws
+// and hit-tests its 8 handles on ITS OWN rotated frame (rotatedHandlePoints, T0232 3b R4:
+// "8 scale handles at rotatedCorners/edge-mids"); every other case (multi-selection, a
+// group, or an unrotated element) keeps the plain AABB fan unchanged from increment 2 --
+// rotate-as-a-block stays deferred, and an unrotated element's handles are numerically
+// identical either way (rotatedHandlePoints' identity fast path). Shared by the draw pass
+// and the hit-test so both agree on the exact same points.
+function resizeHandleWorldPoints(items) {
+  if (items.length === 1 && items[0].kind === "element") {
+    const rotation = Number(items[0].ref.rotation) || 0;
+    if (rotation) return rotatedHandlePoints({ ...items[0].box, rotation });
+  }
+  return scaleHandlePoints(unionBBox(items.map((item) => item.box)));
 }
 
 // Screen-space hit-test for the selection's resize handles -- checked BEFORE element
@@ -721,10 +769,39 @@ function hitScaleHandle(screen) {
   if (regionEditElement() || state.editingTextId) return null;
   const items = collectResizeItems();
   if (!items.length) return null;
-  const screenBox = scaleHandleScreenBox(items, state.viewport);
-  for (const point of scaleHandlePoints(screenBox)) {
-    if (Math.abs(screen.x - point.x) <= SCALE_HANDLE_TOL && Math.abs(screen.y - point.y) <= SCALE_HANDLE_TOL) return point;
+  for (const point of resizeHandleWorldPoints(items)) {
+    const screenPt = imageToScreenPoint(point, state.viewport);
+    if (Math.abs(screen.x - screenPt.x) <= SCALE_HANDLE_TOL && Math.abs(screen.y - screenPt.y) <= SCALE_HANDLE_TOL) {
+      return { ...point, x: screenPt.x, y: screenPt.y };
+    }
   }
+  return null;
+}
+
+// The rotate handle's SCREEN position: the element's own rotated top-center handle point
+// (rotatedHandlePoints' "n" entry -- correct for both a rotated AND an unrotated element,
+// since rotation absent/0 collapses to the plain top-center), pushed a further FIXED
+// ROTATE_HANDLE_OFFSET screen px along the SAME rotated "up" direction (rotationUpVector) --
+// a Figma-style knob on a short stem, always the same visual length regardless of zoom.
+function rotateHandleScreenPoint(element, vp) {
+  const box = { x: element.x, y: element.y, w: element.w, h: element.h, rotation: Number(element.rotation) || 0 };
+  const topCenterWorld = rotatedHandlePoints(box).find((point) => point.key === "n");
+  const topCenterScreen = imageToScreenPoint(topCenterWorld, vp);
+  const up = rotationUpVector(box.rotation);
+  return { x: topCenterScreen.x + up.x * ROTATE_HANDLE_OFFSET, y: topCenterScreen.y + up.y * ROTATE_HANDLE_OFFSET };
+}
+
+// Hit-test for the rotate handle (the single knob floating above a SOLO selected element's
+// top-center) -- checked BEFORE hitScaleHandle in onMouseDown (it floats OUTSIDE the box, so
+// it is always the most specific target under the cursor when hit, same "most specific wins"
+// precedence hitScaleHandle already follows over move). Returns the element itself (the drag
+// needs its full box + current rotation), or null.
+function hitRotateHandle(screen) {
+  if (regionEditElement() || state.editingTextId) return null;
+  const element = singleSelectedElement();
+  if (!element) return null;
+  const point = rotateHandleScreenPoint(element, state.viewport);
+  if (Math.abs(screen.x - point.x) <= ROTATE_HANDLE_TOL && Math.abs(screen.y - point.y) <= ROTATE_HANDLE_TOL) return element;
   return null;
 }
 
@@ -737,15 +814,41 @@ function drawSelectionHandles(vp) {
   if (drag && drag.mode === "marquee") return;
   const items = collectResizeItems();
   if (!items.length) return;
-  const screenBox = scaleHandleScreenBox(items, vp);
   ctx.save();
   ctx.lineWidth = 1;
-  for (const point of scaleHandlePoints(screenBox)) {
+  for (const point of resizeHandleWorldPoints(items)) {
+    const screenPt = imageToScreenPoint(point, vp);
     ctx.fillStyle = "#77a7ff";
-    ctx.fillRect(point.x - SCALE_HANDLE_HALF, point.y - SCALE_HANDLE_HALF, SCALE_HANDLE_HALF * 2, SCALE_HANDLE_HALF * 2);
+    ctx.fillRect(screenPt.x - SCALE_HANDLE_HALF, screenPt.y - SCALE_HANDLE_HALF, SCALE_HANDLE_HALF * 2, SCALE_HANDLE_HALF * 2);
     ctx.strokeStyle = "#1a1f2b";
-    ctx.strokeRect(point.x - SCALE_HANDLE_HALF, point.y - SCALE_HANDLE_HALF, SCALE_HANDLE_HALF * 2, SCALE_HANDLE_HALF * 2);
+    ctx.strokeRect(screenPt.x - SCALE_HANDLE_HALF, screenPt.y - SCALE_HANDLE_HALF, SCALE_HANDLE_HALF * 2, SCALE_HANDLE_HALF * 2);
   }
+  ctx.restore();
+  // T0232 increment 3b: the rotate handle -- a knob on a short stem above a SOLO selected
+  // element's (rotated) top-center -- draws in the same chrome pass, right after the scale
+  // handles, for a single element/text selection only (singleSelectedElement's guard).
+  drawRotateHandle(vp);
+}
+
+function drawRotateHandle(vp) {
+  const element = singleSelectedElement();
+  if (!element) return;
+  const box = { x: element.x, y: element.y, w: element.w, h: element.h, rotation: Number(element.rotation) || 0 };
+  const topCenterScreen = imageToScreenPoint(rotatedHandlePoints(box).find((point) => point.key === "n"), vp);
+  const knob = rotateHandleScreenPoint(element, vp);
+  ctx.save();
+  ctx.strokeStyle = "#77a7ff";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(topCenterScreen.x, topCenterScreen.y);
+  ctx.lineTo(knob.x, knob.y);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(knob.x, knob.y, ROTATE_HANDLE_RADIUS, 0, Math.PI * 2);
+  ctx.fillStyle = "#77a7ff";
+  ctx.fill();
+  ctx.strokeStyle = "#1a1f2b";
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -760,7 +863,21 @@ function beginScaleDrag(handle, screen, world) {
   if (!items.length) return;
   const origAABB = unionBBox(items.map((item) => item.box));
   const proportionalDefault = items.every((item) => item.kind === "element" && !item.isText);
-  drag = { mode: "scale", startX: screen.x, startY: screen.y, grabWorld: world, handle, items, origAABB, proportionalDefault };
+  // T0232 increment 3b: a SOLO rotated element scales in its OWN local (rotated) frame --
+  // see resizeRotatedBox's header in viewport.mjs -- so its rotated anchor corner/edge stays
+  // put in WORLD space. Every other case (multi-selection, a group, or an unrotated element)
+  // keeps the plain AABB block-scale path unchanged (`rotation` 0 -> the mousemove "scale"
+  // case below takes the ORIGINAL branch verbatim).
+  const rotation = items.length === 1 && items[0].kind === "element" ? Number(items[0].ref.rotation) || 0 : 0;
+  drag = { mode: "scale", startX: screen.x, startY: screen.y, grabWorld: world, handle, items, origAABB, proportionalDefault, rotation };
+}
+
+// Begin a "rotate" drag: the pivot is the element's OWN box center at grab time (rotation
+// never moves the box, so this stays valid for the whole gesture); `startWorld` anchors the
+// angle delta (rotationFromDrag), `baseRotation` is the element's rotation when grabbed.
+function beginRotateDrag(element, screen, world) {
+  const center = { x: element.x + element.w / 2, y: element.y + element.h / 2 };
+  drag = { mode: "rotate", startX: screen.x, startY: screen.y, elementId: element.id, center, startWorld: world, baseRotation: Number(element.rotation) || 0 };
 }
 
 // Commit a finished scale drag. Element geometry (images + text) always batches through ONE
@@ -822,6 +939,27 @@ function commitScaleDrag(finished) {
       setStatus(error.message, true);
     }
   })();
+}
+
+// Commit a finished rotate drag: ONE patchElement({rotation}) -- the SAME PATCH path the
+// inspector's Rotation input and the CLI's `element-set --rotation` use (README "Rotation &
+// flip": "whatever the page can set, the CLI/API can set identically"), so a rotate-handle
+// gesture is a single journal entry / one Ctrl+Z, exactly like a scale or move. Rounded to
+// the nearest whole degree at commit (T0236 fractional-during/round-at-commit law, same as
+// every other drag in this file); a no-op gesture (released back at the grabbed angle)
+// writes no entry.
+function commitRotateDrag(finished) {
+  const element = elements().find((item) => item.id === finished.elementId);
+  if (!element) {
+    refresh();
+    return;
+  }
+  const rotation = Math.round(Number(element.rotation) || 0) % 360;
+  if (rotation === Math.round(finished.baseRotation)) {
+    refresh();
+    return;
+  }
+  patchElementBox(finished.elementId, { rotation });
 }
 
 function updateZoomIndicator() {
@@ -939,7 +1077,11 @@ function hasGroupFill(group) {
 // interior). Clipped-out areas stay unhittable (the clip guard skips the whole subtree AND
 // the fill when the point is outside a clipping ancestor's box).
 function hitElement(world) {
-  const inBox = (e) => world.x >= e.x && world.x <= e.x + e.w && world.y >= e.y && world.y <= e.y + e.h;
+  // T0232 increment 3b: rotation-aware -- a rotated element/group hit-tests by its TRUE
+  // (rotated) footprint, not its stale unrotated box (pointInRotatedBox's identity fast
+  // path keeps every unrotated node's hit-test byte-identical to before this increment;
+  // groups never carry `rotation`, so they always take that fast path).
+  const inBox = (e) => pointInRotatedBox(world, e);
   const walk = (scopeId) => {
     const children = orderedChildren(state.project, scopeId);
     for (let i = children.length - 1; i >= 0; i -= 1) {
@@ -1175,6 +1317,16 @@ function onMouseDown(event) {
       exitRegionEdit();
       refresh();
     }
+  }
+
+  // T0232 increment 3b: grab the rotate handle BEFORE the scale handles/element hit-test --
+  // it floats OUTSIDE the box, so it is always the most specific target under the cursor
+  // when hit (same precedence rule the scale-handle check right below already follows).
+  const grabbedRotate = hitRotateHandle(screen);
+  if (grabbedRotate) {
+    beginRotateDrag(grabbedRotate, screen, world);
+    setCursor("grabbing");
+    return;
   }
 
   // T0232 increment 2: grab a resize handle on the current selection's AABB BEFORE falling
@@ -1500,6 +1652,28 @@ function onMouseMove(event) {
       const { dx, dy } = dragWorldDelta(drag.grabWorld, screen, vp);
       const proportional = event.shiftKey ? !drag.proportionalDefault : drag.proportionalDefault;
       const fromCenter = event.altKey;
+      if (drag.rotation) {
+        // T0232 increment 3b: a SOLO rotated element resizes in its own local (rotated)
+        // frame (resizeRotatedBox) -- rotation itself never changes during a scale gesture,
+        // so drag.rotation stays fixed for the whole drag.
+        const item = drag.items[0];
+        const mapped = resizeRotatedBox(
+          { ...item.box, rotation: drag.rotation },
+          drag.handle,
+          { dx, dy },
+          { proportional, fromCenter, minSize: SCALE_MIN_SIZE },
+        );
+        item.ref.x = mapped.x;
+        item.ref.y = mapped.y;
+        if (item.isText) {
+          item.ref.style = { ...item.ref.style, fontSize: scaledFontSize(item.origFontSize, mapped.sy) };
+        } else {
+          item.ref.w = Math.max(1, mapped.w);
+          item.ref.h = Math.max(1, mapped.h);
+        }
+        requestRender();
+        break;
+      }
       const newAABB = resizeBox(drag.origAABB, drag.handle, { dx, dy }, { proportional, fromCenter, minSize: SCALE_MIN_SIZE });
       for (const item of drag.items) {
         const mapped = mapItemBox(item.box, drag.origAABB, newAABB);
@@ -1527,6 +1701,21 @@ function onMouseMove(event) {
           item.ref.h = Math.max(1, mapped.h);
         }
       }
+      requestRender();
+      break;
+    }
+    case "rotate": {
+      // T0232 increment 3b: recompute the ABSOLUTE angle fresh every frame from the FIXED
+      // grab point/pivot (rotationFromDrag) -- never an incremental accumulation, so the
+      // result is exact regardless of frame count; a mid-drag zoom is naturally absorbed the
+      // same way dragWorldDelta absorbs it elsewhere (screenToImagePoint through the LIVE
+      // viewport). Shift snaps to 15-degree steps (Figma); NEVER smart-guide snapped (T0244
+      // is translate-only -- this drag object carries no snapCandidates/activeGuides, so
+      // drawSnapGuides's early-return keeps it silent here).
+      const currentWorld = screenToImagePoint(screen, vp);
+      const rotation = rotationFromDrag(drag.center, drag.startWorld, currentWorld, drag.baseRotation, { snap15: event.shiftKey });
+      const element = elements().find((item) => item.id === drag.elementId);
+      if (element) element.rotation = rotation;
       requestRender();
       break;
     }
@@ -1769,6 +1958,9 @@ function onMouseUp() {
     case "scale":
       commitScaleDrag(finished);
       break;
+    case "rotate":
+      commitRotateDrag(finished);
+      break;
     default:
       render();
       break;
@@ -1806,6 +1998,12 @@ function updateCursorAt(screen) {
       return;
     }
     setCursor("default");
+    return;
+  }
+  // T0232 increment 3b: the rotate handle takes cursor precedence over the scale handles
+  // (same order as the mousedown grab check above).
+  if (hitRotateHandle(screen)) {
+    setCursor("grab");
     return;
   }
   // T0232 increment 2: a resize handle takes cursor precedence over move (same order as
@@ -1860,8 +2058,16 @@ function updateHoverGroup(screen, editEl) {
 // inspector "+ Add region". In polygon mode a double-click closes the draft
 // (handled in onMouseDown via event.detail), so it must not re-enter isolation here.
 function onDblClick(event) {
+  // T0232 increment 3b: double-click the rotate handle resets rotation to 0 in ONE commit
+  // (R4/R5 -- the same reset the inspector's "Reset rotation" button drives elsewhere).
+  const screen = pointer(event);
+  const rotateHit = hitRotateHandle(screen);
+  if (rotateHit) {
+    if ((Number(rotateHit.rotation) || 0) !== 0) patchElementBox(rotateHit.id, { rotation: 0 });
+    return;
+  }
   if (state.regionEditId && state.regionTool === "polygon") return;
-  const world = screenToImagePoint(pointer(event), state.viewport);
+  const world = screenToImagePoint(screen, state.viewport);
   const hit = hitElement(world);
   if (!hit) return;
   const res = resolveClickSelection(hit, state.enteredGroupId);
