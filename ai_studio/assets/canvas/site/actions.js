@@ -644,6 +644,22 @@ export async function setSlice9Action(elementId, insets) {
   }
 }
 
+// ---- animation (T0260) ---------------------------------------------------------
+
+// Set or clear an element's procedural animation in ONE journaled setElementAnimation op —
+// the inspector Animation section's "Add sample", Edit-JSON Save, and Clear all commit through
+// here (tool parity with the CLI's animation-set and the agent API). `animationOrNull` is a
+// validated {channels:[...]} spec, or null to clear the field (image + text). The op's own
+// loud validation (a bad channel/prop/kind, a duplicate prop, a non-image/text element)
+// surfaces as an error toast — mirrors setSlice9Action exactly, one route segment over.
+export async function setElementAnimationAction(elementId, animationOrNull) {
+  try {
+    applyMutation(await api("PUT", `/projects/${pid()}/elements/${elementId}/animation`, { animation: animationOrNull }));
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 // ---- export ------------------------------------------------------------------
 
 // Replace an element's Figma-style export rows via the journaled setExportSettings

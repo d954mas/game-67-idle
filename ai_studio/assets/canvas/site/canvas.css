@@ -1843,6 +1843,14 @@ body.layers-resizing {
   white-space: nowrap;
 }
 
+/* Animation section (T0260 increment 2): Play/Edit JSON reuse the inline .insp-alpha-row
+   layout; the Clear button arms red on its first click (two-step confirm, home.js's pattern)
+   so a stray single click never wipes the spec. */
+.insp-animation-clear.armed {
+  border-color: var(--red);
+  color: var(--red);
+}
+
 /* Plate thumbnails (T0238 dual-plate flow; inline styles moved here in T0245 bonus
    cleanup, zero visual change). One row per plate: thumbnail, role label, add button. */
 .insp-alpha-plates {

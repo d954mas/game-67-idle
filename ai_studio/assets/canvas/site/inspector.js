@@ -56,6 +56,7 @@ import {
   renameRegion,
   renderScreen,
   selectedNodeIds,
+  setElementAnimationAction,
   setExportRows,
   setGroupBackground,
   setGroupClip,
@@ -66,10 +67,11 @@ import {
   toggleElementFlip,
 } from "./actions.js";
 import { childrenOf, descendantsOf, isNodeTransformed } from "../tree.mjs";
+import { validateAnimation } from "../animation.mjs";
 import { fontFamilies, fontWeights } from "./fonts.js";
 import { openContextMenu } from "./context_menu.js";
 import { inlineEdit } from "./inline.js";
-import { clearCleanupPreview, getCleanupPreview, loadCleanupBitmap, setCleanupPreview, setCleanupPreviewCompare } from "./workspace.js";
+import { clearCleanupPreview, getCleanupPreview, isAnimationPreviewing, loadCleanupBitmap, setCleanupPreview, setCleanupPreviewCompare, toggleAnimationPreview } from "./workspace.js";
 
 function field(label, node) {
   const row = document.createElement("label");
@@ -309,8 +311,18 @@ function openPromptModal(title, initialValue, onSave, { readOnly: viewOnly = fal
   const save = () => {
     if (viewOnly) return;
     // Match the inline textarea's change-event semantics: an unedited Save/Ctrl+Enter
-    // is a plain close, never a no-op journal entry.
-    if (textarea.value !== (initialValue == null ? "" : String(initialValue))) onSave(textarea.value);
+    // is a plain close, never a no-op journal entry. A save whose onSave THROWS (T0260's
+    // Animation JSON editor validates JSON.parse + the spec client-side) keeps the modal
+    // OPEN and toasts the reason, so the lead fixes the text instead of losing it — every
+    // pre-existing caller's onSave never throws, so their close-on-save is unchanged.
+    if (textarea.value !== (initialValue == null ? "" : String(initialValue))) {
+      try {
+        onSave(textarea.value);
+      } catch (error) {
+        setStatus(error.message, true);
+        return;
+      }
+    }
     close();
   };
 
@@ -1579,6 +1591,121 @@ function renderSlice9(element, root) {
   body.appendChild(hint);
 }
 
+// ---- Animation (T0260 increment 2) ---------------------------------------------
+//
+// Procedural animation (element.animation — the ai_studio.canvas.animation.v1 spec) on an
+// IMAGE or TEXT element, with an on-canvas PREVIEW (workspace.js samples the SHARED
+// animation.mjs each rAF; pure view-state, never journaled). Chat/codex is the intended spec
+// editor ("wings slower" = one number patch); this section is the manual fallback — seed a
+// sample, Play/Stop the preview, hand-edit the JSON, or clear it. Play/Stop is per-element
+// VIEW-STATE: switching selection does NOT stop playback, so the lead can start several
+// elements and watch them together. Each of Add/Save/Clear = exactly ONE setElementAnimation op.
+
+// The starter "Add sample animation" writes: a ~8px vertical bob every 1.2s (one osc channel
+// on off_y) — instantly visible, and a valid spec the sampler/op both accept as-is.
+const ANIMATION_SAMPLE_SPEC = { v: 1, channels: [{ prop: "off_y", kind: "osc", amplitude: 8, period_ms: 1200 }] };
+
+function renderAnimation(element, root) {
+  const body = collapsible(root, "animation", "Animation");
+  const animation = element.animation;
+  const hasSpec = animation && Array.isArray(animation.channels) && animation.channels.length > 0;
+
+  if (!hasSpec) {
+    const empty = document.createElement("div");
+    empty.className = "insp-region-hint";
+    empty.textContent = "No animation. Add a sample, then edit it here or ask chat.";
+    body.appendChild(empty);
+
+    const addBtn = document.createElement("button");
+    addBtn.type = "button";
+    addBtn.className = "insp-btn";
+    addBtn.textContent = "Add sample animation";
+    addBtn.title = "Seed a gentle vertical bob (off_y osc) you can preview and edit";
+    addBtn.addEventListener("click", () => setElementAnimationAction(element.id, ANIMATION_SAMPLE_SPEC));
+    body.appendChild(addBtn);
+    return;
+  }
+
+  // Summary: "N channels: prop, prop" — the props this animation drives.
+  const props = animation.channels.map((channel) => channel.prop);
+  const summary = document.createElement("div");
+  summary.className = "insp-region-hint";
+  summary.textContent = `${props.length} ${props.length === 1 ? "channel" : "channels"}: ${props.join(", ")}`;
+  body.appendChild(summary);
+
+  const actions = document.createElement("div");
+  actions.className = "insp-alpha-row";
+
+  // Play/Stop is pure view-state (workspace.js), so a toggle repaints the CANVAS but NOT this
+  // panel — re-label the button in place instead of forcing an inspector rebuild.
+  const playing = isAnimationPreviewing(element.id);
+  const playBtn = document.createElement("button");
+  playBtn.type = "button";
+  playBtn.className = playing ? "primary insp-btn insp-alpha-btn" : "insp-btn insp-alpha-btn";
+  playBtn.textContent = playing ? "Stop" : "Play";
+  playBtn.addEventListener("click", () => {
+    toggleAnimationPreview(element.id);
+    const now = isAnimationPreviewing(element.id);
+    playBtn.textContent = now ? "Stop" : "Play";
+    playBtn.classList.toggle("primary", now);
+  });
+  actions.appendChild(playBtn);
+
+  const editBtn = document.createElement("button");
+  editBtn.type = "button";
+  editBtn.className = "insp-btn insp-alpha-btn";
+  editBtn.textContent = "Edit JSON";
+  editBtn.title = "Hand-edit the raw animation spec";
+  editBtn.addEventListener("click", () => {
+    openPromptModal(`${element.name || "Animation"} — JSON`, JSON.stringify(animation, null, 2), (next) => {
+      // Throwing keeps the modal open + toasts (openPromptModal's save wrapper). Parse first,
+      // then run the SAME validateAnimation the op re-validates with — a loud client-side gate
+      // so a typo never round-trips.
+      let spec;
+      try {
+        spec = JSON.parse(next);
+      } catch (error) {
+        throw new Error(`Invalid JSON: ${error.message}`);
+      }
+      validateAnimation(spec);
+      setElementAnimationAction(element.id, spec);
+    });
+  });
+  actions.appendChild(editBtn);
+  body.appendChild(actions);
+
+  // Clear = two-step confirm (home.js's in-place pattern): the first click ARMS (red label),
+  // the second within the window clears; it disarms on blur or a 3s timeout so a stray single
+  // click never wipes the spec. Stop any live preview first so it can't paint a vanished spec.
+  const clearBtn = document.createElement("button");
+  clearBtn.type = "button";
+  clearBtn.className = "insp-btn-small insp-animation-clear";
+  clearBtn.textContent = "Clear animation";
+  let armed = false;
+  let disarmTimer = null;
+  const disarm = () => {
+    armed = false;
+    clearTimeout(disarmTimer);
+    clearBtn.classList.remove("armed");
+    clearBtn.textContent = "Clear animation";
+  };
+  clearBtn.addEventListener("click", () => {
+    if (!armed) {
+      armed = true;
+      clearBtn.classList.add("armed");
+      clearBtn.textContent = "Clear — confirm?";
+      clearTimeout(disarmTimer);
+      disarmTimer = setTimeout(disarm, 3000);
+      return;
+    }
+    disarm();
+    if (isAnimationPreviewing(element.id)) toggleAnimationPreview(element.id);
+    setElementAnimationAction(element.id, null);
+  });
+  clearBtn.addEventListener("blur", disarm);
+  body.appendChild(clearBtn);
+}
+
 // Generation section (T0250): additive, shown only when the element carries a frozen
 // meta.recipe run snapshot ({cardId, engine, at, prompt_snapshot, refs_snapshot,
 // params_snapshot} — minted by generateFromRecipeAction) — same "presence of the
@@ -1759,6 +1886,7 @@ function renderElement(element, root) {
   renderAlpha(element, root);
   renderCleanup(element, root);
   renderSlice9(element, root);
+  renderAnimation(element, root);
   renderExtracted(element, root);
   renderGeneration(element, root);
 
@@ -1884,6 +2012,7 @@ function renderTextElement(element, root) {
   root.appendChild(hint);
 
   renderTextStyle(element, style, root);
+  renderAnimation(element, root);
 }
 
 // The group's BACKGROUND section: mode None/Solid + a color input (enabled for Solid).
@@ -2394,7 +2523,7 @@ function inspectorSig() {
       // T0249: rotation is part of the structure too (the Position & Size header badge
       // + the rotation row's Reset button both depend on it) — a rotation-only change
       // (e.g. the canvas rotate handle) must rebuild the section, not just skip.
-      return `t:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.content}|${JSON.stringify(e.style || {})}|${e.groupId || ""}|${e.rotation || 0}`;
+      return `t:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.content}|${JSON.stringify(e.style || {})}|${e.groupId || ""}|${e.rotation || 0}|${JSON.stringify(e.animation || null)}`;
     }
     const regions = (e.regions || [])
       .map((r) => `${r.id}~${r.name || ""}~${(r.rect || r.content_bbox || []).join(",")}`)
@@ -2404,7 +2533,7 @@ function inspectorSig() {
     // depend on these, so they must rebuild the section too. element.slice9 (T0233
     // Packet 2): the Slice-9 section's Enable-vs-live-fields branch + every field's
     // displayed value depend on it, so an Enable/Clear/field commit must rebuild too.
-    return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.export || [])}|${JSON.stringify(e.slice9 || null)}|${JSON.stringify(e.meta || {})}|${e.groupId || ""}|${e.rotation || 0},${e.flipH ? 1 : 0},${e.flipV ? 1 : 0}`;
+    return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.export || [])}|${JSON.stringify(e.slice9 || null)}|${JSON.stringify(e.meta || {})}|${e.groupId || ""}|${e.rotation || 0},${e.flipH ? 1 : 0},${e.flipV ? 1 : 0}|${JSON.stringify(e.animation || null)}`;
   }
   // Group ids that ride along with a loose-element multi-selection are folded in too (the
   // Align row's nodeIds come from the FULL selectedNodeIds(), not just `selected`).

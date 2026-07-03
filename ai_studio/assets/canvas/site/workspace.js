@@ -42,6 +42,10 @@ import { canvasFontString } from "../fonts.mjs";
 // T0233: the same pure 9-slice math ops.mjs/render_group.py use (see slice9.mjs) —
 // served over /ai_studio/ so the page normalizes a slice9 element identically.
 import { slice9Patches } from "../slice9.mjs";
+// T0260 increment 2: the SAME pure sampler ops.mjs/the PIL bake use (see animation.mjs) —
+// the on-canvas preview samples it every rAF so a channel animates identically here and in
+// the bake. View-state only; nothing here writes the store.
+import { sampleAnimation } from "../animation.mjs";
 import { areFontsReady, measureTextBox, measureTextLines } from "./fonts.js";
 import { inlineEdit } from "./inline.js";
 import { openContextMenu } from "./context_menu.js";
@@ -286,19 +290,122 @@ export function loadCleanupBitmap(base64) {
   });
 }
 
+// ---- animation preview (T0260 increment 2) ------------------------------------
+//
+// On-canvas playback of an element's procedural animation (element.animation), sampled by
+// the SHARED pure animation.mjs so the page matches the eventual PIL bake byte-for-byte. Pure
+// VIEW-STATE like the cleanup preview above: NOTHING is journaled/persisted — the sample is a
+// paint-time transform (offset/rot/scale about the box center + an opacity multiply) applied
+// ONLY to the drawn image/glyphs. Element geometry is NEVER mutated, so hit-testing, selection
+// outlines, the gizmo, guides and export all keep using the STATIC box (the sprite animates
+// away from its own selection outline — intended, and simpler).
+//
+// Playback is PER-ELEMENT (previewingElementIds), but the CLOCK is shared (previewClockT0),
+// reset only when the FIRST element starts — so two elements previewing at once sample the
+// same t = now - t0 and identical specs stay in phase. The rAF loop runs ONLY while something
+// previews and STOPS DEAD when the set empties (the perf culture here forbids an idle rAF). It
+// also self-cleans: an element deleted/undone (or whose animation was cleared) drops out on
+// the next tick and the loop ends once nothing is left — no stale id keeps it alive.
+const previewingElementIds = new Set();
+let previewClockT0 = 0;
+let previewRafId = 0;
+
+// Drop previewing ids that no longer resolve to a live element carrying an animation (the
+// element was deleted/undone, its animation was cleared, or the project was switched) — the
+// self-clean that lets a mutation on ANY other path silently retire a preview.
+function prunePreviewIds() {
+  for (const id of previewingElementIds) {
+    const element = elements().find((item) => item.id === id);
+    if (!element || !element.animation) previewingElementIds.delete(id);
+  }
+}
+
+function previewLoop() {
+  previewRafId = 0;
+  prunePreviewIds();
+  if (!previewingElementIds.size) return; // nothing left -> the loop dies (no idle rAF)
+  render();
+  previewRafId = requestAnimationFrame(previewLoop);
+}
+
+export function isAnimationPreviewing(elementId) {
+  return previewingElementIds.has(elementId);
+}
+
+// Start previewing an element (the inspector Play button). The shared clock resets only when
+// the FIRST element starts, so a second element joining an in-flight preview stays in phase.
+export function startAnimationPreview(elementId) {
+  if (!elementId || previewingElementIds.has(elementId)) return;
+  if (!previewingElementIds.size) previewClockT0 = performance.now();
+  previewingElementIds.add(elementId);
+  if (!previewRafId) previewRafId = requestAnimationFrame(previewLoop);
+  render(); // paint the first animated frame now, don't wait a whole rAF
+}
+
+// Stop previewing an element (the inspector Stop button). The canvas settles back to the
+// static box immediately; cancelling the rAF outright when it was the last preview.
+export function stopAnimationPreview(elementId) {
+  if (!previewingElementIds.delete(elementId)) return;
+  if (!previewingElementIds.size && previewRafId) {
+    cancelAnimationFrame(previewRafId);
+    previewRafId = 0;
+  }
+  render();
+}
+
+export function toggleAnimationPreview(elementId) {
+  if (previewingElementIds.has(elementId)) stopAnimationPreview(elementId);
+  else startAnimationPreview(elementId);
+}
+
+// The composed animation transform for an element THIS frame, or null when it is not
+// previewing / carries no animation. Sampled at the SHARED clock so every previewing element
+// reads the same t (and thus stays in phase).
+function previewSampleFor(element) {
+  if (!previewingElementIds.has(element.id) || !element.animation) return null;
+  return sampleAnimation(element.animation, performance.now() - previewClockT0);
+}
+
+// Wrap a draw callback in the render-time animation transform: the world-unit offset becomes a
+// screen translation (world->screen is a pan/zoom similarity, no rotation), then rot+scale
+// pivot about the element's STATIC box center — the SAME center the element's own rotation
+// pivots about, so anim rot/scale compose on top of the element's rotation/flip for free (this
+// wrapper sits OUTSIDE that block). A plain passthrough when the sample is identity, so a
+// resting channel never pays a save/restore.
+function drawWithAnimation(sample, element, vp, drawFn) {
+  const active = sample && (sample.offX !== 0 || sample.offY !== 0 || sample.rot !== 0 || sample.scale !== 1);
+  if (!active) {
+    drawFn();
+    return;
+  }
+  const center = imageToScreenPoint({ x: element.x + element.w / 2, y: element.y + element.h / 2 }, vp);
+  ctx.save();
+  ctx.translate(sample.offX * vp.scale, sample.offY * vp.scale);
+  ctx.translate(center.x, center.y);
+  if (sample.rot) ctx.rotate((sample.rot * Math.PI) / 180);
+  if (sample.scale !== 1) ctx.scale(sample.scale, sample.scale);
+  ctx.translate(-center.x, -center.y);
+  drawFn();
+  ctx.restore();
+}
+
 function paintElement(element, vp, editEl) {
   if (element.type === "text") {
     paintTextElement(element, vp, editEl);
     return;
   }
   const isEdit = editEl && element.id === editEl.id;
+  // T0260 increment 2: the live animation-preview sample for THIS element this frame (null
+  // unless it is previewing with a real animation). Its opacity multiplies into globalAlpha
+  // below; its offset/rot/scale wrap the image draw (drawWithAnimation) further down.
+  const animSample = previewSampleFor(element);
   // Mode B dims every other element to focus the isolated one. T0260: element.opacity
   // (static, [0,1], absent = 1) multiplies into that dim, set BEFORE the rotate/flip/
   // slice9 drawBody so the whole element draw is alpha-scaled — parity with
-  // render_group.py's paint_element alpha multiply. Reset to 1 below. (The opacity
-  // animation channel, sampled, will multiply in on top in a later increment.)
+  // render_group.py's paint_element alpha multiply. The sampled opacity channel (increment 2)
+  // multiplies in on top, clamped [0,1] by the sampler. Reset to 1 below.
   const opacity = element.opacity === undefined || element.opacity === null ? 1 : Number(element.opacity);
-  ctx.globalAlpha = (editEl && !isEdit ? 0.3 : 1) * opacity;
+  ctx.globalAlpha = (editEl && !isEdit ? 0.3 : 1) * opacity * (animSample ? animSample.opacity : 1);
   // T0207: a live Quantize/Denoise preview for THIS element, while "Hold to compare"
   // isn't pressed, paints in place of the source — pure view-state substitution, nothing
   // about `element` or the store changes.
@@ -333,27 +440,32 @@ function paintElement(element, vp, editEl) {
         ctx.drawImage(img, origin.x, origin.y, w, h); // unchanged fallback
       }
     };
-    if (rotation || flipH || flipV) {
-      // T0232 increment 3a — rotation/flip parity contract (must agree byte-for-byte with
-      // render_group.py's paint_element, see README "Rotation & flip"): rotate(+theta) is
-      // CW on this Y-down canvas, about the element's box CENTER; flip mirrors in the same
-      // rotated local frame (composition order resize -> flip -> rotate, flip innermost).
-      // Translating to the SCREEN-space center, applying rotate+scale(flip), then
-      // translating back lets drawImage keep using the ORIGINAL unrotated origin/w/h — pan
-      // and zoom never rotate, so "screen space" and "world space" differ only by a
-      // similarity transform, and this composition is algebraically identical to drawing
-      // the image in a box centered at the origin under the same rotate+flip.
-      const center = imageToScreenPoint({ x: element.x + element.w / 2, y: element.y + element.h / 2 }, vp);
-      ctx.save();
-      ctx.translate(center.x, center.y);
-      if (rotation) ctx.rotate((rotation * Math.PI) / 180);
-      if (flipH || flipV) ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
-      ctx.translate(-center.x, -center.y);
-      drawBody();
-      ctx.restore();
-    } else {
-      drawBody();
-    }
+    // T0260 increment 2: the animation preview composes as an OUTER transform around this
+    // (untouched) rotation/flip block — see drawWithAnimation. Not previewing / at rest = a
+    // plain passthrough, byte-identical to before this increment.
+    drawWithAnimation(animSample, element, vp, () => {
+      if (rotation || flipH || flipV) {
+        // T0232 increment 3a — rotation/flip parity contract (must agree byte-for-byte with
+        // render_group.py's paint_element, see README "Rotation & flip"): rotate(+theta) is
+        // CW on this Y-down canvas, about the element's box CENTER; flip mirrors in the same
+        // rotated local frame (composition order resize -> flip -> rotate, flip innermost).
+        // Translating to the SCREEN-space center, applying rotate+scale(flip), then
+        // translating back lets drawImage keep using the ORIGINAL unrotated origin/w/h — pan
+        // and zoom never rotate, so "screen space" and "world space" differ only by a
+        // similarity transform, and this composition is algebraically identical to drawing
+        // the image in a box centered at the origin under the same rotate+flip.
+        const center = imageToScreenPoint({ x: element.x + element.w / 2, y: element.y + element.h / 2 }, vp);
+        ctx.save();
+        ctx.translate(center.x, center.y);
+        if (rotation) ctx.rotate((rotation * Math.PI) / 180);
+        if (flipH || flipV) ctx.scale(flipH ? -1 : 1, flipV ? -1 : 1);
+        ctx.translate(-center.x, -center.y);
+        drawBody();
+        ctx.restore();
+      } else {
+        drawBody();
+      }
+    });
   } else {
     ctx.strokeStyle = "#596774";
     ctx.strokeRect(origin.x, origin.y, w, h);
@@ -423,11 +535,15 @@ function strokeRotatedQuad(node, vp) {
 // textarea overlay shows the live text).
 function paintTextElement(element, vp, editEl) {
   const isEdit = editEl && element.id === editEl.id;
-  ctx.globalAlpha = editEl && !isEdit ? 0.3 : 1;
+  // T0260 increment 2: text carries the same animation as an image element — the sampled
+  // opacity multiplies globalAlpha, the offset/rot/scale wrap the glyph draw (about the box
+  // center). Null when not previewing => byte-identical to before.
+  const animSample = previewSampleFor(element);
+  ctx.globalAlpha = (editEl && !isEdit ? 0.3 : 1) * (animSample ? animSample.opacity : 1);
   const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
   const style = element.style || {};
   if (areFontsReady() && state.editingTextId !== element.id) {
-    drawTextGlyphs(element, style, origin, vp);
+    drawWithAnimation(animSample, element, vp, () => drawTextGlyphs(element, style, origin, vp));
   }
   ctx.globalAlpha = 1;
   if (isSelected(element)) {
