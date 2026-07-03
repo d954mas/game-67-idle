@@ -489,6 +489,27 @@ export async function alphaDualPlateFor(ids, control) {
   );
 }
 
+// AUTOMATIC dual-plate alpha from ONE element (T0238/T0247 — the inspector Alpha section's
+// explicit "Dual-plate (generate)" method): the element's own pixels are the light plate
+// (the op refuses loudly on a non-flat/non-light background BEFORE any codex spend), the
+// dark plate is generated as a subject-locked codex edit, and the gated/aligned cut lands
+// as ONE NEW element beside the source (plates + prompt + verdict in its meta.alpha).
+// Codex generation runs minutes, not seconds — same runLongOp limiter/spinner/disable
+// treatment, just a longer-lived toast. The new element is selected on success (mirrors
+// alphaDualPlateFor).
+export async function alphaDualPlateGenerateFor(id, control) {
+  await runLongOp(
+    "Dual-plate generate… (codex, ~2-4 min)",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/alpha-dual-generate`, { elementId: id });
+      selectOnly(result.element.id);
+      applyMutation(result);
+      return { kind: "success", message: `Dual-plate alpha created "${result.element.name}".` };
+    },
+    { control },
+  );
+}
+
 // Mint a normal element from a dual-plate-generate plate's STORED file (T0238) — the
 // inspector's per-plate "Add to canvas" button. No re-upload/no re-fetch: the server reads
 // the existing content-addressed file directly (POST /images-from-file). Fast metadata op
