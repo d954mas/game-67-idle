@@ -1516,6 +1516,10 @@ body.layers-resizing {
 .insp-alpha-row .insp-field {
   flex: 1;
   margin: 0;
+  /* A <select>'s intrinsic width is its widest option; without this the field's
+     min-width:auto lets a long option push the whole row past the panel width
+     (T0247 "Dual-plate" regression: horizontal scrollbar in the inspector). */
+  min-width: 0;
 }
 
 .insp-alpha-btn {

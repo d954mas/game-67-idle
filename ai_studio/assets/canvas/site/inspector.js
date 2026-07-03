@@ -380,7 +380,7 @@ function renderAlpha(element, root) {
   alphaRow.className = "insp-alpha-row";
   const methodSel = document.createElement("select");
   methodSel.className = "insp-input";
-  for (const [value, label] of [["matte", "Key matte"], ["dual", "Dual-plate (generate)"]]) {
+  for (const [value, label] of [["matte", "Key matte"], ["dual", "Dual-plate"]]) {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = label;
