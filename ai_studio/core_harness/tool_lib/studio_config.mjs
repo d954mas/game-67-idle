@@ -115,3 +115,24 @@ export function canvasLocalCacheRoot(root) {
   if (!raw) return resolve(root, "tmp", "canvas_cache");
   return looksAbsolute(raw) ? resolve(raw) : resolve(root, raw);
 }
+
+// Absolute on-disk root of the ISOLATED, wholesale-deletable video-generation
+// experiment (T0257): the portable ComfyUI stack, the draft/final workflow
+// JSONs, and the CorridorKey/MatAnyone tool venvs. Deliberately OUTSIDE the repo
+// — its outputs and model weights are large and machine-local, and the whole
+// thing can be deleted without touching git. The Track B video-animation
+// pipeline (ai_studio/assets/tools/video/**) reads this to find the ComfyUI
+// server, the profile workflows, and the matte tool venvs. Resolution mirrors
+// canvasProjectsRoot: VIDEO_GEN_ROOT env overrides everything (tests/one-off
+// runs); otherwise the committed `videoGenRoot` (local override wins). Unlike
+// the canvas accessors this THROWS loudly when unset — a video stage cannot run
+// without the experiment stack, and a silent default would be a fallback.
+export function videoGenRoot(root) {
+  const fromEnv = String(process.env.VIDEO_GEN_ROOT || "").trim();
+  if (fromEnv) return resolve(fromEnv);
+  const raw = String(loadStudioConfig(root).videoGenRoot || "").trim();
+  if (!raw) {
+    throw new Error(`studio config is missing videoGenRoot (schema ${STUDIO_CONFIG_SCHEMA})`);
+  }
+  return looksAbsolute(raw) ? resolve(raw) : resolve(root, raw);
+}
