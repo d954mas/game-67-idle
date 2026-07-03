@@ -33,8 +33,6 @@ import {
   alphaCutoutFor,
   alphaDualPlateFor,
   alphaDualPlateGenerateFor,
-  cleanupApplyAction,
-  cleanupPreviewAction,
   deleteRegion,
   detectRegionsFor,
   distributeSelection,
@@ -71,7 +69,8 @@ import { validateAnimation } from "../animation.mjs";
 import { fontFamilies, fontWeights } from "./fonts.js";
 import { openContextMenu } from "./context_menu.js";
 import { inlineEdit } from "./inline.js";
-import { clearCleanupPreview, getCleanupPreview, isAnimationPreviewing, loadCleanupBitmap, setCleanupPreview, setCleanupPreviewCompare, toggleAnimationPreview } from "./workspace.js";
+import { activeCleanupDialogTool, openCleanupDialog, syncCleanupDialog } from "./cleanup_dialog.js";
+import { clearCleanupPreview, getCleanupPreview, isAnimationPreviewing, toggleAnimationPreview } from "./workspace.js";
 
 function field(label, node) {
   const row = document.createElement("label");
@@ -629,67 +628,18 @@ function renderAlphaPlates(element, root) {
   root.appendChild(wrap);
 }
 
-// T0207 UX (lead 2026-07-04 «я бы хотел видеть сколько сейчас цветов»): the element's CURRENT
-// unique-color count, computed client-side from the source bitmap with the SAME definition as
-// quantize.py's _count_unique_colors (unique RGB triples over ALL pixels, alpha ignored,
-// capped) so this number and the preview report's palette_size_before can never disagree.
-// Cached by content-addressed src — the src IS the pixels, so the cache cannot go stale.
-const paletteCountCache = new Map(); // element.src -> Promise<number>
-const PALETTE_COUNT_CAP = 100000; // mirrors quantize.py UNIQUE_COLOR_CAP
-
-function countElementColors(element) {
-  const key = element.src;
-  if (!paletteCountCache.has(key)) {
-    paletteCountCache.set(key, new Promise((resolveCount, rejectCount) => {
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const cv = document.createElement("canvas");
-          cv.width = img.naturalWidth;
-          cv.height = img.naturalHeight;
-          const c2 = cv.getContext("2d", { willReadFrequently: true });
-          c2.drawImage(img, 0, 0);
-          const data = c2.getImageData(0, 0, cv.width, cv.height).data;
-          const seen = new Set();
-          for (let i = 0; i < data.length; i += 4) {
-            seen.add((data[i] << 16) | (data[i + 1] << 8) | data[i + 2]);
-            if (seen.size >= PALETTE_COUNT_CAP) break;
-          }
-          resolveCount(seen.size);
-        } catch (error) {
-          rejectCount(error);
-        }
-      };
-      img.onerror = () => rejectCount(new Error(`could not load ${element.src} to count colors`));
-      img.src = fileUrl(element);
-    }));
-  }
-  return paletteCountCache.get(key);
-}
-
-// Cleanup section (T0207 — lead: NOT one monolithic "Clean up" button; a small section of
-// TWO separate interactive tools, Quantize and Denoise, each with its own controls and a
-// LIVE on-canvas preview recomputed debounced (~350ms) as the controls change — nothing is
-// written to disk until Apply. Both tools share ONE preview slot (workspace.js's module-
-// level cleanupPreview) since only one result can be "the current preview" at a time, so
-// this section also shares ONE Hold-to-compare/Reset/Apply row below both sub-blocks,
-// labeled for whichever tool was last previewed — the simpler of the two shapes the task
-// offered (a separate Apply per sub-block would just duplicate the same three buttons
-// without changing what either one does, since a second concurrent preview isn't a thing).
-// R7 (same rule as Alpha/Regions): cleanup reads/writes source-space pixels, so a rotated/
-// flipped element refuses — every control stays disabled and the shared TRANSFORM_GUARD_
-// REASON hint shows, same as the Alpha section.
+// Cleanup launchers (T0207; UX redesigned 2026-07-04 after the lead's live verify — «кажется
+// что это про одно и что это настройки», then his own pick: «почему мы не делаем модальным
+// окном?»): Quantize and Denoise are TWO INDEPENDENT destructive one-shot tools; each opens
+// its own floating Photoshop-style dialog over the stage (cleanup_dialog.js) with the live
+// preview on the canvas itself. ONE dialog at a time (the "only one uncommitted preview"
+// rule from the competitor audit), so both launchers are disabled while one is open. The
+// dialog owns all controls; this section is just the entry point + the applied-provenance
+// line («как откатить обратно») + the shared transform guard (R7: cleanup reads/writes
+// source-space pixels, so a rotated/flipped element refuses).
 function renderCleanup(element, root) {
   const transformed = isNodeTransformed(element);
   const body = collapsible(root, "cleanup", "Cleanup");
-
-  // Collapsing the section clears the preview too (spec: "keeps state simple"). This runs
-  // AFTER collapsible()'s own head listener (which already flipped the "collapsed" class),
-  // so reading it here reflects the POST-toggle state.
-  const head = body.parentElement.querySelector(".insp-group-head");
-  head.addEventListener("click", () => {
-    if (body.parentElement.classList.contains("collapsed")) clearCleanupPreview();
-  });
 
   if (transformed) {
     const hint = document.createElement("div");
@@ -698,19 +648,8 @@ function renderCleanup(element, root) {
     body.appendChild(hint);
   }
 
-  // T0207 UX (lead live-verify 2026-07-04: the preview contract was invisible — «не понятно
-  // что арт не меняется» / «как откатить обратно»): spell it out. The canvas paints the
-  // RESULT live (amber "preview" chip on the element, see workspace.js paintElement); the
-  // stored art never changes until Apply; Reset drops the preview; an applied cleanup is one
-  // journal entry — Ctrl+Z restores the original byte-for-byte.
-  const contractHint = document.createElement("div");
-  contractHint.className = "insp-region-hint";
-  contractHint.textContent =
-    "Live preview on canvas — the stored art does not change until Apply. Reset drops the preview; after Apply, Ctrl+Z reverts exactly.";
-  body.appendChild(contractHint);
-
-  // Rollback answer for an ALREADY-applied cleanup (same lead question): meta.cleanup is the
-  // op's own provenance record — surface it with the undo route.
+  // Rollback answer for an ALREADY-applied cleanup («как откатить обратно»): meta.cleanup
+  // is the op's own provenance record — surface it with the undo route.
   if (element.meta && element.meta.cleanup) {
     const applied = element.meta.cleanup;
     const p = applied.params || {};
@@ -723,288 +662,36 @@ function renderCleanup(element, root) {
     body.appendChild(appliedLine);
   }
 
-  // ---- Quantize --------------------------------------------------------------
-  const quantizeCaption = document.createElement("div");
-  quantizeCaption.className = "insp-align-caption";
-  quantizeCaption.textContent = "Quantize (reduce palette)";
-  body.appendChild(quantizeCaption);
-
-  // Current palette size + the slider SEEDED from it (lead: «ползунок от текущего
-  // значения») — dragging left = fewer colors, and the number finally answers "does
-  // quantize even have anything to do here". Async once per src (cached above); seeding
-  // only happens while the control still shows the untouched default and no preview is
-  // live — never fights a value the lead already set.
-  const paletteLine = document.createElement("div");
-  paletteLine.className = "insp-cleanup-report";
-  paletteLine.textContent = "Current palette: counting…";
-  body.appendChild(paletteLine);
-  countElementColors(element)
-    .then((count) => {
-      if (!paletteLine.isConnected) return; // section rebuilt/collapsed meanwhile
-      paletteLine.textContent = count >= PALETTE_COUNT_CAP
-        ? `Current palette: ${PALETTE_COUNT_CAP.toLocaleString()}+ colors`
-        : `Current palette: ${count} colors`;
-      const preview = getCleanupPreview();
-      const untouched = quantizeNum.value === "32" && !(preview && preview.elementId === element.id);
-      if (untouched) {
-        const seeded = Math.min(256, Math.max(2, count));
-        quantizeNum.value = String(seeded);
-        quantizeRange.value = String(seeded);
-      }
-    })
-    .catch(() => {
-      if (paletteLine.isConnected) paletteLine.textContent = "Current palette: unavailable";
-    });
-
-  const quantizeRow = document.createElement("div");
-  quantizeRow.className = "insp-cleanup-row";
-  const quantizeRange = document.createElement("input");
-  quantizeRange.type = "range";
-  quantizeRange.min = "2";
-  quantizeRange.max = "256";
-  quantizeRange.value = "32";
-  quantizeRange.className = "insp-range";
-  quantizeRange.disabled = transformed;
-  const quantizeNum = document.createElement("input");
-  quantizeNum.type = "number";
-  quantizeNum.min = "2";
-  quantizeNum.max = "256";
-  quantizeNum.value = "32";
-  quantizeNum.className = "insp-input insp-cleanup-num";
-  quantizeNum.disabled = transformed;
-  const quantizeSpinner = document.createElement("span");
-  quantizeSpinner.className = "insp-cleanup-spinner hidden";
-  quantizeRow.append(quantizeRange, quantizeNum, quantizeSpinner);
-  body.appendChild(quantizeRow);
-
-  const ditherRow = document.createElement("label");
-  ditherRow.className = "insp-check";
-  const ditherCheck = document.createElement("input");
-  ditherCheck.type = "checkbox";
-  ditherCheck.disabled = transformed;
-  const ditherLabel = document.createElement("span");
-  ditherLabel.textContent = "Dither";
-  ditherRow.append(ditherCheck, ditherLabel);
-  body.appendChild(ditherRow);
-
-  const quantizeReport = document.createElement("div");
-  quantizeReport.className = "insp-cleanup-report";
-  body.appendChild(quantizeReport);
-
-  // ---- Denoise -----------------------------------------------------------------
-  const denoiseCaption = document.createElement("div");
-  denoiseCaption.className = "insp-align-caption";
-  denoiseCaption.textContent = "Denoise (remove speckle)";
-  body.appendChild(denoiseCaption);
-
-  const denoiseRow = document.createElement("div");
-  denoiseRow.className = "insp-cleanup-row";
-  const denoiseSeg = document.createElement("div");
-  denoiseSeg.className = "insp-segmented";
-  // 0 = off (lead ask 2026-07-04 «нужна какая-то 0 сила?»): the default is a real OFF state
-  // instead of a false-active "1" — clicking 0 drops a live denoise preview. 1..3 preview.
-  let denoiseStrength = 0;
-  const denoiseButtons = [0, 1, 2, 3].map((value) => {
+  const row = document.createElement("div");
+  row.className = "insp-cleanup-actions";
+  const openTool = activeCleanupDialogTool();
+  const syncLaunchers = (open) => {
+    const disabled = transformed || open !== null;
+    quantizeBtn.disabled = disabled;
+    denoiseBtn.disabled = disabled;
+  };
+  const launcher = (tool, label) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = value === denoiseStrength ? "insp-seg-btn primary" : "insp-seg-btn";
-    btn.textContent = String(value);
-    btn.disabled = transformed;
-    denoiseSeg.appendChild(btn);
-    return btn;
-  });
-  const denoiseHint = document.createElement("span");
-  denoiseHint.className = "insp-cleanup-hint";
-  denoiseHint.textContent = "0 off · 1 light · 3 strong";
-  const denoiseSpinner = document.createElement("span");
-  denoiseSpinner.className = "insp-cleanup-spinner hidden";
-  denoiseRow.append(denoiseSeg, denoiseHint, denoiseSpinner);
-  body.appendChild(denoiseRow);
-
-  const denoiseReport = document.createElement("div");
-  denoiseReport.className = "insp-cleanup-report";
-  body.appendChild(denoiseReport);
-
-  // ---- shared actions row (Hold to compare / Reset / Apply) --------------------
-  const actionsRow = document.createElement("div");
-  actionsRow.className = "insp-cleanup-actions";
-
-  const compareBtn = document.createElement("button");
-  compareBtn.type = "button";
-  compareBtn.className = "insp-btn-small hidden";
-  // Direction made explicit (lead read it backwards): the canvas already shows the NEW
-  // result; holding this shows the ORIGINAL underneath.
-  compareBtn.textContent = "Hold to see original";
-  const startCompare = (event) => {
-    event.preventDefault();
-    setCleanupPreviewCompare(true);
-  };
-  const stopCompare = () => setCleanupPreviewCompare(false);
-  compareBtn.addEventListener("mousedown", startCompare);
-  compareBtn.addEventListener("touchstart", startCompare);
-  compareBtn.addEventListener("mouseup", stopCompare);
-  compareBtn.addEventListener("mouseleave", stopCompare);
-  compareBtn.addEventListener("touchend", stopCompare);
-
-  const clearReports = () => {
-    quantizeReport.textContent = "";
-    denoiseReport.textContent = "";
-  };
-
-  const resetBtn = smallBtn("Reset", () => {
-    clearCleanupPreview();
-    clearReports();
-    syncActions();
-  });
-
-  const applyBtn = document.createElement("button");
-  applyBtn.type = "button";
-  applyBtn.className = "primary insp-btn";
-  applyBtn.textContent = "Apply";
-  applyBtn.addEventListener("click", () => {
-    const preview = getCleanupPreview();
-    if (!preview || preview.elementId !== element.id) return;
-    const { tool, params } = preview;
-    // Clear BEFORE the mutation lands (not after): the mutation's own rebuild (a
-    // meta.cleanup write, which rides the inspector's structure signature) would
-    // otherwise briefly show this Apply/Compare row still wired to a preview that's
-    // about to stop existing.
-    clearCleanupPreview();
-    clearReports();
-    syncActions();
-    cleanupApplyAction(element.id, tool, params, applyBtn).finally(syncActions);
-  });
-
-  actionsRow.append(compareBtn, resetBtn, applyBtn);
-  body.appendChild(actionsRow);
-
-  // ---- shared preview plumbing ---------------------------------------------------
-  function syncActions() {
-    const preview = getCleanupPreview();
-    const active = Boolean(preview && preview.elementId === element.id);
-    compareBtn.classList.toggle("hidden", !active);
-    resetBtn.disabled = !active;
-    applyBtn.disabled = !active;
-    applyBtn.textContent = active ? `Apply ${preview.tool === "denoise" ? "Denoise" : "Quantize"}` : "Apply";
-  }
-
-  // Zero-change previews looked like "the tool does nothing" (lead 2026-07-04: «квантизация
-  // как будто ничего не меняет») — when nothing changed, SAY it and say why/what to try.
-  function reportLine(tool, report) {
-    if (!report) return "";
-    const changed = Number(report.changed_pixel_pct) || 0;
-    if (tool === "denoise") {
-      if (changed === 0) return `strength ${report.strength}: 0% changed — art is already clean at this strength`;
-      return `strength ${report.strength}, ${report.changed_pixel_pct}% pixels changed`;
-    }
-    if (changed === 0) {
-      return `0% changed — art already has ${report.palette_size_before} colors; lower the count to see an effect`;
-    }
-    return `palette ${report.palette_size_before} -> ${report.palette_size_after}, ${report.changed_pixel_pct}% pixels changed`;
-  }
-
-  function setComputing(tool, computing) {
-    const spinner = tool === "denoise" ? denoiseSpinner : quantizeSpinner;
-    spinner.classList.toggle("hidden", !computing);
-    quantizeRange.disabled = transformed || (tool === "quantize" && computing);
-    quantizeNum.disabled = transformed || (tool === "quantize" && computing);
-    ditherCheck.disabled = transformed || (tool === "quantize" && computing);
-    for (const btn of denoiseButtons) btn.disabled = transformed || (tool === "denoise" && computing);
-  }
-
-  let debounceTimer = null;
-  let requestSeq = 0; // guards a slow-resolving preview from clobbering a newer one
-
-  function runPreview(tool, params) {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(async () => {
-      const seq = (requestSeq += 1);
-      setComputing(tool, true);
-      try {
-        const result = await cleanupPreviewAction(element.id, tool, params);
-        if (seq !== requestSeq) return; // superseded by a later change — drop it
-        const bitmap = await loadCleanupBitmap(result.preview_base64);
-        if (seq !== requestSeq) return;
-        setCleanupPreview({ elementId: element.id, bitmap, tool: result.tool, params: result.params, report: result.report });
-        const line = tool === "denoise" ? denoiseReport : quantizeReport;
-        const other = tool === "denoise" ? quantizeReport : denoiseReport;
-        line.textContent = reportLine(tool, result.report);
-        other.textContent = "";
-      } catch (error) {
-        setStatus(error.message, true);
-        clearCleanupPreview();
-        clearReports();
-      } finally {
-        if (seq === requestSeq) setComputing(tool, false);
-        syncActions();
-      }
-    }, 350);
-  }
-
-  const clampColors = (raw) => {
-    const n = Math.round(Number(raw));
-    return Number.isFinite(n) ? Math.min(256, Math.max(2, n)) : null;
-  };
-  const quantizeParams = () => ({ colors: clampColors(quantizeNum.value) ?? 32, dither: ditherCheck.checked });
-
-  // The range thumb is always a valid clamped int (browser-enforced min/max/step) — sync
-  // the number field's displayed value to match and preview immediately.
-  quantizeRange.addEventListener("input", () => {
-    quantizeNum.value = quantizeRange.value;
-    if (!transformed) runPreview("quantize", quantizeParams());
-  });
-  // Typing in the number field must NEVER rewrite what's on screen mid-edit (clamping a
-  // mid-typed "1" of "128" back to "2" would fight every subsequent keystroke) — only the
-  // range thumb tracks along on each valid keystroke; the field's own text is normalized on
-  // commit (change/blur), matching numberInput()'s convention elsewhere in this panel.
-  quantizeNum.addEventListener("input", () => {
-    const clamped = clampColors(quantizeNum.value);
-    if (clamped == null) return; // mid-edit / empty — nothing valid to preview yet
-    quantizeRange.value = String(clamped);
-    if (!transformed) runPreview("quantize", { colors: clamped, dither: ditherCheck.checked });
-  });
-  quantizeNum.addEventListener("change", () => {
-    const clamped = clampColors(quantizeNum.value) ?? 32;
-    quantizeNum.value = String(clamped);
-    quantizeRange.value = String(clamped);
-    if (!transformed) runPreview("quantize", { colors: clamped, dither: ditherCheck.checked });
-  });
-  ditherCheck.addEventListener("change", () => {
-    if (!transformed) runPreview("quantize", quantizeParams());
-  });
-
-  const setDenoiseHighlight = (value) => {
-    denoiseStrength = value;
-    for (const other of denoiseButtons) other.classList.toggle("primary", Number(other.textContent) === value);
-  };
-
-  for (const btn of denoiseButtons) {
+    btn.className = "insp-btn";
+    btn.textContent = label;
+    btn.disabled = transformed || openTool !== null;
     btn.addEventListener("click", () => {
-      const value = Number(btn.textContent);
-      if (value === denoiseStrength) return;
-      setDenoiseHighlight(value);
-      if (transformed) return;
-      if (value === 0) {
-        // OFF: cancel any pending preview request and drop a live DENOISE preview (a live
-        // quantize preview is the other sub-block's state — 0 must not eat it).
-        clearTimeout(debounceTimer);
-        const preview = getCleanupPreview();
-        if (preview && preview.elementId === element.id && preview.tool === "denoise") {
-          clearCleanupPreview();
-          denoiseReport.textContent = "";
-          syncActions();
-        }
-        return;
-      }
-      runPreview("denoise", { strength: value });
+      openCleanupDialog(tool, element, {
+        // The dialog outlives inspector rebuilds; if THIS row is still on screen when it
+        // closes, re-enable in place (a rebuilt row re-derives from activeCleanupDialogTool).
+        onClose: () => {
+          if (row.isConnected) syncLaunchers(null);
+        },
+      });
+      syncLaunchers(tool);
     });
-  }
-
-  // Reset drops the preview — the strength highlight must fall back to OFF with it, or the
-  // segmented control claims a strength that is no longer previewing anything.
-  resetBtn.addEventListener("click", () => setDenoiseHighlight(0));
-
-  syncActions();
+    return btn;
+  };
+  const quantizeBtn = launcher("quantize", "Quantize…");
+  const denoiseBtn = launcher("denoise", "Denoise…");
+  row.append(quantizeBtn, denoiseBtn);
+  body.appendChild(row);
 }
 
 // ---- export (Figma-style rows persisted on the element) ----------------------
@@ -2727,6 +2414,8 @@ export function renderInspector() {
   const cleanupOwnerId = selected.length === 1 && selected[0].type === "image" ? selected[0].id : null;
   const activeCleanupPreview = getCleanupPreview();
   if (activeCleanupPreview && activeCleanupPreview.elementId !== cleanupOwnerId) clearCleanupPreview();
+  // The floating cleanup dialog must never outlive its element either (T0207 redesign).
+  syncCleanupDialog(cleanupOwnerId);
 
   if (group) {
     renderGroupInspector(group, root);

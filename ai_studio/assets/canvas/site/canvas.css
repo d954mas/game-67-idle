@@ -1928,6 +1928,62 @@ body.layers-resizing {
   white-space: nowrap;
 }
 
+/* ---- cleanup tool dialog (T0207 redesign: Photoshop-style floating filter window;
+   NON-modal on purpose — a backdrop would cover the canvas, and the live preview paints
+   ON the canvas. Same visual family as #history-panel.) ------------------------------ */
+.cleanup-dialog {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  width: 252px;
+  display: flex;
+  flex-direction: column;
+  background: rgba(23, 27, 31, 0.97);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  z-index: 7;
+  overflow: hidden;
+}
+
+.cleanup-dialog-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px 7px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cleanup-dialog-head .panel-title {
+  font-weight: 600;
+  font-size: 13px;
+  flex: 1;
+}
+
+.cleanup-dialog-close {
+  padding: 1px 7px;
+  line-height: 1.2;
+  font-size: 15px;
+}
+
+.cleanup-dialog-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px 2px;
+}
+
+.cleanup-dialog-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px 10px;
+}
+
+.cleanup-dialog-foot .spacer {
+  flex: 1;
+}
+
 .insp-cleanup-actions {
   display: flex;
   gap: 6px;
