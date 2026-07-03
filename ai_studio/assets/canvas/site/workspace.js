@@ -133,6 +133,93 @@ export function requestRender() {
   });
 }
 
+// ---- viewport culling (T0255) ------------------------------------------------
+//
+// The paint loop skips any element or group whose CONSERVATIVE screen-space AABB lies fully
+// outside the canvas rect grown by CULL_MARGIN. Everything here works in the SAME CSS-px space
+// the paint coords live in (state.cssWidth/Height; DPR is folded into the base transform, so the
+// visible rect is always [0,0,cssW,cssH]). Culling removes ONLY draws that could not touch a
+// visible pixel, so it is byte-for-byte invisible. The margin absorbs fixed-screen-size chrome
+// that overhangs a box (a 2px selection stroke, the group name pill ~18px above the frame) and
+// any small text-metric drift, so nothing poking just past an edge is ever wrongly dropped.
+const CULL_MARGIN = 64;
+
+// True when the screen AABB [x0,y0,x1,y1] cannot intersect the viewport grown by CULL_MARGIN.
+function screenAABBOffscreen(x0, y0, x1, y1) {
+  return (
+    x1 < -CULL_MARGIN ||
+    y1 < -CULL_MARGIN ||
+    x0 > state.cssWidth + CULL_MARGIN ||
+    y0 > state.cssHeight + CULL_MARGIN
+  );
+}
+
+// Conservative screen AABB of an ELEMENT's static footprint. Rotation: the four rotatedCorners
+// (world) mapped to screen, min/max -> the tight rotated AABB (exact, still cheap). Unrotated
+// (the common case) takes a single origin transform + w/h*scale. Flip mirrors WITHIN the box
+// (no bounds change); slice9 draws within the box; the not-yet-loaded placeholder strokeRect
+// and the cleanup-preview substitution both draw in the SAME box; a text element's auto-width
+// w/h is kept == its live measure by patchTextElement (actions.js), so the stored box is the
+// drawn box. The ONE draw that escapes this box is the animation preview (a sampled offset/
+// scale about the center) — previewing elements are never culled (see elementCullable), so
+// this box deliberately ignores it.
+function elementScreenAABB(element, vp) {
+  const rotation = Number(element.rotation) || 0;
+  if (rotation) {
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const corner of rotatedCorners(element)) {
+      const p = imageToScreenPoint(corner, vp);
+      if (p.x < x0) x0 = p.x;
+      if (p.x > x1) x1 = p.x;
+      if (p.y < y0) y0 = p.y;
+      if (p.y > y1) y1 = p.y;
+    }
+    return { x0, y0, x1, y1 };
+  }
+  const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
+  return { x0: origin.x, y0: origin.y, x1: origin.x + element.w * vp.scale, y1: origin.y + element.h * vp.scale };
+}
+
+// Whether an element can be skipped this frame. NEVER culls an animation-previewing element
+// (its draw can travel far outside the static box via the sampled offset/scale; previewing ids
+// are few and the preview rAF already repaints every frame, so keeping them is correct and
+// negligible) nor the region-edit isolated element (its interactive region overlay/handles are
+// pinned to it — keeping exactly that one element sidesteps any overlay-vs-cull edge).
+function elementCullable(element, vp, editEl) {
+  if (previewingElementIds.has(element.id)) return false;
+  if (editEl && element.id === editEl.id) return false;
+  const aabb = elementScreenAABB(element, vp);
+  return screenAABBOffscreen(aabb.x0, aabb.y0, aabb.x1, aabb.y1);
+}
+
+// Conservative screen AABB of a GROUP's own box — the clip rect, the background fill and the
+// frame rect are all this same rect (groups never rotate). Backs the pass-1 clip/background
+// decision (raw box) and, grown, the pass-2 chrome cull.
+function groupBoxScreenAABB(group, vp) {
+  const origin = imageToScreenPoint({ x: group.x, y: group.y }, vp);
+  return { x0: origin.x, y0: origin.y, x1: origin.x + group.w * vp.scale, y1: origin.y + group.h * vp.scale };
+}
+
+// Conservative screen AABB of a group's pass-2 CHROME (drawGroupFrame): the box grown RIGHT by
+// a cheap upper bound on the name pill / card chip / prompt-preview width — those anchor at the
+// frame's top-left and can extend past a NARROW frame's right edge (a short frame, a long name).
+// They never overhang the frame's LEFT or BOTTOM, and the pill's ~18px rise above the top is
+// already covered by CULL_MARGIN, so only the right edge needs widening. Width is bounded by
+// string length x a generous per-char px (never ctx.measureText — the cull must cost less than
+// the draws it removes; over-estimating only makes it skip strictly less).
+function groupChromeScreenAABB(group, vp) {
+  const box = groupBoxScreenAABB(group, vp);
+  // 12px pill font, wide-glyph upper bound ~12px/char + pill padding.
+  let chromeW = String(group.name || "Group").length * 12 + 12;
+  // A recipe/style card adds a chip beside the pill (+gap) and an 11px prompt preview of up to
+  // RECIPE_PROMPT_PREVIEW_MAX chars inside the frame.
+  if (group.recipe || group.style) chromeW = Math.max(chromeW + 4 + 90, RECIPE_PROMPT_PREVIEW_MAX * 11 + 14);
+  return { x0: box.x0, y0: box.y0, x1: Math.max(box.x1, box.x0 + chromeW), y1: box.y1 };
+}
+
 export function render() {
   if (!canvas || !state.project) return;
   resizeCanvas();
@@ -159,6 +246,11 @@ export function render() {
   groupLabelRects = [];
   for (const group of groups()) {
     if (isNodeHidden(state.project, group)) continue;
+    // T0255: skip a group whose entire pass-2 chrome (frame + name pill + card chip/preview)
+    // lies off the viewport. A culled frame pushes no groupLabelRects entry — correct, since an
+    // offscreen label is never under the cursor, so it was never label-hit-testable anyway.
+    const chrome = groupChromeScreenAABB(group, vp);
+    if (screenAABBOffscreen(chrome.x0, chrome.y0, chrome.x1, chrome.y1)) continue;
     drawGroupFrame(group, vp);
   }
   // Ghost the clipped-out part of any selected element (or selected group's members) so a
@@ -218,17 +310,28 @@ function paintScope(scopeId, vp, editEl) {
     if (child.kind === "group") {
       const group = child.ref;
       const clip = group.clip === true;
+      // T0255: the clip rect, the background fill, and the frame all share the group's box.
+      const box = groupBoxScreenAABB(group, vp);
+      const boxOffscreen = screenAABBOffscreen(box.x0, box.y0, box.x1, box.y1);
+      // A clip=true group crops EVERY descendant to its box; when that box is fully offscreen
+      // the whole subtree (background + children, nested clips included) is cropped away and
+      // paints no visible pixel — skip clip setup, background, and recursion in one shot. A
+      // NON-clip group's offscreen box implies nothing about its children (they keep their own
+      // positions), so it still recurses and each child is culled on its own below.
+      if (clip && boxOffscreen) continue;
       if (clip) {
         ctx.save();
-        const origin = imageToScreenPoint({ x: group.x, y: group.y }, vp);
         ctx.beginPath();
-        ctx.rect(origin.x, origin.y, group.w * vp.scale, group.h * vp.scale);
+        ctx.rect(box.x0, box.y0, group.w * vp.scale, group.h * vp.scale);
         ctx.clip();
       }
-      fillGroupBackground(group, vp);
+      // The background IS the group box; an offscreen box fills nothing visible (reached only by
+      // a non-clip group here — a clip group with an offscreen box already `continue`d above).
+      if (!boxOffscreen) fillGroupBackground(group, vp);
       paintScope(child.id, vp, editEl);
       if (clip) ctx.restore();
     } else {
+      if (elementCullable(child.ref, vp, editEl)) continue;
       paintElement(child.ref, vp, editEl);
     }
   }
