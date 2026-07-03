@@ -1,7 +1,7 @@
 ---
 id: T0231
 title: "Canvas: text editing UX - live auto-width while typing + layers shows text content preview"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P1
@@ -35,3 +35,4 @@ Two lead reports from live verification 2026-07-03:
 ## Log
 
 - 2026-07-03: created from lead reports during T0210 verification.
+- 2026-07-03: landed: live auto-width (measureTextBox on input) + layers dimmed content preview; site-only, page reload enough; awaiting lead live check
