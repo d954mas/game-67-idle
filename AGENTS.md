@@ -26,6 +26,14 @@ Reviewed AI pipeline modules live in `ai_studio/`. New AI-pipeline docs/tools
 belong in the owning `ai_studio/` module; do not add new root-level compatibility
 paths.
 
+## Agent Roles
+
+Reusable agent roles live in the active harness catalog. Codex roles live in
+`.codex/agents/`; Claude roles live in `.claude/agents/`. Before delegating
+non-trivial work, load the matching catalog and choose the closest existing role
+instead of inventing a new one. Create a new role only when the catalog has no
+fitting role.
+
 ## Current Game
 
 Current game context lives under `games/<game-id>/`.
@@ -55,6 +63,8 @@ explicitly asks for it.
 ## Context Routing
 
 - Workflow and commands: `ai_studio/README.md`.
+- Reusable agent roles: the active harness catalog, such as `.codex/agents/`
+  or `.claude/agents/`.
 - Task/status state: `ai_studio/taskboard/README.md` and the taskboard.
 - AI Studio architecture: `ai_studio/README.md`, `ai_studio/tree.json`, and
   `ai_studio/architecture_map/README.md`.

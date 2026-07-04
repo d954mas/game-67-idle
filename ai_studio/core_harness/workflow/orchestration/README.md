@@ -4,6 +4,10 @@ Use orchestration by default for non-trivial work. The goal is to keep the lead
 agent focused on scope, integration, and validation while workers do bounded
 reading, research, review, generation, or isolated implementation.
 
+Before creating a delegation packet, load the active harness's agent catalog
+and select the closest existing role. Codex uses `.codex/agents/`; Claude uses
+`.claude/agents/`. Do not invent ad hoc agent types while a catalog role fits.
+
 ## Delegate When
 
 Delegate before broad reading when the task needs:
@@ -24,6 +28,7 @@ model.
 Use a short packet:
 
 ```text
+Agent: <role from the active harness catalog>
 Task: <what to find or do>
 Scope: <where to look or the area to inspect>
 Return: <short result shape>
@@ -33,6 +38,7 @@ Stop: <when to stop>
 Example:
 
 ```text
+Agent: deep-reasoner
 Task: Map how Taskboard validation currently works.
 Scope: ai_studio/taskboard/cli.mjs, ai_studio/taskboard/lib.mjs, ai_studio/taskboard/tests/
 Return: commands, data flow, risks, and suggested split. Max 20 bullets.
