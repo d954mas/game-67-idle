@@ -5,8 +5,9 @@ agent focused on scope, integration, and validation while workers do bounded
 reading, research, review, generation, or isolated implementation.
 
 Before creating a delegation packet, load the active harness's agent catalog
-and select the closest existing role. Codex uses `.codex/agents/`; Claude uses
-`.claude/agents/`. Do not invent ad hoc agent types while a catalog role fits.
+and select the closest existing role. Codex uses `.codex/agents/*.toml`; Claude
+uses `.claude/agents/*.md`. Do not invent ad hoc agent types while a catalog
+role fits.
 
 ## Delegate When
 

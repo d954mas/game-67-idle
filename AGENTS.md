@@ -28,11 +28,19 @@ paths.
 
 ## Agent Roles
 
-Reusable agent roles live in the active harness catalog. Codex roles live in
-`.codex/agents/`; Claude roles live in `.claude/agents/`. Before delegating
-non-trivial work, load the matching catalog and choose the closest existing role
+Reusable agent roles live in the active harness catalog. Codex custom agents
+live in `.codex/agents/*.toml`; Claude agents live in `.claude/agents/*.md`.
+Work that is non-trivial, context-heavy, architecture/research/debugging-heavy,
+or faster to describe as a bounded packet than to execute inline must be
+delegated to the closest existing role when subagent tooling is available. The
+lead agent may execute directly only for small local tasks where delegation would
+cost more than the work itself, such as moving a button, making a one-file wording
+tweak, running a simple command, or applying an obvious tiny fix. Before
+delegating, load the matching catalog and choose the closest existing role
 instead of inventing a new one. Create a new role only when the catalog has no
-fitting role.
+fitting role. If delegation is required but subagent tooling is unavailable, stop
+and report that delegation is unavailable instead of silently doing the delegated
+work directly.
 
 ## Current Game
 

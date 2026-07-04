@@ -1,19 +1,17 @@
 # Codex Agent Catalog
 
-This folder is Codex's local catalog of reusable subagent roles. The lead agent
-loads this catalog before delegating non-trivial work and chooses an existing
-role instead of inventing a new one.
+This folder is Codex's project-scoped custom agent catalog. Codex loads
+standalone TOML files in `.codex/agents/` as custom subagent definitions.
 
-The Markdown frontmatter is repo-local metadata for the lead agent. Operational
-keys map to `spawn_agent` defaults:
+Each custom agent file must define:
 
-- `agent_type`: the Codex subagent type to request, such as `default`,
-  `explorer`, or `worker`.
-- `reasoning_effort`: optional effort override, such as `low`, `medium`,
-  `high`, or `xhigh`.
+- `name`
+- `description`
+- `developer_instructions`
 
-Do not add `model` by default. Codex subagents should inherit the parent model
-unless the lead explicitly accepts a model override for a specific packet.
+Optional settings such as `model`, `model_reasoning_effort`, and `sandbox_mode`
+use the same configuration keys as a normal Codex session. Omitted optional
+settings inherit from the parent session.
 
 ## Use
 
@@ -27,7 +25,7 @@ Before delegation:
 Packet shape:
 
 ```text
-Agent: <role file>
+Agent: <agent name>
 Task: <what to find or do>
 Scope: <where to look or write>
 Return: <short result shape>
@@ -36,7 +34,7 @@ Stop: <when to stop>
 
 ## Roles
 
-- `deep-reasoner.md`: reasoning-heavy architecture, debugging, algorithms,
+- `deep-reasoner.toml`: reasoning-heavy architecture, debugging, algorithms,
   research synthesis, and trade-off analysis.
-- `fast-worker.md`: mechanical implementation, tests, formatting, simple
+- `fast-worker.toml`: mechanical implementation, tests, formatting, simple
   edits, repetitive refactors, and decided plans.
