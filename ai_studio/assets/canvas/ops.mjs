@@ -37,7 +37,7 @@
 //   - Observability: every journaled line carries duration_ms; failed ops append to
 //     <project>/errors.jsonl (see recordOpFailure, wired from the API + CLI clients).
 import { randomUUID } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { extname, join } from "node:path";
 import { performance } from "node:perf_hooks";
@@ -73,6 +73,12 @@ import { expandPrompt, extractFromImage } from "./tools/prompt_assist.mjs";
 // slow-op shape as extractFromElement (codex OUTSIDE the lock, one commit inside it) and the
 // same injectable-runner test seam (tests inject a fake `runner`, codex never spawns).
 import { runAnimateFromText } from "./tools/animation_assist.mjs";
+// CorridorKey neural green-screen matte (T0261): the canvas "corridorkey" alpha method reuses
+// the video Track-B invocation VERBATIM (one source of truth for prep -> corridorkey_cli ->
+// EXR->RGBA). Cross-module import canvas->video tools is deliberate (documented in matte.mjs's
+// header too); it pulls in no torch/heavy deps at import time — the CorridorKey venv is only
+// spawned at call time, and a missing videoGenRoot/CK venv is that module's own LOUD error.
+import { runCorridorKey } from "../tools/video/matte/matte.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
@@ -3848,12 +3854,16 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
 
 // ---- alphaCutout (own alpha tool) --------------------------------------------
 
-// Accepted alpha methods on the canvas: the auto route (soft_score router picks
-// key_matte, and refuses a wide soft zone that would need a dual-plate pair) and an
-// explicit key_matte force. alpha_dualplate needs a white+black plate PAIR — a single
-// elementId call can't provide one, so asking for it here is a loud error that points
-// at the separate alphaDualPlate op (T0237), which takes 2 elementIds instead.
-const ALPHA_METHODS = new Set(["auto", "matte"]);
+// Accepted alpha methods on the canvas: the auto route (soft_score router picks key_matte, and
+// refuses a wide soft zone that would need a dual-plate pair), an explicit key_matte force, and
+// an explicit "corridorkey" — the neural CorridorKey green-screen matte for soft glow / translucent
+// / soft-edge art (T0261). corridorkey is EXPLICIT-ONLY: the auto router never yields it (it routes
+// only key_matte|dual_plate); it is scoped to GREEN keys (a non-green border key is a LOUD refusal,
+// never a silent fringe); it costs a ~13-16s cold GPU model load per call, so it is never a silent
+// default; and it is whole-element only (no region scoping in v1). alpha_dualplate needs a white+black
+// plate PAIR — a single elementId call can't provide one, so asking for it here is a loud error that
+// points at the separate alphaDualPlate op (T0237), which takes 2 elementIds instead.
+const ALPHA_METHODS = new Set(["auto", "matte", "corridorkey"]);
 
 // Resolve the optional region-id selection against the element's STORED regions (same
 // model as slice's regionIds), so moved/resized/hand-drawn regions key exactly where they
@@ -3910,6 +3920,144 @@ async function runAlphaCutoutTool(root, projectId, element, chosen, specRegions)
   }
 }
 
+// ---- corridorkey (neural green-screen matte; T0261) --------------------------
+//
+// CorridorKey is a THIRD, EXPLICIT alpha method scoped to GREEN-key soft/glow/translucent art
+// (the same niche it fills in the video Track-B pipeline). It is architecturally green/blue only
+// (no magenta model) and the canvas scopes it to GREEN. The invocation reuses the video pipeline's
+// runCorridorKey() verbatim (one source of truth); this file only adds the canvas seam: the green
+// gate, the 1-frame staging, the content-addressed src swap, and provenance — identical contract to
+// key_matte so the single/batch/undo paths are method-agnostic. There is NO auto-router entry and
+// NO silent fallback to key_matte: a non-green key or a missing CK venv is a LOUD refusal.
+//
+// Magenta (planned follow-up, NOT wired here): a hue+180deg preprocessing shim fools the green
+// checkpoint (rotate input hue +180 so magenta 300deg -> green 120deg, run green + despill G,
+// rotate the returned FG RGB back -180, alpha untouched) — measured a strict upgrade over
+// blue-on-magenta (research_corridorkey_magenta_2026-07-05.md; runner precedent
+// C:\projects\video_gen_experiment\static_eval\trick_run.py), and would be recorded as
+// meta.alpha {method:"corridorkey", shim:"hue180"}. It is NOT enabled here because the pre/post
+// hue rotations are Python pixel ops that need a canvas-side helper this increment's file scope
+// does not own (same blocker as region-scoped CK). For FLAT magenta art key_matte remains the
+// recommended default (it beats CK there outright); the shim only matters for an explicit CK
+// choice on magenta GLOW/soft art, and is UNTESTED on soft magenta so far. Until it lands, a
+// magenta key is a loud refusal that points at key_matte.
+
+// CorridorKey's shipped checkpoints key GREEN (and blue); the canvas supports GREEN only. This green
+// test mirrors corridorkey_prep.py's rough_chroma_hint dominance rule EXACTLY (g - max(r,b) > 40 AND
+// g > 110) so the op-level gate and the coarse AlphaHint agree on what "green" means (single source of
+// the green definition; the two constants below are the only duplication, and are pinned to that file).
+const CK_GREEN_DOMINANCE = 40;
+const CK_GREEN_MIN = 110;
+export function isCorridorKeyGreenKey(key) {
+  if (!Array.isArray(key) || key.length < 3) return false;
+  const [r, g, b] = key.map((value) => Number(value));
+  return g - Math.max(r, b) > CK_GREEN_DOMINANCE && g > CK_GREEN_MIN;
+}
+
+// LOUD refusal (before the ~15s GPU call) for any non-green key: names the detected key and the
+// method to use instead — never a silent fringe.
+function assertCorridorKeyGreen(key) {
+  if (isCorridorKeyGreenKey(key)) return;
+  const [r, g, b] = Array.isArray(key) ? key : [];
+  throw new Error(
+    `corridorkey supports green screens only — the border key of this element is ` +
+      `rgb(${r}, ${g}, ${b}), not a green screen. Use method "matte" (key_matte) for magenta ` +
+      `or other flat keys, or the alphaDualPlate op for a neutral (non-chroma) background.`,
+  );
+}
+
+// Estimate the element's flat-key colour the SAME way the auto router does: route_cutout.py returns
+// the border-estimated key (lib/color.estimate_border_key — the one shared convention), through the
+// warm repo-venv worker (no GPU, sub-second) — the cheap gate BEFORE the expensive CK call.
+async function estimateBorderKeyRgb(root, sourceAbs) {
+  const stdout = await runToolPython(root, [
+    "ai_studio/assets/tools/image/route/route_cutout.py",
+    "--image",
+    sourceAbs,
+    "--json",
+  ]);
+  const line = String(stdout).trim().split(/\r?\n/).filter(Boolean).pop();
+  let decision;
+  try {
+    decision = JSON.parse(line);
+  } catch (error) {
+    throw new Error(`corridorkey green gate: could not parse route_cutout output (${error.message}): ${stdout}`);
+  }
+  const key = decision && decision.key;
+  if (!Array.isArray(key) || key.length < 3) {
+    throw new Error("corridorkey green gate: route_cutout returned no border key");
+  }
+  return [Number(key[0]), Number(key[1]), Number(key[2])];
+}
+
+// The DEFAULT (real, GPU-backed) CorridorKey invocation. Injectable via the op's `corridorKey`
+// option so tests fake the ~15s GPU run with no GPU/venv in the suite — the same seam shape as
+// alphaDualPlateGenerate's `generator`. Contract: writes a straight-RGBA PNG to `outAbs` and returns
+// a canvas alpha report. Steps: (1) GREEN GATE — estimate the border key and LOUD-refuse a non-green
+// key before spending the model load; (2) reuse runCorridorKey() (video Track-B) on a 1-frame shot;
+// (3) copy the single RGBA frame to outAbs. `corridorkey_prep.py` inside runCorridorKey builds the
+// coarse green-dominance AlphaHint, so the whole green subject (incl. its soft glow halo) is kept.
+async function defaultCorridorKeyInvoke(root, { sourceAbs, outAbs }) {
+  const key = await estimateBorderKeyRgb(root, sourceAbs);
+  assertCorridorKeyGreen(key);
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-ck-"));
+  try {
+    const framesDir = join(workDir, "frames");
+    const outDir = join(workDir, "matte");
+    mkdirSync(framesDir, { recursive: true });
+    copyFileSync(sourceAbs, join(framesDir, "frame_000.png"));
+    const { report: ck } = await runCorridorKey({ root, framesDir, outDir, runDir: workDir, screenColor: "green" });
+    const outFrame = join(outDir, "frame_000.png");
+    if (!existsSync(outFrame)) throw new Error(`CorridorKey produced no RGBA frame at ${outFrame}`);
+    copyFileSync(outFrame, outAbs);
+    return {
+      schema: "ai_studio.canvas.alpha_cutout_report.v1",
+      method: "corridorkey",
+      tool: "corridorkey",
+      key_color: key,
+      screen_color: "green",
+      commit: ck.commit,
+      license: ck.license,
+      settings: ck.settings,
+      wall_seconds: ck.wall_seconds,
+      per_frame_seconds: ck.per_frame_seconds,
+      region_count: 0,
+      regions: [{ id: "*element*", method: "corridorkey", routed: "corridorkey", key }],
+    };
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// Run ONE element's CURRENT pixels through CorridorKey (own temp dir) and return the new
+// content-addressed src + the canvas alpha report — the corridorkey sibling of runAlphaCutoutTool,
+// so the single AND batch paths swap src / record provenance / undo BYTE-IDENTICALLY to key_matte.
+// `invoke` is the injectable CK seam (default defaultCorridorKeyInvoke; tests fake it). Whole-element
+// only — regions are refused at the op level (a full-frame neural matte has no per-region seam yet).
+async function runCorridorKeyCutoutTool(root, projectId, element, invoke) {
+  const sourceAbs = resolveProjectFile(root, projectId, element.src);
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-alpha-ck-"));
+  try {
+    const outPath = join(workDir, "alpha_out.png");
+    const report = await (invoke || defaultCorridorKeyInvoke)(root, { sourceAbs, outAbs: outPath });
+    const bytes = readFileSync(outPath);
+    const newSrc = storeAddFile(root, projectId, { bytes, name: `${slug(element.name)}.png` }).src;
+    return { newSrc, report };
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// Route ONE element to the right keyer: key_matte via alpha_cutout.py (auto/matte, regions-aware) or
+// the neural CorridorKey tool (explicit green-only, whole-element). Both return the identical
+// { newSrc, report } contract so the single + batch commit paths stay method-agnostic.
+async function runOneAlphaKeyer(root, projectId, element, chosen, specRegions, corridorKey) {
+  if (chosen === "corridorkey") {
+    return runCorridorKeyCutoutTool(root, projectId, element, corridorKey);
+  }
+  return runAlphaCutoutTool(root, projectId, element, chosen, specRegions);
+}
+
 // Build the tool_runs row + element.meta.alpha provenance for one keyed element (shared by
 // the single and batch paths, so the recorded shape never drifts between them).
 function buildAlphaProvenance(elementId, chosen, specRegions, report, parentSrc) {
@@ -3935,18 +4083,39 @@ function buildAlphaProvenance(elementId, chosen, specRegions, report, parentSrc)
     regions: run.params.regions,
     routing: (report && report.regions) || [],
   };
+  // corridorkey provenance (T0261): record the neural tool + its commit/licence/timings so the
+  // ~15s GPU run is auditable, mirroring how the video matte report carries them.
+  if (report && report.tool === "corridorkey") {
+    alphaMeta.tool = "corridorkey";
+    alphaMeta.commit = report.commit;
+    alphaMeta.license = report.license;
+    alphaMeta.screen_color = report.screen_color;
+    alphaMeta.timings = {
+      wall_seconds: report.wall_seconds ?? null,
+      per_frame_seconds: report.per_frame_seconds ?? null,
+    };
+  }
   return { run, alphaMeta };
 }
 
 // Single-element path (unchanged behavior/journal shape from before batching landed).
-async function alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt) {
+async function alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt, corridorKey) {
   const element = (before.elements || []).find((item) => item.id === elementId);
   if (!element) throw new Error(`element not found: ${elementId}`);
   if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
   refuseIfTransformed(element, elementId);
+  // corridorkey is a full-frame neural matte with no per-region seam in v1 — refuse regions LOUD and
+  // EARLY (before any region resolution or tool spawn), never silently key the whole element instead.
+  if (chosen === "corridorkey" && Array.isArray(regions) && regions.length) {
+    throw new Error(
+      'corridorkey does not support region-scoped cutout (v1) — it keys the whole element (a ' +
+        'full-frame neural matte). Use method "matte" (key_matte) for per-region keying, or run ' +
+        "corridorkey without regions.",
+    );
+  }
   const specRegions = resolveAlphaRegions(element, regions);
 
-  const { newSrc, report } = await runAlphaCutoutTool(root, projectId, element, chosen, specRegions);
+  const { newSrc, report } = await runOneAlphaKeyer(root, projectId, element, chosen, specRegions, corridorKey);
 
   // Re-read to avoid clobbering concurrent edits, then swap src + record provenance on the
   // SAME element (previous src file stays in files/, so undo restores the exact bytes).
@@ -3981,7 +4150,7 @@ async function alphaCutoutSingle(root, projectId, before, elementId, chosen, reg
 // "mutated" in the non-destructive sense). Only once EVERY element has keyed
 // successfully does this commit ONE journal entry swapping every src + every
 // element.meta.alpha — one undo restores every element byte-exact.
-async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt) {
+async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt, corridorKey) {
   const ids = elementIds.map((value) => String(value));
   const unique = [...new Set(ids)];
   const elements = unique.map((elementId) => {
@@ -3994,7 +4163,7 @@ async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, sta
 
   const processed = [];
   for (const element of elements) {
-    const { newSrc, report } = await runAlphaCutoutTool(root, projectId, element, chosen, null);
+    const { newSrc, report } = await runOneAlphaKeyer(root, projectId, element, chosen, null, corridorKey);
     processed.push({ elementId: element.id, newSrc, report });
   }
 
@@ -4043,7 +4212,9 @@ async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, sta
 // key_matte modules unmodified (no matte logic duplicated in node or a second python impl);
 // ops writes an alpha spec (absolute source path + method + the element's selected regions
 // with their exact rects) and spawns it once through the shared warm worker. `method` is
-// "auto" (route) or "matte" (force key_matte); a wide soft zone under "auto" is a loud error
+// "auto" (route), "matte" (force key_matte), or "corridorkey" (T0261 — the explicit neural
+// green-screen matte for soft glow/translucent art; green-only, whole-element, ~15s GPU cold,
+// via runCorridorKeyCutoutTool, NOT the warm worker); a wide soft zone under "auto" is a loud error
 // (dual-plate pair needed — no silent single-plate fallback), as is a non-image element or an
 // unknown method. `regions` is an optional list of the element's stored region ids: given, the
 // alpha is applied ONLY inside those region masks and the rest is untouched (region-mask
@@ -4053,7 +4224,7 @@ async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, sta
 // run (method, params, parent src, routing metrics) like slice provenance, plus a tool_runs row.
 // `elementIds` (2+ images), given INSTEAD of `elementId`, batches a multi-selection into ONE
 // journal entry (T0230) — see alphaCutoutBatch; `regions` is not accepted with a batch.
-export async function alphaCutout(root, { projectId, elementId, elementIds, method, regions } = {}) {
+export async function alphaCutout(root, { projectId, elementId, elementIds, method, regions, corridorKey } = {}) {
   if (!projectId) throw new Error("alphaCutout requires projectId");
   const batch = elementIds !== undefined && elementIds !== null;
   if (batch && elementId != null) {
@@ -4081,15 +4252,15 @@ export async function alphaCutout(root, { projectId, elementId, elementIds, meth
           `(API POST /alpha-dual, CLI alpha-dual) instead, or use method "auto"/"matte" on a single image.`,
       );
     }
-    throw new Error(`unknown alpha method ${JSON.stringify(method)} (expected "auto" or "matte")`);
+    throw new Error(`unknown alpha method ${JSON.stringify(method)} (expected "auto", "matte", or "corridorkey")`);
   }
   const startedAt = performance.now();
   const before = getProject(root, projectId);
 
   if (batch) {
-    return alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt);
+    return alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt, corridorKey);
   }
-  return alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt);
+  return alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt, corridorKey);
 }
 
 // ---- cleanup: Quantize + Denoise (own Python tools, src-swap) ----------------

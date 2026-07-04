@@ -32,3 +32,11 @@ key colour. Fast, no licence constraint; cannot recover soft fractional alpha.
 - **Output:** `<runDir>/matte/frame_%03d.png` (RGBA) + `report.json` (tool,
   settings, commit/licence, per-frame + wall timing).
 - **Reserve:** `MatAnyone` (R2 PARTIAL — green-fringes glow) is NOT wired into v1.
+
+### Reused by the canvas alpha op (T0261)
+`runCorridorKey()` is exported and imported cross-module by the canvas alpha op
+(`ai_studio/assets/canvas/ops.mjs`) as the **one source of truth** for the CorridorKey
+invocation: the canvas `"corridorkey"` alpha method stages a single element's pixels as a
+1-frame `ClipsForInference` shot, calls `runCorridorKey({framesDir, outDir, screenColor:"green"})`,
+and swaps the element to the returned RGBA. The video pipeline behaviour here is unchanged —
+only `runCorridorKey`'s export visibility was widened.

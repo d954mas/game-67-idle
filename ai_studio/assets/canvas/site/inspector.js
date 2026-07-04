@@ -528,7 +528,10 @@ function renderRegions(element, root) {
 // T0247 (lead): the method choice is EXPLICIT — no "Auto" router in the UI ("я хочу явно
 // выбирать"; ops/CLI keep accepting auto additively for the agent). "Key matte" keys the
 // element's OWN pixels in place, region-aware (scoped to the selected regions when any
-// are selected in region-edit mode, else the whole element). "Dual-plate (generate)" runs
+// are selected in region-edit mode, else the whole element). "CorridorKey (green glow)"
+// (T0261) is the neural green-screen matte for soft glow/translucent art — GREEN keys only
+// (a non-green key is a loud refusal pointing at Key matte), whole-element (no region scope),
+// and a ~15s GPU run behind the same long-op busy toast. "Dual-plate (generate)" runs
 // the automatic T0238 flow — flat-light-bg check -> generated dark plate (codex, minutes)
 // -> gate -> ONE NEW cut element beside the source; no region scoping (the pair tool cuts
 // the whole plate). Both long-op via the queue + progress toast (mirrors Slice).
@@ -539,7 +542,9 @@ function renderAlpha(element, root) {
   alphaRow.className = "insp-alpha-row";
   const methodSel = document.createElement("select");
   methodSel.className = "insp-input";
-  for (const [value, label] of [["matte", "Key matte"], ["dual", "Dual-plate"]]) {
+  // T0261: "CorridorKey (green glow)" is the explicit neural green-screen matte for soft
+  // glow/translucent art — green-only, whole-element, and a ~15s GPU run (its own busy toast).
+  for (const [value, label] of [["matte", "Key matte"], ["corridorkey", "CorridorKey (green glow)"], ["dual", "Dual-plate"]]) {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = label;
@@ -556,6 +561,11 @@ function renderAlpha(element, root) {
       alphaBtn.textContent = "Generate";
       return;
     }
+    if (methodSel.value === "corridorkey") {
+      // CorridorKey is whole-element only (no region scope) and neural (~15s) — say so.
+      alphaBtn.textContent = "Alpha cutout (neural ~15s)";
+      return;
+    }
     const ids = selectedRegionIdsFor(element);
     alphaBtn.textContent = ids.length ? `Alpha cutout (${ids.length})` : "Alpha cutout";
   };
@@ -565,6 +575,11 @@ function renderAlpha(element, root) {
   alphaBtn.addEventListener("click", () => {
     if (methodSel.value === "dual") {
       alphaDualPlateGenerateFor(element.id, alphaBtn);
+      return;
+    }
+    if (methodSel.value === "corridorkey") {
+      // Whole-element only — never pass region ids (the op refuses corridorkey+regions loudly).
+      alphaCutoutFor(element.id, "corridorkey", undefined, alphaBtn);
       return;
     }
     const ids = selectedRegionIdsFor(element);

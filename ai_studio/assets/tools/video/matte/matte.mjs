@@ -20,6 +20,12 @@
 //
 // Writes <runDir>/matte/frame_%03d.png (RGBA) + report.json (tool, settings,
 // per-frame + wall timing). LOUD if the chosen tool is not installed.
+//
+// Cross-module reuse (T0261): the canvas alpha op imports runCorridorKey() from here as the
+// ONE source of truth for the CorridorKey invocation (prep -> corridorkey_cli -> EXR->RGBA)
+// — the canvas "corridorkey" alpha method keys a single element by staging its pixels as a
+// 1-frame ClipsForInference shot. The video Track-B pipeline behavior is unchanged; only the
+// export visibility of runCorridorKey was widened. See ai_studio/assets/canvas/ops.mjs.
 import { existsSync, readdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -49,7 +55,9 @@ function countPngs(dir) {
   return existsSync(dir) ? readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".png")).length : 0;
 }
 
-async function runCorridorKey({ root, framesDir, outDir, runDir, screenColor }) {
+// Exported (T0261) so the canvas alpha op can reuse the EXACT CorridorKey invocation for its
+// single-element "corridorkey" method — one source of truth for prep -> inference -> EXR->RGBA.
+export async function runCorridorKey({ root, framesDir, outDir, runDir, screenColor }) {
   const ckDir = corridorKeyDir(root);
   const ckPython = corridorKeyPython(root); // LOUD if the venv is missing
 

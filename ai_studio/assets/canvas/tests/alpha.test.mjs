@@ -9,12 +9,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath, URL } from "node:url";
 
-import { addImage, addText, alphaCutout, alphaDualPlate, createProject, getProject, setRegions, undoOp, redoOp } from "../ops.mjs";
+import { addImage, addText, alphaCutout, alphaDualPlate, createProject, getProject, isCorridorKeyGreenKey, setRegions, undoOp, redoOp } from "../ops.mjs";
 import { resolveProjectFile } from "../store.mjs";
 import { createCanvasApi } from "../api.mjs";
 import { dualPlatePairPng, magentaSheetPng, slicedCropPng, softGlowPng } from "./png_fixture.mjs";
@@ -418,6 +418,163 @@ test("alpha API and CLI both drive elementIds batches, one journal entry each (p
   assert.match(parsed.elements[0].src, /^files\//);
   assert.match(parsed.elements[1].src, /^files\//);
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBeforeCli + 1, "CLI batch is one journal entry too");
+});
+
+// ---- corridorkey (T0261: explicit neural GREEN-screen matte for soft glow art) ----
+//
+// The real path spends a ~13-16s cold GPU model load per call, so the suite NEVER runs it: the
+// CK inference is an injectable seam (`corridorKey` on the op — the alphaDualPlateGenerate
+// `generator` precedent) that tests fake, and the pure green gate is unit-tested directly. ONE
+// live GPU smoke exists OUT of the suite (tests/live/ck_smoke.mjs).
+
+// A fake CorridorKey invocation: writes a valid RGBA PNG to outAbs and returns a canvas alpha
+// report, so the op's src-swap/provenance/undo/journal contract is exercised with NO GPU/venv.
+// The green gate lives inside the REAL invoke (route_cutout + isCorridorKeyGreenKey); this fake
+// bypasses it, so the source pixels are irrelevant here (the gate is unit-tested separately).
+function fakeCorridorKey(bytes = softGlowPng()) {
+  const calls = { n: 0 };
+  const invoke = (root, { outAbs }) => {
+    calls.n += 1;
+    writeFileSync(outAbs, bytes);
+    return {
+      schema: "ai_studio.canvas.alpha_cutout_report.v1",
+      method: "corridorkey",
+      tool: "corridorkey",
+      key_color: [0, 255, 0],
+      screen_color: "green",
+      commit: "test-commit-97e55a4",
+      license: "CC-BY-NC-SA-4.0 (test)",
+      settings: { image_size: 2048 },
+      wall_seconds: 0.01,
+      per_frame_seconds: 0.01,
+      region_count: 0,
+      regions: [{ id: "*element*", method: "corridorkey", routed: "corridorkey", key: [0, 255, 0] }],
+    };
+  };
+  return { invoke, calls };
+}
+
+test("corridorkey green gate: isCorridorKeyGreenKey accepts green, rejects magenta/neutral/blue/olive", () => {
+  assert.equal(isCorridorKeyGreenKey([0, 255, 0]), true, "pure green screen");
+  assert.equal(isCorridorKeyGreenKey([0, 200, 40]), true, "green screen with mild tint");
+  assert.equal(isCorridorKeyGreenKey([255, 0, 255]), false, "magenta -> not green");
+  assert.equal(isCorridorKeyGreenKey([60, 60, 66]), false, "neutral gray -> not green");
+  assert.equal(isCorridorKeyGreenKey([0, 0, 255]), false, "blue -> not green (canvas is green-only)");
+  assert.equal(isCorridorKeyGreenKey([120, 120, 0]), false, "olive -> g not dominant over r");
+  assert.equal(isCorridorKeyGreenKey([]), false, "malformed key -> not green");
+});
+
+test("corridorkey is in the method table; the CK seam runs ONLY for method=corridorkey (auto/matte never yield it)", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "CK method table" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "a.png", bytes: magentaSheetPng() });
+  const ck = fakeCorridorKey();
+
+  // Explicit corridorkey: the CK seam runs exactly once and provenance records method=corridorkey.
+  const res = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "corridorkey", corridorKey: ck.invoke });
+  assert.equal(ck.calls.n, 1, "CK seam invoked exactly once for method=corridorkey");
+  assert.equal(res.method, "corridorkey");
+  assert.equal(res.element.meta.alpha.method, "corridorkey");
+
+  // auto/matte must NEVER reach the CK seam (they route to key_matte by construction). We pass the
+  // SAME spy and assert it is never called — the op outcome (success or a venv miss) is irrelevant.
+  for (const method of ["auto", "matte"]) {
+    const p = createProject(REPO_ROOT, { title: `CK not-${method}` });
+    const { element: el } = addImage(REPO_ROOT, p.id, { name: "b.png", bytes: magentaSheetPng() });
+    try {
+      await alphaCutout(REPO_ROOT, { projectId: p.id, elementId: el.id, method, corridorKey: ck.invoke });
+    } catch {
+      // venv miss / key_matte refusal — does not matter; the point is the spy below.
+    }
+    assert.equal(ck.calls.n, 1, `CK seam not called for method=${method}`);
+  }
+});
+
+test("corridorkey (faked GPU run) swaps src + records provenance/timings; ONE undo restores byte-exact, redo re-applies", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "CK provenance" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "green.png", bytes: magentaSheetPng() });
+  const original = getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id);
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+  const ck = fakeCorridorKey();
+
+  const result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "corridorkey", corridorKey: ck.invoke });
+  assert.equal(ck.calls.n, 1);
+  assert.notEqual(result.element.src, original.src, "src swapped to a new alpha file");
+  assert.equal(result.element.w, original.w, "geometry preserved (w)");
+  assert.equal(result.element.h, original.h, "geometry preserved (h)");
+  const meta = result.element.meta.alpha;
+  assert.equal(meta.method, "corridorkey");
+  assert.equal(meta.tool, "corridorkey");
+  assert.equal(meta.parentSrc, original.src);
+  assert.deepEqual(meta.key_color, [0, 255, 0]);
+  assert.equal(meta.screen_color, "green");
+  assert.ok(meta.commit && meta.license, "commit + licence recorded for provenance");
+  assert.equal(typeof meta.timings.wall_seconds, "number", "wall timing recorded");
+  assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "corridorkey keying is one journal entry");
+
+  // Original file kept (non-destructive); undo restores byte-exact (src + no alpha meta); redo re-applies.
+  assert.ok(existsSync(resolveProjectFile(REPO_ROOT, project.id, original.src)), "original file kept on disk");
+  const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "undo restores the exact pre-alpha element");
+  const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.equal(redone.elements.find((el) => el.id === element.id).src, result.element.src, "redo re-applies the alpha src");
+});
+
+test("corridorkey batch (faked) keys 2 images in ONE journal entry; one undo restores both byte-exact", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "CK batch" });
+  const { element: e1 } = addImage(REPO_ROOT, project.id, { name: "g1.png", bytes: magentaSheetPng() });
+  const { element: e2 } = addImage(REPO_ROOT, project.id, { name: "g2.png", bytes: magentaSheetPng() });
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+  const originals = getProject(REPO_ROOT, project.id).elements.map((el) => ({ ...el }));
+  const ck = fakeCorridorKey();
+
+  const result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementIds: [e1.id, e2.id], method: "corridorkey", corridorKey: ck.invoke });
+  assert.equal(ck.calls.n, 2, "CK seam runs once per element");
+  assert.equal(result.count, 2);
+  assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "batch is one journal entry");
+  for (const el of result.elements) assert.equal(el.meta.alpha.method, "corridorkey");
+  const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  for (const original of originals) {
+    assert.deepEqual(undone.elements.find((el) => el.id === original.id), original, `undo restores element ${original.id}`);
+  }
+});
+
+test("corridorkey refuses region-scoped cutout (v1) loudly BEFORE any tool spawn; the CK seam is never reached", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "CK regions refusal" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "g.png", bytes: magentaSheetPng() });
+  setRegions(REPO_ROOT, { projectId: project.id, elementId: element.id, regions: [{ id: "r1", rect: [4, 4, 20, 20] }] });
+  const original = getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id);
+  const ck = fakeCorridorKey();
+  await assert.rejects(
+    () => alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "corridorkey", regions: ["r1"], corridorKey: ck.invoke }),
+    /region-scoped cutout|whole element/,
+  );
+  assert.equal(ck.calls.n, 0, "CK seam never reached when regions are refused");
+  assert.deepEqual(getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id), original, "nothing mutated on refusal");
+});
+
+test("corridorkey (real green gate) refuses a magenta key with a clean message BEFORE any GPU call (skips without the studio venv)", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "CK magenta reject" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "magenta.png", bytes: magentaSheetPng() });
+  const original = getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id);
+  // No injected seam: the DEFAULT invoke runs the real green gate (route_cutout, repo venv, NO
+  // GPU). A magenta border key must be rejected before the CorridorKey model is ever loaded.
+  try {
+    await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "corridorkey" });
+    assert.fail("corridorkey on a magenta key must refuse (green-only gate)");
+  } catch (error) {
+    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
+      t.skip(`corridorkey green gate unavailable (studio venv): ${error.message}`);
+      return;
+    }
+    assert.match(error.message, /green screens only/i, `green-only refusal expected, got: ${error.message}`);
+    assert.ok(!/Traceback|File "/.test(error.message), `traceback leaked to the operator: ${error.message}`);
+  }
+  assert.deepEqual(getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id), original, "element untouched after a refusal");
 });
 
 // ---- alphaDualPlate (T0237: white+black plate pair -> ONE new cut element) ----

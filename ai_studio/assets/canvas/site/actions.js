@@ -449,10 +449,12 @@ export async function sliceRegionsFor(id, regionIds, control) {
 
 // Alpha-cutout the selected image element via the image-tools matte pipeline: swaps the
 // element to a new content-addressed alpha PNG in ONE journaled op (undo restores the
-// previous src). `method` is "auto" (route; refuses a dual-plate soft zone loudly) or
-// "matte" (force key_matte). `regionIds`, when given, keys ONLY inside those stored
-// regions (rest untouched). Long (python-backed) op — same limiter/spinner/disable
-// treatment as slice; the triggering `control` is disabled while in flight.
+// previous src). `method` is "auto" (route; refuses a dual-plate soft zone loudly),
+// "matte" (force key_matte), or "corridorkey" (T0261 — the neural green-screen matte for
+// soft glow art; green-only + whole-element, ~15s GPU). `regionIds`, when given, keys ONLY
+// inside those stored regions (rest untouched; never passed for corridorkey). Long
+// (python-backed) op — same limiter/spinner/disable treatment as slice + the busy toast
+// covers the ~15s CorridorKey wait; the triggering `control` is disabled while in flight.
 export async function alphaCutoutFor(id, method, regionIds, control) {
   await runLongOp(
     "Alpha cutout…",
