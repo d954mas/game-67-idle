@@ -511,6 +511,13 @@ function applyElementFields(element, patch = {}) {
   if (patch.style !== undefined && patch.style && typeof patch.style === "object") {
     element.style = patch.style;
   }
+  // Note background (T0268): the op layer validated/normalized this to null or
+  // {type:"color", color:"#rrggbb"} before the store runs, so this just stores the
+  // pre-validated value; `null` clears it to an ABSENT field (mirrors rotation:0 above).
+  if (patch.background !== undefined) {
+    if (patch.background === null) delete element.background;
+    else element.background = patch.background;
+  }
   if (patch.rotation !== undefined) {
     if (Number(patch.rotation) === 0) delete element.rotation;
     else element.rotation = Number(patch.rotation);
@@ -545,6 +552,33 @@ export function addText(root, id, { x = 0, y = 0, w = 0, h = 0, content = "Text"
     name: String(name || "Text"),
     meta: meta && typeof meta === "object" ? meta : {},
   };
+  if (groupId != null && groupId !== "") element.groupId = String(groupId);
+  project.elements = [...(project.elements || []), element];
+  const saved = updateProject(root, id, { elements: project.elements });
+  return { project: saved, element };
+}
+
+// Append a NOTE element (T0268 — a Miro/FigJam sticky card). Parallel to addText but the
+// box is FULLY fixed (both w and h are user-set/resizable; no auto-measure) and it carries
+// an optional `background` fill. `style` (the validated font-subset object), `background`
+// (null or {type:"color", color}), and `name` are computed by the op layer before this
+// runs — the store just stores them. Optional `groupId` drops the note straight into a group.
+export function addNote(root, id, { x = 0, y = 0, w = 0, h = 0, content = "", style = {}, background, name, groupId, meta } = {}) {
+  const project = readProjectFile(root, id);
+  const element = {
+    id: `el_${randomUUID().slice(0, 8)}`,
+    type: "note",
+    x: finiteOr(x, 0),
+    y: finiteOr(y, 0),
+    w: finiteOr(w, 0),
+    h: finiteOr(h, 0),
+    content: String(content),
+    style,
+    name: String(name || "Note"),
+    meta: meta && typeof meta === "object" ? meta : {},
+  };
+  // Store background only when present (null = no fill = absent field, like group.background).
+  if (background != null) element.background = background;
   if (groupId != null && groupId !== "") element.groupId = String(groupId);
   project.elements = [...(project.elements || []), element];
   const saved = updateProject(root, id, { elements: project.elements });

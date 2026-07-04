@@ -87,10 +87,14 @@ import { alignMoves, ancestorsOf, blockReorder, buildNodesSpec, descendantsOf, d
 // owns the node-only disk read of the manifest; all validation/merge/resolution logic
 // lives in fonts.mjs so the browser and the agent normalize a style identically.
 import {
+  DEFAULT_NOTE_BACKGROUND,
+  DEFAULT_NOTE_SIZE,
   FONTS_DIR_REPO_PATH,
   FONTS_MANIFEST_REPO_PATH,
+  defaultNoteStyle,
   defaultTextStyle,
   firstTextLine,
+  mergeNoteStyle,
   mergeTextStyle,
   nominalTextBox,
   resolveFontEntry,
@@ -110,6 +114,7 @@ import { validateAnimation } from "./animation.mjs";
 import {
   addFile as storeAddFile,
   addImage as storeAddImage,
+  addNote as storeAddNote,
   addText as storeAddText,
   appendArchive,
   appendError,
@@ -233,19 +238,50 @@ function resolveFontFileAbs(root, entry) {
 // untouched. A no-op fast path when the patch has neither, so image patches never load
 // the manifest. Throws if content/style target a non-text element.
 function sanitizeTextPatch(root, project, elementId, patch = {}) {
-  if (patch.style === undefined && patch.content === undefined) return patch;
+  if (patch.style === undefined && patch.content === undefined && patch.background === undefined) return patch;
   const element = (project.elements || []).find((item) => item.id === elementId);
   if (!element) throw new Error(`element not found: ${elementId}`);
-  if (element.type !== "text") {
-    throw new Error(`element ${elementId} is not a text element (content/style only apply to type:"text")`);
-  }
+  const isText = element.type === "text";
+  const isNote = element.type === "note"; // T0268: content/style also apply to a note (its own font subset)
   const clean = { ...patch };
+  if (patch.content !== undefined || patch.style !== undefined) {
+    if (!isText && !isNote) {
+      throw new Error(`element ${elementId} is not a text element (content/style only apply to type:"text"/"note")`);
+    }
+  }
   if (patch.content !== undefined) clean.content = String(patch.content);
   if (patch.style !== undefined) {
     const manifest = readFontsManifest(root);
-    clean.style = mergeTextStyle(element.style || defaultTextStyle(), patch.style, manifest);
+    clean.style = isNote
+      ? mergeNoteStyle(element.style || defaultNoteStyle(), patch.style, manifest)
+      : mergeTextStyle(element.style || defaultTextStyle(), patch.style, manifest);
+  }
+  // Background is NOTE-only (T0268): a loud error on an image or a text element, mirroring
+  // the content/style type gate above. Validated/normalized to null or {type:"color", color}.
+  if (patch.background !== undefined) {
+    if (!isNote) {
+      throw new Error(`element ${elementId} is not a note element (background only applies to type:"note")`);
+    }
+    clean.background = normalizeNoteBackground(patch.background);
   }
   return clean;
+}
+
+// Validate + normalize an optional NOTE background (additive field, T0268). Accepts null
+// (no fill) or {type:"color", color:"#rrggbb"}; anything else throws a loud error (no
+// silent fallback). Reuses the group-background shape/validator via the shared hexColor
+// gate. Returns null or the normalized {type:"color", color} object.
+function normalizeNoteBackground(background) {
+  if (background === null) return null;
+  if (typeof background !== "object" || Array.isArray(background)) {
+    throw new Error(`note background must be null or {type:"color", color:"#rrggbb"}, got ${JSON.stringify(background)}`);
+  }
+  if (background.type !== "color") {
+    throw new Error(`note background type must be "color", got ${JSON.stringify(background.type)}`);
+  }
+  const color = hexColor(background.color);
+  if (!color) throw new Error(`note background color must be #rrggbb, got ${JSON.stringify(background.color)}`);
+  return { type: "color", color };
 }
 
 // Degrees, finite; normalized to [0,360) so 450 and -90 store identically to 90/270 —
@@ -610,6 +646,58 @@ export function addText(root, projectId, args = {}) {
       content: content.slice(0, 40),
       fontFamily: style.fontFamily,
       fontSize: style.fontSize,
+    },
+    before,
+    after,
+    startedAt,
+  });
+  const element = (project.elements || []).find((item) => item.id === result.element.id) || result.element;
+  return { project, element };
+}
+
+// Add a NOTE element (T0268 — a Miro/FigJam sticky card). Mirrors addText's shape (store
+// build + front-order hook + ONE journaled entry), but the box is FULLY user-fixed (both
+// w and h; defaults to DEFAULT_NOTE_SIZE, both resizable afterward), the `style` is the
+// note font SUBSET merged over the note defaults + validated against the fonts manifest,
+// and it carries a `background` fill (a sticky preset or arbitrary #rrggbb; defaults to the
+// first preset, `null` = no fill). Notes are annotations, never render content: renderGroup/
+// exportProject skip them and exportElements refuses them (see below). Optional `groupId`
+// drops the note into a group (validated).
+export function addNote(root, projectId, args = {}) {
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const manifest = readFontsManifest(root);
+  const style = mergeNoteStyle(defaultNoteStyle(), args.style || {}, manifest);
+  const background = args.background === undefined ? { ...DEFAULT_NOTE_BACKGROUND } : normalizeNoteBackground(args.background);
+  const content = args.content == null ? "" : String(args.content);
+  const groupId = args.groupId == null || args.groupId === "" ? undefined : String(args.groupId);
+  if (groupId && !groupsOf(before).some((group) => group.id === groupId)) {
+    throw new Error(`group not found: ${groupId}`);
+  }
+  // User-fixed box: honor an explicit finite positive w/h, else the default sticky size.
+  const w = Number.isFinite(Number(args.w)) && Number(args.w) > 0 ? Number(args.w) : DEFAULT_NOTE_SIZE.w;
+  const h = Number.isFinite(Number(args.h)) && Number(args.h) > 0 ? Number(args.h) : DEFAULT_NOTE_SIZE.h;
+  const name = firstTextLine(content) || "Note";
+  const result = storeAddNote(root, projectId, { x: args.x, y: args.y, w, h, content, style, background, name, groupId });
+  // Front-order hook (identical to addText/addImage): a fresh note lands at the FRONT of its
+  // scope when that scope is already explicitly ordered; a no-op otherwise.
+  let after = result.project;
+  const fo = frontOrder(before, result.element.groupId == null ? null : result.element.groupId);
+  if (fo !== null) {
+    after = updateProject(root, projectId, {
+      elements: (result.project.elements || []).map((element) =>
+        element.id === result.element.id ? { ...element, order: fo } : element,
+      ),
+    });
+  }
+  const project = commitMutation(root, projectId, {
+    op: "addNote",
+    args_summary: {
+      elementId: result.element.id,
+      content: content.slice(0, 40),
+      background: background ? background.color : null,
+      w,
+      h,
     },
     before,
     after,
@@ -5001,6 +5089,14 @@ export async function exportElements(root, { projectId, elementIds, rows } = {})
         `element ${id} is a text element — standalone text export is not in v1. Put it in a group and export the screen (Render group / project export) to bake the text into the PNG.`,
       );
     }
+    if (element.type === "note") {
+      // A note is a work annotation, NOT render content (T0268): it never reaches a PNG in
+      // ANY path — renderGroup/exportProject prune it and this standalone export refuses it
+      // loudly, same spirit as the text refusal above.
+      throw new Error(
+        `element ${id} is a note element — notes are canvas annotations and never export to a PNG (they are excluded from Render group / project export too).`,
+      );
+    }
     if (element.type !== "image" || !element.src) throw new Error(`element ${id} is not an exportable image`);
     elements.push(element);
   }
@@ -5205,6 +5301,11 @@ function buildRenderNodes(root, projectId, project, scopeId, leaves, fonts) {
       });
     } else {
       const element = child.ref;
+      // T0268: a NOTE is a canvas-only work annotation — prune it from the render spec
+      // BEFORE it is written so render_group.py never sees it (renderGroup + exportProject,
+      // which composites through here, both inherit the skip; no Python change needed). This
+      // is the explicit belt to the natural fall-through's suspenders below.
+      if (element.type === "note") continue;
       if (element.type === "text") {
         // A text node carries the ABSOLUTE font file (render_group.py loads the same
         // .ttf the page @font-faces) plus the split lines + style; the painter

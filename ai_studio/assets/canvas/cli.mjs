@@ -11,6 +11,7 @@
 //   node ai_studio/assets/canvas/cli.mjs add-image <id> --file path.png
 //   node ai_studio/assets/canvas/cli.mjs add-images <id> --files a.png,b.png   (batched; one undo)
 //   node ai_studio/assets/canvas/cli.mjs add-text <id> [--x n --y n] [--content "..."] [--style-json path] [--group gid]
+//   node ai_studio/assets/canvas/cli.mjs add-note <id> [--x n --y n] [--w n --h n] [--content "..."] [--style-json path] [--background '#rrggbb'|none] [--group gid]   (T0268: sticky-note annotation; fixed clipped box; excluded from renders)
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
 //   node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--w n --h n] [--x n --y n] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>]   (T0232 3a: rotation = degrees CW about the box center, normalized to [0,360); flip is image-only; T0260: opacity in [0,1], stored only when != 1; --w/--h/--x/--y are the same finite-number patchElement fields the API PATCH route accepts)
@@ -74,6 +75,7 @@ import {
   addImage,
   addImageFromFile,
   addImages,
+  addNote,
   addText,
   alignNodes,
   alphaCutout,
@@ -207,7 +209,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
   list [--full]   (summary by default: [{id,title,created,updated,elements,groups,head}]; --full = every project in full, today's original dump)
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -217,9 +219,10 @@ function usage() {
   add-images <id> --files a.png,b.png   (batched multi-image add; one undo step)
   add-image-from-file <id> --src <files/hash.png> [--name <name>] [--x <n> --y <n>]   (mint an element from an EXISTING project file; no re-upload, no duplicate bytes)
   add-text <id> [--x <n> --y <n>] [--content "<text>"] [--style-json <path>] [--group <gid>]
+  add-note <id> [--x <n> --y <n>] [--w <n> --h <n>] [--content "<text>"] [--style-json <path>] [--background '#rrggbb'|none] [--group <gid>]   (T0268: sticky-note annotation — plain text, fixed box + browser wrap/clip, background fill; excluded from renderGroup/exportProject)
   detect-regions <id> --element <eid>
   move <id> --element <eid> --x <n> --y <n>
-  element-set <id> --element <eid> [--name <name>] [--visible true|false] [--content "<text>"] [--style-json <path>] [--w <n> --h <n>] [--x <n> --y <n>] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>]   (--w/--h/--x/--y are the same finite-number fields the API PATCH route + move accept — single-element resize/reposition from the CLI, T0254; --opacity in [0,1] stored only when != 1, T0260)
+  element-set <id> --element <eid> [--name <name>] [--visible true|false] [--content "<text>"] [--style-json <path>] [--background '#rrggbb'|none] [--w <n> --h <n>] [--x <n> --y <n>] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>]   (--content/--style-json patch a text OR note; --background is note-only)   (--w/--h/--x/--y are the same finite-number fields the API PATCH route + move accept — single-element resize/reposition from the CLI, T0254; --opacity in [0,1] stored only when != 1, T0260)
   element-remove <id> --element <eid>
   elements-set <id> --json <path>   (batched patch: [{elementId,x?,y?,w?,h?,name?,visible?}] or {patches:[...]}; one undo step)
   elements-remove <id> --elements e1,e2   (batched delete; one undo step)
@@ -355,6 +358,29 @@ async function runCommand(command, id, positional, flags) {
       // addText(root, projectId, args) — the op validates style against fonts.json.
       return print(addText(repoRoot, id, args));
     }
+    case "add-note": {
+      // T0268: add a sticky-note annotation. --w/--h set the FULLY FIXED box (default
+      // sticky size otherwise); --content is plain text (\n for newlines, wrapped on the
+      // page); --style-json is the note font subset (validated against fonts.json);
+      // --background '#rrggbb' sets a solid fill, 'none' = no fill (default = yellow preset).
+      if (!id) fail("add-note requires <id>");
+      const args = {};
+      if (flags.x !== undefined) args.x = Number(flags.x);
+      if (flags.y !== undefined) args.y = Number(flags.y);
+      if (flags.w !== undefined && flags.w !== "true") args.w = Number(flags.w);
+      if (flags.h !== undefined && flags.h !== "true") args.h = Number(flags.h);
+      if (flags.content && flags.content !== "true") args.content = flags.content;
+      if (flags["style-json"] && flags["style-json"] !== "true") {
+        args.style = JSON.parse(readFileSync(resolve(flags["style-json"]), "utf8"));
+      }
+      // --background '#rrggbb' -> solid fill; 'none' -> no fill; omitted -> op default preset.
+      if (flags.background !== undefined) {
+        args.background = flags.background === "none" ? null : { type: "color", color: flags.background };
+      }
+      if (flags.group && flags.group !== "true" && flags.group !== "none") args.groupId = flags.group;
+      // addNote(root, projectId, args) — the op validates style + background loudly.
+      return print(addNote(repoRoot, id, args));
+    }
     case "detect-regions": {
       if (!id) fail("detect-regions requires <id>");
       if (!flags.element) fail("detect-regions requires --element <eid>");
@@ -380,6 +406,12 @@ async function runCommand(command, id, positional, flags) {
       if (flags["style-json"] && flags["style-json"] !== "true") {
         patch.style = JSON.parse(readFileSync(resolve(flags["style-json"]), "utf8"));
       }
+      // T0268: --background '#rrggbb' sets a NOTE's solid fill; 'none' clears it. The op
+      // refuses it loudly on a non-note element (background is note-only), same shape as
+      // group-set's --background. Content/style above apply to a text OR a note element.
+      if (flags.background !== undefined) {
+        patch.background = flags.background === "none" ? null : { type: "color", color: flags.background };
+      }
       // T0232 increment 3a: rotation (degrees CW about the box center; the op normalizes
       // to [0,360) and throws on a non-finite value) + flip (image-only booleans; a loud
       // error on a text element) — the SAME patchElement fields the page's inspector
@@ -400,7 +432,7 @@ async function runCommand(command, id, positional, flags) {
       // same patchElement field the inspector's Opacity input / the API PATCH route accept.
       if (flags.opacity !== undefined && flags.opacity !== "true") patch.opacity = Number(flags.opacity);
       if (!Object.keys(patch).length) {
-        fail("element-set requires --name, --visible, --content, --style-json, --rotation, --flip-h, --flip-v, --opacity, --w, --h, --x, and/or --y");
+        fail("element-set requires --name, --visible, --content, --style-json, --background, --rotation, --flip-h, --flip-v, --opacity, --w, --h, --x, and/or --y");
       }
       return print(patchElement(repoRoot, id, flags.element, patch));
     }

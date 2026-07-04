@@ -45,6 +45,7 @@ import {
   generateFromRecipeAction,
   patchElementBox,
   patchGroupBox,
+  patchNoteStyle,
   patchRecipeAction,
   patchStyleAction,
   patchTextElement,
@@ -61,12 +62,14 @@ import {
   setGroupClip,
   setGroupsShared,
   setGroupVisible,
+  setNoteBackground,
   setSlice9Action,
   sliceRegionsFor,
   toggleElementFlip,
 } from "./actions.js";
 import { childrenOf, descendantsOf, isNodeTransformed } from "../tree.mjs";
 import { validateAnimation } from "../animation.mjs";
+import { NOTE_BACKGROUND_PRESETS } from "../fonts.mjs";
 import { fontFamilies, fontWeights } from "./fonts.js";
 import { openContextMenu } from "./context_menu.js";
 import { inlineEdit } from "./inline.js";
@@ -1881,6 +1884,123 @@ function renderTextElement(element, root) {
   renderAnimation(element, root);
 }
 
+// ---- note element (T0268) ----------------------------------------------------
+
+// The NOTE inspector: name, an EDITABLE Position & Size (both w AND h — the box is fully
+// user-fixed, unlike text's read-only "(auto-width)"), a Background section (sticky presets
+// + custom + None), and a Text section (the note font SUBSET — no stroke/shadow). Every
+// change commits ONE journaled patchElement, never per keystroke.
+function renderNoteElement(element, root) {
+  const style = element.style || {};
+  const name = field("Name", textInput(element.name, (next) => renameElement(element.id, next)));
+  name.classList.add("insp-name");
+  root.appendChild(name);
+
+  const layout = collapsible(root, "layout", "Position & Size");
+  // Both w and h are editable (fully-fixed box) — reuse boxGrid, unlike text's read-only size.
+  layout.appendChild(boxGrid(element, (patch) => patchElementBox(element.id, patch)));
+
+  // Single node inside a parent group: align-to-frame (same rule as text/image).
+  if (element.groupId) renderAlignSection([element.id], root);
+
+  renderNoteBackground(element, root);
+  renderNoteStyle(element, style, root);
+
+  const hint = document.createElement("div");
+  hint.className = "insp-region-hint";
+  hint.textContent = "Double-click the note on the canvas to edit its text (it wraps and clips to the box).";
+  root.appendChild(hint);
+}
+
+// The note's TEXT section: font family + weight, size, line height, align, fill color — the
+// note font SUBSET only (no outline/shadow — those are text-only). Each change commits ONE
+// patchNoteStyle (the op shallow-merges + validates against fonts.json).
+function renderNoteStyle(element, style, root) {
+  const body = collapsible(root, "text", "Text");
+  const commit = (stylePatch) => patchNoteStyle(element.id, stylePatch);
+
+  const families = fontFamilies();
+  const familySel = selectInput(style.fontFamily, families.length ? families : [style.fontFamily], (family) => {
+    const weights = fontWeights(family);
+    const weight = weights.includes(Number(style.fontWeight)) ? Number(style.fontWeight) : weights[0];
+    commit({ fontFamily: family, fontWeight: weight });
+  });
+  body.appendChild(field("Font", familySel));
+
+  const weights = fontWeights(style.fontFamily).map(String);
+  const weightSel = selectInput(String(style.fontWeight), weights.length ? weights : [String(style.fontWeight)], (value) =>
+    commit({ fontWeight: Number(value) }),
+  );
+  body.appendChild(field("Weight", weightSel));
+
+  const sizeRow = document.createElement("div");
+  sizeRow.className = "insp-grid";
+  sizeRow.appendChild(field("Size", numberInput(style.fontSize, (v) => commit({ fontSize: v }))));
+  sizeRow.appendChild(field("Line", numberInput(style.lineHeight, (v) => commit({ lineHeight: v }))));
+  body.appendChild(sizeRow);
+
+  body.appendChild(field("Align", selectInput(style.align || "left", ["left", "center", "right"], (v) => commit({ align: v }))));
+  body.appendChild(field("Fill", colorInput(style.color, (v) => commit({ color: v }))));
+}
+
+// The note's BACKGROUND section: a preset swatch row (yellow/green/pink/blue/gray) plus a
+// mode None/Solid + custom color input (mirrors renderGroupBackground, with sticky presets).
+// A change persists via setNoteBackground (patchElement -> applyMutation); the op validates
+// it and refuses a background on a non-note element.
+function renderNoteBackground(element, root) {
+  const body = collapsible(root, "note-background", "Background");
+  const current = element.background && element.background.type === "color" ? element.background : null;
+
+  // Preset swatch row: one click sets the fill.
+  const swatches = document.createElement("div");
+  swatches.className = "note-swatches";
+  for (const preset of NOTE_BACKGROUND_PRESETS) {
+    const swatch = document.createElement("button");
+    swatch.type = "button";
+    swatch.className = "note-swatch";
+    swatch.style.background = preset.color;
+    swatch.title = preset.name;
+    swatch.setAttribute("aria-label", preset.name);
+    if (current && current.color.toLowerCase() === preset.color.toLowerCase()) swatch.classList.add("selected");
+    swatch.addEventListener("click", () => setNoteBackground(element.id, { type: "color", color: preset.color }));
+    swatches.appendChild(swatch);
+  }
+  body.appendChild(swatches);
+
+  const mode = document.createElement("select");
+  mode.className = "insp-input";
+  for (const [value, text] of [["none", "None"], ["color", "Solid"]]) {
+    const option = document.createElement("option");
+    option.value = value;
+    option.textContent = text;
+    if ((current ? "color" : "none") === value) option.selected = true;
+    mode.appendChild(option);
+  }
+
+  const color = document.createElement("input");
+  color.type = "color";
+  color.value = current ? current.color : "#fff9b1";
+  color.className = "insp-color";
+  color.disabled = !current;
+
+  mode.addEventListener("change", () => {
+    if (mode.value === "color") {
+      color.disabled = false;
+      setNoteBackground(element.id, { type: "color", color: color.value });
+    } else {
+      color.disabled = true;
+      setNoteBackground(element.id, null);
+    }
+  });
+  color.addEventListener("change", () => {
+    if (mode.value === "color") setNoteBackground(element.id, { type: "color", color: color.value });
+  });
+
+  const row = field("Custom", mode);
+  row.appendChild(color);
+  body.appendChild(row);
+}
+
 // The group's BACKGROUND section: mode None/Solid + a color input (enabled for Solid).
 // A change persists via patchGroup({background}) through the actions -> applyMutation
 // flow (canvas + render honor it). The render-time bg dropdown in "Render group" stays
@@ -2391,6 +2511,11 @@ function inspectorSig() {
       // (e.g. the canvas rotate handle) must rebuild the section, not just skip.
       return `t:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.content}|${JSON.stringify(e.style || {})}|${e.groupId || ""}|${e.rotation || 0}|${JSON.stringify(e.animation || null)}`;
     }
+    // A note's structure is its box + content + style + background (T0268) — any change must
+    // rebuild the Note sections so the inputs (size, Text, Background swatches) reflect it.
+    if (e.type === "note") {
+      return `n:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.content}|${JSON.stringify(e.style || {})}|${JSON.stringify(e.background || null)}|${e.groupId || ""}`;
+    }
     const regions = (e.regions || [])
       .map((r) => `${r.id}~${r.name || ""}~${(r.rect || r.content_bbox || []).join(",")}`)
       .join("|");
@@ -2475,6 +2600,7 @@ export function renderInspector() {
     renderMultiGroup(groupIds, root);
   } else if (selected.length === 1) {
     if (selected[0].type === "text") renderTextElement(selected[0], root);
+    else if (selected[0].type === "note") renderNoteElement(selected[0], root);
     else renderElement(selected[0], root);
   } else if (selected.length > 1) {
     renderMulti(selected, root);

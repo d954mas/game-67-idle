@@ -154,6 +154,13 @@ function elementRow(element, depth) {
     glyph.textContent = "T";
     glyph.setAttribute("aria-hidden", "true");
     row.appendChild(glyph);
+  } else if (element.type === "note") {
+    // A note has no image file either — a distinct "▤" glyph marks it as a note card (T0268).
+    const glyph = document.createElement("span");
+    glyph.className = "thumb thumb-note";
+    glyph.textContent = "▤";
+    glyph.setAttribute("aria-hidden", "true");
+    row.appendChild(glyph);
   } else {
     row.appendChild(thumbFor(element)); // reused node — no re-download / re-decode on rebuild
   }
@@ -166,7 +173,7 @@ function elementRow(element, depth) {
   // distinct so "Text" (the default name) doesn't read as the content. Both spans sit in
   // a shared flexible label so each ellipsizes on its own; a non-text or empty-content
   // element keeps the plain unwrapped name (unchanged from before).
-  const preview = element.type === "text" ? textPreview(element.content) : "";
+  const preview = element.type === "text" || element.type === "note" ? textPreview(element.content) : "";
   if (preview) {
     const label = document.createElement("span");
     label.className = "layer-label";
@@ -384,7 +391,7 @@ function layersSignature() {
         // preview for text elements, so an edit that only changes `content` (name/visible/
         // regions unchanged) must still trigger a rebuild.
         parts.push(
-          `e:${depth}:${e.id}:${e.name || ""}:${e.visible !== false ? 1 : 0}:${(e.regions || []).length}:${e.type === "text" ? e.content || "" : ""}`,
+          `e:${depth}:${e.id}:${e.name || ""}:${e.visible !== false ? 1 : 0}:${(e.regions || []).length}:${e.type === "text" || e.type === "note" ? e.content || "" : ""}`,
         );
       }
     }

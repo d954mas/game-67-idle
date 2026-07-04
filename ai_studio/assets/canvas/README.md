@@ -964,6 +964,67 @@ drop-shadow toggle with dx/dy + color). The layers row shows a **"T"** glyph pla
 element parked outside its group's frame stays a member; joining/leaving a group is
 explicit (layers drag, Ctrl+G, Ungroup, CLI `group-assign`).
 
+## Note elements
+
+**(T0268.)** A **note** is a Miro/FigJam-style sticky card — `type: "note"` in the flat
+`elements[]` beside images and text, so z-order, grouping/nesting, undo, marquee,
+copy/paste, and the inspector treat it like any element. Notes exist so the lead can write
+lots of plain text onto a big board and stay oriented. It carries a `content` string
+(explicit `\n` respected), a `style` block (the font **subset** — no stroke/shadow/italic),
+and an optional `background` fill:
+
+```json
+{ "type": "note", "x": 40, "y": 50, "w": 220, "h": 180,
+  "content": "Todo\nbuy milk",
+  "style": { "fontFamily": "Inter", "fontWeight": 400, "fontSize": 18,
+             "lineHeight": 1.35, "align": "left", "color": "#1a1a1a" },
+  "background": { "type": "color", "color": "#fff9b1" } }
+```
+
+Defaults: `content` empty, a **220×180** box, Inter 400 / size 18 / lineHeight 1.35 / align
+left / color `#1a1a1a`, and the yellow sticky preset as `background`. `background` is the
+same additive `{type:"color", color:"#rrggbb"}` shape as `group.background` (a sticky preset
+or arbitrary `#rrggbb`; `null` = no fill = absent field), validated **loudly** on write and a
+loud error on a non-note element (`background` is note-only). Unknown font family/weight,
+bad align/color, or a non-finite size are the same **loud** manifest errors text uses.
+
+**Differences from text (deliberate):**
+
+- **Fully-fixed box.** Both `w` **and** `h` are user-set and resizable (canvas handles +
+  the inspector's editable Position & Size). Text is auto-width; a note never auto-sizes.
+- **Word-wrap + clip.** The text is greedy word-wrapped (`ctx.measureText`) to the padded
+  inner width and **clipped** at the box; overflow shows a bottom **fade** indicator (more
+  text is there — double-click to read/edit it all). Wrap is a **browser-display concern
+  only** (`site/fonts.js` `wrapNoteLines`, cached per element on content + inner width +
+  font): because the box is user-fixed **and notes never reach a PNG**, there is **no PIL
+  wrap and no nominal-box math** anywhere.
+- **Never render content.** A note is a **work annotation**. `renderGroup` /
+  `exportProject` **prune** every `type:"note"` node before the render spec is written
+  (`buildRenderNodes`), so `render_group.py` never sees it — a group with a note renders
+  **pixel-identical** to the same group without it (proven in `tests/note.test.mjs`).
+  `exportElements` on a note **refuses loudly** (same spirit as standalone text). Group
+  labels/chrome and recipe cards already never reach a PNG either.
+
+**Fonts** reuse the same shared parity contract as text (`fonts.mjs` — `DEFAULT_NOTE_STYLE`,
+`mergeNoteStyle`, the sticky presets, `NOTE_PADDING`); the note simply uses the font subset.
+
+**Ops / parity.** `addNote` mints one (front-order hook + one journaled entry, mirrors
+`addText`); `patchElement` carries `content`/`style`/`background` (content/style valid on a
+text **or** a note; background note-only). HTTP: `POST /projects/<id>/note`; patches ride the
+existing element `PATCH` route. CLI: `add-note` (`--w/--h/--content/--style-json/--background`)
+and `element-set --background '#rrggbb'|none`. Undo restores a note byte-exact (content,
+style, background, box).
+
+**Page.** The **N** tool in the rail places a note at the click point (then switches back to
+Select and opens the inline editor); the empty-canvas context menu's **New note** does the
+same at the click point. Double-click a note to edit it in the **same** textarea overlay as
+text, but `wrap=soft` over the note's fixed box (no live auto-width) — commit on blur or
+`Ctrl/Cmd+Enter`, `Esc` cancels, **one** `patchElement` per commit (never per keystroke).
+Resize handles change the box (`w`/`h`, free on both axes) and the text re-wraps. The
+inspector shows editable **Position & Size**, a **Background** section (preset swatch row +
+custom color + None), and a **Text** section (font/weight/size/line/align/fill). The layers
+row shows a **"▤"** glyph placeholder plus the same content preview text rows use.
+
 ## Rotation & flip
 
 **(T0232 increment 3a — data model, render, export parity; no interactive gizmo yet.)**

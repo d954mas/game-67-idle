@@ -15,6 +15,7 @@
 //   POST   /api/canvas/projects/<id>/images-batch  {images:[{name, bytes_base64, x?, y?}]} (one entry)
 //   POST   /api/canvas/projects/<id>/images-from-file {src, name?, x?, y?}   (mint an element from an EXISTING project file; no re-upload)
 //   POST   /api/canvas/projects/<id>/text          {x?, y?, content?, style?, groupId?}
+//   POST   /api/canvas/projects/<id>/note          {x?, y?, w?, h?, content?, style?, background?, groupId?}  (T0268: a sticky-note annotation; fixed clipped box + wrap; excluded from renderGroup/exportProject)
 //   POST   /api/canvas/projects/<id>/detect-regions {elementId, params?}
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
 //   POST   /api/canvas/projects/<id>/alpha          {elementId, method?, regions?} | {elementIds, method?} (batch, one entry)
@@ -55,7 +56,7 @@
 //   GET    /api/canvas/projects/<id>/history
 //   GET    /api/canvas/projects/<id>/history-list
 //   POST   /api/canvas/projects/<id>/history-jump   {seq, expectHead?}
-//   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible,rotation?,flipH?,flipV?,opacity?} (T0232 3a: rotation = degrees CW about the box center; flip is image-only. T0260: opacity in [0,1], stored only when != 1)
+//   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible,rotation?,flipH?,flipV?,opacity?,content?,style?,background?} (T0232 3a: rotation = degrees CW about the box center; flip is image-only. T0260: opacity in [0,1], stored only when != 1. T0222/T0268: content/style patch a text OR note; background patches a note only — all loud on the wrong type)
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/regions {regions}   (replace)
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/slice9  {insets}    (T0233: set 9-slice insets {left,top,right,bottom,scale?}; {insets:null} clears; image-only)
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/animation {animation} (T0260: set the ai_studio.canvas.animation.v1 spec; {animation:null} clears; image + text)
@@ -72,6 +73,7 @@ import {
   addImage,
   addImageFromFile,
   addImages,
+  addNote,
   addText,
   alignNodes,
   alphaCutout,
@@ -337,6 +339,25 @@ export function createCanvasApi(root) {
           y: body.y,
           content: body.content,
           style: body.style,
+          groupId: body.groupId,
+        })));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/note  (add a note element — T0268)
+      // x/y place it at a world point; content/style/background/w/h/groupId are optional
+      // (style + background are validated by the op — a loud 400 on bad input). A note is a
+      // canvas annotation and is excluded from renderGroup/exportProject.
+      if (parts.length === 5 && sub === "note" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(201, await locked(id, () => addNote(root, id, {
+          x: body.x,
+          y: body.y,
+          w: body.w,
+          h: body.h,
+          content: body.content,
+          style: body.style,
+          background: body.background,
           groupId: body.groupId,
         })));
         return true;

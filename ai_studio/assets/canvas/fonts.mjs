@@ -214,3 +214,76 @@ export function nominalTextBox(content, style) {
   const h = Math.max(1, Math.round(lines.length * size * lineHeight));
   return { w, h };
 }
+
+// ---- note cards (T0268) ------------------------------------------------------
+//
+// A NOTE element (`type:"note"`) is a Miro/FigJam sticky card: plain text on a colored
+// box. It reuses this shared font contract for its style (a SUBSET of the text style —
+// no stroke/shadow/autoResize/italic), but differs from text in three deliberate ways:
+// the box is FULLY user-fixed (both w AND h are set/resized, never auto), the text is
+// WORD-WRAPPED to the box (browser-side greedy wrap in site/fonts.js — notes never reach
+// a PNG so there is NO PIL-parity wrap and NO nominal-box math here), and overflow CLIPS
+// at the padded box. A note is a work annotation, NOT render content: renderGroup /
+// exportProject skip it and exportElements refuses it (see ops.mjs).
+
+// The padded inset (world px) between the note box edge and its wrapped text, on every
+// side. Shared so the page's paint/edit/wrap and the inspector agree on ONE inner width.
+export const NOTE_PADDING = 12;
+
+// A fresh note's default box (world px). The op passes this when no explicit w/h is
+// given; both are user-resizable afterward (fully fixed box, T0268 lead decision).
+export const DEFAULT_NOTE_SIZE = Object.freeze({ w: 220, h: 180 });
+
+// The default note style: the font subset only (no stroke/shadow/autoResize — those are
+// text-only). A fresh note merges any partial style over this; content defaults to "".
+export const DEFAULT_NOTE_STYLE = Object.freeze({
+  fontFamily: "Inter",
+  fontWeight: 400,
+  fontSize: 18,
+  lineHeight: 1.35,
+  align: "left",
+  color: "#1a1a1a",
+});
+
+// Sticky-note background presets (the inspector's swatch row). Arbitrary #rrggbb is also
+// allowed via the custom color input; the stored shape is {type:"color", color} either way.
+export const NOTE_BACKGROUND_PRESETS = Object.freeze([
+  Object.freeze({ name: "Yellow", color: "#fff9b1" }),
+  Object.freeze({ name: "Green", color: "#d5f6b1" }),
+  Object.freeze({ name: "Pink", color: "#ffd6e0" }),
+  Object.freeze({ name: "Blue", color: "#cfe6ff" }),
+  Object.freeze({ name: "Gray", color: "#e6e6e6" }),
+]);
+
+// The default fill a fresh note is created with (the first preset).
+export const DEFAULT_NOTE_BACKGROUND = Object.freeze({ type: "color", color: "#fff9b1" });
+
+export function defaultNoteStyle() {
+  return { ...DEFAULT_NOTE_STYLE };
+}
+
+// Merge a (possibly partial) note style patch over a base and validate the RESULT against
+// the manifest — the note twin of mergeTextStyle, but for the font SUBSET only (no
+// stroke/shadow/italic). Both addNote (base = defaults) and patchElement (base = the
+// note's current style) call it. Throws loudly on an unknown family/weight, a bad
+// align/color, or a non-finite size. Returns a fresh normalized style object.
+export function mergeNoteStyle(base, patch = {}, manifest) {
+  if (patch === null || typeof patch !== "object" || Array.isArray(patch)) {
+    throw new Error(`note style must be an object, got ${JSON.stringify(patch)}`);
+  }
+  const src = base && typeof base === "object" ? base : DEFAULT_NOTE_STYLE;
+  const out = {
+    fontFamily: patch.fontFamily !== undefined ? String(patch.fontFamily) : String(src.fontFamily || DEFAULT_NOTE_STYLE.fontFamily),
+    fontWeight: Number(patch.fontWeight !== undefined ? patch.fontWeight : src.fontWeight ?? DEFAULT_NOTE_STYLE.fontWeight),
+    fontSize: finiteNumber(patch.fontSize !== undefined ? patch.fontSize : src.fontSize ?? DEFAULT_NOTE_STYLE.fontSize, "fontSize"),
+    lineHeight: finiteNumber(patch.lineHeight !== undefined ? patch.lineHeight : src.lineHeight ?? DEFAULT_NOTE_STYLE.lineHeight, "lineHeight"),
+    align: patch.align !== undefined ? String(patch.align) : String(src.align || "left"),
+    color: normHex(patch.color !== undefined ? patch.color : src.color ?? DEFAULT_NOTE_STYLE.color, "color"),
+  };
+  if (!TEXT_ALIGNS.has(out.align)) throw new Error(`align must be left|center|right, got ${JSON.stringify(out.align)}`);
+  if (!(out.fontSize > 0) || out.fontSize > MAX_FONT_SIZE) throw new Error(`fontSize must be in (0, ${MAX_FONT_SIZE}], got ${out.fontSize}`);
+  if (!(out.lineHeight > 0)) throw new Error(`lineHeight must be > 0, got ${out.lineHeight}`);
+  // The single gate: the (family, weight, normal) must exist in the manifest.
+  resolveFontEntry(manifest, { family: out.fontFamily, weight: out.fontWeight, style: "normal" });
+  return out;
+}

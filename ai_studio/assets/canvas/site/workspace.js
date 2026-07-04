@@ -37,8 +37,8 @@ import {
   syncPrimaryGroup,
   toggleSelect,
 } from "./app.js";
-import { addTextAt, moveNodesTo, patchElementBox, patchTextElement, renameProject, setRegionsFor, undo, redo } from "./actions.js";
-import { canvasFontString } from "../fonts.mjs";
+import { addNoteAt, addTextAt, moveNodesTo, patchElementBox, patchNoteContent, patchTextElement, renameProject, setRegionsFor, undo, redo } from "./actions.js";
+import { canvasFontString, NOTE_PADDING } from "../fonts.mjs";
 // T0233: the same pure 9-slice math ops.mjs/render_group.py use (see slice9.mjs) —
 // served over /ai_studio/ so the page normalizes a slice9 element identically.
 import { slice9Patches } from "../slice9.mjs";
@@ -46,7 +46,7 @@ import { slice9Patches } from "../slice9.mjs";
 // the on-canvas preview samples it every rAF so a channel animates identically here and in
 // the bake. View-state only; nothing here writes the store.
 import { sampleAnimation } from "../animation.mjs";
-import { areFontsReady, measureTextBox, measureTextLines } from "./fonts.js";
+import { areFontsReady, measureTextBox, measureTextLines, wrapNoteLines } from "./fonts.js";
 import { inlineEdit } from "./inline.js";
 import { openContextMenu } from "./context_menu.js";
 import {
@@ -497,6 +497,10 @@ function paintElement(element, vp, editEl) {
     paintTextElement(element, vp, editEl);
     return;
   }
+  if (element.type === "note") {
+    paintNoteElement(element, vp, editEl);
+    return;
+  }
   const isEdit = editEl && element.id === editEl.id;
   // T0260 increment 2: the live animation-preview sample for THIS element this frame (null
   // unless it is previewing with a real animation). Its opacity multiplies into globalAlpha
@@ -778,6 +782,135 @@ function drawTextGlyphs(element, style, origin, vp) {
   ctx.restore();
 }
 
+// ---- note cards (T0268) ------------------------------------------------------
+//
+// A note is a Miro/FigJam sticky: a colored, FULLY-fixed box (user-set w AND h) with plain
+// text word-wrapped to the padded inner width and CLIPPED at the box, plus an overflow
+// indicator (a bottom fade) when the wrapped text is taller than the box. Notes are canvas
+// annotations — they never reach a PNG (renderGroup/exportProject skip them). The greedy
+// wrap is cached per element, keyed on content + inner width + font, so it only recomputes
+// when one of those actually changes (never per frame during a pan/zoom).
+const noteWrapCache = new Map(); // elementId -> { key, lines }
+
+function noteInnerWidth(element) {
+  return Math.max(1, (Number(element.w) || 0) - NOTE_PADDING * 2);
+}
+
+function noteWrappedLines(element, style) {
+  const innerWidth = noteInnerWidth(element);
+  const key = `${element.content || ""}\u0000${innerWidth}\u0000${canvasFontString(style, Number(style.fontSize) || 18)}`;
+  const cached = noteWrapCache.get(element.id);
+  if (cached && cached.key === key) return cached.lines;
+  const lines = wrapNoteLines(element.content, style, innerWidth);
+  noteWrapCache.set(element.id, { key, lines });
+  return lines;
+}
+
+function paintNoteElement(element, vp, editEl) {
+  const isEdit = editEl && element.id === editEl.id;
+  ctx.globalAlpha = editEl && !isEdit ? 0.3 : 1;
+  const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
+  const style = element.style || {};
+  const w = Math.max(1, (Number(element.w) || 0) * vp.scale);
+  const h = Math.max(1, (Number(element.h) || 0) * vp.scale);
+  const radius = Math.min(10 * vp.scale, w / 2, h / 2);
+
+  // Background fill (a slightly rounded rect) — the sticky card. `background` absent = no fill.
+  const bg = element.background && element.background.type === "color" ? element.background.color : null;
+  ctx.save();
+  roundRectPath(origin.x, origin.y, w, h, radius);
+  if (bg) {
+    ctx.fillStyle = bg;
+    ctx.fill();
+  }
+  // Thin card border so an unfilled/pale note still reads as a box.
+  ctx.strokeStyle = "rgba(0,0,0,0.18)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.restore();
+
+  // Wrapped text, clipped to the padded inner box. Skipped while inline-editing (the
+  // textarea overlay shows the live text) and until the real fonts are ready (no FOUT).
+  let overflow = false;
+  if (areFontsReady() && state.editingTextId !== element.id) {
+    const fontSize = Number(style.fontSize) || 18;
+    const lineHeight = Number(style.lineHeight) || 1.35;
+    const lines = noteWrappedLines(element, style);
+    const pad = NOTE_PADDING * vp.scale;
+    const innerX = origin.x + pad;
+    const innerY = origin.y + pad;
+    const innerW = Math.max(1, w - pad * 2);
+    const innerH = Math.max(1, h - pad * 2);
+    const lineStep = fontSize * lineHeight * vp.scale;
+    overflow = lines.length * lineStep > innerH + 0.5;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(innerX, innerY, innerW, innerH);
+    ctx.clip();
+    ctx.font = canvasFontString(style, fontSize * vp.scale);
+    ctx.textBaseline = "top";
+    ctx.textAlign = "left";
+    ctx.fillStyle = style.color || "#1a1a1a";
+    const align = style.align || "left";
+    for (let i = 0; i < lines.length; i += 1) {
+      const y = innerY + i * lineStep;
+      if (y > innerY + innerH) break; // fully below the clip box — stop early
+      let x = innerX;
+      if (align !== "left") {
+        const lineW = ctx.measureText(lines[i]).width;
+        x = align === "center" ? innerX + (innerW - lineW) / 2 : innerX + innerW - lineW;
+      }
+      ctx.fillText(lines[i], x, y);
+    }
+    ctx.restore();
+
+    // Overflow indicator: a bottom fade over the clipped-off text — cheap + obvious that
+    // more text exists below (double-click to read/edit it all).
+    if (overflow) {
+      const fadeH = Math.min(18 * vp.scale, h * 0.4);
+      const grad = ctx.createLinearGradient(0, origin.y + h - fadeH, 0, origin.y + h);
+      const fade = bg || "#ffffff";
+      grad.addColorStop(0, hexToRgba(fade, 0));
+      grad.addColorStop(1, hexToRgba(fade, 0.95));
+      ctx.save();
+      roundRectPath(origin.x, origin.y, w, h, radius);
+      ctx.clip();
+      ctx.fillStyle = grad;
+      ctx.fillRect(origin.x, origin.y + h - fadeH, w, fadeH);
+      ctx.restore();
+    }
+  }
+  ctx.globalAlpha = 1;
+
+  if (isSelected(element)) {
+    ctx.strokeStyle = "#77a7ff";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(origin.x, origin.y, w, h);
+  }
+}
+
+// Trace a rounded-rectangle path (no fill/stroke — caller decides). Used by the note card.
+function roundRectPath(x, y, w, h, r) {
+  const radius = Math.max(0, Math.min(r, w / 2, h / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+// #rrggbb -> "rgba(r,g,b,a)" for the note overflow fade gradient. A non-hex value falls
+// back to white so the fade still reads.
+function hexToRgba(hex, alpha) {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(String(hex || "").trim());
+  if (!m) return `rgba(255,255,255,${alpha})`;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+}
+
 // ---- inline text editor (textarea overlay) -----------------------------------
 //
 // Double-click a text element (or place one with the T tool) to edit it in place: a
@@ -790,19 +923,23 @@ let textCommitting = false;
 function openTextEditor(element) {
   closeTextEditor();
   state.editingTextId = element.id;
+  const isNote = element.type === "note";
   const ta = document.createElement("textarea");
-  ta.className = "text-edit-overlay";
+  ta.className = isNote ? "text-edit-overlay note-edit-overlay" : "text-edit-overlay";
   ta.value = element.content || "";
   ta.spellcheck = false;
-  ta.wrap = "off";
+  // A note wraps softly inside its FIXED box (T0268); a text element is auto-width (no wrap).
+  ta.wrap = isNote ? "soft" : "off";
+  ta.style.whiteSpace = isNote ? "pre-wrap" : "pre";
   el("stage").appendChild(ta);
-  textEditor = { el: ta, elementId: element.id };
+  textEditor = { el: ta, elementId: element.id, isNote };
   positionTextEditor();
   ta.focus();
   ta.select();
   ta.addEventListener("keydown", onTextEditorKey);
   ta.addEventListener("blur", () => commitTextEditor());
-  ta.addEventListener("input", positionTextEditor);
+  // A note's box is fixed, so it never re-flows the overlay on input; only auto-width text does.
+  if (!isNote) ta.addEventListener("input", positionTextEditor);
 }
 
 function onTextEditorKey(event) {
@@ -827,8 +964,23 @@ function positionTextEditor() {
   const vp = state.viewport;
   const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
   const style = element.style || {};
-  const fontSize = Number(style.fontSize) || 24;
   const ta = textEditor.el;
+  if (textEditor.isNote) {
+    // A note's editor exactly matches its FIXED box (padded), wrapping softly inside it —
+    // no auto-width, no per-keystroke reflow; commit only changes the content string.
+    const fontSize = Number(style.fontSize) || 18;
+    const pad = NOTE_PADDING * vp.scale;
+    ta.style.left = `${origin.x + pad}px`;
+    ta.style.top = `${origin.y + pad}px`;
+    ta.style.font = canvasFontString(style, fontSize * vp.scale);
+    ta.style.lineHeight = `${fontSize * (Number(style.lineHeight) || 1.35) * vp.scale}px`;
+    ta.style.color = style.color || "#1a1a1a";
+    ta.style.textAlign = style.align || "left";
+    ta.style.width = `${Math.max(24, element.w * vp.scale - pad * 2)}px`;
+    ta.style.height = `${Math.max(fontSize * vp.scale, element.h * vp.scale - pad * 2)}px`;
+    return;
+  }
+  const fontSize = Number(style.fontSize) || 24;
   // Live auto-width: re-measure the CURRENT textarea value with the same measureTextBox
   // used by the commit path (actions.js patchTextElement), so the box grows/shrinks on
   // every keystroke and never jumps on Enter/commit (identical math, not the browser's
@@ -847,14 +999,17 @@ function positionTextEditor() {
 async function commitTextEditor() {
   if (!textEditor || textCommitting) return;
   textCommitting = true;
-  const { el: ta, elementId } = textEditor;
+  const { el: ta, elementId, isNote } = textEditor;
   const content = ta.value;
   const element = elements().find((item) => item.id === elementId);
   textEditor = null;
   state.editingTextId = null;
   ta.remove();
   if (element && content !== element.content) {
-    await patchTextElement(elementId, { content });
+    // A note's box is fixed: commit ONLY the content (no re-measured box); text commits the
+    // content + its re-measured auto-width box in the same journaled patchElement entry.
+    if (isNote) await patchNoteContent(elementId, content);
+    else await patchTextElement(elementId, { content });
   } else {
     render();
   }
@@ -1199,12 +1354,17 @@ function collectResizeItems() {
   const items = [];
   for (const element of selectedElements()) {
     const isText = element.type === "text";
+    // A NOTE resizes its FIXED box (w/h change, text re-wraps) like an image — NOT like text
+    // (which scales its font). Flagged so beginScaleDrag excludes it from image-style
+    // aspect-lock (a note box resizes freely on both axes).
+    const isNote = element.type === "note";
     items.push({
       kind: "element",
       id: element.id,
       ref: element,
       box: { x: element.x, y: element.y, w: element.w, h: element.h },
       isText,
+      isNote,
       origFontSize: isText ? Number((element.style || {}).fontSize) || 24 : undefined,
     });
   }
@@ -1347,7 +1507,9 @@ function beginScaleDrag(handle, screen, world) {
   const items = collectResizeItems();
   if (!items.length) return;
   const origAABB = unionBBox(items.map((item) => item.box));
-  const proportionalDefault = items.every((item) => item.kind === "element" && !item.isText);
+  // Only a pure block of IMAGE elements keeps proportions by default; text (font scale) and
+  // notes (free-resize fixed box, T0268) both default to free resize.
+  const proportionalDefault = items.every((item) => item.kind === "element" && !item.isText && !item.isNote);
   // T0232 increment 3b: a SOLO rotated element scales in its OWN local (rotated) frame --
   // see resizeRotatedBox's header in viewport.mjs -- so its rotated anchor corner/edge stays
   // put in WORLD space. Every other case (multi-selection, a group, or an unrotated element)
@@ -1779,6 +1941,12 @@ function onMouseDown(event) {
   // T tool: drop a text element at the click point (Figma-style), then edit it inline.
   if (state.tool === "text") {
     placeTextAt(world);
+    return;
+  }
+
+  // N tool: drop a note card at the click point (T0268), then edit it inline.
+  if (state.tool === "note") {
+    placeNoteAt(world);
     return;
   }
 
@@ -2588,9 +2756,10 @@ function onDblClick(event) {
     refresh();
     return;
   }
-  // A TEXT leaf has no regions, so double-click = inline text edit (T0219: text leaf
-  // dblclick edits text INSTEAD of region-edit). An image leaf enters region-edit.
-  if (hit.type === "text") {
+  // A TEXT or NOTE leaf has no regions, so double-click = inline edit (T0219 text; T0268
+  // note — the same textarea overlay, wrap=soft on the note's fixed box). An image leaf
+  // enters region-edit instead.
+  if (hit.type === "text" || hit.type === "note") {
     selectOnly(hit.id);
     openTextEditor(hit);
     refresh();
@@ -2732,10 +2901,13 @@ async function onFilePick(event) {
 }
 
 export function setTool(tool) {
-  state.tool = tool === "pan" ? "pan" : tool === "text" ? "text" : "select";
+  state.tool = tool === "pan" ? "pan" : tool === "text" ? "text" : tool === "note" ? "note" : "select";
   const stage = el("stage");
   if (stage) stage.classList.toggle("pan-tool", state.tool === "pan");
-  if (canvas) canvas.style.cursor = state.tool === "pan" ? "grab" : state.tool === "text" ? "text" : "default";
+  if (canvas) {
+    canvas.style.cursor =
+      state.tool === "pan" ? "grab" : state.tool === "text" || state.tool === "note" ? "text" : "default";
+  }
   syncTopBar();
 }
 
@@ -2748,4 +2920,17 @@ async function placeTextAt(world) {
     const live = elements().find((item) => item.id === element.id);
     if (live) openTextEditor(live);
   }
+}
+
+// N tool: place a fresh note card at the click point, switch back to Select, and open its
+// inline editor so the user types immediately (T0268 — mirrors placeTextAt). Exported so
+// the empty-canvas context menu's "New note" can create + edit in one gesture too.
+export async function placeNoteAt(world) {
+  const element = await addNoteAt(world);
+  setTool("select");
+  if (element) {
+    const live = elements().find((item) => item.id === element.id);
+    if (live) openTextEditor(live);
+  }
+  return element;
 }

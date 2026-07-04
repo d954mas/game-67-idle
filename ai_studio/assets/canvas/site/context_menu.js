@@ -6,6 +6,7 @@
 // SHORT (lead's menu diet): anything with an inspector/layers home stays out.
 import { el, elementById, enterRegionEdit, groupById, groups, refresh, setStatus, state } from "./app.js";
 import {
+  addNoteAt,
   bringNodeForward,
   bringNodeToFront,
   createGroupFromSelection,
@@ -272,6 +273,8 @@ function itemsFor(target) {
   return [
     { label: "Add image", onClick: () => el("file-input").click() },
     { label: "Paste", onClick: () => pasteFromClipboard() },
+    // T0268: mint a sticky note at the click point (double-click it to write text).
+    { label: "New note", onClick: () => addNoteAt(target.world) },
     { label: "Create group", onClick: () => createGroupOrDefault("New group") },
     // T0239 increment 1: mint a recipe card at the click point (a group with an
     // additive `recipe` blob — no generation yet, that lands in increment 2).

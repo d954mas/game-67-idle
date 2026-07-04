@@ -138,6 +138,63 @@ export async function patchTextElement(id, { content, style } = {}, message) {
   }
 }
 
+// ---- notes (T0268) -----------------------------------------------------------
+
+// Add a note card at a world point (the N tool click / context-menu "New note"). Returns
+// the created element so the caller can immediately open its inline editor. One journaled
+// addNote op; the op validates style + background loudly and applies the default sticky
+// box + yellow fill. The note is a canvas annotation — excluded from renderGroup/exportProject.
+export async function addNoteAt(worldPoint, { content, style, background, w, h } = {}) {
+  if (!state.project) return null;
+  try {
+    const body = { x: Math.round(worldPoint.x), y: Math.round(worldPoint.y) };
+    if (content !== undefined) body.content = content;
+    if (style !== undefined) body.style = style;
+    if (background !== undefined) body.background = background;
+    if (w !== undefined) body.w = w;
+    if (h !== undefined) body.h = h;
+    const result = await api("POST", `/projects/${pid()}/note`, body);
+    if (result && result.element) selectOnly(result.element.id);
+    applyMutation(result, "Added note.");
+    return result ? result.element : null;
+  } catch (error) {
+    setStatus(error.message, true);
+    return null;
+  }
+}
+
+// Patch a note's content ONLY (the inline-editor commit). The box is user-fixed, so unlike
+// text there is NO re-measured box here — just the content string, in ONE journaled entry.
+export async function patchNoteContent(id, content, message) {
+  const element = elementById(id);
+  if (!element || element.type !== "note") return;
+  try {
+    applyMutation(await api("PATCH", `/projects/${pid()}/elements/${id}`, { content }), message);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Patch a note's style (a partial note font-subset object) — the inspector's Text section.
+// The op shallow-merges + validates it against fonts.json (loud on a bad family/weight/
+// align/color/size); one journaled patchElement per commit, mirrors patchTextElement.
+export async function patchNoteStyle(id, style, message) {
+  const element = elementById(id);
+  if (!element || element.type !== "note") return;
+  try {
+    applyMutation(await api("PATCH", `/projects/${pid()}/elements/${id}`, { style }), message);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Set/clear a note's background fill (one journaled patchElement): null = no fill,
+// {type:"color", color:"#rrggbb"} = solid. The op validates the value and refuses it on a
+// non-note element (background is note-only). Mirrors setGroupBackground exactly.
+export async function setNoteBackground(id, background) {
+  await patchElementBox(id, { background });
+}
+
 // Paste an image blob from the clipboard at the current viewport center.
 export async function pasteImageBlob(blob) {
   if (!blob || !state.project) return;
