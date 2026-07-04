@@ -237,7 +237,7 @@ function usage() {
   slice9-set <id> --element <eid> [--left <n> --top <n> --right <n> --bottom <n>] [--scale <n>] | --clear   (T0233: 9-slice insets in SOURCE pixels; corners stay fixed size, edges stretch one axis, center stretches both, when the element is resized; image-only; omitted flags merge over the element's current slice9, or 0 if unset; --scale multiplies the DESTINATION corner/edge band only (default 1, source pixels never move); --clear sends insets:null)
   animation-set <id> --element <eid> --json <path> | --clear   (T0260: set an element's procedural animation — the ai_studio.canvas.animation.v1 spec {channels:[...]} (a spec object or a bare channels array) from a file; --clear sends animation:null; image + text; validated loudly at set time)
   slice <id> --element <eid> [--regions r1,r2]
-  alpha <id> --element <eid> [--method auto|matte|corridorkey] [--regions r1,r2]   (alpha-cutout the element; auto routes, matte forces key_matte, corridorkey = neural GREEN-screen matte for soft glow (green-only, whole-element, ~15s GPU); one undo)
+  alpha <id> --element <eid> [--method auto|matte|corridorkey] [--regions r1,r2]   (alpha-cutout the element; auto routes, matte forces key_matte, corridorkey = neural green-screen matte for soft glow (green native, magenta via hue180 shim; regions composite the whole-frame CK result into the requested regions; ~15s GPU); one undo)
   alpha <id> --elements e1,e2 [--method auto|matte|corridorkey]   (batch: 2+ images keyed into ONE journal entry/undo; no --regions with a batch; corridorkey pays its ~15s GPU cost per image)
   alpha-dual <id> --elements a,b   (white-plate + black-plate pair -> ONE new cut element; either order; plates untouched; one undo step)
   alpha-dual-generate <id> --element <eid> [--prompt "<extra subject description>"]   (AUTOMATIC: the element's current pixels are the LIGHT plate; generates the DARK plate via codex edit, gates it (one automatic retry), cuts -> ONE new element beside the source; source untouched; one undo step)
@@ -592,8 +592,9 @@ async function runCommand(command, id, positional, flags) {
       // Alpha-cutout the element's current pixels (whole element, or only --regions r1,r2)
       // via the image-tools matte pipeline; swaps the element to a new alpha PNG (one undo).
       // --method auto (route; refuses a dual-plate soft zone), matte (force key_matte), or
-      // corridorkey (T0261 — neural GREEN-screen matte for soft glow art; green-only, whole-
-      // element, ~15s GPU; a non-green key or --regions is a loud refusal). --elements e1,e2
+      // corridorkey (T0261/T0262 — neural GREEN-screen matte for soft glow art; green native,
+      // magenta via a hue180 shim, ~15s GPU; a key that is neither is a loud refusal; --regions
+      // composites the whole-frame CK result into the requested regions). --elements e1,e2
       // batches 2+ images into ONE journal entry/undo (regions are not allowed with a batch —
       // regions stay single-element, use --element).
       if (!id) fail("alpha requires <id>");

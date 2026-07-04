@@ -714,33 +714,47 @@ implementation, and a missing module is a loud import error.
   recommendation. `"corridorkey"` (T0261) is the third, EXPLICIT method — see below.
   `dual_plate`/generation is out of v1 scope; a future "generate a
   dual-plate pair" op is where a pair source could come from.
-- **`"corridorkey"` — neural GREEN-screen matte (T0261).** The third path, for GREEN-key
-  **soft glow / translucent / soft-edge** art — the one case `key_matte` block-quantizes and
-  the single-image `dual_plate` route can't cut. It reuses the video Track-B invocation
-  **`runCorridorKey()` verbatim** (`ai_studio/assets/tools/video/matte/matte.mjs`, imported
-  cross-module) as the ONE source of truth for prep → `corridorkey_cli` → EXR→RGBA; ops.mjs
-  only adds the canvas seam (green gate, 1-frame staging, src swap, provenance). It is:
-  **explicit-only** (the auto router NEVER yields it), **green-only** (the element's border key
-  is estimated via `route_cutout` and a non-green key is a **loud refusal** naming the key and
-  pointing at `key_matte` — no silent fringe), **whole-element only** (region-scoped CK is not
-  in v1 — regions + corridorkey is a loud refusal; see the gap note below), and **slow**
-  (~13-16s cold GPU model load per call — it is never a silent default; the page shows the
-  long-op busy toast). Provenance (`element.meta.alpha`) records
-  `{method:"corridorkey", tool:"corridorkey", key_color, screen_color:"green", commit, license,
-  timings:{wall_seconds, per_frame_seconds}}`. Licence: **CC-BY-NC-SA-4.0** (asset-processing
-  carve-out). The CK inference is an **injectable seam** on the op (`corridorKey` — the
-  `generator` precedent) so tests fake the ~15s GPU run; a live GPU smoke lives at
-  `tests/live/ck_smoke.mjs` (out of the suite). Choose it deliberately; `key_matte` stays the
-  default for crisp opaque sprites AND the recommended path for flat magenta art.
-  - **Known v1 gaps (follow-ups, not wired here — the file scope of this increment could not
-    add the canvas-side Python pixel helper both need):** (1) **region-scoped CK** — run CK
-    full-frame then reuse `alpha_cutout.py`'s region-mask composite; (2) **magenta support** —
-    a hue+180° preprocessing shim fools the green checkpoint (rotate input hue +180 so magenta
-    → green, run green + despill G, rotate the returned FG RGB back −180, alpha untouched), a
-    measured strict upgrade over blue-on-magenta and recorded as
-    `meta.alpha {shim:"hue180"}` (runner precedent
-    `C:\projects\video_gen_experiment\static_eval\trick_run.py`; untested on soft magenta so
-    far). Until the shim lands, a magenta key loud-refuses to `key_matte`.
+- **`"corridorkey"` — neural GREEN/MAGENTA-screen matte (T0261, magenta shim + regions
+  T0262).** The third path, for chroma-key **soft glow / translucent / soft-edge** art — the
+  one case `key_matte` block-quantizes and the single-image `dual_plate` route can't cut. It
+  reuses the video Track-B invocation **`runCorridorKey()` verbatim**
+  (`ai_studio/assets/tools/video/matte/matte.mjs`, imported cross-module) as the ONE source of
+  truth for prep → `corridorkey_cli` → EXR→RGBA; ops.mjs adds the canvas seam (key gate, the
+  magenta hue180 shim, 1-frame staging, region composite, src swap, provenance). It is:
+  **explicit-only** (the auto router NEVER yields it), **green-native + magenta-via-shim** (the
+  element's border key is estimated via `route_cutout`; a key that is neither is a **loud
+  refusal** naming the key and pointing at `key_matte`/`alphaDualPlate` — no silent fringe),
+  **region-aware** (CorridorKey itself is always whole-frame; a region-scoped request runs it
+  once on the whole element and composites the result into the requested regions — see below),
+  and **slow** (~13-16s cold GPU model load per call — it is never a silent default; the page
+  shows the long-op busy toast). Provenance (`element.meta.alpha`) records
+  `{method:"corridorkey", tool:"corridorkey", key_color, screen_color:"green", shim:"hue180"?,
+  commit, license, timings:{wall_seconds, per_frame_seconds}}` (`shim` only present when the
+  magenta path ran). Licence: **CC-BY-NC-SA-4.0** (asset-processing carve-out). The CK inference
+  is an **injectable seam** on the op (`corridorKey` — the `generator` precedent) so tests fake
+  the ~15s GPU run; a live GPU smoke lives at `tests/live/ck_smoke.mjs` (out of the suite, both
+  the native-green and magenta-shim paths). Choose it deliberately; `key_matte` stays the
+  default for crisp opaque sprites AND the recommended path for FLAT magenta art (it beats CK
+  there outright — exact color, ~200ms).
+  - **Magenta via hue180 shim (T0262).** No magenta CorridorKey checkpoint exists (only
+    green/blue), so the canvas fools the shipped GREEN checkpoint instead: rotate the input's
+    hue +180° (magenta 300° → green 120°, value-preserving HSV rotation — S/V untouched, so
+    dark subjects survive), stage that as the frame, run the native green path unchanged, then
+    rotate the reconstructed FG's RGB back −180° (its own inverse mod 360); the alpha channel is
+    copied through byte-exact, never touched by the color shim. Measured a **strict upgrade**
+    over the blue-on-magenta path on the research's hard-edge fixtures (subject dE76 2.7 → 2.0,
+    rim contamination → 0%; `tmp/research_corridorkey_magenta_2026-07-05.md`, runner precedent
+    `C:\projects\video_gen_experiment\static_eval\trick_run.py`) — **UNTESTED on soft/glow
+    magenta** so far (only hard-edge fixtures were measured); `key_matte` remains the
+    recommended default for flat magenta. The HSV math is ported into
+    `tools/ck_pixel_ops.py` (`hue_shift_image` — pure numpy, this repo's venv has no cv2).
+  - **Region-scoped CorridorKey (T0262).** CorridorKey has no per-region neural pass, so a
+    region-scoped request runs the whole-frame CK cutout ONCE (with the magenta shim first, if
+    applicable) and then pastes that result into the requested regions of a copy of the
+    ORIGINAL source — everywhere else keeps the original opaque pixels. The composite step
+    (`tools/ck_pixel_ops.py`'s `compose_regions`) reuses `alpha_cutout.py`'s
+    `region_mask`/`clamp_rect` **verbatim** (imported, not duplicated), so it is the exact
+    mask/paste contract `key_matte`'s own region path already uses.
 - **Regions optional.** Without regions the whole element is keyed. With region ids, the
   op keys **only inside** each region's mask (rect, or the polygon when present) and pastes
   each keyed crop back over the **untouched original opaque pixels** — the region-mask
@@ -1327,7 +1341,7 @@ node ai_studio/assets/canvas/cli.mjs nodes-delete <id> --nodes id1,id2   # batch
 node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json   # a regions array or {regions:[...]}
 node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
-node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte|corridorkey] [--regions r1,r2]   # alpha-cutout the element (auto routes; matte forces key_matte; corridorkey = neural GREEN matte for soft glow, green-only/whole-element/~15s GPU); one undo
+node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte|corridorkey] [--regions r1,r2]   # alpha-cutout the element (auto routes; matte forces key_matte; corridorkey = neural GREEN/MAGENTA(shim) matte for soft glow, region composite, ~15s GPU); one undo
 node ai_studio/assets/canvas/cli.mjs alpha <id> --elements e1,e2 [--method auto|matte]   # batch: 2+ images keyed into ONE journal entry/undo; no --regions with a batch
 node ai_studio/assets/canvas/cli.mjs alpha-dual <id> --elements a,b   # white-plate + black-plate pair (either order) -> ONE new cut element; plates untouched; one undo
 node ai_studio/assets/canvas/cli.mjs alpha-dual-generate <id> --element <eid> [--prompt "extra subject text"]   # AUTOMATIC: element's current pixels = light plate; generates the dark plate, gates (one auto-retry), cuts -> ONE new element beside the source; source untouched; one undo
@@ -1422,8 +1436,8 @@ one document that swaps two views; the JS is split into focused ES modules under
   compact per-region rows — number + name/size + delete, coords in the tooltip —
   that select/enter region-edit on the canvas and inline-rename on double-click,
   plus **Detect**, **Slice** (selected regions, else all), an **Alpha cutout** control (a
-  method dropdown Key matte / **CorridorKey (green glow)** (T0261 — neural green matte for soft
-  glow, green-only/whole-element/~15s GPU) / Dual-plate + a run button scoped to the selected
+  method dropdown Key matte / **CorridorKey (green glow)** (T0261/T0262 — neural green matte for
+  soft glow, green native/magenta via hue180 shim, region composite, ~15s GPU) / Dual-plate + a run button scoped to the selected
   regions when any are selected, else the whole element — a long-op via the queue), which additionally shows
   two compact plate-thumbnail rows + role labels + a per-plate **Add to canvas** button
   (T0238) once `element.meta.alpha.plates` exists (an `alphaDualPlateGenerate` result)),

@@ -368,8 +368,9 @@ export function createCanvasApi(root) {
       // Alpha-cutout the element's current pixels (whole element, or only the given stored
       // region ids) via the image-tools matte pipeline; swaps the element to a new alpha PNG
       // (one journal entry). method "auto" (route), "matte" (force key_matte), or "corridorkey"
-      // (T0261 — neural GREEN-screen matte for soft glow art; green-only, whole-element, ~15s
-      // GPU; a non-green key or regions is a loud refusal). elementIds (2+ images) batches a
+      // (T0261/T0262 — neural GREEN-screen matte for soft glow art; green native, magenta via a
+      // hue180 shim, ~15s GPU; a key that is neither is a loud refusal; regions composite the
+      // whole-frame CK result into the requested regions). elementIds (2+ images) batches a
       // multi-selection into ONE journal entry/undo (regions are not allowed with a batch).
       if (parts.length === 5 && sub === "alpha" && req.method === "POST") {
         const body = await readJsonBody(req);
