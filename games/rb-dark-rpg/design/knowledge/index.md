@@ -37,6 +37,10 @@ Use this as the first stop for durable game-specific knowledge.
   [../combat_mechanics.md](../combat_mechanics.md), and the current structured
   combat contract lives in
   [../data/combat.json](../data/combat.json).
+- Dialogue modal reference notes are captured in
+  [sources/legacy_of_dragons_dialogue_modal_ref_2026-07-04.md](sources/legacy_of_dragons_dialogue_modal_ref_2026-07-04.md):
+  first-slice dialogue should be a centered modal over a dimmed scene, not a
+  small side panel.
 - Quest structure and state decisions are captured in
   [../quest_system.md](../quest_system.md), with authored quest data in
   [../data/quests.json](../data/quests.json).

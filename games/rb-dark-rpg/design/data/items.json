@@ -32,6 +32,20 @@
       "tags": ["starter", "quest_reward", "armour"]
     },
     {
+      "id": "leather_greaves",
+      "display_name": "Кожаные поножи",
+      "kind": "gear",
+      "slot": "legs",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_leather_greaves",
+      "price_gold": 0,
+      "stats": {
+        "vitality": 3,
+        "protection": 8
+      },
+      "tags": ["starter", "quest_reward", "legs"]
+    },
+    {
       "id": "iron_sword",
       "display_name": "Железный меч",
       "kind": "gear",

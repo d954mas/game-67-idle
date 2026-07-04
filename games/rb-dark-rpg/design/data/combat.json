@@ -164,7 +164,7 @@
       "bonus_attack_power": 0,
       "attack_interval": 2.1
     },
-    "starter_loadout": ["old_sword", "padded_jacket"],
+    "starter_loadout": ["old_sword", "padded_jacket", "leather_greaves"],
     "starter_total": {
       "id": "seeker_start",
       "vitality": 30,
@@ -181,7 +181,7 @@
   },
   "item_refs": {
     "item_source": "data/items.json",
-    "starter_loadout": ["old_sword", "padded_jacket"],
+    "starter_loadout": ["old_sword", "padded_jacket", "leather_greaves"],
     "upgrade_examples": ["iron_sword", "patched_mail", "black_sun_charm"],
     "rule": "Item stats live in items.json. Combat owns formulas, encounters, and balance expectations."
   },

@@ -22,6 +22,7 @@ static nt_resource_t s_overlay_atlas, s_overlay_atlas_tex;
 static nt_resource_t s_background_atlas, s_background_atlas_tex;
 static nt_material_t s_overlay_material, s_background_material, s_mask_glow_material, s_hud_fade_material;
 static uint32_t s_white_region = NT_ATLAS_INVALID_REGION;
+static uint32_t s_tutorial_finger_region = NT_ATLAS_INVALID_REGION;
 static uint32_t s_background_region = NT_ATLAS_INVALID_REGION;
 static uint32_t s_guard_region = NT_ATLAS_INVALID_REGION;
 
@@ -67,6 +68,16 @@ static bool overlay_ready(void) {
         s_white_region = nt_atlas_find_region(s_overlay_atlas, ASSET_ATLAS_REGION_UI__WHITE.value);
     }
     return s_white_region != NT_ATLAS_INVALID_REGION && material_ready(s_overlay_material);
+}
+
+static bool tutorial_finger_ready(void) {
+    if (!nt_resource_is_ready(s_overlay_atlas) || !material_ready(s_overlay_material)) {
+        return false;
+    }
+    if (s_tutorial_finger_region == NT_ATLAS_INVALID_REGION) {
+        s_tutorial_finger_region = nt_atlas_find_region(s_overlay_atlas, ASSET_ATLAS_REGION_UI_TUTORIAL_FINGER.value);
+    }
+    return s_tutorial_finger_region != NT_ATLAS_INVALID_REGION;
 }
 
 static bool background_ready(void) {
@@ -427,19 +438,39 @@ static void draw_scene_object_sprites(const World *w) {
 }
 
 static void draw_tutorial_finger_for_object(const World *w, const scene_interaction_object_t *object) {
+    nt_atlas_region_handles_t handles;
+    nt_atlas_get_region_handles(s_overlay_atlas, s_tutorial_finger_region, &handles);
+    if (!handles.region || handles.region->source_h == 0U) {
+        return;
+    }
+
     const float pulse = 0.5F + 0.5F * sinf(w->time_seconds * 4.0F);
-    const float finger_x = (float)object->bounds.x + (float)object->bounds.w * 0.76F;
-    const float finger_y = (float)(object->bounds.y + object->bounds.h) - 7.0F + 10.0F * pulse;
-    draw_quad(finger_x - 11.0F, finger_y, 22.0F, 58.0F, rgba(0.95F, 0.86F, 0.62F, 0.92F));
-    draw_tri(finger_x - 33.0F, finger_y, finger_x + 33.0F, finger_y, finger_x, finger_y - 44.0F, rgba(0.95F, 0.86F, 0.62F, 0.92F));
+    const float source_h = (float)handles.region->source_h * handles.ipu;
+    const float target_h = 128.0F;
+    const float scale = (target_h / source_h) * (1.0F + 0.025F * pulse);
+    const float tip_x = object->anchor_x + 16.0F + 4.0F * pulse;
+    const float tip_y = (float)object->bounds.y + (float)object->bounds.h * 0.64F + 4.0F * pulse;
+    const uint32_t color = rgba(1.0F, 0.96F, 0.86F, 0.88F + 0.08F * pulse);
+
+    float m[16];
+    glm_mat4_identity((vec4 *)m);
+    m[0] = scale;
+    m[5] = scale;
+    m[12] = tip_x;
+    m[13] = tip_y;
+
+    nt_sprite_renderer_emit_region(s_overlay_atlas, s_tutorial_finger_region, m, 0.16F, 0.92F, color, 0U);
 }
 
 static void draw_tutorial_fingers(const World *w) {
+    if (!tutorial_finger_ready()) {
+        return;
+    }
+
     int count = 0;
     const scene_interaction_object_t *objects = scene_interactions_all(&count);
     for (int i = 0; i < count; ++i) {
-        const uint32_t flags = scene_interactions_visual_flags(w, objects[i].id);
-        if ((flags & SCENE_INTERACTION_OBJECTIVE) != 0U) {
+        if (scene_interactions_should_show_tutorial_finger(w, objects[i].id)) {
             draw_tutorial_finger_for_object(w, &objects[i]);
         }
     }

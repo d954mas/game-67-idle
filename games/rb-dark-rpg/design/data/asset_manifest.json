@@ -216,6 +216,13 @@
       "notes": "Padded jacket inventory icon."
     },
     {
+      "id": "asset_icon_leather_greaves",
+      "kind": "item_icon",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Leather greaves inventory icon."
+    },
+    {
       "id": "asset_icon_iron_sword",
       "kind": "item_icon",
       "status": "needed",

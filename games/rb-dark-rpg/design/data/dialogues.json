@@ -8,28 +8,154 @@
       "title": "Страж: допуск за ворота",
       "participants": ["gate_guard", "player_seeker"],
       "entry_node_id": "start",
+      "quest_preview": {
+        "goal": "Надень меч, броню и поножи, убери падальщика у ворот и вернись к стражу.",
+        "immediate_rewards": [
+          {
+            "type": "item",
+            "item_id": "old_sword",
+            "count": 1
+          },
+          {
+            "type": "item",
+            "item_id": "padded_jacket",
+            "count": 1
+          },
+          {
+            "type": "item",
+            "item_id": "leather_greaves",
+            "count": 1
+          }
+        ],
+        "completion_rewards": [
+          {
+            "type": "item",
+            "item_id": "seeker_token",
+            "count": 1
+          },
+          {
+            "type": "grant_xp",
+            "amount": 10
+          },
+          {
+            "type": "unlock_screen",
+            "screen_id": "ash_border_map",
+            "location_id": "old_mill",
+            "quest_id": "q002_bread_for_post"
+          }
+        ]
+      },
       "nodes": [
         {
           "id": "start",
           "speaker_id": "gate_guard",
-          "text": "За ворота без жетона и оружия больше не выпускаю. Хочешь контракт - докажи, что вернешься живым.",
+          "text": "За ворота без жетона и железа не выпускаю. Хочешь выйти - пройдешь проверку.",
+          "choices": [
+            {
+              "id": "ask_what_happened",
+              "text": "Что случилось за воротами?",
+              "next_node_id": "outside_lore"
+            },
+            {
+              "id": "ask_what_needed",
+              "text": "Что за проверка?",
+              "next_node_id": "explain_check"
+            },
+            {
+              "id": "accept",
+              "text": "Беру снаряжение",
+              "effects": [
+                {
+                  "type": "grant_item",
+                  "item_id": "old_sword",
+                  "count": 1
+                },
+                {
+                  "type": "grant_item",
+                  "item_id": "padded_jacket",
+                  "count": 1
+                },
+                {
+                  "type": "grant_item",
+                  "item_id": "leather_greaves",
+                  "count": 1
+                },
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q001_gate_pass",
+                  "step_id": "talk_gate_guard"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "outside_lore",
+          "speaker_id": "gate_guard",
+          "text": "После ухода Дракона дороги стали чужими. На трактах падальщики и люди с черным знаком. Совет платит тем, кто возвращается с новостями.",
           "choices": [
             {
               "id": "ask_what_needed",
-              "text": "Что нужно сделать?",
+              "text": "Что за проверка?",
               "next_node_id": "explain_check"
+            },
+            {
+              "id": "accept",
+              "text": "Беру снаряжение",
+              "effects": [
+                {
+                  "type": "grant_item",
+                  "item_id": "old_sword",
+                  "count": 1
+                },
+                {
+                  "type": "grant_item",
+                  "item_id": "padded_jacket",
+                  "count": 1
+                },
+                {
+                  "type": "grant_item",
+                  "item_id": "leather_greaves",
+                  "count": 1
+                },
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q001_gate_pass",
+                  "step_id": "talk_gate_guard"
+                }
+              ]
             }
           ]
         },
         {
           "id": "explain_check",
           "speaker_id": "gate_guard",
-          "text": "Кузнец выдаст старый меч и куртку. Надень их, убери падальщика у ворот, потом вернешься ко мне.",
+          "text": "Я выдам старый меч, стеганую куртку и поножи прямо сейчас. Надень комплект, убери падальщика у ворот, потом вернешься ко мне за жетоном искателя.",
           "choices": [
             {
+              "id": "ask_what_happened",
+              "text": "Почему всё так плохо?",
+              "next_node_id": "outside_lore"
+            },
+            {
               "id": "accept",
-              "text": "Понял.",
+              "text": "Беру снаряжение",
               "effects": [
+                {
+                  "type": "grant_item",
+                  "item_id": "old_sword",
+                  "count": 1
+                },
+                {
+                  "type": "grant_item",
+                  "item_id": "padded_jacket",
+                  "count": 1
+                },
+                {
+                  "type": "grant_item",
+                  "item_id": "leather_greaves",
+                  "count": 1
+                },
                 {
                   "type": "advance_quest",
                   "quest_id": "q001_gate_pass",
@@ -50,18 +176,11 @@
         {
           "id": "start",
           "speaker_id": "blacksmith",
-          "text": "Страж прислал? Значит, бери меч и куртку. Не новые, но лучше, чем голые руки.",
+          "text": "Страж уже выдал тебе дорожный комплект. Когда откроют торговлю, принесу железо получше.",
           "choices": [
             {
-              "id": "take_gear",
-              "text": "Взять снаряжение.",
-              "effects": [
-                {
-                  "type": "advance_quest",
-                  "quest_id": "q001_gate_pass",
-                  "step_id": "receive_starter_gear"
-                }
-              ]
+              "id": "close",
+              "text": "Понятно."
             }
           ]
         }

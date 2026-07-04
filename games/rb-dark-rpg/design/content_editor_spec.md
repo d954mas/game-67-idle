@@ -115,6 +115,10 @@ Quest editor must make this easy:
 9. Preview journal text and blocked reasons.
 10. Validate broken refs.
 
+The quest detail panel should first show a visual step map: one card per step,
+ordered top to bottom, with objective, location, target, linked dialogue,
+blocked reasons, and completion rewards/effects. Raw JSON remains below the map.
+
 The editor should not ask the lead to manually type ids when a registry picker
 can be used.
 
@@ -127,6 +131,11 @@ Dialogue editor:
 - choices can have requirements;
 - choices can advance quest steps or grant items;
 - graph/tree preview should show unreachable nodes.
+
+The dialogue detail panel should show a graph-card view before raw JSON: speaker,
+line text, choices, next node ids, and quest-advance effects. Links from dialogue
+effects should open the affected quest, and links from quest steps should open
+the affected dialogue.
 
 For v1, linear dialogues are enough. Branching choices are supported by data
 shape but should be used sparingly.

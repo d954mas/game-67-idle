@@ -111,25 +111,8 @@
           "dialogue_id": "dlg_gate_guard_intro",
           "ui_hint": "Страж стоит у закрытых ворот Последнего Поста.",
           "on_complete": {
-            "set_flags": ["gate_guard_intro_seen"],
-            "unlock_markers": ["blacksmith"]
-          }
-        },
-        {
-          "id": "receive_starter_gear",
-          "title": "Забрать снаряжение у кузнеца",
-          "description": "Кузнец выдаст старый меч и стеганую куртку тем, кого страж отправил на проверку.",
-          "location_id": "hub_last_post",
-          "objective": {
-            "type": "talk_to_npc",
-            "target_id": "blacksmith",
-            "count": 1
-          },
-          "dialogue_id": "dlg_blacksmith_starter_gear",
-          "ui_hint": "Кузнец отмечен в Последнем Посту после разговора со стражем.",
-          "on_complete": {
-            "grant_items": ["old_sword", "padded_jacket"],
-            "set_flags": ["starter_gear_received"],
+            "grant_items": ["old_sword", "padded_jacket", "leather_greaves"],
+            "set_flags": ["gate_guard_intro_seen", "starter_gear_received"],
             "unlock_screens": ["equipment"]
           }
         },
@@ -162,7 +145,23 @@
           },
           "ui_hint": "Поставь Стеганую куртку в слот брони.",
           "on_complete": {
-            "set_flags": ["padded_jacket_equipped"],
+            "set_flags": ["padded_jacket_equipped"]
+          }
+        },
+        {
+          "id": "equip_leather_greaves",
+          "title": "Надеть кожаные поножи",
+          "description": "Полный стартовый комплект закрывает базовую защиту перед первой дракой.",
+          "location_id": "equipment",
+          "objective": {
+            "type": "equip_item",
+            "item_id": "leather_greaves",
+            "slot": "legs",
+            "count": 1
+          },
+          "ui_hint": "Поставь Кожаные поножи в слот ног.",
+          "on_complete": {
+            "set_flags": ["leather_greaves_equipped"],
             "unlock_encounters": ["gate_scavenger"]
           }
         },
@@ -191,6 +190,13 @@
                 "not_equipped": "padded_jacket"
               },
               "text": "Нужна броня."
+            },
+            {
+              "id": "missing_legs",
+              "condition": {
+                "not_equipped": "leather_greaves"
+              },
+              "text": "Нужны поножи."
             }
           ],
           "on_complete": {
@@ -222,7 +228,7 @@
         }
       ],
       "completion_rewards": {
-        "xp": 0,
+        "xp": 10,
         "gold": 0,
         "items": ["seeker_token"],
         "flags": ["seeker_token_owned", "map_gate_unlocked", "old_mill_unlocked"],

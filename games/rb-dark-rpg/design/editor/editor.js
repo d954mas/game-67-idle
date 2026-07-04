@@ -532,6 +532,12 @@ function createEntityRow(config, entity) {
   if (config.id === "characters") {
     return createCharacterCard(config, entity);
   }
+  if (config.id === "quests") {
+    return createQuestListCard(config, entity);
+  }
+  if (config.id === "dialogues") {
+    return createDialogueListCard(config, entity);
+  }
 
   const id = entity.id || "";
   const preview = getEntityPreview(entity, config);
@@ -543,6 +549,56 @@ function createEntityRow(config, entity) {
     <span class="entity-text">
       <span class="entity-title">${escapeHtml(getEntityTitle(entity))}</span>
       <span class="entity-subtitle">${escapeHtml(getEntitySubtitle(config, entity))}</span>
+    </span>
+  `;
+  button.addEventListener("click", () => {
+    state.selectedIds.set(config.id, id);
+    state.rawDraft = JSON.stringify(entity, null, 2);
+    renderAll();
+  });
+  return button;
+}
+
+function createQuestListCard(config, entity) {
+  const id = entity.id || "";
+  const steps = entity.steps || [];
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `quest-list-card ${id === getSelectedId(config) ? "active" : ""}`;
+  button.innerHTML = `
+    <span class="content-card-head">
+      <strong>${escapeHtml(getEntityTitle(entity))}</strong>
+      <em>${escapeHtml(entity.type || "quest")}</em>
+    </span>
+    <span class="content-card-description">${escapeHtml(entity.journal?.short_goal || entity.implementation_note || entity.id)}</span>
+    <span class="content-card-footer">
+      <span>${steps.length} steps</span>
+      <span>${escapeHtml(entity.priority || entity.start_location || "draft")}</span>
+    </span>
+  `;
+  button.addEventListener("click", () => {
+    state.selectedIds.set(config.id, id);
+    state.rawDraft = JSON.stringify(entity, null, 2);
+    renderAll();
+  });
+  return button;
+}
+
+function createDialogueListCard(config, entity) {
+  const id = entity.id || "";
+  const nodes = entity.nodes || [];
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = `dialogue-list-card ${id === getSelectedId(config) ? "active" : ""}`;
+  button.innerHTML = `
+    <span class="content-card-head">
+      <strong>${escapeHtml(getEntityTitle(entity))}</strong>
+      <em>${nodes.length} nodes</em>
+    </span>
+    <span class="content-card-description">${escapeHtml(getDialogueParticipantsLabel(entity))}</span>
+    <span class="content-card-footer">
+      <span>entry: ${escapeHtml(entity.entry_node_id || "missing")}</span>
+      <span>${escapeHtml(id)}</span>
     </span>
   `;
   button.addEventListener("click", () => {
@@ -619,6 +675,7 @@ function renderEditor() {
       <button type="button" id="downloadFileButton">Download file</button>
     </div>
     ${renderVisualPreview(entity, config)}
+    ${renderEntityMapPreview(entity, config)}
     <div class="field-sections" id="fieldSections"></div>
     <div class="raw-editor">
       <div class="raw-editor-head">
@@ -656,6 +713,283 @@ function renderEditor() {
   ELEMENTS.editorView.querySelector("#applyJsonButton").addEventListener("click", () => applyRawJson(config));
   ELEMENTS.editorView.querySelector("#formatJsonButton").addEventListener("click", () => formatRawJson());
   ELEMENTS.editorView.querySelector("#downloadFileButton").addEventListener("click", () => downloadFile(config.file));
+  wireEditorLinks();
+}
+
+function renderEntityMapPreview(entity, config) {
+  if (config.id === "quests") {
+    return renderQuestMap(entity);
+  }
+  if (config.id === "dialogues") {
+    return renderDialogueGraph(entity);
+  }
+  return "";
+}
+
+function wireEditorLinks() {
+  for (const button of ELEMENTS.editorView.querySelectorAll("[data-open-view]")) {
+    button.addEventListener("click", () => {
+      const view = button.dataset.openView;
+      const id = button.dataset.openId;
+      const config = getConfig(view);
+      if (!config) {
+        return;
+      }
+      state.activeView = view;
+      if (id) {
+        state.selectedIds.set(view, id);
+      }
+      state.search = "";
+      ELEMENTS.searchInput.value = "";
+      ensureSelection();
+      renderAll();
+    });
+  }
+}
+
+function renderQuestMap(quest) {
+  const steps = quest.steps || [];
+  return `
+    <section class="quest-map-panel" aria-label="Quest map">
+      <div class="map-panel-head">
+        <div>
+          <h3>Карта квеста</h3>
+          <p>${escapeHtml(quest.journal?.short_goal || quest.implementation_note || "Этапы пока не описаны.")}</p>
+        </div>
+        <div class="map-panel-badges">
+          ${renderBadge(quest.type || "quest")}
+          ${renderBadge(quest.priority || "priority missing")}
+          ${renderBadge(`giver: ${getRegistryLabel("characters", quest.giver?.id) || quest.giver?.display_name || "none"}`)}
+          ${renderBadge(`start: ${getRegistryLabel("locations", quest.start_location) || quest.start_location || "none"}`)}
+        </div>
+      </div>
+      ${steps.length > 0 ? `
+        <div class="quest-flow">
+          ${steps.map((step, index) => renderQuestStepCard(quest, step, index, steps.length)).join("")}
+        </div>
+      ` : `
+        <div class="map-empty">
+          <strong>Нет этапов</strong>
+          <span>Добавь steps в JSON ниже, и здесь появится карта прохождения.</span>
+        </div>
+      `}
+    </section>
+  `;
+}
+
+function renderQuestStepCard(quest, step, index, total) {
+  const objective = step.objective || {};
+  const dialogue = step.dialogue_id ? getRegistryEntity("dialogues", step.dialogue_id) : null;
+  return `
+    <article class="quest-step-card">
+      <div class="quest-step-index">${index + 1}</div>
+      <div class="quest-step-main">
+        <header>
+          <strong>${escapeHtml(step.title || step.id || `Step ${index + 1}`)}</strong>
+          <span>${escapeHtml(step.id || "")}</span>
+        </header>
+        <p>${escapeHtml(step.description || step.ui_hint || "Описание этапа не заполнено.")}</p>
+        <div class="step-chip-row">
+          ${renderBadge(objective.type || "objective missing")}
+          ${step.location_id ? renderBadge(getRegistryLabel("locations", step.location_id) || step.location_id) : ""}
+          ${renderObjectiveTargetBadge(objective)}
+        </div>
+        ${step.dialogue_id ? `
+          <button type="button" class="graph-link-button" data-open-view="dialogues" data-open-id="${escapeHtml(step.dialogue_id)}">
+            Dialogue graph: ${escapeHtml(dialogue?.title || step.dialogue_id)}
+          </button>
+        ` : ""}
+        ${renderStepOutcome(step)}
+      </div>
+      ${index < total - 1 ? `<div class="quest-step-connector" aria-hidden="true"></div>` : ""}
+    </article>
+  `;
+}
+
+function renderObjectiveTargetBadge(objective) {
+  const targetId = objective.target_id || objective.item_id || objective.encounter_id || objective.object_id || "";
+  if (!targetId) {
+    return "";
+  }
+  const objectiveTargetRegistries = {
+    talk_to_npc: "characters",
+    return_to_npc: "characters",
+    visit_location: "locations"
+  };
+  const registry = objective.target_id
+    ? objectiveTargetRegistries[objective.type] || "characters"
+    : objective.item_id
+      ? "items"
+      : objective.encounter_id
+        ? "encounters"
+        : "";
+  const label = registry ? getRegistryLabel(registry, targetId) || targetId : targetId;
+  return renderBadge(`target: ${label}`);
+}
+
+function renderStepOutcome(step) {
+  const lines = summarizeStepOutcome(step.on_complete);
+  if (lines.length === 0 && (!step.blocked_reasons || step.blocked_reasons.length === 0)) {
+    return "";
+  }
+  return `
+    <div class="step-outcome">
+      ${lines.map((line) => `<span>${escapeHtml(line)}</span>`).join("")}
+      ${(step.blocked_reasons || []).map((reason) => `<span class="blocked">${escapeHtml(reason.text || reason.id)}</span>`).join("")}
+    </div>
+  `;
+}
+
+function summarizeStepOutcome(outcome) {
+  if (!outcome) {
+    return [];
+  }
+  const lines = [];
+  if (outcome.grant_items?.length) {
+    lines.push(`items: ${outcome.grant_items.map((id) => getRegistryLabel("items", id) || id).join(", ")}`);
+  }
+  if (outcome.grant_xp) {
+    lines.push(`xp: ${outcome.grant_xp}`);
+  }
+  if (outcome.grant_gold) {
+    lines.push(`gold: ${outcome.grant_gold}`);
+  }
+  if (outcome.set_flags?.length) {
+    lines.push(`flags: ${outcome.set_flags.join(", ")}`);
+  }
+  if (outcome.unlock_screens?.length) {
+    lines.push(`screens: ${outcome.unlock_screens.join(", ")}`);
+  }
+  if (outcome.unlock_locations?.length) {
+    lines.push(`locations: ${outcome.unlock_locations.map((id) => getRegistryLabel("locations", id) || id).join(", ")}`);
+  }
+  if (outcome.unlock_markers?.length) {
+    lines.push(`markers: ${outcome.unlock_markers.join(", ")}`);
+  }
+  if (outcome.unlock_encounters?.length) {
+    lines.push(`encounters: ${outcome.unlock_encounters.map((id) => getRegistryLabel("encounters", id) || id).join(", ")}`);
+  }
+  if (outcome.unlock_quests?.length) {
+    lines.push(`quests: ${outcome.unlock_quests.map((id) => getRegistryLabel("quests", id) || id).join(", ")}`);
+  }
+  if (outcome.complete_quest) {
+    lines.push("complete quest");
+  }
+  return lines;
+}
+
+function renderDialogueGraph(dialogue) {
+  const nodes = getDialogueGraphNodes(dialogue);
+  return `
+    <section class="dialogue-graph-panel" aria-label="Dialogue graph">
+      <div class="map-panel-head">
+        <div>
+          <h3>Граф диалога</h3>
+          <p>${escapeHtml(getDialogueParticipantsLabel(dialogue))}</p>
+        </div>
+        <div class="map-panel-badges">
+          ${renderBadge(`entry: ${dialogue.entry_node_id || "missing"}`)}
+          ${renderBadge(`${(dialogue.nodes || []).length} nodes`)}
+          ${renderBadge(`${countDialogueChoices(dialogue)} choices`)}
+        </div>
+      </div>
+      ${nodes.length > 0 ? `
+        <div class="dialogue-graph">
+          ${nodes.map(({ node, depth, reachable }, index) => renderDialogueNode(dialogue, node, depth, index, reachable)).join("")}
+        </div>
+      ` : `
+        <div class="map-empty">
+          <strong>Нет узлов</strong>
+          <span>Добавь nodes в JSON ниже, и здесь появится граф диалога.</span>
+        </div>
+      `}
+    </section>
+  `;
+}
+
+function renderDialogueNode(dialogue, node, depth, index, reachable) {
+  const speaker = getRegistryEntity("characters", node.speaker_id);
+  const speakerPreview = speaker ? getEntityPreview(speaker, getConfig("characters")) : null;
+  const choices = node.choices || [];
+  return `
+    <article class="dialogue-node-card ${reachable ? "" : "unreachable"}" style="--node-depth: ${Math.min(depth, 4)}">
+      <header>
+        <span class="dialogue-node-avatar">
+          ${speakerPreview ? `<img src="${escapeHtml(speakerPreview.url)}" alt="${escapeHtml(getEntityTitle(speaker))}" loading="lazy" />` : `<span>${escapeHtml(getInitials(node.speaker_id || "?"))}</span>`}
+        </span>
+        <span>
+          <strong>${escapeHtml(node.id || `node_${index}`)}</strong>
+          <em>${escapeHtml(getRegistryLabel("characters", node.speaker_id) || node.speaker_id || "speaker missing")}</em>
+        </span>
+        ${dialogue.entry_node_id === node.id ? `<b>ENTRY</b>` : ""}
+      </header>
+      <p>${escapeHtml(node.text || "Текст реплики не заполнен.")}</p>
+      <div class="dialogue-choice-list">
+        ${choices.length > 0 ? choices.map((choice) => renderDialogueChoice(choice)).join("") : `<span class="dialogue-terminal">End node</span>`}
+      </div>
+    </article>
+  `;
+}
+
+function renderDialogueChoice(choice) {
+  const effects = choice.effects || [];
+  return `
+    <div class="dialogue-choice">
+      <span class="choice-text">${escapeHtml(choice.text || choice.id || "choice")}</span>
+      ${choice.next_node_id ? `<span class="choice-target">→ ${escapeHtml(choice.next_node_id)}</span>` : `<span class="choice-target muted">no next node</span>`}
+      ${effects.length > 0 ? `<span class="choice-effects">${effects.map((effect) => renderDialogueEffect(effect)).join("")}</span>` : ""}
+    </div>
+  `;
+}
+
+function renderDialogueEffect(effect) {
+  if (effect.type === "advance_quest" && effect.quest_id) {
+    return `
+      <button type="button" class="effect-link" data-open-view="quests" data-open-id="${escapeHtml(effect.quest_id)}">
+        ${escapeHtml(effect.type)}: ${escapeHtml(effect.step_id || effect.quest_id)}
+      </button>
+    `;
+  }
+  return `<span class="effect-chip">${escapeHtml(effect.type || "effect")}</span>`;
+}
+
+function getDialogueGraphNodes(dialogue) {
+  const nodes = dialogue.nodes || [];
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const entryId = dialogue.entry_node_id || nodes[0]?.id;
+  const depths = new Map();
+  const queue = entryId && byId.has(entryId) ? [{ id: entryId, depth: 0 }] : [];
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (depths.has(current.id)) {
+      continue;
+    }
+    depths.set(current.id, current.depth);
+    const node = byId.get(current.id);
+    for (const choice of node?.choices || []) {
+      if (choice.next_node_id && byId.has(choice.next_node_id)) {
+        queue.push({ id: choice.next_node_id, depth: current.depth + 1 });
+      }
+    }
+  }
+
+  return nodes
+    .map((node, index) => ({
+      node,
+      index,
+      depth: depths.has(node.id) ? depths.get(node.id) : Math.max(1, depths.size),
+      reachable: depths.has(node.id)
+    }))
+    .sort((left, right) => left.depth - right.depth || left.index - right.index);
+}
+
+function countDialogueChoices(dialogue) {
+  return (dialogue.nodes || []).reduce((count, node) => count + (node.choices || []).length, 0);
+}
+
+function renderBadge(value) {
+  return `<span class="meta-badge">${escapeHtml(value)}</span>`;
 }
 
 function renderFieldSections(container, fields, entity) {
@@ -1322,6 +1656,28 @@ function getCollection(config) {
     return [];
   }
   return state.content.files[config.file][config.collection] || [];
+}
+
+function getRegistryEntity(registry, id) {
+  if (!id) {
+    return null;
+  }
+  return getCollection(getConfig(registry)).find((entity) => entity.id === id) || null;
+}
+
+function getRegistryLabel(registry, id) {
+  const entity = getRegistryEntity(registry, id);
+  return entity ? getEntityTitle(entity) : "";
+}
+
+function getDialogueParticipantsLabel(dialogue) {
+  const participants = dialogue?.participants || [];
+  if (participants.length === 0) {
+    return "No participants";
+  }
+  return participants
+    .map((id) => getRegistryLabel("characters", id) || id)
+    .join(" / ");
 }
 
 function getSelectedId(config) {

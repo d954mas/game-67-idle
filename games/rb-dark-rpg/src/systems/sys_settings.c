@@ -1,6 +1,9 @@
 #include "systems/sys_settings.h"
 
 #include "clay.h"
+#include "generated/game_assets.h"
+#include "nt_pack_format.h"
+#include "resource/nt_resource.h"
 #include "ui/nt_ui_button.h"
 #include "ui/nt_ui_label.h"
 #include "ui/nt_ui_panel.h"
@@ -9,7 +12,7 @@
 
 #include <stdio.h>
 
-// Walker batches RECTs/IMAGEs first, then TEXT, within each Clay zIndex — so a
+// Walker batches RECTs/IMAGEs first, then TEXT, within each Clay zIndex - so a
 // lower layer draws behind: panel bg (BG) < widget art (IMG) < labels (TEXT).
 #define LAYER_BG 0
 #define LAYER_IMG 1
@@ -26,6 +29,8 @@
 
 static bool s_open;
 static float s_master = 0.8F, s_music = 0.7F, s_sfx = 0.9F;
+static nt_resource_t s_settings_ui_atlas;
+static nt_atlas_region_ref_t s_settings_gear_region;
 
 void sys_settings_force_open(void) { s_open = true; }
 bool sys_settings_is_open(void) { return s_open; }
@@ -52,6 +57,39 @@ static float settings_panel_width(nt_ui_context_t *ctx) {
     return clampf(available, SETTINGS_MIN_W, SETTINGS_MAX_W);
 }
 
+static void ensure_settings_gear_region(void) {
+    if (s_settings_ui_atlas.id != 0U) {
+        return;
+    }
+
+    s_settings_ui_atlas = nt_resource_request(ASSET_ATLAS_UI, NT_ASSET_ATLAS);
+    s_settings_gear_region = nt_atlas_ref(s_settings_ui_atlas, ASSET_ATLAS_REGION_UI_TOP_HUD_SETTINGS_BUTTON.value);
+}
+
+static nt_ui_button_style_t settings_gear_button_style(void) {
+    nt_ui_button_style_t style = {0};
+    style.idle.bg = s_settings_gear_region;
+    style.idle.bg_tint = 0xFFFFFFFFU;
+    style.idle.scale = 1.0F;
+    style.idle.opacity = 1.0F;
+    style.hover.bg_tint = 0xFFFFFFFFU;
+    style.hover.scale = 1.05F;
+    style.hover.opacity = 1.0F;
+    style.pressed.bg_tint = 0xFFE3E3E3U;
+    style.pressed.scale = 0.96F;
+    style.pressed.opacity = 1.0F;
+    style.disabled.bg_tint = 0xFF808080U;
+    style.disabled.scale = 1.0F;
+    style.disabled.opacity = 0.55F;
+    style.transition_speed = 14.0F;
+    style.hit_padding_lrtb[0] = 6;
+    style.hit_padding_lrtb[1] = 6;
+    style.hit_padding_lrtb[2] = 6;
+    style.hit_padding_lrtb[3] = 6;
+    style.slice9_scale = 1.0F;
+    return style;
+}
+
 // Label + slider stacked; the slider mutates *value in place (engine owns the drag).
 static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, float *value, float slider_w) {
     char buf[48];
@@ -66,19 +104,21 @@ static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, f
 }
 
 void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
+    ensure_settings_gear_region();
+
     // Floating gear button: anchor to the visible root, independent from other
     // full-screen UI siblings and portrait logical-width expansion.
     CLAY({.id = CLAY_ID("settings_root"),
           .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
                        .attachPoints = {.element = CLAY_ATTACH_POINT_RIGHT_TOP, .parent = CLAY_ATTACH_POINT_RIGHT_TOP},
                        .offset = {-16.0F, 16.0F}},
-          .layout = {.sizing = {CLAY_SIZING_FIXED(132), CLAY_SIZING_FIXED(48)}}}) {
+          .layout = {.sizing = {CLAY_SIZING_FIXED(48), CLAY_SIZING_FIXED(48)}}}) {
         CLAY({.id = CLAY_ID("settings/gear"), .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}}}) {
             const uint32_t gear_id = nt_ui_id("settings/gear/button");
-            nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), gear_id, &g_theme.button,
+            nt_ui_button_style_t gear_style = settings_gear_button_style();
+            nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), gear_id, &gear_style,
                                &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
                                true, NULL);
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Опции", &g_theme.button_label);
             if (nt_ui_button_end(ctx)) {
                 s_open = !s_open;
             }

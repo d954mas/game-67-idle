@@ -23,6 +23,13 @@
 #define PANEL_BORDER 10
 #define BUTTON_BORDER 16
 #define BAR_BORDER 8
+#define TOP_HUD_BAR_BORDER_X 42
+#define TOP_HUD_BAR_BORDER_Y 20
+#define TOP_HUD_PLAQUE_BORDER_X 46
+#define TOP_HUD_PLAQUE_BORDER_Y 28
+#define TOP_HUD_RESOURCE_BORDER_L 86
+#define TOP_HUD_RESOURCE_BORDER_R 34
+#define TOP_HUD_RESOURCE_BORDER_Y 32
 
 // Russian UI text must be packed into the engine font; shape/pixel text is only
 // a debug fallback. Basic Cyrillic + Yo covers the first-screen tutorial copy.
@@ -139,6 +146,79 @@ int main(int argc, char *argv[]) {
     nt_atlas_sprite_opts_t white_opts = nt_atlas_sprite_opts_defaults();
     white_opts.name = "_white";
     nt_builder_atlas_add_raw(ctx, white_pixel, 1, 1, &white_opts);
+
+    nt_atlas_sprite_opts_t tutorial_finger_opts = nt_atlas_sprite_opts_defaults();
+    tutorial_finger_opts.name = "tutorial_finger";
+    tutorial_finger_opts.origin_x = 0.5F;
+    tutorial_finger_opts.origin_y = 0.0F;
+    tutorial_finger_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
+    tutorial_finger_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
+    nt_builder_atlas_add(ctx, "assets/ui/tutorial_finger_01.png", &tutorial_finger_opts);
+
+    nt_atlas_sprite_opts_t gate_guard_portrait_opts = nt_atlas_sprite_opts_defaults();
+    gate_guard_portrait_opts.name = "gate_guard_portrait";
+    gate_guard_portrait_opts.origin_x = 0.5F;
+    gate_guard_portrait_opts.origin_y = 0.5F;
+    gate_guard_portrait_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
+    gate_guard_portrait_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
+    nt_builder_atlas_add(ctx, "assets/ui/gate_guard_portrait.png", &gate_guard_portrait_opts);
+
+    nt_atlas_sprite_opts_t nav_opts = nt_atlas_sprite_opts_defaults();
+    nav_opts.origin_x = 0.5F;
+    nav_opts.origin_y = 0.5F;
+    nav_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
+    nav_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
+    nav_opts.name = "nav_v11_equipment";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_equipment.png", &nav_opts);
+    nav_opts.name = "nav_v11_journal";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_journal.png", &nav_opts);
+    nav_opts.name = "nav_v11_map";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_map.png", &nav_opts);
+    nav_opts.name = "nav_v11_place";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_place.png", &nav_opts);
+    nav_opts.name = "nav_v11_more";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_more.png", &nav_opts);
+
+    nt_atlas_sprite_opts_t top_hud_opts = nt_atlas_sprite_opts_defaults();
+    top_hud_opts.origin_x = 0.5F;
+    top_hud_opts.origin_y = 0.5F;
+    top_hud_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
+    top_hud_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
+
+    top_hud_opts.name = "top_hud_portrait_frame";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_portrait_frame.png", &top_hud_opts);
+
+    top_hud_opts.slice9_left = top_hud_opts.slice9_right = TOP_HUD_PLAQUE_BORDER_X;
+    top_hud_opts.slice9_top = top_hud_opts.slice9_bottom = TOP_HUD_PLAQUE_BORDER_Y;
+    top_hud_opts.name = "top_hud_status_plaque";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_status_plaque.png", &top_hud_opts);
+    top_hud_opts.name = "top_hud_location_plaque";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_location_plaque.png", &top_hud_opts);
+
+    top_hud_opts.slice9_left = top_hud_opts.slice9_right = TOP_HUD_BAR_BORDER_X;
+    top_hud_opts.slice9_top = top_hud_opts.slice9_bottom = TOP_HUD_BAR_BORDER_Y;
+    top_hud_opts.name = "top_hud_hp_frame";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_hp_frame.png", &top_hud_opts);
+    top_hud_opts.name = "top_hud_xp_frame";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_xp_frame.png", &top_hud_opts);
+
+    top_hud_opts.slice9_left = TOP_HUD_RESOURCE_BORDER_L;
+    top_hud_opts.slice9_right = TOP_HUD_RESOURCE_BORDER_R;
+    top_hud_opts.slice9_top = top_hud_opts.slice9_bottom = TOP_HUD_RESOURCE_BORDER_Y;
+    top_hud_opts.name = "top_hud_resource_coin_chip";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_resource_coin_chip.png", &top_hud_opts);
+    top_hud_opts.name = "top_hud_resource_supplies_chip";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_resource_supplies_chip.png", &top_hud_opts);
+
+    top_hud_opts.slice9_left = top_hud_opts.slice9_right = top_hud_opts.slice9_top = top_hud_opts.slice9_bottom = 0;
+    top_hud_opts.name = "top_hud_settings_button";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_settings_button.png", &top_hud_opts);
+    top_hud_opts.name = "top_hud_level_badge";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_level_badge.png", &top_hud_opts);
+    top_hud_opts.name = "top_hud_icon_coin";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_icon_coin.png", &top_hud_opts);
+    top_hud_opts.name = "top_hud_icon_supplies";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_icon_supplies.png", &top_hud_opts);
 
     nt_atlas_sprite_opts_t panel_opts = nt_atlas_sprite_opts_defaults();
     panel_opts.name = "panel";

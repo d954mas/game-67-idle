@@ -43,6 +43,7 @@ scene_object_id_t scene_interactions_hit_test(float master_x, float master_y);
 void scene_interactions_update_pointer_state(World *w, scene_object_id_t hit_object_id,
                                              bool pointer_pressed, bool pointer_down, bool pointer_released);
 bool scene_interactions_pointer_captures_pan(const World *w);
+bool scene_interactions_should_show_tutorial_finger(const World *w, scene_object_id_t id);
 uint32_t scene_interactions_visual_flags(const World *w, scene_object_id_t id);
 
 #endif /* RB_DARK_RPG_SCENE_INTERACTIONS_H */

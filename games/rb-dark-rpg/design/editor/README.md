@@ -38,6 +38,7 @@ Current scope:
 - browse/search characters, locations, items, shops, healing services,
   dialogues, quests, encounters, and assets;
 - show thumbnails and large previews for assets with `file_path`;
+- show quests as ordered step maps and dialogues as node graphs;
 - group entities by type/status/location/priority/archetype where available;
 - filter lists by the same high-signal fields;
 - edit common scalar fields in grouped sections instead of one flat form;

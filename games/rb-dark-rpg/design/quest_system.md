@@ -143,14 +143,14 @@ Save state should be compact and id-driven:
       "q001_gate_pass": {
         "status": "active",
         "current_step_id": "equip_old_sword",
-        "completed_step_ids": ["talk_gate_guard", "receive_starter_gear"],
+        "completed_step_ids": ["talk_gate_guard"],
         "objective_progress": {
           "equip_old_sword": 0
         },
-        "flags": ["gate_guard_intro_seen"],
+        "flags": ["gate_guard_intro_seen", "starter_gear_received"],
         "started_at_step": 1,
         "completed_at_step": null,
-        "last_update_reason": "item_received"
+        "last_update_reason": "npc_talked"
       }
     },
     "global_flags": {
@@ -170,19 +170,34 @@ Purpose:
 
 - teach the player that the hub is interactive;
 - establish that leaving town requires permission and gear;
-- give starter sword and armour;
+- give starter sword, armour, and greaves directly inside the first dialogue;
 - prove first autobattle;
 - unlock the map and the first contract.
 
 Flow:
 
 1. Talk to the gate guard at `Последний Пост`.
-2. Visit the blacksmith and receive starter gear.
+2. Receive `Старый меч`, `Стеганая куртка`, and `Кожаные поножи` from the guard.
 3. Equip `Старый меч`.
 4. Equip `Стеганая куртка`.
-5. Defeat `Падальщик у ворот`.
-6. Return to the guard and receive `Жетон искателя`.
-7. Unlock map access and `Хлеб для Поста`.
+5. Equip `Кожаные поножи`.
+6. Defeat `Падальщик у ворот`.
+7. Return to the guard and receive `Жетон искателя`.
+8. Unlock map access and `Хлеб для Поста`.
+
+The first dialogue is mandatory. It may offer lore/clarification choices, but it
+does not offer a refusal or "return later" branch.
+
+The first dialogue reward block is shown in this order:
+
+1. dialogue text;
+2. separator;
+3. `Задание`: one short objective line;
+4. separator;
+5. `Текущая награда`: reward cells received immediately;
+6. separator;
+7. `Награда за квест`: reward cells for quest completion;
+8. mandatory action choices.
 
 The quest should take under two minutes on a clean first playthrough.
 

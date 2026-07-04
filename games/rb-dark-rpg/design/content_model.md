@@ -60,7 +60,7 @@ Use stable ids everywhere.
 characters: gate_guard, blacksmith
 locations: hub_last_post, old_mill
 objects: hub_last_post.gate, hub_last_post.contract_board
-items: old_sword, seeker_token
+items: old_sword, padded_jacket, leather_greaves, seeker_token
 dialogues: dlg_gate_guard_intro
 quests: q001_gate_pass
 encounters: gate_scavenger
@@ -131,6 +131,42 @@ Examples:
 ```
 
 Runtime should not need quest-specific code for these common outcomes.
+
+## Dialogue Quest Preview
+
+Dialogue nodes that start or explain a quest may include a compact
+`quest_preview` block. It is UI metadata derived from the same ids used by
+effects and quest rewards:
+
+```json
+{
+  "goal": "Надень меч, броню и поножи, убери падальщика у ворот и вернись к стражу.",
+  "immediate_rewards": [
+    { "type": "item", "item_id": "old_sword", "count": 1 }
+  ],
+  "completion_rewards": [
+    { "type": "item", "item_id": "seeker_token", "count": 1 },
+    { "type": "grant_xp", "amount": 10 },
+    { "type": "unlock_screen", "screen_id": "ash_border_map" }
+  ]
+}
+```
+
+The runtime dialogue panel displays quest-taking previews in this order:
+
+1. dialogue text;
+2. separator;
+3. `Задание` - short objective text that can be understood without rereading
+   the dialogue;
+4. separator;
+5. `Текущая награда` - reward cells granted immediately by this dialogue;
+6. separator;
+7. `Награда за квест` - reward cells granted on quest completion.
+
+Reward previews are inventory-like cells: icon/image first, short tooltip on
+hover, and a tap/click detail window for touch screens. The preview must not
+replace real `effects` or quest `completion_rewards`; it only makes the upcoming
+outcomes readable before the player accepts the mandatory first quest.
 
 ## Runtime Loading
 

@@ -69,6 +69,23 @@ if(NOT EMSCRIPTEN)
             assets/shaders/mesh_tex.vert assets/shaders/mesh_tex.frag
             assets/shaders/sprite.vert assets/shaders/sprite.frag assets/shaders/sprite_mask_glow.frag
             assets/ui/panel.png assets/ui/button.png
+            assets/ui/tutorial_finger_01.png
+            assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_equipment.png
+            assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_journal.png
+            assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_map.png
+            assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_place.png
+            assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_more.png
+            assets/ui/generated/top_hud_tokens_02/slices/top_hud_portrait_frame.png
+            assets/ui/generated/top_hud_tokens_02/slices/top_hud_status_plaque.png
+            assets/ui/generated/top_hud_tokens_02/slices/top_hud_hp_frame.png
+            assets/ui/generated/top_hud_tokens_02/slices/top_hud_xp_frame.png
+            assets/ui/generated/top_hud_tokens_02/slices/top_hud_resource_coin_chip.png
+            assets/ui/generated/top_hud_tokens_02/slices/top_hud_resource_supplies_chip.png
+            assets/ui/generated/top_hud_tokens_02/slices/top_hud_location_plaque.png
+            assets/ui/generated/top_hud_tokens_02/slices/top_hud_settings_button.png
+            assets/ui/generated/top_hud_tokens_02/slices/top_hud_level_badge.png
+            assets/ui/generated/top_hud_tokens_02/slices/top_hud_icon_coin.png
+            assets/ui/generated/top_hud_tokens_02/slices/top_hud_icon_supplies.png
             assets/ui/slider_track.png assets/ui/slider_fill.png assets/ui/slider_thumb.png
             assets/scenes/last_post_background_candidate05_1280x700.png
             assets/characters/last_post_guard_05.png
@@ -92,8 +109,12 @@ add_executable(${GAME_TARGET}
     src/main.c
     src/ui/hud.c
     src/ui/first_screen_hud.c
+    src/ui/bottom_nav.c
+    src/ui/tutorial_callout.c
+    src/ui/dialogue_panel.c
     src/ui/ui_runtime.c
     src/ui/theme.c
+    src/game_dialogue.c
     src/scene/scene_layout.c
     src/scene/scene_interactions.c
     src/render/render_2d_runtime.c
@@ -139,7 +160,6 @@ if(FEATURE_GAME_STATE)
     target_sources(${GAME_TARGET} PRIVATE
         "${GAME_STATE_GENERATED_SOURCE}"
         src/game_storage.c
-        state/migrations/v0_to_v1.c
     )
     target_link_libraries(${GAME_TARGET} PRIVATE cjson)
     target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=1)
@@ -209,6 +229,7 @@ add_custom_target(scene_layout_test
 
 add_executable(test_scene_interactions
     src/scene/scene_interactions.c
+    src/game_dialogue.c
     tests/test_scene_interactions.c
 )
 target_include_directories(test_scene_interactions PRIVATE src)
@@ -225,6 +246,22 @@ add_custom_target(scene_interactions_test
 
 add_custom_target(first_scene_tests
     DEPENDS scene_layout_test scene_interactions_test
+)
+
+add_executable(test_game_dialogue
+    src/game_dialogue.c
+    tests/test_game_dialogue.c
+)
+target_include_directories(test_game_dialogue PRIVATE src)
+target_include_directories(test_game_dialogue PRIVATE "${ENGINE_DIR}/engine")
+nt_set_warning_flags(test_game_dialogue)
+set_target_properties(test_game_dialogue PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
+add_custom_target(game_dialogue_test
+    COMMAND $<TARGET_FILE:test_game_dialogue>
+    DEPENDS test_game_dialogue
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    COMMENT "Running dialogue state tests"
+    VERBATIM
 )
 
 if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)

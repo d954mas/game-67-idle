@@ -1,5 +1,7 @@
 #include "scene/scene_interactions.h"
 
+#include "game_dialogue.h"
+
 #include <stddef.h>
 
 static const scene_interaction_object_t SCENE_OBJECTS[] = {
@@ -25,7 +27,12 @@ void scene_interactions_init_first_scene(World *w) {
     }
     w->first_scene.hovered_object_id = SCENE_OBJECT_ID_NONE;
     w->first_scene.pressed_object_id = SCENE_OBJECT_ID_NONE;
+    w->first_scene.activated_object_id = SCENE_OBJECT_ID_NONE;
+    if (!w->first_scene.current_objective_text) {
+        w->first_scene.current_objective_text = "Поговори со стражником";
+    }
     w->first_scene.objective_object_id = SCENE_OBJECT_ID_GUARD;
+    w->first_scene.tutorial_guard_talk_completed = false;
     w->first_scene.interactions_initialized = true;
 }
 
@@ -64,6 +71,7 @@ void scene_interactions_update_pointer_state(World *w, scene_object_id_t hit_obj
         return;
     }
     scene_interactions_init_first_scene(w);
+    w->first_scene.activated_object_id = SCENE_OBJECT_ID_NONE;
 
     if (pointer_pressed) {
         w->first_scene.pressed_object_id = hit_object_id;
@@ -78,8 +86,15 @@ void scene_interactions_update_pointer_state(World *w, scene_object_id_t hit_obj
     }
 
     if (pointer_released) {
+        const scene_object_id_t pressed_object_id = w->first_scene.pressed_object_id;
         w->first_scene.pressed_object_id = SCENE_OBJECT_ID_NONE;
         w->first_scene.hovered_object_id = hit_object_id;
+        if (pressed_object_id != SCENE_OBJECT_ID_NONE && pressed_object_id == hit_object_id) {
+            w->first_scene.activated_object_id = hit_object_id;
+            if (hit_object_id == SCENE_OBJECT_ID_GUARD && w->first_scene.objective_object_id == SCENE_OBJECT_ID_GUARD) {
+                (void)game_dialogue_open(w, "dlg_gate_guard_intro");
+            }
+        }
         return;
     }
 
@@ -89,6 +104,11 @@ void scene_interactions_update_pointer_state(World *w, scene_object_id_t hit_obj
 
 bool scene_interactions_pointer_captures_pan(const World *w) {
     return w && w->first_scene.pressed_object_id != SCENE_OBJECT_ID_NONE;
+}
+
+bool scene_interactions_should_show_tutorial_finger(const World *w, scene_object_id_t id) {
+    return w && id != SCENE_OBJECT_ID_NONE && w->first_scene.objective_object_id == id &&
+           !w->first_scene.tutorial_guard_talk_completed && !w->dialogue.open;
 }
 
 uint32_t scene_interactions_visual_flags(const World *w, scene_object_id_t id) {

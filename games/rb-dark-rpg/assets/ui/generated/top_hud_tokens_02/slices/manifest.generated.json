@@ -1,0 +1,123 @@
+﻿[
+    {
+        "name":  "top_hud_portrait_frame",
+        "file":  "slices/top_hud_portrait_frame.png",
+        "source_rect":  {
+                            "y":  102,
+                            "w":  363,
+                            "h":  377,
+                            "x":  54
+                        },
+        "sha256":  "2F5A22B17A029CB1EE4B820DA04D673BC495A88DDB7A8A0090B9ACFBFB02E829"
+    },
+    {
+        "name":  "top_hud_status_plaque",
+        "file":  "slices/top_hud_status_plaque.png",
+        "source_rect":  {
+                            "y":  150,
+                            "w":  651,
+                            "h":  129,
+                            "x":  460
+                        },
+        "sha256":  "4F233B133C10D2CBB42A63AC71BC813E588B20EC4B80DBD679805DD71CF69922"
+    },
+    {
+        "name":  "top_hud_hp_frame",
+        "file":  "slices/top_hud_hp_frame.png",
+        "source_rect":  {
+                            "y":  302,
+                            "w":  693,
+                            "h":  83,
+                            "x":  444
+                        },
+        "sha256":  "A62675194BF4A4B5825CD00C62505129659193F51FDDCC4D6374A7AB2588D574"
+    },
+    {
+        "name":  "top_hud_xp_frame",
+        "file":  "slices/top_hud_xp_frame.png",
+        "source_rect":  {
+                            "y":  402,
+                            "w":  693,
+                            "h":  83,
+                            "x":  444
+                        },
+        "sha256":  "9CA38EBA004D8E995EF781EC865EE72A62FB3D111BBB669427DF0E224F0F4547"
+    },
+    {
+        "name":  "top_hud_resource_coin_chip",
+        "file":  "slices/top_hud_resource_coin_chip.png",
+        "source_rect":  {
+                            "y":  166,
+                            "w":  385,
+                            "h":  135,
+                            "x":  1210
+                        },
+        "sha256":  "E0AB91A02B84C9A83341CEF6D57162D74369DCA86E80FA2620874E2B17ACC208"
+    },
+    {
+        "name":  "top_hud_resource_supplies_chip",
+        "file":  "slices/top_hud_resource_supplies_chip.png",
+        "source_rect":  {
+                            "y":  332,
+                            "w":  383,
+                            "h":  139,
+                            "x":  1210
+                        },
+        "sha256":  "E685D8784721401B3ACC9FDD2EF1843285190D919B2B5244DA89DBBBAA3B6D5E"
+    },
+    {
+        "name":  "top_hud_location_plaque",
+        "file":  "slices/top_hud_location_plaque.png",
+        "source_rect":  {
+                            "y":  566,
+                            "w":  659,
+                            "h":  217,
+                            "x":  480
+                        },
+        "sha256":  "00D12F2239E0EAA0B5BE575A5A3409E992BC72B0F4207501575F9C9C79801995"
+    },
+    {
+        "name":  "top_hud_settings_button",
+        "file":  "slices/top_hud_settings_button.png",
+        "source_rect":  {
+                            "y":  584,
+                            "w":  181,
+                            "h":  183,
+                            "x":  1182
+                        },
+        "sha256":  "8C8649E33CDAF1EEEAD384889B71F9777DCAA4C0E7AB6B06C630BFFADC90091D"
+    },
+    {
+        "name":  "top_hud_level_badge",
+        "file":  "slices/top_hud_level_badge.png",
+        "source_rect":  {
+                            "y":  564,
+                            "w":  185,
+                            "h":  225,
+                            "x":  1408
+                        },
+        "sha256":  "03E8F20DC8E7C6839A262AED921EA1AB3A5855F94C649E5CB3D3740FD4C36C32"
+    },
+    {
+        "name":  "top_hud_icon_coin",
+        "file":  "slices/top_hud_icon_coin.png",
+        "source_rect":  {
+                            "y":  596,
+                            "w":  157,
+                            "h":  165,
+                            "x":  56
+                        },
+        "sha256":  "62BF8083EB667FEA8E154FD3B7472B0F304B63BD93E386C9430CC7ACBFE85548"
+    },
+    {
+        "name":  "top_hud_icon_supplies",
+        "file":  "slices/top_hud_icon_supplies.png",
+        "source_rect":  {
+                            "y":  584,
+                            "w":  169,
+                            "h":  187,
+                            "x":  262
+                        },
+        "sha256":  "05F5DA693F24F882FABB6B04123583A0A5C1F25A4368EBB3DB96FD1D1864921C"
+    }
+]

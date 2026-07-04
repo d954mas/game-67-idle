@@ -48,6 +48,7 @@
 #include "systems/sys_scene_pan.h"
 #include "systems/sys_move.h"
 #include "systems/sys_settings.h"
+#include "ui/dialogue_panel.h"
 #include "ui/first_screen_hud.h"
 #include "ui/hud.h"
 #include "ui/ui_runtime.h"
@@ -268,6 +269,7 @@ static void frame(void) {
     // settings UI: real nt_ui widgets (panel + sliders + buttons), built + walked here
     if (ui_runtime_begin(g_nt_app.dt)) {
         first_screen_hud_ui(ui_runtime_ctx(), &s_world);
+        dialogue_panel_ui(ui_runtime_ctx(), &s_world);
         sys_settings_ui(ui_runtime_ctx(), &s_world);
         ui_runtime_end();
     }

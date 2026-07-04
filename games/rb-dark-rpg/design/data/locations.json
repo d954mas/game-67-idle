@@ -122,6 +122,10 @@
             {
               "type": "equipped",
               "item_id": "padded_jacket"
+            },
+            {
+              "type": "equipped",
+              "item_id": "leather_greaves"
             }
           ]
         }
