@@ -2,6 +2,30 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Debug Game: rb-dark-rpg (native debug)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/games/rb-dark-rpg/build/native-debug/bin/game.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/games/rb-dark-rpg",
+      "environment": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "Game: rb-dark-rpg: build native debug"
+    },
+    {
+      "name": "Run Game: rb-dark-rpg (native release)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/games/rb-dark-rpg/build/native-release/bin/game.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/games/rb-dark-rpg",
+      "environment": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "Game: rb-dark-rpg: build native release"
+    },
+    {
       "name": "Debug Template: template (native debug)",
       "type": "cppvsdbg",
       "request": "launch",

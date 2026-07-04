@@ -1,0 +1,25 @@
+{
+  "schema": "ai_studio.game_design.asset_manifest.v1",
+  "game_id": "rb-dark-rpg",
+  "status": "draft",
+  "assets": [
+    {
+      "id": "starter_ui",
+      "kind": "ui",
+      "status": "copied_from_template",
+      "source": "games/rb-dark-rpg/assets/ui"
+    },
+    {
+      "id": "ruin_gate_visual_proof",
+      "kind": "environment",
+      "status": "needed",
+      "source": "source-first: shared library, then CC0/OFL, then generated proof"
+    },
+    {
+      "id": "first_threat_visual_proof",
+      "kind": "enemy_or_hazard",
+      "status": "needed",
+      "source": "source-first: shared library, then CC0/OFL, then generated proof"
+    }
+  ]
+}

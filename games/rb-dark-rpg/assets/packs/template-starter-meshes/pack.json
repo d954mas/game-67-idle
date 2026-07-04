@@ -1,0 +1,22 @@
+﻿{
+  "pack": "template-starter-meshes",
+  "title": "Template Starter Meshes",
+  "source": "project",
+  "kind": "model",
+  "origin": "mine",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "license_kind": "cc",
+  "attribution_required": "false",
+  "notice_required": "false",
+  "publish": "true",
+  "redistribution_allowed": "true",
+  "commercial_use": "true",
+  "modification_allowed": "true",
+  "source_page": "templates/template/assets/meshes/cube.glb",
+  "author_vendor": "Neotolis template",
+  "tags": ["template", "starter", "mesh"],
+  "genre": ["template"],
+  "style": ["debug"],
+  "description": "Project-owned starter mesh used by the game template to prove mesh loading."
+}

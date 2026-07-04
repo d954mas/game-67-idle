@@ -1,0 +1,20 @@
+{
+  "schema": "ai_studio.game_design.ui_flow.v1",
+  "game_id": "rb-dark-rpg",
+  "status": "draft",
+  "screens": [
+    {
+      "id": "play",
+      "purpose": "Default playable view: movement, title/status HUD, and encounter cues."
+    },
+    {
+      "id": "settings",
+      "purpose": "Starter settings panel retained from the template."
+    },
+    {
+      "id": "encounter_result",
+      "purpose": "Later first-slice result panel for reward, recovery, or retreat."
+    }
+  ],
+  "first_path": ["play", "settings", "play", "encounter_result"]
+}

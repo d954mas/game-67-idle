@@ -1,0 +1,27 @@
+{
+  "schema": "ai_studio.game_design.core_loop.v1",
+  "game_id": "rb-dark-rpg",
+  "status": "draft",
+  "loop": [
+    {
+      "step": "enter_ruin_edge",
+      "player_action": "Move from safety toward the visible gate objective.",
+      "feedback": "Camera, title HUD, and landmark confirm orientation."
+    },
+    {
+      "step": "read_threat",
+      "player_action": "Inspect a hazard or enemy tell before committing.",
+      "feedback": "Danger is visible before damage or failure."
+    },
+    {
+      "step": "engage_or_retreat",
+      "player_action": "Choose to fight, avoid, or back out.",
+      "feedback": "Health/stamina and encounter state update immediately."
+    },
+    {
+      "step": "recover_and_prepare",
+      "player_action": "Use reward, recovery, or upgrade choice before going deeper.",
+      "feedback": "The next risk is clearer because the state changed."
+    }
+  ]
+}

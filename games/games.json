@@ -1,4 +1,12 @@
 {
   "schema": "ai_studio.assets.games.v1",
-  "games": []
+  "games": [
+    {
+      "id": "rb-dark-rpg",
+      "title": "RB Dark RPG",
+      "folder": "games/rb-dark-rpg",
+      "assets": "games/rb-dark-rpg/assets",
+      "status": "active"
+    }
+  ]
 }
