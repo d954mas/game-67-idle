@@ -133,3 +133,13 @@ scene_point_t scene_layout_pointer_to_master(scene_view_t view, float pointer_x,
         .y = view.view_y + (((float)view.framebuffer_h - pointer_y) / view.scale),
     };
 }
+
+scene_point_t scene_layout_master_to_screen(scene_view_t view, float master_x, float master_y) {
+    if (view.scale <= 0.0f) {
+        return (scene_point_t){0.0f, 0.0f};
+    }
+    return (scene_point_t){
+        .x = (master_x - view.view_x) * view.scale,
+        .y = (float)view.framebuffer_h - ((master_y - view.view_y) * view.scale),
+    };
+}

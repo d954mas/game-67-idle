@@ -1,0 +1,88 @@
+{
+  "schema": "ai_studio.game_design.content_compatibility.v1",
+  "game_id": "rb-dark-rpg",
+  "status": "draft",
+  "lock_level": "pre_external_playtest",
+  "policy_doc": "../knowledge/content_update_compatibility_rules.md",
+  "stable_ids": {
+    "characters": [
+      "blacksmith",
+      "council_scribe",
+      "elder",
+      "gate_guard",
+      "healer",
+      "player_seeker"
+    ],
+    "locations": [
+      "equipment",
+      "hub_gate_outskirts",
+      "hub_last_post",
+      "old_mill"
+    ],
+    "encounters": [
+      "black_sun_runner",
+      "gate_scavenger",
+      "mill_brute",
+      "mill_scavenger",
+      "night_attacker"
+    ],
+    "items": [
+      "black_sun_charm",
+      "burned_chain_bracket",
+      "grain_sacks",
+      "iron_sword",
+      "leather_greaves",
+      "old_sword",
+      "order_scrap",
+      "patched_mail",
+      "padded_jacket",
+      "seeker_token"
+    ],
+    "quests": [
+      "q001_gate_pass",
+      "q002_bread_for_post"
+    ],
+    "quest_steps": [
+      "clear_gate_scavenger",
+      "equip_leather_greaves",
+      "equip_old_sword",
+      "equip_padded_jacket",
+      "report_to_gate_guard",
+      "talk_gate_guard"
+    ],
+    "dialogues": [
+      "dlg_council_scribe_placeholder",
+      "dlg_gate_guard_intro",
+      "dlg_gate_guard_turn_in"
+    ],
+    "dialogue_choices": [
+      "dlg_council_scribe_placeholder.close",
+      "dlg_gate_guard_intro.accept",
+      "dlg_gate_guard_intro.ask_what_happened",
+      "dlg_gate_guard_intro.ask_what_needed",
+      "dlg_gate_guard_turn_in.take_token"
+    ],
+    "reward_ids": [
+      "dlg_gate_guard_intro.accept.immediate"
+    ],
+    "flags": [
+      "gate_guard_intro_seen",
+      "gate_scavenger_defeated",
+      "leather_greaves_equipped",
+      "map_gate_unlocked",
+      "old_mill_unlocked",
+      "old_sword_equipped",
+      "padded_jacket_equipped",
+      "seeker_token_owned",
+      "starter_gear_received"
+    ],
+    "unlocks": [
+      "ash_border_map",
+      "equipment",
+      "gate_scavenger",
+      "old_mill",
+      "q002_bread_for_post"
+    ]
+  },
+  "migrations": []
+}

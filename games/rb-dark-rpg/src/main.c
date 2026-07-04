@@ -349,6 +349,7 @@ int main(int argc, char **argv) {
     render_2d_runtime_init();
 #if FEATURE_GAME_STATE
     game_state_init();
+    s_world.player_state = &g_game_state;
 #endif
 
     s_pack_id = nt_hash32_str("game");

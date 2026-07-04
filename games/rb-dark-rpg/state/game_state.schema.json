@@ -15,6 +15,7 @@
       "hidden",
       "available",
       "active",
+      "ready_to_turn_in",
       "completed",
       "failed",
       "content_missing"
@@ -186,6 +187,14 @@
     {
       "path": "equipment.charm_instance_id",
       "id": 10,
+      "type": "string?",
+      "default": null,
+      "max_length": 63,
+      "devapi": "read_write"
+    },
+    {
+      "path": "equipment.legs_instance_id",
+      "id": 19,
       "type": "string?",
       "default": null,
       "max_length": 63,

@@ -1,7 +1,7 @@
 ---
 id: T0271
 title: "rb-dark-rpg 3-8s: диалог со стражем и старт квеста Допуск за ворота"
-status: todo
+status: review
 project: P003
 epic: E011
 priority: P1
@@ -147,3 +147,8 @@ State contract:
   `q001_gate_pass`, `dlg_gate_guard_intro`, `talk_gate_guard`,
   `receive_starter_gear`, `padded_jacket`; removed stale `gate_permit` and
   `leather_jacket` references.
+- 2026-07-04: Executor started implementation after T1 state slice; aligning guard dialogue action with task contract: advance q001 to receive_starter_gear, no starter item grants, blacksmith next target.
+- 2026-07-04: Implemented executor slice: dialogue definitions are generated from design/data JSON at build time; gate guard accept advances q001_gate_pass/talk_gate_guard to receive_starter_gear; no starter gear is granted at guard; blacksmith hotspot unlocks as next objective. Verification: game_dialogue_test, scene_interactions_test, quality_responsive passed. Evidence summary: tmp/quality/qclr_002_responsive/summary.json.
+- 2026-07-04: Lead correction: no blacksmith in this slice. Guard gives starter gear and explains the world; next objective returns to equipping granted gear. Reworking previous blacksmith objective/hotspot changes.
+- 2026-07-04: Lead correction applied: guard dialogue now says the guard gives the starter gear and explains the world; no blacksmith objective/hotspot/dialogue in this slice. q001 advances to equip_old_sword after talk_gate_guard. Verification passed: game_dialogue_test, scene_interactions_test, quality_responsive. Evidence: tmp/quality/qclr_002_responsive/summary.json.
+- 2026-07-04: Data-driven reward/effect follow-up: guard accept choices now carry authored reward_id in dialogues.json; runtime choice effects and reward claim id are generated from dialogue data instead of C hardcode. Compatibility validator now reads authored choice.reward_id. Verification passed: game_dialogue_test, scene_interactions_test, quality_responsive; git diff --check has only CRLF normalization warnings.

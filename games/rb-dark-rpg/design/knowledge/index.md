@@ -48,6 +48,10 @@ Use this as the first stop for durable game-specific knowledge.
   [../content_model.md](../content_model.md), the local web editor direction is
   captured in [../content_editor_spec.md](../content_editor_spec.md), and the
   loader/editor manifest lives in [../data/content_manifest.json](../data/content_manifest.json).
+- Save-compatible content update rules are captured in
+  [content_update_compatibility_rules.md](content_update_compatibility_rules.md):
+  after saves exist, quest/item/reward/flag/unlock ids become compatibility
+  contracts and should be deprecated or migrated instead of deleted.
 
 ## Playtest Or Build Findings
 

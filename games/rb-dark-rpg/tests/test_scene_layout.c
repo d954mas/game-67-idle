@@ -78,6 +78,19 @@ static void test_pointer_to_master_is_y_up(void) {
     assert(fabsf(bottom_right.y - 80.0f) < 0.0001f);
 }
 
+static void test_master_to_screen_tracks_portrait_pan(void) {
+    const scene_view_t center = scene_layout_compute_view(390, 844, scene_layout_default_center_x(), scene_layout_default_center_y());
+    const scene_view_t right = scene_layout_compute_view(390, 844, scene_layout_default_center_x() + 120.0f, scene_layout_default_center_y());
+    const scene_point_t center_screen = scene_layout_master_to_screen(center, 656.0f, 346.0f);
+    const scene_point_t right_screen = scene_layout_master_to_screen(right, 656.0f, 346.0f);
+    assert(center_screen.x > right_screen.x + 40.0f);
+    assert(fabsf(center_screen.y - right_screen.y) < 0.0001f);
+
+    const scene_point_t roundtrip = scene_layout_pointer_to_master(center, center_screen.x, center_screen.y);
+    assert(fabsf(roundtrip.x - 656.0f) < 0.0001f);
+    assert(fabsf(roundtrip.y - 346.0f) < 0.0001f);
+}
+
 int main(void) {
     test_rects();
     test_scale();
@@ -86,5 +99,6 @@ int main(void) {
     test_view_portrait_clamps_center();
     test_view_portrait_pan_clamps_to_master();
     test_pointer_to_master_is_y_up();
+    test_master_to_screen_tracks_portrait_pan();
     return 0;
 }

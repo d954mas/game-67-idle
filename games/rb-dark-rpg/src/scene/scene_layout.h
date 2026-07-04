@@ -55,6 +55,7 @@ float scene_layout_default_center_y(void);
 scene_view_t scene_layout_compute_view(int framebuffer_w, int framebuffer_h,
                                        float requested_center_x, float requested_center_y);
 scene_point_t scene_layout_pointer_to_master(scene_view_t view, float pointer_x, float pointer_y);
+scene_point_t scene_layout_master_to_screen(scene_view_t view, float master_x, float master_y);
 
 #ifdef __cplusplus
 }

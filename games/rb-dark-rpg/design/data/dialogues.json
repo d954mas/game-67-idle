@@ -6,7 +6,10 @@
     {
       "id": "dlg_gate_guard_intro",
       "title": "Страж: допуск за ворота",
-      "participants": ["gate_guard", "player_seeker"],
+      "participants": [
+        "gate_guard",
+        "player_seeker"
+      ],
       "entry_node_id": "start",
       "quest_preview": {
         "goal": "Надень меч, броню и поножи, убери падальщика у ворот и вернись к стражу.",
@@ -49,7 +52,7 @@
         {
           "id": "start",
           "speaker_id": "gate_guard",
-          "text": "За ворота без жетона и железа не выпускаю. Хочешь выйти - пройдешь проверку.",
+          "text": "За ворота без жетона и железа не выпускаю. После ухода Дракона дороги стали чужими: на трактах падальщики и люди с черным знаком. Хочешь выйти - пройдешь проверку.",
           "choices": [
             {
               "id": "ask_what_happened",
@@ -64,6 +67,7 @@
             {
               "id": "accept",
               "text": "Беру снаряжение",
+              "reward_id": "dlg_gate_guard_intro.accept.immediate",
               "effects": [
                 {
                   "type": "grant_item",
@@ -79,6 +83,14 @@
                   "type": "grant_item",
                   "item_id": "leather_greaves",
                   "count": 1
+                },
+                {
+                  "type": "set_flag",
+                  "flag_id": "gate_guard_intro_seen"
+                },
+                {
+                  "type": "set_flag",
+                  "flag_id": "starter_gear_received"
                 },
                 {
                   "type": "advance_quest",
@@ -92,7 +104,7 @@
         {
           "id": "outside_lore",
           "speaker_id": "gate_guard",
-          "text": "После ухода Дракона дороги стали чужими. На трактах падальщики и люди с черным знаком. Совет платит тем, кто возвращается с новостями.",
+          "text": "Последний Пост держится на тех, кто возвращается с новостями. Совет платит за сведения, но сначала ты должен доказать, что не станешь еще одним телом у дороги.",
           "choices": [
             {
               "id": "ask_what_needed",
@@ -102,6 +114,7 @@
             {
               "id": "accept",
               "text": "Беру снаряжение",
+              "reward_id": "dlg_gate_guard_intro.accept.immediate",
               "effects": [
                 {
                   "type": "grant_item",
@@ -117,6 +130,14 @@
                   "type": "grant_item",
                   "item_id": "leather_greaves",
                   "count": 1
+                },
+                {
+                  "type": "set_flag",
+                  "flag_id": "gate_guard_intro_seen"
+                },
+                {
+                  "type": "set_flag",
+                  "flag_id": "starter_gear_received"
                 },
                 {
                   "type": "advance_quest",
@@ -140,6 +161,7 @@
             {
               "id": "accept",
               "text": "Беру снаряжение",
+              "reward_id": "dlg_gate_guard_intro.accept.immediate",
               "effects": [
                 {
                   "type": "grant_item",
@@ -157,6 +179,14 @@
                   "count": 1
                 },
                 {
+                  "type": "set_flag",
+                  "flag_id": "gate_guard_intro_seen"
+                },
+                {
+                  "type": "set_flag",
+                  "flag_id": "starter_gear_received"
+                },
+                {
                   "type": "advance_quest",
                   "quest_id": "q001_gate_pass",
                   "step_id": "talk_gate_guard"
@@ -168,28 +198,12 @@
       ]
     },
     {
-      "id": "dlg_blacksmith_starter_gear",
-      "title": "Кузнец: стартовое снаряжение",
-      "participants": ["blacksmith", "player_seeker"],
-      "entry_node_id": "start",
-      "nodes": [
-        {
-          "id": "start",
-          "speaker_id": "blacksmith",
-          "text": "Страж уже выдал тебе дорожный комплект. Когда откроют торговлю, принесу железо получше.",
-          "choices": [
-            {
-              "id": "close",
-              "text": "Понятно."
-            }
-          ]
-        }
-      ]
-    },
-    {
       "id": "dlg_gate_guard_turn_in",
       "title": "Страж: жетон искателя",
-      "participants": ["gate_guard", "player_seeker"],
+      "participants": [
+        "gate_guard",
+        "player_seeker"
+      ],
       "entry_node_id": "start",
       "nodes": [
         {
@@ -215,7 +229,10 @@
     {
       "id": "dlg_council_scribe_placeholder",
       "title": "Писарь: заглушка",
-      "participants": ["council_scribe", "player_seeker"],
+      "participants": [
+        "council_scribe",
+        "player_seeker"
+      ],
       "entry_node_id": "start",
       "nodes": [
         {

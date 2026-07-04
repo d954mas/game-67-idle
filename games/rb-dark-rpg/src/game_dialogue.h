@@ -10,6 +10,21 @@ typedef enum dialogue_choice_kind_t {
     DIALOGUE_CHOICE_PROGRESS = 1,
 } dialogue_choice_kind_t;
 
+typedef enum dialogue_effect_kind_t {
+    DIALOGUE_EFFECT_GRANT_ITEM = 0,
+    DIALOGUE_EFFECT_ADVANCE_QUEST = 1,
+    DIALOGUE_EFFECT_SET_FLAG = 2,
+} dialogue_effect_kind_t;
+
+typedef struct dialogue_effect_t {
+    dialogue_effect_kind_t kind;
+    const char *item_id;
+    int count;
+    const char *quest_id;
+    const char *step_id;
+    const char *flag_id;
+} dialogue_effect_t;
+
 typedef struct dialogue_choice_t {
     const char *id;
     const char *text;
@@ -17,6 +32,9 @@ typedef struct dialogue_choice_t {
     dialogue_choice_kind_t kind;
     const char *quest_id;
     const char *step_id;
+    const char *reward_id;
+    const dialogue_effect_t *effects;
+    int effect_count;
 } dialogue_choice_t;
 
 typedef enum dialogue_reward_kind_t {

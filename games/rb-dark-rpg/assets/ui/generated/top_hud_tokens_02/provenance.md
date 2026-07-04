@@ -2,7 +2,7 @@
 
 Asset: `top_hud_component_sheet_02.png`
 
-Status: accepted art-lead candidate, pending final subagent pass before runtime integration.
+Status: accepted by art lead and subagent review; integrated into runtime top HUD.
 
 Source:
 - Generated with built-in Codex image generation on 2026-07-04.
@@ -20,6 +20,7 @@ Runtime intent:
 - Use the sheet only as source art for cropped transparent PNG tokens.
 - Runtime owns all labels, values, HP/XP fill amounts, hit testing, and responsive layout.
 - Top UI remains floating components over scene fade, not a hard opaque header.
+- Runtime evidence: `tmp/quality/qclr_002_responsive/contact_sheet.png`.
 
 Do not use:
 - The full sheet directly in-game.

@@ -20,6 +20,7 @@ endif()
 if(NOT DEFINED FEATURE_GAME_STATE)
     set(FEATURE_GAME_STATE ON CACHE BOOL "Build the installed game-state feature." FORCE)
 endif()
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 
 if(GAME_DEVAPI_ENABLED)
     set(NT_DEVAPI_ENABLED ON CACHE BOOL "Build the engine DevAPI command layer." FORCE)
@@ -50,6 +51,60 @@ set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
 set(GAME_PACK_DIR "${CMAKE_BINARY_DIR}/pack")
 set(GAME_ASSETS_DIR "${GAME_OUTPUT_DIR}/assets")
 set(GAME_SOURCE_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/generated")
+set(GAME_CONTENT_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_dialogue_content.py")
+set(GAME_CONTENT_COMPATIBILITY_VALIDATOR "${CMAKE_CURRENT_SOURCE_DIR}/tools/validate_content_compatibility.py")
+set(GAME_CONTENT_COMPATIBILITY "${CMAKE_CURRENT_SOURCE_DIR}/design/data/content_compatibility.json")
+set(GAME_CONTENT_DIALOGUES "${CMAKE_CURRENT_SOURCE_DIR}/design/data/dialogues.json")
+set(GAME_CONTENT_CHARACTERS "${CMAKE_CURRENT_SOURCE_DIR}/design/data/characters.json")
+set(GAME_CONTENT_QUESTS "${CMAKE_CURRENT_SOURCE_DIR}/design/data/quests.json")
+set(GAME_CONTENT_ITEMS "${CMAKE_CURRENT_SOURCE_DIR}/design/data/items.json")
+set(GAME_CONTENT_LOCATIONS "${CMAKE_CURRENT_SOURCE_DIR}/design/data/locations.json")
+set(GAME_CONTENT_SERVICES "${CMAKE_CURRENT_SOURCE_DIR}/design/data/services.json")
+set(GAME_CONTENT_COMBAT "${CMAKE_CURRENT_SOURCE_DIR}/design/data/combat.json")
+set(GAME_CONTENT_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/design/data/content_manifest.json")
+set(GAME_STATE_SCHEMA_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
+set(GAME_CONTENT_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/content")
+set(GAME_CONTENT_GENERATED_SOURCE "${GAME_CONTENT_GENERATED_DIR}/game_content.generated.c")
+
+add_custom_target(content_compatibility_check
+    COMMAND "${Python3_EXECUTABLE}" "${GAME_CONTENT_COMPATIBILITY_VALIDATOR}"
+        --game-dir "${CMAKE_CURRENT_SOURCE_DIR}"
+    DEPENDS
+        "${GAME_CONTENT_COMPATIBILITY_VALIDATOR}"
+        "${GAME_CONTENT_COMPATIBILITY}"
+        "${GAME_CONTENT_MANIFEST}"
+        "${GAME_CONTENT_DIALOGUES}"
+        "${GAME_CONTENT_CHARACTERS}"
+        "${GAME_CONTENT_QUESTS}"
+        "${GAME_CONTENT_ITEMS}"
+        "${GAME_CONTENT_LOCATIONS}"
+        "${GAME_CONTENT_SERVICES}"
+        "${GAME_CONTENT_COMBAT}"
+        "${GAME_STATE_SCHEMA_SOURCE}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    COMMENT "Validating rb-dark-rpg save-compatible content ids"
+    VERBATIM
+)
+
+add_custom_command(
+    OUTPUT "${GAME_CONTENT_GENERATED_SOURCE}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_CONTENT_GENERATED_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${GAME_CONTENT_GENERATOR}"
+        "${GAME_CONTENT_DIALOGUES}"
+        "${GAME_CONTENT_CHARACTERS}"
+        "${GAME_CONTENT_QUESTS}"
+        "${GAME_CONTENT_ITEMS}"
+        "${GAME_CONTENT_GENERATED_SOURCE}"
+    DEPENDS
+        "${GAME_CONTENT_GENERATOR}"
+        "${GAME_CONTENT_DIALOGUES}"
+        "${GAME_CONTENT_CHARACTERS}"
+        "${GAME_CONTENT_QUESTS}"
+        "${GAME_CONTENT_ITEMS}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    COMMENT "Generating rb-dark-rpg dialogue content"
+    VERBATIM
+)
 
 # --- asset pack builder (runs at build time -> game.ntpack + asset-id header) ---
 if(NOT EMSCRIPTEN)
@@ -115,6 +170,7 @@ add_executable(${GAME_TARGET}
     src/ui/ui_runtime.c
     src/ui/theme.c
     src/game_dialogue.c
+    "${GAME_CONTENT_GENERATED_SOURCE}"
     src/scene/scene_layout.c
     src/scene/scene_interactions.c
     src/render/render_2d_runtime.c
@@ -126,11 +182,11 @@ add_executable(${GAME_TARGET}
     src/systems/sys_scene_pan.c
     src/systems/sys_settings.c
 )
+add_dependencies(${GAME_TARGET} content_compatibility_check)
 if(NOT EMSCRIPTEN)
     add_dependencies(${GAME_TARGET} game_asset_packs)
 endif()
 if(FEATURE_GAME_STATE)
-    find_package(Python3 COMPONENTS Interpreter REQUIRED)
     set(GAME_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
     set(GAME_STATE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/generate_state.py")
     set(GAME_STATE_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/game_state.c.in")
@@ -160,6 +216,7 @@ if(FEATURE_GAME_STATE)
     target_sources(${GAME_TARGET} PRIVATE
         "${GAME_STATE_GENERATED_SOURCE}"
         src/game_storage.c
+        src/game_actions.c
     )
     target_link_libraries(${GAME_TARGET} PRIVATE cjson)
     target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=1)
@@ -227,42 +284,70 @@ add_custom_target(scene_layout_test
     VERBATIM
 )
 
-add_executable(test_scene_interactions
-    src/scene/scene_interactions.c
-    src/game_dialogue.c
-    tests/test_scene_interactions.c
-)
-target_include_directories(test_scene_interactions PRIVATE src)
-target_include_directories(test_scene_interactions PRIVATE "${ENGINE_DIR}/engine")
-nt_set_warning_flags(test_scene_interactions)
-set_target_properties(test_scene_interactions PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
-add_custom_target(scene_interactions_test
-    COMMAND $<TARGET_FILE:test_scene_interactions>
-    DEPENDS test_scene_interactions
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
-    COMMENT "Running scene interaction tests"
-    VERBATIM
-)
+if(FEATURE_GAME_STATE)
+    add_executable(test_scene_interactions
+        src/scene/scene_interactions.c
+        src/game_actions.c
+        src/game_dialogue.c
+        "${GAME_CONTENT_GENERATED_SOURCE}"
+        "${GAME_STATE_GENERATED_SOURCE}"
+        tests/test_scene_interactions.c
+    )
+    target_include_directories(test_scene_interactions PRIVATE src)
+    target_include_directories(test_scene_interactions PRIVATE "${ENGINE_DIR}/engine")
+    target_include_directories(test_scene_interactions PRIVATE "${GAME_STATE_GENERATED_DIR}")
+    target_link_libraries(test_scene_interactions PRIVATE cjson)
+    target_compile_definitions(test_scene_interactions PRIVATE FEATURE_GAME_STATE=1 NT_DEVAPI_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_scene_interactions)
+    set_target_properties(test_scene_interactions PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
+    add_custom_target(scene_interactions_test
+        COMMAND $<TARGET_FILE:test_scene_interactions>
+        DEPENDS test_scene_interactions
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+        COMMENT "Running scene interaction tests"
+        VERBATIM
+    )
+else()
+    add_custom_target(scene_interactions_test
+        COMMAND ${CMAKE_COMMAND} -E echo "Skipping scene interaction tests: FEATURE_GAME_STATE=OFF"
+        COMMENT "Skipping scene interaction tests"
+        VERBATIM
+    )
+endif()
 
 add_custom_target(first_scene_tests
     DEPENDS scene_layout_test scene_interactions_test
 )
 
-add_executable(test_game_dialogue
-    src/game_dialogue.c
-    tests/test_game_dialogue.c
-)
-target_include_directories(test_game_dialogue PRIVATE src)
-target_include_directories(test_game_dialogue PRIVATE "${ENGINE_DIR}/engine")
-nt_set_warning_flags(test_game_dialogue)
-set_target_properties(test_game_dialogue PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
-add_custom_target(game_dialogue_test
-    COMMAND $<TARGET_FILE:test_game_dialogue>
-    DEPENDS test_game_dialogue
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
-    COMMENT "Running dialogue state tests"
-    VERBATIM
-)
+if(FEATURE_GAME_STATE)
+    add_executable(test_game_dialogue
+        src/game_actions.c
+        src/game_dialogue.c
+        "${GAME_CONTENT_GENERATED_SOURCE}"
+        "${GAME_STATE_GENERATED_SOURCE}"
+        tests/test_game_dialogue.c
+    )
+    target_include_directories(test_game_dialogue PRIVATE src)
+    target_include_directories(test_game_dialogue PRIVATE "${ENGINE_DIR}/engine")
+    target_include_directories(test_game_dialogue PRIVATE "${GAME_STATE_GENERATED_DIR}")
+    target_link_libraries(test_game_dialogue PRIVATE cjson)
+    target_compile_definitions(test_game_dialogue PRIVATE FEATURE_GAME_STATE=1 NT_DEVAPI_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_game_dialogue)
+    set_target_properties(test_game_dialogue PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
+    add_custom_target(game_dialogue_test
+        COMMAND $<TARGET_FILE:test_game_dialogue>
+        DEPENDS test_game_dialogue
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+        COMMENT "Running dialogue state tests"
+        VERBATIM
+    )
+else()
+    add_custom_target(game_dialogue_test
+        COMMAND ${CMAKE_COMMAND} -E echo "Skipping dialogue state tests: FEATURE_GAME_STATE=OFF"
+        COMMENT "Skipping dialogue state tests"
+        VERBATIM
+    )
+endif()
 
 if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)
     find_package(Python3 COMPONENTS Interpreter QUIET)

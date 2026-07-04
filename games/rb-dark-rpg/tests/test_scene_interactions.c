@@ -1,5 +1,6 @@
 #include "scene/scene_interactions.h"
 #include "game_dialogue.h"
+#include "game_state.h"
 
 #include <assert.h>
 #include <string.h>
@@ -66,6 +67,9 @@ static void test_pointer_state_captures_pan_while_pressed(void) {
 
 static void test_guard_release_opens_dialogue_without_completing_step(void) {
     World w = {0};
+    GameState state;
+    game_state_init_defaults(&state);
+    w.player_state = &state;
     scene_interactions_update_pointer_state(&w, SCENE_OBJECT_ID_GUARD, true, true, false);
     assert(scene_interactions_should_show_tutorial_finger(&w, SCENE_OBJECT_ID_GUARD));
 
@@ -87,10 +91,11 @@ static void test_guard_release_opens_dialogue_without_completing_step(void) {
     assert(strcmp(w.dialogue.current_node->id, "explain_check") == 0);
     assert(game_dialogue_select_choice(&w, "accept"));
     assert(!w.dialogue.open);
-    assert(w.first_scene.objective_object_id == SCENE_OBJECT_ID_NONE);
     assert(w.first_scene.tutorial_guard_talk_completed);
     assert(w.first_scene.active_quest_completed_talk_step);
     assert(w.first_scene.active_quest_gate_guard_intro_seen);
+    assert(w.first_scene.objective_object_id == SCENE_OBJECT_ID_NONE);
+    assert(!w.first_scene.blacksmith_unlocked);
 
     scene_interactions_update_pointer_state(&w, SCENE_OBJECT_ID_NONE, false, false, false);
     assert(w.first_scene.activated_object_id == SCENE_OBJECT_ID_NONE);
