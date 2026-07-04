@@ -17,10 +17,10 @@
 #include <math.h>
 #include <string.h>
 
-static nt_resource_t s_sprite_vs, s_sprite_fs, s_sprite_mask_glow_fs;
+static nt_resource_t s_sprite_vs, s_sprite_fs, s_sprite_mask_glow_fs, s_sprite_fade_vs, s_sprite_fade_fs;
 static nt_resource_t s_overlay_atlas, s_overlay_atlas_tex;
 static nt_resource_t s_background_atlas, s_background_atlas_tex;
-static nt_material_t s_overlay_material, s_background_material, s_mask_glow_material;
+static nt_material_t s_overlay_material, s_background_material, s_mask_glow_material, s_hud_fade_material;
 static uint32_t s_white_region = NT_ATLAS_INVALID_REGION;
 static uint32_t s_background_region = NT_ATLAS_INVALID_REGION;
 static uint32_t s_guard_region = NT_ATLAS_INVALID_REGION;
@@ -42,21 +42,6 @@ static void draw_tri(float ax, float ay, float bx, float by, float cx, float cy,
     const float p[3][2] = {{ax, ay}, {bx, by}, {cx, cy}};
     static const uint16_t idx[3] = {0, 1, 2};
     nt_sprite_renderer_emit_geometry(s_overlay_atlas, s_white_region, p, 3, idx, 3, NT_MATH_MAT4_IDENTITY, color);
-}
-
-static void draw_vertical_alpha_bands(float x, float y, float w, float h, bool strongest_at_bottom, const float *alphas, int alpha_count) {
-    if (alpha_count <= 0 || h <= 0.0F) {
-        return;
-    }
-    const float step = h / (float)alpha_count;
-    for (int i = 0; i < alpha_count; ++i) {
-        const int alpha_i = strongest_at_bottom ? (alpha_count - 1 - i) : i;
-        const float a = alphas[alpha_i];
-        if (a <= 0.0F) {
-            continue;
-        }
-        draw_quad(x, y + (step * (float)i), w, step + 0.5F, rgba(0.010F, 0.012F, 0.018F, a));
-    }
 }
 
 static void draw_soft_oval(float center_x, float y, float w, float h, uint32_t color) {
@@ -108,6 +93,8 @@ void render_hub_scene_init(void) {
     s_sprite_vs = nt_resource_request(rid("assets/shaders/sprite.vert"), NT_ASSET_SHADER_CODE);
     s_sprite_fs = nt_resource_request(rid("assets/shaders/sprite.frag"), NT_ASSET_SHADER_CODE);
     s_sprite_mask_glow_fs = nt_resource_request(rid("assets/shaders/sprite_mask_glow.frag"), NT_ASSET_SHADER_CODE);
+    s_sprite_fade_vs = nt_resource_request(rid("assets/shaders/sprite_ui_fade.vert"), NT_ASSET_SHADER_CODE);
+    s_sprite_fade_fs = nt_resource_request(rid("assets/shaders/sprite_ui_fade.frag"), NT_ASSET_SHADER_CODE);
     s_overlay_atlas = nt_resource_request(ASSET_ATLAS_UI, NT_ASSET_ATLAS);
     s_overlay_atlas_tex = nt_resource_request(ASSET_TEXTURE_UI_TEX0, NT_ASSET_TEXTURE);
     s_background_atlas = nt_resource_request(ASSET_ATLAS_HUB_SCENE, NT_ASSET_ATLAS);
@@ -144,6 +131,19 @@ void render_hub_scene_init(void) {
         .depth_write = false,
         .cull_mode = NT_CULL_NONE,
         .label = "hub_scene_mask_glow_sprite",
+    });
+    s_hud_fade_material = nt_material_create(&(nt_material_create_desc_t){
+        .vs = s_sprite_fade_vs,
+        .fs = s_sprite_fade_fs,
+        .textures = {{.name = "u_texture", .resource = s_overlay_atlas_tex}},
+        .texture_count = 1,
+        .attr_map = {{.stream_name = "fade", .location = 4}},
+        .attr_map_count = 1,
+        .blend_mode = NT_BLEND_MODE_ALPHA,
+        .depth_test = false,
+        .depth_write = false,
+        .cull_mode = NT_CULL_NONE,
+        .label = "hub_scene_hud_fade_sprite",
     });
 }
 
@@ -201,14 +201,49 @@ static void draw_fallback_background(void) {
     draw_tri(760.0F, 80.0F, 980.0F, 80.0F, 670.0F, 230.0F, rgba(0.075F, 0.066F, 0.060F, 1.0F));
 }
 
+static void draw_hud_fade_quad(float x, float y, float w, float h, float transparent_y, float dense_y, float max_alpha) {
+    const float p[4][2] = {{x, y}, {x + w, y}, {x + w, y + h}, {x, y + h}};
+    static const uint16_t idx[6] = {0, 1, 2, 0, 2, 3};
+    const float fade_attrs[4] = {transparent_y, dense_y, max_alpha, 0.0F};
+    nt_sprite_renderer_set_custom_attrs(fade_attrs, (uint8_t)sizeof fade_attrs);
+    nt_sprite_renderer_emit_geometry(s_overlay_atlas,
+                                     s_white_region,
+                                     p,
+                                     4,
+                                     idx,
+                                     6,
+                                     NT_MATH_MAT4_IDENTITY,
+                                     rgba(0.039F, 0.027F, 0.020F, 1.0F));
+}
+
 static void draw_hud_scrims(scene_view_t view) {
-    static const float top_alpha[] = {0.04F, 0.08F, 0.14F, 0.22F, 0.34F, 0.48F};
-    static const float bottom_alpha[] = {0.08F, 0.14F, 0.22F, 0.32F, 0.44F, 0.56F};
-    const float top_h = 96.0F / view.scale;
-    const float bottom_h = 126.0F / view.scale;
-    const float top_y = view.view_y + view.view_h - top_h;
-    draw_vertical_alpha_bands(view.view_x, top_y, view.view_w, top_h, false, top_alpha, (int)(sizeof top_alpha / sizeof top_alpha[0]));
-    draw_vertical_alpha_bands(view.view_x, view.view_y, view.view_w, bottom_h, true, bottom_alpha, (int)(sizeof bottom_alpha / sizeof bottom_alpha[0]));
+    if (!material_ready(s_hud_fade_material)) {
+        return;
+    }
+
+    const bool portrait = view.framebuffer_h > view.framebuffer_w;
+    const float top_tail_h = (portrait ? 172.0F : 156.0F) / view.scale;
+    const float top_dense_h = (portrait ? 96.0F : 84.0F) / view.scale;
+    const float bottom_tail_h = (portrait ? 206.0F : 190.0F) / view.scale;
+    const float bottom_dense_h = (portrait ? 132.0F : 124.0F) / view.scale;
+    const float top_edge_y = view.view_y + view.view_h;
+    const float bottom_edge_y = view.view_y;
+
+    nt_sprite_renderer_set_material(s_hud_fade_material);
+    draw_hud_fade_quad(view.view_x,
+                       top_edge_y - top_tail_h,
+                       view.view_w,
+                       top_tail_h,
+                       top_edge_y - top_tail_h,
+                       top_edge_y - top_dense_h,
+                       0.78F);
+    draw_hud_fade_quad(view.view_x,
+                       bottom_edge_y,
+                       view.view_w,
+                       bottom_tail_h,
+                       bottom_edge_y + bottom_tail_h,
+                       bottom_edge_y + bottom_dense_h,
+                       0.76F);
 }
 
 static void draw_character_contact_shadow(const scene_interaction_object_t *object, uint32_t flags) {
@@ -328,27 +363,27 @@ static void draw_scene_object_sprite_mask_glow(const scene_interaction_object_t 
     const bool hovered = (flags & SCENE_INTERACTION_HOVERED) != 0U;
     const bool pressed = (flags & SCENE_INTERACTION_PRESSED) != 0U;
     const bool objective = (flags & SCENE_INTERACTION_OBJECTIVE) != 0U;
-    const float base_alpha = objective ? 0.052F + 0.010F * pulse : 0.036F;
-    const float glow_alpha = pressed ? 0.170F : (hovered ? 0.150F : base_alpha);
+    const float base_alpha = objective ? 0.068F + 0.012F * pulse : 0.048F;
+    const float glow_alpha = pressed ? 0.145F : (hovered ? 0.130F : base_alpha);
     const float radius = hovered || pressed ? 6.0F : 3.5F;
 
-    const uint32_t outer_red = rgba(1.0F, 0.08F, 0.035F, glow_alpha * 0.62F);
-    const uint32_t mid_red = rgba(1.0F, 0.18F, 0.075F, glow_alpha * 0.74F);
-    const uint32_t warm_core = rgba(1.0F, 0.60F, 0.22F, glow_alpha * 0.36F);
+    const uint32_t outer_warm = rgba(1.0F, 0.66F, 0.30F, glow_alpha * 0.54F);
+    const uint32_t mid_warm = rgba(1.0F, 0.82F, 0.48F, glow_alpha * 0.66F);
+    const uint32_t soft_core = rgba(1.0F, 0.92F, 0.70F, glow_alpha * 0.26F);
 
-    emit_scene_object_sprite(object, visual, 0.0F, 0.0F, hovered ? 1.150F : 1.095F, outer_red);
-    emit_scene_object_sprite(object, visual, -radius, 0.0F, hovered ? 1.088F : 1.048F, mid_red);
-    emit_scene_object_sprite(object, visual, radius, 0.0F, hovered ? 1.088F : 1.048F, mid_red);
-    emit_scene_object_sprite(object, visual, 0.0F, -radius, hovered ? 1.088F : 1.048F, mid_red);
-    emit_scene_object_sprite(object, visual, 0.0F, radius, hovered ? 1.088F : 1.048F, mid_red);
+    emit_scene_object_sprite(object, visual, 0.0F, 0.0F, hovered ? 1.150F : 1.095F, outer_warm);
+    emit_scene_object_sprite(object, visual, -radius, 0.0F, hovered ? 1.088F : 1.048F, mid_warm);
+    emit_scene_object_sprite(object, visual, radius, 0.0F, hovered ? 1.088F : 1.048F, mid_warm);
+    emit_scene_object_sprite(object, visual, 0.0F, -radius, hovered ? 1.088F : 1.048F, mid_warm);
+    emit_scene_object_sprite(object, visual, 0.0F, radius, hovered ? 1.088F : 1.048F, mid_warm);
 
     if (hovered || pressed) {
         const float diagonal = radius * 0.70F;
-        emit_scene_object_sprite(object, visual, -diagonal, -diagonal, 1.045F, mid_red);
-        emit_scene_object_sprite(object, visual, diagonal, -diagonal, 1.045F, mid_red);
-        emit_scene_object_sprite(object, visual, -diagonal, diagonal, 1.045F, mid_red);
-        emit_scene_object_sprite(object, visual, diagonal, diagonal, 1.045F, mid_red);
-        emit_scene_object_sprite(object, visual, 0.0F, 0.0F, 1.030F, warm_core);
+        emit_scene_object_sprite(object, visual, -diagonal, -diagonal, 1.045F, mid_warm);
+        emit_scene_object_sprite(object, visual, diagonal, -diagonal, 1.045F, mid_warm);
+        emit_scene_object_sprite(object, visual, -diagonal, diagonal, 1.045F, mid_warm);
+        emit_scene_object_sprite(object, visual, diagonal, diagonal, 1.045F, mid_warm);
+        emit_scene_object_sprite(object, visual, 0.0F, 0.0F, 1.030F, soft_core);
     }
 }
 
@@ -439,12 +474,15 @@ void render_hub_scene_draw(const World *w, nt_buffer_t frame_ubo) {
         if (!has_background) {
             draw_fallback_background();
         }
-        draw_hud_scrims(view);
         draw_scene_object_affordances(w, has_guard);
         nt_sprite_renderer_flush();
     }
     if (has_guard) {
         draw_scene_object_sprites(w);
+    }
+    if (has_overlay) {
+        draw_hud_scrims(view);
+        nt_sprite_renderer_flush();
     }
     if (has_overlay) {
         nt_sprite_renderer_set_material(s_overlay_material);
@@ -457,4 +495,5 @@ void render_hub_scene_shutdown(void) {
     nt_material_destroy(s_overlay_material);
     nt_material_destroy(s_background_material);
     nt_material_destroy(s_mask_glow_material);
+    nt_material_destroy(s_hud_fade_material);
 }

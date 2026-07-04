@@ -115,6 +115,8 @@ int main(int argc, char *argv[]) {
     nt_builder_add_shader(ctx, "assets/shaders/sprite.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/sprite.frag", NT_BUILD_SHADER_FRAGMENT);
     nt_builder_add_shader(ctx, "assets/shaders/sprite_mask_glow.frag", NT_BUILD_SHADER_FRAGMENT);
+    nt_builder_add_shader(ctx, "assets/shaders/sprite_ui_fade.vert", NT_BUILD_SHADER_VERTEX);
+    nt_builder_add_shader(ctx, "assets/shaders/sprite_ui_fade.frag", NT_BUILD_SHADER_FRAGMENT);
 
     nt_atlas_opts_t atlas_opts = nt_atlas_opts_defaults();
     atlas_opts.shape = NT_ATLAS_SHAPE_RECT;
