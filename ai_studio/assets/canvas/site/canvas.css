@@ -990,6 +990,43 @@ body.layers-resizing {
   margin: 8px 0;
 }
 
+/* Position & Size box (T0272): X/Y keeps the plain 2-col .insp-grid above (already
+   margin-bottom:8px); W/H gets its own flex row so the aspect-lock toggle can sit
+   wedged between the two fields. */
+.insp-wh-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.insp-wh-row .insp-field {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.insp-wh-row .insp-label {
+  min-width: 14px;
+}
+
+/* Aspect-ratio lock (chain link): locked = accent border + tinted fill, same idiom as
+   .insp-flip-btn.active; unlocked = a plain small button. */
+.insp-aspect-lock {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 30px;
+  padding: 0;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.insp-aspect-lock.active {
+  border-color: var(--accent, #77a7ff);
+  background: rgba(119, 167, 255, 0.18);
+  color: var(--text);
+}
+
 .insp-render {
   display: flex;
   flex-direction: column;

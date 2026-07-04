@@ -180,16 +180,114 @@ function numberInput(value, onCommit, { step } = {}) {
   return input;
 }
 
-// A 2x2 grid of X/Y/W/H inputs bound to a patch function.
+// ---- aspect-ratio lock (T0272 — lead: W/H edits ignore the image's proportions) -----
+//
+// A "keep proportions" toggle sits between the W/H fields in boxGrid below, so every
+// panel that reuses boxGrid (element, group, note) gets it for free. Locked: editing W
+// or H recomputes the OTHER field from the box's CURRENT ratio at edit time and commits
+// both in the SAME onPatch call the field already made (one undo, per the module's
+// one-gesture-one-entry law). Unlocked: exactly the pre-T0272 free-edit behavior. The
+// lock is page-only view state (never journaled), keyed by node id so a manual toggle
+// survives re-renders of the SAME selection but resets to the computed default the
+// moment the selection moves to a different node (including back to a node seen before —
+// re-selecting IS a fresh "selection changes" event).
+let aspectLockNodeId = null;
+let aspectLockValue = true;
+
+const ASPECT_RATIO_EPSILON = 0.01; // ~1% — absorbs integer-pixel rounding between w/h and source_w/source_h
+
+// Pure: the default lock state for a box with optional source_w/source_h. ON when there
+// is no source to compare against (groups/notes carry neither field; text never reaches
+// boxGrid — renderTextElement's size is read-only), or the box's CURRENT ratio already
+// matches the source ratio within tolerance. OFF when the box is already stretched/
+// squashed relative to its source.
+export function defaultAspectLock(box) {
+  const sw = Number(box && box.source_w);
+  const sh = Number(box && box.source_h);
+  if (!(sw > 0) || !(sh > 0)) return true; // no source dims: default ON (groups, notes)
+  const w = Number(box && box.w);
+  const h = Number(box && box.h);
+  if (!(w > 0) || !(h > 0)) return true; // degenerate current box: nothing to compare
+  const sourceRatio = sw / sh;
+  return Math.abs(w / h - sourceRatio) <= sourceRatio * ASPECT_RATIO_EPSILON;
+}
+
+// Pure: the OTHER dimension for a locked W/H edit, from the box's ratio at edit time.
+// Returns null on a degenerate ratio (w or h <= 0) or a non-finite/non-positive new
+// value — the caller falls back to a free single-field edit in that case (never divides
+// by zero, never returns a non-finite number for the ops layer to reject).
+export function linkedDimension(currentW, currentH, editedKey, newValue) {
+  const w = Number(currentW);
+  const h = Number(currentH);
+  if (!(w > 0) || !(h > 0)) return null;
+  const value = Number(newValue);
+  if (!Number.isFinite(value) || !(value > 0)) return null;
+  if (editedKey === "w") return Math.round(value * (h / w));
+  if (editedKey === "h") return Math.round(value * (w / h));
+  return null;
+}
+
+// Resolves the current lock value for `box`, recomputing the default the moment the
+// selection has moved to a different node id since the last call (a manual toggle
+// persists across re-renders of the SAME node only).
+function aspectLockFor(box) {
+  if (box.id !== aspectLockNodeId) {
+    aspectLockNodeId = box.id;
+    aspectLockValue = defaultAspectLock(box);
+  }
+  return aspectLockValue;
+}
+
+// The Position & Size box: X/Y in a plain 2-col grid, then a W/H row with the
+// aspect-lock toggle wedged between the two fields (see aspectLockFor/linkedDimension
+// above). Shared by the element, group, and note panels.
 function boxGrid(box, onPatch) {
-  const grid = document.createElement("div");
-  grid.className = "insp-grid";
-  const add = (key, label) => grid.appendChild(field(label, numberInput(box[key], (value) => onPatch({ [key]: value }))));
-  add("x", "X");
-  add("y", "Y");
-  add("w", "W");
-  add("h", "H");
-  return grid;
+  const wrap = document.createElement("div");
+  wrap.className = "insp-boxgrid";
+
+  const xyGrid = document.createElement("div");
+  xyGrid.className = "insp-grid";
+  xyGrid.appendChild(field("X", numberInput(box.x, (value) => onPatch({ x: value }))));
+  xyGrid.appendChild(field("Y", numberInput(box.y, (value) => onPatch({ y: value }))));
+  wrap.appendChild(xyGrid);
+
+  let locked = aspectLockFor(box);
+  const commitLinked = (editedKey, otherKey) => (value) => {
+    if (locked) {
+      const linked = linkedDimension(box.w, box.h, editedKey, value);
+      if (linked != null) {
+        onPatch({ [editedKey]: value, [otherKey]: linked });
+        return;
+      }
+    }
+    onPatch({ [editedKey]: value });
+  };
+
+  const whRow = document.createElement("div");
+  whRow.className = "insp-wh-row";
+  whRow.appendChild(field("W", numberInput(box.w, commitLinked("w", "h"))));
+
+  const lockBtn = document.createElement("button");
+  lockBtn.type = "button";
+  lockBtn.title = "Сохранять пропорции";
+  lockBtn.setAttribute("aria-label", "Keep W/H proportions linked");
+  const syncLockBtn = () => {
+    lockBtn.className = locked ? "insp-aspect-lock active" : "insp-aspect-lock";
+    lockBtn.setAttribute("aria-pressed", locked ? "true" : "false");
+    lockBtn.textContent = locked ? "🔗" : "🔓"; // 🔗🔓
+  };
+  syncLockBtn();
+  lockBtn.addEventListener("click", () => {
+    locked = !locked;
+    aspectLockNodeId = box.id;
+    aspectLockValue = locked;
+    syncLockBtn();
+  });
+  whRow.appendChild(lockBtn);
+  whRow.appendChild(field("H", numberInput(box.h, commitLinked("h", "w"))));
+  wrap.appendChild(whRow);
+
+  return wrap;
 }
 
 function readOnly(label, value) {

@@ -78,7 +78,7 @@ import {
   SCALE_HANDLES,
   zoomViewportAt,
 } from "./viewport.mjs";
-import { ancestorsOf, childrenOf, descendantsOf, isNodeHidden, isNodeTransformed, nodeScope, orderedChildren, rotatedCorners, unionBBox } from "../tree.mjs";
+import { ancestorsOf, childrenOf, descendantsOf, isNodeHidden, isNodeTransformed, nodeScope, orderedChildren, rotatedCorners, scaleGroupMoves, unionBBox } from "../tree.mjs";
 // T0244 smart guides: pure snap math, no DOM (see snap.mjs's own header). Imported here only
 // -- the drag-lifetime precompute + mousemove application + guide overlay all live in this
 // file; ops.mjs/api.mjs/cli.mjs are untouched (snapping commits through the EXISTING ops).
@@ -1345,11 +1345,14 @@ const ROTATE_HANDLE_OFFSET = 24; // stem length beyond the (rotated) top-center 
 const ROTATE_HANDLE_RADIUS = 6; // knob glyph radius, CSS px
 const ROTATE_HANDLE_TOL = 8; // hit tolerance around the knob centre, CSS px (matches SCALE_HANDLE_TOL)
 
-// The nodes a scale gesture would resize: every selected element (image or text) plus
-// every selected group's OWN frame -- never a group's descendants (T0232 Q2 default:
-// "group-in-selection = frame-only resize", no subtree scale in v1). `box` is the node's
-// CURRENT frame; called fresh each frame for drawing/hit-testing, and ONCE at grab time to
-// seed a drag (drag.items then holds that frozen snapshot for the rest of the gesture).
+// The nodes a scale gesture directly targets: every selected element (image or text) plus
+// every selected group's OWN frame entry -- a group's descendants are NOT added here (they
+// never get their own handles/hit-test); instead, applyGroupScalePreview scales them
+// separately off the group's own item entry (T0271: subtree-scale is now the DEFAULT --
+// see beginScaleDrag/applyGroupScalePreview below; Ctrl+drag keeps the ORIGINAL T0232 Q2
+// frame-only behavior, children pinned). `box` is the node's CURRENT frame; called fresh
+// each frame for drawing/hit-testing, and ONCE at grab time to seed a drag (drag.items then
+// holds that frozen snapshot for the rest of the gesture).
 function collectResizeItems() {
   const items = [];
   for (const element of selectedElements()) {
@@ -1503,6 +1506,26 @@ function drawRotateHandle(vp) {
 // pure multi-image block) -- "sprites keep proportions by default, Shift = free distort"
 // (the design doc's default); a group or a text element in the mix defaults to free resize
 // (Shift then LOCKS it), since neither has an intrinsic "aspect" the way a bitmap does.
+// A frozen `{groups, elements}`-shaped snapshot of a group's OWN frame plus its FULL
+// descendant closure (`descendantsOf` -- nested subgroup frames AND every element in the
+// subtree), captured ONCE at scale-drag grab (beginScaleDrag). This is the exact shape
+// `tree.scaleGroupMoves` expects as its `project` argument, so the live preview
+// (applyGroupScalePreview below) maps FROM the SAME pure math `scaleGroup` commits
+// server-side -- page and op can never disagree. A shallow-per-node clone (own fields + a
+// cloned `style` object) is enough: nothing here reads nested objects deeper than
+// `style.fontSize`, and cloning keeps this snapshot immune to this SAME drag's own later
+// preview writes onto the real live elements/groups. Frozen at grab, never re-read after --
+// every mousemove maps from this ORIGINAL, not from a previous frame's own preview, so
+// toggling Ctrl mid-drag always recomputes cleanly (T0271).
+function snapshotGroupSubtree(groupId) {
+  const group = groupById(groupId);
+  const { groups: descGroups, elements: descElements } = descendantsOf(state.project, groupId);
+  return {
+    groups: [group, ...descGroups].map((g) => ({ ...g })),
+    elements: descElements.map((e) => ({ ...e, style: e.style ? { ...e.style } : e.style })),
+  };
+}
+
 function beginScaleDrag(handle, screen, world) {
   const items = collectResizeItems();
   if (!items.length) return;
@@ -1516,7 +1539,73 @@ function beginScaleDrag(handle, screen, world) {
   // keeps the plain AABB block-scale path unchanged (`rotation` 0 -> the mousemove "scale"
   // case below takes the ORIGINAL branch verbatim).
   const rotation = items.length === 1 && items[0].kind === "element" ? Number(items[0].ref.rotation) || 0 : 0;
+  // T0271: snapshot every selected GROUP's subtree ONCE at grab -- see snapshotGroupSubtree.
+  for (const item of items) {
+    if (item.kind === "group") item.subtreeSnapshot = snapshotGroupSubtree(item.id);
+  }
   drag = { mode: "scale", startX: screen.x, startY: screen.y, grabWorld: world, handle, items, origAABB, proportionalDefault, rotation };
+}
+
+// Live drag-preview for ONE selected GROUP item's scale (T0271 -- the lead's override of
+// T0232 Q2's shipped frame-only default). `mapped` is this item's own new frame (the SAME
+// per-item `mapItemBox` mapping every other selected item already goes through in the
+// mousemove "scale" case below); `frameOnly` is the live Ctrl/Cmd modifier read fresh every
+// event, exactly like Shift/Alt.
+//
+// `frameOnly` true (Ctrl/Cmd held) = the ORIGINAL T0232 behavior: only the group's own w/h
+// changes (x/y stay pinned at grab, the existing v1 skeleton limitation), and every
+// descendant is restored to its GRABBED original from the frozen snapshot -- unconditionally,
+// every frame, so a mode flip mid-drag (content-scale on a previous frame, then Ctrl pressed)
+// always lands on a clean "children exactly as grabbed" state rather than whatever the last
+// content-mode frame left behind.
+//
+// `frameOnly` false (the NEW default) = the group's own frame moves/resizes to `mapped` too
+// (no longer pinned), and its full descendant closure is remapped by feeding the FROZEN
+// grab-time snapshot through `tree.scaleGroupMoves` -- the exact same pure function
+// `scaleGroup` (ops.mjs) uses server-side, so the live preview and the eventual commit can
+// never numerically disagree. Recomputed from the snapshot fresh every call (never from the
+// previous frame's own mutated refs), so this is order-independent across mousemove events
+// exactly like the plain block-scale path above it (`resizeBox(drag.origAABB, ...)`).
+function applyGroupScalePreview(item, mapped, frameOnly) {
+  const snapshot = item.subtreeSnapshot;
+  if (!snapshot) return; // defensive: every group item gets one in beginScaleDrag
+  if (frameOnly) {
+    for (const g of snapshot.groups) {
+      if (g.id === item.id) continue;
+      const live = groupById(g.id);
+      if (live) Object.assign(live, { x: g.x, y: g.y, w: g.w, h: g.h });
+    }
+    for (const e of snapshot.elements) {
+      const live = elements().find((element) => element.id === e.id);
+      if (!live) continue;
+      live.x = e.x;
+      live.y = e.y;
+      live.w = e.w;
+      live.h = e.h;
+      if (e.type === "text") live.style = { ...live.style, fontSize: Number((e.style || {}).fontSize) || 24 };
+    }
+    item.ref.w = Math.max(SCALE_MIN_SIZE, mapped.w);
+    item.ref.h = Math.max(SCALE_MIN_SIZE, mapped.h);
+    return;
+  }
+  const newFrame = { x: mapped.x, y: mapped.y, w: Math.max(SCALE_MIN_SIZE, mapped.w), h: Math.max(SCALE_MIN_SIZE, mapped.h) };
+  const patches = scaleGroupMoves(snapshot, item.id, newFrame);
+  for (const patch of patches) {
+    if (patch.kind === "group") {
+      const live = patch.id === item.id ? item.ref : groupById(patch.id);
+      if (live) Object.assign(live, { x: patch.x, y: patch.y, w: patch.w, h: patch.h });
+      continue;
+    }
+    const live = elements().find((element) => element.id === patch.id);
+    if (!live) continue;
+    live.x = patch.x;
+    live.y = patch.y;
+    if (patch.fontSize !== undefined) live.style = { ...live.style, fontSize: patch.fontSize };
+    else {
+      live.w = patch.w;
+      live.h = patch.h;
+    }
+  }
 }
 
 // Begin a "rotate" drag: the pivot is the element's OWN box center at grab time (rotation
@@ -1532,23 +1621,37 @@ function beginRotateDrag(element, screen, world) {
 // commitElementDrag, which does the same for a move). A selected GROUP's frame has no
 // batched-resize op (T0232 §2b: patchGroup is per-group, frame-only, no `patchGroups`-style
 // batch reused here) -- a gesture that resizes 2+ groups, or a MIX of elements and groups,
-// therefore lands as more than one journal entry (one Ctrl+Z per group patch); a pure
+// therefore lands as more than one journal entry (one Ctrl+Z per group patch/scale); a pure
 // element-only block or a single solo group still commits as exactly one undo, matching the
 // doc's two documented cases. A future combined resize op (moveNodes's resize sibling) would
-// close that gap; out of scope here (no ops.mjs change in this increment).
+// close that gap; out of scope here. T0271: each group item commits through ONE of two
+// routes depending on `finished.groupFrameOnly` (the last-known Ctrl/Cmd state stashed by
+// the mousemove "scale" case, since `onMouseUp` itself carries no modifier state) -- the
+// EXISTING frame-only `PATCH .../groups/<gid> {w,h}` when Ctrl was held, or the NEW
+// `POST .../groups/<gid>/scale {x,y,w,h}` (the default): the server computes every
+// descendant patch from the final frame via `scaleGroup`/`tree.scaleGroupMoves`, so the page
+// never sends descendant patches itself (page and op can't disagree).
 function commitScaleDrag(finished) {
   const projectId = state.project.id;
+  const frameOnly = !!finished.groupFrameOnly;
   const elementPatches = [];
-  const groupPatches = [];
+  const groupPatches = []; // frame-only PATCH {w,h} (Ctrl held)
+  const groupScales = []; // content-mode POST /scale {x,y,w,h} (the default)
   for (const item of finished.items) {
     const orig = item.box;
     if (item.kind === "group") {
-      // No x/y here on purpose (see the mousemove "scale" case's group branch): only w/h
-      // ever moved, so patchGroup's move-cascade (triggered by ANY x/y change) never fires.
+      const x = Math.round(item.ref.x);
+      const y = Math.round(item.ref.y);
       const w = Math.round(item.ref.w);
       const h = Math.round(item.ref.h);
-      if (w !== Math.round(orig.w) || h !== Math.round(orig.h)) {
-        groupPatches.push({ groupId: item.id, w, h });
+      if (frameOnly) {
+        // No x/y here on purpose (see the mousemove "scale" case's group branch): only w/h
+        // ever moved, so patchGroup's move-cascade (triggered by ANY x/y change) never fires.
+        if (w !== Math.round(orig.w) || h !== Math.round(orig.h)) {
+          groupPatches.push({ groupId: item.id, w, h });
+        }
+      } else if (x !== Math.round(orig.x) || y !== Math.round(orig.y) || w !== Math.round(orig.w) || h !== Math.round(orig.h)) {
+        groupScales.push({ groupId: item.id, x, y, w, h });
       }
       continue;
     }
@@ -1567,7 +1670,7 @@ function commitScaleDrag(finished) {
       elementPatches.push({ elementId: item.id, x, y, w, h });
     }
   }
-  if (!elementPatches.length && !groupPatches.length) {
+  if (!elementPatches.length && !groupPatches.length && !groupScales.length) {
     refresh();
     return;
   }
@@ -1580,6 +1683,10 @@ function commitScaleDrag(finished) {
       for (const patch of groupPatches) {
         const { groupId, ...body } = patch;
         result = await api("PATCH", `/projects/${projectId}/groups/${groupId}`, body);
+      }
+      for (const scale of groupScales) {
+        const { groupId, ...body } = scale;
+        result = await api("POST", `/projects/${projectId}/groups/${groupId}/scale`, body);
       }
       applyMutation(result);
     } catch (error) {
@@ -2350,19 +2457,20 @@ function onMouseMove(event) {
         break;
       }
       const newAABB = resizeBox(drag.origAABB, drag.handle, { dx, dy }, { proportional, fromCenter, minSize: SCALE_MIN_SIZE });
+      // T0271: Ctrl/Cmd held during a SCALE drag now means "frame-only" (the ORIGINAL
+      // T0232 Q2 default -- the group's own box resizes, children pinned exactly as
+      // grabbed), demoted to a modifier now that whole-subtree content-scale is the
+      // default. Read live per-event, exactly like Shift/Alt, so toggling mid-drag flips
+      // modes on the very next frame (applyGroupScalePreview always recomputes from the
+      // frozen grab-time snapshot, never from a previous frame's own preview). Stashed on
+      // `drag` too so commitScaleDrag (which only sees the FINAL released state, not the
+      // mouseup event) knows which server route each group item should commit through.
+      const groupFrameOnly = event.ctrlKey || event.metaKey;
+      drag.groupFrameOnly = groupFrameOnly;
       for (const item of drag.items) {
         const mapped = mapItemBox(item.box, drag.origAABB, newAABB);
         if (item.kind === "group") {
-          // patchGroup translates its FULL descendant closure whenever x/y CHANGE (that is
-          // exactly right for a group MOVE drag, commitGroupDrag's own case) -- but a resize
-          // must NOT trigger that cascade, or "frame-only resize; children unchanged" (T0232
-          // §2b) would silently drag every member along with a moved corner/edge handle. So a
-          // group's origin stays PINNED at its grab-time x/y here; only w/h (still scaled by
-          // the same block factors as every other item) tracks the drag. A known v1 skeleton
-          // limitation: unlike an element, a solo/mixed group therefore only grows from its
-          // fixed top-left regardless of which handle is dragged (flagged in the packet report).
-          item.ref.w = Math.max(SCALE_MIN_SIZE, mapped.w);
-          item.ref.h = Math.max(SCALE_MIN_SIZE, mapped.h);
+          applyGroupScalePreview(item, mapped, groupFrameOnly);
           continue;
         }
         item.ref.x = mapped.x;

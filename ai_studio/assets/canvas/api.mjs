@@ -29,6 +29,7 @@
 //   DELETE /api/canvas/projects/<id>/groups/<gid>
 //   POST   /api/canvas/projects/<id>/groups/<gid>/render {scale?, background?}
 //   POST   /api/canvas/projects/<id>/groups/<gid>/fit {padding?}   (resize frame to content)
+//   POST   /api/canvas/projects/<id>/groups/<gid>/scale {x,y,w,h}   (T0271: scale the group's full subtree -- frame + descendants + text fontSize -- to a new frame; one entry)
 //   POST   /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null, index?}
 //   POST   /api/canvas/projects/<id>/groups/<gid>/ungroup  (dissolve one level, keep children)
 //   POST   /api/canvas/projects/<id>/recipe-cards          {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 1: mint a recipe card — a group with an additive `recipe` blob)
@@ -128,6 +129,7 @@ import {
   reparentGroup,
   resolveProjectFile,
   resolveProjectPath,
+  scaleGroup,
   setElementAnimation,
   setExportSettings,
   setRegions,
@@ -647,6 +649,27 @@ export function createCanvasApi(root) {
         const groupId = decodeURIComponent(parts[5]);
         const body = await readJsonBody(req);
         sendMutation(200, await locked(id, () => fitGroup(root, { projectId: id, groupId, padding: body.padding })));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/groups/<gid>/scale  (T0271: scale the group's FULL
+      // subtree -- the group's own frame AND every descendant element/nested-group box,
+      // proportionally, text fontSize scaled too -- to the given {x,y,w,h} in ONE entry.
+      // Children are computed SERVER-SIDE by scaleGroup/tree.scaleGroupMoves, so the page
+      // never sends descendant patches itself. Distinct from PATCH .../groups/<gid> {w,h},
+      // which is FRAME-ONLY (children pinned) -- the page picks one route or the other per
+      // drag depending on whether Ctrl is held.)
+      if (parts.length === 7 && sub === "groups" && parts[6] === "scale" && req.method === "POST") {
+        const groupId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, await locked(id, () => scaleGroup(root, {
+          projectId: id,
+          groupId,
+          x: body.x,
+          y: body.y,
+          w: body.w,
+          h: body.h,
+        })));
         return true;
       }
 

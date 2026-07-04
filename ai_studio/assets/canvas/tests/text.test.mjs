@@ -59,8 +59,8 @@ test("addText applies defaults + derives the layer name from the first content l
   assert.equal(element.style.fontSize, 24);
   assert.equal(element.style.lineHeight, 1.2);
   assert.equal(element.style.align, "left");
-  assert.equal(element.style.color, "#111111");
-  assert.deepEqual(element.style.stroke, { width: 0, color: "#000000" });
+  assert.equal(element.style.color, "#ffffff");
+  assert.deepEqual(element.style.stroke, { width: 2, color: "#000000" });
   assert.equal(element.style.shadow, null);
   assert.equal(element.style.autoResize, "width");
 });

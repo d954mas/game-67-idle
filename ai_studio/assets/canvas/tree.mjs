@@ -621,6 +621,112 @@ export function distributeMoves(project, nodeIds, axis) {
   return moves;
 }
 
+// ---- group subtree scale (T0271: lead override of T0232 Q2's shipped "frame-only"
+// default) --------------------------------------------------------------------------
+//
+// mapNodeBox/mapFontSize mirror site/viewport.mjs's mapItemBox/scaledFontSize EXACTLY
+// (same formulas) — reimplemented here rather than imported, because viewport.mjs imports
+// FROM tree.mjs (rotatedCorners, near the top of this file), so importing back would be a
+// cycle, and tree.mjs must stay loadable standalone by both ops.mjs (node) and the site.
+// Both pairs are exercised against the SAME expected numbers (tests/scale_handles.test.mjs
+// for viewport.mjs's copies, tests/group_scale.test.mjs for these) — keep them in lockstep
+// by hand if the formula ever changes.
+function mapNodeBox(box, origFrame, newFrame) {
+  const sx = origFrame.w !== 0 ? newFrame.w / origFrame.w : 1;
+  const sy = origFrame.h !== 0 ? newFrame.h / origFrame.h : 1;
+  return {
+    x: newFrame.x + (box.x - origFrame.x) * sx,
+    y: newFrame.y + (box.y - origFrame.y) * sy,
+    w: box.w * sx,
+    h: box.h * sy,
+    sx,
+    sy,
+  };
+}
+
+function mapFontSize(origFontSize, ratio, minSize = 1) {
+  const size = Number(origFontSize) || 0;
+  const r = Number.isFinite(ratio) && ratio > 0 ? ratio : 1;
+  return Math.max(minSize, size * r);
+}
+
+// Floor for a scaled descendant's own w/h (never let a subtree scale invert/collapse a
+// child) — mirrors the site's SCALE_HANDLE minSize floor (site/workspace.js SCALE_MIN_SIZE),
+// kept as its own small constant here since ops.mjs has no equivalent today.
+const SCALE_GROUP_MIN_SIZE = 1;
+
+// scaleGroupMoves(project, groupId, newFrame) -> [{kind:"group"|"element", id, x, y, w, h, fontSize?}]
+// The pure math behind the NEW default group-handle drag (T0271): scale the group's OWN
+// frame AND its FULL descendant closure (descendantsOf — nested subgroup frames AND every
+// element in the subtree) as one rigid block, mapping every node's box from the group's
+// CURRENT frame to `newFrame` by the SAME per-axis factors — a group-subtree scale IS a
+// block scale (T0232's multi-select mapItemBox path), just anchored on the group's own
+// frame instead of a selection's AABB. The group's own patch is `newFrame` verbatim (the
+// caller's exact final drag frame); every descendant is `mapNodeBox`'d through it.
+//
+// A TEXT descendant never has its box stretched (PIL re-measures from content + fontSize,
+// so a stretched box would just be discarded next paint/export, exactly like the site's own
+// per-item text branch in the mousemove "scale" case) — its patch carries `fontSize`
+// (scaled by the mapping's `sy`, mirroring scaledFontSize) INSTEAD of `w`/`h`. Every other
+// node (image, note, nested group) gets its `x`/`y`/`w`/`h` box remapped and NOTHING else —
+// in particular a rotated element's `rotation` field is left completely untouched, exactly
+// like the existing multi-select block-scale path: T0232 never invented a subtree-rotation
+// convention (a rotated child's ANGLE never changes in a block scale, only its box), and
+// this doesn't invent one either.
+//
+// Loud + pure: an unknown `groupId`, a non-finite `newFrame.x`/`.y`, or a non-positive
+// `newFrame.w`/`.h` throws before anything is computed (no partial patch list — mirrors
+// fitGroup's padding validation). A same-frame call is a VALID no-op: every patch below
+// comes out numerically identical to the node's current box (sx=sy=1), so the caller's
+// commitMutation before===after guard writes no journal entry; this function itself never
+// special-cases "unchanged".
+export function scaleGroupMoves(project, groupId, newFrame) {
+  const group = groupsArr(project).find((item) => item.id === groupId);
+  if (!group) throw new Error(`group not found: ${groupId}`);
+  const frame = newFrame || {};
+  if (!Number.isFinite(Number(frame.x)) || !Number.isFinite(Number(frame.y))) {
+    throw new Error(`scaleGroupMoves requires a finite newFrame x/y, got ${JSON.stringify(newFrame)}`);
+  }
+  if (!(Number(frame.w) > 0) || !(Number(frame.h) > 0)) {
+    throw new Error(`scaleGroupMoves requires a positive newFrame w/h, got ${JSON.stringify(newFrame)}`);
+  }
+  const origFrame = { x: Number(group.x) || 0, y: Number(group.y) || 0, w: Number(group.w) || 0, h: Number(group.h) || 0 };
+  const target = { x: Number(frame.x), y: Number(frame.y), w: Number(frame.w), h: Number(frame.h) };
+  const patches = [{ kind: "group", id: group.id, x: target.x, y: target.y, w: target.w, h: target.h }];
+
+  const { groups, elements } = descendantsOf(project, groupId);
+  for (const descGroup of groups) {
+    const box = { x: Number(descGroup.x) || 0, y: Number(descGroup.y) || 0, w: Number(descGroup.w) || 0, h: Number(descGroup.h) || 0 };
+    const mapped = mapNodeBox(box, origFrame, target);
+    patches.push({
+      kind: "group",
+      id: descGroup.id,
+      x: mapped.x,
+      y: mapped.y,
+      w: Math.max(SCALE_GROUP_MIN_SIZE, mapped.w),
+      h: Math.max(SCALE_GROUP_MIN_SIZE, mapped.h),
+    });
+  }
+  for (const element of elements) {
+    const box = { x: Number(element.x) || 0, y: Number(element.y) || 0, w: Number(element.w) || 0, h: Number(element.h) || 0 };
+    const mapped = mapNodeBox(box, origFrame, target);
+    if (element.type === "text") {
+      const origFontSize = Number((element.style || {}).fontSize) || 24;
+      patches.push({ kind: "element", id: element.id, x: mapped.x, y: mapped.y, fontSize: mapFontSize(origFontSize, mapped.sy) });
+      continue;
+    }
+    patches.push({
+      kind: "element",
+      id: element.id,
+      x: mapped.x,
+      y: mapped.y,
+      w: Math.max(SCALE_GROUP_MIN_SIZE, mapped.w),
+      h: Math.max(SCALE_GROUP_MIN_SIZE, mapped.h),
+    });
+  }
+  return patches;
+}
+
 // ---- copy/paste node spec (T0227) --------------------------------------------
 //
 // The serialized shape a Ctrl+C snapshot / CLI nodes-duplicate builds and the paste

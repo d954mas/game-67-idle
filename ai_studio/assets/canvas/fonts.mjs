@@ -29,8 +29,8 @@ export const DEFAULT_TEXT_STYLE = Object.freeze({
   fontSize: 24,
   lineHeight: 1.2,
   align: "left",
-  color: "#111111",
-  stroke: Object.freeze({ width: 0, color: "#000000" }),
+  color: "#ffffff",
+  stroke: Object.freeze({ width: 2, color: "#000000" }),
   shadow: null,
   autoResize: "width",
 });

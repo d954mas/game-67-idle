@@ -44,6 +44,7 @@
 //   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none] [--clip true|false]
 //   node ai_studio/assets/canvas/cli.mjs groups-set <id> --groups g1,g2 [--visible true|false] [--clip true|false]   (batched shared toggles; one undo)
 //   node ai_studio/assets/canvas/cli.mjs group-fit <id> --group g [--padding n]
+//   node ai_studio/assets/canvas/cli.mjs group-scale <id> --group g --x n --y n --w n --h n   (T0271: scale the group's full subtree -- frame + every descendant + text fontSize -- to a new frame; one undo step)
 //   node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 //   node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
@@ -127,6 +128,7 @@ import {
   reorderNode,
   reorderNodes,
   reparentGroup,
+  scaleGroup,
   setElementAnimation,
   setExportSettings,
   setOpsActor,
@@ -209,7 +211,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
   list [--full]   (summary by default: [{id,title,created,updated,elements,groups,head}]; --full = every project in full, today's original dump)
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -254,6 +256,7 @@ function usage() {
   group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>] [--background '#rrggbb'|none] [--clip true|false]
   groups-set <id> --groups g1,g2 [--visible true|false] [--clip true|false]   (batched shared toggles; one undo step)
   group-fit <id> --group <gid> [--padding <n>]   (resize the frame to fit its content; padding default 24)
+  group-scale <id> --group <gid> --x <n> --y <n> --w <n> --h <n>   (T0271: scale the group's FULL subtree — the frame AND every descendant element/nested-group box, text fontSize scaled too — to the given frame; server computes every descendant patch, so page and CLI can't disagree; one undo step. Distinct from group-set's frame-only --w/--h, which pins children in place.)
   group-assign <id> --elements e1,e2 --group <gid>|none
   group-ungroup <id> --group <gid>   (dissolve one level; children keep the group's z-slot; one undo step)
   group-delete <id> --group <gid>
@@ -826,6 +829,26 @@ async function runCommand(command, id, positional, flags) {
       // validates it (finite >= 0, else a loud error — no silent fallback).
       if (flags.padding !== undefined && flags.padding !== "true") args.padding = Number(flags.padding);
       return print(fitGroup(repoRoot, args));
+    }
+    case "group-scale": {
+      // T0271: scale the group's full subtree (frame + descendants + text fontSize) to a
+      // new frame — the default drag-mode counterpart to group-set's frame-only --w/--h.
+      // All four dims are required (this IS the final frame, not a partial patch); the op
+      // itself validates finite x/y and positive w/h, but fail early here with a clearer
+      // message than the op's own per-field error.
+      if (!id) fail("group-scale requires <id>");
+      if (!flags.group) fail("group-scale requires --group <gid>");
+      if (flags.x === undefined || flags.y === undefined || flags.w === undefined || flags.h === undefined) {
+        fail("group-scale requires --x --y --w --h");
+      }
+      return print(scaleGroup(repoRoot, {
+        projectId: id,
+        groupId: flags.group,
+        x: Number(flags.x),
+        y: Number(flags.y),
+        w: Number(flags.w),
+        h: Number(flags.h),
+      }));
     }
     case "group-assign": {
       if (!id) fail("group-assign requires <id>");

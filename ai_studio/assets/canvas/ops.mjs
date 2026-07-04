@@ -82,7 +82,7 @@ import { runCorridorKey } from "../tools/video/matte/matte.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
-import { alignMoves, ancestorsOf, blockReorder, buildNodesSpec, descendantsOf, distributeMoves, frontOrder, isNodeHidden, isNodeTransformed, nodeAABB, nodeScope, orderedChildren, wouldCycle } from "./tree.mjs";
+import { alignMoves, ancestorsOf, blockReorder, buildNodesSpec, descendantsOf, distributeMoves, frontOrder, isNodeHidden, isNodeTransformed, nodeAABB, nodeScope, orderedChildren, scaleGroupMoves, wouldCycle } from "./tree.mjs";
 // Shared, pure text/font contract (imported by the site too — see fonts.mjs). ops.mjs
 // owns the node-only disk read of the manifest; all validation/merge/resolution logic
 // lives in fonts.mjs so the browser and the agent normalize a style identically.
@@ -1785,6 +1785,63 @@ export function fitGroup(root, { projectId, groupId, padding } = {}) {
   const project = commitMutation(root, projectId, {
     op: "fitGroup",
     args_summary: { groupId, padding: pad, x: frame.x, y: frame.y, w: frame.w, h: frame.h },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, group: (project.groups || []).find((item) => item.id === groupId) };
+}
+
+// Scale a group's FULL subtree to a new frame in ONE journaled gesture (T0271: the lead's
+// override of T0232 Q2's shipped default — dragging a group's scale handles now scales its
+// CONTENT by default; a Ctrl-held drag keeps the old frame-only `patchGroup` path). Unlike
+// `patchGroup` (which only ever moves/resizes the group's OWN frame, pinning members),
+// this computes the group's own frame AND every descendant element/nested-group's box from
+// the PURE mapping `tree.scaleGroupMoves` gives (the group's CURRENT frame -> the requested
+// `{x,y,w,h}`) and commits them all together — the page never has to compute/send
+// descendant patches itself (so page and op can never disagree on the math). A text
+// descendant's `fontSize` scales instead of its box (see `scaleGroupMoves`); every other
+// node's box is remapped as-is, `rotation` untouched. Loud + atomic: an unknown group, a
+// non-finite `x`/`y`, or a non-positive `w`/`h` throws before any write (`scaleGroupMoves`
+// itself validates, before `updateProject` is ever called). A same-frame call writes no
+// journal entry (commitMutation's own no-op guard — `scaleGroupMoves`' patches come out
+// identical to the current state). One commitMutation, so a single undo restores the group
+// AND every descendant exactly.
+export function scaleGroup(root, { projectId, groupId, x, y, w, h } = {}) {
+  if (!projectId) throw new Error("scaleGroup requires projectId");
+  if (!groupId) throw new Error("scaleGroup requires groupId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const patches = scaleGroupMoves(before, groupId, { x, y, w, h }); // pure; throws before any write
+
+  const groupPatchById = new Map();
+  const elementPatchById = new Map();
+  for (const patch of patches) {
+    if (patch.kind === "group") groupPatchById.set(patch.id, patch);
+    else elementPatchById.set(patch.id, patch);
+  }
+
+  const nextGroups = groupsOf(before).map((group) => {
+    const patch = groupPatchById.get(group.id);
+    return patch ? { ...group, x: patch.x, y: patch.y, w: patch.w, h: patch.h } : group;
+  });
+  const nextElements = (before.elements || []).map((element) => {
+    const patch = elementPatchById.get(element.id);
+    if (!patch) return element;
+    const next = { ...element, x: patch.x, y: patch.y };
+    if (patch.fontSize !== undefined) {
+      next.style = { ...next.style, fontSize: patch.fontSize };
+    } else {
+      next.w = patch.w;
+      next.h = patch.h;
+    }
+    return next;
+  });
+
+  const after = updateProject(root, projectId, { groups: nextGroups, elements: nextElements });
+  const project = commitMutation(root, projectId, {
+    op: "scaleGroup",
+    args_summary: { groupId, x, y, w, h, count: patches.length },
     before,
     after,
     startedAt,
@@ -3524,6 +3581,7 @@ export function historyEntryLabel(op, args = {}) {
     case "deleteGroup": return { label: "Delete group", summary: "" };
     case "assignToGroup": return { label: "Move to group", summary: "" };
     case "fitGroup": return { label: "Fit group", summary: "" };
+    case "scaleGroup": return { label: "Scale group", summary: "" };
     case "reparentGroup": return { label: "Nest group", summary: "" };
     case "ungroupGroup": return { label: "Ungroup", summary: "" };
     case "createRecipeCard": return { label: "Recipe card", summary: String(a.name || "") };

@@ -151,9 +151,9 @@ Every capability is one op in `ops.mjs`:
   dedicated-op shape as `setRegions`/`setExportSettings` (not a `patchElement`
   field): image-only, loud set-time validation, free undo/redo (slice9 rides the
   elements snapshot). Journaled. See **9-slice elements** below.
-- `createGroup` / `patchGroup` / `fitGroup` / `assignToGroup` / `deleteGroup` — group
-  (screen) mutations, journaled; `renderGroup` — composited screen PNG export, not
-  journaled. See **Groups = screens** below.
+- `createGroup` / `patchGroup` / `fitGroup` / `scaleGroup` / `assignToGroup` /
+  `deleteGroup` — group (screen) mutations, journaled; `renderGroup` — composited
+  screen PNG export, not journaled. See **Groups = screens** below.
 - `createRecipeCard({projectId, name?, x?, y?, w?, h?, parentId?})` / `patchRecipe({
   projectId, groupId, patch})` / `generateFromRecipe({projectId, groupId, generators?})` —
   **(T0239 increments 1-2)** the generation recipe card: a group carrying an additive
@@ -366,6 +366,21 @@ scope-crossing walk (render, move cascade, delete, visibility) is cycle-safe.
   preserved. An **empty group** (no descendant content) is a **loud error** ("nothing to
   fit"), as is a non-finite or negative `padding` (no silent fallback). One journal entry;
   undo restores the old frame.
+- `scaleGroup({projectId, groupId, x, y, w, h})` — **(T0271)** scale the group's **full
+  subtree** to a new frame: unlike `fitGroup`/`patchGroup` resize, **children move and
+  resize with it**. The pure math (`tree.scaleGroupMoves`) maps the group's OWN frame
+  **and** its full descendant closure (nested subgroup frames AND every element in the
+  subtree) from the group's **current** frame to the given `{x,y,w,h}` by the same
+  per-axis factors a multi-select block-scale uses — a group-subtree scale **is** a block
+  scale, just anchored on the group's own frame. A **text** descendant never has its box
+  stretched: only its `fontSize` scales (by the height ratio, same formula as
+  `scaledFontSize`); every other node's box is remapped as-is, with a rotated element's
+  `rotation` left untouched (mirrors the existing multi-select block-scale path — T0232
+  never invented a subtree-rotation convention, and this doesn't either). All four
+  `x/y/w/h` are required (this **is** the final frame, not a partial patch); a non-finite
+  `x`/`y` or a non-positive `w`/`h` is a **loud error**, as is an unknown `groupId`. A
+  same-frame call is a valid no-op (no journal entry). **One** journal entry covers the
+  group AND every descendant; one undo restores them all exactly.
 - `reparentGroup({projectId, groupId, parentId|null, index?})` — move a group under a new
   parent (`null` = top level) at an optional **merged-sibling** `index` (default = front
   of the destination scope). **Cycle guard**: a parent that is the group itself or any
@@ -400,15 +415,25 @@ scope-crossing walk (render, move cascade, delete, visibility) is cycle-safe.
   restores the group exactly. Grandchildren stay under the surviving subgroups.
 
 HTTP: `POST /api/canvas/projects/<id>/groups/<gid>/fit {padding?}` (resize to content);
-`POST /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null, index?}`;
-`POST .../groups {..., parentId?}` nests on create. The **Fit to content** button in the
-inspector Position & Size section (disabled for a trivially-empty group) and the group
-context-menu **Fit to content** item both call `fitGroup`. Page (Figma nesting): a canvas drag
-moves a selected group's **whole subtree**; the layers panel drags a group onto another
-group's header **middle** to nest (its own subtree is an inert target — a cycle can't be
-dropped), a header **edge**/element row to reorder or reparent across scopes (the
+`POST /api/canvas/projects/<id>/groups/<gid>/scale {x,y,w,h}` (T0271: scale the full
+subtree — server computes every descendant patch via `scaleGroup`, so the page never sends
+them itself); `POST /api/canvas/projects/<id>/groups/<gid>/reparent {parentId|null,
+index?}`; `POST .../groups {..., parentId?}` nests on create. The **Fit to content** button
+in the inspector Position & Size section (disabled for a trivially-empty group) and the
+group context-menu **Fit to content** item both call `fitGroup`. Page (Figma nesting): a
+canvas drag moves a selected group's **whole subtree**; the layers panel drags a group onto
+another group's header **middle** to nest (its own subtree is an inert target — a cycle
+can't be dropped), a header **edge**/element row to reorder or reparent across scopes (the
 insertion line's indent encodes the target scope); the group context menu's **Move to
 group ▸** submenu lists nested targets indented.
+
+**Scale handles (T0271).** Dragging a selected group's scale handle **scales its content by
+default**: the group's own frame AND its full descendant closure move/resize with it (a
+text descendant's font size scales instead of its box), committed via `scaleGroup`.
+Holding **Ctrl/Cmd** during the drag switches to the **original T0232 frame-only** behavior
+— only the group's own `w`/`h` change, children stay exactly where they were, committed via
+the plain `PATCH .../groups/<gid> {w,h}` — read live per event like `Shift`(proportional)/
+`Alt`(from-center), so toggling the modifier mid-drag flips modes on the very next frame.
 
 ### Node z-order (`reorderNode`)
 
@@ -890,13 +915,14 @@ newlines) and a `style` block:
 
 ```json
 { "fontFamily": "Inter", "fontWeight": 400, "fontStyle": "normal", "fontSize": 24,
-  "lineHeight": 1.2, "align": "left", "color": "#111111",
-  "stroke": { "width": 0, "color": "#000000" }, "shadow": null, "autoResize": "width" }
+  "lineHeight": 1.2, "align": "left", "color": "#ffffff",
+  "stroke": { "width": 2, "color": "#000000" }, "shadow": null, "autoResize": "width" }
 ```
 
 `shadow`, when set, is a HARD offset `{ dx, dy, blur, color }` (blur is stored but always
 0 in v1). The defaults are `content` "Text", Inter 400, size 24, lineHeight 1.2
-(unitless), align left, color `#111111`, stroke width 0, shadow off.
+(unitless), align left, color `#ffffff`, stroke width 2 `#000000` (white text on a black
+outline reads on typical art), shadow off.
 
 **v1 scope** (kills the parity traps): **auto-width only** (explicit newlines, NO
 auto-wrap), solid fill, OUTLINE + HARD offset shadow, align L/C/R. Letter-spacing, shadow
@@ -1416,6 +1442,7 @@ node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
 node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none] [--clip true|false]
 node ai_studio/assets/canvas/cli.mjs groups-set <id> --groups g1,g2 [--visible true|false] [--clip true|false]   # batched shared toggles (multi-group inspector); one undo step
 node ai_studio/assets/canvas/cli.mjs group-fit <id> --group g [--padding n]   # resize the frame to fit its content (padding default 24)
+node ai_studio/assets/canvas/cli.mjs group-scale <id> --group g --x n --y n --w n --h n   # T0271: scale the group's FULL subtree (frame + every descendant + text fontSize) to a new frame; server computes descendant patches; one undo step. Distinct from group-set's frame-only --w/--h (children pinned).
 node ai_studio/assets/canvas/cli.mjs group-assign <id> --elements e1,e2 --group g|none
 node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g   # dissolve one level; children keep the group's z-slot; one undo step
 node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
@@ -1635,6 +1662,7 @@ context-menu **Clip content** item, or the CLI `group-set --clip`.
 | `Ctrl/Cmd`+`G` | Group 2+ selected elements into a screen |
 | `Ctrl/Cmd`+`C` / `Ctrl/Cmd`+`V` / `Ctrl/Cmd`+`D` | Copy the selection (elements/groups/mixed) to the page buffer / paste it into the current scope (repeat paste offsets again) / duplicate in place (+offset) — one journal entry per paste/duplicate |
 | `Ctrl/Cmd`+`]` / `Ctrl/Cmd`+`[` (`+Alt` = to front / to back) | Z-order the single selected node (a group, or one element) among its merged siblings |
+| Drag a group's scale handle (`Ctrl/Cmd` held = frame/zone only) | **(T0271)** Default: scale the group's full subtree — children move/resize proportionally, text font sizes scale (`scaleGroup`). `Ctrl`/`Cmd` held: resize only the group's own frame, children unchanged (the original T0232 behavior, `patchGroup {w,h}`). `Shift`/`Alt` (proportional-lock / from-center) work the same in both modes |
 | `Delete` / `Backspace` | Region-edit mode: remove selected regions; else remove the selection — elements only, a single group + its subtree, or a mixed/multi-group selection (batched `deleteNodes`), always one journal entry |
 | `Escape` | Close menu, then exit region-edit isolation, then step UP one entered-group scope, then clear selection |
 | Right-click | Context menu (element / region / group / empty); double-click a name to inline-rename |
