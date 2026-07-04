@@ -40,6 +40,8 @@
 //   PATCH  /api/canvas/projects/<id>/style-cards/<gid>     {prompt?, ref?}                    (partial style blob update; ref must be null or a member IMAGE element id — the "Make ref" gesture; 400 on a group with no `style`)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/cleanup-preview {tool, params}  (T0207: quantize|denoise LIVE preview against CURRENT pixels; writes NOTHING to the store)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/cleanup        {tool, params}  (T0207: apply — new file + element.src swap; one journal entry)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/filters-bake  {}   (T0274 "Apply": rasterize the element's CURRENT filters+opacity into a new source file, then clear both; one journal entry)
+//   POST   /api/canvas/projects/<id>/filters-bake  {elementIds}   (batch: 2+ images baked into ONE journal entry/undo, atomic)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/extract        {}   (T0239 increment 4: ONE codex VISION call -> element.meta.extracted {prompt_full, prompt_subject, style, description}; no card minted here — re-running overwrites)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/animate        {text}   (T0264: ONE codex TEXT/VISION call -> element.animation (the ai_studio.canvas.animation.v1 spec); authors fresh or minimally patches an existing spec; image + text; loud on a non-JSON reply / invalid spec)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/promote-recipe {}   (mint a RECIPE card BELOW the element from its ALREADY-STORED meta.extracted; NO codex call; loud without meta.extracted first)
@@ -82,6 +84,7 @@ import {
   alphaDualPlateGenerate,
   animateElementFromText,
   assignToGroup,
+  bakeFilters,
   cleanupApply,
   cleanupPreview,
   createGroup,
@@ -799,6 +802,31 @@ export function createCanvasApi(root) {
         const elementId = decodeURIComponent(parts[5]);
         const body = await readJsonBody(req);
         sendMutation(200, await locked(id, () => cleanupApply(root, { projectId: id, elementId, tool: body.tool, params: body.params })));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/filters-bake  (T0274 "Apply")
+      // Rasterize the element's CURRENT non-destructive filters+opacity (T0273/T0260) into a
+      // NEW content-addressed source file, then clear both (the sliders reset) — ONE journal
+      // entry; undo restores the previous src + filters + opacity byte-exact, like alphaCutout.
+      // Loud (400) when the element has nothing to bake (filters/opacity already at defaults).
+      if (parts.length === 7 && sub === "elements" && parts[6] === "filters-bake" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        await readJsonBody(req);
+        sendMutation(200, await locked(id, () => bakeFilters(root, { projectId: id, elementId })));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/filters-bake  (T0274 "Apply", batch)
+      // The multi-selection "Apply filters on N images" gesture: elementIds (2+ images) baked
+      // into ONE journal entry/undo, atomic (any refusal — non-image, nothing to bake — rejects
+      // the whole batch, nothing mutated). Mirrors /alpha's project-level batch shape.
+      if (parts.length === 5 && sub === "filters-bake" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(200, await locked(id, () => bakeFilters(root, {
+          projectId: id,
+          elementIds: Array.isArray(body.elementIds) ? body.elementIds : [],
+        })));
         return true;
       }
 

@@ -646,6 +646,40 @@ export async function cleanupApplyAction(elementId, tool, params, control) {
   );
 }
 
+// ---- filters bake (T0274 "Apply": rasterize filters+opacity into pixels) -----
+//
+// Photoshop-rasterize semantics ("принял -> получил новый арт -> ползунки снова в 0"):
+// burns the element's CURRENT non-destructive filters+opacity (T0273/T0260) into a NEW
+// content-addressed source file as ONE journaled mutation, then clears both fields — the
+// inspector's Filters section re-renders with every slider back at its default. Same
+// runLongOp limiter/spinner/disable treatment as Alpha cutout/Cleanup (python-backed).
+export async function bakeFiltersFor(elementId, control) {
+  await runLongOp(
+    "Apply filters…",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/elements/${elementId}/filters-bake`, {});
+      applyMutation(result);
+      return { kind: "success", message: "Filters applied — new art, sliders reset." };
+    },
+    { control },
+  );
+}
+
+// Batch "Apply filters on N images" (T0274): every selected image bakes its own CURRENT
+// filters+opacity in ONE journaled op (one Ctrl+Z restores every element). Atomic — mirrors
+// alphaCutoutBatchFor.
+export async function bakeFiltersBatchFor(ids, control) {
+  await runLongOp(
+    "Apply filters…",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/filters-bake`, { elementIds: ids });
+      applyMutation(result);
+      return { kind: "success", message: `Filters applied to ${ids.length} images.` };
+    },
+    { control },
+  );
+}
+
 // ---- regions -----------------------------------------------------------------
 
 // Replace an element's regions in one journaled setRegions op. Region edits

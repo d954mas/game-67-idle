@@ -3663,6 +3663,7 @@ export function historyEntryLabel(op, args = {}) {
     case "alphaDualPlate": return { label: "Dual-plate alpha", summary: "" };
     case "alphaDualPlateGenerate": return { label: "Dual-plate alpha (generated)", summary: "" };
     case "cleanupApply": return { label: a.tool === "denoise" ? "Denoise" : "Quantize", summary: "" };
+    case "bakeFilters": return { label: "Apply filters", summary: a.count ? plural(count(a.count), "image") : "" };
     case "setExportSettings": return { label: "Export settings", summary: "" };
     case "patchProject": return { label: "Rename project", summary: String(a.title || "") };
     case "createGroup": return { label: "Group", summary: String(a.name || "") };
@@ -4759,6 +4760,212 @@ export async function cleanupApply(root, { projectId, elementId, tool, params } 
     params: clean,
     report,
   };
+}
+
+// ---- bakeFilters ("Apply" — rasterize filters + opacity into pixels) ---------
+//
+// T0274 (lead-approved, Photoshop-rasterize semantics): "принял -> получил новый арт ->
+// ползунки снова в 0". element.filters/element.opacity (T0273/T0260) are non-destructive
+// so the lead can iterate, but he also wants to COMMIT a look: burn the CURRENT filters +
+// opacity into a NEW content-addressed source file and reset the sliders — Photoshop's
+// "Flatten"/rasterize on an adjustment layer. Mirrors alphaCutout/cleanupApply's
+// non-destructive src-swap shape verbatim (own Python tool, own temp dir, one
+// commitMutation, previous file kept in files/ so undo restores byte-exact).
+//
+// Math: tools/bake_filters.py imports the SAME apply_filters() render_group.py's paint
+// path uses (extracted to tools/filters_math.py, T0274 — one implementation of the
+// canonical brightness/saturate/contrast/tint chain, see README "Image filters"), then
+// multiplies the alpha channel by opacity with the IDENTICAL formula paint_element uses
+// (`round(a * factor)` via PIL's own `.point()`) — so the baked asset's pixels match the
+// on-canvas preview exactly. Opacity-to-alpha lives ONLY in bake_filters.py; render_group.py
+// still applies opacity at composite time for every OTHER (non-baked) element, so nothing
+// here double-applies it.
+//
+// Image elements only (loud on text/note, mirrors alphaCutout's type guard). A loud error
+// when the element has NOTHING to bake (no/default filters AND opacity absent-or-1) — no
+// silent no-op file churn.
+
+// True when an element carries a filters object (always non-empty when present — see
+// normalizeFilters) OR a stored opacity != 1 (also always the non-default case — see
+// normalizeOpacityPatch) — the "there is something to bake" gate shared by the single AND
+// batch paths.
+export function hasBakeableFilters(element) {
+  if (!element) return false;
+  if (element.filters && typeof element.filters === "object" && Object.keys(element.filters).length) return true;
+  const opacity = element.opacity;
+  return opacity !== undefined && opacity !== null && Number(opacity) !== 1;
+}
+
+// Resolve + validate the element for a bake: must be an image with a src, and must carry
+// something to bake (loud otherwise, BEFORE any python spawn).
+function resolveBakeElement(project, elementId) {
+  const element = (project.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
+  if (!hasBakeableFilters(element)) {
+    throw new Error(`element ${elementId} has nothing to apply — filters are at defaults`);
+  }
+  return element;
+}
+
+// Run ONE element's CURRENT pixels through bake_filters.py (own worker spawn + own temp
+// dir, deleted before returning) and return the new content-addressed src + the tool's
+// report, WITHOUT touching project.json — the caller (single or batch) commits. Mirrors
+// runAlphaCutoutTool/runCleanupToolOnElement exactly.
+async function runBakeFiltersTool(root, projectId, element) {
+  const sourceAbs = resolveProjectFile(root, projectId, element.src);
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-bake-"));
+  try {
+    const specPath = join(workDir, "bake_spec.json");
+    const reportPath = join(workDir, "bake_report.json");
+    const outPath = join(workDir, "bake_out.png");
+    const spec = {
+      schema: "ai_studio.canvas.bake_filters_spec.v1",
+      source: sourceAbs,
+      output: outPath,
+      report: reportPath,
+    };
+    if (element.filters) spec.filters = element.filters;
+    if (element.opacity !== undefined) spec.opacity = element.opacity;
+    writeFileSync(specPath, `${JSON.stringify(spec, null, 2)}\n`);
+    await runToolPython(root, ["ai_studio/assets/canvas/tools/bake_filters.py", "--spec", specPath]);
+    const report = JSON.parse(readFileSync(reportPath, "utf8"));
+    const bytes = readFileSync(outPath);
+    const newSrc = storeAddFile(root, projectId, { bytes, name: `${slug(element.name)}.png` }).src;
+    return { newSrc, report };
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// Build the tool_runs row + element.meta.filters_bake provenance for one baked element
+// (shared by the single and batch paths). `baked` records exactly what was burned in (the
+// filters object and the opacity the element carried going in), so "what did Apply just
+// do" is answerable without re-deriving it from the undo state.
+function buildBakeProvenance(elementId, element, report, prevSrc) {
+  const at = new Date().toISOString();
+  const baked = { filters: element.filters || null, opacity: element.opacity !== undefined ? element.opacity : 1 };
+  const run = {
+    id: `run_${randomUUID().slice(0, 8)}`,
+    op: "filters_bake",
+    elementId,
+    at,
+    params: baked,
+    result_summary: { width: report && report.width, height: report && report.height },
+  };
+  const bakeMeta = { prev_src: prevSrc, baked, at };
+  return { run, bakeMeta };
+}
+
+// Single-element path.
+async function bakeFiltersSingle(root, projectId, before, elementId, startedAt) {
+  const element = resolveBakeElement(before, elementId);
+  const { newSrc, report } = await runBakeFiltersTool(root, projectId, element);
+
+  // Re-read to avoid clobbering concurrent edits, then swap src + clear filters/opacity +
+  // record provenance on the SAME element (previous src file stays in files/, so undo
+  // restores the exact previous bytes AND the exact previous filters/opacity).
+  const current = getProject(root, projectId);
+  const target = (current.elements || []).find((item) => item.id === elementId);
+  if (!target) throw new Error(`element not found: ${elementId}`);
+  const { run, bakeMeta } = buildBakeProvenance(elementId, element, report, target.src);
+  const nextElements = (current.elements || []).map((item) => {
+    if (item.id !== elementId) return item;
+    const next = { ...item, src: newSrc, meta: { ...(item.meta || {}), filters_bake: bakeMeta } };
+    delete next.filters;
+    delete next.opacity;
+    return next;
+  });
+  const after = updateProject(root, projectId, {
+    elements: nextElements,
+    tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
+  });
+  const project = commitMutation(root, projectId, {
+    op: "bakeFilters",
+    args_summary: { elementId },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, element: (project.elements || []).find((item) => item.id === elementId), run };
+}
+
+// Batch path — the multi-selection "Apply filters on N images" gesture. Atomic
+// all-or-nothing, mirrors alphaCutoutBatch exactly: every element is validated up front
+// (exists, is an image, HAS something to bake) BEFORE any python spawn; each is then baked
+// SEQUENTIALLY through its own worker spawn; if ANY element fails, the error propagates
+// immediately and NOTHING is written to project.json. Only once EVERY element has baked
+// successfully does this commit ONE journal entry swapping every src + clearing every
+// element's filters/opacity — one undo restores every element byte-exact.
+async function bakeFiltersBatch(root, projectId, before, elementIds, startedAt) {
+  const ids = elementIds.map((value) => String(value));
+  const unique = [...new Set(ids)];
+  const elements = unique.map((elementId) => resolveBakeElement(before, elementId));
+
+  const processed = [];
+  for (const element of elements) {
+    const { newSrc, report } = await runBakeFiltersTool(root, projectId, element);
+    processed.push({ element, newSrc, report });
+  }
+
+  // Re-read once (defensive against a concurrent edit across the whole sequential run),
+  // then swap every src + clear every element's filters/opacity off the SAME snapshot.
+  const current = getProject(root, projectId);
+  const runs = [];
+  const swapById = new Map();
+  for (const item of processed) {
+    const target = (current.elements || []).find((el) => el.id === item.element.id);
+    if (!target) throw new Error(`element not found: ${item.element.id}`);
+    const { run, bakeMeta } = buildBakeProvenance(item.element.id, item.element, item.report, target.src);
+    runs.push(run);
+    swapById.set(item.element.id, { newSrc: item.newSrc, bakeMeta });
+  }
+  const nextElements = (current.elements || []).map((item) => {
+    const swap = swapById.get(item.id);
+    if (!swap) return item;
+    const next = { ...item, src: swap.newSrc, meta: { ...(item.meta || {}), filters_bake: swap.bakeMeta } };
+    delete next.filters;
+    delete next.opacity;
+    return next;
+  });
+  const after = updateProject(root, projectId, {
+    elements: nextElements,
+    tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), ...runs]),
+  });
+  const project = commitMutation(root, projectId, {
+    op: "bakeFilters",
+    args_summary: { elementIds: unique, count: unique.length },
+    before,
+    after,
+    startedAt,
+  });
+  const resultIds = new Set(unique);
+  return {
+    project,
+    elements: (project.elements || []).filter((item) => resultIds.has(item.id)),
+    runs,
+    count: unique.length,
+  };
+}
+
+// Bake the element's CURRENT filters+opacity into a NEW content-addressed source file in
+// ONE journaled entry, then reset the sliders (filters/opacity cleared) — "принял -> получил
+// новый арт -> ползунки снова в 0". `elementIds` (2+ images), given INSTEAD of `elementId`,
+// batches a multi-selection into ONE journal entry/undo (mirrors alphaCutout).
+export async function bakeFilters(root, { projectId, elementId, elementIds } = {}) {
+  if (!projectId) throw new Error("bakeFilters requires projectId");
+  const batch = elementIds !== undefined && elementIds !== null;
+  if (batch && elementId != null) {
+    throw new Error("bakeFilters accepts either elementId or elementIds, not both");
+  }
+  if (!batch && !elementId) throw new Error("bakeFilters requires elementId");
+  if (batch && (!Array.isArray(elementIds) || !elementIds.length)) {
+    throw new Error("bakeFilters requires a non-empty elementIds array");
+  }
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  if (batch) return bakeFiltersBatch(root, projectId, before, elementIds, startedAt);
+  return bakeFiltersSingle(root, projectId, before, elementId, startedAt);
 }
 
 // ---- alphaDualPlate (white+black plate pair -> one new cut element) ----------

@@ -1195,12 +1195,15 @@ refusal guard.
   (keyed by `src` + the filters signature — mirrors `layers_panel.js`'s thumbnail cache
   precedent) and pruned each render alongside it; an element with no tint pays zero
   offscreen cost, an element with no filters at all takes the exact pre-existing fast path.
-- **PIL** (`tools/render_group.py` `apply_filters`, called from `paint_element` right after
-  the resize/slice9 step, **before** flip/rotate — per-pixel color ops commute with
-  geometry, so this ordering is a free choice, picked so filters read the untransformed
-  post-resize pixels): the same four steps in `numpy`, alpha channel copied through
-  byte-for-byte untouched. **PIL is the single source of rendered truth**; the canvas
-  approximates via the browser's own spec'd CSS filters, which compute the same functions.
+- **PIL** (`tools/filters_math.py` `apply_filters` — T0274: extracted out of
+  `render_group.py` so it is the ONE shared implementation both `render_group.py`
+  (`paint_element`, called right after the resize/slice9 step, **before** flip/rotate —
+  per-pixel color ops commute with geometry, so this ordering is a free choice, picked so
+  filters read the untransformed post-resize pixels) and `tools/bake_filters.py` (see
+  **Filters bake ("Apply")** below) import): the same four steps in `numpy`, alpha channel
+  copied through byte-for-byte untouched. **PIL is the single source of rendered truth**;
+  the canvas approximates via the browser's own spec'd CSS filters, which compute the same
+  functions.
 - `ops.buildRenderNodes` forwards `filters` verbatim on an image paint node (`undefined`
   when absent, so `JSON.stringify` drops the key — zero shape change for an unfiltered
   element), same as `rotation`/`flipH`/`opacity`/`slice9`.
@@ -1229,6 +1232,53 @@ filters (an "export the source asset" action, not an "export what's on screen" a
 `patchElementBox`/`patchElementsBatch` → the SAME `patchElement`/`patchElements` fields the
 agent sets via `element-set --filters-json '<json|null>'` (or `elements-set`'s batched
 JSON patches) — whatever the page can set, the CLI/API can set identically.
+
+### Filters bake ("Apply")
+
+**(T0274 — Photoshop-rasterize semantics; lead: "принял -> получил новый арт -> ползунки
+снова в 0".)** `element.filters`/`element.opacity` are non-destructive so the lead can
+iterate, but **Apply** commits a look: it burns the element's CURRENT filters + opacity
+into a **new** content-addressed source file (own Python tool, own temp dir — mirrors
+`alphaCutout`/`cleanupApply` exactly) as **one** journaled mutation, then **clears** both
+fields so the sliders reset to their defaults. `source_w`/`source_h`/`w`/`h`/`x`/`y`/
+`rotation`/`flip`/regions are all **untouched** (geometry never changes — the output PNG
+is written at the source's full resolution, same as `alphaCutout`), and the previous file
+stays in `files/`, so undo restores the previous src **and** the previous filters/opacity
+byte-exact.
+
+**Math (single source of truth).** `tools/bake_filters.py` imports the SAME
+`tools/filters_math.py` `apply_filters()` the live render path uses (see **Image
+filters** above — one implementation, never copy-pasted), then multiplies the alpha
+channel by `opacity` with the **identical** formula `render_group.py`'s `paint_element`
+applies at composite time (`image.putalpha(image.getchannel("A").point(lambda a: round(a
+* factor)))`, `factor` clamped to `[0,1]`) — so the baked pixels are bit-identical to
+what the on-canvas preview showed. Opacity-to-alpha lives **only** in `bake_filters.py`;
+`render_group.py` still applies opacity at composite time for every *other*
+(non-baked) element.
+
+**Op / API / CLI.** `bakeFilters({ projectId, elementId | elementIds })` — image
+elements only (loud on text/note), and loud when the element has **nothing to bake**
+(`filters` absent/default AND `opacity` absent-or-1: *"...has nothing to apply — filters
+are at defaults"*). `elementIds` (2+ images), given INSTEAD of `elementId`, batches a
+multi-selection into ONE journal entry — every element is validated (image, has
+something to bake) **before** any Python spawn, so a batch is fully atomic: one refusing
+element rejects the whole batch, nothing mutated. `POST
+/api/canvas/projects/<id>/elements/<eid>/filters-bake {}` (single) and `POST
+/api/canvas/projects/<id>/filters-bake {elementIds}` (batch) — mirrors how `/alpha`
+handles single vs. batch. CLI: `filters-bake <id> --element <eid>` /
+`filters-bake <id> --elements e1,e2`.
+
+**Provenance.** `element.meta.filters_bake = { prev_src, baked: { filters, opacity },
+at }` (`baked` records exactly what was burned in) + a `tool_runs` row (`op:
+"filters_bake"`), the same convention `alphaCutout`/`cleanupApply` use.
+
+**Page.** The Filters section's **Apply** button (disabled when there is nothing to
+bake) runs through the long-op queue with a progress toast, like Alpha/Cleanup; on
+success the section re-renders with every slider back at its default. Multi-select:
+when every selected element is an image, an **"Apply filters on N images"** button sits
+beside the batched **«Приглушить»** preset — enabled only when *every* selected image
+has something to bake (front-loading the batch op's own atomic gate into a useful
+disabled state).
 
 ## 9-slice elements
 

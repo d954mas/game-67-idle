@@ -35,6 +35,8 @@
 //   node ai_studio/assets/canvas/cli.mjs alpha-dual-generate <id> --element <el> [--prompt "..."]   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; one undo)
 //   node ai_studio/assets/canvas/cli.mjs quantize <id> --element <eid> --colors N [--dither] [--preview <out.png>]   (T0207: with --preview, writes the preview PNG + prints the report, NO journal entry; without it, applies — one undo step)
 //   node ai_studio/assets/canvas/cli.mjs denoise <id> --element <eid> --strength 1|2|3 [--preview <out.png>]   (T0207: same preview/apply split as quantize)
+//   node ai_studio/assets/canvas/cli.mjs filters-bake <id> --element <eid>   (T0274 "Apply": rasterize the element's CURRENT filters+opacity into a new source file, then clear both; one undo)
+//   node ai_studio/assets/canvas/cli.mjs filters-bake <id> --elements e1,e2   (batch; one undo)
 //   node ai_studio/assets/canvas/cli.mjs add-image-from-file <id> --src files/<hash>.png [--name X] [--x n --y n]   (mint an element from an EXISTING project file, no re-upload)
 //   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --resample --base]
 //   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --resample --base] [--to <dir>] [--zip <path>]
@@ -84,6 +86,7 @@ import {
   alphaDualPlateGenerate,
   animateElementFromText,
   assignToGroup,
+  bakeFilters,
   cleanupApply,
   cleanupPreview,
   createGroup,
@@ -211,7 +214,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|filters-bake|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
   list [--full]   (summary by default: [{id,title,created,updated,elements,groups,head}]; --full = every project in full, today's original dump)
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -248,6 +251,8 @@ function usage() {
   alpha-dual-generate <id> --element <eid> [--prompt "<extra subject description>"]   (AUTOMATIC: the element's current pixels are the LIGHT plate; generates the DARK plate via codex edit, gates it (one automatic retry), cuts -> ONE new element beside the source; source untouched; one undo step)
   quantize <id> --element <eid> --colors <2-256> [--dither] [--preview <out.png>]   (T0207: palette-quantize the element's CURRENT pixels, alpha untouched; --preview writes the result PNG to <out.png> + prints the report, NO journal entry; without --preview, commits a new file + src swap as one undo step)
   denoise <id> --element <eid> --strength <1|2|3> [--preview <out.png>]   (T0207: light median denoise, alpha NEVER filtered; same --preview/apply split as quantize)
+  filters-bake <id> --element <eid>   (T0274 "Apply": rasterize the element's CURRENT filters+opacity — T0273/T0260 — into a NEW content-addressed source file, then clear both (sliders reset); loud when there is nothing to bake; one undo step)
+  filters-bake <id> --elements e1,e2   (batch: 2+ images baked into ONE journal entry/undo; atomic — any refusal rejects the whole batch)
   export-set <id> --element <eid> --json <path> | --scale <t> [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest] [--base source|canvas]
   export <id> --elements e1,e2 | --all | --project [--scale <t> --format <f> --quality <n> --resample <r> --base source|canvas] [--to <dir>] [--zip <path>]
   group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]
@@ -713,6 +718,23 @@ async function runCommand(command, id, positional, flags) {
         return print({ preview: previewPath, tool: result.tool, params: result.params, report: result.report });
       }
       return print(await cleanupApply(repoRoot, { projectId: id, elementId: flags.element, tool: "denoise", params }));
+    }
+    case "filters-bake": {
+      // T0274 "Apply": rasterize the element's CURRENT filters+opacity into a new source
+      // file, then clear both (one undo step). --elements batches 2+ images into ONE
+      // journal entry (atomic — mirrors the alpha verb's single-vs-batch shape).
+      if (!id) fail("filters-bake requires <id>");
+      const hasElements = flags.elements && flags.elements !== "true";
+      const hasElement = flags.element && flags.element !== "true";
+      if (!hasElement && !hasElements) fail("filters-bake requires --element <eid> or --elements e1,e2");
+      if (hasElement && hasElements) fail("filters-bake accepts --element or --elements, not both");
+      const args = { projectId: id };
+      if (hasElements) {
+        args.elementIds = String(flags.elements).split(",").map((value) => value.trim()).filter(Boolean);
+      } else {
+        args.elementId = flags.element;
+      }
+      return print(await bakeFilters(repoRoot, args));
     }
     case "export-set": {
       if (!id) fail("export-set requires <id>");

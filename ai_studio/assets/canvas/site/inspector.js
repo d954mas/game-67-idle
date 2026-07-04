@@ -34,6 +34,8 @@ import {
   alphaDualPlateFor,
   alphaDualPlateGenerateFor,
   animateElementFromTextAction,
+  bakeFiltersBatchFor,
+  bakeFiltersFor,
   deleteRegion,
   detectRegionsFor,
   distributeSelection,
@@ -1441,6 +1443,17 @@ function transformBadge(element) {
 // filters is whole-object-replace (like `style`) — every commit resolves the FULL desired
 // object from the element's CURRENT effective values + the one field being changed, so
 // changing brightness never silently resets saturation/contrast/tint.
+// T0274 "Apply": true when the element carries a filters object (non-default — see
+// effectiveFilters below) OR a stored opacity != 1 — the "there is something to bake"
+// gate for the Apply button's enabled state. Mirrors ops.hasBakeableFilters (the server
+// re-validates regardless, so a stale read here is caught, never silently no-op'd).
+function hasBakeableFilters(element) {
+  if (!element) return false;
+  if (element.filters && typeof element.filters === "object" && Object.keys(element.filters).length) return true;
+  const opacity = element.opacity;
+  return opacity !== undefined && opacity !== null && Number(opacity) !== 1;
+}
+
 function effectiveFilters(element) {
   const stored = element.filters || {};
   const tint = stored.tint || {};
@@ -1605,6 +1618,24 @@ function renderFilters(element, root) {
   const resetAllBtn = smallBtn("Reset all", () => patchElementBox(element.id, { opacity: 1, filters: null }));
   presetRow.append(dimBtn, resetAllBtn);
   body.appendChild(presetRow);
+
+  // T0274 "Apply" (Photoshop-rasterize semantics, lead: "принял -> получил новый арт ->
+  // ползунки снова в 0"): burns the CURRENT filters+opacity into a NEW source file as ONE
+  // journaled op, then clears both — the section re-renders with every slider back at its
+  // default (the op already cleared the fields; applyMutation's re-render just reflects
+  // it). Disabled when there is nothing to bake (mirrors the Regions/Alpha section's
+  // disabled-at-nothing-to-do stance).
+  const applyRow = document.createElement("div");
+  applyRow.className = "insp-alpha-row";
+  const applyBtn = document.createElement("button");
+  applyBtn.type = "button";
+  applyBtn.className = "primary insp-btn";
+  applyBtn.textContent = "Apply";
+  applyBtn.title = "Bake the current filters + opacity into a new source file, then reset the sliders";
+  applyBtn.disabled = !hasBakeableFilters(element);
+  applyBtn.addEventListener("click", () => bakeFiltersFor(element.id, applyBtn));
+  applyRow.appendChild(applyBtn);
+  body.appendChild(applyRow);
 }
 
 // Multi-select (T0273): when EVERY selected element is an image, offer the SAME
@@ -1625,6 +1656,21 @@ function renderMultiFilters(selected, root) {
     );
   });
   body.appendChild(dimBtn);
+
+  // T0274 "Apply" batch: only enabled when EVERY selected image actually has something to
+  // bake (the batch op validates atomically — one element with nothing to bake would
+  // refuse the WHOLE batch — so the button front-loads that same gate for a useful
+  // disabled state instead of a click that always errors).
+  const applyBtn = document.createElement("button");
+  applyBtn.type = "button";
+  applyBtn.className = "insp-btn insp-alpha-btn";
+  applyBtn.textContent = `Apply filters: apply to ${selected.length} images`;
+  applyBtn.title = "Bake each image's current filters + opacity into a new source file, then reset its sliders";
+  applyBtn.disabled = !selected.every((element) => hasBakeableFilters(element));
+  applyBtn.addEventListener("click", () => {
+    bakeFiltersBatchFor(selected.map((element) => element.id), applyBtn);
+  });
+  body.appendChild(applyBtn);
 }
 
 // ---- Slice-9 (T0233 Packet 2) --------------------------------------------------
