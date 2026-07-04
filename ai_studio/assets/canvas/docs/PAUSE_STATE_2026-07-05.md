@@ -25,8 +25,15 @@
   окна Quantize/Denoise)/alpha: key_matte | dual_plate | corridorkey.
   Write-lock на проект, коды 404/409, вьюпорт-каллинг + мемоизация
   (таргет «тысячи объектов»). Сьют 566.
-- **Alpha corridorkey** (a229f769 + фоллоу-ап): зелёный нативно, маджента
-  через hue180-шим, регионы; ~15с GPU на вызов; громкие отказы.
+- **Alpha corridorkey** (a229f769 + c9bc8186): ЗАВЕРШЁН ПОЛНОСТЬЮ —
+  зелёный нативно (10.1с), маджента через hue180-шим (13.1с, provenance
+  shim:"hue180", ck_pixel_ops.py), регионы (compose_regions = контракт
+  key_matte бит-в-бит), батч; нейтральный фон = громкий отказ. Живые
+  GPU-смоуки в tests/live/ck_smoke.mjs. Финальный сьют: канвас 568,
+  чат 51 (+ фикс codex resume -C 2d125bba), питон-хелпер 15.
+  ПОСЛЕДНИЙ КОММИТ ПАУЗЫ: c9bc8186. Некоммичены только ЧУЖИЕ правки
+  (AGENTS.md «Agent Roles» + .codex/agents/ + orchestration README —
+  лидовые/кодексовые, оставлены как есть).
 - **Хранилище**: journal/snapshots/.lock в локальном кэше
   `C:/Users/ROG/AppData/Local/ai_studio/canvas_cache` (НЕ в repo tmp, НЕ в
   YandexDisk); project.json+files/ синкаются YandexDisk
