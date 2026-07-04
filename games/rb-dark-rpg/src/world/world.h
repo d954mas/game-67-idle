@@ -2,6 +2,7 @@
 #define GAME_WORLD_H
 
 #include "entity/nt_entity.h"
+#include "scene/scene_interaction_types.h"
 
 #include <stdbool.h>
 
@@ -12,8 +13,18 @@
 // The sample character below shows the rule: its STATE lives here, while MOVEMENT
 // (systems/sys_move) and RENDERING (render/render_mesh) are two SEPARATE systems
 // that both operate on this state.
+typedef struct FirstSceneState {
+    float camera_center_x, camera_center_y;
+    bool camera_initialized;
+    bool interactions_initialized;
+    scene_object_id_t hovered_object_id;
+    scene_object_id_t pressed_object_id;
+    scene_object_id_t objective_object_id;
+} FirstSceneState;
+
 typedef struct World {
     float time_seconds;
+    FirstSceneState first_scene;
 
     float player_x, player_z, player_yaw;
     nt_entity_t player_entity;

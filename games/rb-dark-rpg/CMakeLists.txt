@@ -67,9 +67,11 @@ if(NOT EMSCRIPTEN)
             assets/shaders/slug_text.vert assets/shaders/slug_text.frag
             assets/shaders/mesh_inst.vert assets/shaders/mesh_inst.frag
             assets/shaders/mesh_tex.vert assets/shaders/mesh_tex.frag
-            assets/shaders/sprite.vert assets/shaders/sprite.frag
+            assets/shaders/sprite.vert assets/shaders/sprite.frag assets/shaders/sprite_mask_glow.frag
             assets/ui/panel.png assets/ui/button.png
             assets/ui/slider_track.png assets/ui/slider_fill.png assets/ui/slider_thumb.png
+            assets/scenes/last_post_background_candidate05_1280x700.png
+            assets/characters/last_post_guard_05.png
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         COMMENT "Building game asset pack"
         VERBATIM
@@ -89,11 +91,18 @@ endif()
 add_executable(${GAME_TARGET}
     src/main.c
     src/ui/hud.c
+    src/ui/first_screen_hud.c
     src/ui/ui_runtime.c
     src/ui/theme.c
+    src/scene/scene_layout.c
+    src/scene/scene_interactions.c
+    src/render/render_2d_runtime.c
+    src/render/render_hub_scene.c
     src/render/render_mesh.c
     src/render/capture.c
     src/systems/sys_move.c
+    src/systems/sys_scene_interactions.c
+    src/systems/sys_scene_pan.c
     src/systems/sys_settings.c
 )
 if(NOT EMSCRIPTEN)
@@ -183,6 +192,41 @@ endif()
 nt_set_warning_flags(${GAME_TARGET})
 set_target_properties(${GAME_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}")
 
+add_executable(test_scene_layout
+    src/scene/scene_layout.c
+    tests/test_scene_layout.c
+)
+target_include_directories(test_scene_layout PRIVATE src)
+nt_set_warning_flags(test_scene_layout)
+set_target_properties(test_scene_layout PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
+add_custom_target(scene_layout_test
+    COMMAND $<TARGET_FILE:test_scene_layout>
+    DEPENDS test_scene_layout
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    COMMENT "Running first-scene layout tests"
+    VERBATIM
+)
+
+add_executable(test_scene_interactions
+    src/scene/scene_interactions.c
+    tests/test_scene_interactions.c
+)
+target_include_directories(test_scene_interactions PRIVATE src)
+target_include_directories(test_scene_interactions PRIVATE "${ENGINE_DIR}/engine")
+nt_set_warning_flags(test_scene_interactions)
+set_target_properties(test_scene_interactions PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
+add_custom_target(scene_interactions_test
+    COMMAND $<TARGET_FILE:test_scene_interactions>
+    DEPENDS test_scene_interactions
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    COMMENT "Running scene interaction tests"
+    VERBATIM
+)
+
+add_custom_target(first_scene_tests
+    DEPENDS scene_layout_test scene_interactions_test
+)
+
 if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if(Python3_Interpreter_FOUND)
@@ -203,7 +247,7 @@ if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)
                 "${Python3_EXECUTABLE}"
                 "${CMAKE_CURRENT_SOURCE_DIR}/devapi/responsive_viewports.py"
                 "--exe" "$<TARGET_FILE:${GAME_TARGET}>"
-            DEPENDS ${GAME_TARGET}
+            DEPENDS ${GAME_TARGET} first_scene_tests
             WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
             COMMENT "Capturing QCLR_002 responsive viewport evidence"
             VERBATIM

@@ -1,0 +1,116 @@
+{
+  "schema": "ai_studio.game_design.dialogues.v1",
+  "game_id": "rb-dark-rpg",
+  "status": "draft",
+  "dialogues": [
+    {
+      "id": "dlg_gate_guard_intro",
+      "title": "Страж: допуск за ворота",
+      "participants": ["gate_guard", "player_seeker"],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "gate_guard",
+          "text": "За ворота без жетона и оружия больше не выпускаю. Хочешь контракт - докажи, что вернешься живым.",
+          "choices": [
+            {
+              "id": "ask_what_needed",
+              "text": "Что нужно сделать?",
+              "next_node_id": "explain_check"
+            }
+          ]
+        },
+        {
+          "id": "explain_check",
+          "speaker_id": "gate_guard",
+          "text": "Кузнец выдаст старый меч и куртку. Надень их, убери падальщика у ворот, потом вернешься ко мне.",
+          "choices": [
+            {
+              "id": "accept",
+              "text": "Понял.",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q001_gate_pass",
+                  "step_id": "talk_gate_guard"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_blacksmith_starter_gear",
+      "title": "Кузнец: стартовое снаряжение",
+      "participants": ["blacksmith", "player_seeker"],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "blacksmith",
+          "text": "Страж прислал? Значит, бери меч и куртку. Не новые, но лучше, чем голые руки.",
+          "choices": [
+            {
+              "id": "take_gear",
+              "text": "Взять снаряжение.",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q001_gate_pass",
+                  "step_id": "receive_starter_gear"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_gate_guard_turn_in",
+      "title": "Страж: жетон искателя",
+      "participants": ["gate_guard", "player_seeker"],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "gate_guard",
+          "text": "Вернулся. Значит, не зря выдавали железо. Держи жетон искателя. Теперь можешь брать настоящие контракты.",
+          "choices": [
+            {
+              "id": "take_token",
+              "text": "Взять жетон.",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q001_gate_pass",
+                  "step_id": "report_to_gate_guard"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_council_scribe_placeholder",
+      "title": "Писарь: заглушка",
+      "participants": ["council_scribe", "player_seeker"],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "council_scribe",
+          "text": "Отчеты принимаются после контрактов. Печати Совета без дела не ставятся.",
+          "choices": [
+            {
+              "id": "close",
+              "text": "Понятно."
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

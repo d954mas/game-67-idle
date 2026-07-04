@@ -41,9 +41,14 @@
 #endif
 
 #include "render/capture.h"
+#include "render/render_2d_runtime.h"
+#include "render/render_hub_scene.h"
 #include "render/render_mesh.h"
+#include "systems/sys_scene_interactions.h"
+#include "systems/sys_scene_pan.h"
 #include "systems/sys_move.h"
 #include "systems/sys_settings.h"
+#include "ui/first_screen_hud.h"
 #include "ui/hud.h"
 #include "ui/ui_runtime.h"
 #include "world/world.h"
@@ -238,6 +243,8 @@ static void frame(void) {
 
     // game systems update the world (settings logic now lives in its nt_ui build)
     sys_move(&s_world, g_nt_app.dt);
+    sys_scene_interactions_update(&s_world);
+    sys_scene_pan_update(&s_world);
 
     nt_gfx_begin_frame();
     if (g_nt_gfx.context_restored) {
@@ -249,17 +256,18 @@ static void frame(void) {
             .type = NT_BUFFER_UNIFORM, .usage = NT_USAGE_DYNAMIC,
             .size = sizeof(nt_frame_uniforms_t), .label = "frame_uniforms"});
         nt_text_renderer_restore_gpu();
+        render_2d_runtime_restore_gpu();
         render_mesh_restore_gpu();
         ui_runtime_restore_gpu();
     }
 
     // render systems read the world
-    nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.75F, 0.96F, 1.0F}, .clear_depth = 1.0F});
-    render_mesh_draw(&s_world, s_frame_ubo);
-    hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
+    nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.035F, 0.043F, 0.060F, 1.0F}, .clear_depth = 1.0F});
+    render_hub_scene_draw(&s_world, s_frame_ubo);
 
     // settings UI: real nt_ui widgets (panel + sliders + buttons), built + walked here
     if (ui_runtime_begin(g_nt_app.dt)) {
+        first_screen_hud_ui(ui_runtime_ctx(), &s_world);
         sys_settings_ui(ui_runtime_ctx(), &s_world);
         ui_runtime_end();
     }
@@ -336,6 +344,7 @@ int main(int argc, char **argv) {
     nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});
     nt_text_renderer_init();
+    render_2d_runtime_init();
 #if FEATURE_GAME_STATE
     game_state_init();
 #endif
@@ -386,6 +395,7 @@ int main(int argc, char **argv) {
     render_mesh_spawn_prop(&s_world, s_cube);
 
     // engine UI stack (sprite renderer + slice9 atlas + nt_ui ctx); reuses the font + text material
+    render_hub_scene_init();
     ui_runtime_init(s_text_material, s_font, s_font_resource);
 
     if (!devapi_start()) {
@@ -401,7 +411,9 @@ int main(int argc, char **argv) {
 
 #ifndef NT_PLATFORM_WEB
     devapi_shutdown_runtime();
+    render_hub_scene_shutdown();
     ui_runtime_shutdown();
+    render_2d_runtime_shutdown();
     nt_mem_scratch_shutdown();
     nt_text_renderer_shutdown();
     nt_font_destroy(s_font);

@@ -1,0 +1,112 @@
+{
+  "schema": "ai_studio.game_design.items.v1",
+  "game_id": "rb-dark-rpg",
+  "status": "draft",
+  "stat_model": "Legend-style: vitality, strength, protection, intuition, weapon_damage.",
+  "items": [
+    {
+      "id": "old_sword",
+      "display_name": "Старый меч",
+      "kind": "gear",
+      "slot": "weapon",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_old_sword",
+      "price_gold": 0,
+      "stats": {
+        "weapon_damage": 4
+      },
+      "tags": ["starter", "quest_reward", "weapon"]
+    },
+    {
+      "id": "padded_jacket",
+      "display_name": "Стеганая куртка",
+      "kind": "gear",
+      "slot": "armour",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_padded_jacket",
+      "price_gold": 0,
+      "stats": {
+        "vitality": 6,
+        "protection": 15
+      },
+      "tags": ["starter", "quest_reward", "armour"]
+    },
+    {
+      "id": "iron_sword",
+      "display_name": "Железный меч",
+      "kind": "gear",
+      "slot": "weapon",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_iron_sword",
+      "price_gold": 12,
+      "stats": {
+        "weapon_damage": 7
+      },
+      "tags": ["shop", "weapon", "upgrade"]
+    },
+    {
+      "id": "patched_mail",
+      "display_name": "Латаная кольчуга",
+      "kind": "gear",
+      "slot": "armour",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_patched_mail",
+      "price_gold": 14,
+      "stats": {
+        "vitality": 10,
+        "protection": 30
+      },
+      "tags": ["shop", "armour", "upgrade"]
+    },
+    {
+      "id": "black_sun_charm",
+      "display_name": "Осколок черного знака",
+      "kind": "gear",
+      "slot": "charm",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_black_sun_charm",
+      "unlock": {
+        "type": "flag",
+        "flag_id": "mill_black_sun_clue_found",
+        "value": true
+      },
+      "stats": {
+        "intuition": 4
+      },
+      "tags": ["charm", "clue", "crit"]
+    },
+    {
+      "id": "seeker_token",
+      "display_name": "Жетон искателя",
+      "kind": "quest_item",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_seeker_token",
+      "tags": ["quest", "gate_access"]
+    },
+    {
+      "id": "grain_sacks",
+      "display_name": "Мешки зерна",
+      "kind": "quest_item",
+      "stackable": true,
+      "max_stack": 10,
+      "icon_asset_id": "asset_icon_grain_sacks",
+      "tags": ["quest", "old_mill", "contract"]
+    },
+    {
+      "id": "burned_chain_bracket",
+      "display_name": "Обгоревшая скоба цепи",
+      "kind": "clue",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_burned_chain_bracket",
+      "tags": ["clue", "dragon", "black_sun"]
+    },
+    {
+      "id": "order_scrap",
+      "display_name": "Обрывок приказа",
+      "kind": "clue",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_order_scrap",
+      "tags": ["clue", "black_sun"]
+    }
+  ]
+}

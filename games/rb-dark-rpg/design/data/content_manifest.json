@@ -1,0 +1,115 @@
+{
+  "schema": "ai_studio.game_design.content_manifest.v1",
+  "game_id": "rb-dark-rpg",
+  "status": "draft",
+  "design_doc": "../content_model.md",
+  "editor_spec": "../content_editor_spec.md",
+  "load_order": [
+    "asset_manifest.json",
+    "items.json",
+    "characters.json",
+    "locations.json",
+    "services.json",
+    "dialogues.json",
+    "combat.json",
+    "quests.json"
+  ],
+  "registries": {
+    "assets": {
+      "file": "asset_manifest.json",
+      "path": "$.assets[*]",
+      "id_field": "id"
+    },
+    "items": {
+      "file": "items.json",
+      "path": "$.items[*]",
+      "id_field": "id"
+    },
+    "characters": {
+      "file": "characters.json",
+      "path": "$.characters[*]",
+      "id_field": "id"
+    },
+    "locations": {
+      "file": "locations.json",
+      "path": "$.locations[*]",
+      "id_field": "id"
+    },
+    "shops": {
+      "file": "services.json",
+      "path": "$.shops[*]",
+      "id_field": "id"
+    },
+    "healing_services": {
+      "file": "services.json",
+      "path": "$.healing_services[*]",
+      "id_field": "id"
+    },
+    "dialogues": {
+      "file": "dialogues.json",
+      "path": "$.dialogues[*]",
+      "id_field": "id"
+    },
+    "quests": {
+      "file": "quests.json",
+      "path": "$.quests[*]",
+      "id_field": "id"
+    },
+    "encounters": {
+      "file": "combat.json",
+      "path": "$.encounters[*]",
+      "id_field": "id"
+    }
+  },
+  "shared_types": {
+    "requirement_types": [
+      "quest_completed",
+      "quest_active",
+      "flag",
+      "level_min",
+      "has_item",
+      "equipped",
+      "location_unlocked"
+    ],
+    "effect_types": [
+      "grant_item",
+      "grant_gold",
+      "grant_xp",
+      "set_flag",
+      "restore_hp_percent",
+      "unlock_location",
+      "unlock_screen",
+      "unlock_quest",
+      "start_dialogue",
+      "advance_quest",
+      "complete_quest"
+    ],
+    "objective_types": [
+      "talk_to_npc",
+      "return_to_npc",
+      "receive_items",
+      "equip_item",
+      "win_encounter",
+      "visit_location",
+      "collect_item",
+      "inspect_object"
+    ]
+  },
+  "editor_views": [
+    "dashboard",
+    "characters",
+    "locations",
+    "items",
+    "services",
+    "dialogues",
+    "quests",
+    "combat",
+    "assets",
+    "validation"
+  ],
+  "generated_runtime_bundle": {
+    "enabled_later": true,
+    "path": "games/rb-dark-rpg/build/generated/content_pack.json",
+    "source_of_truth": false
+  }
+}

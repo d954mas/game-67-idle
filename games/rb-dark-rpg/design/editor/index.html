@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RB Dark RPG Content Editor</title>
+    <link rel="stylesheet" href="./editor.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div class="topbar-title">
+          <strong>RB Dark RPG</strong>
+          <span>Content Editor</span>
+        </div>
+        <div class="topbar-actions">
+          <button type="button" id="openFolderButton">Open data folder</button>
+          <button type="button" id="reloadButton">Reload</button>
+          <button type="button" id="saveButton" class="primary" disabled>Save</button>
+        </div>
+      </header>
+
+      <main class="workspace">
+        <nav class="view-nav" aria-label="Content views" id="viewNav"></nav>
+
+        <section class="entity-panel" aria-label="Entity list">
+          <div class="panel-header">
+            <h1 id="listTitle">Content</h1>
+            <span id="listCount">0</span>
+          </div>
+          <label class="search-box">
+            <span>Search</span>
+            <input id="searchInput" type="search" autocomplete="off" />
+          </label>
+          <div id="listControls" class="list-controls"></div>
+          <div id="entityList" class="entity-list"></div>
+        </section>
+
+        <section class="editor-panel" aria-label="Entity editor">
+          <div id="editorView" class="editor-view"></div>
+        </section>
+
+        <aside class="inspector-panel" aria-label="Validation and references">
+          <section class="inspector-block">
+            <h2>Status</h2>
+            <div id="fileStatus" class="status-list"></div>
+          </section>
+          <section class="inspector-block">
+            <h2>References</h2>
+            <div id="referenceSummary" class="reference-list"></div>
+          </section>
+          <section class="inspector-block validation-block">
+            <h2>Validation</h2>
+            <div id="validationList" class="validation-list"></div>
+          </section>
+        </aside>
+      </main>
+
+      <footer class="statusbar" id="statusBar">Loading content...</footer>
+    </div>
+
+    <script src="./editor.js"></script>
+  </body>
+</html>

@@ -22,10 +22,12 @@
 
 #include <string.h>
 
-// UI reference resolution; EXPAND keeps widgets a constant logical size and grows
-// the canvas to fill the window (so the panel stays centered at any aspect).
-#define UI_REF_W 1280.0F
-#define UI_REF_H 720.0F
+// UI reference resolutions. Landscape follows the accepted game screen, while
+// portrait uses a phone-first logical canvas so controls stay readable.
+#define UI_LANDSCAPE_REF_W 960.0F
+#define UI_LANDSCAPE_REF_H 540.0F
+#define UI_PORTRAIT_REF_W 390.0F
+#define UI_PORTRAIT_REF_H 844.0F
 // Headroom for the default 1024-element UI (Clay arena dominates); a game that
 // builds a denser UI can raise this. Static storage — cost is negligible.
 #define UI_ARENA_SIZE ((size_t)4U * 1024U * 1024U)
@@ -57,9 +59,6 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
     // Atlas resource activator (the NT_ASSET_TEXTURE activator is set in main, shared
     // with the mesh texture path).
     nt_atlas_init();
-
-    nt_sprite_renderer_desc_t sr = nt_sprite_renderer_desc_defaults();
-    nt_sprite_renderer_init(&sr);
 
     nt_ui_module_init();
     nt_ui_create_desc_t desc = nt_ui_create_desc_defaults();
@@ -109,7 +108,12 @@ bool ui_runtime_begin(float dt) {
 
     const float fb_w = (float)(g_nt_window.fb_width > 0 ? g_nt_window.fb_width : 1280);
     const float fb_h = (float)(g_nt_window.fb_height > 0 ? g_nt_window.fb_height : 720);
-    nt_ui_scale_desc_t sd = {.ref_w = UI_REF_W, .ref_h = UI_REF_H, .mode = NT_UI_SCALE_EXPAND};
+    const bool portrait = fb_h > fb_w;
+    nt_ui_scale_desc_t sd = {
+        .ref_w = portrait ? UI_PORTRAIT_REF_W : UI_LANDSCAPE_REF_W,
+        .ref_h = portrait ? UI_PORTRAIT_REF_H : UI_LANDSCAPE_REF_H,
+        .mode = NT_UI_SCALE_EXPAND,
+    };
     s_scale = nt_ui_compute_scale(&sd, fb_w, fb_h);
 
     nt_frame_uniforms_t u;
@@ -144,7 +148,6 @@ void ui_runtime_end(void) {
 void ui_runtime_restore_gpu(void) {
     nt_gfx_destroy_buffer(s_ui_ubo);
     s_ui_ubo = make_ubo();
-    nt_sprite_renderer_restore_gpu();
     s_atlas_bound = false; // re-resolve atlas white region after GL restore
     s_font_bound = false;
 }
@@ -152,7 +155,6 @@ void ui_runtime_restore_gpu(void) {
 void ui_runtime_shutdown(void) {
     nt_ui_destroy_context(s_ctx);
     nt_ui_module_shutdown();
-    nt_sprite_renderer_shutdown();
     nt_material_destroy(s_sprite_material);
     nt_gfx_destroy_buffer(s_ui_ubo);
 }

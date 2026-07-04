@@ -24,6 +24,19 @@
 #define BUTTON_BORDER 16
 #define BAR_BORDER 8
 
+// Russian UI text must be packed into the engine font; shape/pixel text is only
+// a debug fallback. Basic Cyrillic + Yo covers the first-screen tutorial copy.
+static const char CYRILLIC_CHARSET[] =
+    "\xd0\x90\xd0\x91\xd0\x92\xd0\x93\xd0\x94\xd0\x95\xd0\x96\xd0\x97"
+    "\xd0\x98\xd0\x99\xd0\x9a\xd0\x9b\xd0\x9c\xd0\x9d\xd0\x9e\xd0\x9f"
+    "\xd0\xa0\xd0\xa1\xd0\xa2\xd0\xa3\xd0\xa4\xd0\xa5\xd0\xa6\xd0\xa7"
+    "\xd0\xa8\xd0\xa9\xd0\xaa\xd0\xab\xd0\xac\xd0\xad\xd0\xae\xd0\xaf"
+    "\xd0\xb0\xd0\xb1\xd0\xb2\xd0\xb3\xd0\xb4\xd0\xb5\xd0\xb6\xd0\xb7"
+    "\xd0\xb8\xd0\xb9\xd0\xba\xd0\xbb\xd0\xbc\xd0\xbd\xd0\xbe\xd0\xbf"
+    "\xd1\x80\xd1\x81\xd1\x82\xd1\x83\xd1\x84\xd1\x85\xd1\x86\xd1\x87"
+    "\xd1\x88\xd1\x89\xd1\x8a\xd1\x8b\xd1\x8c\xd1\x8d\xd1\x8e\xd1\x8f"
+    "\xd0\x81\xd1\x91";
+
 static char s_path_buf[512];
 static const char *pack_path(const char *dir, const char *name) {
     (void)snprintf(s_path_buf, sizeof(s_path_buf), "%s/%s", dir, name);
@@ -52,8 +65,10 @@ int main(int argc, char *argv[]) {
     // text shell
     nt_builder_add_shader(ctx, "assets/shaders/slug_text.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/slug_text.frag", NT_BUILD_SHADER_FRAGMENT);
+    char font_charset[512];
+    (void)snprintf(font_charset, sizeof(font_charset), "%s%s", NT_CHARSET_ASCII, CYRILLIC_CHARSET);
     nt_builder_add_font(ctx, "../../external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf",
-                        &(nt_font_opts_t){.charset = NT_CHARSET_ASCII, .resource_name = "game/font"});
+                        &(nt_font_opts_t){.charset = font_charset, .resource_name = "game/font"});
 
     // instanced-mesh shell: TWO mesh paths a game learns from. The COLOURED path
     // (mesh_inst = position + per-instance world matrix + colour, no texture) and the
@@ -99,6 +114,7 @@ int main(int argc, char *argv[]) {
     // panel/button/slider art the settings panel renders with. nt_ui draws from this.
     nt_builder_add_shader(ctx, "assets/shaders/sprite.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/sprite.frag", NT_BUILD_SHADER_FRAGMENT);
+    nt_builder_add_shader(ctx, "assets/shaders/sprite_mask_glow.frag", NT_BUILD_SHADER_FRAGMENT);
 
     nt_atlas_opts_t atlas_opts = nt_atlas_opts_defaults();
     atlas_opts.shape = NT_ATLAS_SHAPE_RECT;
@@ -142,6 +158,43 @@ int main(int argc, char *argv[]) {
     nt_atlas_sprite_opts_t thumb_opts = nt_atlas_sprite_opts_defaults();
     thumb_opts.name = "slider_thumb"; // circle: no slice9
     nt_builder_atlas_add(ctx, "assets/ui/slider_thumb.png", &thumb_opts);
+
+    nt_builder_end_atlas(ctx);
+
+    // Hub scene art is a separate atlas so large location backgrounds do not
+    // inflate or couple to the reusable UI atlas.
+    nt_atlas_opts_t scene_atlas_opts = nt_atlas_opts_defaults();
+    scene_atlas_opts.shape = NT_ATLAS_SHAPE_RECT;
+    scene_atlas_opts.allow_transform = false;
+    scene_atlas_opts.pixels_per_unit = 1.0F;
+    scene_atlas_opts.padding = 0;
+    scene_atlas_opts.margin = 0;
+    scene_atlas_opts.extrude = 0;
+    scene_atlas_opts.premultiplied = true;
+    scene_atlas_opts.compress = NULL;
+    scene_atlas_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR_MIPMAP_LINEAR;
+    scene_atlas_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
+    scene_atlas_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
+    scene_atlas_opts.wrap_v = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
+    scene_atlas_opts.gen_mipmaps = true;
+    nt_builder_begin_atlas(ctx, "hub_scene", &scene_atlas_opts);
+
+    nt_atlas_sprite_opts_t bg_opts = nt_atlas_sprite_opts_defaults();
+    bg_opts.name = "last_post_background";
+    bg_opts.origin_x = 0.0F;
+    bg_opts.origin_y = 0.0F;
+    bg_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
+    bg_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
+    nt_builder_atlas_add(ctx, "assets/scenes/last_post_background_candidate05_1280x700.png", &bg_opts);
+
+    nt_atlas_sprite_opts_t guard_opts = nt_atlas_sprite_opts_defaults();
+    guard_opts.name = "last_post_guard";
+    guard_opts.origin_x = 0.5F;
+    guard_opts.origin_y = 0.0F;
+    guard_opts.shape = NT_ATLAS_SPRITE_SHAPE_CONCAVE;
+    guard_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
+    guard_opts.max_vertices = 12;
+    nt_builder_atlas_add(ctx, "assets/characters/last_post_guard_05.png", &guard_opts);
 
     nt_builder_end_atlas(ctx);
 

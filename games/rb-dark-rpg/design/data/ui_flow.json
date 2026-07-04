@@ -4,17 +4,48 @@
   "status": "draft",
   "screens": [
     {
-      "id": "play",
-      "purpose": "Default playable view: movement, title/status HUD, and encounter cues."
+      "id": "hub_last_post",
+      "purpose": "Illustrated hub screen with gate guard, contract board, blacksmith, healer, council scribe, Dragon memorial, and map gate."
+    },
+    {
+      "id": "quest_journal",
+      "purpose": "Main navigation for current quest objectives, rewards, linked locations, and completed steps."
+    },
+    {
+      "id": "equipment",
+      "purpose": "Small early gear screen for sword, armor, and stat changes used by gate onboarding."
+    },
+    {
+      "id": "ash_border_map",
+      "purpose": "Node map of unlocked and fogged locations, with active quest highlight and threat labels."
+    },
+    {
+      "id": "location_old_mill",
+      "purpose": "Illustrated first contract location with encounters, grain recovery, and basement clue progression."
+    },
+    {
+      "id": "autobattle",
+      "purpose": "Separate combat screen for pure autobattle: player/enemy HP, damage events, result, and rewards."
+    },
+    {
+      "id": "clue_journal",
+      "purpose": "Investigation journal for Dragon-related clues, Black Sun evidence, and next lead."
     },
     {
       "id": "settings",
-      "purpose": "Starter settings panel retained from the template."
-    },
-    {
-      "id": "encounter_result",
-      "purpose": "Later first-slice result panel for reward, recovery, or retreat."
+      "purpose": "Basic settings panel retained as support UI, not part of the first narrative loop."
     }
   ],
-  "first_path": ["play", "settings", "play", "encounter_result"]
+  "first_path": [
+    "hub_last_post",
+    "quest_journal",
+    "equipment",
+    "autobattle",
+    "quest_journal",
+    "ash_border_map",
+    "location_old_mill",
+    "autobattle",
+    "clue_journal",
+    "hub_last_post"
+  ]
 }

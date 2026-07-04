@@ -1,0 +1,60 @@
+{
+  "schema": "ai_studio.game_design.services.v1",
+  "game_id": "rb-dark-rpg",
+  "status": "draft",
+  "shops": [
+    {
+      "id": "shop_blacksmith_basic",
+      "display_name": "Кузница",
+      "keeper_character_id": "blacksmith",
+      "location_id": "hub_last_post",
+      "inventory": [
+        {
+          "item_id": "iron_sword",
+          "price_gold": 12,
+          "requirements": [
+            {
+              "type": "quest_completed",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        },
+        {
+          "item_id": "patched_mail",
+          "price_gold": 14,
+          "requirements": [
+            {
+              "type": "quest_completed",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "healing_services": [
+    {
+      "id": "heal_basic",
+      "display_name": "Перевязка",
+      "provider_character_id": "healer",
+      "location_id": "hub_last_post",
+      "cost_gold": 5,
+      "effect": {
+        "type": "restore_hp_percent",
+        "value": 1.0
+      },
+      "free_uses": [
+        {
+          "id": "tutorial_heal",
+          "requirements": [
+            {
+              "type": "quest_active",
+              "quest_id": "q001_gate_pass"
+            }
+          ],
+          "max_uses": 1
+        }
+      ]
+    }
+  ]
+}

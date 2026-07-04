@@ -4,24 +4,34 @@
   "status": "draft",
   "loop": [
     {
-      "step": "enter_ruin_edge",
-      "player_action": "Move from safety toward the visible gate objective.",
-      "feedback": "Camera, title HUD, and landmark confirm orientation."
+      "step": "hub_contract",
+      "player_action": "Use Last Post hub objects or NPCs to accept a quest or contract.",
+      "feedback": "Quest journal shows the current objective, reward, and linked location."
     },
     {
-      "step": "read_threat",
-      "player_action": "Inspect a hazard or enemy tell before committing.",
-      "feedback": "Danger is visible before damage or failure."
+      "step": "prepare",
+      "player_action": "Equip basic gear, recover, or buy a small upgrade before leaving.",
+      "feedback": "Stats and blocked/ready states show whether the seeker can pass the gate or attempt the contract."
     },
     {
-      "step": "engage_or_retreat",
-      "player_action": "Choose to fight, avoid, or back out.",
-      "feedback": "Health/stamina and encounter state update immediately."
+      "step": "map_to_location",
+      "player_action": "Open the Ash Border map and choose an unlocked quest node.",
+      "feedback": "The selected node shows threat, quest link, and travel/start action."
     },
     {
-      "step": "recover_and_prepare",
-      "player_action": "Use reward, recovery, or upgrade choice before going deeper.",
-      "feedback": "The next risk is clearer because the state changed."
+      "step": "autobattle",
+      "player_action": "Start a simple autobattle encounter.",
+      "feedback": "HP, damage ticks, enemy state, and win/loss result are readable without active skills."
+    },
+    {
+      "step": "reward_or_clue",
+      "player_action": "Collect loot, contract progress, or a strange clue.",
+      "feedback": "Gold, XP, item, quest state, and clue journal updates appear immediately."
+    },
+    {
+      "step": "return_and_report",
+      "player_action": "Return to Last Post to report, recover, upgrade, or follow the next clue.",
+      "feedback": "Hub state, NPC reactions, and journal/map unlocks show what changed."
     }
   ]
 }

@@ -6,20 +6,263 @@
     {
       "id": "starter_ui",
       "kind": "ui",
-      "status": "copied_from_template",
-      "source": "games/rb-dark-rpg/assets/ui"
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui",
+      "file_path": "assets/ui/panel.png",
+      "notes": "Starter UI pack copied from template. Panel image is used as the editor preview."
     },
     {
-      "id": "ruin_gate_visual_proof",
+      "id": "last_post_hub_visual_proof",
       "kind": "environment",
       "status": "needed",
-      "source": "source-first: shared library, then CC0/OFL, then generated proof"
+      "source": "source-first: shared library, then CC0/OFL, then generated proof",
+      "notes": "Illustrated hub with locked gate, gate guard, contract board, Dragon memorial/beacon, and future clickable objects."
     },
     {
-      "id": "first_threat_visual_proof",
+      "id": "ash_border_map_visual_proof",
+      "kind": "map",
+      "status": "needed",
+      "source": "source-first: shared library, then CC0/OFL, then generated proof",
+      "notes": "Node map with Last Post, Old Mill, abandoned road, cult hideout, and fogged future zones."
+    },
+    {
+      "id": "old_mill_location_visual_proof",
+      "kind": "environment",
+      "status": "needed",
+      "source": "source-first: shared library, then CC0/OFL, then generated proof",
+      "notes": "First contract location with readable grain-storage problem and later basement clue state."
+    },
+    {
+      "id": "first_autobattle_enemy_visual_proof",
       "kind": "enemy_or_hazard",
       "status": "needed",
-      "source": "source-first: shared library, then CC0/OFL, then generated proof"
+      "source": "source-first: shared library, then CC0/OFL, then generated proof",
+      "notes": "Simple readable scavenger/road threat suitable for pure autobattle."
+    },
+    {
+      "id": "black_sun_clue_icons",
+      "kind": "ui_or_prop",
+      "status": "needed",
+      "source": "source-first: shared library, then CC0/OFL, then generated proof",
+      "notes": "Small clue props: black sun mark, burned chain bracket, torn order scrap."
+    },
+    {
+      "id": "asset_portrait_player_seeker",
+      "kind": "portrait",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Player portrait for character sheet or dialogue fallback."
+    },
+    {
+      "id": "asset_character_player_seeker",
+      "kind": "character",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Full or half-body player seeker art."
+    },
+    {
+      "id": "asset_portrait_gate_guard",
+      "kind": "portrait",
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/characters/last_post_guard_05.png",
+      "file_path": "assets/characters/last_post_guard_05.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/characters/last_post_guard_05.provenance.md",
+      "sha256": "98160D69823D6DB90080AB2E997079002B7D4E81F50C3CE0626C2181240B8A37",
+      "notes": "Gate guard dialogue portrait. Current available art is full-body; crop in UI where needed."
+    },
+    {
+      "id": "asset_character_gate_guard",
+      "kind": "character",
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/characters/last_post_guard_05.png",
+      "file_path": "assets/characters/last_post_guard_05.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/characters/last_post_guard_05.provenance.md",
+      "sha256": "98160D69823D6DB90080AB2E997079002B7D4E81F50C3CE0626C2181240B8A37",
+      "notes": "Gate guard hub figure."
+    },
+    {
+      "id": "asset_portrait_blacksmith",
+      "kind": "portrait",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Blacksmith dialogue portrait."
+    },
+    {
+      "id": "asset_character_blacksmith",
+      "kind": "character",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Blacksmith hub figure."
+    },
+    {
+      "id": "asset_portrait_elder",
+      "kind": "portrait",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Elder dialogue portrait."
+    },
+    {
+      "id": "asset_character_elder",
+      "kind": "character",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Elder hub figure."
+    },
+    {
+      "id": "asset_portrait_healer",
+      "kind": "portrait",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Healer dialogue portrait."
+    },
+    {
+      "id": "asset_character_healer",
+      "kind": "character",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Healer hub figure."
+    },
+    {
+      "id": "asset_portrait_council_scribe",
+      "kind": "portrait",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Council scribe dialogue portrait."
+    },
+    {
+      "id": "asset_character_council_scribe",
+      "kind": "character",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Council scribe hub figure."
+    },
+    {
+      "id": "asset_location_last_post_bg",
+      "kind": "environment",
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/scenes/last_post_background_candidate05_1280x700.png",
+      "file_path": "assets/scenes/last_post_background_candidate05_1280x700.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/scenes/last_post_background_candidate05_1280x700.provenance.md",
+      "sha256": "0AB90BBC7B10FF56273D0EAAFDD3409BF5CBBE7A99A1BAE30D1A5D87EBD662D0",
+      "notes": "Last Post hub background."
+    },
+    {
+      "id": "asset_location_gate_outskirts_bg",
+      "kind": "environment",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Gate outskirts combat background."
+    },
+    {
+      "id": "asset_location_old_mill_bg",
+      "kind": "environment",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Old Mill location background."
+    },
+    {
+      "id": "asset_map_node_old_mill",
+      "kind": "map_node",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Old Mill map node icon."
+    },
+    {
+      "id": "asset_object_contract_board",
+      "kind": "prop",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Contract board hub object."
+    },
+    {
+      "id": "asset_object_dragon_memorial",
+      "kind": "prop",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Dim Dragon memorial or beacon object."
+    },
+    {
+      "id": "asset_object_map_gate",
+      "kind": "prop",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Gate/map exit object."
+    },
+    {
+      "id": "asset_object_black_sun_mark",
+      "kind": "prop",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Black Sun clue mark."
+    },
+    {
+      "id": "asset_icon_old_sword",
+      "kind": "item_icon",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Old sword inventory icon."
+    },
+    {
+      "id": "asset_icon_padded_jacket",
+      "kind": "item_icon",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Padded jacket inventory icon."
+    },
+    {
+      "id": "asset_icon_iron_sword",
+      "kind": "item_icon",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Iron sword inventory icon."
+    },
+    {
+      "id": "asset_icon_patched_mail",
+      "kind": "item_icon",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Patched mail inventory icon."
+    },
+    {
+      "id": "asset_icon_black_sun_charm",
+      "kind": "item_icon",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Black Sun charm inventory icon."
+    },
+    {
+      "id": "asset_icon_seeker_token",
+      "kind": "item_icon",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Seeker token inventory icon."
+    },
+    {
+      "id": "asset_icon_grain_sacks",
+      "kind": "item_icon",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Grain sacks inventory icon."
+    },
+    {
+      "id": "asset_icon_burned_chain_bracket",
+      "kind": "item_icon",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Burned chain bracket clue icon."
+    },
+    {
+      "id": "asset_icon_order_scrap",
+      "kind": "item_icon",
+      "status": "needed",
+      "source": "source-first",
+      "notes": "Order scrap clue icon."
     }
   ]
 }

@@ -1,0 +1,242 @@
+{
+  "schema": "ai_studio.game_design.locations.v1",
+  "game_id": "rb-dark-rpg",
+  "status": "draft",
+  "locations": [
+    {
+      "id": "hub_last_post",
+      "display_name": "Последний Пост",
+      "kind": "hub",
+      "screen_id": "hub_last_post",
+      "act": "act_1_extra_witness",
+      "art": {
+        "background_asset_id": "asset_location_last_post_bg"
+      },
+      "unlock": {
+        "mode": "available_on_new_game"
+      },
+      "objects": [
+        {
+          "id": "hub_last_post.gate_guard",
+          "kind": "npc",
+          "display_name": "Страж у ворот",
+          "character_id": "gate_guard",
+          "position_hint": "left_gate",
+          "interactions": [
+            {
+              "type": "dialogue",
+              "dialogue_id": "dlg_gate_guard_intro"
+            },
+            {
+              "type": "quest",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        },
+        {
+          "id": "hub_last_post.blacksmith",
+          "kind": "npc",
+          "display_name": "Кузнец",
+          "character_id": "blacksmith",
+          "position_hint": "right_forge",
+          "interactions": [
+            {
+              "type": "dialogue",
+              "dialogue_id": "dlg_blacksmith_starter_gear"
+            },
+            {
+              "type": "shop",
+              "shop_id": "shop_blacksmith_basic"
+            }
+          ]
+        },
+        {
+          "id": "hub_last_post.contract_board",
+          "kind": "quest_board",
+          "display_name": "Доска контрактов",
+          "asset_id": "asset_object_contract_board",
+          "position_hint": "center_board",
+          "interactions": [
+            {
+              "type": "quest_list",
+              "quest_types": ["contract", "side"]
+            }
+          ]
+        },
+        {
+          "id": "hub_last_post.healer",
+          "kind": "npc",
+          "display_name": "Лекарь",
+          "character_id": "healer",
+          "position_hint": "right_tent",
+          "interactions": [
+            {
+              "type": "healer",
+              "service_id": "heal_basic"
+            }
+          ]
+        },
+        {
+          "id": "hub_last_post.dragon_memorial",
+          "kind": "hotspot",
+          "display_name": "Потухший знак Дракона",
+          "asset_id": "asset_object_dragon_memorial",
+          "position_hint": "back_center",
+          "interactions": [
+            {
+              "type": "inspect",
+              "object_id": "dragon_memorial"
+            }
+          ]
+        },
+        {
+          "id": "hub_last_post.map_gate",
+          "kind": "exit",
+          "display_name": "Ворота на карту",
+          "asset_id": "asset_object_map_gate",
+          "position_hint": "left_gate",
+          "requirements": [
+            {
+              "type": "flag",
+              "flag_id": "map_gate_unlocked",
+              "value": true
+            }
+          ],
+          "blocked_text": "Нужен жетон искателя.",
+          "interactions": [
+            {
+              "type": "open_screen",
+              "screen_id": "ash_border_map"
+            }
+          ]
+        }
+      ],
+      "exits": [
+        {
+          "target_location_id": "hub_gate_outskirts",
+          "requirements": [
+            {
+              "type": "equipped",
+              "item_id": "old_sword"
+            },
+            {
+              "type": "equipped",
+              "item_id": "padded_jacket"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "hub_gate_outskirts",
+      "display_name": "У ворот Последнего Поста",
+      "kind": "combat_spot",
+      "screen_id": "autobattle",
+      "act": "act_1_extra_witness",
+      "art": {
+        "background_asset_id": "asset_location_gate_outskirts_bg"
+      },
+      "unlock": {
+        "mode": "quest_step",
+        "quest_id": "q001_gate_pass",
+        "step_id": "clear_gate_scavenger"
+      },
+      "objects": [
+        {
+          "id": "hub_gate_outskirts.gate_scavenger",
+          "kind": "combat",
+          "display_name": "Падальщик у ворот",
+          "encounter_id": "gate_scavenger",
+          "position_hint": "center_enemy",
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "gate_scavenger"
+            }
+          ]
+        }
+      ],
+      "exits": [
+        {
+          "target_location_id": "hub_last_post"
+        }
+      ]
+    },
+    {
+      "id": "equipment",
+      "display_name": "Снаряжение",
+      "kind": "system_screen",
+      "screen_id": "equipment",
+      "act": "act_1_extra_witness",
+      "art": {
+        "background_asset_id": "starter_ui"
+      },
+      "unlock": {
+        "mode": "flag",
+        "flag_id": "starter_gear_received",
+        "value": true
+      },
+      "objects": [],
+      "exits": [
+        {
+          "target_location_id": "hub_last_post"
+        }
+      ]
+    },
+    {
+      "id": "old_mill",
+      "display_name": "Старая мельница",
+      "kind": "quest_location",
+      "screen_id": "location_old_mill",
+      "act": "act_1_extra_witness",
+      "art": {
+        "background_asset_id": "asset_location_old_mill_bg",
+        "map_node_asset_id": "asset_map_node_old_mill"
+      },
+      "unlock": {
+        "mode": "flag",
+        "flag_id": "old_mill_unlocked",
+        "value": true
+      },
+      "objects": [
+        {
+          "id": "old_mill.main_yard",
+          "kind": "combat",
+          "display_name": "Двор мельницы",
+          "encounter_id": "mill_scavenger",
+          "position_hint": "center_yard",
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "mill_scavenger"
+            }
+          ]
+        },
+        {
+          "id": "old_mill.black_sun_mark",
+          "kind": "hotspot",
+          "display_name": "Знак Черного Солнца",
+          "asset_id": "asset_object_black_sun_mark",
+          "position_hint": "basement_wall",
+          "requirements": [
+            {
+              "type": "quest_active",
+              "quest_id": "q002_bread_for_post"
+            }
+          ],
+          "interactions": [
+            {
+              "type": "inspect",
+              "object_id": "black_sun_mark"
+            }
+          ]
+        }
+      ],
+      "exits": [
+        {
+          "target_location_id": "hub_last_post"
+        }
+      ]
+    }
+  ]
+}

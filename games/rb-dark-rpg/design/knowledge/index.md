@@ -16,10 +16,34 @@ Use this as the first stop for durable game-specific knowledge.
 - `rb-dark-rpg` is the active game id and `RB Dark RPG` is the working title.
 - The first slice targets dark fantasy RPG exploration/combat, not idle or
   offline progression.
+- A user-provided v0 concept/GDD draft is captured in
+  [sources/v0_concept_gdd_draft.md](sources/v0_concept_gdd_draft.md).
+- The distilled v0 concept direction is tracked in
+  [v0_concept_idea.md](v0_concept_idea.md): `Дракон не вернулся`, a
+  2D illustrated FITGAME-like dark browser RPG about ordinary searchers in a
+  world after the Great Dragon disappears.
 
 ## Reference Lessons
 
-- None captured yet.
+- Story/world/lore reference lessons are captured in
+  [story_world_lore_digest.md](story_world_lore_digest.md), backed by
+  [sources/story_world_reference_packet_2026-07-04.md](sources/story_world_reference_packet_2026-07-04.md).
+- First visual direction quick pass for the `Последний Пост` hub background is
+  captured in
+  [visual_refpack_last_post_2026-07-04.md](visual_refpack_last_post_2026-07-04.md).
+- First-autobattle stat reference notes are captured in
+  [sources/combat_stats_reference_packet_2026-07-04.md](sources/combat_stats_reference_packet_2026-07-04.md);
+  the full combat mechanics spec lives in
+  [../combat_mechanics.md](../combat_mechanics.md), and the current structured
+  combat contract lives in
+  [../data/combat.json](../data/combat.json).
+- Quest structure and state decisions are captured in
+  [../quest_system.md](../quest_system.md), with authored quest data in
+  [../data/quests.json](../data/quests.json).
+- The data-driven content model is captured in
+  [../content_model.md](../content_model.md), the local web editor direction is
+  captured in [../content_editor_spec.md](../content_editor_spec.md), and the
+  loader/editor manifest lives in [../data/content_manifest.json](../data/content_manifest.json).
 
 ## Playtest Or Build Findings
 
@@ -27,5 +51,12 @@ Use this as the first stop for durable game-specific knowledge.
 
 ## Open Questions
 
-- Define the player-facing meaning of `RB`.
-- Choose the first combat style before implementing combat rules.
+- Decide whether `rb-dark-rpg` remains only the repo id while the public title
+  becomes `Дракон не вернулся`.
+- Choose the first implementation slice: hub screen, map screen, autobattle,
+  quest journal, or clue journal.
+- Define the first screen layout for `Последний Пост`.
+- Decide the Dragon's true state after Act I: bound, hidden, wounded, used as a
+  seal, or another option.
+- Decide Black Sun's exact ideology beyond "prepared for a world without the
+  Dragon".

@@ -1,0 +1,272 @@
+{
+  "schema": "ai_studio.game_design.quests.v1",
+  "game_id": "rb-dark-rpg",
+  "status": "draft",
+  "design_doc": "../quest_system.md",
+  "storage_model": {
+    "definitions_live_in": "games/rb-dark-rpg/design/data/quests.json",
+    "runtime_progress_lives_in": "save.quest_state",
+    "runtime_rule": "Quest state stores ids, status, progress, flags, and choices. It never duplicates authored quest text."
+  },
+  "status_enum": [
+    "hidden",
+    "available",
+    "active",
+    "ready_to_turn_in",
+    "completed",
+    "failed"
+  ],
+  "objective_types": [
+    "talk_to_npc",
+    "return_to_npc",
+    "receive_items",
+    "equip_item",
+    "win_encounter",
+    "visit_location",
+    "collect_item",
+    "inspect_object"
+  ],
+  "event_types": [
+    "npc_talked",
+    "item_received",
+    "item_equipped",
+    "encounter_won",
+    "location_visited",
+    "item_collected",
+    "object_inspected",
+    "quest_reported"
+  ],
+  "state_contract": {
+    "tracked_quest_id": "string_or_null",
+    "quests": {
+      "quest_id": {
+        "status": "hidden|available|active|ready_to_turn_in|completed|failed",
+        "current_step_id": "string_or_null",
+        "completed_step_ids": ["string"],
+        "objective_progress": {
+          "step_id": 0
+        },
+        "flags": ["string"],
+        "choice_ids": ["string"],
+        "started_at_step": "integer_or_null",
+        "completed_at_step": "integer_or_null",
+        "last_update_reason": "string_or_null"
+      }
+    },
+    "global_flags": {
+      "flag_id": true
+    }
+  },
+  "example_initial_state": {
+    "tracked_quest_id": null,
+    "quests": {
+      "q001_gate_pass": {
+        "status": "available",
+        "current_step_id": null,
+        "completed_step_ids": [],
+        "objective_progress": {},
+        "flags": [],
+        "choice_ids": [],
+        "started_at_step": null,
+        "completed_at_step": null,
+        "last_update_reason": "new_game"
+      }
+    },
+    "global_flags": {
+      "map_gate_unlocked": false,
+      "seeker_token_owned": false,
+      "old_mill_unlocked": false
+    }
+  },
+  "quests": [
+    {
+      "id": "q001_gate_pass",
+      "title": "Допуск за ворота",
+      "type": "tutorial",
+      "act": "act_1_extra_witness",
+      "priority": "critical_path",
+      "giver": {
+        "type": "npc",
+        "id": "gate_guard",
+        "display_name": "Страж у ворот"
+      },
+      "start_location": "hub_last_post",
+      "start_mode": "available_on_new_game",
+      "prerequisites": [],
+      "journal": {
+        "summary": "За ворота теперь не выпускают без жетона и оружия. Страж велит доказать, что ты не станешь еще одним телом у дороги.",
+        "short_goal": "Получить снаряжение и пройти проверку у ворот."
+      },
+      "steps": [
+        {
+          "id": "talk_gate_guard",
+          "title": "Поговорить со стражем",
+          "description": "Узнать, почему ворота закрыты и что нужно для допуска.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "talk_to_npc",
+            "target_id": "gate_guard",
+            "count": 1
+          },
+          "dialogue_id": "dlg_gate_guard_intro",
+          "ui_hint": "Страж стоит у закрытых ворот Последнего Поста.",
+          "on_complete": {
+            "set_flags": ["gate_guard_intro_seen"],
+            "unlock_markers": ["blacksmith"]
+          }
+        },
+        {
+          "id": "receive_starter_gear",
+          "title": "Забрать снаряжение у кузнеца",
+          "description": "Кузнец выдаст старый меч и стеганую куртку тем, кого страж отправил на проверку.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "talk_to_npc",
+            "target_id": "blacksmith",
+            "count": 1
+          },
+          "dialogue_id": "dlg_blacksmith_starter_gear",
+          "ui_hint": "Кузнец отмечен в Последнем Посту после разговора со стражем.",
+          "on_complete": {
+            "grant_items": ["old_sword", "padded_jacket"],
+            "set_flags": ["starter_gear_received"],
+            "unlock_screens": ["equipment"]
+          }
+        },
+        {
+          "id": "equip_old_sword",
+          "title": "Надеть старый меч",
+          "description": "Без оружия проверку у ворот не пройти.",
+          "location_id": "equipment",
+          "objective": {
+            "type": "equip_item",
+            "item_id": "old_sword",
+            "slot": "weapon",
+            "count": 1
+          },
+          "ui_hint": "Открой снаряжение и поставь Старый меч в слот оружия.",
+          "on_complete": {
+            "set_flags": ["old_sword_equipped"]
+          }
+        },
+        {
+          "id": "equip_padded_jacket",
+          "title": "Надеть стеганую куртку",
+          "description": "Куртка добавляет живучесть и защиту перед первой дракой.",
+          "location_id": "equipment",
+          "objective": {
+            "type": "equip_item",
+            "item_id": "padded_jacket",
+            "slot": "armour",
+            "count": 1
+          },
+          "ui_hint": "Поставь Стеганую куртку в слот брони.",
+          "on_complete": {
+            "set_flags": ["padded_jacket_equipped"],
+            "unlock_encounters": ["gate_scavenger"]
+          }
+        },
+        {
+          "id": "clear_gate_scavenger",
+          "title": "Разобраться с падальщиком у ворот",
+          "description": "Страж не откроет проход, пока у ворот шныряет тварь.",
+          "location_id": "hub_gate_outskirts",
+          "objective": {
+            "type": "win_encounter",
+            "encounter_id": "gate_scavenger",
+            "count": 1
+          },
+          "ui_hint": "Нажми «В бой» у ворот. Бой пройдет автоматически.",
+          "blocked_reasons": [
+            {
+              "id": "missing_weapon",
+              "condition": {
+                "not_equipped": "old_sword"
+              },
+              "text": "Нужен меч."
+            },
+            {
+              "id": "missing_armour",
+              "condition": {
+                "not_equipped": "padded_jacket"
+              },
+              "text": "Нужна броня."
+            }
+          ],
+          "on_complete": {
+            "set_flags": ["gate_scavenger_defeated"],
+            "grant_xp": 8,
+            "grant_gold": 5
+          }
+        },
+        {
+          "id": "report_to_gate_guard",
+          "title": "Вернуться к стражу",
+          "description": "Проверка пройдена. Теперь можно получить жетон и доступ к карте.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "return_to_npc",
+            "target_id": "gate_guard",
+            "count": 1
+          },
+          "dialogue_id": "dlg_gate_guard_turn_in",
+          "ui_hint": "Страж ждет у ворот Последнего Поста.",
+          "on_complete": {
+            "grant_items": ["seeker_token"],
+            "set_flags": ["seeker_token_owned", "map_gate_unlocked", "old_mill_unlocked"],
+            "unlock_screens": ["ash_border_map"],
+            "unlock_locations": ["old_mill"],
+            "unlock_quests": ["q002_bread_for_post"],
+            "complete_quest": true
+          }
+        }
+      ],
+      "completion_rewards": {
+        "xp": 0,
+        "gold": 0,
+        "items": ["seeker_token"],
+        "flags": ["seeker_token_owned", "map_gate_unlocked", "old_mill_unlocked"],
+        "unlocks": {
+          "screens": ["ash_border_map"],
+          "locations": ["old_mill"],
+          "quests": ["q002_bread_for_post"]
+        }
+      }
+    },
+    {
+      "id": "q002_bread_for_post",
+      "title": "Хлеб для Поста",
+      "type": "contract",
+      "act": "act_1_extra_witness",
+      "priority": "critical_path",
+      "giver": {
+        "type": "npc",
+        "id": "elder",
+        "display_name": "Староста"
+      },
+      "start_location": "hub_last_post",
+      "start_mode": "unlocked_by_q001_gate_pass",
+      "prerequisites": [
+        {
+          "quest_completed": "q001_gate_pass"
+        },
+        {
+          "flag": "map_gate_unlocked"
+        }
+      ],
+      "journal": {
+        "summary": "Старая мельница не отвечает, а Последнему Посту нужен хлеб. Контракт выглядит простым, пока не появляется знак Черного Солнца.",
+        "short_goal": "Добраться до Старой мельницы и вернуть зерно."
+      },
+      "steps": [],
+      "completion_rewards": {
+        "xp": 0,
+        "gold": 0,
+        "items": [],
+        "flags": [],
+        "unlocks": {}
+      },
+      "implementation_note": "Detailed steps intentionally deferred until q001 flow is playable."
+    }
+  ]
+}

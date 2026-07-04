@@ -1,0 +1,441 @@
+{
+  "schema": "ai_studio.game_design.combat.v4",
+  "game_id": "rb-dark-rpg",
+  "status": "draft",
+  "combat_mode": "pure_autobattle",
+  "design_goal": "Legend-style visible stats without a hidden armour mitigation curve: strength for physical damage, vitality for HP, protection for block, intuition for crit.",
+  "design_doc": "../combat_mechanics.md",
+  "reference_model": {
+    "primary_reference": "Legend: Legacy of the Dragons official Character Attributes",
+    "source_url": "https://warofdragons.com/info/library/index.php?obj=cat&id=429",
+    "fixed_decisions": [
+      "damage is derived from weapon damage plus strength scaling",
+      "vitality is max HP",
+      "protection is block chance, not armour absorption",
+      "intuition is crit chance",
+      "critical hits cannot be blocked",
+      "agility/dodge and active super-blows are deferred"
+    ]
+  },
+  "player_decisions": [
+    "accept_or_postpone_quest",
+    "equip_weapon_and_armour",
+    "heal_or_risk_fighting_wounded",
+    "read_prefight_threat",
+    "start_fight_or_upgrade_first"
+  ],
+  "visible_stats": [
+    {
+      "id": "vitality",
+      "display_name": "Живучесть",
+      "tier": "primary",
+      "unit": "points",
+      "effect": "Max HP. One vitality equals one HP.",
+      "ui_rule": "always_show"
+    },
+    {
+      "id": "strength",
+      "display_name": "Сила",
+      "tier": "primary",
+      "unit": "points",
+      "effect": "Physical damage growth. Ten strength adds one average physical damage.",
+      "ui_rule": "always_show"
+    },
+    {
+      "id": "protection",
+      "display_name": "Защита",
+      "tier": "primary",
+      "unit": "points",
+      "effect": "Block chance against normal physical hits.",
+      "ui_rule": "always_show"
+    },
+    {
+      "id": "intuition",
+      "display_name": "Интуиция",
+      "tier": "primary",
+      "unit": "points",
+      "effect": "Physical critical hit chance. Intuition crits cannot be blocked.",
+      "ui_rule": "always_show"
+    },
+    {
+      "id": "weapon_damage",
+      "display_name": "Урон оружия",
+      "tier": "item_primary",
+      "unit": "points",
+      "effect": "Base weapon contribution to physical hits.",
+      "ui_rule": "item_cards_and_details"
+    },
+    {
+      "id": "attack_interval",
+      "display_name": "Скорость",
+      "tier": "secondary",
+      "unit": "seconds_between_attacks",
+      "effect": "Lower value attacks more often.",
+      "ui_rule": "details_and_enemy_cards"
+    }
+  ],
+  "derived_stats": [
+    {
+      "id": "max_hp",
+      "formula": "vitality",
+      "player_visible": true
+    },
+    {
+      "id": "attack_power",
+      "formula": "weapon_damage + floor(strength / 10) + bonus_attack_power",
+      "player_visible": true
+    },
+    {
+      "id": "crit_chance",
+      "formula": "min(0.30, intuition / 100)",
+      "player_visible": "details"
+    },
+    {
+      "id": "block_chance",
+      "formula": "min(0.35, protection / 100)",
+      "player_visible": "details"
+    },
+    {
+      "id": "blocked_hit",
+      "formula": "max(1, ceil(attack_power * 0.5))",
+      "player_visible": false
+    },
+    {
+      "id": "crit_hit",
+      "formula": "attack_power * 2",
+      "player_visible": false
+    }
+  ],
+  "rules": {
+    "attack_power": "weapon_damage + floor(strength / 10) + bonus_attack_power",
+    "crit": "roll crit first; if random < crit_chance, deal attack_power * 2 and skip defender block",
+    "block": "if no crit and random < defender.block_chance, damage = max(1, ceil(attack_power * 0.5))",
+    "normal_hit": "if no crit and no block, damage = attack_power",
+    "damage_variance": "none_in_v1",
+    "attack_timing": "each unit attacks automatically when its attack timer reaches attack_interval",
+    "timer_start": "both_timers_start_at_0",
+    "ready_order": "if both attacks are ready on the same timestamp, resolve player attack first, then enemy if still alive",
+    "simultaneous_ko": "player_wins_with_1_hp",
+    "win": "enemy current_hp reaches 0",
+    "loss": "player current_hp reaches 0",
+    "retreat": "available_before_combat_only"
+  },
+  "prefight_threat": {
+    "shown_to_player": true,
+    "show_percentages": false,
+    "labels": [
+      {
+        "id": "easy",
+        "display_name": "Легко",
+        "internal_rule": "predicted_win_chance >= 0.80"
+      },
+      {
+        "id": "fair",
+        "display_name": "Ровно",
+        "internal_rule": "predicted_win_chance >= 0.60 and < 0.80"
+      },
+      {
+        "id": "risky",
+        "display_name": "Риск",
+        "internal_rule": "predicted_win_chance >= 0.40 and < 0.60"
+      },
+      {
+        "id": "deadly",
+        "display_name": "Смертельно",
+        "internal_rule": "predicted_win_chance < 0.40"
+      }
+    ],
+    "reason_lines": [
+      "У тебя достаточно живучести для этой встречи.",
+      "Его защита часто режет обычные удары.",
+      "Тебе не хватает силы или оружия.",
+      "Враг бьет чаще тебя.",
+      "У врага высокий шанс крита."
+    ]
+  },
+  "player_character": {
+    "base": {
+      "id": "seeker_base",
+      "vitality": 24,
+      "strength": 20,
+      "protection": 0,
+      "intuition": 3,
+      "weapon_damage": 0,
+      "bonus_attack_power": 0,
+      "attack_interval": 2.1
+    },
+    "starter_loadout": ["old_sword", "padded_jacket"],
+    "starter_total": {
+      "id": "seeker_start",
+      "vitality": 30,
+      "strength": 20,
+      "protection": 15,
+      "intuition": 3,
+      "weapon_damage": 4,
+      "bonus_attack_power": 0,
+      "attack_power": 6,
+      "crit_chance": 0.03,
+      "block_chance": 0.15,
+      "attack_interval": 2.1
+    }
+  },
+  "item_refs": {
+    "item_source": "data/items.json",
+    "starter_loadout": ["old_sword", "padded_jacket"],
+    "upgrade_examples": ["iron_sword", "patched_mail", "black_sun_charm"],
+    "rule": "Item stats live in items.json. Combat owns formulas, encounters, and balance expectations."
+  },
+  "leveling": {
+    "role": "secondary_growth_confirmation",
+    "mandatory_fights_require_grinding": false,
+    "levels": [
+      {
+        "level": 1,
+        "total_xp_required": 0,
+        "stat_changes_from_previous": {}
+      },
+      {
+        "level": 2,
+        "total_xp_required": 20,
+        "stat_changes_from_previous": {
+          "vitality": 5,
+          "strength": 10
+        }
+      },
+      {
+        "level": 3,
+        "total_xp_required": 45,
+        "stat_changes_from_previous": {
+          "vitality": 5,
+          "protection": 5
+        }
+      }
+    ]
+  },
+  "enemy_archetypes": [
+    {
+      "id": "scavenger",
+      "stat_shape": "low protection, average attack power",
+      "counter": "any starter weapon"
+    },
+    {
+      "id": "guard",
+      "stat_shape": "high vitality and protection",
+      "counter": "weapon damage or strength upgrade"
+    },
+    {
+      "id": "runner",
+      "stat_shape": "low vitality, fast attack interval",
+      "counter": "enough vitality or protection"
+    },
+    {
+      "id": "bonebreaker",
+      "stat_shape": "moderate damage and higher intuition",
+      "counter": "heal before combat and upgrade weapon"
+    }
+  ],
+  "encounters": [
+    {
+      "id": "gate_scavenger",
+      "display_name": "Падальщик у ворот",
+      "archetype": "scavenger",
+      "role": "first_check",
+      "quest": "Допуск за ворота",
+      "vitality": 20,
+      "strength": 0,
+      "protection": 0,
+      "intuition": 0,
+      "weapon_damage": 4,
+      "bonus_attack_power": 0,
+      "attack_power": 4,
+      "attack_interval": 2.2,
+      "target_duration_seconds": [4, 10],
+      "expected_threat_with_starter_loadout": "easy",
+      "reward_xp": 8,
+      "reward_gold": 5,
+      "reward_items": ["seeker_token_unlock"]
+    },
+    {
+      "id": "mill_scavenger",
+      "display_name": "Мельничный падальщик",
+      "archetype": "scavenger",
+      "role": "first_contract_enemy",
+      "quest": "Хлеб для Поста",
+      "vitality": 26,
+      "strength": 0,
+      "protection": 5,
+      "intuition": 0,
+      "weapon_damage": 5,
+      "bonus_attack_power": 0,
+      "attack_power": 5,
+      "attack_interval": 2.1,
+      "target_duration_seconds": [6, 16],
+      "expected_threat_with_starter_loadout": "fair",
+      "reward_xp": 10,
+      "reward_gold": 7,
+      "reward_items": ["contract_progress"]
+    },
+    {
+      "id": "mill_brute",
+      "display_name": "Мельничный громила",
+      "archetype": "guard",
+      "role": "first_protection_lesson",
+      "quest": "Хлеб для Поста",
+      "vitality": 34,
+      "strength": 0,
+      "protection": 20,
+      "intuition": 0,
+      "weapon_damage": 6,
+      "bonus_attack_power": 0,
+      "attack_power": 6,
+      "attack_interval": 2.5,
+      "target_duration_seconds": [8, 18],
+      "expected_threat_with_starter_loadout": "risky",
+      "expected_threat_with_iron_sword": "fair",
+      "reward_xp": 14,
+      "reward_gold": 9,
+      "reward_items": ["grain_sacks"]
+    },
+    {
+      "id": "black_sun_runner",
+      "display_name": "Беглец Черного Солнца",
+      "archetype": "runner",
+      "role": "first_speed_lesson",
+      "quest": "Не показывай это никому",
+      "vitality": 25,
+      "strength": 0,
+      "protection": 0,
+      "intuition": 5,
+      "weapon_damage": 5,
+      "bonus_attack_power": 0,
+      "attack_power": 5,
+      "attack_interval": 1.6,
+      "target_duration_seconds": [5, 14],
+      "expected_threat_with_starter_loadout": "fair",
+      "reward_xp": 12,
+      "reward_gold": 8,
+      "reward_items": ["clue_fragment"]
+    },
+    {
+      "id": "night_attacker",
+      "display_name": "Ночной нападавший",
+      "archetype": "bonebreaker",
+      "role": "first_human_threat",
+      "quest": "Те, кто пришел ночью",
+      "vitality": 35,
+      "strength": 0,
+      "protection": 10,
+      "intuition": 8,
+      "weapon_damage": 6,
+      "bonus_attack_power": 0,
+      "attack_power": 6,
+      "attack_interval": 2.0,
+      "target_duration_seconds": [8, 18],
+      "expected_threat_with_starter_loadout": "risky",
+      "expected_threat_with_iron_sword": "fair",
+      "reward_xp": 16,
+      "reward_gold": 10,
+      "reward_items": ["order_scrap"]
+    }
+  ],
+  "outcomes": {
+    "win": {
+      "player_hp": "keeps_remaining_hp",
+      "rewards": "grant_xp_gold_items_immediately",
+      "quest_state": "advance_current_objective",
+      "journal": "add_clue_when_encounter_has_reward_item_clue"
+    },
+    "loss": {
+      "return_location": "Последний Пост",
+      "player_hp": 1,
+      "gold_loss": 0,
+      "item_loss": "none",
+      "encounter_progress": "reset_current_encounter",
+      "explanation": "show_main_mismatch_low_hp_low_strength_low_weapon_damage_low_protection_enemy_speed_or_enemy_crit"
+    },
+    "retreat": {
+      "available": "before_combat_only",
+      "cost": "none_in_v1"
+    },
+    "healing": {
+      "tutorial_heal": "free_once",
+      "basic_heal_cost_gold": [3, 5],
+      "must_be_available_before_mandatory_risky_fights": true
+    }
+  },
+  "ui_contract": {
+    "always_show": ["vitality", "strength", "protection", "intuition", "attack_power"],
+    "details_show": ["weapon_damage", "attack_interval", "crit_chance", "block_chance"],
+    "prefight_panel": [
+      "enemy_portrait_and_name",
+      "player_hp_strength_protection_intuition_damage",
+      "enemy_hp_damage_protection_intuition",
+      "threat_label",
+      "one_reason_line",
+      "expected_rewards",
+      "fight_button",
+      "back_button",
+      "heal_button_when_relevant",
+      "upgrade_button_when_relevant"
+    ],
+    "combat_view": [
+      "two_hp_bars",
+      "attack_pips_or_swing_timers",
+      "floating_damage_numbers",
+      "crit_marker_only_when_it_happens",
+      "block_marker_only_when_it_happens",
+      "last_3_combat_events",
+      "result_panel_with_reward_and_next_quest_or_clue"
+    ],
+    "item_cards": [
+      "show_direct_stat_deltas",
+      "show_final_attack_power_preview_on_weapon_cards",
+      "hide_expected_dps_outside_debug"
+    ]
+  },
+  "balance_rules": [
+    "mandatory early fights should be easy or fair with intended gear and at least 70 percent player hp",
+    "optional danger can be risky; story gates should not be deadly",
+    "ten strength should increase final attack power by one",
+    "one weapon upgrade should reduce hits-to-kill against at least one current enemy",
+    "one armour upgrade should increase hits-survived or add visible blocked hits",
+    "crit should never be required for mandatory victory",
+    "if the player loses, the next best action must be obvious from the result screen"
+  ],
+  "deferred_stats": [
+    "agility",
+    "dodge",
+    "accuracy",
+    "element",
+    "resistance",
+    "mana",
+    "stamina",
+    "morale",
+    "stress",
+    "injury",
+    "lifesteal",
+    "status_effects",
+    "active_super_blow_input",
+    "party_formation",
+    "pets",
+    "pvp",
+    "idle_offline_rewards",
+    "poe_style_armour_curve"
+  ],
+  "tuning_knobs": [
+    "player vitality",
+    "player strength",
+    "player protection",
+    "player intuition",
+    "player weapon_damage",
+    "enemy vitality",
+    "enemy attack_power",
+    "enemy protection",
+    "enemy intuition",
+    "attack_interval",
+    "reward_xp",
+    "reward_gold",
+    "gear stat changes",
+    "healing cost"
+  ]
+}
