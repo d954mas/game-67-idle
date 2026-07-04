@@ -342,6 +342,71 @@ function normalizeOpacityPatch(patch) {
   return num;
 }
 
+// ---- image filters (non-destructive brightness/saturation/contrast/tint) ------
+//
+// `element.filters` is an ADDITIVE object (absent = no filters, same "absent means the
+// default" convention as `rotation`/`flipH`/`background`) with up to four optional keys:
+// `brightness`/`saturation`/`contrast` (finite numbers in [0,2], default 1, stored only
+// when != 1) and `tint` ({color:"#rrggbb", strength:[0,1]}, stored only when strength > 0).
+// See README "Image filters" for the shared canonical math (both renderers implement the
+// SAME per-pixel formulas — PIL is the source of rendered truth, the canvas approximates
+// via the browser's spec'd CSS filters, same stance as **Rotation & flip**).
+const FILTER_DEFAULTS = { brightness: 1, saturation: 1, contrast: 1 };
+
+// Normalize one filters object: validates every present key loudly (non-finite/out-of-
+// range/bad hex all throw BEFORE any write), then drops any key that lands at its default
+// so the stored shape never carries redundant defaults. `null`/`{}` (or an object that
+// normalizes to all-defaults) collapses to `null` — the whole-object "clear" signal
+// store.mjs's applyElementFields understands (mirrors `rotation:0` clearing to absent).
+function normalizeFilters(input) {
+  if (input === null) return null;
+  if (typeof input !== "object" || Array.isArray(input)) {
+    throw new Error(`filters must be an object, got ${JSON.stringify(input)}`);
+  }
+  const out = {};
+  for (const key of ["brightness", "saturation", "contrast"]) {
+    if (input[key] === undefined) continue;
+    const num = Number(input[key]);
+    if (!Number.isFinite(num) || num < 0 || num > 2) {
+      throw new Error(`filters.${key} must be a finite number in [0,2], got ${JSON.stringify(input[key])}`);
+    }
+    if (num !== FILTER_DEFAULTS[key]) out[key] = num;
+  }
+  if (input.tint !== undefined && input.tint !== null) {
+    if (typeof input.tint !== "object" || Array.isArray(input.tint)) {
+      throw new Error(`filters.tint must be an object {color, strength}, got ${JSON.stringify(input.tint)}`);
+    }
+    const color = hexColor(input.tint.color);
+    if (!color) throw new Error(`filters.tint.color must be #rrggbb, got ${JSON.stringify(input.tint.color)}`);
+    const strength = Number(input.tint.strength);
+    if (!Number.isFinite(strength) || strength < 0 || strength > 1) {
+      throw new Error(`filters.tint.strength must be a finite number in [0,1], got ${JSON.stringify(input.tint.strength)}`);
+    }
+    // Validated above regardless (loud even at strength 0); stored only when it actually
+    // does something — mirrors the brightness/saturation/contrast "!= default" rule.
+    if (strength > 0) out.tint = { color, strength };
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+// Sanitize a patch that may carry `filters` — image-only (mirrors the flipH/flipV guard:
+// a loud error on a text/note element), whole-object REPLACE (not a merge: patching
+// `filters:{contrast:1.3}` resets brightness/saturation/tint to their defaults too, same
+// as a `style` patch replacing a text element's whole style object). A no-op fast path
+// when the patch carries no `filters` key, so an untouched patch never pays for the
+// element lookup (mirrors sanitizeTransformPatch above).
+function sanitizeFiltersPatch(project, elementId, patch = {}) {
+  if (patch.filters === undefined) return patch;
+  const element = (project.elements || []).find((item) => item.id === elementId);
+  if (!element) throw new Error(`element not found: ${elementId}`);
+  if (element.type !== "image") {
+    throw new Error(
+      `element ${elementId} is a ${element.type} element — filters are image-only (filters don't apply to type:"${element.type}")`,
+    );
+  }
+  return { ...patch, filters: normalizeFilters(patch.filters) };
+}
+
 // ---- journal core ------------------------------------------------------------
 
 function snapshotOf(project) {
@@ -710,7 +775,11 @@ export function addNote(root, projectId, args = {}) {
 export function patchElement(root, projectId, elementId, patch = {}) {
   const startedAt = performance.now();
   const before = getProject(root, projectId);
-  const clean = sanitizeTransformPatch(before, elementId, sanitizeTextPatch(root, before, elementId, patch));
+  const clean = sanitizeFiltersPatch(
+    before,
+    elementId,
+    sanitizeTransformPatch(before, elementId, sanitizeTextPatch(root, before, elementId, patch)),
+  );
   // Validate opacity BEFORE any write so a bad value throws atomically (nothing applied).
   const opacity = normalizeOpacityPatch(clean);
   const result = storePatchElement(root, projectId, elementId, clean);
@@ -754,30 +823,51 @@ export function removeElement(root, projectId, elementId) {
 
 // Patch several elements in ONE journaled gesture — the marquee/multi-select
 // move commit and any agent multi-move. Each patch is {elementId, x?, y?, w?, h?,
-// name?, visible?} with the SAME per-field rules as patchElement. A bad/missing
-// elementId throws before any write (atomic — no partial batch), and the whole batch
-// is ONE commitMutation, so a single undo restores the entire gesture (not N steps).
-// An empty batch is a no-op (no journal entry), like the other no-op-guarded ops.
+// name?, visible?} with the SAME per-field rules as patchElement (incl. rotation/flip,
+// filters, and opacity). A bad/missing elementId throws before any write (atomic — no
+// partial batch), and the whole batch is ONE commitMutation, so a single undo restores
+// the entire gesture (not N steps). An empty batch is a no-op (no journal entry), like
+// the other no-op-guarded ops.
 export function patchElements(root, { projectId, patches } = {}) {
   if (!projectId) throw new Error("patchElements requires projectId");
   if (!Array.isArray(patches)) throw new Error("patchElements requires a patches array");
   const startedAt = performance.now();
   const before = getProject(root, projectId);
+  // opacity is not a store field (same as patchElement) — validated per-element here,
+  // applied in a second pass below once the store has written everything else.
+  const opacityByElementId = new Map();
   const clean = patches.map((patch, index) => {
     if (!patch || typeof patch !== "object") throw new Error(`patch ${index} is not an object`);
     const elementId = String(patch.elementId == null ? "" : patch.elementId).trim();
     if (!elementId) throw new Error(`patch ${index} is missing an elementId`);
-    // Text content/style AND rotation/flip patches are validated + normalized here (same
-    // as patchElement); plain geometry patches skip both fast paths entirely.
+    // Text content/style, rotation/flip, AND filters patches are validated + normalized
+    // here (same as patchElement); plain geometry patches skip all three fast paths.
     const textClean = sanitizeTextPatch(root, before, elementId, patch);
-    return { ...sanitizeTransformPatch(before, elementId, textClean), elementId };
+    const transformClean = sanitizeTransformPatch(before, elementId, textClean);
+    const filtersClean = sanitizeFiltersPatch(before, elementId, transformClean);
+    const opacity = normalizeOpacityPatch(filtersClean);
+    if (opacity !== undefined) opacityByElementId.set(elementId, opacity);
+    return { ...filtersClean, elementId };
   });
   const result = storePatchElements(root, projectId, clean);
+  let after = result.project;
+  if (opacityByElementId.size) {
+    after = updateProject(root, projectId, {
+      elements: (after.elements || []).map((item) => {
+        if (!opacityByElementId.has(item.id)) return item;
+        const opacity = opacityByElementId.get(item.id);
+        const next = { ...item };
+        if (opacity === 1) delete next.opacity;
+        else next.opacity = opacity;
+        return next;
+      }),
+    });
+  }
   const project = commitMutation(root, projectId, {
     op: "patchElements",
     args_summary: { count: clean.length, elementIds: clean.map((patch) => patch.elementId) },
     before,
-    after: result.project,
+    after,
     startedAt,
   });
   const ids = new Set(clean.map((patch) => patch.elementId));
@@ -5428,6 +5518,12 @@ function buildRenderNodes(root, projectId, project, scopeId, leaves, fonts) {
         // Image-only render integration in increment 1: text nodes do not carry it (a
         // translucent text element renders opaque in BOTH renderers today).
         opacity: element.opacity,
+        // Image filters (brightness/saturation/contrast/tint): forwarded verbatim so
+        // render_group.py's paint_element can apply the SAME canonical formulas (see
+        // README "Image filters") right after the resize/slice9 step, BEFORE flip/rotate.
+        // `undefined` when absent, so JSON.stringify drops the key — zero shape change for
+        // an unfiltered element. Image-only, same as slice9/rotation/flip above.
+        filters: element.filters || undefined,
       });
     }
   }

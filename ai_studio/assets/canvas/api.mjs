@@ -57,7 +57,7 @@
 //   GET    /api/canvas/projects/<id>/history
 //   GET    /api/canvas/projects/<id>/history-list
 //   POST   /api/canvas/projects/<id>/history-jump   {seq, expectHead?}
-//   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible,rotation?,flipH?,flipV?,opacity?,content?,style?,background?} (T0232 3a: rotation = degrees CW about the box center; flip is image-only. T0260: opacity in [0,1], stored only when != 1. T0222/T0268: content/style patch a text OR note; background patches a note only — all loud on the wrong type)
+//   PATCH  /api/canvas/projects/<id>/elements/<eid> {x,y,w,h,name,visible,rotation?,flipH?,flipV?,opacity?,filters?,content?,style?,background?} (T0232 3a: rotation = degrees CW about the box center; flip is image-only. T0260: opacity in [0,1], stored only when != 1. T0273: filters = {brightness?,saturation?,contrast?,tint?} non-destructive image color adjustments, image-only, whole-object replace, null/{} clears — see README "Image filters". T0222/T0268: content/style patch a text OR note; background patches a note only — all loud on the wrong type)
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/regions {regions}   (replace)
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/slice9  {insets}    (T0233: set 9-slice insets {left,top,right,bottom,scale?}; {insets:null} clears; image-only)
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/animation {animation} (T0260: set the ai_studio.canvas.animation.v1 spec; {animation:null} clears; image + text)

@@ -44,6 +44,7 @@ import {
   fitGroupAction,
   generateFromRecipeAction,
   patchElementBox,
+  patchElementsBatch,
   patchGroupBox,
   patchNoteStyle,
   patchRecipeAction,
@@ -1425,6 +1426,207 @@ function transformBadge(element) {
   return badge;
 }
 
+// ---- Image filters (T0273) ------------------------------------------------------
+//
+// Non-destructive brightness/saturation/contrast/tint (element.filters) + the existing
+// element.opacity — image elements only (renderElement is only reached for a non-text
+// element). Every slider drags LIVE: the `input` event mutates the in-memory element
+// directly and repaints the canvas (hooks.renderCanvas(), the same view-state-only idiom
+// the T0207 cleanup preview uses) — nothing commits until release. `change` (fires once on
+// release for a range input) commits ONE patchElement; a release back at the value the
+// slider STARTED this gesture at is a deliberate no-op (no journal entry). Each row also
+// gets a small "×" reset (mirrors the Rotation row's "↺": always rendered, disabled at the
+// default so its position never shifts mid-interaction).
+
+// filters is whole-object-replace (like `style`) — every commit resolves the FULL desired
+// object from the element's CURRENT effective values + the one field being changed, so
+// changing brightness never silently resets saturation/contrast/tint.
+function effectiveFilters(element) {
+  const stored = element.filters || {};
+  const tint = stored.tint || {};
+  return {
+    brightness: stored.brightness ?? 1,
+    saturation: stored.saturation ?? 1,
+    contrast: stored.contrast ?? 1,
+    tintColor: tint.color || "#000000",
+    tintStrength: tint.strength || 0,
+  };
+}
+
+// View-state-only: mutate the SAME element object the page already renders from and
+// repaint immediately — no store write, no journal entry (mirrors setCleanupPreview).
+function liveSetFilter(element, patch) {
+  const next = { ...effectiveFilters(element), ...patch };
+  element.filters = {
+    brightness: next.brightness,
+    saturation: next.saturation,
+    contrast: next.contrast,
+    tint: { color: next.tintColor, strength: next.tintStrength },
+  };
+  hooks.renderCanvas();
+}
+
+// ONE patchElement committing the full resolved filters object (the op layer validates +
+// drops any field back at its default, so callers never have to pre-normalize).
+function commitFilters(element, patch) {
+  const next = { ...effectiveFilters(element), ...patch };
+  patchElementBox(element.id, {
+    filters: {
+      brightness: next.brightness,
+      saturation: next.saturation,
+      contrast: next.contrast,
+      tint: { color: next.tintColor, strength: next.tintStrength },
+    },
+  });
+}
+
+// A range row: live-preview via `onInput` on every `input` event, commits via `onCommit`
+// on `change` — but ONLY when the released value differs from the value this gesture
+// started at (a drag that settles back where it began is a deliberate no-op commit).
+function filterSliderRow(label, value, { min, max, step, defaultValue, format, onInput, onCommit, onReset }) {
+  const input = document.createElement("input");
+  input.type = "range";
+  input.min = String(min);
+  input.max = String(max);
+  input.step = String(step);
+  input.value = String(value);
+  input.className = "insp-range";
+
+  const out = document.createElement("span");
+  out.className = "insp-range-value";
+  out.textContent = format(value);
+
+  let committed = value;
+  input.addEventListener("input", () => {
+    const v = Number(input.value);
+    out.textContent = format(v);
+    onInput(v);
+  });
+  input.addEventListener("change", () => {
+    const v = Number(input.value);
+    if (v === committed) return; // released back where the gesture started — no commit
+    committed = v;
+    onCommit(v);
+  });
+
+  const reset = smallBtn("×", onReset); // ×
+  reset.classList.add("insp-filter-reset");
+  reset.title = `Reset ${label}`;
+  reset.setAttribute("aria-label", `Reset ${label}`);
+  reset.disabled = value === defaultValue;
+
+  const row = field(label, input);
+  row.append(out, reset);
+  return row;
+}
+
+function renderFilters(element, root) {
+  const body = collapsible(root, "filters", "Filters");
+
+  const opacity = element.opacity === undefined || element.opacity === null ? 1 : Number(element.opacity);
+  const pct = (v) => `${Math.round(v * 100)}%`;
+  body.appendChild(
+    filterSliderRow("Opacity", opacity, {
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 1,
+      format: pct,
+      onInput: (v) => {
+        element.opacity = v;
+        hooks.renderCanvas();
+      },
+      onCommit: (v) => patchElementBox(element.id, { opacity: v }),
+      onReset: () => patchElementBox(element.id, { opacity: 1 }),
+    }),
+  );
+
+  const current = effectiveFilters(element);
+  body.appendChild(
+    filterSliderRow("Brightness", current.brightness, {
+      min: 0,
+      max: 2,
+      step: 0.01,
+      defaultValue: 1,
+      format: pct,
+      onInput: (v) => liveSetFilter(element, { brightness: v }),
+      onCommit: (v) => commitFilters(element, { brightness: v }),
+      onReset: () => commitFilters(element, { brightness: 1 }),
+    }),
+  );
+  body.appendChild(
+    filterSliderRow("Saturation", current.saturation, {
+      min: 0,
+      max: 2,
+      step: 0.01,
+      defaultValue: 1,
+      format: pct,
+      onInput: (v) => liveSetFilter(element, { saturation: v }),
+      onCommit: (v) => commitFilters(element, { saturation: v }),
+      onReset: () => commitFilters(element, { saturation: 1 }),
+    }),
+  );
+  body.appendChild(
+    filterSliderRow("Contrast", current.contrast, {
+      min: 0,
+      max: 2,
+      step: 0.01,
+      defaultValue: 1,
+      format: pct,
+      onInput: (v) => liveSetFilter(element, { contrast: v }),
+      onCommit: (v) => commitFilters(element, { contrast: v }),
+      onReset: () => commitFilters(element, { contrast: 1 }),
+    }),
+  );
+
+  body.appendChild(field("Tint color", colorInput(current.tintColor, (next) => commitFilters(element, { tintColor: next }))));
+  body.appendChild(
+    filterSliderRow("Tint strength", current.tintStrength, {
+      min: 0,
+      max: 1,
+      step: 0.01,
+      defaultValue: 0,
+      format: pct,
+      onInput: (v) => liveSetFilter(element, { tintStrength: v }),
+      onCommit: (v) => commitFilters(element, { tintStrength: v }),
+      onReset: () => commitFilters(element, { tintStrength: 0 }),
+    }),
+  );
+
+  // Lead ask (verbatim, mute/dim a background behind a UI mockup): one click to opacity
+  // 70% + brightness 70% + saturation 60% — ONE patchElement, one undo. "Reset all" clears
+  // both filters and opacity back to defaults, also one patchElement/one undo.
+  const presetRow = document.createElement("div");
+  presetRow.className = "insp-alpha-row";
+  const dimBtn = smallBtn("Приглушить", () =>
+    patchElementBox(element.id, { opacity: 0.7, filters: { brightness: 0.7, saturation: 0.6 } }),
+  );
+  dimBtn.title = "Dim: opacity 70%, brightness 70%, saturation 60%";
+  const resetAllBtn = smallBtn("Reset all", () => patchElementBox(element.id, { opacity: 1, filters: null }));
+  presetRow.append(dimBtn, resetAllBtn);
+  body.appendChild(presetRow);
+}
+
+// Multi-select (T0273): when EVERY selected element is an image, offer the SAME
+// "Приглушить" dim preset batched into ONE elements-set call (one undo restores every
+// element) — mirrors renderMultiAlpha's "Apply to N images" shape just above it.
+function renderMultiFilters(selected, root) {
+  const body = collapsible(root, "multifilters", "Filters");
+  const dimBtn = document.createElement("button");
+  dimBtn.type = "button";
+  dimBtn.className = "insp-btn insp-alpha-btn";
+  dimBtn.textContent = `Приглушить: apply to ${selected.length} images`;
+  dimBtn.title = "Dim: opacity 70%, brightness 70%, saturation 60%";
+  dimBtn.addEventListener("click", () => {
+    patchElementsBatch(
+      selected.map((element) => element.id),
+      { opacity: 0.7, filters: { brightness: 0.7, saturation: 0.6 } },
+      `Dimmed ${selected.length} image(s).`,
+    );
+  });
+  body.appendChild(dimBtn);
+}
+
 // ---- Slice-9 (T0233 Packet 2) --------------------------------------------------
 //
 // Image-only inspector section (renderElement is only reached for a non-text
@@ -1852,6 +2054,7 @@ function renderElement(element, root) {
   renderRegions(element, root);
   renderAlpha(element, root);
   renderCleanup(element, root);
+  renderFilters(element, root);
   renderSlice9(element, root);
   renderAnimation(element, root);
   renderExtracted(element, root);
@@ -2536,6 +2739,7 @@ function renderMulti(selected, root) {
 
   if (selected.every((element) => element.type === "image")) {
     renderMultiAlpha(selected, root);
+    renderMultiFilters(selected, root);
   }
 
   const note = document.createElement("div");

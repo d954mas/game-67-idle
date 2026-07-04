@@ -216,6 +216,19 @@ export async function renameElement(id, name) {
   await patchElementBox(id, { name });
 }
 
+// Patch SEVERAL elements with the SAME patch, in ONE journaled gesture (elements-set) —
+// e.g. the multi-image "Приглушить N images" dim preset (T0273). Same per-field rules as
+// patchElementBox, applied identically to every id; one undo restores every element.
+export async function patchElementsBatch(ids, patch, message) {
+  if (!ids || !ids.length) return;
+  try {
+    const patches = ids.map((elementId) => ({ elementId, ...patch }));
+    applyMutation(await api("POST", `/projects/${pid()}/elements-set`, { patches }), message);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
 // Toggle one flip axis on an IMAGE element (T0232 increment 3a) — an additive boolean
 // flag (image-only; validated at the op layer). Both the inspector's Flip H/Flip V
 // buttons and the element context menu's "Flip horizontal"/"Flip vertical" drive this

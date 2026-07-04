@@ -89,14 +89,18 @@ Every capability is one op in `ops.mjs`:
   width-only edit keeps the color); `content`/`style` on a non-text element is a loud
   error. Also accepts `rotation` (finite degrees, normalized to `[0,360)`) and `flipH`/
   `flipV` (image-only booleans) — see **Rotation & flip** below (T0232 increment 3a).
-  `patchElements` (batched) accepts the same text and transform fields.
+  Also accepts `opacity` (finite `[0,1]`, stored only when `!= 1`, T0260) and `filters`
+  (image-only, whole-object replace, `null`/`{}` clears — see **Image filters** below,
+  T0273). `patchElements` (batched) accepts the same text, transform, opacity, and
+  filters fields.
 - `patchElements({ projectId, patches })` / `removeElements({ projectId, elementIds })`
   — the **batched** multi-element ops behind marquee/multi-select move and multi-delete.
   Each applies the whole gesture in ONE `commitMutation`, so it is **one journal entry**
   and a single undo restores everything (not N steps). Same per-field rules as
   `patchElement`; a bad/missing/unknown id throws **before any write** (atomic — no
   partial batch), and an empty batch is a no-op. Both clients call these: the page's
-  drag/delete commits and the CLI `elements-set`/`elements-remove`.
+  drag/delete commits + the multi-image Filters "Приглушить N images" preset, and the
+  CLI `elements-set`/`elements-remove`.
 - `moveNodes({ projectId, moves:[{nodeId,x,y}...] })` — the **mixed** marquee/multi-select
   move: loose elements AND group frames in ONE entry, each group cascading its full subtree
   (overlap-safe — a node inside a moved group shifts once, with the topmost moved ancestor).
@@ -1118,6 +1122,114 @@ FIRST, proven by a headless test, before any interactive code depends on it.
 true|false --flip-v true|false` (or `elements-set`'s batched JSON patches) — whatever the
 page can set, the CLI/API can set identically.
 
+## Element opacity
+
+**(T0260.)** `element.opacity` — a finite number in `[0,1]`, absent = `1` (fully opaque),
+stored only when `!= 1`. An **additive whitelisted field** on `patchElement`/
+`patchElements` (same "absent means the default" convention as `rotation`/`flipH`).
+Applies to **image** elements in both renderers today (a translucent **text** element
+renders opaque in both — out of scope). The canvas multiplies it into `ctx.globalAlpha`
+before the rotate/flip/slice9 draw (`site/workspace.js` `paintElement`);
+`render_group.py`'s `paint_element` scales the pasted layer's alpha channel by the same
+factor right before compositing. Both clients: the inspector's **Filters** section
+**Opacity** slider (see **Image filters** below) and `element-set --opacity <0..1>` /
+`elements-set`'s batched JSON patches.
+
+## Image filters
+
+**(T0273 — non-destructive brightness/saturation/contrast/tint; lead use case: mute/dim a
+background image sitting behind a UI mockup.)** `element.filters` — an **additive**
+object, absent = no filters, **image-only** (a loud error patching `filters` onto a
+`text`/`note` element — mirrors the `flipH`/`flipV` image-only guard). Up to four optional
+keys, each stored only when it differs from its default (the object itself is omitted
+entirely once every key is back at default — the same "absent means the default"
+convention `rotation`/`flipH`/`background` already use):
+
+- `brightness` — finite number `[0,2]`, default `1`.
+- `saturation` — finite number `[0,2]`, default `1`.
+- `contrast` — finite number `[0,2]`, default `1`.
+- `tint` — `{ color: "#rrggbb", strength: [0,1] }`, stored only when `strength > 0`
+  (both fields are still validated loudly even at `strength: 0`).
+
+A `filters` patch is a **whole-object REPLACE**, not a merge (like `style`): patching
+`{contrast:1.3}` resets `brightness`/`saturation`/`tint` on that element back to their
+defaults too. `null` or `{}` (or an object that normalizes to all-defaults) clears
+`filters` to an absent field. All validation is loud and happens **before any write**:
+a non-finite/out-of-range number or a bad `#rrggbb` hex throws atomically.
+
+**The parity contract (load-bearing — both renderers implement the SAME per-pixel math):**
+non-premultiplied sRGB channels in `[0,1]`; **alpha is never touched** by
+brightness/saturation/contrast (a fully transparent pixel stays fully transparent, a
+semi-transparent one keeps its exact alpha). Canonical order:
+
+1. **brightness**: `C' = clamp(C * b)`
+2. **saturate** (the SVG `feColorMatrix type="saturate"` matrix, luma
+   `0.2126/0.7152/0.0722` — **not** PIL's default `0.299/0.587/0.114` grayscale luma; at
+   `saturation: 0` this is the one trap the whole design guards against):
+   ```
+   R' = (0.2126+0.7874s)R + (0.7152-0.7152s)G + (0.0722-0.0722s)B
+   G' = (0.2126-0.2126s)R + (0.7152+0.2848s)G + (0.0722-0.0722s)B
+   B' = (0.2126-0.2126s)R + (0.7152-0.7152s)G + (0.0722+0.9278s)B
+   ```
+3. **contrast**: `C' = clamp((C - 0.5) * c + 0.5)` (pivots at mid-gray)
+4. **tint** (a scrim, RGB only): `C' = C*(1-strength) + tintC*strength`; alpha unchanged.
+
+Element `opacity` (see **Element opacity** above) multiplies alpha **at composite time**,
+already implemented on both sides — filters never touch it, never duplicate it. Filters
+are pure per-pixel color ops on the element's **own** pixels: geometry (x/y/w/h/rotation/
+flip), hit-test, marquee, and regions are **unaffected**. Source-space ops
+(`detectRegions`/`sliceRegions`/`alphaCutout`) read the element's **untransformed source**
+pixels and stay valid with filters on — unlike rotation/flip (R7), filters need **no**
+refusal guard.
+
+- **Canvas** (`site/workspace.js` `paintElement`): brightness/saturation/contrast wrap the
+  existing `drawImage`/slice9-patch loop in `ctx.filter = "brightness(b) saturate(s)
+  contrast(c)"` (CSS filters apply left→right, matching the canonical order above; empty
+  string — `ctx.filter` never touched — when all three are at default, and always reset to
+  `"none"` after). `tint` cannot be expressed by `ctx.filter` (the mix must stay inside the
+  element's own pixels), so an element carrying `tint.strength > 0` instead draws through a
+  small **cached offscreen canvas**: the filtered image is drawn once, then a
+  `globalCompositeOperation:"source-atop"` + `globalAlpha:strength` fill lays the tint
+  scrim on top; the result (a plain bitmap at the source's natural size) flows through the
+  UNCHANGED rotate/flip/opacity/slice9 pipeline. The offscreen is cached per element id
+  (keyed by `src` + the filters signature — mirrors `layers_panel.js`'s thumbnail cache
+  precedent) and pruned each render alongside it; an element with no tint pays zero
+  offscreen cost, an element with no filters at all takes the exact pre-existing fast path.
+- **PIL** (`tools/render_group.py` `apply_filters`, called from `paint_element` right after
+  the resize/slice9 step, **before** flip/rotate — per-pixel color ops commute with
+  geometry, so this ordering is a free choice, picked so filters read the untransformed
+  post-resize pixels): the same four steps in `numpy`, alpha channel copied through
+  byte-for-byte untouched. **PIL is the single source of rendered truth**; the canvas
+  approximates via the browser's own spec'd CSS filters, which compute the same functions.
+- `ops.buildRenderNodes` forwards `filters` verbatim on an image paint node (`undefined`
+  when absent, so `JSON.stringify` drops the key — zero shape change for an unfiltered
+  element), same as `rotation`/`flipH`/`opacity`/`slice9`.
+
+**Inspector (page):** a collapsible **Filters** section on an image element — **Opacity**,
+**Brightness**, **Saturation**, **Contrast** sliders (0-200%, 0-100% for opacity) with a
+per-control reset ("×", always rendered, disabled at the default — mirrors the Rotation
+row's "↺"), plus a **Tint** color input + **Tint strength** slider. Each slider drags LIVE
+(mutates the in-memory element + repaints, the same view-state idiom the T0207 cleanup
+preview uses) and commits **ONE** `patchElement` on release; releasing back at the value
+the drag started from commits nothing. **«Приглушить»** (lead's one-click dim preset) sets
+`{opacity:0.7, filters:{brightness:0.7, saturation:0.6}}` in one patch/one undo; **Reset
+all** clears both back to defaults, also one patch/one undo. Multi-select: when every
+selected element is an image, the same «Приглушить» preset is offered batched into ONE
+`patchElements` call (mirrors the Alpha section's "Apply to N images"); per-slider live
+editing is **not** batched (single-element only, v1).
+
+**Export stance:** `renderGroup`/`exportProject` (both flow through `render_group.py`)
+apply filters — that is the whole point for a muted background. Single-element
+`exportElements` does **not**: it only resizes/re-encodes the element's raw source
+pixels (`tools/export_images.py` never reads `rotation`/`flipH`/`flipV`/`opacity`/
+`filters`) — the same stance rotation/flip/opacity already have there, kept identical for
+filters (an "export the source asset" action, not an "export what's on screen" action).
+
+**Both clients (strict tool parity):** the inspector's Filters section commits through
+`patchElementBox`/`patchElementsBatch` → the SAME `patchElement`/`patchElements` fields the
+agent sets via `element-set --filters-json '<json|null>'` (or `elements-set`'s batched
+JSON patches) — whatever the page can set, the CLI/API can set identically.
+
 ## 9-slice elements
 
 **(T0233 — data model, shared math, both renderers, op/API/CLI, inspector UI.)** Lead
@@ -1350,7 +1462,11 @@ Both `exportElements` and `exportProject` write one `manifest.json`
 lead chose is a separate delivery-to-disk layer (page save-file dialog / CLI `--to`) on
 top of this one shared op output — the op itself never writes to an arbitrary path.
 
-**Element export** (`exportElements`): one file per element × export row.
+**Element export** (`exportElements`): one file per element × export row — a resize +
+re-encode of the element's **raw source** pixels only; `rotation`/`flipH`/`flipV`/
+`opacity`/`filters` are display transforms and are **not** applied here (see **Image
+filters** → "Export stance"). `renderGroup`/`exportProject` (composited screens) DO apply
+all of them.
 
 ```json
 { "schema": "ai_studio.canvas.export.v1", "project": "<id>", "at": "<iso>",
@@ -1413,8 +1529,9 @@ node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
 node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--name "X"] [--visible true|false]
 node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--rotation <deg>] [--flip-h true|false] [--flip-v true|false]   # T0232 3a: rotation = degrees CW about the box center, normalized [0,360); flip is image-only
+node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> --opacity 0.7 --filters-json '{"brightness":0.7,"saturation":0.6}'   # T0273: image-only, whole-object replace; --filters-json null clears
 node ai_studio/assets/canvas/cli.mjs element-remove <id> --element <eid>
-node ai_studio/assets/canvas/cli.mjs elements-set <id> --json patches.json    # batched patch [{elementId,x?,y?,w?,h?,name?,visible?,rotation?,flipH?,flipV?}]; one undo step
+node ai_studio/assets/canvas/cli.mjs elements-set <id> --json patches.json    # batched patch [{elementId,x?,y?,w?,h?,name?,visible?,rotation?,flipH?,flipV?,opacity?,filters?}]; one undo step
 node ai_studio/assets/canvas/cli.mjs elements-remove <id> --elements e1,e2    # batched delete; one undo step
 node ai_studio/assets/canvas/cli.mjs element-reorder <id> --element <eid> --index <n>   # z-order among merged siblings; 0 = back (clamps)
 node ai_studio/assets/canvas/cli.mjs node-reorder <id> --node <id> --index <n>          # reorder an element OR group among merged siblings; 0 = back (strict)
@@ -1519,7 +1636,10 @@ one document that swaps two views; the JS is split into focused ES modules under
 - `inspector.js` — the right panel for the selection: element (name, X/Y/W/H,
   source size, a **Reset to source size** button, a **Rotation** number input + **Flip
   H**/**Flip V** toggle buttons (T0232 increment 3a — see **Rotation & flip**; Detect/
-  Slice/Alpha gray out with a reason while the element is rotated/flipped), provenance,
+  Slice/Alpha gray out with a reason while the element is rotated/flipped), a
+  **Filters** section (T0273 — Opacity/Brightness/Saturation/Contrast sliders + Tint
+  color/strength, a per-slider reset, and «Приглушить»/Reset all presets; see **Image
+  filters**), provenance,
   meta, and a calm **Regions** section: a count badge,
   compact per-region rows — number + name/size + delete, coords in the tooltip —
   that select/enter region-edit on the canvas and inline-rename on double-click,

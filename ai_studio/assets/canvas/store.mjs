@@ -495,8 +495,11 @@ const NUMERIC_ELEMENT_FIELDS = ["x", "y", "w", "h"];
 // booleans, flip rejected on a text element) — this just stores them, mirroring
 // `group.clip`'s "absent means the default" rule: `rotation === 0` and `flipH`/`flipV
 // === false` are stored as an ABSENT field (an untouched/reset element stays clean; the
-// stored shape never carries a redundant zero/false). Shared by patchElement and the
-// batched patchElements so both honor identical rules.
+// stored shape never carries a redundant zero/false). `filters` (brightness/saturation/
+// contrast/tint — non-destructive image color adjustments, see README "Image filters")
+// is likewise pre-validated/normalized by ops.sanitizeFiltersPatch (image-only, whole-
+// object replace, `null` clears to absent). Shared by patchElement and the batched
+// patchElements so both honor identical rules.
 function applyElementFields(element, patch = {}) {
   for (const field of NUMERIC_ELEMENT_FIELDS) {
     if (patch[field] !== undefined && patch[field] !== null && Number.isFinite(Number(patch[field]))) {
@@ -529,6 +532,16 @@ function applyElementFields(element, patch = {}) {
   if (patch.flipV !== undefined) {
     if (patch.flipV === false) delete element.flipV;
     else element.flipV = true;
+  }
+  // Image filters (brightness/saturation/contrast/tint): the op layer validated +
+  // normalized this to `null` (clear) or a non-empty object carrying only non-default
+  // keys — this just stores it. `null` clears to an ABSENT field (mirrors rotation/
+  // background above); a non-null object is a WHOLE-OBJECT REPLACE, not a merge (like
+  // `style`), so patching e.g. `{contrast:1.3}` resets brightness/saturation/tint to
+  // their defaults too.
+  if (patch.filters !== undefined) {
+    if (patch.filters === null) delete element.filters;
+    else element.filters = patch.filters;
   }
   return element;
 }

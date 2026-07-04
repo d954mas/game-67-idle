@@ -1501,6 +1501,19 @@ body.layers-resizing {
   font-size: 12px;
 }
 
+/* ---- image filters (T0273): opacity/brightness/saturation/contrast/tint sliders ---
+   Each row is a plain .insp-field (label + .insp-range, reused from the export Quality
+   slider) with a value readout + a small per-control reset — same "always rendered,
+   disabled at default" idiom as .insp-rotation-reset so its position never shifts
+   mid-drag. flex:0 0 auto (NOT .insp-btn-small's flex:1) keeps it from splitting the
+   row evenly with the range input. */
+.insp-filter-reset {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 5px 8px;
+  color: var(--muted);
+}
+
 /* ---- feedback layer (toasts, T0203) --------------------------------------- */
 
 /* Fixed stack at the bottom-right of the CANVAS working area — inset past the 264px

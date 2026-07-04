@@ -222,6 +222,7 @@ function groupChromeScreenAABB(group, vp) {
 
 export function render() {
   if (!canvas || !state.project) return;
+  pruneFilterOffscreenCache();
   resizeCanvas();
   const vp = state.viewport;
   // Clear in DEVICE pixels, not CSS pixels: with a fractional devicePixelRatio
@@ -393,6 +394,75 @@ export function loadCleanupBitmap(base64) {
   });
 }
 
+// ---- image filters (T0273 — non-destructive brightness/saturation/contrast/tint) ----
+//
+// Canonical math lives in README "Image filters" (both renderers implement the SAME
+// per-pixel formulas; PIL/render_group.py is the source of rendered truth). brightness/
+// saturation/contrast are plain CSS filters (`ctx.filter`) wrapped around the existing
+// drawImage — the browser computes the same functions the PIL side hand-rolls in numpy.
+// `tint` needs its mix constrained to the element's OWN pixels (source-atop), which
+// `ctx.filter` cannot express, so an element that carries a tint (strength > 0) instead
+// draws through a small cached offscreen canvas: the (brightness/saturation/contrast-)
+// filtered image is drawn once, then a source-atop + globalAlpha fill lays the tint scrim
+// on top — the result is a plain bitmap at the SOURCE's natural size that flows into the
+// SAME rotate/flip/opacity/slice9 pipeline paintElement already has, unmodified (slice9's
+// patch sx/sy/sw/sh stay valid crops of it). An element with no tint skips the offscreen
+// entirely (ctx.filter only, zero extra canvas); an element with no filters at all skips
+// both — byte-identical to the pre-existing fast path.
+
+// brightness/saturation/contrast as one CSS filter string, or "" when every value is at
+// its default (the fast-path signal: ctx.filter is never touched for an unfiltered, or
+// tint-only, element).
+function cssFilterFor(filters) {
+  if (!filters) return "";
+  const b = filters.brightness ?? 1;
+  const s = filters.saturation ?? 1;
+  const c = filters.contrast ?? 1;
+  if (b === 1 && s === 1 && c === 1) return "";
+  return `brightness(${b}) saturate(${s}) contrast(${c})`;
+}
+
+// element.id -> { canvas, src, sig }. `sig` is the filters object's JSON (small, cheap to
+// compare) so the offscreen rebuilds exactly when the src OR the filters actually change —
+// pan/zoom/resize/rotate never invalidate it (built at the SOURCE's natural pixel size,
+// independent of the element's current display box / vp.scale).
+const filterOffscreenCache = new Map();
+
+function tintedOffscreenFor(element, img) {
+  const filters = element.filters;
+  const sig = JSON.stringify(filters);
+  let entry = filterOffscreenCache.get(element.id);
+  if (!entry || entry.src !== element.src || entry.sig !== sig) {
+    const offscreen = document.createElement("canvas");
+    offscreen.width = Math.max(1, img.naturalWidth || 1);
+    offscreen.height = Math.max(1, img.naturalHeight || 1);
+    const octx = offscreen.getContext("2d");
+    const cssFilter = cssFilterFor(filters);
+    if (cssFilter) octx.filter = cssFilter;
+    octx.drawImage(img, 0, 0);
+    if (cssFilter) octx.filter = "none";
+    const tint = filters.tint;
+    if (tint && tint.strength > 0) {
+      octx.globalCompositeOperation = "source-atop";
+      octx.globalAlpha = tint.strength;
+      octx.fillStyle = tint.color;
+      octx.fillRect(0, 0, offscreen.width, offscreen.height);
+      octx.globalCompositeOperation = "source-over";
+      octx.globalAlpha = 1;
+    }
+    entry = { canvas: offscreen, src: element.src, sig };
+    filterOffscreenCache.set(element.id, entry);
+  }
+  return entry.canvas;
+}
+
+// Drop cached offscreens for elements no longer in the project (mirrors layers_panel's
+// pruneThumbCache — keyed by id, bounded across deletes/project switches).
+function pruneFilterOffscreenCache() {
+  const live = new Set(elements().map((item) => item.id));
+  for (const id of filterOffscreenCache.keys()) if (!live.has(id)) filterOffscreenCache.delete(id);
+}
+
 // ---- animation preview (T0260 increment 2) ------------------------------------
 //
 // On-canvas playback of an element's procedural animation (element.animation), sampled by
@@ -534,18 +604,30 @@ function paintElement(element, vp, editEl) {
     const patches = element.slice9
       ? slice9Patches(element.slice9, img.naturalWidth, img.naturalHeight, element.w, element.h)
       : null;
+    // T0273: a tint (strength > 0) needs the pre-baked offscreen (source-atop scrim
+    // constrained to the element's own pixels); brightness/saturation/contrast alone are a
+    // plain ctx.filter around the draw below. The cleanup-preview bitmap (T0207) has no
+    // stable `element.src` identity to key the offscreen cache on, so a live preview skips
+    // the tint bake (brightness/saturation/contrast still apply via ctx.filter) — a narrow,
+    // deliberately-scoped gap: the tint reappears the instant the preview ends/commits.
+    const filters = element.filters;
+    const useTintOffscreen = !previewBitmap && !!(filters && filters.tint && filters.tint.strength > 0);
+    const paintSource = useTintOffscreen ? tintedOffscreenFor(element, img) : img;
+    const cssFilter = useTintOffscreen ? "" : cssFilterFor(filters);
     const drawBody = () => {
+      if (cssFilter) ctx.filter = cssFilter;
       if (patches) {
         for (const p of patches) {
           ctx.drawImage(
-            img,
+            paintSource,
             p.sx, p.sy, p.sw, p.sh,
             origin.x + p.dx * vp.scale, origin.y + p.dy * vp.scale, p.dw * vp.scale, p.dh * vp.scale,
           );
         }
       } else {
-        ctx.drawImage(img, origin.x, origin.y, w, h); // unchanged fallback
+        ctx.drawImage(paintSource, origin.x, origin.y, w, h); // unchanged fallback when unfiltered
       }
+      if (cssFilter) ctx.filter = "none";
     };
     // T0260 increment 2: the animation preview composes as an OUTER transform around this
     // (untouched) rotation/flip block — see drawWithAnimation. Not previewing / at rest = a

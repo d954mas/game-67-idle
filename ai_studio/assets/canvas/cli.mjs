@@ -14,7 +14,7 @@
 //   node ai_studio/assets/canvas/cli.mjs add-note <id> [--x n --y n] [--w n --h n] [--content "..."] [--style-json path] [--background '#rrggbb'|none] [--group gid]   (T0268: sticky-note annotation; fixed clipped box; excluded from renders)
 //   node ai_studio/assets/canvas/cli.mjs detect-regions <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs move <id> --element <eid> --x 10 --y 20
-//   node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--w n --h n] [--x n --y n] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>]   (T0232 3a: rotation = degrees CW about the box center, normalized to [0,360); flip is image-only; T0260: opacity in [0,1], stored only when != 1; --w/--h/--x/--y are the same finite-number patchElement fields the API PATCH route accepts)
+//   node ai_studio/assets/canvas/cli.mjs element-set <id> --element <eid> [--w n --h n] [--x n --y n] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>] [--filters-json '<json|null>']   (T0232 3a: rotation = degrees CW about the box center, normalized to [0,360); flip is image-only; T0260: opacity in [0,1], stored only when != 1; T0273: filters-json = {brightness?,saturation?,contrast?,tint?:{color,strength}} non-destructive image color adjustments, image-only, whole-object replace, "null" clears — see README "Image filters"; --w/--h/--x/--y are the same finite-number patchElement fields the API PATCH route accepts)
 //   node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json
 //   node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs slice9-set <id> --element <eid> [--left n --top n --right n --bottom n] [--scale n] | --clear   (T0233: 9-slice insets, SOURCE pixels; missing flags merge over the element's current slice9 (or 0s); --scale multiplies the DESTINATION corner/edge band only, default 1; --clear sends null)
@@ -224,9 +224,9 @@ function usage() {
   add-note <id> [--x <n> --y <n>] [--w <n> --h <n>] [--content "<text>"] [--style-json <path>] [--background '#rrggbb'|none] [--group <gid>]   (T0268: sticky-note annotation — plain text, fixed box + browser wrap/clip, background fill; excluded from renderGroup/exportProject)
   detect-regions <id> --element <eid>
   move <id> --element <eid> --x <n> --y <n>
-  element-set <id> --element <eid> [--name <name>] [--visible true|false] [--content "<text>"] [--style-json <path>] [--background '#rrggbb'|none] [--w <n> --h <n>] [--x <n> --y <n>] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>]   (--content/--style-json patch a text OR note; --background is note-only)   (--w/--h/--x/--y are the same finite-number fields the API PATCH route + move accept — single-element resize/reposition from the CLI, T0254; --opacity in [0,1] stored only when != 1, T0260)
+  element-set <id> --element <eid> [--name <name>] [--visible true|false] [--content "<text>"] [--style-json <path>] [--background '#rrggbb'|none] [--w <n> --h <n>] [--x <n> --y <n>] [--rotation <deg>] [--flip-h true|false] [--flip-v true|false] [--opacity <0..1>] [--filters-json '<json|null>']   (--content/--style-json patch a text OR note; --background is note-only)   (--w/--h/--x/--y are the same finite-number fields the API PATCH route + move accept — single-element resize/reposition from the CLI, T0254; --opacity in [0,1] stored only when != 1, T0260; --filters-json = {brightness?,saturation?,contrast?,tint?:{color,strength}} non-destructive image color adjustments, image-only, whole-object replace, "null" clears, T0273 — see README "Image filters")
   element-remove <id> --element <eid>
-  elements-set <id> --json <path>   (batched patch: [{elementId,x?,y?,w?,h?,name?,visible?}] or {patches:[...]}; one undo step)
+  elements-set <id> --json <path>   (batched patch: [{elementId,x?,y?,w?,h?,name?,visible?,rotation?,flipH?,flipV?,opacity?,filters?}] or {patches:[...]}; one undo step)
   elements-remove <id> --elements e1,e2   (batched delete; one undo step)
   element-reorder <id> --element <eid> --index <n>   (z-order among siblings; 0 = back)
   node-reorder <id> --node <id> --index <n>   (z-order of an element OR group among merged siblings; 0 = back)
@@ -434,8 +434,16 @@ async function runCommand(command, id, positional, flags) {
       // T0260: --opacity in [0,1] (the op validates loudly, stores only when != 1) — the
       // same patchElement field the inspector's Opacity input / the API PATCH route accept.
       if (flags.opacity !== undefined && flags.opacity !== "true") patch.opacity = Number(flags.opacity);
+      // T0273: --filters-json is an INLINE JSON value (not a file path, unlike --style-json)
+      // — {brightness?,saturation?,contrast?,tint?:{color,strength}}, validated + normalized
+      // loudly by the op layer (image-only, whole-object replace); the literal string "null"
+      // clears filters to absent — the same patchElement field the inspector's Filters
+      // section / the API PATCH route accept.
+      if (flags["filters-json"] !== undefined && flags["filters-json"] !== "true") {
+        patch.filters = flags["filters-json"] === "null" ? null : JSON.parse(flags["filters-json"]);
+      }
       if (!Object.keys(patch).length) {
-        fail("element-set requires --name, --visible, --content, --style-json, --background, --rotation, --flip-h, --flip-v, --opacity, --w, --h, --x, and/or --y");
+        fail("element-set requires --name, --visible, --content, --style-json, --background, --rotation, --flip-h, --flip-v, --opacity, --filters-json, --w, --h, --x, and/or --y");
       }
       return print(patchElement(repoRoot, id, flags.element, patch));
     }
@@ -447,8 +455,9 @@ async function runCommand(command, id, positional, flags) {
     case "elements-set": {
       // Batched multi-element patch (one journal entry). --json is a patches array
       // or a { patches: [...] } wrapper; each patch is {elementId, x?, y?, w?, h?,
-      // name?, visible?, rotation?, flipH?, flipV?} — same fields as `move`/`element-set`
-      // (incl. T0232 3a rotation/flip), applied together.
+      // name?, visible?, rotation?, flipH?, flipV?, opacity?, filters?} — same fields as
+      // `move`/`element-set` (incl. T0232 3a rotation/flip and T0273 filters/opacity),
+      // applied together.
       if (!id) fail("elements-set requires <id>");
       if (!flags.json || flags.json === "true") fail("elements-set requires --json <path> (a patches array or {patches:[...]})");
       const raw = JSON.parse(readFileSync(resolve(flags.json), "utf8"));

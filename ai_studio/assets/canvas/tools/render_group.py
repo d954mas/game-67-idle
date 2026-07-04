@@ -28,6 +28,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 ROOT = Path(__file__).resolve().parents[4]
@@ -55,6 +56,72 @@ def scaled_len(value: float, scale: float) -> int:
     return max(1, round(float(value) * scale))
 
 
+def apply_filters(image: Image.Image, filters: dict[str, Any] | None) -> Image.Image:
+    """Apply the canonical non-destructive filter chain — brightness -> saturate ->
+    contrast -> tint — to an RGBA image's COLOR channels; alpha is never touched (a
+    fully transparent pixel stays fully transparent, a semi-transparent one keeps its
+    alpha exactly). This is the ONE canonical math both renderers implement identically
+    (see README "Image filters"): PIL here is the source of rendered truth; the canvas's
+    own paintElement approximates the SAME formulas via the browser's spec'd CSS
+    `filter: brightness() saturate() contrast()` plus an offscreen source-atop tint scrim.
+
+    Order (matches `site/workspace.js` byte-for-byte, same non-premultiplied sRGB [0,1]
+    channel math):
+      1. brightness: C' = clamp(C * b)
+      2. saturate (SVG matrix, luma 0.2126/0.7152/0.0722 — NOT PIL's default 0.299/0.587/
+         0.114 grayscale luma; saturation=0 must land on the FORMER, the whole reason this
+         is hand-rolled in numpy instead of `ImageEnhance.Color`)
+      3. contrast: C' = clamp((C - 0.5) * c + 0.5)
+      4. tint: linear RGB mix toward `tint.color` by `tint.strength`, alpha untouched
+
+    No-op (returns `image` unchanged, no numpy work) when `filters` is empty/absent or
+    every value is already at its default — an unfiltered element pays zero extra cost,
+    the pre-existing fast path."""
+    if not filters:
+        return image
+    brightness = float(filters.get("brightness", 1))
+    saturation = float(filters.get("saturation", 1))
+    contrast = float(filters.get("contrast", 1))
+    tint = filters.get("tint")
+    tint_strength = float(tint.get("strength", 0)) if tint else 0.0
+    if brightness == 1 and saturation == 1 and contrast == 1 and tint_strength <= 0:
+        return image
+
+    src = np.asarray(image, dtype=np.uint8)
+    alpha = src[..., 3]  # untouched, reassembled verbatim at the end
+    rgb = src[..., :3].astype(np.float32) / 255.0
+
+    if brightness != 1:
+        rgb = rgb * brightness
+
+    if saturation != 1:
+        s = saturation
+        r, g, b = rgb[..., 0], rgb[..., 1], rgb[..., 2]
+        rgb = np.stack(
+            [
+                (0.2126 + 0.7874 * s) * r + (0.7152 - 0.7152 * s) * g + (0.0722 - 0.0722 * s) * b,
+                (0.2126 - 0.2126 * s) * r + (0.7152 + 0.2848 * s) * g + (0.0722 - 0.0722 * s) * b,
+                (0.2126 - 0.2126 * s) * r + (0.7152 - 0.7152 * s) * g + (0.0722 + 0.9278 * s) * b,
+            ],
+            axis=-1,
+        )
+
+    if contrast != 1:
+        rgb = (rgb - 0.5) * contrast + 0.5
+
+    rgb = np.clip(rgb, 0.0, 1.0)
+
+    if tint_strength > 0:
+        hexs = str(tint["color"]).lstrip("#")
+        tint_rgb = np.array([int(hexs[i : i + 2], 16) / 255.0 for i in (0, 2, 4)], dtype=np.float32)
+        rgb = rgb * (1 - tint_strength) + tint_rgb * tint_strength
+        rgb = np.clip(rgb, 0.0, 1.0)
+
+    out_rgb = np.round(rgb * 255.0).astype(np.uint8)
+    out = np.dstack([out_rgb, alpha])
+    return Image.fromarray(out, mode="RGBA")
+
+
 def paint_element(out: Image.Image, node: dict[str, Any], origin: tuple[float, float], scale: float) -> None:
     """Paste one element image onto `out` at its scaled offset (relative to `origin`),
     honoring an optional rotation/flip (T0232 increment 3a).
@@ -80,7 +147,14 @@ def paint_element(out: Image.Image, node: dict[str, Any], origin: tuple[float, f
     flip -> rotate -> paste chain below unmodified — the drop-in composition
     contract (design section 4.0): `image` is assigned BEFORE those steps, exactly
     like the plain resize it replaces, so a rotated/flipped slice9 panel composes
-    for free with no extra code here."""
+    for free with no extra code here.
+
+    Image filters (brightness/saturation/contrast/tint): applied via `apply_filters`
+    right after the resize/slice9 step, BEFORE flip/rotate — per-pixel color ops commute
+    with geometry, so this ordering is a free choice; it is picked here so filters read
+    on the UNTRANSFORMED (post-resize) pixels, mirroring the canvas's own paintElement
+    (which applies ctx.filter / the tint offscreen to the same pre-rotate image). See
+    README "Image filters" for the canonical shared math."""
     source = Path(node["src"])
     if not source.exists():
         raise FileNotFoundError(f"element image missing: {source}")
@@ -105,6 +179,11 @@ def paint_element(out: Image.Image, node: dict[str, Any], origin: tuple[float, f
         image = sliced
     elif (image.width, image.height) != (box_w, box_h):
         image = image.resize((box_w, box_h), Image.Resampling.LANCZOS)
+    # Image filters (brightness/saturation/contrast/tint) are pure per-pixel color ops,
+    # so they commute with the flip/rotate geometry below — applied HERE, right after the
+    # resize/slice9 step, so a rotated/flipped/sliced filtered element pays no extra code
+    # path (same drop-in-before-flip contract as slice9 above; see README "Image filters").
+    image = apply_filters(image, node.get("filters"))
     if node.get("flipH"):
         image = image.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
     if node.get("flipV"):
@@ -115,7 +194,17 @@ def paint_element(out: Image.Image, node: dict[str, Any], origin: tuple[float, f
     cx = round((float(node.get("x") or 0) + float(node.get("w") or 0) / 2 - origin[0]) * scale)
     cy = round((float(node.get("y") or 0) + float(node.get("h") or 0) / 2 - origin[1]) * scale)
     layer = Image.new("RGBA", out.size, (0, 0, 0, 0))
-    layer.paste(image, (cx - image.width // 2, cy - image.height // 2), image)
+    # T0273 fix (pre-existing bug, found while testing tint-vs-alpha parity): NO mask here.
+    # `layer.paste(image, pos, image)` (passing `image` as its OWN mask) does not copy
+    # `image`'s pixels verbatim — PIL blends EVERY channel (RGB **and** alpha) of the
+    # destination toward `image` by the mask fraction (image's own alpha / 255). Against
+    # this fully-transparent `layer`, that squares any non-opaque source alpha (e.g. a
+    # soft-edged alpha-cutout, or a filtered image with a semi-transparent source pixel):
+    # alpha 128 pasted this way lands at ~64, not 128. A plain `paste(image, pos)` (no
+    # mask) instead COPIES `image`'s bytes exactly into this dedicated, otherwise-empty
+    # layer (verified: negative/overflow offsets still clip correctly with no mask), so
+    # the one `alpha_composite` below is the single, correct source-over blend.
+    layer.paste(image, (cx - image.width // 2, cy - image.height // 2))
     # T0260: static element.opacity ([0,1], absent = 1) scales the element alpha before
     # compositing — parity with the canvas's ctx.globalAlpha. Scaled on the pasted LAYER
     # (whose RGB is straight after a full-opacity paste), NOT on `image` beforehand: reducing
