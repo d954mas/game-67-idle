@@ -159,8 +159,14 @@ export function buildFirstTurnCommand({ prompt, outputPath } = {}) {
   };
 }
 
-// LATER turns: `exec resume <sessionId>` — same flags, the compact message (buildResumeMessage)
-// as the trailing PROMPT positional (resume's own usage: `resume [OPTIONS] [SESSION_ID] [PROMPT]`).
+// LATER turns: `exec resume <sessionId>` — the compact message (buildResumeMessage) as the
+// trailing PROMPT positional (resume's own usage: `resume [OPTIONS] [SESSION_ID] [PROMPT]`).
+// ARGV ORDER MATTERS (live incident 2026-07-05, «codex exec exited 2: unexpected argument
+// '-C'»): a codex CLI update removed `-C/--cd` from the resume SUBCOMMAND's options — it is
+// an `exec`-level flag now, so it must sit BETWEEN `exec` and `resume`. The other flags
+// (--skip-git-repo-check / --dangerously-bypass… / --json / --output-last-message) are still
+// accepted by resume itself (verified against `codex exec resume --help` + a live parse test
+// with a fake session id: parse passes, only "no rollout found" remains).
 export function buildResumeCommand({ sessionId, message, outputPath } = {}) {
   if (!sessionId) throw new Error("buildResumeCommand requires sessionId");
   if (!message) throw new Error("buildResumeCommand requires message");
@@ -170,11 +176,11 @@ export function buildResumeCommand({ sessionId, message, outputPath } = {}) {
     args: [
       CODEX_JS,
       "exec",
+      "-C",
+      REPO_ROOT,
       "resume",
       sessionId,
       "--skip-git-repo-check",
-      "-C",
-      REPO_ROOT,
       "--dangerously-bypass-approvals-and-sandbox",
       "--json",
       "--output-last-message",

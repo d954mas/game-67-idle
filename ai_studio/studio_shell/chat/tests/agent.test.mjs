@@ -115,17 +115,17 @@ test("buildFirstTurnCommand requires prompt/outputPath", () => {
   assert.throws(() => buildFirstTurnCommand({ prompt: "p" }), /requires outputPath/);
 });
 
-test("buildResumeCommand: node <codex.js> exec resume <sessionId> with the same flags and the message as a plain positional", () => {
+test("buildResumeCommand: -C sits at the EXEC level, before the resume subcommand (2026-07-05 codex CLI dropped -C from resume's options — live 'unexpected argument' incident)", () => {
   const { command, args } = buildResumeCommand({ sessionId: "sess-abc", message: "теперь дуал путь", outputPath: "C:/tmp/last2.txt" });
   assert.equal(command, process.execPath);
   assert.deepEqual(args, [
     CODEX_JS,
     "exec",
+    "-C",
+    REPO_ROOT,
     "resume",
     "sess-abc",
     "--skip-git-repo-check",
-    "-C",
-    REPO_ROOT,
     "--dangerously-bypass-approvals-and-sandbox",
     "--json",
     "--output-last-message",
