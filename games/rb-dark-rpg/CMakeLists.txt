@@ -312,6 +312,7 @@ if(FEATURE_GAME_STATE)
     target_sources(${GAME_TARGET} PRIVATE
         "${GAME_STATE_GENERATED_SOURCE}"
         src/game_storage.c
+        src/game_persistence.c
         src/game_actions.c
     )
     target_link_libraries(${GAME_TARGET} PRIVATE cjson)
@@ -499,8 +500,32 @@ add_custom_target(game_dialogue_test
         COMMENT "Running combat state tests"
         VERBATIM
     )
+    add_executable(test_game_persistence
+        src/game_storage.c
+        src/game_persistence.c
+        "${GAME_STATE_GENERATED_SOURCE}"
+        tests/test_game_persistence.c
+    )
+    target_include_directories(test_game_persistence PRIVATE src)
+    target_include_directories(test_game_persistence PRIVATE "${GAME_STATE_GENERATED_DIR}")
+    target_link_libraries(test_game_persistence PRIVATE cjson)
+    target_compile_definitions(test_game_persistence PRIVATE
+        FEATURE_GAME_STATE=1
+        NT_DEVAPI_ENABLED=0
+        GAME_PERSISTENCE_SAVE_KEY=\"persistence_test\"
+        _CRT_SECURE_NO_WARNINGS
+    )
+    nt_set_warning_flags(test_game_persistence)
+    set_target_properties(test_game_persistence PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
+    add_custom_target(game_persistence_test
+        COMMAND $<TARGET_FILE:test_game_persistence>
+        DEPENDS test_game_persistence
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+        COMMENT "Running game persistence tests"
+        VERBATIM
+    )
     add_custom_target(game_state_rules_tests
-        DEPENDS game_dialogue_test game_combat_test
+        DEPENDS game_dialogue_test game_combat_test game_persistence_test
     )
 
     add_executable(test_world_story

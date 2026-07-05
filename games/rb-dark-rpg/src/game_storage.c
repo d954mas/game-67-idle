@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/emscripten.h>
+#endif
 #ifdef _WIN32
 #include <direct.h>
 #else
@@ -13,6 +16,50 @@
 
 #define GAME_STORAGE_PATH_MAX 512
 #define GAME_STORAGE_MAX_BYTES (1024 * 1024)
+
+#if defined(__EMSCRIPTEN__)
+/* clang-format off */
+EM_JS_DEPS(game_storage_web, "$UTF8ToString,$lengthBytesUTF8,$stringToUTF8,malloc")
+
+EM_JS(int, game_storage_web_key_exists, (const char *path_ptr), {
+    try {
+        var key = "rb-dark-rpg:" + UTF8ToString(path_ptr);
+        return window.localStorage.getItem(key) !== null ? 1 : 0;
+    } catch (e) {
+        return 0;
+    }
+})
+
+EM_JS(int, game_storage_web_save, (const char *path_ptr, const char *json_ptr), {
+    try {
+        var key = "rb-dark-rpg:" + UTF8ToString(path_ptr);
+        window.localStorage.setItem(key, UTF8ToString(json_ptr));
+        return 1;
+    } catch (e) {
+        return 0;
+    }
+})
+
+EM_JS(char *, game_storage_web_load, (const char *path_ptr), {
+    try {
+        var key = "rb-dark-rpg:" + UTF8ToString(path_ptr);
+        var data = window.localStorage.getItem(key);
+        if (data === null) {
+            return 0;
+        }
+        var size = lengthBytesUTF8(data) + 1;
+        var ptr = malloc(size);
+        if (!ptr) {
+            return 0;
+        }
+        stringToUTF8(data, ptr, size);
+        return ptr;
+    } catch (e) {
+        return 0;
+    }
+})
+/* clang-format on */
+#endif
 
 static void set_error(char *error, int error_cap, const char *message) {
     if (error && error_cap > 0) {
@@ -34,6 +81,7 @@ static bool is_safe_segment(const char *value) {
     return true;
 }
 
+#if !defined(__EMSCRIPTEN__)
 static bool make_dir_if_needed(const char *path) {
 #ifdef _WIN32
     if (_mkdir(path) == 0) {
@@ -70,6 +118,7 @@ static bool ensure_parent_dirs(const char *path, char *error, int error_cap) {
     }
     return true;
 }
+#endif
 
 bool game_storage_resolve_key(const char *key, const char *document, char *out, int out_cap, char *error, int error_cap) {
     if (!is_safe_segment(key) || !is_safe_segment(document)) {
@@ -83,11 +132,36 @@ bool game_storage_resolve_key(const char *key, const char *document, char *out, 
     return true;
 }
 
+bool game_storage_key_exists(const char *key, const char *document) {
+    char path[GAME_STORAGE_PATH_MAX];
+    char error[128];
+    if (!game_storage_resolve_key(key, document, path, (int)sizeof(path), error, (int)sizeof(error))) {
+        return false;
+    }
+#if defined(__EMSCRIPTEN__)
+    return game_storage_web_key_exists(path) != 0;
+#else
+    FILE *file = fopen(path, "rb");
+    if (!file) {
+        return false;
+    }
+    fclose(file);
+    return true;
+#endif
+}
+
 bool game_storage_save_json(const char *key, const char *document, const char *json, char *error, int error_cap) {
     char path[GAME_STORAGE_PATH_MAX];
     if (!json || !game_storage_resolve_key(key, document, path, (int)sizeof(path), error, error_cap)) {
         return false;
     }
+#if defined(__EMSCRIPTEN__)
+    if (!game_storage_web_save(path, json)) {
+        set_error(error, error_cap, "failed to write browser storage");
+        return false;
+    }
+    return true;
+#else
     if (!ensure_parent_dirs(path, error, error_cap)) {
         return false;
     }
@@ -104,6 +178,7 @@ bool game_storage_save_json(const char *key, const char *document, const char *j
         return false;
     }
     return true;
+#endif
 }
 
 bool game_storage_load_json(const char *key, const char *document, char **out_json, char *error, int error_cap) {
@@ -111,6 +186,16 @@ bool game_storage_load_json(const char *key, const char *document, char **out_js
     if (!out_json || !game_storage_resolve_key(key, document, path, (int)sizeof(path), error, error_cap)) {
         return false;
     }
+    *out_json = NULL;
+#if defined(__EMSCRIPTEN__)
+    char *data = game_storage_web_load(path);
+    if (!data) {
+        set_error(error, error_cap, "failed to open browser storage for read");
+        return false;
+    }
+    *out_json = data;
+    return true;
+#else
     FILE *file = fopen(path, "rb");
     if (!file) {
         set_error(error, error_cap, "failed to open storage file for read");
@@ -148,4 +233,5 @@ bool game_storage_load_json(const char *key, const char *document, char **out_js
     data[size] = '\0';
     *out_json = data;
     return true;
+#endif
 }

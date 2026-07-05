@@ -550,6 +550,52 @@ def prepare_post_trader_shop_purchase(game: Any, viewport: Any) -> dict[str, str
     return {"state": "post_trader_shop_purchase", "item": "iron_sword", "viewport": viewport.window_size}
 
 
+def prepare_post_trader_shop_trade(game: Any, viewport: Any) -> dict[str, str]:
+    """Open the Last Post trader shop, sell a bag item, then buy back the same instance."""
+
+    trade_instance_id = "gear_runner_wraps_trade"
+    _prepare_shop_fixture(game)
+    game.result(
+        "game.state.patch",
+        {
+            "doc": "player",
+            "values": {
+                "wallet.gold": 20,
+                "inventory.gear_instances": {
+                    trade_instance_id: {
+                        "def_id": "runner_wraps",
+                        "durability": 1,
+                        "level": 1,
+                        "bind_state": "none",
+                    }
+                },
+                "inventory.bag_order": [trade_instance_id],
+            },
+        },
+    )
+    game.wait_frames(3)
+
+    _open_bottom_nav_slot(game, viewport, 3)
+    _clear_dev_world_place_flag(game)
+    _open_place_tab(game, viewport, "environment")
+    tree, node = _wait_for_node(game, "world_place/object/hub_last_post.town_trader")
+    _tap_node(game, tree, node, viewport)
+    _wait_for_node(game, "shop/modal_frame")
+    _tap_by_id_bounds(game, viewport, "shop/mode/sell", max_frames=60)
+    _wait_for_node(game, f"shop/sell/{trade_instance_id}")
+    _tap_by_id_bounds(game, viewport, f"shop/sell/{trade_instance_id}", max_frames=60)
+    _wait_for_state_value(game, "wallet.gold", 22)
+    _wait_for_gear_def_count(game, "runner_wraps", 0)
+    _wait_for_node(game, "shop/feedback")
+    _tap_by_id_bounds(game, viewport, "shop/mode/buyback", max_frames=60)
+    _wait_for_node(game, f"shop/buyback/{trade_instance_id}")
+    _tap_by_id_bounds(game, viewport, f"shop/buyback/{trade_instance_id}", max_frames=60)
+    _wait_for_state_value(game, "wallet.gold", 20)
+    _wait_for_gear_def_count(game, "runner_wraps", 1)
+    _wait_for_node(game, "shop/feedback")
+    return {"state": "post_trader_shop_trade", "item": "runner_wraps", "viewport": viewport.window_size}
+
+
 def prepare_world_map_move_gate(game: Any, viewport: Any) -> dict[str, str]:
     """Open the world map, click the gate-outskirts node, and stop on the Place window."""
 
@@ -1162,3 +1208,27 @@ def prepare_equipment_screen(game: Any, viewport: Any) -> dict[str, str]:
 def prepare_equipment_screen_grid(game: Any, viewport: Any) -> dict[str, str]:
     return _prepare_equipment_fixture(game, viewport, item_modal=False)
     return {"state": "equipment_screen_item_modal", "viewport": viewport.window_size}
+
+
+def prepare_equipment_quest_items(game: Any, viewport: Any) -> dict[str, str]:
+    """Open the inventory quest-item tab and stop on a quest item detail modal."""
+
+    _prepare_equipment_fixture(game, viewport, item_modal=False)
+    game.result(
+        "game.state.patch",
+        {
+            "doc": "player",
+            "values": {
+                "inventory.stack_instances": {
+                    "seeker_token": {"def_id": "seeker_token", "count": 1},
+                    "clue_fragment": {"def_id": "clue_fragment", "count": 2},
+                }
+            },
+        },
+    )
+    game.wait_frames(3)
+    _tap_by_id(game, viewport, "gear_screen/tab/quest", max_frames=60)
+    _wait_for_node(game, "gear_screen/quest_cell", max_frames=60)
+    _tap_by_id(game, viewport, "gear_screen/quest_cell", max_frames=60)
+    _wait_for_node(game, "gear_screen/quest_item_modal", max_frames=60)
+    return {"state": "equipment_quest_items", "viewport": viewport.window_size}

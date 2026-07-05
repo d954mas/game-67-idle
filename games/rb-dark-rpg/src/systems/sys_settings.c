@@ -32,6 +32,7 @@
 
 static bool s_open;
 static int s_dismiss_guard_frames;
+static bool s_cleanup_pending;
 static float s_master = 0.8F, s_music = 0.45F, s_sfx = 0.9F;
 static nt_resource_t s_settings_ui_atlas;
 static nt_atlas_region_ref_t s_settings_gear_region;
@@ -46,6 +47,16 @@ bool sys_settings_is_open(void) { return s_open; }
 float sys_settings_master(void) { return s_master; }
 float sys_settings_music(void) { return s_music; }
 float sys_settings_sfx(void) { return s_sfx; }
+
+static void settings_request_state_cleanup(void) { s_cleanup_pending = true; }
+
+static void settings_clear_transient_ui_state(nt_ui_context_t *ctx) {
+    if (!ctx || !s_cleanup_pending) {
+        return;
+    }
+    game_modal_clear_state(ctx, SETTINGS_MODAL_ID);
+    s_cleanup_pending = false;
+}
 
 static float clampf(float v, float lo, float hi) {
     if (v < lo) {
@@ -128,6 +139,7 @@ static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, f
 }
 
 void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
+    settings_clear_transient_ui_state(ctx);
     ensure_settings_gear_region();
 
     // Floating gear button: anchor to the visible root, independent from other
@@ -151,6 +163,7 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
                 } else {
                     s_open = false;
                     s_dismiss_guard_frames = 0;
+                    settings_request_state_cleanup();
                 }
             }
         }
@@ -182,6 +195,8 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
         s_open = modal_open;
         if (!s_open) {
             s_dismiss_guard_frames = 0;
+            settings_request_state_cleanup();
+            settings_clear_transient_ui_state(ctx);
         }
         return;
     }
@@ -248,6 +263,7 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
                 w->player_yaw = 0.0F;
                 modal_open = false;
                 s_open = false;
+                settings_request_state_cleanup();
             }
         }
 
@@ -273,5 +289,7 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
     if (!modal_open) {
         s_open = false;
         s_dismiss_guard_frames = 0;
+        settings_request_state_cleanup();
     }
+    settings_clear_transient_ui_state(ctx);
 }

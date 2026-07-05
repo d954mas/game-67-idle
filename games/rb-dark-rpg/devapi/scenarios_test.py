@@ -11,6 +11,7 @@ class FakeGame:
     def __init__(self):
         self.clicks = []
         self.gestures = []
+        self.applied_clicks = []
         self.patches = []
         self.waits = []
         self.current_location = "hub_last_post"
@@ -20,12 +21,19 @@ class FakeGame:
         self.completed_step_ids = []
         self.quest_states = {}
         self.hero_xp = 0
+        self.wallet_gold = 0
+        self.gear_instances = {}
+        self.bag_order = []
         self.flags_ids = []
         self.claimed_reward_ids = []
         self.combat_prefight_open = False
         self.combat_running_open = False
         self.combat_result_open = False
         self.auto_open_dev_place = False
+        self.shop_open = False
+        self.shop_mode = "buy"
+        self.shop_buyback = {}
+        self.shop_feedback = False
 
     def _current_nodes(self):
         nav_names = ["equipment", "journal", "map", "place", "more"]
@@ -151,6 +159,69 @@ class FakeGame:
                         "bounds": {"x": 300, "y": 230, "w": 280, "h": 52},
                     }
                 )
+                nodes.append(
+                    {
+                        "id": 48,
+                        "id_string": "world_place/object/hub_last_post.town_trader",
+                        "bounds": {"x": 300, "y": 290, "w": 280, "h": 52},
+                    }
+                )
+        if self.shop_open:
+            nodes.append(
+                {
+                    "id": 60,
+                    "id_string": "shop/modal_frame",
+                    "bounds": {"x": 180, "y": 58, "w": 600, "h": 410},
+                }
+            )
+            for index, mode in enumerate(["buy", "sell", "buyback"]):
+                nodes.append(
+                    {
+                        "id": 61 + index,
+                        "id_string": f"shop/mode/{mode}",
+                        "bounds": {"x": 210 + index * 120, "y": 122, "w": 104, "h": 34},
+                    }
+                )
+            nodes.append(
+                {
+                    "id": 65,
+                    "id_string": "shop/item/iron_sword",
+                    "bounds": {"x": 205, "y": 178, "w": 250, "h": 72},
+                }
+            )
+            nodes.append(
+                {
+                    "id": 66,
+                    "id_string": "shop/buy/iron_sword",
+                    "bounds": {"x": 358, "y": 194, "w": 96, "h": 38},
+                }
+            )
+            if self.shop_mode == "sell":
+                for index, instance_id in enumerate(self.bag_order):
+                    nodes.append(
+                        {
+                            "id": 70 + index,
+                            "id_string": f"shop/sell/{instance_id}",
+                            "bounds": {"x": 505, "y": 194 + index * 78, "w": 96, "h": 38},
+                        }
+                    )
+            if self.shop_mode == "buyback":
+                for index, instance_id in enumerate(self.shop_buyback):
+                    nodes.append(
+                        {
+                            "id": 80 + index,
+                            "id_string": f"shop/buyback/{instance_id}",
+                            "bounds": {"x": 505, "y": 194 + index * 78, "w": 96, "h": 38},
+                        }
+                    )
+            if self.shop_feedback:
+                nodes.append(
+                    {
+                        "id": 90,
+                        "id_string": "shop/feedback",
+                        "bounds": {"x": 200, "y": 156, "w": 540, "h": 30},
+                    }
+                )
         nodes.append(
             {
                 "id": 34,
@@ -223,12 +294,17 @@ class FakeGame:
             node_id = node.get("id_string")
             if node.get("role") in ("bottom_nav", "nt_button") or (
                 isinstance(node_id, str)
-                and (node_id.startswith("world_map/") or node_id.startswith("world_place/"))
+                and (
+                    node_id.startswith("world_map/")
+                    or node_id.startswith("world_place/")
+                    or node_id.startswith("shop/")
+                )
             ):
                 return node_id
         return hits[0].get("id_string") if hits else None
 
     def _apply_click(self, click_id):
+        self.applied_clicks.append(click_id)
         if click_id == "bottom_nav/slot/place":
             self.place_open = True
             self.map_open = False
@@ -277,6 +353,32 @@ class FakeGame:
             self.combat_prefight_open = True
             self.combat_running_open = False
             self.combat_result_open = False
+        elif click_id == "world_place/object/hub_last_post.town_trader":
+            self.shop_open = True
+            self.shop_mode = "buy"
+            self.shop_feedback = False
+        elif click_id == "shop/mode/buy":
+            self.shop_mode = "buy"
+        elif click_id == "shop/mode/sell":
+            self.shop_mode = "sell"
+        elif click_id == "shop/mode/buyback":
+            self.shop_mode = "buyback"
+        elif isinstance(click_id, str) and click_id.startswith("shop/sell/"):
+            instance_id = click_id.removeprefix("shop/sell/")
+            gear = self.gear_instances.pop(instance_id, None)
+            if gear is not None and instance_id in self.bag_order:
+                self.bag_order = [item for item in self.bag_order if item != instance_id]
+                self.shop_buyback[instance_id] = gear
+                self.wallet_gold += 2
+                self.shop_feedback = True
+        elif isinstance(click_id, str) and click_id.startswith("shop/buyback/"):
+            instance_id = click_id.removeprefix("shop/buyback/")
+            gear = self.shop_buyback.pop(instance_id, None)
+            if gear is not None and self.wallet_gold >= 2:
+                self.gear_instances[instance_id] = gear
+                self.bag_order.append(instance_id)
+                self.wallet_gold -= 2
+                self.shop_feedback = True
         elif click_id == "combat/prefight_start":
             self.combat_prefight_open = False
             self.combat_running_open = True
@@ -317,6 +419,9 @@ class FakeGame:
             self.completed_step_ids = values.get("quests.completed_step_ids", self.completed_step_ids)
             self.quest_states = values.get("quests.quest_states", self.quest_states)
             self.hero_xp = values.get("hero.xp", self.hero_xp)
+            self.wallet_gold = values.get("wallet.gold", self.wallet_gold)
+            self.gear_instances = values.get("inventory.gear_instances", self.gear_instances)
+            self.bag_order = values.get("inventory.bag_order", self.bag_order)
             self.flags_ids = values.get("flags.ids", self.flags_ids)
             self.claimed_reward_ids = values.get("quests.claimed_reward_ids", self.claimed_reward_ids)
             if self.auto_open_dev_place and "dev_world_place_open" in self.flags_ids:
@@ -334,6 +439,12 @@ class FakeGame:
             path = params.get("path", "") if params else ""
             if path == "hero.xp":
                 return {"path": path, "value": self.hero_xp}
+            if path == "wallet.gold":
+                return {"path": path, "value": self.wallet_gold}
+            if path == "inventory.gear_instances":
+                return {"path": path, "value": self.gear_instances}
+            if path == "inventory.bag_order":
+                return {"path": path, "value": self.bag_order}
             if path == "flags.ids":
                 return {"path": path, "value": self.flags_ids}
             if path == "quests.claimed_reward_ids":
@@ -475,6 +586,23 @@ class WorldMapScenarioTest(unittest.TestCase):
         self.assertEqual(game.hero_xp, 12)
         self.assertIn("seeker_token_owned", game.flags_ids)
         self.assertEqual(game.claimed_reward_ids, ["dlg_gate_guard_turn_in.take_token.completion"])
+
+    def test_prepare_post_trader_shop_trade_sells_and_rebuys_instance(self):
+        game = FakeGame()
+        viewport = SimpleNamespace(window_size="960x540")
+
+        result = scenarios.prepare_post_trader_shop_trade(game, viewport)
+
+        self.assertEqual(result["state"], "post_trader_shop_trade")
+        self.assertEqual(result["item"], "runner_wraps")
+        self.assertEqual(game.wallet_gold, 20)
+        self.assertIn("gear_runner_wraps_trade", game.gear_instances)
+        self.assertIn("gear_runner_wraps_trade", game.bag_order)
+        self.assertFalse(game.shop_buyback)
+        self.assertIn("shop/mode/sell", game.applied_clicks)
+        self.assertIn("shop/sell/gear_runner_wraps_trade", game.applied_clicks)
+        self.assertIn("shop/mode/buyback", game.applied_clicks)
+        self.assertIn("shop/buyback/gear_runner_wraps_trade", game.applied_clicks)
 
     def test_prepare_combat_prefight_prefers_clickable_bottom_nav_slot(self):
         game = FakeGame()

@@ -91,6 +91,13 @@ bool game_modal_visible(nt_ui_context_t *ctx, uint32_t id,
     return true;
 }
 
+void game_modal_clear_state(nt_ui_context_t *ctx, uint32_t id) {
+    if (!ctx) {
+        return;
+    }
+    nt_ui_modal_clear_state(ctx, id);
+}
+
 nt_ui_image_style_t game_modal_panel_image(bool portrait) {
     nt_ui_image_style_t s = nt_ui_image_style_defaults();
     s.slice9_scale = portrait ? 0.42F : 0.50F;

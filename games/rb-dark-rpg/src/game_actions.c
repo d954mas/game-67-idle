@@ -2,6 +2,7 @@
 
 #include "game_content.h"
 
+#include <limits.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <string.h>
@@ -75,6 +76,27 @@ static GameGearInstance *find_gear(GameState *state, const char *instance_id) {
     }
   }
   return NULL;
+}
+
+static const GameGearInstance *find_gear_const(const GameState *state,
+                                               const char *instance_id) {
+  if (!state || !instance_id) {
+    return NULL;
+  }
+  for (int i = 0; i < GAME_STATE_MAX_INVENTORY_GEAR_INSTANCES; ++i) {
+    const GameGearInstance *gear = &state->inventory_gear_instances[i];
+    if (gear->used && strcmp(gear->key, instance_id) == 0) {
+      return gear;
+    }
+  }
+  return NULL;
+}
+
+static bool bag_contains_instance(const GameState *state,
+                                  const char *instance_id) {
+  return state && list_contains(state->inventory_bag_order,
+                                state->inventory_bag_order_count,
+                                instance_id);
 }
 
 static GameGearInstance *alloc_gear(GameState *state) {
@@ -1114,6 +1136,205 @@ bool game_actions_purchase_shop_item(GameState *state, const char *shop_id,
   }
 
   *state = next;
+  if (live_state) {
+    game_state_mark_dirty();
+  }
+  return true;
+}
+
+void game_actions_shop_buyback_init(game_shop_buyback_t *buyback) {
+  if (buyback) {
+    *buyback = (game_shop_buyback_t){0};
+  }
+}
+
+int game_actions_item_sell_price(const game_item_definition_t *item) {
+  if (!item || !item->sellable || item->price_gold <= 0) {
+    return 0;
+  }
+  const int price = item->price_gold / 2;
+  return price > 0 ? price : 1;
+}
+
+bool game_actions_can_sell_inventory_item(const GameState *state,
+                                          const char *instance_id,
+                                          int *out_price_gold) {
+  if (out_price_gold) {
+    *out_price_gold = 0;
+  }
+  if (!state || !instance_id || instance_id[0] == '\0' ||
+      !bag_contains_instance(state, instance_id) ||
+      is_instance_equipped(state, instance_id)) {
+    return false;
+  }
+  const GameGearInstance *gear = find_gear_const(state, instance_id);
+  if (!gear || !gear->def_id[0]) {
+    return false;
+  }
+  const game_item_definition_t *item = game_content_find_item(gear->def_id);
+  if (!item || item->kind != GAME_ITEM_KIND_GEAR) {
+    return false;
+  }
+  const int price = game_actions_item_sell_price(item);
+  if (price <= 0) {
+    return false;
+  }
+  if (out_price_gold) {
+    *out_price_gold = price;
+  }
+  return true;
+}
+
+static int buyback_find_index(const game_shop_buyback_t *buyback,
+                              const char *entry_id) {
+  if (!buyback || !entry_id || entry_id[0] == '\0') {
+    return -1;
+  }
+  for (int i = 0; i < buyback->count; ++i) {
+    if (buyback->entries[i].used &&
+        strcmp(buyback->entries[i].entry_id, entry_id) == 0) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+static bool buyback_append(game_shop_buyback_t *buyback,
+                           const game_shop_buyback_entry_t *entry) {
+  if (!buyback || !entry || !entry->used || entry->entry_id[0] == '\0' ||
+      !entry->gear.used || entry->gear.key[0] == '\0' ||
+      entry->gear.def_id[0] == '\0' || entry->price_gold <= 0 ||
+      buyback->count < 0 || buyback->count > GAME_ACTIONS_SHOP_BUYBACK_MAX) {
+    return false;
+  }
+  if (buyback->count == GAME_ACTIONS_SHOP_BUYBACK_MAX) {
+    for (int i = 1; i < GAME_ACTIONS_SHOP_BUYBACK_MAX; ++i) {
+      buyback->entries[i - 1] = buyback->entries[i];
+    }
+    buyback->count -= 1;
+  }
+  buyback->entries[buyback->count] = *entry;
+  buyback->count += 1;
+  return true;
+}
+
+static bool buyback_remove_at(game_shop_buyback_t *buyback, int index) {
+  if (!buyback || index < 0 || index >= buyback->count) {
+    return false;
+  }
+  for (int i = index + 1; i < buyback->count; ++i) {
+    buyback->entries[i - 1] = buyback->entries[i];
+  }
+  buyback->count -= 1;
+  if (buyback->count >= 0 &&
+      buyback->count < GAME_ACTIONS_SHOP_BUYBACK_MAX) {
+    buyback->entries[buyback->count] = (game_shop_buyback_entry_t){0};
+  }
+  return true;
+}
+
+bool game_actions_sell_inventory_item(GameState *state,
+                                      const char *instance_id,
+                                      game_shop_buyback_t *buyback) {
+  int price = 0;
+  if (!buyback ||
+      !game_actions_can_sell_inventory_item(state, instance_id, &price)) {
+    return false;
+  }
+  GameState next = *state;
+  const bool live_state = state == &g_game_state;
+  GameGearInstance *gear = find_gear(&next, instance_id);
+  if (!gear || next.wallet_gold > INT_MAX - price) {
+    return false;
+  }
+
+  game_shop_buyback_entry_t entry = {0};
+  entry.used = true;
+  entry.price_gold = price;
+  entry.gear = *gear;
+  if (!copy_id(entry.entry_id, instance_id)) {
+    return false;
+  }
+
+  game_shop_buyback_t next_buyback = *buyback;
+  if (!buyback_append(&next_buyback, &entry)) {
+    return false;
+  }
+  if (!list_remove(next.inventory_bag_order, &next.inventory_bag_order_count,
+                   instance_id)) {
+    return false;
+  }
+  *gear = (GameGearInstance){0};
+  next.wallet_gold += price;
+
+  *state = next;
+  *buyback = next_buyback;
+  if (live_state) {
+    game_state_mark_dirty();
+  }
+  return true;
+}
+
+bool game_actions_can_rebuy_inventory_item(const GameState *state,
+                                           const game_shop_buyback_t *buyback,
+                                           const char *entry_id,
+                                           int *out_price_gold) {
+  if (out_price_gold) {
+    *out_price_gold = 0;
+  }
+  const int index = buyback_find_index(buyback, entry_id);
+  if (!state || index < 0) {
+    return false;
+  }
+  const game_shop_buyback_entry_t *entry = &buyback->entries[index];
+  if (!entry->gear.used || entry->gear.key[0] == '\0' ||
+      entry->gear.def_id[0] == '\0' || entry->price_gold <= 0 ||
+      state->wallet_gold < entry->price_gold ||
+      state->inventory_bag_order_count >= GAME_STATE_MAX_INVENTORY_BAG_ORDER ||
+      find_gear_const(state, entry->gear.key) ||
+      bag_contains_instance(state, entry->gear.key) ||
+      !game_content_find_item(entry->gear.def_id)) {
+    return false;
+  }
+  if (out_price_gold) {
+    *out_price_gold = entry->price_gold;
+  }
+  return true;
+}
+
+bool game_actions_rebuy_inventory_item(GameState *state,
+                                       game_shop_buyback_t *buyback,
+                                       const char *entry_id) {
+  int price = 0;
+  const int index = buyback_find_index(buyback, entry_id);
+  if (index < 0 ||
+      !game_actions_can_rebuy_inventory_item(state, buyback, entry_id,
+                                             &price)) {
+    return false;
+  }
+
+  GameState next = *state;
+  const bool live_state = state == &g_game_state;
+  GameGearInstance *slot = alloc_gear(&next);
+  if (!slot) {
+    return false;
+  }
+  const game_shop_buyback_entry_t entry = buyback->entries[index];
+  next.wallet_gold -= price;
+  *slot = entry.gear;
+  slot->used = true;
+  if (!list_add_unique(next.inventory_bag_order, &next.inventory_bag_order_count,
+                       GAME_STATE_MAX_INVENTORY_BAG_ORDER, slot->key)) {
+    return false;
+  }
+
+  game_shop_buyback_t next_buyback = *buyback;
+  if (!buyback_remove_at(&next_buyback, index)) {
+    return false;
+  }
+
+  *state = next;
+  *buyback = next_buyback;
   if (live_state) {
     game_state_mark_dirty();
   }

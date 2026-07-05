@@ -55,6 +55,7 @@
 #include "ui/ui_runtime.h"
 #include "world/world.h"
 #if FEATURE_GAME_STATE
+#include "game_persistence.h"
 #include "game_state.h"
 #endif
 
@@ -82,6 +83,11 @@ static bool s_open_settings_on_start;
 static int s_window_width = 1280;
 static int s_window_height = 720;
 static int s_frame_count;
+#if FEATURE_GAME_STATE
+static bool s_fresh_state;
+static bool s_autosave_enabled = true;
+static bool s_autosave_error_reported;
+#endif
 
 #if NT_DEVAPI_ENABLED
 static bool s_devapi_requested;
@@ -230,6 +236,23 @@ static void devapi_shutdown_runtime(void) {}
 #endif
 #endif
 
+#if FEATURE_GAME_STATE
+static void autosave_update(void) {
+    if (!s_autosave_enabled || !game_state_is_dirty()) {
+        return;
+    }
+    char error[256];
+    if (!game_persistence_save_autosave_if_dirty(error, (int)sizeof(error))) {
+        if (!s_autosave_error_reported) {
+            fprintf(stderr, "autosave failed: %s\n", error);
+            s_autosave_error_reported = true;
+        }
+        return;
+    }
+    s_autosave_error_reported = false;
+}
+#endif
+
 // The frame loop: poll, advance the world, render. Calls subsystems only.
 static void frame(void) {
     const double frame_begin = nt_time_now();
@@ -278,6 +301,9 @@ static void frame(void) {
         sys_settings_ui(ui_runtime_ctx(), &s_world);
         ui_runtime_end();
     }
+#if FEATURE_GAME_STATE
+    autosave_update();
+#endif
     nt_gfx_end_pass();
 
     // --capture: after a few frames (resources loaded + rendered), grab + quit.
@@ -304,8 +330,15 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "invalid --window-size, expected WIDTHxHEIGHT\n");
                 return 2;
             }
-        } else if (strcmp(argv[i], "--fresh-state") == 0 || strcmp(argv[i], "--disable-autosave") == 0) {
-            /* Accepted for shared runtime automation launch compatibility; the template has no save flow yet. */
+        } else if (strcmp(argv[i], "--fresh-state") == 0) {
+#if FEATURE_GAME_STATE
+            s_fresh_state = true;
+            s_autosave_enabled = false;
+#endif
+        } else if (strcmp(argv[i], "--disable-autosave") == 0) {
+#if FEATURE_GAME_STATE
+            s_autosave_enabled = false;
+#endif
 #if NT_DEVAPI_ENABLED
         } else if (strcmp(argv[i], "--devapi") == 0 && i + 1 < argc) {
             s_devapi_requested = true;
@@ -355,6 +388,10 @@ int main(int argc, char **argv) {
     render_2d_runtime_init();
 #if FEATURE_GAME_STATE
     game_state_init();
+    char state_error[256];
+    if (!game_persistence_load_autosave(s_fresh_state, state_error, (int)sizeof(state_error))) {
+        fprintf(stderr, "failed to load autosave: %s\n", state_error);
+    }
     s_world.player_state = &g_game_state;
 #endif
 
@@ -419,6 +456,10 @@ int main(int argc, char **argv) {
 
     g_nt_app.target_dt = 1.0F / 60.0F;
     nt_app_run(frame);
+
+#if FEATURE_GAME_STATE
+    autosave_update();
+#endif
 
 #ifndef NT_PLATFORM_WEB
     devapi_shutdown_runtime();

@@ -105,6 +105,24 @@ def item_kind(value: str | None) -> str:
     return "GAME_ITEM_KIND_UNKNOWN"
 
 
+def item_category_label(item: dict) -> str:
+    explicit = item.get("category_label")
+    if explicit:
+        return explicit
+    kind = item.get("kind")
+    if kind == "gear":
+        return "Снаряжение"
+    if kind == "quest_item":
+        return "Квестовый предмет"
+    if kind == "clue":
+        return "Улика"
+    if kind == "consumable":
+        return "Расходник"
+    if kind == "material":
+        return "Материал"
+    return "Предмет"
+
+
 def item_slot(value: str | None) -> str:
     if value == "weapon":
         return "GAME_ITEM_SLOT_WEAPON"
@@ -348,11 +366,15 @@ def main() -> int:
         lines.append("    {")
         lines.append(f"        .id = {c_str(item.get('id'))},")
         lines.append(f"        .display_name = {c_str(item.get('display_name'))},")
+        lines.append(f"        .category_label = {c_str(item_category_label(item))},")
+        lines.append(f"        .description = {c_str(item.get('description'))},")
         lines.append(f"        .icon_asset_id = {c_str(item.get('icon_asset_id'))},")
         lines.append(f"        .kind = {item_kind(item.get('kind'))},")
         lines.append(f"        .slot = {item_slot(item.get('slot'))},")
         lines.append(f"        .stackable = {'true' if item.get('stackable') else 'false'},")
         lines.append(f"        .max_stack = {int(item.get('max_stack', 1))},")
+        lines.append(f"        .price_gold = {int(item.get('price_gold', 0))},")
+        lines.append(f"        .sellable = {'true' if item.get('sellable') else 'false'},")
         lines.append(f"        .stats = {stat_init(item.get('stats'))},")
         lines.append("    },")
     lines.append("};")

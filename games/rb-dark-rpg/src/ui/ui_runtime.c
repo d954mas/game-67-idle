@@ -62,6 +62,11 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
 
     nt_ui_module_init();
     nt_ui_create_desc_t desc = nt_ui_create_desc_defaults();
+    // rb-dark-rpg has several modal/sheet ids that intentionally share a UI context.
+    // Keep cleanup on close, but give the retained-state pool enough probe headroom
+    // for game-scale overlays without tripping on low-bit id clusters.
+    desc.state_slots = 1024U;
+    desc.state_probe_max = 16U;
     s_ctx = nt_ui_create_context(s_ui_arena, sizeof s_ui_arena, &desc);
     NT_ASSERT(s_ctx != NULL && "ui_runtime: failed to create UI context");
 

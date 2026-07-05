@@ -45,13 +45,29 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "prompt": "prompt_gear.txt"
+    },
+    {
+      "role": "reward",
+      "file": "reward_source_sheet.png",
+      "layout": {
+        "columns": 7,
+        "rows": 1
+      },
+      "sha256": "E6FFE86A2465B22D7966CC978399DD5102125D8591A137E3E07C00D0D58184C9",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "prompt": "prompt_reward_source_sheet.txt",
+      "canvas_project_id": "rb-dark-rpg-reward-icon-source-sheet-6d8622",
+      "canvas_element_id": "el_7a738c3b"
     }
   ],
   "source_first": {
     "local_library": [
       "node ai_studio/assets/backlog/storage/search.mjs --query \"dark rpg equipment icons weapon armor boots ring relic\" --kind item_icon,ui_icon --limit 12 --json",
       "node ai_studio/assets/backlog/storage/search.mjs --query \"inventory slot icons rpg gear\" --kind ui,item_icon,ui_icon --limit 12 --json",
-      "node ai_studio/assets/backlog/storage/search.mjs --query \"Kenney UI icons RPG equipment\" --limit 12 --json"
+      "node ai_studio/assets/backlog/storage/search.mjs --query \"Kenney UI icons RPG equipment\" --limit 12 --json",
+      "node ai_studio/assets/backlog/storage/search.mjs --query \"dark rpg reward icons xp gold quest clue item tokens\" --kind item_icon,ui_icon --limit 12 --json",
+      "node ai_studio/assets/backlog/storage/search.mjs --query \"xp reward token parchment clue sacks dark fantasy inventory icon\" --kind item_icon,ui_icon --limit 12 --json"
     ],
     "local_library_result": "0 matches for each query",
     "free_source_result": "No exact CC0/OFL set imported; external candidates were mixed-license or did not cover the required slot/item set."
@@ -476,9 +492,9 @@
         "w": 64,
         "h": 64
       },
-      "origin": "procedural",
+      "origin": "ai",
       "license": "project-internal generated asset",
-      "sha256": "38A06823B98CBEDFC0A69FA82E52C3846C55664EFCBC6121DE61A3A0E205783E"
+      "sha256": "EA863B3291301D5DD2A29A905D3628B2A7AD6D61051F1A502926DFF96A5620C2"
     }
   ],
   "reward_items": [
@@ -491,9 +507,9 @@
         "w": 64,
         "h": 64
       },
-      "origin": "procedural",
+      "origin": "ai",
       "license": "project-internal generated asset",
-      "sha256": "45D51DA202B2AD73E625C6592883F0A14067C89298549BD871BA0E1959C60E0C",
+      "sha256": "379D8211EB994665C1983B96F361F871055C01C21F3EED7B9BF0500D775A1415",
       "item_id": "seeker_token"
     },
     {
@@ -505,9 +521,9 @@
         "w": 64,
         "h": 64
       },
-      "origin": "procedural",
+      "origin": "ai",
       "license": "project-internal generated asset",
-      "sha256": "DBBA8A75DD24A2A05E3E098A34C370B666D282867F4F58E717A41268D8253B3C",
+      "sha256": "F4A9FC5760D3735F2AF360C20C125F3C3E7B0F18262A9CDC35F7337383512302",
       "item_id": "grain_sacks"
     },
     {
@@ -519,9 +535,9 @@
         "w": 64,
         "h": 64
       },
-      "origin": "procedural",
+      "origin": "ai",
       "license": "project-internal generated asset",
-      "sha256": "ABE842AA64D6AC0B0387B369C6FB4F968B658F8F3A852E81E8F9E08F7460FBC0",
+      "sha256": "4B3F75B25589634B2CEBAFAA4FF39937938C67F6E81219B63A6A57179FFBE61C",
       "item_id": "contract_progress"
     },
     {
@@ -533,9 +549,9 @@
         "w": 64,
         "h": 64
       },
-      "origin": "procedural",
+      "origin": "ai",
       "license": "project-internal generated asset",
-      "sha256": "5393974C567CEF4263E9699AD6ACBCD67E6626AAA41A530E68EC5191E5758109",
+      "sha256": "956C51C77D855D873552723BD240AC6D9BCC1AE21E76C38702A41907A5206BE4",
       "item_id": "clue_fragment"
     },
     {
@@ -547,9 +563,9 @@
         "w": 64,
         "h": 64
       },
-      "origin": "procedural",
+      "origin": "ai",
       "license": "project-internal generated asset",
-      "sha256": "9E0B3D53C01379451DD66D8FA722C583BCA97F36E71947055C695993F9CB44C9",
+      "sha256": "7E8CCC5101D310F3FA39E1CBA8522BD70989D2571EA0A61C807B6CC154AFD560",
       "item_id": "burned_chain_bracket"
     },
     {
@@ -561,9 +577,9 @@
         "w": 64,
         "h": 64
       },
-      "origin": "procedural",
+      "origin": "ai",
       "license": "project-internal generated asset",
-      "sha256": "9C9EDEFB533CCBAC7E2791BD3F7DC0640831751F0A54F18156BB438E333F9036",
+      "sha256": "3A915F8011F7A3CB486493802E929C7CBE8CC05EF5D20C42D1595A0FD1CFEA99",
       "item_id": "order_scrap"
     }
   ],
@@ -572,7 +588,7 @@
     "shows": "cell_plus_overlay_composition",
     "origin": "derived",
     "license": "project-internal generated asset",
-    "sha256": "F09DC0AE1BC41EA56A97A81B63123DF8E471728EAB38BAFF9D118238534B0DDD",
+    "sha256": "9D7696594AA1B5591E274582B92B555E0DB27849544C98C24CCDAC11386380CC",
     "size": {
       "w": 656,
       "h": 296

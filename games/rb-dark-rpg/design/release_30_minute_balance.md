@@ -1,8 +1,8 @@
 ---
 type: Game Design Specification
 title: RB Dark RPG 30 Minute Release Balance
-description: Release-scope pacing, levels, quests, gear tiers, enemies, and visual proof target for a 30-minute Act I build.
-tags: [gdd, balance, release, content, visual-proof]
+description: Release-scope pacing, levels, quests, gear tiers, enemies, and authored content target for a 30-minute Act I build.
+tags: [gdd, balance, release, content]
 game_id: rb-dark-rpg
 status: draft
 ---
@@ -20,12 +20,11 @@ This balance pass is done when the release target has:
 - 10+ authored quests, split into critical path and optional support quests;
 - 5 readable gear and weapon tiers;
 - 10+ distinct enemies with clear stat lessons;
-- a visual proof target showing how the player reads level, quest, enemy, gear tier, reward, and next action in one gameplay screen.
+- authored content data that can be loaded by the game/editor in the next
+  implementation slice.
 
-Runtime implementation, final art production, and full expansion of
-`quests.json`, `combat.json`, `items.json`, `locations.json`, and
-`dialogues.json` are the next gate. This pass creates the accepted balance
-contract first.
+Runtime implementation and final art production are the next gate. This pass
+creates the accepted balance/content contract first.
 
 ## Release Shape
 
@@ -167,23 +166,6 @@ Healing:
    for the accepted quest beats.
 6. Update the content editor so balance fields can be edited without raw JSON.
 
-## Visual Target
-
-The first release visual proof is
-`design/layout/release_30min_fake_shot.svg`.
-
-It should show a real gameplay state, not a poster:
-
-- player level and HP;
-- XP progress toward level 10;
-- current quest and next action;
-- current enemy and threat label;
-- current gear tier;
-- one visible reward;
-- bottom navigation and phone-safe action density;
-- enough map/environment context to show that the 30-minute arc is not only a
-  spreadsheet.
-
 ## Open Risks
 
 - The current runtime and authored JSON cover the first minutes, not the full
@@ -192,5 +174,3 @@ It should show a real gameplay state, not a poster:
   after this contract is accepted.
 - The current `combat.json` level curve stops at level 3; it must be migrated to
   the release curve after acceptance.
-- Visual proof is a direction target. It does not replace sliced UI assets or
-  engine-rendered text.

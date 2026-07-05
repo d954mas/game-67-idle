@@ -8,6 +8,8 @@
 
 #include <stdbool.h>
 
+#define GAME_ACTIONS_SHOP_BUYBACK_MAX 12
+
 typedef enum game_action_gear_slot_t {
   GAME_ACTION_GEAR_SLOT_NONE = 0,
   GAME_ACTION_GEAR_SLOT_WEAPON,
@@ -23,6 +25,18 @@ typedef enum game_action_gear_slot_t {
   GAME_ACTION_GEAR_SLOT_RING_RIGHT,
   GAME_ACTION_GEAR_SLOT_RELIC,
 } game_action_gear_slot_t;
+
+typedef struct game_shop_buyback_entry_t {
+  bool used;
+  char entry_id[GAME_STATE_STRING_MAX];
+  int price_gold;
+  GameGearInstance gear;
+} game_shop_buyback_entry_t;
+
+typedef struct game_shop_buyback_t {
+  game_shop_buyback_entry_t entries[GAME_ACTIONS_SHOP_BUYBACK_MAX];
+  int count;
+} game_shop_buyback_t;
 
 bool game_actions_grant_gear(GameState *state, const char *instance_id,
                              const char *def_id,
@@ -60,6 +74,21 @@ bool game_actions_can_purchase_shop_item(
     const game_shop_item_t *shop_item);
 bool game_actions_purchase_shop_item(GameState *state, const char *shop_id,
                                      const char *item_id);
+void game_actions_shop_buyback_init(game_shop_buyback_t *buyback);
+int game_actions_item_sell_price(const game_item_definition_t *item);
+bool game_actions_can_sell_inventory_item(const GameState *state,
+                                          const char *instance_id,
+                                          int *out_price_gold);
+bool game_actions_sell_inventory_item(GameState *state,
+                                      const char *instance_id,
+                                      game_shop_buyback_t *buyback);
+bool game_actions_can_rebuy_inventory_item(const GameState *state,
+                                           const game_shop_buyback_t *buyback,
+                                           const char *entry_id,
+                                           int *out_price_gold);
+bool game_actions_rebuy_inventory_item(GameState *state,
+                                       game_shop_buyback_t *buyback,
+                                       const char *entry_id);
 bool game_actions_resolve_encounter(GameState *state, const char *encounter_id,
                                     game_combat_result_t *out_result);
 bool game_actions_apply_dialogue_choice(

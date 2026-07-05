@@ -143,6 +143,18 @@ static const nt_ui_widget_def_t COMBAT_BUTTON_DEF = {
     .pill_color = 0xFFE2A75CU,
 };
 
+static bool s_cleanup_pending;
+
+static void combat_request_state_cleanup(void) { s_cleanup_pending = true; }
+
+static void combat_clear_transient_ui_state(nt_ui_context_t *ctx) {
+    if (!ctx || !s_cleanup_pending) {
+        return;
+    }
+    game_modal_clear_state(ctx, COMBAT_MODAL_ID);
+    s_cleanup_pending = false;
+}
+
 static Clay_ElementId clay_id_from_text(const char *id_text) {
     return Clay_GetElementId((Clay_String){
         .isStaticallyAllocated = false,
@@ -1268,12 +1280,15 @@ static void result_ui(nt_ui_context_t *ctx, World *w, const game_encounter_defin
 }
 
 void combat_flow_ui(nt_ui_context_t *ctx, World *w) {
+    combat_clear_transient_ui_state(ctx);
     if (!ctx || !combat_flow_is_open(w)) {
         return;
     }
     const game_encounter_definition_t *encounter = game_content_find_encounter(w->combat.encounter_id);
     if (!encounter) {
         w->combat.phase = COMBAT_FLOW_NONE;
+        combat_request_state_cleanup();
+        combat_clear_transient_ui_state(ctx);
         return;
     }
 
@@ -1287,6 +1302,8 @@ void combat_flow_ui(nt_ui_context_t *ctx, World *w) {
     if (!nt_ui_modal_visible(ctx, COMBAT_MODAL_ID, &modal_style, &modal_open)) {
         if (!modal_open && dismissible) {
             w->combat.phase = COMBAT_FLOW_NONE;
+            combat_request_state_cleanup();
+            combat_clear_transient_ui_state(ctx);
         }
         return;
     }
@@ -1331,4 +1348,8 @@ void combat_flow_ui(nt_ui_context_t *ctx, World *w) {
     if (!modal_open && dismissible) {
         w->combat.phase = COMBAT_FLOW_NONE;
     }
+    if (!combat_flow_is_open(w)) {
+        combat_request_state_cleanup();
+    }
+    combat_clear_transient_ui_state(ctx);
 }

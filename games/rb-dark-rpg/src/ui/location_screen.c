@@ -17,6 +17,7 @@
 #include "ui/nt_ui_label.h"
 #include "ui/nt_ui_panel.h"
 #include "ui/nt_ui_scroll.h"
+#include "ui/nt_ui_state.h"
 #include "ui/shop_screen.h"
 #include "ui/tutorial_callout.h"
 
@@ -56,6 +57,7 @@ static bool s_open;
 static location_tab_t s_tab = LOCATION_TAB_POINTS;
 static bool s_tab_needs_default = true;
 static int s_dismiss_guard_frames;
+static bool s_cleanup_pending;
 static char s_semantic_id_storage[LOCATION_SEMANTIC_ID_SLOTS]
                                  [LOCATION_SEMANTIC_ID_LEN];
 static int s_semantic_id_cursor;
@@ -72,6 +74,17 @@ static const nt_ui_widget_def_t LOCATION_ROW_DEF = {
     .name = "location_row",
     .pill_color = 0xFFB58A45U,
 };
+
+static void location_request_state_cleanup(void) { s_cleanup_pending = true; }
+
+static void location_clear_transient_ui_state(nt_ui_context_t *ctx) {
+  if (!ctx || !s_cleanup_pending) {
+    return;
+  }
+  game_modal_clear_state(ctx, LOCATION_MODAL_ID);
+  nt_ui_state_clear(ctx, nt_ui_id("world_place/scroll"));
+  s_cleanup_pending = false;
+}
 
 static nt_ui_label_style_t label_style(float font_size, float r, float g,
                                        float b, float a) {
@@ -549,6 +562,9 @@ person_region_for_object(const game_location_object_t *object) {
 }
 
 static void close_location_screen(void) {
+  if (s_open) {
+    location_request_state_cleanup();
+  }
   s_open = false;
   s_dismiss_guard_frames = 0;
 }
@@ -1060,6 +1076,9 @@ void location_screen_set_open(bool open) {
     s_dismiss_guard_frames = 2;
     s_tab_needs_default = true;
   }
+  if (!open && s_open) {
+    location_request_state_cleanup();
+  }
   if (!open) {
     s_dismiss_guard_frames = 0;
   }
@@ -1085,6 +1104,7 @@ static bool dev_requested_open(const GameState *state) {
 #endif
 
 void location_screen_ui(nt_ui_context_t *ctx, World *w) {
+  location_clear_transient_ui_state(ctx);
 #if defined(NT_DEVAPI_ENABLED) && NT_DEVAPI_ENABLED
   if (!s_open && w && w->player_state && dev_requested_open(w->player_state)) {
     location_screen_set_open(true);
@@ -1122,6 +1142,7 @@ void location_screen_ui(nt_ui_context_t *ctx, World *w) {
                           ignore_close_request)) {
     if (!modal_open) {
       location_screen_set_open(false);
+      location_clear_transient_ui_state(ctx);
     }
     return;
   }
@@ -1196,4 +1217,5 @@ void location_screen_ui(nt_ui_context_t *ctx, World *w) {
   if (!modal_open) {
     location_screen_set_open(false);
   }
+  location_clear_transient_ui_state(ctx);
 }

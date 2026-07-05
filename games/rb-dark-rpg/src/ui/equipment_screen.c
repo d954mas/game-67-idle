@@ -12,6 +12,7 @@
 #include "ui/nt_ui_label.h"
 #include "ui/nt_ui_panel.h"
 #include "ui/nt_ui_scroll.h"
+#include "ui/nt_ui_state.h"
 #include "nt_pack_format.h"
 #include "resource/nt_resource.h"
 
@@ -38,13 +39,53 @@
 static bool s_open;
 static bool s_detail_open;
 static char s_selected_instance_id[GAME_STATE_STRING_MAX];
+static char s_selected_stack_id[GAME_STATE_STRING_MAX];
 static int s_dismiss_guard_frames;
+static bool s_main_cleanup_pending;
+static bool s_detail_cleanup_pending;
 
 static const nt_ui_widget_def_t EQUIPMENT_WIDGET_DEF = {
     .name = "gear_screen",
     .pill_color = 0xFFB58A45U,
     ._reserved = 0U,
 };
+
+typedef enum equipment_inventory_tab_t {
+    EQUIPMENT_TAB_GEAR = 0,
+    EQUIPMENT_TAB_QUEST,
+} equipment_inventory_tab_t;
+
+static equipment_inventory_tab_t s_inventory_tab;
+
+static void equipment_request_state_cleanup(void) {
+    s_main_cleanup_pending = true;
+    s_detail_cleanup_pending = true;
+}
+
+static void equipment_request_detail_state_cleanup(void) { s_detail_cleanup_pending = true; }
+
+static void equipment_detail_set_open(bool open) {
+    if (!open && s_detail_open) {
+        equipment_request_detail_state_cleanup();
+    }
+    s_detail_open = open;
+}
+
+static void equipment_clear_transient_ui_state(nt_ui_context_t *ctx) {
+    if (!ctx) {
+        return;
+    }
+    if (s_main_cleanup_pending) {
+        game_modal_clear_state(ctx, EQUIPMENT_MODAL_ID);
+        nt_ui_state_clear(ctx, nt_ui_id("gear_screen/backpack_scroll"));
+        nt_ui_state_clear(ctx, nt_ui_id("gear_screen/quest_scroll"));
+        s_main_cleanup_pending = false;
+    }
+    if (s_detail_cleanup_pending) {
+        game_modal_clear_state(ctx, EQUIPMENT_ITEM_MODAL_ID);
+        s_detail_cleanup_pending = false;
+    }
+}
 
 typedef enum equipment_art_region_t {
     EQUIP_ART_CELL = 0,
@@ -75,6 +116,12 @@ typedef enum equipment_art_region_t {
     EQUIP_ART_ITEM_SCAVENGER_KNEE_PLATES,
     EQUIP_ART_ITEM_DRAGON_ASH_TOKEN,
     EQUIP_ART_ITEM_MILLER_LUCKY_NAIL,
+    EQUIP_ART_ITEM_SEEKER_TOKEN,
+    EQUIP_ART_ITEM_GRAIN_SACKS,
+    EQUIP_ART_ITEM_CONTRACT_PROGRESS,
+    EQUIP_ART_ITEM_CLUE_FRAGMENT,
+    EQUIP_ART_ITEM_BURNED_CHAIN_BRACKET,
+    EQUIP_ART_ITEM_ORDER_SCRAP,
     EQUIP_ART_HERO,
     EQUIP_ART_COUNT,
 } equipment_art_region_t;
@@ -108,6 +155,12 @@ static const nt_hash64_t EQUIPMENT_ART_REGION_HASHES[EQUIP_ART_COUNT] = {
     ASSET_ATLAS_REGION_UI_ASSET_ICON_SCAVENGER_KNEE_PLATES,
     ASSET_ATLAS_REGION_UI_ASSET_ICON_DRAGON_ASH_TOKEN,
     ASSET_ATLAS_REGION_UI_ASSET_ICON_MILLER_LUCKY_NAIL,
+    ASSET_ATLAS_REGION_UI_ASSET_ICON_SEEKER_TOKEN,
+    ASSET_ATLAS_REGION_UI_ASSET_ICON_GRAIN_SACKS,
+    ASSET_ATLAS_REGION_UI_ASSET_ICON_CONTRACT_PROGRESS,
+    ASSET_ATLAS_REGION_UI_ASSET_ICON_CLUE_FRAGMENT,
+    ASSET_ATLAS_REGION_UI_ASSET_ICON_BURNED_CHAIN_BRACKET,
+    ASSET_ATLAS_REGION_UI_ASSET_ICON_ORDER_SCRAP,
     ASSET_ATLAS_REGION_UI_COMBAT_ACTOR_HERO,
 };
 
@@ -273,6 +326,24 @@ static equipment_art_region_t equipment_item_art(const game_item_definition_t *i
     if (strcmp(item->id, "miller_lucky_nail") == 0) {
         return EQUIP_ART_ITEM_MILLER_LUCKY_NAIL;
     }
+    if (strcmp(item->id, "seeker_token") == 0 || strcmp(item->id, "seeker_token_unlock") == 0) {
+        return EQUIP_ART_ITEM_SEEKER_TOKEN;
+    }
+    if (strcmp(item->id, "grain_sacks") == 0) {
+        return EQUIP_ART_ITEM_GRAIN_SACKS;
+    }
+    if (strcmp(item->id, "contract_progress") == 0) {
+        return EQUIP_ART_ITEM_CONTRACT_PROGRESS;
+    }
+    if (strcmp(item->id, "clue_fragment") == 0) {
+        return EQUIP_ART_ITEM_CLUE_FRAGMENT;
+    }
+    if (strcmp(item->id, "burned_chain_bracket") == 0) {
+        return EQUIP_ART_ITEM_BURNED_CHAIN_BRACKET;
+    }
+    if (strcmp(item->id, "order_scrap") == 0) {
+        return EQUIP_ART_ITEM_ORDER_SCRAP;
+    }
     return EQUIP_ART_COUNT;
 }
 
@@ -412,6 +483,59 @@ static const game_item_definition_t *gear_definition(const GameState *state, con
     return gear ? game_content_find_item(gear->def_id) : NULL;
 }
 
+static bool item_belongs_to_quest_tab(const game_item_definition_t *item) {
+    return item && (item->kind == GAME_ITEM_KIND_QUEST_ITEM || item->kind == GAME_ITEM_KIND_CLUE);
+}
+
+static const GameStackInstance *find_stack(const GameState *state, const char *stack_id) {
+    if (!state || !stack_id || stack_id[0] == '\0') {
+        return NULL;
+    }
+    for (int i = 0; i < GAME_STATE_MAX_INVENTORY_STACK_INSTANCES; ++i) {
+        const GameStackInstance *stack = &state->inventory_stack_instances[i];
+        if (stack->used && strcmp(stack->key, stack_id) == 0) {
+            return stack;
+        }
+    }
+    return NULL;
+}
+
+static const game_item_definition_t *stack_definition(const GameStackInstance *stack) {
+    return stack && stack->def_id[0] != '\0' ? game_content_find_item(stack->def_id) : NULL;
+}
+
+static RB_UNUSED_FN int quest_stack_count(const GameState *state) {
+    if (!state) {
+        return 0;
+    }
+    int count = 0;
+    for (int i = 0; i < GAME_STATE_MAX_INVENTORY_STACK_INSTANCES; ++i) {
+        const GameStackInstance *stack = &state->inventory_stack_instances[i];
+        if (stack->used && item_belongs_to_quest_tab(stack_definition(stack))) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+static RB_UNUSED_FN const GameStackInstance *quest_stack_at(const GameState *state, int visible_index) {
+    if (!state || visible_index < 0) {
+        return NULL;
+    }
+    int seen = 0;
+    for (int i = 0; i < GAME_STATE_MAX_INVENTORY_STACK_INSTANCES; ++i) {
+        const GameStackInstance *stack = &state->inventory_stack_instances[i];
+        if (!stack->used || !item_belongs_to_quest_tab(stack_definition(stack))) {
+            continue;
+        }
+        if (seen == visible_index) {
+            return stack;
+        }
+        ++seen;
+    }
+    return NULL;
+}
+
 static void stat_line(const game_item_definition_t *item, char *out, size_t out_cap) {
     if (!out || out_cap == 0U) {
         return;
@@ -436,7 +560,7 @@ static void stat_line(const game_item_definition_t *item, char *out, size_t out_
 }
 
 static void select_first_bag_item(const GameState *state) {
-    if (!state || s_selected_instance_id[0] != '\0') {
+    if (!state || s_inventory_tab != EQUIPMENT_TAB_GEAR || s_selected_instance_id[0] != '\0') {
         return;
     }
     for (int i = 0; i < state->inventory_bag_order_count; ++i) {
@@ -452,7 +576,14 @@ static void clear_missing_selection(const GameState *state) {
         (!find_gear(state, s_selected_instance_id) ||
          (!bag_contains(state, s_selected_instance_id) && !is_equipped(state, s_selected_instance_id)))) {
         s_selected_instance_id[0] = '\0';
-        s_detail_open = false;
+        equipment_detail_set_open(false);
+    }
+    if (s_selected_stack_id[0] != '\0') {
+        const GameStackInstance *stack = find_stack(state, s_selected_stack_id);
+        if (!stack || !item_belongs_to_quest_tab(stack_definition(stack))) {
+            s_selected_stack_id[0] = '\0';
+            equipment_detail_set_open(false);
+        }
     }
 }
 
@@ -609,6 +740,17 @@ static void equipment_doll_ui(nt_ui_context_t *ctx, const GameState *state, bool
     }
 }
 
+static RB_UNUSED_FN void equipment_select_tab(equipment_inventory_tab_t tab) {
+    if (s_inventory_tab == tab) {
+        return;
+    }
+    s_inventory_tab = tab;
+    s_selected_instance_id[0] = '\0';
+    s_selected_stack_id[0] = '\0';
+    equipment_detail_set_open(false);
+    equipment_request_state_cleanup();
+}
+
 static void bag_cell_ui(nt_ui_context_t *ctx, const GameState *state, int index, const char *instance_id, float size) {
     const bool selected = instance_id && strcmp(instance_id, s_selected_instance_id) == 0;
     const game_item_definition_t *item = gear_definition(state, instance_id);
@@ -635,6 +777,57 @@ static void bag_cell_ui(nt_ui_context_t *ctx, const GameState *state, int index,
         }
         if (events.clicked && instance_id) {
             (void)snprintf(s_selected_instance_id, sizeof s_selected_instance_id, "%s", instance_id);
+            s_detail_open = true;
+            game_audio_play(GAME_AUDIO_CUE_GEAR_SELECT);
+        }
+    }
+}
+
+static void quest_stack_cell_ui(nt_ui_context_t *ctx, int index, const GameStackInstance *stack, float size) {
+    const game_item_definition_t *item = stack_definition(stack);
+    const bool selected = stack && strcmp(stack->key, s_selected_stack_id) == 0;
+    const equipment_art_region_t art = equipment_item_art(item);
+    const float icon_size = size * 0.78F;
+    Clay_ElementId clay_id = CLAY_IDI("gear_screen/quest_cell", index);
+    CLAY({.id = clay_id,
+          .layout = {.sizing = {CLAY_SIZING_FIXED(size), CLAY_SIZING_FIXED(size)},
+                     .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
+          .backgroundColor = {13.0F, 10.0F, 8.0F, 174.0F},
+          .cornerRadius = CLAY_CORNER_RADIUS(2),
+          .border = {.color = {124.0F, 90.0F, 48.0F, 132.0F}, .width = {1, 1, 1, 1, 0}},
+          .userData = NT_UI_CLAY_DATA(LAYER_ART)}) {
+        const int16_t hit_pad[4] = {2, 2, 2, 2};
+        nt_ui_widget_register(ctx, clay_id.id, &EQUIPMENT_WIDGET_DEF, hit_pad, stack != NULL);
+        const nt_ui_events_t events = nt_ui_events_padded(ctx, clay_id.id, NULL, hit_pad);
+        if (art < EQUIP_ART_COUNT) {
+            CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(icon_size), CLAY_SIZING_FIXED(icon_size)}}}) {
+                equipment_art_image(ctx, art, icon_size, 0xFFFFFFFFU, LAYER_ICON);
+            }
+        }
+        if (stack && stack->count > 1) {
+            char count_buf[16];
+            (void)snprintf(count_buf, sizeof count_buf, "%d", stack->count);
+            const nt_ui_label_style_t count_style = label_style(9.0F, 255.0F, 238.0F, 202.0F, 255.0F);
+            CLAY({.floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
+                               .attachPoints = {.element = CLAY_ATTACH_POINT_RIGHT_BOTTOM,
+                                                .parent = CLAY_ATTACH_POINT_RIGHT_BOTTOM},
+                               .offset = {-2.0F, -2.0F},
+                               .zIndex = 5},
+                  .layout = {.sizing = {CLAY_SIZING_FIXED(20.0F), CLAY_SIZING_FIXED(15.0F)},
+                             .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
+                  .backgroundColor = {42.0F, 26.0F, 12.0F, 230.0F},
+                  .cornerRadius = CLAY_CORNER_RADIUS(3),
+                  .border = {.color = {184.0F, 128.0F, 62.0F, 190.0F}, .width = {1, 1, 1, 1, 0}},
+                  .userData = NT_UI_CLAY_DATA(LAYER_ICON)}) {
+                text_label(ctx, count_buf, &count_style);
+            }
+        }
+        if (selected) {
+            equipment_cell_state_overlay(size, (Clay_Color){255.0F, 203.0F, 101.0F, 245.0F}, (Clay_Color){92.0F, 48.0F, 18.0F, 68.0F});
+        }
+        if (events.clicked && stack) {
+            (void)snprintf(s_selected_stack_id, sizeof s_selected_stack_id, "%s", stack->key);
+            s_selected_instance_id[0] = '\0';
             s_detail_open = true;
             game_audio_play(GAME_AUDIO_CUE_GEAR_SELECT);
         }
@@ -696,7 +889,7 @@ static void equipment_apply_selected(World *w, GameState *state) {
     if (equipped) {
         game_audio_play(GAME_AUDIO_CUE_GEAR_EQUIP);
         s_selected_instance_id[0] = '\0';
-        s_detail_open = false;
+        equipment_detail_set_open(false);
     }
     if (equipped && state->has_quests_tracked_quest_id) {
         const GameQuestState *quest = NULL;
@@ -768,8 +961,91 @@ static int item_compare_changed_stat_count(const game_item_definition_t *next, c
     return changed;
 }
 
+static void selected_stack_item_modal_ui(nt_ui_context_t *ctx, const GameState *state, bool portrait) {
+    const GameStackInstance *stack = find_stack(state, s_selected_stack_id);
+    const game_item_definition_t *item = stack_definition(stack);
+    if (!s_detail_open || !stack || !item_belongs_to_quest_tab(item)) {
+        return;
+    }
+
+    float layout_w = 0.0F;
+    float layout_h = 0.0F;
+    nt_ui_context_layout_size(ctx, &layout_w, &layout_h);
+    const float modal_w = portrait ? clamp_f(layout_w - 44.0F, 286.0F, 340.0F) : clamp_f(layout_w * 0.44F, 340.0F, 430.0F);
+    const float modal_h = portrait ? 272.0F : 248.0F;
+    const nt_ui_label_style_t title = label_style(portrait ? 17.0F : 19.0F, 255.0F, 238.0F, 202.0F, 255.0F);
+    const nt_ui_label_style_t meta = label_style(portrait ? 11.0F : 12.0F, 211.0F, 180.0F, 136.0F, 255.0F);
+    const nt_ui_label_style_t body = label_style(portrait ? 11.0F : 12.0F, 232.0F, 210.0F, 172.0F, 255.0F);
+    const nt_ui_label_style_t locked = label_style(portrait ? 11.0F : 12.0F, 230.0F, 156.0F, 103.0F, 255.0F);
+    char count_buf[48];
+    (void)snprintf(count_buf, sizeof count_buf, "Количество: %d", stack->count);
+
+    bool modal_open = s_detail_open;
+    nt_ui_modal_style_t modal_style = game_modal_style((nt_ui_layer_t)LAYER_BG, true);
+    modal_style.backdrop_alpha = 0.42F;
+    if (!game_modal_visible(ctx, EQUIPMENT_ITEM_MODAL_ID, &modal_style, &modal_open, false)) {
+        equipment_detail_set_open(modal_open);
+        equipment_clear_transient_ui_state(ctx);
+        return;
+    }
+    CLAY({.id = CLAY_ID("gear_screen/quest_item_modal_scrim"),
+          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+                     .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
+        CLAY({.id = CLAY_ID("gear_screen/quest_item_modal"),
+              .layout = {.sizing = {CLAY_SIZING_FIXED(modal_w), CLAY_SIZING_FIXED(modal_h)}},
+              .backgroundColor = {16.0F, 10.0F, 7.0F, 252.0F},
+              .cornerRadius = CLAY_CORNER_RADIUS(5),
+              .border = {.color = {202.0F, 137.0F, 65.0F, 228.0F}, .width = {1, 1, 1, 1, 0}},
+              .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
+            nt_ui_image_style_t panel_body = game_modal_body_image(portrait);
+            nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(LAYER_BG), game_modal_art(GAME_MODAL_ART_BODY_PANEL), &panel_body,
+                              &(Clay_ElementDeclaration){
+                                  .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+                                             .padding = CLAY_PADDING_ALL(portrait ? 8 : 10),
+                                             .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                             .childGap = portrait ? 7 : 8,
+                                             .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
+            CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
+                             .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                             .childGap = 8,
+                             .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
+                CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
+                    text_label(ctx, item->display_name ? item->display_name : item->id, &title);
+                }
+                if (game_modal_close_button(ctx, (nt_ui_layer_t)LAYER_BG, (nt_ui_layer_t)LAYER_TEXT,
+                                            "gear_screen/quest_item_modal_close", portrait)) {
+                    equipment_detail_set_open(false);
+                }
+            }
+            CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
+                             .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                             .childGap = 10,
+                             .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}}) {
+                equipment_cell_art_ui(ctx, portrait ? 56.0F : 62.0F, item, GAME_ITEM_SLOT_NONE, false);
+                CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
+                                 .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                                 .childGap = 4,
+                                 .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}}) {
+                    text_label(ctx, item->category_label ? item->category_label : "Квестовый предмет", &meta);
+                    text_label(ctx, count_buf, &meta);
+                    text_label(ctx, "Не продается", &locked);
+                }
+            }
+            text_label(ctx, item->description ? item->description : "Хранится отдельно от снаряжения.", &body);
+            nt_ui_panel_end(ctx);
+        }
+    }
+    nt_ui_modal_end(ctx);
+    equipment_detail_set_open(modal_open);
+    equipment_clear_transient_ui_state(ctx);
+}
+
 static void selected_item_modal_ui(nt_ui_context_t *ctx, World *w, bool portrait) {
     GameState *state = w ? w->player_state : NULL;
+    if (s_inventory_tab == EQUIPMENT_TAB_QUEST) {
+        selected_stack_item_modal_ui(ctx, state, portrait);
+        return;
+    }
     const game_item_definition_t *selected_item = gear_definition(state, s_selected_instance_id);
     if (!s_detail_open || !state || !selected_item) {
         return;
@@ -793,7 +1069,8 @@ static void selected_item_modal_ui(nt_ui_context_t *ctx, World *w, bool portrait
     nt_ui_modal_style_t modal_style = game_modal_style((nt_ui_layer_t)LAYER_BG, true);
     modal_style.backdrop_alpha = 0.42F;
     if (!game_modal_visible(ctx, EQUIPMENT_ITEM_MODAL_ID, &modal_style, &modal_open, false)) {
-        s_detail_open = modal_open;
+        equipment_detail_set_open(modal_open);
+        equipment_clear_transient_ui_state(ctx);
         return;
     }
     CLAY({.id = CLAY_ID("gear_screen/item_modal_scrim"),
@@ -822,7 +1099,7 @@ static void selected_item_modal_ui(nt_ui_context_t *ctx, World *w, bool portrait
                 }
                 if (game_modal_close_button(ctx, (nt_ui_layer_t)LAYER_BG, (nt_ui_layer_t)LAYER_TEXT,
                                             "gear_screen/item_modal_close", portrait)) {
-                    s_detail_open = false;
+                    equipment_detail_set_open(false);
                 }
             }
             CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
@@ -874,7 +1151,8 @@ static void selected_item_modal_ui(nt_ui_context_t *ctx, World *w, bool portrait
         }
     }
     nt_ui_modal_end(ctx);
-    s_detail_open = modal_open;
+    equipment_detail_set_open(modal_open);
+    equipment_clear_transient_ui_state(ctx);
 }
 
 static void stat_row_ui(nt_ui_context_t *ctx, const char *name, int value, const nt_ui_label_style_t *label,
@@ -933,6 +1211,45 @@ static void equipment_right_column_ui(nt_ui_context_t *ctx, World *w, bool portr
     }
 }
 
+static void inventory_tab_button(nt_ui_context_t *ctx, const char *id_suffix, const char *label,
+                                 equipment_inventory_tab_t tab, bool portrait) {
+    const bool selected = s_inventory_tab == tab;
+    Clay_ElementId tab_id =
+        tab == EQUIPMENT_TAB_QUEST ? CLAY_ID("gear_screen/tab/quest") : CLAY_ID("gear_screen/tab/gear");
+    const nt_ui_label_style_t text = label_style(portrait ? 11.5F : 13.0F, selected ? 255.0F : 190.0F,
+                                                 selected ? 230.0F : 166.0F, selected ? 183.0F : 124.0F, 255.0F);
+    CLAY({.id = tab_id,
+          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(portrait ? 32.0F : 34.0F)},
+                     .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
+          .backgroundColor = selected ? (Clay_Color){76.0F, 45.0F, 22.0F, 228.0F}
+                                      : (Clay_Color){24.0F, 17.0F, 12.0F, 176.0F},
+          .cornerRadius = CLAY_CORNER_RADIUS(4),
+          .border = {.color = selected ? (Clay_Color){194.0F, 132.0F, 63.0F, 220.0F}
+                                       : (Clay_Color){94.0F, 67.0F, 39.0F, 132.0F},
+                     .width = {1, 1, 1, 1, 0}},
+          .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
+        const int16_t hit_pad[4] = {2, 2, 2, 2};
+        nt_ui_widget_register(ctx, tab_id.id, &EQUIPMENT_WIDGET_DEF, hit_pad, true);
+        const nt_ui_events_t events = nt_ui_events_padded(ctx, tab_id.id, NULL, hit_pad);
+        text_label(ctx, label, &text);
+        if (events.clicked) {
+            equipment_select_tab(tab);
+        }
+    }
+    (void)id_suffix;
+}
+
+static void inventory_tabs_ui(nt_ui_context_t *ctx, bool portrait) {
+    CLAY({.id = CLAY_ID("gear_screen/tabs"),
+          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
+                     .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                     .childGap = 5,
+                     .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
+        inventory_tab_button(ctx, "gear", "Снаряжение", EQUIPMENT_TAB_GEAR, portrait);
+        inventory_tab_button(ctx, "quest", "Квестовое", EQUIPMENT_TAB_QUEST, portrait);
+    }
+}
+
 static void backpack_grid_ui(nt_ui_context_t *ctx, World *w, bool portrait, float available_w) {
     GameState *state = w ? w->player_state : NULL;
     const nt_ui_label_style_t title = label_style(portrait ? 15.0F : 17.0F, 246.0F, 222.0F, 176.0F, 255.0F);
@@ -941,10 +1258,15 @@ static void backpack_grid_ui(nt_ui_context_t *ctx, World *w, bool portrait, floa
     const float cell_size = backpack_cell_size_for_layout(available_w, columns, portrait);
     const float grid_gap = backpack_cell_gap(portrait);
     const float grid_inset = backpack_grid_inset(portrait);
-    const int count = state ? state->inventory_bag_order_count : 0;
-    int visible_cells = GAME_STATE_MAX_INVENTORY_BAG_ORDER;
+    const bool quest_tab = s_inventory_tab == EQUIPMENT_TAB_QUEST;
+    const int count = quest_tab ? quest_stack_count(state) : (state ? state->inventory_bag_order_count : 0);
+    const int capacity = quest_tab ? GAME_STATE_MAX_INVENTORY_STACK_INSTANCES : GAME_STATE_MAX_INVENTORY_BAG_ORDER;
+    int visible_cells = quest_tab ? columns * 2 : capacity;
     if (count > visible_cells) {
         visible_cells = ((count + columns - 1) / columns) * columns;
+    }
+    if (visible_cells > capacity) {
+        visible_cells = capacity;
     }
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                      .padding = CLAY_PADDING_ALL((uint16_t)BACKPACK_PANEL_PADDING),
@@ -959,16 +1281,19 @@ static void backpack_grid_ui(nt_ui_context_t *ctx, World *w, bool portrait, floa
                          .layoutDirection = CLAY_LEFT_TO_RIGHT,
                          .childGap = 8,
                          .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
-            text_label(ctx, "Рюкзак", &title);
+            text_label(ctx, quest_tab ? "Квестовые предметы" : "Рюкзак", &title);
             char cap_buf[32];
-            (void)snprintf(cap_buf, sizeof cap_buf, "%d/%d", count, GAME_STATE_MAX_INVENTORY_BAG_ORDER);
+            (void)snprintf(cap_buf, sizeof cap_buf, "%d/%d", count, capacity);
             text_label(ctx, cap_buf, &meta);
         }
+        inventory_tabs_ui(ctx, portrait);
         nt_ui_scroll_style_t scroll_style = nt_ui_scroll_style_defaults();
         scroll_style.bar_visibility = NT_UI_SCROLLBAR_AUTO_HIDE;
         scroll_style.scroll_x = false;
         scroll_style.scroll_y = true;
-        nt_ui_scroll_begin(ctx, NT_UI_DATA_LAYER(LAYER_BG), nt_ui_id("gear_screen/backpack_scroll"), &scroll_style,
+        nt_ui_scroll_begin(ctx, NT_UI_DATA_LAYER(LAYER_BG),
+                           quest_tab ? nt_ui_id("gear_screen/quest_scroll") : nt_ui_id("gear_screen/backpack_scroll"),
+                           &scroll_style,
                            &(Clay_ElementDeclaration){
                                .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                                           .padding = {.left = (uint16_t)grid_inset,
@@ -995,12 +1320,22 @@ static void backpack_grid_ui(nt_ui_context_t *ctx, World *w, bool portrait, floa
                         if (index >= visible_cells) {
                             break;
                         }
-                        const char *instance_id = state && index < state->inventory_bag_order_count ? state->inventory_bag_order[index] : NULL;
-                        if (instance_id && find_gear(state, instance_id)) {
-                            bag_cell_ui(ctx, state, index, instance_id, cell_size);
-                            ++drawn;
+                        if (quest_tab) {
+                            const GameStackInstance *stack = quest_stack_at(state, index);
+                            if (stack) {
+                                quest_stack_cell_ui(ctx, index, stack, cell_size);
+                                ++drawn;
+                            } else {
+                                empty_bag_cell_ui(ctx, index, cell_size);
+                            }
                         } else {
-                            empty_bag_cell_ui(ctx, index, cell_size);
+                            const char *instance_id = state && index < state->inventory_bag_order_count ? state->inventory_bag_order[index] : NULL;
+                            if (instance_id && find_gear(state, instance_id)) {
+                                bag_cell_ui(ctx, state, index, instance_id, cell_size);
+                                ++drawn;
+                            } else {
+                                empty_bag_cell_ui(ctx, index, cell_size);
+                            }
                         }
                     }
                 }
@@ -1017,10 +1352,14 @@ void equipment_screen_set_open(bool open) {
     if (open && !s_open) {
         s_dismiss_guard_frames = 2;
     }
+    if (!open && (s_open || s_detail_open)) {
+        equipment_request_state_cleanup();
+    }
     s_open = open;
     if (!s_open) {
         s_selected_instance_id[0] = '\0';
-        s_detail_open = false;
+        s_selected_stack_id[0] = '\0';
+        equipment_detail_set_open(false);
         s_dismiss_guard_frames = 0;
     }
 }
@@ -1040,6 +1379,7 @@ static bool equipment_state_has_flag(const GameState *state, const char *flag) {
 }
 
 void equipment_screen_ui(nt_ui_context_t *ctx, World *w) {
+    equipment_clear_transient_ui_state(ctx);
     if (!ctx || !w || w->dialogue.open || !w->player_state) {
         return;
     }
@@ -1052,7 +1392,7 @@ void equipment_screen_ui(nt_ui_context_t *ctx, World *w) {
     GameState *state = w->player_state;
     clear_missing_selection(state);
     select_first_bag_item(state);
-    if (!s_detail_open && s_selected_instance_id[0] != '\0' &&
+    if (s_inventory_tab == EQUIPMENT_TAB_GEAR && !s_detail_open && s_selected_instance_id[0] != '\0' &&
         equipment_state_has_flag(state, "dev_equipment_item_modal")) {
         s_detail_open = true;
     }
@@ -1076,6 +1416,7 @@ void equipment_screen_ui(nt_ui_context_t *ctx, World *w) {
     const bool ignore_close_request = s_dismiss_guard_frames > 0;
     if (!game_modal_visible(ctx, EQUIPMENT_MODAL_ID, &modal_style, &modal_open, ignore_close_request)) {
         equipment_screen_set_open(modal_open);
+        equipment_clear_transient_ui_state(ctx);
         return;
     }
 
@@ -1150,4 +1491,5 @@ void equipment_screen_ui(nt_ui_context_t *ctx, World *w) {
     if (!modal_open) {
         equipment_screen_set_open(false);
     }
+    equipment_clear_transient_ui_state(ctx);
 }

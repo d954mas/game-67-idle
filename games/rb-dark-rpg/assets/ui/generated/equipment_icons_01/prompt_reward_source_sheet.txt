@@ -1,0 +1,8 @@
+Use case: stylized-concept
+Asset type: game UI reward icon source sheet for a dark fantasy RPG inventory/reward system
+Primary request: Generate one real raster image source sheet containing exactly 7 separate centered reward icons arranged left-to-right in a single row with generous spacing: 1) blue XP crystal/star token, 2) brass seeker token medallion with simple compass mark, 3) tied grain sacks, 4) parchment contract with green check mark, 5) torn clue paper fragment with a small blue eye symbol, 6) burned dark iron chain bracket with ember scar, 7) torn order scrap parchment with red wax seal.
+Style/medium: polished hand-painted game item icons, thick dark outline, readable at 64x64, consistent dark RPG UI art, no photorealism.
+Composition/framing: one horizontal source sheet, each icon isolated in its own invisible cell, full icon visible, no overlap, no text labels.
+Scene/backdrop: perfectly flat solid #00ff00 chroma-key background, one uniform color to the image edges.
+Lighting/mood: soft painted highlights on the objects only; no cast shadow, no contact shadow, no floor plane.
+Constraints: real raster image, not code-drawn. No text, no numbers, no watermark. Do not include the words XP or any letters. Do not use #00ff00 anywhere inside the icons. Keep edges crisp for chroma-key removal.

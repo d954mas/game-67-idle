@@ -47,11 +47,13 @@ class EquipmentIconGenerationTest(unittest.TestCase):
             cell_source = Path(tmp) / "cell_source.png"
             slots_source = Path(tmp) / "slots_source_sheet.png"
             gear_source = Path(tmp) / "gear_source_sheet.png"
+            reward_source = Path(tmp) / "reward_source_sheet.png"
             self._write_fake_cell(cell_source)
             self._write_fake_sheet(slots_source, columns=4, rows=3)
             self._write_fake_sheet(gear_source, columns=5, rows=3)
+            self._write_fake_sheet(reward_source, columns=7, rows=1)
 
-            manifest = equipment_icons.write_icon_pack(specs, out_dir, cell_source, slots_source, gear_source)
+            manifest = equipment_icons.write_icon_pack(specs, out_dir, cell_source, slots_source, gear_source, reward_source)
 
             self.assertEqual(manifest["schema"], "rb-dark-rpg.equipment_icons.v1")
             self.assertEqual(manifest["cell"]["asset_id"], "asset_equipment_slot_cell")

@@ -36,10 +36,10 @@
             "item_id": "seeker_token",
             "count": 1
           },
-      {
-        "type": "grant_xp",
-        "amount": 12
-      },
+          {
+            "type": "grant_xp",
+            "amount": 12
+          },
           {
             "type": "unlock_screen",
             "screen_id": "ash_border_map",
@@ -396,6 +396,688 @@
             {
               "id": "close",
               "text": "Понятно."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q003_sign_in_cellar_start",
+      "title": "Знак в подвале: старт",
+      "participants": [
+        "council_scribe",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "council_scribe",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q003_sign_in_cellar",
+                  "step_id": "q003_return_to_mill"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q003_sign_in_cellar_report",
+      "title": "Знак в подвале: отчет",
+      "participants": [
+        "council_scribe",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "council_scribe",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q003_sign_in_cellar",
+                  "step_id": "q003_report_to_scribe"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q003_sign_in_cellar"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q004_do_not_show_anyone_start",
+      "title": "Не показывай это никому: старт",
+      "participants": [
+        "council_scribe",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "council_scribe",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q004_do_not_show_anyone",
+                  "step_id": "q004_talk_scribe"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q004_do_not_show_anyone_report",
+      "title": "Не показывай это никому: отчет",
+      "participants": [
+        "council_scribe",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "council_scribe",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q004_do_not_show_anyone",
+                  "step_id": "q004_report_scribe"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q004_do_not_show_anyone"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q005_night_visitors_start",
+      "title": "Те, кто пришел ночью: старт",
+      "participants": [
+        "healer",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "healer",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q005_night_visitors",
+                  "step_id": "q005_talk_healer"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q005_night_visitors_report",
+      "title": "Те, кто пришел ночью: отчет",
+      "participants": [
+        "healer",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "healer",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q005_night_visitors",
+                  "step_id": "q005_report_attack"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q005_night_visitors"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q006_forest_road_start",
+      "title": "Лесная дорога: старт",
+      "participants": [
+        "gate_guard",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "gate_guard",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q006_forest_road",
+                  "step_id": "q006_visit_road"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q006_forest_road_report",
+      "title": "Лесная дорога: отчет",
+      "participants": [
+        "gate_guard",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "gate_guard",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q006_forest_road",
+                  "step_id": "q006_visit_road"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q006_forest_road"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q007_ash_convoy_start",
+      "title": "Пепельный обоз: старт",
+      "participants": [
+        "elder",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "elder",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q007_ash_convoy",
+                  "step_id": "q007_visit_convoy"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q007_ash_convoy_report",
+      "title": "Пепельный обоз: отчет",
+      "participants": [
+        "elder",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "elder",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q007_ash_convoy",
+                  "step_id": "q007_report_elder"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q007_ash_convoy"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q008_scribes_seal_start",
+      "title": "Печать писаря: старт",
+      "participants": [
+        "council_scribe",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "council_scribe",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q008_scribes_seal",
+                  "step_id": "q008_report_evidence"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q008_scribes_seal_report",
+      "title": "Печать писаря: отчет",
+      "participants": [
+        "council_scribe",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "council_scribe",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q008_scribes_seal",
+                  "step_id": "q008_report_evidence"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q008_scribes_seal"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q009_black_sun_hideout_start",
+      "title": "Тайник Черного Солнца: старт",
+      "participants": [
+        "council_scribe",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "council_scribe",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q009_black_sun_hideout",
+                  "step_id": "q009_visit_hideout"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q009_black_sun_hideout_report",
+      "title": "Тайник Черного Солнца: отчет",
+      "participants": [
+        "council_scribe",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "council_scribe",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q009_black_sun_hideout",
+                  "step_id": "q009_visit_hideout"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q009_black_sun_hideout"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q010_extra_witness_finale_start",
+      "title": "Лишний свидетель: старт",
+      "participants": [
+        "council_scribe",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "council_scribe",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q010_extra_witness_finale",
+                  "step_id": "q010_face_captain"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q010_extra_witness_finale_report",
+      "title": "Лишний свидетель: отчет",
+      "participants": [
+        "council_scribe",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "council_scribe",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q010_extra_witness_finale",
+                  "step_id": "q010_return_proof"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q010_extra_witness_finale"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q011_healer_debt_start",
+      "title": "Долг лекаря: старт",
+      "participants": [
+        "healer",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "healer",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q011_healer_debt",
+                  "step_id": "q011_talk_healer"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q011_healer_debt_report",
+      "title": "Долг лекаря: отчет",
+      "participants": [
+        "healer",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "healer",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q011_healer_debt",
+                  "step_id": "q011_talk_healer"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q011_healer_debt"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q012_blacksmith_chain_test_start",
+      "title": "Проба черной цепи: старт",
+      "participants": [
+        "blacksmith",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "blacksmith",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q012_blacksmith_chain_test",
+                  "step_id": "q012_talk_blacksmith"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q012_blacksmith_chain_test_report",
+      "title": "Проба черной цепи: отчет",
+      "participants": [
+        "blacksmith",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "blacksmith",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q012_blacksmith_chain_test",
+                  "step_id": "q012_talk_blacksmith"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q012_blacksmith_chain_test"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q013_missing_cart_start",
+      "title": "Пропавшая повозка: старт",
+      "participants": [
+        "elder",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "elder",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q013_missing_cart",
+                  "step_id": "q013_visit_road"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_q013_missing_cart_report",
+      "title": "Пропавшая повозка: отчет",
+      "participants": [
+        "elder",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "elder",
+          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "choices": [
+            {
+              "id": "continue",
+              "text": "Понял",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q013_missing_cart",
+                  "step_id": "q013_report_cart"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q013_missing_cart"
+                }
+              ]
             }
           ]
         }

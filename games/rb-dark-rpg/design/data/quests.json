@@ -77,6 +77,127 @@
         "started_at_step": null,
         "completed_at_step": null,
         "last_update_reason": "new_game"
+      },
+      "q003_sign_in_cellar": {
+        "status": "hidden",
+        "current_step_id": null,
+        "completed_step_ids": [],
+        "objective_progress": {},
+        "flags": [],
+        "choice_ids": [],
+        "started_at_step": null,
+        "completed_at_step": null,
+        "last_update_reason": "new_game"
+      },
+      "q004_do_not_show_anyone": {
+        "status": "hidden",
+        "current_step_id": null,
+        "completed_step_ids": [],
+        "objective_progress": {},
+        "flags": [],
+        "choice_ids": [],
+        "started_at_step": null,
+        "completed_at_step": null,
+        "last_update_reason": "new_game"
+      },
+      "q005_night_visitors": {
+        "status": "hidden",
+        "current_step_id": null,
+        "completed_step_ids": [],
+        "objective_progress": {},
+        "flags": [],
+        "choice_ids": [],
+        "started_at_step": null,
+        "completed_at_step": null,
+        "last_update_reason": "new_game"
+      },
+      "q006_forest_road": {
+        "status": "hidden",
+        "current_step_id": null,
+        "completed_step_ids": [],
+        "objective_progress": {},
+        "flags": [],
+        "choice_ids": [],
+        "started_at_step": null,
+        "completed_at_step": null,
+        "last_update_reason": "new_game"
+      },
+      "q007_ash_convoy": {
+        "status": "hidden",
+        "current_step_id": null,
+        "completed_step_ids": [],
+        "objective_progress": {},
+        "flags": [],
+        "choice_ids": [],
+        "started_at_step": null,
+        "completed_at_step": null,
+        "last_update_reason": "new_game"
+      },
+      "q008_scribes_seal": {
+        "status": "hidden",
+        "current_step_id": null,
+        "completed_step_ids": [],
+        "objective_progress": {},
+        "flags": [],
+        "choice_ids": [],
+        "started_at_step": null,
+        "completed_at_step": null,
+        "last_update_reason": "new_game"
+      },
+      "q009_black_sun_hideout": {
+        "status": "hidden",
+        "current_step_id": null,
+        "completed_step_ids": [],
+        "objective_progress": {},
+        "flags": [],
+        "choice_ids": [],
+        "started_at_step": null,
+        "completed_at_step": null,
+        "last_update_reason": "new_game"
+      },
+      "q010_extra_witness_finale": {
+        "status": "hidden",
+        "current_step_id": null,
+        "completed_step_ids": [],
+        "objective_progress": {},
+        "flags": [],
+        "choice_ids": [],
+        "started_at_step": null,
+        "completed_at_step": null,
+        "last_update_reason": "new_game"
+      },
+      "q011_healer_debt": {
+        "status": "hidden",
+        "current_step_id": null,
+        "completed_step_ids": [],
+        "objective_progress": {},
+        "flags": [],
+        "choice_ids": [],
+        "started_at_step": null,
+        "completed_at_step": null,
+        "last_update_reason": "new_game"
+      },
+      "q012_blacksmith_chain_test": {
+        "status": "hidden",
+        "current_step_id": null,
+        "completed_step_ids": [],
+        "objective_progress": {},
+        "flags": [],
+        "choice_ids": [],
+        "started_at_step": null,
+        "completed_at_step": null,
+        "last_update_reason": "new_game"
+      },
+      "q013_missing_cart": {
+        "status": "hidden",
+        "current_step_id": null,
+        "completed_step_ids": [],
+        "objective_progress": {},
+        "flags": [],
+        "choice_ids": [],
+        "started_at_step": null,
+        "completed_at_step": null,
+        "last_update_reason": "new_game"
       }
     },
     "global_flags": {
@@ -332,6 +453,30 @@
           "ui_hint": "Открой карту и выбери Старую мельницу."
         },
         {
+          "id": "q002_clear_mill_yard",
+          "title": "Выиграть бой",
+          "description": "Шаг релизного квеста q002_bread_for_post: выиграть бой.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "win_encounter",
+            "count": 1,
+            "encounter_id": "mill_scavenger"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q002_clear_mill_brute",
+          "title": "Выиграть бой",
+          "description": "Шаг релизного квеста q002_bread_for_post: выиграть бой.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "win_encounter",
+            "count": 1,
+            "encounter_id": "mill_brute"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
           "id": "inspect_old_mill",
           "title": "Осмотреть двор мельницы",
           "description": "Понять, почему мельница не отвечает Последнему Посту.",
@@ -354,17 +499,955 @@
             "count": 1
           },
           "dialogue_id": "dlg_elder_bread_turn_in",
-          "ui_hint": "Р’РµСЂРЅРёСЃСЊ РІ РџРѕСЃР»РµРґРЅРёР№ РџРѕСЃС‚ Рё СЃРґР°Р№ РЅР°С…РѕРґРєСѓ РЎС‚Р°СЂРѕСЃС‚Рµ."
+          "ui_hint": "Р’РµСЂРЅРёСЃСЊ РІ РџРѕСЃР»РµРґРЅРёР№ РџРѕСЃС‚ Рё СЃРґР°Р№ РЅР°С…РѕРґРєСѓ РЎС‚Р°СЂРѕСЃС‚Рµ.",
+          "on_complete": {
+            "grant_xp": 44,
+            "grant_gold": 16,
+            "grant_items": [
+              "grain_sacks"
+            ],
+            "set_flags": [
+              "bread_contract_done"
+            ],
+            "unlock_quests": [
+              "q003_sign_in_cellar"
+            ],
+            "complete_quest": true
+          }
         }
       ],
       "completion_rewards": {
-        "xp": 10,
-        "gold": 6,
-        "items": [],
-        "flags": [],
-        "unlocks": {}
+        "xp": 44,
+        "gold": 16,
+        "items": [
+          "grain_sacks"
+        ],
+        "flags": [
+          "bread_contract_done"
+        ],
+        "unlocks": {
+          "quests": [
+            "q003_sign_in_cellar"
+          ]
+        }
       },
-      "implementation_note": "Detailed steps intentionally deferred until q001 flow is playable."
+      "implementation_note": "Release content pass expanded q002 with two authored combat objectives."
+    },
+    {
+      "id": "q003_sign_in_cellar",
+      "title": "Знак в подвале",
+      "type": "clue",
+      "act": "act_1_extra_witness",
+      "priority": "side",
+      "giver": {
+        "type": "npc",
+        "id": "council_scribe"
+      },
+      "start_location": "old_mill",
+      "start_mode": "unlocked_by_q002_bread_for_post",
+      "prerequisites": [
+        {
+          "quest_completed": "q002_bread_for_post"
+        }
+      ],
+      "journal": {
+        "summary": "Знак в подвале",
+        "short_goal": "Добраться до места"
+      },
+      "steps": [
+        {
+          "id": "q003_return_to_mill",
+          "title": "Добраться до места",
+          "description": "Шаг релизного квеста q003_sign_in_cellar: добраться до места.",
+          "location_id": "old_mill",
+          "objective": {
+            "type": "visit_location",
+            "count": 1,
+            "location_id": "old_mill"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q003_clear_knifeman",
+          "title": "Выиграть бой",
+          "description": "Шаг релизного квеста q003_sign_in_cellar: выиграть бой.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "win_encounter",
+            "count": 1,
+            "encounter_id": "cellar_knifeman"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q003_take_chain_bracket",
+          "title": "Осмотреть улику",
+          "description": "Шаг релизного квеста q003_sign_in_cellar: осмотреть улику.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "inspect_object",
+            "count": 1,
+            "target_id": "old_mill.black_sun_mark"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q003_report_to_scribe",
+          "title": "Вернуться с отчетом",
+          "description": "Шаг релизного квеста q003_sign_in_cellar: вернуться с отчетом.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "return_to_npc",
+            "count": 1,
+            "target_id": "council_scribe"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "dialogue_id": "dlg_q003_sign_in_cellar_report",
+          "on_complete": {
+            "grant_xp": 42,
+            "grant_gold": 8,
+            "set_flags": [
+              "mill_black_sun_clue_found"
+            ],
+            "unlock_quests": [
+              "q004_do_not_show_anyone"
+            ],
+            "complete_quest": true
+          }
+        }
+      ],
+      "completion_rewards": {
+        "xp": 42,
+        "gold": 8,
+        "items": [],
+        "flags": [
+          "mill_black_sun_clue_found"
+        ],
+        "unlocks": {
+          "quests": [
+            "q004_do_not_show_anyone"
+          ]
+        }
+      }
+    },
+    {
+      "id": "q004_do_not_show_anyone",
+      "title": "Не показывай это никому",
+      "type": "main",
+      "act": "act_1_extra_witness",
+      "priority": "critical_path",
+      "giver": {
+        "type": "npc",
+        "id": "council_scribe"
+      },
+      "start_location": "hub_last_post",
+      "start_mode": "unlocked_by_q003_sign_in_cellar",
+      "prerequisites": [
+        {
+          "quest_completed": "q003_sign_in_cellar"
+        }
+      ],
+      "journal": {
+        "summary": "Не показывай это никому",
+        "short_goal": "Поговорить"
+      },
+      "steps": [
+        {
+          "id": "q004_talk_scribe",
+          "title": "Поговорить",
+          "description": "Шаг релизного квеста q004_do_not_show_anyone: поговорить.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "talk_to_npc",
+            "count": 1,
+            "target_id": "council_scribe"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "dialogue_id": "dlg_q004_do_not_show_anyone_start"
+        },
+        {
+          "id": "q004_show_blacksmith",
+          "title": "Поговорить",
+          "description": "Шаг релизного квеста q004_do_not_show_anyone: поговорить.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "talk_to_npc",
+            "count": 1,
+            "target_id": "blacksmith"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "dialogue_id": "dlg_q004_do_not_show_anyone_start"
+        },
+        {
+          "id": "q004_report_scribe",
+          "title": "Вернуться с отчетом",
+          "description": "Шаг релизного квеста q004_do_not_show_anyone: вернуться с отчетом.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "return_to_npc",
+            "count": 1,
+            "target_id": "council_scribe"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "dialogue_id": "dlg_q004_do_not_show_anyone_report",
+          "on_complete": {
+            "grant_xp": 45,
+            "grant_gold": 8,
+            "set_flags": [
+              "scribe_warned"
+            ],
+            "unlock_quests": [
+              "q005_night_visitors"
+            ],
+            "complete_quest": true
+          }
+        }
+      ],
+      "completion_rewards": {
+        "xp": 45,
+        "gold": 8,
+        "items": [],
+        "flags": [
+          "scribe_warned"
+        ],
+        "unlocks": {
+          "quests": [
+            "q005_night_visitors"
+          ]
+        }
+      }
+    },
+    {
+      "id": "q005_night_visitors",
+      "title": "Те, кто пришел ночью",
+      "type": "main",
+      "act": "act_1_extra_witness",
+      "priority": "critical_path",
+      "giver": {
+        "type": "npc",
+        "id": "healer"
+      },
+      "start_location": "hub_last_post",
+      "start_mode": "unlocked_by_q004_do_not_show_anyone",
+      "prerequisites": [
+        {
+          "quest_completed": "q004_do_not_show_anyone"
+        }
+      ],
+      "journal": {
+        "summary": "Те, кто пришел ночью",
+        "short_goal": "Поговорить"
+      },
+      "steps": [
+        {
+          "id": "q005_talk_healer",
+          "title": "Поговорить",
+          "description": "Шаг релизного квеста q005_night_visitors: поговорить.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "talk_to_npc",
+            "count": 1,
+            "target_id": "healer"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "dialogue_id": "dlg_q005_night_visitors_start"
+        },
+        {
+          "id": "q005_defeat_attacker",
+          "title": "Выиграть бой",
+          "description": "Шаг релизного квеста q005_night_visitors: выиграть бой.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "win_encounter",
+            "count": 1,
+            "encounter_id": "night_attacker"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q005_report_attack",
+          "title": "Вернуться с отчетом",
+          "description": "Шаг релизного квеста q005_night_visitors: вернуться с отчетом.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "return_to_npc",
+            "count": 1,
+            "target_id": "healer"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "dialogue_id": "dlg_q005_night_visitors_report",
+          "on_complete": {
+            "grant_xp": 52,
+            "grant_gold": 12,
+            "set_flags": [
+              "night_attack_survived",
+              "forest_road_unlocked"
+            ],
+            "unlock_quests": [
+              "q006_forest_road"
+            ],
+            "unlock_locations": [
+              "forest_road"
+            ],
+            "complete_quest": true
+          }
+        }
+      ],
+      "completion_rewards": {
+        "xp": 52,
+        "gold": 12,
+        "items": [],
+        "flags": [
+          "night_attack_survived"
+        ],
+        "unlocks": {
+          "quests": [
+            "q006_forest_road"
+          ]
+        }
+      }
+    },
+    {
+      "id": "q006_forest_road",
+      "title": "Лесная дорога",
+      "type": "main",
+      "act": "act_1_extra_witness",
+      "priority": "critical_path",
+      "giver": {
+        "type": "npc",
+        "id": "gate_guard"
+      },
+      "start_location": "forest_road",
+      "start_mode": "unlocked_by_q005_night_visitors",
+      "prerequisites": [
+        {
+          "quest_completed": "q005_night_visitors"
+        }
+      ],
+      "journal": {
+        "summary": "Лесная дорога",
+        "short_goal": "Добраться до места"
+      },
+      "steps": [
+        {
+          "id": "q006_visit_road",
+          "title": "Добраться до места",
+          "description": "Шаг релизного квеста q006_forest_road: добраться до места.",
+          "location_id": "forest_road",
+          "objective": {
+            "type": "visit_location",
+            "count": 1,
+            "location_id": "forest_road"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q006_clear_cutthroat",
+          "title": "Выиграть бой",
+          "description": "Шаг релизного квеста q006_forest_road: выиграть бой.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "win_encounter",
+            "count": 1,
+            "encounter_id": "road_cutthroat"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q006_take_route_clue",
+          "title": "Осмотреть улику",
+          "description": "Шаг релизного квеста q006_forest_road: осмотреть улику.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "inspect_object",
+            "count": 1,
+            "target_id": "forest_road.cart_tracks"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "on_complete": {
+            "grant_xp": 55,
+            "grant_gold": 14,
+            "set_flags": [
+              "forest_road_cleared",
+              "ash_convoy_unlocked"
+            ],
+            "unlock_quests": [
+              "q007_ash_convoy"
+            ],
+            "unlock_locations": [
+              "ash_convoy"
+            ],
+            "complete_quest": true
+          }
+        }
+      ],
+      "completion_rewards": {
+        "xp": 55,
+        "gold": 14,
+        "items": [],
+        "flags": [
+          "forest_road_cleared"
+        ],
+        "unlocks": {
+          "quests": [
+            "q007_ash_convoy"
+          ]
+        }
+      }
+    },
+    {
+      "id": "q007_ash_convoy",
+      "title": "Пепельный обоз",
+      "type": "main",
+      "act": "act_1_extra_witness",
+      "priority": "critical_path",
+      "giver": {
+        "type": "npc",
+        "id": "elder"
+      },
+      "start_location": "ash_convoy",
+      "start_mode": "unlocked_by_q006_forest_road",
+      "prerequisites": [
+        {
+          "quest_completed": "q006_forest_road"
+        }
+      ],
+      "journal": {
+        "summary": "Пепельный обоз",
+        "short_goal": "Добраться до места"
+      },
+      "steps": [
+        {
+          "id": "q007_visit_convoy",
+          "title": "Добраться до места",
+          "description": "Шаг релизного квеста q007_ash_convoy: добраться до места.",
+          "location_id": "ash_convoy",
+          "objective": {
+            "type": "visit_location",
+            "count": 1,
+            "location_id": "ash_convoy"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q007_clear_scout",
+          "title": "Выиграть бой",
+          "description": "Шаг релизного квеста q007_ash_convoy: выиграть бой.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "win_encounter",
+            "count": 1,
+            "encounter_id": "ash_trail_scout"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q007_clear_chain_bearer",
+          "title": "Выиграть бой",
+          "description": "Шаг релизного квеста q007_ash_convoy: выиграть бой.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "win_encounter",
+            "count": 1,
+            "encounter_id": "chain_bearer"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q007_report_elder",
+          "title": "Вернуться с отчетом",
+          "description": "Шаг релизного квеста q007_ash_convoy: вернуться с отчетом.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "return_to_npc",
+            "count": 1,
+            "target_id": "elder"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "dialogue_id": "dlg_q007_ash_convoy_report",
+          "on_complete": {
+            "grant_xp": 58,
+            "grant_gold": 16,
+            "grant_items": [
+              "ember_relic"
+            ],
+            "set_flags": [
+              "ash_convoy_found"
+            ],
+            "unlock_quests": [
+              "q008_scribes_seal"
+            ],
+            "complete_quest": true
+          }
+        }
+      ],
+      "completion_rewards": {
+        "xp": 58,
+        "gold": 16,
+        "items": [],
+        "flags": [
+          "ash_convoy_found"
+        ],
+        "unlocks": {
+          "quests": [
+            "q008_scribes_seal"
+          ]
+        }
+      }
+    },
+    {
+      "id": "q008_scribes_seal",
+      "title": "Печать писаря",
+      "type": "main",
+      "act": "act_1_extra_witness",
+      "priority": "critical_path",
+      "giver": {
+        "type": "npc",
+        "id": "council_scribe"
+      },
+      "start_location": "hub_last_post",
+      "start_mode": "unlocked_by_q007_ash_convoy",
+      "prerequisites": [
+        {
+          "quest_completed": "q007_ash_convoy"
+        }
+      ],
+      "journal": {
+        "summary": "Печать писаря",
+        "short_goal": "Вернуться с отчетом"
+      },
+      "steps": [
+        {
+          "id": "q008_report_evidence",
+          "title": "Вернуться с отчетом",
+          "description": "Шаг релизного квеста q008_scribes_seal: вернуться с отчетом.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "return_to_npc",
+            "count": 1,
+            "target_id": "council_scribe"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "dialogue_id": "dlg_q008_scribes_seal_report"
+        },
+        {
+          "id": "q008_collect_seal",
+          "title": "Получить печать писаря",
+          "description": "Писарь ставит печать после проверки цепи и следов обоза.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "return_to_npc",
+            "target_id": "council_scribe",
+            "count": 1
+          },
+          "dialogue_id": "dlg_q008_scribes_seal_report",
+          "ui_hint": "Вернись к писарю Совета.",
+          "on_complete": {
+            "grant_xp": 60,
+            "grant_gold": 14,
+            "set_flags": [
+              "council_seal_owned",
+              "black_sun_hideout_unlocked"
+            ],
+            "unlock_quests": [
+              "q009_black_sun_hideout"
+            ],
+            "unlock_locations": [
+              "black_sun_hideout"
+            ],
+            "complete_quest": true
+          }
+        }
+      ],
+      "completion_rewards": {
+        "xp": 60,
+        "gold": 14,
+        "items": [],
+        "flags": [
+          "council_seal_owned"
+        ],
+        "unlocks": {
+          "quests": [
+            "q009_black_sun_hideout"
+          ]
+        }
+      }
+    },
+    {
+      "id": "q009_black_sun_hideout",
+      "title": "Тайник Черного Солнца",
+      "type": "main",
+      "act": "act_1_extra_witness",
+      "priority": "critical_path",
+      "giver": {
+        "type": "npc",
+        "id": "council_scribe"
+      },
+      "start_location": "black_sun_hideout",
+      "start_mode": "unlocked_by_q008_scribes_seal",
+      "prerequisites": [
+        {
+          "quest_completed": "q008_scribes_seal"
+        }
+      ],
+      "journal": {
+        "summary": "Тайник Черного Солнца",
+        "short_goal": "Добраться до места"
+      },
+      "steps": [
+        {
+          "id": "q009_visit_hideout",
+          "title": "Добраться до места",
+          "description": "Шаг релизного квеста q009_black_sun_hideout: добраться до места.",
+          "location_id": "black_sun_hideout",
+          "objective": {
+            "type": "visit_location",
+            "count": 1,
+            "location_id": "black_sun_hideout"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q009_clear_acolyte",
+          "title": "Выиграть бой",
+          "description": "Шаг релизного квеста q009_black_sun_hideout: выиграть бой.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "win_encounter",
+            "count": 1,
+            "encounter_id": "black_sun_acolyte"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q009_clear_warden",
+          "title": "Выиграть бой",
+          "description": "Шаг релизного квеста q009_black_sun_hideout: выиграть бой.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "win_encounter",
+            "count": 1,
+            "encounter_id": "relic_warden"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "on_complete": {
+            "grant_xp": 70,
+            "grant_gold": 18,
+            "set_flags": [
+              "hideout_opened"
+            ],
+            "unlock_quests": [
+              "q010_extra_witness_finale"
+            ],
+            "complete_quest": true
+          }
+        }
+      ],
+      "completion_rewards": {
+        "xp": 70,
+        "gold": 18,
+        "items": [],
+        "flags": [
+          "hideout_opened"
+        ],
+        "unlocks": {
+          "quests": [
+            "q010_extra_witness_finale"
+          ]
+        }
+      }
+    },
+    {
+      "id": "q010_extra_witness_finale",
+      "title": "Лишний свидетель",
+      "type": "main",
+      "act": "act_1_extra_witness",
+      "priority": "critical_path",
+      "giver": {
+        "type": "npc",
+        "id": "council_scribe"
+      },
+      "start_location": "black_sun_hideout",
+      "start_mode": "unlocked_by_q009_black_sun_hideout",
+      "prerequisites": [
+        {
+          "quest_completed": "q009_black_sun_hideout"
+        }
+      ],
+      "journal": {
+        "summary": "Лишний свидетель",
+        "short_goal": "Выиграть бой"
+      },
+      "steps": [
+        {
+          "id": "q010_face_captain",
+          "title": "Выиграть бой",
+          "description": "Шаг релизного квеста q010_extra_witness_finale: выиграть бой.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "win_encounter",
+            "count": 1,
+            "encounter_id": "black_sun_captain"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q010_return_proof",
+          "title": "Вернуться с отчетом",
+          "description": "Шаг релизного квеста q010_extra_witness_finale: вернуться с отчетом.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "return_to_npc",
+            "count": 1,
+            "target_id": "council_scribe"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "dialogue_id": "dlg_q010_extra_witness_finale_report",
+          "on_complete": {
+            "grant_xp": 94,
+            "grant_gold": 20,
+            "set_flags": [
+              "act_i_completed"
+            ],
+            "complete_quest": true
+          }
+        }
+      ],
+      "completion_rewards": {
+        "xp": 94,
+        "gold": 20,
+        "items": [],
+        "flags": [
+          "act_i_completed"
+        ],
+        "unlocks": {
+          "quests": []
+        }
+      }
+    },
+    {
+      "id": "q011_healer_debt",
+      "title": "Долг лекаря",
+      "type": "side",
+      "act": "act_1_extra_witness",
+      "priority": "side",
+      "giver": {
+        "type": "npc",
+        "id": "healer"
+      },
+      "start_location": "hub_last_post",
+      "start_mode": "unlocked_by_q002_bread_for_post",
+      "prerequisites": [
+        {
+          "quest_completed": "q002_bread_for_post"
+        }
+      ],
+      "journal": {
+        "summary": "Долг лекаря",
+        "short_goal": "Поговорить"
+      },
+      "steps": [
+        {
+          "id": "q011_talk_healer",
+          "title": "Поговорить",
+          "description": "Шаг релизного квеста q011_healer_debt: поговорить.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "talk_to_npc",
+            "count": 1,
+            "target_id": "healer"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "dialogue_id": "dlg_q011_healer_debt_start"
+        },
+        {
+          "id": "q011_bring_ration",
+          "title": "Вернуться к лекарю",
+          "description": "Лекарь принимает помощь и выдает жетон на лечение.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "return_to_npc",
+            "target_id": "healer",
+            "count": 1
+          },
+          "dialogue_id": "dlg_q011_healer_debt_report",
+          "ui_hint": "Вернись к лекарю в Последнем Посту.",
+          "on_complete": {
+            "grant_xp": 20,
+            "grant_gold": 0,
+            "grant_items": [
+              "healer_token"
+            ],
+            "set_flags": [
+              "healer_token_owned"
+            ],
+            "complete_quest": true
+          }
+        }
+      ],
+      "completion_rewards": {
+        "xp": 20,
+        "gold": 0,
+        "items": [],
+        "flags": [
+          "healer_token_owned"
+        ],
+        "unlocks": {
+          "quests": []
+        }
+      }
+    },
+    {
+      "id": "q012_blacksmith_chain_test",
+      "title": "Проба черной цепи",
+      "type": "side",
+      "act": "act_1_extra_witness",
+      "priority": "side",
+      "giver": {
+        "type": "npc",
+        "id": "blacksmith"
+      },
+      "start_location": "hub_last_post",
+      "start_mode": "unlocked_by_q003_sign_in_cellar",
+      "prerequisites": [
+        {
+          "quest_completed": "q003_sign_in_cellar"
+        }
+      ],
+      "journal": {
+        "summary": "Проба черной цепи",
+        "short_goal": "Поговорить"
+      },
+      "steps": [
+        {
+          "id": "q012_talk_blacksmith",
+          "title": "Поговорить",
+          "description": "Шаг релизного квеста q012_blacksmith_chain_test: поговорить.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "talk_to_npc",
+            "count": 1,
+            "target_id": "blacksmith"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "dialogue_id": "dlg_q012_blacksmith_chain_test_start"
+        },
+        {
+          "id": "q012_bring_chain",
+          "title": "Показать цепную скобу кузнецу",
+          "description": "Кузнец проверяет металл и делает скидку на позднее снаряжение.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "return_to_npc",
+            "target_id": "blacksmith",
+            "count": 1
+          },
+          "dialogue_id": "dlg_q012_blacksmith_chain_test_report",
+          "ui_hint": "Вернись к кузнецу.",
+          "on_complete": {
+            "grant_xp": 25,
+            "grant_gold": 4,
+            "set_flags": [
+              "blacksmith_chain_test_done"
+            ],
+            "complete_quest": true
+          }
+        }
+      ],
+      "completion_rewards": {
+        "xp": 25,
+        "gold": 4,
+        "items": [],
+        "flags": [
+          "blacksmith_chain_test_done"
+        ],
+        "unlocks": {
+          "quests": []
+        }
+      }
+    },
+    {
+      "id": "q013_missing_cart",
+      "title": "Пропавшая повозка",
+      "type": "side",
+      "act": "act_1_extra_witness",
+      "priority": "side",
+      "giver": {
+        "type": "npc",
+        "id": "elder"
+      },
+      "start_location": "forest_road",
+      "start_mode": "unlocked_by_q006_forest_road",
+      "prerequisites": [
+        {
+          "quest_completed": "q006_forest_road"
+        }
+      ],
+      "journal": {
+        "summary": "Пропавшая повозка",
+        "short_goal": "Добраться до места"
+      },
+      "steps": [
+        {
+          "id": "q013_visit_road",
+          "title": "Добраться до места",
+          "description": "Шаг релизного квеста q013_missing_cart: добраться до места.",
+          "location_id": "forest_road",
+          "objective": {
+            "type": "visit_location",
+            "count": 1,
+            "location_id": "forest_road"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q013_clear_cutthroat",
+          "title": "Выиграть бой",
+          "description": "Шаг релизного квеста q013_missing_cart: выиграть бой.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "win_encounter",
+            "count": 1,
+            "encounter_id": "road_cutthroat"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале."
+        },
+        {
+          "id": "q013_report_cart",
+          "title": "Вернуться с отчетом",
+          "description": "Шаг релизного квеста q013_missing_cart: вернуться с отчетом.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "return_to_npc",
+            "count": 1,
+            "target_id": "elder"
+          },
+          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "dialogue_id": "dlg_q013_missing_cart_report",
+          "on_complete": {
+            "grant_xp": 30,
+            "grant_gold": 18,
+            "grant_items": [
+              "tier4_component"
+            ],
+            "set_flags": [
+              "missing_cart_found"
+            ],
+            "complete_quest": true
+          }
+        }
+      ],
+      "completion_rewards": {
+        "xp": 30,
+        "gold": 18,
+        "items": [],
+        "flags": [
+          "missing_cart_found"
+        ],
+        "unlocks": {
+          "quests": []
+        }
+      }
     }
   ]
 }

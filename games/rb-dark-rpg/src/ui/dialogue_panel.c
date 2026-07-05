@@ -12,6 +12,7 @@
 #include "ui/nt_ui_modal.h"
 #include "ui/nt_ui_panel.h"
 #include "ui/nt_ui_scroll.h"
+#include "ui/nt_ui_state.h"
 #include "ui/nt_ui_tooltip.h"
 #include "ui/theme.h"
 
@@ -37,6 +38,8 @@ static bool s_dialogue_was_open;
 static bool s_reward_detail_was_open;
 static int s_dialogue_dismiss_guard_frames;
 static int s_reward_detail_dismiss_guard_frames;
+static bool s_dialogue_cleanup_pending;
+static bool s_reward_detail_cleanup_pending;
 static nt_resource_t s_dialogue_ui_atlas;
 static nt_atlas_region_ref_t s_gate_guard_portrait_region;
 static nt_atlas_region_ref_t s_scrollbar_white_region;
@@ -75,6 +78,28 @@ typedef enum dialogue_reward_icon_art_t {
     DIALOGUE_REWARD_ICON_ORDER_SCRAP,
     DIALOGUE_REWARD_ICON_COUNT,
 } dialogue_reward_icon_art_t;
+
+static void dialogue_request_state_cleanup(void) {
+    s_dialogue_cleanup_pending = true;
+    s_reward_detail_cleanup_pending = true;
+}
+
+static void dialogue_request_reward_detail_cleanup(void) { s_reward_detail_cleanup_pending = true; }
+
+static void dialogue_clear_transient_ui_state(nt_ui_context_t *ctx) {
+    if (!ctx) {
+        return;
+    }
+    if (s_dialogue_cleanup_pending) {
+        game_modal_clear_state(ctx, DIALOGUE_MODAL_ID);
+        nt_ui_state_clear(ctx, nt_ui_id("dialogue/content_scroll"));
+        s_dialogue_cleanup_pending = false;
+    }
+    if (s_reward_detail_cleanup_pending) {
+        game_modal_clear_state(ctx, DIALOGUE_REWARD_DETAIL_MODAL_ID);
+        s_reward_detail_cleanup_pending = false;
+    }
+}
 
 static const char *DIALOGUE_REWARD_ICON_ASSET_IDS[DIALOGUE_REWARD_ICON_COUNT] DIALOGUE_UNUSED_VAR = {
     "asset_icon_old_sword",
@@ -350,6 +375,9 @@ static void reward_icon_visual_ui(nt_ui_context_t *ctx, const dialogue_reward_t 
 
 static void reward_detail_modal_ui(nt_ui_context_t *ctx, bool portrait) {
     if (!s_reward_detail_open || !s_selected_reward) {
+        if (s_reward_detail_was_open) {
+            dialogue_request_reward_detail_cleanup();
+        }
         s_reward_detail_was_open = false;
         s_reward_detail_dismiss_guard_frames = 0;
         return;
@@ -366,6 +394,7 @@ static void reward_detail_modal_ui(nt_ui_context_t *ctx, bool portrait) {
                             &detail_open, ignore_close_request)) {
         s_reward_detail_open = detail_open;
         if (!s_reward_detail_open) {
+            dialogue_request_reward_detail_cleanup();
             s_selected_reward = NULL;
             s_reward_detail_was_open = false;
             s_reward_detail_dismiss_guard_frames = 0;
@@ -448,6 +477,7 @@ static void reward_detail_modal_ui(nt_ui_context_t *ctx, bool portrait) {
 
     s_reward_detail_open = detail_open;
     if (!s_reward_detail_open) {
+        dialogue_request_reward_detail_cleanup();
         s_selected_reward = NULL;
         s_reward_detail_was_open = false;
         s_reward_detail_dismiss_guard_frames = 0;
@@ -732,12 +762,19 @@ static bool dialogue_choices_ui(nt_ui_context_t *ctx, World *w, const dialogue_n
 
 void dialogue_panel_ui(nt_ui_context_t *ctx, World *w) {
     if (!w || !w->dialogue.open || !w->dialogue.current_node) {
+        if (s_dialogue_was_open || s_reward_detail_was_open || s_reward_detail_open) {
+            dialogue_request_state_cleanup();
+        }
         s_selected_reward = NULL;
         s_reward_detail_open = false;
         s_dialogue_was_open = false;
         s_dialogue_dismiss_guard_frames = 0;
+        s_reward_detail_was_open = false;
+        s_reward_detail_dismiss_guard_frames = 0;
+        dialogue_clear_transient_ui_state(ctx);
         return;
     }
+    dialogue_clear_transient_ui_state(ctx);
     if (!s_dialogue_was_open) {
         s_dialogue_dismiss_guard_frames = 2;
         s_dialogue_was_open = true;
@@ -762,8 +799,10 @@ void dialogue_panel_ui(nt_ui_context_t *ctx, World *w) {
     if (!game_modal_visible(ctx, DIALOGUE_MODAL_ID, &modal_style,
                             &w->dialogue.open, ignore_close_request)) {
         if (!w->dialogue.open) {
+            dialogue_request_state_cleanup();
             s_dialogue_was_open = false;
             s_dialogue_dismiss_guard_frames = 0;
+            dialogue_clear_transient_ui_state(ctx);
         }
         return;
     }
@@ -961,7 +1000,9 @@ void dialogue_panel_ui(nt_ui_context_t *ctx, World *w) {
         --s_dialogue_dismiss_guard_frames;
     }
     if (!w->dialogue.open) {
+        dialogue_request_state_cleanup();
         s_dialogue_was_open = false;
         s_dialogue_dismiss_guard_frames = 0;
     }
+    dialogue_clear_transient_ui_state(ctx);
 }

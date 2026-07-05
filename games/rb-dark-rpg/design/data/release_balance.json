@@ -428,20 +428,5 @@
     "risky states must expose heal and upgrade actions",
     "no mandatory win may require a critical hit",
     "release fights target 6 to 18 seconds except the finale at 20 to 26 seconds"
-  ],
-  "visual_proof": {
-    "fake_shot": "../layout/release_30min_fake_shot.svg",
-    "tier": "fake_shot",
-    "must_show": [
-      "level",
-      "hp",
-      "xp_progress",
-      "current_quest",
-      "next_action",
-      "enemy_threat",
-      "gear_tier",
-      "reward",
-      "bottom_navigation"
-    ]
-  }
+  ]
 }

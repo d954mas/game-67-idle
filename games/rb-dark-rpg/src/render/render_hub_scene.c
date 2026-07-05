@@ -28,7 +28,6 @@ static uint32_t s_last_post_background_region = NT_ATLAS_INVALID_REGION;
 static uint32_t s_gate_outskirts_background_region = NT_ATLAS_INVALID_REGION;
 static uint32_t s_old_mill_background_region = NT_ATLAS_INVALID_REGION;
 static uint32_t s_guard_region = NT_ATLAS_INVALID_REGION;
-static uint32_t s_black_sun_mark_region = NT_ATLAS_INVALID_REGION;
 
 static nt_hash64_t rid(const char *s) { return nt_hash64_str(s); }
 
@@ -135,14 +134,6 @@ static bool guard_ready(void) {
     }
     (void)scene_atlas_region(&s_guard_region, ASSET_ATLAS_REGION_HUB_SCENE_LAST_POST_GUARD);
     return s_guard_region != NT_ATLAS_INVALID_REGION && material_ready(s_background_material);
-}
-
-static bool black_sun_mark_ready(void) {
-    if (!nt_resource_is_ready(s_background_atlas)) {
-        return false;
-    }
-    (void)scene_atlas_region(&s_black_sun_mark_region, ASSET_ATLAS_REGION_HUB_SCENE_BLACK_SUN_MARK);
-    return s_black_sun_mark_region != NT_ATLAS_INVALID_REGION && material_ready(s_background_material);
 }
 
 void render_hub_scene_init(void) {
@@ -482,31 +473,6 @@ static void draw_scene_object_sprites(const World *w) {
     nt_sprite_renderer_flush();
 }
 
-static void draw_black_sun_mark_prop(void) {
-    if (!black_sun_mark_ready()) {
-        return;
-    }
-
-    nt_atlas_region_handles_t handles;
-    nt_atlas_get_region_handles(s_background_atlas, s_black_sun_mark_region, &handles);
-    if (!handles.region || handles.region->source_h == 0U) {
-        return;
-    }
-
-    const float source_h = (float)handles.region->source_h * handles.ipu;
-    const float scale = 116.0F / source_h;
-    float m[16];
-    glm_mat4_identity((vec4 *)m);
-    m[0] = scale;
-    m[5] = scale;
-    m[12] = 925.0F;
-    m[13] = 348.0F;
-
-    nt_sprite_renderer_set_material(s_background_material);
-    nt_sprite_renderer_emit_region(s_background_atlas, s_black_sun_mark_region, m, 0.5F, 0.5F, 0xFFFFFFFFU, 0U);
-    nt_sprite_renderer_flush();
-}
-
 static void draw_tutorial_finger_for_object(const World *w, const scene_interaction_object_t *object) {
     nt_atlas_region_handles_t handles;
     nt_atlas_get_region_handles(s_overlay_atlas, s_tutorial_finger_region, &handles);
@@ -571,9 +537,6 @@ void render_hub_scene_draw(const World *w, nt_buffer_t frame_ubo) {
     }
     if (has_background) {
         draw_background_image(background_region);
-    }
-    if (current_location_is(w, "old_mill")) {
-        draw_black_sun_mark_prop();
     }
     if (has_overlay) {
         nt_sprite_renderer_set_material(s_overlay_material);

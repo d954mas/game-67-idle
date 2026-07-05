@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw
+from PIL import Image
 
 
 GAME_DIR = Path(__file__).resolve().parents[1]
@@ -19,6 +19,7 @@ DEFAULT_OUT_DIR = GAME_DIR / "assets" / "ui" / "generated" / "equipment_icons_01
 DEFAULT_CELL_SOURCE = DEFAULT_OUT_DIR / "cell_source.png"
 DEFAULT_SLOTS_SOURCE = DEFAULT_OUT_DIR / "slots_source_sheet.png"
 DEFAULT_GEAR_SOURCE = DEFAULT_OUT_DIR / "gear_source_sheet.png"
+DEFAULT_REWARD_SOURCE = DEFAULT_OUT_DIR / "reward_source_sheet.png"
 ICON_SIZE = 64
 
 
@@ -190,92 +191,6 @@ def slice_single_art(source: Image.Image) -> Image.Image:
     return key_to_alpha(square).resize((ICON_SIZE, ICON_SIZE), Image.Resampling.LANCZOS)
 
 
-def scaled_box(values: tuple[int, int, int, int], scale: int) -> tuple[int, int, int, int]:
-    return tuple(v * scale for v in values)
-
-
-def scaled_points(values: tuple[tuple[int, int], ...], scale: int) -> list[tuple[int, int]]:
-    return [(x * scale, y * scale) for x, y in values]
-
-
-def draw_reward_item_icon(asset_id: str) -> Image.Image:
-    scale = 4
-    image = Image.new("RGBA", (ICON_SIZE * scale, ICON_SIZE * scale), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image, "RGBA")
-
-    def box(values: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
-        return scaled_box(values, scale)
-
-    def points(values: tuple[tuple[int, int], ...]) -> list[tuple[int, int]]:
-        return scaled_points(values, scale)
-
-    def line(values: tuple[tuple[int, int], ...], fill: tuple[int, int, int, int], width: int) -> None:
-        draw.line(points(values), fill=fill, width=width * scale, joint="curve")
-
-    draw.ellipse(box((13, 48, 51, 58)), fill=(0, 0, 0, 70))
-
-    if asset_id == "asset_icon_seeker_token":
-        draw.ellipse(box((13, 8, 51, 52)), fill=(92, 56, 28, 255), outline=(226, 172, 88, 255), width=3 * scale)
-        draw.ellipse(box((19, 14, 45, 45)), fill=(158, 97, 42, 255), outline=(246, 204, 124, 255), width=2 * scale)
-        draw.polygon(points(((32, 19), (39, 31), (32, 43), (25, 31))), fill=(51, 83, 99, 255), outline=(235, 211, 152, 255))
-        draw.line(points(((32, 22), (32, 40))), fill=(247, 220, 148, 210), width=2)
-    elif asset_id == "asset_reward_xp":
-        draw.polygon(
-            points(((32, 6), (40, 22), (57, 25), (45, 37), (48, 55), (32, 46), (16, 55), (19, 37), (7, 25), (24, 22))),
-            fill=(49, 93, 122, 255),
-            outline=(211, 182, 105, 255),
-        )
-        draw.polygon(points(((32, 13), (39, 28), (32, 43), (25, 28))), fill=(99, 167, 196, 255), outline=(232, 216, 154, 235))
-        line(((18, 25), (46, 25)), (232, 216, 154, 180), 2)
-        line(((23, 38), (41, 38)), (232, 216, 154, 150), 2)
-    elif asset_id == "asset_icon_grain_sacks":
-        draw.ellipse(box((10, 47, 54, 58)), fill=(0, 0, 0, 75))
-        draw.rounded_rectangle(box((13, 20, 35, 52)), radius=7 * scale, fill=(142, 98, 54, 255), outline=(226, 177, 103, 255), width=2 * scale)
-        draw.rounded_rectangle(box((29, 17, 51, 53)), radius=7 * scale, fill=(117, 80, 49, 255), outline=(209, 158, 86, 255), width=2 * scale)
-        draw.arc(box((15, 15, 36, 30)), 180, 350, fill=(245, 204, 118, 220), width=2 * scale)
-        draw.arc(box((31, 12, 52, 28)), 180, 350, fill=(229, 185, 101, 220), width=2 * scale)
-        for x in (22, 28, 39, 45):
-            line(((x, 27), (x - 2, 45)), (80, 53, 34, 115), 1)
-    elif asset_id == "asset_icon_contract_progress":
-        draw.rounded_rectangle(box((13, 9, 50, 54)), radius=4 * scale, fill=(191, 157, 104, 255), outline=(98, 62, 37, 255), width=2 * scale)
-        draw.rectangle(box((18, 15, 45, 49)), fill=(226, 194, 135, 255))
-        for y in (22, 29, 36):
-            line(((22, y), (41, y)), (105, 72, 45, 180), 1)
-        line(((22, 43), (28, 48), (42, 34)), (58, 117, 77, 255), 3)
-    elif asset_id == "asset_icon_clue_fragment":
-        draw.polygon(
-            points(((18, 10), (47, 15), (43, 29), (50, 42), (33, 55), (14, 45), (20, 31), (12, 21))),
-            fill=(213, 184, 132, 255),
-            outline=(91, 60, 40, 255),
-        )
-        draw.polygon(points(((37, 15), (47, 15), (43, 27))), fill=(158, 118, 78, 255))
-        line(((22, 24), (38, 27)), (85, 58, 43, 170), 1)
-        line(((20, 34), (42, 38)), (85, 58, 43, 160), 1)
-        draw.ellipse(box((29, 28, 37, 36)), outline=(43, 81, 91, 220), width=2 * scale)
-    elif asset_id == "asset_icon_burned_chain_bracket":
-        for bounds in ((13, 18, 35, 39), (29, 25, 51, 46)):
-            draw.ellipse(box(bounds), outline=(48, 45, 43, 255), width=7 * scale)
-            draw.ellipse(box((bounds[0] + 4, bounds[1] + 4, bounds[2] - 4, bounds[3] - 4)), outline=(137, 90, 53, 255), width=2 * scale)
-        line(((16, 47), (48, 13)), (214, 88, 45, 210), 3)
-        draw.polygon(points(((12, 48), (18, 43), (16, 54))), fill=(239, 133, 57, 210))
-    elif asset_id == "asset_icon_order_scrap":
-        draw.polygon(
-            points(((16, 8), (47, 10), (51, 48), (38, 55), (30, 50), (16, 54), (11, 23))),
-            fill=(219, 188, 130, 255),
-            outline=(99, 63, 39, 255),
-        )
-        draw.rectangle(box((20, 16, 43, 20)), fill=(108, 70, 43, 170))
-        for y in (27, 34):
-            line(((20, y), (42, y)), (108, 70, 43, 150), 1)
-        draw.ellipse(box((33, 39, 48, 53)), fill=(127, 31, 29, 235), outline=(237, 155, 90, 210), width=1 * scale)
-        line(((37, 45), (44, 47)), (239, 183, 107, 180), 1)
-    else:
-        draw.rounded_rectangle(box((12, 12, 52, 52)), radius=6 * scale, fill=(84, 68, 52, 255), outline=(218, 170, 92, 255), width=2 * scale)
-        draw.polygon(points(((32, 18), (44, 32), (32, 46), (20, 32))), fill=(44, 73, 86, 255), outline=(239, 206, 130, 255))
-
-    return image.resize((ICON_SIZE, ICON_SIZE), Image.Resampling.LANCZOS)
-
-
 def entry_for_spec(spec: IconSpec, out_dir: Path) -> dict:
     path = out_dir / spec.file
     entry = {
@@ -284,7 +199,7 @@ def entry_for_spec(spec: IconSpec, out_dir: Path) -> dict:
         "role": spec.role,
         "sheet_index": spec.sheet_index,
         "size": {"w": ICON_SIZE, "h": ICON_SIZE},
-        "origin": "procedural" if spec.role in ("reward_item", "reward_token") else "ai",
+        "origin": "ai" if spec.role in ("gear_item", "reward_item", "reward_token") else "ai",
         "license": "project-internal generated asset",
         "sha256": sha256_file(path),
     }
@@ -319,7 +234,14 @@ def write_contact_sheet(entries: list[dict], out_dir: Path, cell_file: str) -> d
     }
 
 
-def write_icon_pack(specs: IconSpecs, out_dir: Path, cell_source_path: Path, slots_source_path: Path, gear_source_path: Path) -> dict:
+def write_icon_pack(
+    specs: IconSpecs,
+    out_dir: Path,
+    cell_source_path: Path,
+    slots_source_path: Path,
+    gear_source_path: Path,
+    reward_source_path: Path,
+) -> dict:
     out_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "cell").mkdir(exist_ok=True)
     (out_dir / "slots").mkdir(exist_ok=True)
@@ -330,15 +252,16 @@ def write_icon_pack(specs: IconSpecs, out_dir: Path, cell_source_path: Path, slo
     cell_source = Image.open(cell_source_path).convert("RGB")
     slots_source = Image.open(slots_source_path).convert("RGB")
     gear_source = Image.open(gear_source_path).convert("RGB")
+    reward_source = Image.open(reward_source_path).convert("RGB")
     slice_single_art(cell_source).save(out_dir / specs.cell.file)
     for spec in specs.slots:
         slice_icon(slots_source, 4, 3, spec.sheet_index).save(out_dir / spec.file)
     for spec in specs.gear:
         slice_icon(gear_source, 5, 3, spec.sheet_index).save(out_dir / spec.file)
     for spec in specs.reward_tokens:
-        draw_reward_item_icon(spec.asset_id).save(out_dir / spec.file)
+        slice_icon(reward_source, 7, 1, spec.sheet_index).save(out_dir / spec.file)
     for spec in specs.reward_items:
-        draw_reward_item_icon(spec.asset_id).save(out_dir / spec.file)
+        slice_icon(reward_source, 7, 1, spec.sheet_index + len(specs.reward_tokens)).save(out_dir / spec.file)
 
     cell_entry = entry_for_spec(specs.cell, out_dir)
     slot_entries = [entry_for_spec(spec, out_dir) for spec in specs.slots]
@@ -382,12 +305,25 @@ def write_icon_pack(specs: IconSpecs, out_dir: Path, cell_source_path: Path, slo
                 "license": "project-internal generated asset",
                 "prompt": "prompt_gear.txt",
             },
+            {
+                "role": "reward",
+                "file": reward_source_path.name,
+                "layout": {"columns": 7, "rows": 1},
+                "sha256": sha256_file(reward_source_path),
+                "origin": "ai",
+                "license": "project-internal generated asset",
+                "prompt": "prompt_reward_source_sheet.txt",
+                "canvas_project_id": "rb-dark-rpg-reward-icon-source-sheet-6d8622",
+                "canvas_element_id": "el_7a738c3b",
+            },
         ],
         "source_first": {
             "local_library": [
                 'node ai_studio/assets/backlog/storage/search.mjs --query "dark rpg equipment icons weapon armor boots ring relic" --kind item_icon,ui_icon --limit 12 --json',
                 'node ai_studio/assets/backlog/storage/search.mjs --query "inventory slot icons rpg gear" --kind ui,item_icon,ui_icon --limit 12 --json',
                 'node ai_studio/assets/backlog/storage/search.mjs --query "Kenney UI icons RPG equipment" --limit 12 --json',
+                'node ai_studio/assets/backlog/storage/search.mjs --query "dark rpg reward icons xp gold quest clue item tokens" --kind item_icon,ui_icon --limit 12 --json',
+                'node ai_studio/assets/backlog/storage/search.mjs --query "xp reward token parchment clue sacks dark fantasy inventory icon" --kind item_icon,ui_icon --limit 12 --json',
             ],
             "local_library_result": "0 matches for each query",
             "free_source_result": "No exact CC0/OFL set imported; external candidates were mixed-license or did not cover the required slot/item set.",
@@ -414,7 +350,7 @@ def write_provenance(out_dir: Path, manifest: dict) -> None:
         "- Game: `rb-dark-rpg`",
         "- Role: AI-generated source sheets sliced into one reusable cell plus transparent slot, gear, and reward item overlay icons.",
         "- Status: placeholder-ready for runtime atlas packing.",
-        "- Origin: AI-generated raster source sheets with deterministic crop/key cleanup; XP and quest/clue reward icons are deterministic procedural overlays from reward/item semantics.",
+        "- Origin: AI-generated raster source sheets with deterministic crop/key cleanup.",
         "- Generator: `games/rb-dark-rpg/tools/generate_equipment_icons.py`.",
         "- Source data: `games/rb-dark-rpg/design/data/items.json`.",
         "- Date: 2026-07-05.",
@@ -428,6 +364,8 @@ def write_provenance(out_dir: Path, manifest: dict) -> None:
         "- `node ai_studio/assets/backlog/storage/search.mjs --query \"dark rpg equipment icons weapon armor boots ring relic\" --kind item_icon,ui_icon --limit 12 --json` -> 0 matches.",
         "- `node ai_studio/assets/backlog/storage/search.mjs --query \"inventory slot icons rpg gear\" --kind ui,item_icon,ui_icon --limit 12 --json` -> 0 matches.",
         "- `node ai_studio/assets/backlog/storage/search.mjs --query \"Kenney UI icons RPG equipment\" --limit 12 --json` -> 0 matches.",
+        "- `node ai_studio/assets/backlog/storage/search.mjs --query \"dark rpg reward icons xp gold quest clue item tokens\" --kind item_icon,ui_icon --limit 12 --json` -> 0 matches.",
+        "- `node ai_studio/assets/backlog/storage/search.mjs --query \"xp reward token parchment clue sacks dark fantasy inventory icon\" --kind item_icon,ui_icon --limit 12 --json` -> 0 matches.",
         "",
         "A quick free-source check did not find one reliable CC0/OFL source set that covers all current slots and gear items without mixed-license or visual-style mismatch. The accepted output is therefore generated project art, not sourced third-party art.",
         "",
@@ -443,7 +381,9 @@ def write_provenance(out_dir: Path, manifest: dict) -> None:
     lines.extend(
         [
             "",
-            "Generation path: `.codex/skills/nt-asset-image-generation/scripts/generate_image.py` via Codex OAuth image generation. Path A wrapper was unavailable on this Windows host because WSL bash was missing and Git Bash could not execute the WindowsApps `codex.exe`; Path C was used after that failure.",
+            "Generation path for `reward_source_sheet.png`: built-in `image_gen` tool after Path A was unavailable on this Windows host (`bash`/WSL missing; `codex.exe` access denied from PowerShell).",
+            "",
+            "Canvas handoff for `reward_source_sheet.png`: project `rb-dark-rpg-reward-icon-source-sheet-6d8622`, image element `el_7a738c3b`; prompt/provenance note `el_957e3538`.",
             "",
         "Layering contract: `asset_equipment_slot_cell` is the reusable cell/socket. Slot placeholder, gear item, XP token, and reward item icons are transparent overlays rendered above that cell; they are not baked into a rectangle.",
         "",
@@ -473,6 +413,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--cell-source", type=Path, default=DEFAULT_CELL_SOURCE)
     parser.add_argument("--slots-source", type=Path, default=DEFAULT_SLOTS_SOURCE)
     parser.add_argument("--gear-source", type=Path, default=DEFAULT_GEAR_SOURCE)
+    parser.add_argument("--reward-source", type=Path, default=DEFAULT_REWARD_SOURCE)
     return parser.parse_args()
 
 
@@ -480,7 +421,7 @@ def main() -> None:
     args = parse_args()
     items_doc = load_items_doc(args.items)
     specs = collect_icon_specs(items_doc)
-    manifest = write_icon_pack(specs, args.out, args.cell_source, args.slots_source, args.gear_source)
+    manifest = write_icon_pack(specs, args.out, args.cell_source, args.slots_source, args.gear_source, args.reward_source)
     write_provenance(args.out, manifest)
     print(
         f"wrote {len(manifest['slots'])} slot icons, {len(manifest['gear_items'])} gear icons, "

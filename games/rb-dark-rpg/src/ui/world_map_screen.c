@@ -16,9 +16,11 @@
 #include "ui/nt_ui_label.h"
 #include "ui/nt_ui_panel.h"
 #include "ui/nt_ui_scroll.h"
+#include "ui/nt_ui_state.h"
 #include "ui/shop_screen.h"
 #include "ui/world_map_viewport.h"
 
+#include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -35,6 +37,7 @@
 #define WORLD_MAP_Z_MARKER 1014
 #define WORLD_MAP_Z_TEXT 1016
 #define WORLD_MAP_TRAVEL_MAX_STEPS 4
+#define WORLD_MAP_TRAVEL_MAX_PATH_POINTS 8
 #define WORLD_MAP_TRAVEL_SEGMENT_SECONDS 5.0F
 typedef enum world_map_mode_t {
   WORLD_MAP_MODE_CLOSED = 0,
@@ -43,6 +46,7 @@ typedef enum world_map_mode_t {
 
 static world_map_mode_t s_mode = WORLD_MAP_MODE_CLOSED;
 static int s_dismiss_guard_frames;
+static bool s_cleanup_pending;
 static char s_semantic_id_storage[WORLD_SEMANTIC_ID_SLOTS]
                                  [WORLD_SEMANTIC_ID_LEN];
 static int s_semantic_id_cursor;
@@ -57,6 +61,9 @@ static float s_map_travel_segment_started_at;
 static char s_map_travel_from_id[GAME_STATE_STRING_MAX];
 static char s_map_travel_steps[WORLD_MAP_TRAVEL_MAX_STEPS]
                               [GAME_STATE_STRING_MAX];
+static int s_map_travel_path_count;
+static float s_map_travel_path_x[WORLD_MAP_TRAVEL_MAX_PATH_POINTS];
+static float s_map_travel_path_y[WORLD_MAP_TRAVEL_MAX_PATH_POINTS];
 
 static const nt_ui_widget_def_t WORLD_ROW_DEF = {
     .name = "world_map_row",
@@ -77,6 +84,17 @@ static float clamp_f(float value, float lo, float hi) {
     return hi;
   }
   return value;
+}
+
+static void world_map_request_state_cleanup(void) { s_cleanup_pending = true; }
+
+static void world_map_clear_transient_ui_state(nt_ui_context_t *ctx) {
+  if (!ctx || !s_cleanup_pending) {
+    return;
+  }
+  game_modal_clear_state(ctx, WORLD_MAP_MODAL_ID);
+  nt_ui_state_clear(ctx, nt_ui_id("world_map/viewport_scroll"));
+  s_cleanup_pending = false;
 }
 
 static bool str_eq(const char *a, const char *b) {
@@ -365,6 +383,120 @@ static float map_travel_segment_progress(const World *w) {
                  0.0F, 1.0F);
 }
 
+static void map_travel_path_clear(void) {
+  s_map_travel_path_count = 0;
+  for (int i = 0; i < WORLD_MAP_TRAVEL_MAX_PATH_POINTS; ++i) {
+    s_map_travel_path_x[i] = 0.0F;
+    s_map_travel_path_y[i] = 0.0F;
+  }
+}
+
+static bool map_travel_path_add(float design_x, float design_y) {
+  if (s_map_travel_path_count >= WORLD_MAP_TRAVEL_MAX_PATH_POINTS) {
+    return false;
+  }
+  s_map_travel_path_x[s_map_travel_path_count] = design_x;
+  s_map_travel_path_y[s_map_travel_path_count] = design_y;
+  s_map_travel_path_count += 1;
+  return true;
+}
+
+static bool map_travel_path_add_location(const char *location_id) {
+  const game_location_definition_t *location =
+      game_content_find_location(location_id);
+  if (!location_has_map_node(location)) {
+    return false;
+  }
+  return map_travel_path_add(location->map_x * 1280.0F,
+                             location->map_y * 720.0F);
+}
+
+static bool map_prepare_travel_leg_path(const char *from_id,
+                                        const char *to_id) {
+  map_travel_path_clear();
+  if (!from_id || !to_id || !map_travel_path_add_location(from_id)) {
+    return false;
+  }
+
+  if (str_eq(from_id, "hub_last_post") &&
+      str_eq(to_id, "hub_gate_outskirts")) {
+    return map_travel_path_add(410.0F, 304.0F) &&
+           map_travel_path_add(482.0F, 448.0F) &&
+           map_travel_path_add(590.0F, 382.0F) &&
+           map_travel_path_add_location(to_id);
+  }
+  if (str_eq(from_id, "hub_gate_outskirts") &&
+      str_eq(to_id, "hub_last_post")) {
+    return map_travel_path_add(590.0F, 382.0F) &&
+           map_travel_path_add(482.0F, 448.0F) &&
+           map_travel_path_add(410.0F, 304.0F) &&
+           map_travel_path_add_location(to_id);
+  }
+  if (str_eq(from_id, "hub_gate_outskirts") && str_eq(to_id, "old_mill")) {
+    return map_travel_path_add(780.0F, 315.0F) &&
+           map_travel_path_add(902.0F, 390.0F) &&
+           map_travel_path_add(995.0F, 410.0F) &&
+           map_travel_path_add_location(to_id);
+  }
+  if (str_eq(from_id, "old_mill") && str_eq(to_id, "hub_gate_outskirts")) {
+    return map_travel_path_add(995.0F, 410.0F) &&
+           map_travel_path_add(902.0F, 390.0F) &&
+           map_travel_path_add(780.0F, 315.0F) &&
+           map_travel_path_add_location(to_id);
+  }
+  return map_travel_path_add_location(to_id);
+}
+
+static bool map_travel_path_point_at(float progress, float map_w, float map_h,
+                                     float *out_x, float *out_y) {
+  if (s_map_travel_path_count <= 0) {
+    return false;
+  }
+  if (s_map_travel_path_count == 1) {
+    if (out_x) {
+      *out_x = s_map_travel_path_x[0] * map_w / 1280.0F;
+    }
+    if (out_y) {
+      *out_y = s_map_travel_path_y[0] * map_h / 720.0F;
+    }
+    return true;
+  }
+
+  float total = 0.0F;
+  for (int i = 1; i < s_map_travel_path_count; ++i) {
+    const float dx = s_map_travel_path_x[i] - s_map_travel_path_x[i - 1];
+    const float dy = s_map_travel_path_y[i] - s_map_travel_path_y[i - 1];
+    total += sqrtf(dx * dx + dy * dy);
+  }
+  if (total <= 0.01F) {
+    return false;
+  }
+
+  float remaining = clamp_f(progress, 0.0F, 1.0F) * total;
+  for (int i = 1; i < s_map_travel_path_count; ++i) {
+    const float sx = s_map_travel_path_x[i - 1];
+    const float sy = s_map_travel_path_y[i - 1];
+    const float ex = s_map_travel_path_x[i];
+    const float ey = s_map_travel_path_y[i];
+    const float dx = ex - sx;
+    const float dy = ey - sy;
+    const float len = sqrtf(dx * dx + dy * dy);
+    if (remaining > len && i < s_map_travel_path_count - 1) {
+      remaining -= len;
+      continue;
+    }
+    const float t = len > 0.01F ? clamp_f(remaining / len, 0.0F, 1.0F) : 1.0F;
+    if (out_x) {
+      *out_x = (sx + dx * t) * map_w / 1280.0F;
+    }
+    if (out_y) {
+      *out_y = (sy + dy * t) * map_h / 720.0F;
+    }
+    return true;
+  }
+  return false;
+}
+
 static bool map_begin_travel(World *w, const char *target_id) {
   if (!w || !w->player_state || !target_id) {
     return false;
@@ -376,6 +508,9 @@ static bool map_begin_travel(World *w, const char *target_id) {
                           route_steps, WORLD_MAP_TRAVEL_MAX_STEPS);
   if (route_count <= 0 ||
       !map_copy_id(s_map_travel_from_id, current_location_id(state))) {
+    return false;
+  }
+  if (!map_prepare_travel_leg_path(current_location_id(state), route_steps[0])) {
     return false;
   }
   for (int i = 0; i < route_count; ++i) {
@@ -398,6 +533,7 @@ static void map_cancel_travel(void) {
   s_map_travel_step_index = 0;
   s_map_travel_frame_count = 0;
   s_map_travel_from_id[0] = '\0';
+  map_travel_path_clear();
   for (int i = 0; i < WORLD_MAP_TRAVEL_MAX_STEPS; ++i) {
     s_map_travel_steps[i][0] = '\0';
   }
@@ -433,6 +569,9 @@ static void map_update_travel(World *w) {
     map_cancel_travel();
     s_mode = WORLD_MAP_MODE_CLOSED;
     location_screen_open_screen();
+  } else if (!map_prepare_travel_leg_path(
+                 next_id, s_map_travel_steps[s_map_travel_step_index])) {
+    map_cancel_travel();
   }
 }
 
@@ -784,6 +923,88 @@ map_object_marker_ui(nt_ui_context_t *ctx, World *w,
   }
 }
 
+static void map_region_hit_size(const game_location_definition_t *location,
+                                bool portrait, float *out_w, float *out_h) {
+  float w = portrait ? 152.0F : 184.0F;
+  float h = portrait ? 118.0F : 136.0F;
+  if (location && str_eq(location->id, "hub_last_post")) {
+    w = portrait ? 218.0F : 260.0F;
+    h = portrait ? 172.0F : 206.0F;
+  } else if (location && str_eq(location->id, "hub_gate_outskirts")) {
+    w = portrait ? 190.0F : 232.0F;
+    h = portrait ? 126.0F : 156.0F;
+  } else if (location && str_eq(location->id, "old_mill")) {
+    w = portrait ? 206.0F : 252.0F;
+    h = portrait ? 140.0F : 174.0F;
+  }
+  if (out_w) {
+    *out_w = w;
+  }
+  if (out_h) {
+    *out_h = h;
+  }
+}
+
+static void map_region_hit_area_ui(nt_ui_context_t *ctx, World *w,
+                                   const game_location_definition_t *location,
+                                   bool portrait, int index, float map_w,
+                                   float map_h) {
+  if (!ctx || !w || !w->player_state || !location_has_map_node(location)) {
+    return;
+  }
+  GameState *state = w->player_state;
+  const bool current = str_eq(current_location_id(state), location->id);
+  const bool can_route =
+      !current && map_location_route_available(state, location->id);
+  const bool can_move =
+      !current && game_actions_can_move_location(state, location->id);
+  const bool enabled =
+      !s_map_travel_active && (current || can_route || can_move);
+  if (!enabled) {
+    return;
+  }
+
+  float hit_w = 0.0F;
+  float hit_h = 0.0F;
+  map_region_hit_size(location, portrait, &hit_w, &hit_h);
+  const float x = map_node_center_x(location, map_w) - hit_w * 0.5F;
+  const float y = map_node_center_y(location, map_h) - hit_h * 0.5F;
+  const Clay_ElementId hit_id =
+      semantic_clay_id("world_map/region/", location->id);
+  const int16_t hit_pad[4] = {0, 0, 0, 0};
+  nt_ui_events_t events = {0};
+
+  CLAY({.id = CLAY_IDI("world_map/region_hit_shell", index),
+        .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
+                     .clipTo = CLAY_CLIP_TO_ATTACHED_PARENT,
+                     .attachPoints = {.element = CLAY_ATTACH_POINT_LEFT_TOP,
+                                      .parent = CLAY_ATTACH_POINT_LEFT_TOP},
+                     .offset = {x, y},
+                     .zIndex = WORLD_MAP_Z_TERRAIN + 1},
+        .layout = {.sizing = {CLAY_SIZING_FIXED(hit_w),
+                              CLAY_SIZING_FIXED(hit_h)}}}) {
+    CLAY({.id = hit_id,
+          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}},
+          .backgroundColor = {255.0F, 216.0F, 72.0F,
+                              current ? 8.0F : 3.0F},
+          .cornerRadius = CLAY_CORNER_RADIUS(18),
+          .userData = NT_UI_CLAY_DATA(LAYER_WORLD_MAP_TERRAIN)}) {
+      nt_ui_widget_register(ctx, hit_id.id, &WORLD_ROW_DEF, hit_pad, true);
+      events = nt_ui_events_padded(ctx, hit_id.id, NULL, hit_pad);
+    }
+  }
+
+  if (events.clicked) {
+    if (current) {
+      game_audio_play(GAME_AUDIO_CUE_UI_CLICK);
+      s_mode = WORLD_MAP_MODE_CLOSED;
+      location_screen_open_screen();
+    } else if (map_begin_travel(w, location->id)) {
+      game_audio_play(GAME_AUDIO_CUE_LOCATION_MOVE);
+    }
+  }
+}
+
 static void map_location_marker_ui(nt_ui_context_t *ctx, World *w,
                                    const game_location_definition_t *location,
                                    bool portrait, float map_w, float map_h,
@@ -898,57 +1119,26 @@ static bool map_travel_point(const World *w, float map_w, float map_h,
       s_map_travel_step_index >= s_map_travel_step_count) {
     return false;
   }
-  const game_location_definition_t *from =
-      game_content_find_location(s_map_travel_from_id);
-  const game_location_definition_t *to =
-      game_content_find_location(s_map_travel_steps[s_map_travel_step_index]);
-  if (!location_has_map_node(from) || !location_has_map_node(to)) {
-    return false;
-  }
-  const float t = map_travel_segment_progress(w);
-  const float from_x = map_node_center_x(from, map_w);
-  const float from_y = map_node_center_y(from, map_h);
-  const float to_x = map_node_center_x(to, map_w);
-  const float to_y = map_node_center_y(to, map_h);
-  if (out_x) {
-    *out_x = from_x + (to_x - from_x) * t;
-  }
-  if (out_y) {
-    *out_y = from_y + (to_y - from_y) * t;
-  }
-  return true;
+  return map_travel_path_point_at(map_travel_segment_progress(w), map_w, map_h,
+                                  out_x, out_y);
 }
 
 static void map_travel_route_ui(GameState *state, float map_w, float map_h) {
   (void)state;
-  if (!s_map_travel_active || s_map_travel_step_index >= s_map_travel_step_count) {
+  if (!s_map_travel_active || s_map_travel_path_count < 2) {
     return;
   }
-  const game_location_definition_t *from =
-      game_content_find_location(s_map_travel_from_id);
   int dot_index = 0;
-  for (int step = s_map_travel_step_index;
-       step < s_map_travel_step_count && location_has_map_node(from); ++step) {
-    const game_location_definition_t *to =
-        game_content_find_location(s_map_travel_steps[step]);
-    if (!location_has_map_node(to)) {
-      break;
+  for (int dot = 1; dot <= 18; ++dot) {
+    float x = 0.0F;
+    float y = 0.0F;
+    if (map_travel_path_point_at((float)dot / 19.0F, map_w, map_h, &x, &y)) {
+      map_box_on_layer(
+          CLAY_IDI("world_map/travel_dot", dot_index++),
+          (nt_ui_layer_t)LAYER_WORLD_MAP_MARKER, x - 3.0F, y - 3.0F, 6.0F,
+          6.0F, (Clay_Color){255.0F, 218.0F, 74.0F, 205.0F}, 3.0F,
+          (Clay_Color){94.0F, 48.0F, 14.0F, 150.0F}, 1);
     }
-    const float from_x = map_node_center_x(from, map_w);
-    const float from_y = map_node_center_y(from, map_h);
-    const float to_x = map_node_center_x(to, map_w);
-    const float to_y = map_node_center_y(to, map_h);
-    for (int dot = 1; dot <= 7; ++dot) {
-      const float t = (float)dot / 8.0F;
-      const float x = from_x + (to_x - from_x) * t;
-      const float y = from_y + (to_y - from_y) * t;
-      map_box_on_layer(CLAY_IDI("world_map/travel_dot", dot_index++),
-                       (nt_ui_layer_t)LAYER_WORLD_MAP_MARKER, x - 3.0F,
-                       y - 3.0F, 6.0F, 6.0F,
-                       (Clay_Color){255.0F, 218.0F, 74.0F, 205.0F}, 3.0F,
-                       (Clay_Color){94.0F, 48.0F, 14.0F, 150.0F}, 1);
-    }
-    from = to;
   }
 }
 
@@ -995,6 +1185,31 @@ static void map_travel_status_ui(nt_ui_context_t *ctx, const World *w,
         label_style(portrait ? 10.0F : 11.0F, 255.0F, 232.0F, 175.0F, 255.0F);
     text_label(ctx, text, &timer);
   }
+}
+
+static void map_travel_curtain_ui(float viewport_w, float viewport_h) {
+  if (!s_map_travel_active || viewport_w <= 0.0F || viewport_h <= 0.0F) {
+    return;
+  }
+  const float side_w = clamp_f(viewport_w * 0.16F, 34.0F, 96.0F);
+  const float top_h = clamp_f(viewport_h * 0.12F, 28.0F, 56.0F);
+  const float bottom_h = clamp_f(viewport_h * 0.18F, 42.0F, 92.0F);
+  const Clay_Color shade = {11.0F, 7.0F, 4.0F, 116.0F};
+  const Clay_Color edge = {246.0F, 182.0F, 64.0F, 42.0F};
+  map_box_on_layer(CLAY_ID("world_map/travel_curtain_left"),
+                   (nt_ui_layer_t)LAYER_WORLD_MAP_MARKER, 0.0F, 0.0F,
+                   side_w, viewport_h, shade, 0.0F, edge, 0);
+  map_box_on_layer(CLAY_ID("world_map/travel_curtain_right"),
+                   (nt_ui_layer_t)LAYER_WORLD_MAP_MARKER,
+                   viewport_w - side_w, 0.0F, side_w, viewport_h, shade,
+                   0.0F, edge, 0);
+  map_box_on_layer(CLAY_ID("world_map/travel_curtain_top"),
+                   (nt_ui_layer_t)LAYER_WORLD_MAP_MARKER, 0.0F, 0.0F,
+                   viewport_w, top_h, shade, 0.0F, edge, 0);
+  map_box_on_layer(CLAY_ID("world_map/travel_curtain_bottom"),
+                   (nt_ui_layer_t)LAYER_WORLD_MAP_MARKER, 0.0F,
+                   viewport_h - bottom_h, viewport_w, bottom_h, shade, 0.0F,
+                   edge, 0);
 }
 
 static void map_hero_marker(nt_ui_context_t *ctx, const World *w,
@@ -1058,6 +1273,7 @@ static void map_body(nt_ui_context_t *ctx, World *w, bool portrait,
   const float map_h = viewport.content_h;
   const uint32_t scroll_id = nt_ui_id("world_map/viewport_scroll");
   int rendered = 0;
+  int region_slot = 0;
   int object_slot = 0;
   GameState *state = w->player_state;
 
@@ -1094,6 +1310,16 @@ static void map_body(nt_ui_context_t *ctx, World *w, bool portrait,
       draw_ash_border_map_art(ctx, map_w, map_h);
       map_routes_ui(state, map_w, map_h);
       map_travel_route_ui(state, map_w, map_h);
+
+      for (int i = 0; i < game_content_location_count(); ++i) {
+        const game_location_definition_t *location =
+            game_content_location_at(i);
+        if (!map_location_visible(state, location)) {
+          continue;
+        }
+        map_region_hit_area_ui(ctx, w, location, portrait, region_slot++,
+                               map_w, map_h);
+      }
 
       for (int i = 0; i < game_content_location_count(); ++i) {
         const game_location_definition_t *location =
@@ -1154,6 +1380,7 @@ static void map_body(nt_ui_context_t *ctx, World *w, bool portrait,
 #endif
       }
       nt_ui_scroll_end(ctx);
+      map_travel_curtain_ui(viewport.viewport_w, viewport.viewport_h);
       map_travel_status_ui(ctx, w, portrait, viewport.viewport_w);
       if (map_floating_tool_button(ctx, "world_map/center_current", "C",
                                    viewport.viewport_w - 42.0F, 10.0F,
@@ -1201,6 +1428,9 @@ static void set_world_map_mode(world_map_mode_t mode) {
     s_dismiss_guard_frames = 2;
   }
   if (mode == WORLD_MAP_MODE_CLOSED) {
+    if (s_mode != WORLD_MAP_MODE_CLOSED) {
+      world_map_request_state_cleanup();
+    }
     s_dismiss_guard_frames = 0;
   }
   s_mode = mode;
@@ -1227,6 +1457,7 @@ void world_map_screen_toggle_map(void) {
 }
 
 void world_map_screen_ui(nt_ui_context_t *ctx, World *w) {
+  world_map_clear_transient_ui_state(ctx);
 #if defined(NT_DEVAPI_ENABLED) && NT_DEVAPI_ENABLED
   if (s_mode == WORLD_MAP_MODE_CLOSED && w && w->player_state) {
     const world_map_mode_t dev_mode =
@@ -1277,6 +1508,7 @@ void world_map_screen_ui(nt_ui_context_t *ctx, World *w) {
                           ignore_close_request)) {
     if (!modal_open) {
       set_world_map_mode(WORLD_MAP_MODE_CLOSED);
+      world_map_clear_transient_ui_state(ctx);
     }
     return;
   }
@@ -1340,4 +1572,5 @@ void world_map_screen_ui(nt_ui_context_t *ctx, World *w) {
   if (!modal_open) {
     set_world_map_mode(WORLD_MAP_MODE_CLOSED);
   }
+  world_map_clear_transient_ui_state(ctx);
 }

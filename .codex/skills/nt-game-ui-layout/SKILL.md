@@ -71,6 +71,10 @@ Search for the requested capability before coding:
   menu, and game-local wrappers such as `game_modal`;
 - lists and overflow: `nt_ui_scroll_begin/end`, `nt_ui_vlist_begin/end`,
   scrollbar visibility, scenario-specific scroll state;
+- retained UI state: `nt_ui_state`, `nt_ui_state_clear`,
+  `nt_ui_state_clear_all`, `nt_ui_state_used_slots`, screen/overlay close
+  ownership, and whether `state_slots` / `state_probe_max` are capacity or
+  lifetime problems;
 - widgets: `nt_ui_button`, `nt_ui_panel`, `nt_ui_image`, `nt_ui_label`,
   checkbox/radio/toggle, slider/progress, input text, tabbar, rich text;
 - text: real engine font/text renderer only; rich text/markup when emphasis or
@@ -94,6 +98,13 @@ content child, then floating text/caret/selection with
 - Keep internal game/world/UI layout logic Y-up. Convert Y-down platform or
   capture data only at documented boundaries.
 - Keep user-visible text on the engine text stack with packed real fonts.
+- Treat `nt_ui_state` cells as owned retained view/interaction state, not game
+  state. For screens, sheets, modals, popups, lists, or overlays whose
+  scroll/focus/hover/open/caret state does not intentionally survive close and
+  reopen, clear the owned ids with `nt_ui_state_clear` on close, or use
+  `nt_ui_state_clear_all` for a full screen transition. Raise `state_slots` or
+  `state_probe_max` only after an id/lifetime audit proves the state is
+  intentionally retained.
 - Prefer semantic UI ids and game-state assertions over coordinate-only bots.
 - For PC and phone, use one adaptive component contract unless the design
   explicitly requires separate systems.
@@ -106,6 +117,9 @@ Pick the smallest proof that covers the changed surface:
 
 - Native/unit tests for layout math, UI state, dialogue/equipment/combat logic,
   or game-local viewport helpers.
+- For surfaces that create retained engine UI state, loop open/close/reopen and
+  verify `nt_ui_state_used_slots` returns to the baseline, or to a documented
+  intentionally retained baseline, before treating overflow as a capacity issue.
 - `quality_responsive` or `games/<game-id>/devapi/responsive_viewports.py` for
   desktop and phone evidence. Use scenario hooks to open the exact screen.
 - `ui.tree` bounds and stable ids for hit targets; do not rely only on labels or

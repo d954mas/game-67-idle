@@ -43,11 +43,15 @@ typedef struct game_combat_stats_t {
 typedef struct game_item_definition_t {
   const char *id;
   const char *display_name;
+  const char *category_label;
+  const char *description;
   const char *icon_asset_id;
   game_item_kind_t kind;
   game_item_slot_t slot;
   bool stackable;
   int max_stack;
+  int price_gold;
+  bool sellable;
   game_combat_stats_t stats;
 } game_item_definition_t;
 

@@ -16,7 +16,6 @@
   "author_vendor": "OpenAI Codex for rb-dark-rpg",
   "tags": ["rb-dark-rpg", "location", "background", "prop", "generated"],
   "genre": ["dark fantasy", "rpg"],
-  "style": ["blocky browser rpg", "dark fantasy"],
-  "description": "Generated runtime location backgrounds and Black Sun prop for the first road-to-mill slice."
+  "style": ["city-style-v2", "stylized 3d painted", "dark fantasy"],
+  "description": "Generated runtime location backgrounds matched to the accepted Last Post city style, plus Black Sun prop for the first road-to-mill slice."
 }
-

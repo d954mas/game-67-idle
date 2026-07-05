@@ -164,7 +164,11 @@
       "bonus_attack_power": 0,
       "attack_interval": 2.1
     },
-    "starter_loadout": ["old_sword", "padded_jacket", "leather_greaves"],
+    "starter_loadout": [
+      "old_sword",
+      "padded_jacket",
+      "leather_greaves"
+    ],
     "starter_total": {
       "id": "seeker_start",
       "vitality": 33,
@@ -181,8 +185,18 @@
   },
   "item_refs": {
     "item_source": "data/items.json",
-    "starter_loadout": ["old_sword", "padded_jacket", "leather_greaves"],
-    "upgrade_examples": ["iron_sword", "militia_axe", "patched_mail", "guard_coat", "black_sun_charm"],
+    "starter_loadout": [
+      "old_sword",
+      "padded_jacket",
+      "leather_greaves"
+    ],
+    "upgrade_examples": [
+      "iron_sword",
+      "militia_axe",
+      "patched_mail",
+      "guard_coat",
+      "black_sun_charm"
+    ],
     "rule": "Item stats live in items.json. Combat owns formulas, encounters, and balance expectations."
   },
   "leveling": {
@@ -192,22 +206,111 @@
       {
         "level": 1,
         "total_xp_required": 0,
-        "stat_changes_from_previous": {}
+        "stat_changes_from_previous": {},
+        "base_stats_at_level": {
+          "vitality": 24,
+          "strength": 20,
+          "protection": 0,
+          "intuition": 3
+        }
       },
       {
         "level": 2,
         "total_xp_required": 20,
-        "stat_changes_from_previous": {
-          "vitality": 5,
-          "strength": 10
+        "stat_changes_from_previous": {},
+        "base_stats_at_level": {
+          "vitality": 29,
+          "strength": 30,
+          "protection": 0,
+          "intuition": 3
         }
       },
       {
         "level": 3,
-        "total_xp_required": 45,
-        "stat_changes_from_previous": {
-          "vitality": 5,
-          "protection": 5
+        "total_xp_required": 50,
+        "stat_changes_from_previous": {},
+        "base_stats_at_level": {
+          "vitality": 34,
+          "strength": 30,
+          "protection": 5,
+          "intuition": 3
+        }
+      },
+      {
+        "level": 4,
+        "total_xp_required": 90,
+        "stat_changes_from_previous": {},
+        "base_stats_at_level": {
+          "vitality": 39,
+          "strength": 40,
+          "protection": 5,
+          "intuition": 4
+        }
+      },
+      {
+        "level": 5,
+        "total_xp_required": 140,
+        "stat_changes_from_previous": {},
+        "base_stats_at_level": {
+          "vitality": 45,
+          "strength": 45,
+          "protection": 8,
+          "intuition": 5
+        }
+      },
+      {
+        "level": 6,
+        "total_xp_required": 200,
+        "stat_changes_from_previous": {},
+        "base_stats_at_level": {
+          "vitality": 51,
+          "strength": 55,
+          "protection": 10,
+          "intuition": 6
+        }
+      },
+      {
+        "level": 7,
+        "total_xp_required": 270,
+        "stat_changes_from_previous": {},
+        "base_stats_at_level": {
+          "vitality": 58,
+          "strength": 60,
+          "protection": 13,
+          "intuition": 8
+        }
+      },
+      {
+        "level": 8,
+        "total_xp_required": 350,
+        "stat_changes_from_previous": {},
+        "base_stats_at_level": {
+          "vitality": 65,
+          "strength": 70,
+          "protection": 15,
+          "intuition": 10
+        }
+      },
+      {
+        "level": 9,
+        "total_xp_required": 440,
+        "stat_changes_from_previous": {},
+        "base_stats_at_level": {
+          "vitality": 72,
+          "strength": 75,
+          "protection": 18,
+          "intuition": 12
+        }
+      },
+      {
+        "level": 10,
+        "total_xp_required": 540,
+        "stat_changes_from_previous": {},
+        "base_stats_at_level": {
+          "vitality": 80,
+          "strength": 85,
+          "protection": 20,
+          "intuition": 14
         }
       }
     ]
@@ -238,8 +341,8 @@
     {
       "id": "gate_scavenger",
       "display_name": "Падальщик в клетке",
-      "archetype": "scavenger",
-      "role": "first_check",
+      "archetype": "tutorial_check",
+      "role": "tutorial_check",
       "quest": "Допуск за ворота",
       "vitality": 20,
       "strength": 0,
@@ -249,16 +352,27 @@
       "bonus_attack_power": 0,
       "attack_power": 4,
       "attack_interval": 2.2,
-      "target_duration_seconds": [4, 10],
+      "target_duration_seconds": [
+        6,
+        18
+      ],
       "expected_threat_with_starter_loadout": "easy",
       "reward_xp": 8,
       "reward_gold": 5,
-      "reward_items": ["seeker_token_unlock"]
+      "reward_items": [
+        "seeker_token_unlock"
+      ],
+      "level_band": [
+        1,
+        1
+      ],
+      "visual_asset_id": "asset_enemy_gate_scavenger",
+      "expected_threat_with_intended_loadout": "easy"
     },
     {
       "id": "mill_scavenger",
       "display_name": "Мельничный падальщик",
-      "archetype": "scavenger",
+      "archetype": "first_contract_enemy",
       "role": "first_contract_enemy",
       "quest": "Хлеб для Поста",
       "vitality": 26,
@@ -269,17 +383,29 @@
       "bonus_attack_power": 0,
       "attack_power": 5,
       "attack_interval": 2.1,
-      "target_duration_seconds": [6, 16],
+      "target_duration_seconds": [
+        6,
+        18
+      ],
       "expected_threat_with_starter_loadout": "fair",
       "reward_xp": 10,
       "reward_gold": 7,
-      "reward_items": ["contract_progress", "scavenger_knee_plates"]
+      "reward_items": [
+        "contract_progress",
+        "scavenger_knee_plates"
+      ],
+      "level_band": [
+        2,
+        2
+      ],
+      "visual_asset_id": "asset_enemy_mill_scavenger",
+      "expected_threat_with_intended_loadout": "fair"
     },
     {
       "id": "mill_brute",
       "display_name": "Мельничный громила",
-      "archetype": "guard",
-      "role": "first_protection_lesson",
+      "archetype": "protection_lesson",
+      "role": "protection_lesson",
       "quest": "Хлеб для Поста",
       "vitality": 34,
       "strength": 0,
@@ -289,53 +415,294 @@
       "bonus_attack_power": 0,
       "attack_power": 6,
       "attack_interval": 2.5,
-      "target_duration_seconds": [8, 18],
+      "target_duration_seconds": [
+        6,
+        18
+      ],
       "expected_threat_with_starter_loadout": "risky",
       "expected_threat_with_iron_sword": "fair",
       "reward_xp": 14,
       "reward_gold": 9,
-      "reward_items": ["grain_sacks", "chain_patches"]
+      "reward_items": [
+        "grain_sacks",
+        "chain_patches"
+      ],
+      "level_band": [
+        3,
+        3
+      ],
+      "visual_asset_id": "asset_enemy_mill_brute",
+      "expected_threat_with_intended_loadout": "risky"
     },
     {
       "id": "black_sun_runner",
       "display_name": "Беглец Черного Солнца",
-      "archetype": "runner",
-      "role": "first_speed_lesson",
+      "archetype": "speed_lesson",
+      "role": "speed_lesson",
       "quest": "Не показывай это никому",
-      "vitality": 25,
+      "vitality": 30,
       "strength": 0,
       "protection": 0,
-      "intuition": 5,
-      "weapon_damage": 5,
+      "intuition": 7,
+      "weapon_damage": 7,
       "bonus_attack_power": 0,
-      "attack_power": 5,
+      "attack_power": 7,
       "attack_interval": 1.6,
-      "target_duration_seconds": [5, 14],
+      "target_duration_seconds": [
+        6,
+        18
+      ],
       "expected_threat_with_starter_loadout": "fair",
-      "reward_xp": 12,
-      "reward_gold": 8,
-      "reward_items": ["clue_fragment", "dragon_ash_token"]
+      "reward_xp": 18,
+      "reward_gold": 10,
+      "reward_items": [
+        "clue_fragment",
+        "dragon_ash_token"
+      ],
+      "level_band": [
+        4,
+        4
+      ],
+      "visual_asset_id": "asset_enemy_black_sun_runner",
+      "expected_threat_with_intended_loadout": "fair"
     },
     {
       "id": "night_attacker",
       "display_name": "Ночной нападавший",
-      "archetype": "bonebreaker",
-      "role": "first_human_threat",
+      "archetype": "human_threat",
+      "role": "human_threat",
       "quest": "Те, кто пришел ночью",
-      "vitality": 35,
+      "vitality": 42,
       "strength": 0,
-      "protection": 10,
+      "protection": 12,
       "intuition": 8,
-      "weapon_damage": 6,
+      "weapon_damage": 8,
       "bonus_attack_power": 0,
-      "attack_power": 6,
+      "attack_power": 8,
       "attack_interval": 2.0,
-      "target_duration_seconds": [8, 18],
+      "target_duration_seconds": [
+        6,
+        18
+      ],
       "expected_threat_with_starter_loadout": "risky",
       "expected_threat_with_iron_sword": "fair",
-      "reward_xp": 16,
-      "reward_gold": 10,
-      "reward_items": ["order_scrap", "miller_hook"]
+      "reward_xp": 28,
+      "reward_gold": 12,
+      "reward_items": [
+        "order_scrap",
+        "miller_hook"
+      ],
+      "level_band": [
+        5,
+        5
+      ],
+      "visual_asset_id": "asset_enemy_night_attacker",
+      "expected_threat_with_intended_loadout": "risky"
+    },
+    {
+      "id": "cellar_knifeman",
+      "display_name": "Нож Черного Солнца",
+      "archetype": "clue_defender",
+      "role": "clue_defender",
+      "level_band": [
+        4,
+        4
+      ],
+      "visual_asset_id": "asset_enemy_cellar_knifeman",
+      "vitality": 32,
+      "strength": 0,
+      "protection": 8,
+      "intuition": 8,
+      "weapon_damage": 7,
+      "bonus_attack_power": 0,
+      "attack_power": 7,
+      "attack_interval": 1.9,
+      "target_duration_seconds": [
+        6,
+        18
+      ],
+      "expected_threat_with_intended_loadout": "fair",
+      "reward_xp": 24,
+      "reward_gold": 8,
+      "reward_items": [
+        "burned_chain_bracket",
+        "cellar_knife"
+      ]
+    },
+    {
+      "id": "road_cutthroat",
+      "display_name": "Дорожный резчик",
+      "archetype": "travel_tax",
+      "role": "travel_tax",
+      "level_band": [
+        6,
+        6
+      ],
+      "visual_asset_id": "asset_enemy_road_cutthroat",
+      "vitality": 50,
+      "strength": 0,
+      "protection": 10,
+      "intuition": 10,
+      "weapon_damage": 9,
+      "bonus_attack_power": 0,
+      "attack_power": 9,
+      "attack_interval": 1.9,
+      "target_duration_seconds": [
+        6,
+        18
+      ],
+      "expected_threat_with_intended_loadout": "fair",
+      "reward_xp": 30,
+      "reward_gold": 14,
+      "reward_items": [
+        "road_ration"
+      ]
+    },
+    {
+      "id": "ash_trail_scout",
+      "display_name": "Разведчик пепельной тропы",
+      "archetype": "fast_ambusher",
+      "role": "fast_ambusher",
+      "level_band": [
+        6,
+        6
+      ],
+      "visual_asset_id": "asset_enemy_ash_trail_scout",
+      "vitality": 44,
+      "strength": 0,
+      "protection": 5,
+      "intuition": 14,
+      "weapon_damage": 8,
+      "bonus_attack_power": 0,
+      "attack_power": 8,
+      "attack_interval": 1.5,
+      "target_duration_seconds": [
+        6,
+        18
+      ],
+      "expected_threat_with_intended_loadout": "fair",
+      "reward_xp": 28,
+      "reward_gold": 12,
+      "reward_items": [
+        "route_clue"
+      ]
+    },
+    {
+      "id": "chain_bearer",
+      "display_name": "Носильщик цепей",
+      "archetype": "block_brute",
+      "role": "block_brute",
+      "level_band": [
+        7,
+        7
+      ],
+      "visual_asset_id": "asset_enemy_chain_bearer",
+      "vitality": 60,
+      "strength": 0,
+      "protection": 25,
+      "intuition": 6,
+      "weapon_damage": 10,
+      "bonus_attack_power": 0,
+      "attack_power": 10,
+      "attack_interval": 2.4,
+      "target_duration_seconds": [
+        6,
+        18
+      ],
+      "expected_threat_with_intended_loadout": "risky",
+      "reward_xp": 34,
+      "reward_gold": 16,
+      "reward_items": [
+        "tier4_component"
+      ]
+    },
+    {
+      "id": "black_sun_acolyte",
+      "display_name": "Аколит Черного Солнца",
+      "archetype": "mixed_cultist",
+      "role": "mixed_cultist",
+      "level_band": [
+        8,
+        8
+      ],
+      "visual_asset_id": "asset_enemy_black_sun_acolyte",
+      "vitality": 58,
+      "strength": 0,
+      "protection": 15,
+      "intuition": 16,
+      "weapon_damage": 11,
+      "bonus_attack_power": 0,
+      "attack_power": 11,
+      "attack_interval": 1.8,
+      "target_duration_seconds": [
+        6,
+        18
+      ],
+      "expected_threat_with_intended_loadout": "fair",
+      "reward_xp": 38,
+      "reward_gold": 18,
+      "reward_items": [
+        "hideout_key"
+      ]
+    },
+    {
+      "id": "relic_warden",
+      "display_name": "Страж реликвии",
+      "archetype": "tank_check",
+      "role": "tank_check",
+      "level_band": [
+        9,
+        9
+      ],
+      "visual_asset_id": "asset_enemy_relic_warden",
+      "vitality": 68,
+      "strength": 0,
+      "protection": 30,
+      "intuition": 8,
+      "weapon_damage": 12,
+      "bonus_attack_power": 0,
+      "attack_power": 12,
+      "attack_interval": 2.5,
+      "target_duration_seconds": [
+        6,
+        18
+      ],
+      "expected_threat_with_intended_loadout": "risky",
+      "reward_xp": 42,
+      "reward_gold": 18,
+      "reward_items": [
+        "dragon_proof_sigil"
+      ]
+    },
+    {
+      "id": "black_sun_captain",
+      "display_name": "Капитан Черного Солнца",
+      "archetype": "act_1_finale",
+      "role": "act_1_finale",
+      "level_band": [
+        10,
+        10
+      ],
+      "visual_asset_id": "asset_enemy_black_sun_captain",
+      "vitality": 86,
+      "strength": 0,
+      "protection": 24,
+      "intuition": 20,
+      "weapon_damage": 15,
+      "bonus_attack_power": 0,
+      "attack_power": 15,
+      "attack_interval": 2.1,
+      "target_duration_seconds": [
+        20,
+        26
+      ],
+      "expected_threat_with_intended_loadout": "fair",
+      "reward_xp": 60,
+      "reward_gold": 20,
+      "reward_items": [
+        "act_i_proof",
+        "black_sun_blade"
+      ]
     }
   ],
   "outcomes": {
@@ -359,13 +726,27 @@
     },
     "healing": {
       "tutorial_heal": "free_once",
-      "basic_heal_cost_gold": [3, 5],
+      "basic_heal_cost_gold": [
+        3,
+        5
+      ],
       "must_be_available_before_mandatory_risky_fights": true
     }
   },
   "ui_contract": {
-    "always_show": ["vitality", "strength", "protection", "intuition", "attack_power"],
-    "details_show": ["weapon_damage", "attack_interval", "crit_chance", "block_chance"],
+    "always_show": [
+      "vitality",
+      "strength",
+      "protection",
+      "intuition",
+      "attack_power"
+    ],
+    "details_show": [
+      "weapon_damage",
+      "attack_interval",
+      "crit_chance",
+      "block_chance"
+    ],
     "prefight_panel": [
       "enemy_portrait_and_name",
       "player_hp_strength_protection_intuition_damage",

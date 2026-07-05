@@ -27,6 +27,7 @@ nt_ui_modal_style_t game_modal_style(nt_ui_layer_t layer, bool dismissible);
 bool game_modal_visible(nt_ui_context_t *ctx, uint32_t id,
                         const nt_ui_modal_style_t *style, bool *open,
                         bool ignore_close_request);
+void game_modal_clear_state(nt_ui_context_t *ctx, uint32_t id);
 nt_ui_image_style_t game_modal_panel_image(bool portrait);
 nt_ui_image_style_t game_modal_body_image(bool portrait);
 nt_ui_image_style_t game_modal_header_image(bool portrait);

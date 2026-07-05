@@ -1,0 +1,144 @@
+{
+  "schema": "rb-dark-rpg.release_content_30m_assets.v1",
+  "game_id": "rb-dark-rpg",
+  "status": "procedural_placeholder_ready",
+  "origin": "procedural",
+  "license": "project-internal generated asset",
+  "assets": [
+    {
+      "id": "asset_icon_cellar_knife",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_cellar_knife.png",
+      "sha256": "9CE8269BC33DD6241D3F9DD18F6C190D75C15F38E65C5EB0B9D95145B5B4DFDE"
+    },
+    {
+      "id": "asset_icon_roadwarden_sabre",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_roadwarden_sabre.png",
+      "sha256": "F81552B338B0E33324C04A0003E3A9FC64545BB8A915F65D36E3C34272F304D1"
+    },
+    {
+      "id": "asset_icon_roadwarden_coat",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_roadwarden_coat.png",
+      "sha256": "F81552B338B0E33324C04A0003E3A9FC64545BB8A915F65D36E3C34272F304D1"
+    },
+    {
+      "id": "asset_icon_plated_greaves",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_plated_greaves.png",
+      "sha256": "2A4A5E76AA476FAD55EC0F885E1BB791B6DDAF7F5154D910ABFE2E5C88260ABD"
+    },
+    {
+      "id": "asset_icon_ember_relic",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_ember_relic.png",
+      "sha256": "6FBE758C9B31C856C5E74181067032395EB6088DA66C1705F7A6F760E91DE081"
+    },
+    {
+      "id": "asset_icon_black_sun_blade",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_black_sun_blade.png",
+      "sha256": "E020D5287B344C8A8791A01F4EFED23957440DF2754C52011FFC972C02930266"
+    },
+    {
+      "id": "asset_icon_sealed_mail",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_sealed_mail.png",
+      "sha256": "478CC298553339773DA76A5B20C322AFFF8FC65CE21D8626D10591AD6DFD166E"
+    },
+    {
+      "id": "asset_icon_captain_greaves",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_captain_greaves.png",
+      "sha256": "666B21D55874596B0046FB30C17D0736441AE1E82B52A14CB3B0EF508E9F3001"
+    },
+    {
+      "id": "asset_icon_dragon_proof_sigil",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_dragon_proof_sigil.png",
+      "sha256": "40C53608E3D02CF89E363E7157D96C915F7C3A245BB2E710FFD3EC3F9254CC7E"
+    },
+    {
+      "id": "asset_icon_road_ration",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_road_ration.png",
+      "sha256": "F81552B338B0E33324C04A0003E3A9FC64545BB8A915F65D36E3C34272F304D1"
+    },
+    {
+      "id": "asset_icon_route_clue",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_route_clue.png",
+      "sha256": "CD2C97C54E30041115EE6ED11C2262901EEF3EF9B5A66D170E259187B1CC4CCE"
+    },
+    {
+      "id": "asset_icon_tier4_component",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_tier4_component.png",
+      "sha256": "F8EC70E0E0A60BB27138CB0B5C1075DAD8487919A5BB6F58E8F2C2EF48629949"
+    },
+    {
+      "id": "asset_icon_hideout_key",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_hideout_key.png",
+      "sha256": "7219C69503756D49418204647E3407711C463A7F4F0E7A254EA994C93DD60C92"
+    },
+    {
+      "id": "asset_icon_act_i_proof",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_act_i_proof.png",
+      "sha256": "B1DB3C7A37F33F987C458212F4BE26BE4ADDDD4C24A7AF1FEE79E67A705C6A2D"
+    },
+    {
+      "id": "asset_icon_healer_token",
+      "file": "assets/ui/generated/release_content_30m_01/icons/asset_icon_healer_token.png",
+      "sha256": "F561235AEEFDB989A2115FC1803E3283F085EEBD9384CB38DE2E4626A11568CE"
+    },
+    {
+      "id": "asset_enemy_gate_scavenger",
+      "file": "assets/ui/generated/release_content_30m_01/enemies/asset_enemy_gate_scavenger.png",
+      "sha256": "60F5AD6C194B6BDB113EE2EAEAC5CBC32C4183D3DDEF5B64DCE61E94F3F6CB9E"
+    },
+    {
+      "id": "asset_enemy_mill_scavenger",
+      "file": "assets/ui/generated/release_content_30m_01/enemies/asset_enemy_mill_scavenger.png",
+      "sha256": "986034405F35AF26C0D2CE0BC9CA34E4D54DBA7EC856B80818E82F4F20D14E40"
+    },
+    {
+      "id": "asset_enemy_mill_brute",
+      "file": "assets/ui/generated/release_content_30m_01/enemies/asset_enemy_mill_brute.png",
+      "sha256": "31A6A3F5DFA3703BF8CE4A1E21EFD26A44A8E9803F3DB00C1E0E8E01B4589520"
+    },
+    {
+      "id": "asset_enemy_black_sun_runner",
+      "file": "assets/ui/generated/release_content_30m_01/enemies/asset_enemy_black_sun_runner.png",
+      "sha256": "9D48A7AB8C0F8BC76D1D90CB80CEF81693436A4AA1251575F40D9D1B110D549C"
+    },
+    {
+      "id": "asset_enemy_cellar_knifeman",
+      "file": "assets/ui/generated/release_content_30m_01/enemies/asset_enemy_cellar_knifeman.png",
+      "sha256": "8E1B5B578FA2B239DEB78C290EA50FAA929DCB1CEAD0EDEC7F044027B85327BE"
+    },
+    {
+      "id": "asset_enemy_night_attacker",
+      "file": "assets/ui/generated/release_content_30m_01/enemies/asset_enemy_night_attacker.png",
+      "sha256": "8FD3DE70ED61BA02DB4BA9230B6A5C04F2746DFF8C7AA55AFA8B8CB5BCAF6E1B"
+    },
+    {
+      "id": "asset_enemy_road_cutthroat",
+      "file": "assets/ui/generated/release_content_30m_01/enemies/asset_enemy_road_cutthroat.png",
+      "sha256": "C709DF79CCCB8B4626F6EEB3734820E7FBADEAE6819EE7B646CB3A38676F7240"
+    },
+    {
+      "id": "asset_enemy_ash_trail_scout",
+      "file": "assets/ui/generated/release_content_30m_01/enemies/asset_enemy_ash_trail_scout.png",
+      "sha256": "19F98979CE6B30B3E413966BDC251BD699C68932D3C4B1D707CA8C8DB0FEA8C0"
+    },
+    {
+      "id": "asset_enemy_chain_bearer",
+      "file": "assets/ui/generated/release_content_30m_01/enemies/asset_enemy_chain_bearer.png",
+      "sha256": "19CF59C46DFAEF957F288FAE83123C0F670B877347857450C3DD8E08712E5F61"
+    },
+    {
+      "id": "asset_enemy_black_sun_acolyte",
+      "file": "assets/ui/generated/release_content_30m_01/enemies/asset_enemy_black_sun_acolyte.png",
+      "sha256": "C4C21001847CEA3D2CCE1560C97E08DED3D74F7F44D9F98BB6133AFE8FF562EA"
+    },
+    {
+      "id": "asset_enemy_relic_warden",
+      "file": "assets/ui/generated/release_content_30m_01/enemies/asset_enemy_relic_warden.png",
+      "sha256": "9115C2E2D1BA3D8B6F3CA5FF80307CC907BC8A4740DE4080ABEFBF3860F01B08"
+    },
+    {
+      "id": "asset_enemy_black_sun_captain",
+      "file": "assets/ui/generated/release_content_30m_01/enemies/asset_enemy_black_sun_captain.png",
+      "sha256": "EBD45683718F2EF35960CEF3C073095A9C5C6433258B1218118C2CD33DB486CA"
+    }
+  ]
+}

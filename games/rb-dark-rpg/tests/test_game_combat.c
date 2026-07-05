@@ -55,6 +55,27 @@ static int gear_count(const GameState *state, const char *def_id) {
     return count;
 }
 
+static bool has_gear_instance(const GameState *state, const char *instance_id) {
+    for (int i = 0; i < GAME_STATE_MAX_INVENTORY_GEAR_INSTANCES; ++i) {
+        const GameGearInstance *gear = &state->inventory_gear_instances[i];
+        if (gear->used && strcmp(gear->key, instance_id) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static bool bag_has_instance(const GameState *state, const char *instance_id) {
+    for (int i = 0; i < state->inventory_bag_order_count; ++i) {
+        if (strcmp(state->inventory_bag_order[i], instance_id) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+static float test_absf(float value) { return value < 0.0F ? -value : value; }
+
 static void prepare_shop_unlocked_state(GameState *state, int gold) {
     game_state_init_defaults(state);
     state->wallet_gold = gold;
@@ -105,6 +126,129 @@ static void test_shop_purchase_rejects_insufficient_gold_without_mutation(void) 
     assert(state.wallet_gold == 4);
     assert(gear_count(&state, "runner_wraps") == 0);
     assert(state.inventory_bag_order_count == 0);
+}
+
+static void test_shop_item_content_exposes_price_and_sellable_contract(void) {
+    const game_item_definition_t *shop_item = game_content_find_item("iron_sword");
+    const game_item_definition_t *starter_item = game_content_find_item("old_sword");
+    const game_item_definition_t *clue_item = game_content_find_item("clue_fragment");
+    const game_item_definition_t *quest_item = game_content_find_item("seeker_token");
+
+    assert(shop_item != 0);
+    assert(shop_item->price_gold == 12);
+    assert(shop_item->sellable);
+    assert(starter_item != 0);
+    assert(starter_item->price_gold == 0);
+    assert(!starter_item->sellable);
+    assert(clue_item != 0);
+    assert(!clue_item->sellable);
+    assert(clue_item->category_label != 0);
+    assert(strcmp(clue_item->category_label, "Улика") == 0);
+    assert(clue_item->description != 0);
+    assert(quest_item != 0);
+    assert(!quest_item->sellable);
+    assert(quest_item->category_label != 0);
+    assert(strcmp(quest_item->category_label, "Квестовый предмет") == 0);
+    assert(quest_item->description != 0);
+}
+
+static void test_shop_sell_rejects_quest_stack_items(void) {
+    GameState state;
+    prepare_shop_unlocked_state(&state, 0);
+    state.inventory_stack_instances[0].used = true;
+    (void)strcpy(state.inventory_stack_instances[0].key, "seeker_token");
+    (void)strcpy(state.inventory_stack_instances[0].def_id, "seeker_token");
+    state.inventory_stack_instances[0].count = 1;
+
+    game_shop_buyback_t buyback;
+    game_actions_shop_buyback_init(&buyback);
+
+    int sell_price = 99;
+    assert(!game_actions_can_sell_inventory_item(&state, "seeker_token", &sell_price));
+    assert(sell_price == 0);
+    assert(!game_actions_sell_inventory_item(&state, "seeker_token", &buyback));
+    assert(state.wallet_gold == 0);
+    assert(state.inventory_stack_instances[0].used);
+    assert(state.inventory_stack_instances[0].count == 1);
+    assert(buyback.count == 0);
+}
+
+static void test_shop_sell_bag_gear_records_buyback_snapshot(void) {
+    GameState state;
+    prepare_shop_unlocked_state(&state, 0);
+    assert(game_actions_grant_gear(&state, "gear_iron_sword_001", "iron_sword", GAME_ACTION_GEAR_SLOT_WEAPON));
+
+    game_shop_buyback_t buyback;
+    game_actions_shop_buyback_init(&buyback);
+
+    int sell_price = 0;
+    assert(game_actions_can_sell_inventory_item(&state, "gear_iron_sword_001", &sell_price));
+    assert(sell_price == 6);
+    assert(game_actions_sell_inventory_item(&state, "gear_iron_sword_001", &buyback));
+
+    assert(state.wallet_gold == 6);
+    assert(!has_gear_instance(&state, "gear_iron_sword_001"));
+    assert(!bag_has_instance(&state, "gear_iron_sword_001"));
+    assert(buyback.count == 1);
+    assert(strcmp(buyback.entries[0].entry_id, "gear_iron_sword_001") == 0);
+    assert(strcmp(buyback.entries[0].gear.def_id, "iron_sword") == 0);
+    assert(buyback.entries[0].price_gold == 6);
+}
+
+static void test_shop_sell_rejects_equipped_or_unsellable_items_without_mutation(void) {
+    GameState state;
+    prepare_shop_unlocked_state(&state, 0);
+    assert(game_actions_grant_gear(&state, "gear_iron_sword_001", "iron_sword", GAME_ACTION_GEAR_SLOT_WEAPON));
+    assert(game_actions_equip_gear(&state, "gear_iron_sword_001"));
+    assert(game_actions_grant_gear(&state, "gear_old_sword_001", "old_sword", GAME_ACTION_GEAR_SLOT_WEAPON));
+
+    game_shop_buyback_t buyback;
+    game_actions_shop_buyback_init(&buyback);
+
+    assert(!game_actions_sell_inventory_item(&state, "gear_iron_sword_001", &buyback));
+    assert(!game_actions_sell_inventory_item(&state, "gear_old_sword_001", &buyback));
+    assert(state.wallet_gold == 0);
+    assert(has_gear_instance(&state, "gear_iron_sword_001"));
+    assert(has_gear_instance(&state, "gear_old_sword_001"));
+    assert(buyback.count == 0);
+}
+
+static void test_shop_buyback_restores_original_gear_instance_for_sale_price(void) {
+    GameState state;
+    prepare_shop_unlocked_state(&state, 0);
+    assert(game_actions_grant_gear(&state, "gear_runner_wraps_001", "runner_wraps", GAME_ACTION_GEAR_SLOT_LEGS));
+    GameGearInstance *sold = 0;
+    for (int i = 0; i < GAME_STATE_MAX_INVENTORY_GEAR_INSTANCES; ++i) {
+        if (state.inventory_gear_instances[i].used &&
+            strcmp(state.inventory_gear_instances[i].key, "gear_runner_wraps_001") == 0) {
+            sold = &state.inventory_gear_instances[i];
+            break;
+        }
+    }
+    assert(sold != 0);
+    sold->durability = 0.42F;
+    sold->level = 3;
+
+    game_shop_buyback_t buyback;
+    game_actions_shop_buyback_init(&buyback);
+    assert(game_actions_sell_inventory_item(&state, "gear_runner_wraps_001", &buyback));
+    assert(state.wallet_gold == 2);
+
+    assert(game_actions_rebuy_inventory_item(&state, &buyback, "gear_runner_wraps_001"));
+    assert(state.wallet_gold == 0);
+    assert(buyback.count == 0);
+    assert(has_gear_instance(&state, "gear_runner_wraps_001"));
+    assert(bag_has_instance(&state, "gear_runner_wraps_001"));
+    for (int i = 0; i < GAME_STATE_MAX_INVENTORY_GEAR_INSTANCES; ++i) {
+        const GameGearInstance *gear = &state.inventory_gear_instances[i];
+        if (gear->used && strcmp(gear->key, "gear_runner_wraps_001") == 0) {
+            assert(strcmp(gear->def_id, "runner_wraps") == 0);
+            assert(gear->durability > 0.41F && gear->durability < 0.43F);
+            assert(gear->level == 3);
+            return;
+        }
+    }
+    assert(false);
 }
 
 static void prepare_mill_contract_state(GameState *state) {
@@ -170,6 +314,7 @@ static void test_gate_scavenger_combat_records_event_timeline(void) {
 
     const game_combat_event_t *first = &result.events[0];
     assert(first->time_seconds > 0.0F);
+    assert(first->time_seconds < stats.attack_interval);
     assert(first->actor == GAME_COMBAT_ACTOR_PLAYER || first->actor == GAME_COMBAT_ACTOR_ENEMY);
     assert(first->damage > 0);
     assert(first->player_hp_after >= 0);
@@ -186,6 +331,24 @@ static void test_gate_scavenger_combat_records_event_timeline(void) {
     assert(last->player_hp_after == result.player_hp);
     assert(last->enemy_hp_after == result.enemy_hp);
     assert(last->enemy_hp_after == 0);
+}
+
+static void test_mill_combat_timeline_avoids_same_timestamp_exchange(void) {
+    GameState state;
+    prepare_mill_contract_state(&state);
+    const game_encounter_definition_t *encounter = game_content_find_encounter("mill_scavenger");
+    assert(encounter != 0);
+
+    game_combat_stats_t stats;
+    game_combat_result_t result;
+    assert(game_combat_build_player_stats(&state, &stats));
+    assert(game_combat_simulate(&stats, state.hero_hp, encounter, 67890U, &result));
+    assert(result.event_count > 2);
+
+    for (int i = 1; i < result.event_count; ++i) {
+        const float spacing = test_absf(result.events[i].time_seconds - result.events[i - 1].time_seconds);
+        assert(spacing >= 0.25F);
+    }
 }
 
 static void test_gate_scavenger_win_grants_rewards_once_and_advances_quest(void) {
@@ -395,11 +558,17 @@ static void test_multi_item_encounter_rewards_grant_once(void) {
 }
 
 int main(void) {
+    test_shop_item_content_exposes_price_and_sellable_contract();
     test_generated_gate_encounter_is_available();
     test_player_stats_use_equipped_starter_gear();
     test_shop_purchase_requires_completed_quest_and_spends_gold();
     test_shop_purchase_rejects_insufficient_gold_without_mutation();
+    test_shop_sell_rejects_quest_stack_items();
+    test_shop_sell_bag_gear_records_buyback_snapshot();
+    test_shop_sell_rejects_equipped_or_unsellable_items_without_mutation();
+    test_shop_buyback_restores_original_gear_instance_for_sale_price();
     test_gate_scavenger_combat_records_event_timeline();
+    test_mill_combat_timeline_avoids_same_timestamp_exchange();
     test_gate_scavenger_win_grants_rewards_once_and_advances_quest();
     test_zero_hp_cannot_win_or_claim_rewards();
     test_positive_hp_loss_records_fight_but_grants_no_rewards();

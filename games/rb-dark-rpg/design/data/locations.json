@@ -87,7 +87,10 @@
           "interactions": [
             {
               "type": "quest_list",
-              "quest_types": ["contract", "side"]
+              "quest_types": [
+                "contract",
+                "side"
+              ]
             }
           ]
         },
@@ -293,7 +296,7 @@
       },
       "map": {
         "x": 0.85,
-        "y": 0.60
+        "y": 0.6
       },
       "unlock": {
         "mode": "flag",
@@ -330,6 +333,180 @@
             {
               "type": "inspect",
               "object_id": "black_sun_mark"
+            }
+          ]
+        },
+        {
+          "id": "old_mill.cellar_knifeman",
+          "kind": "combat",
+          "display_name": "Нож Черного Солнца",
+          "encounter_id": "cellar_knifeman",
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "cellar_knifeman"
+            }
+          ]
+        }
+      ],
+      "exits": [
+        {
+          "target_location_id": "hub_gate_outskirts"
+        }
+      ]
+    },
+    {
+      "id": "forest_road",
+      "display_name": "Лесная дорога",
+      "kind": "quest_location",
+      "screen_id": "location_forest_road",
+      "act": "act_1_extra_witness",
+      "art": {
+        "background_asset_id": "asset_location_forest_road_bg"
+      },
+      "map": {
+        "x": 0.58,
+        "y": 0.72
+      },
+      "unlock": {
+        "mode": "flag",
+        "flag_id": "forest_road_unlocked",
+        "value": true
+      },
+      "objects": [
+        {
+          "id": "forest_road.cutthroat",
+          "kind": "combat",
+          "display_name": "road_cutthroat",
+          "encounter_id": "road_cutthroat",
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "road_cutthroat"
+            }
+          ]
+        },
+        {
+          "id": "forest_road.cart_tracks",
+          "kind": "hotspot",
+          "display_name": "След",
+          "asset_id": "asset_icon_route_clue",
+          "interactions": [
+            {
+              "type": "inspect",
+              "object_id": "cart_tracks"
+            }
+          ]
+        }
+      ],
+      "exits": [
+        {
+          "target_location_id": "hub_gate_outskirts"
+        }
+      ]
+    },
+    {
+      "id": "ash_convoy",
+      "display_name": "Пепельный обоз",
+      "kind": "quest_location",
+      "screen_id": "location_ash_convoy",
+      "act": "act_1_extra_witness",
+      "art": {
+        "background_asset_id": "asset_location_ash_convoy_bg"
+      },
+      "map": {
+        "x": 0.7,
+        "y": 0.64
+      },
+      "unlock": {
+        "mode": "flag",
+        "flag_id": "ash_convoy_unlocked",
+        "value": true
+      },
+      "objects": [
+        {
+          "id": "ash_convoy.scout",
+          "kind": "combat",
+          "display_name": "ash_trail_scout",
+          "encounter_id": "ash_trail_scout",
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "ash_trail_scout"
+            }
+          ]
+        },
+        {
+          "id": "ash_convoy.chain_bearer",
+          "kind": "combat",
+          "display_name": "chain_bearer",
+          "encounter_id": "chain_bearer",
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "chain_bearer"
+            }
+          ]
+        }
+      ],
+      "exits": [
+        {
+          "target_location_id": "hub_gate_outskirts"
+        }
+      ]
+    },
+    {
+      "id": "black_sun_hideout",
+      "display_name": "Тайник Черного Солнца",
+      "kind": "quest_location",
+      "screen_id": "location_black_sun_hideout",
+      "act": "act_1_extra_witness",
+      "art": {
+        "background_asset_id": "asset_location_black_sun_hideout_bg"
+      },
+      "map": {
+        "x": 0.86,
+        "y": 0.38
+      },
+      "unlock": {
+        "mode": "flag",
+        "flag_id": "black_sun_hideout_unlocked",
+        "value": true
+      },
+      "objects": [
+        {
+          "id": "black_sun_hideout.acolyte",
+          "kind": "combat",
+          "display_name": "black_sun_acolyte",
+          "encounter_id": "black_sun_acolyte",
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "black_sun_acolyte"
+            }
+          ]
+        },
+        {
+          "id": "black_sun_hideout.relic_warden",
+          "kind": "combat",
+          "display_name": "relic_warden",
+          "encounter_id": "relic_warden",
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "relic_warden"
+            }
+          ]
+        },
+        {
+          "id": "black_sun_hideout.captain",
+          "kind": "combat",
+          "display_name": "black_sun_captain",
+          "encounter_id": "black_sun_captain",
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "black_sun_captain"
             }
           ]
         }
