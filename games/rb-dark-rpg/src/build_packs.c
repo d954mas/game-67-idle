@@ -152,6 +152,14 @@ int main(int argc, char *argv[]) {
     nt_builder_add_shader(ctx, "assets/shaders/sprite_ui_fade.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/sprite_ui_fade.frag", NT_BUILD_SHADER_FRAGMENT);
 
+    // Basis ETC1S keeps the web download small (raw RGBA pages ballooned the
+    // pack to ~61MB); runtime transcodes or falls back to RGBA32 upload.
+    static const nt_tex_compress_opts_t ui_atlas_compress = {
+        .mode = NT_TEX_COMPRESS_ETC1S,
+        .quality = 200,
+        .endpoint_rdo_quality = 1.5F,
+        .selector_rdo_quality = 1.25F,
+    };
     nt_atlas_opts_t atlas_opts = nt_atlas_opts_defaults();
     atlas_opts.shape = NT_ATLAS_SHAPE_RECT;
     atlas_opts.allow_transform = false;
@@ -160,7 +168,7 @@ int main(int argc, char *argv[]) {
     atlas_opts.margin = 2;
     atlas_opts.extrude = 1;
     atlas_opts.premultiplied = true;
-    atlas_opts.compress = NULL;
+    atlas_opts.compress = &ui_atlas_compress;
     atlas_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     atlas_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     atlas_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
@@ -396,6 +404,13 @@ int main(int argc, char *argv[]) {
 
     // Hub scene art is a separate atlas so large location backgrounds do not
     // inflate or couple to the reusable UI atlas.
+    // Painterly scene art compresses very well with ETC1S default quality.
+    static const nt_tex_compress_opts_t scene_atlas_compress = {
+        .mode = NT_TEX_COMPRESS_ETC1S,
+        .quality = 128,
+        .endpoint_rdo_quality = 1.5F,
+        .selector_rdo_quality = 1.25F,
+    };
     nt_atlas_opts_t scene_atlas_opts = nt_atlas_opts_defaults();
     scene_atlas_opts.shape = NT_ATLAS_SHAPE_RECT;
     scene_atlas_opts.allow_transform = false;
@@ -404,7 +419,7 @@ int main(int argc, char *argv[]) {
     scene_atlas_opts.margin = 0;
     scene_atlas_opts.extrude = 0;
     scene_atlas_opts.premultiplied = true;
-    scene_atlas_opts.compress = NULL;
+    scene_atlas_opts.compress = &scene_atlas_compress;
     scene_atlas_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR_MIPMAP_LINEAR;
     scene_atlas_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     scene_atlas_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
@@ -432,6 +447,42 @@ int main(int argc, char *argv[]) {
     guard_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
     guard_opts.max_vertices = 12;
     nt_builder_atlas_add(ctx, "assets/characters/last_post_guard_05.png", &guard_opts);
+
+    const UiSpriteAsset scene_sprite_assets[] = {
+        {"asset_character_blacksmith",
+         "assets/ui/generated/location_scene_sprites_01/characters/asset_character_blacksmith.png"},
+        {"asset_character_town_trader",
+         "assets/ui/generated/location_scene_sprites_01/characters/asset_character_town_trader.png"},
+        {"asset_character_elder",
+         "assets/ui/generated/location_scene_sprites_01/characters/asset_character_elder.png"},
+        {"asset_character_healer",
+         "assets/ui/generated/location_scene_sprites_01/characters/asset_character_healer.png"},
+        {"asset_object_contract_board",
+         "assets/ui/generated/location_scene_sprites_01/props/asset_object_contract_board.png"},
+        {"asset_object_dragon_memorial",
+         "assets/ui/generated/location_scene_sprites_01/props/asset_object_dragon_memorial.png"},
+        {"asset_object_map_gate",
+         "assets/ui/generated/location_scene_sprites_01/props/asset_object_map_gate.png"},
+        {"asset_object_caged_scavenger",
+         "assets/ui/generated/location_scene_sprites_01/props/asset_object_caged_scavenger.png"},
+        {"asset_enemy_mill_scavenger_scene",
+         "assets/ui/generated/location_scene_sprites_01/enemies/asset_enemy_mill_scavenger_scene.png"},
+        {"asset_enemy_cellar_knifeman_scene",
+         "assets/ui/generated/location_scene_sprites_01/enemies/asset_enemy_cellar_knifeman_scene.png"},
+        {"asset_object_old_mill_cellar_hatch",
+         "assets/ui/generated/location_scene_sprites_01/props/asset_object_old_mill_cellar_hatch.png"},
+        {"asset_object_black_sun_clue_wall",
+         "assets/ui/generated/location_scene_sprites_01/props/asset_object_black_sun_clue_wall.png"},
+    };
+    nt_atlas_sprite_opts_t scene_sprite_opts = nt_atlas_sprite_opts_defaults();
+    scene_sprite_opts.origin_x = 0.5F;
+    scene_sprite_opts.origin_y = 0.0F;
+    scene_sprite_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
+    scene_sprite_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
+    for (size_t i = 0; i < sizeof(scene_sprite_assets) / sizeof(scene_sprite_assets[0]); ++i) {
+        scene_sprite_opts.name = scene_sprite_assets[i].name;
+        nt_builder_atlas_add(ctx, scene_sprite_assets[i].path, &scene_sprite_opts);
+    }
 
     nt_atlas_sprite_opts_t location_prop_opts = nt_atlas_sprite_opts_defaults();
     location_prop_opts.name = "black_sun_mark";
