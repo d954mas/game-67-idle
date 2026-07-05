@@ -695,15 +695,22 @@ object_marker_text(const game_location_object_t *object,
   return "i";
 }
 
+static bool object_marker_is_combat(const game_location_object_t *object) {
+  return object && str_eq(object->kind, "combat");
+}
+
 static Clay_Color object_marker_color(const game_location_object_t *object,
                                       const game_location_interaction_t
                                           *interaction,
                                       bool enabled) {
   if (!enabled) {
-    return (Clay_Color){52.0F, 45.0F, 39.0F, 170.0F};
+    if (object_marker_is_combat(object)) {
+      return (Clay_Color){118.0F, 34.0F, 30.0F, 194.0F};
+    }
+    return (Clay_Color){52.0F, 45.0F, 39.0F, 112.0F};
   }
-  if (object && str_eq(object->kind, "combat")) {
-    return (Clay_Color){172.0F, 38.0F, 32.0F, 236.0F};
+  if (object_marker_is_combat(object)) {
+    return (Clay_Color){199.0F, 38.0F, 32.0F, 244.0F};
   }
   if (object && str_eq(object->kind, "quest_board")) {
     return (Clay_Color){190.0F, 139.0F, 38.0F, 238.0F};
@@ -878,8 +885,11 @@ static void map_object_offset(const game_location_definition_t *location,
       x = 12.0F;
       y = -70.0F;
     } else if (str_eq(object->id, "hub_last_post.caged_scavenger")) {
-      x = 88.0F;
-      y = -36.0F;
+      x = 128.0F;
+      y = -54.0F;
+    } else if (str_eq(object->id, "hub_last_post.night_assault")) {
+      x = 128.0F;
+      y = 6.0F;
     }
   } else if (location && str_eq(location->id, "hub_gate_outskirts")) {
     x = 0.0F;
@@ -917,7 +927,12 @@ map_object_marker_ui(nt_ui_context_t *ctx, World *w,
   const bool available =
       interaction != NULL && game_actions_location_object_available(state, object);
   const bool enabled = !s_map_travel_active && parent_current && available;
-  const float size = portrait ? 20.0F : 22.0F;
+  const bool combat_marker = object_marker_is_combat(object);
+  if (!parent_current && !combat_marker) {
+    return;
+  }
+  const float size = combat_marker ? (portrait ? 22.0F : 24.0F)
+                                   : (portrait ? 18.0F : 20.0F);
   float offset_x = 0.0F;
   float offset_y = 0.0F;
   map_object_offset(location, object, object_slot, &offset_x, &offset_y);
@@ -937,8 +952,10 @@ map_object_marker_ui(nt_ui_context_t *ctx, World *w,
   }
   const Clay_Color bg = object_marker_color(object, interaction, enabled);
   const nt_ui_label_style_t icon = label_style(
-      portrait ? 10.0F : 11.0F, enabled ? 255.0F : 158.0F,
-      enabled ? 235.0F : 145.0F, enabled ? 196.0F : 124.0F, 255.0F);
+      combat_marker ? (portrait ? 12.0F : 13.0F) : (portrait ? 9.5F : 10.5F),
+      enabled || combat_marker ? 255.0F : 158.0F,
+      enabled || combat_marker ? 235.0F : 145.0F,
+      enabled || combat_marker ? 196.0F : 124.0F, 255.0F);
 
   CLAY({.id = CLAY_IDI("world_map/object_shell", object_slot),
         .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
@@ -957,8 +974,10 @@ map_object_marker_ui(nt_ui_context_t *ctx, World *w,
           .backgroundColor = bg,
           .cornerRadius = CLAY_CORNER_RADIUS(8),
           .border = {.color = {236.0F, 188.0F, 95.0F,
-                               enabled ? 205.0F : 82.0F},
-                     .width = {1, 1, 1, 1, 0}},
+                               enabled || combat_marker ? 218.0F : 74.0F},
+                     .width = {combat_marker ? 2 : 1, combat_marker ? 2 : 1,
+                               combat_marker ? 2 : 1, combat_marker ? 2 : 1,
+                               0}},
           .userData = NT_UI_CLAY_DATA(LAYER_WORLD_MAP_MARKER)}) {
       text_label(ctx, object_marker_text(object, interaction), &icon);
     }
@@ -1276,9 +1295,12 @@ static void map_hero_marker(nt_ui_context_t *ctx, const World *w,
   }
   const nt_ui_label_style_t hero_label =
       label_style(portrait ? 8.5F : 9.5F, 255.0F, 232.0F, 175.0F, 255.0F);
-  map_box(CLAY_ID("world_map/hero/ring"), x - 24.0F, y + 8.0F, 48.0F, 15.0F,
-          (Clay_Color){248.0F, 211.0F, 71.0F, 112.0F}, 8,
+  map_box(CLAY_ID("world_map/hero/ring"), x - 29.0F, y + 8.0F, 58.0F, 16.0F,
+          (Clay_Color){248.0F, 211.0F, 71.0F, 132.0F}, 8,
           (Clay_Color){255.0F, 226.0F, 88.0F, 195.0F}, 2);
+  map_box(CLAY_ID("world_map/hero/halo"), x - 20.0F, y - 36.0F, 40.0F,
+          44.0F, (Clay_Color){255.0F, 218.0F, 73.0F, 34.0F}, 16,
+          (Clay_Color){255.0F, 226.0F, 88.0F, 72.0F}, 1);
   map_box(CLAY_ID("world_map/hero/shadow"), x - 9.0F, y - 20.0F, 18.0F,
           30.0F, (Clay_Color){40.0F, 18.0F, 17.0F, 230.0F}, 9,
           (Clay_Color){246.0F, 183.0F, 70.0F, 180.0F}, 1);
@@ -1296,7 +1318,7 @@ static void map_hero_marker(nt_ui_context_t *ctx, const World *w,
                      .clipTo = CLAY_CLIP_TO_ATTACHED_PARENT,
                      .attachPoints = {.element = CLAY_ATTACH_POINT_LEFT_TOP,
                                       .parent = CLAY_ATTACH_POINT_LEFT_TOP},
-                     .offset = {x - 25.0F, y + 25.0F},
+                     .offset = {x - 25.0F, y - 52.0F},
                      .zIndex = WORLD_MAP_Z_TEXT},
         .layout = {.sizing = {CLAY_SIZING_FIXED(50.0F),
                               CLAY_SIZING_FIT(0)},

@@ -360,9 +360,7 @@
       "expected_threat_with_starter_loadout": "easy",
       "reward_xp": 8,
       "reward_gold": 5,
-      "reward_items": [
-        "seeker_token_unlock"
-      ],
+      "reward_items": [],
       "level_band": [
         1,
         1
@@ -704,6 +702,62 @@
         "act_i_proof",
         "black_sun_blade"
       ]
+    },
+    {
+      "id": "mill_yard_farm",
+      "display_name": "Бродячие падальщики",
+      "archetype": "repeatable_farm",
+      "role": "repeatable_farm",
+      "level_band": [
+        2,
+        2
+      ],
+      "visual_asset_id": "asset_enemy_mill_scavenger",
+      "vitality": 26,
+      "strength": 0,
+      "protection": 5,
+      "intuition": 0,
+      "weapon_damage": 5,
+      "bonus_attack_power": 0,
+      "attack_power": 5,
+      "attack_interval": 2.1,
+      "target_duration_seconds": [
+        6,
+        18
+      ],
+      "expected_threat_with_intended_loadout": "fair",
+      "repeatable": true,
+      "reward_xp": 2,
+      "reward_gold": 4,
+      "reward_items": []
+    },
+    {
+      "id": "cellar_knifeman_farm",
+      "display_name": "Нож Черного Солнца",
+      "archetype": "repeatable_farm",
+      "role": "repeatable_farm",
+      "level_band": [
+        4,
+        4
+      ],
+      "visual_asset_id": "asset_enemy_cellar_knifeman",
+      "vitality": 32,
+      "strength": 0,
+      "protection": 8,
+      "intuition": 8,
+      "weapon_damage": 7,
+      "bonus_attack_power": 0,
+      "attack_power": 7,
+      "attack_interval": 1.9,
+      "target_duration_seconds": [
+        6,
+        18
+      ],
+      "expected_threat_with_intended_loadout": "fair",
+      "repeatable": true,
+      "reward_xp": 3,
+      "reward_gold": 7,
+      "reward_items": []
     }
   ],
   "outcomes": {

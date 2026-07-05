@@ -34,7 +34,9 @@
       "chain_bearer",
       "black_sun_acolyte",
       "relic_warden",
-      "black_sun_captain"
+      "black_sun_captain",
+      "mill_yard_farm",
+      "cellar_knifeman_farm"
     ],
     "items": [
       "black_sun_charm",
@@ -216,7 +218,9 @@
       "encounter.chain_bearer.win",
       "encounter.black_sun_acolyte.win",
       "encounter.relic_warden.win",
-      "encounter.black_sun_captain.win"
+      "encounter.black_sun_captain.win",
+      "encounter.mill_yard_farm.win",
+      "encounter.cellar_knifeman_farm.win"
     ],
     "flags": [
       "gate_guard_intro_seen",

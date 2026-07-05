@@ -213,6 +213,8 @@ int main(int argc, char *argv[]) {
     nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/nav_v11_place.png", &nav_opts);
     nav_opts.name = "nav_v11_more";
     nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/nav_v11_more.png", &nav_opts);
+    nav_opts.name = "nav_overlay_lock";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/garrison_nav_tokens_03/slices/nav_overlay_lock.png", &nav_opts);
 
     nt_atlas_sprite_opts_t top_hud_opts = nt_atlas_sprite_opts_defaults();
     top_hud_opts.origin_x = 0.5F;

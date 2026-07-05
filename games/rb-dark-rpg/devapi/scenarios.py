@@ -374,7 +374,8 @@ def _prepare_gate_turn_in_state(game: Any) -> None:
                 "quests.tracked_quest_id": "q001_gate_pass",
                 "quests.quest_states": {
                     "q001_gate_pass": {
-                        "status": "ready_to_turn_in",
+                        "status": "active",
+                        "current_step_id": "report_to_gate_guard",
                         "objective_progress": 0,
                         "last_update_reason": "runtime_guard_turn_in_fixture",
                     }
@@ -385,7 +386,6 @@ def _prepare_gate_turn_in_state(game: Any) -> None:
                     "equip_padded_jacket",
                     "equip_leather_greaves",
                     "clear_gate_scavenger",
-                    "report_to_gate_guard",
                 ],
                 "quests.claimed_reward_ids": [],
                 "inventory.stack_instances": {},
@@ -770,8 +770,12 @@ def prepare_gate_guard_turn_in_from_place(game: Any, viewport: Any) -> dict[str,
     tree, node = _wait_for_node(game, "dialogue/primary_choice_inline")
     _tap_node(game, tree, node, viewport)
     _wait_for_quest_status(game, "q001_gate_pass", "completed")
+    quest = _wait_for_quest_status(game, "q002_bread_for_post", "active")
+    if quest.get("current_step_id") != "visit_old_mill":
+        raise RuntimeError(f"q002_bread_for_post did not start at visit_old_mill: {quest!r}")
     _wait_for_state_value(game, "hero.xp", 12)
     _wait_for_state_value(game, "quests.claimed_reward_ids", ["dlg_gate_guard_turn_in.take_token.completion"])
+    _wait_for_stack_count(game, "seeker_token", 1)
     _wait_for_state_value(
         game,
         "flags.ids",
@@ -794,12 +798,6 @@ def prepare_q002_elder_contract_flow(game: Any, viewport: Any) -> dict[str, str]
     """Play the first q002 story loop through Place, Map, Old Mill inspect, and Elder turn-in."""
 
     prepare_gate_guard_turn_in_from_place(game, viewport)
-
-    _open_bottom_nav_slot(game, viewport, 3)
-    tree, node = _wait_for_node(game, "world_place/object/hub_last_post.elder")
-    _tap_node(game, tree, node, viewport)
-    tree, node = _wait_for_node(game, "dialogue/primary_choice_inline")
-    _tap_node(game, tree, node, viewport)
     quest = _wait_for_quest_status(game, "q002_bread_for_post", "active")
     if quest.get("current_step_id") != "visit_old_mill":
         raise RuntimeError(f"q002_bread_for_post did not start at visit_old_mill: {quest!r}")
@@ -864,7 +862,8 @@ def prepare_combat_result(game: Any, viewport: Any) -> dict[str, str]:
     _wait_for_state_value(game, "hero.xp", 8)
     _wait_for_state_value(game, "wallet.gold", 5)
     _wait_for_state_value(game, "quests.claimed_reward_ids", ["encounter.gate_scavenger.win"])
-    _wait_for_stack_count(game, "seeker_token_unlock", 1)
+    _wait_for_stack_count(game, "seeker_token_unlock", 0)
+    _wait_for_stack_count(game, "seeker_token", 0)
     _wait_for_state_value(
         game,
         "flags.ids",
@@ -908,7 +907,7 @@ def prepare_combat_loss_result(game: Any, viewport: Any) -> dict[str, str]:
     _wait_for_node(game, "combat/prefight")
     _tap_by_id_bounds(game, viewport, "combat/prefight_start", max_frames=60)
     _wait_for_node(game, "combat/result", max_frames=720, stride=8)
-    _wait_for_state_value(game, "hero.hp", 1)
+    _wait_for_state_value(game, "hero.hp", 33)
     _wait_for_state_value(game, "hero.xp", 0)
     _wait_for_state_value(game, "wallet.gold", 0)
     _wait_for_state_value(game, "world.current_location_id", "hub_last_post")
@@ -936,14 +935,12 @@ def prepare_combat_loss_result(game: Any, viewport: Any) -> dict[str, str]:
 
 
 def prepare_combat_loss_recovered_hub(game: Any, viewport: Any) -> dict[str, str]:
-    """Lose the first combat, return to the post, heal, and stop on the hub Place sheet."""
+    """Lose the first combat, close the result, and stop on the recovered hub Place sheet."""
 
     prepare_combat_loss_result(game, viewport)
     _tap_by_id(game, viewport, "combat/result_close", max_frames=60)
     _open_bottom_nav_slot(game, viewport, 3)
     _open_place_tab(game, viewport, "environment")
-    tree, node = _wait_for_node(game, "world_place/object/hub_last_post.healer")
-    _tap_node(game, tree, node, viewport)
     _wait_for_state_value(game, "hero.hp", 33)
     _wait_for_state_value(game, "hero.xp", 0)
     _wait_for_state_value(game, "wallet.gold", 0)

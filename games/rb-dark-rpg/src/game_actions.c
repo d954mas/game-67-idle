@@ -1168,6 +1168,11 @@ bool game_actions_set_flag(GameState *state, const char *flag_id) {
                                   GAME_STATE_MAX_FLAGS_IDS, flag_id);
 }
 
+bool game_actions_has_flag(const GameState *state, const char *flag_id) {
+  return state && flag_id &&
+         list_contains(state->flags_ids, state->flags_ids_count, flag_id);
+}
+
 bool game_actions_restore_hp(GameState *state) {
   if (!state) {
     return false;
@@ -1475,8 +1480,7 @@ bool game_actions_resolve_encounter(GameState *state, const char *encounter_id,
     return false;
   }
 
-  next.hero_hp =
-      result.outcome == GAME_COMBAT_OUTCOME_WIN ? result.player_hp : 1;
+  next.hero_hp = player_stats.vitality;
   if (result.outcome == GAME_COMBAT_OUTCOME_LOSS) {
     if (!copy_id(next.world_current_location_id, "hub_last_post")) {
       return false;
@@ -1495,7 +1499,10 @@ bool game_actions_resolve_encounter(GameState *state, const char *encounter_id,
                  encounter_id) >= (int)sizeof reward_id) {
       return false;
     }
+    // Repeatable farm encounters pay gold/xp on every win and are never
+    // recorded as claimed; unique item rewards stay one-shot only.
     const bool already_claimed =
+        !encounter->repeatable &&
         list_contains(next.quests_claimed_reward_ids,
                       next.quests_claimed_reward_ids_count, reward_id);
     if (!already_claimed) {
@@ -1511,13 +1518,15 @@ bool game_actions_resolve_encounter(GameState *state, const char *encounter_id,
         }
         next.wallet_gold += encounter->reward_gold;
       }
-      for (int i = 0; i < encounter->reward_item_count; ++i) {
-        if (!game_actions_grant_item(&next, encounter->reward_items[i], 1)) {
+      if (!encounter->repeatable) {
+        for (int i = 0; i < encounter->reward_item_count; ++i) {
+          if (!game_actions_grant_item(&next, encounter->reward_items[i], 1)) {
+            return false;
+          }
+        }
+        if (!game_actions_claim_reward_once(&next, reward_id)) {
           return false;
         }
-      }
-      if (!game_actions_claim_reward_once(&next, reward_id)) {
-        return false;
       }
       result.reward_granted = true;
     }

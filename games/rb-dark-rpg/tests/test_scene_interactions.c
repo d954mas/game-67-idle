@@ -1,4 +1,5 @@
 #include "scene/scene_interactions.h"
+#include "game_actions.h"
 #include "game_dialogue.h"
 #include "game_state.h"
 
@@ -42,8 +43,12 @@ static void test_disabled_scene_objects_are_not_shown(void) {
     int count = 0;
     const scene_interaction_object_t *objects = scene_interactions_all(&w, &count);
     assert(objects != 0);
-    assert(count == 1);
+    /* Scene shows only scene-enabled objects: the guard and the town trader.
+     * Disabled objects (blacksmith, caged scavenger, etc.) stay out. */
+    assert(count == 2);
     assert(strcmp(objects[0].id, GUARD_ID) == 0);
+    assert(strcmp(objects[1].id, "hub_last_post.town_trader") == 0);
+    assert(scene_interactions_find(&w, "hub_last_post.town_trader") != 0);
     assert(scene_interactions_find(&w, "hub_last_post.blacksmith") == 0);
     assert(scene_interactions_hit_test(&w, 448.0f, 280.0f) == 0);
 }
@@ -149,6 +154,25 @@ static void test_guard_release_opens_dialogue_without_completing_step(void) {
     assert(w.first_scene.activated_object_id == 0);
 }
 
+static void test_guard_release_opens_turn_in_dialogue_after_gate_fight(void) {
+    World w = {0};
+    GameState state;
+    game_state_init_defaults(&state);
+    assert(game_actions_start_quest(&state, "q001_gate_pass",
+                                    "report_to_gate_guard", "test"));
+    w.player_state = &state;
+    w.first_scene.objective_object_id = GUARD_ID;
+    w.first_scene.tutorial_guard_talk_completed = false;
+
+    scene_interactions_update_pointer_state(&w, GUARD_ID, true, true, false);
+    scene_interactions_update_pointer_state(&w, GUARD_ID, false, false, true);
+
+    assert(strcmp(w.first_scene.activated_object_id, GUARD_ID) == 0);
+    assert(w.dialogue.open);
+    assert(w.dialogue.definition != 0);
+    assert(strcmp(w.dialogue.definition->id, "dlg_gate_guard_turn_in") == 0);
+}
+
 static void test_release_outside_does_not_complete_tutorial(void) {
     World w = {0};
     scene_interactions_update_pointer_state(&w, GUARD_ID, true, true, false);
@@ -235,6 +259,7 @@ int main(void) {
     test_visual_flags_compose_states();
     test_pointer_state_captures_pan_while_pressed();
     test_guard_release_opens_dialogue_without_completing_step();
+    test_guard_release_opens_turn_in_dialogue_after_gate_fight();
     test_release_outside_does_not_complete_tutorial();
     test_modal_suppression_clears_press_before_release();
     test_tutorial_finger_requires_current_objective();

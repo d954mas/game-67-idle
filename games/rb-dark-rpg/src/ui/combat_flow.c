@@ -78,6 +78,7 @@ typedef enum combat_reward_icon_art_t {
 
 static const char *FIRST_ENCOUNTER_STEP_ID = "clear_gate_scavenger";
 static const char *FIRST_ENCOUNTER_FLAG_ID = "gate_scavenger_defeated";
+static const char *FIRST_ENCOUNTER_ID = "gate_scavenger";
 
 static nt_resource_t s_combat_actor_atlas;
 static nt_atlas_region_ref_t s_combat_actor_regions[COMBAT_ACTOR_ART_COUNT];
@@ -1236,6 +1237,12 @@ static void running_ui(nt_ui_context_t *ctx, World *w, const game_encounter_defi
     if (progress >= 1.0F && !w->combat.result_applied) {
         if (game_actions_resolve_encounter(w->player_state, w->combat.encounter_id, &w->combat.result)) {
             w->combat.result_applied = true;
+            if (w->combat.result.outcome == GAME_COMBAT_OUTCOME_WIN &&
+                strcmp(w->combat.encounter_id, FIRST_ENCOUNTER_ID) == 0) {
+                w->first_scene.objective_object_id = "hub_last_post.gate_guard";
+                w->first_scene.tutorial_guard_talk_completed = false;
+                w->first_scene.current_objective_text = "Вернись к стражнику";
+            }
             game_audio_play(w->combat.result.outcome == GAME_COMBAT_OUTCOME_WIN ? GAME_AUDIO_CUE_COMBAT_VICTORY
                                                                                  : GAME_AUDIO_CUE_COMBAT_DEFEAT);
             if (w->combat.result.reward_granted) {
@@ -1285,7 +1292,7 @@ static void result_ui(nt_ui_context_t *ctx, World *w, const game_encounter_defin
         (void)snprintf(next_step, sizeof next_step, "Можно продолжать.");
     } else {
         (void)snprintf(rewards, sizeof rewards, "Награда не получена. Прогресс задания не изменился.");
-        (void)snprintf(next_step, sizeof next_step, "Ты вернулся к посту с 1 HP. Восстанови HP или проверь снаряжение.");
+        (void)snprintf(next_step, sizeof next_step, "Ты вернулся к посту. HP восстановлены, проверь снаряжение.");
     }
 
     CLAY({.id = CLAY_ID("combat/result"),

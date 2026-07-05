@@ -10,6 +10,7 @@
 #define TUTORIAL_CALLOUT_LAYER_SHADOW 29
 #define TUTORIAL_CALLOUT_LAYER_TEXT 30
 #define TUTORIAL_CALLOUT_LAYER_FINGER 31
+#define TUTORIAL_CALLOUT_Z_INDEX (NT_UI_MODAL_ZBAND_STRIDE + 80)
 
 static nt_resource_t s_ui_atlas;
 static nt_atlas_region_ref_t s_finger_region;
@@ -100,7 +101,8 @@ void tutorial_callout_ui(nt_ui_context_t *ctx, const tutorial_callout_desc_t *de
     CLAY({.id = CLAY_IDI("tutorial_callout/root", desc->slot),
           .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
                        .attachPoints = {.element = clay_anchor(desc->element_anchor), .parent = clay_anchor(desc->parent_anchor)},
-                       .offset = {desc->offset_x, desc->offset_y}},
+                       .offset = {desc->offset_x, desc->offset_y},
+                       .zIndex = TUTORIAL_CALLOUT_Z_INDEX},
           .layout = {.sizing = {CLAY_SIZING_FIXED(style->width), CLAY_SIZING_FIXED(style->height)},
                      .padding = {.left = style->padding_left,
                                  .right = style->padding_right,
@@ -133,7 +135,8 @@ void tutorial_finger_ui(nt_ui_context_t *ctx, const tutorial_finger_desc_t *desc
     CLAY({.id = CLAY_IDI("tutorial_callout/finger", desc->slot),
           .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
                        .attachPoints = {.element = CLAY_ATTACH_POINT_LEFT_TOP, .parent = CLAY_ATTACH_POINT_LEFT_TOP},
-                       .offset = {desc->offset_x, desc->offset_y}},
+                       .offset = {desc->offset_x, desc->offset_y},
+                       .zIndex = TUTORIAL_CALLOUT_Z_INDEX + 1},
           .layout = {.sizing = {CLAY_SIZING_FIXED(desc->size), CLAY_SIZING_FIXED(desc->size)}}}) {
         nt_ui_image_style_t style = nt_ui_image_style_defaults();
         style.flip_bits = desc->flip_bits;

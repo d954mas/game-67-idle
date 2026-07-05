@@ -121,6 +121,14 @@ bool game_dialogue_select_choice(World *w, const char *choice_id) {
       w->first_scene.contract_board_locked = true;
       w->first_scene.current_objective_text = "Надеть выданное снаряжение";
     }
+    if (strcmp(choice->quest_id, "q001_gate_pass") == 0 &&
+        strcmp(choice->step_id, "report_to_gate_guard") == 0) {
+      // Gate pass complete: drop the guard objective so the scene finger/callout
+      // (re-armed after the gate fight) stops pointing at the guard.
+      w->first_scene.objective_object_id = NULL;
+      w->first_scene.tutorial_guard_talk_completed = true;
+      w->first_scene.current_objective_text = NULL;
+    }
     game_dialogue_close(w);
     return true;
   }

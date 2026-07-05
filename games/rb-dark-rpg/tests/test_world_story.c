@@ -73,6 +73,24 @@ static void test_world_content_registry(void) {
   assert(game_content_location_at(-1) == 0);
   assert(game_content_location_at(game_content_location_count()) == 0);
 
+  assert(game_content_quest_count() >= 2);
+  assert(game_content_quest_at(0) != 0);
+  assert(game_content_quest_at(-1) == 0);
+  assert(game_content_quest_at(game_content_quest_count()) == 0);
+  const game_quest_definition_t *gate_quest =
+      game_content_find_quest("q001_gate_pass");
+  assert(gate_quest != 0);
+  assert(strcmp(gate_quest->title, "Допуск за ворота") == 0);
+  assert(gate_quest->step_count >= 6);
+  const game_quest_step_definition_t *gate_step =
+      game_content_find_quest_step("q001_gate_pass", "clear_gate_scavenger");
+  assert(gate_step != 0);
+  assert(strcmp(gate_step->title,
+                "Проверить себя на падальщике в клетке") == 0);
+  assert(strcmp(gate_step->location_id, "hub_last_post") == 0);
+  assert(game_content_find_quest("missing_quest") == 0);
+  assert(game_content_find_quest_step("q001_gate_pass", "missing_step") == 0);
+
   const game_location_definition_t *last_post =
       game_content_find_location("hub_last_post");
   assert(last_post != 0);
@@ -88,11 +106,11 @@ static void test_world_content_registry(void) {
                 "dlg_gate_guard_turn_in") == 0);
   assert(last_post->objects[0].interactions[0].requirement_count == 1);
   assert(last_post->objects[0].interactions[0].requirements[0].kind ==
-         GAME_LOCATION_REQUIREMENT_QUEST_STATUS);
+         GAME_LOCATION_REQUIREMENT_QUEST_STEP);
   assert(strcmp(last_post->objects[0].interactions[0].requirements[0].id,
                 "q001_gate_pass") == 0);
-  assert(strcmp(last_post->objects[0].interactions[0].requirements[0].status,
-                "ready_to_turn_in") == 0);
+  assert(strcmp(last_post->objects[0].interactions[0].requirements[0].step_id,
+                "report_to_gate_guard") == 0);
   assert(strcmp(last_post->objects[0].interactions[1].dialogue_id,
                 "dlg_gate_guard_intro") == 0);
   const game_location_object_t *caged_scavenger =
@@ -151,7 +169,7 @@ static void test_world_content_registry(void) {
   assert(old_mill != 0);
   assert(old_mill->unlock_kind == GAME_LOCATION_UNLOCK_FLAG);
   assert(strcmp(old_mill->unlock_flag_id, "old_mill_unlocked") == 0);
-  assert(old_mill->object_count == 3);
+  assert(old_mill->object_count == 5);
   assert(strcmp(old_mill->objects[1].asset_id,
                 "asset_object_black_sun_clue_wall") == 0);
   assert(old_mill->objects[1].interaction_count == 1);
@@ -178,10 +196,11 @@ static void test_location_object_interaction_selection_uses_state(void) {
   assert(strcmp(interaction->interaction_type, "dialogue") == 0);
   assert(strcmp(interaction->dialogue_id, "dlg_gate_guard_intro") == 0);
 
+  /* After the gate fight the quest rests ACTIVE on the return step; the guard
+   * must offer the turn-in dialogue at that resting state (not only during the
+   * transient READY_TO_TURN_IN flip that the turn-in choice itself performs). */
   assert(game_actions_start_quest(&state, "q001_gate_pass",
                                   "report_to_gate_guard", "test"));
-  assert(game_actions_complete_step(&state, "q001_gate_pass",
-                                    "report_to_gate_guard", 0, "test"));
   interaction = game_actions_select_location_interaction(&state, guard);
   assert(interaction != 0);
   assert(strcmp(interaction->interaction_type, "dialogue") == 0);

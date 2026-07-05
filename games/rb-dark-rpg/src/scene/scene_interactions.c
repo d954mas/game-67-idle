@@ -26,6 +26,33 @@ static const char *current_location_id(const World *w) {
                : "hub_last_post";
 }
 
+static const game_location_object_t *current_location_object(const World *w, const char *object_id) {
+    const game_location_definition_t *location = game_content_find_location(current_location_id(w));
+    if (!location || !object_id) {
+        return NULL;
+    }
+    for (int i = 0; i < location->object_count; ++i) {
+        if (str_eq(location->objects[i].id, object_id)) {
+            return &location->objects[i];
+        }
+    }
+    return NULL;
+}
+
+static bool activate_scene_object(World *w, const char *object_id) {
+    if (!w || !w->player_state || !object_id) {
+        return false;
+    }
+    const game_location_object_t *object = current_location_object(w, object_id);
+    const game_location_interaction_t *interaction =
+        game_actions_select_location_interaction(w->player_state, object);
+    if (!interaction || !str_eq(interaction->interaction_type, "dialogue") ||
+        !interaction->dialogue_id) {
+        return false;
+    }
+    return game_dialogue_open(w, interaction->dialogue_id);
+}
+
 static scene_object_kind_t scene_kind_for_location_object(const game_location_object_t *object) {
     if (!object || !object->kind) {
         return SCENE_OBJECT_KIND_PROP;
@@ -157,10 +184,7 @@ void scene_interactions_update_pointer_state(World *w, const char *hit_object_id
         w->first_scene.hovered_object_id = hit_object_id;
         if (pressed_object_id && str_eq(pressed_object_id, hit_object_id)) {
             w->first_scene.activated_object_id = hit_object_id;
-            if (str_eq(hit_object_id, "hub_last_post.gate_guard") &&
-                str_eq(w->first_scene.objective_object_id, "hub_last_post.gate_guard")) {
-                (void)game_dialogue_open(w, "dlg_gate_guard_intro");
-            }
+            (void)activate_scene_object(w, hit_object_id);
         }
         return;
     }

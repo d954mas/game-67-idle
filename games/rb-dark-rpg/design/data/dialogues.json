@@ -239,6 +239,11 @@
                 {
                   "type": "complete_quest",
                   "quest_id": "q001_gate_pass"
+                },
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q002_bread_for_post",
+                  "step_id": "accept_bread_contract"
                 }
               ]
             }

@@ -40,9 +40,9 @@
               "dialogue_id": "dlg_gate_guard_turn_in",
               "requirements": [
                 {
-                  "type": "quest_status",
+                  "type": "quest_step",
                   "quest_id": "q001_gate_pass",
-                  "status": "ready_to_turn_in"
+                  "step_id": "report_to_gate_guard"
                 }
               ]
             },
@@ -93,7 +93,7 @@
             "anchor_y": 118,
             "sprite_region_name": "hub_scene/asset_character_town_trader",
             "sprite_target_h": 136,
-            "enabled": false
+            "enabled": true
           },
           "interactions": [
             {
@@ -540,6 +540,64 @@
             {
               "type": "start_encounter",
               "encounter_id": "mill_brute"
+            }
+          ]
+        },
+        {
+          "id": "old_mill.yard_scavengers",
+          "kind": "combat",
+          "display_name": "Бродячие падальщики",
+          "asset_id": "asset_enemy_mill_scavenger_scene",
+          "encounter_id": "mill_yard_farm",
+          "position_hint": "yard_patrol",
+          "scene": {
+            "bounds": { "x": 590, "y": 104, "w": 116, "h": 164 },
+            "anchor_x": 648,
+            "anchor_y": 108,
+            "sprite_region_name": "hub_scene/asset_enemy_mill_scavenger_scene",
+            "sprite_target_h": 150,
+            "enabled": false
+          },
+          "requirements": [
+            {
+              "type": "quest_status",
+              "quest_id": "q002_bread_for_post",
+              "status": "completed"
+            }
+          ],
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "mill_yard_farm"
+            }
+          ]
+        },
+        {
+          "id": "old_mill.cellar_knifeman",
+          "kind": "combat",
+          "display_name": "Нож Черного Солнца",
+          "asset_id": "asset_enemy_cellar_knifeman_scene",
+          "encounter_id": "cellar_knifeman_farm",
+          "position_hint": "cellar_hatch",
+          "scene": {
+            "bounds": { "x": 986, "y": 104, "w": 116, "h": 164 },
+            "anchor_x": 1044,
+            "anchor_y": 108,
+            "sprite_region_name": "hub_scene/asset_enemy_cellar_knifeman_scene",
+            "sprite_target_h": 150,
+            "enabled": false
+          },
+          "requirements": [
+            {
+              "type": "quest_status",
+              "quest_id": "q002_bread_for_post",
+              "status": "completed"
+            }
+          ],
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "cellar_knifeman_farm"
             }
           ]
         }

@@ -69,6 +69,7 @@ bool game_actions_complete_quest(GameState *state, const char *quest_id,
 bool game_actions_claim_reward_once(GameState *state, const char *reward_id);
 bool game_actions_record_choice(GameState *state, const char *choice_id);
 bool game_actions_set_flag(GameState *state, const char *flag_id);
+bool game_actions_has_flag(const GameState *state, const char *flag_id);
 bool game_actions_restore_hp(GameState *state);
 bool game_actions_shop_item_available(const GameState *state,
                                       const game_shop_item_t *shop_item);

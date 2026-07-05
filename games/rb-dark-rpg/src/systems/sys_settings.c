@@ -9,6 +9,7 @@
 #include "scene/scene_interactions.h"
 #include "ui/equipment_screen.h"
 #include "ui/game_modal.h"
+#include "ui/journal_screen.h"
 #include "ui/location_screen.h"
 #include "ui/nt_ui_button.h"
 #include "ui/nt_ui_label.h"
@@ -73,6 +74,7 @@ void sys_settings_force_open(void) {
     if (!s_open) {
         s_dismiss_guard_frames = 2;
     }
+    journal_screen_set_open(false);
     s_open = true;
 }
 bool sys_settings_is_open(void) { return s_open; }
@@ -118,6 +120,7 @@ static bool settings_reset_game(World *w) {
     w->player_yaw = 0.0F;
     scene_interactions_init_first_scene(w);
     equipment_screen_set_open(false);
+    journal_screen_set_open(false);
     location_screen_set_open(false);
     world_map_screen_set_open(false);
     shop_screen_set_open(false);
@@ -254,6 +257,7 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
                 game_audio_play(GAME_AUDIO_CUE_SETTINGS);
                 if (!s_open) {
                     s_dismiss_guard_frames = 2;
+                    journal_screen_set_open(false);
                     s_open = true;
                 } else {
                     s_open = false;

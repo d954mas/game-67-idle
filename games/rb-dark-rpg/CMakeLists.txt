@@ -271,6 +271,7 @@ add_executable(${GAME_TARGET}
     src/ui/hud.c
     src/ui/first_screen_hud.c
     src/ui/bottom_nav.c
+    src/ui/journal_screen.c
     src/ui/location_screen.c
     src/ui/world_map_screen.c
     src/ui/world_map_viewport.c

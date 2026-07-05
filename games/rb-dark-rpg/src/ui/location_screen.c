@@ -344,9 +344,12 @@ static bool is_person_object(const game_location_object_t *object,
 static bool object_matches_tab(const GameState *state,
                                const game_location_object_t *object,
                                location_tab_t tab) {
+  if (!object || !game_actions_location_object_visible(state, object)) {
+    return false;
+  }
   const game_location_interaction_t *interaction =
       game_actions_select_location_interaction(state, object);
-  if (!interaction || !object) {
+  if (!interaction) {
     return false;
   }
   const bool combat = is_combat_object(object) ||

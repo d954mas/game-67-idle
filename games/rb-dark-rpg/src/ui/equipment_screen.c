@@ -1503,8 +1503,8 @@ void equipment_screen_ui(nt_ui_context_t *ctx, World *w) {
         }
         nt_ui_panel_end(ctx);
     }
-    nt_ui_modal_end(ctx);
     selected_item_modal_ui(ctx, w, portrait);
+    nt_ui_modal_end(ctx);
     if (s_dismiss_guard_frames > 0) {
         --s_dismiss_guard_frames;
     }

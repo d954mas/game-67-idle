@@ -24,7 +24,7 @@
 ## Обязательные строки
 - Made for VibeJam #1
 - Канал джема: https://t.me/VibeYura
-- Автор: https://t.me/AUTHOR_TG_PLACEHOLDER  ← ЗАМЕНИТЬ перед публикацией
+- Автор: https://t.me/d954mas_make_games  ← ЗАМЕНИТЬ перед публикацией
 
 ## Настройки страницы itch.io
 - Kind of project: HTML — «This file will be played in the browser».
@@ -34,7 +34,7 @@
 - Скриншоты: хаб, префайт mill_brute, бой, финальный экран «Мир без тебя».
 
 ## Чеклист сдачи
-- [ ] Заменить AUTHOR_TG_PLACEHOLDER в src/systems/sys_settings.c и на странице.
+- [x] TG автора вписан: https://t.me/d954mas_make_games (настройки + страница).
 - [ ] Финальный wasm: bash tools/dev_rebuild.sh && bash tools/package_web.sh.
 - [ ] Ручная проверка в браузере: дуга q001→финал, звук, ссылки из настроек.
 - [ ] Опубликовать на itch.io, проверить билд в браузере с самой страницы.

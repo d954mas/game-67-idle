@@ -2,6 +2,7 @@
 
 #include "clay.h"
 #include "atlas/nt_atlas.h"
+#include "game_actions.h"
 #include "game_audio.h"
 #include "generated/game_assets.h"
 #include "hash/nt_hash.h"
@@ -10,6 +11,7 @@
 #include "resource/nt_resource.h"
 #include "ui/combat_flow.h"
 #include "ui/equipment_screen.h"
+#include "ui/journal_screen.h"
 #include "ui/location_screen.h"
 #include "ui/nt_ui_label.h"
 #include "ui/shop_screen.h"
@@ -76,6 +78,7 @@ static const nt_hash64_t NAV_REGION_HASHES[] = {
 
 static nt_resource_t s_atlas;
 static nt_atlas_region_ref_t s_regions[sizeof NAV_ITEMS / sizeof NAV_ITEMS[0]];
+static nt_atlas_region_ref_t s_lock_region;
 static bottom_nav_id_t s_active = BOTTOM_NAV_NONE;
 static bottom_nav_id_t s_open_sheet = BOTTOM_NAV_NONE;
 
@@ -141,6 +144,23 @@ static void ensure_regions(void) {
     for (int i = 0; i < (int)(sizeof NAV_ITEMS / sizeof NAV_ITEMS[0]); ++i) {
       s_regions[i] = nt_atlas_ref(s_atlas, NAV_REGION_HASHES[i].value);
     }
+    s_lock_region =
+        nt_atlas_ref(s_atlas, ASSET_ATLAS_REGION_UI_NAV_OVERLAY_LOCK.value);
+  }
+}
+
+// Padlock overlay drawn centered over a locked nav tile.
+static void nav_lock_overlay(nt_ui_context_t *ctx, int slot, float size) {
+  (void)ctx;
+  CLAY({.id = CLAY_IDI("bottom_nav/lock", slot),
+        .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
+                     .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER,
+                                      .parent = CLAY_ATTACH_POINT_CENTER_CENTER}},
+        .layout = {.sizing = {CLAY_SIZING_FIXED(size), CLAY_SIZING_FIXED(size)},
+                   .childAlignment = {CLAY_ALIGN_X_CENTER,
+                                      CLAY_ALIGN_Y_CENTER}}}) {
+    nav_image_visual(NT_UI_DATA_LAYER(LAYER_NAV_BADGE), &s_lock_region,
+                     0xFFFFFFFFU, NULL);
   }
 }
 
@@ -229,7 +249,7 @@ static void bottom_sheet_ui(nt_ui_context_t *ctx, float nav_h,
 
 bool bottom_nav_sheet_open(void) {
   return s_open_sheet != BOTTOM_NAV_NONE || equipment_screen_open() ||
-         location_screen_open() || world_map_screen_open() ||
+         journal_screen_open() || location_screen_open() || world_map_screen_open() ||
          shop_screen_open();
 }
 
@@ -267,6 +287,10 @@ void bottom_nav_ui(nt_ui_context_t *ctx, World *w) {
            .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
     for (int i = 0; i < (int)(sizeof NAV_ITEMS / sizeof NAV_ITEMS[0]); ++i) {
       const bool active = s_active == NAV_ITEMS[i].id;
+      const bool locked = NAV_ITEMS[i].id == BOTTOM_NAV_MAP && w &&
+                          w->player_state &&
+                          !game_actions_has_flag(w->player_state,
+                                                 "map_gate_unlocked");
       const Clay_ElementId slot_id = nav_slot_clay_id(NAV_ITEMS[i].id);
       const uint32_t id = slot_id.id;
       const int16_t hit_pad[4] = {4, 4, 4, 4};
@@ -276,7 +300,7 @@ void bottom_nav_ui(nt_ui_context_t *ctx, World *w) {
                        .childAlignment = {CLAY_ALIGN_X_CENTER,
                                           CLAY_ALIGN_Y_CENTER}},
             .userData = NT_UI_CLAY_DATA(LAYER_NAV_ART)}) {
-        nt_ui_widget_register(ctx, id, &NAV_BUTTON_DEF, hit_pad, true);
+        nt_ui_widget_register(ctx, id, &NAV_BUTTON_DEF, hit_pad, !locked);
         const nt_ui_interaction_t preview =
             nt_ui_query_interaction_padded(ctx, id, hit_pad);
         const float visual_scale =
@@ -284,9 +308,11 @@ void bottom_nav_ui(nt_ui_context_t *ctx, World *w) {
                            : (preview.hovered ? 1.045F
                                              : (active ? 1.015F : 1.0F));
         const uint32_t image_tint =
-            preview.pressed ? 0xFFE3E3E3U
-                           : ((preview.hovered || active) ? 0xFFFFFFFFU
-                                                         : 0xFFF0F0F0U);
+            locked ? 0xFF666666U
+                   : (preview.pressed ? 0xFFE3E3E3U
+                                     : ((preview.hovered || active)
+                                            ? 0xFFFFFFFFU
+                                            : 0xFFF0F0F0U));
         const nt_ui_label_style_t label =
             label_style(label_font * visual_scale, 246.0F, 229.0F, 194.0F, 255.0F);
 
@@ -306,36 +332,51 @@ void bottom_nav_ui(nt_ui_context_t *ctx, World *w) {
                   {.attachTo = CLAY_ATTACH_TO_PARENT,
                    .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_BOTTOM,
                                     .parent = CLAY_ATTACH_POINT_CENTER_BOTTOM},
-                   .offset = {0.0F, portrait ? -6.0F : -7.0F}},
+                   .offset = {0.0F, (portrait ? -6.0F : -7.0F) +
+                                       (preview.pressed ? 1.0F : 0.0F)}},
               .layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0)}}}) {
           nav_shadowed_label(ctx, i, NAV_ITEMS[i].label, &label);
         }
         nav_badge(ctx, i, NULL);
+        if (locked) {
+          nav_lock_overlay(ctx, i, btn_w * 0.52F);
+        }
 
         const nt_ui_events_t events = nt_ui_events_padded(ctx, id, NULL, hit_pad);
-        if (events.clicked) {
+        if (events.clicked && !locked) {
           game_audio_play(GAME_AUDIO_CUE_UI_CLICK);
           s_active = NAV_ITEMS[i].id;
           if (NAV_ITEMS[i].id == BOTTOM_NAV_EQUIPMENT) {
             s_open_sheet = BOTTOM_NAV_NONE;
+            journal_screen_set_open(false);
             world_map_screen_set_open(false);
             location_screen_set_open(false);
             shop_screen_set_open(false);
             equipment_screen_toggle();
+          } else if (NAV_ITEMS[i].id == BOTTOM_NAV_JOURNAL) {
+            equipment_screen_set_open(false);
+            world_map_screen_set_open(false);
+            location_screen_set_open(false);
+            shop_screen_set_open(false);
+            s_open_sheet = BOTTOM_NAV_NONE;
+            journal_screen_toggle();
           } else if (NAV_ITEMS[i].id == BOTTOM_NAV_MAP) {
             equipment_screen_set_open(false);
+            journal_screen_set_open(false);
             location_screen_set_open(false);
             shop_screen_set_open(false);
             s_open_sheet = BOTTOM_NAV_NONE;
             world_map_screen_toggle_map();
           } else if (NAV_ITEMS[i].id == BOTTOM_NAV_PLACE) {
             equipment_screen_set_open(false);
+            journal_screen_set_open(false);
             world_map_screen_set_open(false);
             shop_screen_set_open(false);
             s_open_sheet = BOTTOM_NAV_NONE;
             location_screen_toggle();
           } else if (NAV_ITEMS[i].id == BOTTOM_NAV_MORE) {
             equipment_screen_set_open(false);
+            journal_screen_set_open(false);
             location_screen_set_open(false);
             world_map_screen_set_open(false);
             shop_screen_set_open(false);
@@ -343,6 +384,7 @@ void bottom_nav_ui(nt_ui_context_t *ctx, World *w) {
                                                            : NAV_ITEMS[i].id;
           } else {
             equipment_screen_set_open(false);
+            journal_screen_set_open(false);
             location_screen_set_open(false);
             world_map_screen_set_open(false);
             shop_screen_set_open(false);

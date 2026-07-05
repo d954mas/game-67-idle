@@ -9,9 +9,11 @@
 #include "resource/nt_resource.h"
 #include "scene/scene_interactions.h"
 #include "scene/scene_layout.h"
+#include "systems/sys_settings.h"
 #include "ui/bottom_nav.h"
 #include "ui/combat_flow.h"
 #include "ui/equipment_screen.h"
+#include "ui/journal_screen.h"
 #include "ui/location_screen.h"
 #include "ui/nt_ui_image.h"
 #include "ui/nt_ui_label.h"
@@ -395,7 +397,7 @@ static bool objective_callout_screen_anchor(const World *w, float layout_w, floa
 }
 
 static void first_screen_tutorial_hint_ui(nt_ui_context_t *ctx, const World *w, bool portrait, float layout_w, float layout_h) {
-    if (bottom_nav_sheet_open() || combat_flow_is_open(w) || !w || w->dialogue.open) {
+    if (bottom_nav_sheet_open() || combat_flow_is_open(w) || sys_settings_is_open() || !w || w->dialogue.open) {
         return;
     }
 
@@ -480,10 +482,12 @@ void first_screen_hud_ui(nt_ui_context_t *ctx, World *w) {
 
         if (!combat_flow_is_open(w)) {
             equipment_screen_ui(ctx, w);
+            journal_screen_ui(ctx, w);
             location_screen_ui(ctx, w);
             world_map_screen_ui(ctx, w);
             shop_screen_ui(ctx, w);
-            if (!world_map_screen_open() && !location_screen_open() &&
+            if (!world_map_screen_open() && !journal_screen_open() &&
+                !location_screen_open() &&
                 !shop_screen_open()) {
                 bottom_nav_ui(ctx, w);
             }

@@ -207,6 +207,7 @@ typedef struct game_encounter_definition_t {
   const char *reward_items[GAME_CONTENT_MAX_ENCOUNTER_REWARD_ITEMS];
   int reward_item_count;
   const char *expected_threat;
+  bool repeatable;
 } game_encounter_definition_t;
 
 typedef struct game_quest_encounter_step_t {
@@ -216,6 +217,21 @@ typedef struct game_quest_encounter_step_t {
   const char *complete_flag_id;
   const char *unlock_id;
 } game_quest_encounter_step_t;
+
+typedef struct game_quest_step_definition_t {
+  const char *id;
+  const char *title;
+  const char *description;
+  const char *location_id;
+} game_quest_step_definition_t;
+
+typedef struct game_quest_definition_t {
+  const char *id;
+  const char *title;
+  const char *short_goal;
+  const game_quest_step_definition_t *steps;
+  int step_count;
+} game_quest_definition_t;
 
 const dialogue_definition_t *
 game_content_find_dialogue(const char *dialogue_id);
@@ -233,6 +249,11 @@ game_content_equipment_slot_at(int index);
 const game_combat_stats_t *game_content_base_player_stats(void);
 const game_encounter_definition_t *
 game_content_find_encounter(const char *encounter_id);
+const game_quest_definition_t *game_content_find_quest(const char *quest_id);
+int game_content_quest_count(void);
+const game_quest_definition_t *game_content_quest_at(int index);
+const game_quest_step_definition_t *
+game_content_find_quest_step(const char *quest_id, const char *step_id);
 const char *game_content_next_quest_step(const char *quest_id,
                                          const char *step_id);
 const game_quest_equip_step_t *

@@ -24,6 +24,7 @@ class FakeGame:
         self.wallet_gold = 0
         self.gear_instances = {}
         self.bag_order = []
+        self.stack_instances = {}
         self.flags_ids = []
         self.claimed_reward_ids = []
         self.combat_prefight_open = False
@@ -396,15 +397,28 @@ class FakeGame:
             self.combat_result_open = False
         elif click_id == "dialogue/primary_choice_inline":
             q001 = self.quest_states.get("q001_gate_pass")
-            if isinstance(q001, dict) and q001.get("status") == "ready_to_turn_in":
+            if isinstance(q001, dict) and (
+                q001.get("status") == "ready_to_turn_in"
+                or (
+                    q001.get("status") == "active"
+                    and q001.get("current_step_id") == "report_to_gate_guard"
+                )
+            ):
                 self.quest_states = {
                     "q001_gate_pass": {
                         "status": "completed",
                         "objective_progress": 0,
                         "last_update_reason": "dlg_gate_guard_turn_in.take_token",
+                    },
+                    "q002_bread_for_post": {
+                        "status": "active",
+                        "current_step_id": "visit_old_mill",
+                        "objective_progress": 0,
+                        "last_update_reason": "dlg_gate_guard_turn_in.take_token",
                     }
                 }
                 self.hero_xp = 12
+                self.stack_instances = {"seeker_token": {"count": 1}}
                 self.claimed_reward_ids = ["dlg_gate_guard_turn_in.take_token.completion"]
                 self.flags_ids = [
                     "gate_guard_intro_seen",
@@ -429,6 +443,7 @@ class FakeGame:
             self.wallet_gold = values.get("wallet.gold", self.wallet_gold)
             self.gear_instances = values.get("inventory.gear_instances", self.gear_instances)
             self.bag_order = values.get("inventory.bag_order", self.bag_order)
+            self.stack_instances = values.get("inventory.stack_instances", self.stack_instances)
             self.flags_ids = values.get("flags.ids", self.flags_ids)
             self.claimed_reward_ids = values.get("quests.claimed_reward_ids", self.claimed_reward_ids)
             if self.auto_open_dev_place and "dev_world_place_open" in self.flags_ids:
@@ -452,6 +467,8 @@ class FakeGame:
                 return {"path": path, "value": self.gear_instances}
             if path == "inventory.bag_order":
                 return {"path": path, "value": self.bag_order}
+            if path == "inventory.stack_instances":
+                return {"path": path, "value": self.stack_instances}
             if path == "flags.ids":
                 return {"path": path, "value": self.flags_ids}
             if path == "quests.claimed_reward_ids":
@@ -590,8 +607,11 @@ class WorldMapScenarioTest(unittest.TestCase):
         self.assertTrue(any(click.get("id") == "world_place/object/hub_last_post.gate_guard" for click in game.gestures))
         self.assertTrue(any(click.get("id") == "dialogue/primary_choice_inline" for click in game.gestures))
         self.assertEqual(game.quest_states["q001_gate_pass"]["status"], "completed")
+        self.assertEqual(game.quest_states["q002_bread_for_post"]["status"], "active")
+        self.assertEqual(game.quest_states["q002_bread_for_post"]["current_step_id"], "visit_old_mill")
         self.assertEqual(game.hero_xp, 12)
         self.assertIn("seeker_token_owned", game.flags_ids)
+        self.assertEqual(game.stack_instances["seeker_token"]["count"], 1)
         self.assertEqual(game.claimed_reward_ids, ["dlg_gate_guard_turn_in.take_token.completion"])
 
     def test_prepare_post_trader_shop_trade_sells_and_rebuys_instance(self):

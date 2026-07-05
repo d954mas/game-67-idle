@@ -275,12 +275,7 @@ static void test_generated_gate_encounter_is_available(void) {
     assert(encounter->enemy.weapon_damage == 4);
     assert(encounter->reward_xp == 8);
     assert(encounter->reward_gold == 5);
-    assert(encounter->reward_item_count == 1);
-    assert(strcmp(encounter->reward_items[0], "seeker_token_unlock") == 0);
-    const game_item_definition_t *token = game_content_find_item(encounter->reward_items[0]);
-    assert(token != 0);
-    assert(token->icon_asset_id != 0);
-    assert(strcmp(token->icon_asset_id, "asset_icon_seeker_token") == 0);
+    assert(encounter->reward_item_count == 0);
 }
 
 static void test_player_stats_use_equipped_starter_gear(void) {
@@ -365,9 +360,14 @@ static void test_gate_scavenger_win_grants_rewards_once_and_advances_quest(void)
 
     assert(state.hero_xp == 8);
     assert(state.wallet_gold == 5);
-    assert(stack_count(&state, "seeker_token_unlock") == 1);
+    assert(state.hero_hp == 33);
+    assert(stack_count(&state, "seeker_token_unlock") == 0);
+    assert(stack_count(&state, "seeker_token") == 0);
     assert(has_reward(&state, "encounter.gate_scavenger.win"));
     assert(has_flag(&state, "gate_scavenger_defeated"));
+    assert(!has_flag(&state, "seeker_token_owned"));
+    assert(!has_flag(&state, "map_gate_unlocked"));
+    assert(!has_flag(&state, "old_mill_unlocked"));
 
     const GameQuestState *quest = find_quest(&state, "q001_gate_pass");
     assert(quest != 0);
@@ -377,13 +377,13 @@ static void test_gate_scavenger_win_grants_rewards_once_and_advances_quest(void)
 
     const int xp_after_first = state.hero_xp;
     const int gold_after_first = state.wallet_gold;
-    const int token_after_first = stack_count(&state, "seeker_token_unlock");
     assert(game_actions_resolve_encounter(&state, "gate_scavenger", &result));
     assert(result.outcome == GAME_COMBAT_OUTCOME_WIN);
     assert(!result.reward_granted);
     assert(state.hero_xp == xp_after_first);
     assert(state.wallet_gold == gold_after_first);
-    assert(stack_count(&state, "seeker_token_unlock") == token_after_first);
+    assert(stack_count(&state, "seeker_token_unlock") == 0);
+    assert(stack_count(&state, "seeker_token") == 0);
 }
 
 static void test_zero_hp_cannot_win_or_claim_rewards(void) {
@@ -396,7 +396,7 @@ static void test_zero_hp_cannot_win_or_claim_rewards(void) {
     assert(result.outcome == GAME_COMBAT_OUTCOME_LOSS);
     assert(!result.reward_granted);
     assert(result.event_count == 0);
-    assert(state.hero_hp == 1);
+    assert(state.hero_hp == 33);
     assert(state.hero_xp == 0);
     assert(state.wallet_gold == 0);
     assert(stack_count(&state, "seeker_token_unlock") == 0);
@@ -423,7 +423,7 @@ static void test_positive_hp_loss_records_fight_but_grants_no_rewards(void) {
     assert(result.enemy_damage_done > 0);
     assert(result.player_damage_done > 0);
     assert(result.player_hp == 0);
-    assert(state.hero_hp == 1);
+    assert(state.hero_hp == 33);
     assert(state.hero_xp == 0);
     assert(state.wallet_gold == 0);
     assert(stack_count(&state, "seeker_token_unlock") == 0);
@@ -467,30 +467,32 @@ static void test_loss_restore_retry_can_win_and_claim_rewards_once(void) {
     game_combat_result_t result;
     assert(game_actions_resolve_encounter(&state, "gate_scavenger", &result));
     assert(result.outcome == GAME_COMBAT_OUTCOME_LOSS);
-    assert(state.hero_hp == 1);
+    assert(state.hero_hp == 33);
     assert(strcmp(state.world_current_location_id, "hub_last_post") == 0);
 
-    assert(game_actions_restore_hp(&state));
-    assert(state.hero_hp == 33);
     assert(!game_actions_move_location(&state, "hub_gate_outskirts"));
     assert(game_actions_resolve_encounter(&state, "gate_scavenger", &result));
     assert(result.outcome == GAME_COMBAT_OUTCOME_WIN);
     assert(result.reward_granted);
     assert(state.hero_xp == 8);
     assert(state.wallet_gold == 5);
-    assert(stack_count(&state, "seeker_token_unlock") == 1);
+    assert(stack_count(&state, "seeker_token_unlock") == 0);
+    assert(stack_count(&state, "seeker_token") == 0);
     assert(has_reward(&state, "encounter.gate_scavenger.win"));
     assert(has_flag(&state, "gate_scavenger_defeated"));
+    assert(!has_flag(&state, "seeker_token_owned"));
+    assert(!has_flag(&state, "map_gate_unlocked"));
+    assert(!has_flag(&state, "old_mill_unlocked"));
 
     const int xp_after_first_win = state.hero_xp;
     const int gold_after_first_win = state.wallet_gold;
-    const int token_after_first_win = stack_count(&state, "seeker_token_unlock");
     assert(game_actions_resolve_encounter(&state, "gate_scavenger", &result));
     assert(result.outcome == GAME_COMBAT_OUTCOME_WIN);
     assert(!result.reward_granted);
     assert(state.hero_xp == xp_after_first_win);
     assert(state.wallet_gold == gold_after_first_win);
-    assert(stack_count(&state, "seeker_token_unlock") == token_after_first_win);
+    assert(stack_count(&state, "seeker_token_unlock") == 0);
+    assert(stack_count(&state, "seeker_token") == 0);
 }
 
 static void test_active_untracked_encounter_quest_advances(void) {
@@ -549,6 +551,37 @@ static void test_multi_item_encounter_rewards_grant_once(void) {
     assert(state.wallet_gold == gold_after_first);
     assert(stack_count(&state, "contract_progress") == contract_after_first);
     assert(gear_count(&state, "scavenger_knee_plates") == gear_after_first);
+}
+
+static void test_repeatable_farm_encounter_pays_every_win(void) {
+    GameState state;
+    prepare_mill_contract_state(&state);
+    assert(game_actions_complete_quest(&state, "q002_bread_for_post", "test"));
+
+    const int gold0 = state.wallet_gold;
+    const int xp0 = state.hero_xp;
+
+    game_combat_result_t result;
+    assert(game_actions_resolve_encounter(&state, "mill_yard_farm", &result));
+    assert(result.outcome == GAME_COMBAT_OUTCOME_WIN);
+    assert(result.reward_granted);
+    assert(state.wallet_gold == gold0 + 4);
+    assert(state.hero_xp == xp0 + 2);
+    /* Repeatable farm wins are never recorded as claimed rewards. */
+    assert(!has_reward(&state, "encounter.mill_yard_farm.win"));
+
+    /* Second win pays again (repeat wins keep paying). */
+    assert(game_actions_resolve_encounter(&state, "mill_yard_farm", &result));
+    assert(result.outcome == GAME_COMBAT_OUTCOME_WIN);
+    assert(result.reward_granted);
+    assert(state.wallet_gold == gold0 + 8);
+    assert(state.hero_xp == xp0 + 4);
+    assert(!has_reward(&state, "encounter.mill_yard_farm.win"));
+
+    /* Farming does not disturb the completed contract. */
+    const GameQuestState *quest = find_quest(&state, "q002_bread_for_post");
+    assert(quest != 0);
+    assert(quest->status == GAME_STATE_QUEST_STATUS_COMPLETED);
 }
 
 static unsigned int test_encounter_seed(const char *encounter_id) {
@@ -626,6 +659,7 @@ int main(void) {
     test_loss_restore_retry_can_win_and_claim_rewards_once();
     test_active_untracked_encounter_quest_advances();
     test_multi_item_encounter_rewards_grant_once();
+    test_repeatable_farm_encounter_pays_every_win();
     test_mill_brute_is_a_real_shop_gate();
     test_finale_beatable_with_one_upgrade();
     return 0;

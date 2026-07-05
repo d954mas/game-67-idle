@@ -339,6 +339,11 @@ test_gate_turn_in_dialogue_completes_quest_and_grants_rewards(void) {
   assert(has_flag(&state, "seeker_token_owned"));
   assert(has_flag(&state, "map_gate_unlocked"));
   assert(has_flag(&state, "old_mill_unlocked"));
+  const GameQuestState *bread_quest = find_quest(&state, "q002_bread_for_post");
+  assert(bread_quest != 0);
+  assert(bread_quest->status == GAME_STATE_QUEST_STATUS_ACTIVE);
+  assert(bread_quest->has_current_step_id);
+  assert(strcmp(bread_quest->current_step_id, "visit_old_mill") == 0);
   assert(state.hero_xp == 12);
   bool has_token = false;
   for (int i = 0; i < GAME_STATE_MAX_INVENTORY_STACK_INSTANCES; ++i) {
