@@ -68,56 +68,6 @@
               "quest_id": "q001_gate_pass"
             }
           ]
-        },
-        {
-          "item_id": "cellar_knife",
-          "price_gold": 0,
-          "requirements": [
-            {
-              "type": "quest_completed",
-              "quest_id": "q003_sign_in_cellar"
-            }
-          ]
-        },
-        {
-          "item_id": "roadwarden_sabre",
-          "price_gold": 26,
-          "requirements": [
-            {
-              "type": "quest_completed",
-              "quest_id": "q006_forest_road"
-            }
-          ]
-        },
-        {
-          "item_id": "roadwarden_coat",
-          "price_gold": 24,
-          "requirements": [
-            {
-              "type": "quest_completed",
-              "quest_id": "q006_forest_road"
-            }
-          ]
-        },
-        {
-          "item_id": "plated_greaves",
-          "price_gold": 18,
-          "requirements": [
-            {
-              "type": "quest_completed",
-              "quest_id": "q006_forest_road"
-            }
-          ]
-        },
-        {
-          "item_id": "sealed_mail",
-          "price_gold": 36,
-          "requirements": [
-            {
-              "type": "quest_completed",
-              "quest_id": "q009_black_sun_hideout"
-            }
-          ]
         }
       ]
     },
@@ -184,56 +134,6 @@
             {
               "type": "quest_completed",
               "quest_id": "q001_gate_pass"
-            }
-          ]
-        },
-        {
-          "item_id": "cellar_knife",
-          "price_gold": 0,
-          "requirements": [
-            {
-              "type": "quest_completed",
-              "quest_id": "q003_sign_in_cellar"
-            }
-          ]
-        },
-        {
-          "item_id": "roadwarden_sabre",
-          "price_gold": 26,
-          "requirements": [
-            {
-              "type": "quest_completed",
-              "quest_id": "q006_forest_road"
-            }
-          ]
-        },
-        {
-          "item_id": "roadwarden_coat",
-          "price_gold": 24,
-          "requirements": [
-            {
-              "type": "quest_completed",
-              "quest_id": "q006_forest_road"
-            }
-          ]
-        },
-        {
-          "item_id": "plated_greaves",
-          "price_gold": 18,
-          "requirements": [
-            {
-              "type": "quest_completed",
-              "quest_id": "q006_forest_road"
-            }
-          ]
-        },
-        {
-          "item_id": "sealed_mail",
-          "price_gold": 36,
-          "requirements": [
-            {
-              "type": "quest_completed",
-              "quest_id": "q009_black_sun_hideout"
             }
           ]
         }

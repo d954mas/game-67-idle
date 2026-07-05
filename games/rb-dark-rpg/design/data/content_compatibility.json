@@ -147,6 +147,7 @@
       "dlg_q003_sign_in_cellar_start",
       "dlg_q004_do_not_show_anyone_start",
       "dlg_q005_night_visitors_start",
+      "dlg_q005_night_visitors_in_progress",
       "dlg_q006_forest_road_start",
       "dlg_q007_ash_convoy_start",
       "dlg_q008_scribes_seal_start",
@@ -201,6 +202,7 @@
     ],
     "reward_ids": [
       "dlg_elder_bread_turn_in.report.completion",
+      "dlg_q005_night_visitors_report.continue.completion",
       "dlg_gate_guard_intro.accept.immediate",
       "dlg_gate_guard_turn_in.take_token.completion",
       "encounter.black_sun_runner.win",

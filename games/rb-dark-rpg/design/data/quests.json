@@ -429,8 +429,8 @@
       "steps": [
         {
           "id": "accept_bread_contract",
-          "title": "Р’Р·СЏС‚СЊ РєРѕРЅС‚СЂР°РєС‚ Сѓ РЎС‚Р°СЂРѕСЃС‚С‹",
-          "description": "РЎС‚Р°СЂРѕСЃС‚Р° РїСЂРѕСЃРёС‚ РїСЂРѕРІРµСЂРёС‚СЊ РЎС‚Р°СЂСѓСЋ РјРµР»СЊРЅРёС†Сѓ Рё РІРµСЂРЅСѓС‚СЊ Р·РµСЂРЅРѕ РґР»СЏ РџРѕСЃС‚Р°.",
+          "title": "Взять контракт у Старосты",
+          "description": "Староста просит проверить Старую мельницу и вернуть зерно для Поста.",
           "location_id": "hub_last_post",
           "objective": {
             "type": "talk_to_npc",
@@ -438,7 +438,7 @@
             "count": 1
           },
           "dialogue_id": "dlg_elder_bread_contract",
-          "ui_hint": "РџРѕРіРѕРІРѕСЂРё СЃРѕ РЎС‚Р°СЂРѕСЃС‚РѕР№ РІ РџРѕСЃР»РµРґРЅРµРј РџРѕСЃС‚Рµ."
+          "ui_hint": "Поговори со Старостой в Последнем Посте."
         },
         {
           "id": "visit_old_mill",
@@ -490,8 +490,8 @@
         },
         {
           "id": "report_to_elder",
-          "title": "Р’РµСЂРЅСѓС‚СЊСЃСЏ Рє РЎС‚Р°СЂРѕСЃС‚Рµ",
-          "description": "Р—РµСЂРЅРѕ РЅР°Р№РґРµРЅРѕ, РЅРѕ Р·РЅР°Рє РЅР° РјРµР»СЊРЅРёС†Рµ РІР°Р¶РЅРµРµ СЃР°РјРѕРіРѕ РєРѕРЅС‚СЂР°РєС‚Р°.",
+          "title": "Вернуться к Старосте",
+          "description": "Зерно найдено, но знак на мельнице важнее самого контракта.",
           "location_id": "hub_last_post",
           "objective": {
             "type": "return_to_npc",
@@ -499,7 +499,7 @@
             "count": 1
           },
           "dialogue_id": "dlg_elder_bread_turn_in",
-          "ui_hint": "Р’РµСЂРЅРёСЃСЊ РІ РџРѕСЃР»РµРґРЅРёР№ РџРѕСЃС‚ Рё СЃРґР°Р№ РЅР°С…РѕРґРєСѓ РЎС‚Р°СЂРѕСЃС‚Рµ.",
+          "ui_hint": "Вернись в Последний Пост и сдай находку Старосте.",
           "on_complete": {
             "grant_xp": 44,
             "grant_gold": 16,
@@ -719,62 +719,62 @@
     },
     {
       "id": "q005_night_visitors",
-      "title": "Те, кто пришел ночью",
+      "title": "Ночь без Дракона",
       "type": "main",
       "act": "act_1_extra_witness",
       "priority": "critical_path",
       "giver": {
         "type": "npc",
-        "id": "healer"
+        "id": "elder"
       },
       "start_location": "hub_last_post",
-      "start_mode": "unlocked_by_q004_do_not_show_anyone",
+      "start_mode": "unlocked_by_q002_bread_for_post",
       "prerequisites": [
         {
-          "quest_completed": "q004_do_not_show_anyone"
+          "quest_completed": "q002_bread_for_post"
         }
       ],
       "journal": {
-        "summary": "Те, кто пришел ночью",
-        "short_goal": "Поговорить"
+        "summary": "Знак Черного Солнца был предупреждением. Ночью налётчики придут к самому Последнему Посту, и держать ворота придётся тебе.",
+        "short_goal": "Выстоять ночной штурм заставы."
       },
       "steps": [
         {
           "id": "q005_talk_healer",
-          "title": "Поговорить",
-          "description": "Шаг релизного квеста q005_night_visitors: поговорить.",
+          "title": "Принять последний контракт",
+          "description": "Староста просит остаться и держать оборону заставы этой ночью.",
           "location_id": "hub_last_post",
           "objective": {
             "type": "talk_to_npc",
             "count": 1,
-            "target_id": "healer"
+            "target_id": "elder"
           },
-          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "ui_hint": "Поговори со Старостой в Последнем Посте.",
           "dialogue_id": "dlg_q005_night_visitors_start"
         },
         {
           "id": "q005_defeat_attacker",
-          "title": "Выиграть бой",
-          "description": "Шаг релизного квеста q005_night_visitors: выиграть бой.",
+          "title": "Отбить ночной штурм",
+          "description": "Вожак ночного налёта ведёт людей Черного Солнца прямо к воротам заставы.",
           "location_id": "hub_last_post",
           "objective": {
             "type": "win_encounter",
             "count": 1,
             "encounter_id": "night_attacker"
           },
-          "ui_hint": "Следуй отмеченной цели в журнале."
+          "ui_hint": "Открой «Здесь», вкладку «Враги», и встреть вожака у ворот."
         },
         {
           "id": "q005_report_attack",
-          "title": "Вернуться с отчетом",
-          "description": "Шаг релизного квеста q005_night_visitors: вернуться с отчетом.",
+          "title": "Доложить Старосте",
+          "description": "Застава выстояла. Расскажи Старосте, чем закончилась ночь.",
           "location_id": "hub_last_post",
           "objective": {
             "type": "return_to_npc",
             "count": 1,
-            "target_id": "healer"
+            "target_id": "elder"
           },
-          "ui_hint": "Следуй отмеченной цели в журнале.",
+          "ui_hint": "Вернись к Старосте в Последнем Посте.",
           "dialogue_id": "dlg_q005_night_visitors_report",
           "on_complete": {
             "grant_xp": 52,

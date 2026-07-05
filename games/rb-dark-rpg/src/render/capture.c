@@ -2,7 +2,7 @@
 
 #include "window/nt_window.h"
 
-#ifndef NT_PLATFORM_WEB
+#if !defined(NT_PLATFORM_WEB) && !defined(__EMSCRIPTEN__)
 #include <glad/gl.h>
 
 #include <stdint.h>

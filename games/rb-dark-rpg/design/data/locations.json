@@ -103,7 +103,39 @@
           "interactions": [
             {
               "type": "dialogue",
+              "dialogue_id": "dlg_q005_night_visitors_report",
+              "requirements": [
+                {
+                  "type": "quest_step",
+                  "quest_id": "q005_night_visitors",
+                  "step_id": "q005_report_attack"
+                }
+              ]
+            },
+            {
+              "type": "dialogue",
+              "dialogue_id": "dlg_q005_night_visitors_in_progress",
+              "requirements": [
+                {
+                  "type": "quest_active",
+                  "quest_id": "q005_night_visitors"
+                }
+              ]
+            },
+            {
+              "type": "dialogue",
               "dialogue_id": "dlg_elder_bread_completed",
+              "requirements": [
+                {
+                  "type": "quest_status",
+                  "quest_id": "q005_night_visitors",
+                  "status": "completed"
+                }
+              ]
+            },
+            {
+              "type": "dialogue",
+              "dialogue_id": "dlg_q005_night_visitors_start",
               "requirements": [
                 {
                   "type": "quest_status",
@@ -131,6 +163,17 @@
                   "type": "quest_status",
                   "quest_id": "q002_bread_for_post",
                   "status": "active"
+                }
+              ]
+            },
+            {
+              "type": "dialogue",
+              "dialogue_id": "dlg_elder_bread_completed",
+              "requirements": [
+                {
+                  "type": "quest_status",
+                  "quest_id": "q002_bread_for_post",
+                  "status": "completed"
                 }
               ]
             },
@@ -212,6 +255,27 @@
             {
               "type": "open_screen",
               "screen_id": "ash_border_map"
+            }
+          ]
+        },
+        {
+          "id": "hub_last_post.night_assault",
+          "kind": "combat",
+          "display_name": "Вожак ночного налёта",
+          "asset_id": "asset_enemy_mill_scavenger_scene",
+          "encounter_id": "night_attacker",
+          "position_hint": "gate_breach",
+          "requirements": [
+            {
+              "type": "quest_step",
+              "quest_id": "q005_night_visitors",
+              "step_id": "q005_defeat_attacker"
+            }
+          ],
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "night_attacker"
             }
           ]
         }
@@ -339,15 +403,23 @@
           ]
         },
         {
-          "id": "old_mill.cellar_knifeman",
+          "id": "old_mill.mill_brute",
           "kind": "combat",
-          "display_name": "Нож Черного Солнца",
-          "asset_id": "asset_enemy_cellar_knifeman_scene",
-          "encounter_id": "cellar_knifeman",
+          "display_name": "Мельничный громила",
+          "asset_id": "asset_enemy_mill_scavenger_scene",
+          "encounter_id": "mill_brute",
+          "position_hint": "yard_gate",
+          "requirements": [
+            {
+              "type": "quest_step",
+              "quest_id": "q002_bread_for_post",
+              "step_id": "q002_clear_mill_brute"
+            }
+          ],
           "interactions": [
             {
               "type": "start_encounter",
-              "encounter_id": "cellar_knifeman"
+              "encounter_id": "mill_brute"
             }
           ]
         }
@@ -366,10 +438,6 @@
       "act": "act_1_extra_witness",
       "art": {
         "background_asset_id": "asset_location_forest_road_bg"
-      },
-      "map": {
-        "x": 0.58,
-        "y": 0.72
       },
       "unlock": {
         "mode": "flag",
@@ -417,10 +485,6 @@
       "art": {
         "background_asset_id": "asset_location_ash_convoy_bg"
       },
-      "map": {
-        "x": 0.7,
-        "y": 0.64
-      },
       "unlock": {
         "mode": "flag",
         "flag_id": "ash_convoy_unlocked",
@@ -466,10 +530,6 @@
       "act": "act_1_extra_witness",
       "art": {
         "background_asset_id": "asset_location_black_sun_hideout_bg"
-      },
-      "map": {
-        "x": 0.86,
-        "y": 0.38
       },
       "unlock": {
         "mode": "flag",

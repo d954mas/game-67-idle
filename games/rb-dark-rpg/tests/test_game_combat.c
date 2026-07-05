@@ -551,6 +551,62 @@ static void test_multi_item_encounter_rewards_grant_once(void) {
     assert(gear_count(&state, "scavenger_knee_plates") == gear_after_first);
 }
 
+static unsigned int test_encounter_seed(const char *encounter_id) {
+    unsigned int hash = 2166136261U;
+    for (const unsigned char *p = (const unsigned char *)encounter_id; *p; ++p) {
+        hash ^= (unsigned int)*p;
+        hash *= 16777619U;
+    }
+    return hash;
+}
+
+static void equip_balance_loadout(GameState *state, const char *weapon, const char *armour, const char *legs) {
+    game_state_init_defaults(state);
+    assert(game_actions_grant_gear(state, "gear_bal_weapon", weapon, GAME_ACTION_GEAR_SLOT_WEAPON));
+    assert(game_actions_equip_gear(state, "gear_bal_weapon"));
+    assert(game_actions_grant_gear(state, "gear_bal_armour", armour, GAME_ACTION_GEAR_SLOT_ARMOUR));
+    assert(game_actions_equip_gear(state, "gear_bal_armour"));
+    assert(game_actions_grant_gear(state, "gear_bal_legs", legs, GAME_ACTION_GEAR_SLOT_LEGS));
+    assert(game_actions_equip_gear(state, "gear_bal_legs"));
+}
+
+/* Deterministic full-HP outcome using the same seed and math the game uses. */
+static int fight_full_hp_outcome(GameState *state, const char *encounter_id) {
+    const game_encounter_definition_t *encounter = game_content_find_encounter(encounter_id);
+    assert(encounter != 0);
+    game_combat_stats_t stats;
+    assert(game_combat_build_player_stats(state, &stats));
+    game_combat_result_t result;
+    assert(game_combat_simulate(&stats, stats.vitality, encounter, test_encounter_seed(encounter_id), &result));
+    return (int)result.outcome;
+}
+
+static void test_mill_brute_is_a_real_shop_gate(void) {
+    /* Starter gear at full HP is a near-death gamble that is lost: the fight forces an upgrade. */
+    GameState starter;
+    equip_balance_loadout(&starter, "old_sword", "padded_jacket", "leather_greaves");
+    assert(fight_full_hp_outcome(&starter, "mill_brute") == GAME_COMBAT_OUTCOME_LOSS);
+    /* One affordable T2 weapon (iron_sword, 12g) flips it to a tense win. */
+    GameState weapon;
+    equip_balance_loadout(&weapon, "iron_sword", "padded_jacket", "leather_greaves");
+    assert(fight_full_hp_outcome(&weapon, "mill_brute") == GAME_COMBAT_OUTCOME_WIN);
+    /* One affordable T2 armour (guard_coat, 10g) also wins at full HP: the choice is real, not a trap. */
+    GameState armour;
+    equip_balance_loadout(&armour, "old_sword", "guard_coat", "leather_greaves");
+    assert(fight_full_hp_outcome(&armour, "mill_brute") == GAME_COMBAT_OUTCOME_WIN);
+}
+
+static void test_finale_beatable_with_one_upgrade(void) {
+    /* The night-assault finale must be losable with only starter gear... */
+    GameState starter;
+    equip_balance_loadout(&starter, "old_sword", "padded_jacket", "leather_greaves");
+    assert(fight_full_hp_outcome(&starter, "night_attacker") == GAME_COMBAT_OUTCOME_LOSS);
+    /* ...and winnable at full HP with a single T2 weapon carried over from the mill gate. */
+    GameState weapon;
+    equip_balance_loadout(&weapon, "iron_sword", "padded_jacket", "leather_greaves");
+    assert(fight_full_hp_outcome(&weapon, "night_attacker") == GAME_COMBAT_OUTCOME_WIN);
+}
+
 int main(void) {
     test_shop_item_content_exposes_price_and_sellable_contract();
     test_generated_gate_encounter_is_available();
@@ -570,5 +626,7 @@ int main(void) {
     test_loss_restore_retry_can_win_and_claim_rewards_once();
     test_active_untracked_encounter_quest_advances();
     test_multi_item_encounter_rewards_grant_once();
+    test_mill_brute_is_a_real_shop_gate();
+    test_finale_beatable_with_one_upgrade();
     return 0;
 }

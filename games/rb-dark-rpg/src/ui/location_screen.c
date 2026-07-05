@@ -546,7 +546,7 @@ static nt_atlas_region_ref_t *enemy_region_for_encounter(
     return NULL;
   }
   ensure_location_art_regions();
-  if (strstr(encounter_id, "mill") != NULL) {
+  if (strstr(encounter_id, "mill") != NULL || strstr(encounter_id, "night") != NULL) {
     return &s_location_regions[LOCATION_ART_MILL_SCAVENGER];
   }
   return &s_location_regions[LOCATION_ART_GATE_SCAVENGER];

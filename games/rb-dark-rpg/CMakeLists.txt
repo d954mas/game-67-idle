@@ -4,7 +4,13 @@ project(game LANGUAGES C)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
+if(EMSCRIPTEN)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(NT_PRESET_NAME "wasm-release")
+    else()
+        set(NT_PRESET_NAME "wasm-debug")
+    endif()
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(NT_PRESET_NAME "native-release")
 else()
     set(NT_PRESET_NAME "native-debug")
@@ -218,7 +224,7 @@ if(NOT EMSCRIPTEN)
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_xp_frame.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_resource_coin_chip.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_resource_supplies_chip.png
-            assets/ui/generated/top_hud_tokens_02/slices/top_hud_location_plaque.png
+            assets/ui/generated/roblox_blocky_rpg_tiles_01/location_plaque.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_settings_button.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_level_badge.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_icon_coin.png
@@ -255,6 +261,7 @@ add_executable(${GAME_TARGET}
     src/ui/world_map_screen.c
     src/ui/world_map_viewport.c
     src/ui/combat_flow.c
+    src/ui/end_screen.c
     src/ui/equipment_screen.c
     src/ui/shop_screen.c
     src/ui/game_modal.c
@@ -330,17 +337,21 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_resource nt_material nt_shared nt_render nt_hash nt_fs nt_log nt_math nt_time
     nt_mesh_renderer nt_entity nt_transform_comp nt_mesh_comp nt_material_comp nt_drawable_comp
     nt_ui nt_sprite_renderer nt_atlas nt_mem_scratch nt_clipboard
-    glad stb_image_write
 )
 if(EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http nt_platform_web)
     target_link_options(${GAME_TARGET} PRIVATE
         "SHELL:-sFORCE_FILESYSTEM=1"
+        "SHELL:-sEXPORTED_FUNCTIONS=_main,_malloc,_free"
+        "SHELL:-sMIN_WEBGL_VERSION=2"
+        "SHELL:-sMAX_WEBGL_VERSION=2"
+        "SHELL:-sFULL_ES3=1"
         "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio@/assets/audio"
+        "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/build/native-debug/bin/assets/game.ntpack@/assets/game.ntpack"
     )
     target_compile_definitions(${GAME_TARGET} PRIVATE GAME_AUDIO_ASSET_DIR="/assets/audio")
 else()
-    target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub)
+    target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub glad stb_image_write)
     target_compile_definitions(${GAME_TARGET} PRIVATE GAME_AUDIO_ASSET_DIR="${GAME_AUDIO_ASSETS_DIR}")
 endif()
 if(GAME_DEVAPI_ENABLED)
@@ -360,8 +371,15 @@ endif()
 if(WIN32 AND NOT EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE winmm)
 endif()
+if(EMSCRIPTEN)
+    # The pack builder is native-only; the web build preloads the pack produced
+    # by the native build into the wasm FS (see EMSCRIPTEN link options).
+    set(GAME_PACK_RUNTIME_PATH "/assets/game.ntpack")
+else()
+    set(GAME_PACK_RUNTIME_PATH "${GAME_ASSETS_DIR}/game.ntpack")
+endif()
 target_compile_definitions(${GAME_TARGET} PRIVATE
-    GAME_ASSET_PACK_PATH="${GAME_ASSETS_DIR}/game.ntpack"
+    GAME_ASSET_PACK_PATH="${GAME_PACK_RUNTIME_PATH}"
     NT_INTROSPECT_ENABLED=$<BOOL:${NT_INTROSPECT_ENABLED}>
     NT_INTROSPECT_WRITE_ENABLED=$<BOOL:${NT_INTROSPECT_WRITE_ENABLED}>
     _CRT_SECURE_NO_WARNINGS

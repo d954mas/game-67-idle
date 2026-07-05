@@ -223,7 +223,7 @@ int main(int argc, char *argv[]) {
     top_hud_opts.name = "top_hud_status_plaque";
     nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_status_plaque.png", &top_hud_opts);
     top_hud_opts.name = "top_hud_location_plaque";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_location_plaque.png", &top_hud_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/roblox_blocky_rpg_tiles_01/location_plaque.png", &top_hud_opts);
 
     top_hud_opts.name = "top_hud_hp_frame";
     nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_hp_frame.png", &top_hud_opts);

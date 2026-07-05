@@ -527,21 +527,21 @@
     },
     {
       "id": "dlg_q005_night_visitors_start",
-      "title": "Те, кто пришел ночью: старт",
+      "title": "Ночь без Дракона: последний контракт",
       "participants": [
-        "healer",
+        "elder",
         "player_seeker"
       ],
       "entry_node_id": "start",
       "nodes": [
         {
           "id": "start",
-          "speaker_id": "healer",
-          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "speaker_id": "elder",
+          "text": "Знак на мельнице был не угрозой, а обещанием. Ночью они придут за самой заставой. Дракон отогнал бы их одним крылом... но Дракона нет. Останься. Держи ворота.",
           "choices": [
             {
               "id": "continue",
-              "text": "Понял",
+              "text": "Я удержу ворота",
               "effects": [
                 {
                   "type": "advance_quest",
@@ -555,23 +555,53 @@
       ]
     },
     {
-      "id": "dlg_q005_night_visitors_report",
-      "title": "Те, кто пришел ночью: отчет",
+      "id": "dlg_q005_night_visitors_in_progress",
+      "title": "Ночь без Дракона: держи оборону",
       "participants": [
-        "healer",
+        "elder",
         "player_seeker"
       ],
       "entry_node_id": "start",
       "nodes": [
         {
           "id": "start",
-          "speaker_id": "healer",
-          "text": "Коротко: дело стало опаснее. Возьми цель, проверь след и возвращайся с доказательством.",
+          "speaker_id": "elder",
+          "text": "Они уже у ворот. Открой «Здесь», найди вожака во вкладке врагов и не пропусти его внутрь.",
+          "choices": []
+        }
+      ]
+    },
+    {
+      "id": "dlg_q005_night_visitors_report",
+      "title": "Ночь без Дракона: рассвет",
+      "participants": [
+        "elder",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "elder",
+          "text": "Ты стоишь, и ворота стоят. Впервые после ухода Дракона застава встретила рассвет сама. Мир без него учится держаться — и начал этой ночью.",
           "choices": [
             {
               "id": "continue",
-              "text": "Понял",
+              "text": "Встретить рассвет",
+              "reward_id": "dlg_q005_night_visitors_report.continue.completion",
               "effects": [
+                {
+                  "type": "grant_xp",
+                  "amount": 30
+                },
+                {
+                  "type": "grant_gold",
+                  "amount": 12
+                },
+                {
+                  "type": "set_flag",
+                  "flag_id": "act_i_completed"
+                },
                 {
                   "type": "advance_quest",
                   "quest_id": "q005_night_visitors",

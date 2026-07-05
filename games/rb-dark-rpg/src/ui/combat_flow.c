@@ -248,7 +248,10 @@ static void ensure_combat_reward_regions(void) {
 }
 
 static combat_actor_art_t combat_enemy_art_for_encounter(const char *encounter_id) {
-    if (encounter_id && strstr(encounter_id, "mill") != NULL) {
+    if (encounter_id &&
+        (strstr(encounter_id, "mill") != NULL || strstr(encounter_id, "night") != NULL)) {
+        /* The mill brute and the night-assault boss use the heavier silhouette so the
+         * finale reads as a real threat instead of the caged gate scavenger. */
         return COMBAT_ACTOR_ART_MILL_SCAVENGER;
     }
     return COMBAT_ACTOR_ART_GATE_SCAVENGER;

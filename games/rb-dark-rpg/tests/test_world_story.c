@@ -229,6 +229,28 @@ static void test_elder_interaction_selection_tracks_q002_story_state(void) {
   assert(game_actions_complete_quest(&state, "q002_bread_for_post", "test"));
   interaction = game_actions_select_location_interaction(&state, elder);
   assert(interaction != 0);
+  assert(strcmp(interaction->dialogue_id, "dlg_q005_night_visitors_start") == 0);
+
+  /* Accepting the finale moves the elder into the night-assault in-progress line. */
+  assert(game_actions_start_quest(&state, "q005_night_visitors",
+                                  "q005_defeat_attacker", "test"));
+  interaction = game_actions_select_location_interaction(&state, elder);
+  assert(interaction != 0);
+  assert(strcmp(interaction->dialogue_id,
+                "dlg_q005_night_visitors_in_progress") == 0);
+
+  /* Once the boss step is cleared, the elder offers the finale turn-in. */
+  assert(game_actions_complete_step(&state, "q005_night_visitors",
+                                    "q005_defeat_attacker", "q005_report_attack",
+                                    "test"));
+  interaction = game_actions_select_location_interaction(&state, elder);
+  assert(interaction != 0);
+  assert(strcmp(interaction->dialogue_id, "dlg_q005_night_visitors_report") == 0);
+
+  /* After the finale completes, the elder never re-offers the contract. */
+  assert(game_actions_complete_quest(&state, "q005_night_visitors", "test"));
+  interaction = game_actions_select_location_interaction(&state, elder);
+  assert(interaction != 0);
   assert(strcmp(interaction->dialogue_id, "dlg_elder_bread_completed") == 0);
 }
 
