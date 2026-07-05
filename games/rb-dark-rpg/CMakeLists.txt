@@ -361,8 +361,12 @@ if(EMSCRIPTEN)
         "SHELL:-sMIN_WEBGL_VERSION=2"
         "SHELL:-sMAX_WEBGL_VERSION=2"
         "SHELL:-sFULL_ES3=1"
+        # Engine targets set memory flags PRIVATE on static libs, which never
+        # reach the executable link: without these the heap is fixed at 16MB
+        # and texture transcode OOMs (Aborted(OOM) on web).
+        "SHELL:-sALLOW_MEMORY_GROWTH=1"
+        "SHELL:-sINITIAL_MEMORY=64MB"
         "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio@/assets/audio"
-        "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/build/native-debug/bin/assets/game.ntpack@/assets/game.ntpack"
     )
     target_compile_definitions(${GAME_TARGET} PRIVATE GAME_AUDIO_ASSET_DIR="/assets/audio")
 else()
@@ -387,9 +391,10 @@ if(WIN32 AND NOT EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE winmm shell32)
 endif()
 if(EMSCRIPTEN)
-    # The pack builder is native-only; the web build preloads the pack produced
-    # by the native build into the wasm FS (see EMSCRIPTEN link options).
-    set(GAME_PACK_RUNTIME_PATH "/assets/game.ntpack")
+    # On web the engine streams packs over HTTP relative to the page URL, so
+    # the path must be RELATIVE and the pack ships as a plain file next to
+    # index.html (tools/package_web.sh copies it from the native build).
+    set(GAME_PACK_RUNTIME_PATH "assets/game.ntpack")
 else()
     set(GAME_PACK_RUNTIME_PATH "${GAME_ASSETS_DIR}/game.ntpack")
 endif()
