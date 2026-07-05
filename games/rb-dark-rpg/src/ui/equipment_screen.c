@@ -161,7 +161,7 @@ static const nt_hash64_t EQUIPMENT_ART_REGION_HASHES[EQUIP_ART_COUNT] = {
     ASSET_ATLAS_REGION_UI_ASSET_ICON_CLUE_FRAGMENT,
     ASSET_ATLAS_REGION_UI_ASSET_ICON_BURNED_CHAIN_BRACKET,
     ASSET_ATLAS_REGION_UI_ASSET_ICON_ORDER_SCRAP,
-    ASSET_ATLAS_REGION_UI_COMBAT_ACTOR_HERO,
+    ASSET_ATLAS_REGION_UI_SEEKER_PORTRAIT_HUD,
 };
 
 static nt_resource_t s_equipment_atlas;
@@ -905,6 +905,18 @@ static void equipment_apply_selected(World *w, GameState *state) {
     }
 }
 
+static void equipment_unequip_selected(GameState *state) {
+    if (!state || s_selected_instance_id[0] == '\0' || !is_equipped(state, s_selected_instance_id)) {
+        return;
+    }
+    const bool unequipped = game_actions_unequip_gear(state, s_selected_instance_id);
+    if (unequipped) {
+        game_audio_play(GAME_AUDIO_CUE_GEAR_EQUIP);
+        s_selected_instance_id[0] = '\0';
+        equipment_detail_set_open(false);
+    }
+}
+
 static void item_compare_column_ui(nt_ui_context_t *ctx, const char *title_text, const game_item_definition_t *item,
                                    bool portrait) {
     const nt_ui_label_style_t title = label_style(portrait ? 9.5F : 11.0F, 190.0F, 166.0F, 125.0F, 255.0F);
@@ -1014,6 +1026,7 @@ static void selected_stack_item_modal_ui(nt_ui_context_t *ctx, const GameState *
                 }
                 if (game_modal_close_button(ctx, (nt_ui_layer_t)LAYER_BG, (nt_ui_layer_t)LAYER_TEXT,
                                             "gear_screen/quest_item_modal_close", portrait)) {
+                    modal_open = false;
                     equipment_detail_set_open(false);
                 }
             }
@@ -1054,6 +1067,8 @@ static void selected_item_modal_ui(nt_ui_context_t *ctx, World *w, bool portrait
     const game_item_definition_t *current_item =
         current_instance && strcmp(current_instance, s_selected_instance_id) != 0 ? gear_definition(state, current_instance) : NULL;
     const bool can_equip = bag_contains(state, s_selected_instance_id);
+    const bool can_unequip = !can_equip && is_equipped(state, s_selected_instance_id);
+    const bool can_act = can_equip || can_unequip;
     const int changed_stats = item_compare_changed_stat_count(selected_item, current_item);
     float layout_w = 0.0F;
     float layout_h = 0.0F;
@@ -1099,6 +1114,7 @@ static void selected_item_modal_ui(nt_ui_context_t *ctx, World *w, bool portrait
                 }
                 if (game_modal_close_button(ctx, (nt_ui_layer_t)LAYER_BG, (nt_ui_layer_t)LAYER_TEXT,
                                             "gear_screen/item_modal_close", portrait)) {
+                    modal_open = false;
                     equipment_detail_set_open(false);
                 }
             }
@@ -1124,7 +1140,7 @@ static void selected_item_modal_ui(nt_ui_context_t *ctx, World *w, bool portrait
                           .backgroundColor = {17.0F, 12.0F, 9.0F, 178.0F},
                           .cornerRadius = CLAY_CORNER_RADIUS(3),
                           .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
-                        text_label(ctx, "РҐР°СЂР°РєС‚РµСЂРёСЃС‚РёРєРё РЅРµ РјРµРЅСЏСЋС‚СЃСЏ", &no_change);
+                        text_label(ctx, "Характеристики не меняются", &no_change);
                     }
                 }
             }
@@ -1132,19 +1148,23 @@ static void selected_item_modal_ui(nt_ui_context_t *ctx, World *w, bool portrait
             CLAY({.id = equip_id,
                   .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(portrait ? 40.0F : 44.0F)},
                              .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
-                  .backgroundColor = can_equip ? (Clay_Color){112.0F, 62.0F, 32.0F, 238.0F}
+                  .backgroundColor = can_act ? (Clay_Color){112.0F, 62.0F, 32.0F, 238.0F}
                                                : (Clay_Color){56.0F, 44.0F, 34.0F, 190.0F},
                   .cornerRadius = CLAY_CORNER_RADIUS(5),
-                  .border = {.color = can_equip ? (Clay_Color){211.0F, 147.0F, 70.0F, 230.0F}
+                  .border = {.color = can_act ? (Clay_Color){211.0F, 147.0F, 70.0F, 230.0F}
                                                  : (Clay_Color){100.0F, 80.0F, 58.0F, 150.0F},
                              .width = {1, 1, 1, 1, 0}},
                   .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
                 const int16_t hit_pad[4] = {2, 2, 2, 2};
-                nt_ui_widget_register(ctx, equip_id.id, &EQUIPMENT_WIDGET_DEF, hit_pad, can_equip);
+                nt_ui_widget_register(ctx, equip_id.id, &EQUIPMENT_WIDGET_DEF, hit_pad, can_act);
                 const nt_ui_events_t events = nt_ui_events_padded(ctx, equip_id.id, NULL, hit_pad);
-                text_label(ctx, can_equip ? "Надеть" : "Надето", &action);
+                text_label(ctx, can_equip ? "Надеть" : (can_unequip ? "Снять" : "Надето"), &action);
                 if (events.clicked && can_equip) {
                     equipment_apply_selected(w, state);
+                    modal_open = false;
+                } else if (events.clicked && can_unequip) {
+                    equipment_unequip_selected(state);
+                    modal_open = false;
                 }
             }
             nt_ui_panel_end(ctx);

@@ -26,8 +26,35 @@ def c_str(value) -> str:
     return f'"{escaped}"'
 
 
+def c_bool(value) -> str:
+    return "true" if bool(value) else "false"
+
+
 def load_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def load_asset_region_hashes(path: Path) -> dict[str, str]:
+    if not path.exists():
+        raise FileNotFoundError(f"asset header not found: {path}")
+    hashes: dict[str, str] = {}
+    pattern = re.compile(
+        r"#define\s+ASSET_ATLAS_REGION_[A-Z0-9_]+\s+\(\(nt_hash64_t\)\{0x([0-9A-Fa-f]+)ULL\}\)\s+/\*\s+([^*]+?)\s+\*/"
+    )
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = pattern.match(line)
+        if match:
+            hashes[match.group(2)] = f"0x{match.group(1).upper()}ULL"
+    return hashes
+
+
+def asset_region_hash_literal(region_name: str | None, hashes: dict[str, str]) -> str:
+    if not region_name:
+        return "0ULL"
+    value = hashes.get(region_name)
+    if value is None:
+        raise ValueError(f"scene sprite region {region_name!r} is not present in generated game_assets.h")
+    return value
 
 
 def find_quest_id(dialogue: dict) -> str | None:
@@ -121,6 +148,16 @@ def item_category_label(item: dict) -> str:
     if kind == "material":
         return "Материал"
     return "Предмет"
+
+
+def scene_bounds(scene: dict) -> dict:
+    bounds = scene.get("bounds") or {}
+    return {
+        "x": int(bounds.get("x", 0)),
+        "y": int(bounds.get("y", 0)),
+        "w": int(bounds.get("w", 0)),
+        "h": int(bounds.get("h", 0)),
+    }
 
 
 def item_slot(value: str | None) -> str:
@@ -336,6 +373,8 @@ def main() -> int:
     locations_path = Path(sys.argv[6])
     services_path = Path(sys.argv[7])
     out_path = Path(sys.argv[8])
+    game_dir = locations_path.parent.parent.parent
+    asset_region_hashes = load_asset_region_hashes(game_dir / "src" / "generated" / "game_assets.h")
 
     dialogues = load_json(dialogues_path)["dialogues"]
     characters = {c["id"]: c for c in load_json(characters_path)["characters"]}
@@ -611,6 +650,8 @@ def main() -> int:
             for index, obj in enumerate(objects):
                 interactions = obj.get("interactions") or []
                 reqs = obj.get("requirements") or []
+                scene = obj.get("scene") or {}
+                bounds = scene_bounds(scene)
                 req_symbol = f"LOCATION_{loc_symbol}_OBJECT_{index}_REQS"
                 interaction_symbol = f"LOCATION_{loc_symbol}_OBJECT_{index}_INTERACTIONS"
                 lines.append("    {")
@@ -620,6 +661,17 @@ def main() -> int:
                 lines.append(f"        .character_id = {c_str(obj.get('character_id'))},")
                 lines.append(f"        .asset_id = {c_str(obj.get('asset_id'))},")
                 lines.append(f"        .encounter_id = {c_str(obj.get('encounter_id'))},")
+                lines.append(
+                    f"        .scene_bounds = {{.x = {bounds['x']}, .y = {bounds['y']}, .w = {bounds['w']}, .h = {bounds['h']}}},"
+                )
+                lines.append(f"        .scene_anchor_x = {float(scene.get('anchor_x', 0.0)):.3f}F,")
+                lines.append(f"        .scene_anchor_y = {float(scene.get('anchor_y', 0.0)):.3f}F,")
+                lines.append(f"        .scene_sprite_region_name = {c_str(scene.get('sprite_region_name'))},")
+                lines.append(
+                    f"        .scene_sprite_region_hash = {asset_region_hash_literal(scene.get('sprite_region_name'), asset_region_hashes)},"
+                )
+                lines.append(f"        .scene_sprite_target_h = {float(scene.get('sprite_target_h', 0.0)):.3f}F,")
+                lines.append(f"        .scene_enabled = {c_bool(scene.get('enabled', False))},")
                 lines.append(f"        .interactions = {interaction_symbol if interactions else 'NULL'},")
                 lines.append(f"        .interaction_count = {len(interactions)},")
                 lines.append(f"        .requirements = {req_symbol if reqs else 'NULL'},")

@@ -4,7 +4,6 @@
 #include "entity/nt_entity.h"
 #include "game_combat.h"
 #include "game_dialogue.h"
-#include "scene/scene_interaction_types.h"
 
 #include <stdbool.h>
 
@@ -19,10 +18,10 @@ typedef struct FirstSceneState {
     float camera_center_x, camera_center_y;
     bool camera_initialized;
     bool interactions_initialized;
-    scene_object_id_t hovered_object_id;
-    scene_object_id_t pressed_object_id;
-    scene_object_id_t activated_object_id;
-    scene_object_id_t objective_object_id;
+    const char *hovered_object_id;
+    const char *pressed_object_id;
+    const char *activated_object_id;
+    const char *objective_object_id;
     bool tutorial_guard_talk_completed;
     const char *active_quest_id;
     int active_quest_status;

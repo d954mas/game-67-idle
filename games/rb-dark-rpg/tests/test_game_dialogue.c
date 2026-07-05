@@ -195,7 +195,7 @@ static void test_gate_dialogue_progression(void) {
   assert(w.dialogue.definition != 0);
   assert(w.dialogue.definition->quest_preview != 0);
   assert(w.dialogue.definition->quest_preview->immediate_reward_count == 3);
-  assert(w.dialogue.definition->quest_preview->completion_reward_count == 3);
+  assert(w.dialogue.definition->quest_preview->completion_reward_count == 2);
   const dialogue_reward_t *first_reward =
       &w.dialogue.definition->quest_preview->immediate_rewards[0];
   assert(strcmp(first_reward->id, "old_sword") == 0);
@@ -212,9 +212,6 @@ static void test_gate_dialogue_progression(void) {
   assert(completion_xp->kind == DIALOGUE_REWARD_XP);
   assert(completion_xp->amount == 12);
   assert(completion_xp->icon_asset_id == 0);
-  const dialogue_reward_t *completion_unlock =
-      &w.dialogue.definition->quest_preview->completion_rewards[2];
-  assert(completion_unlock->kind == DIALOGUE_REWARD_UNLOCK);
   const game_item_definition_t *old_sword =
       game_content_find_item("old_sword");
   assert(old_sword != 0);
@@ -252,7 +249,7 @@ static void test_gate_dialogue_progression(void) {
   assert(w.first_scene.active_quest_completed_talk_step);
   assert(w.first_scene.active_quest_gate_guard_intro_seen);
   assert(w.first_scene.tutorial_guard_talk_completed);
-  assert(w.first_scene.objective_object_id == SCENE_OBJECT_ID_NONE);
+  assert(w.first_scene.objective_object_id == 0);
   assert(!w.first_scene.blacksmith_unlocked);
   assert(w.first_scene.gate_locked);
   assert(w.first_scene.contract_board_locked);
@@ -379,6 +376,26 @@ static void test_equipping_replacement_returns_previous_item_to_bag(void) {
          0);
 }
 
+static void test_unequipping_returns_item_to_bag(void) {
+  GameState state;
+  game_state_init_defaults(&state);
+
+  assert(game_actions_grant_gear(&state, "gear_old_sword_001", "old_sword",
+                                 GAME_ACTION_GEAR_SLOT_WEAPON));
+  assert(game_actions_equip_gear(&state, "gear_old_sword_001"));
+  assert(state.inventory_bag_order_count == 0);
+  assert(state.has_equipment_weapon_instance_id);
+  assert(strcmp(state.equipment_weapon_instance_id, "gear_old_sword_001") ==
+         0);
+
+  assert(game_actions_unequip_gear(&state, "gear_old_sword_001"));
+  assert(!state.has_equipment_weapon_instance_id);
+  assert(state.equipment_weapon_instance_id[0] == '\0');
+  assert(state.inventory_bag_order_count == 1);
+  assert(strcmp(state.inventory_bag_order[0], "gear_old_sword_001") == 0);
+  assert(!game_actions_unequip_gear(&state, "gear_old_sword_001"));
+}
+
 static void test_elder_dialogues_start_and_complete_q002_from_data(void) {
   World w = {0};
   GameState state;
@@ -470,6 +487,7 @@ int main(void) {
   test_gate_dialogue_progression();
   test_gate_turn_in_dialogue_completes_quest_and_grants_rewards();
   test_equipping_replacement_returns_previous_item_to_bag();
+  test_unequipping_returns_item_to_bag();
   test_elder_dialogues_start_and_complete_q002_from_data();
   test_legacy_v1_save_without_legs_slot_loads();
   test_equipment_slot_registry_matches_runtime_grid();

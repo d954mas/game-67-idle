@@ -41,7 +41,19 @@ Source sheets copied into this pack:
 - `source_props_sheet.png`: contract board, Dragon memorial, map gate, caged scavenger. SHA-256 `49AA61BFCE7099A12436268E25DFEB2A189C23ACB02598DEDFC654C7CBD15C2B`.
 - `source_mill_sheet.png`: mill scavenger, cellar knifeman, cellar hatch, Black Sun clue wall. SHA-256 `AF11FE2EB0867BC1FE910D5C7464552778F2B879A8755761863DD8F809810D87`.
 
-Cleanup used `tmp/rb_dark_rpg_scene_sprites_prompts/slice_scene_sheets.py`: fixed 2x2 sheet slicing, green chroma-key removal to alpha, alpha-bbox trimming, portrait crops for NPCs, and contact-sheet proof.
+Initial slicing used `tmp/rb_dark_rpg_scene_sprites_prompts/slice_scene_sheets.py`: fixed 2x2 sheet slicing, alpha-bbox trimming, portrait crops for NPCs, and contact-sheet proof.
+
+Final runtime transparency was produced through the Canvas alpha route:
+
+- Canvas CLI op: `alpha --elements ... --method matte`
+- Canvas history: `alphaCutout` at seq `4`
+- Tool: `alpha_cutout.py`
+- Runtime export: `tmp/canvas_scene_alpha_export/`
+- Install report: `tmp/canvas_scene_sprites_alpha_export_report.json`
+
+NPC portrait PNGs are transparent crops derived from the Canvas-alpha full-body character sprites, not a separate chroma-key pass. The direct Canvas matte portrait outputs were rejected because their dark portrait backgrounds caused semi-transparent holes in the clothing.
+
+Post-export sanitation: `tmp/sanitize_canvas_alpha_bleed.py` removed only exact semi-transparent chroma bleed pixels left after Canvas export. It does not recompute the alpha matte and does not replace the Canvas alpha route.
 
 ## Canvas Handoff
 

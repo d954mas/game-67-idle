@@ -15,6 +15,7 @@
 #include "renderers/nt_text_renderer.h"
 #include "resource/nt_resource.h"
 #include "ui/nt_ui_scale.h"
+#include "ui/nt_ui_modal.h"
 #include "window/nt_window.h"
 
 #include "generated/game_assets.h"
@@ -143,6 +144,10 @@ bool ui_runtime_begin(float dt) {
     }
     nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, pointers, NT_INPUT_MAX_POINTERS);
     return true;
+}
+
+bool ui_runtime_blocks_world_input(void) {
+    return s_ctx != NULL && nt_ui_modal_active(s_ctx);
 }
 
 void ui_runtime_end(void) {

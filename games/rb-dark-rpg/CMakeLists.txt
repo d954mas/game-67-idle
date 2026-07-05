@@ -72,6 +72,7 @@ set(GAME_CONTENT_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/design/data/content_manif
 set(GAME_STATE_SCHEMA_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
 set(GAME_CONTENT_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/content")
 set(GAME_CONTENT_GENERATED_SOURCE "${GAME_CONTENT_GENERATED_DIR}/game_content.generated.c")
+set(GAME_ASSET_HEADER "${GAME_SOURCE_GENERATED_DIR}/game_assets.h")
 
 add_custom_target(content_compatibility_check
     COMMAND "${Python3_EXECUTABLE}" "${GAME_CONTENT_COMPATIBILITY_VALIDATOR}"
@@ -86,6 +87,7 @@ add_custom_target(content_compatibility_check
         "${GAME_CONTENT_ITEMS}"
         "${GAME_CONTENT_LOCATIONS}"
         "${GAME_CONTENT_SERVICES}"
+        "${GAME_ASSET_HEADER}"
         "${GAME_CONTENT_COMBAT}"
         "${GAME_STATE_SCHEMA_SOURCE}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
@@ -274,7 +276,6 @@ add_executable(${GAME_TARGET}
     src/ui/world_map_viewport.c
     src/ui/combat_flow.c
     src/ui/end_screen.c
-    src/ui/title_card.c
     src/ui/equipment_screen.c
     src/ui/shop_screen.c
     src/ui/game_modal.c

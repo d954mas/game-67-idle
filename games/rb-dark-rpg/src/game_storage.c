@@ -58,6 +58,16 @@ EM_JS(char *, game_storage_web_load, (const char *path_ptr), {
         return 0;
     }
 })
+
+EM_JS(int, game_storage_web_delete, (const char *path_ptr), {
+    try {
+        var key = "rb-dark-rpg:" + UTF8ToString(path_ptr);
+        window.localStorage.removeItem(key);
+        return 1;
+    } catch (e) {
+        return 0;
+    }
+})
 /* clang-format on */
 #endif
 
@@ -233,5 +243,25 @@ bool game_storage_load_json(const char *key, const char *document, char **out_js
     data[size] = '\0';
     *out_json = data;
     return true;
+#endif
+}
+
+bool game_storage_delete_json(const char *key, const char *document, char *error, int error_cap) {
+    char path[GAME_STORAGE_PATH_MAX];
+    if (!game_storage_resolve_key(key, document, path, (int)sizeof(path), error, error_cap)) {
+        return false;
+    }
+#if defined(__EMSCRIPTEN__)
+    if (!game_storage_web_delete(path)) {
+        set_error(error, error_cap, "failed to delete browser storage");
+        return false;
+    }
+    return true;
+#else
+    if (remove(path) == 0 || errno == ENOENT) {
+        return true;
+    }
+    set_error(error, error_cap, "failed to delete storage file");
+    return false;
 #endif
 }

@@ -1,7 +1,6 @@
 #ifndef RB_DARK_RPG_SCENE_INTERACTIONS_H
 #define RB_DARK_RPG_SCENE_INTERACTIONS_H
 
-#include "scene/scene_interaction_types.h"
 #include "scene/scene_layout.h"
 #include "world/world.h"
 
@@ -26,9 +25,13 @@ enum {
 };
 
 typedef struct scene_interaction_object_t {
-    scene_object_id_t id;
+    const char *id;
     scene_object_kind_t kind;
+    const char *location_id;
     const char *stable_id;
+    const char *sprite_region_name;
+    uint64_t sprite_region_hash;
+    float sprite_target_h;
     scene_rect_t bounds;
     float anchor_x;
     float anchor_y;
@@ -37,13 +40,14 @@ typedef struct scene_interaction_object_t {
 } scene_interaction_object_t;
 
 void scene_interactions_init_first_scene(World *w);
-const scene_interaction_object_t *scene_interactions_all(int *out_count);
-const scene_interaction_object_t *scene_interactions_find(scene_object_id_t id);
-scene_object_id_t scene_interactions_hit_test(float master_x, float master_y);
-void scene_interactions_update_pointer_state(World *w, scene_object_id_t hit_object_id,
+const scene_interaction_object_t *scene_interactions_all(const World *w, int *out_count);
+const scene_interaction_object_t *scene_interactions_find(const World *w, const char *id);
+bool scene_interactions_object_visible(const World *w, const scene_interaction_object_t *object);
+const char *scene_interactions_hit_test(const World *w, float master_x, float master_y);
+void scene_interactions_update_pointer_state(World *w, const char *hit_object_id,
                                              bool pointer_pressed, bool pointer_down, bool pointer_released);
 bool scene_interactions_pointer_captures_pan(const World *w);
-bool scene_interactions_should_show_tutorial_finger(const World *w, scene_object_id_t id);
-uint32_t scene_interactions_visual_flags(const World *w, scene_object_id_t id);
+bool scene_interactions_should_show_tutorial_finger(const World *w, const char *id);
+uint32_t scene_interactions_visual_flags(const World *w, const char *id);
 
 #endif /* RB_DARK_RPG_SCENE_INTERACTIONS_H */

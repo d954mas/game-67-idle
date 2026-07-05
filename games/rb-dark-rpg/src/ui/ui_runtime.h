@@ -19,6 +19,9 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
 // Returns false (skip widget build) until the atlas + font + materials are ready.
 bool ui_runtime_begin(float dt);
 
+// True when an overlay from the previous UI frame must consume world input this frame.
+bool ui_runtime_blocks_world_input(void);
+
 // Closes the frame, walks the tree, flushes the sprite + text renderers.
 void ui_runtime_end(void);
 

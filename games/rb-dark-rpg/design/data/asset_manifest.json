@@ -133,7 +133,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "91B5401340E91B7E02B26E45B972B93027AA97CBE6F238F4EC7F3DD2B5B02BDE"
+      "sha256": "3509C147F0C25B6716EEBAB1DBFAC06752DB2F4BB8F265ED39EFC19F842B512C"
     },
     {
       "id": "asset_character_blacksmith",
@@ -145,7 +145,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "8E3AFFF48F1D610FE709D22E697ECC9C79D4E15F4E58CED5555195F8533BDE3A"
+      "sha256": "5D38FFED0CD7D0629BF894ACE93F388066E707D06E4855746C5EFC5D92A3C0D3"
     },
     {
       "id": "asset_portrait_elder",
@@ -157,7 +157,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "B25DCDB200A5B87F369ADFF71FEB90E7BB7BBBEE303F105DD00DA17A93351CCD"
+      "sha256": "7B387D889414F498FDB169A37FA7D7A3DF19E17AE98ADBADEFE26B6D2645365B"
     },
     {
       "id": "asset_character_elder",
@@ -169,7 +169,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "159A25F4E689333274F8D8EA1ADDD08C013CCF0074FDFF922DC972B7E7EF39FA"
+      "sha256": "282A4AAA153C2E9A23AF7B3D87F6AD9A11B3DD53436EE73A11FD28B9D2C756BE"
     },
     {
       "id": "asset_portrait_healer",
@@ -181,7 +181,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "B8E1E0DCCCBBF48BB770FC0FDBFC2B2EB487F319D0878BC376B2A478D1A92E2E"
+      "sha256": "C8F44558FBB8B1792FD4B3833C6BBC52A3C466933C65DDEBE731FD2F89D0ED0D"
     },
     {
       "id": "asset_character_healer",
@@ -193,7 +193,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "AAAEB3CF92C7619DA0AB4F110242CCA8F58B323B6E79120C6F0E2A1AAC62696E"
+      "sha256": "BB892291F233D1D0E1C95A54D7C6F38A05181BC4CF068BB8BAD3F345FC8DE9C6"
     },
     {
       "id": "asset_portrait_council_scribe",
@@ -262,7 +262,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "DD5533752AC5CE25CD5DEB525916409CF17B56CF3D517B72546D67806FCF1183"
+      "sha256": "22570A1D9B025F08F3F96B5D806B7C9F59FB1E56BBC281DDBDE73F5ED73502B3"
     },
     {
       "id": "asset_object_dragon_memorial",
@@ -274,7 +274,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "6708C91B7EA504367BDE5050FDB1BD202ABCA480B4243053492E7849687B2C62"
+      "sha256": "DB5AA02111AF09B08B0B0C34A3EBCDD5CACA3ACEA5E3862C49A646F26F45421B"
     },
     {
       "id": "asset_object_map_gate",
@@ -286,7 +286,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "1E267CC919AC8AD43C6CCAA1F97C01ACB589B5690149741472661925D886408B"
+      "sha256": "F4531BD6D788E2B1B6485DC15CEACC627E45AF667AF89BA55F525D24D9C97835"
     },
     {
       "id": "asset_object_black_sun_mark",
@@ -1041,7 +1041,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "373B6B8EA078AC19CCD1A6E92B26AEE2C7C0944676376A2DD60CBC5070E337A3",
+      "sha256": "117320DC7BD7D25399447429B8457D9A0419883222CA62DEDDDD2609C1F12FF0",
       "notes": "City-reference full-body town trader scene sprite for the Last Post market/shop object. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
     },
     {
@@ -1053,7 +1053,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "1D3133FF8CB6C932F9B7E175223BD77BE290093F1E127E017ED70584F56D9017",
+      "sha256": "122E509D32765EA83E6AFCC1EA3D61743B8A4BFF9C25C143C330102BE5144396",
       "notes": "Upper-body portrait crop from the accepted town trader scene sprite. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
     },
     {
@@ -1065,7 +1065,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "BA7B01F0C98ACB622F7C6D2CC70281EF4936FAD54947279CF3944BDC12DEFAE7",
+      "sha256": "05AFAC0B9822803DF0DC2D6C512EAEB3733C49BBD2A420FAF3DB7643D46DF225",
       "notes": "City-reference transparent caged scavenger prop for the gate-pass combat objective. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
     },
     {
@@ -1077,7 +1077,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "EE3B6783543EA235F24225A21C4048EDAC9744433B0EE85A4F99A2AC9DD1B696",
+      "sha256": "549D93F7645F22E3C072D4AB3CC1EC0505FD211A6A6EC2ED94FE8BFC7260EA44",
       "notes": "City-reference transparent Old Mill scavenger scene/combat sprite. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
     },
     {
@@ -1089,7 +1089,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "7EB8C53EEF837457E18363FDB9114B91AB3F09F0064E684F2753B780BD015955",
+      "sha256": "0A10AFB9E84526E6E15917BE799849CFE32BBAECEBCC0DFC70926FD0FDD37FFB",
       "notes": "City-reference transparent Old Mill cellar knifeman scene/combat sprite. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
     },
     {
@@ -1101,7 +1101,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "BDF64F51BE45908CA38DBC03387347C787A3F9C6D4A4C634E799320BB928F9F9",
+      "sha256": "24A7A9E0AE3A5223AE430B1404A93B6191B470F3C908DDE195A17C73FA3260FF",
       "notes": "City-reference transparent Old Mill cellar hatch prop. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
     },
     {
@@ -1113,7 +1113,7 @@
       "origin": "ai",
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
-      "sha256": "9CB3A2F10B5E28319FF82A92193FF5D5467CE70BED49515E74E0CD6AC73F4460",
+      "sha256": "AF3A5AAB8752226103734970D57C1E557B27FA7527EEA8E3A7D0E753D5F5E8F0",
       "notes": "City-reference transparent broken-wall Black Sun clue prop; replaces the rejected hanging facade sign for scene use. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
     }
   ]

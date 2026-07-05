@@ -469,7 +469,7 @@
     },
     {
       "id": "night_attacker",
-      "display_name": "Вожак ночного налёта",
+      "display_name": "Вожак ночного налета",
       "archetype": "human_threat",
       "role": "act_i_finale_boss",
       "quest": "Ночь без Дракона",

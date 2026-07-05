@@ -42,6 +42,7 @@ bool game_actions_grant_gear(GameState *state, const char *instance_id,
                              const char *def_id,
                              game_action_gear_slot_t preferred_slot);
 bool game_actions_equip_gear(GameState *state, const char *instance_id);
+bool game_actions_unequip_gear(GameState *state, const char *instance_id);
 bool game_actions_starter_gear_equipped(const GameState *state);
 bool game_actions_needs_starter_gear_onboarding(const GameState *state);
 bool game_actions_needs_gate_check_onboarding(const GameState *state);
@@ -50,6 +51,8 @@ bool game_actions_location_unlocked(const GameState *state,
 bool game_actions_can_move_location(const GameState *state,
                                     const char *location_id);
 bool game_actions_location_object_available(
+    const GameState *state, const game_location_object_t *object);
+bool game_actions_location_object_visible(
     const GameState *state, const game_location_object_t *object);
 const game_location_interaction_t *
 game_actions_select_location_interaction(const GameState *state,

@@ -114,7 +114,7 @@ bool game_dialogue_select_choice(World *w, const char *choice_id) {
       w->first_scene.active_quest_completed_step_id = "talk_gate_guard";
       w->first_scene.active_quest_completed_talk_step = true;
       w->first_scene.active_quest_gate_guard_intro_seen = true;
-      w->first_scene.objective_object_id = SCENE_OBJECT_ID_NONE;
+      w->first_scene.objective_object_id = NULL;
       w->first_scene.tutorial_guard_talk_completed = true;
       w->first_scene.blacksmith_unlocked = false;
       w->first_scene.gate_locked = true;

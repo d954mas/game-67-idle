@@ -39,12 +39,6 @@
           {
             "type": "grant_xp",
             "amount": 12
-          },
-          {
-            "type": "unlock_screen",
-            "screen_id": "ash_border_map",
-            "location_id": "old_mill",
-            "quest_id": "q002_bread_for_post"
           }
         ]
       },
@@ -52,7 +46,7 @@
         {
           "id": "start",
           "speaker_id": "gate_guard",
-          "text": "За ворота без жетона и железа не выпускаю. После ухода Дракона дороги стали чужими: на трактах падальщики и люди с черным знаком. Хочешь выйти - пройдешь проверку.",
+          "text": "За ворота без жетона и железа не выпускаю. На трактах падальщики и люди с черным знаком. Хочешь выйти - пройдешь проверку.",
           "choices": [
             {
               "id": "ask_what_happened",
@@ -155,7 +149,7 @@
           "choices": [
             {
               "id": "ask_what_happened",
-              "text": "Почему всё так плохо?",
+              "text": "Почему все так плохо?",
               "next_node_id": "outside_lore"
             },
             {

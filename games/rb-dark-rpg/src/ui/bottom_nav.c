@@ -251,9 +251,6 @@ void bottom_nav_ui(nt_ui_context_t *ctx, World *w) {
   const float btn_h = btn_w * (365.0F / 299.0F);
   const float bottom_gap = portrait ? 12.0F : 10.0F;
   const float label_font = portrait ? 11.0F : 13.0F;
-  const nt_ui_label_style_t label =
-      label_style(label_font, 246.0F, 229.0F, 194.0F, 255.0F);
-
   bottom_sheet_ui(ctx, btn_h, bottom_gap);
 
   CLAY(
@@ -290,6 +287,8 @@ void bottom_nav_ui(nt_ui_context_t *ctx, World *w) {
             preview.pressed ? 0xFFE3E3E3U
                            : ((preview.hovered || active) ? 0xFFFFFFFFU
                                                          : 0xFFF0F0F0U);
+        const nt_ui_label_style_t label =
+            label_style(label_font * visual_scale, 246.0F, 229.0F, 194.0F, 255.0F);
 
         CLAY({.id = CLAY_IDI("bottom_nav/art_anchor", i),
               .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,

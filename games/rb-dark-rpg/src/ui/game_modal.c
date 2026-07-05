@@ -130,8 +130,8 @@ nt_ui_button_style_t game_modal_button_style(bool primary) {
     s.pressed.bg = s.idle.bg;
     s.disabled.bg = s.idle.bg;
     s.idle.bg_tint = 0xFFFFFFFFU;
-    s.hover.bg_tint = primary ? 0xFFFFE7B5U : 0xFFE9F3F8U;
-    s.pressed.bg_tint = primary ? 0xFFD19A67U : 0xFFB5C8D2U;
+    s.hover.bg_tint = primary ? 0xFFB5E7FFU : 0xFFF8F3E9U;
+    s.pressed.bg_tint = primary ? 0xFF679AD1U : 0xFFD2C8B5U;
     s.disabled.bg_tint = 0xFFFFFFFFU;
     s.idle.scale = 1.0F;
     s.hover.scale = 1.02F;
@@ -151,12 +151,30 @@ nt_ui_button_style_t game_modal_button_style(bool primary) {
 }
 
 nt_ui_button_style_t game_modal_close_button_style(void) {
-    nt_ui_button_style_t s = game_modal_button_style(false);
-    s.idle.bg_tint = 0xFFE2C69CU;
-    s.hover.bg_tint = 0xFFFFE3B4U;
-    s.pressed.bg_tint = 0xFFC18C5AU;
-    s.disabled.bg_tint = 0xFFE2C69CU;
-    s.slice9_scale = 0.34F;
+    ensure_regions();
+    nt_ui_button_style_t s = {0};
+    s.idle.bg = s_white_region;
+    s.hover.bg = s_white_region;
+    s.pressed.bg = s_white_region;
+    s.disabled.bg = s_white_region;
+    s.idle.bg_tint = 0xEE291F45U;
+    s.hover.bg_tint = 0xFF473067U;
+    s.pressed.bg_tint = 0xFF1C1732U;
+    s.disabled.bg_tint = 0x80342B3CU;
+    s.idle.scale = 1.0F;
+    s.hover.scale = 1.08F;
+    s.pressed.scale = 0.90F;
+    s.disabled.scale = 1.0F;
+    s.idle.opacity = 1.0F;
+    s.hover.opacity = 1.0F;
+    s.pressed.opacity = 1.0F;
+    s.disabled.opacity = 0.55F;
+    s.transition_speed = 22.0F;
+    s.hit_padding_lrtb[0] = 12;
+    s.hit_padding_lrtb[1] = 12;
+    s.hit_padding_lrtb[2] = 12;
+    s.hit_padding_lrtb[3] = 12;
+    s.slice9_scale = 1.0F;
     return s;
 }
 
@@ -182,23 +200,21 @@ bool game_modal_close_button(nt_ui_context_t *ctx, nt_ui_layer_t image_layer,
                              bool portrait) {
     const Clay_ElementId wrapper_id = clay_id_from_text(id_text);
     const uint32_t button_id = nt_ui_child_id(wrapper_id.id, "button");
-    const float size = portrait ? 34.0F : 36.0F;
+    const float size = portrait ? 48.0F : 50.0F;
     nt_ui_button_style_t button = game_modal_close_button_style();
-    const nt_ui_label_style_t label = game_modal_label(portrait ? 18.0F : 19.0F, 56.0F, 28.0F, 18.0F, 255.0F);
+    const nt_ui_label_style_t label = game_modal_label(portrait ? 30.0F : 31.0F, 255.0F, 232.0F, 204.0F, 255.0F);
 
     bool clicked = false;
     CLAY({.id = wrapper_id,
           .layout = {.sizing = {CLAY_SIZING_FIXED(size), CLAY_SIZING_FIXED(size)},
-                     .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
-          .backgroundColor = {43.0F, 25.0F, 17.0F, 230.0F},
-          .cornerRadius = CLAY_CORNER_RADIUS(4),
-          .userData = NT_UI_CLAY_DATA(image_layer)}) {
+                     .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
         nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(image_layer), button_id, &button,
                            &(Clay_ElementDeclaration){
                                .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
-                                          .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
+                                          .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
+                               .border = {.color = {212.0F, 150.0F, 84.0F, 235.0F}, .width = {2, 2, 2, 2, 0}}},
                            true, NULL);
-        nt_ui_label(ctx, NT_UI_DATA_LAYER(text_layer), "x", &label);
+        nt_ui_label(ctx, NT_UI_DATA_LAYER(text_layer), "X", &label);
         clicked = nt_ui_button_end(ctx);
     }
     return clicked;

@@ -3,6 +3,7 @@
 #include "input/nt_input.h"
 #include "scene/scene_interactions.h"
 #include "scene/scene_layout.h"
+#include "ui/ui_runtime.h"
 #include "window/nt_window.h"
 
 static bool s_dragging;
@@ -26,6 +27,10 @@ static float clamped_center_x(scene_view_t view) {
 
 void sys_scene_pan_update(World *w) {
     ensure_camera(w);
+    if (ui_runtime_blocks_world_input()) {
+        s_dragging = false;
+        return;
+    }
 
     const int fb_w = (int)g_nt_window.fb_width;
     const int fb_h = (int)g_nt_window.fb_height;

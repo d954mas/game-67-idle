@@ -373,10 +373,10 @@ static void top_hud_ui(nt_ui_context_t *ctx, const World *w, bool portrait) {
 }
 
 static bool objective_callout_screen_anchor(const World *w, float layout_w, float layout_h, scene_point_t *out_anchor) {
-    if (!w || !out_anchor || w->first_scene.objective_object_id == SCENE_OBJECT_ID_NONE) {
+    if (!w || !out_anchor || !w->first_scene.objective_object_id) {
         return false;
     }
-    const scene_interaction_object_t *object = scene_interactions_find(w->first_scene.objective_object_id);
+    const scene_interaction_object_t *object = scene_interactions_find(w, w->first_scene.objective_object_id);
     if (!object || !scene_interactions_should_show_tutorial_finger(w, object->id)) {
         return false;
     }
@@ -402,7 +402,7 @@ static void first_screen_tutorial_hint_ui(nt_ui_context_t *ctx, const World *w, 
     scene_point_t anchor = {0.0F, 0.0F};
     tutorial_callout_style_t style = tutorial_callout_default_style(portrait, layout_w);
     if (objective_callout_screen_anchor(w, layout_w, layout_h, &anchor)) {
-        const char *text = w->first_scene.current_objective_text ? w->first_scene.current_objective_text : "РџРѕРіРѕРІРѕСЂРё СЃРѕ СЃС‚СЂР°Р¶РЅРёРєРѕРј";
+        const char *text = w->first_scene.current_objective_text ? w->first_scene.current_objective_text : "Поговори со стражником";
         const float margin_x = 14.0F + style.width * 0.5F;
         const float min_y = 108.0F + style.height;
         const float max_y = layout_h - (portrait ? 134.0F : 116.0F);

@@ -54,3 +54,13 @@ bool game_persistence_save_autosave_if_dirty(char *error, int error_cap) {
     }
     return game_persistence_save_autosave(error, error_cap);
 }
+
+bool game_persistence_reset_autosave(char *error, int error_cap) {
+    if (!game_storage_delete_json(GAME_PERSISTENCE_SAVE_KEY, GAME_STATE_DOCUMENT, error, error_cap)) {
+        return false;
+    }
+    if (!game_state_reset(&g_game_state, error, error_cap)) {
+        return false;
+    }
+    return game_persistence_save_autosave(error, error_cap);
+}

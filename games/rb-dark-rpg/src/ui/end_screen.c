@@ -150,7 +150,7 @@ void end_screen_ui(nt_ui_context_t *ctx, World *w) {
       CLAY({.id = CLAY_ID("end_screen/gap_a"),
             .layout = {.sizing = {CLAY_SIZING_GROW(0),
                                   CLAY_SIZING_FIXED(6.0F)}}}) {}
-      text_label(ctx, "Дракон не вернулся.", &body);
+      text_label(ctx, "Застава встретила рассвет.", &body);
       text_label(ctx, "Но этой ночью Последний Пост встретил рассвет сам.",
                  &body);
       text_label(ctx, "Мир без своего защитника учится стоять сам,", &body);

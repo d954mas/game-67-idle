@@ -240,8 +240,8 @@ static nt_ui_button_style_t dialogue_topic_button(void) {
     s.pressed.bg = s_dialogue_answer_normal_region;
     s.disabled.bg = s_dialogue_answer_normal_region;
     s.idle.bg_tint = 0xFFFFFFFFU;
-    s.hover.bg_tint = 0xFFE9F3F8U;
-    s.pressed.bg_tint = 0xFFB5C8D2U;
+    s.hover.bg_tint = 0xFFF8F3E9U;
+    s.pressed.bg_tint = 0xFFD2C8B5U;
     s.disabled.bg_tint = 0xFFFFFFFFU;
     s.slice9_scale = 0.48F;
     return s;
@@ -255,8 +255,8 @@ static nt_ui_button_style_t dialogue_primary_button(void) {
     s.pressed.bg = s_dialogue_answer_primary_region;
     s.disabled.bg = s_dialogue_answer_primary_region;
     s.idle.bg_tint = 0xFFFFFFFFU;
-    s.hover.bg_tint = 0xFFFFE7B5U;
-    s.pressed.bg_tint = 0xFFD19A67U;
+    s.hover.bg_tint = 0xFFB5E7FFU;
+    s.pressed.bg_tint = 0xFF679AD1U;
     s.disabled.bg_tint = 0xFFFFFFFFU;
     s.slice9_scale = 0.48F;
     return s;
@@ -270,8 +270,8 @@ static nt_ui_button_style_t dialogue_reward_button(void) {
     s.pressed.bg = s_dialogue_reward_cell_region;
     s.disabled.bg = s_dialogue_reward_cell_region;
     s.idle.bg_tint = 0xFFFFFFFFU;
-    s.hover.bg_tint = 0xFFFFE6B8U;
-    s.pressed.bg_tint = 0xFFD5A66FU;
+    s.hover.bg_tint = 0xFFB8E6FFU;
+    s.pressed.bg_tint = 0xFF6FA6D5U;
     s.disabled.bg_tint = 0xFFFFFFFFU;
     s.slice9_scale = 0.46F;
     return s;
@@ -287,15 +287,6 @@ static nt_ui_scroll_style_t dialogue_scroll_style(void) {
     s.thumb_ref = s_scrollbar_white_region;
     s.track_tint = 0xA0243456U;
     s.thumb_tint = 0xF044BCECU;
-    return s;
-}
-
-static nt_ui_button_style_t dialogue_close_button(void) {
-    nt_ui_button_style_t s = dialogue_choice_button();
-    s.idle.bg_tint = 0xFF835339U;
-    s.hover.bg_tint = 0xFFA66845U;
-    s.pressed.bg_tint = 0xFF5A3325U;
-    s.disabled.bg_tint = 0xFF835339U;
     return s;
 }
 
@@ -407,8 +398,6 @@ static void reward_detail_modal_ui(nt_ui_context_t *ctx, bool portrait) {
     const nt_ui_label_style_t title_style = make_label(22.0F, 255.0F, 238.0F, 202.0F, 255.0F);
     const nt_ui_label_style_t icon_style = make_label(28.0F, 246.0F, 220.0F, 170.0F, 255.0F);
     const nt_ui_label_style_t body_style = make_label(16.0F, 236.0F, 211.0F, 166.0F, 255.0F);
-    const nt_ui_label_style_t close_label = make_label(18.0F, 255.0F, 239.0F, 206.0F, 255.0F);
-    nt_ui_button_style_t close_button = dialogue_close_button();
 
     CLAY({.id = CLAY_ID("dialogue/reward_detail_frame"),
           .layout = {.sizing = {CLAY_SIZING_FIXED(panel_w), CLAY_SIZING_FIT(0)},
@@ -453,22 +442,6 @@ static void reward_detail_modal_ui(nt_ui_context_t *ctx, bool portrait) {
                          .padding = {.left = 2, .right = 2, .top = 2, .bottom = 2}}}) {
             nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), reward->detail, &body_style);
         }
-
-        CLAY({.id = CLAY_ID("dialogue/reward_detail_close"),
-              .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(42.0F)}}}) {
-            const uint32_t close_id = nt_ui_id("dialogue/reward_detail_close/button");
-            nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), close_id, &close_button,
-                               &(Clay_ElementDeclaration){
-                                   .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
-                                              .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
-                                   .cornerRadius = CLAY_CORNER_RADIUS(4),
-                                   .border = {.color = {176.0F, 122.0F, 64.0F, 255.0F}, .width = {1, 1, 1, 1, 0}}},
-                               true, NULL);
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Закрыть", &close_label);
-            if (nt_ui_button_end(ctx)) {
-                detail_open = false;
-            }
-        }
     }
     nt_ui_modal_end(ctx);
     if (s_reward_detail_dismiss_guard_frames > 0) {
@@ -490,20 +463,22 @@ static void reward_cell_ui(nt_ui_context_t *ctx, const char *scope, int slot, co
         return;
     }
 
-    const float cell_size = portrait ? 50.0F : 44.0F;
+    const bool numeric_reward = reward->kind == DIALOGUE_REWARD_XP || reward->kind == DIALOGUE_REWARD_GOLD;
+    const float cell_w = numeric_reward ? (portrait ? 66.0F : 62.0F) : (portrait ? 56.0F : 50.0F);
+    const float cell_h = portrait ? 56.0F : 50.0F;
     const uint32_t group_id = nt_ui_child_id(nt_ui_id("dialogue/reward_group"), scope);
     const uint32_t button_id = nt_ui_child_id(group_id, reward->id);
     nt_ui_button_style_t cell_button = dialogue_reward_button();
     char amount_buf[16];
     amount_buf[0] = '\0';
-    if (reward->kind == DIALOGUE_REWARD_XP || reward->kind == DIALOGUE_REWARD_GOLD) {
+    if (numeric_reward) {
         (void)snprintf(amount_buf, sizeof amount_buf, "+%d", reward->amount);
     } else if (reward->amount > 1) {
         (void)snprintf(amount_buf, sizeof amount_buf, "x%d", reward->amount);
     }
 
     CLAY({.id = CLAY_IDI("dialogue/reward_cell_box", slot),
-          .layout = {.sizing = {CLAY_SIZING_FIXED(cell_size), CLAY_SIZING_FIXED(cell_size)}},
+          .layout = {.sizing = {CLAY_SIZING_FIXED(cell_w), CLAY_SIZING_FIXED(cell_h)}},
           .backgroundColor = dialogue_underlay_reward(),
           .cornerRadius = CLAY_CORNER_RADIUS(4),
           .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
@@ -512,7 +487,7 @@ static void reward_cell_ui(nt_ui_context_t *ctx, const char *scope, int slot, co
                                .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                                           .padding = CLAY_PADDING_ALL(4),
                                           .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                                          .childGap = 2,
+                                          .childGap = 0,
                                           .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
                            true, NULL);
         CLAY({.id = CLAY_IDI("dialogue/reward_icon", slot),
@@ -522,10 +497,21 @@ static void reward_cell_ui(nt_ui_context_t *ctx, const char *scope, int slot, co
               .cornerRadius = CLAY_CORNER_RADIUS(3),
               .border = {.color = {209.0F, 154.0F, 82.0F, 255.0F}, .width = {1, 1, 1, 1, 0}},
               .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
-            reward_icon_visual_ui(ctx, reward, cell_size * 0.66F, icon_style);
-        }
-        if (amount_buf[0] != '\0') {
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), amount_buf, amount_style);
+            reward_icon_visual_ui(ctx, reward, cell_h * (numeric_reward ? 0.58F : 0.70F), icon_style);
+            if (amount_buf[0] != '\0') {
+                CLAY({.id = CLAY_IDI("dialogue/reward_amount_band", slot),
+                      .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
+                                   .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_BOTTOM,
+                                                    .parent = CLAY_ATTACH_POINT_CENTER_BOTTOM},
+                                   .offset = {0.0F, -2.0F}},
+                      .layout = {.sizing = {CLAY_SIZING_FIXED(cell_w - 10.0F), CLAY_SIZING_FIXED(16.0F)},
+                                 .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
+                      .backgroundColor = {29.0F, 20.0F, 15.0F, 230.0F},
+                      .cornerRadius = CLAY_CORNER_RADIUS(3),
+                      .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
+                    nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), amount_buf, amount_style);
+                }
+            }
         }
         if (nt_ui_button_end(ctx)) {
             s_selected_reward = reward;
@@ -644,11 +630,11 @@ static void task_section_ui(nt_ui_context_t *ctx, const char *objective, bool po
                                          .childGap = 9,
                                          .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
         CLAY({.id = CLAY_ID("dialogue/task_icon"),
-              .layout = {.sizing = {CLAY_SIZING_FIXED(portrait ? 34.0F : 36.0F), CLAY_SIZING_FIXED(portrait ? 34.0F : 36.0F)},
+              .layout = {.sizing = {CLAY_SIZING_FIXED(portrait ? 32.0F : 34.0F), CLAY_SIZING_FIXED(portrait ? 32.0F : 34.0F)},
                          .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
-              .backgroundColor = {229.0F, 169.0F, 41.0F, 255.0F},
-              .cornerRadius = CLAY_CORNER_RADIUS(18),
-              .border = {.color = {117.0F, 50.0F, 24.0F, 255.0F}, .width = {2, 2, 2, 2, 0}},
+              .backgroundColor = {67.0F, 43.0F, 29.0F, 245.0F},
+              .cornerRadius = CLAY_CORNER_RADIUS(4),
+              .border = {.color = {174.0F, 118.0F, 61.0F, 230.0F}, .width = {1, 1, 1, 1, 0}},
               .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
             nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "!", section_style);
         }
@@ -911,13 +897,21 @@ void dialogue_panel_ui(nt_ui_context_t *ctx, World *w) {
                                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
                           .backgroundColor = {28.0F, 23.0F, 20.0F, 255.0F},
                           .cornerRadius = CLAY_CORNER_RADIUS(4),
-                          .border = {.color = {178.0F, 126.0F, 66.0F, 255.0F}, .width = {1, 1, 1, 1, 0}},
                           .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
                         nt_atlas_region_ref_t *portrait_region = speaker_portrait_region(node);
                         if (portrait_region) {
                             nt_ui_image_style_t portrait_image = nt_ui_image_style_defaults();
                             portrait_image.color_packed = 0xFFFFFFFFU;
                             nt_ui_image(ctx, NT_UI_DATA_LAYER(LAYER_IMG), portrait_region, &portrait_image, NULL);
+                            CLAY({.id = CLAY_ID("dialogue/portrait_badge_frame"),
+                                  .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
+                                               .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER,
+                                                                .parent = CLAY_ATTACH_POINT_CENTER_CENTER}},
+                                  .layout = {.sizing = {CLAY_SIZING_FIXED(portrait_badge_w),
+                                                        CLAY_SIZING_FIXED(portrait_badge_h)}}}) {
+                                nt_ui_image(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), &s_dialogue_portrait_frame_region,
+                                            &portrait_frame_image, NULL);
+                            }
                         } else {
                             nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), portrait ? "NPC" : "СТРАЖ", &portrait_style);
                         }

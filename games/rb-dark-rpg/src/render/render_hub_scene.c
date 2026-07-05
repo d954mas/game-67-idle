@@ -27,7 +27,6 @@ static uint32_t s_tutorial_finger_region = NT_ATLAS_INVALID_REGION;
 static uint32_t s_last_post_background_region = NT_ATLAS_INVALID_REGION;
 static uint32_t s_gate_outskirts_background_region = NT_ATLAS_INVALID_REGION;
 static uint32_t s_old_mill_background_region = NT_ATLAS_INVALID_REGION;
-static uint32_t s_guard_region = NT_ATLAS_INVALID_REGION;
 
 static nt_hash64_t rid(const char *s) { return nt_hash64_str(s); }
 
@@ -126,14 +125,6 @@ static bool background_ready(const World *w, uint32_t *out_region) {
         *out_region = region;
     }
     return region != NT_ATLAS_INVALID_REGION && material_ready(s_background_material);
-}
-
-static bool guard_ready(void) {
-    if (!nt_resource_is_ready(s_background_atlas)) {
-        return false;
-    }
-    (void)scene_atlas_region(&s_guard_region, ASSET_ATLAS_REGION_HUB_SCENE_LAST_POST_GUARD);
-    return s_guard_region != NT_ATLAS_INVALID_REGION && material_ready(s_background_material);
 }
 
 void render_hub_scene_init(void) {
@@ -338,26 +329,18 @@ static void draw_scene_object_ground_affordance(const scene_interaction_object_t
     draw_interaction_ground_shadow(object, flags, has_sprite_outline);
 }
 
-static void draw_scene_object_fallback(const scene_interaction_object_t *object) {
-    if (object->id != SCENE_OBJECT_ID_GUARD) {
-        return;
-    }
-    draw_quad(626.0F, 250.0F, 48.0F, 86.0F, rgba(0.180F, 0.170F, 0.150F, 1.0F));
-    draw_quad(632.0F, 336.0F, 36.0F, 34.0F, rgba(0.210F, 0.185F, 0.140F, 1.0F));
-    draw_quad(618.0F, 246.0F, 64.0F, 8.0F, rgba(0.95F, 0.70F, 0.26F, 1.0F));
-}
-
 static void draw_scene_object_affordances(const World *w, bool has_guard) {
     const float pulse = 0.5F + 0.5F * sinf(w->time_seconds * 4.0F);
     int count = 0;
-    const scene_interaction_object_t *objects = scene_interactions_all(&count);
+    const scene_interaction_object_t *objects = scene_interactions_all(w, &count);
     for (int i = 0; i < count; ++i) {
-        const uint32_t flags = scene_interactions_visual_flags(w, objects[i].id);
-        const bool has_sprite_outline = objects[i].id == SCENE_OBJECT_ID_GUARD && has_guard;
-        draw_scene_object_ground_affordance(&objects[i], flags, pulse, has_sprite_outline);
-        if (objects[i].id == SCENE_OBJECT_ID_GUARD && !has_guard) {
-            draw_scene_object_fallback(&objects[i]);
+        if (!scene_interactions_object_visible(w, &objects[i])) {
+            continue;
         }
+        const uint32_t flags = scene_interactions_visual_flags(w, objects[i].id);
+        const bool is_guard = objects[i].id && strcmp(objects[i].id, "hub_last_post.gate_guard") == 0;
+        const bool has_sprite_outline = is_guard && has_guard;
+        draw_scene_object_ground_affordance(&objects[i], flags, pulse, has_sprite_outline);
     }
 }
 
@@ -367,12 +350,17 @@ typedef struct scene_object_sprite_visual_t {
 } scene_object_sprite_visual_t;
 
 static bool scene_object_sprite_visual(const scene_interaction_object_t *object, scene_object_sprite_visual_t *visual) {
-    if (object->id == SCENE_OBJECT_ID_GUARD && s_guard_region != NT_ATLAS_INVALID_REGION) {
-        visual->region = s_guard_region;
-        visual->target_h = (float)object->bounds.h - 14.0F;
-        return true;
+    if (!object || !visual || object->sprite_region_hash == 0U || object->sprite_target_h <= 0.0F ||
+        !nt_resource_is_ready(s_background_atlas)) {
+        return false;
     }
-    return false;
+    const uint32_t region = nt_atlas_find_region(s_background_atlas, object->sprite_region_hash);
+    if (region == NT_ATLAS_INVALID_REGION) {
+        return false;
+    }
+    visual->region = region;
+    visual->target_h = object->sprite_target_h;
+    return true;
 }
 
 static void emit_scene_object_sprite(const scene_interaction_object_t *object,
@@ -443,26 +431,34 @@ static void draw_scene_object_sprite(const scene_interaction_object_t *object, c
 }
 
 static void draw_scene_object_sprites(const World *w) {
-    if (!material_ready(s_mask_glow_material) || !material_ready(s_background_material)) {
+    if (!material_ready(s_background_material)) {
         return;
     }
 
     const float pulse = 0.5F + 0.5F * sinf(w->time_seconds * 4.0F);
     int count = 0;
-    const scene_interaction_object_t *objects = scene_interactions_all(&count);
-    nt_sprite_renderer_set_material(s_mask_glow_material);
-    for (int i = 0; i < count; ++i) {
-        scene_object_sprite_visual_t visual;
-        if (!scene_object_sprite_visual(&objects[i], &visual)) {
-            continue;
+    const scene_interaction_object_t *objects = scene_interactions_all(w, &count);
+    if (material_ready(s_mask_glow_material)) {
+        nt_sprite_renderer_set_material(s_mask_glow_material);
+        for (int i = 0; i < count; ++i) {
+            if (!scene_interactions_object_visible(w, &objects[i])) {
+                continue;
+            }
+            scene_object_sprite_visual_t visual;
+            if (!scene_object_sprite_visual(&objects[i], &visual)) {
+                continue;
+            }
+            const uint32_t flags = scene_interactions_visual_flags(w, objects[i].id);
+            draw_scene_object_sprite_mask_glow(&objects[i], &visual, flags, pulse);
         }
-        const uint32_t flags = scene_interactions_visual_flags(w, objects[i].id);
-        draw_scene_object_sprite_mask_glow(&objects[i], &visual, flags, pulse);
+        nt_sprite_renderer_flush();
     }
-    nt_sprite_renderer_flush();
 
     nt_sprite_renderer_set_material(s_background_material);
     for (int i = 0; i < count; ++i) {
+        if (!scene_interactions_object_visible(w, &objects[i])) {
+            continue;
+        }
         scene_object_sprite_visual_t visual;
         if (!scene_object_sprite_visual(&objects[i], &visual)) {
             continue;
@@ -504,8 +500,11 @@ static void draw_tutorial_fingers(const World *w) {
     }
 
     int count = 0;
-    const scene_interaction_object_t *objects = scene_interactions_all(&count);
+    const scene_interaction_object_t *objects = scene_interactions_all(w, &count);
     for (int i = 0; i < count; ++i) {
+        if (!scene_interactions_object_visible(w, &objects[i])) {
+            continue;
+        }
         if (scene_interactions_should_show_tutorial_finger(w, objects[i].id)) {
             draw_tutorial_finger_for_object(w, &objects[i]);
         }
@@ -516,7 +515,10 @@ void render_hub_scene_draw(const World *w, nt_buffer_t frame_ubo) {
     uint32_t background_region = NT_ATLAS_INVALID_REGION;
     const bool has_background = background_ready(w, &background_region);
     const bool last_post_scene = current_location_is(w, "hub_last_post");
-    const bool has_guard = last_post_scene && guard_ready();
+    scene_object_sprite_visual_t guard_visual;
+    const scene_interaction_object_t *guard = scene_interactions_find(w, "hub_last_post.gate_guard");
+    const bool has_guard = last_post_scene && guard && scene_object_sprite_visual(guard, &guard_visual) &&
+                           material_ready(s_background_material);
     const bool has_overlay = overlay_ready();
     if (!has_background && !has_overlay) {
         return;
@@ -543,12 +545,10 @@ void render_hub_scene_draw(const World *w, nt_buffer_t frame_ubo) {
         if (!has_background) {
             draw_fallback_background();
         }
-        if (last_post_scene) {
-            draw_scene_object_affordances(w, has_guard);
-        }
+        draw_scene_object_affordances(w, has_guard);
         nt_sprite_renderer_flush();
     }
-    if (has_guard) {
+    if (material_ready(s_background_material)) {
         draw_scene_object_sprites(w);
     }
     if (has_overlay) {
@@ -557,9 +557,7 @@ void render_hub_scene_draw(const World *w, nt_buffer_t frame_ubo) {
     }
     if (has_overlay) {
         nt_sprite_renderer_set_material(s_overlay_material);
-        if (last_post_scene) {
-            draw_tutorial_fingers(w);
-        }
+        draw_tutorial_fingers(w);
         nt_sprite_renderer_flush();
     }
 }

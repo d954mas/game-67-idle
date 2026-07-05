@@ -2,15 +2,24 @@
 
 #include "clay.h"
 #include "game_audio.h"
+#include "game_dialogue.h"
 #include "generated/game_assets.h"
 #include "nt_pack_format.h"
 #include "resource/nt_resource.h"
+#include "scene/scene_interactions.h"
+#include "ui/equipment_screen.h"
 #include "ui/game_modal.h"
+#include "ui/location_screen.h"
 #include "ui/nt_ui_button.h"
 #include "ui/nt_ui_label.h"
 #include "ui/nt_ui_panel.h"
 #include "ui/nt_ui_slider.h"
+#include "ui/shop_screen.h"
 #include "ui/theme.h"
+#include "ui/world_map_screen.h"
+#if FEATURE_GAME_STATE
+#include "game_persistence.h"
+#endif
 
 #include <stdio.h>
 
@@ -41,18 +50,16 @@ EM_JS(void, sys_settings_web_open_url, (const char *url_ptr), {
 #define SETTINGS_MARGIN 18.0F
 #define SETTINGS_MAX_W 460.0F
 #define SETTINGS_MIN_W 304.0F
-#define SETTINGS_PADDING_LANDSCAPE 28.0F
-#define SETTINGS_PADDING_PORTRAIT 18.0F
+#define SETTINGS_PADDING_LANDSCAPE 8.0F
+#define SETTINGS_PADDING_PORTRAIT 6.0F
 #define SETTINGS_SLIDER_MAX_W 380.0F
 #define SETTINGS_SLIDER_MIN_W 232.0F
 #define SETTINGS_MODAL_ID 0x5E771001U
 
 // VibeJam #1 attribution (jam rule: "Made for VibeJam #1" + link to the jam
-// channel must be reachable from the game). SYS_SETTINGS_AUTHOR_TG_URL is a
-// PLACEHOLDER - replace it with the lead's real Telegram handle before
-// publishing the build; do not ship with AUTHOR_TG_PLACEHOLDER still in the URL.
+// channel must be reachable from the game).
 #define SYS_SETTINGS_JAM_CHANNEL_URL "https://t.me/VibeYura"
-#define SYS_SETTINGS_AUTHOR_TG_URL "https://t.me/AUTHOR_TG_PLACEHOLDER"
+#define SYS_SETTINGS_AUTHOR_TG_URL "https://t.me/d954mas_make_games"
 #define SYS_SETTINGS_URL_SCHEME_LEN 8 /* strlen("https://"), used to show the bare handle */
 
 static bool s_open;
@@ -91,6 +98,30 @@ static float clampf(float v, float lo, float hi) {
         return hi;
     }
     return v;
+}
+
+static bool settings_reset_game(World *w) {
+    if (!w) {
+        return false;
+    }
+#if FEATURE_GAME_STATE
+    char error[256];
+    if (!game_persistence_reset_autosave(error, (int)sizeof(error))) {
+        return false;
+    }
+#endif
+    w->first_scene = (FirstSceneState){0};
+    game_dialogue_init(w);
+    w->combat = (CombatFlowState){.last_audio_event_index = -1};
+    w->player_x = 0.0F;
+    w->player_z = 0.0F;
+    w->player_yaw = 0.0F;
+    scene_interactions_init_first_scene(w);
+    equipment_screen_set_open(false);
+    location_screen_set_open(false);
+    world_map_screen_set_open(false);
+    shop_screen_set_open(false);
+    return true;
 }
 
 static float settings_panel_width(nt_ui_context_t *ctx) {
@@ -139,19 +170,22 @@ static nt_ui_button_style_t settings_gear_button_style(void) {
 static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, float *value, float slider_w) {
     char buf[48];
     (void)snprintf(buf, sizeof buf, "%s   %d%%", name, (int)(*value * 100.0F + 0.5F));
-    nt_ui_slider_style_t slider_style = nt_ui_slider_style_defaults();
-    nt_atlas_region_ref_t *white = game_modal_art(GAME_MODAL_ART_WHITE);
-    if (white) {
-        slider_style.states[NT_UI_SLIDER_IDLE].track = *white;
-        slider_style.states[NT_UI_SLIDER_IDLE].fill = *white;
-        slider_style.states[NT_UI_SLIDER_IDLE].thumb = *white;
+    nt_ui_slider_style_t slider_style = g_theme.slider;
+    for (int i = 1; i < 4; ++i) {
+        slider_style.states[i] = slider_style.states[NT_UI_SLIDER_IDLE];
     }
-    slider_style.states[NT_UI_SLIDER_IDLE].track_tint = 0xFF0F1722U;
-    slider_style.states[NT_UI_SLIDER_IDLE].fill_tint = 0xFF3879B7U;
-    slider_style.states[NT_UI_SLIDER_IDLE].thumb_tint = 0xFF94C9E8U;
-    slider_style.track_h = 12.0F;
-    slider_style.thumb_w = 18.0F;
-    slider_style.thumb_h = 24.0F;
+    slider_style.states[NT_UI_SLIDER_IDLE].track_tint = 0xFFFFFFFFU;
+    slider_style.states[NT_UI_SLIDER_IDLE].fill_tint = 0xFFFFFFFFU;
+    slider_style.states[NT_UI_SLIDER_IDLE].thumb_tint = 0xFFFFFFFFU;
+    slider_style.states[NT_UI_SLIDER_HOVER].track_tint = 0xFFFFFFFFU;
+    slider_style.states[NT_UI_SLIDER_HOVER].fill_tint = 0xFFFFFFFFU;
+    slider_style.states[NT_UI_SLIDER_HOVER].thumb_tint = 0xFFFFFFFFU;
+    slider_style.states[NT_UI_SLIDER_PRESSED].track_tint = 0xFFFFFFFFU;
+    slider_style.states[NT_UI_SLIDER_PRESSED].fill_tint = 0xFFFFFFFFU;
+    slider_style.states[NT_UI_SLIDER_PRESSED].thumb_tint = 0xFFFFFFFFU;
+    slider_style.track_h = 18.0F;
+    slider_style.thumb_w = 26.0F;
+    slider_style.thumb_h = 26.0F;
     slider_style.track_w = slider_w;
     slider_style.state_speed = 16.0F;
     slider_style.value_speed = 18.0F;
@@ -184,8 +218,8 @@ static void settings_open_url(const char *url) {
 static void jam_link_row(nt_ui_context_t *ctx, const char *id, const char *prefix, const char *url) {
     char label_text[96];
     (void)snprintf(label_text, sizeof label_text, "%s%s", prefix, url + SYS_SETTINGS_URL_SCHEME_LEN);
-    nt_ui_button_style_t link_style = game_modal_button_style(false);
-    const nt_ui_label_style_t link_label = game_modal_label(15.0F, 236.0F, 216.0F, 176.0F, 255.0F);
+    nt_ui_button_style_t link_style = game_modal_button_style(true);
+    const nt_ui_label_style_t link_label = game_modal_label(15.0F, 255.0F, 238.0F, 202.0F, 255.0F);
     const uint32_t link_id = nt_ui_id(id);
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(40)}}}) {
         nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), link_id, &link_style,
@@ -242,13 +276,11 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
     const float slider_w = clampf(content_w, SETTINGS_SLIDER_MIN_W, SETTINGS_SLIDER_MAX_W);
     nt_ui_image_style_t panel_image = game_modal_panel_image(portrait_panel);
     const nt_ui_label_style_t title_style = game_modal_label(24.0F, 255.0F, 238.0F, 202.0F, 255.0F);
-    const nt_ui_label_style_t button_label = game_modal_label(16.0F, 255.0F, 238.0F, 202.0F, 255.0F);
     const nt_ui_label_style_t danger_label = game_modal_label(16.0F, 255.0F, 238.0F, 202.0F, 255.0F);
     nt_ui_button_style_t reset_button = game_modal_button_style(false);
     reset_button.idle.bg_tint = 0xFF5864B4U;
     reset_button.hover.bg_tint = 0xFF687CD5U;
     reset_button.pressed.bg_tint = 0xFF394288U;
-    nt_ui_button_style_t close_button = game_modal_button_style(true);
     bool modal_open = s_open;
     nt_ui_modal_style_t modal_style = game_modal_style((nt_ui_layer_t)LAYER_BG, true);
     const bool ignore_close_request = s_dismiss_guard_frames > 0;
@@ -266,11 +298,11 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
                           .layout = {.sizing = {CLAY_SIZING_FIXED(panel_w), CLAY_SIZING_FIT(0)},
                                      .padding = CLAY_PADDING_ALL(panel_padding),
                                      .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                                     .childGap = 16,
+                                     .childGap = 10,
                                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
     CLAY({.id = CLAY_ID("settings/body_fill"),
           .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
-                     .padding = CLAY_PADDING_ALL(portrait_panel ? 8 : 10),
+                     .padding = CLAY_PADDING_ALL(portrait_panel ? 6 : 8),
                      .layoutDirection = CLAY_TOP_TO_BOTTOM,
                      .childGap = 14,
                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}},
@@ -309,10 +341,10 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
         jam_link_row(ctx, "settings/jam_author", "Автор: ", SYS_SETTINGS_AUTHOR_TG_URL);
     }
 
-    // Action row: hold-to-reset (long press) + close.
+    // Reset is the only footer action; the modal already has a header close button.
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
-                     .layoutDirection = portrait_panel ? CLAY_TOP_TO_BOTTOM : CLAY_LEFT_TO_RIGHT,
-                     .childGap = 12,
+                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                     .childGap = 0,
                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
         CLAY({.id = CLAY_ID("settings/reset"), .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(48)}}}) {
             const uint32_t reset_id = nt_ui_id("settings/reset/button");
@@ -331,25 +363,11 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
             (void)nt_ui_button_end(ctx);
             if (re.long_pressed) {
                 game_audio_play(GAME_AUDIO_CUE_SETTINGS);
-                w->player_x = 0.0F;
-                w->player_z = 0.0F;
-                w->player_yaw = 0.0F;
-                modal_open = false;
-                s_open = false;
-                settings_request_state_cleanup();
-            }
-        }
-
-        CLAY({.id = CLAY_ID("settings/close"),
-              .layout = {.sizing = {portrait_panel ? CLAY_SIZING_GROW(0) : CLAY_SIZING_FIXED(120), CLAY_SIZING_FIXED(48)}}}) {
-            const uint32_t close_id = nt_ui_id("settings/close/button");
-            nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), close_id, &close_button,
-                               &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
-                               true, NULL);
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Закрыть", &button_label);
-            if (nt_ui_button_end(ctx)) {
-                game_audio_play(GAME_AUDIO_CUE_SETTINGS);
-                modal_open = false;
+                if (settings_reset_game(w)) {
+                    modal_open = false;
+                    s_open = false;
+                    settings_request_state_cleanup();
+                }
             }
         }
     }

@@ -2,8 +2,10 @@
 #define RB_DARK_RPG_GAME_CONTENT_H
 
 #include "game_dialogue.h"
+#include "scene/scene_layout.h"
 
 #include <stdbool.h>
+#include <stdint.h>
 
 typedef enum game_item_kind_t {
   GAME_ITEM_KIND_UNKNOWN = 0,
@@ -119,6 +121,13 @@ typedef struct game_location_object_t {
   const char *character_id;
   const char *asset_id;
   const char *encounter_id;
+  scene_rect_t scene_bounds;
+  float scene_anchor_x;
+  float scene_anchor_y;
+  const char *scene_sprite_region_name;
+  uint64_t scene_sprite_region_hash;
+  float scene_sprite_target_h;
+  bool scene_enabled;
   const game_location_interaction_t *interactions;
   int interaction_count;
   const game_location_requirement_t *requirements;

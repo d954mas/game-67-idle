@@ -526,6 +526,65 @@ static bool set_slot(GameState *state, game_action_gear_slot_t slot,
   }
 }
 
+static void clear_slot(GameState *state, game_action_gear_slot_t slot) {
+  if (!state) {
+    return;
+  }
+  switch (slot) {
+  case GAME_ACTION_GEAR_SLOT_WEAPON:
+    state->has_equipment_weapon_instance_id = false;
+    state->equipment_weapon_instance_id[0] = '\0';
+    return;
+  case GAME_ACTION_GEAR_SLOT_OFFHAND:
+    state->has_equipment_offhand_instance_id = false;
+    state->equipment_offhand_instance_id[0] = '\0';
+    return;
+  case GAME_ACTION_GEAR_SLOT_HEAD:
+    state->has_equipment_head_instance_id = false;
+    state->equipment_head_instance_id[0] = '\0';
+    return;
+  case GAME_ACTION_GEAR_SLOT_ARMOUR:
+    state->has_equipment_armour_instance_id = false;
+    state->equipment_armour_instance_id[0] = '\0';
+    return;
+  case GAME_ACTION_GEAR_SLOT_HANDS:
+    state->has_equipment_hands_instance_id = false;
+    state->equipment_hands_instance_id[0] = '\0';
+    return;
+  case GAME_ACTION_GEAR_SLOT_WAIST:
+    state->has_equipment_waist_instance_id = false;
+    state->equipment_waist_instance_id[0] = '\0';
+    return;
+  case GAME_ACTION_GEAR_SLOT_LEGS:
+    state->has_equipment_legs_instance_id = false;
+    state->equipment_legs_instance_id[0] = '\0';
+    return;
+  case GAME_ACTION_GEAR_SLOT_FEET:
+    state->has_equipment_feet_instance_id = false;
+    state->equipment_feet_instance_id[0] = '\0';
+    return;
+  case GAME_ACTION_GEAR_SLOT_NECK:
+    state->has_equipment_neck_instance_id = false;
+    state->equipment_neck_instance_id[0] = '\0';
+    return;
+  case GAME_ACTION_GEAR_SLOT_RING_LEFT:
+    state->has_equipment_ring_left_instance_id = false;
+    state->equipment_ring_left_instance_id[0] = '\0';
+    return;
+  case GAME_ACTION_GEAR_SLOT_RING_RIGHT:
+    state->has_equipment_ring_right_instance_id = false;
+    state->equipment_ring_right_instance_id[0] = '\0';
+    return;
+  case GAME_ACTION_GEAR_SLOT_RELIC:
+    state->has_equipment_charm_instance_id = false;
+    state->equipment_charm_instance_id[0] = '\0';
+    return;
+  case GAME_ACTION_GEAR_SLOT_NONE:
+  default:
+    return;
+  }
+}
+
 static const char *equipped_instance_for_slot(
     const GameState *state, game_action_gear_slot_t slot) {
   if (!state) {
@@ -816,6 +875,40 @@ bool game_actions_equip_gear(GameState *state, const char *instance_id) {
   return true;
 }
 
+bool game_actions_unequip_gear(GameState *state, const char *instance_id) {
+  if (!state || !instance_id || instance_id[0] == '\0') {
+    return false;
+  }
+  GameState next = *state;
+  const bool live_state = state == &g_game_state;
+  GameGearInstance *gear = find_gear(&next, instance_id);
+  if (!gear) {
+    return false;
+  }
+  const game_item_definition_t *item = game_content_find_item(gear->def_id);
+  if (!item || item->kind != GAME_ITEM_KIND_GEAR) {
+    return false;
+  }
+  const game_action_gear_slot_t slot = gear_slot_from_item(item);
+  if (slot == GAME_ACTION_GEAR_SLOT_NONE) {
+    return false;
+  }
+  const char *equipped = equipped_instance_for_slot(&next, slot);
+  if (!equipped || strcmp(equipped, instance_id) != 0) {
+    return false;
+  }
+  if (!list_add_unique(next.inventory_bag_order, &next.inventory_bag_order_count,
+                       GAME_STATE_MAX_INVENTORY_BAG_ORDER, instance_id)) {
+    return false;
+  }
+  clear_slot(&next, slot);
+  *state = next;
+  if (live_state) {
+    game_state_mark_dirty();
+  }
+  return true;
+}
+
 bool game_actions_location_unlocked(const GameState *state,
                                     const char *location_id) {
   if (!state || !location_id) {
@@ -849,6 +942,13 @@ bool game_actions_can_move_location(const GameState *state,
 bool game_actions_location_object_available(
     const GameState *state, const game_location_object_t *object) {
   return game_actions_select_location_interaction(state, object) != NULL;
+}
+
+bool game_actions_location_object_visible(
+    const GameState *state, const game_location_object_t *object) {
+  return state && object &&
+         location_requirements_met(state, object->requirements,
+                                   object->requirement_count);
 }
 
 const game_location_interaction_t *
