@@ -47,8 +47,8 @@
               ]
             },
             {
-              "type": "open_screen",
-              "screen_id": "world_map",
+              "type": "dialogue",
+              "dialogue_id": "dlg_gate_guard_completed",
               "requirements": [
                 {
                   "type": "quest_status",
@@ -156,7 +156,7 @@
             "anchor_y": 130,
             "sprite_region_name": "hub_scene/asset_character_elder",
             "sprite_target_h": 150,
-            "enabled": false
+            "enabled": true
           },
           "interactions": [
             {

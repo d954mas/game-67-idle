@@ -72,6 +72,11 @@ bool game_dialogue_select_choice(World *w, const char *choice_id) {
     return false;
   }
   if (choice->kind == DIALOGUE_CHOICE_BRANCH) {
+    if (!choice->next_node_id || choice->next_node_id[0] == '\0') {
+      game_dialogue_close(w);
+      game_audio_play(GAME_AUDIO_CUE_DIALOGUE_CHOICE);
+      return true;
+    }
     const dialogue_node_t *next =
         find_node(w->dialogue.definition, choice->next_node_id);
     if (!next) {
@@ -123,11 +128,11 @@ bool game_dialogue_select_choice(World *w, const char *choice_id) {
     }
     if (strcmp(choice->quest_id, "q001_gate_pass") == 0 &&
         strcmp(choice->step_id, "report_to_gate_guard") == 0) {
-      // Gate pass complete: drop the guard objective so the scene finger/callout
-      // (re-armed after the gate fight) stops pointing at the guard.
-      w->first_scene.objective_object_id = NULL;
-      w->first_scene.tutorial_guard_talk_completed = true;
-      w->first_scene.current_objective_text = NULL;
+      // The guard starts the bread route; move the scene callout away from him.
+      w->first_scene.objective_object_id = "hub_last_post.elder";
+      w->first_scene.tutorial_guard_talk_completed = false;
+      w->first_scene.current_objective_text =
+          "Поговори со старостой";
     }
     game_dialogue_close(w);
     return true;

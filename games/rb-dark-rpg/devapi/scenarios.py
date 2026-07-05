@@ -905,15 +905,21 @@ def prepare_gate_guard_turn_in_from_place(game: Any, viewport: Any) -> dict[str,
     return {"state": "gate_guard_turn_in_from_place", "quest": "q001_gate_pass", "viewport": viewport.window_size}
 
 
-def prepare_gate_guard_completed_opens_map(game: Any, viewport: Any) -> dict[str, str]:
-    """Complete q001, tap the guard again, and verify the guard routes to the map."""
+def prepare_gate_guard_completed_dialogue_closes(game: Any, viewport: Any) -> dict[str, str]:
+    """Complete q001, tap the guard again, and verify the guidance dialogue closes."""
 
     prepare_gate_guard_turn_in_from_place(game, viewport)
     _open_bottom_nav_slot(game, viewport, 3)
     tree, node = _wait_for_node(game, "world_place/object/hub_last_post.gate_guard")
     _tap_node(game, tree, node, viewport)
-    _wait_for_node(game, "world_map/atlas_canvas", max_frames=90)
-    return {"state": "gate_guard_completed_opens_map", "quest": "q001_gate_pass", "viewport": viewport.window_size}
+    tree, node = _wait_for_node(game, "dialogue/topic_choice", max_frames=60)
+    _tap_node(game, tree, node, viewport)
+    for _ in range(60):
+        tree = game.result("ui.tree", {})
+        if not any(node.get("id_string") == "dialogue/modal_frame" for node in tree.get("nodes", [])):
+            return {"state": "gate_guard_completed_dialogue_closes", "quest": "q001_gate_pass", "viewport": viewport.window_size}
+        game.wait_frames(1)
+    raise RuntimeError("completed guard acknowledgement did not close the dialogue")
 
 
 def prepare_q002_elder_contract_flow(game: Any, viewport: Any) -> dict[str, str]:

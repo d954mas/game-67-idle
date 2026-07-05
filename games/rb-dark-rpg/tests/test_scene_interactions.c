@@ -13,6 +13,7 @@ void world_map_screen_set_open(bool open);
 
 static const char *GUARD_ID = "hub_last_post.gate_guard";
 static const char *TRADER_ID = "hub_last_post.town_trader";
+static const char *ELDER_ID = "hub_last_post.elder";
 static const char *MAP_GATE_ID = "hub_last_post.map_gate";
 
 static void test_first_scene_defaults(void) {
@@ -50,12 +51,14 @@ static void test_disabled_scene_objects_are_not_shown(void) {
     int count = 0;
     const scene_interaction_object_t *objects = scene_interactions_all(&w, &count);
     assert(objects != 0);
-    /* Scene shows only scene-enabled objects: the guard and the town trader.
+    /* Scene shows only scene-enabled objects: guard, trader, and elder.
      * Disabled objects (blacksmith, caged scavenger, etc.) stay out. */
-    assert(count == 2);
+    assert(count == 3);
     assert(strcmp(objects[0].id, GUARD_ID) == 0);
     assert(strcmp(objects[1].id, TRADER_ID) == 0);
+    assert(strcmp(objects[2].id, ELDER_ID) == 0);
     assert(scene_interactions_find(&w, TRADER_ID) != 0);
+    assert(scene_interactions_find(&w, ELDER_ID) != 0);
     assert(scene_interactions_find(&w, "hub_last_post.blacksmith") == 0);
     assert(scene_interactions_hit_test(&w, 448.0f, 280.0f) == 0);
 }

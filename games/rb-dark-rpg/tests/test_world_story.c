@@ -111,8 +111,8 @@ static void test_world_content_registry(void) {
                 "q001_gate_pass") == 0);
   assert(strcmp(last_post->objects[0].interactions[0].requirements[0].step_id,
                 "report_to_gate_guard") == 0);
-  assert(strcmp(last_post->objects[0].interactions[1].interaction_type,
-                "open_screen") == 0);
+  assert(strcmp(last_post->objects[0].interactions[1].dialogue_id,
+                "dlg_gate_guard_completed") == 0);
   assert(last_post->objects[0].interactions[1].requirement_count == 1);
   assert(last_post->objects[0].interactions[1].requirements[0].kind ==
          GAME_LOCATION_REQUIREMENT_QUEST_STATUS);
@@ -128,6 +128,10 @@ static void test_world_content_registry(void) {
   assert(strcmp(last_post->objects[0].interactions[2].requirements[0].id,
                 "gate_guard_intro_seen") == 0);
   assert(!last_post->objects[0].interactions[2].requirements[0].value);
+  const game_location_object_t *elder =
+      find_location_object(last_post, "hub_last_post.elder");
+  assert(elder != 0);
+  assert(elder->scene_enabled);
   const game_location_object_t *caged_scavenger =
       find_location_object(last_post, "hub_last_post.caged_scavenger");
   assert(caged_scavenger != 0);
@@ -246,7 +250,8 @@ static void test_location_object_interaction_selection_uses_state(void) {
   assert(game_actions_complete_quest(&state, "q001_gate_pass", "test"));
   interaction = game_actions_select_location_interaction(&state, guard);
   assert(interaction != 0);
-  assert(strcmp(interaction->interaction_type, "open_screen") == 0);
+  assert(strcmp(interaction->interaction_type, "dialogue") == 0);
+  assert(strcmp(interaction->dialogue_id, "dlg_gate_guard_completed") == 0);
 }
 
 static void test_elder_interaction_selection_tracks_q002_story_state(void) {

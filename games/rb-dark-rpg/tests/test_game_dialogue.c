@@ -379,6 +379,12 @@ test_gate_turn_in_dialogue_completes_quest_and_grants_rewards(void) {
   assert(bread_quest->status == GAME_STATE_QUEST_STATUS_ACTIVE);
   assert(bread_quest->has_current_step_id);
   assert(strcmp(bread_quest->current_step_id, "visit_old_mill") == 0);
+  assert(w.first_scene.objective_object_id != 0);
+  assert(strcmp(w.first_scene.objective_object_id, "hub_last_post.elder") == 0);
+  assert(!w.first_scene.tutorial_guard_talk_completed);
+  assert(w.first_scene.current_objective_text != 0);
+  assert(strcmp(w.first_scene.current_objective_text,
+                "Поговори со старостой") == 0);
   assert(state.hero_xp == 12);
   bool has_token = false;
   for (int i = 0; i < GAME_STATE_MAX_INVENTORY_STACK_INSTANCES; ++i) {
@@ -392,6 +398,21 @@ test_gate_turn_in_dialogue_completes_quest_and_grants_rewards(void) {
   assert(state.quests_claimed_reward_ids_count == 1);
   assert(strcmp(state.quests_claimed_reward_ids[0],
                 "dlg_gate_guard_turn_in.take_token.completion") == 0);
+}
+
+static void test_gate_completed_dialogue_closes_on_acknowledge(void) {
+  World w = {0};
+  GameState state;
+  game_state_init_defaults(&state);
+  w.player_state = &state;
+  game_dialogue_init(&w);
+
+  assert(game_dialogue_open(&w, "dlg_gate_guard_completed"));
+  assert(w.dialogue.current_node != 0);
+  assert(strstr(w.dialogue.current_node->text, "Открой карту") != 0);
+  assert(strstr(w.dialogue.current_node->text, "Старую мельницу") != 0);
+  assert(game_dialogue_select_choice(&w, "close"));
+  assert(!w.dialogue.open);
 }
 
 static void test_equipping_replacement_returns_previous_item_to_bag(void) {
@@ -527,6 +548,7 @@ int main(void) {
   test_gate_dialogue_progression();
   test_starter_gear_progress_does_not_depend_on_equip_order();
   test_gate_turn_in_dialogue_completes_quest_and_grants_rewards();
+  test_gate_completed_dialogue_closes_on_acknowledge();
   test_equipping_replacement_returns_previous_item_to_bag();
   test_unequipping_returns_item_to_bag();
   test_elder_dialogues_start_and_complete_q002_from_data();

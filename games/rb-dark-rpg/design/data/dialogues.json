@@ -252,6 +252,28 @@
       ]
     },
     {
+      "id": "dlg_gate_guard_completed",
+      "title": "Страж: следующий контракт",
+      "participants": [
+        "gate_guard",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "gate_guard",
+          "text": "Жетон при тебе, ворота открыты. Открой карту, выбери Старую мельницу и доберись туда. На месте открой «Здесь», зачисти двор и потом разбирайся с тем, что найдешь у мельницы.",
+          "choices": [
+            {
+              "id": "close",
+              "text": "Понял"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "dlg_elder_bread_contract",
       "title": "Староста: хлеб для Поста",
       "participants": [
