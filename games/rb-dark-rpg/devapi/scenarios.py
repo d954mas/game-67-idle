@@ -598,6 +598,69 @@ def prepare_scene_trader_shop_open(game: Any, viewport: Any) -> dict[str, str]:
     return {"state": "scene_trader_shop_open", "viewport": viewport.window_size}
 
 
+def prepare_scene_map_gate_open(game: Any, viewport: Any) -> dict[str, str]:
+    """Tap the map gate directly in the first scene and verify the world map opens."""
+
+    game.result(
+        "game.state.patch",
+        {
+            "doc": "player",
+            "values": {
+                "hero.hp": 33,
+                "flags.ids": ["map_gate_unlocked"],
+                "world.current_location_id": "hub_last_post",
+                "world.visited_location_ids": ["hub_last_post"],
+            },
+        },
+    )
+    game.wait_frames(3)
+    tree = _wait_for_node(game, "settings/gear", max_frames=90, stride=3)[0]
+    tree_viewport = tree.get("viewport") if isinstance(tree, dict) else {}
+    fb_w, fb_h = _viewport_size(viewport, tree_viewport if isinstance(tree_viewport, dict) else {})
+    x_fb, y_fb = _scene_master_to_framebuffer(287.0, 212.0, fb_w, fb_h)
+    for candidate_y in (y_fb, fb_h - y_fb):
+        game.result("input.click", {"x": x_fb, "y": candidate_y, "button": 1, "hold": 2})
+        try:
+            _wait_for_node(game, "world_map/atlas_canvas", max_frames=30, stride=3)
+            return {
+                "state": "scene_map_gate_open",
+                "tap": {"x": x_fb, "y": candidate_y},
+                "viewport": viewport.window_size,
+            }
+        except RuntimeError:
+            pass
+    _wait_for_node(game, "world_map/atlas_canvas", max_frames=3, stride=1)
+    return {"state": "scene_map_gate_open", "viewport": viewport.window_size}
+
+
+def prepare_place_map_gate_open(game: Any, viewport: Any) -> dict[str, str]:
+    """Open Place, tap the map gate object, and verify the world map opens."""
+
+    game.result(
+        "game.state.patch",
+        {
+            "doc": "player",
+            "values": {
+                "hero.hp": 33,
+                "flags.ids": ["map_gate_unlocked"],
+                "world.current_location_id": "hub_last_post",
+                "world.visited_location_ids": ["hub_last_post"],
+            },
+        },
+    )
+    game.wait_frames(3)
+    _open_bottom_nav_slot(game, viewport, 3)
+    _open_place_tab(game, viewport, "environment")
+    tree, node = _wait_for_node(game, "world_place/object/hub_last_post.map_gate", max_frames=60)
+    if node.get("visible") is False:
+        game.result("ui.scroll", {"id": "world_place/scroll", "dx": 0, "dy": 360})
+        game.wait_frames(4)
+        tree, node = _wait_for_node(game, "world_place/object/hub_last_post.map_gate", max_frames=60)
+    _tap_node_by_bounds(game, tree, node, viewport)
+    _wait_for_node(game, "world_map/atlas_canvas", max_frames=90, stride=3)
+    return {"state": "place_map_gate_open", "viewport": viewport.window_size}
+
+
 def prepare_post_trader_shop_trade(game: Any, viewport: Any) -> dict[str, str]:
     """Open the Last Post trader shop, sell a bag item, then buy back the same instance."""
 
@@ -840,6 +903,17 @@ def prepare_gate_guard_turn_in_from_place(game: Any, viewport: Any) -> dict[str,
         ],
     )
     return {"state": "gate_guard_turn_in_from_place", "quest": "q001_gate_pass", "viewport": viewport.window_size}
+
+
+def prepare_gate_guard_completed_opens_map(game: Any, viewport: Any) -> dict[str, str]:
+    """Complete q001, tap the guard again, and verify the guard routes to the map."""
+
+    prepare_gate_guard_turn_in_from_place(game, viewport)
+    _open_bottom_nav_slot(game, viewport, 3)
+    tree, node = _wait_for_node(game, "world_place/object/hub_last_post.gate_guard")
+    _tap_node(game, tree, node, viewport)
+    _wait_for_node(game, "world_map/atlas_canvas", max_frames=90)
+    return {"state": "gate_guard_completed_opens_map", "quest": "q001_gate_pass", "viewport": viewport.window_size}
 
 
 def prepare_q002_elder_contract_flow(game: Any, viewport: Any) -> dict[str, str]:

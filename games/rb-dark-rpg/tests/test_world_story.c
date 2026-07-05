@@ -101,7 +101,7 @@ static void test_world_content_registry(void) {
   assert(strcmp(last_post->objects[0].id, "hub_last_post.gate_guard") == 0);
   assert(strcmp(last_post->objects[0].kind, "npc") == 0);
   assert(strcmp(last_post->objects[0].character_id, "gate_guard") == 0);
-  assert(last_post->objects[0].interaction_count >= 2);
+  assert(last_post->objects[0].interaction_count >= 3);
   assert(strcmp(last_post->objects[0].interactions[0].dialogue_id,
                 "dlg_gate_guard_turn_in") == 0);
   assert(last_post->objects[0].interactions[0].requirement_count == 1);
@@ -111,8 +111,23 @@ static void test_world_content_registry(void) {
                 "q001_gate_pass") == 0);
   assert(strcmp(last_post->objects[0].interactions[0].requirements[0].step_id,
                 "report_to_gate_guard") == 0);
-  assert(strcmp(last_post->objects[0].interactions[1].dialogue_id,
+  assert(strcmp(last_post->objects[0].interactions[1].interaction_type,
+                "open_screen") == 0);
+  assert(last_post->objects[0].interactions[1].requirement_count == 1);
+  assert(last_post->objects[0].interactions[1].requirements[0].kind ==
+         GAME_LOCATION_REQUIREMENT_QUEST_STATUS);
+  assert(strcmp(last_post->objects[0].interactions[1].requirements[0].id,
+                "q001_gate_pass") == 0);
+  assert(strcmp(last_post->objects[0].interactions[1].requirements[0].status,
+                "completed") == 0);
+  assert(strcmp(last_post->objects[0].interactions[2].dialogue_id,
                 "dlg_gate_guard_intro") == 0);
+  assert(last_post->objects[0].interactions[2].requirement_count == 1);
+  assert(last_post->objects[0].interactions[2].requirements[0].kind ==
+         GAME_LOCATION_REQUIREMENT_FLAG);
+  assert(strcmp(last_post->objects[0].interactions[2].requirements[0].id,
+                "gate_guard_intro_seen") == 0);
+  assert(!last_post->objects[0].interactions[2].requirements[0].value);
   const game_location_object_t *caged_scavenger =
       find_location_object(last_post, "hub_last_post.caged_scavenger");
   assert(caged_scavenger != 0);
@@ -179,6 +194,26 @@ static void test_world_content_registry(void) {
   assert_valid_map_position(old_mill);
   assert(old_mill->map_x > gate_outskirts->map_x);
   assert(old_mill->map_y > gate_outskirts->map_y);
+
+  const game_quest_definition_t *bread_quest =
+      game_content_find_quest("q002_bread_for_post");
+  assert(bread_quest != 0);
+  assert(strcmp(bread_quest->short_goal,
+                "Открой карту, дойди до Старой мельницы и зачисти двор.") ==
+         0);
+  const game_quest_step_definition_t *mill_yard_step =
+      game_content_find_quest_step("q002_bread_for_post",
+                                   "q002_clear_mill_yard");
+  assert(mill_yard_step != 0);
+  assert(strcmp(mill_yard_step->location_id, "old_mill") == 0);
+  assert(strcmp(mill_yard_step->title, "Зачистить двор мельницы") == 0);
+  assert(strstr(mill_yard_step->description, "Открой «Здесь»") != 0);
+  const game_quest_step_definition_t *mill_brute_step =
+      game_content_find_quest_step("q002_bread_for_post",
+                                   "q002_clear_mill_brute");
+  assert(mill_brute_step != 0);
+  assert(strcmp(mill_brute_step->location_id, "old_mill") == 0);
+  assert(strcmp(mill_brute_step->title, "Добить главаря у мельницы") == 0);
   assert(game_content_find_location("missing_location") == 0);
 }
 
@@ -205,6 +240,13 @@ static void test_location_object_interaction_selection_uses_state(void) {
   assert(interaction != 0);
   assert(strcmp(interaction->interaction_type, "dialogue") == 0);
   assert(strcmp(interaction->dialogue_id, "dlg_gate_guard_turn_in") == 0);
+
+  assert(game_actions_complete_step(&state, "q001_gate_pass",
+                                    "report_to_gate_guard", 0, "test"));
+  assert(game_actions_complete_quest(&state, "q001_gate_pass", "test"));
+  interaction = game_actions_select_location_interaction(&state, guard);
+  assert(interaction != 0);
+  assert(strcmp(interaction->interaction_type, "open_screen") == 0);
 }
 
 static void test_elder_interaction_selection_tracks_q002_story_state(void) {

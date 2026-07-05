@@ -31,7 +31,7 @@
 #define UI_PORTRAIT_REF_H 844.0F
 // Headroom for the default 1024-element UI (Clay arena dominates); a game that
 // builds a denser UI can raise this. Static storage — cost is negligible.
-#define UI_ARENA_SIZE ((size_t)4U * 1024U * 1024U)
+#define UI_ARENA_SIZE ((size_t)8U * 1024U * 1024U)
 
 static NT_UI_DECLARE_ARENA(s_ui_arena, UI_ARENA_SIZE);
 static nt_ui_context_t *s_ctx;
@@ -63,9 +63,10 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
 
     nt_ui_module_init();
     nt_ui_create_desc_t desc = nt_ui_create_desc_defaults();
-    // rb-dark-rpg has several modal/sheet ids that intentionally share a UI context.
-    // Keep cleanup on close, but give the retained-state pool enough probe headroom
-    // for game-scale overlays without tripping on low-bit id clusters.
+    // rb-dark-rpg has several modal/sheet ids that intentionally share a UI
+    // context. Dense shop/equipment/map overlays need a larger Clay hashmap than
+    // the engine's tiny sample default.
+    desc.max_elements = 4096U;
     desc.state_slots = 1024U;
     desc.state_probe_max = 16U;
     s_ctx = nt_ui_create_context(s_ui_arena, sizeof s_ui_arena, &desc);

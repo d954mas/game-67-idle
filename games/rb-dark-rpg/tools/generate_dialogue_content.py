@@ -439,10 +439,12 @@ def main() -> int:
     for quest in quests.values():
         quest_symbol = c_ident(quest.get("id", "quest"))
         steps = quest.get("steps", [])
+        journal = quest.get("journal") if isinstance(quest.get("journal"), dict) else {}
+        short_goal = journal.get("short_goal") or quest.get("short_goal")
         lines.append("    {")
         lines.append(f"        .id = {c_str(quest.get('id'))},")
         lines.append(f"        .title = {c_str(quest.get('title'))},")
-        lines.append(f"        .short_goal = {c_str(quest.get('short_goal'))},")
+        lines.append(f"        .short_goal = {c_str(short_goal)},")
         lines.append(f"        .steps = {'QUEST_' + quest_symbol + '_STEPS' if steps else 'NULL'},")
         lines.append(f"        .step_count = {len(steps)},")
         lines.append("    },")

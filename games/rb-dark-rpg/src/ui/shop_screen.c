@@ -1112,8 +1112,7 @@ static void shop_sell_cell(nt_ui_context_t *ctx, World *w, bool portrait,
     return;
   }
   const game_item_definition_t *item = game_content_find_item(gear->def_id);
-  const Clay_ElementId item_id =
-      semantic_clay_id("shop/player_item/", instance_id);
+  const Clay_ElementId item_id = CLAY_IDI("shop/player_item", index);
   const Clay_ElementId sell_id = semantic_clay_id("shop/sell/", instance_id);
   int price_gold = 0;
   const bool can_sell =
@@ -1137,7 +1136,7 @@ static void shop_sell_cell(nt_ui_context_t *ctx, World *w, bool portrait,
 
 static void shop_buyback_cell(nt_ui_context_t *ctx, World *w,
                               const game_shop_buyback_entry_t *entry,
-                              bool portrait) {
+                              bool portrait, int entry_index) {
   if (!ctx || !w || !w->player_state || !entry || !entry->used ||
       entry->entry_id[0] == '\0' || entry->gear.def_id[0] == '\0') {
     return;
@@ -1145,8 +1144,7 @@ static void shop_buyback_cell(nt_ui_context_t *ctx, World *w,
   GameState *state = w->player_state;
   const game_item_definition_t *item =
       game_content_find_item(entry->gear.def_id);
-  const Clay_ElementId item_id =
-      semantic_clay_id("shop/buyback_item/", entry->entry_id);
+  const Clay_ElementId item_id = CLAY_IDI("shop/buyback_item", entry_index);
   const Clay_ElementId buyback_id =
       semantic_clay_id("shop/buyback/", entry->entry_id);
   int price_gold = 0;
@@ -1241,7 +1239,8 @@ static int shop_buyback_grid_ui(nt_ui_context_t *ctx, World *w, bool portrait,
         if (!s_buyback.entries[entry_index].used) {
           continue;
         }
-        shop_buyback_cell(ctx, w, &s_buyback.entries[entry_index], portrait);
+        shop_buyback_cell(ctx, w, &s_buyback.entries[entry_index], portrait,
+                          entry_index);
         drawn += 1;
         col += 1;
       }
