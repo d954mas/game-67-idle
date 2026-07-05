@@ -1,7 +1,7 @@
 ---
 id: T0298
 title: "rb-dark-rpg jam: rebuild-safe цикл итерации и запуск всех тестов одной командой"
-status: todo
+status: done
 project: P003
 epic: E013
 priority: P1
@@ -24,3 +24,4 @@ updated: 2026-07-05
 ## Open questions
 
 ## Log
+- 2026-07-05: tools/dev_rebuild.sh (taskkill+build+relaunch) и tools/run_tests.sh (8 тестов, timeout 60s = FAIL); 8/8 PASS проверено в сессии

@@ -1,7 +1,7 @@
 ---
 id: T0296
 title: "rb-dark-rpg jam: чекпоинт-коммит и решение по сабмодулю движка"
-status: todo
+status: done
 project: P003
 epic: E013
 priority: P1
@@ -25,3 +25,4 @@ updated: 2026-07-05
 ## Open questions
 
 ## Log
+- 2026-07-05: Чекпоинт 84ae6a38 (P0 sprite packet + fix stale world_story asserts); сабмодуль движка оказался уже чистым; git status чист

@@ -1,7 +1,7 @@
 ---
 id: T0297
 title: "rb-dark-rpg jam: долинковать wasm-билд и headless-смоук"
-status: todo
+status: review
 project: P003
 epic: E013
 priority: P1
@@ -25,3 +25,5 @@ C:/develop/emsdk (не на PATH — нужен emsdk_env). Фаза 0 (час 0
 ## Open questions
 
 ## Log
+- 2026-07-05: Корни найдены/починены: NT_PRESET_NAME без EMSCRIPTEN-ветки линковал нативные .a движка; glad/stb native-only; capture.c гард __EMSCRIPTEN__; EXPORTED_FUNCTIONS _malloc. Сборка wasm-release идёт
+- 2026-07-05: wasm-release слинкован: game.wasm 1.3MB + game.data 52MB (пак+аудио преложены), index.html shell написан; рантайм в headless доходит до Running... без JS-ошибок, но канвас на скринах чёрный (headless+SwiftShader подозрителен); нужен ручной взгляд браузером http://127.0.0.1:8123/index.html

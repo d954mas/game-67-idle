@@ -1,7 +1,7 @@
 ---
 id: T0300
 title: "rb-dark-rpg jam: мельница - боевой шаг q002 и спавн mill_brute с T2-гейтом"
-status: todo
+status: done
 project: P003
 epic: E013
 priority: P1
@@ -26,3 +26,5 @@ q002 сейчас без единого боя, а mill_brute заавторен
 ## Open questions
 
 ## Log
+- 2026-07-05: Делегировано deep-reasoner: спавн mill_brute в old_mill после победы во дворе + T2-гейт баланс
+- 2026-07-05: mill_brute заспавнен (гейт по шагу q002_clear_mill_brute), баланс тестом: стартовый=LOSS, iron_sword=WIN на 1HP, золото до боя ровно 12=цена меча; тест test_mill_brute_is_a_real_shop_gate

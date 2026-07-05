@@ -1,7 +1,7 @@
 ---
 id: T0302
 title: "rb-dark-rpg jam: финал Акта I - босс и экран конца"
-status: todo
+status: review
 project: P003
 epic: E013
 priority: P1
@@ -24,3 +24,5 @@ updated: 2026-07-05
 ## Open questions
 
 ## Log
+- 2026-07-05: Делегировано: финал = переиспользуем q005 как ночной штурм заставы от Старосты + end-screen модал (audit Option B)
+- 2026-07-05: Финал: q005 переиспользован как ночной штурм от Старосты, боссу перемаплен спрайт, end_screen.c с темой Мир без тебя + Made for VibeJam #1 + флаги act_i_completed/ending_seen; скрин 03_end_screen.png; остался тофу-глиф в тексте и финальный клик-прогон
