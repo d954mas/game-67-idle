@@ -196,7 +196,7 @@ int main(int argc, char *argv[]) {
     gate_guard_portrait_opts.origin_y = 0.5F;
     gate_guard_portrait_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
     gate_guard_portrait_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
-    nt_builder_atlas_add(ctx, "assets/ui/gate_guard_portrait.png", &gate_guard_portrait_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/gate_guard_portrait.png", &gate_guard_portrait_opts);
 
     nt_atlas_sprite_opts_t nav_opts = nt_atlas_sprite_opts_defaults();
     nav_opts.origin_x = 0.5F;
@@ -204,15 +204,15 @@ int main(int argc, char *argv[]) {
     nav_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
     nav_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
     nav_opts.name = "nav_v11_equipment";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_equipment.png", &nav_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/nav_v11_equipment.png", &nav_opts);
     nav_opts.name = "nav_v11_journal";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_journal.png", &nav_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/nav_v11_journal.png", &nav_opts);
     nav_opts.name = "nav_v11_map";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_map.png", &nav_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/nav_v11_map.png", &nav_opts);
     nav_opts.name = "nav_v11_place";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_place.png", &nav_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/nav_v11_place.png", &nav_opts);
     nav_opts.name = "nav_v11_more";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_more.png", &nav_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/nav_v11_more.png", &nav_opts);
 
     nt_atlas_sprite_opts_t top_hud_opts = nt_atlas_sprite_opts_defaults();
     top_hud_opts.origin_x = 0.5F;
@@ -226,10 +226,10 @@ int main(int argc, char *argv[]) {
     nt_builder_atlas_add(ctx, "assets/ui/gold_coin_hud.png", &top_hud_opts);
 
     top_hud_opts.name = "top_hud_portrait_frame";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_portrait_frame.png", &top_hud_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/top_hud_portrait_frame.png", &top_hud_opts);
 
     top_hud_opts.name = "top_hud_status_plaque";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_status_plaque.png", &top_hud_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/top_hud_status_plaque.png", &top_hud_opts);
     top_hud_opts.name = "top_hud_location_plaque";
     nt_builder_atlas_add(ctx, "assets/ui/generated/roblox_blocky_rpg_tiles_01/location_plaque.png", &top_hud_opts);
 
@@ -239,14 +239,14 @@ int main(int argc, char *argv[]) {
     nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_xp_frame.png", &top_hud_opts);
 
     top_hud_opts.name = "top_hud_resource_coin_chip";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_resource_coin_chip.png", &top_hud_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/top_hud_resource_coin_chip.png", &top_hud_opts);
     top_hud_opts.name = "top_hud_resource_supplies_chip";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_resource_supplies_chip.png", &top_hud_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/top_hud_resource_supplies_chip.png", &top_hud_opts);
 
     top_hud_opts.name = "top_hud_settings_button";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_settings_button.png", &top_hud_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/top_hud_settings_button.png", &top_hud_opts);
     top_hud_opts.name = "top_hud_level_badge";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_level_badge.png", &top_hud_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/top_hud_level_badge.png", &top_hud_opts);
     top_hud_opts.name = "top_hud_icon_coin";
     nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_icon_coin.png", &top_hud_opts);
 
@@ -318,7 +318,9 @@ int main(int argc, char *argv[]) {
     dialogue_frame_opts.slice9_left = dialogue_frame_opts.slice9_right = DIALOGUE_FRAME_BORDER_X;
     dialogue_frame_opts.slice9_top = dialogue_frame_opts.slice9_bottom = DIALOGUE_FRAME_BORDER_Y;
     dialogue_frame_opts.name = "dialogue_outer_frame";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_outer_frame.png", &dialogue_frame_opts);
+    // jam_optimized_ui_01: middle-cropped to an 80px stretch tile; border
+    // widths are unchanged (34px, matches DIALOGUE_FRAME_BORDER_X/Y).
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/dialogue_outer_frame.png", &dialogue_frame_opts);
     dialogue_frame_opts.name = "dialogue_portrait_frame";
     nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_portrait_frame.png", &dialogue_frame_opts);
 
@@ -326,7 +328,9 @@ int main(int argc, char *argv[]) {
     dialogue_body_opts.slice9_left = dialogue_body_opts.slice9_right = DIALOGUE_BODY_BORDER;
     dialogue_body_opts.slice9_top = dialogue_body_opts.slice9_bottom = DIALOGUE_BODY_BORDER;
     dialogue_body_opts.name = "dialogue_body_panel";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_body_panel.png", &dialogue_body_opts);
+    // jam_optimized_ui_01: middle-cropped to an 80px stretch tile; border
+    // widths are unchanged (22px, matches DIALOGUE_BODY_BORDER).
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/dialogue_body_panel.png", &dialogue_body_opts);
 
     nt_atlas_sprite_opts_t dialogue_header_opts = dialogue_frame_opts;
     dialogue_header_opts.slice9_left = dialogue_header_opts.slice9_right = DIALOGUE_HEADER_BORDER_X;
@@ -348,11 +352,14 @@ int main(int argc, char *argv[]) {
 
     nt_atlas_sprite_opts_t dialogue_answer_opts = dialogue_frame_opts;
     dialogue_answer_opts.slice9_left = dialogue_answer_opts.slice9_right = DIALOGUE_ANSWER_BORDER_X;
-    dialogue_answer_opts.slice9_top = dialogue_answer_opts.slice9_bottom = DIALOGUE_ANSWER_BORDER_Y;
+    // jam_optimized_ui_01: middle-cropped to an 80px stretch tile, X-axis
+    // only (source dialogue_answer_* is a fixed-height plaque; no vertical
+    // stretch, so slice9_top/bottom are 0 instead of DIALOGUE_ANSWER_BORDER_Y).
+    dialogue_answer_opts.slice9_top = dialogue_answer_opts.slice9_bottom = 0;
     dialogue_answer_opts.name = "dialogue_answer_normal";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_answer_normal.png", &dialogue_answer_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/dialogue_answer_normal.png", &dialogue_answer_opts);
     dialogue_answer_opts.name = "dialogue_answer_primary";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_answer_primary.png", &dialogue_answer_opts);
+    nt_builder_atlas_add(ctx, "assets/ui/generated/jam_optimized_ui_01/dialogue_answer_primary.png", &dialogue_answer_opts);
 
     nt_atlas_sprite_opts_t dialogue_divider_opts = dialogue_frame_opts;
     dialogue_divider_opts.slice9_left = dialogue_divider_opts.slice9_right = DIALOGUE_DIVIDER_BORDER_X;
