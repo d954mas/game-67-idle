@@ -249,25 +249,6 @@ int main(int argc, char *argv[]) {
     nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_level_badge.png", &top_hud_opts);
     top_hud_opts.name = "top_hud_icon_coin";
     nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_icon_coin.png", &top_hud_opts);
-    top_hud_opts.name = "top_hud_icon_supplies";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_icon_supplies.png", &top_hud_opts);
-
-    nt_atlas_sprite_opts_t world_map_opts = nt_atlas_sprite_opts_defaults();
-    world_map_opts.origin_x = 0.5F;
-    world_map_opts.origin_y = 0.5F;
-    world_map_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
-    world_map_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
-    world_map_opts.name = "ash_border_map";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/world_map_ash_border_01/ash_border_map.png", &world_map_opts);
-
-    const UiSpriteAsset combat_actor_assets[] = {
-        {"combat_actor_hero", "assets/ui/generated/combat_actor_sprites_01/slices/combat_actor_hero.png"},
-        {"combat_actor_gate_scavenger",
-         "assets/ui/generated/combat_actor_sprites_01/slices/combat_actor_gate_scavenger.png"},
-        {"combat_actor_mill_scavenger",
-         "assets/ui/generated/combat_actor_sprites_01/slices/combat_actor_mill_scavenger.png"},
-    };
-    add_centered_ui_sprites(ctx, combat_actor_assets, sizeof(combat_actor_assets) / sizeof(combat_actor_assets[0]));
 
     const UiSpriteAsset equipment_icon_assets[] = {
         {"asset_equipment_slot_cell",
@@ -400,6 +381,46 @@ int main(int argc, char *argv[]) {
     thumb_opts.name = "slider_thumb"; // circle: no slice9
     nt_builder_atlas_add(ctx, "assets/ui/slider_thumb.png", &thumb_opts);
 
+    nt_builder_end_atlas(ctx);
+
+    // Big art pieces get single-purpose atlases: one art = one GPU texture
+    // sized to the art (power_of_two off), instead of inflating the shared
+    // 2K UI pages.
+    nt_atlas_opts_t big_art_atlas_opts = nt_atlas_opts_defaults();
+    big_art_atlas_opts.shape = NT_ATLAS_SHAPE_RECT;
+    big_art_atlas_opts.allow_transform = false;
+    big_art_atlas_opts.pixels_per_unit = 1.0F;
+    big_art_atlas_opts.padding = 0;
+    big_art_atlas_opts.margin = 0;
+    big_art_atlas_opts.extrude = 0;
+    big_art_atlas_opts.premultiplied = true;
+    big_art_atlas_opts.compress = &ui_atlas_compress;
+    big_art_atlas_opts.power_of_two = false;
+    big_art_atlas_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
+    big_art_atlas_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
+    big_art_atlas_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
+    big_art_atlas_opts.wrap_v = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
+    big_art_atlas_opts.gen_mipmaps = false;
+
+    nt_builder_begin_atlas(ctx, "world_map", &big_art_atlas_opts);
+    nt_atlas_sprite_opts_t world_map_opts = nt_atlas_sprite_opts_defaults();
+    world_map_opts.origin_x = 0.5F;
+    world_map_opts.origin_y = 0.5F;
+    world_map_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
+    world_map_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
+    world_map_opts.name = "ash_border_map";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/world_map_ash_border_01/ash_border_map.png", &world_map_opts);
+    nt_builder_end_atlas(ctx);
+
+    nt_builder_begin_atlas(ctx, "combat_actors", &big_art_atlas_opts);
+    const UiSpriteAsset combat_actor_assets[] = {
+        {"combat_actor_hero", "assets/ui/generated/combat_actor_sprites_01/slices/combat_actor_hero.png"},
+        {"combat_actor_gate_scavenger",
+         "assets/ui/generated/combat_actor_sprites_01/slices/combat_actor_gate_scavenger.png"},
+        {"combat_actor_mill_scavenger",
+         "assets/ui/generated/combat_actor_sprites_01/slices/combat_actor_mill_scavenger.png"},
+    };
+    add_centered_ui_sprites(ctx, combat_actor_assets, sizeof(combat_actor_assets) / sizeof(combat_actor_assets[0]));
     nt_builder_end_atlas(ctx);
 
     // Hub scene art is a separate atlas so large location backgrounds do not

@@ -66,9 +66,11 @@ static nt_atlas_region_ref_t s_location_regions[LOCATION_ART_COUNT];
 
 static const nt_hash64_t LOCATION_ART_HASHES[LOCATION_ART_COUNT] = {
     ASSET_ATLAS_REGION_UI_GATE_GUARD_PORTRAIT,
-    ASSET_ATLAS_REGION_UI_COMBAT_ACTOR_GATE_SCAVENGER,
-    ASSET_ATLAS_REGION_UI_COMBAT_ACTOR_MILL_SCAVENGER,
+    ASSET_ATLAS_REGION_COMBAT_ACTORS_COMBAT_ACTOR_GATE_SCAVENGER,
+    ASSET_ATLAS_REGION_COMBAT_ACTORS_COMBAT_ACTOR_MILL_SCAVENGER,
 };
+/* Index 0 lives in the ui atlas; the combat actors moved to their own atlas. */
+static nt_resource_t s_location_actor_atlas;
 
 static const nt_ui_widget_def_t LOCATION_ROW_DEF = {
     .name = "location_row",
@@ -279,9 +281,11 @@ static void ensure_location_art_regions(void) {
     return;
   }
   s_location_atlas = nt_resource_request(ASSET_ATLAS_UI, NT_ASSET_ATLAS);
+  s_location_actor_atlas =
+      nt_resource_request(ASSET_ATLAS_COMBAT_ACTORS, NT_ASSET_ATLAS);
   for (int i = 0; i < LOCATION_ART_COUNT; ++i) {
-    s_location_regions[i] = nt_atlas_ref(s_location_atlas,
-                                         LOCATION_ART_HASHES[i].value);
+    nt_resource_t atlas = (i == 0) ? s_location_atlas : s_location_actor_atlas;
+    s_location_regions[i] = nt_atlas_ref(atlas, LOCATION_ART_HASHES[i].value);
   }
 }
 

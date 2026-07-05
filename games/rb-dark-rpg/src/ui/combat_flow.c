@@ -82,9 +82,9 @@ static const char *FIRST_ENCOUNTER_FLAG_ID = "gate_scavenger_defeated";
 static nt_resource_t s_combat_actor_atlas;
 static nt_atlas_region_ref_t s_combat_actor_regions[COMBAT_ACTOR_ART_COUNT];
 static const nt_hash64_t COMBAT_ACTOR_REGION_HASHES[COMBAT_ACTOR_ART_COUNT] = {
-    ASSET_ATLAS_REGION_UI_COMBAT_ACTOR_HERO,
-    ASSET_ATLAS_REGION_UI_COMBAT_ACTOR_GATE_SCAVENGER,
-    ASSET_ATLAS_REGION_UI_COMBAT_ACTOR_MILL_SCAVENGER,
+    ASSET_ATLAS_REGION_COMBAT_ACTORS_COMBAT_ACTOR_HERO,
+    ASSET_ATLAS_REGION_COMBAT_ACTORS_COMBAT_ACTOR_GATE_SCAVENGER,
+    ASSET_ATLAS_REGION_COMBAT_ACTORS_COMBAT_ACTOR_MILL_SCAVENGER,
 };
 
 static nt_resource_t s_combat_reward_atlas;
@@ -229,7 +229,7 @@ static void ensure_combat_actor_regions(void) {
     if (s_combat_actor_atlas.id != 0U) {
         return;
     }
-    s_combat_actor_atlas = nt_resource_request(ASSET_ATLAS_UI, NT_ASSET_ATLAS);
+    s_combat_actor_atlas = nt_resource_request(ASSET_ATLAS_COMBAT_ACTORS, NT_ASSET_ATLAS);
     for (int i = 0; i < COMBAT_ACTOR_ART_COUNT; ++i) {
         s_combat_actor_regions[i] = nt_atlas_ref(s_combat_actor_atlas, COMBAT_ACTOR_REGION_HASHES[i].value);
     }
@@ -965,7 +965,7 @@ static COMBAT_UNUSED_FN void combat_log_ui(nt_ui_context_t *ctx, const game_comb
           .border = {.color = {83.0F, 61.0F, 39.0F, 190.0F}, .width = {1, 1, 1, 1, 0}},
           .userData = NT_UI_CLAY_DATA(LAYER_COMBAT_BG)}) {
         if (latest_event < 0) {
-            stat_line(ctx, 10, "РўС‹ РІС…РѕРґРёС€СЊ РІ Р±Р»РёР¶РЅРёР№ Р±РѕР№.");
+            stat_line(ctx, 10, "Ты входишь в ближний бой.");
         } else {
             int first_event = latest_event - 2;
             if (first_event < 0) {

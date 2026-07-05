@@ -255,9 +255,9 @@ static void ensure_world_map_art(void) {
   if (s_world_map_atlas.id != 0U) {
     return;
   }
-  s_world_map_atlas = nt_resource_request(ASSET_ATLAS_UI, NT_ASSET_ATLAS);
+  s_world_map_atlas = nt_resource_request(ASSET_ATLAS_WORLD_MAP, NT_ASSET_ATLAS);
   s_ash_border_map_region =
-      nt_atlas_ref(s_world_map_atlas, ASSET_ATLAS_REGION_UI_ASH_BORDER_MAP.value);
+      nt_atlas_ref(s_world_map_atlas, ASSET_ATLAS_REGION_WORLD_MAP_ASH_BORDER_MAP.value);
 }
 
 static void draw_ash_border_map_art(nt_ui_context_t *ctx, float map_w,
@@ -1311,7 +1311,7 @@ static void map_body(nt_ui_context_t *ctx, World *w, bool portrait,
   const nt_ui_label_style_t empty =
       label_style(13.0F, 190.0F, 163.0F, 122.0F, 255.0F);
   if (!w || !w->player_state) {
-    text_label(ctx, "РќРµС‚ РѕС‚РєСЂС‹С‚С‹С… РјРµСЃС‚.", &empty);
+    text_label(ctx, "Нет открытых мест.", &empty);
     return;
   }
 
