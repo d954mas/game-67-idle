@@ -1,0 +1,13 @@
+Create one real raster source sheet for game-use Old Mill scene sprites, using the attached Last Post background as the strict visual style reference and matching the new Old Mill background mood.
+
+Output: a clean 2x2 sprite sheet on one perfectly flat chroma green background (#00ff00). No text, no labels, no watermark, no UI, no frames, no shadows touching the background, no scenery. Each quadrant contains one isolated sprite, centered with generous padding and not overlapping the grid boundary.
+
+Style requirements: match the accepted city scene style: low-noise painterly 2D, chunky readable forms, slightly blocky dark fantasy browser RPG look, muted browns/greys, warm lantern edge light, crisp silhouette, readable at small scale, not realistic photo, not anime, not pixel art.
+
+Sprites in order:
+top-left: mill scavenger enemy, ragged yard threat, hunched posture, scrap weapon, grimy mill-yard colors, non-gory.
+top-right: cellar knifeman enemy, lean masked Black Sun human threat, short blade, dark coat, subtle cult details, not too ornamental.
+bottom-left: cellar hatch / basement entrance prop, wooden trapdoor or low stone cellar entrance, dark interior, usable as an inspect/enter hotspot.
+bottom-right: subtle Black Sun clue prop, cracked stone wall fragment or small burned chain mark, integrated and restrained, not a large hanging sign or black sticker.
+
+Important: generate actual raster art with the image generation model. Do not draw with code, SVG, PIL, vectors, or simple shapes.

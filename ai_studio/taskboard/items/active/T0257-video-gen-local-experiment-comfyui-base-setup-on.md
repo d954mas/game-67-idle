@@ -12,9 +12,15 @@ updated: 2026-07-03
 
 ## What
 
+Run the local video-generation experiment on the RTX 4080 machine: ComfyUI setup,
+model pull, WAN I2V verification, and R1/R2/R3 evidence for style, matting, and
+iteration speed.
+
 ## Done when
 
-- [ ]
+- [x] ComfyUI and required models are installed in the isolated experiment dir.
+- [x] WAN I2V style and iteration evidence is recorded.
+- [ ] R2 matting verdict is completed or explicitly unblocked by a follow-up.
 
 ## Open questions
 

@@ -2,8 +2,8 @@
 id: T0263
 title: "Track B v1 pipeline: staged video tool generate->matte->frames->sheet in isolated folder, canvas seam LAST (gated on R2 verdict + speedup)"
 status: review
-project: ""
-epic: ""
+project: P001
+epic: E010
 priority: P1
 tags: [video, pipeline]
 created: 2026-07-03
@@ -12,9 +12,14 @@ updated: 2026-07-03
 
 ## What
 
+Build the isolated Track B video pipeline with staged generate, matte, frames,
+and sheet tools, keeping the Canvas integration seam last.
+
 ## Done when
 
-- [ ]
+- [x] Staged video tool folders and orchestrator are landed.
+- [x] A golden wings run proves generate->matte->frames->sheet output.
+- [ ] Canvas seam is approved, implemented, or split into a separate task.
 
 ## Open questions
 

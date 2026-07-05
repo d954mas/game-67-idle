@@ -522,13 +522,7 @@ static void test_multi_item_encounter_rewards_grant_once(void) {
     const GameQuestState *visited_quest = find_quest(&state, "q002_bread_for_post");
     assert(visited_quest != 0);
     assert(visited_quest->has_current_step_id);
-    assert(strcmp(visited_quest->current_step_id, "inspect_old_mill") == 0);
-    assert(game_actions_inspect_object(&state, "old_mill.black_sun_mark"));
-    const GameQuestState *inspected_quest = find_quest(&state, "q002_bread_for_post");
-    assert(inspected_quest != 0);
-    assert(inspected_quest->status == GAME_STATE_QUEST_STATUS_ACTIVE);
-    assert(inspected_quest->has_current_step_id);
-    assert(strcmp(inspected_quest->current_step_id, "report_to_elder") == 0);
+    assert(strcmp(visited_quest->current_step_id, "q002_clear_mill_yard") == 0);
 
     assert(game_actions_resolve_encounter(&state, "mill_scavenger", &result));
     assert(result.outcome == GAME_COMBAT_OUTCOME_WIN);
@@ -542,7 +536,7 @@ static void test_multi_item_encounter_rewards_grant_once(void) {
     assert(quest != 0);
     assert(quest->status == GAME_STATE_QUEST_STATUS_ACTIVE);
     assert(quest->has_current_step_id);
-    assert(strcmp(quest->current_step_id, "report_to_elder") == 0);
+    assert(strcmp(quest->current_step_id, "q002_clear_mill_brute") == 0);
 
     const int xp_after_first = state.hero_xp;
     const int gold_after_first = state.wallet_gold;

@@ -74,6 +74,10 @@ Resolution order:
 7. Subtract damage from current HP.
 
 No random damage range in v1. Randomness comes only from crit and block.
+Opening attacks use short timer offsets so the first visible hit lands before a
+full attack interval. If both combatants would resolve on the same timestamp,
+the player event resolves first and the next event is delayed by a short combat
+beat instead of being logged as a simultaneous exchange.
 
 ## Why No Armour Curve
 

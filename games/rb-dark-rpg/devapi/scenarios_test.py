@@ -90,6 +90,13 @@ class FakeGame:
             )
             nodes.append(
                 {
+                    "id": 135,
+                    "id_string": "world_map/region/hub_gate_outskirts",
+                    "bounds": {"x": 440, "y": 205, "w": 150, "h": 120},
+                }
+            )
+            nodes.append(
+                {
                     "id": 36,
                     "id_string": "world_map/hero/ring",
                     "bounds": {"x": 314, "y": 286, "w": 48, "h": 15},
@@ -320,7 +327,7 @@ class FakeGame:
             self.place_tab = "enemies"
         elif click_id == "world_place/tab/environment":
             self.place_tab = "environment"
-        elif click_id == "world_map/location/hub_gate_outskirts":
+        elif click_id in {"world_map/location/hub_gate_outskirts", "world_map/region/hub_gate_outskirts"}:
             self.current_location = "hub_gate_outskirts"
             self.map_open = False
             self.place_open = True
@@ -552,7 +559,7 @@ class WorldMapScenarioTest(unittest.TestCase):
         self.assertEqual(result["location"], "hub_gate_outskirts")
         self.assertTrue(game.patches)
         self.assertTrue(any(click.get("id") == "bottom_nav/slot/map" for click in game.gestures))
-        self.assertTrue(any(click.get("id") == "world_map/location/hub_gate_outskirts" for click in game.gestures))
+        self.assertIn("world_map/region/hub_gate_outskirts", game.applied_clicks)
         self.assertEqual(game.current_location, "hub_gate_outskirts")
 
     def test_prepare_old_mill_inspect_mark_taps_semantic_object_and_advances_quest(self):
@@ -623,7 +630,7 @@ class WorldMapScenarioTest(unittest.TestCase):
         self.assertEqual(result["state"], "combat_running")
         self.assertTrue(game.combat_running_open)
         self.assertTrue(any(click.get("x") == 395.0 and click.get("y") == 125.0 for click in game.gestures))
-        self.assertIn(120, game.waits)
+        self.assertIn(8, game.waits)
 
     def test_prepare_mill_combat_running_waits_on_stage(self):
         game = FakeGame()
@@ -635,7 +642,7 @@ class WorldMapScenarioTest(unittest.TestCase):
         self.assertEqual(game.current_location, "old_mill")
         self.assertTrue(game.combat_running_open)
         self.assertTrue(any(click.get("x") == 440.0 and click.get("y") == 256.0 for click in game.gestures))
-        self.assertIn(120, game.waits)
+        self.assertNotIn(120, game.waits)
 
 
 if __name__ == "__main__":

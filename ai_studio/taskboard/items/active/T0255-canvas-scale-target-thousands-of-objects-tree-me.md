@@ -12,9 +12,14 @@ updated: 2026-07-03
 
 ## What
 
+Make Canvas credible at thousands-of-object scale by landing immediate tree and
+viewport performance wins, then define the remaining mutation-payload work.
+
 ## Done when
 
-- [ ]
+- [x] Tree memoization and viewport culling are implemented and validated.
+- [x] Large-canvas visual parity/performance evidence is recorded.
+- [ ] Mutation payload diet is accepted, deferred, or split into a follow-up.
 
 ## Open questions
 

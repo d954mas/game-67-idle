@@ -12,9 +12,14 @@ updated: 2026-07-03
 
 ## What
 
+Apply review fixes around key-matte performance and color-distance consistency,
+while preserving golden alpha behavior.
+
 ## Done when
 
-- [ ]
+- [x] Shared color-distance helper and metric unification are landed.
+- [x] Golden-first check explains why the dead-pass removal is not automatic.
+- [ ] Lead chooses the final F1 pass strategy or accepts the current behavior.
 
 ## Open questions
 

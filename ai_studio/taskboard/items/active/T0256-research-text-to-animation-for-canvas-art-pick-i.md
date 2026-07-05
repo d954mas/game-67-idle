@@ -12,9 +12,15 @@ updated: 2026-07-03
 
 ## What
 
+Research text-to-animation options for Canvas art: pick an image, describe the
+motion in text, preview results, and identify an iteration path that fits the
+Canvas/video boundaries.
+
 ## Done when
 
-- [ ]
+- [ ] Source-backed research compares viable animation approaches.
+- [ ] The recommended route is summarized with constraints and risks.
+- [ ] Follow-up implementation tasks are created or explicitly deferred.
 
 ## Open questions
 

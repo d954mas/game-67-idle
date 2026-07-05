@@ -1,0 +1,13 @@
+Create one real raster source sheet for game-use character sprites, using the attached Last Post background as the strict visual style reference.
+
+Output: a clean 2x2 sprite sheet on one perfectly flat chroma green background (#00ff00). No text, no labels, no watermark, no UI, no frames, no shadows touching the background, no scenery. Each quadrant contains one isolated full-body/three-quarter-body dark fantasy Roblox-like browser RPG NPC, centered with generous padding and not overlapping the grid boundary.
+
+Style requirements: match the accepted city scene style: low-noise painterly 2D, chunky readable forms, slightly blocky proportions, dark medieval border-town clothing, warm lantern highlights, muted browns/greys, crisp silhouette, readable at small scale, not realistic photo, not anime, not pixel art.
+
+Characters in order:
+top-left: blacksmith, sturdy adult worker, leather apron, hammer at belt, soot and metal accents, warm forge tones.
+top-right: town trader, practical border merchant, layered travel coat, satchel, small ledger or pouch, distinct from blacksmith.
+bottom-left: elder / староста, older contract giver, severe but calm, long coat, document roll or key ring, civic authority.
+bottom-right: healer, field medic, hood or scarf, bandage pouch, small lantern or remedy satchel, gentle silhouette.
+
+Important: generate actual raster art with the image generation model. Do not draw with code, SVG, PIL, vectors, or simple shapes.

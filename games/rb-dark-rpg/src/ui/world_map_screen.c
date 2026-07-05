@@ -401,14 +401,59 @@ static bool map_travel_path_add(float design_x, float design_y) {
   return true;
 }
 
+static bool map_location_travel_anchor(const char *location_id,
+                                       float *out_x, float *out_y) {
+  float x = 0.0F;
+  float y = 0.0F;
+  if (str_eq(location_id, "hub_last_post")) {
+    x = 350.0F;
+    y = 430.0F;
+  } else if (str_eq(location_id, "hub_gate_outskirts")) {
+    x = 704.0F;
+    y = 425.0F;
+  } else if (str_eq(location_id, "old_mill")) {
+    x = 1048.0F;
+    y = 324.0F;
+  } else {
+    const game_location_definition_t *location =
+        game_content_find_location(location_id);
+    if (!location_has_map_node(location)) {
+      return false;
+    }
+    x = location->map_x * 1280.0F;
+    y = location->map_y * 720.0F;
+  }
+  if (out_x) {
+    *out_x = x;
+  }
+  if (out_y) {
+    *out_y = y;
+  }
+  return true;
+}
+
 static bool map_travel_path_add_location(const char *location_id) {
-  const game_location_definition_t *location =
-      game_content_find_location(location_id);
-  if (!location_has_map_node(location)) {
+  float x = 0.0F;
+  float y = 0.0F;
+  if (!map_location_travel_anchor(location_id, &x, &y)) {
     return false;
   }
-  return map_travel_path_add(location->map_x * 1280.0F,
-                             location->map_y * 720.0F);
+  return map_travel_path_add(x, y);
+}
+
+static world_map_point_t map_hero_anchor_point(
+    const game_location_definition_t *location, float map_w, float map_h) {
+  if (!location) {
+    return (world_map_point_t){0};
+  }
+  float x = 0.0F;
+  float y = 0.0F;
+  if (location && map_location_travel_anchor(location->id, &x, &y)) {
+    return (world_map_point_t){.x = x * map_w / 1280.0F,
+                               .y = y * map_h / 720.0F};
+  }
+  return (world_map_point_t){.x = map_node_center_x(location, map_w),
+                             .y = map_node_center_y(location, map_h)};
 }
 
 static bool map_prepare_travel_leg_path(const char *from_id,
@@ -420,28 +465,28 @@ static bool map_prepare_travel_leg_path(const char *from_id,
 
   if (str_eq(from_id, "hub_last_post") &&
       str_eq(to_id, "hub_gate_outskirts")) {
-    return map_travel_path_add(410.0F, 304.0F) &&
+    return map_travel_path_add(418.0F, 445.0F) &&
            map_travel_path_add(482.0F, 448.0F) &&
-           map_travel_path_add(590.0F, 382.0F) &&
+           map_travel_path_add(590.0F, 425.0F) &&
            map_travel_path_add_location(to_id);
   }
   if (str_eq(from_id, "hub_gate_outskirts") &&
       str_eq(to_id, "hub_last_post")) {
-    return map_travel_path_add(590.0F, 382.0F) &&
+    return map_travel_path_add(590.0F, 425.0F) &&
            map_travel_path_add(482.0F, 448.0F) &&
-           map_travel_path_add(410.0F, 304.0F) &&
+           map_travel_path_add(418.0F, 445.0F) &&
            map_travel_path_add_location(to_id);
   }
   if (str_eq(from_id, "hub_gate_outskirts") && str_eq(to_id, "old_mill")) {
-    return map_travel_path_add(780.0F, 315.0F) &&
+    return map_travel_path_add(820.0F, 414.0F) &&
            map_travel_path_add(902.0F, 390.0F) &&
-           map_travel_path_add(995.0F, 410.0F) &&
+           map_travel_path_add(980.0F, 352.0F) &&
            map_travel_path_add_location(to_id);
   }
   if (str_eq(from_id, "old_mill") && str_eq(to_id, "hub_gate_outskirts")) {
-    return map_travel_path_add(995.0F, 410.0F) &&
+    return map_travel_path_add(980.0F, 352.0F) &&
            map_travel_path_add(902.0F, 390.0F) &&
-           map_travel_path_add(780.0F, 315.0F) &&
+           map_travel_path_add(820.0F, 414.0F) &&
            map_travel_path_add_location(to_id);
   }
   return map_travel_path_add_location(to_id);
@@ -583,8 +628,8 @@ static void map_center_scroll_to_hero(nt_ui_context_t *ctx,
   if (!ctx || !location_has_map_node(location)) {
     return;
   }
-  const world_map_point_t hero = world_map_viewport_location_point(
-      location->map_x, location->map_y, viewport.content_w, viewport.content_h);
+  const world_map_point_t hero = map_hero_anchor_point(
+      location, viewport.content_w, viewport.content_h);
   const world_map_point_t offset = world_map_viewport_center_offset(
       hero.x, hero.y, viewport.viewport_w, viewport.viewport_h,
       viewport.content_w, viewport.content_h);
@@ -959,7 +1004,7 @@ static void map_region_hit_area_ui(nt_ui_context_t *ctx, World *w,
   const bool can_move =
       !current && game_actions_can_move_location(state, location->id);
   const bool enabled =
-      !s_map_travel_active && (current || can_route || can_move);
+      !s_map_travel_active && !current && (can_route || can_move);
   if (!enabled) {
     return;
   }
@@ -980,7 +1025,7 @@ static void map_region_hit_area_ui(nt_ui_context_t *ctx, World *w,
                      .attachPoints = {.element = CLAY_ATTACH_POINT_LEFT_TOP,
                                       .parent = CLAY_ATTACH_POINT_LEFT_TOP},
                      .offset = {x, y},
-                     .zIndex = WORLD_MAP_Z_TERRAIN + 1},
+                     .zIndex = WORLD_MAP_Z_TEXT + 1},
         .layout = {.sizing = {CLAY_SIZING_FIXED(hit_w),
                               CLAY_SIZING_FIXED(hit_h)}}}) {
     CLAY({.id = hit_id,
@@ -988,7 +1033,7 @@ static void map_region_hit_area_ui(nt_ui_context_t *ctx, World *w,
           .backgroundColor = {255.0F, 216.0F, 72.0F,
                               current ? 8.0F : 3.0F},
           .cornerRadius = CLAY_CORNER_RADIUS(18),
-          .userData = NT_UI_CLAY_DATA(LAYER_WORLD_MAP_TERRAIN)}) {
+          .userData = NT_UI_CLAY_DATA(LAYER_WORLD_MAP_MARKER)}) {
       nt_ui_widget_register(ctx, hit_id.id, &WORLD_ROW_DEF, hit_pad, true);
       events = nt_ui_events_padded(ctx, hit_id.id, NULL, hit_pad);
     }
@@ -1221,6 +1266,9 @@ static void map_hero_marker(nt_ui_context_t *ctx, const World *w,
   }
   float x = map_node_center_x(location, map_w);
   float y = map_node_center_y(location, map_h);
+  const world_map_point_t hero = map_hero_anchor_point(location, map_w, map_h);
+  x = hero.x;
+  y = hero.y;
   (void)map_travel_point(w, map_w, map_h, &x, &y);
   if (x + 42.0F < 0.0F || x - 42.0F > clip_w || y + 46.0F < 0.0F ||
       y - 34.0F > clip_h) {

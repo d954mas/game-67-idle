@@ -12,9 +12,14 @@ updated: 2026-07-03
 
 ## What
 
+Run and synthesize a full Canvas site UI/UX review covering flows, visual
+consistency, and frontend performance, then launch the highest-priority fixes.
+
 ## Done when
 
-- [ ]
+- [x] Flow, visual, and frontend-performance review packets are collected.
+- [x] A synthesized ranked findings document exists.
+- [ ] Tier 1 fixes are accepted, delegated, or split into follow-up tasks.
 
 ## Open questions
 

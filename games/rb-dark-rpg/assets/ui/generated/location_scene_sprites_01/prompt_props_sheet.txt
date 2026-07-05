@@ -1,0 +1,13 @@
+Create one real raster source sheet for game-use transparent prop sprites, using the attached Last Post background as the strict visual style reference.
+
+Output: a clean 2x2 prop sheet on one perfectly flat chroma green background (#00ff00). No text, no labels, no watermark, no UI, no frames, no shadows touching the background, no scenery. Each quadrant contains one isolated prop, centered with generous padding and not overlapping the grid boundary.
+
+Style requirements: match the accepted city scene style: low-noise painterly 2D, chunky readable forms, dark medieval border-town materials, muted wood/iron/stone, warm lamp accents where relevant, crisp silhouette, readable at hub scale, not realistic photo, not pixel art.
+
+Props in order:
+top-left: contract board, rugged wooden notice board with parchment shapes but no readable text.
+top-right: dim Dragon memorial, small worn stone/iron shrine or extinguished beacon, heroic but weathered, no living creature.
+bottom-left: map gate / exit marker, heavy fortified gate-side object or travel sign, clearly reads as "exit to map" without any letters.
+bottom-right: caged scavenger threat prop, crude small cage with a hunched ragged captive/scavenger silhouette inside, readable but not gory.
+
+Important: generate actual raster art with the image generation model. Do not draw with code, SVG, PIL, vectors, or simple shapes.

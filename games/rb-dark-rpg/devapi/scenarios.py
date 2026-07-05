@@ -603,10 +603,25 @@ def prepare_world_map_move_gate(game: Any, viewport: Any) -> dict[str, str]:
     _clear_dev_world_map_flag(game)
     _clear_dev_world_place_flag(game)
     _open_bottom_nav_slot(game, viewport, 2)
-    tree, node = _wait_for_node(game, "world_map/location/hub_gate_outskirts")
-    _tap_node(game, tree, node, viewport)
-    _wait_for_state_value(game, "world.current_location_id", "hub_gate_outskirts")
-    _wait_for_node(game, "world_place/tabs")
+    tree, node = _wait_for_node(game, "world_map/region/hub_gate_outskirts")
+    bounds = node.get("bounds") if isinstance(node, dict) else None
+    if isinstance(bounds, dict):
+        node = {
+            **node,
+            "bounds": {
+                "x": float(bounds["x"]) + float(bounds["w"]) * 0.24,
+                "y": float(bounds["y"]) + float(bounds["h"]) * 0.55,
+                "w": 8.0,
+                "h": 8.0,
+            },
+        }
+    _tap_node_by_bounds(game, tree, node, viewport)
+    try:
+        _wait_for_node(game, "world_map/travel_timer", max_frames=60, stride=4)
+    except RuntimeError:
+        pass
+    _wait_for_state_value(game, "world.current_location_id", "hub_gate_outskirts", max_frames=420, stride=4)
+    _wait_for_node(game, "world_place/tabs", max_frames=120, stride=4)
     return {"state": "world_map_move_gate", "location": "hub_gate_outskirts", "viewport": viewport.window_size}
 
 
@@ -947,7 +962,7 @@ def prepare_combat_running(game: Any, viewport: Any) -> dict[str, str]:
     _tap_by_id_bounds(game, viewport, "combat/prefight_start", max_frames=60)
     _wait_for_node(game, "combat/running", max_frames=180, stride=4)
     _wait_for_node(game, "combat/stage", max_frames=180, stride=4)
-    game.wait_frames(120)
+    game.wait_frames(8)
     _wait_for_node(game, "combat/stage", max_frames=1, stride=1)
     return {"state": "combat_running", "viewport": viewport.window_size}
 
@@ -1118,7 +1133,6 @@ def prepare_mill_combat_running(game: Any, viewport: Any) -> dict[str, str]:
     _tap_by_id_bounds(game, viewport, "combat/prefight_start", max_frames=60)
     _wait_for_node(game, "combat/running", max_frames=180, stride=4)
     _wait_for_node(game, "combat/stage", max_frames=180, stride=4)
-    game.wait_frames(120)
     _wait_for_node(game, "combat/stage", max_frames=1, stride=1)
     return {"state": "mill_combat_running", "viewport": viewport.window_size}
 

@@ -1,0 +1,174 @@
+{
+  "schema": "ai_studio.generated_asset_pack.v1",
+  "game_id": "rb-dark-rpg",
+  "pack_id": "location_scene_sprites_01",
+  "created": "2026-07-05",
+  "origin": "ai",
+  "license": "project-internal generated asset",
+  "reference_asset": "assets/scenes/last_post_background_candidate05_1280x700.png",
+  "source_sheets": {
+    "source_npc_sheet.png": {
+      "sha256": "BC501D9CAF611012593598DE1E9A05BB1ACD4118932DC100DEAD3E9EDBC36B18",
+      "bytes": 1669874
+    },
+    "source_props_sheet.png": {
+      "sha256": "49AA61BFCE7099A12436268E25DFEB2A189C23ACB02598DEDFC654C7CBD15C2B",
+      "bytes": 1752512
+    },
+    "source_mill_sheet.png": {
+      "sha256": "AF11FE2EB0867BC1FE910D5C7464552778F2B879A8755761863DD8F809810D87",
+      "bytes": 1637313
+    }
+  },
+  "assets": [
+    {
+      "id": "asset_character_blacksmith",
+      "kind": "character",
+      "file_path": "characters/asset_character_blacksmith.png",
+      "width": 453,
+      "height": 614,
+      "sha256": "8E3AFFF48F1D610FE709D22E697ECC9C79D4E15F4E58CED5555195F8533BDE3A",
+      "source_sheet": "source_npc_sheet.png"
+    },
+    {
+      "id": "asset_portrait_blacksmith",
+      "kind": "portrait",
+      "file_path": "portraits/asset_portrait_blacksmith.png",
+      "width": 436,
+      "height": 346,
+      "sha256": "91B5401340E91B7E02B26E45B972B93027AA97CBE6F238F4EC7F3DD2B5B02BDE",
+      "source_sheet": "source_npc_sheet.png"
+    },
+    {
+      "id": "asset_character_town_trader",
+      "kind": "character",
+      "file_path": "characters/asset_character_town_trader.png",
+      "width": 447,
+      "height": 616,
+      "sha256": "373B6B8EA078AC19CCD1A6E92B26AEE2C7C0944676376A2DD60CBC5070E337A3",
+      "source_sheet": "source_npc_sheet.png"
+    },
+    {
+      "id": "asset_portrait_town_trader",
+      "kind": "portrait",
+      "file_path": "portraits/asset_portrait_town_trader.png",
+      "width": 426,
+      "height": 347,
+      "sha256": "1D3133FF8CB6C932F9B7E175223BD77BE290093F1E127E017ED70584F56D9017",
+      "source_sheet": "source_npc_sheet.png"
+    },
+    {
+      "id": "asset_character_elder",
+      "kind": "character",
+      "file_path": "characters/asset_character_elder.png",
+      "width": 433,
+      "height": 598,
+      "sha256": "159A25F4E689333274F8D8EA1ADDD08C013CCF0074FDFF922DC972B7E7EF39FA",
+      "source_sheet": "source_npc_sheet.png"
+    },
+    {
+      "id": "asset_portrait_elder",
+      "kind": "portrait",
+      "file_path": "portraits/asset_portrait_elder.png",
+      "width": 421,
+      "height": 335,
+      "sha256": "B25DCDB200A5B87F369ADFF71FEB90E7BB7BBBEE303F105DD00DA17A93351CCD",
+      "source_sheet": "source_npc_sheet.png"
+    },
+    {
+      "id": "asset_character_healer",
+      "kind": "character",
+      "file_path": "characters/asset_character_healer.png",
+      "width": 444,
+      "height": 597,
+      "sha256": "AAAEB3CF92C7619DA0AB4F110242CCA8F58B323B6E79120C6F0E2A1AAC62696E",
+      "source_sheet": "source_npc_sheet.png"
+    },
+    {
+      "id": "asset_portrait_healer",
+      "kind": "portrait",
+      "file_path": "portraits/asset_portrait_healer.png",
+      "width": 432,
+      "height": 334,
+      "sha256": "B8E1E0DCCCBBF48BB770FC0FDBFC2B2EB487F319D0878BC376B2A478D1A92E2E",
+      "source_sheet": "source_npc_sheet.png"
+    },
+    {
+      "id": "asset_object_contract_board",
+      "kind": "prop",
+      "file_path": "props/asset_object_contract_board.png",
+      "width": 544,
+      "height": 593,
+      "sha256": "DD5533752AC5CE25CD5DEB525916409CF17B56CF3D517B72546D67806FCF1183",
+      "source_sheet": "source_props_sheet.png"
+    },
+    {
+      "id": "asset_object_dragon_memorial",
+      "kind": "prop",
+      "file_path": "props/asset_object_dragon_memorial.png",
+      "width": 467,
+      "height": 610,
+      "sha256": "6708C91B7EA504367BDE5050FDB1BD202ABCA480B4243053492E7849687B2C62",
+      "source_sheet": "source_props_sheet.png"
+    },
+    {
+      "id": "asset_object_map_gate",
+      "kind": "prop",
+      "file_path": "props/asset_object_map_gate.png",
+      "width": 469,
+      "height": 572,
+      "sha256": "1E267CC919AC8AD43C6CCAA1F97C01ACB589B5690149741472661925D886408B",
+      "source_sheet": "source_props_sheet.png"
+    },
+    {
+      "id": "asset_object_caged_scavenger",
+      "kind": "prop",
+      "file_path": "props/asset_object_caged_scavenger.png",
+      "width": 471,
+      "height": 566,
+      "sha256": "BA7B01F0C98ACB622F7C6D2CC70281EF4936FAD54947279CF3944BDC12DEFAE7",
+      "source_sheet": "source_props_sheet.png"
+    },
+    {
+      "id": "asset_enemy_mill_scavenger_scene",
+      "kind": "enemy_sprite",
+      "file_path": "enemies/asset_enemy_mill_scavenger_scene.png",
+      "width": 493,
+      "height": 529,
+      "sha256": "EE3B6783543EA235F24225A21C4048EDAC9744433B0EE85A4F99A2AC9DD1B696",
+      "source_sheet": "source_mill_sheet.png"
+    },
+    {
+      "id": "asset_enemy_cellar_knifeman_scene",
+      "kind": "enemy_sprite",
+      "file_path": "enemies/asset_enemy_cellar_knifeman_scene.png",
+      "width": 412,
+      "height": 581,
+      "sha256": "7EB8C53EEF837457E18363FDB9114B91AB3F09F0064E684F2753B780BD015955",
+      "source_sheet": "source_mill_sheet.png"
+    },
+    {
+      "id": "asset_object_old_mill_cellar_hatch",
+      "kind": "prop",
+      "file_path": "props/asset_object_old_mill_cellar_hatch.png",
+      "width": 546,
+      "height": 503,
+      "sha256": "BDF64F51BE45908CA38DBC03387347C787A3F9C6D4A4C634E799320BB928F9F9",
+      "source_sheet": "source_mill_sheet.png"
+    },
+    {
+      "id": "asset_object_black_sun_clue_wall",
+      "kind": "prop",
+      "file_path": "props/asset_object_black_sun_clue_wall.png",
+      "width": 441,
+      "height": 477,
+      "sha256": "9CB3A2F10B5E28319FF82A92193FF5D5467CE70BED49515E74E0CD6AC73F4460",
+      "source_sheet": "source_mill_sheet.png"
+    }
+  ],
+  "contact_sheet": {
+    "file_path": "contact_sheet.png",
+    "sha256": "53FB6F30776852837A5525C14429DDFC2A7923B8BDAAA3E8E1F96C59179781C6",
+    "bytes": 746188
+  }
+}

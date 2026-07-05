@@ -2,8 +2,8 @@
 id: T0265
 title: "Canvas animation card v1 (video route): anim card + generateAnimFromCard -> editable element.flipbook + rAF flipbook player; inc2 animation MODE w/ timeline trim/delete/fps/play-mode; inc3 FLF multi-keyframe"
 status: todo
-project: ""
-epic: ""
+project: P001
+epic: E010
 priority: P1
 tags: [canvas, animation, video]
 created: 2026-07-04
@@ -12,9 +12,15 @@ updated: 2026-07-04
 
 ## What
 
+Build the Canvas video-route animation card: describe animation, generate a
+flipbook element, preview it on canvas, then expand toward timeline editing and
+multi-keyframe FLF.
+
 ## Done when
 
-- [ ]
+- [ ] Increment 1 creates an anim card and generates editable flipbook output.
+- [ ] The canvas preview uses the existing rAF loop without procedural transforms.
+- [ ] Later increments for timeline editing and FLF are accepted or split.
 
 ## Open questions
 

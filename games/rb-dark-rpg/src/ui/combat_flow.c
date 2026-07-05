@@ -39,6 +39,8 @@ typedef struct combat_actor_pose_t {
     float scale_x;
     float scale_y;
     bool flash;
+    bool block_flash;
+    bool crit_flash;
     bool attacking;
 } combat_actor_pose_t;
 
@@ -664,6 +666,8 @@ static combat_actor_pose_t combat_actor_pose(game_combat_actor_t actor, const ga
         .scale_x = 1.0F,
         .scale_y = 1.0F,
         .flash = false,
+        .block_flash = false,
+        .crit_flash = false,
         .attacking = false,
     };
     if (!event || actor == GAME_COMBAT_ACTOR_NONE) {
@@ -673,13 +677,15 @@ static combat_actor_pose_t combat_actor_pose(game_combat_actor_t actor, const ga
     const float p = clampf(visual_progress, 0.0F, 1.0F);
     const float toward_center = actor == GAME_COMBAT_ACTOR_PLAYER ? 1.0F : -1.0F;
     const float away_from_center = actor == GAME_COMBAT_ACTOR_PLAYER ? -1.0F : 1.0F;
+    const float hit_power = event->crit ? 1.24F : (event->block ? 0.78F : 1.0F);
     const float windup = portrait ? 8.0F : 12.0F;
-    const float lunge = portrait ? 30.0F : 42.0F;
+    const float lunge = (portrait ? 30.0F : 42.0F) * hit_power;
     const float rebound = portrait ? 8.0F : 12.0F;
-    const float recoil = portrait ? 18.0F : 26.0F;
+    const float recoil = (portrait ? 18.0F : 26.0F) * hit_power;
 
     if (event->actor == actor) {
         pose.attacking = p >= 0.30F && p <= 0.70F;
+        pose.crit_flash = event->crit && p >= 0.38F && p <= 0.62F;
         if (p < 0.30F) {
             const float t = ease01(p / 0.30F);
             pose.x = -toward_center * windup * t;
@@ -706,15 +712,19 @@ static combat_actor_pose_t combat_actor_pose(game_combat_actor_t actor, const ga
     if (p >= 0.42F && p < 0.68F) {
         const float t = ease01((p - 0.42F) / 0.26F);
         pose.x = away_from_center * lerpf(0.0F, recoil, t);
-        pose.y = lerpf(0.0F, 3.0F, t);
-        pose.scale_x = lerpf(1.0F, 1.08F, t);
-        pose.scale_y = lerpf(1.0F, 0.94F, t);
-        pose.flash = true;
+        pose.y = lerpf(0.0F, event->block ? 1.0F : 3.0F, t);
+        pose.scale_x = event->block ? lerpf(1.0F, 0.98F, t) : lerpf(1.0F, 1.08F, t);
+        pose.scale_y = event->block ? lerpf(1.0F, 1.04F, t) : lerpf(1.0F, 0.94F, t);
+        pose.flash = !event->block;
+        pose.block_flash = event->block;
+        pose.crit_flash = event->crit;
     } else if (p >= 0.68F) {
         const float t = ease01((p - 0.68F) / 0.32F);
         pose.x = away_from_center * lerpf(recoil, 0.0F, t);
-        pose.y = lerpf(3.0F, 0.0F, t);
-        pose.flash = p < 0.82F;
+        pose.y = lerpf(event->block ? 1.0F : 3.0F, 0.0F, t);
+        pose.flash = !event->block && p < 0.82F;
+        pose.block_flash = event->block && p < 0.84F;
+        pose.crit_flash = event->crit && p < 0.80F;
     }
     return pose;
 }
@@ -727,7 +737,13 @@ static void combat_actor_sprite(nt_ui_context_t *ctx, int slot, combat_actor_art
     const float root_w = root_h * (512.0F / 704.0F) * pose.scale_x;
     const float shadow_w = root_w * (pose.attacking ? 0.78F : 0.64F);
     nt_ui_image_style_t sprite_style = nt_ui_image_style_defaults();
-    sprite_style.color_packed = pose.flash ? 0xFFA8DCFFU : 0xFFFFFFFFU;
+    if (pose.crit_flash) {
+        sprite_style.color_packed = 0xFFFFA66CU;
+    } else if (pose.block_flash) {
+        sprite_style.color_packed = 0xFFB7D8FFU;
+    } else {
+        sprite_style.color_packed = pose.flash ? 0xFFFFC7B4U : 0xFFFFFFFFU;
+    }
 
     CLAY({.id = CLAY_IDI("combat/actor_sprite", slot),
           .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
@@ -802,28 +818,40 @@ static void combat_actor_lane(nt_ui_context_t *ctx, int slot, game_combat_actor_
     }
 }
 
-static void combat_impact_overlay(nt_ui_context_t *ctx, int active_event, float event_progress, const char *hit_badge,
-                                  Clay_Color hit_badge_bg, bool portrait) {
+static Clay_Color combat_impact_flash_color(const game_combat_event_t *event) {
+    if (event && event->crit) {
+        return (Clay_Color){255.0F, 92.0F, 62.0F, 230.0F};
+    }
+    if (event && event->block) {
+        return (Clay_Color){142.0F, 205.0F, 255.0F, 220.0F};
+    }
+    return (Clay_Color){255.0F, 214.0F, 117.0F, 205.0F};
+}
+
+static void combat_impact_overlay(nt_ui_context_t *ctx, const game_combat_event_t *event, int active_event,
+                                  float event_progress, const char *hit_badge, Clay_Color hit_badge_bg,
+                                  bool portrait) {
     const bool show_hit = active_event >= 0 && event_progress >= 0.38F && event_progress <= 0.88F;
     if (!show_hit) {
         return;
     }
+    const Clay_Color flash_color = combat_impact_flash_color(event);
     CLAY({.id = CLAY_ID("combat/impact"),
           .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
                        .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER,
                                         .parent = CLAY_ATTACH_POINT_CENTER_CENTER},
                        .offset = {0.0F, portrait ? -30.0F : -34.0F},
                        .zIndex = COMBAT_MODAL_CONTROL_Z + 4},
-          .layout = {.sizing = {CLAY_SIZING_FIXED(portrait ? 96.0F : 120.0F), CLAY_SIZING_FIXED(54.0F)},
+          .layout = {.sizing = {CLAY_SIZING_FIXED(portrait ? 118.0F : 144.0F), CLAY_SIZING_FIXED(54.0F)},
                      .layoutDirection = CLAY_TOP_TO_BOTTOM,
                      .childGap = 6,
                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
         CLAY({.id = CLAY_ID("combat/impact_flash"),
               .layout = {.sizing = {CLAY_SIZING_FIXED(portrait ? 74.0F : 96.0F), CLAY_SIZING_FIXED(4.0F)}},
-              .backgroundColor = {255.0F, 214.0F, 117.0F, 205.0F},
+              .backgroundColor = flash_color,
               .cornerRadius = CLAY_CORNER_RADIUS(3),
               .userData = NT_UI_CLAY_DATA(LAYER_COMBAT_FILL)}) {}
-        damage_badge(ctx, 2, hit_badge, hit_badge_bg, portrait ? 74.0F : 104.0F, portrait ? 15.0F : 18.0F);
+        damage_badge(ctx, 2, hit_badge, hit_badge_bg, portrait ? 96.0F : 124.0F, portrait ? 15.0F : 18.0F);
     }
 }
 
@@ -859,7 +887,7 @@ static COMBAT_UNUSED_FN void combat_stage_ui(nt_ui_context_t *ctx, const game_co
                           portrait, height - 14.0F, enemy_label, (float)enemy_hp / (float)enemy->vitality,
                           (Clay_Color){155.0F, 42.0F, 32.0F, 240.0F},
                           actor_charge_progress(preview, GAME_COMBAT_ACTOR_ENEMY, timeline_time));
-        combat_impact_overlay(ctx, active_event, event_progress, hit_badge, hit_badge_bg, portrait);
+        combat_impact_overlay(ctx, event, active_event, event_progress, hit_badge, hit_badge_bg, portrait);
     }
 }
 
@@ -1187,7 +1215,16 @@ static void running_ui(nt_ui_context_t *ctx, World *w, const game_encounter_defi
     (void)snprintf(player_label, sizeof player_label, "Ты  %d/%d", player_hp, player->vitality);
     (void)snprintf(enemy_label, sizeof enemy_label, "Враг  %d/%d", enemy_hp, enemy->vitality);
     if (latest_event >= 0) {
-        (void)snprintf(hit_badge, sizeof hit_badge, "-%d", preview->events[latest_event].damage);
+        const game_combat_event_t *event = &preview->events[latest_event];
+        if (event->crit) {
+            (void)snprintf(hit_badge, sizeof hit_badge, "CRIT -%d", event->damage);
+            hit_badge_bg = (Clay_Color){101.0F, 31.0F, 24.0F, 232.0F};
+        } else if (event->block) {
+            (void)snprintf(hit_badge, sizeof hit_badge, "BLOCK -%d", event->damage);
+            hit_badge_bg = (Clay_Color){28.0F, 55.0F, 78.0F, 226.0F};
+        } else {
+            (void)snprintf(hit_badge, sizeof hit_badge, "-%d", event->damage);
+        }
     }
 
     CLAY({.id = CLAY_ID("combat/running"),

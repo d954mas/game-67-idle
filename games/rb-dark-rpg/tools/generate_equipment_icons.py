@@ -62,7 +62,12 @@ def collect_icon_specs(items_doc: dict) -> IconSpecs:
         slots.append(IconSpec(asset_id=asset_id, file=f"slots/{asset_id}.png", role="slot_empty", slot=slot_id, sheet_index=index))
 
     gear = []
-    for index, item in enumerate(item for item in items_doc.get("items", []) if item.get("kind") == "gear"):
+    def belongs_to_base_pack(item: dict) -> bool:
+        return "release_30m" not in set(item.get("tags", []))
+
+    for index, item in enumerate(
+        item for item in items_doc.get("items", []) if item.get("kind") == "gear" and belongs_to_base_pack(item)
+    ):
         asset_id = str(item["icon_asset_id"])
         gear.append(
             IconSpec(
@@ -78,7 +83,7 @@ def collect_icon_specs(items_doc: dict) -> IconSpecs:
     reward_items = []
     seen_reward_assets: set[str] = set()
     for item in items_doc.get("items", []):
-        if item.get("kind") == "gear" or not item.get("icon_asset_id"):
+        if item.get("kind") == "gear" or not item.get("icon_asset_id") or not belongs_to_base_pack(item):
             continue
         asset_id = str(item["icon_asset_id"])
         if asset_id in seen_reward_assets:

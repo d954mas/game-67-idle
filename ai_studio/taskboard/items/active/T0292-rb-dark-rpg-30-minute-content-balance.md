@@ -22,7 +22,7 @@ Review and accept or revise the 30-minute release balance/content contract for
   5 gear tiers, 12 enemies, reward budget, and implementation order.
 - [x] `games/rb-dark-rpg/design/data/release_balance.json` validates as JSON and
   contains 10 levels, 13 quests, 5 tiers, 12 enemies, and a 540 XP Act I cap.
-- [ ] Release content is expanded into authored game data files.
+- [x] Release content is expanded into authored game data files.
 - [ ] Lead accepts the balance/content direction or requests concrete changes.
 
 ## Open questions
@@ -39,3 +39,7 @@ Review and accept or revise the 30-minute release balance/content contract for
 - 2026-07-05: Removed generated fake-shot visual artifacts after lead clarified
   that the requested work is authored game content and gameplay assets, not
   mock visuals.
+- 2026-07-05: Expanded authored content to 13 quests, 12 encounters, 37 items,
+  7 locations, 30 dialogues, and 89 asset manifest entries. Added procedural
+  PNG placeholder icons/enemy cards under
+  `games/rb-dark-rpg/assets/ui/generated/release_content_30m_01/`.

@@ -18,15 +18,18 @@ class EquipmentIconGenerationTest(unittest.TestCase):
 
         slot_ids = [slot["id"] for slot in items_doc["equipment_slots"]]
         expected_slot_asset_ids = {f"asset_slot_icon_{slot_id}_empty" for slot_id in slot_ids}
+        def belongs_to_base_pack(item: dict) -> bool:
+            return "release_30m" not in set(item.get("tags", []))
+
         expected_gear_asset_ids = {
             item["icon_asset_id"]
             for item in items_doc["items"]
-            if item.get("kind") == "gear"
+            if item.get("kind") == "gear" and belongs_to_base_pack(item)
         }
         expected_reward_item_asset_ids = {
             item["icon_asset_id"]
             for item in items_doc["items"]
-            if item.get("kind") != "gear" and item.get("icon_asset_id")
+            if item.get("kind") != "gear" and item.get("icon_asset_id") and belongs_to_base_pack(item)
         }
 
         self.assertEqual({spec.asset_id for spec in specs.slots}, expected_slot_asset_ids)

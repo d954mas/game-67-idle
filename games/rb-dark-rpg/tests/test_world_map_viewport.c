@@ -14,12 +14,12 @@ static void expect_near(float actual, float expected, const char *label) {
 
 static void test_portrait_keeps_scrollable_content(void) {
   world_map_viewport_desc_t v = world_map_viewport_compute(390.0F, 720.0F, true);
-  if (!(v.content_w > v.viewport_w * 2.0F)) {
-    fprintf(stderr, "portrait content should be substantially wider than viewport\n");
+  if (!(v.content_w > v.viewport_w * 1.8F)) {
+    fprintf(stderr, "portrait content should remain horizontally pannable\n");
     exit(1);
   }
-  if (!(v.content_h > v.viewport_h)) {
-    fprintf(stderr, "portrait content should remain vertically pannable\n");
+  if (!(v.content_h <= v.viewport_h)) {
+    fprintf(stderr, "portrait content should not force a close vertical zoom\n");
     exit(1);
   }
 }

@@ -12,9 +12,14 @@ updated: 2026-07-02
 
 ## What
 
+Review and close the polygonal-region editor work after mining the legacy
+implementation.
+
 ## Done when
 
-- [ ]
+- [x] Legacy polygon model and editor behavior are documented.
+- [x] Polygon draw/select/slice behavior is implemented and validated.
+- [ ] Remaining follow-ups, if any, are accepted or split into new tasks.
 
 ## Open questions
 

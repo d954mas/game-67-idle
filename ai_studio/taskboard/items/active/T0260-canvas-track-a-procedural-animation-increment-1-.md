@@ -2,8 +2,8 @@
 id: T0260
 title: "Canvas Track A: procedural animation increment 1 - spec v1 + sampler + element.opacity + ops/CLI/API (T0256 plan, lead approved)"
 status: review
-project: ""
-epic: ""
+project: P001
+epic: E010
 priority: P1
 tags: [canvas, animation]
 created: 2026-07-03
@@ -12,9 +12,14 @@ updated: 2026-07-04
 
 ## What
 
+Deliver Canvas procedural animation increments while tracking the later lead
+pivot away from transform-style animation toward video-route animation.
+
 ## Done when
 
-- [ ]
+- [x] Spec v1, sampler, opacity support, ops/API/CLI, and preview UI land.
+- [x] Lead pivot away from procedural transform animation is recorded.
+- [ ] Dormant procedural code is kept, removed, or reused by an explicit follow-up.
 
 ## Open questions
 

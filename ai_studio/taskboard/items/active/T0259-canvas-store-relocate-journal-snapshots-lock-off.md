@@ -2,8 +2,8 @@
 id: T0259
 title: "Canvas store: relocate journal/snapshots/.lock off YandexDisk to local cache (review item 3, lead approved)"
 status: review
-project: ""
-epic: ""
+project: P001
+epic: E010
 priority: P1
 tags: [canvas, store, perf]
 created: 2026-07-03
@@ -12,9 +12,14 @@ updated: 2026-07-03
 
 ## What
 
+Relocate Canvas journal, snapshots, and lock files off YandexDisk into local
+cache storage so heavy history I/O no longer syncs through cloud folders.
+
 ## Done when
 
-- [ ]
+- [x] Store migration lands with cache location pinned outside the repo.
+- [x] Existing project history is read through the moved cache path.
+- [ ] The latent snapshotForEntry follow-up is accepted, deferred, or split.
 
 ## Open questions
 

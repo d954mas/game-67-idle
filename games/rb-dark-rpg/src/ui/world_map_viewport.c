@@ -19,13 +19,13 @@ world_map_viewport_desc_t world_map_viewport_compute(float panel_w,
   const float viewport_h =
       wm_clamp(panel_h - (portrait ? 122.0F : 116.0F), portrait ? 350.0F : 320.0F,
                portrait ? 560.0F : 620.0F);
-  float content_w = portrait ? 960.0F : 1280.0F;
-  const float min_content_w = viewport_w * (portrait ? 2.15F : 1.35F);
+  float content_w = portrait ? 760.0F : 980.0F;
+  const float min_content_w = viewport_w * (portrait ? 1.85F : 1.18F);
   if (content_w < min_content_w) {
     content_w = min_content_w;
   }
   float content_h = content_w * 0.5625F;
-  const float min_content_h = viewport_h * 1.12F;
+  const float min_content_h = portrait ? 0.0F : viewport_h * 1.04F;
   if (content_h < min_content_h) {
     content_h = min_content_h;
     content_w = content_h / 0.5625F;

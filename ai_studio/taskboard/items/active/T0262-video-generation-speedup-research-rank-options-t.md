@@ -2,8 +2,8 @@
 id: T0262
 title: "Video generation speedup: research + rank options (TeaCache/Sage/steps/resolution ladder/faster engines), then apply best to WAN stack"
 status: review
-project: ""
-epic: ""
+project: P001
+epic: E010
 priority: P1
 tags: [video, perf]
 created: 2026-07-03
@@ -12,9 +12,14 @@ updated: 2026-07-03
 
 ## What
 
+Research and apply video-generation speedups for the WAN stack, separating real
+accelerators from quality-risk shortcuts.
+
 ## Done when
 
-- [ ]
+- [x] Speedup research ranks TeaCache/Sage/step/resolution options.
+- [x] Current WAN baseline is re-measured and draft/final profiles are recorded.
+- [ ] Chosen speed profile is carried into the next pipeline/card task.
 
 ## Open questions
 

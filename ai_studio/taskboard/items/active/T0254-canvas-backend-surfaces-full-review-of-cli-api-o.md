@@ -12,9 +12,14 @@ updated: 2026-07-03
 
 ## What
 
+Review Canvas backend surfaces across CLI, API/ops, and Python tools for design,
+parity, correctness, and performance risks.
+
 ## Done when
 
-- [ ]
+- [x] CLI, API/ops, and Python-tool review packets are collected.
+- [x] Synthesis identifies Tier 1 backend fixes and lead-decision questions.
+- [ ] Lead-decision questions are resolved or split into follow-up tasks.
 
 ## Open questions
 

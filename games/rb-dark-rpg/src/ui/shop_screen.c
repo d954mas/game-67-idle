@@ -27,8 +27,8 @@
 #define SHOP_SEMANTIC_ID_LEN 96
 #define SHOP_CELL_W_DESKTOP 112.0F
 #define SHOP_CELL_W_PHONE 106.0F
-#define SHOP_CELL_H_DESKTOP 124.0F
-#define SHOP_CELL_H_PHONE 118.0F
+#define SHOP_CELL_H_DESKTOP 132.0F
+#define SHOP_CELL_H_PHONE 128.0F
 
 #if defined(__GNUC__) || defined(__clang__)
 #define SHOP_UNUSED_FN __attribute__((unused))
@@ -56,6 +56,7 @@ typedef enum shop_list_kind_t {
 
 typedef enum shop_art_region_t {
   SHOP_ART_SLOT_CELL = 0,
+  SHOP_ART_GOLD_COIN,
   SHOP_ART_ITEM_OLD_SWORD,
   SHOP_ART_ITEM_PADDED_JACKET,
   SHOP_ART_ITEM_LEATHER_GREAVES,
@@ -95,6 +96,7 @@ static const nt_ui_widget_def_t SHOP_WIDGET_DEF RB_DARK_RPG_UNUSED = {
 
 static const nt_hash64_t SHOP_ART_REGION_HASHES[SHOP_ART_COUNT] RB_DARK_RPG_UNUSED = {
     ASSET_ATLAS_REGION_UI_ASSET_EQUIPMENT_SLOT_CELL,
+    ASSET_ATLAS_REGION_UI_GOLD_COIN_HUD,
     ASSET_ATLAS_REGION_UI_ASSET_ICON_OLD_SWORD,
     ASSET_ATLAS_REGION_UI_ASSET_ICON_PADDED_JACKET,
     ASSET_ATLAS_REGION_UI_ASSET_ICON_LEATHER_GREAVES,
@@ -322,13 +324,19 @@ static void shop_item_icon(nt_ui_context_t *ctx,
   const shop_art_region_t item_art = shop_item_art(item);
   const bool has_icon = item_art < SHOP_ART_COUNT;
   const float slot_size = size;
-  const float icon_size = has_icon ? size * 0.75F : size * 0.55F;
+  const float icon_size = has_icon ? size * 0.64F : size * 0.48F;
   const float opacity = enabled ? 1.0F : 0.45F;
   CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(slot_size),
                               CLAY_SIZING_FIXED(slot_size)},
                    .childAlignment = {CLAY_ALIGN_X_CENTER,
-                                      CLAY_ALIGN_Y_CENTER}}}) {
-    shop_art_image(ctx, SHOP_ART_SLOT_CELL, slot_size, 0xFFE2C69CU, opacity);
+                                      CLAY_ALIGN_Y_CENTER}},
+        .backgroundColor = enabled ? (Clay_Color){15.0F, 11.0F, 8.0F, 212.0F}
+                                   : (Clay_Color){11.0F, 9.0F, 7.0F, 172.0F},
+        .cornerRadius = CLAY_CORNER_RADIUS(3),
+        .border = {.color = enabled ? (Clay_Color){124.0F, 86.0F, 45.0F, 178.0F}
+                                    : (Clay_Color){82.0F, 66.0F, 47.0F, 128.0F},
+                   .width = {1, 1, 1, 1, 0}},
+        .userData = NT_UI_CLAY_DATA(LAYER_SHOP_BG)}) {
     shop_art_image(ctx, has_icon ? item_art : SHOP_ART_SLOT_CELL, icon_size,
                    enabled ? 0xFFFFFFFFU : 0xFF9F8866U, opacity);
   }
@@ -342,56 +350,63 @@ static float shop_cell_h(bool portrait) {
   return portrait ? SHOP_CELL_H_PHONE : SHOP_CELL_H_DESKTOP;
 }
 
-static void shop_price_badge(nt_ui_context_t *ctx, const char *text,
+static void shop_money_icon(nt_ui_context_t *ctx, bool enabled, bool portrait) {
+  shop_art_image(ctx, SHOP_ART_GOLD_COIN, portrait ? 11.0F : 12.0F,
+                 enabled ? 0xFFFFFFFFU : 0xFF9F8866U,
+                 enabled ? 1.0F : 0.55F);
+}
+
+static bool shop_cell_button(nt_ui_context_t *ctx, uint32_t button_id,
+                             const char *action_text, const char *price_text,
                              bool enabled, bool portrait) {
-  const nt_ui_label_style_t label =
-      game_modal_label(portrait ? 9.0F : 10.0F, enabled ? 255.0F : 196.0F,
-                       enabled ? 236.0F : 172.0F, enabled ? 185.0F : 128.0F,
+  nt_ui_button_style_t button = game_modal_button_style(true);
+  button.slice9_scale = portrait ? 0.34F : 0.38F;
+  button.hit_padding_lrtb[0] = 6;
+  button.hit_padding_lrtb[1] = 6;
+  button.hit_padding_lrtb[2] = 6;
+  button.hit_padding_lrtb[3] = 6;
+  const nt_ui_label_style_t action =
+      game_modal_label(portrait ? 9.0F : 10.0F, enabled ? 255.0F : 154.0F,
+                       enabled ? 226.0F : 119.0F, enabled ? 176.0F : 88.0F,
                        255.0F);
-  CLAY({.floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
-                     .attachPoints = {.element = CLAY_ATTACH_POINT_RIGHT_TOP,
-                                      .parent = CLAY_ATTACH_POINT_RIGHT_TOP},
-                     .offset = {-2.0F, 2.0F},
-                     .zIndex = 8},
-        .layout = {.sizing = {CLAY_SIZING_FIXED(portrait ? 42.0F : 46.0F),
-                              CLAY_SIZING_FIXED(18.0F)},
-                   .padding = {.left = 3, .right = 3, .top = 1, .bottom = 1},
-                   .childAlignment = {CLAY_ALIGN_X_CENTER,
-                                      CLAY_ALIGN_Y_CENTER}},
-        .backgroundColor = enabled ? (Clay_Color){58.0F, 36.0F, 13.0F, 238.0F}
-                                   : (Clay_Color){31.0F, 25.0F, 18.0F, 218.0F},
-        .cornerRadius = CLAY_CORNER_RADIUS(3),
-        .border = {.color = enabled ? (Clay_Color){213.0F, 151.0F, 64.0F, 220.0F}
-                                    : (Clay_Color){102.0F, 83.0F, 58.0F, 180.0F},
-                   .width = {1, 1, 1, 1, 0}},
-        .userData = NT_UI_CLAY_DATA(LAYER_SHOP_ICON)}) {
-    text_label(ctx, text, &label);
-  }
+  const nt_ui_label_style_t price =
+      game_modal_label(portrait ? 9.5F : 10.5F, enabled ? 255.0F : 154.0F,
+                       enabled ? 238.0F : 119.0F, enabled ? 196.0F : 88.0F,
+                       255.0F);
+  nt_ui_button_begin(
+      ctx, NT_UI_DATA_LAYER(LAYER_SHOP_BG), button_id, &button,
+      &(Clay_ElementDeclaration){
+          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+                     .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                     .childGap = 3,
+                     .padding = {.left = 4, .right = 4, .top = 3, .bottom = 4},
+                     .childAlignment = {CLAY_ALIGN_X_CENTER,
+                                        CLAY_ALIGN_Y_CENTER}}},
+      enabled, NULL);
+  text_label(ctx, action_text ? action_text : "", &action);
+  shop_money_icon(ctx, enabled, portrait);
+  text_label(ctx, price_text ? price_text : "", &price);
+  return nt_ui_button_end(ctx);
 }
 
 static bool shop_trade_cell(nt_ui_context_t *ctx, Clay_ElementId item_id,
                             Clay_ElementId action_id,
                             const game_item_definition_t *item,
                             const char *fallback_name, const char *price_text,
-                            const char *status_text, bool enabled,
+                            const char *action_text, bool enabled,
                             bool portrait) {
   const float cell_w = shop_cell_w(portrait);
   const float cell_h = shop_cell_h(portrait);
-  const float icon_size = portrait ? 56.0F : 62.0F;
+  const float icon_size = portrait ? 52.0F : 56.0F;
   const nt_ui_label_style_t name =
       game_modal_label(portrait ? 10.0F : 11.0F, enabled ? 252.0F : 155.0F,
                        enabled ? 230.0F : 139.0F, enabled ? 190.0F : 112.0F,
-                       255.0F);
-  const nt_ui_label_style_t status =
-      game_modal_label(portrait ? 8.5F : 9.5F, enabled ? 203.0F : 128.0F,
-                       enabled ? 174.0F : 109.0F, enabled ? 130.0F : 86.0F,
                        255.0F);
   bool clicked = false;
   CLAY({.id = item_id,
         .layout = {.sizing = {CLAY_SIZING_FIXED(cell_w),
                               CLAY_SIZING_FIXED(cell_h)}}}) {
-    CLAY({.id = action_id,
-          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+    CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                      .padding = {.left = 7, .right = 7, .top = 7, .bottom = 6},
                      .layoutDirection = CLAY_TOP_TO_BOTTOM,
                      .childGap = 4,
@@ -404,17 +419,11 @@ static bool shop_trade_cell(nt_ui_context_t *ctx, Clay_ElementId item_id,
                                       : (Clay_Color){88.0F, 71.0F, 50.0F, 138.0F},
                      .width = {1, 1, 1, 1, 0}},
           .userData = NT_UI_CLAY_DATA(LAYER_SHOP_BG)}) {
-      const int16_t hit_pad[4] = {4, 4, 4, 4};
-      nt_ui_widget_register(ctx, action_id.id, &SHOP_WIDGET_DEF, hit_pad,
-                            enabled);
-      const nt_ui_events_t events =
-          nt_ui_events_padded(ctx, action_id.id, NULL, hit_pad);
       CLAY({.layout = {.sizing = {CLAY_SIZING_FIXED(icon_size),
                                   CLAY_SIZING_FIXED(icon_size)},
                        .childAlignment = {CLAY_ALIGN_X_CENTER,
                                           CLAY_ALIGN_Y_CENTER}}}) {
         shop_item_icon(ctx, item, icon_size, enabled);
-        shop_price_badge(ctx, price_text, enabled, portrait);
       }
       CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0),
                                   CLAY_SIZING_FIXED(portrait ? 24.0F : 26.0F)},
@@ -422,13 +431,14 @@ static bool shop_trade_cell(nt_ui_context_t *ctx, Clay_ElementId item_id,
                                           CLAY_ALIGN_Y_CENTER}}}) {
         text_label(ctx, shop_item_name(item, fallback_name), &name);
       }
-      CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0),
-                                  CLAY_SIZING_FIXED(portrait ? 14.0F : 16.0F)},
+      CLAY({.id = action_id,
+            .layout = {.sizing = {CLAY_SIZING_GROW(0),
+                                  CLAY_SIZING_FIXED(portrait ? 28.0F : 30.0F)},
                        .childAlignment = {CLAY_ALIGN_X_CENTER,
                                           CLAY_ALIGN_Y_CENTER}}}) {
-        text_label(ctx, status_text, &status);
+        clicked = shop_cell_button(ctx, nt_ui_child_id(action_id.id, "button"),
+                                   action_text, price_text, enabled, portrait);
       }
-      clicked = events.clicked && enabled;
     }
   }
   return clicked;
@@ -491,7 +501,7 @@ static const char *locked_reason(const GameState *state,
   return "можно купить";
 }
 
-static void SHOP_UNUSED_FN shop_item_row(nt_ui_context_t *ctx, World *w,
+static SHOP_UNUSED_FN void shop_item_row(nt_ui_context_t *ctx, World *w,
                           const game_shop_definition_t *shop,
                           const game_shop_item_t *shop_item, bool portrait,
                           int index) {
@@ -633,7 +643,7 @@ static const char *shop_sell_locked_reason(const GameState *state,
   return "недоступно";
 }
 
-static void SHOP_UNUSED_FN shop_sell_row(nt_ui_context_t *ctx, World *w, bool portrait,
+static SHOP_UNUSED_FN void shop_sell_row(nt_ui_context_t *ctx, World *w, bool portrait,
                           int index) {
   if (!ctx || !w || !w->player_state || index < 0 ||
       index >= w->player_state->inventory_bag_order_count) {
@@ -732,7 +742,7 @@ static const char *shop_buyback_locked_reason(const GameState *state,
   return "нет места";
 }
 
-static void SHOP_UNUSED_FN shop_buyback_row(nt_ui_context_t *ctx, World *w,
+static SHOP_UNUSED_FN void shop_buyback_row(nt_ui_context_t *ctx, World *w,
                              const game_shop_buyback_entry_t *entry,
                              bool portrait) {
   if (!ctx || !w || !w->player_state || !entry || !entry->used ||
@@ -829,8 +839,7 @@ static void shop_buy_cell(nt_ui_context_t *ctx, World *w,
   char price_buf[24];
   (void)snprintf(price_buf, sizeof price_buf, "%d", shop_item->price_gold);
   if (shop_trade_cell(ctx, item_id, buy_id, item, shop_item->item_id, price_buf,
-                      can_buy ? "Купить" : locked_reason(state, shop_item),
-                      can_buy, portrait)) {
+                      "Купить", can_buy, portrait)) {
     if (game_actions_purchase_shop_item(state, shop->id, shop_item->item_id)) {
       (void)snprintf(s_feedback, sizeof s_feedback, "Куплено: %s",
                      shop_item_name(item, shop_item->item_id));
@@ -865,10 +874,7 @@ static void shop_sell_cell(nt_ui_context_t *ctx, World *w, bool portrait,
   (void)snprintf(price_buf, sizeof price_buf, preview_price > 0 ? "+%d" : "-",
                  preview_price);
   if (shop_trade_cell(ctx, item_id, sell_id, item, instance_id, price_buf,
-                      can_sell ? "Продать"
-                               : shop_sell_locked_reason(state, instance_id,
-                                                         item),
-                      can_sell, portrait)) {
+                      "Продать", can_sell, portrait)) {
     char name_buf[GAME_STATE_STRING_MAX];
     (void)snprintf(name_buf, sizeof name_buf, "%s",
                    shop_item_name(item, instance_id));
@@ -900,11 +906,7 @@ static void shop_buyback_cell(nt_ui_context_t *ctx, World *w,
   char price_buf[24];
   (void)snprintf(price_buf, sizeof price_buf, "%d", preview_price);
   if (shop_trade_cell(ctx, item_id, buyback_id, item, entry->entry_id,
-                      price_buf,
-                      can_rebuy ? "Выкуп"
-                                : shop_buyback_locked_reason(state,
-                                                             preview_price),
-                      can_rebuy, portrait)) {
+                      price_buf, "Выкуп", can_rebuy, portrait)) {
     char name_buf[GAME_STATE_STRING_MAX];
     (void)snprintf(name_buf, sizeof name_buf, "%s",
                    shop_item_name(item, entry->entry_id));

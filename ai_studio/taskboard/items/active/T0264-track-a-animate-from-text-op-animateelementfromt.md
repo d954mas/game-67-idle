@@ -2,8 +2,8 @@
 id: T0264
 title: "Track A: animate-from-text - op animateElementFromText (codex vision authors/patches spec v1), API/CLI parity, inspector text input + auto-play preview"
 status: review
-project: ""
-epic: ""
+project: P001
+epic: E010
 priority: P1
 tags: [canvas, animation]
 created: 2026-07-03
@@ -12,9 +12,14 @@ updated: 2026-07-04
 
 ## What
 
+Implement and review the animate-from-text operation for procedural animation,
+then preserve the useful UX idea after the video-route pivot.
+
 ## Done when
 
-- [ ]
+- [x] animateElementFromText operation, API/CLI parity, and inspector input land.
+- [x] Live verification and pivot note are recorded.
+- [ ] The text-to-motion UX is transferred to the video animation card or closed.
 
 ## Open questions
 
