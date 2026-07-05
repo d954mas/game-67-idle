@@ -45,7 +45,17 @@ typedef struct tutorial_callout_desc_t {
     tutorial_callout_style_t style;
 } tutorial_callout_desc_t;
 
+typedef struct tutorial_finger_desc_t {
+    bool visible;
+    uint32_t slot;
+    float offset_x;
+    float offset_y;
+    float size;
+    uint8_t flip_bits;
+} tutorial_finger_desc_t;
+
 tutorial_callout_style_t tutorial_callout_default_style(bool compact, float max_width);
 void tutorial_callout_ui(nt_ui_context_t *ctx, const tutorial_callout_desc_t *desc);
+void tutorial_finger_ui(nt_ui_context_t *ctx, const tutorial_finger_desc_t *desc);
 
 #endif

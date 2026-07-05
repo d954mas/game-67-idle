@@ -4,6 +4,74 @@
   "status": "draft",
   "shops": [
     {
+      "id": "shop_post_trader_basic",
+      "display_name": "Лавка Поста",
+      "keeper_character_id": "town_trader",
+      "location_id": "hub_last_post",
+      "inventory": [
+        {
+          "item_id": "iron_sword",
+          "price_gold": 12,
+          "requirements": [
+            {
+              "type": "quest_completed",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        },
+        {
+          "item_id": "militia_axe",
+          "price_gold": 13,
+          "requirements": [
+            {
+              "type": "quest_completed",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        },
+        {
+          "item_id": "patched_mail",
+          "price_gold": 14,
+          "requirements": [
+            {
+              "type": "quest_completed",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        },
+        {
+          "item_id": "guard_coat",
+          "price_gold": 10,
+          "requirements": [
+            {
+              "type": "quest_completed",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        },
+        {
+          "item_id": "iron_greaves",
+          "price_gold": 9,
+          "requirements": [
+            {
+              "type": "quest_completed",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        },
+        {
+          "item_id": "runner_wraps",
+          "price_gold": 5,
+          "requirements": [
+            {
+              "type": "quest_completed",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": "shop_blacksmith_basic",
       "display_name": "Кузница",
       "keeper_character_id": "blacksmith",
@@ -20,8 +88,48 @@
           ]
         },
         {
+          "item_id": "militia_axe",
+          "price_gold": 13,
+          "requirements": [
+            {
+              "type": "quest_completed",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        },
+        {
           "item_id": "patched_mail",
           "price_gold": 14,
+          "requirements": [
+            {
+              "type": "quest_completed",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        },
+        {
+          "item_id": "guard_coat",
+          "price_gold": 10,
+          "requirements": [
+            {
+              "type": "quest_completed",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        },
+        {
+          "item_id": "iron_greaves",
+          "price_gold": 9,
+          "requirements": [
+            {
+              "type": "quest_completed",
+              "quest_id": "q001_gate_pass"
+            }
+          ]
+        },
+        {
+          "item_id": "runner_wraps",
+          "price_gold": 5,
           "requirements": [
             {
               "type": "quest_completed",

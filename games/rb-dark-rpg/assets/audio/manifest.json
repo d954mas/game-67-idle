@@ -1,0 +1,160 @@
+{
+  "schema": "ai_studio.game_audio_manifest.v1",
+  "game": "rb-dark-rpg",
+  "format": {
+    "container": "mp3",
+    "codec": "mp3",
+    "sample_rate_hz": 44100,
+    "sfx_channels": 1,
+    "music_channels": 2
+  },
+  "sources": [
+    {
+      "id": "oga-kenney-rpg50",
+      "title": "50 RPG sound effects",
+      "author_vendor": "Kenney",
+      "source_page": "https://opengameart.org/content/50-rpg-sound-effects",
+      "download_url": "https://opengameart.org/sites/default/files/RPGsounds_Kenney.zip",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source_sha256": "3AE398AD63E293F9C450BDA22D5D81C3AF69C74DF66FC1400F33C012C0BBC231"
+    },
+    {
+      "id": "oga-dark-forest-theme",
+      "title": "Dark Forest Theme",
+      "author_vendor": "cynicmusic",
+      "source_page": "https://opengameart.org/content/dark-forest-theme",
+      "download_url": "https://opengameart.org/sites/default/files/GameMusic_ForestTheme_24.mp3",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source_sha256": "C9E83D01741E97A462C44963AFF81645A9C2AA3A7A33E5849114A1399D1B0914"
+    },
+    {
+      "id": "oga-rpg-sound-pack",
+      "title": "RPG Sound Pack",
+      "author_vendor": "artisticdude",
+      "source_page": "https://opengameart.org/content/rpg-sound-pack",
+      "download_url": "https://opengameart.org/sites/default/files/rpg_sound_pack.zip",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source_sha256": "F80754A9C04854E30C9DA89D0186540AD097309D98B41387B6E83029E2601421"
+    },
+    {
+      "id": "project-generated-interface-tones",
+      "title": "rb-dark-rpg generated interface tones",
+      "author_vendor": "OpenAI Codex for rb-dark-rpg",
+      "source_page": "local/generated-by-ffmpeg-aevalsrc",
+      "download_url": "",
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "source_sha256": ""
+    }
+  ],
+  "assets": [
+    {
+      "cue": "music",
+      "file": "music/dark_forest_theme.mp3",
+      "source_id": "oga-dark-forest-theme",
+      "source_file": "GameMusic_ForestTheme_24.mp3",
+      "sha256": "7BE0F848D0B4E73D11663AD148701DBD4488F091CC43D541C003D2A6C3742BD6"
+    },
+    {
+      "cue": "ui_click",
+      "file": "sfx/ui_click.mp3",
+      "source_id": "project-generated-interface-tones",
+      "source_file": "aevalsrc 1320Hz/1980Hz short blip",
+      "sha256": "6810FE7EB5A08D20B5F8EE5674948AB5F5AC050B9D44F7F055BCB19C06A8B325"
+    },
+    {
+      "cue": "dialogue_open",
+      "file": "sfx/dialogue_open.mp3",
+      "source_id": "project-generated-interface-tones",
+      "source_file": "aevalsrc 660Hz/990Hz/1320Hz soft open chime",
+      "sha256": "8E66E66572BC961ADA2B8076B4E33B8B8C24DCD80FC714D4D119CA5A9451CC95"
+    },
+    {
+      "cue": "dialogue_choice",
+      "file": "sfx/dialogue_choice.mp3",
+      "source_id": "project-generated-interface-tones",
+      "source_file": "aevalsrc 1175Hz/1760Hz short choice blip",
+      "sha256": "CBA9036F7355ACB7895940748BF376D642A479264CB36A2A3BA882CE8AAC0013"
+    },
+    {
+      "cue": "gear_select",
+      "file": "sfx/gear_select.mp3",
+      "source_id": "oga-kenney-rpg50",
+      "source_file": "RPGsounds_Kenney/OGG/metalLatch.ogg",
+      "sha256": "C58DE8CAB30E0BDA6ACDBEDF4D41019EB90C0681BB10685A98431EDD466730BD"
+    },
+    {
+      "cue": "gear_equip",
+      "file": "sfx/gear_equip.mp3",
+      "source_id": "oga-kenney-rpg50",
+      "source_file": "RPGsounds_Kenney/OGG/drawKnife1.ogg",
+      "sha256": "763A2CE31EB0B9A9BBFB23B152101D81B31F2E831599CCEECB6041EEABE22AE2"
+    },
+    {
+      "cue": "location_move",
+      "file": "sfx/location_move.mp3",
+      "source_id": "oga-kenney-rpg50",
+      "source_file": "RPGsounds_Kenney/OGG/footstep03.ogg",
+      "sha256": "16404E0D2F45DB27DD87B9CC6EBBFEC530381545795E0001231EA718E02A76CB"
+    },
+    {
+      "cue": "location_inspect",
+      "file": "sfx/location_inspect.mp3",
+      "source_id": "oga-kenney-rpg50",
+      "source_file": "RPGsounds_Kenney/OGG/doorOpen_1.ogg",
+      "sha256": "9C4A778571294F9889EA6005F5BA62202881C806F8B3FE097A17B6D173CB0D76"
+    },
+    {
+      "cue": "heal",
+      "file": "sfx/heal.mp3",
+      "source_id": "oga-rpg-sound-pack",
+      "source_file": "RPG Sound Pack/battle/magic1.wav",
+      "sha256": "A433F785550DF506C852098A69862B2BA1E9D5A74750B1460D8F7783A03EC15C"
+    },
+    {
+      "cue": "combat_start",
+      "file": "sfx/combat_start.mp3",
+      "source_id": "oga-kenney-rpg50",
+      "source_file": "RPGsounds_Kenney/OGG/drawKnife2.ogg",
+      "sha256": "7F46A1C4D894480CFF7C86A1EF3D86E725127FABB8F4AA8955F53F62454E7114"
+    },
+    {
+      "cue": "combat_hit",
+      "file": "sfx/combat_hit.mp3",
+      "source_id": "oga-kenney-rpg50",
+      "source_file": "RPGsounds_Kenney/OGG/knifeSlice2.ogg",
+      "sha256": "C360D70930319957A2D5074176D10FB99AC5DF0FFC821FCAFF01303BF1BCE53C"
+    },
+    {
+      "cue": "combat_victory",
+      "file": "sfx/combat_victory.mp3",
+      "source_id": "oga-kenney-rpg50",
+      "source_file": "RPGsounds_Kenney/OGG/handleCoins.ogg",
+      "sha256": "681D12A1C7488F563DAB5A4F6D26A6F991B886FC4BA8EB2B38D7110045EBB468"
+    },
+    {
+      "cue": "combat_defeat",
+      "file": "sfx/combat_defeat.mp3",
+      "source_id": "oga-kenney-rpg50",
+      "source_file": "RPGsounds_Kenney/OGG/bookClose.ogg",
+      "sha256": "6AB5706EBB817BCD34471CFB8B3A740142B84712365ECFC888D406A1BA7E8AEF"
+    },
+    {
+      "cue": "reward",
+      "file": "sfx/reward.mp3",
+      "source_id": "oga-kenney-rpg50",
+      "source_file": "RPGsounds_Kenney/OGG/handleCoins2.ogg",
+      "sha256": "7C7816111477456D72B41F4F6F7BB6E5ED35FA9C5000A9FEBE92E0C72C682548"
+    },
+    {
+      "cue": "settings",
+      "file": "sfx/settings.mp3",
+      "source_id": "project-generated-interface-tones",
+      "source_file": "aevalsrc 880Hz/1320Hz settings blip",
+      "sha256": "82F3FFD7951A942A27094FFEF00C0E75D5FE582E19DCB26D2C6258A7F5D87129"
+    }
+  ]
+}

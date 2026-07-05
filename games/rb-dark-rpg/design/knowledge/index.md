@@ -37,10 +37,29 @@ Use this as the first stop for durable game-specific knowledge.
   [../combat_mechanics.md](../combat_mechanics.md), and the current structured
   combat contract lives in
   [../data/combat.json](../data/combat.json).
+- First-slice combat/reward loop decisions are locked in
+  [../combat_reward_loop_v1.md](../combat_reward_loop_v1.md): pure autobattle,
+  preparation before combat, immediate deterministic victory rewards, defeat
+  without rewards, healer-based recovery, and reward/result UI expectations.
+- Combat-entry reference notes are captured in
+  [sources/legend_combat_entry_reference_2026-07-04.md](sources/legend_combat_entry_reference_2026-07-04.md):
+  first-slice combat starts from a local place/threat and opens a focused
+  pure-autobattle screen after a pre-fight card; it does not start from the
+  bottom navigation.
 - Dialogue modal reference notes are captured in
   [sources/legacy_of_dragons_dialogue_modal_ref_2026-07-04.md](sources/legacy_of_dragons_dialogue_modal_ref_2026-07-04.md):
   first-slice dialogue should be a centered modal over a dimmed scene, not a
   small side panel.
+- World-map reference notes are captured in
+  [sources/legacy_of_dragons_world_map_reference_2026-07-05.md](sources/legacy_of_dragons_world_map_reference_2026-07-05.md),
+  and the implementation-facing contract lives in
+  [../world_map_v1.md](../world_map_v1.md): the player-facing map should be a
+  visual region atlas with shaped boundaries, roads, landmarks, current/selected
+  state, and NPC/enemy/object markers, not an abstract node graph.
+- World-map art-pipeline notes are captured in
+  [sources/rpg_world_map_art_pipeline_reference_2026-07-05.md](sources/rpg_world_map_art_pipeline_reference_2026-07-05.md):
+  the next map pass should use a painted marker-free atlas base plus a precise
+  runtime overlay, not more final-art drawing through code primitives.
 - Quest structure and state decisions are captured in
   [../quest_system.md](../quest_system.md), with authored quest data in
   [../data/quests.json](../data/quests.json).
@@ -48,6 +67,10 @@ Use this as the first stop for durable game-specific knowledge.
   [../content_model.md](../content_model.md), the local web editor direction is
   captured in [../content_editor_spec.md](../content_editor_spec.md), and the
   loader/editor manifest lives in [../data/content_manifest.json](../data/content_manifest.json).
+- The MVP item and equipment model is captured in
+  [../equipment_item_model.md](../equipment_item_model.md): four equip slots
+  (`weapon`, `armour`, `legs`, `relic`), with broader slot expansion deferred
+  until gameplay proves it is needed.
 - Save-compatible content update rules are captured in
   [content_update_compatibility_rules.md](content_update_compatibility_rules.md):
   after saves exist, quest/item/reward/flag/unlock ids become compatibility
@@ -61,8 +84,8 @@ Use this as the first stop for durable game-specific knowledge.
 
 - Decide whether `rb-dark-rpg` remains only the repo id while the public title
   becomes `Дракон не вернулся`.
-- Choose the first implementation slice: hub screen, map screen, autobattle,
-  quest journal, or clue journal.
+- Implement the first combat flow: pre-fight card -> pure autobattle -> result
+  panel -> quest advancement.
 - Define the first screen layout for `Последний Пост`.
 - Decide the Dragon's true state after Act I: bound, hidden, wounded, used as a
   seal, or another option.

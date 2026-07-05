@@ -3,6 +3,15 @@
 Detect isolated regions on a normalized chroma-key source sheet and emit rects
 for slicing.
 
+## Region rule for chroma-key sheets
+
+`content_bbox` is only the tight detected foreground bounds. The slice `rect`
+must keep a safety band of key-colored background around the visible component.
+Default padding is 8 px; use 8-16 px for UI component sheets and only reduce it
+when neighboring components would overlap after padding. Tight crop regions break
+alpha/matte because the keyer has no background samples at anti-aliased borders,
+which causes eaten edges, green spill, or holes after export.
+
 Current tool:
 
 ```powershell
@@ -21,7 +30,8 @@ The output schema is `ai_studio.raster2d.detected_regions.v1`.
 Each region contains:
 
 - `content_bbox`: tight detected content bounds.
-- `rect`: padded crop rect to use for slicing.
+- `rect`: padded crop rect to use for slicing; for chroma-key sheets this should
+  include key background around the component, not hug the visible edge.
 - `area_px`: foreground pixel count used to filter noise.
 
 In the site flow, this runs after `../background/normalize_background.py`. The

@@ -1,0 +1,12 @@
+2D game UI source sheet for rb-dark-rpg GEAR ITEM overlay icons, real raster image (not code-drawn), 5 columns by 3 rows, exactly 15 separate crop-friendly item icons on a flat pure #00ff00 chroma key background between icons.
+
+Style: dark low-noise fantasy RPG inventory art, rugged border-garrison materials, warm aged bronze accents, charcoal leather, muted desaturated steel, thick readable silhouettes, softly painted but simple, matching the accepted rb-dark-rpg dark RPG HUD icon style. Each output is only the gear item art, isolated on green, with no socket/cell/frame/rectangle behind it. Readable when placed over a separate equipment cell and reduced to 40-52 px.
+
+Row-major item subjects:
+1 old battered sword, 2 padded leather jacket, 3 leather greaves, 4 iron sword, 5 patched chainmail armour,
+6 guard coat, 7 iron greaves, 8 militia axe, 9 runner leg wraps, 10 black sun charm relic,
+11 miller hook weapon, 12 chainmail patch bundle, 13 scavenger knee plates, 14 dragon ash token relic, 15 bent lucky nail relic.
+
+Art notes: old sword is rusty and worn; iron sword is cleaner steel; militia axe has a broad axe head; miller hook is a curved metal hook; padded jacket is quilted brown leather; patched mail is chainmail with visible patches; guard coat is dark red-brown; runner wraps are cloth leg wraps; black sun charm is a dark circular sun emblem; dragon ash token is a worn metal token with ash-gray detail; lucky nail is a bent nail.
+
+Hard negatives: no letters, no numbers, no labels, no readable runes, no watermarks, no skulls, no character portraits, no full inventory screen, no complete UI mockup, no square cell, no rectangle, no frame, no border, no background plate, no baked inventory slot, no tiny scratches, no noisy texture, no neon purple, no beige parchment, no icons touching each other, no drop shadows, no green inside the icons.

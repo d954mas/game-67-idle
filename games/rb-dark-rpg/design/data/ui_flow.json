@@ -17,7 +17,7 @@
     },
     {
       "id": "ash_border_map",
-      "purpose": "Node map of unlocked and fogged locations, with active quest highlight and threat labels."
+      "purpose": "Visual Ash Border region map with unlocked/fogged locations, shaped region boundaries, roads, active quest highlight, local contents, and threat labels."
     },
     {
       "id": "location_old_mill",

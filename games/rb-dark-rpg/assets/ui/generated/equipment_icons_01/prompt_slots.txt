@@ -1,0 +1,10 @@
+2D game UI source sheet for rb-dark-rpg equipment EMPTY SLOT placeholder OVERLAY icons, real raster image (not code-drawn), 4 columns by 3 rows, exactly 12 separate crop-friendly icon glyphs on a flat pure #00ff00 chroma key background between icons.
+
+Style: dark low-noise fantasy RPG interface, rugged border-garrison materials, warm aged bronze, charcoal leather, muted desaturated steel, thick readable silhouettes, softly painted but simple, matching a dark Roblox-like RPG HUD. Each icon is only the dim symbolic slot silhouette, isolated on green, with no socket/cell/frame/rectangle behind it. Readable when placed over a separate equipment cell and reduced to 40-52 px.
+
+Row-major icon subjects:
+1 weapon sword empty slot, 2 offhand shield empty slot, 3 head helmet empty slot, 4 armour cuirass empty slot,
+5 hands gloves empty slot, 6 waist belt empty slot, 7 legs greaves empty slot, 8 feet boots empty slot,
+9 neck amulet empty slot, 10 left ring empty slot plain band, 11 right ring empty slot band with small gem shape, 12 relic token empty slot.
+
+Hard negatives: no letters, no numbers, no labels, no readable runes, no watermarks, no skulls, no character portraits, no full inventory screen, no complete UI mockup, no square cell, no rectangle, no frame, no border, no background plate, no baked inventory slot, no tiny scratches, no noisy texture, no neon purple, no beige parchment, no icons touching each other, no drop shadows, no green inside the icons.

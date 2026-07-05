@@ -177,6 +177,22 @@
       "devapi": "read_write"
     },
     {
+      "path": "equipment.offhand_instance_id",
+      "id": 20,
+      "type": "string?",
+      "default": null,
+      "max_length": 63,
+      "devapi": "read_write"
+    },
+    {
+      "path": "equipment.head_instance_id",
+      "id": 21,
+      "type": "string?",
+      "default": null,
+      "max_length": 63,
+      "devapi": "read_write"
+    },
+    {
       "path": "equipment.armour_instance_id",
       "id": 9,
       "type": "string?",
@@ -185,8 +201,56 @@
       "devapi": "read_write"
     },
     {
+      "path": "equipment.hands_instance_id",
+      "id": 22,
+      "type": "string?",
+      "default": null,
+      "max_length": 63,
+      "devapi": "read_write"
+    },
+    {
+      "path": "equipment.waist_instance_id",
+      "id": 23,
+      "type": "string?",
+      "default": null,
+      "max_length": 63,
+      "devapi": "read_write"
+    },
+    {
       "path": "equipment.charm_instance_id",
       "id": 10,
+      "type": "string?",
+      "default": null,
+      "max_length": 63,
+      "devapi": "read_write"
+    },
+    {
+      "path": "equipment.feet_instance_id",
+      "id": 24,
+      "type": "string?",
+      "default": null,
+      "max_length": 63,
+      "devapi": "read_write"
+    },
+    {
+      "path": "equipment.neck_instance_id",
+      "id": 25,
+      "type": "string?",
+      "default": null,
+      "max_length": 63,
+      "devapi": "read_write"
+    },
+    {
+      "path": "equipment.ring_left_instance_id",
+      "id": 26,
+      "type": "string?",
+      "default": null,
+      "max_length": 63,
+      "devapi": "read_write"
+    },
+    {
+      "path": "equipment.ring_right_instance_id",
+      "id": 27,
       "type": "string?",
       "default": null,
       "max_length": 63,
@@ -255,6 +319,24 @@
       "id": 18,
       "type": "list<string>",
       "max_count": 128,
+      "devapi": "read_write"
+    },
+    {
+      "path": "world.current_location_id",
+      "id": 28,
+      "type": "string",
+      "default": "hub_last_post",
+      "max_length": 63,
+      "devapi": "read_write"
+    },
+    {
+      "path": "world.visited_location_ids",
+      "id": 29,
+      "type": "list<string>",
+      "max_count": 64,
+      "default": [
+        "hub_last_post"
+      ],
       "devapi": "read_write"
     }
   ]

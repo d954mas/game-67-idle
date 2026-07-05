@@ -1,8 +1,10 @@
 #include "scene/scene_interactions.h"
 
 #include "game_dialogue.h"
+#include "game_state.h"
 
 #include <stddef.h>
+#include <string.h>
 
 static const scene_interaction_object_t SCENE_OBJECTS[] = {
     {
@@ -19,6 +21,11 @@ static const scene_interaction_object_t SCENE_OBJECTS[] = {
 
 static bool contains(scene_rect_t r, float x, float y) {
     return x >= (float)r.x && x <= (float)(r.x + r.w) && y >= (float)r.y && y <= (float)(r.y + r.h);
+}
+
+static bool first_scene_location_active(const World *w) {
+    return !w || !w->player_state || w->player_state->world_current_location_id[0] == '\0' ||
+           strcmp(w->player_state->world_current_location_id, "hub_last_post") == 0;
 }
 
 void scene_interactions_init_first_scene(World *w) {
@@ -107,7 +114,7 @@ bool scene_interactions_pointer_captures_pan(const World *w) {
 }
 
 bool scene_interactions_should_show_tutorial_finger(const World *w, scene_object_id_t id) {
-    return w && id != SCENE_OBJECT_ID_NONE && w->first_scene.objective_object_id == id &&
+    return w && first_scene_location_active(w) && id != SCENE_OBJECT_ID_NONE && w->first_scene.objective_object_id == id &&
            !w->first_scene.tutorial_guard_talk_completed && !w->dialogue.open;
 }
 

@@ -21,6 +21,12 @@ label (used for slice filenames and review-sheet labels, de-duplicated with a
 numeric suffix). Polygon points are source-image coordinates; the crop rect stays
 the bounding box while pixels outside the polygon become transparent.
 
+For chroma-key sheets, reviewed crop rects should intentionally include a small
+band of key-colored background around the visible component. The detector default
+is 8 px. Do not tighten regions to the art edge before slicing: key-matte needs
+background pixels around anti-aliased borders, and too-tight crops produce broken
+edges or leftover key spill.
+
 ## Per-region alpha policy (folded in from the old raster2d/alpha)
 
 Alpha is selected per reviewed region:

@@ -118,15 +118,6 @@
           "dialogue_id": "dlg_gate_guard_intro",
           "ui_hint": "Страж стоит у закрытых ворот Последнего Поста.",
           "on_complete": {
-            "grant_items": [
-              "old_sword",
-              "padded_jacket",
-              "leather_greaves"
-            ],
-            "set_flags": [
-              "gate_guard_intro_seen",
-              "starter_gear_received"
-            ],
             "unlock_screens": [
               "equipment"
             ]
@@ -191,15 +182,15 @@
         },
         {
           "id": "clear_gate_scavenger",
-          "title": "Разобраться с падальщиком у ворот",
-          "description": "Страж не откроет проход, пока у ворот шныряет тварь.",
-          "location_id": "hub_gate_outskirts",
+          "title": "Проверить себя на падальщике в клетке",
+          "description": "Страж держит пленного падальщика для короткой проверки боя прямо в городе.",
+          "location_id": "hub_last_post",
           "objective": {
             "type": "win_encounter",
             "encounter_id": "gate_scavenger",
             "count": 1
           },
-          "ui_hint": "Нажми «В бой» у ворот. Бой пройдет автоматически.",
+          "ui_hint": "Открой «Здесь», вкладку «Враги», и начни проверку боя.",
           "blocked_reasons": [
             {
               "id": "missing_weapon",
@@ -266,7 +257,7 @@
         }
       ],
       "completion_rewards": {
-        "xp": 10,
+        "xp": 12,
         "gold": 0,
         "items": [
           "seeker_token"
@@ -314,10 +305,61 @@
         "summary": "Старая мельница не отвечает, а Последнему Посту нужен хлеб. Контракт выглядит простым, пока не появляется знак Черного Солнца.",
         "short_goal": "Добраться до Старой мельницы и вернуть зерно."
       },
-      "steps": [],
+      "steps": [
+        {
+          "id": "accept_bread_contract",
+          "title": "Р’Р·СЏС‚СЊ РєРѕРЅС‚СЂР°РєС‚ Сѓ РЎС‚Р°СЂРѕСЃС‚С‹",
+          "description": "РЎС‚Р°СЂРѕСЃС‚Р° РїСЂРѕСЃРёС‚ РїСЂРѕРІРµСЂРёС‚СЊ РЎС‚Р°СЂСѓСЋ РјРµР»СЊРЅРёС†Сѓ Рё РІРµСЂРЅСѓС‚СЊ Р·РµСЂРЅРѕ РґР»СЏ РџРѕСЃС‚Р°.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "talk_to_npc",
+            "target_id": "elder",
+            "count": 1
+          },
+          "dialogue_id": "dlg_elder_bread_contract",
+          "ui_hint": "РџРѕРіРѕРІРѕСЂРё СЃРѕ РЎС‚Р°СЂРѕСЃС‚РѕР№ РІ РџРѕСЃР»РµРґРЅРµРј РџРѕСЃС‚Рµ."
+        },
+        {
+          "id": "visit_old_mill",
+          "title": "Добраться до Старой мельницы",
+          "description": "Найти Старую мельницу на карте и перейти в локацию.",
+          "location_id": "old_mill",
+          "objective": {
+            "type": "visit_location",
+            "location_id": "old_mill",
+            "count": 1
+          },
+          "ui_hint": "Открой карту и выбери Старую мельницу."
+        },
+        {
+          "id": "inspect_old_mill",
+          "title": "Осмотреть двор мельницы",
+          "description": "Понять, почему мельница не отвечает Последнему Посту.",
+          "location_id": "old_mill",
+          "objective": {
+            "type": "inspect_object",
+            "target_id": "old_mill.black_sun_mark",
+            "count": 1
+          },
+          "ui_hint": "Осмотри заметный знак во дворе мельницы."
+        },
+        {
+          "id": "report_to_elder",
+          "title": "Р’РµСЂРЅСѓС‚СЊСЃСЏ Рє РЎС‚Р°СЂРѕСЃС‚Рµ",
+          "description": "Р—РµСЂРЅРѕ РЅР°Р№РґРµРЅРѕ, РЅРѕ Р·РЅР°Рє РЅР° РјРµР»СЊРЅРёС†Рµ РІР°Р¶РЅРµРµ СЃР°РјРѕРіРѕ РєРѕРЅС‚СЂР°РєС‚Р°.",
+          "location_id": "hub_last_post",
+          "objective": {
+            "type": "return_to_npc",
+            "target_id": "elder",
+            "count": 1
+          },
+          "dialogue_id": "dlg_elder_bread_turn_in",
+          "ui_hint": "Р’РµСЂРЅРёСЃСЊ РІ РџРѕСЃР»РµРґРЅРёР№ РџРѕСЃС‚ Рё СЃРґР°Р№ РЅР°С…РѕРґРєСѓ РЎС‚Р°СЂРѕСЃС‚Рµ."
+        }
+      ],
       "completion_rewards": {
-        "xp": 0,
-        "gold": 0,
+        "xp": 10,
+        "gold": 6,
         "items": [],
         "flags": [],
         "unlocks": {}

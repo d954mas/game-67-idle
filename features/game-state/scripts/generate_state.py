@@ -1048,6 +1048,17 @@ def validate_field_shape(
         raise SystemExit(f"unsupported object field type for {path}: {typ}")
     if is_list_type(typ):
         validate_max_count(field, path)
+        default = field.get("default")
+        if default is not None:
+            if not isinstance(default, list):
+                raise SystemExit(f"{path} list default must be an array")
+            if len(default) > field["max_count"]:
+                raise SystemExit(f"{path} list default exceeds max_count")
+            for entry in default:
+                if not isinstance(entry, str) or not entry:
+                    raise SystemExit(f"{path} list default entries must be non-empty strings")
+                if len(entry) >= schema["string_max"]:
+                    raise SystemExit(f"{path} list default entry exceeds string_max")
         return
     map_name = map_type_name(typ)
     if map_name:
@@ -1570,6 +1581,14 @@ def render_defaults(schema: dict[str, Any]) -> str:
     lines: list[str] = []
     for field in scalar_fields(schema):
         lines.extend(render_scalar_default_assignment(field, "state"))
+    for field in list_fields(schema):
+        default = field.get("default")
+        if not default:
+            continue
+        ident = c_ident(field["path"])
+        for index, value in enumerate(default):
+            lines.append(f"    (void)copy_text(state->{ident}[{index}], sizeof(state->{ident}[{index}]), {c_string(value)});")
+        lines.append(f"    state->{ident}_count = {len(default)};")
     return "\n".join(lines)
 
 

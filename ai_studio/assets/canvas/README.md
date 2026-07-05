@@ -149,6 +149,11 @@ Every capability is one op in `ops.mjs`:
   and an in-source-bounds integer `rect`, while **preserving any extra fields**
   the detector/slicer attach (`content_bbox`, `area_px`, `merged_from`, and any
   future shape field). Journaled, so undo/redo restore the previous regions.
+  For chroma-key source sheets, hand-edited `rect`s must keep key-colored
+  background padding around the visible component (detector default: 8 px; use
+  8-16 px for UI sheets when space allows). `content_bbox` may be tight, but
+  the slicing `rect` must not hug the art edge: Canvas crops the stored rect
+  verbatim, and alpha/matte needs background samples around anti-aliased borders.
 - `setSlice9({ projectId, elementId, insets })` — **(T0233)** set or clear an image
   element's 9-slice insets (`insets` an object `{left,top,right,bottom,scale?}` ->
   validated + stored on `element.slice9`; `insets: null` clears it). Same

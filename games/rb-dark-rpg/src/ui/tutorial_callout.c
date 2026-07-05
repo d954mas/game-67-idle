@@ -1,9 +1,18 @@
 #include "ui/tutorial_callout.h"
 
+#include "generated/game_assets.h"
+#include "nt_pack_format.h"
+#include "resource/nt_resource.h"
+#include "ui/nt_ui_image.h"
 #include "ui/nt_ui_label.h"
 
-#define TUTORIAL_CALLOUT_LAYER_SHADOW 1
-#define TUTORIAL_CALLOUT_LAYER_TEXT 2
+#define TUTORIAL_CALLOUT_LAYER_BG 28
+#define TUTORIAL_CALLOUT_LAYER_SHADOW 29
+#define TUTORIAL_CALLOUT_LAYER_TEXT 30
+#define TUTORIAL_CALLOUT_LAYER_FINGER 31
+
+static nt_resource_t s_ui_atlas;
+static nt_atlas_region_ref_t s_finger_region;
 
 static float clampf(float value, float min_value, float max_value) {
     if (value < min_value) {
@@ -33,6 +42,14 @@ static Clay_FloatingAttachPointType clay_anchor(tutorial_callout_anchor_t anchor
 
 static nt_ui_label_style_t label_style(float font_size, Clay_Color color) {
     return (nt_ui_label_style_t){.font_id = 0, .font_size = font_size, .color = color};
+}
+
+static void ensure_finger_region(void) {
+    if (s_ui_atlas.id != 0U) {
+        return;
+    }
+    s_ui_atlas = nt_resource_request(ASSET_ATLAS_UI, NT_ASSET_ATLAS);
+    s_finger_region = nt_atlas_ref(s_ui_atlas, ASSET_ATLAS_REGION_UI_TUTORIAL_FINGER.value);
 }
 
 static void callout_label(nt_ui_context_t *ctx, uint32_t slot, const char *text, const tutorial_callout_style_t *style) {
@@ -92,7 +109,8 @@ void tutorial_callout_ui(nt_ui_context_t *ctx, const tutorial_callout_desc_t *de
                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
           .backgroundColor = style->background,
           .cornerRadius = CLAY_CORNER_RADIUS(style->corner_radius),
-          .border = {.color = style->border, .width = {1, 1, 1, 1, 0}}}) {
+          .border = {.color = style->border, .width = {1, 1, 1, 1, 0}},
+          .userData = NT_UI_CLAY_DATA(TUTORIAL_CALLOUT_LAYER_BG)}) {
         CLAY({.id = CLAY_IDI("tutorial_callout/tail", desc->slot),
               .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
                            .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_TOP, .parent = CLAY_ATTACH_POINT_CENTER_BOTTOM},
@@ -100,7 +118,25 @@ void tutorial_callout_ui(nt_ui_context_t *ctx, const tutorial_callout_desc_t *de
               .layout = {.sizing = {CLAY_SIZING_FIXED(style->tail_width), CLAY_SIZING_FIXED(style->tail_height)}},
               .backgroundColor = style->background,
               .cornerRadius = CLAY_CORNER_RADIUS(3),
-              .border = {.color = {style->border.r, style->border.g, style->border.b, 130.0F}, .width = {0, 1, 0, 1, 0}}}) {}
+              .border = {.color = {style->border.r, style->border.g, style->border.b, 130.0F}, .width = {0, 1, 0, 1, 0}},
+              .userData = NT_UI_CLAY_DATA(TUTORIAL_CALLOUT_LAYER_BG)}) {}
         callout_label(ctx, desc->slot, desc->text, style);
+    }
+}
+
+void tutorial_finger_ui(nt_ui_context_t *ctx, const tutorial_finger_desc_t *desc) {
+    if (!ctx || !desc || !desc->visible || desc->size <= 0.0F) {
+        return;
+    }
+    ensure_finger_region();
+
+    CLAY({.id = CLAY_IDI("tutorial_callout/finger", desc->slot),
+          .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
+                       .attachPoints = {.element = CLAY_ATTACH_POINT_LEFT_TOP, .parent = CLAY_ATTACH_POINT_LEFT_TOP},
+                       .offset = {desc->offset_x, desc->offset_y}},
+          .layout = {.sizing = {CLAY_SIZING_FIXED(desc->size), CLAY_SIZING_FIXED(desc->size)}}}) {
+        nt_ui_image_style_t style = nt_ui_image_style_defaults();
+        style.flip_bits = desc->flip_bits;
+        nt_ui_image(ctx, NT_UI_DATA_LAYER(TUTORIAL_CALLOUT_LAYER_FINGER), &s_finger_region, &style, NULL);
     }
 }

@@ -103,6 +103,45 @@ class DetectRegionsTest(unittest.TestCase):
             self.assertEqual(data["region_count"], 1)
             self.assertEqual(data["regions"][0]["content_bbox"], [8, 10, 15, 6])
 
+    def test_default_padding_keeps_key_background_around_crop(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "sheet.png"
+            output = root / "regions.json"
+            image = Image.new("RGBA", (48, 40), (0, 255, 0, 255))
+            for y in range(16, 24):
+                for x in range(18, 30):
+                    image.putpixel((x, y), (170, 80, 40, 255))
+            image.save(source)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPT),
+                    "--source",
+                    str(source),
+                    "--key-color",
+                    "#00ff00",
+                    "--key-tolerance",
+                    "0",
+                    "--min-area",
+                    "8",
+                    "--json-output",
+                    str(output),
+                ],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            data = json.loads(output.read_text(encoding="utf-8"))
+            self.assertEqual(data["detection"]["padding"], 8)
+            self.assertEqual(data["regions"][0]["content_bbox"], [18, 16, 12, 8])
+            self.assertEqual(data["regions"][0]["rect"], [10, 8, 28, 24])
+
 
 if __name__ == "__main__":
     unittest.main()

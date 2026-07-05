@@ -65,6 +65,26 @@
       "tags": ["npc", "hub", "vendor", "gear"]
     },
     {
+      "id": "town_trader",
+      "kind": "npc",
+      "display_name": "Торговец",
+      "short_description": "Поставщик раннего снаряжения у Последнего Поста.",
+      "role": "early shopkeeper and gear vendor",
+      "home_location_id": "hub_last_post",
+      "art": {
+        "portrait_asset_id": "asset_portrait_blacksmith",
+        "full_body_asset_id": "asset_character_blacksmith",
+        "dialogue_face_asset_id": "asset_portrait_blacksmith"
+      },
+      "interactions": [
+        {
+          "type": "shop",
+          "shop_id": "shop_post_trader_basic"
+        }
+      ],
+      "tags": ["npc", "hub", "vendor", "shop"]
+    },
+    {
       "id": "elder",
       "kind": "npc",
       "display_name": "Староста",

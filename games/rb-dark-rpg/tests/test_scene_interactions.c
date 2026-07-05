@@ -112,6 +112,23 @@ static void test_release_outside_does_not_complete_tutorial(void) {
     assert(scene_interactions_should_show_tutorial_finger(&w, SCENE_OBJECT_ID_GUARD));
 }
 
+static void test_modal_suppression_clears_press_before_release(void) {
+    World w = {0};
+    GameState state;
+    game_state_init_defaults(&state);
+    w.player_state = &state;
+
+    scene_interactions_update_pointer_state(&w, SCENE_OBJECT_ID_GUARD, true, true, false);
+    assert(w.first_scene.pressed_object_id == SCENE_OBJECT_ID_GUARD);
+
+    scene_interactions_update_pointer_state(&w, SCENE_OBJECT_ID_NONE, false, false, false);
+    assert(w.first_scene.pressed_object_id == SCENE_OBJECT_ID_NONE);
+
+    scene_interactions_update_pointer_state(&w, SCENE_OBJECT_ID_GUARD, false, false, true);
+    assert(w.first_scene.activated_object_id == SCENE_OBJECT_ID_NONE);
+    assert(!w.dialogue.open);
+}
+
 static void test_tutorial_finger_requires_current_objective(void) {
     World w = {0};
     scene_interactions_init_first_scene(&w);
@@ -123,6 +140,27 @@ static void test_tutorial_finger_requires_current_objective(void) {
 
     w.first_scene.objective_object_id = SCENE_OBJECT_ID_GUARD;
     w.first_scene.tutorial_guard_talk_completed = true;
+    assert(!scene_interactions_should_show_tutorial_finger(&w, SCENE_OBJECT_ID_GUARD));
+}
+
+static void test_tutorial_finger_is_hidden_outside_last_post(void) {
+    World w = {0};
+    GameState state;
+    game_state_init_defaults(&state);
+    w.player_state = &state;
+    scene_interactions_init_first_scene(&w);
+    assert(scene_interactions_should_show_tutorial_finger(&w, SCENE_OBJECT_ID_GUARD));
+
+    strncpy(state.world_current_location_id,
+            "hub_gate_outskirts",
+            sizeof state.world_current_location_id - 1);
+    state.world_current_location_id[sizeof state.world_current_location_id - 1] = '\0';
+    assert(!scene_interactions_should_show_tutorial_finger(&w, SCENE_OBJECT_ID_GUARD));
+
+    strncpy(state.world_current_location_id,
+            "old_mill",
+            sizeof state.world_current_location_id - 1);
+    state.world_current_location_id[sizeof state.world_current_location_id - 1] = '\0';
     assert(!scene_interactions_should_show_tutorial_finger(&w, SCENE_OBJECT_ID_GUARD));
 }
 
@@ -149,7 +187,9 @@ int main(void) {
     test_pointer_state_captures_pan_while_pressed();
     test_guard_release_opens_dialogue_without_completing_step();
     test_release_outside_does_not_complete_tutorial();
+    test_modal_suppression_clears_press_before_release();
     test_tutorial_finger_requires_current_objective();
+    test_tutorial_finger_is_hidden_outside_last_post();
     test_hover_without_press_does_not_capture_pan();
     test_unknown_object_has_no_flags();
     return 0;

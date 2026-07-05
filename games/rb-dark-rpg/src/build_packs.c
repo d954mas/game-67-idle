@@ -6,6 +6,7 @@
 #define NT_BUILD_MAX_ASSETS 4096
 #include "nt_builder.h"
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -23,10 +24,18 @@
 #define PANEL_BORDER 10
 #define BUTTON_BORDER 16
 #define BAR_BORDER 8
-#define DIALOGUE_PANEL_BORDER_X 64
-#define DIALOGUE_PANEL_BORDER_Y 58
-#define DIALOGUE_ROW_BORDER_X 58
-#define DIALOGUE_ROW_BORDER_Y 36
+#define DIALOGUE_FRAME_BORDER_X 34
+#define DIALOGUE_FRAME_BORDER_Y 34
+#define DIALOGUE_BODY_BORDER 22
+#define DIALOGUE_HEADER_BORDER_X 34
+#define DIALOGUE_HEADER_BORDER_Y 18
+#define DIALOGUE_OBJECTIVE_BORDER_X 32
+#define DIALOGUE_OBJECTIVE_BORDER_Y 30
+#define DIALOGUE_REWARD_BORDER 22
+#define DIALOGUE_ANSWER_BORDER_X 44
+#define DIALOGUE_ANSWER_BORDER_Y 24
+#define DIALOGUE_DIVIDER_BORDER_X 16
+#define DIALOGUE_DIVIDER_BORDER_Y 8
 
 // Russian UI text must be packed into the engine font; shape/pixel text is only
 // a debug fallback. Basic Cyrillic + Yo covers the first-screen tutorial copy.
@@ -45,6 +54,27 @@ static char s_path_buf[512];
 static const char *pack_path(const char *dir, const char *name) {
     (void)snprintf(s_path_buf, sizeof(s_path_buf), "%s/%s", dir, name);
     return s_path_buf;
+}
+
+typedef struct UiSpriteAsset {
+    const char *name;
+    const char *path;
+} UiSpriteAsset;
+
+static void add_centered_ui_sprite(NtBuilderContext *ctx, const char *name, const char *path) {
+    nt_atlas_sprite_opts_t opts = nt_atlas_sprite_opts_defaults();
+    opts.name = name;
+    opts.origin_x = 0.5F;
+    opts.origin_y = 0.5F;
+    opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
+    opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
+    nt_builder_atlas_add(ctx, path, &opts);
+}
+
+static void add_centered_ui_sprites(NtBuilderContext *ctx, const UiSpriteAsset *assets, size_t count) {
+    for (size_t i = 0; i < count; ++i) {
+        add_centered_ui_sprite(ctx, assets[i].name, assets[i].path);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -184,6 +214,8 @@ int main(int argc, char *argv[]) {
 
     top_hud_opts.name = "seeker_portrait_hud";
     nt_builder_atlas_add(ctx, "assets/ui/seeker_portrait_hud.png", &top_hud_opts);
+    top_hud_opts.name = "gold_coin_hud";
+    nt_builder_atlas_add(ctx, "assets/ui/gold_coin_hud.png", &top_hud_opts);
 
     top_hud_opts.name = "top_hud_portrait_frame";
     nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_portrait_frame.png", &top_hud_opts);
@@ -212,27 +244,132 @@ int main(int argc, char *argv[]) {
     top_hud_opts.name = "top_hud_icon_supplies";
     nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_icon_supplies.png", &top_hud_opts);
 
-    nt_atlas_sprite_opts_t dialogue_panel_opts = nt_atlas_sprite_opts_defaults();
-    dialogue_panel_opts.origin_x = 0.5F;
-    dialogue_panel_opts.origin_y = 0.5F;
-    dialogue_panel_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
-    dialogue_panel_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
-    dialogue_panel_opts.slice9_left = dialogue_panel_opts.slice9_right = DIALOGUE_PANEL_BORDER_X;
-    dialogue_panel_opts.slice9_top = dialogue_panel_opts.slice9_bottom = DIALOGUE_PANEL_BORDER_Y;
-    dialogue_panel_opts.name = "dialogue_panel";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/roblox_blocky_rpg_tiles_01/bottom_sheet_panel.png", &dialogue_panel_opts);
+    nt_atlas_sprite_opts_t world_map_opts = nt_atlas_sprite_opts_defaults();
+    world_map_opts.origin_x = 0.5F;
+    world_map_opts.origin_y = 0.5F;
+    world_map_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
+    world_map_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
+    world_map_opts.name = "ash_border_map";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/world_map_ash_border_01/ash_border_map.png", &world_map_opts);
 
-    nt_atlas_sprite_opts_t dialogue_row_opts = nt_atlas_sprite_opts_defaults();
-    dialogue_row_opts.origin_x = 0.5F;
-    dialogue_row_opts.origin_y = 0.5F;
-    dialogue_row_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
-    dialogue_row_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
-    dialogue_row_opts.slice9_left = dialogue_row_opts.slice9_right = DIALOGUE_ROW_BORDER_X;
-    dialogue_row_opts.slice9_top = dialogue_row_opts.slice9_bottom = DIALOGUE_ROW_BORDER_Y;
-    dialogue_row_opts.name = "dialogue_row";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/roblox_blocky_rpg_tiles_01/list_row_normal.png", &dialogue_row_opts);
-    dialogue_row_opts.name = "dialogue_row_active";
-    nt_builder_atlas_add(ctx, "assets/ui/generated/roblox_blocky_rpg_tiles_01/list_row_active.png", &dialogue_row_opts);
+    const UiSpriteAsset combat_actor_assets[] = {
+        {"combat_actor_hero", "assets/ui/generated/combat_actor_sprites_01/slices/combat_actor_hero.png"},
+        {"combat_actor_gate_scavenger",
+         "assets/ui/generated/combat_actor_sprites_01/slices/combat_actor_gate_scavenger.png"},
+        {"combat_actor_mill_scavenger",
+         "assets/ui/generated/combat_actor_sprites_01/slices/combat_actor_mill_scavenger.png"},
+    };
+    add_centered_ui_sprites(ctx, combat_actor_assets, sizeof(combat_actor_assets) / sizeof(combat_actor_assets[0]));
+
+    const UiSpriteAsset equipment_icon_assets[] = {
+        {"asset_equipment_slot_cell",
+         "assets/ui/generated/equipment_icons_01/cell/asset_equipment_slot_cell.png"},
+        {"asset_slot_icon_weapon_empty",
+         "assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_weapon_empty.png"},
+        {"asset_slot_icon_offhand_empty",
+         "assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_offhand_empty.png"},
+        {"asset_slot_icon_head_empty",
+         "assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_head_empty.png"},
+        {"asset_slot_icon_armour_empty",
+         "assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_armour_empty.png"},
+        {"asset_slot_icon_hands_empty",
+         "assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_hands_empty.png"},
+        {"asset_slot_icon_waist_empty",
+         "assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_waist_empty.png"},
+        {"asset_slot_icon_legs_empty",
+         "assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_legs_empty.png"},
+        {"asset_slot_icon_feet_empty",
+         "assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_feet_empty.png"},
+        {"asset_slot_icon_neck_empty",
+         "assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_neck_empty.png"},
+        {"asset_slot_icon_ring_left_empty",
+         "assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_ring_left_empty.png"},
+        {"asset_slot_icon_ring_right_empty",
+         "assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_ring_right_empty.png"},
+        {"asset_slot_icon_relic_empty",
+         "assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_relic_empty.png"},
+        {"asset_icon_old_sword", "assets/ui/generated/equipment_icons_01/gear/asset_icon_old_sword.png"},
+        {"asset_icon_padded_jacket", "assets/ui/generated/equipment_icons_01/gear/asset_icon_padded_jacket.png"},
+        {"asset_icon_leather_greaves",
+         "assets/ui/generated/equipment_icons_01/gear/asset_icon_leather_greaves.png"},
+        {"asset_icon_iron_sword", "assets/ui/generated/equipment_icons_01/gear/asset_icon_iron_sword.png"},
+        {"asset_icon_patched_mail", "assets/ui/generated/equipment_icons_01/gear/asset_icon_patched_mail.png"},
+        {"asset_icon_guard_coat", "assets/ui/generated/equipment_icons_01/gear/asset_icon_guard_coat.png"},
+        {"asset_icon_iron_greaves", "assets/ui/generated/equipment_icons_01/gear/asset_icon_iron_greaves.png"},
+        {"asset_icon_militia_axe", "assets/ui/generated/equipment_icons_01/gear/asset_icon_militia_axe.png"},
+        {"asset_icon_runner_wraps", "assets/ui/generated/equipment_icons_01/gear/asset_icon_runner_wraps.png"},
+        {"asset_icon_black_sun_charm",
+         "assets/ui/generated/equipment_icons_01/gear/asset_icon_black_sun_charm.png"},
+        {"asset_icon_miller_hook", "assets/ui/generated/equipment_icons_01/gear/asset_icon_miller_hook.png"},
+        {"asset_icon_chain_patches", "assets/ui/generated/equipment_icons_01/gear/asset_icon_chain_patches.png"},
+        {"asset_icon_scavenger_knee_plates",
+         "assets/ui/generated/equipment_icons_01/gear/asset_icon_scavenger_knee_plates.png"},
+        {"asset_icon_dragon_ash_token",
+         "assets/ui/generated/equipment_icons_01/gear/asset_icon_dragon_ash_token.png"},
+        {"asset_icon_miller_lucky_nail",
+         "assets/ui/generated/equipment_icons_01/gear/asset_icon_miller_lucky_nail.png"},
+        {"asset_reward_xp", "assets/ui/generated/equipment_icons_01/rewards/asset_reward_xp.png"},
+        {"asset_icon_seeker_token", "assets/ui/generated/equipment_icons_01/items/asset_icon_seeker_token.png"},
+        {"asset_icon_grain_sacks", "assets/ui/generated/equipment_icons_01/items/asset_icon_grain_sacks.png"},
+        {"asset_icon_contract_progress",
+         "assets/ui/generated/equipment_icons_01/items/asset_icon_contract_progress.png"},
+        {"asset_icon_clue_fragment", "assets/ui/generated/equipment_icons_01/items/asset_icon_clue_fragment.png"},
+        {"asset_icon_burned_chain_bracket",
+         "assets/ui/generated/equipment_icons_01/items/asset_icon_burned_chain_bracket.png"},
+        {"asset_icon_order_scrap", "assets/ui/generated/equipment_icons_01/items/asset_icon_order_scrap.png"},
+    };
+    add_centered_ui_sprites(ctx, equipment_icon_assets,
+                            sizeof(equipment_icon_assets) / sizeof(equipment_icon_assets[0]));
+
+    nt_atlas_sprite_opts_t dialogue_frame_opts = nt_atlas_sprite_opts_defaults();
+    dialogue_frame_opts.origin_x = 0.5F;
+    dialogue_frame_opts.origin_y = 0.5F;
+    dialogue_frame_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
+    dialogue_frame_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
+    dialogue_frame_opts.slice9_left = dialogue_frame_opts.slice9_right = DIALOGUE_FRAME_BORDER_X;
+    dialogue_frame_opts.slice9_top = dialogue_frame_opts.slice9_bottom = DIALOGUE_FRAME_BORDER_Y;
+    dialogue_frame_opts.name = "dialogue_outer_frame";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_outer_frame.png", &dialogue_frame_opts);
+    dialogue_frame_opts.name = "dialogue_portrait_frame";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_portrait_frame.png", &dialogue_frame_opts);
+
+    nt_atlas_sprite_opts_t dialogue_body_opts = dialogue_frame_opts;
+    dialogue_body_opts.slice9_left = dialogue_body_opts.slice9_right = DIALOGUE_BODY_BORDER;
+    dialogue_body_opts.slice9_top = dialogue_body_opts.slice9_bottom = DIALOGUE_BODY_BORDER;
+    dialogue_body_opts.name = "dialogue_body_panel";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_body_panel.png", &dialogue_body_opts);
+
+    nt_atlas_sprite_opts_t dialogue_header_opts = dialogue_frame_opts;
+    dialogue_header_opts.slice9_left = dialogue_header_opts.slice9_right = DIALOGUE_HEADER_BORDER_X;
+    dialogue_header_opts.slice9_top = dialogue_header_opts.slice9_bottom = DIALOGUE_HEADER_BORDER_Y;
+    dialogue_header_opts.name = "dialogue_header_plaque";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_header_plaque.png", &dialogue_header_opts);
+
+    nt_atlas_sprite_opts_t dialogue_objective_opts = dialogue_frame_opts;
+    dialogue_objective_opts.slice9_left = dialogue_objective_opts.slice9_right = DIALOGUE_OBJECTIVE_BORDER_X;
+    dialogue_objective_opts.slice9_top = dialogue_objective_opts.slice9_bottom = DIALOGUE_OBJECTIVE_BORDER_Y;
+    dialogue_objective_opts.name = "dialogue_objective_panel";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_objective_panel.png", &dialogue_objective_opts);
+
+    nt_atlas_sprite_opts_t dialogue_reward_opts = dialogue_frame_opts;
+    dialogue_reward_opts.slice9_left = dialogue_reward_opts.slice9_right = DIALOGUE_REWARD_BORDER;
+    dialogue_reward_opts.slice9_top = dialogue_reward_opts.slice9_bottom = DIALOGUE_REWARD_BORDER;
+    dialogue_reward_opts.name = "dialogue_reward_cell";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_reward_cell.png", &dialogue_reward_opts);
+
+    nt_atlas_sprite_opts_t dialogue_answer_opts = dialogue_frame_opts;
+    dialogue_answer_opts.slice9_left = dialogue_answer_opts.slice9_right = DIALOGUE_ANSWER_BORDER_X;
+    dialogue_answer_opts.slice9_top = dialogue_answer_opts.slice9_bottom = DIALOGUE_ANSWER_BORDER_Y;
+    dialogue_answer_opts.name = "dialogue_answer_normal";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_answer_normal.png", &dialogue_answer_opts);
+    dialogue_answer_opts.name = "dialogue_answer_primary";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_answer_primary.png", &dialogue_answer_opts);
+
+    nt_atlas_sprite_opts_t dialogue_divider_opts = dialogue_frame_opts;
+    dialogue_divider_opts.slice9_left = dialogue_divider_opts.slice9_right = DIALOGUE_DIVIDER_BORDER_X;
+    dialogue_divider_opts.slice9_top = dialogue_divider_opts.slice9_bottom = DIALOGUE_DIVIDER_BORDER_Y;
+    dialogue_divider_opts.name = "dialogue_divider";
+    nt_builder_atlas_add(ctx, "assets/ui/generated/dialogue_panel_03/slices/dialogue_divider.png", &dialogue_divider_opts);
 
     nt_atlas_sprite_opts_t panel_opts = nt_atlas_sprite_opts_defaults();
     panel_opts.name = "panel";
@@ -282,6 +419,10 @@ int main(int argc, char *argv[]) {
     bg_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
     bg_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
     nt_builder_atlas_add(ctx, "assets/scenes/last_post_background_candidate05_1280x700.png", &bg_opts);
+    bg_opts.name = "gate_outskirts_background";
+    nt_builder_atlas_add(ctx, "assets/scenes/gate_outskirts_background_1280x700.png", &bg_opts);
+    bg_opts.name = "old_mill_background";
+    nt_builder_atlas_add(ctx, "assets/scenes/old_mill_background_1280x700.png", &bg_opts);
 
     nt_atlas_sprite_opts_t guard_opts = nt_atlas_sprite_opts_defaults();
     guard_opts.name = "last_post_guard";
@@ -291,6 +432,15 @@ int main(int argc, char *argv[]) {
     guard_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
     guard_opts.max_vertices = 12;
     nt_builder_atlas_add(ctx, "assets/characters/last_post_guard_05.png", &guard_opts);
+
+    nt_atlas_sprite_opts_t location_prop_opts = nt_atlas_sprite_opts_defaults();
+    location_prop_opts.name = "black_sun_mark";
+    location_prop_opts.origin_x = 0.5F;
+    location_prop_opts.origin_y = 0.5F;
+    location_prop_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
+    location_prop_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
+    nt_builder_atlas_add(ctx, "assets/ui/generated/location_object_sprites_01/asset_object_black_sun_mark.png",
+                         &location_prop_opts);
 
     nt_builder_end_atlas(ctx);
 

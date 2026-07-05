@@ -2,6 +2,7 @@
 #define GAME_WORLD_H
 
 #include "entity/nt_entity.h"
+#include "game_combat.h"
 #include "game_dialogue.h"
 #include "scene/scene_interaction_types.h"
 
@@ -37,11 +38,31 @@ typedef struct FirstSceneState {
 
 typedef struct GameState GameState;
 
+typedef enum CombatFlowPhase {
+    COMBAT_FLOW_NONE = 0,
+    COMBAT_FLOW_PREFIGHT,
+    COMBAT_FLOW_RUNNING,
+    COMBAT_FLOW_RESULT,
+} CombatFlowPhase;
+
+typedef struct CombatFlowState {
+    CombatFlowPhase phase;
+    char encounter_id[GAME_STATE_STRING_MAX];
+    game_combat_stats_t player_stats;
+    game_combat_result_t preview_result;
+    game_combat_result_t result;
+    float phase_started_at;
+    float visual_duration_seconds;
+    int last_audio_event_index;
+    bool result_applied;
+} CombatFlowState;
+
 typedef struct World {
     float time_seconds;
     FirstSceneState first_scene;
     dialogue_runtime_t dialogue;
     GameState *player_state;
+    CombatFlowState combat;
 
     float player_x, player_z, player_yaw;
     nt_entity_t player_entity;

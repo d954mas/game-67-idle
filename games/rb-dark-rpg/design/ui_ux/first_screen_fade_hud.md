@@ -94,7 +94,7 @@ Rationale:
 
 Definitions:
 
-- `Карта`: world/node map and travel between unlocked locations;
+- `Карта`: visual region map and travel between unlocked locations;
 - `Дневник`: quests, step history, notes, and later clue records;
 - `Снаряжение`;
 - `Место`: contextual list of objects/actions in the current scene;

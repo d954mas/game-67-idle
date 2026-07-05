@@ -1,0 +1,22 @@
+{
+  "pack": "rb-dark-rpg-audio-cc0",
+  "title": "rb-dark-rpg CC0 Audio",
+  "source": "opengameart",
+  "kind": "audio",
+  "origin": "sourced",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "license_kind": "cc",
+  "attribution_required": "false",
+  "notice_required": "false",
+  "publish": "true",
+  "redistribution_allowed": "true",
+  "commercial_use": "true",
+  "modification_allowed": "true",
+  "source_page": "https://opengameart.org/content/50-rpg-sound-effects",
+  "author_vendor": "OpenAI Codex; Kenney; cynicmusic; artisticdude",
+  "tags": ["rb-dark-rpg", "audio", "sfx", "music", "dark-fantasy"],
+  "genre": ["dark fantasy", "rpg"],
+  "style": ["dark forest", "interface tone", "metal", "combat", "footstep"],
+  "description": "CC0 MP3 music and SFX cues normalized for rb-dark-rpg web and native playback. UI and dialogue cues are generated interface tones; physical foley is reserved for movement, combat, gear, and rewards."
+}

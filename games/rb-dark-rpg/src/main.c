@@ -41,6 +41,7 @@
 #endif
 
 #include "render/capture.h"
+#include "game_audio.h"
 #include "render/render_2d_runtime.h"
 #include "render/render_hub_scene.h"
 #include "render/render_mesh.h"
@@ -224,7 +225,9 @@ static void devapi_shutdown_runtime(void) {
 static bool devapi_start(void) { return true; }
 static void devapi_update_frame(void) {}
 static void devapi_sample_metrics(double frame_begin) { (void)frame_begin; }
+#ifndef NT_PLATFORM_WEB
 static void devapi_shutdown_runtime(void) {}
+#endif
 #endif
 
 // The frame loop: poll, advance the world, render. Calls subsystems only.
@@ -240,6 +243,8 @@ static void frame(void) {
 #endif
     nt_resource_step();
     nt_material_step();
+    game_audio_set_volume(sys_settings_master(), sys_settings_music(), sys_settings_sfx());
+    game_audio_update();
     s_world.time_seconds += g_nt_app.dt;
 
     // game systems update the world (settings logic now lives in its nt_ui build)
@@ -336,6 +341,7 @@ int main(int argc, char **argv) {
 
     nt_http_init();
     nt_fs_init();
+    game_audio_init();
     nt_hash_init(&(nt_hash_desc_t){0});
     nt_resource_init(&(nt_resource_desc_t){0});
     nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader, nt_gfx_deactivate_shader);
@@ -400,6 +406,8 @@ int main(int argc, char **argv) {
     // engine UI stack (sprite renderer + slice9 atlas + nt_ui ctx); reuses the font + text material
     render_hub_scene_init();
     ui_runtime_init(s_text_material, s_font, s_font_resource);
+    game_audio_set_volume(sys_settings_master(), sys_settings_music(), sys_settings_sfx());
+    game_audio_start_music();
 
     if (!devapi_start()) {
         return 1;
@@ -417,6 +425,7 @@ int main(int argc, char **argv) {
     render_hub_scene_shutdown();
     ui_runtime_shutdown();
     render_2d_runtime_shutdown();
+    game_audio_shutdown();
     nt_mem_scratch_shutdown();
     nt_text_renderer_shutdown();
     nt_font_destroy(s_font);

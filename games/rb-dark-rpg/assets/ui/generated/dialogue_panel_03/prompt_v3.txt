@@ -1,0 +1,49 @@
+Use your built-in image generation to create one real raster image, not code-drawn. Save the PNG to C:\projects\game-67-idle\tmp\rb_dark_rpg_dialogue_panel_gen_03.png.
+
+Do not write or run any drawing code. Do not use SVG, PIL/Pillow, ImageMagick, System.Drawing, matplotlib, cairo, or vector drawing. If image generation is unavailable, print IMAGEGEN UNAVAILABLE and stop.
+
+Use these local image references:
+- Most important accepted bottom navigation buttons/icons style reference: C:\projects\game-67-idle\games\rb-dark-rpg\assets\ui\generated\garrison_nav_tokens_11\bottom_nav_component_sheet_11.png
+- Accepted equipment bottom button: C:\projects\game-67-idle\games\rb-dark-rpg\assets\ui\generated\garrison_nav_tokens_11\slices\nav_v11_equipment.png
+- Accepted journal bottom button: C:\projects\game-67-idle\games\rb-dark-rpg\assets\ui\generated\garrison_nav_tokens_11\slices\nav_v11_journal.png
+- Accepted map bottom button: C:\projects\game-67-idle\games\rb-dark-rpg\assets\ui\generated\garrison_nav_tokens_11\slices\nav_v11_map.png
+- Earlier accepted rb-dark-rpg UI material reference: C:\projects\game-67-idle\games\rb-dark-rpg\assets\ui\generated\roblox_blocky_rpg_tiles_01\source_sheet_04.png
+- Accepted top HUD style reference: C:\projects\game-67-idle\games\rb-dark-rpg\assets\ui\generated\top_hud_tokens_02\slices\contact_sheet.png
+- Character mood/color reference: C:\projects\game-67-idle\games\rb-dark-rpg\assets\ui\gate_guard_portrait.png
+- Location mood/color reference: C:\projects\game-67-idle\games\rb-dark-rpg\assets\scenes\last_post_background_candidate05_1280x700.png
+- Negative example, DO NOT repeat its thick choice-button edges: C:\projects\game-67-idle\tmp\rb_dark_rpg_dialogue_responsive_probe\landscape_1280x720.png
+
+Goal:
+Generate a new rb-dark-rpg dialogue UI source sheet. Match the accepted bottom navigation v11 art quality, palette, material rendering, and dark fantasy mood: black leather panels, dark iron bevels, antique bronze/gold accents, muted red leather, readable painterly detail. BUT this is for a dialogue modal, not square nav tiles, so make the construction flatter, wider, thinner, and more elegant.
+
+Canvas: 1536x1024. Flat chroma green background #00ff00 touching every outside edge for later cutout. No alpha required.
+
+ABSOLUTE RULES:
+- NO text, NO letters, NO numbers, NO icons, NO logos, NO symbols, NO watermark.
+- Empty UI surfaces only; runtime will draw all labels and icons.
+- Use bottom nav v11 as STYLE/MATERIAL reference, not shape reference.
+- Do not copy the bottom nav square tile proportions.
+- Do not copy the giant end caps from source_sheet_04.
+- Borders must be thin and slice9-friendly. On long answer rows, border thickness around 4-7% of row height.
+- Answer rows: long, low, elegant, minimal end caps, no giant square blocks.
+- Outer frame: thin enough that it does not consume content space on 390px mobile.
+- Low noise: no filigree, no gothic scrollwork, no skulls, no runes, no heavy grain.
+- Dark UI, not beige parchment.
+
+Generate separated source-sheet parts with clear spacing:
+1. Large dialogue outer frame, landscape 16:9 empty center, thin dark iron/bronze frame, compact corners, subtle warm highlights, slice9-friendly.
+2. Inner body panel surface, broad empty dark leather/wood rectangle, very thin border, calm center, slice9-friendly.
+3. Separate header plaque for quest title, narrow horizontal muted red-brown plaque, thin brass edge, no text, designed to overlap the top frame.
+4. NPC portrait card frame, vertical card with thin border and dark empty center, no portrait inside.
+5. Objective alert panel, muted red-brown body panel with thin warm border and small empty circular marker socket on left, no exclamation mark.
+6. Reward item cell, square empty slot, dark center, thin warm border, same polish level as bottom nav v11 icons but no icon inside.
+7. Answer choice row normal, long horizontal button frame, black/dark-brown leather center, thin border, minimal end caps, no text.
+8. Answer choice row primary, long horizontal button frame, muted deep red leather center, thin brass/bronze border, minimal end caps, no text.
+9. Small divider line / separator strip, thin dark bronze horizontal line.
+
+Composition requirements:
+- Each part isolated with at least 32px green gap around it.
+- Parts must be front-facing orthographic UI, no perspective.
+- Rectangular geometry, clean edges, slice9-friendly.
+- Consistent family across all parts.
+- Runtime text will sit on top, so centers need calm empty space.

@@ -2,6 +2,7 @@
 
 #include "atlas/nt_atlas.h"
 #include "color/nt_color.h"
+#include "game_state.h"
 #include "generated/game_assets.h"
 #include "hash/nt_hash.h"
 #include "material/nt_material.h"
@@ -23,8 +24,11 @@ static nt_resource_t s_background_atlas, s_background_atlas_tex;
 static nt_material_t s_overlay_material, s_background_material, s_mask_glow_material, s_hud_fade_material;
 static uint32_t s_white_region = NT_ATLAS_INVALID_REGION;
 static uint32_t s_tutorial_finger_region = NT_ATLAS_INVALID_REGION;
-static uint32_t s_background_region = NT_ATLAS_INVALID_REGION;
+static uint32_t s_last_post_background_region = NT_ATLAS_INVALID_REGION;
+static uint32_t s_gate_outskirts_background_region = NT_ATLAS_INVALID_REGION;
+static uint32_t s_old_mill_background_region = NT_ATLAS_INVALID_REGION;
 static uint32_t s_guard_region = NT_ATLAS_INVALID_REGION;
+static uint32_t s_black_sun_mark_region = NT_ATLAS_INVALID_REGION;
 
 static nt_hash64_t rid(const char *s) { return nt_hash64_str(s); }
 
@@ -80,24 +84,65 @@ static bool tutorial_finger_ready(void) {
     return s_tutorial_finger_region != NT_ATLAS_INVALID_REGION;
 }
 
-static bool background_ready(void) {
+static const char *current_location_id(const World *w) {
+    return w && w->player_state && w->player_state->world_current_location_id[0] != '\0'
+               ? w->player_state->world_current_location_id
+               : "hub_last_post";
+}
+
+static bool current_location_is(const World *w, const char *id) {
+    return strcmp(current_location_id(w), id) == 0;
+}
+
+static uint32_t scene_atlas_region(uint32_t *cached, nt_hash64_t hash) {
+    if (*cached == NT_ATLAS_INVALID_REGION) {
+        *cached = nt_atlas_find_region(s_background_atlas, hash.value);
+    }
+    return *cached;
+}
+
+static uint32_t background_region_for_world(const World *w) {
     if (!nt_resource_is_ready(s_background_atlas)) {
-        return false;
+        return NT_ATLAS_INVALID_REGION;
     }
-    if (s_background_region == NT_ATLAS_INVALID_REGION) {
-        s_background_region = nt_atlas_find_region(s_background_atlas, ASSET_ATLAS_REGION_HUB_SCENE_LAST_POST_BACKGROUND.value);
+    if (current_location_is(w, "hub_gate_outskirts")) {
+        return scene_atlas_region(&s_gate_outskirts_background_region,
+                                  ASSET_ATLAS_REGION_HUB_SCENE_GATE_OUTSKIRTS_BACKGROUND);
     }
-    return s_background_region != NT_ATLAS_INVALID_REGION && material_ready(s_background_material);
+    if (current_location_is(w, "old_mill")) {
+        return scene_atlas_region(&s_old_mill_background_region,
+                                  ASSET_ATLAS_REGION_HUB_SCENE_OLD_MILL_BACKGROUND);
+    }
+    return scene_atlas_region(&s_last_post_background_region,
+                              ASSET_ATLAS_REGION_HUB_SCENE_LAST_POST_BACKGROUND);
+}
+
+static bool background_ready(const World *w, uint32_t *out_region) {
+    uint32_t region = background_region_for_world(w);
+    if (region == NT_ATLAS_INVALID_REGION && !current_location_is(w, "hub_last_post")) {
+        region = scene_atlas_region(&s_last_post_background_region,
+                                    ASSET_ATLAS_REGION_HUB_SCENE_LAST_POST_BACKGROUND);
+    }
+    if (out_region) {
+        *out_region = region;
+    }
+    return region != NT_ATLAS_INVALID_REGION && material_ready(s_background_material);
 }
 
 static bool guard_ready(void) {
     if (!nt_resource_is_ready(s_background_atlas)) {
         return false;
     }
-    if (s_guard_region == NT_ATLAS_INVALID_REGION) {
-        s_guard_region = nt_atlas_find_region(s_background_atlas, ASSET_ATLAS_REGION_HUB_SCENE_LAST_POST_GUARD.value);
-    }
+    (void)scene_atlas_region(&s_guard_region, ASSET_ATLAS_REGION_HUB_SCENE_LAST_POST_GUARD);
     return s_guard_region != NT_ATLAS_INVALID_REGION && material_ready(s_background_material);
+}
+
+static bool black_sun_mark_ready(void) {
+    if (!nt_resource_is_ready(s_background_atlas)) {
+        return false;
+    }
+    (void)scene_atlas_region(&s_black_sun_mark_region, ASSET_ATLAS_REGION_HUB_SCENE_BLACK_SUN_MARK);
+    return s_black_sun_mark_region != NT_ATLAS_INVALID_REGION && material_ready(s_background_material);
 }
 
 void render_hub_scene_init(void) {
@@ -179,11 +224,11 @@ static void bind_scene_view(scene_view_t view, nt_buffer_t frame_ubo) {
     nt_gfx_bind_uniform_buffer(frame_ubo, 0);
 }
 
-static void draw_background_image(void) {
+static void draw_background_image(uint32_t region) {
     float m[16];
     glm_mat4_identity((vec4 *)m);
     nt_sprite_renderer_set_material(s_background_material);
-    nt_sprite_renderer_emit_region(s_background_atlas, s_background_region, m, 0.0F, 0.0F, 0xFFFFFFFFU, 0U);
+    nt_sprite_renderer_emit_region(s_background_atlas, region, m, 0.0F, 0.0F, 0xFFFFFFFFU, 0U);
     nt_sprite_renderer_flush();
 }
 
@@ -437,6 +482,31 @@ static void draw_scene_object_sprites(const World *w) {
     nt_sprite_renderer_flush();
 }
 
+static void draw_black_sun_mark_prop(void) {
+    if (!black_sun_mark_ready()) {
+        return;
+    }
+
+    nt_atlas_region_handles_t handles;
+    nt_atlas_get_region_handles(s_background_atlas, s_black_sun_mark_region, &handles);
+    if (!handles.region || handles.region->source_h == 0U) {
+        return;
+    }
+
+    const float source_h = (float)handles.region->source_h * handles.ipu;
+    const float scale = 116.0F / source_h;
+    float m[16];
+    glm_mat4_identity((vec4 *)m);
+    m[0] = scale;
+    m[5] = scale;
+    m[12] = 925.0F;
+    m[13] = 348.0F;
+
+    nt_sprite_renderer_set_material(s_background_material);
+    nt_sprite_renderer_emit_region(s_background_atlas, s_black_sun_mark_region, m, 0.5F, 0.5F, 0xFFFFFFFFU, 0U);
+    nt_sprite_renderer_flush();
+}
+
 static void draw_tutorial_finger_for_object(const World *w, const scene_interaction_object_t *object) {
     nt_atlas_region_handles_t handles;
     nt_atlas_get_region_handles(s_overlay_atlas, s_tutorial_finger_region, &handles);
@@ -477,8 +547,10 @@ static void draw_tutorial_fingers(const World *w) {
 }
 
 void render_hub_scene_draw(const World *w, nt_buffer_t frame_ubo) {
-    const bool has_background = background_ready();
-    const bool has_guard = guard_ready();
+    uint32_t background_region = NT_ATLAS_INVALID_REGION;
+    const bool has_background = background_ready(w, &background_region);
+    const bool last_post_scene = current_location_is(w, "hub_last_post");
+    const bool has_guard = last_post_scene && guard_ready();
     const bool has_overlay = overlay_ready();
     if (!has_background && !has_overlay) {
         return;
@@ -498,14 +570,19 @@ void render_hub_scene_draw(const World *w, nt_buffer_t frame_ubo) {
         nt_sprite_renderer_flush();
     }
     if (has_background) {
-        draw_background_image();
+        draw_background_image(background_region);
+    }
+    if (current_location_is(w, "old_mill")) {
+        draw_black_sun_mark_prop();
     }
     if (has_overlay) {
         nt_sprite_renderer_set_material(s_overlay_material);
         if (!has_background) {
             draw_fallback_background();
         }
-        draw_scene_object_affordances(w, has_guard);
+        if (last_post_scene) {
+            draw_scene_object_affordances(w, has_guard);
+        }
         nt_sprite_renderer_flush();
     }
     if (has_guard) {
@@ -517,7 +594,9 @@ void render_hub_scene_draw(const World *w, nt_buffer_t frame_ubo) {
     }
     if (has_overlay) {
         nt_sprite_renderer_set_material(s_overlay_material);
-        draw_tutorial_fingers(w);
+        if (last_post_scene) {
+            draw_tutorial_fingers(w);
+        }
         nt_sprite_renderer_flush();
     }
 }

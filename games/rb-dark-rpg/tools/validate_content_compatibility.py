@@ -12,6 +12,7 @@ from typing import Any
 
 
 ID_RE = re.compile(r"^[a-z0-9_.]+$")
+MAX_ENCOUNTER_REWARD_ITEMS = 4
 
 
 def load_json(path: Path) -> Any:
@@ -128,7 +129,10 @@ def collect_content_ids(game_dir: Path) -> tuple[dict[str, set[str]], dict[str, 
 
     combat = load_json(data_dir / "combat.json")
     for encounter in combat.get("encounters", []):
-        add_id(defined, "encounters", encounter.get("id"))
+        encounter_id = encounter.get("id")
+        add_id(defined, "encounters", encounter_id)
+        if isinstance(encounter_id, str) and encounter_id:
+            defined["reward_ids"].add(f"encounter.{encounter_id}.win")
     collect_recursive_ids(combat, references)
 
     items = load_json(data_dir / "items.json")
@@ -211,6 +215,20 @@ def collect_duplicates(game_dir: Path, errors: list[str]) -> None:
     validate_duplicate_ids("quest step", step_ids, errors)
 
 
+def validate_encounter_rewards(game_dir: Path, errors: list[str]) -> None:
+    combat = load_json(game_dir / "design" / "data" / "combat.json")
+    for encounter in combat.get("encounters", []):
+        encounter_id = encounter.get("id", "<missing>")
+        reward_items = encounter.get("reward_items", [])
+        if not isinstance(reward_items, list):
+            errors.append(f"encounter {encounter_id}: reward_items must be a list")
+            continue
+        if len(reward_items) > MAX_ENCOUNTER_REWARD_ITEMS:
+            errors.append(
+                f"encounter {encounter_id}: reward_items has {len(reward_items)} entries, max is {MAX_ENCOUNTER_REWARD_ITEMS}"
+            )
+
+
 def migration_covers(compat: dict[str, Any], category: str, stable_id: str) -> bool:
     for migration in compat.get("migrations", []):
         if migration.get("category") != category:
@@ -249,6 +267,10 @@ def validate_stable_ids(compat: dict[str, Any], observed: dict[str, set[str]], e
                     f"destructive content change without migration plan: stable_ids.{category} missing {stable_id}"
                 )
 
+    stable_reward_ids = set(stable.get("reward_ids", []))
+    for reward_id in sorted(observed.get("reward_ids", set()) - stable_reward_ids):
+        errors.append(f"stable_ids.reward_ids missing observed persistent reward id: {reward_id}")
+
 
 def validate_status_enum(game_dir: Path, errors: list[str]) -> None:
     quests = load_json(game_dir / "design" / "data" / "quests.json")
@@ -282,6 +304,7 @@ def main(argv: list[str]) -> int:
         compat = load_json(game_dir / "design" / "data" / "content_compatibility.json")
         observed, references = collect_content_ids(game_dir)
         collect_duplicates(game_dir, errors)
+        validate_encounter_rewards(game_dir, errors)
         validate_status_enum(game_dir, errors)
         validate_stable_ids(compat, observed, errors)
         if args.warnings:

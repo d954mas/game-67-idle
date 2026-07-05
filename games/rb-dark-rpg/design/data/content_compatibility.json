@@ -29,41 +29,72 @@
     "items": [
       "black_sun_charm",
       "burned_chain_bracket",
+      "chain_patches",
+      "clue_fragment",
+      "contract_progress",
+      "dragon_ash_token",
       "grain_sacks",
+      "guard_coat",
+      "iron_greaves",
       "iron_sword",
       "leather_greaves",
+      "miller_hook",
+      "miller_lucky_nail",
+      "militia_axe",
       "old_sword",
       "order_scrap",
       "patched_mail",
       "padded_jacket",
-      "seeker_token"
+      "runner_wraps",
+      "scavenger_knee_plates",
+      "seeker_token",
+      "seeker_token_unlock"
     ],
     "quests": [
       "q001_gate_pass",
       "q002_bread_for_post"
     ],
     "quest_steps": [
+      "accept_bread_contract",
       "clear_gate_scavenger",
       "equip_leather_greaves",
       "equip_old_sword",
       "equip_padded_jacket",
+      "inspect_old_mill",
+      "report_to_elder",
       "report_to_gate_guard",
-      "talk_gate_guard"
+      "talk_gate_guard",
+      "visit_old_mill"
     ],
     "dialogues": [
+      "dlg_blacksmith_starter_gear",
       "dlg_council_scribe_placeholder",
+      "dlg_elder_bread_completed",
+      "dlg_elder_bread_contract",
+      "dlg_elder_bread_in_progress",
+      "dlg_elder_bread_turn_in",
       "dlg_gate_guard_intro",
       "dlg_gate_guard_turn_in"
     ],
     "dialogue_choices": [
+      "dlg_blacksmith_starter_gear.close",
       "dlg_council_scribe_placeholder.close",
+      "dlg_elder_bread_contract.accept_bread_contract",
+      "dlg_elder_bread_turn_in.report_bread_contract",
       "dlg_gate_guard_intro.accept",
       "dlg_gate_guard_intro.ask_what_happened",
       "dlg_gate_guard_intro.ask_what_needed",
       "dlg_gate_guard_turn_in.take_token"
     ],
     "reward_ids": [
-      "dlg_gate_guard_intro.accept.immediate"
+      "dlg_elder_bread_turn_in.report.completion",
+      "dlg_gate_guard_intro.accept.immediate",
+      "dlg_gate_guard_turn_in.take_token.completion",
+      "encounter.black_sun_runner.win",
+      "encounter.gate_scavenger.win",
+      "encounter.mill_brute.win",
+      "encounter.mill_scavenger.win",
+      "encounter.night_attacker.win"
     ],
     "flags": [
       "gate_guard_intro_seen",

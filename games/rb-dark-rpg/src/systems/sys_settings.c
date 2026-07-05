@@ -1,9 +1,11 @@
 #include "systems/sys_settings.h"
 
 #include "clay.h"
+#include "game_audio.h"
 #include "generated/game_assets.h"
 #include "nt_pack_format.h"
 #include "resource/nt_resource.h"
+#include "ui/game_modal.h"
 #include "ui/nt_ui_button.h"
 #include "ui/nt_ui_label.h"
 #include "ui/nt_ui_panel.h"
@@ -26,13 +28,20 @@
 #define SETTINGS_PADDING_PORTRAIT 18.0F
 #define SETTINGS_SLIDER_MAX_W 380.0F
 #define SETTINGS_SLIDER_MIN_W 232.0F
+#define SETTINGS_MODAL_ID 0x5E771001U
 
 static bool s_open;
-static float s_master = 0.8F, s_music = 0.7F, s_sfx = 0.9F;
+static int s_dismiss_guard_frames;
+static float s_master = 0.8F, s_music = 0.45F, s_sfx = 0.9F;
 static nt_resource_t s_settings_ui_atlas;
 static nt_atlas_region_ref_t s_settings_gear_region;
 
-void sys_settings_force_open(void) { s_open = true; }
+void sys_settings_force_open(void) {
+    if (!s_open) {
+        s_dismiss_guard_frames = 2;
+    }
+    s_open = true;
+}
 bool sys_settings_is_open(void) { return s_open; }
 float sys_settings_master(void) { return s_master; }
 float sys_settings_music(void) { return s_music; }
@@ -94,10 +103,25 @@ static nt_ui_button_style_t settings_gear_button_style(void) {
 static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, float *value, float slider_w) {
     char buf[48];
     (void)snprintf(buf, sizeof buf, "%s   %d%%", name, (int)(*value * 100.0F + 0.5F));
-    nt_ui_slider_style_t slider_style = g_theme.slider;
+    nt_ui_slider_style_t slider_style = nt_ui_slider_style_defaults();
+    nt_atlas_region_ref_t *white = game_modal_art(GAME_MODAL_ART_WHITE);
+    if (white) {
+        slider_style.states[NT_UI_SLIDER_IDLE].track = *white;
+        slider_style.states[NT_UI_SLIDER_IDLE].fill = *white;
+        slider_style.states[NT_UI_SLIDER_IDLE].thumb = *white;
+    }
+    slider_style.states[NT_UI_SLIDER_IDLE].track_tint = 0xFF0F1722U;
+    slider_style.states[NT_UI_SLIDER_IDLE].fill_tint = 0xFF3879B7U;
+    slider_style.states[NT_UI_SLIDER_IDLE].thumb_tint = 0xFF94C9E8U;
+    slider_style.track_h = 12.0F;
+    slider_style.thumb_w = 18.0F;
+    slider_style.thumb_h = 24.0F;
     slider_style.track_w = slider_w;
+    slider_style.state_speed = 16.0F;
+    slider_style.value_speed = 18.0F;
+    const nt_ui_label_style_t label_style = game_modal_label(16.0F, 246.0F, 222.0F, 176.0F, 255.0F);
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 4}}) {
-        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), buf, &g_theme.label);
+        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), buf, &label_style);
         (void)nt_ui_slider_float(ctx, NT_UI_DATA_LAYER(LAYER_IMG), LAYER_TEXT, nt_ui_id(id), NULL, value, 0.0F, 1.0F, 0.0F, &slider_style,
                                  &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(slider_w), CLAY_SIZING_FIXED(30)}}}, true);
     }
@@ -120,7 +144,14 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
                                &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
                                true, NULL);
             if (nt_ui_button_end(ctx)) {
-                s_open = !s_open;
+                game_audio_play(GAME_AUDIO_CUE_SETTINGS);
+                if (!s_open) {
+                    s_dismiss_guard_frames = 2;
+                    s_open = true;
+                } else {
+                    s_open = false;
+                    s_dismiss_guard_frames = 0;
+                }
             }
         }
     }
@@ -135,15 +166,56 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
     const float panel_padding = portrait_panel ? SETTINGS_PADDING_PORTRAIT : SETTINGS_PADDING_LANDSCAPE;
     const float content_w = panel_w - (panel_padding * 2.0F);
     const float slider_w = clampf(content_w, SETTINGS_SLIDER_MIN_W, SETTINGS_SLIDER_MAX_W);
-    nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(LAYER_BG), &g_theme.panel_region, &g_theme.panel_img,
+    nt_ui_image_style_t panel_image = game_modal_panel_image(portrait_panel);
+    const nt_ui_label_style_t title_style = game_modal_label(24.0F, 255.0F, 238.0F, 202.0F, 255.0F);
+    const nt_ui_label_style_t button_label = game_modal_label(16.0F, 255.0F, 238.0F, 202.0F, 255.0F);
+    const nt_ui_label_style_t danger_label = game_modal_label(16.0F, 255.0F, 238.0F, 202.0F, 255.0F);
+    nt_ui_button_style_t reset_button = game_modal_button_style(false);
+    reset_button.idle.bg_tint = 0xFF5864B4U;
+    reset_button.hover.bg_tint = 0xFF687CD5U;
+    reset_button.pressed.bg_tint = 0xFF394288U;
+    nt_ui_button_style_t close_button = game_modal_button_style(true);
+    bool modal_open = s_open;
+    nt_ui_modal_style_t modal_style = game_modal_style((nt_ui_layer_t)LAYER_BG, true);
+    const bool ignore_close_request = s_dismiss_guard_frames > 0;
+    if (!game_modal_visible(ctx, SETTINGS_MODAL_ID, &modal_style, &modal_open, ignore_close_request)) {
+        s_open = modal_open;
+        if (!s_open) {
+            s_dismiss_guard_frames = 0;
+        }
+        return;
+    }
+    nt_ui_panel_begin(ctx, NT_UI_DATA_LAYER(LAYER_BG), game_modal_art(GAME_MODAL_ART_OUTER_FRAME), &panel_image,
                       &(Clay_ElementDeclaration){
-                          .floating = {.attachTo = CLAY_ATTACH_TO_ROOT, .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER, .parent = CLAY_ATTACH_POINT_CENTER_CENTER}},
                           .layout = {.sizing = {CLAY_SIZING_FIXED(panel_w), CLAY_SIZING_FIT(0)},
                                      .padding = CLAY_PADDING_ALL(panel_padding),
                                      .layoutDirection = CLAY_TOP_TO_BOTTOM,
                                      .childGap = 16,
                                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
-    nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "SETTINGS", &g_theme.title);
+    CLAY({.id = CLAY_ID("settings/body_fill"),
+          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
+                     .padding = CLAY_PADDING_ALL(portrait_panel ? 8 : 10),
+                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                     .childGap = 14,
+                     .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}},
+          .backgroundColor = {18.0F, 12.0F, 9.0F, 255.0F},
+          .cornerRadius = CLAY_CORNER_RADIUS(4),
+          .userData = NT_UI_CLAY_DATA(LAYER_BG)}) {
+    CLAY({.id = CLAY_ID("settings/header"),
+          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
+                     .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                     .childGap = 12,
+                     .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
+        CLAY({.id = CLAY_ID("settings/header_title"),
+              .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}}}) {
+            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Настройки", &title_style);
+        }
+        if (game_modal_close_button(ctx, (nt_ui_layer_t)LAYER_IMG, (nt_ui_layer_t)LAYER_TEXT,
+                                    "settings/close_x", portrait_panel)) {
+            game_audio_play(GAME_AUDIO_CUE_SETTINGS);
+            modal_open = false;
+        }
+    }
 
     volume_row(ctx, "Master", "settings/master", &s_master, slider_w);
     volume_row(ctx, "Music", "settings/music", &s_music, slider_w);
@@ -157,22 +229,24 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
         CLAY({.id = CLAY_ID("settings/reset"), .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(48)}}}) {
             const uint32_t reset_id = nt_ui_id("settings/reset/button");
             const nt_ui_events_cfg_t hold = {.long_press_secs = RESET_HOLD_SECONDS, .double_click = false};
-            nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), reset_id, &g_theme.button_danger,
+            nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), reset_id, &reset_button,
                                &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
                                true, &hold);
             const nt_ui_events_t re = nt_ui_query_events(ctx, reset_id);
             char rlabel[48];
             if (re.hold_progress > 0.0F && re.hold_progress < 1.0F) {
-                (void)snprintf(rlabel, sizeof rlabel, "Hold to reset  %d%%", (int)(re.hold_progress * 100.0F));
+                (void)snprintf(rlabel, sizeof rlabel, "Reset  %d%%", (int)(re.hold_progress * 100.0F));
             } else {
-                (void)snprintf(rlabel, sizeof rlabel, "Hold to reset");
+                (void)snprintf(rlabel, sizeof rlabel, "Reset");
             }
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), rlabel, &g_theme.label);
+            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), rlabel, &danger_label);
             (void)nt_ui_button_end(ctx);
             if (re.long_pressed) {
+                game_audio_play(GAME_AUDIO_CUE_SETTINGS);
                 w->player_x = 0.0F;
                 w->player_z = 0.0F;
                 w->player_yaw = 0.0F;
+                modal_open = false;
                 s_open = false;
             }
         }
@@ -180,14 +254,24 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
         CLAY({.id = CLAY_ID("settings/close"),
               .layout = {.sizing = {portrait_panel ? CLAY_SIZING_GROW(0) : CLAY_SIZING_FIXED(120), CLAY_SIZING_FIXED(48)}}}) {
             const uint32_t close_id = nt_ui_id("settings/close/button");
-            nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), close_id, &g_theme.button,
+            nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), close_id, &close_button,
                                &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
                                true, NULL);
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Close", &g_theme.button_label);
+            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Закрыть", &button_label);
             if (nt_ui_button_end(ctx)) {
-                s_open = false;
+                game_audio_play(GAME_AUDIO_CUE_SETTINGS);
+                modal_open = false;
             }
         }
     }
+    }
     nt_ui_panel_end(ctx);
+    nt_ui_modal_end(ctx);
+    if (s_dismiss_guard_frames > 0) {
+        --s_dismiss_guard_frames;
+    }
+    if (!modal_open) {
+        s_open = false;
+        s_dismiss_guard_frames = 0;
+    }
 }

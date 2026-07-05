@@ -112,6 +112,7 @@ class StateCodegenTests(unittest.TestCase):
                 {"path": "equipment.weapon_instance_id", "id": 8, "type": "string?", "default": None, "max_length": 63},
                 {"path": "quests.quest_states", "id": 9, "type": "map<string,QuestState>", "max_count": 32},
                 {"path": "quests.completed_step_ids", "id": 10, "type": "list<string>", "max_count": 128},
+                {"path": "world.visited_location_ids", "id": 11, "type": "list<string>", "max_count": 64, "default": ["hub_last_post"]},
             ],
         }
         with tempfile.TemporaryDirectory() as tmp:
@@ -125,6 +126,8 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn("typedef struct GameQuestState", text)
         self.assertIn("inventory_stack_instances", text)
         self.assertIn("quests_completed_step_ids", text)
+        self.assertIn("copy_text(state->world_visited_location_ids[0]", text)
+        self.assertIn("state->world_visited_location_ids_count = 1;", text)
         self.assertNotIn("hero_hp_max", text)
 
 

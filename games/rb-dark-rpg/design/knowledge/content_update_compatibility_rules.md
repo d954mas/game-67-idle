@@ -129,6 +129,11 @@ Reward ids recorded in `quests.claimed_reward_ids` are compatibility ids. Do not
 rename them during content edits. Changing a reward id can let old players claim
 the same reward twice or make a valid claim look unclaimed.
 
+Immediate rewards must have one runtime owner. If a dialogue choice grants an
+item through `dialogues.json` effects, the linked quest step must not duplicate
+the same item in `quests.json/on_complete`. The quest can still preview or
+describe the reward, but only one runtime action should grant it.
+
 Flag and unlock ids are also compatibility ids. If a flag is no longer used by
 new content, keep it readable for old saves and mark it deprecated. If a new gate
 replaces it, migrate the old flag to the new one explicitly.

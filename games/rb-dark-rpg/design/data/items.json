@@ -3,6 +3,107 @@
   "game_id": "rb-dark-rpg",
   "status": "draft",
   "stat_model": "Legend-style: vitality, strength, protection, intuition, weapon_damage.",
+  "item_kinds": [
+    "gear",
+    "quest_item",
+    "clue",
+    "consumable",
+    "material"
+  ],
+  "equipment_slots": [
+    {
+      "id": "weapon",
+      "display_name": "Оружие",
+      "mvp": true,
+      "ui_order": 1
+    },
+    {
+      "id": "offhand",
+      "display_name": "Левая рука",
+      "mvp": false,
+      "ui_order": 2
+    },
+    {
+      "id": "head",
+      "display_name": "Шлем",
+      "mvp": false,
+      "ui_order": 3
+    },
+    {
+      "id": "armour",
+      "display_name": "Броня",
+      "mvp": true,
+      "ui_order": 4
+    },
+    {
+      "id": "hands",
+      "display_name": "Перчатки",
+      "mvp": false,
+      "ui_order": 5
+    },
+    {
+      "id": "waist",
+      "display_name": "Пояс",
+      "mvp": false,
+      "ui_order": 6
+    },
+    {
+      "id": "legs",
+      "display_name": "Поножи",
+      "mvp": true,
+      "ui_order": 7
+    },
+    {
+      "id": "feet",
+      "display_name": "Сапоги",
+      "mvp": false,
+      "ui_order": 8
+    },
+    {
+      "id": "neck",
+      "display_name": "Амулет",
+      "mvp": false,
+      "ui_order": 9
+    },
+    {
+      "id": "ring_left",
+      "display_name": "Кольцо I",
+      "mvp": false,
+      "ui_order": 10
+    },
+    {
+      "id": "ring_right",
+      "display_name": "Кольцо II",
+      "mvp": false,
+      "ui_order": 11
+    },
+    {
+      "id": "relic",
+      "display_name": "Знак",
+      "mvp": true,
+      "ui_order": 12
+    }
+  ],
+  "equipment_sets": [
+    {
+      "id": "starter_guard_castoff",
+      "display_name": "Выданное стражей",
+      "level_band": "1",
+      "items": ["old_sword", "padded_jacket", "leather_greaves"]
+    },
+    {
+      "id": "post_militia",
+      "display_name": "Ополчение Поста",
+      "level_band": "2-3",
+      "items": ["iron_sword", "militia_axe", "patched_mail", "guard_coat", "iron_greaves", "runner_wraps", "black_sun_charm"]
+    },
+    {
+      "id": "mill_salvage",
+      "display_name": "Находки у мельницы",
+      "level_band": "2-3",
+      "items": ["miller_hook", "chain_patches", "scavenger_knee_plates", "dragon_ash_token", "miller_lucky_nail"]
+    }
+  ],
   "items": [
     {
       "id": "old_sword",
@@ -12,6 +113,8 @@
       "stackable": false,
       "icon_asset_id": "asset_icon_old_sword",
       "price_gold": 0,
+      "required_level": 1,
+      "equipment_set": "starter_guard_castoff",
       "stats": {
         "weapon_damage": 4
       },
@@ -25,9 +128,11 @@
       "stackable": false,
       "icon_asset_id": "asset_icon_padded_jacket",
       "price_gold": 0,
+      "required_level": 1,
+      "equipment_set": "starter_guard_castoff",
       "stats": {
         "vitality": 6,
-        "protection": 15
+        "protection": 10
       },
       "tags": ["starter", "quest_reward", "armour"]
     },
@@ -39,9 +144,11 @@
       "stackable": false,
       "icon_asset_id": "asset_icon_leather_greaves",
       "price_gold": 0,
+      "required_level": 1,
+      "equipment_set": "starter_guard_castoff",
       "stats": {
         "vitality": 3,
-        "protection": 8
+        "protection": 5
       },
       "tags": ["starter", "quest_reward", "legs"]
     },
@@ -53,6 +160,8 @@
       "stackable": false,
       "icon_asset_id": "asset_icon_iron_sword",
       "price_gold": 12,
+      "required_level": 2,
+      "equipment_set": "post_militia",
       "stats": {
         "weapon_damage": 7
       },
@@ -66,19 +175,89 @@
       "stackable": false,
       "icon_asset_id": "asset_icon_patched_mail",
       "price_gold": 14,
+      "required_level": 2,
+      "equipment_set": "post_militia",
       "stats": {
         "vitality": 10,
-        "protection": 30
+        "protection": 20
       },
       "tags": ["shop", "armour", "upgrade"]
+    },
+    {
+      "id": "guard_coat",
+      "display_name": "Караульный кафтан",
+      "kind": "gear",
+      "slot": "armour",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_guard_coat",
+      "price_gold": 10,
+      "required_level": 2,
+      "equipment_set": "post_militia",
+      "stats": {
+        "vitality": 14,
+        "protection": 12
+      },
+      "tags": ["shop", "armour", "vitality"]
+    },
+    {
+      "id": "iron_greaves",
+      "display_name": "Железные поножи",
+      "kind": "gear",
+      "slot": "legs",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_iron_greaves",
+      "price_gold": 9,
+      "required_level": 2,
+      "equipment_set": "post_militia",
+      "stats": {
+        "vitality": 5,
+        "protection": 8
+      },
+      "tags": ["shop", "legs", "upgrade"]
+    },
+    {
+      "id": "militia_axe",
+      "display_name": "Топор ополченца",
+      "kind": "gear",
+      "slot": "weapon",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_militia_axe",
+      "price_gold": 13,
+      "required_level": 2,
+      "equipment_set": "post_militia",
+      "stats": {
+        "strength": 10,
+        "weapon_damage": 6
+      },
+      "tags": ["shop", "weapon", "strength"]
+    },
+    {
+      "id": "runner_wraps",
+      "display_name": "Обмотки дозорного",
+      "kind": "gear",
+      "slot": "legs",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_runner_wraps",
+      "price_gold": 5,
+      "required_level": 2,
+      "equipment_set": "post_militia",
+      "stats": {
+        "vitality": 2,
+        "protection": 4,
+        "intuition": 3
+      },
+      "tags": ["shop", "legs", "intuition"]
     },
     {
       "id": "black_sun_charm",
       "display_name": "Осколок черного знака",
       "kind": "gear",
-      "slot": "charm",
+      "slot": "relic",
       "stackable": false,
       "icon_asset_id": "asset_icon_black_sun_charm",
+      "price_gold": 0,
+      "required_level": 2,
+      "equipment_set": "post_militia",
       "unlock": {
         "type": "flag",
         "flag_id": "mill_black_sun_clue_found",
@@ -87,7 +266,86 @@
       "stats": {
         "intuition": 4
       },
-      "tags": ["charm", "clue", "crit"]
+      "tags": ["relic", "clue", "crit"]
+    },
+    {
+      "id": "miller_hook",
+      "display_name": "Мельничный крюк",
+      "kind": "gear",
+      "slot": "weapon",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_miller_hook",
+      "price_gold": 0,
+      "required_level": 2,
+      "equipment_set": "mill_salvage",
+      "stats": {
+        "weapon_damage": 5,
+        "intuition": 2
+      },
+      "tags": ["drop", "weapon", "old_mill", "intuition"]
+    },
+    {
+      "id": "chain_patches",
+      "display_name": "Кольчужные заплаты",
+      "kind": "gear",
+      "slot": "armour",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_chain_patches",
+      "price_gold": 0,
+      "required_level": 2,
+      "equipment_set": "mill_salvage",
+      "stats": {
+        "vitality": 6,
+        "protection": 22
+      },
+      "tags": ["drop", "armour", "old_mill", "protection"]
+    },
+    {
+      "id": "scavenger_knee_plates",
+      "display_name": "Наколенники падальщика",
+      "kind": "gear",
+      "slot": "legs",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_scavenger_knee_plates",
+      "price_gold": 0,
+      "required_level": 2,
+      "equipment_set": "mill_salvage",
+      "stats": {
+        "vitality": 4,
+        "protection": 10
+      },
+      "tags": ["drop", "legs", "old_mill", "protection"]
+    },
+    {
+      "id": "dragon_ash_token",
+      "display_name": "Жетон с пеплом Дракона",
+      "kind": "gear",
+      "slot": "relic",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_dragon_ash_token",
+      "price_gold": 0,
+      "required_level": 2,
+      "equipment_set": "mill_salvage",
+      "stats": {
+        "vitality": 2,
+        "intuition": 2
+      },
+      "tags": ["relic", "old_mill", "dragon", "survival"]
+    },
+    {
+      "id": "miller_lucky_nail",
+      "display_name": "Счастливый гвоздь мельника",
+      "kind": "gear",
+      "slot": "relic",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_miller_lucky_nail",
+      "price_gold": 0,
+      "required_level": 2,
+      "equipment_set": "mill_salvage",
+      "stats": {
+        "protection": 4
+      },
+      "tags": ["relic", "old_mill", "protection"]
     },
     {
       "id": "seeker_token",
@@ -105,6 +363,32 @@
       "max_stack": 10,
       "icon_asset_id": "asset_icon_grain_sacks",
       "tags": ["quest", "old_mill", "contract"]
+    },
+    {
+      "id": "contract_progress",
+      "display_name": "Отметка контракта",
+      "kind": "quest_item",
+      "stackable": true,
+      "max_stack": 99,
+      "icon_asset_id": "asset_icon_contract_progress",
+      "tags": ["quest", "contract", "progress_marker"]
+    },
+    {
+      "id": "seeker_token_unlock",
+      "display_name": "Право на жетон",
+      "kind": "quest_item",
+      "stackable": false,
+      "icon_asset_id": "asset_icon_seeker_token",
+      "tags": ["quest", "internal", "gate_access"]
+    },
+    {
+      "id": "clue_fragment",
+      "display_name": "Обрывок улики",
+      "kind": "clue",
+      "stackable": true,
+      "max_stack": 10,
+      "icon_asset_id": "asset_icon_clue_fragment",
+      "tags": ["clue", "black_sun", "fragment"]
     },
     {
       "id": "burned_chain_bracket",

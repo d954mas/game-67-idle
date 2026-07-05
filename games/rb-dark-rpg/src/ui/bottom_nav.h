@@ -5,6 +5,6 @@
 #include "world/world.h"
 
 bool bottom_nav_sheet_open(void);
-void bottom_nav_ui(nt_ui_context_t *ctx, const World *w);
+void bottom_nav_ui(nt_ui_context_t *ctx, World *w);
 
 #endif /* RB_DARK_RPG_BOTTOM_NAV_H */

@@ -62,7 +62,7 @@ id. The engine should not become the main editor for quests/dialogues/content.
 - Inspect hub objects and NPCs
 - Accept or track a quest
 - Equip basic gear
-- Choose a map node
+- Choose a map location or marker
 - Start autobattle
 - Collect reward or loot
 - Record a clue

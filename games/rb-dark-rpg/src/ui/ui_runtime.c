@@ -132,8 +132,11 @@ bool ui_runtime_begin(float dt) {
 
     nt_font_step();
     nt_mem_scratch_reset();
-    const nt_pointer_t p = nt_ui_scale_apply_pointer(&s_scale, g_nt_input.pointers[0]);
-    nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, &p, 1);
+    nt_pointer_t pointers[NT_INPUT_MAX_POINTERS];
+    for (uint32_t i = 0; i < NT_INPUT_MAX_POINTERS; ++i) {
+        pointers[i] = nt_ui_scale_apply_pointer(&s_scale, g_nt_input.pointers[i]);
+    }
+    nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, pointers, NT_INPUT_MAX_POINTERS);
     return true;
 }
 

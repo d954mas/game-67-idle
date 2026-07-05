@@ -167,7 +167,7 @@
     "starter_loadout": ["old_sword", "padded_jacket", "leather_greaves"],
     "starter_total": {
       "id": "seeker_start",
-      "vitality": 30,
+      "vitality": 33,
       "strength": 20,
       "protection": 15,
       "intuition": 3,
@@ -182,7 +182,7 @@
   "item_refs": {
     "item_source": "data/items.json",
     "starter_loadout": ["old_sword", "padded_jacket", "leather_greaves"],
-    "upgrade_examples": ["iron_sword", "patched_mail", "black_sun_charm"],
+    "upgrade_examples": ["iron_sword", "militia_axe", "patched_mail", "guard_coat", "black_sun_charm"],
     "rule": "Item stats live in items.json. Combat owns formulas, encounters, and balance expectations."
   },
   "leveling": {
@@ -237,7 +237,7 @@
   "encounters": [
     {
       "id": "gate_scavenger",
-      "display_name": "Падальщик у ворот",
+      "display_name": "Падальщик в клетке",
       "archetype": "scavenger",
       "role": "first_check",
       "quest": "Допуск за ворота",
@@ -273,7 +273,7 @@
       "expected_threat_with_starter_loadout": "fair",
       "reward_xp": 10,
       "reward_gold": 7,
-      "reward_items": ["contract_progress"]
+      "reward_items": ["contract_progress", "scavenger_knee_plates"]
     },
     {
       "id": "mill_brute",
@@ -294,7 +294,7 @@
       "expected_threat_with_iron_sword": "fair",
       "reward_xp": 14,
       "reward_gold": 9,
-      "reward_items": ["grain_sacks"]
+      "reward_items": ["grain_sacks", "chain_patches"]
     },
     {
       "id": "black_sun_runner",
@@ -314,7 +314,7 @@
       "expected_threat_with_starter_loadout": "fair",
       "reward_xp": 12,
       "reward_gold": 8,
-      "reward_items": ["clue_fragment"]
+      "reward_items": ["clue_fragment", "dragon_ash_token"]
     },
     {
       "id": "night_attacker",
@@ -335,7 +335,7 @@
       "expected_threat_with_iron_sword": "fair",
       "reward_xp": 16,
       "reward_gold": 10,
-      "reward_items": ["order_scrap"]
+      "reward_items": ["order_scrap", "miller_hook"]
     }
   ],
   "outcomes": {

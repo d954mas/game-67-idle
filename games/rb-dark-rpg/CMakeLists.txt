@@ -50,6 +50,7 @@ set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
 set(GAME_PACK_DIR "${CMAKE_BINARY_DIR}/pack")
 set(GAME_ASSETS_DIR "${GAME_OUTPUT_DIR}/assets")
+set(GAME_AUDIO_ASSETS_DIR "${GAME_ASSETS_DIR}/audio")
 set(GAME_SOURCE_GENERATED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/generated")
 set(GAME_CONTENT_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_dialogue_content.py")
 set(GAME_CONTENT_COMPATIBILITY_VALIDATOR "${CMAKE_CURRENT_SOURCE_DIR}/tools/validate_content_compatibility.py")
@@ -94,6 +95,9 @@ add_custom_command(
         "${GAME_CONTENT_CHARACTERS}"
         "${GAME_CONTENT_QUESTS}"
         "${GAME_CONTENT_ITEMS}"
+        "${GAME_CONTENT_COMBAT}"
+        "${GAME_CONTENT_LOCATIONS}"
+        "${GAME_CONTENT_SERVICES}"
         "${GAME_CONTENT_GENERATED_SOURCE}"
     DEPENDS
         "${GAME_CONTENT_GENERATOR}"
@@ -101,6 +105,9 @@ add_custom_command(
         "${GAME_CONTENT_CHARACTERS}"
         "${GAME_CONTENT_QUESTS}"
         "${GAME_CONTENT_ITEMS}"
+        "${GAME_CONTENT_COMBAT}"
+        "${GAME_CONTENT_LOCATIONS}"
+        "${GAME_CONTENT_SERVICES}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
     COMMENT "Generating rb-dark-rpg dialogue content"
     VERBATIM
@@ -108,11 +115,84 @@ add_custom_command(
 
 # --- asset pack builder (runs at build time -> game.ntpack + asset-id header) ---
 if(NOT EMSCRIPTEN)
+    file(GLOB_RECURSE GAME_AUDIO_ASSET_FILES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/*"
+    )
+
+    add_custom_command(
+        OUTPUT "${GAME_AUDIO_ASSETS_DIR}/.audio_assets.stamp"
+        COMMAND ${CMAKE_COMMAND} -E rm -rf "${GAME_AUDIO_ASSETS_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_AUDIO_ASSETS_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets/audio" "${GAME_AUDIO_ASSETS_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E touch "${GAME_AUDIO_ASSETS_DIR}/.audio_assets.stamp"
+        DEPENDS ${GAME_AUDIO_ASSET_FILES}
+        COMMENT "Copying loose audio assets -> bin/assets/audio"
+        VERBATIM
+    )
+    add_custom_target(game_audio_assets DEPENDS "${GAME_AUDIO_ASSETS_DIR}/.audio_assets.stamp")
+
     add_executable(build_game_packs src/build_packs.c)
     target_link_libraries(build_game_packs PRIVATE nt_builder nt_log)
     target_compile_definitions(build_game_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(build_game_packs PRIVATE -U_DLL)
     set_target_properties(build_game_packs PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}")
+    set(ASH_BORDER_MAP_PNG "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/world_map_ash_border_01/ash_border_map.png")
+    set(GAME_COMBAT_ACTOR_FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/combat_actor_sprites_01/slices/combat_actor_hero.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/combat_actor_sprites_01/slices/combat_actor_gate_scavenger.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/combat_actor_sprites_01/slices/combat_actor_mill_scavenger.png"
+    )
+    set(GAME_LOCATION_SCENE_FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/scenes/gate_outskirts_background_1280x700.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/scenes/old_mill_background_1280x700.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_object_sprites_01/asset_object_black_sun_mark.png"
+    )
+    set(GAME_EQUIPMENT_ICON_FILES
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/cell/asset_equipment_slot_cell.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_weapon_empty.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_offhand_empty.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_head_empty.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_armour_empty.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_hands_empty.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_waist_empty.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_legs_empty.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_feet_empty.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_neck_empty.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_ring_left_empty.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_ring_right_empty.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/slots/asset_slot_icon_relic_empty.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_old_sword.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_padded_jacket.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_leather_greaves.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_iron_sword.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_patched_mail.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_guard_coat.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_iron_greaves.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_militia_axe.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_runner_wraps.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_black_sun_charm.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_miller_hook.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_chain_patches.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_scavenger_knee_plates.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_dragon_ash_token.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/gear/asset_icon_miller_lucky_nail.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/rewards/asset_reward_xp.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/items/asset_icon_seeker_token.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/items/asset_icon_grain_sacks.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/items/asset_icon_contract_progress.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/items/asset_icon_clue_fragment.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/items/asset_icon_burned_chain_bracket.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/items/asset_icon_order_scrap.png"
+    )
+    add_custom_command(
+        OUTPUT "${ASH_BORDER_MAP_PNG}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/world_map_ash_border_01"
+        COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_world_map_art.py" --out "${ASH_BORDER_MAP_PNG}"
+        DEPENDS tools/generate_world_map_art.py
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        COMMENT "Generating Ash Border world map atlas"
+        VERBATIM
+    )
 
     add_custom_command(
         OUTPUT "${GAME_PACK_DIR}/game.ntpack" "${CMAKE_CURRENT_SOURCE_DIR}/src/generated/game_assets.h"
@@ -131,6 +211,7 @@ if(NOT EMSCRIPTEN)
             assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_place.png
             assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_more.png
             assets/ui/seeker_portrait_hud.png
+            assets/ui/gold_coin_hud.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_portrait_frame.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_status_plaque.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_hp_frame.png
@@ -142,6 +223,10 @@ if(NOT EMSCRIPTEN)
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_level_badge.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_icon_coin.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_icon_supplies.png
+            "${ASH_BORDER_MAP_PNG}"
+            ${GAME_COMBAT_ACTOR_FILES}
+            ${GAME_LOCATION_SCENE_FILES}
+            ${GAME_EQUIPMENT_ICON_FILES}
             assets/ui/slider_track.png assets/ui/slider_fill.png assets/ui/slider_thumb.png
             assets/scenes/last_post_background_candidate05_1280x700.png
             assets/characters/last_post_guard_05.png
@@ -166,11 +251,20 @@ add_executable(${GAME_TARGET}
     src/ui/hud.c
     src/ui/first_screen_hud.c
     src/ui/bottom_nav.c
+    src/ui/location_screen.c
+    src/ui/world_map_screen.c
+    src/ui/world_map_viewport.c
+    src/ui/combat_flow.c
+    src/ui/equipment_screen.c
+    src/ui/shop_screen.c
+    src/ui/game_modal.c
     src/ui/tutorial_callout.c
     src/ui/dialogue_panel.c
     src/ui/ui_runtime.c
     src/ui/theme.c
     src/game_dialogue.c
+    src/game_combat.c
+    src/game_audio.c
     "${GAME_CONTENT_GENERATED_SOURCE}"
     src/scene/scene_layout.c
     src/scene/scene_interactions.c
@@ -186,6 +280,7 @@ add_executable(${GAME_TARGET}
 add_dependencies(${GAME_TARGET} content_compatibility_check)
 if(NOT EMSCRIPTEN)
     add_dependencies(${GAME_TARGET} game_asset_packs)
+    add_dependencies(${GAME_TARGET} game_audio_assets)
 endif()
 if(FEATURE_GAME_STATE)
     set(GAME_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
@@ -238,8 +333,14 @@ target_link_libraries(${GAME_TARGET} PRIVATE
 )
 if(EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http nt_platform_web)
+    target_link_options(${GAME_TARGET} PRIVATE
+        "SHELL:-sFORCE_FILESYSTEM=1"
+        "SHELL:--preload-file ${CMAKE_CURRENT_SOURCE_DIR}/assets/audio@/assets/audio"
+    )
+    target_compile_definitions(${GAME_TARGET} PRIVATE GAME_AUDIO_ASSET_DIR="/assets/audio")
 else()
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub)
+    target_compile_definitions(${GAME_TARGET} PRIVATE GAME_AUDIO_ASSET_DIR="${GAME_AUDIO_ASSETS_DIR}")
 endif()
 if(GAME_DEVAPI_ENABLED)
     if(EMSCRIPTEN)
@@ -289,6 +390,8 @@ if(FEATURE_GAME_STATE)
     add_executable(test_scene_interactions
         src/scene/scene_interactions.c
         src/game_actions.c
+        src/game_audio.c
+        src/game_combat.c
         src/game_dialogue.c
         "${GAME_CONTENT_GENERATED_SOURCE}"
         "${GAME_STATE_GENERATED_SOURCE}"
@@ -298,7 +401,7 @@ if(FEATURE_GAME_STATE)
     target_include_directories(test_scene_interactions PRIVATE "${ENGINE_DIR}/engine")
     target_include_directories(test_scene_interactions PRIVATE "${GAME_STATE_GENERATED_DIR}")
     target_link_libraries(test_scene_interactions PRIVATE cjson)
-    target_compile_definitions(test_scene_interactions PRIVATE FEATURE_GAME_STATE=1 NT_DEVAPI_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
+    target_compile_definitions(test_scene_interactions PRIVATE FEATURE_GAME_STATE=1 NT_DEVAPI_ENABLED=0 NT_PLATFORM_WEB=1 _CRT_SECURE_NO_WARNINGS)
     nt_set_warning_flags(test_scene_interactions)
     set_target_properties(test_scene_interactions PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
     add_custom_target(scene_interactions_test
@@ -316,13 +419,43 @@ else()
     )
 endif()
 
-add_custom_target(first_scene_tests
-    DEPENDS scene_layout_test scene_interactions_test
+add_executable(test_game_audio
+    src/game_audio.c
+    tests/test_game_audio.c
+)
+target_include_directories(test_game_audio PRIVATE src)
+target_compile_definitions(test_game_audio PRIVATE NT_PLATFORM_WEB=1)
+target_compile_definitions(test_game_audio PRIVATE GAME_AUDIO_ASSET_DIR="${CMAKE_CURRENT_SOURCE_DIR}/assets/audio")
+nt_set_warning_flags(test_game_audio)
+set_target_properties(test_game_audio PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
+add_custom_target(game_audio_test
+    COMMAND $<TARGET_FILE:test_game_audio>
+    DEPENDS test_game_audio
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    COMMENT "Running game audio tests"
+    VERBATIM
+)
+
+add_executable(test_world_map_viewport
+    src/ui/world_map_viewport.c
+    tests/test_world_map_viewport.c
+)
+target_include_directories(test_world_map_viewport PRIVATE src)
+nt_set_warning_flags(test_world_map_viewport)
+set_target_properties(test_world_map_viewport PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
+add_custom_target(world_map_viewport_test
+    COMMAND $<TARGET_FILE:test_world_map_viewport>
+    DEPENDS test_world_map_viewport
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    COMMENT "Running world-map viewport tests"
+    VERBATIM
 )
 
 if(FEATURE_GAME_STATE)
     add_executable(test_game_dialogue
         src/game_actions.c
+        src/game_audio.c
+        src/game_combat.c
         src/game_dialogue.c
         "${GAME_CONTENT_GENERATED_SOURCE}"
         "${GAME_STATE_GENERATED_SOURCE}"
@@ -332,14 +465,63 @@ if(FEATURE_GAME_STATE)
     target_include_directories(test_game_dialogue PRIVATE "${ENGINE_DIR}/engine")
     target_include_directories(test_game_dialogue PRIVATE "${GAME_STATE_GENERATED_DIR}")
     target_link_libraries(test_game_dialogue PRIVATE cjson)
-    target_compile_definitions(test_game_dialogue PRIVATE FEATURE_GAME_STATE=1 NT_DEVAPI_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
+    target_compile_definitions(test_game_dialogue PRIVATE FEATURE_GAME_STATE=1 NT_DEVAPI_ENABLED=0 NT_PLATFORM_WEB=1 _CRT_SECURE_NO_WARNINGS)
     nt_set_warning_flags(test_game_dialogue)
     set_target_properties(test_game_dialogue PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
-    add_custom_target(game_dialogue_test
+add_custom_target(game_dialogue_test
         COMMAND $<TARGET_FILE:test_game_dialogue>
         DEPENDS test_game_dialogue
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
         COMMENT "Running dialogue state tests"
+        VERBATIM
+    )
+
+    add_executable(test_game_combat
+        src/game_actions.c
+        src/game_audio.c
+        src/game_combat.c
+        src/game_dialogue.c
+        "${GAME_CONTENT_GENERATED_SOURCE}"
+        "${GAME_STATE_GENERATED_SOURCE}"
+        tests/test_game_combat.c
+    )
+    target_include_directories(test_game_combat PRIVATE src)
+    target_include_directories(test_game_combat PRIVATE "${ENGINE_DIR}/engine")
+    target_include_directories(test_game_combat PRIVATE "${GAME_STATE_GENERATED_DIR}")
+    target_link_libraries(test_game_combat PRIVATE cjson)
+    target_compile_definitions(test_game_combat PRIVATE FEATURE_GAME_STATE=1 NT_DEVAPI_ENABLED=0 NT_PLATFORM_WEB=1 _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_game_combat)
+    set_target_properties(test_game_combat PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
+    add_custom_target(game_combat_test
+        COMMAND $<TARGET_FILE:test_game_combat>
+        DEPENDS test_game_combat
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+        COMMENT "Running combat state tests"
+        VERBATIM
+    )
+    add_custom_target(game_state_rules_tests
+        DEPENDS game_dialogue_test game_combat_test
+    )
+
+    add_executable(test_world_story
+        src/game_actions.c
+        src/game_combat.c
+        "${GAME_CONTENT_GENERATED_SOURCE}"
+        "${GAME_STATE_GENERATED_SOURCE}"
+        tests/test_world_story.c
+    )
+    target_include_directories(test_world_story PRIVATE src)
+    target_include_directories(test_world_story PRIVATE "${ENGINE_DIR}/engine")
+    target_include_directories(test_world_story PRIVATE "${GAME_STATE_GENERATED_DIR}")
+    target_link_libraries(test_world_story PRIVATE cjson)
+    target_compile_definitions(test_world_story PRIVATE FEATURE_GAME_STATE=1 NT_DEVAPI_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_world_story)
+    set_target_properties(test_world_story PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}/tests")
+    add_custom_target(world_story_test
+        COMMAND $<TARGET_FILE:test_world_story>
+        DEPENDS test_world_story
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+        COMMENT "Running world story tests"
         VERBATIM
     )
 else()
@@ -348,7 +530,24 @@ else()
         COMMENT "Skipping dialogue state tests"
         VERBATIM
     )
+    add_custom_target(game_combat_test
+        COMMAND ${CMAKE_COMMAND} -E echo "Skipping combat state tests: FEATURE_GAME_STATE=OFF"
+        COMMENT "Skipping combat state tests"
+        VERBATIM
+    )
+    add_custom_target(game_state_rules_tests
+        DEPENDS game_dialogue_test game_combat_test
+    )
+    add_custom_target(world_story_test
+        COMMAND ${CMAKE_COMMAND} -E echo "Skipping world story tests: FEATURE_GAME_STATE=OFF"
+        COMMENT "Skipping world story tests"
+        VERBATIM
+    )
 endif()
+
+add_custom_target(first_scene_tests
+    DEPENDS scene_layout_test scene_interactions_test game_state_rules_tests game_audio_test world_map_viewport_test
+)
 
 if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)
     find_package(Python3 COMPONENTS Interpreter QUIET)

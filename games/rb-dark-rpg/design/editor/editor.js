@@ -5,6 +5,7 @@ const REGISTRY_CONFIGS = [
     label: "Персонажи",
     file: "characters.json",
     collection: "characters",
+    createLabel: "Новый персонаж",
     subtitleKeys: ["kind", "role"],
     groupKeys: ["kind", "home_location_id", "tags"],
     filterKeys: ["kind", "home_location_id", "tags"]
@@ -14,6 +15,7 @@ const REGISTRY_CONFIGS = [
     label: "Локации",
     file: "locations.json",
     collection: "locations",
+    createLabel: "Новая локация",
     subtitleKeys: ["kind", "screen_id"],
     groupKeys: ["kind", "act"],
     filterKeys: ["kind", "act", "screen_id"]
@@ -23,6 +25,7 @@ const REGISTRY_CONFIGS = [
     label: "Предметы",
     file: "items.json",
     collection: "items",
+    createLabel: "Новый предмет",
     subtitleKeys: ["kind", "slot", "rarity"],
     groupKeys: ["kind", "slot", "rarity", "tags"],
     filterKeys: ["kind", "slot", "rarity", "tags"]
@@ -32,6 +35,7 @@ const REGISTRY_CONFIGS = [
     label: "Магазины",
     file: "services.json",
     collection: "shops",
+    createLabel: "Новый магазин",
     subtitleKeys: ["keeper_character_id", "location_id"],
     groupKeys: ["location_id", "keeper_character_id"],
     filterKeys: ["location_id", "keeper_character_id"]
@@ -41,6 +45,7 @@ const REGISTRY_CONFIGS = [
     label: "Лечение",
     file: "services.json",
     collection: "healing_services",
+    createLabel: "Новая услуга",
     subtitleKeys: ["provider_character_id", "location_id"],
     groupKeys: ["location_id", "provider_character_id"],
     filterKeys: ["location_id", "provider_character_id"]
@@ -50,6 +55,7 @@ const REGISTRY_CONFIGS = [
     label: "Диалоги",
     file: "dialogues.json",
     collection: "dialogues",
+    createLabel: "Новый диалог",
     subtitleKeys: ["entry_node_id"],
     groupKeys: ["entry_node_id", "participants"],
     filterKeys: ["participants"]
@@ -59,6 +65,7 @@ const REGISTRY_CONFIGS = [
     label: "Квесты",
     file: "quests.json",
     collection: "quests",
+    createLabel: "Новый квест",
     subtitleKeys: ["type", "priority", "start_location"],
     groupKeys: ["type", "priority", "act", "start_location"],
     filterKeys: ["type", "priority", "act", "start_location"]
@@ -68,6 +75,7 @@ const REGISTRY_CONFIGS = [
     label: "Бой",
     file: "combat.json",
     collection: "encounters",
+    createLabel: "Новый бой",
     subtitleKeys: ["location_id", "tier"],
     groupKeys: ["archetype", "role", "expected_threat_with_starter_loadout"],
     filterKeys: ["archetype", "role", "expected_threat_with_starter_loadout"]
@@ -77,6 +85,7 @@ const REGISTRY_CONFIGS = [
     label: "Ассеты",
     file: "asset_manifest.json",
     collection: "assets",
+    createLabel: "Новый ассет",
     subtitleKeys: ["kind", "status"],
     groupKeys: ["kind", "status"],
     filterKeys: ["kind", "status"]
@@ -444,6 +453,7 @@ function renderListControls(config, collection) {
   const filters = getFilterState(config);
 
   ELEMENTS.listControls.innerHTML = `
+    <button type="button" id="createEntityButton" class="create-entity-button">${escapeHtml(config.createLabel || `New ${config.label}`)}</button>
     <label class="control-field">
       <span>Group</span>
       <select id="groupBySelect">
@@ -457,6 +467,8 @@ function renderListControls(config, collection) {
   `;
 
   const groupSelect = ELEMENTS.listControls.querySelector("#groupBySelect");
+  const createButton = ELEMENTS.listControls.querySelector("#createEntityButton");
+  createButton.addEventListener("click", () => createEntity(config));
   groupSelect.addEventListener("change", () => {
     state.groupBy.set(config.id, groupSelect.value);
     renderEntityList();
@@ -676,6 +688,7 @@ function renderEditor() {
     </div>
     ${renderVisualPreview(entity, config)}
     ${renderEntityMapPreview(entity, config)}
+    ${config.id === "items" ? renderItemWorkbench(entity) : ""}
     <div class="field-sections" id="fieldSections"></div>
     <div class="raw-editor">
       <div class="raw-editor-head">
@@ -692,7 +705,7 @@ function renderEditor() {
   const fieldSections = ELEMENTS.editorView.querySelector("#fieldSections");
   renderFieldSections(fieldSections, fields, entity);
 
-  for (const input of fieldSections.querySelectorAll("input[data-key], textarea[data-key]")) {
+  for (const input of fieldSections.querySelectorAll("input[data-key], textarea[data-key], select[data-key]")) {
     input.addEventListener("input", () => {
       const key = input.dataset.key;
       entity[key] = coerceFieldValue(input.value, entity[key]);
@@ -703,6 +716,7 @@ function renderEditor() {
       syncRawTextarea();
     });
   }
+  wireItemWorkbench(config, entity);
 
   const rawJson = ELEMENTS.editorView.querySelector("#rawJson");
   rawJson.value = state.rawDraft || JSON.stringify(entity, null, 2);
@@ -714,6 +728,230 @@ function renderEditor() {
   ELEMENTS.editorView.querySelector("#formatJsonButton").addEventListener("click", () => formatRawJson());
   ELEMENTS.editorView.querySelector("#downloadFileButton").addEventListener("click", () => downloadFile(config.file));
   wireEditorLinks();
+}
+
+function createEntity(config) {
+  if (!config?.collection || !config.file) {
+    return;
+  }
+  const collection = getCollection(config);
+  const entity = createEntityTemplate(config, collection);
+  collection.push(entity);
+  state.selectedIds.set(config.id, entity.id);
+  state.rawDraft = JSON.stringify(entity, null, 2);
+  markDirty(config.file);
+  validateContent();
+  renderAll();
+  setStatus(`Created ${entity.id}.`);
+}
+
+function createEntityTemplate(config, collection) {
+  if (config.id === "items") {
+    const id = uniqueEntityId(collection, "new_gear");
+    return {
+      id,
+      display_name: "New Gear",
+      kind: "gear",
+      slot: "weapon",
+      stackable: false,
+      icon_asset_id: "",
+      price_gold: 0,
+      required_level: 1,
+      stats: {
+        weapon_damage: 1
+      },
+      tags: ["draft"]
+    };
+  }
+  if (config.id === "quests") {
+    const id = uniqueEntityId(collection, "q_new_quest");
+    return {
+      id,
+      title: "New Quest",
+      type: "contract",
+      act: "act_1_extra_witness",
+      priority: "side",
+      start_location: "hub_last_post",
+      prerequisites: [],
+      journal: {
+        summary: "",
+        short_goal: ""
+      },
+      steps: [],
+      completion_rewards: {
+        xp: 0,
+        gold: 0,
+        items: [],
+        flags: [],
+        unlocks: {}
+      }
+    };
+  }
+  if (config.id === "dialogues") {
+    const id = uniqueEntityId(collection, "dlg_new");
+    return {
+      id,
+      title: "New Dialogue",
+      participants: ["player_seeker"],
+      entry_node_id: "start",
+      nodes: [
+        {
+          id: "start",
+          speaker_id: "player_seeker",
+          text: "",
+          choices: [
+            {
+              id: "close",
+              text: "Close"
+            }
+          ]
+        }
+      ]
+    };
+  }
+  const id = uniqueEntityId(collection, `new_${config.id}`);
+  return {
+    id,
+    display_name: "New Entry"
+  };
+}
+
+function uniqueEntityId(collection, baseId) {
+  const existing = new Set(collection.map((entity) => entity.id).filter(Boolean));
+  let candidate = baseId;
+  let index = 2;
+  while (existing.has(candidate)) {
+    candidate = `${baseId}_${index}`;
+    index += 1;
+  }
+  return candidate;
+}
+
+function renderItemWorkbench(item) {
+  const stats = item.stats || {};
+  const tags = Array.isArray(item.tags) ? item.tags.join(", ") : "";
+  return `
+    <section class="item-workbench" aria-label="Item setup">
+      <div class="map-panel-head">
+        <div>
+          <h3>Item setup</h3>
+          <p>Gear uses four MVP slots: weapon, armour, legs, relic. Other item kinds stay in inventory.</p>
+        </div>
+        <div class="map-panel-badges">
+          ${renderBadge(item.kind || "kind missing")}
+          ${item.kind === "gear" ? renderBadge(item.slot || "slot missing") : renderBadge("inventory")}
+          ${renderBadge(`level ${item.required_level || 1}`)}
+        </div>
+      </div>
+      <div class="item-form-grid">
+        <label class="field">
+          <span>Kind</span>
+          <select data-item-field="kind">
+            ${["gear", "quest_item", "clue", "consumable", "material"].map((kind) => `<option value="${kind}" ${item.kind === kind ? "selected" : ""}>${kind}</option>`).join("")}
+          </select>
+        </label>
+        <label class="field">
+          <span>Slot</span>
+          <select data-item-field="slot">
+            ${["none", "weapon", "armour", "legs", "relic"].map((slot) => `<option value="${slot}" ${((item.slot || "none") === slot) ? "selected" : ""}>${slot}</option>`).join("")}
+          </select>
+        </label>
+        <label class="field">
+          <span>Required level</span>
+          <input data-item-field="required_level" type="number" min="1" max="99" value="${escapeHtml(item.required_level || 1)}" />
+        </label>
+        <label class="field">
+          <span>Price gold</span>
+          <input data-item-field="price_gold" type="number" min="0" value="${escapeHtml(item.price_gold || 0)}" />
+        </label>
+        <label class="field">
+          <span>Equipment set</span>
+          <input data-item-field="equipment_set" value="${escapeHtml(item.equipment_set || "")}" />
+        </label>
+        <label class="field">
+          <span>Icon asset</span>
+          <input data-item-field="icon_asset_id" value="${escapeHtml(item.icon_asset_id || "")}" />
+        </label>
+        <label class="field checkbox-field">
+          <input data-item-field="stackable" type="checkbox" ${item.stackable ? "checked" : ""} />
+          <span>Stackable</span>
+        </label>
+        <label class="field">
+          <span>Max stack</span>
+          <input data-item-field="max_stack" type="number" min="1" value="${escapeHtml(item.max_stack || 1)}" />
+        </label>
+        <label class="field full">
+          <span>Tags</span>
+          <input data-item-field="tags" value="${escapeHtml(tags)}" />
+        </label>
+      </div>
+      <div class="item-stats-grid">
+        ${["vitality", "strength", "protection", "intuition", "weapon_damage"].map((stat) => `
+          <label class="stat-field">
+            <span>${escapeHtml(formatFacetName(stat))}</span>
+            <input data-item-stat="${stat}" type="number" value="${escapeHtml(stats[stat] ?? 0)}" />
+          </label>
+        `).join("")}
+      </div>
+    </section>
+  `;
+}
+
+function wireItemWorkbench(config, item) {
+  if (config.id !== "items") {
+    return;
+  }
+  for (const input of ELEMENTS.editorView.querySelectorAll("[data-item-field]")) {
+    input.addEventListener("input", () => updateItemField(config, item, input));
+    input.addEventListener("change", () => updateItemField(config, item, input));
+  }
+  for (const input of ELEMENTS.editorView.querySelectorAll("[data-item-stat]")) {
+    input.addEventListener("input", () => {
+      const stat = input.dataset.itemStat;
+      const value = Number(input.value);
+      item.stats = item.stats || {};
+      if (Number.isFinite(value) && value !== 0) {
+        item.stats[stat] = value;
+      } else {
+        delete item.stats[stat];
+      }
+      touchEditedEntity(config, item);
+    });
+  }
+}
+
+function updateItemField(config, item, input) {
+  const field = input.dataset.itemField;
+  if (field === "stackable") {
+    item.stackable = input.checked;
+  } else if (field === "price_gold" || field === "required_level" || field === "max_stack") {
+    const value = Number(input.value);
+    item[field] = Number.isFinite(value) ? value : 0;
+  } else if (field === "tags") {
+    item.tags = input.value.split(",").map((tag) => tag.trim()).filter(Boolean);
+  } else if (field === "slot") {
+    if (input.value === "none") {
+      delete item.slot;
+    } else {
+      item.slot = input.value;
+    }
+  } else if (input.value) {
+    item[field] = input.value;
+  } else {
+    delete item[field];
+  }
+  if (item.kind !== "gear") {
+    delete item.slot;
+  }
+  touchEditedEntity(config, item);
+}
+
+function touchEditedEntity(config, entity) {
+  state.rawDraft = JSON.stringify(entity, null, 2);
+  markDirty(config.file);
+  validateContent();
+  renderSidePanels();
+  syncRawTextarea();
 }
 
 function renderEntityMapPreview(entity, config) {

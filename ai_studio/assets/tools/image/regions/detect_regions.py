@@ -21,6 +21,7 @@ from ai_studio.assets.tools.lib.color import format_hex, key_distance, parse_hex
 
 RGB = tuple[int, int, int]
 Rect = tuple[int, int, int, int]
+DEFAULT_CHROMA_REGION_PADDING = 8
 
 # T0254: local hex parse/format duplication -> shared lib/color (parse_hex,
 # format_hex). Kept as local aliases so this module's public names don't churn.
@@ -312,7 +313,7 @@ def main() -> int:
     parser.add_argument("--alpha-threshold", type=int, default=0)
     parser.add_argument("--min-area", type=int, default=128)
     parser.add_argument("--merge-distance", type=int, default=0)
-    parser.add_argument("--padding", type=int, default=0)
+    parser.add_argument("--padding", type=int, default=DEFAULT_CHROMA_REGION_PADDING)
     parser.add_argument("--row-tolerance", type=int, default=32)
     parser.add_argument("--json-output", type=Path)
     parser.add_argument("--overlay-output", type=Path)

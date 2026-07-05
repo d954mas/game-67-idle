@@ -36,10 +36,10 @@
             "item_id": "seeker_token",
             "count": 1
           },
-          {
-            "type": "grant_xp",
-            "amount": 10
-          },
+      {
+        "type": "grant_xp",
+        "amount": 12
+      },
           {
             "type": "unlock_screen",
             "screen_id": "ash_border_map",
@@ -214,13 +214,166 @@
             {
               "id": "take_token",
               "text": "Взять жетон.",
+              "reward_id": "dlg_gate_guard_turn_in.take_token.completion",
               "effects": [
+                {
+                  "type": "grant_item",
+                  "item_id": "seeker_token",
+                  "count": 1
+                },
+                {
+                  "type": "grant_xp",
+                  "amount": 12
+                },
+                {
+                  "type": "set_flag",
+                  "flag_id": "seeker_token_owned"
+                },
+                {
+                  "type": "set_flag",
+                  "flag_id": "map_gate_unlocked"
+                },
+                {
+                  "type": "set_flag",
+                  "flag_id": "old_mill_unlocked"
+                },
                 {
                   "type": "advance_quest",
                   "quest_id": "q001_gate_pass",
                   "step_id": "report_to_gate_guard"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q001_gate_pass"
                 }
               ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_elder_bread_contract",
+      "title": "Староста: хлеб для Поста",
+      "participants": [
+        "elder",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "elder",
+          "text": "Жетон есть, значит можно дать настоящее поручение. Старая мельница молчит, а Посту нужен хлеб. Доберись туда и проверь двор.",
+          "choices": [
+            {
+              "id": "accept_bread_contract",
+              "text": "Взять контракт",
+              "effects": [
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q002_bread_for_post",
+                  "step_id": "accept_bread_contract"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_elder_bread_in_progress",
+      "title": "Староста: мельница ждет",
+      "participants": [
+        "elder",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "elder",
+          "text": "Не тяни. Открой карту, дойди до Старой мельницы и осмотри знак во дворе.",
+          "choices": []
+        }
+      ]
+    },
+    {
+      "id": "dlg_elder_bread_turn_in",
+      "title": "Староста: знак на мельнице",
+      "participants": [
+        "elder",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "elder",
+          "text": "Зерно можно забрать позже. Сейчас важнее знак Черного Солнца. Совет должен узнать, что мельницу пометили.",
+          "choices": [
+            {
+              "id": "report_bread_contract",
+              "text": "Сдать находку",
+              "reward_id": "dlg_elder_bread_turn_in.report.completion",
+              "effects": [
+                {
+                  "type": "grant_xp",
+                  "amount": 10
+                },
+                {
+                  "type": "grant_gold",
+                  "amount": 6
+                },
+                {
+                  "type": "advance_quest",
+                  "quest_id": "q002_bread_for_post",
+                  "step_id": "report_to_elder"
+                },
+                {
+                  "type": "complete_quest",
+                  "quest_id": "q002_bread_for_post"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dlg_elder_bread_completed",
+      "title": "Староста: новые вести",
+      "participants": [
+        "elder",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "elder",
+          "text": "Ты сделал, что нужно. Дальше Совет разберется со знаком.",
+          "choices": []
+        }
+      ]
+    },
+    {
+      "id": "dlg_blacksmith_starter_gear",
+      "title": "Кузнец: первое снаряжение",
+      "participants": [
+        "blacksmith",
+        "player_seeker"
+      ],
+      "entry_node_id": "start",
+      "nodes": [
+        {
+          "id": "start",
+          "speaker_id": "blacksmith",
+          "text": "Страж уже выдал тебе старый комплект. Не спорь с железом: надень меч, куртку и поножи, а потом возвращайся к воротам.",
+          "choices": [
+            {
+              "id": "close",
+              "text": "Понял."
             }
           ]
         }

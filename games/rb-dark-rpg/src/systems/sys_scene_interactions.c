@@ -1,12 +1,31 @@
 #include "systems/sys_scene_interactions.h"
 
+#include "game_state.h"
 #include "input/nt_input.h"
 #include "scene/scene_interactions.h"
 #include "scene/scene_layout.h"
+#include "ui/bottom_nav.h"
+#include "ui/combat_flow.h"
 #include "window/nt_window.h"
 
+#include <string.h>
+
+static bool first_scene_interactions_active(const World *w) {
+    return !w || !w->player_state || w->player_state->world_current_location_id[0] == '\0' ||
+           strcmp(w->player_state->world_current_location_id, "hub_last_post") == 0;
+}
+
 void sys_scene_interactions_update(World *w) {
+    if (!w) {
+        return;
+    }
     scene_interactions_init_first_scene(w);
+
+    if (!first_scene_interactions_active(w) || w->dialogue.open ||
+        bottom_nav_sheet_open() || combat_flow_is_open(w)) {
+        scene_interactions_update_pointer_state(w, SCENE_OBJECT_ID_NONE, false, false, false);
+        return;
+    }
 
     const int fb_w = (int)g_nt_window.fb_width;
     const int fb_h = (int)g_nt_window.fb_height;

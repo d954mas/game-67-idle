@@ -244,6 +244,13 @@ body[data-active-view="dialogues"] .workspace {
   gap: 8px;
 }
 
+.create-entity-button {
+  width: 100%;
+  border-color: var(--accent-dark);
+  background: #21170f;
+  color: var(--accent);
+}
+
 .control-field.compact span {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -661,7 +668,8 @@ body[data-active-view="dialogues"] .group-header {
 }
 
 .quest-map-panel,
-.dialogue-graph-panel {
+.dialogue-graph-panel,
+.item-workbench {
   display: grid;
   gap: 14px;
   margin-bottom: 14px;
@@ -669,6 +677,53 @@ body[data-active-view="dialogues"] .group-header {
   border-radius: 8px;
   background: #15120f;
   padding: 14px;
+}
+
+.item-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.item-form-grid .field span,
+.stat-field span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.item-form-grid select,
+.item-form-grid input,
+.item-stats-grid input {
+  width: 100%;
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--field);
+  color: var(--text);
+  padding: 6px 8px;
+}
+
+.checkbox-field {
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: end;
+  align-items: center;
+  min-height: 54px;
+}
+
+.checkbox-field input {
+  width: 18px;
+  min-height: 18px;
+}
+
+.item-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.stat-field {
+  display: grid;
+  gap: 5px;
 }
 
 .map-panel-head {
@@ -1214,7 +1269,9 @@ body[data-active-view="dialogues"] .group-header {
   }
 
   .map-panel-head,
-  .dialogue-choice {
+  .dialogue-choice,
+  .item-form-grid,
+  .item-stats-grid {
     grid-template-columns: 1fr;
   }
 

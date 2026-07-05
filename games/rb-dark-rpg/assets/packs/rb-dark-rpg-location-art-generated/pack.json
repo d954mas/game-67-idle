@@ -1,0 +1,22 @@
+{
+  "pack": "rb-dark-rpg-location-art-generated",
+  "title": "rb-dark-rpg Generated Location Art",
+  "source": "project-generation",
+  "kind": "environment",
+  "origin": "ai",
+  "license": "project-internal generated asset",
+  "license_kind": "project-internal",
+  "attribution_required": "false",
+  "notice_required": "true",
+  "publish": "false",
+  "redistribution_allowed": "false",
+  "commercial_use": "project-internal",
+  "modification_allowed": "true",
+  "source_page": "canvas://rb-dark-rpg-location-art-2026-07-05-6b4dce",
+  "author_vendor": "OpenAI Codex for rb-dark-rpg",
+  "tags": ["rb-dark-rpg", "location", "background", "prop", "generated"],
+  "genre": ["dark fantasy", "rpg"],
+  "style": ["blocky browser rpg", "dark fantasy"],
+  "description": "Generated runtime location backgrounds and Black Sun prop for the first road-to-mill slice."
+}
+

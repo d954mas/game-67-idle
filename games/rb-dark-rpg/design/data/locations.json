@@ -12,6 +12,10 @@
       "art": {
         "background_asset_id": "asset_location_last_post_bg"
       },
+      "map": {
+        "x": 0.28,
+        "y": 0.38
+      },
       "unlock": {
         "mode": "available_on_new_game"
       },
@@ -23,6 +27,17 @@
           "character_id": "gate_guard",
           "position_hint": "left_gate",
           "interactions": [
+            {
+              "type": "dialogue",
+              "dialogue_id": "dlg_gate_guard_turn_in",
+              "requirements": [
+                {
+                  "type": "quest_status",
+                  "quest_id": "q001_gate_pass",
+                  "status": "ready_to_turn_in"
+                }
+              ]
+            },
             {
               "type": "dialogue",
               "dialogue_id": "dlg_gate_guard_intro"
@@ -51,6 +66,19 @@
           ]
         },
         {
+          "id": "hub_last_post.town_trader",
+          "kind": "npc",
+          "display_name": "Торговец",
+          "character_id": "town_trader",
+          "position_hint": "right_market",
+          "interactions": [
+            {
+              "type": "shop",
+              "shop_id": "shop_post_trader_basic"
+            }
+          ]
+        },
+        {
           "id": "hub_last_post.contract_board",
           "kind": "quest_board",
           "display_name": "Доска контрактов",
@@ -60,6 +88,59 @@
             {
               "type": "quest_list",
               "quest_types": ["contract", "side"]
+            }
+          ]
+        },
+        {
+          "id": "hub_last_post.elder",
+          "kind": "npc",
+          "display_name": "РЎС‚Р°СЂРѕСЃС‚Р°",
+          "character_id": "elder",
+          "position_hint": "center_contracts",
+          "interactions": [
+            {
+              "type": "dialogue",
+              "dialogue_id": "dlg_elder_bread_completed",
+              "requirements": [
+                {
+                  "type": "quest_status",
+                  "quest_id": "q002_bread_for_post",
+                  "status": "completed"
+                }
+              ]
+            },
+            {
+              "type": "dialogue",
+              "dialogue_id": "dlg_elder_bread_turn_in",
+              "requirements": [
+                {
+                  "type": "quest_step",
+                  "quest_id": "q002_bread_for_post",
+                  "step_id": "report_to_elder"
+                }
+              ]
+            },
+            {
+              "type": "dialogue",
+              "dialogue_id": "dlg_elder_bread_in_progress",
+              "requirements": [
+                {
+                  "type": "quest_status",
+                  "quest_id": "q002_bread_for_post",
+                  "status": "active"
+                }
+              ]
+            },
+            {
+              "type": "dialogue",
+              "dialogue_id": "dlg_elder_bread_contract",
+              "requirements": [
+                {
+                  "type": "flag",
+                  "flag_id": "map_gate_unlocked",
+                  "value": true
+                }
+              ]
             }
           ]
         },
@@ -90,6 +171,26 @@
           ]
         },
         {
+          "id": "hub_last_post.caged_scavenger",
+          "kind": "combat",
+          "display_name": "Падальщик в клетке",
+          "encounter_id": "gate_scavenger",
+          "position_hint": "left_gate_cage",
+          "requirements": [
+            {
+              "type": "quest_step",
+              "quest_id": "q001_gate_pass",
+              "step_id": "clear_gate_scavenger"
+            }
+          ],
+          "interactions": [
+            {
+              "type": "start_encounter",
+              "encounter_id": "gate_scavenger"
+            }
+          ]
+        },
+        {
           "id": "hub_last_post.map_gate",
           "kind": "exit",
           "display_name": "Ворота на карту",
@@ -116,16 +217,9 @@
           "target_location_id": "hub_gate_outskirts",
           "requirements": [
             {
-              "type": "equipped",
-              "item_id": "old_sword"
-            },
-            {
-              "type": "equipped",
-              "item_id": "padded_jacket"
-            },
-            {
-              "type": "equipped",
-              "item_id": "leather_greaves"
+              "type": "flag",
+              "flag_id": "map_gate_unlocked",
+              "value": true
             }
           ]
         }
@@ -140,29 +234,29 @@
       "art": {
         "background_asset_id": "asset_location_gate_outskirts_bg"
       },
-      "unlock": {
-        "mode": "quest_step",
-        "quest_id": "q001_gate_pass",
-        "step_id": "clear_gate_scavenger"
+      "map": {
+        "x": 0.55,
+        "y": 0.38
       },
-      "objects": [
-        {
-          "id": "hub_gate_outskirts.gate_scavenger",
-          "kind": "combat",
-          "display_name": "Падальщик у ворот",
-          "encounter_id": "gate_scavenger",
-          "position_hint": "center_enemy",
-          "interactions": [
-            {
-              "type": "start_encounter",
-              "encounter_id": "gate_scavenger"
-            }
-          ]
-        }
-      ],
+      "unlock": {
+        "mode": "flag",
+        "flag_id": "map_gate_unlocked",
+        "value": true
+      },
+      "objects": [],
       "exits": [
         {
           "target_location_id": "hub_last_post"
+        },
+        {
+          "target_location_id": "old_mill",
+          "requirements": [
+            {
+              "type": "flag",
+              "flag_id": "old_mill_unlocked",
+              "value": true
+            }
+          ]
         }
       ]
     },
@@ -196,6 +290,10 @@
       "art": {
         "background_asset_id": "asset_location_old_mill_bg",
         "map_node_asset_id": "asset_map_node_old_mill"
+      },
+      "map": {
+        "x": 0.85,
+        "y": 0.60
       },
       "unlock": {
         "mode": "flag",
@@ -238,7 +336,7 @@
       ],
       "exits": [
         {
-          "target_location_id": "hub_last_post"
+          "target_location_id": "hub_gate_outskirts"
         }
       ]
     }
