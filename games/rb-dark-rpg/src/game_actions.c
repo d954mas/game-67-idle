@@ -1,5 +1,6 @@
 #include "game_actions.h"
 
+#include "game_combat.h"
 #include "game_content.h"
 
 #include <limits.h>
@@ -308,6 +309,45 @@ bool game_actions_starter_gear_equipped(const GameState *state) {
   return state && is_item_equipped(state, "old_sword") &&
          is_item_equipped(state, "padded_jacket") &&
          is_item_equipped(state, "leather_greaves");
+}
+
+static bool is_starter_gear_step(const char *step_id);
+
+static bool complete_starter_gear_steps_if_ready(GameState *state,
+                                                 const char *reason) {
+  if (!state || !game_actions_starter_gear_equipped(state)) {
+    return true;
+  }
+  GameQuestState *quest = find_quest(state, "q001_gate_pass");
+  if (!quest || quest->status != GAME_STATE_QUEST_STATUS_ACTIVE ||
+      !quest->has_current_step_id || !is_starter_gear_step(quest->current_step_id)) {
+    return true;
+  }
+  const char *steps[] = {"equip_old_sword", "equip_padded_jacket",
+                         "equip_leather_greaves"};
+  for (int i = 0; i < 3; ++i) {
+    if (!list_add_unique(state->quests_completed_step_ids,
+                         &state->quests_completed_step_ids_count,
+                         GAME_STATE_MAX_QUESTS_COMPLETED_STEP_IDS, steps[i])) {
+      return false;
+    }
+  }
+  if (!game_actions_set_flag(state, "old_sword_equipped") ||
+      !game_actions_set_flag(state, "padded_jacket_equipped") ||
+      !game_actions_set_flag(state, "leather_greaves_equipped")) {
+    return false;
+  }
+  quest->status = GAME_STATE_QUEST_STATUS_ACTIVE;
+  quest->has_current_step_id = true;
+  if (!copy_id(quest->current_step_id, "clear_gate_scavenger")) {
+    return false;
+  }
+  quest->has_last_update_reason = reason && reason[0] != '\0';
+  if (quest->has_last_update_reason &&
+      !copy_id(quest->last_update_reason, reason)) {
+    return false;
+  }
+  return true;
 }
 
 static bool is_starter_gear_step(const char *step_id) {
@@ -803,6 +843,8 @@ bool game_actions_equip_gear(GameState *state, const char *instance_id) {
   }
   GameState next = *state;
   const bool live_state = state == &g_game_state;
+  game_combat_stats_t old_stats;
+  const bool had_old_stats = game_combat_build_player_stats(&next, &old_stats);
   GameGearInstance *gear = find_gear(&next, instance_id);
   if (!gear) {
     return false;
@@ -865,6 +907,30 @@ bool game_actions_equip_gear(GameState *state, const char *instance_id) {
                            GAME_STATE_MAX_UNLOCKS_IDS, step->unlock_id)) {
         return false;
       }
+    }
+  }
+
+  char starter_reason[GAME_STATE_STRING_MAX];
+  if (snprintf(starter_reason, sizeof starter_reason, "equip.%s", item->id) >=
+      (int)sizeof starter_reason) {
+    return false;
+  }
+  if (!complete_starter_gear_steps_if_ready(&next, starter_reason)) {
+    return false;
+  }
+
+  game_combat_stats_t new_stats;
+  if (game_combat_build_player_stats(&next, &new_stats)) {
+    if (had_old_stats && new_stats.vitality > old_stats.vitality) {
+      const int delta = new_stats.vitality - old_stats.vitality;
+      next.hero_hp = next.hero_hp > INT_MAX - delta ? new_stats.vitality
+                                                    : next.hero_hp + delta;
+    }
+    if (next.hero_hp > new_stats.vitality) {
+      next.hero_hp = new_stats.vitality;
+    }
+    if (next.hero_hp < 0) {
+      next.hero_hp = 0;
     }
   }
 

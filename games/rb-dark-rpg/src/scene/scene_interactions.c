@@ -10,6 +10,9 @@
 
 enum { SCENE_INTERACTION_MAX_OBJECTS = 32 };
 
+bool shop_screen_open_shop(const char *shop_id);
+void world_map_screen_open_map(void);
+
 static scene_interaction_object_t s_scene_objects[SCENE_INTERACTION_MAX_OBJECTS];
 
 static bool str_eq(const char *a, const char *b) {
@@ -46,11 +49,20 @@ static bool activate_scene_object(World *w, const char *object_id) {
     const game_location_object_t *object = current_location_object(w, object_id);
     const game_location_interaction_t *interaction =
         game_actions_select_location_interaction(w->player_state, object);
-    if (!interaction || !str_eq(interaction->interaction_type, "dialogue") ||
-        !interaction->dialogue_id) {
+    if (!interaction) {
         return false;
     }
-    return game_dialogue_open(w, interaction->dialogue_id);
+    if (str_eq(interaction->interaction_type, "dialogue") && interaction->dialogue_id) {
+        return game_dialogue_open(w, interaction->dialogue_id);
+    }
+    if (str_eq(interaction->interaction_type, "shop") && interaction->shop_id) {
+        return shop_screen_open_shop(interaction->shop_id);
+    }
+    if (str_eq(interaction->interaction_type, "open_screen")) {
+        world_map_screen_open_map();
+        return true;
+    }
+    return false;
 }
 
 static scene_object_kind_t scene_kind_for_location_object(const game_location_object_t *object) {
@@ -76,12 +88,18 @@ static int build_scene_objects(const World *w) {
     if (!location || !location->objects || location->object_count <= 0) {
         return 0;
     }
+    GameState fallback_state;
+    const GameState *state = w ? w->player_state : NULL;
+    if (!state) {
+        game_state_init_defaults(&fallback_state);
+        state = &fallback_state;
+    }
 
     int out_count = 0;
     for (int i = 0; i < location->object_count && out_count < SCENE_INTERACTION_MAX_OBJECTS; ++i) {
         const game_location_object_t *source = &location->objects[i];
         if (!location_object_has_scene(source) ||
-            (w && w->player_state && !game_actions_location_object_visible(w->player_state, source))) {
+            !game_actions_location_object_visible(state, source)) {
             continue;
         }
 
@@ -99,7 +117,7 @@ static int build_scene_objects(const World *w) {
             .anchor_y = source->scene_anchor_y,
             .highlight_profile = SCENE_HIGHLIGHT_MASK_GLOW,
             .enabled = source->scene_enabled &&
-                       (!w || !w->player_state || game_actions_location_object_available(w->player_state, source)),
+                       game_actions_location_object_available(state, source),
         };
     }
     return out_count;

@@ -20,6 +20,7 @@
 #include "ui/nt_ui_state.h"
 #include "ui/shop_screen.h"
 #include "ui/tutorial_callout.h"
+#include "ui/world_map_screen.h"
 
 #include <stdint.h>
 #include <stdio.h>
@@ -604,6 +605,11 @@ static bool activate_location_object(World *w,
   }
   if (str_eq(interaction->interaction_type, "shop") && interaction->shop_id &&
       shop_screen_open_shop(interaction->shop_id)) {
+    close_location_screen();
+    return true;
+  }
+  if (str_eq(interaction->interaction_type, "open_screen")) {
+    world_map_screen_open_map();
     close_location_screen();
     return true;
   }

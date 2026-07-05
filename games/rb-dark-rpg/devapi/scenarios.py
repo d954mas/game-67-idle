@@ -550,6 +550,54 @@ def prepare_post_trader_shop_purchase(game: Any, viewport: Any) -> dict[str, str
     return {"state": "post_trader_shop_purchase", "item": "iron_sword", "viewport": viewport.window_size}
 
 
+def _scene_master_to_framebuffer(master_x: float, master_y: float, fb_w: float, fb_h: float) -> tuple[float, float]:
+    screen_w = 960.0
+    screen_h = 540.0
+    master_w = 1280.0
+    master_h = 700.0
+    aspect = fb_w / fb_h
+    min_aspect_for_screen_width = screen_w / master_h
+    if aspect <= min_aspect_for_screen_width:
+        view_h = master_h
+        view_w = master_h * aspect
+    else:
+        view_w = screen_w
+        view_h = screen_w / aspect
+        if view_h < screen_h:
+            view_h = screen_h
+            view_w = screen_h * aspect
+        if view_h > master_h:
+            view_h = master_h
+            view_w = master_h * aspect
+    scale = fb_h / view_h
+    view_x = ((master_w - view_w) * 0.5) if view_w >= master_w else (640.0 - (view_w * 0.5))
+    view_y = ((master_h - view_h) * 0.5) if view_h >= master_h else (350.0 - (view_h * 0.5))
+    return (master_x - view_x) * scale, fb_h - ((master_y - view_y) * scale)
+
+
+def prepare_scene_trader_shop_open(game: Any, viewport: Any) -> dict[str, str]:
+    """Tap the trader directly in the first scene and verify the shop opens."""
+
+    game.wait_frames(3)
+    tree = _wait_for_node(game, "settings/gear", max_frames=90, stride=3)[0]
+    tree_viewport = tree.get("viewport") if isinstance(tree, dict) else {}
+    fb_w, fb_h = _viewport_size(viewport, tree_viewport if isinstance(tree_viewport, dict) else {})
+    x_fb, y_fb = _scene_master_to_framebuffer(989.0, 223.0, fb_w, fb_h)
+    for candidate_y in (y_fb, fb_h - y_fb):
+        game.result("input.click", {"x": x_fb, "y": candidate_y, "button": 1, "hold": 2})
+        try:
+            _wait_for_node(game, "shop/modal_frame", max_frames=30, stride=3)
+            return {
+                "state": "scene_trader_shop_open",
+                "tap": {"x": x_fb, "y": candidate_y},
+                "viewport": viewport.window_size,
+            }
+        except RuntimeError:
+            pass
+    _wait_for_node(game, "shop/modal_frame", max_frames=3, stride=1)
+    return {"state": "scene_trader_shop_open", "viewport": viewport.window_size}
+
+
 def prepare_post_trader_shop_trade(game: Any, viewport: Any) -> dict[str, str]:
     """Open the Last Post trader shop, sell a bag item, then buy back the same instance."""
 
@@ -802,10 +850,6 @@ def prepare_q002_elder_contract_flow(game: Any, viewport: Any) -> dict[str, str]
     if quest.get("current_step_id") != "visit_old_mill":
         raise RuntimeError(f"q002_bread_for_post did not start at visit_old_mill: {quest!r}")
 
-    _open_bottom_nav_slot(game, viewport, 2)
-    tree, node = _wait_for_node(game, "world_map/location/hub_gate_outskirts")
-    _tap_node(game, tree, node, viewport)
-    _wait_for_state_value(game, "world.current_location_id", "hub_gate_outskirts")
     _open_bottom_nav_slot(game, viewport, 2)
     tree, node = _wait_for_node(game, "world_map/location/old_mill")
     _tap_node(game, tree, node, viewport)

@@ -68,7 +68,7 @@
             "anchor_y": 130,
             "sprite_region_name": "hub_scene/asset_character_blacksmith",
             "sprite_target_h": 158,
-            "enabled": false
+            "enabled": true
           },
           "interactions": [
             {
@@ -88,9 +88,9 @@
           "character_id": "town_trader",
           "position_hint": "right_market",
           "scene": {
-            "bounds": { "x": 988, "y": 114, "w": 118, "h": 150 },
-            "anchor_x": 1046,
-            "anchor_y": 118,
+            "bounds": { "x": 930, "y": 148, "w": 118, "h": 150 },
+            "anchor_x": 988,
+            "anchor_y": 152,
             "sprite_region_name": "hub_scene/asset_character_town_trader",
             "sprite_target_h": 136,
             "enabled": true

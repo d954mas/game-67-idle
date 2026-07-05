@@ -430,6 +430,7 @@ if(FEATURE_GAME_STATE)
         "${GAME_CONTENT_GENERATED_SOURCE}"
         "${GAME_STATE_GENERATED_SOURCE}"
         tests/test_scene_interactions.c
+        tests/test_scene_shop_stub.c
     )
     target_include_directories(test_scene_interactions PRIVATE src)
     target_include_directories(test_scene_interactions PRIVATE "${ENGINE_DIR}/engine")

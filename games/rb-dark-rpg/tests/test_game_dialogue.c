@@ -317,6 +317,41 @@ static void test_gate_dialogue_progression(void) {
   assert_gate_reaccept_preserves_advanced_quest(&loaded);
 }
 
+static void test_starter_gear_progress_does_not_depend_on_equip_order(void) {
+  GameState state;
+  game_state_init_defaults(&state);
+  assert(game_actions_grant_gear(&state, "gear_old_sword_001", "old_sword",
+                                 GAME_ACTION_GEAR_SLOT_WEAPON));
+  assert(game_actions_grant_gear(&state, "gear_padded_jacket_001",
+                                 "padded_jacket",
+                                 GAME_ACTION_GEAR_SLOT_ARMOUR));
+  assert(game_actions_grant_gear(&state, "gear_leather_greaves_001",
+                                 "leather_greaves",
+                                 GAME_ACTION_GEAR_SLOT_LEGS));
+  assert(game_actions_start_quest(&state, "q001_gate_pass", "equip_old_sword",
+                                  "test"));
+  assert(game_actions_complete_step(&state, "q001_gate_pass",
+                                    "talk_gate_guard", "equip_old_sword",
+                                    "test"));
+  assert(game_actions_set_flag(&state, "starter_gear_received"));
+
+  assert(game_actions_equip_gear(&state, "gear_leather_greaves_001"));
+  assert(game_actions_equip_gear(&state, "gear_padded_jacket_001"));
+  assert(game_actions_equip_gear(&state, "gear_old_sword_001"));
+
+  assert(game_actions_starter_gear_equipped(&state));
+  assert(!game_actions_needs_starter_gear_onboarding(&state));
+  assert(game_actions_needs_gate_check_onboarding(&state));
+  const GameQuestState *quest = find_quest(&state, "q001_gate_pass");
+  assert(quest != 0);
+  assert(quest->status == GAME_STATE_QUEST_STATUS_ACTIVE);
+  assert(quest->has_current_step_id);
+  assert(strcmp(quest->current_step_id, "clear_gate_scavenger") == 0);
+  assert(has_flag(&state, "old_sword_equipped"));
+  assert(has_flag(&state, "padded_jacket_equipped"));
+  assert(has_flag(&state, "leather_greaves_equipped"));
+}
+
 static void
 test_gate_turn_in_dialogue_completes_quest_and_grants_rewards(void) {
   World w = {0};
@@ -490,6 +525,7 @@ static void test_equipment_slot_registry_matches_runtime_grid(void) {
 
 int main(void) {
   test_gate_dialogue_progression();
+  test_starter_gear_progress_does_not_depend_on_equip_order();
   test_gate_turn_in_dialogue_completes_quest_and_grants_rewards();
   test_equipping_replacement_returns_previous_item_to_bag();
   test_unequipping_returns_item_to_bag();

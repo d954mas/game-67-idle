@@ -6,7 +6,14 @@
 #include <assert.h>
 #include <string.h>
 
+bool shop_screen_open(void);
+void shop_screen_set_open(bool open);
+bool world_map_screen_open(void);
+void world_map_screen_set_open(bool open);
+
 static const char *GUARD_ID = "hub_last_post.gate_guard";
+static const char *TRADER_ID = "hub_last_post.town_trader";
+static const char *MAP_GATE_ID = "hub_last_post.map_gate";
 
 static void test_first_scene_defaults(void) {
     World w = {0};
@@ -47,10 +54,22 @@ static void test_disabled_scene_objects_are_not_shown(void) {
      * Disabled objects (blacksmith, caged scavenger, etc.) stay out. */
     assert(count == 2);
     assert(strcmp(objects[0].id, GUARD_ID) == 0);
-    assert(strcmp(objects[1].id, "hub_last_post.town_trader") == 0);
-    assert(scene_interactions_find(&w, "hub_last_post.town_trader") != 0);
+    assert(strcmp(objects[1].id, TRADER_ID) == 0);
+    assert(scene_interactions_find(&w, TRADER_ID) != 0);
     assert(scene_interactions_find(&w, "hub_last_post.blacksmith") == 0);
     assert(scene_interactions_hit_test(&w, 448.0f, 280.0f) == 0);
+}
+
+static void test_trader_scene_position_is_above_and_left_of_old_market_spot(void) {
+    World w = {0};
+    const scene_interaction_object_t *trader = scene_interactions_find(&w, TRADER_ID);
+    assert(trader != 0);
+    assert(trader->bounds.x == 930);
+    assert(trader->bounds.y == 148);
+    assert(trader->bounds.w == 118);
+    assert(trader->bounds.h == 150);
+    assert(trader->anchor_x == 988.0f);
+    assert(trader->anchor_y == 152.0f);
 }
 
 static void test_guard_hit_bounds(void) {
@@ -173,6 +192,43 @@ static void test_guard_release_opens_turn_in_dialogue_after_gate_fight(void) {
     assert(strcmp(w.dialogue.definition->id, "dlg_gate_guard_turn_in") == 0);
 }
 
+static void test_trader_release_opens_shop(void) {
+    World w = {0};
+    GameState state;
+    game_state_init_defaults(&state);
+    w.player_state = &state;
+    shop_screen_set_open(false);
+
+    scene_interactions_update_pointer_state(&w, TRADER_ID, true, true, false);
+    scene_interactions_update_pointer_state(&w, TRADER_ID, false, false, true);
+
+    assert(strcmp(w.first_scene.activated_object_id, TRADER_ID) == 0);
+    assert(!w.dialogue.open);
+    assert(shop_screen_open());
+    shop_screen_set_open(false);
+}
+
+static void test_map_gate_release_opens_world_map(void) {
+    World w = {0};
+    GameState state;
+    game_state_init_defaults(&state);
+    assert(game_actions_set_flag(&state, "map_gate_unlocked"));
+    w.player_state = &state;
+    world_map_screen_set_open(false);
+
+    const scene_interaction_object_t *map_gate = scene_interactions_find(&w, MAP_GATE_ID);
+    assert(map_gate != 0);
+    assert(map_gate->enabled);
+    scene_interactions_update_pointer_state(&w, MAP_GATE_ID, true, true, false);
+    scene_interactions_update_pointer_state(&w, MAP_GATE_ID, false, false, true);
+
+    assert(strcmp(w.first_scene.activated_object_id, MAP_GATE_ID) == 0);
+    assert(!w.dialogue.open);
+    assert(strcmp(state.world_current_location_id, "hub_last_post") == 0);
+    assert(world_map_screen_open());
+    world_map_screen_set_open(false);
+}
+
 static void test_release_outside_does_not_complete_tutorial(void) {
     World w = {0};
     scene_interactions_update_pointer_state(&w, GUARD_ID, true, true, false);
@@ -253,6 +309,7 @@ int main(void) {
     test_first_scene_defaults();
     test_guard_comes_from_location_scene_data();
     test_disabled_scene_objects_are_not_shown();
+    test_trader_scene_position_is_above_and_left_of_old_market_spot();
     test_guard_hit_bounds();
     test_guard_hidden_outside_last_post();
     test_guard_uses_mask_glow_highlight();
@@ -260,6 +317,8 @@ int main(void) {
     test_pointer_state_captures_pan_while_pressed();
     test_guard_release_opens_dialogue_without_completing_step();
     test_guard_release_opens_turn_in_dialogue_after_gate_fight();
+    test_trader_release_opens_shop();
+    test_map_gate_release_opens_world_map();
     test_release_outside_does_not_complete_tutorial();
     test_modal_suppression_clears_press_before_release();
     test_tutorial_finger_requires_current_objective();

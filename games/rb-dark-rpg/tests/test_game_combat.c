@@ -292,6 +292,24 @@ static void test_player_stats_use_equipped_starter_gear(void) {
     assert(game_combat_attack_power(&stats) == 6);
 }
 
+static void test_equipping_starter_vitality_gear_keeps_hp_full(void) {
+    GameState state;
+    game_state_init_defaults(&state);
+    assert(state.hero_hp == 30);
+    assert(game_actions_grant_gear(&state, "gear_old_sword_001", "old_sword", GAME_ACTION_GEAR_SLOT_WEAPON));
+    assert(game_actions_grant_gear(&state, "gear_padded_jacket_001", "padded_jacket", GAME_ACTION_GEAR_SLOT_ARMOUR));
+    assert(game_actions_grant_gear(&state, "gear_leather_greaves_001", "leather_greaves", GAME_ACTION_GEAR_SLOT_LEGS));
+
+    assert(game_actions_equip_gear(&state, "gear_old_sword_001"));
+    assert(game_actions_equip_gear(&state, "gear_padded_jacket_001"));
+    assert(game_actions_equip_gear(&state, "gear_leather_greaves_001"));
+
+    game_combat_stats_t stats;
+    assert(game_combat_build_player_stats(&state, &stats));
+    assert(stats.vitality == 33);
+    assert(state.hero_hp == 33);
+}
+
 static void test_gate_scavenger_combat_records_event_timeline(void) {
     GameState state;
     prepare_gate_check_state(&state);
@@ -644,6 +662,7 @@ int main(void) {
     test_shop_item_content_exposes_price_and_sellable_contract();
     test_generated_gate_encounter_is_available();
     test_player_stats_use_equipped_starter_gear();
+    test_equipping_starter_vitality_gear_keeps_hp_full();
     test_shop_purchase_requires_completed_quest_and_spends_gold();
     test_shop_purchase_rejects_insufficient_gold_without_mutation();
     test_shop_sell_rejects_quest_stack_items();
