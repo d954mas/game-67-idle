@@ -1,7 +1,7 @@
 ---
 id: T0309
 title: "rb-dark-rpg jam: требования VibeJam #1 - Made for VibeJam, ссылки TG, тема в тайтле"
-status: todo
+status: review
 project: P003
 epic: E013
 priority: P1
@@ -36,3 +36,4 @@ itch.io или GitHub Pages). Обязательные требования ор
 ## Log
 
 - 2026-07-05: Создана после официального старта VibeJam #1 (тема «Мир без тебя»).
+- 2026-07-05: Made for VibeJam #1 в финале и настройках, ссылки кликабельны, TG автора d954mas_make_games вписан; осталась регистрация в форме (лид)

@@ -1,7 +1,7 @@
 ---
 id: T0306
 title: "rb-dark-rpg jam: карта мира stopgap - сепия, убрать неон"
-status: todo
+status: idea
 project: P003
 epic: E013
 priority: P1
@@ -24,3 +24,4 @@ world_map_ash_border_01 — плоский мультяшный арт с нео
 ## Open questions
 
 ## Log
+- 2026-07-05: Вместо сепии карта получила замок до открытия; неоновые контуры остаются - кандидат на пост-джем или последний час
