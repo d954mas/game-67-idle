@@ -49,9 +49,14 @@
     {
       "id": "asset_portrait_player_seeker",
       "kind": "portrait",
-      "status": "needed",
-      "source": "source-first",
-      "notes": "Player portrait for character sheet or dialogue fallback."
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/seeker_portrait_hud.png",
+      "file_path": "assets/ui/seeker_portrait_hud.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/seeker_portrait_hud.provenance.md",
+      "sha256": "24912175D82A4AD7D204E7A3A07386FB8599A650F460F1FE91FDB9608A7CCA5E",
+      "notes": "Low-noise player seeker HUD portrait for the top character panel; also suitable as the character sheet fallback."
     },
     {
       "id": "asset_character_player_seeker",

@@ -14,8 +14,11 @@
 
 #define LAYER_TOP_FILL 4
 #define LAYER_TOP_ART 5
-#define LAYER_TEXT_SHADOW 6
-#define LAYER_TEXT 7
+#define LAYER_TOP_BAR_FILL 6
+#define LAYER_TOP_PORTRAIT 7
+#define LAYER_TOP_OVERLAY 8
+#define LAYER_TEXT_SHADOW 9
+#define LAYER_TEXT 10
 
 static float clampf(float value, float min_value, float max_value) {
     if (value < min_value) {
@@ -28,7 +31,8 @@ static float clampf(float value, float min_value, float max_value) {
 }
 
 typedef enum top_hud_region_t {
-    TOP_HUD_PORTRAIT_FRAME = 0,
+    TOP_HUD_SEEKER_PORTRAIT = 0,
+    TOP_HUD_PORTRAIT_FRAME,
     TOP_HUD_STATUS_PLAQUE,
     TOP_HUD_HP_FRAME,
     TOP_HUD_XP_FRAME,
@@ -40,6 +44,7 @@ typedef enum top_hud_region_t {
 } top_hud_region_t;
 
 static const nt_hash64_t TOP_HUD_REGION_HASHES[TOP_HUD_REGION_COUNT] = {
+    ASSET_ATLAS_REGION_UI_SEEKER_PORTRAIT_HUD,
     ASSET_ATLAS_REGION_UI_TOP_HUD_PORTRAIT_FRAME,
     ASSET_ATLAS_REGION_UI_TOP_HUD_STATUS_PLAQUE,
     ASSET_ATLAS_REGION_UI_TOP_HUD_HP_FRAME,
@@ -87,34 +92,36 @@ static void ensure_top_hud_regions(void) {
     }
 }
 
-static void top_hud_image(nt_ui_context_t *ctx, top_hud_region_t region) {
+static void top_hud_image_on_layer(nt_ui_context_t *ctx, top_hud_region_t region, nt_ui_layer_t layer) {
     nt_ui_image_style_t style = nt_ui_image_style_defaults();
-    nt_ui_image(ctx, NT_UI_DATA_LAYER(LAYER_TOP_ART), &s_top_hud_regions[region], &style, NULL);
+    nt_ui_image(ctx, NT_UI_DATA_LAYER(layer), &s_top_hud_regions[region], &style, NULL);
 }
 
-static void top_hud_bar(nt_ui_context_t *ctx, int slot, top_hud_region_t frame, float ratio, Clay_Color fill_color, float w, float h, const char *label) {
+static void top_hud_image(nt_ui_context_t *ctx, top_hud_region_t region) {
+    top_hud_image_on_layer(ctx, region, LAYER_TOP_ART);
+}
+
+static void top_hud_bar(nt_ui_context_t *ctx, int slot, float ratio, Clay_Color fill_color, float w, float h, const char *label) {
     const nt_ui_label_style_t bar_label = label_style(12.0F, 255.0F, 240.0F, 218.0F, 255.0F);
     ratio = ratio < 0.0F ? 0.0F : (ratio > 1.0F ? 1.0F : ratio);
     CLAY({.id = CLAY_IDI("first_screen/top_hud_bar", slot),
-          .layout = {.sizing = {CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(h)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
-        const float inset_x = min_f(10.0F, w * 0.08F);
+          .layout = {.sizing = {CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(h)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
+          .backgroundColor = {18.0F, 13.0F, 9.0F, 218.0F},
+          .cornerRadius = CLAY_CORNER_RADIUS(4),
+          .border = {.color = {105.0F, 76.0F, 43.0F, 182.0F}, .width = {1, 1, 1, 1, 0}},
+          .userData = NT_UI_CLAY_DATA(LAYER_TOP_ART)}) {
+        const float inset_x = min_f(4.0F, w * 0.08F);
+        const float inset_y = 4.0F;
         const float fill_w = (w - inset_x * 2.0F) * ratio;
         if (fill_w > 1.0F) {
             CLAY({.id = CLAY_IDI("first_screen/top_hud_bar_fill", slot),
                   .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
                                .attachPoints = {.element = CLAY_ATTACH_POINT_LEFT_CENTER, .parent = CLAY_ATTACH_POINT_LEFT_CENTER},
                                .offset = {inset_x, 0.0F}},
-                  .layout = {.sizing = {CLAY_SIZING_FIXED(fill_w), CLAY_SIZING_FIXED(h * 0.42F)}},
+                  .layout = {.sizing = {CLAY_SIZING_FIXED(fill_w), CLAY_SIZING_FIXED(h - inset_y * 2.0F)}},
                   .backgroundColor = fill_color,
                   .cornerRadius = CLAY_CORNER_RADIUS(2),
-                  .userData = NT_UI_CLAY_DATA(LAYER_TOP_FILL)}) {}
-        }
-
-        CLAY({.id = CLAY_IDI("first_screen/top_hud_bar_frame", slot),
-              .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
-                           .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER, .parent = CLAY_ATTACH_POINT_CENTER_CENTER}},
-              .layout = {.sizing = {CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(h)}}}) {
-            top_hud_image(ctx, frame);
+                  .userData = NT_UI_CLAY_DATA(LAYER_TOP_BAR_FILL)}) {}
         }
         if (label) {
             shadowed_label(ctx, 30 + slot, label, &bar_label);
@@ -122,19 +129,24 @@ static void top_hud_bar(nt_ui_context_t *ctx, int slot, top_hud_region_t frame, 
     }
 }
 
-static void top_hud_resource_chip(nt_ui_context_t *ctx, int slot, top_hud_region_t region, const char *value, float w, float h) {
-    const nt_ui_label_style_t value_style = label_style(15.0F, 250.0F, 232.0F, 190.0F, 255.0F);
-    CLAY({.id = CLAY_IDI("first_screen/resource_chip", slot),
-          .layout = {.sizing = {CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(h)},
-                     .padding = {.left = 34, .right = 8, .top = 0, .bottom = 1},
-                     .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
-        CLAY({.id = CLAY_IDI("first_screen/resource_chip_art", slot),
-              .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
-                           .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER, .parent = CLAY_ATTACH_POINT_CENTER_CENTER}},
-              .layout = {.sizing = {CLAY_SIZING_FIXED(w), CLAY_SIZING_FIXED(h)}}}) {
-            top_hud_image(ctx, region);
-        }
-        shadowed_label(ctx, 20 + slot, value, &value_style);
+static void top_hud_gold_counter(nt_ui_context_t *ctx, bool portrait) {
+    const nt_ui_label_style_t value_style = label_style(13.0F, 250.0F, 232.0F, 190.0F, 255.0F);
+    const float coin_size = portrait ? 13.0F : 14.0F;
+    CLAY({.id = CLAY_ID("first_screen/gold_counter"),
+          .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
+                       .attachPoints = {.element = CLAY_ATTACH_POINT_RIGHT_TOP, .parent = CLAY_ATTACH_POINT_RIGHT_TOP},
+                       .offset = {portrait ? -78.0F : -82.0F, portrait ? 86.0F : 82.0F}},
+          .layout = {.sizing = {CLAY_SIZING_FIXED(portrait ? 72.0F : 80.0F), CLAY_SIZING_FIXED(20.0F)},
+                     .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                     .childGap = 5,
+                     .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
+        CLAY({.id = CLAY_ID("first_screen/gold_coin"),
+              .layout = {.sizing = {CLAY_SIZING_FIXED(coin_size), CLAY_SIZING_FIXED(coin_size)}},
+              .backgroundColor = {209.0F, 151.0F, 61.0F, 245.0F},
+              .cornerRadius = CLAY_CORNER_RADIUS(7),
+              .border = {.color = {87.0F, 55.0F, 19.0F, 190.0F}, .width = {1, 1, 1, 1, 0}},
+              .userData = NT_UI_CLAY_DATA(LAYER_TOP_OVERLAY)}) {}
+        shadowed_label(ctx, 20, "1 250", &value_style);
     }
 }
 
@@ -150,38 +162,58 @@ static void top_hud_level_badge(nt_ui_context_t *ctx, bool portrait) {
               .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
                            .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER, .parent = CLAY_ATTACH_POINT_CENTER_CENTER}},
               .layout = {.sizing = {CLAY_SIZING_FIXED(badge_size), CLAY_SIZING_FIXED(badge_size)}}}) {
-            top_hud_image(ctx, TOP_HUD_LEVEL_BADGE);
+            top_hud_image_on_layer(ctx, TOP_HUD_LEVEL_BADGE, LAYER_TOP_OVERLAY);
         }
         shadowed_label(ctx, 12, "1", &level);
     }
 }
 
 static void top_hud_player_cluster(nt_ui_context_t *ctx, bool portrait) {
-    const float portrait_size = portrait ? 42.0F : 48.0F;
-    const float status_w = portrait ? 154.0F : 176.0F;
-    const float status_h = portrait ? 60.0F : 64.0F;
+    const float portrait_size = portrait ? 58.0F : 64.0F;
+    const float portrait_art_size = portrait_size - 8.0F;
+    const float status_w = portrait ? 178.0F : 206.0F;
+    const float status_h = portrait ? 48.0F : 50.0F;
+    const float cluster_h = portrait ? 68.0F : 72.0F;
+    const float cluster_w = portrait_size + status_w + 18.0F;
 
     CLAY({.id = CLAY_ID("first_screen/top_player_cluster"),
           .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
                        .attachPoints = {.element = CLAY_ATTACH_POINT_RIGHT_TOP, .parent = CLAY_ATTACH_POINT_RIGHT_TOP},
                        .offset = {portrait ? -70.0F : -72.0F, portrait ? 14.0F : 14.0F}},
-          .layout = {.sizing = {CLAY_SIZING_FIXED(portrait_size + status_w + 7.0F), CLAY_SIZING_FIXED(status_h)},
+          .layout = {.sizing = {CLAY_SIZING_FIXED(cluster_w), CLAY_SIZING_FIXED(cluster_h)},
+                     .padding = {.left = 4, .right = 8, .top = 4, .bottom = 4},
                      .layoutDirection = CLAY_LEFT_TO_RIGHT,
-                     .childGap = 7,
-                     .childAlignment = {CLAY_ALIGN_X_RIGHT, CLAY_ALIGN_Y_TOP}}}) {
+                     .childGap = 6,
+                     .childAlignment = {CLAY_ALIGN_X_RIGHT, CLAY_ALIGN_Y_CENTER}},
+          .backgroundColor = {14.0F, 10.0F, 7.0F, 168.0F},
+          .cornerRadius = CLAY_CORNER_RADIUS(6),
+          .border = {.color = {115.0F, 79.0F, 42.0F, 150.0F}, .width = {1, 1, 1, 1, 0}},
+          .userData = NT_UI_CLAY_DATA(LAYER_TOP_FILL)}) {
         CLAY({.id = CLAY_ID("first_screen/top_portrait"),
-              .layout = {.sizing = {CLAY_SIZING_FIXED(portrait_size), CLAY_SIZING_FIXED(portrait_size)}}}) {
-            top_hud_image(ctx, TOP_HUD_PORTRAIT_FRAME);
+              .layout = {.sizing = {CLAY_SIZING_FIXED(portrait_size), CLAY_SIZING_FIXED(portrait_size)},
+                         .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
+            CLAY({.id = CLAY_ID("first_screen/top_portrait_art"),
+                  .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
+                               .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER, .parent = CLAY_ATTACH_POINT_CENTER_CENTER}},
+                  .layout = {.sizing = {CLAY_SIZING_FIXED(portrait_art_size), CLAY_SIZING_FIXED(portrait_art_size)}}}) {
+                top_hud_image_on_layer(ctx, TOP_HUD_SEEKER_PORTRAIT, LAYER_TOP_PORTRAIT);
+            }
+            CLAY({.id = CLAY_ID("first_screen/top_portrait_frame"),
+                  .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
+                               .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER, .parent = CLAY_ATTACH_POINT_CENTER_CENTER}},
+                  .layout = {.sizing = {CLAY_SIZING_FIXED(portrait_size), CLAY_SIZING_FIXED(portrait_size)}}}) {
+                top_hud_image(ctx, TOP_HUD_PORTRAIT_FRAME);
+            }
             top_hud_level_badge(ctx, portrait);
         }
 
         CLAY({.id = CLAY_ID("first_screen/top_status"),
               .layout = {.sizing = {CLAY_SIZING_FIXED(status_w), CLAY_SIZING_FIXED(status_h)},
                          .layoutDirection = CLAY_TOP_TO_BOTTOM,
-                         .childGap = portrait ? 4 : 5,
+                         .childGap = 4,
                          .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
-            top_hud_bar(ctx, 0, TOP_HUD_HP_FRAME, 0.82F, (Clay_Color){151.0F, 37.0F, 28.0F, 238.0F}, status_w, portrait ? 18.0F : 20.0F, "245/300");
-            top_hud_resource_chip(ctx, 0, TOP_HUD_RESOURCE_COIN_CHIP, "1 250", status_w, portrait ? 30.0F : 32.0F);
+            top_hud_bar(ctx, 0, 0.82F, (Clay_Color){164.0F, 41.0F, 32.0F, 238.0F}, status_w, 22.0F, "HP 245/300");
+            top_hud_bar(ctx, 1, 0.60F, (Clay_Color){62.0F, 118.0F, 184.0F, 232.0F}, status_w, 22.0F, "XP 12/20");
         }
     }
 }
@@ -193,7 +225,7 @@ static void top_hud_location(nt_ui_context_t *ctx, bool portrait) {
     CLAY({.id = CLAY_ID("first_screen/top_location"),
           .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
                        .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_TOP, .parent = CLAY_ATTACH_POINT_CENTER_TOP},
-                       .offset = {0.0F, portrait ? 76.0F : 16.0F}},
+                       .offset = {0.0F, portrait ? 106.0F : 16.0F}},
           .layout = {.sizing = {CLAY_SIZING_FIXED(plaque_w), CLAY_SIZING_FIXED(plaque_h)},
                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}}) {
         CLAY({.id = CLAY_ID("first_screen/top_location_art"),
@@ -210,13 +242,14 @@ static void top_hud_ui(nt_ui_context_t *ctx, bool portrait) {
     ensure_top_hud_regions();
 
     CLAY({.id = CLAY_ID("first_screen/top_ui"),
-          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(portrait ? 86 : 110)},
+          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(portrait ? 112 : 110)},
                      .layoutDirection = CLAY_LEFT_TO_RIGHT,
                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}}) {
         CLAY({.id = CLAY_ID("first_screen/poki_reserve"),
               .layout = {.sizing = {CLAY_SIZING_FIXED(112), CLAY_SIZING_FIXED(72)}}}) {}
 
         top_hud_player_cluster(ctx, portrait);
+        top_hud_gold_counter(ctx, portrait);
         top_hud_location(ctx, portrait);
     }
 }

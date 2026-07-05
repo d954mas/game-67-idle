@@ -130,6 +130,7 @@ if(NOT EMSCRIPTEN)
             assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_map.png
             assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_place.png
             assets/ui/generated/garrison_nav_tokens_11/slices/nav_v11_more.png
+            assets/ui/seeker_portrait_hud.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_portrait_frame.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_status_plaque.png
             assets/ui/generated/top_hud_tokens_02/slices/top_hud_hp_frame.png

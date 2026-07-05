@@ -182,6 +182,9 @@ int main(int argc, char *argv[]) {
     top_hud_opts.shape = NT_ATLAS_SPRITE_SHAPE_RECT;
     top_hud_opts.allow_rotate = NT_ATLAS_SPRITE_ROTATE_NO;
 
+    top_hud_opts.name = "seeker_portrait_hud";
+    nt_builder_atlas_add(ctx, "assets/ui/seeker_portrait_hud.png", &top_hud_opts);
+
     top_hud_opts.name = "top_hud_portrait_frame";
     nt_builder_atlas_add(ctx, "assets/ui/generated/top_hud_tokens_02/slices/top_hud_portrait_frame.png", &top_hud_opts);
 
