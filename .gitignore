@@ -1,5 +1,8 @@
 tmp/
 .cache/
+.pytest_cache/
+# Root-level native/CMake build output.
+build/
 # Repo-local studio Python venv for the image asset tools (created by
 # ai_studio/assets/tools/image/_bridge/setup_python.mjs). Never committed.
 .venv/
@@ -23,6 +26,10 @@ ai_studio/architecture_map/validation-report.json
 # Per-machine studio config override (points canvas projects at a local/YandexDisk
 # path). Only the committed ai_studio/studio.config.json defaults are tracked.
 ai_studio/studio.config.local.json
+
+# Local Canvas project working copies. The committed studio config keeps the
+# canonical projects root outside the repo.
+ai_studio/assets/canvas/projects/
 
 # Restricted paid/licensed asset binaries: never commit to an open repo.
 # Only catalog/license metadata is committed; binaries live locally and in the
