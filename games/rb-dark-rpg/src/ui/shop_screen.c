@@ -54,6 +54,18 @@ typedef enum shop_list_kind_t {
   SHOP_LIST_BUYBACK,
 } shop_list_kind_t;
 
+typedef struct shop_detail_model_t {
+  bool has_item;
+  bool enabled;
+  const game_item_definition_t *item;
+  const char *fallback_name;
+  const char *context_text;
+  const char *action_text;
+  char price_text[24];
+  char stat_text[96];
+  char status_text[96];
+} shop_detail_model_t;
+
 typedef enum shop_art_region_t {
   SHOP_ART_SLOT_CELL = 0,
   SHOP_ART_GOLD_COIN,
@@ -742,6 +754,244 @@ static const char *shop_buyback_locked_reason(const GameState *state,
   return "нет места";
 }
 
+static const char *shop_kind_title(shop_list_kind_t kind) {
+  switch (kind) {
+  case SHOP_LIST_SELL:
+    return "Моя сумка";
+  case SHOP_LIST_BUYBACK:
+    return "Выкуп";
+  case SHOP_LIST_BUY:
+  default:
+    return "Товары торговца";
+  }
+}
+
+static const char *shop_kind_empty_text(shop_list_kind_t kind) {
+  switch (kind) {
+  case SHOP_LIST_SELL:
+    return "В сумке нет предметов для продажи.";
+  case SHOP_LIST_BUYBACK:
+    return "Проданные предметы появятся здесь до закрытия лавки.";
+  case SHOP_LIST_BUY:
+  default:
+    return "Товаров нет.";
+  }
+}
+
+static void shop_detail_init(shop_detail_model_t *detail,
+                             shop_list_kind_t kind) {
+  if (!detail) {
+    return;
+  }
+  memset(detail, 0, sizeof *detail);
+  detail->context_text = shop_kind_title(kind);
+  detail->action_text = kind == SHOP_LIST_SELL
+                            ? "Продажа"
+                            : (kind == SHOP_LIST_BUYBACK ? "Выкуп" : "Покупка");
+  (void)snprintf(detail->status_text, sizeof detail->status_text, "%s",
+                 shop_kind_empty_text(kind));
+}
+
+static void shop_detail_from_buy(shop_detail_model_t *detail, GameState *state,
+                                 const game_shop_definition_t *shop,
+                                 const game_shop_item_t *shop_item) {
+  if (!detail || !state || !shop || !shop_item || !shop_item->item_id) {
+    return;
+  }
+  const game_item_definition_t *item =
+      game_content_find_item(shop_item->item_id);
+  const bool can_buy =
+      game_actions_can_purchase_shop_item(state, shop, shop_item);
+  detail->has_item = true;
+  detail->enabled = can_buy;
+  detail->item = item;
+  detail->fallback_name = shop_item->item_id;
+  (void)snprintf(detail->price_text, sizeof detail->price_text, "%d",
+                 shop_item->price_gold);
+  item_stat_line(item, detail->stat_text, sizeof detail->stat_text);
+  (void)snprintf(detail->status_text, sizeof detail->status_text, "%s",
+                 locked_reason(state, shop_item));
+}
+
+static void shop_detail_from_sell(shop_detail_model_t *detail, GameState *state,
+                                  const char *instance_id) {
+  if (!detail || !state || !instance_id || instance_id[0] == '\0') {
+    return;
+  }
+  const GameGearInstance *gear = shop_find_gear(state, instance_id);
+  if (!gear) {
+    return;
+  }
+  const game_item_definition_t *item = game_content_find_item(gear->def_id);
+  int price_gold = 0;
+  const bool can_sell =
+      game_actions_can_sell_inventory_item(state, instance_id, &price_gold);
+  const int preview_price =
+      price_gold > 0 ? price_gold : game_actions_item_sell_price(item);
+  detail->has_item = true;
+  detail->enabled = can_sell;
+  detail->item = item;
+  detail->fallback_name = instance_id;
+  (void)snprintf(detail->price_text, sizeof detail->price_text,
+                 preview_price > 0 ? "+%d" : "-", preview_price);
+  item_stat_line(item, detail->stat_text, sizeof detail->stat_text);
+  (void)snprintf(detail->status_text, sizeof detail->status_text, "%s",
+                 can_sell ? "можно продать"
+                          : shop_sell_locked_reason(state, instance_id, item));
+}
+
+static void shop_detail_from_buyback(shop_detail_model_t *detail,
+                                     GameState *state,
+                                     const game_shop_buyback_entry_t *entry) {
+  if (!detail || !state || !entry || !entry->used ||
+      entry->entry_id[0] == '\0' || entry->gear.def_id[0] == '\0') {
+    return;
+  }
+  const game_item_definition_t *item =
+      game_content_find_item(entry->gear.def_id);
+  int price_gold = 0;
+  const bool can_rebuy = game_actions_can_rebuy_inventory_item(
+      state, &s_buyback, entry->entry_id, &price_gold);
+  const int preview_price = price_gold > 0 ? price_gold : entry->price_gold;
+  detail->has_item = true;
+  detail->enabled = can_rebuy;
+  detail->item = item;
+  detail->fallback_name = entry->entry_id;
+  (void)snprintf(detail->price_text, sizeof detail->price_text, "%d",
+                 preview_price);
+  item_stat_line(item, detail->stat_text, sizeof detail->stat_text);
+  (void)snprintf(detail->status_text, sizeof detail->status_text, "%s",
+                 can_rebuy ? "можно выкупить"
+                           : shop_buyback_locked_reason(state, preview_price));
+}
+
+static shop_detail_model_t shop_detail_for_kind(World *w,
+                                                const game_shop_definition_t *shop,
+                                                shop_list_kind_t kind) {
+  shop_detail_model_t detail;
+  shop_detail_init(&detail, kind);
+  if (!w || !w->player_state) {
+    return detail;
+  }
+  GameState *state = w->player_state;
+  if (kind == SHOP_LIST_BUY) {
+    if (shop && shop->items && shop->item_count > 0) {
+      shop_detail_from_buy(&detail, state, shop, &shop->items[0]);
+    }
+    return detail;
+  }
+  if (kind == SHOP_LIST_SELL) {
+    for (int i = 0; i < state->inventory_bag_order_count; ++i) {
+      const char *instance_id = state->inventory_bag_order[i];
+      if (shop_find_gear(state, instance_id)) {
+        shop_detail_from_sell(&detail, state, instance_id);
+        return detail;
+      }
+    }
+    return detail;
+  }
+  for (int i = 0; i < s_buyback.count; ++i) {
+    if (s_buyback.entries[i].used) {
+      shop_detail_from_buyback(&detail, state, &s_buyback.entries[i]);
+      return detail;
+    }
+  }
+  return detail;
+}
+
+static void shop_detail_money_ui(nt_ui_context_t *ctx,
+                                 const shop_detail_model_t *detail,
+                                 bool portrait) {
+  const nt_ui_label_style_t action =
+      game_modal_label(portrait ? 9.5F : 10.5F, detail->enabled ? 234.0F : 146.0F,
+                       detail->enabled ? 206.0F : 116.0F,
+                       detail->enabled ? 159.0F : 88.0F, 255.0F);
+  const nt_ui_label_style_t price =
+      game_modal_label(portrait ? 11.0F : 12.0F, detail->enabled ? 255.0F : 154.0F,
+                       detail->enabled ? 238.0F : 119.0F,
+                       detail->enabled ? 196.0F : 88.0F, 255.0F);
+  CLAY({.id = CLAY_ID("shop/detail/price"),
+        .layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIXED(22.0F)},
+                   .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                   .childGap = 4,
+                   .childAlignment = {CLAY_ALIGN_X_CENTER,
+                                      CLAY_ALIGN_Y_CENTER}}}) {
+    text_label(ctx, detail->action_text, &action);
+    shop_money_icon(ctx, detail->enabled, portrait);
+    text_label(ctx, detail->price_text, &price);
+  }
+}
+
+static void shop_detail_panel_ui(nt_ui_context_t *ctx,
+                                 const shop_detail_model_t *detail,
+                                 bool portrait) {
+  if (!ctx || !detail) {
+    return;
+  }
+  const nt_ui_label_style_t context =
+      game_modal_label(portrait ? 11.0F : 12.0F, 232.0F, 204.0F, 158.0F,
+                       255.0F);
+  const nt_ui_label_style_t title =
+      game_modal_label(portrait ? 12.0F : 13.0F,
+                       detail->enabled ? 255.0F : 172.0F,
+                       detail->enabled ? 232.0F : 140.0F,
+                       detail->enabled ? 194.0F : 110.0F, 255.0F);
+  const nt_ui_label_style_t meta =
+      game_modal_label(portrait ? 9.0F : 10.0F,
+                       detail->enabled ? 205.0F : 139.0F,
+                       detail->enabled ? 176.0F : 112.0F,
+                       detail->enabled ? 134.0F : 88.0F, 255.0F);
+  const float panel_h = portrait ? 94.0F : 74.0F;
+  const float icon_size = portrait ? 38.0F : 42.0F;
+  CLAY({.id = CLAY_ID("shop/detail"),
+        .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(panel_h)},
+                   .padding = {.left = 9, .right = 9, .top = 7, .bottom = 7},
+                   .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                   .childGap = 4,
+                   .childAlignment = {CLAY_ALIGN_X_LEFT,
+                                      CLAY_ALIGN_Y_CENTER}},
+        .backgroundColor = {26.0F, 18.0F, 11.0F, 214.0F},
+        .cornerRadius = CLAY_CORNER_RADIUS(4),
+        .border = {.color = {130.0F, 90.0F, 43.0F, 170.0F},
+                   .width = {1, 1, 1, 1, 0}},
+        .userData = NT_UI_CLAY_DATA(LAYER_SHOP_BG)}) {
+    CLAY({.id = CLAY_ID("shop/context"),
+          .layout = {.sizing = {CLAY_SIZING_GROW(0),
+                                CLAY_SIZING_FIXED(portrait ? 15.0F : 17.0F)},
+                     .childAlignment = {CLAY_ALIGN_X_LEFT,
+                                        CLAY_ALIGN_Y_CENTER}}}) {
+      text_label(ctx, detail->context_text, &context);
+    }
+    if (!detail->has_item) {
+      CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+                       .childAlignment = {CLAY_ALIGN_X_LEFT,
+                                          CLAY_ALIGN_Y_CENTER}}}) {
+        text_label(ctx, detail->status_text, &meta);
+      }
+    } else {
+      CLAY({.id = CLAY_ID("shop/detail/item"),
+            .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+                       .layoutDirection = CLAY_LEFT_TO_RIGHT,
+                       .childGap = 8,
+                       .childAlignment = {CLAY_ALIGN_X_LEFT,
+                                          CLAY_ALIGN_Y_CENTER}}}) {
+        shop_item_icon(ctx, detail->item, icon_size, detail->enabled);
+        CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
+                         .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                         .childGap = 1,
+                         .childAlignment = {CLAY_ALIGN_X_LEFT,
+                                            CLAY_ALIGN_Y_CENTER}}}) {
+          text_label(ctx, shop_item_name(detail->item, detail->fallback_name),
+                     &title);
+          text_label(ctx, detail->stat_text, &meta);
+          text_label(ctx, detail->status_text, &meta);
+        }
+        shop_detail_money_ui(ctx, detail, portrait);
+      }
+    }
+  }
+}
+
 static SHOP_UNUSED_FN void shop_buyback_row(nt_ui_context_t *ctx, World *w,
                              const game_shop_buyback_entry_t *entry,
                              bool portrait) {
@@ -1013,18 +1263,18 @@ static void shop_list_content_ui(nt_ui_context_t *ctx, World *w,
     }
     const int rows = shop_sell_grid_ui(ctx, w, portrait, columns);
     if (rows == 0) {
-      text_label(ctx, "В сумке нет предметов для продажи.", &empty);
+      text_label(ctx, shop_kind_empty_text(kind), &empty);
     }
     return;
   }
   if (kind == SHOP_LIST_BUYBACK) {
     if (s_buyback.count <= 0) {
-      text_label(ctx, "Выкуп пуст.", &empty);
+      text_label(ctx, shop_kind_empty_text(kind), &empty);
       return;
     }
     const int rows = shop_buyback_grid_ui(ctx, w, portrait, columns);
     if (rows == 0) {
-      text_label(ctx, "Выкуп пуст.", &empty);
+      text_label(ctx, shop_kind_empty_text(kind), &empty);
     }
     return;
   }
@@ -1033,7 +1283,7 @@ static void shop_list_content_ui(nt_ui_context_t *ctx, World *w,
     return;
   }
   if (shop->item_count <= 0 || !shop->items) {
-    text_label(ctx, "Товаров нет.", &empty);
+    text_label(ctx, shop_kind_empty_text(kind), &empty);
     return;
   }
   (void)shop_buy_grid_ui(ctx, w, shop, portrait, columns);
@@ -1221,12 +1471,15 @@ void shop_screen_ui(nt_ui_context_t *ctx, World *w) {
         text_label(ctx, s_feedback, &feedback);
       }
     }
+    const shop_list_kind_t active_kind =
+        s_mode == SHOP_MODE_SELL
+            ? SHOP_LIST_SELL
+            : (s_mode == SHOP_MODE_BUYBACK ? SHOP_LIST_BUYBACK
+                                           : SHOP_LIST_BUY);
+    const shop_detail_model_t detail =
+        shop_detail_for_kind(w, shop, active_kind);
+    shop_detail_panel_ui(ctx, &detail, portrait);
     if (portrait) {
-      const shop_list_kind_t active_kind =
-          s_mode == SHOP_MODE_SELL
-              ? SHOP_LIST_SELL
-              : (s_mode == SHOP_MODE_BUYBACK ? SHOP_LIST_BUYBACK
-                                             : SHOP_LIST_BUY);
       const int columns = panel_w >= 356.0F ? 3 : 2;
       shop_scroll_list_ui(ctx, w, shop, active_kind, "shop/scroll",
                           "shop/items", portrait, columns);
@@ -1243,7 +1496,7 @@ void shop_screen_ui(nt_ui_context_t *ctx, World *w) {
                        .childAlignment = {CLAY_ALIGN_X_LEFT,
                                           CLAY_ALIGN_Y_TOP}}}) {
         shop_list_panel_ui(ctx, w, shop, SHOP_LIST_BUY, "shop/buy_column",
-                           "shop/buy_scroll", "shop/items", "Торговец",
+                           "shop/buy_scroll", "shop/items", "Товары торговца",
                            portrait, columns);
         shop_list_panel_ui(ctx, w, shop, player_kind, "shop/player_column",
                            "shop/player_scroll", "shop/player_items",

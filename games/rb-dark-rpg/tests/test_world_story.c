@@ -151,9 +151,9 @@ static void test_world_content_registry(void) {
   assert(old_mill != 0);
   assert(old_mill->unlock_kind == GAME_LOCATION_UNLOCK_FLAG);
   assert(strcmp(old_mill->unlock_flag_id, "old_mill_unlocked") == 0);
-  assert(old_mill->object_count == 2);
+  assert(old_mill->object_count == 3);
   assert(strcmp(old_mill->objects[1].asset_id,
-                "asset_object_black_sun_mark") == 0);
+                "asset_object_black_sun_clue_wall") == 0);
   assert(old_mill->objects[1].interaction_count == 1);
   assert(strcmp(old_mill->objects[1].interactions[0].object_id,
                 "black_sun_mark") == 0);
@@ -311,7 +311,7 @@ static void test_visit_location_advances_quest_step(void) {
   assert(quest != 0);
   assert(quest->status == GAME_STATE_QUEST_STATUS_ACTIVE);
   assert(quest->has_current_step_id);
-  assert(strcmp(quest->current_step_id, "inspect_old_mill") == 0);
+  assert(strcmp(quest->current_step_id, "q002_clear_mill_yard") == 0);
 }
 
 static void test_location_object_requirements_and_inspect_step(void) {

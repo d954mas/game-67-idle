@@ -126,44 +126,74 @@
     {
       "id": "asset_portrait_blacksmith",
       "kind": "portrait",
-      "status": "needed",
-      "source": "source-first",
-      "notes": "Blacksmith dialogue portrait."
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/portraits/asset_portrait_blacksmith.png",
+      "notes": "Upper-body portrait crop from the accepted blacksmith scene sprite. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json.",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/portraits/asset_portrait_blacksmith.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "91B5401340E91B7E02B26E45B972B93027AA97CBE6F238F4EC7F3DD2B5B02BDE"
     },
     {
       "id": "asset_character_blacksmith",
       "kind": "character",
-      "status": "needed",
-      "source": "source-first",
-      "notes": "Blacksmith hub figure."
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/characters/asset_character_blacksmith.png",
+      "notes": "City-reference full-body blacksmith scene sprite for the Last Post hub forge/shop object. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json.",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/characters/asset_character_blacksmith.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "8E3AFFF48F1D610FE709D22E697ECC9C79D4E15F4E58CED5555195F8533BDE3A"
     },
     {
       "id": "asset_portrait_elder",
       "kind": "portrait",
-      "status": "needed",
-      "source": "source-first",
-      "notes": "Elder dialogue portrait."
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/portraits/asset_portrait_elder.png",
+      "notes": "Upper-body portrait crop from the accepted elder scene sprite. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json.",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/portraits/asset_portrait_elder.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "B25DCDB200A5B87F369ADFF71FEB90E7BB7BBBEE303F105DD00DA17A93351CCD"
     },
     {
       "id": "asset_character_elder",
       "kind": "character",
-      "status": "needed",
-      "source": "source-first",
-      "notes": "Elder hub figure."
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/characters/asset_character_elder.png",
+      "notes": "City-reference full-body elder scene sprite for the Last Post contract giver. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json.",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/characters/asset_character_elder.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "159A25F4E689333274F8D8EA1ADDD08C013CCF0074FDFF922DC972B7E7EF39FA"
     },
     {
       "id": "asset_portrait_healer",
       "kind": "portrait",
-      "status": "needed",
-      "source": "source-first",
-      "notes": "Healer dialogue portrait."
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/portraits/asset_portrait_healer.png",
+      "notes": "Upper-body portrait crop from the accepted healer scene sprite. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json.",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/portraits/asset_portrait_healer.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "B8E1E0DCCCBBF48BB770FC0FDBFC2B2EB487F319D0878BC376B2A478D1A92E2E"
     },
     {
       "id": "asset_character_healer",
       "kind": "character",
-      "status": "needed",
-      "source": "source-first",
-      "notes": "Healer hub figure."
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/characters/asset_character_healer.png",
+      "notes": "City-reference full-body healer scene sprite for the Last Post recovery NPC. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json.",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/characters/asset_character_healer.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "AAAEB3CF92C7619DA0AB4F110242CCA8F58B323B6E79120C6F0E2A1AAC62696E"
     },
     {
       "id": "asset_portrait_council_scribe",
@@ -225,23 +255,38 @@
     {
       "id": "asset_object_contract_board",
       "kind": "prop",
-      "status": "needed",
-      "source": "source-first",
-      "notes": "Contract board hub object."
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/props/asset_object_contract_board.png",
+      "notes": "City-reference transparent contract board prop for the Last Post hub. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json.",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/props/asset_object_contract_board.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "DD5533752AC5CE25CD5DEB525916409CF17B56CF3D517B72546D67806FCF1183"
     },
     {
       "id": "asset_object_dragon_memorial",
       "kind": "prop",
-      "status": "needed",
-      "source": "source-first",
-      "notes": "Dim Dragon memorial or beacon object."
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/props/asset_object_dragon_memorial.png",
+      "notes": "City-reference transparent dim Dragon memorial prop for the Last Post hub. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json.",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/props/asset_object_dragon_memorial.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "6708C91B7EA504367BDE5050FDB1BD202ABCA480B4243053492E7849687B2C62"
     },
     {
       "id": "asset_object_map_gate",
       "kind": "prop",
-      "status": "needed",
-      "source": "source-first",
-      "notes": "Gate/map exit object."
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/props/asset_object_map_gate.png",
+      "notes": "City-reference transparent gate/route marker prop for the hub map exit. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json.",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/props/asset_object_map_gate.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "1E267CC919AC8AD43C6CCAA1F97C01ACB589B5690149741472661925D886408B"
     },
     {
       "id": "asset_object_black_sun_mark",
@@ -253,7 +298,7 @@
       "license": "project-internal generated asset",
       "provenance_path": "assets/ui/generated/location_object_sprites_01/provenance.md",
       "sha256": "4E31333054E5F3B41B98A60480DBF7A458E49366C78ADFDF14563C0FE560A962",
-      "notes": "City-style v2 transparent clickable Black Sun mark prop for the Old Mill clue hotspot."
+      "notes": "Legacy generated Black Sun mark prop. Do not use as a large main-scene facade sign; current Old Mill scene data uses asset_object_black_sun_clue_wall instead."
     },
     {
       "id": "asset_equipment_slot_cell",
@@ -986,6 +1031,90 @@
       "provenance_path": "assets/ui/generated/release_content_30m_01/provenance.md",
       "sha256": "EBD45683718F2EF35960CEF3C073095A9C5C6433258B1218118C2CD33DB486CA",
       "notes": "Procedural placeholder enemy card for black_sun_captain."
+    },
+    {
+      "id": "asset_character_town_trader",
+      "kind": "character",
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/characters/asset_character_town_trader.png",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/characters/asset_character_town_trader.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "373B6B8EA078AC19CCD1A6E92B26AEE2C7C0944676376A2DD60CBC5070E337A3",
+      "notes": "City-reference full-body town trader scene sprite for the Last Post market/shop object. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
+    },
+    {
+      "id": "asset_portrait_town_trader",
+      "kind": "portrait",
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/portraits/asset_portrait_town_trader.png",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/portraits/asset_portrait_town_trader.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "1D3133FF8CB6C932F9B7E175223BD77BE290093F1E127E017ED70584F56D9017",
+      "notes": "Upper-body portrait crop from the accepted town trader scene sprite. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
+    },
+    {
+      "id": "asset_object_caged_scavenger",
+      "kind": "prop",
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/props/asset_object_caged_scavenger.png",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/props/asset_object_caged_scavenger.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "BA7B01F0C98ACB622F7C6D2CC70281EF4936FAD54947279CF3944BDC12DEFAE7",
+      "notes": "City-reference transparent caged scavenger prop for the gate-pass combat objective. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
+    },
+    {
+      "id": "asset_enemy_mill_scavenger_scene",
+      "kind": "enemy_sprite",
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/enemies/asset_enemy_mill_scavenger_scene.png",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/enemies/asset_enemy_mill_scavenger_scene.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "EE3B6783543EA235F24225A21C4048EDAC9744433B0EE85A4F99A2AC9DD1B696",
+      "notes": "City-reference transparent Old Mill scavenger scene/combat sprite. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
+    },
+    {
+      "id": "asset_enemy_cellar_knifeman_scene",
+      "kind": "enemy_sprite",
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/enemies/asset_enemy_cellar_knifeman_scene.png",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/enemies/asset_enemy_cellar_knifeman_scene.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "7EB8C53EEF837457E18363FDB9114B91AB3F09F0064E684F2753B780BD015955",
+      "notes": "City-reference transparent Old Mill cellar knifeman scene/combat sprite. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
+    },
+    {
+      "id": "asset_object_old_mill_cellar_hatch",
+      "kind": "prop",
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/props/asset_object_old_mill_cellar_hatch.png",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/props/asset_object_old_mill_cellar_hatch.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "BDF64F51BE45908CA38DBC03387347C787A3F9C6D4A4C634E799320BB928F9F9",
+      "notes": "City-reference transparent Old Mill cellar hatch prop. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
+    },
+    {
+      "id": "asset_object_black_sun_clue_wall",
+      "kind": "prop",
+      "status": "available",
+      "source": "games/rb-dark-rpg/assets/ui/generated/location_scene_sprites_01/props/asset_object_black_sun_clue_wall.png",
+      "file_path": "assets/ui/generated/location_scene_sprites_01/props/asset_object_black_sun_clue_wall.png",
+      "origin": "ai",
+      "license": "project-internal generated asset",
+      "provenance_path": "assets/ui/generated/location_scene_sprites_01/provenance.md",
+      "sha256": "9CB3A2F10B5E28319FF82A92193FF5D5467CE70BED49515E74E0CD6AC73F4460",
+      "notes": "City-reference transparent broken-wall Black Sun clue prop; replaces the rejected hanging facade sign for scene use. Canvas project: rb-dark-rpg-p0-scene-sprites-2026-07-05-9109a4; pack manifest: assets/ui/generated/location_scene_sprites_01/manifest.generated.json."
     }
   ]
 }

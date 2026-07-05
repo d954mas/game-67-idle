@@ -1,8 +1,8 @@
 {
-  "schema": "ai_studio.generated_asset_pack.v1",
+  "schema": "ai_studio.game_asset_pack.generated_manifest.v1",
   "game_id": "rb-dark-rpg",
   "pack_id": "location_scene_sprites_01",
-  "created": "2026-07-05",
+  "generated_at": "2026-07-05T12:18:00Z",
   "origin": "ai",
   "license": "project-internal generated asset",
   "reference_asset": "assets/scenes/last_post_background_candidate05_1280x700.png",

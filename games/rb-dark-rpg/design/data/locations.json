@@ -97,7 +97,7 @@
         {
           "id": "hub_last_post.elder",
           "kind": "npc",
-          "display_name": "РЎС‚Р°СЂРѕСЃС‚Р°",
+          "display_name": "Староста",
           "character_id": "elder",
           "position_hint": "center_contracts",
           "interactions": [
@@ -177,6 +177,7 @@
           "id": "hub_last_post.caged_scavenger",
           "kind": "combat",
           "display_name": "Падальщик в клетке",
+          "asset_id": "asset_object_caged_scavenger",
           "encounter_id": "gate_scavenger",
           "position_hint": "left_gate_cage",
           "requirements": [
@@ -308,6 +309,7 @@
           "id": "old_mill.main_yard",
           "kind": "combat",
           "display_name": "Двор мельницы",
+          "asset_id": "asset_enemy_mill_scavenger_scene",
           "encounter_id": "mill_scavenger",
           "position_hint": "center_yard",
           "interactions": [
@@ -321,7 +323,7 @@
           "id": "old_mill.black_sun_mark",
           "kind": "hotspot",
           "display_name": "Знак Черного Солнца",
-          "asset_id": "asset_object_black_sun_mark",
+          "asset_id": "asset_object_black_sun_clue_wall",
           "position_hint": "basement_wall",
           "requirements": [
             {
@@ -340,6 +342,7 @@
           "id": "old_mill.cellar_knifeman",
           "kind": "combat",
           "display_name": "Нож Черного Солнца",
+          "asset_id": "asset_enemy_cellar_knifeman_scene",
           "encounter_id": "cellar_knifeman",
           "interactions": [
             {

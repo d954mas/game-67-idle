@@ -48,9 +48,9 @@
       "role": "starter gear source and early upgrade vendor",
       "home_location_id": "hub_last_post",
       "art": {
-        "portrait_asset_id": "asset_portrait_blacksmith",
-        "full_body_asset_id": "asset_character_blacksmith",
-        "dialogue_face_asset_id": "asset_portrait_blacksmith"
+        "portrait_asset_id": "asset_portrait_town_trader",
+        "full_body_asset_id": "asset_character_town_trader",
+        "dialogue_face_asset_id": "asset_portrait_town_trader"
       },
       "interactions": [
         {

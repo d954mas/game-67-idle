@@ -290,6 +290,22 @@ Do these before expanding to more regions:
 5. Fix `town_trader` art ids so the trader does not reuse blacksmith assets.
 6. Fix the elder mojibake in `locations.json`.
 
+P0 sprite pass completed on 2026-07-05:
+
+- Added generated pack `assets/ui/generated/location_scene_sprites_01/`
+  with source sheets, prompts, provenance, contact sheet, and 16 transparent
+  PNG sprites.
+- Added city NPC sprites/portraits for `blacksmith`, `town_trader`, `elder`,
+  and `healer`.
+- Added city props for `contract_board`, `dragon_memorial`, `map_gate`, and
+  `caged_scavenger`.
+- Added Old Mill scene sprites for `mill_scavenger`, `cellar_knifeman`,
+  `old_mill_cellar_hatch`, and integrated `black_sun_clue_wall`.
+- Updated `asset_manifest.json`, `characters.json`, and `locations.json` asset
+  references for the accepted P0 sprites.
+- Runtime scene drawing is not fully data-driven yet; these sprites are ready
+  for the next renderer/layout pass.
+
 ### P1: Combat Quality
 
 1. Add distinct combat actors for all encounters used in current and near-future
@@ -321,4 +337,3 @@ asset:
    background.
 5. If it is an enemy, it needs both a scene/threat representation and a combat
    actor, not just an enemy card.
-
