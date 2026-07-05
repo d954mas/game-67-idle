@@ -53,6 +53,7 @@
 #include "ui/end_screen.h"
 #include "ui/first_screen_hud.h"
 #include "ui/hud.h"
+#include "ui/title_card.h"
 #include "ui/ui_runtime.h"
 #include "world/world.h"
 #if FEATURE_GAME_STATE
@@ -298,6 +299,7 @@ static void frame(void) {
     // settings UI: real nt_ui widgets (panel + sliders + buttons), built + walked here
     if (ui_runtime_begin(g_nt_app.dt)) {
         first_screen_hud_ui(ui_runtime_ctx(), &s_world);
+        title_card_ui(ui_runtime_ctx(), &s_world);
         dialogue_panel_ui(ui_runtime_ctx(), &s_world);
         end_screen_ui(ui_runtime_ctx(), &s_world);
         sys_settings_ui(ui_runtime_ctx(), &s_world);

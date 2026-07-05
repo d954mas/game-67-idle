@@ -152,6 +152,18 @@ if(NOT EMSCRIPTEN)
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/scenes/gate_outskirts_background_1280x700.png"
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/scenes/old_mill_background_1280x700.png"
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_object_sprites_01/asset_object_black_sun_mark.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_scene_sprites_01/characters/asset_character_blacksmith.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_scene_sprites_01/characters/asset_character_town_trader.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_scene_sprites_01/characters/asset_character_elder.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_scene_sprites_01/characters/asset_character_healer.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_scene_sprites_01/props/asset_object_contract_board.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_scene_sprites_01/props/asset_object_dragon_memorial.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_scene_sprites_01/props/asset_object_map_gate.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_scene_sprites_01/props/asset_object_caged_scavenger.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_scene_sprites_01/enemies/asset_enemy_mill_scavenger_scene.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_scene_sprites_01/enemies/asset_enemy_cellar_knifeman_scene.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_scene_sprites_01/props/asset_object_old_mill_cellar_hatch.png"
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/location_scene_sprites_01/props/asset_object_black_sun_clue_wall.png"
     )
     set(GAME_EQUIPMENT_ICON_FILES
         "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/generated/equipment_icons_01/cell/asset_equipment_slot_cell.png"
@@ -262,6 +274,7 @@ add_executable(${GAME_TARGET}
     src/ui/world_map_viewport.c
     src/ui/combat_flow.c
     src/ui/end_screen.c
+    src/ui/title_card.c
     src/ui/equipment_screen.c
     src/ui/shop_screen.c
     src/ui/game_modal.c
@@ -369,7 +382,7 @@ if(GAME_DEVAPI_ENABLED)
     )
 endif()
 if(WIN32 AND NOT EMSCRIPTEN)
-    target_link_libraries(${GAME_TARGET} PRIVATE winmm)
+    target_link_libraries(${GAME_TARGET} PRIVATE winmm shell32)
 endif()
 if(EMSCRIPTEN)
     # The pack builder is native-only; the web build preloads the pack produced

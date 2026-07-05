@@ -527,28 +527,23 @@ static void damage_badge(nt_ui_context_t *ctx, int slot, const char *text, Clay_
     }
 }
 
-static void enemy_silhouette(nt_ui_context_t *ctx, bool portrait) {
+static void enemy_portrait_ui(nt_ui_context_t *ctx, combat_actor_art_t art, bool portrait) {
+    ensure_combat_actor_regions();
     const float size = portrait ? 66.0F : 78.0F;
-    const nt_ui_label_style_t mark = label_style(portrait ? 28.0F : 32.0F, 238.0F, 132.0F, 92.0F, 255.0F);
-    CLAY({.id = CLAY_ID("combat/enemy_silhouette"),
+    const float img_h = size - 6.0F;
+    const float img_w = img_h * (512.0F / 704.0F);
+    nt_ui_image_style_t sprite_style = nt_ui_image_style_defaults();
+    sprite_style.color_packed = 0xFFFFFFFFU;
+    CLAY({.id = CLAY_ID("combat/enemy_portrait"),
           .layout = {.sizing = {CLAY_SIZING_FIXED(size), CLAY_SIZING_FIXED(size)},
                      .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}},
           .backgroundColor = {24.0F, 17.0F, 17.0F, 218.0F},
           .cornerRadius = CLAY_CORNER_RADIUS(5),
           .border = {.color = {128.0F, 67.0F, 45.0F, 190.0F}, .width = {1, 1, 1, 1, 0}},
           .userData = NT_UI_CLAY_DATA(LAYER_COMBAT_BG)}) {
-        CLAY({.id = CLAY_ID("combat/enemy_head"),
-              .layout = {.sizing = {CLAY_SIZING_FIXED(size * 0.44F), CLAY_SIZING_FIXED(size * 0.34F)}},
-              .backgroundColor = {43.0F, 36.0F, 33.0F, 245.0F},
-              .cornerRadius = CLAY_CORNER_RADIUS(2),
-              .border = {.color = {91.0F, 70.0F, 54.0F, 170.0F}, .width = {1, 1, 1, 1, 0}},
-              .userData = NT_UI_CLAY_DATA(LAYER_COMBAT_FILL)}) {}
-        CLAY({.id = CLAY_ID("combat/enemy_eye"),
-              .floating = {.attachTo = CLAY_ATTACH_TO_PARENT,
-                           .attachPoints = {.element = CLAY_ATTACH_POINT_CENTER_CENTER, .parent = CLAY_ATTACH_POINT_CENTER_CENTER},
-                           .offset = {0.0F, -1.0F}},
-              .layout = {.sizing = {CLAY_SIZING_FIT(0), CLAY_SIZING_FIT(0)}}}) {
-            nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_COMBAT_TEXT), "!", &mark);
+        CLAY({.id = CLAY_ID("combat/enemy_portrait_image"),
+              .layout = {.sizing = {CLAY_SIZING_FIXED(img_w), CLAY_SIZING_FIXED(img_h)}}}) {
+            nt_ui_image(ctx, NT_UI_DATA_LAYER(LAYER_COMBAT_FILL), &s_combat_actor_regions[art], &sprite_style, NULL);
         }
     }
 }
@@ -945,10 +940,6 @@ static COMBAT_UNUSED_FN void combat_stats_summary_ui(nt_ui_context_t *ctx, const
                                                      const game_combat_stats_t *enemy, bool portrait) {
     char player_stats[80];
     char enemy_stats[80];
-    (void)snprintf(player_stats, sizeof player_stats, "РўС‹: СѓРґР°СЂ %d  Р·Р°С‰ %d",
-                   game_combat_attack_power(player), player->protection);
-    (void)snprintf(enemy_stats, sizeof enemy_stats, "Р’СЂР°Рі: СѓРґР°СЂ %d  Р·Р°С‰ %d",
-                   game_combat_attack_power(enemy), enemy->protection);
     (void)snprintf(player_stats, sizeof player_stats, "Ты: удар %d  защ %d",
                    game_combat_attack_power(player), player->protection);
     (void)snprintf(enemy_stats, sizeof enemy_stats, "Враг: удар %d  защ %d",
@@ -1102,7 +1093,7 @@ static void prefight_ui(nt_ui_context_t *ctx, World *w, const game_encounter_def
                          .layoutDirection = portrait ? CLAY_TOP_TO_BOTTOM : CLAY_LEFT_TO_RIGHT,
                          .childGap = 10,
                          .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {
-            enemy_silhouette(ctx, portrait);
+            enemy_portrait_ui(ctx, combat_enemy_art_for_encounter(w->combat.encounter_id), portrait);
             CLAY({.id = CLAY_ID("combat/prefight_intro_text"),
                   .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
                              .layoutDirection = CLAY_TOP_TO_BOTTOM,

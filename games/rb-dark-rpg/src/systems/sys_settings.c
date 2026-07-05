@@ -14,6 +14,23 @@
 
 #include <stdio.h>
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten/emscripten.h>
+/* clang-format off */
+EM_JS_DEPS(sys_settings_web, "$UTF8ToString")
+EM_JS(void, sys_settings_web_open_url, (const char *url_ptr), {
+    try {
+        window.open(UTF8ToString(url_ptr), "_blank");
+    } catch (e) {}
+})
+/* clang-format on */
+#endif
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 // Walker batches RECTs/IMAGEs first, then TEXT, within each Clay zIndex - so a
 // lower layer draws behind: panel bg (BG) < widget art (IMG) < labels (TEXT).
 #define LAYER_BG 0
@@ -29,6 +46,14 @@
 #define SETTINGS_SLIDER_MAX_W 380.0F
 #define SETTINGS_SLIDER_MIN_W 232.0F
 #define SETTINGS_MODAL_ID 0x5E771001U
+
+// VibeJam #1 attribution (jam rule: "Made for VibeJam #1" + link to the jam
+// channel must be reachable from the game). SYS_SETTINGS_AUTHOR_TG_URL is a
+// PLACEHOLDER - replace it with the lead's real Telegram handle before
+// publishing the build; do not ship with AUTHOR_TG_PLACEHOLDER still in the URL.
+#define SYS_SETTINGS_JAM_CHANNEL_URL "https://t.me/VibeYura"
+#define SYS_SETTINGS_AUTHOR_TG_URL "https://t.me/AUTHOR_TG_PLACEHOLDER"
+#define SYS_SETTINGS_URL_SCHEME_LEN 8 /* strlen("https://"), used to show the bare handle */
 
 static bool s_open;
 static int s_dismiss_guard_frames;
@@ -138,6 +163,42 @@ static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, f
     }
 }
 
+// Opens an external URL from the running game: EM_ASM window.open() on web,
+// ShellExecuteA on native Windows. No-op (link stays visible-only) elsewhere.
+static void settings_open_url(const char *url) {
+    if (!url) {
+        return;
+    }
+#if defined(__EMSCRIPTEN__)
+    sys_settings_web_open_url(url);
+#elif defined(_WIN32)
+    (void)ShellExecuteA(NULL, "open", url, NULL, NULL, SW_SHOWNORMAL);
+#else
+    (void)url;
+#endif
+}
+
+// Full-width clickable row: label shows the bare handle (URL without the
+// "https://" scheme), click opens the URL. Reuses the same button look as the
+// reset/close action row below.
+static void jam_link_row(nt_ui_context_t *ctx, const char *id, const char *prefix, const char *url) {
+    char label_text[96];
+    (void)snprintf(label_text, sizeof label_text, "%s%s", prefix, url + SYS_SETTINGS_URL_SCHEME_LEN);
+    nt_ui_button_style_t link_style = game_modal_button_style(false);
+    const nt_ui_label_style_t link_label = game_modal_label(15.0F, 236.0F, 216.0F, 176.0F, 255.0F);
+    const uint32_t link_id = nt_ui_id(id);
+    CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIXED(40)}}}) {
+        nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), link_id, &link_style,
+                           &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
+                           true, NULL);
+        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), label_text, &link_label);
+        if (nt_ui_button_end(ctx)) {
+            game_audio_play(GAME_AUDIO_CUE_SETTINGS);
+            settings_open_url(url);
+        }
+    }
+}
+
 void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
     settings_clear_transient_ui_state(ctx);
     ensure_settings_gear_region();
@@ -235,6 +296,18 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
     volume_row(ctx, "Master", "settings/master", &s_master, slider_w);
     volume_row(ctx, "Music", "settings/music", &s_music, slider_w);
     volume_row(ctx, "SFX", "settings/sfx", &s_sfx, slider_w);
+
+    // VibeJam #1 attribution: required jam notice + reachable links to the
+    // jam channel and the author's Telegram (see SYS_SETTINGS_*_URL above).
+    CLAY({.id = CLAY_ID("settings/jam_section"),
+          .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
+                     .layoutDirection = CLAY_TOP_TO_BOTTOM,
+                     .childGap = 8}}) {
+        const nt_ui_label_style_t jam_label = game_modal_label(13.5F, 205.0F, 184.0F, 144.0F, 255.0F);
+        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "Сделано для VibeJam #1 - тема \"Мир без тебя\"", &jam_label);
+        jam_link_row(ctx, "settings/jam_channel", "Канал джема: ", SYS_SETTINGS_JAM_CHANNEL_URL);
+        jam_link_row(ctx, "settings/jam_author", "Автор: ", SYS_SETTINGS_AUTHOR_TG_URL);
+    }
 
     // Action row: hold-to-reset (long press) + close.
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)},
