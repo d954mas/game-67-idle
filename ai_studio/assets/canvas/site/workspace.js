@@ -801,6 +801,36 @@ function paintElement(element, vp, editEl) {
       ctx.restore();
     }
   }
+  // Flipbook chrome badge (T0265, lead feedback 2026-07-06: "на канвасе flipbook в покое
+  // выглядит ровно как обычная картинка — типы неразличимы"): a small dark PILL in the
+  // element's bottom-right corner reporting kept-frame count + fps, so a flipbook reads apart
+  // from a plain image at rest AND while playing — element.src (frame 0) paints through the
+  // UNCHANGED image path above regardless. Pure chrome: drawn after the ctx.globalAlpha reset,
+  // same fixed-CSS-px/unrotated-box shortcut as the ref/cleanup chips above (never scales into
+  // an unreadable blob at high zoom), and never touches the pixel path above (renderGroup/
+  // export/the static image draw are untouched — this never runs for a plain image, since it
+  // gates on element.flipbook).
+  if (element.type === "image" && element.flipbook && Array.isArray(element.flipbook.frames)) {
+    const fb = element.flipbook;
+    const keptCount = fb.frames.filter((frame) => frame && frame.kept !== false).length;
+    const fps = Math.round(Number(fb.fps) > 0 ? Number(fb.fps) : 12);
+    const badgeLabel = `▶ ${keptCount} · ${fps}fps`;
+    ctx.save();
+    ctx.font = "11px system-ui, 'Segoe UI', sans-serif";
+    const badgePadX = 5;
+    const badgeH = 16;
+    const badgeTextW = Math.ceil(ctx.measureText(badgeLabel).width);
+    const badgeW = badgeTextW + badgePadX * 2;
+    const badgeX = origin.x + w - badgeW - 4;
+    const badgeY = origin.y + h - badgeH - 4;
+    roundRectPath(badgeX, badgeY, badgeW, badgeH, badgeH / 2);
+    ctx.fillStyle = "rgba(8, 20, 13, 0.8)";
+    ctx.fill();
+    ctx.fillStyle = ANIM_ACCENT;
+    ctx.textBaseline = "middle";
+    ctx.fillText(badgeLabel, badgeX + badgePadX, badgeY + badgeH / 2 + 0.5);
+    ctx.restore();
+  }
   if (isSelected(element)) {
     ctx.strokeStyle = isEdit ? "#3fc7ba" : "#77a7ff";
     ctx.lineWidth = 2;
