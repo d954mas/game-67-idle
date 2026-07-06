@@ -40,8 +40,9 @@
     "schema": "templates/template/state/game_state.schema.json",
     "generated_dir": "templates/template/build/<config>/generated/game-state",
     "runtime_sources": [
-      "templates/template/src/game_storage.c",
-      "templates/template/state/migrations/v0_to_v1.c"
+      "templates/template/src/game_state_json.c",
+      "templates/template/src/game_state_json.h",
+      "templates/template/src/game_storage.c"
     ]
   }
 }

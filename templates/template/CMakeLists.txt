@@ -146,6 +146,7 @@ if(FEATURE_GAME_STATE)
     )
     target_sources(${GAME_TARGET} PRIVATE
         "${GAME_STATE_GENERATED_SOURCE}"
+        src/game_state_json.c
         src/game_storage.c
         state/migrations/v0_to_v1.c
     )
@@ -239,4 +240,16 @@ if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)
             VERBATIM
         )
     endif()
+endif()
+
+# --- native C unit tests (Unity + CTest); introduced in A1, extended in A2/A3 ---
+if(NOT EMSCRIPTEN)
+    enable_testing()
+    add_executable(test_game_state_json tests/test_game_state_json.c src/game_state_json.c)
+    target_link_libraries(test_game_state_json PRIVATE cjson unity)
+    target_include_directories(test_game_state_json PRIVATE src)
+    target_compile_definitions(test_game_state_json PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_state_json PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_state_json COMMAND test_game_state_json)
 endif()

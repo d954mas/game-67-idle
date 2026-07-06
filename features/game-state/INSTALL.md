@@ -18,6 +18,8 @@ project:
 <project>/
   state/game_state.schema.json
   state/migrations/
+  src/game_state_json.c
+  src/game_state_json.h
   src/game_storage.c
   src/game_storage.h
 ```
