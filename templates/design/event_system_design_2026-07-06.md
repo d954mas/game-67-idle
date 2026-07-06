@@ -205,12 +205,13 @@ enum-как-hash благословлён; линт имён feature.noun_verbed
 reason); «эмить N событий, не массив»; поля-ординалы/иерархия тегов/
 центральный реестр — осознанно не нужны.
 
-DOC-SYNC (внести при общей чистке, агенту до неё не отдавать):
-item_system §10 — кольцо-в-items/курсоры/«пропущено N»/подписка-отписка/
-game.economy.journal УСТАРЕЛИ (транспорт теперь здесь; items.txn =
-событие общего лога); item_system §5 — progression_poll_events() УМЕР
-(лвлап = событие progression.levelup общего лога);
-feature_architecture §2 — 5→7 фазовых функций; state §7/§14-p13 —
-добавить секцию events в скоуп генератора (E2 после A4).
+DOC-SYNC — 2026-07-06 ВЫПОЛНЕН (правки в рабочем дереве):
+[x] item_system §10 — кольцо-в-items/курсоры/«пропущено N»/подписка-отписка/
+    game.economy.journal УДАЛЕНЫ; транспорт теперь здесь, items.txn =
+    событие общего лога.
+[x] item_system §5 — progression_poll_events() удалён; лвлап = событие
+    progression.levelup общего лога.
+[x] feature_architecture §2 — 5→7 фазовых функций (react/record).
+[x] state §7/§14-п.13 — секция events добавлена в скоуп генератора (E2 после A4).
 Критический путь реализации: A3 → E1(+агрегатор) → A4 → E2 →
 items/progression рождаются сразу с событиями в схемах.
