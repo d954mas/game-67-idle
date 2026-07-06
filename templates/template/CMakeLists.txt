@@ -208,6 +208,9 @@ target_compile_definitions(${GAME_TARGET} PRIVATE
     NT_INTROSPECT_WRITE_ENABLED=$<BOOL:${NT_INTROSPECT_WRITE_ENABLED}>
     _CRT_SECURE_NO_WARNINGS
 )
+# GAME_STORAGE_APP_ID namespaces the shared web-origin (itch) localStorage; "template" is
+# the template's own default, games override it (A2).
+target_compile_definitions(${GAME_TARGET} PRIVATE GAME_STORAGE_APP_ID="template")
 if(NOT GAME_DEVAPI_ENABLED)
     target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=0)
 endif()
@@ -252,4 +255,15 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_state_json PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_state_json COMMAND test_game_state_json)
+
+    add_executable(test_game_storage tests/test_game_storage.c src/game_storage.c)
+    target_link_libraries(test_game_storage PRIVATE unity)
+    target_include_directories(test_game_storage PRIVATE src)
+    target_compile_definitions(test_game_storage PRIVATE
+        GAME_STORAGE_APP_ID="template_test" _CRT_SECURE_NO_WARNINGS)
+    # MoveFileExA (native quarantine/atomic-replace) is in kernel32, linked by default.
+    set_target_properties(test_game_storage PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_storage COMMAND test_game_storage
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 endif()

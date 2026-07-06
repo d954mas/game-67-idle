@@ -158,6 +158,35 @@ Run the template bot unit tests:
 py -3.12 templates/template/devapi/smoke_bot_test.py
 ```
 
+Run the native `game_storage`/`game_state_json` Unity tests (A2):
+
+```powershell
+ctest --test-dir templates/template/build/native-debug --output-on-failure
+```
+
+Web persistence check (A2.4 item 2, CI-optional/advisory -- headless-localStorage
+automation is capricious, so a failure here does not fail A2 acceptance):
+
+```powershell
+python templates/template/tests/web_persistence_check.py
+```
+
+Builds the template for wasm with `GAME_DEVAPI_ENABLED=ON`, serves it, drives a
+headless Chrome instance over the DevTools Protocol to `game.state.set` a known
+non-default value (`hero.gold=424242`) and `game.state.save` it to a probe key
+via `window.__devapi.submit`, then FULLY QUITS Chrome (CDP `Browser.close`, not
+a page reload -- reload barely exercises real persistence) and relaunches it
+with the same `--user-data-dir`, and confirms `game.state.load` + `game.state.get`
+return the same value -- i.e. the `GAME_STORAGE_APP_ID`-scoped localStorage key
+actually survives a browser restart. Requires `EMSDK` (Emscripten toolchain) and
+a local Chrome/Chromium; exits 2 (skip, not fail) if either is missing. Known
+pre-existing blocker as of A2: any `__EMSCRIPTEN__`/`NT_PLATFORM_WEB` build
+currently fails `-Werror` in `templates/template/src/main.c`
+(`devapi_shutdown_runtime` becomes unused -- its only call site is guarded by
+`#ifndef NT_PLATFORM_WEB`), unrelated to `game_storage`/`game_state_json`; this
+script will report SKIP until that is
+fixed separately.
+
 ## Uninstall
 
 Soft uninstall is preferred for experiments:
