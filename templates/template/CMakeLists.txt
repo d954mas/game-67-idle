@@ -115,6 +115,8 @@ endif()
 # --- game executable (the conductor + systems) ---
 add_executable(${GAME_TARGET}
     src/main.c
+    src/game_events.c            # E1
+    src/features/game_features.c # E1
     src/ui/hud.c
     src/ui/ui_runtime.c
     src/ui/theme.c
@@ -300,4 +302,32 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_save COMMAND test_game_save
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+
+    # (1) основной: позитив + death-тесты переполнения/фазы (NT_ASSERT ФИРИТ)
+    add_executable(test_game_events tests/test_game_events.c src/game_events.c
+        "${ENGINE_DIR}/tests/unit/test_helpers/nt_assert_trap.c")
+    target_link_libraries(test_game_events PRIVATE unity nt_hash nt_log nt_core)
+    target_include_directories(test_game_events PRIVATE src "${ENGINE_DIR}/tests/unit")
+    target_compile_definitions(test_game_events PRIVATE
+        GAME_EVENTS_ARENA_BYTES=1024u   # маленькая арена -> переполнение дёшево (позитив влезает)
+        GAME_EVENTS_LOG_CAP=64          # маленький кап лога -> переполнение дёшево
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_events PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_events COMMAND test_game_events)
+
+    # (2) overflow-drop: тот же файл + GAME_EVENTS_SOFT_OVERFLOW=1 -> emit ДРОПАЕТ
+    # (не assert'ит) в debug-ctest, проверяет release-семантику (тест #10). Не
+    # звено с nt_assert_trap: этот бинарь не использует NT_TEST_EXPECT_ASSERT
+    # (test_game_events.c гейтит его #include под #ifndef GAME_EVENTS_SOFT_OVERFLOW).
+    add_executable(test_game_events_overflow tests/test_game_events.c src/game_events.c)
+    target_link_libraries(test_game_events_overflow PRIVATE unity nt_hash nt_log nt_core)
+    target_include_directories(test_game_events_overflow PRIVATE src)
+    target_compile_definitions(test_game_events_overflow PRIVATE
+        GAME_EVENTS_SOFT_OVERFLOW=1     # выключить debug-assert переполнения -> тестировать дроп
+        GAME_EVENTS_ARENA_BYTES=1024u GAME_EVENTS_LOG_CAP=64
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_events_overflow PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_events_overflow COMMAND test_game_events_overflow)
 endif()

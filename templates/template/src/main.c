@@ -40,9 +40,10 @@
 #endif
 #endif
 
+#include "features/game_features.h"
+#include "game_events.h"
 #include "render/capture.h"
 #include "render/render_mesh.h"
-#include "systems/sys_move.h"
 #include "systems/sys_settings.h"
 #include "ui/hud.h"
 #include "ui/ui_runtime.h"
@@ -244,16 +245,19 @@ static void frame(void) {
     nt_material_step();
     s_world.time_seconds += g_nt_app.dt;
 
-    // game systems update the world (settings logic now lives in its nt_ui build)
-    sys_move(&s_world, g_nt_app.dt);
-
+    // ---- feature two-phase event frame (event_system_design §2/§7) ----
+    game_features_update(&s_world, g_nt_app.dt);   // emit phase (sys_move moved in); phase=EMIT default
+    game_events_react_begin();                     // fixpoint baseline = count after update
+    do {
+        game_features_react(&s_world);             // reactors (may cascade-emit)
+    } while (game_events_react_progressed());       // fixpoint under generation cap
+    game_events_set_phase(GAME_EVENT_PHASE_RECORD);
+    game_features_record(&s_world);                // recorders (E3/E4 fill; empty now)
 #if FEATURE_GAME_STATE
-    // Autosave: debounced flush after game systems (and, when E1 lands, after the
-    // record phase). --disable-autosave freezes it for deterministic bots.
-    if (!s_disable_autosave) {
-        game_save_tick();
-    }
+    // Autosave: after the RECORD phase (the anchor at the old sys_move site).
+    if (!s_disable_autosave) { game_save_tick(); }
 #endif
+    game_event_frame_reset();                       // close the event frame (poison in debug); phase->EMIT
 
     nt_gfx_begin_frame();
     if (g_nt_gfx.context_restored) {
@@ -271,6 +275,7 @@ static void frame(void) {
 
     // render systems read the world
     nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.75F, 0.96F, 1.0F}, .clear_depth = 1.0F});
+    // TODO(feature-migration): game_features_draw_world/draw_ui land here once render systems become features.
     render_mesh_draw(&s_world, s_frame_ubo);
     hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
 
@@ -352,6 +357,7 @@ int main(int argc, char **argv) {
     nt_http_init();
     nt_fs_init();
     nt_hash_init(&(nt_hash_desc_t){0});
+    game_events_init(); // type-hashes/labels need hash init; arena is gfx-independent
     nt_resource_init(&(nt_resource_desc_t){0});
     nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader, nt_gfx_deactivate_shader);
     nt_resource_set_activator(NT_ASSET_MESH, nt_gfx_activate_mesh, nt_gfx_deactivate_mesh);
@@ -429,6 +435,7 @@ int main(int argc, char **argv) {
 
     // engine UI stack (sprite renderer + slice9 atlas + nt_ui ctx); reuses the font + text material
     ui_runtime_init(s_text_material, s_font, s_font_resource);
+    game_features_init(&s_world); // world is constructed and spawned by this point
 
     if (!devapi_start()) {
         return 1;
@@ -444,6 +451,8 @@ int main(int argc, char **argv) {
 #ifndef NT_PLATFORM_WEB
     devapi_shutdown_runtime();
     ui_runtime_shutdown();
+    game_features_shutdown(&s_world);
+    game_events_shutdown();
     nt_mem_scratch_shutdown();
     nt_text_renderer_shutdown();
     nt_font_destroy(s_font);

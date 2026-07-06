@@ -81,6 +81,13 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
 
 ## Log
 
+- 2026-07-07: E1 ГОТОВ: game_events (ФИКСИРОВАННАЯ арена — решение лида,
+  поправка в event-доке §2; engine-issue neotolis-engine#266 на generic
+  nt_arena_t заведён) + game_features 7 фаз + двухфазный кадр в main.c
+  (якорь автосейва закрыт). Спека build_spec_e1 прошла 2 ревью + deep-
+  ревью реализации (ACCEPT-WITH-ADDITIONS: тест округления align +
+  гейт death-тестов — внесены). 5/5 ctest, 3 конфига, смоук ок.
+  Открытие: _Alignof(max_align_t)==8 на MSVC ABI (тесты производные).
 - 2026-07-07: A1 ГОТОВ (c8bcbb63): game_state_json 11 gsj_* + 4 i64,
   40 тестов, warning-clean все конфиги. A2 ГОТОВ (aef4a88d): slot API
   7 функций + 3 compat-обёртки (DevAPI жив), атомарность+bak+карантин
