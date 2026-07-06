@@ -24,11 +24,14 @@ project:
   src/game_storage.h
   src/game_save.c
   src/game_save.h
+  src/game_save_devapi.c
 ```
 
 The generated `game_state.c` now defines the `game_state_fragment` descriptor
 itself (the hand-written `game_fragment.c` adapter was removed in A4), so there
-is no separate fragment source to copy.
+is no separate fragment source to copy. The DevAPI dispatch is the hand-written
+`src/game_save_devapi.c` (A5): universal over the fragment registry, compiled
+only under `GAME_DEVAPI_ENABLED`.
 
 Then add CMake wiring equivalent to `templates/template/CMakeLists.txt`:
 
@@ -37,8 +40,8 @@ Then add CMake wiring equivalent to `templates/template/CMakeLists.txt`:
 - write generated outputs to `<build>/generated/game-state`;
 - compile generated `game_state.c`, `src/game_storage.c`, and migrations when
   `FEATURE_GAME_STATE` is on;
-- compile generated `game_state_devapi.c` only when both `FEATURE_GAME_STATE`
-  and `GAME_DEVAPI_ENABLED` are on;
+- compile the hand-written `src/game_save_devapi.c` only when both
+  `FEATURE_GAME_STATE` and `GAME_DEVAPI_ENABLED` are on;
 - add the generated directory to the target include paths.
 
 Wire runtime code in the app entry point. The DevAPI registration call must live
@@ -77,7 +80,7 @@ if (!disable_autosave) {
 
 /* inside the DevAPI startup path, after nt_devapi_register_default() */
 #if FEATURE_GAME_STATE
-game_state_register_devapi();
+game_save_register_devapi();  /* A5: registry dispatch (src/game_save_devapi.c) */
 #endif
 ```
 
@@ -114,9 +117,14 @@ Do not hand-edit generated files. The generator writes:
 ```text
 game_state.h
 game_state.c
-game_state_devapi.c
 game_state_schema.gen.h
+game_state_events.gen.h
+game_state_events.gen.c
 ```
+
+The DevAPI dispatch is no longer generated: it is the hand-written
+`src/game_save_devapi.c` (A5), a universal registry dispatch shared by every
+fragment.
 
 The default template generates them into:
 
@@ -178,7 +186,7 @@ cmake -S templates/template -B templates/template/build/feature-review-no-state 
 cmake --build templates/template/build/feature-review-no-state --target game
 ```
 
-Verify release excludes generated DevAPI source:
+Verify release excludes the DevAPI dispatch source (`src/game_save_devapi.c`):
 
 ```powershell
 cmake -S templates/template -B templates/template/build/feature-review-release -G Ninja -DFEATURE_GAME_STATE=ON -DGAME_DEVAPI_ENABLED=OFF -DCMAKE_BUILD_TYPE=Release
@@ -213,12 +221,17 @@ with the same `--user-data-dir`, and confirms `game.state.load` + `game.state.ge
 return the same value -- i.e. the `GAME_STORAGE_APP_ID`-scoped localStorage key
 actually survives a browser restart. Requires `EMSDK` (Emscripten toolchain) and
 a local Chrome/Chromium; exits 2 (skip, not fail) if either is missing. Known
-pre-existing blocker as of A2: any `__EMSCRIPTEN__`/`NT_PLATFORM_WEB` build
-currently fails `-Werror` in `templates/template/src/main.c`
-(`devapi_shutdown_runtime` becomes unused -- its only call site is guarded by
-`#ifndef NT_PLATFORM_WEB`), unrelated to `game_storage`/`game_state_json`; this
-script will report SKIP until that is
-fixed separately.
+pre-existing blocker as of A5 (verified on HEAD, engine-side, unrelated to
+`game-state`): a `GAME_DEVAPI_ENABLED=ON` wasm build compiles clean (every game
+TU, including `main.c` and `src/game_save_devapi.c`, builds warning-clean under
+`-Werror`) but fails to LINK the emscripten executable on engine-provided
+symbols — the EM_JS `nt_devapi_web_install_shim` resolves undefined out of the
+`nt_devapi_web` static archive, and (Debug wasm only) the ASan/UBSan-instrumented
+engine libs pull `__asan_*`/`__ubsan_*` runtime symbols the executable link does
+not provide. The engine is read-only; this script reports SKIP until the engine
+web-devapi link is fixed separately. (The earlier `-Werror`
+`devapi_shutdown_runtime` note was stale: `main.c` already carries a
+`#ifndef NT_PLATFORM_WEB` web stub and compiles clean on wasm.)
 
 ## Uninstall
 
@@ -230,5 +243,5 @@ cmake -S <project> -B <project>/build/no-state -DFEATURE_GAME_STATE=OFF
 
 Permanent uninstall requires removing the CMake feature block, generated include
 path, runtime calls to `game_save_register_fragment(&game_state_fragment)` and
-`game_state_register_devapi()`, and the installed state/storage files if no other
-feature uses them.
+`game_save_register_devapi()`, the hand-written `src/game_save_devapi.c`, and the
+installed state/storage files if no other feature uses them.

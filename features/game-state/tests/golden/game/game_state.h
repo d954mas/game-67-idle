@@ -260,8 +260,4 @@ bool   game_state_from_json(GameState *state, const cJSON *json, char *error, in
 /* Generated descriptor — replaces the hand-written fragment adapter. */
 extern const GameSaveFragment game_state_fragment;
 
-#if NT_DEVAPI_ENABLED
-void game_state_register_devapi(void);
-#endif
-
 #endif

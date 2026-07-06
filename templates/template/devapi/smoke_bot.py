@@ -102,18 +102,24 @@ def find_ui_node(tree: Any, element_id: str) -> dict[str, Any] | None:
 
 
 def validate_game_state_schema(schema: Any) -> dict[str, Any]:
+    # A5: game.state.schema returns a per-fragment aggregate { "game": <schema>, ... }.
     if not isinstance(schema, dict):
         raise DevApiError(f"game.state.schema returned {type(schema).__name__}, expected object")
-    if schema.get("schema") != "game_seed.state":
-        raise DevApiError(f"unexpected game.state.schema id: {schema.get('schema')!r}")
-    if schema.get("document") != "game":
-        raise DevApiError(f"unexpected game.state.schema document: {schema.get('document')!r}")
-    if not isinstance(schema.get("fields"), list):
-        raise DevApiError("game.state.schema missing fields array")
+    frag = schema.get("game")
+    if not isinstance(frag, dict):
+        raise DevApiError("game.state.schema missing 'game' fragment")
+    if frag.get("schema") != "game_seed.state":
+        raise DevApiError(f"unexpected game.state.schema id: {frag.get('schema')!r}")
+    # The normalized schema carries both `fragment` and `document` (§A4.4) — accept either.
+    if frag.get("fragment") != "game" and frag.get("document") != "game":
+        raise DevApiError(f"unexpected game.state.schema fragment: {frag.get('fragment')!r}")
+    if not isinstance(frag.get("fields"), list):
+        raise DevApiError("game.state.schema 'game' missing fields array")
     return schema
 
 
 def validate_game_state(state: Any) -> dict[str, Any]:
+    # A5: get {path:""} returns the fragment aggregate { path:"", value:{ game:{...} } }.
     if not isinstance(state, dict):
         raise DevApiError(f"game.state.get returned {type(state).__name__}, expected object")
     if state.get("path") != "":
@@ -121,9 +127,12 @@ def validate_game_state(state: Any) -> dict[str, Any]:
     value = state.get("value")
     if not isinstance(value, dict):
         raise DevApiError("game.state.get missing value object")
+    frag = value.get("game")
+    if not isinstance(frag, dict):
+        raise DevApiError("game.state.get missing value.game fragment")
     for key in ("settings", "tutorial", "inventory"):
-        if not isinstance(value.get(key), dict):
-            raise DevApiError(f"game.state.get missing value.{key} object")
+        if not isinstance(frag.get(key), dict):
+            raise DevApiError(f"game.state.get missing value.game.{key} object")
     return state
 
 
@@ -173,7 +182,7 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
 
     screenshot = game.capture_screenshot(str(out_dir / "first_screen.png"), wait_frames=2, audit=audit)
     summary = {
-        "schema": "template.devapi_smoke.v1",
+        "schema": "template.devapi_smoke.v2",
         "method_count": len(methods),
         "required_methods": sorted(REQUIRED_METHODS),
         "described_methods": sorted(described.keys()),

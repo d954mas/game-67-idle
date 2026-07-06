@@ -136,7 +136,6 @@ if(FEATURE_GAME_STATE)
     set(GAME_STATE_GENERATED_HEADER "${GAME_STATE_GENERATED_DIR}/game_state.h")
     set(GAME_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state.c")
     set(GAME_STATE_GENERATED_SCHEMA "${GAME_STATE_GENERATED_DIR}/game_state_schema.gen.h")
-    set(GAME_STATE_GENERATED_DEVAPI "${GAME_STATE_GENERATED_DIR}/game_state_devapi.c")
     set(GAME_STATE_GENERATED_EVENTS_HEADER "${GAME_STATE_GENERATED_DIR}/game_state_events.gen.h")
     set(GAME_STATE_GENERATED_EVENTS_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state_events.gen.c")
     add_custom_command(
@@ -144,7 +143,6 @@ if(FEATURE_GAME_STATE)
             "${GAME_STATE_GENERATED_HEADER}"
             "${GAME_STATE_GENERATED_SOURCE}"
             "${GAME_STATE_GENERATED_SCHEMA}"
-            "${GAME_STATE_GENERATED_DEVAPI}"
             "${GAME_STATE_GENERATED_EVENTS_HEADER}"
             "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_STATE_GENERATED_DIR}"
@@ -176,7 +174,9 @@ if(FEATURE_GAME_STATE)
     )
     target_include_directories(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DIR}")
     if(GAME_DEVAPI_ENABLED)
-        target_sources(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DEVAPI}")
+        # A5: the DevAPI dispatch is a hand-written shell TU (universal over the
+        # fragment registry), no longer a generated per-fragment source.
+        target_sources(${GAME_TARGET} PRIVATE src/game_save_devapi.c)
     endif()
 else()
     target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=0)

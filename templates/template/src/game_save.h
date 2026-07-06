@@ -31,6 +31,23 @@ typedef struct GameSaveFragment {
    Фрагмент game регистрируется ПОСЛЕДНИМ (§14 п.2). Указатель должен пережить рантайм. */
 void game_save_register_fragment(const GameSaveFragment *fragment);
 
+/* ---- Registry read-access for the DevAPI dispatch (§8 «диспатч по реестру»).
+   Read-only view of the registry filled by game_save_register_fragment. ---- */
+int  game_save_fragment_count(void);                             /* число зарегистрированных */
+const GameSaveFragment *game_save_fragment_at(int index);        /* NULL если вне диапазона */
+const GameSaveFragment *game_save_find_fragment(const char *id); /* NULL если ключ неизвестен */
+
+#if NT_DEVAPI_ENABLED
+/* Регистрирует 7 команд game.state.* над реестром фрагментов (A5; заменяет
+   генерируемый <id>_state_register_devapi). Хендлеры читают реестр ЛЕНИВО в момент
+   ВЫЗОВА команды (бот подключается в кадровом цикле, много позже init), поэтому
+   порядок регистрации команд относительно game_save_register_fragment НЕ важен —
+   сохранённая точка вызова (main.c, внутри devapi_start()) корректна как есть.
+   Звать один раз после nt_devapi_init(). Тело —
+   templates/template/src/game_save_devapi.c. */
+void game_save_register_devapi(void);
+#endif
+
 /* ---- Статус и результат загрузки (§4, §14 п.10, Р7, Р10) ---- */
 typedef enum {
     GAME_SAVE_LOAD_FRESH = 0,      /* файла нет -> reset+on_new_game+save */

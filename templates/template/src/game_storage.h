@@ -41,15 +41,4 @@ bool game_storage_quarantine(const char *slot, char *error, int error_cap);
    false если браузер не сохраняет. */
 bool game_storage_probe(char *error, int error_cap);
 
-/* ---- Compat-обёртки до A5 (генерируемый game_state_devapi.c зовёт старый
-   key+document API: generate_state.py:310/317/343). Тонкие адаптеры (slot=key,
-   document = всегда GAME_STATE_DOCUMENT, сворачивается в slot) над новым API;
-   удаляются в A5 при перегенерации DevAPI-эндпоинтов. ---- */
-bool game_storage_resolve_key(const char *key, const char *document,
-                              char *out, int out_cap, char *error, int error_cap);
-bool game_storage_save_json(const char *key, const char *document,
-                            const char *json, char *error, int error_cap);
-bool game_storage_load_json(const char *key, const char *document,
-                            char **out_json, char *error, int error_cap);
-
 #endif /* GAME_STORAGE_H */

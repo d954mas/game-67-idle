@@ -209,8 +209,7 @@ void test_write_rejects_uppercase_slot(void) {
 /* Deep-review item 4: path-syntax characters must never reach a path/key
    builder. is_safe_segment's charset check runs BEFORE any snprintf, so a
    rejected slot can, by construction, never produce a path outside
-   build/saves/ -- this test pins that down against regression for both
-   write() and the save_json compat wrapper. */
+   build/saves/ -- this test pins that down against regression for write(). */
 static const char *const kUnsafeTraversalSlots[] = {
     "..", ".", "a/b", "a\\b", "/abs", "C:\\x", "",
 };
@@ -221,10 +220,6 @@ void test_write_rejects_path_traversal(void) {
         char err[128] = {0};
         TEST_ASSERT_FALSE(game_storage_write(kUnsafeTraversalSlots[i], "{}", err, (int)sizeof(err)));
         TEST_ASSERT_TRUE(strlen(err) > 0);
-
-        char err2[128] = {0};
-        TEST_ASSERT_FALSE(game_storage_save_json(kUnsafeTraversalSlots[i], "game", "{}", err2, (int)sizeof(err2)));
-        TEST_ASSERT_TRUE(strlen(err2) > 0);
     }
 }
 
@@ -442,30 +437,6 @@ void test_probe_native_always_true(void) {
     TEST_ASSERT_TRUE(game_storage_probe(err, (int)sizeof(err)));
 }
 
-/* ---- compat wrappers (§A2.6 risk: document->slot folding must not break the
-   save/load round trip generated game_state_devapi.c depends on). ---- */
-
-void test_compat_wrappers_round_trip(void) {
-    char err[128] = {0};
-    TEST_ASSERT_TRUE(game_storage_save_json("player1", "game", "{\"level\":3}", err, (int)sizeof(err)));
-
-    char *out = NULL;
-    TEST_ASSERT_TRUE(game_storage_load_json("player1", "game", &out, err, (int)sizeof(err)));
-    TEST_ASSERT_EQUAL_STRING("{\"level\":3}", out);
-    free(out);
-
-    char resolved[256] = {0};
-    TEST_ASSERT_TRUE(game_storage_resolve_key("player1", "game", resolved, (int)sizeof(resolved), err, (int)sizeof(err)));
-
-    /* resolve_key must point at the EXACT file save_json wrote, not merely
-       return a non-empty string. */
-    FILE *resolved_file = fopen(resolved, "rb");
-    TEST_ASSERT_NOT_NULL(resolved_file);
-    if (resolved_file) {
-        fclose(resolved_file);
-    }
-}
-
 int main(void) {
     UNITY_BEGIN();
 
@@ -490,8 +461,6 @@ int main(void) {
     RUN_TEST(test_quarantine_twice_same_slot);
 
     RUN_TEST(test_probe_native_always_true);
-
-    RUN_TEST(test_compat_wrappers_round_trip);
 
     return UNITY_END();
 }

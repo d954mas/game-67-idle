@@ -558,6 +558,27 @@ void game_save_register_fragment(const GameSaveFragment *fragment) {
     s_fragments[s_fragment_count++] = fragment;
 }
 
+/* ---- registry read-access for the DevAPI dispatch (§A5.3). Additive, read-only,
+   behaviourally inert view of the static registry. ---- */
+
+int game_save_fragment_count(void) { return s_fragment_count; }
+
+const GameSaveFragment *game_save_fragment_at(int index) {
+    return (index >= 0 && index < s_fragment_count) ? s_fragments[index] : NULL;
+}
+
+const GameSaveFragment *game_save_find_fragment(const char *id) {
+    if (!id) {
+        return NULL;
+    }
+    for (int i = 0; i < s_fragment_count; i++) {
+        if (strcmp(s_fragments[i]->id, id) == 0) {
+            return s_fragments[i];
+        }
+    }
+    return NULL;
+}
+
 void game_save_init(void) {
     if (!s_mono_clock) {
         s_mono_clock = default_mono_ms;

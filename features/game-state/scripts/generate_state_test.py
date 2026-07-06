@@ -12,7 +12,7 @@ MINI_SCHEMA = ROOT / "features" / "game-state" / "tests" / "mini_state.schema.js
 GOLDEN = ROOT / "features" / "game-state" / "tests" / "golden"
 CLOSED_TOKENS = ("rune_", "fishing_", "Rune", "Fishing", "rune.", "fishing.")
 
-OUTPUT_SUFFIXES = (".h", ".c", "_devapi.c", "_schema.gen.h", "_events.gen.h", "_events.gen.c")
+OUTPUT_SUFFIXES = (".h", ".c", "_schema.gen.h", "_events.gen.h", "_events.gen.c")
 
 
 def generate(schema_path: Path, out_dir: Path, fragment: str | None = None) -> None:
@@ -57,6 +57,17 @@ class StateCodegenTests(unittest.TestCase):
             generate(TEMPLATE_SCHEMA, out_dir, "game")
             for suffix in OUTPUT_SUFFIXES:
                 self.assertTrue((out_dir / f"game_state{suffix}").exists())
+
+    def test_header_has_no_devapi_decl(self):
+        # A5: the DevAPI dispatch is a hand-written shell TU (game_save_devapi.c),
+        # so the generator no longer emits a devapi source or a header declaration.
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp)
+            generate(TEMPLATE_SCHEMA, out_dir, "game")
+            hdr = (out_dir / "game_state.h").read_text(encoding="utf-8")
+        self.assertNotIn("register_devapi", hdr)
+        self.assertNotIn("NT_DEVAPI_ENABLED", hdr)
+        self.assertFalse((out_dir / "game_state_devapi.c").exists())
 
     def test_player_state_schema_supports_owned_maps_and_lists(self):
         # v2 form of the rb_dark player state: fragment "player" -> PlayerState

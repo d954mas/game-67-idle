@@ -149,7 +149,7 @@ static bool devapi_start(void) {
 #endif
     nt_devapi_register_default();
 #if FEATURE_GAME_STATE
-    game_state_register_devapi();
+    game_save_register_devapi();
 #endif
 #ifdef NT_DEVAPI_GROUP_UI
     nt_devapi_ui_register_context("hud", ui_runtime_ctx());

@@ -56,17 +56,20 @@ Run:
 py -3.12 features/game-state/scripts/generate_state.py
 ```
 
-The generator writes `game_state.h`, `game_state.c`, `game_state_devapi.c`, and
-`game_state_schema.gen.h` into the selected generated directory. The default
-template generates those files into the CMake build directory.
+The generator writes `game_state.h`, `game_state.c`, `game_state_schema.gen.h`,
+and the `game_state_events.gen.{h,c}` family into the selected generated
+directory. The default template generates those files into the CMake build
+directory. The DevAPI dispatch is the hand-written `src/game_save_devapi.c`
+(A5), a universal registry dispatch — not a generated per-fragment source.
 
 Schema fields must have stable integer `id` values. Removed fields must move to
 `reserved` rather than being reused. Lists/maps need `max_count`; strings need
 `max_length`.
 
 Installed projects should gate runtime state code with `FEATURE_GAME_STATE`.
-Generated DevAPI registration is part of the installed feature, but it must be
-compiled only when both `FEATURE_GAME_STATE` and `GAME_DEVAPI_ENABLED` are on.
+The DevAPI dispatch (`src/game_save_devapi.c`, `game_save_register_devapi()`) is
+part of the installed feature, but it must be compiled only when both
+`FEATURE_GAME_STATE` and `GAME_DEVAPI_ENABLED` are on.
 
 ## Dirty And Autosave
 

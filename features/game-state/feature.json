@@ -33,7 +33,6 @@
   "outputs": [
     "game_state.h",
     "game_state.c",
-    "game_state_devapi.c",
     "game_state_schema.gen.h"
   ],
   "default_template": {
@@ -45,7 +44,8 @@
       "templates/template/src/game_storage.c",
       "templates/template/src/game_storage.h",
       "templates/template/src/game_save.c",
-      "templates/template/src/game_save.h"
+      "templates/template/src/game_save.h",
+      "templates/template/src/game_save_devapi.c"
     ]
   }
 }

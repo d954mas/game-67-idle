@@ -60,8 +60,9 @@ Default template integration uses:
 - generated output: `templates/template/build/<config>/generated/game-state/`;
 - migrations: `templates/template/state/migrations/`;
 - CMake flag: `FEATURE_GAME_STATE`;
-- DevAPI registrations from generated `game_state_devapi.c` only when
-  `GAME_DEVAPI_ENABLED` is also on;
+- DevAPI registrations from the hand-written `src/game_save_devapi.c` registry
+  dispatch (`game_save_register_devapi()`) only when `GAME_DEVAPI_ENABLED` is
+  also on;
 - semantic runtime commands and domain actions in the game or template source.
 
 For a game-specific variant, pass explicit paths:

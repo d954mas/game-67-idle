@@ -166,11 +166,12 @@ modules from day one so a copied game keeps them apart:
         render_character.{c,h}  draw the character (separate from its movement)
       ui/
         hud.{c,h}               the HUD/UI tree (panels/buttons, the top-right gear)
-      devapi/
-        game_state_devapi.{c,h} game-owned `game.state` snapshot; add scenario
-                                helpers beside it. Engine-owned DevAPI groups
-                                (ui.*, input.*, frame/time, obs, capture.*) are
-                                wired from the engine, NOT duplicated here
+      game_save_devapi.c      hand-written universal `game.state` DevAPI dispatch
+                              over the fragment registry (A5); registered by
+                              `game_save_register_devapi()`, built only under
+                              `GAME_DEVAPI_ENABLED`. Engine-owned DevAPI groups
+                              (ui.*, input.*, frame/time, obs, capture.*) are
+                              wired from the engine, NOT duplicated here
       build_packs.c           pack builder (font + shaders + white + textured sample)
     devapi/
       smoke_bot.py            game-local Python runtime bot: launch via DevAPI,
