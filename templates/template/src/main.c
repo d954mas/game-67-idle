@@ -204,21 +204,23 @@ static void devapi_sample_metrics(double frame_begin) {
 #endif
 }
 
+#ifndef NT_PLATFORM_WEB
 static void devapi_shutdown_runtime(void) {
     if (!s_devapi_running) {
         return;
     }
-#ifndef NT_PLATFORM_WEB
     nt_devapi_net_stop();
-#endif
     nt_devapi_shutdown();
     s_devapi_running = false;
 }
+#endif
 #else
 static bool devapi_start(void) { return true; }
 static void devapi_update_frame(void) {}
 static void devapi_sample_metrics(double frame_begin) { (void)frame_begin; }
+#ifndef NT_PLATFORM_WEB
 static void devapi_shutdown_runtime(void) {}
+#endif
 #endif
 
 // The frame loop: poll, advance the world, render. Calls subsystems only.

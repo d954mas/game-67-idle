@@ -16,7 +16,15 @@ endif()
 # builds sharing one preset would overwrite each other's engine libs
 # (nt_input with/without inject symbols) — the exact parallel-build collision
 # the convention exists to prevent.
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
+if(EMSCRIPTEN)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(NT_PRESET_NAME "wasm-release")
+    elseif(GAME_DEVAPI_ENABLED)
+        set(NT_PRESET_NAME "wasm-devapi-debug")
+    else()
+        set(NT_PRESET_NAME "wasm-debug")
+    endif()
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(NT_PRESET_NAME "native-release")
 elseif(GAME_DEVAPI_ENABLED)
     set(NT_PRESET_NAME "devapi-debug")
