@@ -11,6 +11,7 @@ Read that file and follow it.
 
 Reference playbooks (load only when the Codex entrypoint says to):
 
+- `.codex/skills/nt-asset-image-generation/references/build_spec_pack_expander_2026-07-07.md`
 - `.codex/skills/nt-asset-image-generation/references/generation-paths.md`
 - `.codex/skills/nt-asset-image-generation/references/throughput-and-handoff.md`
 - `.codex/skills/nt-asset-image-generation/references/verification-and-prompts.md`
