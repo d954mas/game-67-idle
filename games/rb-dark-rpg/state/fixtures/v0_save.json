@@ -1,8 +1,0 @@
-{
-  "shape": "sphere",
-  "render_mode": "wire",
-  "camera_distance": 5.0,
-  "test_ui_clicks": 2,
-  "test_label_text": "Label: clicked 2",
-  "test_button_text": "Clicked 2"
-}

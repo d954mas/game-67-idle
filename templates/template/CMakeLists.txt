@@ -122,7 +122,6 @@ if(FEATURE_GAME_STATE)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
     set(GAME_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
     set(GAME_STATE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/generate_state.py")
-    set(GAME_STATE_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/game_state.c.in")
     set(GAME_STATE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state")
     set(GAME_STATE_GENERATED_HEADER "${GAME_STATE_GENERATED_DIR}/game_state.h")
     set(GAME_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state.c")
@@ -141,7 +140,6 @@ if(FEATURE_GAME_STATE)
         DEPENDS
             "${GAME_STATE_SCHEMA}"
             "${GAME_STATE_GENERATOR}"
-            "${GAME_STATE_TEMPLATE}"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
         COMMENT "Generating installed game-state feature sources"
         VERBATIM

@@ -33,7 +33,6 @@ features/game-state/
   scripts/
     generate_state.py
     generate_state_test.py
-    game_state.c.in
 ```
 
 ## Integration Model

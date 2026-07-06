@@ -4,7 +4,7 @@
   "title": "Game State",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
-  "summary": "Schema-first generated game state with JSON save/load, migrations, and DevAPI adapters.",
+  "summary": "Schema-first generated game state with JSON save/load and DevAPI adapters.",
   "copy_model": "manual-copy",
   "owners": [
     "features/game-state"
