@@ -4,18 +4,30 @@ project(game LANGUAGES C)
 set(CMAKE_C_STANDARD 17)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
+# Two-build convention: the human build (native-debug, VS Code) has no DevAPI;
+# agents configure their own dir (build/devapi-debug) with -DGAME_DEVAPI_ENABLED=ON
+# and get a distinct window title so both can run side by side.
+if(NOT DEFINED GAME_DEVAPI_ENABLED)
+    set(GAME_DEVAPI_ENABLED OFF CACHE BOOL "Build the template with engine DevAPI automation support." FORCE)
+endif()
+
+# Preset name must encode the devapi split: engine libs land in
+# build/engine/<preset> and build/tools/builder/<preset>, so human and agent
+# builds sharing one preset would overwrite each other's engine libs
+# (nt_input with/without inject symbols) — the exact parallel-build collision
+# the convention exists to prevent.
 if(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(NT_PRESET_NAME "native-release")
+elseif(GAME_DEVAPI_ENABLED)
+    set(NT_PRESET_NAME "devapi-debug")
 else()
     set(NT_PRESET_NAME "native-debug")
 endif()
-
-if(NOT DEFINED GAME_DEVAPI_ENABLED)
-    if(CMAKE_BUILD_TYPE STREQUAL "Release")
-        set(GAME_DEVAPI_ENABLED OFF CACHE BOOL "Build the template with engine DevAPI automation support." FORCE)
-    else()
-        set(GAME_DEVAPI_ENABLED ON CACHE BOOL "Build the template with engine DevAPI automation support." FORCE)
-    endif()
+set(GAME_TITLE "Template" CACHE STRING "Game window title base")
+if(GAME_DEVAPI_ENABLED)
+    set(GAME_WINDOW_TITLE "${GAME_TITLE} [AI]")
+else()
+    set(GAME_WINDOW_TITLE "${GAME_TITLE}")
 endif()
 if(NOT DEFINED FEATURE_GAME_STATE)
     set(FEATURE_GAME_STATE ON CACHE BOOL "Build the installed game-state feature." FORCE)
@@ -43,6 +55,13 @@ set(ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../external/neotolis-engine")
 add_subdirectory("${ENGINE_DIR}" "${CMAKE_BINARY_DIR}/_engine")
 if(NOT EMSCRIPTEN AND NOT TARGET nt_builder)
     add_subdirectory("${ENGINE_DIR}/tools/builder" "${CMAKE_BINARY_DIR}/_builder")
+    # The pack builder is an offline tool: force -O2 even in Debug game trees
+    # (basisu at -O0 encodes for minutes, not seconds). Engine CI does the same
+    # by building its pack builders with a release preset; games get the same
+    # effect here without patching the engine. Asserts stay on (no NDEBUG).
+    foreach(nt_builder_opt_tgt nt_basisu_encoder clipper2 nt_clipper2_bridge tinycthread nt_builder builder)
+        target_compile_options(${nt_builder_opt_tgt} PRIVATE $<$<NOT:$<CONFIG:Release>>:-O2>)
+    endforeach()
 endif()
 
 set(GAME_TARGET game)
@@ -142,17 +161,30 @@ else()
     target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=0)
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/deps/glfw/deps")
+target_compile_definitions(${GAME_TARGET} PRIVATE GAME_WINDOW_TITLE="${GAME_WINDOW_TITLE}")
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core nt_app nt_input nt_window nt_gfx nt_text_renderer nt_font
     nt_resource nt_material nt_shared nt_render nt_hash nt_fs nt_log nt_math nt_time
     nt_mesh_renderer nt_entity nt_transform_comp nt_mesh_comp nt_material_comp nt_drawable_comp
     nt_ui nt_sprite_renderer nt_atlas nt_mem_scratch nt_clipboard
-    glad stb_image_write
 )
 if(EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http nt_platform_web)
+    target_link_options(${GAME_TARGET} PRIVATE
+        "SHELL:-sFORCE_FILESYSTEM=1"
+        "SHELL:-sEXPORTED_FUNCTIONS=_main,_malloc,_free"
+        "SHELL:-sMIN_WEBGL_VERSION=2"
+        "SHELL:-sMAX_WEBGL_VERSION=2"
+        "SHELL:-sFULL_ES3=1"
+        # Engine targets set memory flags PRIVATE on static libs, which never
+        # reach the executable link: without these the heap is fixed at 16MB
+        # and texture transcode OOMs (Aborted(OOM) on web).
+        "SHELL:-sALLOW_MEMORY_GROWTH=1"
+        "SHELL:-sINITIAL_MEMORY=64MB"
+    )
 else()
-    target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub)
+    # glad/stb_image_write are native-only (no GL loader / file dump on web).
+    target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub glad stb_image_write)
 endif()
 if(GAME_DEVAPI_ENABLED)
     if(EMSCRIPTEN)

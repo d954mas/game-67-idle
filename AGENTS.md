@@ -60,11 +60,20 @@ explicitly asks for it.
 ## Hard Invariants
 
 - Engine boundary: use `external/neotolis-engine` public APIs before custom code.
+- The engine working tree is read-only for agents. Suspected engine problem:
+  first establish where the ROOT CAUSE lives — the existence of a game/template
+  workaround does not settle it (a workaround can be a hack that leaves the
+  real defect in the engine). If the root cause is in the engine, convince the
+  lead the fix is needed; every engine change ships only through an issue and
+  PR in the engine repo — never a direct edit.
 - Game/world/UI logic is Y-up; convert Y-down input/platform data only at boundaries.
 - All user-visible text uses the engine text renderer with real fonts; no handmade
   `draw_text`.
 - Source assets before generating: shared library, then free CC0/OFL sources, then
   generation.
+- SVG/vector/procedurally drawn art is a direction mockup only. It never becomes a
+  game asset unless the lead explicitly asked for or approved it; real game art
+  goes through the asset pipeline (source-first, then raster generation).
 - Every committed asset must have license, provenance, integrity, and `origin`.
 - Paid or non-redistributable binaries never enter git.
 

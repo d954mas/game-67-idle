@@ -95,6 +95,7 @@ int main(int argc, char *argv[]) {
     nt_builder_set_header_dir(ctx, HEADER_DIR);
     (void)MKDIR("build");
     nt_builder_set_cache_dir(ctx, "build/_cache");
+    nt_builder_set_threads_auto(ctx); // Basis encode is CPU-bound; default is single-threaded
 
     // text shell
     nt_builder_add_shader(ctx, "assets/shaders/slug_text.vert", NT_BUILD_SHADER_VERTEX);

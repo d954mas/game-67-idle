@@ -3,6 +3,18 @@
 This folder is copied into every new game. Put game-owned runtime bots,
 smoke tests, and scenario scripts here.
 
+## Two-build convention (human vs agent)
+
+- `build/native-debug` — the HUMAN build (VS Code tasks): `GAME_DEVAPI_ENABLED=OFF`,
+  plain window title. No automation surface — the lead plays this one by hand.
+- `build/devapi-debug` — the AGENT build: configure with `-DGAME_DEVAPI_ENABLED=ON`;
+  window title gets an ` [AI]` suffix so both windows are distinguishable side by side.
+- The preset name encodes the split on purpose: engine libs land in
+  `build/engine/<preset>`, so one shared preset would let the two builds
+  overwrite each other's `nt_input` (with/without inject symbols).
+- Agent scripts must point at `build/devapi-debug/bin/game.exe`, never at the
+  human build.
+
 The shared transport/client code stays in `ai_studio/runtime_automation/`.
 Game scripts import that client, then add semantic game actions here. Do not
 move reusable Python helpers into the skill bundle, and do not duplicate engine

@@ -13,7 +13,8 @@
         "-G",
         "Ninja",
         "-DCMAKE_C_COMPILER=clang",
-        "-DCMAKE_BUILD_TYPE=Debug"
+        "-DCMAKE_BUILD_TYPE=Debug",
+        "-DGAME_DEVAPI_ENABLED=OFF"
       ],
       "problemMatcher": []
     },
@@ -152,7 +153,8 @@
         "-G",
         "Ninja",
         "-DCMAKE_C_COMPILER=clang",
-        "-DCMAKE_BUILD_TYPE=Debug"
+        "-DCMAKE_BUILD_TYPE=Debug",
+        "-DGAME_DEVAPI_ENABLED=OFF"
       ],
       "problemMatcher": []
     },

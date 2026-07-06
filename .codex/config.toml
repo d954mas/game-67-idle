@@ -1,0 +1,12 @@
+# Project-local Codex config (loaded because this path is trusted in the
+# global ~/.codex/config.toml). Step 1 of approval-friction reduction:
+# explicit multi-agent limits only. Step 2 — approvals_reviewer="auto_review"
+# with a policy (auto-allow subagent spawns + imagegen with local files,
+# escalate everything else) — pending the lead's friction test in a live chat.
+
+[features]
+multi_agent = true
+
+[agents]
+max_threads = 6
+max_depth = 1

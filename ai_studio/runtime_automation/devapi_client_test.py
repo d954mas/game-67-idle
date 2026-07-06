@@ -1,9 +1,21 @@
 import base64
 import os
+import socket
+import subprocess
+import sys
 import tempfile
 import unittest
+from unittest import mock
 
-from devapi_client import DEFAULT_DEVAPI_PORT, DevApiClient, DevApiError, write_engine_capture_payload_png
+from devapi_client import (
+    DEFAULT_DEVAPI_PORT,
+    DevApiClient,
+    DevApiError,
+    connect_existing,
+    pick_free_port,
+    resolve_launch_port,
+    write_engine_capture_payload_png,
+)
 
 
 class FakeDevApiClient(DevApiClient):
@@ -46,6 +58,25 @@ class EngineCapturePayloadTest(unittest.TestCase):
         client = FakeDevApiClient()
         self.assertEqual(client.click_ui("settings/gear", observe="game.state"), {"state": "ok"})
 
+    def test_player_gated_disables_then_reenables_player_input(self):
+        client = FakeDevApiClient()
+        with client.player_gated():
+            client.click_ui("settings/gear")
+        self.assertEqual(
+            [(method, params) for (_, method, params) in client.calls if method == "input.set_player_enabled"],
+            [("input.set_player_enabled", {"enabled": False}), ("input.set_player_enabled", {"enabled": True})],
+        )
+
+    def test_player_gated_reenables_player_input_even_when_body_raises(self):
+        client = FakeDevApiClient()
+        with self.assertRaises(RuntimeError):
+            with client.player_gated():
+                raise RuntimeError("boom")
+        self.assertEqual(
+            [(method, params) for (_, method, params) in client.calls if method == "input.set_player_enabled"],
+            [("input.set_player_enabled", {"enabled": False}), ("input.set_player_enabled", {"enabled": True})],
+        )
+
     def test_write_engine_capture_payload_decodes_base64_png(self):
         png = b"\x89PNG\r\n\x1a\npayload"
         payload = {
@@ -70,6 +101,69 @@ class EngineCapturePayloadTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(DevApiError):
                 write_engine_capture_payload_png(payload, os.path.join(tmp, "shot.png"))
+
+
+class LaunchPortResolutionTest(unittest.TestCase):
+    def test_pick_free_port_returns_a_bindable_port(self):
+        port = pick_free_port()
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", port))
+
+    def test_resolve_launch_port_explicit_arg_wins_over_env(self):
+        with mock.patch.dict(os.environ, {"AI_STUDIO_DEVAPI_PORT": "18000"}, clear=False):
+            self.assertEqual(resolve_launch_port(19000), 19000)
+
+    def test_resolve_launch_port_uses_env_override_when_no_arg(self):
+        with mock.patch.dict(os.environ, {"AI_STUDIO_DEVAPI_PORT": "18000", "NT_DEVAPI_PORT": ""}, clear=False):
+            self.assertEqual(resolve_launch_port(None), 18000)
+
+    def test_resolve_launch_port_falls_back_to_nt_devapi_port_env(self):
+        with mock.patch.dict(os.environ, {"NT_DEVAPI_PORT": "18500"}, clear=False):
+            os.environ.pop("AI_STUDIO_DEVAPI_PORT", None)
+            self.assertEqual(resolve_launch_port(None), 18500)
+
+    def test_resolve_launch_port_picks_free_port_when_no_arg_and_no_env(self):
+        with mock.patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("AI_STUDIO_DEVAPI_PORT", None)
+            os.environ.pop("NT_DEVAPI_PORT", None)
+            port = resolve_launch_port(None)
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+                probe.bind(("127.0.0.1", port))
+
+
+class LaunchPreflightDeadChildTest(unittest.TestCase):
+    def test_connect_existing_raises_informative_error_when_child_exits_immediately(self):
+        port = pick_free_port()
+        proc = subprocess.Popen([sys.executable, "-c", "import sys; sys.exit(7)"])
+        try:
+            proc.wait(timeout=5)
+            with self.assertRaises(DevApiError) as ctx:
+                connect_existing(port=port, timeout=3.0, process=proc)
+            message = str(ctx.exception)
+            self.assertIn("exit code 7", message)
+            self.assertIn(str(port), message)
+            self.assertIn("port bind failed", message)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait(timeout=5)
+
+    def test_connect_existing_includes_launch_log_tail_when_available(self):
+        port = pick_free_port()
+        proc = subprocess.Popen([sys.executable, "-c", "import sys; sys.exit(7)"])
+        try:
+            proc.wait(timeout=5)
+            with tempfile.TemporaryDirectory() as tmp:
+                log_path = os.path.join(tmp, "launch.log")
+                with open(log_path, "w", encoding="utf-8") as handle:
+                    handle.write("some engine startup line\nbind failed on port\n")
+                with self.assertRaises(DevApiError) as ctx:
+                    connect_existing(port=port, timeout=3.0, process=proc, launch_log_path=log_path)
+                self.assertIn("bind failed on port", str(ctx.exception))
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+                proc.wait(timeout=5)
 
 
 if __name__ == "__main__":

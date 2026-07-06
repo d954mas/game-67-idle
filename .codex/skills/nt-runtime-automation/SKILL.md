@@ -31,8 +31,10 @@ the reviewed AI Studio module.
    `ai_studio/runtime_automation/devapi_client.py`,
    `devapi_cli.py`, `iterate.py`, `state_capture.py`,
    `pixel_health.py`, and `ui_readability.py`.
-5. Use observe -> act -> `frame.wait` -> observe. Capture logs/screenshots only
-   after the visual state is stable.
+5. Use observe -> act -> `frame.wait` -> observe. Wrap interactive injection
+   (`ui.click`, `input.*`) in `DevApiClient.player_gated()` — an ungated click
+   with a live mouse lands in a non-primary slot, not slot 0. Capture
+   logs/screenshots only after the visual state is stable.
 6. Report concise evidence paths and failures. Do not claim runtime behavior
    from code inspection alone when a running build is available.
 

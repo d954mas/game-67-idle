@@ -28,7 +28,7 @@
 #define UI_REF_H 720.0F
 // Headroom for the default 1024-element UI (Clay arena dominates); a game that
 // builds a denser UI can raise this. Static storage — cost is negligible.
-#define UI_ARENA_SIZE ((size_t)4U * 1024U * 1024U)
+#define UI_ARENA_SIZE ((size_t)8U * 1024U * 1024U) // 8MB: fits max_elements=4096 + state_slots=1024 (jam-proven scale)
 
 static NT_UI_DECLARE_ARENA(s_ui_arena, UI_ARENA_SIZE);
 static nt_ui_context_t *s_ctx;
@@ -63,6 +63,13 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
 
     nt_ui_module_init();
     nt_ui_create_desc_t desc = nt_ui_create_desc_defaults();
+    // Engine defaults (256 state slots / probe 4) are sample-sized; a real game with
+    // several screens sharing one context exhausts the non-evicting state pool and
+    // trips the fail-fast assert (VibeJam #1). Also clear states on screen close
+    // (nt_ui_state_clear_all) instead of only raising these.
+    desc.max_elements = 4096U;
+    desc.state_slots = 1024U;
+    desc.state_probe_max = 16U;
     s_ctx = nt_ui_create_context(s_ui_arena, sizeof s_ui_arena, &desc);
     NT_ASSERT(s_ctx != NULL && "ui_runtime: failed to create UI context");
 
@@ -128,8 +135,13 @@ bool ui_runtime_begin(float dt) {
 
     nt_font_step();
     nt_mem_scratch_reset();
-    const nt_pointer_t p = nt_ui_scale_apply_pointer(&s_scale, g_nt_input.pointers[0]);
-    nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, &p, 1);
+    // Feed ALL pointer slots: a DevAPI-injected click lands in the first FREE
+    // slot, which is not 0 when a real mouse already holds slot 0.
+    nt_pointer_t pointers[NT_INPUT_MAX_POINTERS];
+    for (uint32_t i = 0; i < NT_INPUT_MAX_POINTERS; ++i) {
+        pointers[i] = nt_ui_scale_apply_pointer(&s_scale, g_nt_input.pointers[i]);
+    }
+    nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, pointers, NT_INPUT_MAX_POINTERS);
     return true;
 }
 

@@ -312,7 +312,10 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    g_nt_window.title = "Template";
+#ifndef GAME_WINDOW_TITLE
+#define GAME_WINDOW_TITLE "Template" // CMake sets "<GAME_TITLE> [AI]" for DevAPI builds
+#endif
+    g_nt_window.title = GAME_WINDOW_TITLE;
     g_nt_window.width = (uint32_t)s_window_width;
     g_nt_window.height = (uint32_t)s_window_height;
     nt_window_init();

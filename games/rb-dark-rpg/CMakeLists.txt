@@ -50,6 +50,11 @@ set(ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../external/neotolis-engine")
 add_subdirectory("${ENGINE_DIR}" "${CMAKE_BINARY_DIR}/_engine")
 if(NOT EMSCRIPTEN AND NOT TARGET nt_builder)
     add_subdirectory("${ENGINE_DIR}/tools/builder" "${CMAKE_BINARY_DIR}/_builder")
+    # Offline tool: -O2 even in Debug trees (basisu at -O0 encodes for minutes).
+    # Mirrors engine CI, which builds pack builders with a release preset.
+    foreach(nt_builder_opt_tgt nt_basisu_encoder clipper2 nt_clipper2_bridge tinycthread nt_builder builder)
+        target_compile_options(${nt_builder_opt_tgt} PRIVATE $<$<NOT:$<CONFIG:Release>>:-O2>)
+    endforeach()
 endif()
 
 set(GAME_TARGET game)

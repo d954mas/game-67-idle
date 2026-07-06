@@ -154,6 +154,17 @@ class DevApiClient:
             return last_frame
         return self.result(observe)
 
+    @contextmanager
+    def player_gated(self):
+        """Wrap ui.click/input.* injection sequences: the player-gate ON->OFF edge clears all
+        real pointer slots, so an injected click lands in the always-free slot 0 instead of a
+        non-primary slot beside a live mouse."""
+        self.result("input.set_player_enabled", {"enabled": False})
+        try:
+            yield self
+        finally:
+            self.result("input.set_player_enabled", {"enabled": True})
+
     def endpoint_methods(self) -> set[str]:
         """Engine `endpoints` returns {commands: [{method, group, ...}]}; flatten to names."""
         listing = self.result("endpoints")
@@ -562,9 +573,59 @@ def write_engine_capture_payload_png(payload: Any, output: str) -> str:
     return output
 
 
-def connect_existing(port: int = DEFAULT_DEVAPI_PORT, timeout: float = 8.0) -> DevApiClient | None:
+def pick_free_port(host: str = HOST) -> int:
+    """Bind an OS-assigned ephemeral port and return it.
+
+    There is an inherent TOCTOU race between closing this probe socket and the
+    caller actually binding that port (another process could grab it first),
+    but this is the standard "find a free port" pattern and is good enough to
+    stop concurrent launches from colliding on the fixed default port.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind((host, 0))
+        return probe.getsockname()[1]
+
+
+def resolve_launch_port(port: int | None) -> int:
+    """Resolve the DevAPI port for a single running_game() launch.
+
+    Precedence: an explicit `port` argument wins; otherwise an explicit
+    AI_STUDIO_DEVAPI_PORT / NT_DEVAPI_PORT env override wins; otherwise pick a
+    free ephemeral port so concurrent launches never collide on the fixed
+    17890 default (VibeJam ran 8-9 concurrent sessions on the fixed port;
+    Windows SO_EXCLUSIVEADDRUSE made every instance past the first bind-fail
+    and exit instantly, so probes talked to a wrong/stale instance).
+    """
+    if port is not None:
+        return port
+    env_port = os.environ.get("AI_STUDIO_DEVAPI_PORT") or os.environ.get("NT_DEVAPI_PORT")
+    if env_port:
+        return int(env_port)
+    return pick_free_port()
+
+
+def _dead_child_error(port: int, exit_code: int, launch_log_path: str | None) -> DevApiError:
+    hint = (
+        f"devapi launch process exited immediately (exit code {exit_code}) before a DevAPI "
+        f"connection could be established on port {port}. An instant exit usually means the "
+        "DevAPI port bind failed (another instance is already holding this port)."
+    )
+    return DevApiError(hint + "\n" + format_launch_log_tail(launch_log_path, lines=10))
+
+
+def connect_existing(
+    port: int = DEFAULT_DEVAPI_PORT,
+    timeout: float = 8.0,
+    *,
+    process: subprocess.Popen | None = None,
+    launch_log_path: str | None = None,
+) -> DevApiClient | None:
     end = time.time() + timeout
     while time.time() < end:
+        if process is not None:
+            exit_code = process.poll()
+            if exit_code is not None:
+                raise _dead_child_error(port, exit_code, launch_log_path)
         try:
             return DevApiClient(port=port, timeout=1.0)
         except OSError:
@@ -574,7 +635,7 @@ def connect_existing(port: int = DEFAULT_DEVAPI_PORT, timeout: float = 8.0) -> D
 
 @contextmanager
 def running_game(
-    port: int = DEFAULT_DEVAPI_PORT,
+    port: int | None = None,
     exe: str = NATIVE_DEBUG_EXE,
     cwd: str = ROOT,
     reuse_existing: bool = False,
@@ -582,6 +643,10 @@ def running_game(
     autosave_enabled: bool = False,
     window_size: str | None = None,
 ):
+    # No explicit port: pick a fresh ephemeral port (see resolve_launch_port) so
+    # concurrent launches never collide on the fixed default. Everything below
+    # uses this single resolved value for both the launch args and the connect.
+    port = resolve_launch_port(port)
     proc = None
     client = None
     launch_log_path = None
@@ -610,7 +675,15 @@ def running_game(
         launch_log.flush()
         proc = subprocess.Popen(args, cwd=cwd, stdout=launch_log, stderr=subprocess.STDOUT)
         print(f"launch log: {launch_log_path}", file=sys.stderr)
-        client = connect_existing(port=port)
+        try:
+            client = connect_existing(port=port, process=proc, launch_log_path=launch_log_path)
+        except DevApiError:
+            # Dead child detected mid-retry (see _dead_child_error): reap the
+            # already-exited process and close the log before re-raising the
+            # precise error instead of falling through to a generic timeout.
+            proc.wait(timeout=3)
+            launch_log.close()
+            raise
         if client is not None:
             client.process_id = proc.pid
             client.launch_log_path = launch_log_path

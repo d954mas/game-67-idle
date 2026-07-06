@@ -1,0 +1,80 @@
+---
+id: T0326
+title: "style lock: canvas style group + style_lock.json + acceptance gate in asset pipeline"
+status: backlog
+project: P001
+epic: ""
+priority: P1
+tags: [style-lock, assets, canvas, art-gate, vibejam-retro]
+created: 2026-07-06
+updated: 2026-07-06
+---
+
+## What
+
+VibeJam retro item 3: art was generated before a locked style existed — the #1
+lead-attention sink (nav v3→v11, coin fights, "программер арт"). Design agreed
+in discussion 2026-07-06 (industry research: tmp/style_lock_research_2026-07-06.md):
+
+- ONE art direction per game, per-domain sheets (world/sprites + GUI) sharing
+  palette and Do/Don't; not two independent styles.
+- Canvas group `style` per game: style passport card, palette swatches,
+  2-3 OWNED exemplar assets (the canon), refs/moodboard (separate from
+  exemplars), Do/Don't card (negative examples are first-class — outsourcing
+  practice shows negatives beat extra positives).
+- Machine twin `games/<id>/design/style_lock.json`: prompt_preamble,
+  negative_prompt (the don'ts), palette[] (feeds PROMPTS, not the gate — lead
+  2026-07-06: palette-distance gating is unreliable for multi-color/gradient
+  styles), bg_rule (magenta/green cutout), exemplar_refs (canvas:// ids, owned),
+  asset_size.
+- QA split (lead-corrected): DETERMINISTIC gates only for technical correctness
+  — bg purity/chroma spill, halo, alpha quality, crop bbox, aspect (= T0317).
+  STYLE conformity — vision-model compare vs exemplars + Do/Don't, advisory
+  3-way verdict, lead backstop (same philosophy as the existing visual gate:
+  no embeddings, contract=taste). No palette-ΔE gate, no CLIP gate.
+- LoRA/per-game style model: NOT for current short projects (lead: долго и
+  дорого) — parked as an idea for long projects; optional checkpoint field
+  stays in the schema unused.
+- Enforcement (refined vs original plan): EXPLORE mode ungated but outputs
+  quarantined (cannot slice/pack/promote); PRODUCTION mode requires accepted
+  lock, stamps asset origin with lock id; hard gate at pack/promote, soft at
+  generation; --no-lock taints origin for review. Matches "gates advisory,
+  lead is backstop".
+- Jam cadence: lock thin and after first-playable direction feels right
+  (divergence→convergence), never at hour 0; 1-2h explore phase then lock.
+- Style library: locks + exemplars portable across games (--from <past-lock>),
+  stored like the shared asset library (search library first).
+- T0317 art-QA gate reads thresholds from the lock (answers its open question:
+  per-style thresholds).
+
+## Done when
+
+Increments (lead accepted two-mode design 2026-07-06; every generated asset
+starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
+
+- [ ] 1. `style_lock.json` schema + canvas `style` group convention (passport,
+      palette, exemplars, refs, Do/Don't) — doc + example.
+- [ ] 2. Canvas asset status flag `quarantine → checked → accepted`, visible as
+      a badge on canvas cards; CLI can set/read it.
+- [ ] 3. Generation paths default to quarantine; production mode stamps the
+      lock id into the sidecar/origin; `--no-lock` taints origin.
+- [ ] 4. `checked` = technical auto-gates pass (T0317: bg purity/spill, halo,
+      alpha, bbox, aspect).
+- [ ] 5. `accepted` = style verdict: vision compare vs lock exemplars +
+      Do/Don't, 3-way advisory verdict, lead backstop.
+- [ ] 6. Hard gate at promote: only `accepted` assets can enter
+      `games/<id>/assets/` (and therefore the pack); quarantined art stays in
+      canvas/staging, visible but not promotable.
+- [ ] 7. Style library: `--from <past-game-lock>` seeds a new game's lock.
+
+## Open questions
+
+- (parked) LoRA/per-game style model — idea for long projects only.
+
+## Log
+
+- 2026-07-06: created from retro walkthrough item 3 discussion; full cited
+  research saved at tmp/style_lock_research_2026-07-06.md.
+- 2026-07-06: lead accepted two-mode gate; confirmed mental model: generation
+  always allowed, art carries a visible quarantine flag in canvas until it
+  passes checks; passing = usable in game. Decomposed into 7 increments.
