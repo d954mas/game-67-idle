@@ -137,12 +137,16 @@ if(FEATURE_GAME_STATE)
     set(GAME_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state.c")
     set(GAME_STATE_GENERATED_SCHEMA "${GAME_STATE_GENERATED_DIR}/game_state_schema.gen.h")
     set(GAME_STATE_GENERATED_DEVAPI "${GAME_STATE_GENERATED_DIR}/game_state_devapi.c")
+    set(GAME_STATE_GENERATED_EVENTS_HEADER "${GAME_STATE_GENERATED_DIR}/game_state_events.gen.h")
+    set(GAME_STATE_GENERATED_EVENTS_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state_events.gen.c")
     add_custom_command(
         OUTPUT
             "${GAME_STATE_GENERATED_HEADER}"
             "${GAME_STATE_GENERATED_SOURCE}"
             "${GAME_STATE_GENERATED_SCHEMA}"
             "${GAME_STATE_GENERATED_DEVAPI}"
+            "${GAME_STATE_GENERATED_EVENTS_HEADER}"
+            "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_STATE_GENERATED_DIR}"
         COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
             --schema "${GAME_STATE_SCHEMA}"
@@ -157,6 +161,7 @@ if(FEATURE_GAME_STATE)
     )
     target_sources(${GAME_TARGET} PRIVATE
         "${GAME_STATE_GENERATED_SOURCE}"   # A4: also carries the generated game_state_fragment descriptor
+        "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # E2: typed event structs/emit/descriptors
         src/game_state_json.c
         src/game_storage.c
         src/game_save.c              # A3
@@ -346,4 +351,34 @@ if(NOT EMSCRIPTEN)
             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
         add_test(NAME test_game_state_roundtrip COMMAND test_game_state_roundtrip)
     endif()
+
+    # E2: typed event layer round-trip over the COMMITTED golden mini events + frozen
+    # E1 transport (no build-time generation). Unconditional -- the golden is a
+    # committed fixture and game_events.{c,h}/game_event_desc.h exist independent of
+    # FEATURE_GAME_STATE. This double-serves as a compile check of the golden.
+    add_executable(test_game_events_typed
+        tests/test_game_events_typed.c
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
+        src/game_events.c)
+    target_link_libraries(test_game_events_typed PRIVATE unity nt_hash nt_log nt_core)
+    target_include_directories(test_game_events_typed PRIVATE
+        src
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+    target_compile_definitions(test_game_events_typed PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_events_typed PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_events_typed COMMAND test_game_events_typed)
+
+    # E2 (M3): warning-gated compile check of the richest generated branches
+    # (i64/f64/hash/bool/bytes+len, union staging, offset arithmetic) live ONLY in
+    # mini. An OBJECT lib compiles the golden mini events source under the SAME
+    # -W set + -Werror as the game target, WITHOUT Unity (compile-only, no link) so
+    # -Wconversion is not fighting the test framework's macros.
+    add_library(check_mini_state_events OBJECT
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c")
+    target_include_directories(check_mini_state_events PRIVATE
+        src
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+    target_link_libraries(check_mini_state_events PRIVATE nt_hash nt_log nt_core)  # headers only (OBJECT does not link)
+    nt_set_warning_flags(check_mini_state_events)  # same -W set + -Werror toggle as the game target
 endif()

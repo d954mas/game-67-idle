@@ -12,7 +12,7 @@ MINI_SCHEMA = ROOT / "features" / "game-state" / "tests" / "mini_state.schema.js
 GOLDEN = ROOT / "features" / "game-state" / "tests" / "golden"
 CLOSED_TOKENS = ("rune_", "fishing_", "Rune", "Fishing", "rune.", "fishing.")
 
-OUTPUT_SUFFIXES = (".h", ".c", "_devapi.c", "_schema.gen.h")
+OUTPUT_SUFFIXES = (".h", ".c", "_devapi.c", "_schema.gen.h", "_events.gen.h", "_events.gen.c")
 
 
 def generate(schema_path: Path, out_dir: Path, fragment: str | None = None) -> None:
@@ -173,6 +173,37 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn("gsj_read_i64", src)
         self.assertIn(".steps         = NULL", src)  # no migrations for the template
 
+        # E2: typed events are a SEPARATE file family (read the event keys, not the
+        # state .c). state output above is unaffected by the events section.
+        evh = files["game_state_events.gen.h"]
+        evc = files["game_state_events.gen.c"]
+        self.assertIn("typedef struct GameEvShapeChanged", evh)
+        self.assertIn('#include "game_event_desc.h"', evh)
+        self.assertIn("game_emit_shape_changed", evh)
+        self.assertIn("game_ev_shape_changed_type", evh)
+        self.assertIn("const game_event_desc_t *const game_ev_descs[]", evh)
+        self.assertIn("game_emit_shape_changed", evc)
+        self.assertIn("game_ev_shape_changed_type", evc)
+        self.assertIn("const game_event_desc_t *const game_ev_descs[]", evc)
+        self.assertIn("_Static_assert", evc)
+
+    def test_property_mini_events(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp)
+            generate(MINI_SCHEMA, out_dir, "mini")
+            files = read_outputs(out_dir, "mini_state")
+        evh = files["mini_state_events.gen.h"]
+        evc = files["mini_state_events.gen.c"]
+        # f64 proof: schema 'float' -> C double (NOT state float(C float)).
+        self.assertIn("double rate;", evh)
+        # string field -> uint32 byte offset, never an inline char array.
+        self.assertIn("uint32_t label;", evh)
+        self.assertNotIn("char label[", evh)
+        # scalar-only path + rich descriptor + union staging.
+        self.assertIn("typedef struct MiniEvTicked", evh)
+        self.assertIn("GAME_EVENT_FT_BYTES", evc)
+        self.assertIn("union {", evc)
+
     def test_migrations_and_hooks_descriptor(self):
         schema = {
             "schema": "mig.state",
@@ -278,6 +309,71 @@ class StateCodegenTests(unittest.TestCase):
         ]
         with self.assertRaises(SystemExit):
             generate_state.validate_field_names("fields", fields, set(), True)
+
+    # ---------------------------------------------------------- events (E2)
+    # Every negative anchors on a word/phrase unique to its error BRANCH (LOW-2):
+    # a mutation that swaps which guard fires now fails the test instead of passing.
+
+    def test_reject_event_name_bad_charset(self):
+        for bad in ("Foo", "a.b", "1x"):
+            with self.assertRaisesRegex(SystemExit, r"event name .* must match"):
+                self._write_and_load(self._base(events={bad: {"fields": {}}}))
+
+    def test_reject_event_name_c_ident_collision(self):
+        with self.assertRaisesRegex(SystemExit, r"event names .* collide on C identifier"):
+            self._write_and_load(self._base(events={
+                "a_b": {"fields": {}},
+                "a__b": {"fields": {}},  # both -> C ident a_b (and struct MiniEvAB)
+            }))
+
+    def test_reject_event_name_reserved_symbol(self):
+        # descs/desc_count/register are reserved for the per-fragment table symbols.
+        for bad in ("descs", "desc_count", "register"):
+            with self.assertRaisesRegex(SystemExit, r"per-fragment event table"):
+                self._write_and_load(self._base(events={bad: {"fields": {}}}))
+
+    def test_reject_unknown_event_field_type(self):
+        # str/f64/enum catch the dictionary-split failure mode (event 'string'/'float',
+        # no event enum) with a clean SystemExit rather than broken C.
+        for bad in ("str", "f64", "enum"):
+            with self.assertRaisesRegex(SystemExit, r"unknown event field type"):
+                self._write_and_load(self._base(events={"cell_spawned": {"fields": {"x": {"type": bad}}}}))
+
+    def test_reject_reserved_event_field_envelope(self):
+        for bad in ("type", "seq", "tick"):
+            with self.assertRaisesRegex(SystemExit, r"reserved \(envelope/accessor\)"):
+                self._write_and_load(self._base(events={"cell_spawned": {"fields": {bad: {"type": "int"}}}}))
+
+    def test_reject_reserved_event_field_symbol(self):
+        # desc/fields would redefine the generated per-event descriptor / fields-array
+        # symbols (accessor name clash) -> clean SystemExit, not a dirty duplicate.
+        for bad in ("desc", "fields"):
+            with self.assertRaisesRegex(SystemExit, r"redefine the generated per-event"):
+                self._write_and_load(self._base(events={"cell_spawned": {"fields": {bad: {"type": "string"}}}}))
+
+    def test_reject_event_field_c_ident_collision(self):
+        with self.assertRaisesRegex(SystemExit, r"fields .* collide on C identifier"):
+            self._write_and_load(self._base(events={"cell_spawned": {"fields": {
+                "x_y": {"type": "int"},
+                "x__y": {"type": "int"},
+            }}}))
+
+    def test_reject_bytes_len_synthesized_collision(self):
+        # bytes 'blob' synthesizes 'blob_len'; a declared 'blob_len' would double the
+        # C member -> clean SystemExit, not a dirty duplicate-member compile error.
+        with self.assertRaisesRegex(SystemExit, r"synthesizes .* which collides"):
+            self._write_and_load(self._base(events={"cell_spawned": {"fields": {
+                "blob": {"type": "bytes"},
+                "blob_len": {"type": "int"},
+            }}}))
+
+    def test_reject_event_spec_extra_key(self):
+        with self.assertRaisesRegex(SystemExit, r"cell_spawned has unsupported keys"):
+            self._write_and_load(self._base(events={"cell_spawned": {"fields": {}, "lifetime": "frame"}}))
+
+    def test_reject_event_field_spec_extra_key(self):
+        with self.assertRaisesRegex(SystemExit, r"cell_spawned\.x has unsupported keys"):
+            self._write_and_load(self._base(events={"cell_spawned": {"fields": {"x": {"type": "int", "min": 0}}}}))
 
 
 if __name__ == "__main__":

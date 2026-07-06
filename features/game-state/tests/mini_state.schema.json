@@ -17,5 +17,22 @@
     "total":      { "type": "i64", "default": 0, "min": 0, "max": 9000000000000000000 },
     "cells":      { "type": "map<string,Cell>", "max_count": 8 },
     "order":      { "type": "list<string>", "max_count": 8 }
+  },
+  "events": {
+    "cell_spawned": {
+      "fields": {
+        "total":  { "type": "i64" },
+        "rate":   { "type": "float" },
+        "kind":   { "type": "hash" },
+        "urgent": { "type": "bool" },
+        "label":  { "type": "string" },
+        "blob":   { "type": "bytes" }
+      }
+    },
+    "ticked": {
+      "fields": {
+        "count": { "type": "int" }
+      }
+    }
   }
 }

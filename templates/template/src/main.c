@@ -51,6 +51,7 @@
 #if FEATURE_GAME_STATE
 #include "game_save.h"
 #include "game_state.h"
+#include "game_state_events.gen.h" /* E2: game_ev_register (typed event labels) */
 #endif
 
 #include <stdbool.h>
@@ -357,6 +358,9 @@ int main(int argc, char **argv) {
     nt_fs_init();
     nt_hash_init(&(nt_hash_desc_t){0});
     game_events_init(); // type-hashes/labels need hash init; arena is gfx-independent
+#if FEATURE_GAME_STATE
+    game_ev_register(); // register typed-event debug labels (effect under NT_HASH_LABELS, E3)
+#endif
     nt_resource_init(&(nt_resource_desc_t){0});
     nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader, nt_gfx_deactivate_shader);
     nt_resource_set_activator(NT_ASSET_MESH, nt_gfx_activate_mesh, nt_gfx_deactivate_mesh);

@@ -74,5 +74,14 @@
     "old_mine.last_delve_xp": { "type": "int", "default": 0, "min": 0, "max": 999999 },
     "gear.mine_lantern": { "type": "bool", "default": false },
     "old_mine.depth2_unlocked": { "type": "bool", "default": false }
+  },
+  "events": {
+    "shape_changed": {
+      "fields": {
+        "from_index": { "type": "int" },
+        "to_index":   { "type": "int" },
+        "note":       { "type": "string" }
+      }
+    }
   }
 }

@@ -45,6 +45,50 @@ OUT_DIR = default_out_dir(SCHEMA_PATH)
 # i64 rides the JSON wire as a decimal string (double loses precision above 2^53).
 SCALAR_TYPES = {"bool", "int", "i64", "float", "string", "string?", "enum"}
 
+# Event field vocabulary (event_system_design §3/§5). Names are aligned with the
+# state schema (float/string, not f32/str) so agents don't split the dictionaries,
+# but event `float` is C `double` (f64) and event `int` is int32_t (E2 §2/§15).
+EVENT_NAME_RE = re.compile(r"[a-z][a-z0-9_]*")
+EVENT_FIELD_TYPES = {"bool", "int", "i64", "float", "string", "hash", "bytes"}
+# Envelope/accessor names the generated struct/accessor would shadow.
+EVENT_RESERVED_FIELDS = {"type", "seq", "tick"}
+# Field names whose generated string/bytes accessor <ns>_ev_<evt>_<name> would REDEFINE
+# a generated per-event symbol: `desc` collides with the descriptor
+# `<ns>_ev_<evt>_desc`; `fields` collides with the descriptor array
+# `<ns>_ev_<evt>_fields[]`. Without this guard that is a dirty duplicate-symbol
+# compile error (a real T0327 footgun) instead of a clean SystemExit.
+EVENT_SYMBOL_RESERVED_FIELDS = {"desc", "fields"}
+# Event names reserved to keep the per-fragment table/count/register symbols
+# (<ns>_ev_descs / <ns>_ev_desc_count / <ns>_ev_register) unambiguous.
+EVENT_RESERVED_NAMES = {"descs", "desc_count", "register"}
+
+EVENT_FIELD_C_TYPE = {
+    "bool": "bool",
+    "int": "int32_t",
+    "i64": "int64_t",
+    "float": "double",
+    "string": "uint32_t",  # inline byte offset -> NUL string
+    "hash": "nt_hash64_t",
+    "bytes": "uint32_t",   # inline byte offset (paired with <name>_len)
+}
+EVENT_FIELD_FT_ENUM = {
+    "bool": "GAME_EVENT_FT_BOOL",
+    "int": "GAME_EVENT_FT_INT",
+    "i64": "GAME_EVENT_FT_I64",
+    "float": "GAME_EVENT_FT_FLOAT",
+    "string": "GAME_EVENT_FT_STRING",
+    "hash": "GAME_EVENT_FT_HASH",
+    "bytes": "GAME_EVENT_FT_BYTES",
+}
+# By-value emit argument type for scalar/hash fields (string/bytes use pointers).
+EVENT_FIELD_EMIT_ARG = {
+    "bool": "bool",
+    "int": "int32_t",
+    "i64": "int64_t",
+    "float": "double",
+    "hash": "nt_hash64_t",
+}
+
 
 def c_ident(value: str) -> str:
     value = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", value)
@@ -183,6 +227,80 @@ def c_string(value: Any) -> str:
     return json.dumps(value)
 
 
+def load_events(events_raw: Any) -> dict[str, dict[str, Any]]:
+    """Parse+validate the v2 `events` section (event_system_design §5, E2 §2/§8).
+    Returns an ordered dict evt_name -> {"fields": [{"name","type","doc"}, ...]}.
+    Hard lint = charset + c_ident collisions + reserved (type/seq/tick + synthesized
+    <bytes>_len) + type dictionary. Past-tense naming is skill advice, not a hard fail."""
+    if not isinstance(events_raw, dict):
+        raise SystemExit("events must be a map of name -> spec")
+    events: dict[str, dict[str, Any]] = {}
+    seen_event_idents: dict[str, str] = {}
+    for evt_name, evt_spec in events_raw.items():
+        if not isinstance(evt_name, str) or not EVENT_NAME_RE.fullmatch(evt_name):
+            raise SystemExit(f"event name {evt_name!r} must match [a-z][a-z0-9_]*")
+        if evt_name in EVENT_RESERVED_NAMES:
+            raise SystemExit(
+                f"event name {evt_name} is reserved for the per-fragment event table/count/register symbols"
+            )
+        evt_ident = c_ident(evt_name)
+        if evt_ident in seen_event_idents:
+            raise SystemExit(
+                f"event names {seen_event_idents[evt_ident]} and {evt_name} collide on C identifier {evt_ident}"
+            )
+        seen_event_idents[evt_ident] = evt_name
+        if not isinstance(evt_spec, dict):
+            raise SystemExit(f"event {evt_name} spec must be an object")
+        extra = set(evt_spec.keys()) - {"fields", "doc"}
+        if extra:
+            raise SystemExit(f"event {evt_name} has unsupported keys {sorted(extra)}")
+        fields_raw = evt_spec.get("fields", {})
+        if not isinstance(fields_raw, dict):
+            raise SystemExit(f"event {evt_name}.fields must be a map of name -> spec")
+        fields: list[dict[str, Any]] = []
+        seen_field_idents: dict[str, str] = {}
+        declared_names: set[str] = set()
+        for fname, fspec in fields_raw.items():
+            if not isinstance(fname, str) or not EVENT_NAME_RE.fullmatch(fname):
+                raise SystemExit(f"event {evt_name} field name {fname!r} must match [a-z][a-z0-9_]*")
+            if fname in EVENT_RESERVED_FIELDS:
+                raise SystemExit(f"event {evt_name} field {fname} is reserved (envelope/accessor)")
+            if fname in EVENT_SYMBOL_RESERVED_FIELDS:
+                raise SystemExit(
+                    f"event {evt_name} field {fname} is reserved: its accessor would redefine the "
+                    f"generated per-event descriptor/fields symbols"
+                )
+            fident = c_ident(fname)
+            if fident in seen_field_idents:
+                raise SystemExit(
+                    f"event {evt_name} fields {seen_field_idents[fident]} and {fname} collide on C identifier {fident}"
+                )
+            seen_field_idents[fident] = fname
+            if not isinstance(fspec, dict):
+                raise SystemExit(f"event {evt_name}.{fname} spec must be an object")
+            fextra = set(fspec.keys()) - {"type", "doc"}
+            if fextra:
+                raise SystemExit(f"event {evt_name}.{fname} has unsupported keys {sorted(fextra)}")
+            ftype = fspec.get("type")
+            if ftype not in EVENT_FIELD_TYPES:
+                raise SystemExit(f"unknown event field type {ftype!r} for {evt_name}.{fname}")
+            declared_names.add(fname)
+            fields.append({"name": fname, "type": ftype, "doc": fspec.get("doc")})
+        # L3: a bytes field <name> synthesizes a uint32 <name>_len member; it must not
+        # collide (by name OR c_ident) with a declared field, else a duplicate C member
+        # is a dirty compile error instead of a clean SystemExit.
+        for field in fields:
+            if field["type"] != "bytes":
+                continue
+            len_name = f"{field['name']}_len"
+            if len_name in declared_names or c_ident(len_name) in seen_field_idents:
+                raise SystemExit(
+                    f"bytes field {field['name']} synthesizes {len_name} which collides with a declared field"
+                )
+        events[evt_name] = {"fields": fields}
+    return events
+
+
 def load_schema(schema_path: Path = SCHEMA_PATH) -> dict[str, Any]:
     with schema_path.open("r", encoding="utf-8") as f:
         raw = json.load(f)
@@ -272,6 +390,11 @@ def load_schema(schema_path: Path = SCHEMA_PATH) -> dict[str, Any]:
 
     fields = _normalize_fields(raw.get("fields"), "fields")
 
+    # Events are a SEPARATE family (event_system_design §14 p.13): parsed+validated
+    # here, but NOT consumed by the state renderers or the embedded normalized schema,
+    # so the state/schema/devapi output stays byte-identical (E2 §0/§15 dev.7).
+    events = load_events(raw.get("events", {}))
+
     schema: dict[str, Any] = {
         "schema": schema_label,
         "schema_version": 2,
@@ -284,6 +407,7 @@ def load_schema(schema_path: Path = SCHEMA_PATH) -> dict[str, Any]:
         "enums": enums,
         "types": types,
         "fields": fields,
+        "events": events,
     }
 
     global NS
@@ -1552,6 +1676,282 @@ def render_source(schema: dict[str, Any], schema_label: str = "state/game_state.
 
 
 # ---------------------------------------------------------------------------
+# Events (typed event structs + emit helpers + descriptors)  [E2]
+# ---------------------------------------------------------------------------
+
+
+def schema_events(schema: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    events = schema.get("events", {})
+    return events if isinstance(events, dict) else {}
+
+
+def event_struct_c_name(evt: str) -> str:
+    return f"{NS.pascal}Ev{_pascal(evt)}"          # MiniEvCellSpawned
+
+
+def event_emit_fn(evt: str) -> str:
+    return f"{NS.id}_emit_{evt}"                    # mini_emit_cell_spawned
+
+
+def event_type_fn(evt: str) -> str:
+    return f"{NS.id}_ev_{evt}_type"                 # mini_ev_cell_spawned_type
+
+
+def event_desc_name(evt: str) -> str:
+    return f"{NS.id}_ev_{evt}_desc"                 # mini_ev_cell_spawned_desc
+
+
+def event_full_name(evt: str) -> str:
+    return f"{NS.id}.{evt}"                         # "mini.cell_spawned"
+
+
+def event_accessor(evt: str, field_name: str) -> str:
+    return f"{NS.id}_ev_{evt}_{field_name}"         # mini_ev_cell_spawned_label
+
+
+def event_has_inline(fields: list[dict[str, Any]]) -> bool:
+    return any(f["type"] in ("string", "bytes") for f in fields)
+
+
+def render_event_struct_fields(fields: list[dict[str, Any]]) -> list[str]:
+    lines: list[str] = []
+    for f in fields:
+        name = f["name"]
+        typ = f["type"]
+        if typ == "float":
+            lines.append(f"    double {name}; /* schema 'float' == C double (f64); event float != state float */")
+        elif typ == "string":
+            lines.append(f"    uint32_t {name}; /* byte offset -> inline NUL string (read via accessor) */")
+        elif typ == "bytes":
+            lines.append(f"    uint32_t {name}; /* byte offset -> inline bytes (read via accessor) */")
+            lines.append(f"    uint32_t {name}_len; /* length of the inline bytes */")
+        else:
+            lines.append(f"    {EVENT_FIELD_C_TYPE[typ]} {name};")
+    return lines
+
+
+def render_event_accessors(evt: str, fields: list[dict[str, Any]]) -> list[str]:
+    struct = event_struct_c_name(evt)
+    lines: list[str] = []
+    for f in fields:
+        name = f["name"]
+        acc = event_accessor(evt, name)
+        if f["type"] == "string":
+            lines.append(f"static inline const char *{acc}(const {struct} *e) {{")
+            lines.append(f"    return (const char *)e + e->{name};")
+            lines.append("}")
+        elif f["type"] == "bytes":
+            lines.append(f"static inline const void *{acc}(const {struct} *e) {{")
+            lines.append(f"    return (const uint8_t *)e + e->{name};")
+            lines.append("}")
+            lines.append(f"static inline uint32_t {acc}_len(const {struct} *e) {{")
+            lines.append(f"    return e->{name}_len;")
+            lines.append("}")
+    return lines
+
+
+def render_event_emit_args(fields: list[dict[str, Any]]) -> str:
+    args: list[str] = []
+    for f in fields:
+        name = f["name"]
+        typ = f["type"]
+        if typ == "string":
+            args.append(f"const char *{name}")
+        elif typ == "bytes":
+            args.append(f"const void *{name}, uint32_t {name}_len")
+        else:
+            args.append(f"{EVENT_FIELD_EMIT_ARG[typ]} {name}")
+    return ", ".join(args) if args else "void"
+
+
+def render_event_emit_body(evt: str, fields: list[dict[str, Any]]) -> list[str]:
+    struct = event_struct_c_name(evt)
+    type_fn = event_type_fn(evt)
+    emit_fn = event_emit_fn(evt)
+    lines: list[str] = []
+    if not event_has_inline(fields):
+        # scalar-only: a direct local struct, no staging (E2 §6).
+        lines.append(f"    {struct} ev;")
+        lines.append("    memset(&ev, 0, sizeof(ev));")
+        for f in fields:
+            lines.append(f"    ev.{f['name']} = {f['name']};")
+        lines.append(f"    return game_event_emit({type_fn}(), &ev, (uint32_t)sizeof(ev), _Alignof({struct}));")
+        return lines
+    # inline strings/bytes: aligned union staging (positional-independent packing).
+    lines.append("    union {")
+    lines.append(f"        {struct} ev;")
+    lines.append("        uint8_t bytes[GAME_EVENT_EMIT_MAX];")
+    lines.append("    } u;")
+    lines.append("    memset(&u, 0, sizeof(u.ev)); /* deterministic struct padding; strings written below */")
+    for f in fields:
+        if f["type"] not in ("string", "bytes"):
+            lines.append(f"    u.ev.{f['name']} = {f['name']};")
+    lines.append("")
+    lines.append("    uint32_t off = (uint32_t)sizeof(u.ev);")
+    terms: list[str] = []
+    for f in fields:
+        name = f["name"]
+        if f["type"] == "string":
+            lines.append(f'    const char *{name}_s = {name} ? {name} : "";')
+            lines.append(f"    size_t {name}_n = strlen({name}_s) + 1u; /* incl. NUL */")
+            terms.append(f"{name}_n")
+        elif f["type"] == "bytes":
+            terms.append(f"(size_t){name}_len")
+    cond = " + ".join(["(size_t)off", *terms])
+    lines.append(f"    if ({cond} > sizeof(u.bytes)) {{")
+    lines.append(f'        NT_ASSERT(0 && "{emit_fn} payload exceeds GAME_EVENT_EMIT_MAX");')
+    lines.append(f'        nt_log_warn("{emit_fn}: payload exceeds GAME_EVENT_EMIT_MAX (%u B) -> dropped", (unsigned)GAME_EVENT_EMIT_MAX);')
+    lines.append("        return NULL; /* release: warned drop (no dropped-counter -- E1's counter is private/frozen) */")
+    lines.append("    }")
+    first_write = True
+    for f in fields:
+        name = f["name"]
+        if f["type"] == "string":
+            if not first_write:
+                lines.append("")
+            first_write = False
+            lines.append(f"    u.ev.{name} = off;")
+            lines.append(f"    memcpy(u.bytes + off, {name}_s, {name}_n);")
+            lines.append(f"    off += (uint32_t){name}_n;")
+        elif f["type"] == "bytes":
+            if not first_write:
+                lines.append("")
+            first_write = False
+            lines.append(f"    u.ev.{name} = off;")
+            lines.append(f"    u.ev.{name}_len = {name}_len;")
+            lines.append(f"    if ({name}_len != 0u && {name} != NULL) {{ memcpy(u.bytes + off, {name}, {name}_len); }}")
+            lines.append(f"    off += {name}_len;")
+    lines.append(f"    return game_event_emit({type_fn}(), &u, off, _Alignof({struct}));")
+    return lines
+
+
+def render_event_descriptor(evt: str, fields: list[dict[str, Any]]) -> list[str]:
+    struct = event_struct_c_name(evt)
+    fields_arr = f"{NS.id}_ev_{evt}_fields"
+    lines = [f"static const game_event_field_t {fields_arr}[] = {{"]
+    for f in fields:
+        name = f["name"]
+        ft = EVENT_FIELD_FT_ENUM[f["type"]]
+        if f["type"] == "bytes":
+            len_off = f"(uint32_t)offsetof({struct}, {name}_len)"
+        else:
+            len_off = "0u"
+        lines.append(f'    {{ "{name}", {ft}, (uint32_t)offsetof({struct}, {name}), {len_off} }},')
+    lines.append("};")
+    lines.append(f"const game_event_desc_t {event_desc_name(evt)} = {{")
+    lines.append(f'    "{event_full_name(evt)}",')
+    lines.append(f"    (uint32_t)sizeof({struct}),")
+    lines.append(f"    {fields_arr},")
+    lines.append(f"    (int)(sizeof({fields_arr}) / sizeof({fields_arr}[0])),")
+    lines.append("};")
+    return lines
+
+
+def render_events_header(schema: dict[str, Any], schema_label: str) -> str:
+    events = schema_events(schema)
+    guard = f"{NS.macro}EVENTS_GEN_H"
+    parts: list[str] = [
+        f"#ifndef {guard}",
+        f"#define {guard}",
+        "",
+        f"/* Generated by {TOOL_LABEL} from {schema_label}. */",
+        "",
+        "#include <stdbool.h>",
+        "#include <stddef.h>",
+        "#include <stdint.h>",
+        "",
+        '#include "hash/nt_hash.h"    /* nt_hash64_t */',
+        '#include "game_event_desc.h" /* game_event_desc_t + field-type enum */',
+        "",
+    ]
+    for evt, spec in events.items():
+        fields = spec["fields"]
+        struct = event_struct_c_name(evt)
+        parts.append(f"/* ---- {event_full_name(evt)} ---- */")
+        parts.append(f"typedef struct {struct} {{")
+        parts.extend(render_event_struct_fields(fields))
+        parts.append(f"}} {struct};")
+        parts.append("")
+        parts.append(f'nt_hash64_t {event_type_fn(evt)}(void); /* nt_hash64_str("{event_full_name(evt)}"), cached */')
+        parts.append("")
+        parts.append(f"const void *{event_emit_fn(evt)}({render_event_emit_args(fields)});")
+        accessors = render_event_accessors(evt, fields)
+        if accessors:
+            parts.append("")
+            parts.extend(accessors)
+        parts.append("")
+        parts.append(f"extern const game_event_desc_t {event_desc_name(evt)};")
+        parts.append("")
+    parts.append("/* ---- fragment event table + label registration ---- */")
+    parts.append(f"extern const game_event_desc_t *const {NS.id}_ev_descs[];")
+    parts.append(f"extern const int {NS.id}_ev_desc_count;")
+    parts.append("")
+    parts.append(f"void {NS.id}_ev_register(void); /* register debug labels; call once after nt_hash_init */")
+    parts.append("")
+    parts.append(f"#endif /* {guard} */")
+    parts.append("")
+    return "\n".join(parts)
+
+
+def render_events_source(schema: dict[str, Any], schema_label: str) -> str:
+    events = schema_events(schema)
+    parts: list[str] = [
+        f'#include "{NS.id}_state_events.gen.h"',
+        "",
+        f"/* Generated by {TOOL_LABEL} from {schema_label}. */",
+        "",
+    ]
+    if not events:
+        # Empty fragment (no events): a zero-length array is invalid in C, so emit a
+        # 1-element NULL stub; consumers gate on count==0 and never deref (E2 §6).
+        parts.append(f"const game_event_desc_t *const {NS.id}_ev_descs[1] = {{ NULL }};")
+        parts.append(f"const int {NS.id}_ev_desc_count = 0;")
+        parts.append(f"void {NS.id}_ev_register(void) {{ }}")
+        parts.append("")
+        return "\n".join(parts)
+    parts.append("#include <stddef.h> /* offsetof, max_align_t */")
+    parts.append("#include <string.h> /* memcpy, memset, strlen */")
+    parts.append("")
+    parts.append('#include "core/nt_assert.h"')
+    parts.append('#include "game_events.h" /* game_event_emit, game_event_register_type_name */')
+    parts.append('#include "log/nt_log.h"  /* nt_log_warn on staging overflow (release-visible) */')
+    parts.append("")
+    for evt in events:
+        struct = event_struct_c_name(evt)
+        parts.append(f"_Static_assert(_Alignof({struct}) <= _Alignof(max_align_t),")
+        parts.append(f'               "{struct} over-aligned for game_event_emit");')
+    parts.append("")
+    for evt, spec in events.items():
+        fields = spec["fields"]
+        parts.append(f"/* ---- {event_full_name(evt)} ---- */")
+        parts.append(f"nt_hash64_t {event_type_fn(evt)}(void) {{")
+        parts.append("    static nt_hash64_t h;")
+        parts.append(f'    if (!h.value) {{ h = nt_hash64_str("{event_full_name(evt)}"); }}')
+        parts.append("    return h;")
+        parts.append("}")
+        parts.append("")
+        parts.append(f"const void *{event_emit_fn(evt)}({render_event_emit_args(fields)}) {{")
+        parts.extend(render_event_emit_body(evt, fields))
+        parts.append("}")
+        parts.append("")
+        parts.extend(render_event_descriptor(evt, fields))
+        parts.append("")
+    parts.append("/* ---- fragment event table ---- */")
+    parts.append(f"const game_event_desc_t *const {NS.id}_ev_descs[] = {{")
+    for evt in events:
+        parts.append(f"    &{event_desc_name(evt)},")
+    parts.append("};")
+    parts.append(f"const int {NS.id}_ev_desc_count = {len(events)};")
+    parts.append("")
+    parts.append(f"void {NS.id}_ev_register(void) {{")
+    for evt in events:
+        parts.append(f'    game_event_register_type_name({event_type_fn(evt)}(), "{event_full_name(evt)}");')
+    parts.append("}")
+    parts.append("")
+    return "\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
 # Output
 # ---------------------------------------------------------------------------
 
@@ -1585,6 +1985,8 @@ def main(argv: list[str] | None = None) -> int:
     source_path = out_dir / f"{fragment}_state.c"
     devapi_source_path = out_dir / f"{fragment}_state_devapi.c"
     schema_header_path = out_dir / f"{fragment}_state_schema.gen.h"
+    events_header_path = out_dir / f"{fragment}_state_events.gen.h"
+    events_source_path = out_dir / f"{fragment}_state_events.gen.c"
 
     changed = []
     if write_if_changed(header_path, render_header(schema, schema_label)):
@@ -1595,6 +1997,12 @@ def main(argv: list[str] | None = None) -> int:
         changed.append(schema_header_path)
     if write_if_changed(devapi_source_path, render_devapi_source(schema, schema_label)):
         changed.append(devapi_source_path)
+    # E2: typed event structs/emit/descriptors (separate family; always written even
+    # for an empty events section so the CMake OUTPUT set is deterministic).
+    if write_if_changed(events_header_path, render_events_header(schema, schema_label)):
+        changed.append(events_header_path)
+    if write_if_changed(events_source_path, render_events_source(schema, schema_label)):
+        changed.append(events_source_path)
     if changed:
         for path in changed:
             print(f"generated {relative_label(path)}")

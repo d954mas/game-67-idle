@@ -1,7 +1,7 @@
 ---
 id: T0328
 title: "State: shell persistence toolkit — хирургия генератора, атомарность, localStorage, фрагменты"
-status: in_progress
+status: doing
 project: P001
 epic: E009
 priority: P1
@@ -81,6 +81,18 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
 
 ## Log
 
+- 2026-07-07: E2 ГОТОВ: typed events из схем v2 — секция events (провод
+  "<fragment>.<event>", типы bool/int/i64/float=f64/string/hash/bytes),
+  генерируемые <frag>_state_events.gen.{h,c}: структуры <Frag>Ev<Evt>,
+  emit-хелперы с ALIGNED-стейджингом поверх замороженного E1 (overflow:
+  assert+warn+NULL), ленивые type-аксессоры, дескрипторы для E3,
+  <frag>_ev_register(); рукописный game_event_desc.h; retain-канон через
+  выровненный union (не bare uint8_t[] — UB). Спека 2 ревью + deep-ревью
+  реализации (ACCEPT-WITH-ADDITIONS: резерв desc/fields + имена событий
+  vs descs/desc_count/register, assertRaisesRegex-якоря — внесены).
+  29 py-тестов, 7/7 ctest (+test_game_events_typed,
+  check_mini_state_events под -Werror), golden game+mini 12 файлов
+  одобрен глазами, state-golden байт-идентичен. Осталось: A5, A6, E3, E4.
 - 2026-07-07: A4 ГОТОВ: генератор v2 --fragment (неймспейсы, схема v2
   имя-ключи, i64-строки, дескриптор GameSaveFragment из 11 членов,
   миграционная таблица + extern-хуки, legacy-гард с понятной ошибкой,
@@ -133,3 +145,4 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
   инвертированная атомарность) + индустрия-ревью сейв-систем (web не
   сохраняет = блокер, JSON остаётся, автосейв-топология предрешена:
   debounced-on-dirty + visibilitychange + saved_at).
+- 2026-07-06: status fix: in_progress -> doing (invalid enum, board validate)
