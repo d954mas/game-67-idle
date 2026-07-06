@@ -1,0 +1,85 @@
+---
+id: T0328
+title: "State: shell persistence toolkit — хирургия генератора, атомарность, localStorage, фрагменты"
+status: backlog
+project: P001
+epic: E009
+priority: P1
+tags: [state, persistence, template, codegen]
+created: 2026-07-06
+updated: 2026-07-06
+---
+
+## What
+
+Хирургия features/game-state по итогам жёсткого ревью 2026-07-06
+(NEEDS-SURGERY: ядро генератора хорошее, половина фичи мертва).
+Синтез ревью: templates/design/reviews_synthesis_2026-07-06.md (§1, §2, §6, §8).
+
+Ключевой вердикт: «фича game-state» растворяется — бэкенд + конверт +
+оркестрация + JSON-хелперы + codegen-инструмент = L0 shell persistence
+toolkit; фрагмент стейта + <id>_state_t + save/load-хуки + локальные
+миграции = у каждой фичи.
+
+Решения лида: int64 сейчас (большие счётчики в JSON строкой; идл-bignum =
+точка расширения позже); web = localStorage за сигнатурой game_storage;
+saved_at (wall-clock записи) в конверте у шелла; примитивы set_level И
+reset у прогрессии.
+
+Инкременты (каждый shippable):
+S1. АМПУТАЦИЯ (ноль изменений поведения): удалить game_state.c.in (933
+    строки, мёртв — маркерный путь не исполняется), затенённые первые
+    def'ы в generate_state.py (~700 строк), REQUIRED_FIELDS/
+    SOURCE_MARKERS, GAME_STATE_TEMPLATE DEPENDS в обоих CMakeLists,
+    сироту games/rb-dark-rpg/state/migrations/v0_to_v1.c + фикстуры
+    (чужой контент, не компилится, CMake не включает); починить
+    references/workflow.md, review.md, feature.json (обещают миграции,
+    которых нет в живом коде).
+S2. Атомарность и бэкенды: перенести temp+replace_file (MoveFileEx
+    REPLACE|WRITE_THROUGH — уже написан в генерированном game_state_save,
+    но подключён к дебажному unsafe_path) в game_storage_save_json;
+    .bak-слот (~15 строк, фолбэк на load); консолидировать разошедшиеся
+    бэкенды (у rb-dark 5 функций + web localStorage) в шелл;
+    web-персистентность = localStorage-ветка. POSIX fsync — опционально.
+S3. Миграции: код = принятой 3-уровневой модели — пер-фрагментная
+    версия + чейн шагов; мёртвую монолитную машинерию удалить.
+    [ожидает подтверждения лида Р2]
+S4. Шелл-хелперы game_state_helpers.{c,h} (L0: JSON-хелперы +
+    транзакционный swap + конверт со schema-id/version/saved_at);
+    settings пишет settings_state_t руками; шелл собирает
+    {"features":{...}} — один атомарный документ на слот.
+S5. Генератор: один generic-путь; режим --fragment <id> эмитит
+    <id>_state_t + хуки + пер-фрагментную версию — к items/progression;
+    глобальный GameState уходит. [ожидает подтверждения лида Р5]
+
+## Done when
+
+- [ ] S1: мёртвый код удалён (~1600 строк), генератор на обеих схемах
+      даёт идентичный выход до/после, тесты зелёные, доки фичи честные.
+- [ ] S2: краш-тест записи не убивает сейв (temp+rename+bak); web-сборка
+      шаблона сохраняет через refresh (localStorage).
+- [ ] S4: settings-фрагмент руками + шелл-оркестрация; сейв шаблона =
+      конверт + {"features":{settings}}.
+- [ ] S3/S5 после подтверждений Р2/Р5.
+
+## Open questions
+
+- Р2 (миграции) и Р5 (--fragment тайминг) — у лида, рекомендации в
+  синтезе.
+- Судьба int-полей: генератору нужен int64-тип (сейчас int32, cap
+  999999 в шаблоне) — добавить тип в схему при S5.
+
+## Log
+
+- 2026-07-06 (веч.): полный план v2 готов и прошёл вторую волну ревью:
+  features/game-state/references/state_system_design_2026-07-06.md — инкременты A0-A6 там СУПЕРСИДЯТ
+  S1-S5 этой карточки; §14 плана = обязательные поправки ревью (ротация
+  одним rename + bak-при-загрузке, on_new_game() хук, web save-fail
+  статус + probe, экспорт/импорт строкой в первый web-инкремент,
+  синхронный visibility-flush, dirty_at=первая пометка, i64-провод,
+  правила миграций, clean-break шаблона, честный скоуп генератора).
+- 2026-07-06: создана по итогам жёсткого код-ревью generate_state.py
+  (двойная реализация, мёртвый .c.in, неподключённые миграции,
+  инвертированная атомарность) + индустрия-ревью сейв-систем (web не
+  сохраняет = блокер, JSON остаётся, автосейв-топология предрешена:
+  debounced-on-dirty + visibilitychange + saved_at).
