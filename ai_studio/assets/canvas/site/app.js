@@ -10,6 +10,13 @@
 import { childrenOf, isNodeHidden } from "../tree.mjs";
 import { toastError, toastInfo, toastPinned } from "./toasts.js";
 
+// Video-animation generation is frozen (lead, 2026-07-06): unreliable local motion model,
+// slow, no economics for iteration. Passport: docs/FREEZE_VIDEO_ANIM_2026-07-06.md. Gates
+// only the GENERATION UI (context menu's "Animate this image" / "New animation card", the
+// inspector's anim-card Generate section) — offline playback (renderFlipbook / Play-Stop)
+// is unaffected and stays on. Flip to false to bring the generation UI back once unfrozen.
+export const VIDEO_ANIM_FROZEN = true;
+
 export const el = (id) => document.getElementById(id);
 
 export const state = {

@@ -4,7 +4,7 @@
 // pointer, clamped to the viewport, supports one level of hover submenu ("Order"),
 // and closes on click-away or Escape. Pure rendering/input. Kept deliberately
 // SHORT (lead's menu diet): anything with an inspector/layers home stays out.
-import { el, elementById, enterRegionEdit, groupById, groups, refresh, setStatus, state } from "./app.js";
+import { el, elementById, enterRegionEdit, groupById, groups, refresh, setStatus, state, VIDEO_ANIM_FROZEN } from "./app.js";
 import {
   addNoteAt,
   bringNodeForward,
@@ -219,7 +219,7 @@ function itemsFor(target) {
       // (recipe/style/anim) so we don't offer an action that would only toast a refusal — the
       // server guard (which also refuses a claimed style ref) stays the law.
       const parentCard = element.groupId ? groupById(element.groupId) : null;
-      if (!(parentCard && (parentCard.recipe || parentCard.style || parentCard.anim))) {
+      if (!VIDEO_ANIM_FROZEN && !(parentCard && (parentCard.recipe || parentCard.style || parentCard.anim))) {
         items.push({ label: "Animate this image", onClick: () => createAnimCardAction(null, element) });
       }
     }
@@ -293,8 +293,9 @@ function itemsFor(target) {
     // additive `style` blob — name + style prompt + ONE ref + examples).
     { label: "New style card", onClick: () => createStyleCardAction(target.world) },
     // T0265: mint an animation card at the click point (a group with an additive `anim`
-    // blob — the video-route flipbook workflow, design §1.1).
-    { label: "New animation card", onClick: () => createAnimCardAction(target.world) },
+    // blob — the video-route flipbook workflow, design §1.1). Hidden while
+    // VIDEO_ANIM_FROZEN (video-anim generation frozen 2026-07-06; see app.js/freeze doc).
+    ...(VIDEO_ANIM_FROZEN ? [] : [{ label: "New animation card", onClick: () => createAnimCardAction(target.world) }]),
     { label: "Fit", onClick: () => el("zoom-fit").click() },
     { separator: true },
     copyIdItemFor(target),

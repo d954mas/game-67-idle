@@ -25,6 +25,7 @@ import {
   selectRegionRange,
   setStatus,
   state,
+  VIDEO_ANIM_FROZEN,
 } from "./app.js";
 import {
   addPlateFromFile,
@@ -2143,7 +2144,8 @@ function renderElement(element, root) {
   renderFilters(element, root);
   renderSlice9(element, root);
   renderFlipbook(element, root);
-  renderAnimation(element, root);
+  // procedural track rejected 2026-07-05, code dormant (T0260/T0264); re-enable = restore this call
+  // renderAnimation(element, root);
   renderExtracted(element, root);
   renderGeneration(element, root);
 
@@ -2269,7 +2271,8 @@ function renderTextElement(element, root) {
   root.appendChild(hint);
 
   renderTextStyle(element, style, root);
-  renderAnimation(element, root);
+  // procedural track rejected 2026-07-05, code dormant (T0260/T0264); re-enable = restore this call
+  // renderAnimation(element, root);
 }
 
 // ---- note element (T0268) ----------------------------------------------------
@@ -2766,7 +2769,9 @@ function renderGroupInspector(group, root) {
   renderGroupBackground(group, root);
   renderRecipe(group, root);
   renderStyle(group, root);
-  renderAnim(group, root);
+  // Video-anim generation frozen 2026-07-06 (VIDEO_ANIM_FROZEN, app.js) — hide the anim-card
+  // Generate section; renderFlipbook playback above is unaffected.
+  if (!VIDEO_ANIM_FROZEN) renderAnim(group, root);
 
   const render = collapsible(root, "render", "Render group");
   const controls = document.createElement("div");
