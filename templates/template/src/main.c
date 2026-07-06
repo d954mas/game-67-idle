@@ -51,7 +51,6 @@
 #if FEATURE_GAME_STATE
 #include "game_save.h"
 #include "game_state.h"
-extern const GameSaveFragment game_fragment;
 #endif
 
 #include <stdbool.h>
@@ -368,8 +367,7 @@ int main(int argc, char **argv) {
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});
     nt_text_renderer_init();
 #if FEATURE_GAME_STATE
-    game_state_init();
-    game_save_register_fragment(&game_fragment); /* `game` is the only fragment, hence also last */
+    game_save_register_fragment(&game_state_fragment); /* `game` is the only fragment, hence also last */
     game_save_init();
     if (!s_fresh_state) {
         game_save_load_result_t load_result;
@@ -382,6 +380,10 @@ int main(int argc, char **argv) {
         }
         /* NEWER/RECOVERED_BAK: a game may show a toast (advisory); autosave is already
            paused on NEWER, and RECOVERED_BAK has already rewritten the primary. */
+    } else {
+        /* --fresh-state skips load; the static instance is 0-init, so seed real
+           defaults through the generated descriptor. */
+        game_state_fragment.reset();
     }
 #ifdef NT_PLATFORM_WEB
     game_save_install_web_flush();

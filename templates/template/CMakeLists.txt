@@ -147,6 +147,7 @@ if(FEATURE_GAME_STATE)
         COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
             --schema "${GAME_STATE_SCHEMA}"
             --out-dir "${GAME_STATE_GENERATED_DIR}"
+            --fragment game
         DEPENDS
             "${GAME_STATE_SCHEMA}"
             "${GAME_STATE_GENERATOR}"
@@ -155,12 +156,10 @@ if(FEATURE_GAME_STATE)
         VERBATIM
     )
     target_sources(${GAME_TARGET} PRIVATE
-        "${GAME_STATE_GENERATED_SOURCE}"
+        "${GAME_STATE_GENERATED_SOURCE}"   # A4: also carries the generated game_state_fragment descriptor
         src/game_state_json.c
         src/game_storage.c
         src/game_save.c              # A3
-        src/game_fragment.c          # A3
-        state/migrations/v0_to_v1.c
     )
     target_link_libraries(${GAME_TARGET} PRIVATE cjson)
     target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=1)
@@ -330,4 +329,21 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_events_overflow PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_events_overflow COMMAND test_game_events_overflow)
+
+    # A4: round-trip gate for the generated fragment state layer. Links the
+    # generated game_state.c (data + static wrappers, no game_save_* calls) so
+    # game_save.c is NOT needed and the engine is not pulled in. The generated
+    # source is an add_custom_command OUTPUT, so regen is an automatic build
+    # prerequisite. GAME_STATE_GENERATED_* only exist under FEATURE_GAME_STATE.
+    if(FEATURE_GAME_STATE)
+        add_executable(test_game_state_roundtrip
+            tests/test_game_state_roundtrip.c
+            "${GAME_STATE_GENERATED_SOURCE}" src/game_state_json.c)
+        target_link_libraries(test_game_state_roundtrip PRIVATE cjson unity)
+        target_include_directories(test_game_state_roundtrip PRIVATE src "${GAME_STATE_GENERATED_DIR}")
+        target_compile_definitions(test_game_state_roundtrip PRIVATE _CRT_SECURE_NO_WARNINGS)
+        set_target_properties(test_game_state_roundtrip PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+        add_test(NAME test_game_state_roundtrip COMMAND test_game_state_roundtrip)
+    endif()
 endif()

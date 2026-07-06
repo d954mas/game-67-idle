@@ -45,8 +45,7 @@
       "templates/template/src/game_storage.c",
       "templates/template/src/game_storage.h",
       "templates/template/src/game_save.c",
-      "templates/template/src/game_save.h",
-      "templates/template/src/game_fragment.c"
+      "templates/template/src/game_save.h"
     ]
   }
 }

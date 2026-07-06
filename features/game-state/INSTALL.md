@@ -24,8 +24,11 @@ project:
   src/game_storage.h
   src/game_save.c
   src/game_save.h
-  src/game_fragment.c
 ```
+
+The generated `game_state.c` now defines the `game_state_fragment` descriptor
+itself (the hand-written `game_fragment.c` adapter was removed in A4), so there
+is no separate fragment source to copy.
 
 Then add CMake wiring equivalent to `templates/template/CMakeLists.txt`:
 
@@ -48,8 +51,7 @@ inside code that is compiled only when DevAPI is enabled:
 
 /* after core/runtime init */
 #if FEATURE_GAME_STATE
-game_state_init();
-game_save_register_fragment(&game_fragment); /* register all fragments; `game` last */
+game_save_register_fragment(&game_state_fragment); /* generated descriptor; `game` last */
 game_save_init();                            /* after all fragments are registered */
 if (!fresh_state) {
     game_save_load_result_t r;
@@ -58,6 +60,8 @@ if (!fresh_state) {
         char err[128];
         (void)game_save_new_game(err, (int)sizeof err); /* only on_new_game on this path */
     }
+} else {
+    game_state_fragment.reset();             /* --fresh-state skips load: seed defaults */
 }
 #ifdef NT_PLATFORM_WEB
 game_save_install_web_flush();               /* synchronous visibility/pagehide flush */
@@ -77,8 +81,9 @@ game_state_register_devapi();
 #endif
 ```
 
-Compile `src/game_save.c` and `src/game_fragment.c` with the generated
-`game_state.c` (both under `FEATURE_GAME_STATE`), and define the save knobs
+Compile `src/game_save.c` with the generated `game_state.c` (both under
+`FEATURE_GAME_STATE`; the generated source now also defines the
+`game_state_fragment` descriptor), and define the save knobs
 (`GAME_SAVE_AUTOSAVE_SLOT`, `GAME_SAVE_DEBOUNCE_MS`, `GAME_SAVE_MAX_INTERVAL_MS`,
 `GAME_SAVE_DOC_VERSION`) — see `templates/template/CMakeLists.txt`.
 
@@ -224,5 +229,6 @@ cmake -S <project> -B <project>/build/no-state -DFEATURE_GAME_STATE=OFF
 ```
 
 Permanent uninstall requires removing the CMake feature block, generated include
-path, runtime calls to `game_state_init()` and `game_state_register_devapi()`,
-and the installed state/storage/migration files if no other feature uses them.
+path, runtime calls to `game_save_register_fragment(&game_state_fragment)` and
+`game_state_register_devapi()`, and the installed state/storage files if no other
+feature uses them.

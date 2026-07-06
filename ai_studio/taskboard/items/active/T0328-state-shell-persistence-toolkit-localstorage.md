@@ -81,6 +81,16 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
 
 ## Log
 
+- 2026-07-07: A4 ГОТОВ: генератор v2 --fragment (неймспейсы, схема v2
+  имя-ключи, i64-строки, дескриптор GameSaveFragment из 11 членов,
+  миграционная таблица + extern-хуки, legacy-гард с понятной ошибкой,
+  transitional 7-командный devapi через шелл, монолит g_game_state
+  умер). Golden game+mini одобрен ревью глазами (байт-воспроизводим);
+  спека 2 ревью + реализация deep-ревью (ACCEPT); 18 python-тестов,
+  6/6 ctest, smoke-бот зелёный без правок, A3-сейв с числовым i64
+  грузится. rb-dark = документированный clean-break (гард). Осталось:
+  A5 (DevAPI-диспатч над реестром, снятие compat-обёрток), A6
+  (мультифрагмент: items/progression), E2-E4.
 - 2026-07-07: E1 ГОТОВ: game_events (ФИКСИРОВАННАЯ арена — решение лида,
   поправка в event-доке §2; engine-issue neotolis-engine#266 на generic
   nt_arena_t заведён) + game_features 7 фаз + двухфазный кадр в main.c

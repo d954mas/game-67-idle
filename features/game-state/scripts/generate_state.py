@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the supported game state C API from a state schema JSON file."""
+"""Generate the supported per-fragment game state C API from a v2 state schema."""
 
 from __future__ import annotations
 
@@ -11,6 +11,12 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[3]
 TOOL_LABEL = "features/game-state/scripts/generate_state.py"
+
+INT64_MIN = -(2**63)
+INT64_MAX = 2**63 - 1
+
+FRAGMENT_RE = re.compile(r"[a-z_][a-z0-9_]*")
+C_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 
 def default_schema_path() -> Path:
@@ -35,12 +41,9 @@ def default_out_dir(schema_path: Path | None = None) -> Path:
 
 SCHEMA_PATH = default_schema_path()
 OUT_DIR = default_out_dir(SCHEMA_PATH)
-HEADER_PATH = OUT_DIR / "game_state.h"
-SOURCE_PATH = OUT_DIR / "game_state.c"
-DEVAPI_SOURCE_PATH = OUT_DIR / "game_state_devapi.c"
-SCHEMA_HEADER_PATH = OUT_DIR / "game_state_schema.gen.h"
 
-SCALAR_TYPES = {"bool", "int", "float", "string", "string?", "enum"}
+# i64 rides the JSON wire as a decimal string (double loses precision above 2^53).
+SCALAR_TYPES = {"bool", "int", "i64", "float", "string", "string?", "enum"}
 
 
 def c_ident(value: str) -> str:
@@ -57,6 +60,30 @@ def c_macro(value: str) -> str:
     return c_ident(value).upper()
 
 
+def _pascal(ident: str) -> str:
+    return "".join(part[:1].upper() + part[1:] for part in ident.split("_") if part)
+
+
+class Ns:
+    """Per-fragment C namespace derived from schema.fragment (state doc §7)."""
+
+    def __init__(self, fragment_id: str) -> None:
+        pascal = _pascal(fragment_id)
+        self.id = fragment_id
+        self.ident = fragment_id
+        self.upper = fragment_id.upper()
+        self.pascal = pascal
+        self.type = f"{pascal}State"          # e.g. GameState / MiniState
+        self.fn = f"{fragment_id}_state_"     # e.g. game_state_ / mini_state_
+        self.macro = f"{self.upper}_STATE_"   # e.g. GAME_STATE_ / MINI_STATE_
+        self.inst = f"{fragment_id}_state"    # e.g. game_state / mini_state
+        self.frag = f"{fragment_id}_state_fragment"
+
+
+# Set once per generation (single-run, single-thread) from schema.fragment.
+NS: Ns = Ns("game")
+
+
 def relative_label(path: Path) -> str:
     try:
         return path.relative_to(ROOT).as_posix()
@@ -64,28 +91,48 @@ def relative_label(path: Path) -> str:
         return path.as_posix()
 
 
-def validate_field_ids(scope: str, fields: list[Any], reserved_ids: set[int], reserved_paths: set[str]) -> None:
-    seen_ids: dict[int, str] = {}
+# ---------------------------------------------------------------------------
+# Schema loading + validation (v2 only)
+# ---------------------------------------------------------------------------
+
+
+def _normalize_fields(raw_fields: Any, scope: str) -> list[dict[str, Any]]:
+    """v2 fields/type-fields are a MAP path -> spec; expand to an ordered list
+    with the key injected as ``path`` (file order = struct/golden order)."""
+    if not isinstance(raw_fields, dict):
+        raise SystemExit(f"{scope} must be an object (map of path -> spec)")
+    result: list[dict[str, Any]] = []
+    for path, spec in raw_fields.items():
+        if not isinstance(spec, dict):
+            raise SystemExit(f"{scope}.{path} must be an object")
+        entry: dict[str, Any] = {"path": path}
+        entry.update(spec)
+        result.append(entry)
+    return result
+
+
+def validate_field_names(scope: str, fields: list[dict[str, Any]], reserved_names: set[str], forbid_v: bool) -> None:
     seen_paths: set[str] = set()
+    seen_idents: dict[str, str] = {}
     for field in fields:
         if not isinstance(field, dict):
             raise SystemExit(f"{scope} entries must be objects")
         path = field.get("path")
-        field_id = field.get("id")
         if not isinstance(path, str) or not path:
             raise SystemExit(f"{scope} field path must be a non-empty string")
-        if not isinstance(field_id, int) or field_id <= 0:
-            raise SystemExit(f"{path} must declare a positive integer id")
-        if path in reserved_paths:
+        if forbid_v and path == "v":
+            raise SystemExit('field path "v" is reserved for the save envelope version')
+        if path in reserved_names:
             raise SystemExit(f"{path} is reserved and cannot be reused")
-        if field_id in reserved_ids:
-            raise SystemExit(f"{path} uses reserved id {field_id}")
         if path in seen_paths:
             raise SystemExit(f"duplicate field path {path}")
-        if field_id in seen_ids:
-            raise SystemExit(f"duplicate field id {field_id}: {seen_ids[field_id]} and {path}")
+        ident = c_ident(path)
+        if ident in seen_idents:
+            raise SystemExit(
+                f"field paths {seen_idents[ident]} and {path} collide on C identifier {ident}"
+            )
         seen_paths.add(path)
-        seen_ids[field_id] = path
+        seen_idents[ident] = path
 
 
 def field_c_type(field: dict[str, Any]) -> str:
@@ -94,6 +141,8 @@ def field_c_type(field: dict[str, Any]) -> str:
         return "bool"
     if typ == "int":
         return "int"
+    if typ == "i64":
+        return "int64_t"
     if typ == "float":
         return "float"
     if typ == "enum":
@@ -106,7 +155,7 @@ def field_c_type(field: dict[str, Any]) -> str:
 
 
 def default_enum_macro(enum_name: str, value: str) -> str:
-    return f"GAME_STATE_{c_macro(enum_name)}_{c_macro(value)}"
+    return f"{NS.macro}{c_macro(enum_name)}_{c_macro(value)}"
 
 
 def c_float(value: Any) -> str:
@@ -117,9 +166,15 @@ def c_float(value: Any) -> str:
 
 
 def c_int(value: Any) -> str:
-    if not isinstance(value, int):
+    if not isinstance(value, int) or isinstance(value, bool):
         raise SystemExit(f"expected integer value, got {value!r}")
     return str(value)
+
+
+def c_i64(value: Any) -> str:
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise SystemExit(f"expected i64 integer value, got {value!r}")
+    return f"{value}LL"
 
 
 def c_string(value: Any) -> str:
@@ -128,372 +183,73 @@ def c_string(value: Any) -> str:
     return json.dumps(value)
 
 
-def render_enum(enum_name: str, values: list[str]) -> str:
-    type_name = f"GameState{enum_name}"
-    lines = [f"typedef enum {type_name} {{"]
-    for i, value in enumerate(values):
-        suffix = f" = {i}" if i == 0 else ""
-        lines.append(f"    GAME_STATE_{c_macro(enum_name)}_{c_macro(value)}{suffix},")
-    lines.append(f"    GAME_STATE_{c_macro(enum_name)}_COUNT,")
-    lines.append(f"}} {type_name};")
-    return "\n".join(lines)
-
-
-def render_schema_header(schema: dict[str, Any], schema_label: str = "state/game_state.schema.json") -> str:
-    canonical = json.dumps(schema, ensure_ascii=False, separators=(",", ":"))
-    chunks = [canonical[i : i + 1800] for i in range(0, len(canonical), 1800)]
-    literal_lines = [f"    {json.dumps(chunk)}, \\" for chunk in chunks]
-    return (
-        "#ifndef GAME_STATE_SCHEMA_GEN_H\n"
-        "#define GAME_STATE_SCHEMA_GEN_H\n\n"
-        f"/* Generated by {TOOL_LABEL} from {schema_label}. */\n"
-        "#define GAME_STATE_SCHEMA_JSON_CHUNKS \\\n"
-        "    { \\\n"
-        + "\n".join(literal_lines)
-        + "\n"
-        + '    "" \\\n'
-        + "    }\n\n"
-        "#endif\n"
-    )
-
-
-def render_devapi_source(schema: dict[str, Any], schema_label: str = "state/game_state.schema.json") -> str:
-    doc = schema["document"]
-    return f"""#include "game_state.h"
-
-#if NT_DEVAPI_ENABLED
-
-/* Generated by {TOOL_LABEL} from {schema_label}. */
-
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "devapi/nt_devapi.h"
-#include "game_storage.h"
-
-/* Dev-only, single-threaded: one static buffer for dynamic error messages the
-   engine reads after the handler returns (err->message must outlive the call). */
-static char s_state_err[256];
-
-static bool state_fail(nt_devapi_error *err, const char *code, const char *message) {{
-    (void)snprintf(s_state_err, sizeof(s_state_err), "%s", message);
-    err->code = code;
-    err->message = s_state_err;
-    return false;
-}}
-
-/* err already carries a message snprintf'd into s_state_err by a game_state_* call. */
-static bool state_fail_buf(nt_devapi_error *err, const char *code) {{
-    err->code = code;
-    err->message = s_state_err;
-    return false;
-}}
-
-/* game_state_* helpers return freshly-built cJSON; the engine ABI fills a
-   pre-created object, so transplant src's members into result_obj. */
-static bool state_emit(cJSON *result_obj, cJSON *src, nt_devapi_error *err) {{
-    if (!src) {{
-        return state_fail(err, "internal", "failed to build state json");
-    }}
-    cJSON *child = src->child;
-    while (child) {{
-        cJSON *next = child->next;
-        cJSON_DetachItemViaPointer(src, child);
-        cJSON_AddItemToObject(result_obj, child->string, child);
-        child = next;
-    }}
-    cJSON_Delete(src);
-    return true;
-}}
-
-static bool check_doc(const cJSON *params, nt_devapi_error *err) {{
-    const cJSON *doc = cJSON_GetObjectItemCaseSensitive(params, "doc");
-    if (!doc || (cJSON_IsString(doc) && strcmp(doc->valuestring, "{doc}") == 0)) {{
-        return true;
-    }}
-    return state_fail(err, "bad_params", "unsupported state document");
-}}
-
-static bool ep_game_state_schema(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
-    (void)user;
-    if (!check_doc(params, err)) {{
-        return false;
-    }}
-    return state_emit(result_obj, game_state_schema_json(), err);
-}}
-
-static bool ep_game_state_get(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
-    (void)user;
-    if (!check_doc(params, err)) {{
-        return false;
-    }}
-    const cJSON *path = cJSON_GetObjectItemCaseSensitive(params, "path");
-    const char *state_path = cJSON_IsString(path) ? path->valuestring : "";
-    cJSON *value = game_state_get_path_json(&g_game_state, state_path, s_state_err, (int)sizeof(s_state_err));
-    if (!value) {{
-        return state_fail_buf(err, "bad_params");
-    }}
-    /* result_obj is an object, but a path value can be any JSON, so wrap it. */
-    cJSON_AddItemToObject(result_obj, "path", cJSON_CreateString(state_path));
-    cJSON_AddItemToObject(result_obj, "value", value);
-    return true;
-}}
-
-static bool ep_game_state_set(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
-    (void)user;
-    if (!check_doc(params, err)) {{
-        return false;
-    }}
-    const cJSON *path = cJSON_GetObjectItemCaseSensitive(params, "path");
-    const cJSON *value = cJSON_GetObjectItemCaseSensitive(params, "value");
-    if (!cJSON_IsString(path) || !value) {{
-        return state_fail(err, "bad_params", "path and value are required");
-    }}
-    cJSON *values = cJSON_CreateObject();
-    cJSON *copy = cJSON_Duplicate(value, true);
-    if (!values || !copy) {{
-        cJSON_Delete(values);
-        cJSON_Delete(copy);
-        return state_fail(err, "internal", "failed to copy state value");
-    }}
-    cJSON_AddItemToObject(values, path->valuestring, copy);
-    bool ok = game_state_patch_json(&g_game_state, values, s_state_err, (int)sizeof(s_state_err));
-    cJSON_Delete(values);
-    if (!ok) {{
-        return state_fail_buf(err, "bad_params");
-    }}
-    return state_emit(result_obj, game_state_to_json(&g_game_state), err);
-}}
-
-static bool ep_game_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
-    (void)user;
-    if (!check_doc(params, err)) {{
-        return false;
-    }}
-    const cJSON *values = cJSON_GetObjectItemCaseSensitive(params, "values");
-    if (!cJSON_IsObject(values)) {{
-        return state_fail(err, "bad_params", "values object is required");
-    }}
-    if (!game_state_patch_json(&g_game_state, values, s_state_err, (int)sizeof(s_state_err))) {{
-        return state_fail_buf(err, "bad_params");
-    }}
-    return state_emit(result_obj, game_state_to_json(&g_game_state), err);
-}}
-
-static bool ep_game_state_save(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
-    (void)user;
-    if (!check_doc(params, err)) {{
-        return false;
-    }}
-    cJSON *obj = cJSON_CreateObject();
-    const cJSON *unsafe_path = cJSON_GetObjectItemCaseSensitive(params, "unsafe_path");
-    if (cJSON_IsString(unsafe_path)) {{
-        if (!game_state_save(&g_game_state, unsafe_path->valuestring, s_state_err, (int)sizeof(s_state_err))) {{
-            cJSON_Delete(obj);
-            return state_fail_buf(err, "bad_params");
-        }}
-        cJSON_AddStringToObject(obj, "unsafe_path", unsafe_path->valuestring);
-        return state_emit(result_obj, obj, err);
-    }}
-
-    const cJSON *key = cJSON_GetObjectItemCaseSensitive(params, "key");
-    if (!cJSON_IsString(key)) {{
-        cJSON_Delete(obj);
-        return state_fail(err, "bad_params", "key is required");
-    }}
-    char *data = game_state_save_json_string(&g_game_state, s_state_err, (int)sizeof(s_state_err));
-    if (!data) {{
-        cJSON_Delete(obj);
-        return state_fail_buf(err, "internal");
-    }}
-    if (!game_storage_save_json(key->valuestring, GAME_STATE_DOCUMENT, data, s_state_err, (int)sizeof(s_state_err))) {{
-        cJSON_free(data);
-        cJSON_Delete(obj);
-        return state_fail_buf(err, "internal");
-    }}
-    cJSON_free(data);
-    char resolved[256];
-    if (game_storage_resolve_key(key->valuestring, GAME_STATE_DOCUMENT, resolved, (int)sizeof(resolved), NULL, 0)) {{
-        cJSON_AddStringToObject(obj, "resolved", resolved);
-    }}
-    cJSON_AddStringToObject(obj, "key", key->valuestring);
-    cJSON_AddStringToObject(obj, "doc", GAME_STATE_DOCUMENT);
-    return state_emit(result_obj, obj, err);
-}}
-
-static bool ep_game_state_load(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
-    (void)user;
-    if (!check_doc(params, err)) {{
-        return false;
-    }}
-    const cJSON *unsafe_path = cJSON_GetObjectItemCaseSensitive(params, "unsafe_path");
-    if (cJSON_IsString(unsafe_path)) {{
-        if (!game_state_load(&g_game_state, unsafe_path->valuestring, s_state_err, (int)sizeof(s_state_err))) {{
-            return state_fail_buf(err, "bad_params");
-        }}
-        return state_emit(result_obj, game_state_to_json(&g_game_state), err);
-    }}
-
-    const cJSON *key = cJSON_GetObjectItemCaseSensitive(params, "key");
-    if (!cJSON_IsString(key)) {{
-        return state_fail(err, "bad_params", "key is required");
-    }}
-    char *data = NULL;
-    if (!game_storage_load_json(key->valuestring, GAME_STATE_DOCUMENT, &data, s_state_err, (int)sizeof(s_state_err))) {{
-        return state_fail_buf(err, "bad_params");
-    }}
-    bool ok = game_state_load_json_string(&g_game_state, data, s_state_err, (int)sizeof(s_state_err));
-    free(data);
-    if (!ok) {{
-        return state_fail_buf(err, "bad_params");
-    }}
-    return state_emit(result_obj, game_state_to_json(&g_game_state), err);
-}}
-
-static bool ep_game_state_reset(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
-    (void)params;
-    (void)user;
-    if (!check_doc(params, err)) {{
-        return false;
-    }}
-    if (!game_state_reset(&g_game_state, s_state_err, (int)sizeof(s_state_err))) {{
-        return state_fail_buf(err, "internal");
-    }}
-    return state_emit(result_obj, game_state_to_json(&g_game_state), err);
-}}
-
-void game_state_register_devapi(void) {{
-    static const nt_devapi_command_desc descs[] = {{
-        {{"game.state.schema", "game", "Return the game state JSON schema.", "doc?", "schema object", "immediate", "none"}},
-        {{"game.state.get", "game", "Get a state value by path.", "doc?, path", "path, value", "immediate", "none"}},
-        {{"game.state.set", "game", "Set a state value by path.", "doc?, path, value", "state object", "immediate", "mutates state"}},
-        {{"game.state.patch", "game", "Patch multiple state values.", "doc?, values", "state object", "immediate", "mutates state"}},
-        {{"game.state.save", "game", "Save state to key or unsafe_path.", "doc?, key|unsafe_path", "key, doc, resolved", "immediate", "writes file"}},
-        {{"game.state.load", "game", "Load state from key or unsafe_path.", "doc?, key|unsafe_path", "state object", "immediate", "mutates state"}},
-        {{"game.state.reset", "game", "Reset state to defaults.", "doc?", "state object", "immediate", "mutates state"}},
-    }};
-    const nt_devapi_handler_fn fns[] = {{
-        ep_game_state_schema, ep_game_state_get, ep_game_state_set, ep_game_state_patch,
-        ep_game_state_save, ep_game_state_load, ep_game_state_reset,
-    }};
-    for (size_t i = 0; i < sizeof(fns) / sizeof(fns[0]); ++i) {{
-        (void)nt_devapi_register(&descs[i], fns[i], NULL);
-    }}
-}}
-
-#endif
-"""
-
-
-def enum_alias(field: dict[str, Any]) -> str | None:
-    path = field["path"]
-    return path[: -len("_index")] if path.endswith("_index") else None
-
-
-def enum_table(field: dict[str, Any]) -> tuple[str, str]:
-    """Return (names_table, count_macro) for an enum field."""
-    enum_name = field["enum"]
-    return f"k_{c_ident(enum_name)}_names", f"GAME_STATE_{c_macro(enum_name)}_COUNT"
-
-
-def render_enum_name_decls(schema: dict[str, Any]) -> str:
-    return "\n".join(
-        f"const char *game_state_{c_ident(name)}_name(int value);" for name in schema["enums"]
-    )
-
-
-def render_enum_tables(schema: dict[str, Any]) -> str:
-    blocks: list[str] = []
-    for name, values in schema["enums"].items():
-        ename = c_ident(name)
-        lines = [f"static const char *const k_{ename}_names[GAME_STATE_{c_macro(name)}_COUNT] = {{"]
-        lines.extend(f'    "{value}",' for value in values)
-        lines.append("};")
-        blocks.append("\n".join(lines))
-    for name in schema["enums"]:
-        ename = c_ident(name)
-        blocks.append(
-            f"const char *game_state_{ename}_name(int value) {{\n"
-            f"    return (value >= 0 && value < GAME_STATE_{c_macro(name)}_COUNT) ? k_{ename}_names[value] : \"unknown\";\n"
-            f"}}"
-        )
-    return "\n\n".join(blocks)
-
-
-def map_type_name(type_text: str) -> str | None:
-    m = re.fullmatch(r"map<string,([A-Za-z_][A-Za-z0-9_]*)>", type_text)
-    return m.group(1) if m else None
-
-
-def is_map_type(type_text: str) -> bool:
-    return map_type_name(type_text) is not None
-
-
-def is_list_type(type_text: str) -> bool:
-    return type_text == "list<string>"
-
-
-def collection_macro(path: str) -> str:
-    return f"GAME_STATE_MAX_{c_macro(path)}"
-
-
-def object_type_c_name(type_name: str) -> str:
-    return f"Game{type_name}"
-
-
-def object_type_func_name(type_name: str) -> str:
-    return c_ident(type_name)
-
-
-def schema_types(schema: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    types = schema.get("types", {})
-    return types if isinstance(types, dict) else {}
-
-
-def map_fields(schema: dict[str, Any]) -> list[dict[str, Any]]:
-    return [f for f in schema["fields"] if is_map_type(f["type"])]
-
-
-def list_fields(schema: dict[str, Any]) -> list[dict[str, Any]]:
-    return [f for f in schema["fields"] if is_list_type(f["type"])]
-
-
-def scalar_fields(schema: dict[str, Any]) -> list[dict[str, Any]]:
-    return [f for f in schema["fields"] if f["type"] in SCALAR_TYPES]
-
-
-def scalar_type_fields(fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [f for f in fields if f["type"] in SCALAR_TYPES]
-
-
 def load_schema(schema_path: Path = SCHEMA_PATH) -> dict[str, Any]:
     with schema_path.open("r", encoding="utf-8") as f:
-        schema = json.load(f)
-    if not isinstance(schema.get("schema"), str) or not schema["schema"]:
+        raw = json.load(f)
+    if not isinstance(raw, dict):
+        raise SystemExit("schema root must be an object")
+
+    # M3: reject v1 schemas up front with a readable message (not a KeyError deep
+    # in a renderer). A v1 schema has no schema_version and/or carries "document".
+    if "schema_version" not in raw or "document" in raw:
+        raise SystemExit(
+            "v1 schema unsupported by v2 generator; rebuild rb-dark from its shipping tag"
+        )
+    if raw.get("schema_version") != 2:
+        raise SystemExit("schema_version must be 2")
+
+    schema_label = raw.get("schema")
+    if not isinstance(schema_label, str) or not schema_label:
         raise SystemExit("schema id must be a non-empty string")
-    if not isinstance(schema.get("document"), str) or not schema["document"]:
-        raise SystemExit("document must be a non-empty string")
-    if not isinstance(schema.get("version"), int) or schema["version"] <= 0:
+
+    fragment = raw.get("fragment")
+    if not isinstance(fragment, str) or not FRAGMENT_RE.fullmatch(fragment):
+        raise SystemExit("fragment must be a string matching [a-z_][a-z0-9_]*")
+
+    version = raw.get("version")
+    if not isinstance(version, int) or isinstance(version, bool) or version <= 0:
         raise SystemExit("version must be a positive integer")
-    if not isinstance(schema.get("string_max"), int) or schema["string_max"] < 2:
+
+    string_max = raw.get("string_max")
+    if not isinstance(string_max, int) or isinstance(string_max, bool) or string_max < 2:
         raise SystemExit("string_max must be an integer >= 2")
-    if not isinstance(schema.get("fields"), list):
-        raise SystemExit("fields must be a list")
-    validate_supported_shape(schema)
-    return schema
 
+    reserved_raw = raw.get("reserved", [])
+    if not isinstance(reserved_raw, list):
+        raise SystemExit("reserved must be a list of field names")
+    for item in reserved_raw:
+        if not isinstance(item, str) or not item:
+            raise SystemExit("reserved entries must be non-empty strings")
 
-def validate_supported_shape(schema: dict[str, Any]) -> None:
-    reserved_ids = set()
-    reserved_paths = set()
-    for item in schema.get("reserved", []):
-        if not isinstance(item, dict) or not isinstance(item.get("id"), int) or not isinstance(item.get("path"), str):
-            raise SystemExit("reserved entries must include integer id and string path")
-        reserved_ids.add(item["id"])
-        reserved_paths.add(item["path"])
+    hooks = raw.get("hooks", {})
+    if not isinstance(hooks, dict):
+        raise SystemExit("hooks must be an object")
+    for key, value in hooks.items():
+        if key not in ("on_new_game", "reconcile") or not isinstance(value, bool):
+            raise SystemExit("hooks may only set on_new_game/reconcile to booleans")
 
-    enums = schema.get("enums", {})
+    migrations = raw.get("migrations", [])
+    if not isinstance(migrations, list):
+        raise SystemExit("migrations must be a list")
+    seen_fn: set[str] = set()
+    for index, entry in enumerate(migrations):
+        expected_to = index + 2
+        if not isinstance(entry, dict):
+            raise SystemExit("migration entries must be objects")
+        if entry.get("to_version") != expected_to:
+            raise SystemExit(f"migration {index} to_version must be {expected_to} (monotone 2..version)")
+        fn = entry.get("fn")
+        if not isinstance(fn, str) or not C_IDENT_RE.fullmatch(fn):
+            raise SystemExit("migration fn must be a valid C identifier")
+        if fn in seen_fn:
+            raise SystemExit(f"duplicate migration fn {fn}")
+        seen_fn.add(fn)
+    if version != len(migrations) + 1:
+        raise SystemExit(
+            f"version ({version}) must equal len(migrations)+1 ({len(migrations) + 1})"
+        )
+
+    enums = raw.get("enums", {})
     if not isinstance(enums, dict):
         raise SystemExit("enums must be an object")
     for name, values in enums.items():
@@ -502,22 +258,52 @@ def validate_supported_shape(schema: dict[str, Any]) -> None:
         if any(not isinstance(value, str) or not value for value in values):
             raise SystemExit(f"enum {name} contains a bad value")
 
-    types = schema_types(schema)
-    if not isinstance(types, dict):
+    types_raw = raw.get("types", {})
+    if not isinstance(types_raw, dict):
         raise SystemExit("types must be an object")
-    for type_name, type_def in types.items():
+    types: dict[str, dict[str, Any]] = {}
+    for type_name, type_def in types_raw.items():
         if not isinstance(type_name, str) or not type_name or not c_ident(type_name):
             raise SystemExit("type names must be non-empty strings")
         if not isinstance(type_def, dict) or type_def.get("kind") != "object":
             raise SystemExit(f"types.{type_name} must be an object type")
-        type_fields = type_def.get("fields")
-        if not isinstance(type_fields, list):
-            raise SystemExit(f"types.{type_name}.fields must be a list")
-        validate_field_ids(f"types.{type_name}", type_fields, set(), set())
-        for field in type_fields:
+        type_fields = _normalize_fields(type_def.get("fields"), f"types.{type_name}.fields")
+        types[type_name] = {"kind": "object", "fields": type_fields}
+
+    fields = _normalize_fields(raw.get("fields"), "fields")
+
+    schema: dict[str, Any] = {
+        "schema": schema_label,
+        "schema_version": 2,
+        "fragment": fragment,
+        "version": version,
+        "string_max": string_max,
+        "reserved": list(reserved_raw),
+        "hooks": hooks,
+        "migrations": migrations,
+        "enums": enums,
+        "types": types,
+        "fields": fields,
+    }
+
+    global NS
+    NS = Ns(fragment)
+
+    validate_supported_shape(schema)
+    return schema
+
+
+def validate_supported_shape(schema: dict[str, Any]) -> None:
+    reserved_names = set(schema.get("reserved", []))
+    enums = schema["enums"]
+    types = schema["types"]
+
+    for type_name, type_def in types.items():
+        validate_field_names(f"types.{type_name}", type_def["fields"], set(), forbid_v=False)
+        for field in type_def["fields"]:
             validate_field_shape(schema, field, enums, types, allow_collections=False)
 
-    validate_field_ids("fields", schema["fields"], reserved_ids, reserved_paths)
+    validate_field_names("fields", schema["fields"], reserved_names, forbid_v=True)
     for field in schema["fields"]:
         validate_field_shape(schema, field, enums, types, allow_collections=True)
 
@@ -540,6 +326,17 @@ def validate_field_shape(
             for key in ("default", "min", "max"):
                 if key not in field:
                     raise SystemExit(f"{path} must declare {key}")
+        if typ == "i64":
+            for key in ("default", "min", "max"):
+                if key not in field:
+                    raise SystemExit(f"{path} must declare {key}")
+            for key in ("default", "min", "max"):
+                if not isinstance(field[key], int) or isinstance(field[key], bool):
+                    raise SystemExit(f"{path} i64 {key} must be an integer")
+            if not (INT64_MIN <= field["min"] <= field["max"] <= INT64_MAX):
+                raise SystemExit(f"{path} i64 min/max must fit int64 with min <= max")
+            if not (field["min"] <= field["default"] <= field["max"]):
+                raise SystemExit(f"{path} i64 default must be within [min, max]")
         if typ == "bool" and not isinstance(field.get("default"), bool):
             raise SystemExit(f"{path} must declare bool default")
         if typ == "enum" and field.get("default") not in enums[field["enum"]]:
@@ -586,6 +383,113 @@ def validate_max_count(field: dict[str, Any], path: str) -> None:
         raise SystemExit(f"{path} must declare positive max_count")
 
 
+# ---------------------------------------------------------------------------
+# Type / collection helpers
+# ---------------------------------------------------------------------------
+
+
+def map_type_name(type_text: str) -> str | None:
+    m = re.fullmatch(r"map<string,([A-Za-z_][A-Za-z0-9_]*)>", type_text)
+    return m.group(1) if m else None
+
+
+def is_map_type(type_text: str) -> bool:
+    return map_type_name(type_text) is not None
+
+
+def is_list_type(type_text: str) -> bool:
+    return type_text == "list<string>"
+
+
+def collection_macro(path: str) -> str:
+    return f"{NS.macro}MAX_{c_macro(path)}"
+
+
+def object_type_c_name(type_name: str) -> str:
+    return f"{NS.pascal}{type_name}"
+
+
+def object_type_func_name(type_name: str) -> str:
+    return c_ident(type_name)
+
+
+def schema_types(schema: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    types = schema.get("types", {})
+    return types if isinstance(types, dict) else {}
+
+
+def map_fields(schema: dict[str, Any]) -> list[dict[str, Any]]:
+    return [f for f in schema["fields"] if is_map_type(f["type"])]
+
+
+def list_fields(schema: dict[str, Any]) -> list[dict[str, Any]]:
+    return [f for f in schema["fields"] if is_list_type(f["type"])]
+
+
+def scalar_fields(schema: dict[str, Any]) -> list[dict[str, Any]]:
+    return [f for f in schema["fields"] if f["type"] in SCALAR_TYPES]
+
+
+def scalar_type_fields(fields: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [f for f in fields if f["type"] in SCALAR_TYPES]
+
+
+def enum_alias(field: dict[str, Any]) -> str | None:
+    path = field["path"]
+    return path[: -len("_index")] if path.endswith("_index") else None
+
+
+def enum_table(field: dict[str, Any]) -> tuple[str, str]:
+    """Return (names_table, count_macro) for an enum field."""
+    enum_name = field["enum"]
+    return f"k_{c_ident(enum_name)}_names", f"{NS.macro}{c_macro(enum_name)}_COUNT"
+
+
+# ---------------------------------------------------------------------------
+# Enums
+# ---------------------------------------------------------------------------
+
+
+def render_enum(enum_name: str, values: list[str]) -> str:
+    type_name = f"{NS.type}{enum_name}"
+    lines = [f"typedef enum {type_name} {{"]
+    for i, value in enumerate(values):
+        suffix = f" = {i}" if i == 0 else ""
+        lines.append(f"    {NS.macro}{c_macro(enum_name)}_{c_macro(value)}{suffix},")
+    lines.append(f"    {NS.macro}{c_macro(enum_name)}_COUNT,")
+    lines.append(f"}} {type_name};")
+    return "\n".join(lines)
+
+
+def render_enum_name_decls(schema: dict[str, Any]) -> str:
+    return "\n".join(
+        f"const char *{NS.fn}{c_ident(name)}_name(int value);" for name in schema["enums"]
+    )
+
+
+def render_enum_tables(schema: dict[str, Any]) -> str:
+    blocks: list[str] = []
+    for name, values in schema["enums"].items():
+        ename = c_ident(name)
+        lines = [f"static const char *const k_{ename}_names[{NS.macro}{c_macro(name)}_COUNT] = {{"]
+        lines.extend(f'    "{value}",' for value in values)
+        lines.append("};")
+        blocks.append("\n".join(lines))
+    for name in schema["enums"]:
+        ename = c_ident(name)
+        blocks.append(
+            f"const char *{NS.fn}{ename}_name(int value) {{\n"
+            f"    return (value >= 0 && value < {NS.macro}{c_macro(name)}_COUNT) ? k_{ename}_names[value] : \"unknown\";\n"
+            f"}}"
+        )
+    return "\n\n".join(blocks)
+
+
+# ---------------------------------------------------------------------------
+# Constants + structs
+# ---------------------------------------------------------------------------
+
+
 def render_state_constants(schema: dict[str, Any]) -> str:
     lines: list[str] = []
 
@@ -593,21 +497,25 @@ def render_state_constants(schema: dict[str, Any]) -> str:
         typ = field["type"]
         name = c_macro(f"{prefix}{field['path']}")
         if typ == "enum":
-            lines.append(f"#define GAME_STATE_{name}_DEFAULT {default_enum_macro(field['enum'], field['default'])}")
+            lines.append(f"#define {NS.macro}{name}_DEFAULT {default_enum_macro(field['enum'], field['default'])}")
         elif typ == "int":
-            lines.append(f"#define GAME_STATE_{name}_DEFAULT {c_int(field['default'])}")
-            lines.append(f"#define GAME_STATE_{name}_MIN {c_int(field['min'])}")
-            lines.append(f"#define GAME_STATE_{name}_MAX {c_int(field['max'])}")
+            lines.append(f"#define {NS.macro}{name}_DEFAULT {c_int(field['default'])}")
+            lines.append(f"#define {NS.macro}{name}_MIN {c_int(field['min'])}")
+            lines.append(f"#define {NS.macro}{name}_MAX {c_int(field['max'])}")
+        elif typ == "i64":
+            lines.append(f"#define {NS.macro}{name}_DEFAULT {c_i64(field['default'])}")
+            lines.append(f"#define {NS.macro}{name}_MIN {c_i64(field['min'])}")
+            lines.append(f"#define {NS.macro}{name}_MAX {c_i64(field['max'])}")
         elif typ == "float":
-            lines.append(f"#define GAME_STATE_{name}_DEFAULT {c_float(field['default'])}")
-            lines.append(f"#define GAME_STATE_{name}_MIN {c_float(field['min'])}")
-            lines.append(f"#define GAME_STATE_{name}_MAX {c_float(field['max'])}")
+            lines.append(f"#define {NS.macro}{name}_DEFAULT {c_float(field['default'])}")
+            lines.append(f"#define {NS.macro}{name}_MIN {c_float(field['min'])}")
+            lines.append(f"#define {NS.macro}{name}_MAX {c_float(field['max'])}")
         elif typ == "string" and "default" in field:
-            lines.append(f"#define GAME_STATE_{name}_DEFAULT {c_string(field['default'])}")
+            lines.append(f"#define {NS.macro}{name}_DEFAULT {c_string(field['default'])}")
         elif typ == "string?" and isinstance(field.get("default"), str):
-            lines.append(f"#define GAME_STATE_{name}_DEFAULT {c_string(field['default'])}")
+            lines.append(f"#define {NS.macro}{name}_DEFAULT {c_string(field['default'])}")
         elif typ == "bool":
-            lines.append(f"#define GAME_STATE_{name}_DEFAULT {1 if field['default'] else 0}")
+            lines.append(f"#define {NS.macro}{name}_DEFAULT {1 if field['default'] else 0}")
 
     for field in scalar_fields(schema):
         emit_scalar(field)
@@ -623,9 +531,9 @@ def render_struct_scalar_field(field: dict[str, Any], indent: str = "    ") -> l
     name = c_ident(field["path"])
     typ = field["type"]
     if typ == "string":
-        return [f"{indent}char {name}[GAME_STATE_STRING_MAX];"]
+        return [f"{indent}char {name}[{NS.macro}STRING_MAX];"]
     if typ == "string?":
-        return [f"{indent}bool has_{name};", f"{indent}char {name}[GAME_STATE_STRING_MAX];"]
+        return [f"{indent}bool has_{name};", f"{indent}char {name}[{NS.macro}STRING_MAX];"]
     return [f"{indent}{field_c_type(field)} {name};"]
 
 
@@ -634,7 +542,7 @@ def render_object_structs(schema: dict[str, Any]) -> str:
     for type_name, type_def in schema_types(schema).items():
         lines = [f"typedef struct {object_type_c_name(type_name)} {{"]
         lines.append("    bool used;")
-        lines.append("    char key[GAME_STATE_STRING_MAX];")
+        lines.append(f"    char key[{NS.macro}STRING_MAX];")
         for field in type_def["fields"]:
             lines.extend(render_struct_scalar_field(field))
         lines.append(f"}} {object_type_c_name(type_name)};")
@@ -643,38 +551,46 @@ def render_object_structs(schema: dict[str, Any]) -> str:
 
 
 def render_state_struct(schema: dict[str, Any]) -> str:
-    lines = ["typedef struct GameState {"]
+    lines = [f"typedef struct {NS.type} {{"]
     for field in schema["fields"]:
         typ = field["type"]
         name = c_ident(field["path"])
         if typ in SCALAR_TYPES:
             lines.extend(render_struct_scalar_field(field))
         elif is_list_type(typ):
-            lines.append(f"    char {name}[{collection_macro(field['path'])}][GAME_STATE_STRING_MAX];")
+            lines.append(f"    char {name}[{collection_macro(field['path'])}][{NS.macro}STRING_MAX];")
             lines.append(f"    int {name}_count;")
         elif (type_name := map_type_name(typ)):
             lines.append(f"    {object_type_c_name(type_name)} {name}[{collection_macro(field['path'])}];")
-    lines.append("} GameState;")
+    lines.append(f"}} {NS.type};")
     return "\n".join(lines)
 
 
-def render_header(schema: dict[str, Any], schema_label: str = "state/game_state.schema.json") -> str:
+def render_header(schema: dict[str, Any], schema_label: str) -> str:
     enums = schema["enums"]
     enum_blocks = "\n\n".join(render_enum(name, values) for name, values in enums.items())
-    return f"""#ifndef GAME_STATE_GENERATED_H
-#define GAME_STATE_GENERATED_H
+    guard = f"{NS.macro}GENERATED_H"
+    devapi_block = (
+        f"#if NT_DEVAPI_ENABLED\n"
+        f"void {NS.fn}register_devapi(void);\n"
+        f"#endif\n"
+    )
+    return f"""#ifndef {guard}
+#define {guard}
 
 /* Generated by {TOOL_LABEL} from {schema_label}. */
 
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 
 #include "cJSON.h"
+#include "game_save.h"
 
-#define GAME_STATE_SCHEMA_ID "{schema["schema"]}"
-#define GAME_STATE_DOCUMENT "{schema["document"]}"
-#define GAME_STATE_VERSION {schema["version"]}
-#define GAME_STATE_STRING_MAX {schema["string_max"]}
+#define {NS.macro}SCHEMA_ID "{schema["schema"]}"
+#define {NS.macro}FRAGMENT_ID "{schema["fragment"]}"
+#define {NS.macro}VERSION {schema["version"]}
+#define {NS.macro}STRING_MAX {schema["string_max"]}
 
 {render_state_constants(schema)}
 
@@ -684,54 +600,47 @@ def render_header(schema: dict[str, Any], schema_label: str = "state/game_state.
 
 {render_state_struct(schema)}
 
-typedef bool (*game_state_changed_fn)(const char *path, void *user, char *error, int error_cap);
-
-extern GameState g_game_state;
+/* Instance owned by this fragment TU (the shared global-state monolith is gone).
+   Feature LOGIC works with it directly or through its own API. */
+extern {NS.type} {NS.inst};
 
 {render_enum_name_decls(schema)}
 
-void game_state_init_defaults(GameState *state);
-void game_state_init(void);
-void game_state_set_changed_callback(game_state_changed_fn callback, void *user);
-bool game_state_validate(const GameState *state, char *error, int error_cap);
-void game_state_mark_dirty(void);
-bool game_state_is_dirty(void);
-void game_state_clear_dirty(void);
+void   {NS.fn}init_defaults({NS.type} *state);
+bool   {NS.fn}validate(const {NS.type} *state, char *error, int error_cap);
+cJSON *{NS.fn}schema_json(void);
+cJSON *{NS.fn}to_json(const {NS.type} *state);
+cJSON *{NS.fn}get_path_json(const {NS.type} *state, const char *path, char *error, int error_cap);
+bool   {NS.fn}set_path_json({NS.type} *state, const char *path, const cJSON *value, char *error, int error_cap);
+bool   {NS.fn}patch_json({NS.type} *state, const cJSON *values, char *error, int error_cap);
+bool   {NS.fn}from_json({NS.type} *state, const cJSON *json, char *error, int error_cap);
 
-cJSON *game_state_schema_json(void);
-cJSON *game_state_to_json(const GameState *state);
-cJSON *game_state_get_path_json(const GameState *state, const char *path, char *error, int error_cap);
-bool game_state_set_path_json(GameState *state, const char *path, const cJSON *value, char *error, int error_cap);
-bool game_state_patch_json(GameState *state, const cJSON *values, char *error, int error_cap);
-bool game_state_from_json(GameState *state, const cJSON *json, char *error, int error_cap);
+/* Generated descriptor — replaces the hand-written fragment adapter. */
+extern const GameSaveFragment {NS.frag};
 
-char *game_state_save_json_string(const GameState *state, char *error, int error_cap);
-bool game_state_load_json_string(GameState *state, const char *data, char *error, int error_cap);
-bool game_state_save(const GameState *state, const char *path, char *error, int error_cap);
-bool game_state_load(GameState *state, const char *path, char *error, int error_cap);
-bool game_state_reset(GameState *state, char *error, int error_cap);
-
-#if NT_DEVAPI_ENABLED
-void game_state_register_devapi(void);
-#endif
-
+{devapi_block}
 #endif
 """
 
 
+# ---------------------------------------------------------------------------
+# Scalar codegen
+# ---------------------------------------------------------------------------
+
+
 def render_scalar_default_assignment(field: dict[str, Any], target: str, prefix: str = "") -> list[str]:
     ident = c_ident(field["path"])
-    macro = f"GAME_STATE_{c_macro(prefix + field['path'])}"
+    macro = f"{NS.macro}{c_macro(prefix + field['path'])}"
     typ = field["type"]
     if typ == "string":
         if "default" in field:
-            return [f"    (void)copy_text({target}->{ident}, sizeof({target}->{ident}), {macro}_DEFAULT);"]
+            return [f"    (void)gsj_copy_text({target}->{ident}, sizeof({target}->{ident}), {macro}_DEFAULT);"]
         return []
     if typ == "string?":
         if isinstance(field.get("default"), str):
             return [
                 f"    {target}->has_{ident} = true;",
-                f"    (void)copy_text({target}->{ident}, sizeof({target}->{ident}), {macro}_DEFAULT);",
+                f"    (void)gsj_copy_text({target}->{ident}, sizeof({target}->{ident}), {macro}_DEFAULT);",
             ]
         return [f"    {target}->has_{ident} = false;"]
     return [f"    {target}->{ident} = {macro}_DEFAULT;"]
@@ -739,12 +648,12 @@ def render_scalar_default_assignment(field: dict[str, Any], target: str, prefix:
 
 def render_scalar_validation(field: dict[str, Any], target: str, path: str, prefix: str = "") -> list[str]:
     ident = c_ident(field["path"])
-    macro = f"GAME_STATE_{c_macro(prefix + field['path'])}"
+    macro = f"{NS.macro}{c_macro(prefix + field['path'])}"
     typ = field["type"]
     if typ == "enum":
         _, count_macro = enum_table(field)
         condition = f"{target}->{ident} < 0 || {target}->{ident} >= {count_macro}"
-    elif typ in {"int", "float"}:
+    elif typ in {"int", "float", "i64"}:
         condition = f"{target}->{ident} < {macro}_MIN || {target}->{ident} > {macro}_MAX"
     elif typ == "string":
         condition = f"{target}->{ident}[0] == '\\0'"
@@ -752,66 +661,10 @@ def render_scalar_validation(field: dict[str, Any], target: str, path: str, pref
         return []
     return [
         f"    if ({condition}) {{",
-        f'        set_error(error, error_cap, "{path} out of range");',
+        f'        gsj_set_error(error, error_cap, "{path} out of range");',
         "        return false;",
         "    }",
     ]
-
-
-def render_object_helpers(schema: dict[str, Any]) -> str:
-    blocks: list[str] = []
-    for type_name, type_def in schema_types(schema).items():
-        fname = object_type_func_name(type_name)
-        cname = object_type_c_name(type_name)
-        default_lines = [
-            f"static void {fname}_init_defaults({cname} *obj, const char *key) {{",
-            "    memset(obj, 0, sizeof(*obj));",
-            "    obj->used = true;",
-            "    (void)copy_text(obj->key, sizeof(obj->key), key);",
-        ]
-        for field in type_def["fields"]:
-            default_lines.extend(render_scalar_default_assignment(field, "obj", f"{type_name}."))
-        default_lines.append("}")
-
-        validate_lines = [f"static bool {fname}_validate(const {cname} *obj, char *error, int error_cap) {{"]
-        validate_lines.append("    if (!obj->used) { return true; }")
-        validate_lines.append("    if (obj->key[0] == '\\0') { set_error(error, error_cap, \"object key is empty\"); return false; }")
-        for field in type_def["fields"]:
-            validate_lines.extend(render_scalar_validation(field, "obj", field["path"], f"{type_name}."))
-        validate_lines.append("    return true;")
-        validate_lines.append("}")
-
-        to_json_lines = [f"static cJSON *{fname}_to_json(const {cname} *obj) {{"]
-        to_json_lines.append("    cJSON *json = cJSON_CreateObject();")
-        for field in type_def["fields"]:
-            to_json_lines.extend(render_cjson_add_scalar(field, "json", "obj", field["path"]))
-        to_json_lines.append("    return json;")
-        to_json_lines.append("}")
-
-        get_lines = [f"static cJSON *{fname}_get_field_json(const {cname} *obj, const char *field, char *error, int error_cap) {{"]
-        get_lines.append("    if (!field || field[0] == '\\0') { return " + f"{fname}_to_json(obj); }}")
-        for field in type_def["fields"]:
-            get_lines.extend(render_get_scalar_if(field, "obj", field["path"]))
-        get_lines.append("    set_error(error, error_cap, \"unknown object field\");")
-        get_lines.append("    return NULL;")
-        get_lines.append("}")
-
-        set_lines = [f"static bool {fname}_set_field_json({cname} *obj, const char *field, const cJSON *value, char *error, int error_cap) {{"]
-        for field in type_def["fields"]:
-            set_lines.extend(render_set_scalar_if(field, "obj", field["path"], f"{type_name}."))
-        set_lines.append("    set_error(error, error_cap, \"unknown object field\");")
-        set_lines.append("    return false;")
-        set_lines.append("}")
-
-        from_lines = [f"static bool {fname}_from_json({cname} *obj, const cJSON *json, char *error, int error_cap) {{"]
-        from_lines.append("    if (!cJSON_IsObject(json)) { set_error(error, error_cap, \"object must be json object\"); return false; }")
-        for field in type_def["fields"]:
-            from_lines.extend(render_read_scalar(field, "json", "obj", field["path"], f"{type_name}."))
-        from_lines.append(f"    return {fname}_validate(obj, error, error_cap);")
-        from_lines.append("}")
-
-        blocks.append("\n".join(default_lines + [""] + validate_lines + [""] + to_json_lines + [""] + get_lines + [""] + set_lines + [""] + from_lines))
-    return "\n\n".join(blocks)
 
 
 def render_cjson_add_scalar(field: dict[str, Any], target: str, state_expr: str, key: str) -> list[str]:
@@ -823,11 +676,13 @@ def render_cjson_add_scalar(field: dict[str, Any], target: str, state_expr: str,
         if alias:
             return [
                 f'    cJSON_AddNumberToObject({target}, "{key}", {state_expr}->{ident});',
-                f'    cJSON_AddStringToObject({target}, "{alias}", game_state_{ename}_name({state_expr}->{ident}));',
+                f'    cJSON_AddStringToObject({target}, "{alias}", {NS.fn}{ename}_name({state_expr}->{ident}));',
             ]
-        return [f'    cJSON_AddStringToObject({target}, "{key}", game_state_{ename}_name({state_expr}->{ident}));']
+        return [f'    cJSON_AddStringToObject({target}, "{key}", {NS.fn}{ename}_name({state_expr}->{ident}));']
     if typ == "int":
         return [f'    cJSON_AddNumberToObject({target}, "{key}", {state_expr}->{ident});']
+    if typ == "i64":
+        return [f'    gsj_add_i64({target}, "{key}", {state_expr}->{ident});']
     if typ == "float":
         return [f'    cJSON_AddNumberToObject({target}, "{key}", (double){state_expr}->{ident});']
     if typ == "bool":
@@ -850,9 +705,13 @@ def render_get_scalar_expr(field: dict[str, Any], state_expr: str) -> str:
     typ = field["type"]
     if typ == "enum":
         ename = c_ident(field["enum"])
-        return f"cJSON_CreateString(game_state_{ename}_name({state_expr}->{ident}))"
+        return f"cJSON_CreateString({NS.fn}{ename}_name({state_expr}->{ident}))"
     if typ == "int":
         return f"cJSON_CreateNumber({state_expr}->{ident})"
+    if typ == "i64":
+        # Compound literal lives until the end of the full return expression;
+        # gsj_i64_to_string fills it and cJSON_CreateString copies immediately.
+        return f"cJSON_CreateString(gsj_i64_to_string({state_expr}->{ident}, (char[21]){{0}}, 21))"
     if typ == "float":
         return f"cJSON_CreateNumber((double){state_expr}->{ident})"
     if typ == "bool":
@@ -875,7 +734,7 @@ def render_get_scalar_if(field: dict[str, Any], state_expr: str, path: str) -> l
         ename = c_ident(field["enum"])
         lines.extend([
             f'    if (strcmp(field, "{alias}") == 0) {{',
-            f"        return cJSON_CreateString(game_state_{ename}_name({state_expr}->{c_ident(field['path'])}));",
+            f"        return cJSON_CreateString({NS.fn}{ename}_name({state_expr}->{c_ident(field['path'])}));",
             "    }",
         ])
     return lines
@@ -883,39 +742,44 @@ def render_get_scalar_if(field: dict[str, Any], state_expr: str, path: str) -> l
 
 def render_set_scalar_if(field: dict[str, Any], state_expr: str, path: str, prefix: str = "", compare_var: str = "field") -> list[str]:
     ident = c_ident(field["path"])
-    macro = f"GAME_STATE_{c_macro(prefix + field['path'])}"
+    macro = f"{NS.macro}{c_macro(prefix + field['path'])}"
     typ = field["type"]
     head = [f'    if (strcmp({compare_var}, "{path}") == 0) {{']
     if typ == "enum":
         names_table, count_macro = enum_table(field)
         body = [
-            f"        if (!parse_enum_value(value, {names_table}, {count_macro}, &{state_expr}->{ident}, error, error_cap)) {{ return false; }}",
+            f"        if (!gsj_parse_enum_value(value, {names_table}, {count_macro}, &{state_expr}->{ident}, error, error_cap)) {{ return false; }}",
             "        return true;",
         ]
     elif typ == "int":
         body = [
             "        int parsed = 0;",
-            f"        if (!parse_int_value(value, {macro}_MIN, {macro}_MAX, &parsed, error, error_cap)) {{ return false; }}",
+            f"        if (!gsj_parse_int_value(value, {macro}_MIN, {macro}_MAX, &parsed, error, error_cap)) {{ return false; }}",
             f"        {state_expr}->{ident} = parsed;",
+            "        return true;",
+        ]
+    elif typ == "i64":
+        body = [
+            f"        if (!gsj_parse_i64_value(value, {macro}_MIN, {macro}_MAX, &{state_expr}->{ident}, error, error_cap)) {{ return false; }}",
             "        return true;",
         ]
     elif typ == "float":
         body = [
-            "        if (!cJSON_IsNumber(value)) { set_error(error, error_cap, \"expected number\"); return false; }",
+            "        if (!cJSON_IsNumber(value)) { gsj_set_error(error, error_cap, \"expected number\"); return false; }",
             "        float parsed = (float)value->valuedouble;",
-            f"        if (parsed < {macro}_MIN || parsed > {macro}_MAX) {{ set_error(error, error_cap, \"number out of range\"); return false; }}",
+            f"        if (parsed < {macro}_MIN || parsed > {macro}_MAX) {{ gsj_set_error(error, error_cap, \"number out of range\"); return false; }}",
             f"        {state_expr}->{ident} = parsed;",
             "        return true;",
         ]
     elif typ == "bool":
         body = [
-            "        if (!cJSON_IsBool(value)) { set_error(error, error_cap, \"expected bool\"); return false; }",
+            "        if (!cJSON_IsBool(value)) { gsj_set_error(error, error_cap, \"expected bool\"); return false; }",
             f"        {state_expr}->{ident} = cJSON_IsTrue(value);",
             "        return true;",
         ]
     elif typ == "string":
         body = [
-            f"        if (!cJSON_IsString(value) || !copy_text({state_expr}->{ident}, sizeof({state_expr}->{ident}), value->valuestring)) {{ set_error(error, error_cap, \"expected short string\"); return false; }}",
+            f"        if (!cJSON_IsString(value) || !gsj_copy_text({state_expr}->{ident}, sizeof({state_expr}->{ident}), value->valuestring)) {{ gsj_set_error(error, error_cap, \"expected short string\"); return false; }}",
             "        return true;",
         ]
     elif typ == "string?":
@@ -925,7 +789,7 @@ def render_set_scalar_if(field: dict[str, Any], state_expr: str, path: str, pref
             f"            {state_expr}->{ident}[0] = '\\0';",
             "            return true;",
             "        }",
-            f"        if (!cJSON_IsString(value) || !copy_text({state_expr}->{ident}, sizeof({state_expr}->{ident}), value->valuestring)) {{ set_error(error, error_cap, \"expected short string or null\"); return false; }}",
+            f"        if (!cJSON_IsString(value) || !gsj_copy_text({state_expr}->{ident}, sizeof({state_expr}->{ident}), value->valuestring)) {{ gsj_set_error(error, error_cap, \"expected short string or null\"); return false; }}",
             f"        {state_expr}->has_{ident} = true;",
             "        return true;",
         ]
@@ -936,29 +800,32 @@ def render_set_scalar_if(field: dict[str, Any], state_expr: str, path: str, pref
 
 def render_read_scalar(field: dict[str, Any], source: str, target: str, key: str, prefix: str = "") -> list[str]:
     ident = c_ident(field["path"])
-    macro = f"GAME_STATE_{c_macro(prefix + field['path'])}"
+    macro = f"{NS.macro}{c_macro(prefix + field['path'])}"
     typ = field["type"]
     if typ == "enum":
         names_table, count_macro = enum_table(field)
-        call = f'read_enum({source}, "{key}", {names_table}, {count_macro}, &{target}->{ident}, error, error_cap)'
+        call = f'gsj_read_enum({source}, "{key}", {names_table}, {count_macro}, &{target}->{ident}, error, error_cap)'
     elif typ == "int":
-        call = f'read_int_range({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
+        call = f'gsj_read_int_range({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
+    elif typ == "i64":
+        call = f'gsj_read_i64({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
     elif typ == "float":
-        call = f'read_float_range({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
+        call = f'gsj_read_float_range({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
     elif typ == "bool":
-        call = f'read_bool({source}, "{key}", &{target}->{ident}, error, error_cap)'
+        call = f'gsj_read_bool({source}, "{key}", &{target}->{ident}, error, error_cap)'
     elif typ == "string":
-        call = f'read_string({source}, "{key}", {target}->{ident}, sizeof({target}->{ident}), error, error_cap)'
+        call = f'gsj_read_string({source}, "{key}", {target}->{ident}, sizeof({target}->{ident}), error, error_cap)'
     elif typ == "string?":
+        var = c_ident(source + "_" + key)
         return [
-            f'    const cJSON *{c_ident(source + "_" + key)} = object_item({source}, "{key}");',
-            f"    if ({c_ident(source + '_' + key)}) {{",
-            f"        if (cJSON_IsNull({c_ident(source + '_' + key)})) {{",
+            f'    const cJSON *{var} = gsj_object_item({source}, "{key}");',
+            f"    if ({var}) {{",
+            f"        if (cJSON_IsNull({var})) {{",
             f"            {target}->has_{ident} = false;",
-            f"        }} else if (cJSON_IsString({c_ident(source + '_' + key)}) && copy_text({target}->{ident}, sizeof({target}->{ident}), {c_ident(source + '_' + key)}->valuestring)) {{",
+            f"        }} else if (cJSON_IsString({var}) && gsj_copy_text({target}->{ident}, sizeof({target}->{ident}), {var}->valuestring)) {{",
             f"            {target}->has_{ident} = true;",
             "        } else {",
-            "            set_error(error, error_cap, \"expected short string or null\");",
+            "            gsj_set_error(error, error_cap, \"expected short string or null\");",
             "            return false;",
             "        }",
             "    }",
@@ -966,6 +833,67 @@ def render_read_scalar(field: dict[str, Any], source: str, target: str, key: str
     else:
         raise AssertionError(typ)
     return [f"    if (!{call}) {{ return false; }}"]
+
+
+# ---------------------------------------------------------------------------
+# Object + collection helpers
+# ---------------------------------------------------------------------------
+
+
+def render_object_helpers(schema: dict[str, Any]) -> str:
+    blocks: list[str] = []
+    for type_name, type_def in schema_types(schema).items():
+        fname = object_type_func_name(type_name)
+        cname = object_type_c_name(type_name)
+        default_lines = [
+            f"static void {fname}_init_defaults({cname} *obj, const char *key) {{",
+            "    memset(obj, 0, sizeof(*obj));",
+            "    obj->used = true;",
+            "    (void)gsj_copy_text(obj->key, sizeof(obj->key), key);",
+        ]
+        for field in type_def["fields"]:
+            default_lines.extend(render_scalar_default_assignment(field, "obj", f"{type_name}."))
+        default_lines.append("}")
+
+        validate_lines = [f"static bool {fname}_validate(const {cname} *obj, char *error, int error_cap) {{"]
+        validate_lines.append("    if (!obj->used) { return true; }")
+        validate_lines.append("    if (obj->key[0] == '\\0') { gsj_set_error(error, error_cap, \"object key is empty\"); return false; }")
+        for field in type_def["fields"]:
+            validate_lines.extend(render_scalar_validation(field, "obj", field["path"], f"{type_name}."))
+        validate_lines.append("    return true;")
+        validate_lines.append("}")
+
+        to_json_lines = [f"static cJSON *{fname}_to_json(const {cname} *obj) {{"]
+        to_json_lines.append("    cJSON *json = cJSON_CreateObject();")
+        for field in type_def["fields"]:
+            to_json_lines.extend(render_cjson_add_scalar(field, "json", "obj", field["path"]))
+        to_json_lines.append("    return json;")
+        to_json_lines.append("}")
+
+        get_lines = [f"static cJSON *{fname}_get_field_json(const {cname} *obj, const char *field, char *error, int error_cap) {{"]
+        get_lines.append("    if (!field || field[0] == '\\0') { return " + f"{fname}_to_json(obj); }}")
+        for field in type_def["fields"]:
+            get_lines.extend(render_get_scalar_if(field, "obj", field["path"]))
+        get_lines.append("    gsj_set_error(error, error_cap, \"unknown object field\");")
+        get_lines.append("    return NULL;")
+        get_lines.append("}")
+
+        set_lines = [f"static bool {fname}_set_field_json({cname} *obj, const char *field, const cJSON *value, char *error, int error_cap) {{"]
+        for field in type_def["fields"]:
+            set_lines.extend(render_set_scalar_if(field, "obj", field["path"], f"{type_name}."))
+        set_lines.append("    gsj_set_error(error, error_cap, \"unknown object field\");")
+        set_lines.append("    return false;")
+        set_lines.append("}")
+
+        from_lines = [f"static bool {fname}_from_json({cname} *obj, const cJSON *json, char *error, int error_cap) {{"]
+        from_lines.append("    if (!cJSON_IsObject(json)) { gsj_set_error(error, error_cap, \"object must be json object\"); return false; }")
+        for field in type_def["fields"]:
+            from_lines.extend(render_read_scalar(field, "json", "obj", field["path"], f"{type_name}."))
+        from_lines.append(f"    return {fname}_validate(obj, error, error_cap);")
+        from_lines.append("}")
+
+        blocks.append("\n".join(default_lines + [""] + validate_lines + [""] + to_json_lines + [""] + get_lines + [""] + set_lines + [""] + from_lines))
+    return "\n\n".join(blocks)
 
 
 def render_collection_helpers(schema: dict[str, Any]) -> str:
@@ -978,7 +906,7 @@ def render_collection_helpers(schema: dict[str, Any]) -> str:
         cname = object_type_c_name(type_name)
         max_macro = collection_macro(field["path"])
         blocks.append(f"""
-static {cname} *find_{ident}(GameState *state, const char *key) {{
+static {cname} *find_{ident}({NS.type} *state, const char *key) {{
     for (int i = 0; i < {max_macro}; i++) {{
         if (state->{ident}[i].used && strcmp(state->{ident}[i].key, key) == 0) {{
             return &state->{ident}[i];
@@ -987,7 +915,7 @@ static {cname} *find_{ident}(GameState *state, const char *key) {{
     return NULL;
 }}
 
-static const {cname} *find_{ident}_const(const GameState *state, const char *key) {{
+static const {cname} *find_{ident}_const(const {NS.type} *state, const char *key) {{
     for (int i = 0; i < {max_macro}; i++) {{
         if (state->{ident}[i].used && strcmp(state->{ident}[i].key, key) == 0) {{
             return &state->{ident}[i];
@@ -996,7 +924,7 @@ static const {cname} *find_{ident}_const(const GameState *state, const char *key
     return NULL;
 }}
 
-static {cname} *alloc_{ident}(GameState *state, const char *key) {{
+static {cname} *alloc_{ident}({NS.type} *state, const char *key) {{
     {cname} *existing = find_{ident}(state, key);
     if (existing) {{ return existing; }}
     for (int i = 0; i < {max_macro}; i++) {{
@@ -1008,7 +936,7 @@ static {cname} *alloc_{ident}(GameState *state, const char *key) {{
     return NULL;
 }}
 
-static cJSON *{ident}_to_json(const GameState *state) {{
+static cJSON *{ident}_to_json(const {NS.type} *state) {{
     cJSON *json = cJSON_CreateObject();
     for (int i = 0; i < {max_macro}; i++) {{
         if (state->{ident}[i].used) {{
@@ -1018,14 +946,14 @@ static cJSON *{ident}_to_json(const GameState *state) {{
     return json;
 }}
 
-static bool set_{ident}_from_json(GameState *state, const cJSON *json, char *error, int error_cap) {{
-    if (!cJSON_IsObject(json)) {{ set_error(error, error_cap, \"map must be object\"); return false; }}
+static bool set_{ident}_from_json({NS.type} *state, const cJSON *json, char *error, int error_cap) {{
+    if (!cJSON_IsObject(json)) {{ gsj_set_error(error, error_cap, \"map must be object\"); return false; }}
     for (int i = 0; i < {max_macro}; i++) {{ memset(&state->{ident}[i], 0, sizeof(state->{ident}[i])); }}
     const cJSON *child = NULL;
     cJSON_ArrayForEach(child, json) {{
         if (!child->string) {{ continue; }}
         {cname} *obj = alloc_{ident}(state, child->string);
-        if (!obj) {{ set_error(error, error_cap, \"too many map entries or long key\"); return false; }}
+        if (!obj) {{ gsj_set_error(error, error_cap, \"too many map entries or long key\"); return false; }}
         if (!{fname}_from_json(obj, child, error, error_cap)) {{ return false; }}
     }}
     return true;
@@ -1035,7 +963,7 @@ static bool set_{ident}_from_json(GameState *state, const cJSON *json, char *err
         ident = c_ident(field["path"])
         max_macro = collection_macro(field["path"])
         blocks.append(f"""
-static cJSON *{ident}_to_json(const GameState *state) {{
+static cJSON *{ident}_to_json(const {NS.type} *state) {{
     cJSON *json = cJSON_CreateArray();
     for (int i = 0; i < state->{ident}_count; i++) {{
         cJSON_AddItemToArray(json, cJSON_CreateString(state->{ident}[i]));
@@ -1043,15 +971,15 @@ static cJSON *{ident}_to_json(const GameState *state) {{
     return json;
 }}
 
-static bool set_{ident}_from_json(GameState *state, const cJSON *json, char *error, int error_cap) {{
-    if (!cJSON_IsArray(json)) {{ set_error(error, error_cap, \"list must be array\"); return false; }}
+static bool set_{ident}_from_json({NS.type} *state, const cJSON *json, char *error, int error_cap) {{
+    if (!cJSON_IsArray(json)) {{ gsj_set_error(error, error_cap, \"list must be array\"); return false; }}
     int count = cJSON_GetArraySize((cJSON *)json);
-    if (count > {max_macro}) {{ set_error(error, error_cap, \"too many list entries\"); return false; }}
+    if (count > {max_macro}) {{ gsj_set_error(error, error_cap, \"too many list entries\"); return false; }}
     state->{ident}_count = 0;
     for (int i = 0; i < count; i++) {{
         const cJSON *entry = cJSON_GetArrayItem((cJSON *)json, i);
-        if (!cJSON_IsString(entry) || !copy_text(state->{ident}[i], sizeof(state->{ident}[i]), entry->valuestring)) {{
-            set_error(error, error_cap, \"list entry must be short string\");
+        if (!cJSON_IsString(entry) || !gsj_copy_text(state->{ident}[i], sizeof(state->{ident}[i]), entry->valuestring)) {{
+            gsj_set_error(error, error_cap, \"list entry must be short string\");
             return false;
         }}
         state->{ident}_count++;
@@ -1060,6 +988,11 @@ static bool set_{ident}_from_json(GameState *state, const cJSON *json, char *err
 }}
 """)
     return "\n\n".join(blocks)
+
+
+# ---------------------------------------------------------------------------
+# Top-level (de)serialization
+# ---------------------------------------------------------------------------
 
 
 def parent_var_for(path: str) -> tuple[str, str, str]:
@@ -1094,7 +1027,7 @@ def render_defaults(schema: dict[str, Any]) -> str:
             continue
         ident = c_ident(field["path"])
         for index, value in enumerate(default):
-            lines.append(f"    (void)copy_text(state->{ident}[{index}], sizeof(state->{ident}[{index}]), {c_string(value)});")
+            lines.append(f"    (void)gsj_copy_text(state->{ident}[{index}], sizeof(state->{ident}[{index}]), {c_string(value)});")
         lines.append(f"    state->{ident}_count = {len(default)};")
     return "\n".join(lines)
 
@@ -1108,12 +1041,12 @@ def render_validate(schema: dict[str, Any]) -> str:
         max_macro = collection_macro(field["path"])
         lines.extend([
             f"    if (state->{ident}_count < 0 || state->{ident}_count > {max_macro}) {{",
-            f'        set_error(error, error_cap, "{field["path"]} count out of range");',
+            f'        gsj_set_error(error, error_cap, "{field["path"]} count out of range");',
             "        return false;",
             "    }",
             f"    for (int i = 0; i < state->{ident}_count; i++) {{",
             f"        if (state->{ident}[i][0] == '\\0') {{",
-            f'            set_error(error, error_cap, "{field["path"]} contains empty id");',
+            f'            gsj_set_error(error, error_cap, "{field["path"]} contains empty id");',
             "            return false;",
             "        }",
             "    }",
@@ -1163,19 +1096,19 @@ def render_get_path(schema: dict[str, Any]) -> str:
             f'    if (strncmp(path, "{path}.", {prefix_len}) == 0) {{',
             f"        const char *key = path + {prefix_len};",
             "        const char *field = strchr(key, '.');",
-            "        char map_key[GAME_STATE_STRING_MAX];",
+            f"        char map_key[{NS.macro}STRING_MAX];",
             "        if (field) {",
             "            size_t len = (size_t)(field - key);",
-            "            if (len == 0 || len >= sizeof(map_key)) { set_error(error, error_cap, \"bad map key\"); return NULL; }",
+            "            if (len == 0 || len >= sizeof(map_key)) { gsj_set_error(error, error_cap, \"bad map key\"); return NULL; }",
             "            memcpy(map_key, key, len);",
             "            map_key[len] = '\\0';",
             "            field++;",
-            "        } else if (!copy_text(map_key, sizeof(map_key), key)) {",
-            "            set_error(error, error_cap, \"bad map key\");",
+            "        } else if (!gsj_copy_text(map_key, sizeof(map_key), key)) {",
+            "            gsj_set_error(error, error_cap, \"bad map key\");",
             "            return NULL;",
             "        }",
             f"        const {object_type_c_name(type_name)} *obj = find_{ident}_const(state, map_key);",
-            "        if (!obj) { set_error(error, error_cap, \"unknown map key\"); return NULL; }",
+            "        if (!obj) { gsj_set_error(error, error_cap, \"unknown map key\"); return NULL; }",
             f"        return {fname}_get_field_json(obj, field, error, error_cap);",
             "    }",
         ])
@@ -1208,19 +1141,19 @@ def render_set_path(schema: dict[str, Any]) -> str:
             f'    if (strncmp(path, "{path}.", {prefix_len}) == 0) {{',
             f"        const char *key = path + {prefix_len};",
             "        const char *field = strchr(key, '.');",
-            "        char map_key[GAME_STATE_STRING_MAX];",
+            f"        char map_key[{NS.macro}STRING_MAX];",
             "        if (field) {",
             "            size_t len = (size_t)(field - key);",
-            "            if (len == 0 || len >= sizeof(map_key)) { set_error(error, error_cap, \"bad map key\"); return false; }",
+            "            if (len == 0 || len >= sizeof(map_key)) { gsj_set_error(error, error_cap, \"bad map key\"); return false; }",
             "            memcpy(map_key, key, len);",
             "            map_key[len] = '\\0';",
             "            field++;",
-            "        } else if (!copy_text(map_key, sizeof(map_key), key)) {",
-            "            set_error(error, error_cap, \"bad map key\");",
+            "        } else if (!gsj_copy_text(map_key, sizeof(map_key), key)) {",
+            "            gsj_set_error(error, error_cap, \"bad map key\");",
             "            return false;",
             "        }",
             f"        {object_type_c_name(type_name)} *obj = alloc_{ident}(state, map_key);",
-            "        if (!obj) { set_error(error, error_cap, \"too many map entries or long key\"); return false; }",
+            "        if (!obj) { gsj_set_error(error, error_cap, \"too many map entries or long key\"); return false; }",
             f"        return field ? {fname}_set_field_json(obj, field, value, error, error_cap) : {fname}_from_json(obj, value, error, error_cap);",
             "    }",
         ])
@@ -1234,14 +1167,14 @@ def render_from_json(schema: dict[str, Any]) -> str:
         parent, key, group = parent_var_for(field["path"])
         if group and group not in emitted_groups:
             emitted_groups.add(group)
-            lines.append(f'    const cJSON *{parent} = object_item(json, "{group}");')
+            lines.append(f'    const cJSON *{parent} = gsj_object_item(json, "{group}");')
         source = parent if group else "json"
         if field["type"] in SCALAR_TYPES:
             lines.extend(render_read_scalar(field, source, "(&next)", key))
         elif is_list_type(field["type"]) or is_map_type(field["type"]):
             item_var = c_ident(f"{field['path']}_json")
             lines.extend([
-                f'    const cJSON *{item_var} = object_item({source}, "{key}");',
+                f'    const cJSON *{item_var} = gsj_object_item({source}, "{key}");',
                 f"    if ({item_var} && !set_{c_ident(field['path'])}_from_json(&next, {item_var}, error, error_cap)) {{",
                 "        return false;",
                 "    }",
@@ -1249,189 +1182,147 @@ def render_from_json(schema: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# Descriptor + migration table + hooks
+# ---------------------------------------------------------------------------
+
+
+def render_fragment_descriptor(schema: dict[str, Any]) -> str:
+    migrations = schema["migrations"]
+    hooks = schema["hooks"]
+    pre: list[str] = []
+
+    steps_field = "NULL"
+    if migrations:
+        for entry in migrations:
+            pre.append(f'extern bool {entry["fn"]}(cJSON *frag, char *err, int cap);')
+        pre.append(f"static const GameSaveMigrateFn {NS.inst}_migration_steps[] = {{")
+        for entry in migrations:
+            pre.append(f'    {entry["fn"]},')
+        pre.append("};")
+        steps_field = f"{NS.inst}_migration_steps"
+
+    on_new_game = "NULL"
+    reconcile = "NULL"
+    if hooks.get("on_new_game"):
+        pre.append(f"extern void {NS.ident}_on_new_game(void);")
+        on_new_game = f"{NS.ident}_on_new_game"
+    if hooks.get("reconcile"):
+        pre.append(f"extern void {NS.ident}_reconcile(void);")
+        reconcile = f"{NS.ident}_reconcile"
+
+    wrappers = (
+        f"static void   frag_reset(void)                                             {{ {NS.fn}init_defaults(&{NS.inst}); }}\n"
+        f"static cJSON *frag_to_json(void)                                           {{ return {NS.fn}to_json(&{NS.inst}); }}\n"
+        f"static bool   frag_from_json(const cJSON *j, char *e, int c)               {{ return {NS.fn}from_json(&{NS.inst}, j, e, c); }}\n"
+        f"static cJSON *frag_get_path(const char *s, char *e, int c)                 {{ return {NS.fn}get_path_json(&{NS.inst}, s, e, c); }}\n"
+        f"static bool   frag_set_path(const char *s, const cJSON *v, char *e, int c) {{ return {NS.fn}set_path_json(&{NS.inst}, s, v, e, c); }}\n"
+        f"static cJSON *frag_schema(void)                                            {{ return {NS.fn}schema_json(); }}"
+    )
+
+    descriptor = (
+        f"const GameSaveFragment {NS.frag} = {{\n"
+        f"    .id            = {NS.macro}FRAGMENT_ID,\n"
+        f"    .version       = {NS.macro}VERSION,\n"
+        f"    .steps         = {steps_field},\n"
+        f"    .reset         = frag_reset,\n"
+        f"    .on_new_game   = {on_new_game},\n"
+        f"    .to_json       = frag_to_json,\n"
+        f"    .from_json     = frag_from_json,\n"
+        f"    .reconcile     = {reconcile},\n"
+        f"    .get_path_json = frag_get_path,\n"
+        f"    .set_path_json = frag_set_path,\n"
+        f"    .schema_json   = frag_schema,\n"
+        f"}};"
+    )
+
+    parts = [wrappers]
+    if pre:
+        parts.append("\n".join(pre))
+    parts.append(descriptor)
+    return "\n\n".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Embedded normalized schema
+# ---------------------------------------------------------------------------
+
+
+def normalized_schema_for_embed(schema: dict[str, Any]) -> dict[str, Any]:
+    """Canonical form the runtime embeds and the editor/smoke bot reads (§A4.4):
+    fields (and each type's fields) are LISTS of {path, ...spec}; document is a
+    compat duplicate of fragment so the transitional smoke bot stays green."""
+    embed: dict[str, Any] = {}
+    embed["schema"] = schema["schema"]
+    embed["document"] = schema["fragment"]
+    embed["fragment"] = schema["fragment"]
+    embed["version"] = schema["version"]
+    embed["schema_version"] = 2
+    embed["string_max"] = schema["string_max"]
+    embed["enums"] = schema["enums"]
+    embed["types"] = {
+        name: {"kind": "object", "fields": type_def["fields"]}
+        for name, type_def in schema["types"].items()
+    }
+    embed["fields"] = schema["fields"]
+    return embed
+
+
+def render_schema_header(schema: dict[str, Any], schema_label: str) -> str:
+    canonical = json.dumps(normalized_schema_for_embed(schema), ensure_ascii=False, separators=(",", ":"))
+    chunks = [canonical[i : i + 1800] for i in range(0, len(canonical), 1800)]
+    literal_lines = [f"    {json.dumps(chunk)}, \\" for chunk in chunks]
+    guard = f"{NS.macro}SCHEMA_GEN_H"
+    return (
+        f"#ifndef {guard}\n"
+        f"#define {guard}\n\n"
+        f"/* Generated by {TOOL_LABEL} from {schema_label}. */\n"
+        f"#define {NS.macro}SCHEMA_JSON_CHUNKS \\\n"
+        "    { \\\n"
+        + "\n".join(literal_lines)
+        + "\n"
+        + '    "" \\\n'
+        + "    }\n\n"
+        "#endif\n"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Source + devapi
+# ---------------------------------------------------------------------------
+
+
 def render_generic_source(schema: dict[str, Any], schema_label: str) -> str:
-    return f"""#include "game_state.h"
-#include "game_state_schema.gen.h"
+    return f"""#include "{NS.id}_state.h"
+#include "{NS.id}_state_schema.gen.h"
+#include "game_state_json.h"
 
 /* Generated by {TOOL_LABEL} from {schema_label}. */
 
-#include <errno.h>
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef _WIN32
-#include <direct.h>
-#include <windows.h>
-#else
-#include <sys/stat.h>
-#endif
-
-#define GAME_STATE_MAX_FILE_BYTES (1024 * 1024)
-#define GAME_STATE_PATH_MAX 512
-
-#if defined(__GNUC__) || defined(__clang__)
-#define GAME_STATE_MAYBE_UNUSED __attribute__((unused))
-#else
-#define GAME_STATE_MAYBE_UNUSED
-#endif
 
 {render_enum_tables(schema)}
 
-GameState g_game_state;
-
-static game_state_changed_fn s_changed;
-static void *s_changed_user;
-static bool s_dirty;
-
-static void set_error(char *error, int error_cap, const char *message) {{
-    if (error && error_cap > 0) {{
-        (void)snprintf(error, (size_t)error_cap, "%s", message);
-    }}
-}}
-
-static bool copy_text(char *dst, size_t dst_cap, const char *src) {{
-    if (!dst || dst_cap == 0 || !src || strlen(src) >= dst_cap) {{
-        return false;
-    }}
-    (void)snprintf(dst, dst_cap, "%s", src);
-    return true;
-}}
-
-static const cJSON *object_item(const cJSON *obj, const char *name) {{
-    return cJSON_IsObject(obj) ? cJSON_GetObjectItemCaseSensitive(obj, name) : NULL;
-}}
-
-static GAME_STATE_MAYBE_UNUSED bool read_bool(const cJSON *obj, const char *name, bool *out, char *error, int error_cap) {{
-    const cJSON *item = object_item(obj, name);
-    if (!item) {{ return true; }}
-    if (!cJSON_IsBool(item)) {{ set_error(error, error_cap, "expected bool"); return false; }}
-    *out = cJSON_IsTrue(item);
-    return true;
-}}
-
-static GAME_STATE_MAYBE_UNUSED bool read_int_range(const cJSON *obj, const char *name, int min_value, int max_value, int *out, char *error, int error_cap) {{
-    const cJSON *item = object_item(obj, name);
-    if (!item) {{ return true; }}
-    if (!cJSON_IsNumber(item)) {{ set_error(error, error_cap, "expected number"); return false; }}
-    double number = item->valuedouble;
-    if (number < (double)min_value || number > (double)max_value || number != (double)(int)number) {{
-        set_error(error, error_cap, "number out of range");
-        return false;
-    }}
-    *out = (int)number;
-    return true;
-}}
-
-static GAME_STATE_MAYBE_UNUSED bool read_float_range(const cJSON *obj, const char *name, float min_value, float max_value, float *out, char *error, int error_cap) {{
-    const cJSON *item = object_item(obj, name);
-    if (!item) {{ return true; }}
-    if (!cJSON_IsNumber(item)) {{ set_error(error, error_cap, "expected number"); return false; }}
-    float value = (float)item->valuedouble;
-    if (value < min_value || value > max_value) {{ set_error(error, error_cap, "number out of range"); return false; }}
-    *out = value;
-    return true;
-}}
-
-static GAME_STATE_MAYBE_UNUSED bool read_string(const cJSON *obj, const char *name, char *out, size_t out_cap, char *error, int error_cap) {{
-    const cJSON *item = object_item(obj, name);
-    if (!item) {{ return true; }}
-    if (!cJSON_IsString(item) || !copy_text(out, out_cap, item->valuestring)) {{
-        set_error(error, error_cap, "expected short string");
-        return false;
-    }}
-    return true;
-}}
-
-static int enum_index(const char *value, const char *const *names, int count) {{
-    if (!value) {{ return -1; }}
-    for (int i = 0; i < count; i++) {{
-        if (strcmp(value, names[i]) == 0) {{ return i; }}
-    }}
-    return -1;
-}}
-
-static GAME_STATE_MAYBE_UNUSED bool read_enum(const cJSON *obj, const char *name, const char *const *names, int count, int *out, char *error, int error_cap) {{
-    const cJSON *item = object_item(obj, name);
-    if (!item) {{ return true; }}
-    int value = -1;
-    if (cJSON_IsString(item)) {{
-        value = enum_index(item->valuestring, names, count);
-    }} else if (cJSON_IsNumber(item)) {{
-        double number = item->valuedouble;
-        if (number != (double)(int)number) {{ set_error(error, error_cap, "enum value must be an integer"); return false; }}
-        value = (int)number;
-    }} else {{
-        set_error(error, error_cap, "expected enum string or number");
-        return false;
-    }}
-    if (value < 0 || value >= count) {{ set_error(error, error_cap, "enum value out of range"); return false; }}
-    *out = value;
-    return true;
-}}
-
-static GAME_STATE_MAYBE_UNUSED bool parse_enum_value(const cJSON *item, const char *const *names, int count, int *out, char *error, int error_cap) {{
-    int value = -1;
-    if (cJSON_IsString(item)) {{
-        value = enum_index(item->valuestring, names, count);
-    }} else if (cJSON_IsNumber(item)) {{
-        double number = item->valuedouble;
-        if (number != (double)(int)number) {{ set_error(error, error_cap, "enum value must be an integer"); return false; }}
-        value = (int)number;
-    }} else {{
-        set_error(error, error_cap, "expected enum string or number");
-        return false;
-    }}
-    if (value < 0 || value >= count) {{ set_error(error, error_cap, "enum value out of range"); return false; }}
-    *out = value;
-    return true;
-}}
-
-static GAME_STATE_MAYBE_UNUSED bool parse_int_value(const cJSON *item, int min_value, int max_value, int *out, char *error, int error_cap) {{
-    if (!cJSON_IsNumber(item)) {{ set_error(error, error_cap, "expected integer"); return false; }}
-    double number = item->valuedouble;
-    if (number < (double)min_value || number > (double)max_value || number != (double)(int)number) {{
-        set_error(error, error_cap, "integer value out of range");
-        return false;
-    }}
-    *out = (int)number;
-    return true;
-}}
-
-static bool notify_changed(const char *path, char *error, int error_cap) {{
-    if (!s_changed) {{ return true; }}
-    return s_changed(path, s_changed_user, error, error_cap);
-}}
+{NS.type} {NS.inst};   /* fragment instance (ownership lives here) */
 
 {render_object_helpers(schema)}
 
 {render_collection_helpers(schema)}
 
-void game_state_init_defaults(GameState *state) {{
+void {NS.fn}init_defaults({NS.type} *state) {{
     memset(state, 0, sizeof(*state));
 {render_defaults(schema)}
 }}
 
-void game_state_init(void) {{
-    game_state_init_defaults(&g_game_state);
-}}
-
-void game_state_set_changed_callback(game_state_changed_fn callback, void *user) {{
-    s_changed = callback;
-    s_changed_user = user;
-}}
-
-void game_state_mark_dirty(void) {{ s_dirty = true; }}
-bool game_state_is_dirty(void) {{ return s_dirty; }}
-void game_state_clear_dirty(void) {{ s_dirty = false; }}
-
-bool game_state_validate(const GameState *state, char *error, int error_cap) {{
-    if (!state) {{ set_error(error, error_cap, "state is null"); return false; }}
+bool {NS.fn}validate(const {NS.type} *state, char *error, int error_cap) {{
+    if (!state) {{ gsj_set_error(error, error_cap, "state is null"); return false; }}
 {render_validate(schema)}
     return true;
 }}
 
-cJSON *game_state_schema_json(void) {{
-    const char *chunks[] = GAME_STATE_SCHEMA_JSON_CHUNKS;
+cJSON *{NS.fn}schema_json(void) {{
+    const char *chunks[] = {NS.macro}SCHEMA_JSON_CHUNKS;
     size_t len = 0;
     for (size_t i = 0; chunks[i][0] != '\\0'; i++) {{ len += strlen(chunks[i]); }}
     char *json = (char *)malloc(len + 1U);
@@ -1448,197 +1339,221 @@ cJSON *game_state_schema_json(void) {{
     return root ? root : cJSON_CreateObject();
 }}
 
-cJSON *game_state_to_json(const GameState *state) {{
+cJSON *{NS.fn}to_json(const {NS.type} *state) {{
     cJSON *root = cJSON_CreateObject();
 {render_to_json(schema)}
     return root;
 }}
 
-cJSON *game_state_get_path_json(const GameState *state, const char *path, char *error, int error_cap) {{
-    if (!path || path[0] == '\\0') {{ return game_state_to_json(state); }}
+cJSON *{NS.fn}get_path_json(const {NS.type} *state, const char *path, char *error, int error_cap) {{
+    if (!path || path[0] == '\\0') {{ return {NS.fn}to_json(state); }}
 {render_get_path(schema)}
-    set_error(error, error_cap, "unknown state path");
+    gsj_set_error(error, error_cap, "unknown state path");
     return NULL;
 }}
 
-bool game_state_set_path_json(GameState *state, const char *path, const cJSON *value, char *error, int error_cap) {{
-    if (!state || !path || !path[0] || !value) {{ set_error(error, error_cap, "path and value are required"); return false; }}
+bool {NS.fn}set_path_json({NS.type} *state, const char *path, const cJSON *value, char *error, int error_cap) {{
+    if (!state || !path || !path[0] || !value) {{ gsj_set_error(error, error_cap, "path and value are required"); return false; }}
 {render_set_path(schema)}
-    set_error(error, error_cap, "unknown state path");
+    gsj_set_error(error, error_cap, "unknown state path");
     return false;
 }}
 
-bool game_state_patch_json(GameState *state, const cJSON *values, char *error, int error_cap) {{
-    if (!cJSON_IsObject(values)) {{ set_error(error, error_cap, "values must be an object"); return false; }}
-    GameState next = *state;
+bool {NS.fn}patch_json({NS.type} *state, const cJSON *values, char *error, int error_cap) {{
+    if (!cJSON_IsObject(values)) {{ gsj_set_error(error, error_cap, "values must be an object"); return false; }}
+    {NS.type} next = *state;
     const cJSON *item = NULL;
     cJSON_ArrayForEach(item, values) {{
-        if (!item->string || !game_state_set_path_json(&next, item->string, item, error, error_cap)) {{ return false; }}
+        if (!item->string || !{NS.fn}set_path_json(&next, item->string, item, error, error_cap)) {{ return false; }}
     }}
-    if (!game_state_validate(&next, error, error_cap)) {{ return false; }}
-    GameState old = *state;
+    if (!{NS.fn}validate(&next, error, error_cap)) {{ return false; }}
     *state = next;
-    if (!notify_changed("*", error, error_cap)) {{ *state = old; return false; }}
-    if (state == &g_game_state) {{ game_state_mark_dirty(); }}
     return true;
 }}
 
-bool game_state_from_json(GameState *state, const cJSON *json, char *error, int error_cap) {{
-    if (!cJSON_IsObject(json)) {{ set_error(error, error_cap, "state json must be object"); return false; }}
-    GameState next;
-    game_state_init_defaults(&next);
+bool {NS.fn}from_json({NS.type} *state, const cJSON *json, char *error, int error_cap) {{
+    if (!cJSON_IsObject(json)) {{ gsj_set_error(error, error_cap, "state json must be object"); return false; }}
+    {NS.type} next;
+    {NS.fn}init_defaults(&next);
 {render_from_json(schema)}
-    if (!game_state_validate(&next, error, error_cap)) {{ return false; }}
+    if (!{NS.fn}validate(&next, error, error_cap)) {{ return false; }}
     *state = next;
     return true;
 }}
 
-static cJSON *make_save_doc(const GameState *state) {{
-    cJSON *doc = cJSON_CreateObject();
-    cJSON_AddStringToObject(doc, "schema", GAME_STATE_SCHEMA_ID);
-    cJSON_AddStringToObject(doc, "document", GAME_STATE_DOCUMENT);
-    cJSON_AddNumberToObject(doc, "version", GAME_STATE_VERSION);
-    cJSON_AddItemToObject(doc, "state", game_state_to_json(state));
-    return doc;
+{render_fragment_descriptor(schema)}
+"""
+
+
+def render_devapi_source(schema: dict[str, Any], schema_label: str) -> str:
+    fn = NS.fn
+    inst = NS.inst
+    fid = NS.id
+    return f"""#include "{fid}_state.h"
+
+#if NT_DEVAPI_ENABLED
+
+/* Generated by {TOOL_LABEL} from {schema_label}.
+   Transitional single-fragment DevAPI (A5 replaces this with the shell registry
+   dispatch). Routes through the fragment descriptor + game_save shell; there is
+   no shared global state and no monolith file I/O. */
+
+#include <stdio.h>
+#include <string.h>
+
+#include "devapi/nt_devapi.h"
+#include "game_save.h"
+
+/* Dev-only, single-threaded: one static buffer for dynamic error messages the
+   engine reads after the handler returns (err->message must outlive the call). */
+static char s_state_err[256];
+
+static bool state_fail(nt_devapi_error *err, const char *code, const char *message) {{
+    (void)snprintf(s_state_err, sizeof(s_state_err), "%s", message);
+    err->code = code;
+    err->message = s_state_err;
+    return false;
 }}
 
-char *game_state_save_json_string(const GameState *state, char *error, int error_cap) {{
-    if (!game_state_validate(state, error, error_cap)) {{ return NULL; }}
-    cJSON *doc = make_save_doc(state);
-    char *printed = cJSON_Print(doc);
-    cJSON_Delete(doc);
-    if (!printed) {{ set_error(error, error_cap, "failed to print state"); return NULL; }}
-    return printed;
+/* err already carries a message snprintf'd into s_state_err by a {fn}* call. */
+static bool state_fail_buf(nt_devapi_error *err, const char *code) {{
+    err->code = code;
+    err->message = s_state_err;
+    return false;
 }}
 
-static bool make_dir_if_needed(const char *path) {{
-#ifdef _WIN32
-    if (_mkdir(path) == 0) {{ return true; }}
-    return errno == EEXIST;
-#else
-    if (mkdir(path, 0755) == 0) {{ return true; }}
-    return errno == EEXIST;
+/* {fn}* helpers return freshly-built cJSON; the engine ABI fills a pre-created
+   object, so transplant src's members into result_obj. */
+static bool state_emit(cJSON *result_obj, cJSON *src, nt_devapi_error *err) {{
+    if (!src) {{
+        return state_fail(err, "internal", "failed to build state json");
+    }}
+    cJSON *child = src->child;
+    while (child) {{
+        cJSON *next = child->next;
+        cJSON_DetachItemViaPointer(src, child);
+        cJSON_AddItemToObject(result_obj, child->string, child);
+        child = next;
+    }}
+    cJSON_Delete(src);
+    return true;
+}}
+
+static bool check_doc(const cJSON *params, nt_devapi_error *err) {{
+    const cJSON *doc = cJSON_GetObjectItemCaseSensitive(params, "doc");
+    if (!doc || (cJSON_IsString(doc) && strcmp(doc->valuestring, "{fid}") == 0)) {{
+        return true;
+    }}
+    return state_fail(err, "bad_params", "unsupported state document");
+}}
+
+static bool ep_state_schema(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
+    (void)user;
+    if (!check_doc(params, err)) {{ return false; }}
+    return state_emit(result_obj, {fn}schema_json(), err);
+}}
+
+static bool ep_state_get(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
+    (void)user;
+    if (!check_doc(params, err)) {{ return false; }}
+    const cJSON *path = cJSON_GetObjectItemCaseSensitive(params, "path");
+    const char *state_path = cJSON_IsString(path) ? path->valuestring : "";
+    cJSON *value = {fn}get_path_json(&{inst}, state_path, s_state_err, (int)sizeof(s_state_err));
+    if (!value) {{
+        return state_fail_buf(err, "bad_params");
+    }}
+    /* result_obj is an object, but a path value can be any JSON, so wrap it. */
+    cJSON_AddItemToObject(result_obj, "path", cJSON_CreateString(state_path));
+    cJSON_AddItemToObject(result_obj, "value", value);
+    return true;
+}}
+
+static bool ep_state_set(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
+    (void)user;
+    if (!check_doc(params, err)) {{ return false; }}
+    const cJSON *path = cJSON_GetObjectItemCaseSensitive(params, "path");
+    const cJSON *value = cJSON_GetObjectItemCaseSensitive(params, "value");
+    if (!cJSON_IsString(path) || !value) {{
+        return state_fail(err, "bad_params", "path and value are required");
+    }}
+    if (!{fn}set_path_json(&{inst}, path->valuestring, value, s_state_err, (int)sizeof(s_state_err))) {{
+        return state_fail_buf(err, "bad_params");
+    }}
+    game_save_mark_dirty();
+    return state_emit(result_obj, {fn}to_json(&{inst}), err);
+}}
+
+static bool ep_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
+    (void)user;
+    if (!check_doc(params, err)) {{ return false; }}
+    const cJSON *values = cJSON_GetObjectItemCaseSensitive(params, "values");
+    if (!cJSON_IsObject(values)) {{
+        return state_fail(err, "bad_params", "values object is required");
+    }}
+    if (!{fn}patch_json(&{inst}, values, s_state_err, (int)sizeof(s_state_err))) {{
+        return state_fail_buf(err, "bad_params");
+    }}
+    game_save_mark_dirty();
+    return state_emit(result_obj, {fn}to_json(&{inst}), err);
+}}
+
+static bool ep_state_reset(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
+    (void)user;
+    if (!check_doc(params, err)) {{ return false; }}
+    {fn}init_defaults(&{inst});
+    game_save_mark_dirty();
+    return state_emit(result_obj, {fn}to_json(&{inst}), err);
+}}
+
+static bool ep_state_save(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
+    (void)user;
+    if (!check_doc(params, err)) {{ return false; }}
+    if (!game_save_flush(s_state_err, (int)sizeof(s_state_err))) {{
+        return state_fail_buf(err, "internal");
+    }}
+    cJSON *obj = cJSON_CreateObject();
+    cJSON_AddBoolToObject(obj, "saved", true);
+    return state_emit(result_obj, obj, err);
+}}
+
+static bool ep_state_load(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {{
+    (void)user;
+    if (!check_doc(params, err)) {{ return false; }}
+    game_save_load_result_t result;
+    game_save_load(&result);
+    return state_emit(result_obj, {fn}to_json(&{inst}), err);
+}}
+
+void {fn}register_devapi(void) {{
+    static const nt_devapi_command_desc descs[] = {{
+        {{"{fid}.state.schema", "{fid}", "Return the {fid} state JSON schema.", "doc?", "schema object", "immediate", "none"}},
+        {{"{fid}.state.get", "{fid}", "Get a state value by path.", "doc?, path", "path, value", "immediate", "none"}},
+        {{"{fid}.state.set", "{fid}", "Set a state value by path.", "doc?, path, value", "state object", "immediate", "mutates state"}},
+        {{"{fid}.state.patch", "{fid}", "Patch multiple state values.", "doc?, values", "state object", "immediate", "mutates state"}},
+        {{"{fid}.state.save", "{fid}", "Flush state to storage.", "doc?", "saved", "immediate", "writes file"}},
+        {{"{fid}.state.load", "{fid}", "Reload state from storage.", "doc?", "state object", "immediate", "mutates state"}},
+        {{"{fid}.state.reset", "{fid}", "Reset state to defaults.", "doc?", "state object", "immediate", "mutates state"}},
+    }};
+    const nt_devapi_handler_fn fns[] = {{
+        ep_state_schema, ep_state_get, ep_state_set, ep_state_patch,
+        ep_state_save, ep_state_load, ep_state_reset,
+    }};
+    for (size_t i = 0; i < sizeof(fns) / sizeof(fns[0]); ++i) {{
+        (void)nt_devapi_register(&descs[i], fns[i], NULL);
+    }}
+}}
+
 #endif
-}}
-
-static bool ensure_parent_dirs(const char *path, char *error, int error_cap) {{
-    char temp[GAME_STATE_PATH_MAX];
-    if (!copy_text(temp, sizeof(temp), path)) {{ set_error(error, error_cap, "state path is too long"); return false; }}
-    for (char *p = temp; *p; p++) {{
-        if (*p != '/' && *p != '\\\\') {{ continue; }}
-        if (p == temp || (*(p - 1) == ':')) {{ continue; }}
-        char saved = *p;
-        *p = '\\0';
-        if (!make_dir_if_needed(temp)) {{ set_error(error, error_cap, "failed to create state directory"); return false; }}
-        *p = saved;
-    }}
-    return true;
-}}
-
-static bool replace_file(const char *tmp_path, const char *path) {{
-#ifdef _WIN32
-    return MoveFileExA(tmp_path, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
-#else
-    return rename(tmp_path, path) == 0;
-#endif
-}}
-
-bool game_state_save(const GameState *state, const char *path, char *error, int error_cap) {{
-    if (!path || !path[0]) {{ set_error(error, error_cap, "path is required"); return false; }}
-    if (!game_state_validate(state, error, error_cap)) {{ return false; }}
-    if (!ensure_parent_dirs(path, error, error_cap)) {{ return false; }}
-    char *printed = game_state_save_json_string(state, error, error_cap);
-    if (!printed) {{ return false; }}
-    char tmp_path[GAME_STATE_PATH_MAX];
-    if (snprintf(tmp_path, sizeof(tmp_path), "%s.tmp", path) >= (int)sizeof(tmp_path)) {{
-        cJSON_free(printed);
-        set_error(error, error_cap, "state temp path is too long");
-        return false;
-    }}
-    FILE *file = fopen(tmp_path, "wb");
-    if (!file) {{ cJSON_free(printed); set_error(error, error_cap, "failed to open state file for write"); return false; }}
-    size_t len = strlen(printed);
-    bool ok = fwrite(printed, 1, len, file) == len;
-    ok = fclose(file) == 0 && ok;
-    cJSON_free(printed);
-    if (!ok) {{ (void)remove(tmp_path); set_error(error, error_cap, "failed to write state file"); return false; }}
-    if (!replace_file(tmp_path, path)) {{ (void)remove(tmp_path); set_error(error, error_cap, "failed to replace state file"); return false; }}
-    return true;
-}}
-
-static bool read_file(const char *path, char **out, char *error, int error_cap) {{
-    FILE *file = fopen(path, "rb");
-    if (!file) {{ set_error(error, error_cap, "failed to open state file for read"); return false; }}
-    if (fseek(file, 0, SEEK_END) != 0) {{ fclose(file); set_error(error, error_cap, "failed to seek state file"); return false; }}
-    long size = ftell(file);
-    if (size < 0 || size > GAME_STATE_MAX_FILE_BYTES) {{ fclose(file); set_error(error, error_cap, "state file too large"); return false; }}
-    if (fseek(file, 0, SEEK_SET) != 0) {{ fclose(file); set_error(error, error_cap, "failed to rewind state file"); return false; }}
-    char *data = (char *)malloc((size_t)size + 1U);
-    if (!data) {{ fclose(file); set_error(error, error_cap, "failed to allocate state file buffer"); return false; }}
-    size_t read_size = fread(data, 1, (size_t)size, file);
-    fclose(file);
-    if (read_size != (size_t)size) {{ free(data); set_error(error, error_cap, "failed to read state file"); return false; }}
-    data[size] = '\\0';
-    *out = data;
-    return true;
-}}
-
-static bool game_state_load_doc(GameState *state, cJSON *doc, char *error, int error_cap) {{
-    cJSON *state_json = doc;
-    const cJSON *schema = object_item(doc, "schema");
-    const cJSON *document = object_item(doc, "document");
-    const cJSON *version_json = object_item(doc, "version");
-    const cJSON *wrapped_state = object_item(doc, "state");
-    if (schema || version_json || wrapped_state) {{
-        if (!cJSON_IsString(schema) || strcmp(schema->valuestring, GAME_STATE_SCHEMA_ID) != 0) {{ set_error(error, error_cap, "state schema mismatch"); return false; }}
-        if (document && (!cJSON_IsString(document) || strcmp(document->valuestring, GAME_STATE_DOCUMENT) != 0)) {{ set_error(error, error_cap, "state document mismatch"); return false; }}
-        if (!cJSON_IsNumber(version_json) || version_json->valuedouble != (double)(int)version_json->valuedouble || (int)version_json->valuedouble != GAME_STATE_VERSION || !cJSON_IsObject(wrapped_state)) {{
-            set_error(error, error_cap, "unsupported state version or envelope");
-            return false;
-        }}
-        state_json = (cJSON *)wrapped_state;
-    }}
-    GameState next;
-    if (!game_state_from_json(&next, state_json, error, error_cap)) {{ return false; }}
-    GameState old = *state;
-    *state = next;
-    if (!notify_changed("*", error, error_cap)) {{ *state = old; return false; }}
-    if (state == &g_game_state) {{ game_state_clear_dirty(); }}
-    return true;
-}}
-
-bool game_state_load_json_string(GameState *state, const char *data, char *error, int error_cap) {{
-    if (!data || !data[0]) {{ set_error(error, error_cap, "state json string is empty"); return false; }}
-    cJSON *doc = cJSON_Parse(data);
-    if (!doc) {{ set_error(error, error_cap, "invalid state json"); return false; }}
-    bool ok = game_state_load_doc(state, doc, error, error_cap);
-    cJSON_Delete(doc);
-    return ok;
-}}
-
-bool game_state_load(GameState *state, const char *path, char *error, int error_cap) {{
-    char *data = NULL;
-    if (!read_file(path, &data, error, error_cap)) {{ return false; }}
-    bool ok = game_state_load_json_string(state, data, error, error_cap);
-    free(data);
-    return ok;
-}}
-
-bool game_state_reset(GameState *state, char *error, int error_cap) {{
-    GameState old = *state;
-    GameState next;
-    game_state_init_defaults(&next);
-    if (!game_state_validate(&next, error, error_cap)) {{ return false; }}
-    *state = next;
-    if (!notify_changed("*", error, error_cap)) {{ *state = old; return false; }}
-    if (state == &g_game_state) {{ game_state_mark_dirty(); }}
-    return true;
-}}
 """
 
 
 def render_source(schema: dict[str, Any], schema_label: str = "state/game_state.schema.json") -> str:
     return render_generic_source(schema, schema_label)
+
+
+# ---------------------------------------------------------------------------
+# Output
+# ---------------------------------------------------------------------------
 
 
 def write_if_changed(path: Path, text: str) -> bool:
@@ -1653,18 +1568,24 @@ def write_if_changed(path: Path, text: str) -> bool:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--schema", default=None, help="Schema JSON to generate from.")
-    parser.add_argument("--out-dir", default=None, help="Directory for generated game_state files.")
+    parser.add_argument("--out-dir", default=None, help="Directory for generated fragment state files.")
+    parser.add_argument("--fragment", default=None, help="Expected fragment id (asserted against schema.fragment).")
     args = parser.parse_args(argv)
 
     schema_path = Path(args.schema).resolve() if args.schema else default_schema_path().resolve()
     out_dir = Path(args.out_dir).resolve() if args.out_dir else default_out_dir(schema_path).resolve()
-    header_path = out_dir / "game_state.h"
-    source_path = out_dir / "game_state.c"
-    devapi_source_path = out_dir / "game_state_devapi.c"
-    schema_header_path = out_dir / "game_state_schema.gen.h"
     schema_label = relative_label(schema_path)
 
     schema = load_schema(schema_path)
+    fragment = schema["fragment"]
+    if args.fragment is not None and args.fragment != fragment:
+        raise SystemExit(f"--fragment {args.fragment!r} does not match schema.fragment {fragment!r}")
+
+    header_path = out_dir / f"{fragment}_state.h"
+    source_path = out_dir / f"{fragment}_state.c"
+    devapi_source_path = out_dir / f"{fragment}_state_devapi.c"
+    schema_header_path = out_dir / f"{fragment}_state_schema.gen.h"
+
     changed = []
     if write_if_changed(header_path, render_header(schema, schema_label)):
         changed.append(header_path)
