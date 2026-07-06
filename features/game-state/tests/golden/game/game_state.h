@@ -25,12 +25,6 @@
 #define GAME_STATE_TEST_UI_CLICKS_MAX 1000000
 #define GAME_STATE_TEST_LABEL_TEXT_DEFAULT "Template ready"
 #define GAME_STATE_TEST_BUTTON_TEXT_DEFAULT "Cycle"
-#define GAME_STATE_SETTINGS_MASTER_VOLUME_DEFAULT 0.75F
-#define GAME_STATE_SETTINGS_MASTER_VOLUME_MIN 0.0F
-#define GAME_STATE_SETTINGS_MASTER_VOLUME_MAX 1.0F
-#define GAME_STATE_SETTINGS_SFX_VOLUME_DEFAULT 0.8F
-#define GAME_STATE_SETTINGS_SFX_VOLUME_MIN 0.0F
-#define GAME_STATE_SETTINGS_SFX_VOLUME_MAX 1.0F
 #define GAME_STATE_TUTORIAL_DONE_DEFAULT 0
 #define GAME_STATE_WALLET_SOFT_DEFAULT 0LL
 #define GAME_STATE_WALLET_SOFT_MIN 0LL
@@ -190,8 +184,6 @@ typedef struct GameState {
     int test_ui_clicks;
     char test_label_text[GAME_STATE_STRING_MAX];
     char test_button_text[GAME_STATE_STRING_MAX];
-    float settings_master_volume;
-    float settings_sfx_volume;
     bool tutorial_done;
     int64_t wallet_soft;
     int64_t wallet_hard;

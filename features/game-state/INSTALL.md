@@ -17,6 +17,7 @@ project:
 ```text
 <project>/
   state/game_state.schema.json
+  state/settings.schema.json
   state/migrations/
   src/game_state_json.c
   src/game_state_json.h
@@ -25,6 +26,8 @@ project:
   src/game_save.c
   src/game_save.h
   src/game_save_devapi.c
+  src/features/settings.c
+  src/features/settings.h
 ```
 
 The generated `game_state.c` now defines the `game_state_fragment` descriptor
@@ -33,13 +36,28 @@ is no separate fragment source to copy. The DevAPI dispatch is the hand-written
 `src/game_save_devapi.c` (A5): universal over the fragment registry, compiled
 only under `GAME_DEVAPI_ENABLED`.
 
+`settings` (A6) is the second live fragment and the Р9 sample: its state layer
+(`SettingsState`, defaults, (de)serialization, schema, descriptor) is GENERATED
+from `state/settings.schema.json`; only the feature LOGIC —
+`src/features/settings.{c,h}` (getters/setters + clamp + `game_save_mark_dirty`)
+— is hand-written and copied. The registry, shell, dispatch, and generator are
+universal over `GameSaveFragment`, so a second fragment needs no edit to any of
+them. `src/systems/sys_settings.c` (the UI consumer) is a template system, not a
+feature deliverable, and is NOT part of this copy-list.
+
 Then add CMake wiring equivalent to `templates/template/CMakeLists.txt`:
 
 - define `FEATURE_GAME_STATE`, defaulting on or off for the project;
-- run `features/game-state/scripts/generate_state.py` with the project schema;
+- run `features/game-state/scripts/generate_state.py` with the project schema
+  (`--fragment game`);
+- run the generator a SECOND time with the settings schema
+  (`--fragment settings`) into the SAME generated dir — the two custom commands
+  write different filenames, so a parallel build is fine;
 - write generated outputs to `<build>/generated/game-state`;
-- compile generated `game_state.c`, `src/game_storage.c`, and migrations when
-  `FEATURE_GAME_STATE` is on;
+- compile generated `game_state.c` and `settings_state.c`, the hand-written
+  `src/features/settings.c`, `src/game_storage.c`, and migrations when
+  `FEATURE_GAME_STATE` is on (`settings_state_events.gen.c` is an empty-events
+  stub and is NOT linked; do not call `settings_ev_register`);
 - compile the hand-written `src/game_save_devapi.c` only when both
   `FEATURE_GAME_STATE` and `GAME_DEVAPI_ENABLED` are on;
 - add the generated directory to the target include paths.
@@ -50,11 +68,13 @@ inside code that is compiled only when DevAPI is enabled:
 ```c
 #if FEATURE_GAME_STATE
 #include "game_state.h"
+#include "settings_state.h" /* A6: second fragment; NOT settings_state_events.gen.h */
 #endif
 
 /* after core/runtime init */
 #if FEATURE_GAME_STATE
-game_save_register_fragment(&game_state_fragment); /* generated descriptor; `game` last */
+game_save_register_fragment(&settings_state_fragment); /* settings before game */
+game_save_register_fragment(&game_state_fragment);     /* generated descriptor; `game` last */
 game_save_init();                            /* after all fragments are registered */
 if (!fresh_state) {
     game_save_load_result_t r;
@@ -64,7 +84,8 @@ if (!fresh_state) {
         (void)game_save_new_game(err, (int)sizeof err); /* only on_new_game on this path */
     }
 } else {
-    game_state_fragment.reset();             /* --fresh-state skips load: seed defaults */
+    settings_state_fragment.reset();         /* --fresh-state skips load: seed both fragments */
+    game_state_fragment.reset();
 }
 #ifdef NT_PLATFORM_WEB
 game_save_install_web_flush();               /* synchronous visibility/pagehide flush */
@@ -112,15 +133,22 @@ cmake -S <project> -B <project>/build/release -DFEATURE_GAME_STATE=ON -DGAME_DEV
 
 ## Generated Files
 
-Do not hand-edit generated files. The generator writes:
+Do not hand-edit generated files. Per fragment, the generator writes
+`<id>_state.h`, `<id>_state.c`, `<id>_state_schema.gen.h`,
+`<id>_state_events.gen.h`, and `<id>_state_events.gen.c`. The default template
+generates TWO fragments — `game` and `settings` — into the same generated dir:
 
 ```text
-game_state.h
-game_state.c
-game_state_schema.gen.h
-game_state_events.gen.h
-game_state_events.gen.c
+game_state.h              settings_state.h
+game_state.c              settings_state.c
+game_state_schema.gen.h   settings_state_schema.gen.h
+game_state_events.gen.h   settings_state_events.gen.h
+game_state_events.gen.c   settings_state_events.gen.c
 ```
+
+A fragment with an empty `events` section still emits the events pair as a stub
+(`<id>_ev_desc_count = 0`, empty `<id>_ev_register`); the stub source is NOT
+linked into the target and its register function is never called.
 
 The DevAPI dispatch is no longer generated: it is the hand-written
 `src/game_save_devapi.c` (A5), a universal registry dispatch shared by every
@@ -198,6 +226,14 @@ Run the template bot unit tests:
 ```powershell
 py -3.12 templates/template/devapi/smoke_bot_test.py
 ```
+
+With the template's two fragments registered (`settings` before `game`),
+`game.state.get {path:""}` returns the multi-fragment aggregate
+`{ "settings": {...}, "game": {...} }` (registration order) and
+`game.state.schema` returns both fragment schemas. A cross-fragment
+`game.state.patch` applies each fragment atomically per key; a failure in one
+fragment (e.g. `settings.master_volume:5.0` out of range) rolls that fragment
+back without touching the other.
 
 Run the native `game_storage`/`game_state_json` Unity tests (A2):
 

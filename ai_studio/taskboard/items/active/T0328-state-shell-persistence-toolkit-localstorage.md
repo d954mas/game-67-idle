@@ -78,6 +78,15 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
   аннотация Р7/Р13.
 - Судьба int-полей: генератору нужен int64-тип (сейчас int32, cap
   999999 в шаблоне) — добавить тип в схему при S5.
+- A5/ночь 2026-07-07, ВОПРОС ЛИДУ (движок, сам не решаю): wasm-devapi
+  НЕ ЛИНКУЕТСЯ уже на HEAD до A5 (baseline-гейт зафиксировал) по
+  движковым причинам: (1) Debug-wasm либы движка ASan/UBSan-
+  инструментированы (__asan_*/__odr_asan_gen_* в libnt_core.a), рантайм
+  санитайзера не попадает в линк emscripten-экзешника; (2) EM_JS-символ
+  nt_devapi_web_install_shim не разрешается из libnt_devapi_web.a (и в
+  Release, где ASan уже нет). Сам devapi-TU компилится на wasm
+  warning-clean. Движок read-only — обход на стороне игры не делал
+  (корень в движке). Если подтвердишь — заведу issue в engine-репо.
 - A5/ночь 2026-07-07, ДЕФОЛТ ПРИМЕНЁН, ждёт подтверждения лида:
   включать ли orphan-блобы (незнакомые ключи features{}) в ответ
   DevAPI get "" (агрегат)? Дефолт = НЕТ (только зарегистрированные
@@ -89,6 +98,35 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
 
 ## Log
 
+- 2026-07-07 (ночь): A6 ГОТОВ: мультифрагмент доказан вторым живым
+  фрагментом settings — НЕГАТИВНЫЙ ГЕЙТ прошёл (game_save.*,
+  game_save_devapi.c, generate_state.py ВНЕ диффа: реестр/диспатч/
+  генератор универсальны как есть). settings.schema.json (3 громкости)
+  → генерённый settings_state_* + рукописная логика по Р9
+  (src/features/settings.{c,h}: clamp+mark_dirty; образец hooks-free
+  фрагмента — step/hook-провод тренируется в T0327). Вынос settings из
+  game-схемы = template-clean-break (§14 п.12), снятые пути в reserved;
+  громкости dev-сейва сбрасываются к дефолтам (шипнутых сейвов нет).
+  Живьём: get ""={settings,game}, кросс-фрагментный patch fail-isolation
+  (побитый фрагмент откачен, второй применён), round-trip оба, старый
+  A5-сейв: settings=дефолты, game жив, НЕ NEWER, orphans пусты.
+  31 py + 7 smoke-bot + 7/7 ctest ×2; сборки native/devapi/release/
+  no-state чистые; wasm TU компилятся (линк — известный движковый
+  блокер). Спека 2 ревью + deep-ревью реализации (ACCEPT, дефектов нет).
+  Осталось: E3, E4; items/progression = T0327.
+- 2026-07-07 (ночь): A5 ГОТОВ (edc44baa4): генерируемый game_state_devapi.c
+  умер; рукописный src/game_save_devapi.c — универсальный диспатч 7 команд
+  над реестром GameSaveFragment (агрегат get ""/schema, patch пофрагментно
+  атомарен: снапшот to_json → откат from_json, доказано живым прогоном;
+  reset=game_save_new_game). Провод = паритет A4: имена команд/группа
+  байт-в-байт, error.code заморожен {bad_params, internal}. Compat-обёртки
+  A2 сняты (последний потребитель). Golden .h диф = ровно 4 строки,
+  остальной golden байт-идентичен, devapi-golden удалён. Смоук-бот на
+  фрагментных ключах + его юнит-тесты. Спека 2 ревью + deep-ревью
+  реализации (ACCEPT-WITH-ADDITIONS, дефектов кода нет); ASan-харнесс
+  чист (LeakSan на Windows нет — компенсировано ownership-аудитом).
+  30 py-тестов, 7 smoke-bot-тестов, ctest 7/7 native+devapi. −216 строк
+  нетто. Осталось: A6 (мультифрагмент), E3, E4.
 - 2026-07-07: E2 ГОТОВ: typed events из схем v2 — секция events (провод
   "<fragment>.<event>", типы bool/int/i64/float=f64/string/hash/bytes),
   генерируемые <frag>_state_events.gen.{h,c}: структуры <Frag>Ev<Evt>,

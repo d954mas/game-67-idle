@@ -246,8 +246,6 @@ void game_state_init_defaults(GameState *state) {
     state->test_ui_clicks = GAME_STATE_TEST_UI_CLICKS_DEFAULT;
     (void)gsj_copy_text(state->test_label_text, sizeof(state->test_label_text), GAME_STATE_TEST_LABEL_TEXT_DEFAULT);
     (void)gsj_copy_text(state->test_button_text, sizeof(state->test_button_text), GAME_STATE_TEST_BUTTON_TEXT_DEFAULT);
-    state->settings_master_volume = GAME_STATE_SETTINGS_MASTER_VOLUME_DEFAULT;
-    state->settings_sfx_volume = GAME_STATE_SETTINGS_SFX_VOLUME_DEFAULT;
     state->tutorial_done = GAME_STATE_TUTORIAL_DONE_DEFAULT;
     state->wallet_soft = GAME_STATE_WALLET_SOFT_DEFAULT;
     state->wallet_hard = GAME_STATE_WALLET_HARD_DEFAULT;
@@ -314,14 +312,6 @@ bool game_state_validate(const GameState *state, char *error, int error_cap) {
     }
     if (state->test_button_text[0] == '\0') {
         gsj_set_error(error, error_cap, "test_button_text out of range");
-        return false;
-    }
-    if (state->settings_master_volume < GAME_STATE_SETTINGS_MASTER_VOLUME_MIN || state->settings_master_volume > GAME_STATE_SETTINGS_MASTER_VOLUME_MAX) {
-        gsj_set_error(error, error_cap, "settings.master_volume out of range");
-        return false;
-    }
-    if (state->settings_sfx_volume < GAME_STATE_SETTINGS_SFX_VOLUME_MIN || state->settings_sfx_volume > GAME_STATE_SETTINGS_SFX_VOLUME_MAX) {
-        gsj_set_error(error, error_cap, "settings.sfx_volume out of range");
         return false;
     }
     if (state->wallet_soft < GAME_STATE_WALLET_SOFT_MIN || state->wallet_soft > GAME_STATE_WALLET_SOFT_MAX) {
@@ -486,9 +476,6 @@ cJSON *game_state_to_json(const GameState *state) {
     cJSON_AddNumberToObject(root, "test_ui_clicks", state->test_ui_clicks);
     cJSON_AddStringToObject(root, "test_label_text", state->test_label_text);
     cJSON_AddStringToObject(root, "test_button_text", state->test_button_text);
-    cJSON *settings = cJSON_AddObjectToObject(root, "settings");
-    cJSON_AddNumberToObject(settings, "master_volume", (double)state->settings_master_volume);
-    cJSON_AddNumberToObject(settings, "sfx_volume", (double)state->settings_sfx_volume);
     cJSON *tutorial = cJSON_AddObjectToObject(root, "tutorial");
     cJSON_AddBoolToObject(tutorial, "done", state->tutorial_done);
     cJSON *wallet = cJSON_AddObjectToObject(root, "wallet");
@@ -570,12 +557,6 @@ cJSON *game_state_get_path_json(const GameState *state, const char *path, char *
     }
     if (strcmp(path, "test_button_text") == 0) {
         return cJSON_CreateString(state->test_button_text);
-    }
-    if (strcmp(path, "settings.master_volume") == 0) {
-        return cJSON_CreateNumber((double)state->settings_master_volume);
-    }
-    if (strcmp(path, "settings.sfx_volume") == 0) {
-        return cJSON_CreateNumber((double)state->settings_sfx_volume);
     }
     if (strcmp(path, "tutorial.done") == 0) {
         return cJSON_CreateBool(state->tutorial_done);
@@ -754,20 +735,6 @@ bool game_state_set_path_json(GameState *state, const char *path, const cJSON *v
     }
     if (strcmp(path, "test_button_text") == 0) {
         if (!cJSON_IsString(value) || !gsj_copy_text(state->test_button_text, sizeof(state->test_button_text), value->valuestring)) { gsj_set_error(error, error_cap, "expected short string"); return false; }
-        return true;
-    }
-    if (strcmp(path, "settings.master_volume") == 0) {
-        if (!cJSON_IsNumber(value)) { gsj_set_error(error, error_cap, "expected number"); return false; }
-        float parsed = (float)value->valuedouble;
-        if (parsed < GAME_STATE_SETTINGS_MASTER_VOLUME_MIN || parsed > GAME_STATE_SETTINGS_MASTER_VOLUME_MAX) { gsj_set_error(error, error_cap, "number out of range"); return false; }
-        state->settings_master_volume = parsed;
-        return true;
-    }
-    if (strcmp(path, "settings.sfx_volume") == 0) {
-        if (!cJSON_IsNumber(value)) { gsj_set_error(error, error_cap, "expected number"); return false; }
-        float parsed = (float)value->valuedouble;
-        if (parsed < GAME_STATE_SETTINGS_SFX_VOLUME_MIN || parsed > GAME_STATE_SETTINGS_SFX_VOLUME_MAX) { gsj_set_error(error, error_cap, "number out of range"); return false; }
-        state->settings_sfx_volume = parsed;
         return true;
     }
     if (strcmp(path, "tutorial.done") == 0) {
@@ -1044,9 +1011,6 @@ bool game_state_from_json(GameState *state, const cJSON *json, char *error, int 
     if (!gsj_read_int_range(json, "test_ui_clicks", GAME_STATE_TEST_UI_CLICKS_MIN, GAME_STATE_TEST_UI_CLICKS_MAX, &(&next)->test_ui_clicks, error, error_cap)) { return false; }
     if (!gsj_read_string(json, "test_label_text", (&next)->test_label_text, sizeof((&next)->test_label_text), error, error_cap)) { return false; }
     if (!gsj_read_string(json, "test_button_text", (&next)->test_button_text, sizeof((&next)->test_button_text), error, error_cap)) { return false; }
-    const cJSON *settings = gsj_object_item(json, "settings");
-    if (!gsj_read_float_range(settings, "master_volume", GAME_STATE_SETTINGS_MASTER_VOLUME_MIN, GAME_STATE_SETTINGS_MASTER_VOLUME_MAX, &(&next)->settings_master_volume, error, error_cap)) { return false; }
-    if (!gsj_read_float_range(settings, "sfx_volume", GAME_STATE_SETTINGS_SFX_VOLUME_MIN, GAME_STATE_SETTINGS_SFX_VOLUME_MAX, &(&next)->settings_sfx_volume, error, error_cap)) { return false; }
     const cJSON *tutorial = gsj_object_item(json, "tutorial");
     if (!gsj_read_bool(tutorial, "done", &(&next)->tutorial_done, error, error_cap)) { return false; }
     const cJSON *wallet = gsj_object_item(json, "wallet");

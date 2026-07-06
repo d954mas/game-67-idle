@@ -157,9 +157,35 @@ if(FEATURE_GAME_STATE)
         COMMENT "Generating installed game-state feature sources"
         VERBATIM
     )
+    # A6: SECOND fragment. The registry/dispatch/shell/generator are all universal
+    # over GameSaveFragment, so a second live fragment `settings` needs only its
+    # own schema generated + wired -- no dispatch or generator edit. Same generated
+    # dir (already on the include path); make_directory is idempotent and the two
+    # commands depend on files (not the dir), so parallel ninja is fine.
+    set(SETTINGS_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/settings.schema.json")
+    set(SETTINGS_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/settings_state.c")
+    add_custom_command(
+        OUTPUT
+            "${GAME_STATE_GENERATED_DIR}/settings_state.h"
+            "${SETTINGS_STATE_GENERATED_SOURCE}"
+            "${GAME_STATE_GENERATED_DIR}/settings_state_schema.gen.h"
+            "${GAME_STATE_GENERATED_DIR}/settings_state_events.gen.h"
+            "${GAME_STATE_GENERATED_DIR}/settings_state_events.gen.c"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_STATE_GENERATED_DIR}"
+        COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
+            --schema "${SETTINGS_STATE_SCHEMA}"
+            --out-dir "${GAME_STATE_GENERATED_DIR}"
+            --fragment settings
+        DEPENDS "${SETTINGS_STATE_SCHEMA}" "${GAME_STATE_GENERATOR}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+        COMMENT "Generating installed settings-state fragment sources"
+        VERBATIM
+    )
     target_sources(${GAME_TARGET} PRIVATE
         "${GAME_STATE_GENERATED_SOURCE}"   # A4: also carries the generated game_state_fragment descriptor
         "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # E2: typed event structs/emit/descriptors
+        "${SETTINGS_STATE_GENERATED_SOURCE}"   # A6: generated settings fragment state layer
+        src/features/settings.c                # A6: hand-written settings logic (Р9)
         src/game_state_json.c
         src/game_storage.c
         src/game_save.c              # A3

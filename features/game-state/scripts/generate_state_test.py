@@ -8,6 +8,7 @@ import generate_state
 
 ROOT = Path(__file__).resolve().parents[3]
 TEMPLATE_SCHEMA = ROOT / "templates" / "template" / "state" / "game_state.schema.json"
+SETTINGS_SCHEMA = ROOT / "templates" / "template" / "state" / "settings.schema.json"
 MINI_SCHEMA = ROOT / "features" / "game-state" / "tests" / "mini_state.schema.json"
 GOLDEN = ROOT / "features" / "game-state" / "tests" / "golden"
 CLOSED_TOKENS = ("rune_", "fishing_", "Rune", "Fishing", "rune.", "fishing.")
@@ -57,6 +58,19 @@ class StateCodegenTests(unittest.TestCase):
             generate(TEMPLATE_SCHEMA, out_dir, "game")
             for suffix in OUTPUT_SUFFIXES:
                 self.assertTrue((out_dir / f"game_state{suffix}").exists())
+
+    def test_settings_schema_generates(self):
+        # A6: the committed settings fragment schema stays valid and generates all
+        # five per-fragment files (state layer + empty-events stub), so a broken
+        # schema is caught here without a full build.
+        with tempfile.TemporaryDirectory() as tmp:
+            out_dir = Path(tmp) / "generated"
+            generate(SETTINGS_SCHEMA, out_dir, "settings")
+            outputs = read_outputs(out_dir, "settings_state")
+        self.assertIn("extern SettingsState settings_state;", outputs["settings_state.h"])
+        self.assertIn("const GameSaveFragment settings_state_fragment", outputs["settings_state.c"])
+        # empty events section -> stub table with zero descriptors.
+        self.assertIn("settings_ev_desc_count = 0", outputs["settings_state_events.gen.c"])
 
     def test_header_has_no_devapi_decl(self):
         # A5: the DevAPI dispatch is a hand-written shell TU (game_save_devapi.c),

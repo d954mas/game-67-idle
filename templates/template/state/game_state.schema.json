@@ -4,7 +4,7 @@
   "fragment": "game",
   "version": 1,
   "string_max": 64,
-  "reserved": ["grabbed"],
+  "reserved": ["grabbed", "settings.master_volume", "settings.sfx_volume"],
   "enums": {
     "Shape": ["cube", "sphere", "cylinder", "capsule"],
     "RenderMode": ["solid_wire", "solid", "wire"],
@@ -30,8 +30,6 @@
     "test_ui_clicks": { "type": "int", "default": 0, "min": 0, "max": 1000000 },
     "test_label_text": { "type": "string", "default": "Template ready", "max_length": 63 },
     "test_button_text": { "type": "string", "default": "Cycle", "max_length": 63 },
-    "settings.master_volume": { "type": "float", "default": 0.75, "min": 0, "max": 1 },
-    "settings.sfx_volume": { "type": "float", "default": 0.8, "min": 0, "max": 1 },
     "tutorial.done": { "type": "bool", "default": false },
     "wallet.soft": { "type": "i64", "default": 0, "min": 0, "max": 9000000000000000000 },
     "wallet.hard": { "type": "i64", "default": 0, "min": 0, "max": 9000000000000000000 },

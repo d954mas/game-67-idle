@@ -31,9 +31,11 @@
     "review": "features/game-state/references/review.md"
   },
   "outputs": [
-    "game_state.h",
-    "game_state.c",
-    "game_state_schema.gen.h"
+    "<id>_state.h",
+    "<id>_state.c",
+    "<id>_state_schema.gen.h",
+    "<id>_state_events.gen.h",
+    "<id>_state_events.gen.c"
   ],
   "default_template": {
     "schema": "templates/template/state/game_state.schema.json",
@@ -45,7 +47,9 @@
       "templates/template/src/game_storage.h",
       "templates/template/src/game_save.c",
       "templates/template/src/game_save.h",
-      "templates/template/src/game_save_devapi.c"
+      "templates/template/src/game_save_devapi.c",
+      "templates/template/src/features/settings.c",
+      "templates/template/src/features/settings.h"
     ]
   }
 }
