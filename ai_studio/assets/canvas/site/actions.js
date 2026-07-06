@@ -1148,6 +1148,75 @@ export async function patchStyleAction(groupId, patch) {
   }
 }
 
+// ---- animation cards (T0265 increment 1, video route) --------------------------
+//
+// An animation card is a GROUP carrying an additive `anim` blob (design §1.1 —
+// ai_studio.canvas.anim_card.v1), the SAME "group + additive blob" shape as a recipe/style
+// card. These three actions mirror createRecipeCardAction / patchRecipeAction /
+// generateFromRecipeAction one route segment over (design §2). The op layer + routes are
+// built by the parallel server packet; the client is written to the design contract.
+
+// Mint a new animation card. Two modes:
+//   * from-scratch (empty-canvas context menu): `worldPoint` places the card there, else
+//     the op's own (0,0) default — mirrors createRecipeCardAction exactly.
+//   * PROMOTION ("Animate this image" on an image element): ONE POST with `memberId` (T0265
+//     F6). The server's createAnimCard fits the box around the image (24px padding), moves it
+//     in as the FIRST keyframe, and records the whole promotion as a SINGLE journal entry (one
+//     Ctrl+Z undoes it). It refuses LOUDLY if the image is already a member of a
+//     recipe/style/anim card or a claimed style-card ref — that refusal surfaces as-is via the
+//     catch's toast. The new card is selected so the lead types motion + Generate.
+export async function createAnimCardAction(worldPoint, image) {
+  if (!state.project) return;
+  try {
+    if (image) {
+      const result = await api("POST", `/projects/${pid()}/anim-cards`, { memberId: image.id });
+      selectGroupOnly(result.group.id);
+      applyMutation(result, `Animating "${image.name || image.id}" in new card "${result.group.name}".`);
+      return;
+    }
+    const body = {};
+    if (worldPoint) {
+      body.x = Math.round(worldPoint.x);
+      body.y = Math.round(worldPoint.y);
+    }
+    const result = await api("POST", `/projects/${pid()}/anim-cards`, body);
+    state.selectedGroupId = result.group.id;
+    applyMutation(result, `Created animation card "${result.group.name}".`);
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Partial update of a card's `anim` blob (motion/profile/seed/matte/gen_fps/loop/columns/
+// trim/style_ref/accepted_ref — design §1.1). One journaled patchAnim op; loud on a group
+// without `anim` (the op layer's guard). Mirrors patchRecipeAction exactly.
+export async function patchAnimAction(groupId, patch) {
+  try {
+    applyMutation(await api("PATCH", `/projects/${pid()}/anim-cards/${groupId}`, patch));
+  } catch (error) {
+    setStatus(error.message, true);
+  }
+}
+
+// Generate from an animation card (the Anim inspector's Generate button): runs the video
+// route (generate -> frames -> matte, stops at matte) and imports the per-frame RGBA PNGs
+// into a NEW flipbook element beside the card, in its PARENT scope (design §2
+// generateAnimFromCard -> { project, element, group, run }). Generation takes MINUTES
+// (GPU/ComfyUI) — same runLongOp limiter/spinner/disable + long-op queue (max 2) as
+// generateFromRecipeAction. The minted flipbook element is selected on success.
+export async function generateAnimFromCardAction(groupId, control) {
+  await runLongOp(
+    "Generating animation… (video route, minutes)",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/anim-cards/${groupId}/generate`, {});
+      if (result.element) selectOnly(result.element.id);
+      applyMutation(result);
+      return { kind: "success", message: `Generated "${result.element ? result.element.name : "animation"}".` };
+    },
+    { control },
+  );
+}
+
 // ---- Extract / promote (T0239 increment 4, final shape) ------------------------
 //
 // Extraction is ONE codex vision call that writes element.meta.extracted (no card minted

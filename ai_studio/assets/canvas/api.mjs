@@ -36,6 +36,9 @@
 //   PATCH  /api/canvas/projects/<id>/recipe-cards/<gid>    {prompt?, expanded?, use_expanded?, engine?, style_ref?}     (partial recipe blob update; 400 on a group with no `recipe`; style_ref must be null or an existing style-card group id)
 //   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/generate  {}   (T0239 increment 2/3: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one entry; partial success allowed on engine=both; recipe.style_ref, when set, mixes the style card's prompt + ref image in)
 //   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/expand    {}   (T0239 increment 4: Expand-prompt — ONE codex TEXT call; writes recipe.expanded only, no card minted; Generate sends it when use_expanded is true, else the short prompt)
+//   POST   /api/canvas/projects/<id>/anim-cards            {name?, x?,y?,w?,h?, parentId?, memberId?}   (T0265 increment 1: mint an animation card — a group with an additive `anim` blob; keyframes are its member images. memberId = "Animate this image" promotion: fit around that image + move it in as the first keyframe, ONE entry; not combinable with x/y/w/h)
+//   PATCH  /api/canvas/projects/<id>/anim-cards/<gid>      {motion?, profile?, seed?, matte?, gen_fps?, loop?, columns?, trim?, style_ref?, accepted_ref?}   (partial anim blob update; 400 on a group with no `anim`)
+//   POST   /api/canvas/projects/<id>/anim-cards/<gid>/generate  {}   (T0265 increment 1: generate via the Track B video route — mints ONE flipbook element beside the card in its PARENT scope; one entry; 1 keyframe = plain I2V)
 //   POST   /api/canvas/projects/<id>/style-cards           {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 3: mint a style card — a group with an additive `style` blob: prompt + ONE ref image; no generate route, style cards never generate)
 //   PATCH  /api/canvas/projects/<id>/style-cards/<gid>     {prompt?, ref?}                    (partial style blob update; ref must be null or a member IMAGE element id — the "Make ref" gesture; 400 on a group with no `style`)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/cleanup-preview {tool, params}  (T0207: quantize|denoise LIVE preview against CURRENT pixels; writes NOTHING to the store)
@@ -87,6 +90,7 @@ import {
   bakeFilters,
   cleanupApply,
   cleanupPreview,
+  createAnimCard,
   createGroup,
   createProject,
   createRecipeCard,
@@ -102,6 +106,7 @@ import {
   exportProject,
   extractFromElement,
   fitGroup,
+  generateAnimFromCard,
   generateFromRecipe,
   getProject,
   historyFlags,
@@ -111,6 +116,7 @@ import {
   moveNodes,
   opsStats,
   pasteNodes,
+  patchAnim,
   patchElement,
   patchElements,
   patchGroup,
@@ -744,6 +750,49 @@ export function createCanvasApi(root) {
         const groupId = decodeURIComponent(parts[5]);
         await readJsonBody(req);
         sendMutation(200, await expandRecipePrompt(root, { projectId: id, groupId }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/anim-cards  (create — T0265 increment 1, video route)
+      // An animation card is a group carrying an additive `anim` blob; keyframes are its
+      // member images. With `memberId` (F4) this is the "Animate this image" promotion: the card
+      // fits around that image and the image moves in as the first keyframe in ONE journal entry
+      // (createAnimCard refuses memberId combined with explicit x/y/w/h — fit owns the box).
+      if (parts.length === 5 && sub === "anim-cards" && req.method === "POST") {
+        const body = await readJsonBody(req);
+        sendMutation(201, await locked(id, () => createAnimCard(root, {
+          projectId: id,
+          name: body.name,
+          x: body.x,
+          y: body.y,
+          w: body.w,
+          h: body.h,
+          parentId: body.parentId,
+          memberId: body.memberId,
+        })));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/anim-cards/<gid>  (partial anim blob update)
+      // Body is the anim PATCH itself ({motion?, profile?, seed?, matte?, gen_fps?, loop?,
+      // columns?, trim?, style_ref?, accepted_ref?}), not wrapped — patchAnim validates loudly
+      // and 400s on a group with no `anim` at all.
+      if (parts.length === 6 && sub === "anim-cards" && req.method === "PATCH") {
+        const groupId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, await locked(id, () => patchAnim(root, { projectId: id, groupId, patch: body })));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/anim-cards/<gid>/generate  (T0265 increment 1)
+      // Generation runs OUTSIDE the journal (the Track B video pipeline, minutes); only the
+      // final import+mint commits. Mints ONE flipbook element beside the card frame, in its
+      // PARENT scope — one journal entry. Not wrapped in `locked` (self-locks its own final
+      // commit internally, like recipe generate), so a multi-minute run never blocks the project.
+      if (parts.length === 7 && sub === "anim-cards" && parts[6] === "generate" && req.method === "POST") {
+        const groupId = decodeURIComponent(parts[5]);
+        await readJsonBody(req);
+        sendMutation(201, await generateAnimFromCard(root, { projectId: id, groupId }));
         return true;
       }
 

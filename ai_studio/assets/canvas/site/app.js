@@ -197,13 +197,22 @@ export function coverUrl(project) {
   return first ? `/api/canvas/projects/${project.id}/${first.src}` : null;
 }
 
-export function imageFor(element) {
-  if (imageCache.has(element.src)) return imageCache.get(element.src);
+// Content-addressed image cache lookup by a bare src string (T0265 F4). This is the ONE image
+// cache for the app: element images (imageFor) and flipbook keyframes (workspace's flipbook
+// player) both resolve through it, so there is no duplicated per-frame Map. Same
+// onload -> repaint path as before; a src is stable + content-addressed, so the cache never
+// goes stale.
+export function imageForSrc(src) {
+  if (imageCache.has(src)) return imageCache.get(src);
   const img = new Image();
   img.onload = () => hooks.renderCanvas();
-  img.src = fileUrl(element);
-  imageCache.set(element.src, img);
+  img.src = `/api/canvas/projects/${state.project.id}/${src}`;
+  imageCache.set(src, img);
   return img;
+}
+
+export function imageFor(element) {
+  return imageForSrc(element.src);
 }
 
 export function clearImageCache() {

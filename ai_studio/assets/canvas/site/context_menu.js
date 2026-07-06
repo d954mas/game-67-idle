@@ -9,6 +9,7 @@ import {
   addNoteAt,
   bringNodeForward,
   bringNodeToFront,
+  createAnimCardAction,
   createGroupFromSelection,
   createGroupInside,
   createGroupOrDefault,
@@ -212,6 +213,15 @@ function itemsFor(target) {
         { label: "Flip horizontal", onClick: () => toggleElementFlip(element.id, "h") },
         { label: "Flip vertical", onClick: () => toggleElementFlip(element.id, "v") },
       );
+      // T0265 F6: promote this image into a new animation card as its first keyframe (ONE POST
+      // with memberId — the server fits the box + moves the image in as one journal entry).
+      // Cheap client courtesy: hide the item when the image is ALREADY a member of a card
+      // (recipe/style/anim) so we don't offer an action that would only toast a refusal — the
+      // server guard (which also refuses a claimed style ref) stays the law.
+      const parentCard = element.groupId ? groupById(element.groupId) : null;
+      if (!(parentCard && (parentCard.recipe || parentCard.style || parentCard.anim))) {
+        items.push({ label: "Animate this image", onClick: () => createAnimCardAction(null, element) });
+      }
     }
     // Right-clicking a selected element keeps the whole multi-selection (see
     // workspace.js onContextMenu): a 2+ selection also offers grouping, and Order acts on
@@ -282,6 +292,9 @@ function itemsFor(target) {
     // T0239 increment 3: mint a style card at the click point (a group with an
     // additive `style` blob — name + style prompt + ONE ref + examples).
     { label: "New style card", onClick: () => createStyleCardAction(target.world) },
+    // T0265: mint an animation card at the click point (a group with an additive `anim`
+    // blob — the video-route flipbook workflow, design §1.1).
+    { label: "New animation card", onClick: () => createAnimCardAction(target.world) },
     { label: "Fit", onClick: () => el("zoom-fit").click() },
     { separator: true },
     copyIdItemFor(target),

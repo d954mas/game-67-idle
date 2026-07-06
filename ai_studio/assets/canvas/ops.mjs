@@ -39,7 +39,7 @@
 import { randomUUID } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { extname, join } from "node:path";
+import { basename, extname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { canvasHistoryDepth } from "../../core_harness/tool_lib/studio_config.mjs";
 // ALL canvas Python tools (export_images.py, crop_regions.py, render_group.py) run
@@ -63,6 +63,11 @@ import { buildBlackPlatePrompt, buildWhitePlatePrompt, generatePlate } from "./t
 // what keeps a ref from ever silently failing to reach agy, so ops.mjs just forwards refPaths
 // to whichever engine(s) are attempted, same as it always has for codex.
 import { generateImageCodex, generateImageGemini } from "./tools/recipe_generate.mjs";
+// Anim-card generation (T0265 increment 1): the ONE default generator seam ops.generateAnimFromCard
+// falls back to — orchestrates the Track B video pipeline generate->frames->matte stages and stops
+// at matte (see tools/anim_generate.mjs). Injectable: tests pass a fake `generators.run` so ComfyUI/
+// CorridorKey never spawn in the suite (T0238 contract, carried to the video route).
+import { defaultAnimGenerators } from "./tools/anim_generate.mjs";
 // Expand-prompt / Extract (T0239 increment 4): the ONE codex TEXT/VISION seam. See the
 // module doc for the exact codex-exec invocation shapes (mirrors this repo's other codex
 // spawns) and why raw stdout is never parsed (--output-last-message is the reliable,
@@ -2301,6 +2306,15 @@ export function createRecipeCard(root, { projectId, name, x, y, w, h, parentId }
     if (parent.style) {
       throw new Error(`cannot create a recipe card inside a style card (parent ${parentScope} carries style) — cards do not nest inside cards`);
     }
+    // F6: the guard was asymmetric — only a style parent was refused, so a recipe/anim parent
+    // silently allowed a card to nest inside a card. Refuse those too (new messages; the style
+    // one above stays verbatim — style.test asserts it word-for-word).
+    if (parent.recipe) {
+      throw new Error(`cannot create a recipe card inside another recipe card (parent ${parentScope} carries recipe) — cards do not nest inside cards`);
+    }
+    if (parent.anim) {
+      throw new Error(`cannot create a recipe card inside an animation card (parent ${parentScope} carries anim) — cards do not nest inside cards`);
+    }
   }
 
   const group = {
@@ -2451,6 +2465,14 @@ export function createStyleCard(root, { projectId, name, x, y, w, h, parentId } 
     // Symmetric to createRecipeCard's own guard: cards do not nest inside cards.
     if (parent.recipe) {
       throw new Error(`cannot create a style card inside a recipe card (parent ${parentScope} carries recipe) — cards do not nest inside cards`);
+    }
+    // F6: symmetric to createRecipeCard — refuse a style/anim parent too (only a recipe parent
+    // was caught before; the recipe message above stays verbatim for style.test).
+    if (parent.style) {
+      throw new Error(`cannot create a style card inside another style card (parent ${parentScope} carries style) — cards do not nest inside cards`);
+    }
+    if (parent.anim) {
+      throw new Error(`cannot create a style card inside an animation card (parent ${parentScope} carries anim) — cards do not nest inside cards`);
     }
   }
 
@@ -2873,6 +2895,468 @@ export async function expandRecipePrompt(root, { projectId, groupId, assistant }
   });
   const group = (project.groups || []).find((item) => item.id === groupId);
   return { project, group, expanded };
+}
+
+// ---- animation card (T0265 increment 1, video route) --------------------------
+//
+// An animation card is a GROUP carrying an additive `anim` object — the SAME "group + additive
+// blob" shape as a recipe/style card, not a new element type (design
+// docs/design_video_anim_canvas_2026-07-05.md §1.1). Keyframes (source art + storyboard) are the
+// card's ordinary member IMAGE elements (assignToGroup / drag-in), ordered left-to-right by X
+// (§5); the card blob itself owns only the motion/profile/seed/matte/loop settings. Generate
+// mints a FLIPBOOK element (`element.flipbook`, §1.2) beside the card in its PARENT scope —
+// the per-frame RGBA matte sequence, editable frame-by-frame later (increment 2); the sprite
+// SHEET is a derived export (increment 2), never baked here. `updateProject` spreads `groups`
+// verbatim (store.mjs), so `group.anim` round-trips through every snapshot/undo/redo/copy-paste
+// with zero store/tree changes, exactly like `recipe`/`style`.
+
+const ANIM_PROFILES = new Set(["draft", "final"]); // WAN draft/final workflow choice
+// Matte TOOL choice (video/matte stage). Default "corridorkey" (lead decision, design open
+// question 1): soft glow/translucency; "key_matte" is the clean-licence opaque-sprite cutout.
+const ANIM_MATTES = new Set(["corridorkey", "key_matte"]);
+
+// Default anim blob for a freshly-minted card (design §1.1, schema ai_studio.canvas.anim_card.v1).
+// `seed:null` = a fresh random seed on every Generate; `gen_fps:null` = the workflow's own fps.
+// `loop:true` -> the flipbook plays as a loop; `style_ref`/`accepted_ref` are reserved nullable
+// by-id pointers (style mixing = increment 4, Accept = increment 2); `columns`/`trim` feed the
+// derived sheet export (increment 2); `last_run` is written by generateAnimFromCard.
+function defaultAnim() {
+  return {
+    v: 1,
+    motion: "",
+    profile: "draft",
+    seed: null,
+    matte: "corridorkey",
+    gen_fps: null,
+    loop: true,
+    columns: null,
+    trim: false,
+    style_ref: null,
+    accepted_ref: null,
+    last_run: null,
+  };
+}
+
+// Validate + normalize a PARTIAL anim patch (loud, no silent coercion — mirrors
+// normalizeRecipePatch). PURE of the project (type-level only): `motion` (a string; empty is
+// the draft state), `profile` (ANIM_PROFILES), `seed` (null or a number), `matte`
+// (ANIM_MATTES), `gen_fps` (null or a positive number), `loop`/`trim` (booleans), `columns`
+// (null or a positive integer), `style_ref`/`accepted_ref` (null or a string id — the
+// project-level resolution lives in patchAnim, like patchRecipe's style_ref). Returns the
+// subset of resolved fields actually provided; throws before any write on anything else.
+function normalizeAnimPatch(patch) {
+  if (!patch || typeof patch !== "object" || Array.isArray(patch)) {
+    throw new Error(`anim patch must be an object, got ${JSON.stringify(patch)}`);
+  }
+  const out = {};
+  if (patch.motion !== undefined) {
+    if (typeof patch.motion !== "string") throw new Error(`anim motion must be a string, got ${JSON.stringify(patch.motion)}`);
+    out.motion = patch.motion;
+  }
+  if (patch.profile !== undefined) {
+    if (!ANIM_PROFILES.has(patch.profile)) {
+      throw new Error(`anim profile must be one of ${[...ANIM_PROFILES].join("/")}, got ${JSON.stringify(patch.profile)}`);
+    }
+    out.profile = patch.profile;
+  }
+  if (patch.seed !== undefined) {
+    if (patch.seed !== null && !Number.isFinite(Number(patch.seed))) {
+      throw new Error(`anim seed must be null or a number, got ${JSON.stringify(patch.seed)}`);
+    }
+    out.seed = patch.seed === null ? null : Number(patch.seed);
+  }
+  if (patch.matte !== undefined) {
+    if (!ANIM_MATTES.has(patch.matte)) {
+      throw new Error(`anim matte must be one of ${[...ANIM_MATTES].join("/")}, got ${JSON.stringify(patch.matte)}`);
+    }
+    out.matte = patch.matte;
+  }
+  if (patch.gen_fps !== undefined) {
+    if (patch.gen_fps !== null && (!Number.isFinite(Number(patch.gen_fps)) || Number(patch.gen_fps) <= 0)) {
+      throw new Error(`anim gen_fps must be null or a positive number, got ${JSON.stringify(patch.gen_fps)}`);
+    }
+    out.gen_fps = patch.gen_fps === null ? null : Number(patch.gen_fps);
+  }
+  if (patch.loop !== undefined) {
+    if (typeof patch.loop !== "boolean") throw new Error(`anim loop must be a boolean, got ${JSON.stringify(patch.loop)}`);
+    out.loop = patch.loop;
+  }
+  if (patch.columns !== undefined) {
+    if (patch.columns !== null && (!Number.isInteger(Number(patch.columns)) || Number(patch.columns) < 1)) {
+      throw new Error(`anim columns must be null or a positive integer, got ${JSON.stringify(patch.columns)}`);
+    }
+    out.columns = patch.columns === null ? null : Number(patch.columns);
+  }
+  if (patch.trim !== undefined) {
+    if (typeof patch.trim !== "boolean") throw new Error(`anim trim must be a boolean, got ${JSON.stringify(patch.trim)}`);
+    out.trim = patch.trim;
+  }
+  if (patch.style_ref !== undefined) {
+    if (patch.style_ref !== null && typeof patch.style_ref !== "string") {
+      throw new Error(`anim style_ref must be null or a string id, got ${JSON.stringify(patch.style_ref)}`);
+    }
+    out.style_ref = patch.style_ref;
+  }
+  if (patch.accepted_ref !== undefined) {
+    if (patch.accepted_ref !== null && typeof patch.accepted_ref !== "string") {
+      throw new Error(`anim accepted_ref must be null or a string id, got ${JSON.stringify(patch.accepted_ref)}`);
+    }
+    out.accepted_ref = patch.accepted_ref;
+  }
+  if (!Object.keys(out).length) {
+    throw new Error(
+      "patchAnim requires at least one of motion, profile, seed, matte, gen_fps, loop, columns, trim, style_ref, accepted_ref",
+    );
+  }
+  return out;
+}
+
+// Same default frame as a recipe/style card — a workshop widget, purely cosmetic (the frame
+// never feeds generation; the flipbook box comes from the generated frame pixels).
+const DEFAULT_ANIM_CARD_SIZE = { w: 360, h: 280 };
+// Fit-to-content margin for the "Animate this image" promotion (F4): the card frame hugs the
+// member image by this much on every side. Was applied CLIENT-side (actions.js PAD=24); moved
+// into the op so the whole gesture is ONE journal entry.
+const ANIM_CARD_MEMBER_PAD = 24;
+
+// Mint an animation card: a group carrying a fresh `anim` blob (defaultAnim). Mirrors
+// createRecipeCard/createStyleCard exactly (bounds fallback, optional parentId, one journal
+// entry) except for the blob itself and its symmetric "cards do not nest inside cards" guard
+// (refuses a parent that carries recipe/style/anim).
+//
+// F4 — the "Animate this image" PROMOTION path: with `memberId`, the card FITS around that
+// image (member box + 24px pad) and the image is MOVED INSIDE as the first keyframe in this
+// SAME commit — ONE journal entry (the law "one gesture = one record", precedent
+// promoteExtractedRecipe/Style). The box is owned by fit, so explicit x/y/w/h alongside
+// memberId is a loud refusal (never a silent geometry fight). Refuses a member that is not an
+// image, is missing, or is already committed to another card (a member of a recipe/style/anim
+// card, or a claimed style ref — assignToGroup/applyStyleAutoRef claim refs on membership):
+// stealing it would silently strip the other card, so the lead duplicates the image first.
+export function createAnimCard(root, { projectId, name, x, y, w, h, parentId, memberId } = {}) {
+  if (!projectId) throw new Error("createAnimCard requires projectId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const groupId = `grp_${randomUUID().slice(0, 8)}`;
+  const cleanName = String(name || "").trim() || "Animation card";
+
+  const member = memberId == null || memberId === "" ? null : String(memberId);
+  let memberElement = null;
+  let bounds;
+  if (member != null) {
+    if (x !== undefined || y !== undefined || w !== undefined || h !== undefined) {
+      throw new Error("createAnimCard: pass memberId OR explicit x/y/w/h, not both — memberId fits the card around the image");
+    }
+    memberElement = (before.elements || []).find((el) => el.id === member);
+    if (!memberElement) throw new Error(`element not found: ${member}`);
+    if (memberElement.type !== "image" || !memberElement.src) {
+      throw new Error(`element ${member} is not an image — an animation card keyframe must be an image`);
+    }
+    const memberGroup = memberElement.groupId ? groupsOf(before).find((g) => g.id === memberElement.groupId) : null;
+    const inCard = !!(memberGroup && (memberGroup.recipe || memberGroup.style || memberGroup.anim));
+    const claimedStyleRef = groupsOf(before).some(
+      (g) => g.style && typeof g.style === "object" && g.style.ref === member,
+    );
+    if (inCard || claimedStyleRef) {
+      throw new Error(`element ${member} is already a member of a card (or a claimed style ref) — duplicate the image first`);
+    }
+    bounds = {
+      x: Math.round(Number(memberElement.x) - ANIM_CARD_MEMBER_PAD),
+      y: Math.round(Number(memberElement.y) - ANIM_CARD_MEMBER_PAD),
+      w: Math.round(Number(memberElement.w) + ANIM_CARD_MEMBER_PAD * 2),
+      h: Math.round(Number(memberElement.h) + ANIM_CARD_MEMBER_PAD * 2),
+    };
+  } else {
+    bounds = {
+      x: finite(x) ? Number(x) : 0,
+      y: finite(y) ? Number(y) : 0,
+      w: finite(w) && Number(w) > 0 ? Number(w) : DEFAULT_ANIM_CARD_SIZE.w,
+      h: finite(h) && Number(h) > 0 ? Number(h) : DEFAULT_ANIM_CARD_SIZE.h,
+    };
+  }
+
+  const parentScope = parentId == null || parentId === "" ? null : String(parentId);
+  if (parentScope != null) {
+    const parent = findGroup(before, parentScope); // loud error on an unknown parent
+    if (parent.recipe || parent.style || parent.anim) {
+      throw new Error(
+        `cannot create an animation card inside another card (parent ${parentScope} carries a card blob) — cards do not nest inside cards`,
+      );
+    }
+  }
+
+  const group = {
+    id: groupId,
+    name: cleanName,
+    x: bounds.x,
+    y: bounds.y,
+    w: bounds.w,
+    h: bounds.h,
+    visible: true,
+    anim: defaultAnim(),
+  };
+  if (parentScope != null) group.parentId = parentScope;
+  const groupFront = frontOrder(before, parentScope);
+  if (groupFront !== null) group.order = groupFront;
+
+  // Move the member into the fresh card scope as its first keyframe (same commit). The card has
+  // no children yet, so its scope is implicit (frontOrder null) — drop the member's old order so
+  // it sorts by the v1 fallback in the new scope (scopes never go half-explicit; mirrors
+  // assignToGroup). The member keeps its world position; the fitted frame surrounds it.
+  let nextElements = before.elements || [];
+  if (memberElement != null) {
+    nextElements = nextElements.map((el) => {
+      if (el.id !== member) return el;
+      const moved = { ...el, groupId };
+      delete moved.order;
+      return moved;
+    });
+  }
+
+  const after = updateProject(root, projectId, { groups: [...groupsOf(before), group], elements: nextElements });
+  const project = commitMutation(root, projectId, {
+    op: "createAnimCard",
+    args_summary: { groupId, name: cleanName, bounds, parentId: parentScope, ...(member != null ? { memberId: member } : {}) },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, group: (project.groups || []).find((item) => item.id === groupId) };
+}
+
+// Partial update of a card's `anim` blob (see normalizeAnimPatch; `last_run` is written by
+// generateAnimFromCard, not this general patch). Loud on a group that carries no `anim` at all
+// — a plain group (or a recipe/style card) is not an animation card. Project-aware pointer
+// validation (mirrors patchRecipe's style_ref) lives here, not in normalizeAnimPatch: a
+// non-null `style_ref` must resolve to a STYLE CARD group; a non-null `accepted_ref` must
+// resolve to an element carrying a flipbook blob. One journal entry; undo restores the prior
+// anim blob byte-exact (free via the group snapshot).
+export function patchAnim(root, { projectId, groupId, patch } = {}) {
+  if (!projectId) throw new Error("patchAnim requires projectId");
+  if (!groupId) throw new Error("patchAnim requires groupId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const current = findGroup(before, groupId);
+  if (!current.anim || typeof current.anim !== "object") {
+    throw new Error(`group is not an animation card (no anim blob): ${groupId}`);
+  }
+  const resolved = normalizeAnimPatch(patch); // validates BEFORE any write (type-level)
+  if (resolved.style_ref !== undefined && resolved.style_ref !== null) {
+    const styleCard = groupsOf(before).find((group) => group.id === resolved.style_ref);
+    if (!styleCard || !styleCard.style || typeof styleCard.style !== "object") {
+      throw new Error(`anim style_ref must be null or the id of an existing style-card group, got ${JSON.stringify(resolved.style_ref)}`);
+    }
+  }
+  if (resolved.accepted_ref !== undefined && resolved.accepted_ref !== null) {
+    const el = (before.elements || []).find((item) => item.id === resolved.accepted_ref);
+    if (!el || !el.flipbook || typeof el.flipbook !== "object") {
+      throw new Error(`anim accepted_ref must be null or the id of an existing flipbook element, got ${JSON.stringify(resolved.accepted_ref)}`);
+    }
+  }
+
+  const nextGroups = groupsOf(before).map((group) =>
+    group.id === groupId ? { ...group, anim: { ...group.anim, ...resolved } } : group,
+  );
+  const after = updateProject(root, projectId, { groups: nextGroups });
+  const project = commitMutation(root, projectId, {
+    op: "patchAnim",
+    args_summary: { groupId, patch: resolved },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, group: (project.groups || []).find((item) => item.id === groupId) };
+}
+
+// The card's keyframe IMAGE members in X order (tie-break Y, then id — design §5), visible ones
+// only (a hidden member never feeds generation, mirroring recipeCardMembers). The canvas hands
+// this ordered path list to the generator; FLF/piecewise is the generate stage's concern.
+function animCardKeyframes(project, cardId) {
+  return (project.elements || [])
+    .filter((el) => el.groupId === cardId && el.type === "image" && el.visible !== false)
+    .sort((a, b) => (a.x - b.x) || (a.y - b.y) || String(a.id).localeCompare(String(b.id)));
+}
+
+// The animation card's Generate button / `anim-generate` CLI verb / POST .../generate route.
+// An action on an ANIMATION CARD (`group.anim`) — structurally the twin of generateFromRecipe:
+// validate loudly, generate OUTSIDE the journal/lock (minutes; ComfyUI is GPU-exclusive), then
+// lock + re-read + refuseIfHeadMoved only around the final import+commit. Unlike
+// generateFromRecipe it imports the per-frame RGBA matte sequence (store.addFile, ONE file per
+// frame — NEVER a packed sheet, design decision 2) and mints a FLIPBOOK element beside the card
+// in its PARENT scope (never inside — a result can never become a keyframe feeding a future run
+// of the SAME card). Increment 1 is PLAIN I2V: exactly ONE keyframe (0 or empty motion / >1
+// keyframe are loud refusals). The generator seam is injectable (tests pass a fake
+// `generators.run`); the default runs the Track B generate->frames->matte stages
+// (tools/anim_generate.mjs). One commitMutation; one undo removes the flipbook element AND
+// reverts the card's anim.last_run together.
+export async function generateAnimFromCard(root, { projectId, groupId, generators } = {}) {
+  if (!projectId) throw new Error("generateAnimFromCard requires projectId");
+  if (!groupId) throw new Error("generateAnimFromCard requires groupId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const card = findGroup(before, groupId); // loud "group not found" on an unknown id
+  if (!card.anim || typeof card.anim !== "object") {
+    throw new Error(`group is not an animation card (no anim blob): ${groupId}`);
+  }
+  const anim = card.anim;
+  const cardLabel = card.name || groupId;
+
+  const motion = typeof anim.motion === "string" ? anim.motion.trim() : "";
+  if (!motion) {
+    throw new Error(`animation card "${cardLabel}" (${groupId}) has an empty motion — set one before generating`);
+  }
+
+  const keyframes = animCardKeyframes(before, groupId);
+  if (!keyframes.length) {
+    throw new Error(
+      `animation card "${cardLabel}" (${groupId}) has no keyframes — add a source image member before generating`,
+    );
+  }
+  if (keyframes.length > 1) {
+    throw new Error(
+      `animation card "${cardLabel}" (${groupId}) has ${keyframes.length} keyframes — increment 1 is plain I2V (1 keyframe); multi-keyframe FLF/piecewise is increment 3`,
+    );
+  }
+  const keyframePaths = keyframes.map((el) => resolveProjectFile(root, projectId, el.src));
+  const keyframeSrcs = keyframes.map((el) => el.src);
+
+  // Generation runs OUTSIDE the journal + lock (minutes; ComfyUI is GPU-exclusive), exactly
+  // like generateFromRecipe. The generator seam is injectable — the default orchestrates the
+  // Track B video stages (tools/anim_generate.mjs), tests inject a fake `run`.
+  const gen = generators && typeof generators.run === "function" ? generators : defaultAnimGenerators;
+  const at = new Date().toISOString();
+  const runResult = await gen.run({
+    keyframePaths,
+    motion,
+    profile: anim.profile,
+    seed: anim.seed,
+    matte: anim.matte,
+    gen_fps: anim.gen_fps,
+  });
+
+  const framePaths = runResult && Array.isArray(runResult.framePaths) ? runResult.framePaths : null;
+  if (!framePaths || !framePaths.length) {
+    throw new Error(`generateAnimFromCard: generator returned no frames for animation card "${cardLabel}" (${groupId})`);
+  }
+  const genMeta = (runResult && runResult.meta) || {};
+  const fps = Number(genMeta.fps);
+  if (!Number.isFinite(fps) || fps <= 0) {
+    throw new Error(`generateAnimFromCard: generator meta.fps must be a positive number, got ${JSON.stringify(genMeta.fps)}`);
+  }
+  // The RESOLVED seed the generator actually used — runGenerate rolls a random one when the
+  // card left seed=null, so provenance freezes the reproducible value, not `null`. The card's
+  // REQUESTED seed (anim.seed) stays untouched. Fall back to the requested seed only when a
+  // generator omits meta.seed (a refusal-path fake) — such a run never persists.
+  const resolvedSeed = Number.isFinite(Number(genMeta.seed)) ? Number(genMeta.seed) : anim.seed;
+  const runDir = runResult.runDir ?? null;
+  const playMode = anim.loop ? "loop" : "once"; // ping-pong is increment 2
+  const frameCount = framePaths.length;
+
+  // Locked around ONLY the final import+commit — the multi-minute generate above ran OUTSIDE
+  // it (see withProjectLock's doc in store.mjs). refuseIfHeadMoved runs BEFORE the
+  // store.addFile writes below, not just at commitMutation time (generateFromRecipe's law): an
+  // intermediate file/element write must never land un-journaled just because the FINAL commit
+  // refuses on a concurrent edit.
+  const { project, element, run } = await withProjectLock(root, projectId, () => {
+    const current = getProject(root, projectId);
+    refuseIfHeadMoved("generateAnimFromCard", before, current);
+    const currentCard = (current.groups || []).find((g) => g.id === groupId);
+    if (!currentCard) throw new Error(`group not found: ${groupId}`);
+
+    // Placement (§2): PARENT scope of the card, right of the frame (16px gap) — NEVER inside.
+    const parentScope = currentCard.parentId == null || currentCard.parentId === "" ? null : String(currentCard.parentId);
+    const gap = 16;
+    const x = currentCard.x + currentCard.w + gap;
+    const y = currentCard.y;
+
+    // Frozen per-run provenance written onto the minted element.
+    const animRun = {
+      cardId: groupId,
+      at,
+      motion,
+      profile: anim.profile,
+      seed: resolvedSeed,
+      matte: anim.matte,
+      gen_fps: anim.gen_fps,
+      keyframes: keyframeSrcs,
+      frame_count: frameCount,
+      runDir,
+      meta: { frame_w: genMeta.frame_w ?? null, frame_h: genMeta.frame_h ?? null, fps },
+    };
+
+    // Import frame 0 as the element's own file (src = frame 0, the fallback/thumbnail; its
+    // pixel dims ARE one frame -> the element box). Frames 1..N-1 import via store.addFile
+    // (content-addressed, no element). ONE file per frame, never a packed sheet (decision 2).
+    const frame0Bytes = readFileSync(framePaths[0]);
+    const added = storeAddImage(root, projectId, {
+      name: cardLabel,
+      bytes: frame0Bytes,
+      x,
+      y,
+      meta: { anim_run: animRun },
+    });
+    const elementId = added.element.id;
+    const frameW = added.element.w;
+    const frameH = added.element.h;
+    const frames = [{ src: added.element.src, kept: true }];
+    for (let i = 1; i < framePaths.length; i += 1) {
+      const bytes = readFileSync(framePaths[i]);
+      const file = storeAddFile(root, projectId, { bytes, name: basename(framePaths[i]) });
+      frames.push({ src: file.src, kept: true });
+    }
+
+    const flipbook = { v: 1, frames, fps, play_mode: playMode, frame_w: frameW, frame_h: frameH };
+
+    // Attach the flipbook blob + move the element into the PARENT scope, front-ordered when
+    // that scope is already explicitly ordered (mirrors generateFromRecipe's own remap).
+    const fo = frontOrder(before, parentScope);
+    const nextElements = (added.project.elements || []).map((el) => {
+      if (el.id !== elementId) return el;
+      let next = { ...el, flipbook };
+      if (parentScope != null) next = { ...next, groupId: parentScope };
+      if (fo !== null) next = { ...next, order: fo };
+      return next;
+    });
+
+    const lastRun = { at, result_element_id: elementId, verdict: "ok" };
+    const nextGroups = (added.project.groups || []).map((group) =>
+      group.id === groupId ? { ...group, anim: { ...group.anim, last_run: lastRun } } : group,
+    );
+
+    const run = {
+      id: `run_${randomUUID().slice(0, 8)}`,
+      op: "generate_anim_from_card",
+      cardId: groupId,
+      at,
+      params: {
+        motion_snapshot: motion,
+        profile: anim.profile,
+        seed: resolvedSeed,
+        matte: anim.matte,
+        gen_fps: anim.gen_fps,
+        keyframes: keyframeSrcs,
+      },
+      result_summary: { elementId, frame_count: frameCount, fps, play_mode: playMode, runDir },
+    };
+
+    const after = updateProject(root, projectId, {
+      elements: nextElements,
+      groups: nextGroups,
+      tool_runs: capToolRuns(root, projectId, [...(added.project.tool_runs || []), run]),
+    });
+
+    const project = commitMutation(root, projectId, {
+      op: "generateAnimFromCard",
+      args_summary: { groupId, elementId, frame_count: frameCount },
+      before,
+      after,
+      startedAt,
+    });
+    const element = (project.elements || []).find((el) => el.id === elementId);
+    return { project, element, run };
+  });
+
+  const group = (project.groups || []).find((g) => g.id === groupId);
+  return { project, element, group, run };
 }
 
 // ---- extractFromElement / promoteExtractedRecipe / promoteExtractedStyle (T0239
@@ -3680,6 +4164,9 @@ export function historyEntryLabel(op, args = {}) {
     case "generateFromRecipe": return { label: "Generate from recipe", summary: String(a.engine || "") };
     case "createStyleCard": return { label: "Style card", summary: String(a.name || "") };
     case "patchStyle": return { label: "Edit style", summary: "" };
+    case "createAnimCard": return { label: a.memberId ? "Anim card from image" : "Anim card", summary: String(a.name || "") };
+    case "patchAnim": return { label: "Edit anim card", summary: "" };
+    case "generateAnimFromCard": return { label: "Generate animation", summary: "" };
     case "expandRecipePrompt": return { label: "Expand prompt", summary: "" };
     case "extractFromElement": return { label: "Extract", summary: "" };
     case "promoteExtractedRecipe": return { label: "Recipe from extract", summary: "" };
@@ -3838,6 +4325,17 @@ function refuseIfTransformed(element, elementId) {
   throw new Error(
     `element ${elementId} is rotated/flipped — reset rotation/flip to edit regions or slice (the source is untransformed)`,
   );
+}
+
+// T0265 increment 1: a flipbook element's `element.src` is a plain COPY of `frames[0].src`
+// with no back-link. Any pixel op that SWAPS element.src (cleanup, alpha cutout, bake filters)
+// would leave frame 0 pointing at the OLD bytes forever — the static render and the first
+// animation frame would silently diverge. Per-frame editing arrives in increment 2; until then
+// these ops refuse a flipbook element loudly rather than corrupt it.
+function refuseIfFlipbook(element, elementId) {
+  if (element && element.flipbook && typeof element.flipbook === "object") {
+    throw new Error(`element ${elementId} has a flipbook — frame-level editing lands in increment 2`);
+  }
 }
 
 // Meaningful numbered names for freshly detected regions: "<base> 1..N" (base =
@@ -4445,6 +4943,7 @@ async function alphaCutoutSingle(root, projectId, before, elementId, chosen, reg
   if (!element) throw new Error(`element not found: ${elementId}`);
   if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
   refuseIfTransformed(element, elementId);
+  refuseIfFlipbook(element, elementId);
   // corridorkey regions (T0262): CorridorKey itself is always whole-frame — a region-scoped
   // request runs it once on the whole element and composites the result into the requested
   // regions (runCorridorKeyCutoutTool); no early refusal here anymore.
@@ -4493,6 +4992,7 @@ async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, sta
     if (!element) throw new Error(`element not found: ${elementId}`);
     if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
     refuseIfTransformed(element, elementId);
+    refuseIfFlipbook(element, elementId);
     return element;
   });
 
@@ -4669,6 +5169,7 @@ function resolveCleanupElement(project, elementId) {
   if (!element) throw new Error(`element not found: ${elementId}`);
   if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
   refuseIfTransformed(element, elementId);
+  refuseIfFlipbook(element, elementId);
   return element;
 }
 
@@ -4802,6 +5303,7 @@ function resolveBakeElement(project, elementId) {
   const element = (project.elements || []).find((item) => item.id === elementId);
   if (!element) throw new Error(`element not found: ${elementId}`);
   if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
+  refuseIfFlipbook(element, elementId);
   if (!hasBakeableFilters(element)) {
     throw new Error(`element ${elementId} has nothing to apply — filters are at defaults`);
   }
@@ -5846,7 +6348,7 @@ export async function exportProject(root, { projectId } = {}) {
   if (!projectId) throw new Error("exportProject requires projectId");
   const project = getProject(root, projectId);
   const visibleGroups = groupsOf(project).filter(
-    (group) => group.parentId == null && group.visible !== false && !group.recipe && !group.style,
+    (group) => group.parentId == null && group.visible !== false && !group.recipe && !group.style && !group.anim,
   );
   if (!visibleGroups.length) throw new Error("no visible screens to export (project export renders every visible top-level group)");
 
