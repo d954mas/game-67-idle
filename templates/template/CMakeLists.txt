@@ -202,7 +202,10 @@ if(FEATURE_GAME_STATE)
     if(GAME_DEVAPI_ENABLED)
         # A5: the DevAPI dispatch is a hand-written shell TU (universal over the
         # fragment registry), no longer a generated per-fragment source.
-        target_sources(${GAME_TARGET} PRIVATE src/game_save_devapi.c)
+        target_sources(${GAME_TARGET} PRIVATE
+            src/game_save_devapi.c
+            src/game_events_devapi.c   # E3: event-log tail ring + game.events.tail
+            src/game_event_render.c)   # E3: descriptor-driven JSON renderer
     endif()
 else()
     target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=0)
@@ -234,6 +237,10 @@ else()
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub glad stb_image_write)
 endif()
 if(GAME_DEVAPI_ENABLED)
+    # E3: readable event type/hash labels for game.events.tail. Consuming-CMake edit
+    # (engine tree untouched); devapi presets only -> no collision with native-debug's
+    # clean nt_hash (each preset has its own build/engine/<preset> tree).
+    target_compile_definitions(nt_hash PRIVATE NT_HASH_LABELS=1)
     if(EMSCRIPTEN)
         set(GAME_DEVAPI_TRANSPORT nt_devapi_web nt_platform_web)
     else()
@@ -394,6 +401,24 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_events_typed PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_events_typed COMMAND test_game_events_typed)
+
+    # E3: descriptor-driven renderer over the COMMITTED golden mini events + frozen E1
+    # transport. Native, no devapi (renderer is pure). Unconditional (golden is committed).
+    # nt_hash inherits the preset's NT_HASH_LABELS -> asserts are label-agnostic (HIGH-1):
+    # devapi-debug exercises the label branch, native-debug the hex branch.
+    add_executable(test_game_event_render
+        tests/test_game_event_render.c
+        src/game_event_render.c
+        src/game_state_json.c        # E3: gsj_i64_to_string (i64->string, MED-3)
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
+        src/game_events.c)
+    target_link_libraries(test_game_event_render PRIVATE unity cjson nt_hash nt_log nt_core)
+    target_include_directories(test_game_event_render PRIVATE
+        src "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+    target_compile_definitions(test_game_event_render PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_event_render PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_event_render COMMAND test_game_event_render)
 
     # E2 (M3): warning-gated compile check of the richest generated branches
     # (i64/f64/hash/bool/bytes+len, union staging, offset arithmetic) live ONLY in

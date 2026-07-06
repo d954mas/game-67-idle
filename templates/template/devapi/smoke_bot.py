@@ -47,6 +47,7 @@ REQUIRED_METHODS = {
     "capture.frame",
     "game.state.schema",
     "game.state.get",
+    "game.events.tail",
 }
 
 
@@ -147,6 +148,23 @@ def validate_game_state(state: Any) -> dict[str, Any]:
     return state
 
 
+def validate_events_tail(tail: Any) -> dict[str, Any]:
+    # E3: game.events.tail returns the render-at-copy ring window. The template emits no
+    # events by default, so `events` is typically []; validate SHAPE, tolerate empty.
+    if not isinstance(tail, dict):
+        raise DevApiError(f"game.events.tail returned {type(tail).__name__}, expected object")
+    if not isinstance(tail.get("events"), list):
+        raise DevApiError("game.events.tail missing 'events' array")
+    for key in ("next_seq", "dropped", "evicted"):
+        if not isinstance(tail.get(key), (int, float)):
+            raise DevApiError(f"game.events.tail missing numeric '{key}'")
+    for ev in tail["events"]:  # each rendered event is a self-contained object
+        if not isinstance(ev, dict) or not isinstance(ev.get("seq"), (int, float)) \
+                or not isinstance(ev.get("type"), str):
+            raise DevApiError("game.events.tail event missing seq/type")
+    return tail
+
+
 def wait_for_ui_id(game: Any, element_id: str, *, max_frames: int = 90, stride: int = 3) -> dict[str, Any]:
     last_error: Exception | None = None
     for _ in range(max(1, max_frames // max(1, stride))):
@@ -173,12 +191,13 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
 
     described = {
         method: game.result("command.describe", {"method": method})
-        for method in ("render.set_enabled", "ui.click", "capture.frame", "game.state.schema", "game.state.get")
+        for method in ("render.set_enabled", "ui.click", "capture.frame", "game.state.schema", "game.state.get", "game.events.tail")
     }
 
     closed_tree = wait_for_ui_id(game, "settings/gear")
     state_schema = validate_game_state_schema(game.result("game.state.schema"))
     state_before = validate_game_state(game.result("game.state.get", {"path": ""}))
+    events_tail = validate_events_tail(game.result("game.events.tail", {}))
     render_before = game.result("render.info")
     game.result("render.set_enabled", {"enabled": False})
     game.wait_frames(2)
@@ -193,7 +212,7 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
 
     screenshot = game.capture_screenshot(str(out_dir / "first_screen.png"), wait_frames=2, audit=audit)
     summary = {
-        "schema": "template.devapi_smoke.v3",
+        "schema": "template.devapi_smoke.v4",
         "method_count": len(methods),
         "required_methods": sorted(REQUIRED_METHODS),
         "described_methods": sorted(described.keys()),
@@ -201,6 +220,7 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
         "stable_ui_id": "settings/gear",
         "game_state_schema": state_schema,
         "game_state": state_before,
+        "events_tail": events_tail,
         "render_before": render_before,
         "render_disabled": render_disabled,
         "render_enabled": render_enabled,

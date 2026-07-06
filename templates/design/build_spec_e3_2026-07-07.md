@@ -146,6 +146,17 @@
 
 ## E3.3 Поверхность DevAPI: команда `game.events.tail` (tool parity)
 
+> **[ПОПРАВЛЕНО ночью 2026-07-07: offset-курсор против молчаливой потери seq=0; эмпирика
+> исполнителя; ждёт ратификации лида]** Транспорт E1 нумерует `seq` с НУЛЯ (`game_events.c:92`,
+> `s_seq=0` при init) → первое событие сессии имеет `seq==0`. Исходный контракт `seq > since_seq`
+> при дефолте `since_seq=0` МОЛЧА терял seq=0 (не в `dropped`/`evicted`) — каноническая идиома §E3.9
+> его не видела (подтверждено живьём: эмит seq 0,1,2 → `{}` возвращал только 1,2). Правка:
+> `since_seq` — ВКЛЮЧИТЕЛЬНАЯ нижняя граница (`seq >= since_seq`), `next_seq = seq_последнего+1`
+> (следующий оффсет; пусто → эхо `since`). Дефолт `since_seq=0` теперь отдаёт и seq=0; без дублей и
+> потерь. Идиома §E3.9 не меняется (`since = next_seq`). Прецедент оформления — правка §2 в
+> `event_system_design_2026-07-06.md` (фикс-арена). E4 курсор НЕ использует → потребителей старой
+> семантики нет.
+
 **Решение лида «7 команд» касалось СОХРАНЕНИЯ state-поверхности `game.state.*` (A5) — не
 запрета новых осмысленных команд.** Хвост событий — отдельный концерн (наблюдаемость, не
 стейт) → НОВАЯ команда `game.events.tail`, группа `"game"`, в НОВОМ TU (не в `game_save_devapi.c`).
@@ -161,16 +172,16 @@
 ```
 
 **Params (все опциональны — минимальная поверхность):**
-- `since_seq` (number, дефолт 0): вернуть только записи с `seq > since_seq` (инкрементальный
-  тайлинг; бот помнит `next_seq` прошлого ответа). Читается как double→uint64 (для debug-диапазона
-  seq точно; >2^53 — известная граница, §E3.13).
+- `since_seq` (number, дефолт 0): ВКЛЮЧИТЕЛЬНАЯ нижняя граница — вернуть записи с `seq >= since_seq`
+  (offset-курсор, поправка выше; инкрементальный тайлинг; бот помнит `next_seq` прошлого ответа).
+  Читается как double→uint64 (для debug-диапазона seq точно; >2^53 — известная граница, §E3.13).
 - `limit` (number, дефолт = 256): максимум записей за вызов, клампится в `[1, 256]`. Возвращаются
   СТАРЕЙШИЕ подходящие (ascending seq) → бот проходит бэклог инкрементально, без пропусков.
 
 **Response (`result_obj`):**
 ```json
-{ "events": [ {<рендер>}, ... ],   // oldest -> newest, seq > since_seq, до limit
-  "next_seq": <u64>,               // seq последнего возвращённого (или since_seq, если пусто)
+{ "events": [ {<рендер>}, ... ],   // oldest -> newest, seq >= since_seq, до limit
+  "next_seq": <u64>,               // seq последнего возвращённого + 1 (следующий оффсет; since, если пусто)
   "dropped": <u64>,                // game_events_dropped() — переполнение арены/лога (health)
   "evicted": <u64> }               // кумулятивные вытеснения ринга (бот отстал -> потеря)
 ```
@@ -394,16 +405,17 @@ static bool ep_events_tail(const cJSON *params, cJSON *result_obj, nt_devapi_err
     cJSON *events = cJSON_AddArrayToObject(result_obj, "events");
     if (!events) return state_fail(err, "internal", "failed to build events array");
     uint64_t next = since; int emitted = 0;
-    /* обход СТАРЕЙШИЙ->НОВЕЙШИЙ: oldest index = (head - count + CAP) % CAP */
+    /* обход СТАРЕЙШИЙ->НОВЕЙШИЙ: oldest index = (head - count + CAP) % CAP.
+       offset-курсор (поправка §E3.3): sq >= since (ВКЛЮЧИТЕЛЬНО), next = sq+1 (эхо since, если пусто). */
     uint32_t idx = (s_ring_head + GAME_EVENTS_TAIL_RING_CAP - s_ring_count) % GAME_EVENTS_TAIL_RING_CAP;
     for (uint32_t k = 0; k < s_ring_count && emitted < limit; ++k) {
         uint64_t sq = s_ring_seq[idx];
-        if (sq > since) {
+        if (sq >= since) {
             /* Слот ВСЕГДА валидный JSON (§E3.4) -> cJSON_Parse = ВТОРОЙ гейт валидности.
                cJSON_CreateRaw отвергнут: требует CJSON_RAW-сборки + transport-cJSON_Print и
                слепо пробрасывает возможный мусор в общий ответ; Parse портируем (ядро cJSON). */
             cJSON *obj = cJSON_Parse(s_ring[idx]);
-            if (obj) { cJSON_AddItemToArray(events, obj); next = sq; emitted++; }
+            if (obj) { cJSON_AddItemToArray(events, obj); next = sq + 1u; emitted++; }
         }
         idx = (idx + 1u) % GAME_EVENTS_TAIL_RING_CAP;
     }
@@ -617,12 +629,12 @@ def validate_events_tail(tail: Any) -> dict[str, Any]:
 
 ## E3.9 Канон-идиом бота (тайл-опрос; образец для агентов)
 ```python
-since = 0
+since = 0                     # offset-курсор: 0 отдаёт ВСЁ, включая seq=0 (поправка §E3.3)
 while polling:
     tail = game.result("game.events.tail", {"since_seq": since, "limit": 128})
     for ev in tail["events"]:
-        handle(ev)            # {seq, tick, type, <поля...>}
-    since = tail["next_seq"]  # курсор -> следующий опрос
+        handle(ev)            # {seq, tick, type, <поля...>}; since_seq ВКЛЮЧИТЕЛЬНО
+    since = tail["next_seq"]  # = seq последнего + 1 (следующий оффсет); без дублей/потерь
     if tail["evicted"] or tail["dropped"]:
         warn("event backlog lost — poll faster or raise caps")
 ```

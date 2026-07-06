@@ -42,6 +42,9 @@
 
 #include "features/game_features.h"
 #include "game_events.h"
+#if FEATURE_GAME_STATE && NT_DEVAPI_ENABLED
+#include "game_events_devapi.h" /* E3: game.events.tail (tail ring + recorder) */
+#endif
 #include "render/capture.h"
 #include "render/render_mesh.h"
 #include "systems/sys_settings.h"
@@ -151,6 +154,7 @@ static bool devapi_start(void) {
     nt_devapi_register_default();
 #if FEATURE_GAME_STATE
     game_save_register_devapi();
+    game_events_register_devapi(); // E3: game.events.tail (+ enables the recorder)
 #endif
 #ifdef NT_DEVAPI_GROUP_UI
     nt_devapi_ui_register_context("hud", ui_runtime_ctx());
@@ -361,6 +365,9 @@ int main(int argc, char **argv) {
     game_events_init(); // type-hashes/labels need hash init; arena is gfx-independent
 #if FEATURE_GAME_STATE
     game_ev_register(); // register typed-event debug labels (effect under NT_HASH_LABELS, E3)
+#if NT_DEVAPI_ENABLED
+    game_events_devapi_register_descs(game_ev_descs, game_ev_desc_count); // E3: tail descriptors
+#endif
 #endif
     nt_resource_init(&(nt_resource_desc_t){0});
     nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader, nt_gfx_deactivate_shader);

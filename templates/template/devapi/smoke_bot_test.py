@@ -41,6 +41,8 @@ class FakeGame:
                     "game": {"tutorial": {"done": False}, "inventory": {"item_ids": []}},
                 },
             }
+        if method == "game.events.tail":
+            return {"events": [], "next_seq": 0, "dropped": 0, "evicted": 0}
         if method == "frame.current":
             return {"frame": 1}
         raise AssertionError(f"unexpected method: {method}")
@@ -89,6 +91,14 @@ class SmokeBotTest(unittest.TestCase):
         with self.assertRaises(smoke_bot.DevApiError):
             smoke_bot.validate_game_state_schema({})
 
+    def test_validate_events_tail_accepts_empty_and_rejects_bad(self):
+        ok = {"events": [], "next_seq": 0, "dropped": 0, "evicted": 0}
+        self.assertIs(smoke_bot.validate_events_tail(ok), ok)
+        with self.assertRaises(smoke_bot.DevApiError):  # events not a list
+            smoke_bot.validate_events_tail({"events": 0, "next_seq": 0, "dropped": 0, "evicted": 0})
+        with self.assertRaises(smoke_bot.DevApiError):  # missing numeric field
+            smoke_bot.validate_events_tail({"events": []})
+
     def test_default_executable_uses_ai_studio_game_exe_override(self):
         old = os.environ.get("AI_STUDIO_GAME_EXE")
         os.environ["AI_STUDIO_GAME_EXE"] = "C:/tmp/game.exe"
@@ -108,6 +118,7 @@ class SmokeBotTest(unittest.TestCase):
             self.assertEqual(summary["action"], "render.set_enabled false -> true")
             self.assertEqual(summary["game_state_schema"]["game"]["schema"], "game_seed.state")
             self.assertEqual(summary["game_state"]["path"], "")
+            self.assertIn("events_tail", summary)
             self.assertTrue(summary["render_enabled"]["enabled"])
             self.assertTrue(Path(summary["summary"]).exists())
             self.assertTrue(Path(summary["screenshot"]).exists())
