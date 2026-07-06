@@ -7,6 +7,10 @@
 #include "ui/nt_ui_slider.h"
 #include "ui/theme.h"
 
+#if FEATURE_GAME_STATE
+#include "game_save.h"
+#endif
+
 #include <stdio.h>
 
 // Walker batches RECTs/IMAGEs first, then TEXT, within each Clay zIndex — so a
@@ -30,11 +34,21 @@ float sys_settings_sfx(void) { return s_sfx; }
 static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, float *value) {
     char buf[48];
     (void)snprintf(buf, sizeof buf, "%s   %d%%", name, (int)(*value * 100.0F + 0.5F));
+#if FEATURE_GAME_STATE
+    const float before = *value;
+#endif
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 4}}) {
         nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), buf, &g_theme.label);
         (void)nt_ui_slider_float(ctx, NT_UI_DATA_LAYER(LAYER_IMG), LAYER_TEXT, nt_ui_id(id), NULL, value, 0.0F, 1.0F, 0.0F, &g_theme.slider,
                                  &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(380), CLAY_SIZING_FIXED(30)}}}, true);
     }
+#if FEATURE_GAME_STATE
+    // Demo autosave (A3): any settings change kicks the dirty/debounce loop. The
+    // DevAPI-write -> dirty bridge is A5; this one line keeps the loop live in-app.
+    if (*value != before) {
+        game_save_mark_dirty();
+    }
+#endif
 }
 
 void sys_settings_ui(nt_ui_context_t *ctx, World *w) {

@@ -156,10 +156,18 @@ if(FEATURE_GAME_STATE)
         "${GAME_STATE_GENERATED_SOURCE}"
         src/game_state_json.c
         src/game_storage.c
+        src/game_save.c              # A3
+        src/game_fragment.c          # A3
         state/migrations/v0_to_v1.c
     )
     target_link_libraries(${GAME_TARGET} PRIVATE cjson)
     target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=1)
+    target_compile_definitions(${GAME_TARGET} PRIVATE
+        GAME_SAVE_AUTOSAVE_SLOT="autosave"
+        GAME_SAVE_DEBOUNCE_MS=2000
+        GAME_SAVE_MAX_INTERVAL_MS=30000
+        GAME_SAVE_DOC_VERSION=1
+    )
     target_include_directories(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DIR}")
     if(GAME_DEVAPI_ENABLED)
         target_sources(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DEVAPI}")
@@ -273,5 +281,23 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_storage PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_storage COMMAND test_game_storage
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+
+    add_executable(test_game_save
+        tests/test_game_save.c
+        src/game_save.c src/game_storage.c src/game_state_json.c)
+    target_link_libraries(test_game_save PRIVATE cjson unity)
+    target_include_directories(test_game_save PRIVATE src)
+    target_compile_definitions(test_game_save PRIVATE
+        GAME_SAVE_TESTING=1
+        GAME_STORAGE_APP_ID="template_test"
+        GAME_SAVE_AUTOSAVE_SLOT="test_slot"
+        GAME_SAVE_DEBOUNCE_MS=2000
+        GAME_SAVE_MAX_INTERVAL_MS=30000
+        GAME_SAVE_DOC_VERSION=1
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_save PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_save COMMAND test_game_save
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 endif()

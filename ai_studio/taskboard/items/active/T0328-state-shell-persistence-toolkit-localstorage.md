@@ -81,6 +81,20 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
 
 ## Log
 
+- 2026-07-07: A1 ГОТОВ (c8bcbb63): game_state_json 11 gsj_* + 4 i64,
+  40 тестов, warning-clean все конфиги. A2 ГОТОВ (aef4a88d): slot API
+  7 функций + 3 compat-обёртки (DevAPI жив), атомарность+bak+карантин
+  (уникальные имена), web localStorage APP_ID; краш-набор прошёл deep-
+  ревью (ACCEPT-WITH-ADDITIONS → 18 тестов, все добивки внесены).
+  Попутно: web parity шаблона ПОЧИНЕН (8c2295d2) — wasm-release снова
+  линкуется (capture.c мёртвый guard, main.c unused под web, EMSCRIPTEN-
+  ветка NT_PRESET_NAME против interleave кэша движка; корни в шаблоне,
+  движок чист, issue не нужен). A3 ГОТОВ: game_save конверт+реестр+
+  load-автомат (FRESH/LOADED/RECOVERED_BAK/CORRUPT_RESET/NEWER)+debounce
+  +export/import+transform-шов+web flush; фрагмент game последним;
+  13/13 тестов, 5 конфигов чистые; advisory web-проверка PASS —
+  конверт переживает reload в localStorage (исходный web-блокер T3
+  ЗАКРЫТ). S2+S4-эквиваленты в Done when выполнены.
 - 2026-07-06 (ночь): A0/S1 ампутация ВЫПОЛНЕНА и проверена независимо:
   выхлоп генератора байт-идентичен на обеих схемах, тесты 4/4. Удалено
   ~1538 строк (933 .c.in + 493 генератор + 108 сирота rb-dark + 4 CMake);

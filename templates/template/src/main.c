@@ -48,7 +48,9 @@
 #include "ui/ui_runtime.h"
 #include "world/world.h"
 #if FEATURE_GAME_STATE
+#include "game_save.h"
 #include "game_state.h"
+extern const GameSaveFragment game_fragment;
 #endif
 
 #include <stdbool.h>
@@ -72,6 +74,10 @@ static World s_world;
 static char s_capture_path[260];
 static bool s_capture;
 static bool s_open_settings_on_start;
+#if FEATURE_GAME_STATE
+static bool s_fresh_state;
+static bool s_disable_autosave;
+#endif
 static int s_window_width = 1280;
 static int s_window_height = 720;
 static int s_frame_count;
@@ -241,6 +247,14 @@ static void frame(void) {
     // game systems update the world (settings logic now lives in its nt_ui build)
     sys_move(&s_world, g_nt_app.dt);
 
+#if FEATURE_GAME_STATE
+    // Autosave: debounced flush after game systems (and, when E1 lands, after the
+    // record phase). --disable-autosave freezes it for deterministic bots.
+    if (!s_disable_autosave) {
+        game_save_tick();
+    }
+#endif
+
     nt_gfx_begin_frame();
     if (g_nt_gfx.context_restored) {
         nt_resource_invalidate(NT_ASSET_SHADER_CODE);
@@ -291,8 +305,14 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "invalid --window-size, expected WIDTHxHEIGHT\n");
                 return 2;
             }
-        } else if (strcmp(argv[i], "--fresh-state") == 0 || strcmp(argv[i], "--disable-autosave") == 0) {
-            /* Accepted for shared runtime automation launch compatibility; the template has no save flow yet. */
+        } else if (strcmp(argv[i], "--fresh-state") == 0) {
+#if FEATURE_GAME_STATE
+            s_fresh_state = true; /* skip load, start from reset defaults */
+#endif
+        } else if (strcmp(argv[i], "--disable-autosave") == 0) {
+#if FEATURE_GAME_STATE
+            s_disable_autosave = true; /* keep loading, but never autosave */
+#endif
 #if NT_DEVAPI_ENABLED
         } else if (strcmp(argv[i], "--devapi") == 0 && i + 1 < argc) {
             s_devapi_requested = true;
@@ -343,6 +363,23 @@ int main(int argc, char **argv) {
     nt_text_renderer_init();
 #if FEATURE_GAME_STATE
     game_state_init();
+    game_save_register_fragment(&game_fragment); /* `game` is the only fragment, hence also last */
+    game_save_init();
+    if (!s_fresh_state) {
+        game_save_load_result_t load_result;
+        game_save_load(&load_result);
+        if (load_result.status == GAME_SAVE_LOAD_CORRUPT_RESET) {
+            /* load already did reset()+quarantine but NOT on_new_game (Р10); new_game() is the
+               single on_new_game on this path and also resumes autosave. */
+            char save_err[128];
+            (void)game_save_new_game(save_err, (int)sizeof save_err);
+        }
+        /* NEWER/RECOVERED_BAK: a game may show a toast (advisory); autosave is already
+           paused on NEWER, and RECOVERED_BAK has already rewritten the primary. */
+    }
+#ifdef NT_PLATFORM_WEB
+    game_save_install_web_flush();
+#endif
 #endif
 
     s_pack_id = nt_hash32_str("game");

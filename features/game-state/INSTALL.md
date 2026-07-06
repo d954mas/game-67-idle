@@ -22,6 +22,9 @@ project:
   src/game_state_json.h
   src/game_storage.c
   src/game_storage.h
+  src/game_save.c
+  src/game_save.h
+  src/game_fragment.c
 ```
 
 Then add CMake wiring equivalent to `templates/template/CMakeLists.txt`:
@@ -46,6 +49,26 @@ inside code that is compiled only when DevAPI is enabled:
 /* after core/runtime init */
 #if FEATURE_GAME_STATE
 game_state_init();
+game_save_register_fragment(&game_fragment); /* register all fragments; `game` last */
+game_save_init();                            /* after all fragments are registered */
+if (!fresh_state) {
+    game_save_load_result_t r;
+    game_save_load(&r);                      /* orchestrates FRESH/LOADED/RECOVERED/CORRUPT/NEWER */
+    if (r.status == GAME_SAVE_LOAD_CORRUPT_RESET) {
+        char err[128];
+        (void)game_save_new_game(err, (int)sizeof err); /* only on_new_game on this path */
+    }
+}
+#ifdef NT_PLATFORM_WEB
+game_save_install_web_flush();               /* synchronous visibility/pagehide flush */
+#endif
+#endif
+
+/* per frame, after the game systems (and, with E1, after the record phase) */
+#if FEATURE_GAME_STATE
+if (!disable_autosave) {
+    game_save_tick();                        /* debounced autosave */
+}
 #endif
 
 /* inside the DevAPI startup path, after nt_devapi_register_default() */
@@ -53,6 +76,11 @@ game_state_init();
 game_state_register_devapi();
 #endif
 ```
+
+Compile `src/game_save.c` and `src/game_fragment.c` with the generated
+`game_state.c` (both under `FEATURE_GAME_STATE`), and define the save knobs
+(`GAME_SAVE_AUTOSAVE_SLOT`, `GAME_SAVE_DEBOUNCE_MS`, `GAME_SAVE_MAX_INTERVAL_MS`,
+`GAME_SAVE_DOC_VERSION`) — see `templates/template/CMakeLists.txt`.
 
 ## Enable / Disable
 
