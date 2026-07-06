@@ -112,6 +112,25 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
 
 ## Log
 
+- 2026-07-07 (ночь): E4 ГОТОВ — ВСЕ ИНКРЕМЕНТЫ ПЛАНА (A0-A6, E1-E4)
+  ЗАКРЫТЫ. Аналитика-писатель: game_analytics.{c,h} — пассивный
+  подписчик RECORD-фазы, реюз E3-рендерера (0 правок), NDJSON:
+  header-строка сессии + событие-в-строку; native = буферизованный
+  append в build/analytics/session-<wall>-<pid>.ndjson (посегментный
+  mkdir, флаш по порогу, кап 8МБ keep-oldest-stop, override =0); web =
+  in-memory ring 256КБ keep-newest-roll + инертный export (localStorage
+  запрещён квотой itch); evicted() отдельно от dropped() («0 on
+  healthy» — правда). Встроенный fragment-less log-тип
+  (game_log.{c,h}, рукописный дескриптор, оба реестра: виден и в
+  game.events.tail, и в NDJSON — доказано живьём). FEATURE_GAME_ANALYTICS
+  определён всегда (=0/1), дефолт = devapi-семья, flag-not-mute и
+  gate-independence доказаны сборками. DevAPI-команды нет — смоук не
+  тронут, tool parity не задет. 9/9 ctest ×2 пресета, 4 сборки чистые,
+  wasm TU компилятся, живой NDJSON 294 события seq 0→293. Спека 2
+  ревью (16 фиксов) + deep-ревью реализации (ACCEPT-WITH-ADDITIONS,
+  всё LOW/doc — внесено). Наблюдение: bot-harness гасит процесс
+  terminate'ом — shutdown-флаш не бежит под ботом (потеря ≤ порога
+  флаша, by design; чистый выход флашит).
 - 2026-07-07 (ночь): E3 ГОТОВ: DevAPI-команда game.events.tail —
   фикс-ринг 256×512 render-at-copy (события рендерятся в RECORD-фазе
   при живой арене в самодостаточные JSON-строки; указатели арены через

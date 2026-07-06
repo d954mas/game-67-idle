@@ -3,6 +3,9 @@
 #if FEATURE_GAME_STATE && NT_DEVAPI_ENABLED
 #include "game_events_devapi.h" /* E3: DevAPI tail recorder */
 #endif
+#if FEATURE_GAME_ANALYTICS
+#include "game_analytics.h" /* E4: local analytics NDJSON writer */
+#endif
 
 /* Что стало «фичей» в скелете (E1 решение): НИЧТО формально (папок
    src/features/<id>/ E1 не создаёт — отдельный трек, feature_architecture §4
@@ -51,7 +54,9 @@ void game_features_record(World *w) {
 #if FEATURE_GAME_STATE && NT_DEVAPI_ENABLED
     game_events_devapi_record(); /* E3: DevAPI tail — render-at-copy into the ring */
 #endif
-    /* TODO(E4): analytics recorder (event §6) */
+#if FEATURE_GAME_ANALYTICS
+    game_analytics_record(); /* E4: local analytics NDJSON writer (arena alive; reads only) */
+#endif
 }
 
 void game_features_draw_world(World *w) { (void)w; /* TODO: см. §E1.5 */ }

@@ -42,8 +42,12 @@
 
 #include "features/game_features.h"
 #include "game_events.h"
+#include "game_log.h" /* E4.B: built-in "log" event type (unconditional leaf) */
 #if FEATURE_GAME_STATE && NT_DEVAPI_ENABLED
 #include "game_events_devapi.h" /* E3: game.events.tail (tail ring + recorder) */
+#endif
+#if FEATURE_GAME_ANALYTICS
+#include "game_analytics.h" /* E4: local analytics NDJSON writer */
 #endif
 #include "render/capture.h"
 #include "render/render_mesh.h"
@@ -369,6 +373,17 @@ int main(int argc, char **argv) {
     game_events_devapi_register_descs(game_ev_descs, game_ev_desc_count); // E3: tail descriptors
 #endif
 #endif
+    game_log_register(); // E4.B: debug label "log" (UNCONDITIONAL; game_log.c is a leaf)
+#if FEATURE_GAME_STATE
+#if NT_DEVAPI_ENABLED
+    game_events_devapi_register_descs(game_log_descs, game_log_desc_count); // E3 tail: log type (append)
+#endif
+#if FEATURE_GAME_ANALYTICS
+    game_analytics_register_descs(game_ev_descs, game_ev_desc_count);   // E4: fragment descs (append)
+    game_analytics_register_descs(game_log_descs, game_log_desc_count); // E4: log type (append)
+    game_analytics_init();                                             // E4: open stream + header
+#endif
+#endif // FEATURE_GAME_STATE
     nt_resource_init(&(nt_resource_desc_t){0});
     nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader, nt_gfx_deactivate_shader);
     nt_resource_set_activator(NT_ASSET_MESH, nt_gfx_activate_mesh, nt_gfx_deactivate_mesh);
@@ -468,6 +483,9 @@ int main(int argc, char **argv) {
     devapi_shutdown_runtime();
     ui_runtime_shutdown();
     game_features_shutdown(&s_world);
+#if FEATURE_GAME_ANALYTICS
+    game_analytics_shutdown(); // E4: final flush + close (before event infra teardown)
+#endif
     game_events_shutdown();
     nt_mem_scratch_shutdown();
     nt_text_renderer_shutdown();

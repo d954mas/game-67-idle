@@ -57,6 +57,20 @@ else()
     endforeach()
 endif()
 
+# E4: GAME_ANALYTICS_ENABLED gates the local analytics writer. A -D override wins (a cache
+# entry -> DEFINED -> persists between configures); otherwise the default = GAME_DEVAPI_ENABLED
+# as a PLAIN variable (recomputed EVERY configure, so flipping GAME_DEVAPI_ENABLED in a live
+# tree updates it -- a CACHE...FORCE default would go stale). NOT CACHE on the default path.
+if(NOT DEFINED GAME_ANALYTICS_ENABLED)
+    set(GAME_ANALYTICS_ENABLED ${GAME_DEVAPI_ENABLED})
+endif()
+# Analytics CONSTRUCTIVELY needs FEATURE_GAME_STATE (cJSON + generated descriptors + the E3
+# renderer); force it OFF when state is OFF so the flag never dangles (gate-independence).
+if(GAME_ANALYTICS_ENABLED AND NOT FEATURE_GAME_STATE)
+    message(STATUS "GAME_ANALYTICS_ENABLED requires FEATURE_GAME_STATE; disabling analytics.")
+    set(GAME_ANALYTICS_ENABLED OFF)
+endif()
+
 # Shared engine (one copy, referenced not copied). Templates and games live one
 # folder below the repo groups, so the engine is two levels up.
 set(ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../external/neotolis-engine")
@@ -116,6 +130,7 @@ endif()
 add_executable(${GAME_TARGET}
     src/main.c
     src/game_events.c            # E1
+    src/game_log.c               # E4.B: built-in "log" event type (unconditional leaf)
     src/features/game_features.c # E1
     src/ui/hud.c
     src/ui/ui_runtime.c
@@ -207,6 +222,15 @@ if(FEATURE_GAME_STATE)
             src/game_events_devapi.c   # E3: event-log tail ring + game.events.tail
             src/game_event_render.c)   # E3: descriptor-driven JSON renderer
     endif()
+    # E4: the E3 renderer is ALSO the analytics writer's dependency. When devapi is OFF but
+    # analytics is ON, pull it in here -- guarded against the devapi block's copy above so it
+    # is never listed twice (E3 lines untouched; the renderer compiles if EITHER wants it).
+    if(GAME_ANALYTICS_ENABLED AND NOT GAME_DEVAPI_ENABLED)
+        target_sources(${GAME_TARGET} PRIVATE src/game_event_render.c)   # E3 renderer (shared with E4)
+    endif()
+    if(GAME_ANALYTICS_ENABLED)
+        target_sources(${GAME_TARGET} PRIVATE src/game_analytics.c)      # E4: local analytics writer
+    endif()
 else()
     target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=0)
 endif()
@@ -263,6 +287,10 @@ target_compile_definitions(${GAME_TARGET} PRIVATE
     NT_INTROSPECT_WRITE_ENABLED=$<BOOL:${NT_INTROSPECT_WRITE_ENABLED}>
     _CRT_SECURE_NO_WARNINGS
 )
+# E4: FEATURE_GAME_ANALYTICS is defined ALWAYS (1/0) at target level -- game_features.c and
+# main.c carry #if FEATURE_GAME_ANALYTICS unconditionally, and an undefined macro under
+# -Wundef + -Werror would fail native-debug/release. Mirrors NT_DEVAPI_ENABLED=0.
+target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_ANALYTICS=$<BOOL:${GAME_ANALYTICS_ENABLED}>)
 # GAME_STORAGE_APP_ID namespaces the shared web-origin (itch) localStorage; "template" is
 # the template's own default, games override it (A2).
 target_compile_definitions(${GAME_TARGET} PRIVATE GAME_STORAGE_APP_ID="template")
@@ -419,6 +447,31 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_event_render PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_event_render COMMAND test_game_event_render)
+
+    # E4: analytics writer over the COMMITTED golden mini events + the built-in log type +
+    # frozen E1 transport. Native, sink + clock injected (GAME_ANALYTICS_TESTING). Links
+    # game_state_json.c (game_event_render calls gsj_i64_to_string for FT_I64 -- undefined
+    # ref otherwise) and game_log.c (case #7 emits a log event). Label-agnostic asserts.
+    add_executable(test_game_analytics
+        tests/test_game_analytics.c
+        src/game_analytics.c
+        src/game_event_render.c   # E3 renderer (reused)
+        src/game_state_json.c     # gsj_i64_to_string (FT_I64 -> string link)
+        src/game_log.c            # case #7 game_log_emit
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
+        src/game_events.c)
+    target_link_libraries(test_game_analytics PRIVATE unity cjson nt_hash nt_log nt_core)
+    target_include_directories(test_game_analytics PRIVATE
+        src "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+    target_compile_definitions(test_game_analytics PRIVATE
+        FEATURE_GAME_ANALYTICS=1 GAME_ANALYTICS_TESTING=1
+        GAME_ANALYTICS_BUF_BYTES=256u        # small buffer -> threshold/drop are cheap
+        GAME_ANALYTICS_FLUSH_BYTES=192u
+        GAME_STORAGE_APP_ID="template_test"  # header app field
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_analytics PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_analytics COMMAND test_game_analytics)
 
     # E2 (M3): warning-gated compile check of the richest generated branches
     # (i64/f64/hash/bool/bytes+len, union staging, offset arithmetic) live ONLY in
