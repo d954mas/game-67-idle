@@ -243,3 +243,7 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
   сохраняет = блокер, JSON остаётся, автосейв-топология предрешена:
   debounced-on-dirty + visibilitychange + saved_at).
 - 2026-07-06: status fix: in_progress -> doing (invalid enum, board validate)
+- 2026-07-07: последний хвост «живой web-shim round-trip» ЗАКРЫТ через
+  T0333 (613afce55): tests/web_devapi_check.py PASS — endpoints → 49
+  команд, command.describe → дескриптор, всё через window.__devapi.submit
+  в headless Chrome. Карточка полностью готова, закрывает лид.
