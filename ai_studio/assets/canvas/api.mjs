@@ -403,11 +403,15 @@ export function createCanvasApi(root) {
       // /api/canvas/projects/<id>/alpha
       // Alpha-cutout the element's current pixels (whole element, or only the given stored
       // region ids) via the image-tools matte pipeline; swaps the element to a new alpha PNG
-      // (one journal entry). method "auto" (route), "matte" (force key_matte), or "corridorkey"
+      // (one journal entry). method "auto" (route), "matte" (force key_matte), "corridorkey"
       // (T0261/T0262 — neural GREEN-screen matte for soft glow art; green native, magenta via a
       // hue180 shim, ~15s GPU; a key that is neither is a loud refusal; regions composite the
-      // whole-frame CK result into the requested regions). elementIds (2+ images) batches a
-      // multi-selection into ONE journal entry/undo (regions are not allowed with a batch).
+      // whole-frame CK result into the requested regions), "vitmatte" (T0335 — neural thin-detail /
+      // 2nd-choice-glow matte on a green/magenta key, own GPU venv, ~1-3s, whole-element only), or
+      // "birefnet" (T0335 — SOD cutout for an arbitrary/unknown background with no key, shared repo
+      // venv CPU ~10-30s, whole-element only). elementIds (2+ images) batches a multi-selection into
+      // ONE journal entry/undo (regions are not allowed with a batch). Body is a passthrough — the op
+      // validates the method + surfaces every refusal.
       if (parts.length === 5 && sub === "alpha" && req.method === "POST") {
         const body = await readJsonBody(req);
         sendMutation(200, await locked(id, () => alphaCutout(root, {

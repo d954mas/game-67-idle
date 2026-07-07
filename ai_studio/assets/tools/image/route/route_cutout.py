@@ -9,6 +9,12 @@ Two cutout paths, disjoint problems:
     mathematically unrecoverable from ONE background, so it needs a white+black
     plate pair (gen_dual_plate.sh) instead.
 
+Beyond these two, the canvas exposes EXPLICIT-only neural alpha methods this
+router never emits: corridorkey (glow on a green/magenta key, first choice),
+vitmatte (thin detail / fur / mesh on a key), and birefnet (arbitrary background,
+NO key). See README.md "Что и когда" for the full lead-ratified routing table.
+The key_matte-vs-dual_plate discriminator below is UNCHANGED by those.
+
 This module decides which, FROM THE SINGLE FLAT-KEY SOURCE, so the choice can be
 made before a generation is spent. Discriminator: the fraction of "partial"
 keyness mass -- pixels that are a blend of key + foreground spread over a wide

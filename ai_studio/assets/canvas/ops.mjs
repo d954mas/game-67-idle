@@ -84,6 +84,10 @@ import { runAnimateFromText } from "./tools/animation_assist.mjs";
 // header too); it pulls in no torch/heavy deps at import time — the CorridorKey venv is only
 // spawned at call time, and a missing videoGenRoot/CK venv is that module's own LOUD error.
 import { runCorridorKey } from "../tools/video/matte/matte.mjs";
+// Direct child spawn wrapper (quiet capture -> {code, stdout, stderr}) reused for the vitmatte
+// TOOL-VENV run — its own GPU-torch venv is invoked directly, never through the shared warm worker
+// (which is the shared repo interpreter). Same spawn helper the video pipeline uses for CorridorKey.
+import { runProcess } from "../tools/video/_lib.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
@@ -5595,16 +5599,26 @@ export async function packSlice(root, { projectId, groupId, runGroupId } = {}) {
 
 // Accepted alpha methods on the canvas: the auto route (soft_score router picks key_matte, and
 // refuses a wide soft zone that would need a dual-plate pair), an explicit key_matte force, and
-// an explicit "corridorkey" — the neural CorridorKey green-screen matte for soft glow / translucent
-// / soft-edge art (T0261, magenta shim + regions T0262 follow-up). corridorkey is EXPLICIT-ONLY:
-// the auto router never yields it (it routes only key_matte|dual_plate); it is scoped to GREEN
-// (native) and MAGENTA (via a hue+180 shim) border keys — any OTHER key is a LOUD refusal, never a
-// silent fringe; it costs a ~13-16s cold GPU model load per call, so it is never a silent default;
-// and region scoping composites the CK whole-frame result into the requested regions (CK itself is
-// always whole-frame — there is no per-region neural pass). alpha_dualplate needs a white+black
-// plate PAIR — a single elementId call can't provide one, so asking for it here is a loud error that
-// points at the separate alphaDualPlate op (T0237), which takes 2 elementIds instead.
-const ALPHA_METHODS = new Set(["auto", "matte", "corridorkey"]);
+// three EXPLICIT-ONLY neural methods — "corridorkey", "vitmatte", "birefnet" — the auto router
+// NEVER yields any of them (it routes only key_matte|dual_plate). Their niches (lead-ratified,
+// alpha-methods-portfolio bench 2026-07-07):
+//   - "corridorkey" — neural CorridorKey green-screen matte for soft glow / translucent / soft-edge
+//     art (T0261, magenta shim + regions T0262). GREEN native + MAGENTA via a hue+180 shim; any
+//     OTHER key is a LOUD refusal; ~13-16s cold GPU load; region scoping composites the whole-frame
+//     CK result into the requested regions (CK itself has no per-region pass). FIRST choice for glow.
+//   - "vitmatte" — ViTMatte alpha matting for THIN detail (spider-web / mesh / fur / hair) on a flat
+//     GREEN/MAGENTA key, and the SECOND-priority glow keyer after corridorkey. Its OWN GPU-torch
+//     venv (never the shared repo venv); a key that is neither green nor magenta is a LOUD refusal
+//     pointing at matte/alphaDualPlate; ~1-3s GPU; WHOLE-ELEMENT only in v1 (region-scoped is a loud
+//     refusal). Weights carry an Adobe-DIM noncommercial caveat (local-only, T0335 gate).
+//   - "birefnet" — BiRefNet-general SOD cutout for an ARBITRARY/unknown background with NO chroma
+//     key at all (its niche is exactly where route_cutout finds no flat key, so it has NO key gate);
+//     shared repo venv (CPU onnxruntime, ~10-30s); MIT; weak on flat line-art; WHOLE-ELEMENT only in
+//     v1 (region-scoped is a loud refusal).
+// alpha_dualplate needs a white+black plate PAIR — a single elementId call can't provide one, so
+// asking for it here is a loud error that points at the separate alphaDualPlate op (T0237), which
+// takes 2 elementIds instead; a translucent uniform interior (ghost/glass) is dual-plate ONLY.
+const ALPHA_METHODS = new Set(["auto", "matte", "corridorkey", "vitmatte", "birefnet"]);
 
 // Resolve the optional region-id selection against the element's STORED regions (same
 // model as slice's regionIds), so moved/resized/hand-drawn regions key exactly where they
@@ -5887,13 +5901,197 @@ async function runCorridorKeyCutoutTool(root, projectId, element, invoke, specRe
   }
 }
 
-// Route ONE element to the right keyer: key_matte via alpha_cutout.py (auto/matte, regions-aware) or
+// ---- vitmatte (neural ViTMatte alpha matting; T0335, alpha-methods-portfolio bench 2026-07-07) ---
+//
+// ViTMatte is an EXPLICIT alpha method scoped to THIN detail (spider-web / mesh / fur / hair) on a
+// flat GREEN/MAGENTA key, and the SECOND-priority glow keyer after corridorkey. Two hard rules from
+// the tool contract: it runs in its OWN GPU-torch venv (never the shared repo .venv — cu128 torch
+// must not enter it), and a missing/broken venv is a LOUD error naming the exact setup script (no
+// fallback). Like corridorkey it has a KEY GATE (green/magenta only) and NO auto-router entry.
+const VITMATTE_DIR = "ai_studio/assets/tools/image/vitmatte_matte";
+const VITMATTE_SCRIPT = `${VITMATTE_DIR}/vitmatte_matte.py`;
+const VITMATTE_SETUP = `node ${VITMATTE_DIR}/setup_python.mjs`;
+
+// Resolve ViTMatte's OWN venv interpreter; a missing venv is a LOUD refusal naming the setup script
+// — surface the tool's own no-fallback message, never key with a different method silently.
+function resolveVitmattePython(root) {
+  const abs = join(root, VITMATTE_DIR, ".venv", "Scripts", "python.exe");
+  if (!existsSync(abs)) {
+    throw new Error(
+      `vitmatte requires its OWN GPU-torch venv (not the shared repo .venv) and it is not installed ` +
+        `at ${abs}. Create it: run \`${VITMATTE_SETUP}\` from the repo root, then retry. No fallback ` +
+        `— vitmatte is a deliberate, GPU-backed choice.`,
+    );
+  }
+  return abs;
+}
+
+// LOUD refusal (before the GPU model load) for a key ViTMatte cannot auto-trimap: names the detected
+// key and the methods to use instead. Reuses corridorkey's green/magenta classifier — the same two
+// keys the canvas conveyor keys against. NOTE: ViTMatte's auto-trimap is chroma-DISTANCE-to-key math
+// (matte_math.build_auto_trimap), which is itself key-AGNOSTIC (works for any flat key), but its
+// T1=70 / T2=150 trimap thresholds were tuned once on a MAGENTA fixture (opaque_hard_scavenger) and
+// frozen — so green + magenta are the two keys we gate to here.
+function assertVitmatteSupportedKey(key) {
+  if (classifyCorridorKeyBorder(key)) return;
+  const [r, g, b] = Array.isArray(key) ? key : [];
+  throw new Error(
+    `vitmatte auto-trimaps against a flat GREEN or MAGENTA key — the border key of this element is ` +
+      `rgb(${r}, ${g}, ${b}), which is neither. Use method "matte" (key_matte) for other flat keys, ` +
+      `"birefnet" for an arbitrary/unknown background, or the alphaDualPlate op for a neutral ` +
+      `(non-chroma) background.`,
+  );
+}
+
+// The DEFAULT (real, GPU-backed) ViTMatte invocation. Injectable via the op's `vitmatte` option so
+// tests fake the GPU run with no GPU/venv in the suite — the same seam shape as `corridorKey`.
+// Steps: (1) KEY GATE — estimate the border key (route_cutout, warm repo venv, sub-second) and
+// LOUD-refuse a non-green/non-magenta key BEFORE the model load; (2) spawn the TOOL-VENV python on
+// the staged element pixels with `--key R,G,B` (the detected key) + `--report`; despill is on by
+// default (the tool's default). Writes a straight RGBA PNG to `outAbs` and returns a canvas alpha
+// report mirroring corridorkey's shape.
+async function defaultVitmatteInvoke(root, { sourceAbs, outAbs }) {
+  const key = await estimateBorderKeyRgb(root, sourceAbs);
+  assertVitmatteSupportedKey(key);
+  const python = resolveVitmattePython(root); // LOUD if the tool venv is missing
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-vitmatte-"));
+  try {
+    const reportPath = join(workDir, "vitmatte_report.json");
+    const argv = [
+      join(root, VITMATTE_SCRIPT),
+      "--in", sourceAbs,
+      "--key", key.join(","),
+      "--out", outAbs,
+      "--report", reportPath,
+    ];
+    // quiet:true — the tool's stdout must never reach the CLI's JSON channel; we read the report file.
+    const { code, stdout, stderr } = await runProcess(python, argv, { cwd: root, quiet: true });
+    if (code !== 0) {
+      // Surface the tool's OWN message (setup-script pointer on a broken venv, license refusal,
+      // argparse error) as ONE clean line — never a swallowed or partial failure (no-fallbacks law).
+      throw new Error((stderr || stdout || `vitmatte exited with code ${code}`).trim());
+    }
+    if (!existsSync(outAbs)) throw new Error(`vitmatte produced no RGBA output at ${outAbs}`);
+    const tool = JSON.parse(readFileSync(reportPath, "utf8"));
+    return {
+      schema: "ai_studio.canvas.alpha_cutout_report.v1",
+      method: "vitmatte",
+      tool: "vitmatte",
+      model: tool.model,
+      device: tool.device,
+      despill: tool.despill !== false,
+      license: "code MIT; weights local-only (Adobe-DIM caveat, T0335 gate)",
+      seconds: tool.seconds,
+      key_color: key,
+      region_count: 0,
+      regions: [{ id: "*element*", method: "vitmatte", routed: "vitmatte", key }],
+    };
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// Run ONE element's CURRENT pixels through ViTMatte (own temp dir) — the vitmatte sibling of
+// runCorridorKeyCutoutTool, so the single AND batch paths swap src / record provenance / undo
+// BYTE-IDENTICALLY to key_matte. `invoke` is the injectable seam (default defaultVitmatteInvoke).
+// v1 is WHOLE-ELEMENT ONLY: a region-scoped request is a loud refusal (ViTMatte has no per-region
+// trimap pass here — corridorkey is the region-scoped neural path, or matte for a region key cut).
+async function runVitmatteCutoutTool(root, projectId, element, invoke, specRegions) {
+  if (specRegions) {
+    throw new Error(
+      'vitmatte is whole-element only (v1) — use method "corridorkey" for region-scoped neural ' +
+        'keying, or "matte" for a region-scoped key_matte cut.',
+    );
+  }
+  const sourceAbs = resolveProjectFile(root, projectId, element.src);
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-alpha-vm-"));
+  try {
+    const outPath = join(workDir, "alpha_out.png");
+    const report = await (invoke || defaultVitmatteInvoke)(root, { sourceAbs, outAbs: outPath });
+    const bytes = readFileSync(outPath);
+    const newSrc = storeAddFile(root, projectId, { bytes, name: `${slug(element.name)}.png` }).src;
+    return { newSrc, report };
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// ---- birefnet (BiRefNet-general SOD cutout; T0335, alpha-methods-portfolio bench 2026-07-07) -----
+//
+// BiRefNet is the EXPLICIT alpha method for an ARBITRARY/unknown background with NO chroma key at
+// all — its niche is exactly where route_cutout finds no flat key, so it has NO key gate (calling
+// the key detector would be wrong). It runs in the SHARED repo venv (studio.config pythonPath) via
+// the same warm-worker bridge every other canvas python tool uses (runToolPython), CPU onnxruntime
+// ~10-30s. MIT; weak on flat line-art (a documented routing nuance, not a bug). No auto-router entry.
+
+// The DEFAULT BiRefNet invocation. Injectable via the op's `birefnet` option so tests fake the
+// ~10-30s CPU run — the same seam shape as `corridorKey`. NO key gate. Writes a straight RGBA PNG to
+// `outAbs` and returns a canvas alpha report mirroring corridorkey's shape (no key_color — no key).
+async function defaultBirefnetInvoke(root, { sourceAbs, outAbs }) {
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-birefnet-"));
+  try {
+    const reportPath = join(workDir, "birefnet_report.json");
+    await runToolPython(root, [
+      "ai_studio/assets/tools/image/birefnet_cutout/birefnet_cutout.py",
+      "--in", sourceAbs,
+      "--out", outAbs,
+      "--report", reportPath,
+    ]);
+    if (!existsSync(outAbs)) throw new Error(`birefnet produced no RGBA output at ${outAbs}`);
+    const tool = JSON.parse(readFileSync(reportPath, "utf8"));
+    return {
+      schema: "ai_studio.canvas.alpha_cutout_report.v1",
+      method: "birefnet",
+      tool: "birefnet",
+      model: tool.model,
+      device: tool.device,
+      license: "MIT (rembg + BiRefNet-general)",
+      seconds: tool.seconds,
+      region_count: 0,
+      regions: [{ id: "*element*", method: "birefnet", routed: "birefnet" }],
+    };
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// Run ONE element's CURRENT pixels through BiRefNet (own temp dir) — the birefnet sibling of
+// runCorridorKeyCutoutTool. NO key gate (arbitrary-background niche). v1 is WHOLE-ELEMENT ONLY: a
+// region-scoped request is a loud refusal.
+async function runBirefnetCutoutTool(root, projectId, element, invoke, specRegions) {
+  if (specRegions) {
+    throw new Error(
+      'birefnet is whole-element only (v1) — it cuts the whole image against its own background ' +
+        'model; use method "matte" for a region-scoped key_matte cut.',
+    );
+  }
+  const sourceAbs = resolveProjectFile(root, projectId, element.src);
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-alpha-bn-"));
+  try {
+    const outPath = join(workDir, "alpha_out.png");
+    const report = await (invoke || defaultBirefnetInvoke)(root, { sourceAbs, outAbs: outPath });
+    const bytes = readFileSync(outPath);
+    const newSrc = storeAddFile(root, projectId, { bytes, name: `${slug(element.name)}.png` }).src;
+    return { newSrc, report };
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// Route ONE element to the right keyer: key_matte via alpha_cutout.py (auto/matte, regions-aware),
 // the neural CorridorKey tool (explicit, green native / magenta shim, region composite when
-// requested). Both return the identical { newSrc, report } contract so the single + batch commit
-// paths stay method-agnostic.
-async function runOneAlphaKeyer(root, projectId, element, chosen, specRegions, corridorKey) {
+// requested), ViTMatte (explicit, green/magenta thin detail, own GPU venv), or BiRefNet (explicit,
+// arbitrary background, no key). All return the identical { newSrc, report } contract so the single
+// + batch commit paths stay method-agnostic. Each neural method has its own injectable seam.
+async function runOneAlphaKeyer(root, projectId, element, chosen, specRegions, corridorKey, vitmatte, birefnet) {
   if (chosen === "corridorkey") {
     return runCorridorKeyCutoutTool(root, projectId, element, corridorKey, specRegions);
+  }
+  if (chosen === "vitmatte") {
+    return runVitmatteCutoutTool(root, projectId, element, vitmatte, specRegions);
+  }
+  if (chosen === "birefnet") {
+    return runBirefnetCutoutTool(root, projectId, element, birefnet, specRegions);
   }
   return runAlphaCutoutTool(root, projectId, element, chosen, specRegions);
 }
@@ -5938,11 +6136,29 @@ function buildAlphaProvenance(elementId, chosen, specRegions, report, parentSrc)
       per_frame_seconds: report.per_frame_seconds ?? null,
     };
   }
+  // vitmatte provenance (T0335): the neural thin-detail / second-priority-glow keyer, its own GPU
+  // venv. Record the model + license + despill flag + GPU seconds so the run is auditable, mirroring
+  // the CK block above. key_color is the detected border key (set generically above from report).
+  if (report && report.tool === "vitmatte") {
+    alphaMeta.tool = "vitmatte";
+    alphaMeta.model = report.model;
+    alphaMeta.license = report.license;
+    alphaMeta.despill = report.despill;
+    alphaMeta.timings = { seconds: report.seconds ?? null };
+  }
+  // birefnet provenance (T0335): the arbitrary-background (no-key) SOD cutout, shared repo venv (CPU
+  // onnxruntime). No key_color (there is no key). Record model + license + seconds.
+  if (report && report.tool === "birefnet") {
+    alphaMeta.tool = "birefnet";
+    alphaMeta.model = report.model;
+    alphaMeta.license = report.license;
+    alphaMeta.timings = { seconds: report.seconds ?? null };
+  }
   return { run, alphaMeta };
 }
 
 // Single-element path (unchanged behavior/journal shape from before batching landed).
-async function alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt, corridorKey) {
+async function alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt, corridorKey, vitmatte, birefnet) {
   const element = (before.elements || []).find((item) => item.id === elementId);
   if (!element) throw new Error(`element not found: ${elementId}`);
   if (element.type !== "image" || !element.src) throw new Error(`element ${elementId} is not an image`);
@@ -5953,7 +6169,7 @@ async function alphaCutoutSingle(root, projectId, before, elementId, chosen, reg
   // regions (runCorridorKeyCutoutTool); no early refusal here anymore.
   const specRegions = resolveAlphaRegions(element, regions);
 
-  const { newSrc, report } = await runOneAlphaKeyer(root, projectId, element, chosen, specRegions, corridorKey);
+  const { newSrc, report } = await runOneAlphaKeyer(root, projectId, element, chosen, specRegions, corridorKey, vitmatte, birefnet);
 
   // Re-read to avoid clobbering concurrent edits, then swap src + record provenance on the
   // SAME element (previous src file stays in files/, so undo restores the exact bytes).
@@ -5988,7 +6204,7 @@ async function alphaCutoutSingle(root, projectId, before, elementId, chosen, reg
 // "mutated" in the non-destructive sense). Only once EVERY element has keyed
 // successfully does this commit ONE journal entry swapping every src + every
 // element.meta.alpha — one undo restores every element byte-exact.
-async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt, corridorKey) {
+async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt, corridorKey, vitmatte, birefnet) {
   const ids = elementIds.map((value) => String(value));
   const unique = [...new Set(ids)];
   const elements = unique.map((elementId) => {
@@ -6002,7 +6218,7 @@ async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, sta
 
   const processed = [];
   for (const element of elements) {
-    const { newSrc, report } = await runOneAlphaKeyer(root, projectId, element, chosen, null, corridorKey);
+    const { newSrc, report } = await runOneAlphaKeyer(root, projectId, element, chosen, null, corridorKey, vitmatte, birefnet);
     processed.push({ elementId: element.id, newSrc, report });
   }
 
@@ -6051,11 +6267,15 @@ async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, sta
 // key_matte modules unmodified (no matte logic duplicated in node or a second python impl);
 // ops writes an alpha spec (absolute source path + method + the element's selected regions
 // with their exact rects) and spawns it once through the shared warm worker. `method` is
-// "auto" (route), "matte" (force key_matte), or "corridorkey" (T0261/T0262 — the explicit neural
+// "auto" (route), "matte" (force key_matte), "corridorkey" (T0261/T0262 — the explicit neural
 // green-screen matte for soft glow/translucent art; green native, magenta via a hue180 shim, ~15s
-// GPU cold, via runCorridorKeyCutoutTool, NOT the warm worker); a wide soft zone under "auto" is a
-// loud error (dual-plate pair needed — no silent single-plate fallback), as is a non-image element
-// or an unknown method. `regions` is an optional list of the element's stored region ids: given, the
+// GPU cold, via runCorridorKeyCutoutTool, NOT the warm worker), "vitmatte" (T0335 — explicit neural
+// thin-detail / second-priority-glow matte on a green/magenta key, its OWN GPU-torch venv, ~1-3s,
+// whole-element only), or "birefnet" (T0335 — explicit SOD cutout for an arbitrary/unknown
+// background with no key at all, shared repo venv CPU ~10-30s, whole-element only). vitmatte/birefnet
+// are EXPLICIT-ONLY like corridorkey (the auto router never yields them); a wide soft zone under
+// "auto" is a loud error (dual-plate pair needed — no silent single-plate fallback), as is a
+// non-image element or an unknown method. `regions` is an optional list of the element's stored region ids: given, the
 // alpha is applied ONLY inside those region masks and the rest is untouched (region-mask
 // composition happens IN python, one worker call — for corridorkey this composites the whole-frame
 // CK result into the requested regions, since CK itself has no per-region pass); omitted, the whole
@@ -6065,7 +6285,7 @@ async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, sta
 // run (method, params, parent src, routing metrics) like slice provenance, plus a tool_runs row.
 // `elementIds` (2+ images), given INSTEAD of `elementId`, batches a multi-selection into ONE
 // journal entry (T0230) — see alphaCutoutBatch; `regions` is not accepted with a batch.
-export async function alphaCutout(root, { projectId, elementId, elementIds, method, regions, corridorKey } = {}) {
+export async function alphaCutout(root, { projectId, elementId, elementIds, method, regions, corridorKey, vitmatte, birefnet } = {}) {
   if (!projectId) throw new Error("alphaCutout requires projectId");
   const batch = elementIds !== undefined && elementIds !== null;
   if (batch && elementId != null) {
@@ -6093,15 +6313,18 @@ export async function alphaCutout(root, { projectId, elementId, elementIds, meth
           `(API POST /alpha-dual, CLI alpha-dual) instead, or use method "auto"/"matte" on a single image.`,
       );
     }
-    throw new Error(`unknown alpha method ${JSON.stringify(method)} (expected "auto", "matte", or "corridorkey")`);
+    throw new Error(
+      `unknown alpha method ${JSON.stringify(method)} ` +
+        `(expected "auto", "matte", "corridorkey", "vitmatte", or "birefnet")`,
+    );
   }
   const startedAt = performance.now();
   const before = getProject(root, projectId);
 
   if (batch) {
-    return alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt, corridorKey);
+    return alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt, corridorKey, vitmatte, birefnet);
   }
-  return alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt, corridorKey);
+  return alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt, corridorKey, vitmatte, birefnet);
 }
 
 // ---- cleanup: Quantize + Denoise (own Python tools, src-swap) ----------------

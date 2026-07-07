@@ -642,7 +642,11 @@ function renderRegions(element, root) {
 // are selected in region-edit mode, else the whole element). "CorridorKey (green glow)"
 // (T0261) is the neural green-screen matte for soft glow/translucent art — GREEN keys only
 // (a non-green key is a loud refusal pointing at Key matte), whole-element (no region scope),
-// and a ~15s GPU run behind the same long-op busy toast. "Dual-plate (generate)" runs
+// and a ~15s GPU run behind the same long-op busy toast. "ViTMatte (thin detail)" (T0335) is
+// the neural thin-detail / 2nd-choice-glow matte on a green/magenta key (its own GPU venv, ~1-3s,
+// whole-element only); "BiRefNet (any bg)" (T0335) cuts a ready image on an arbitrary/unknown
+// background with NO key (CPU ~25s, whole-element only) — both explicit-only, both long-op.
+// "Dual-plate (generate)" runs
 // the automatic T0238 flow — flat-light-bg check -> generated dark plate (codex, minutes)
 // -> gate -> ONE NEW cut element beside the source; no region scoping (the pair tool cuts
 // the whole plate). Both long-op via the queue + progress toast (mirrors Slice).
@@ -655,7 +659,10 @@ function renderAlpha(element, root) {
   methodSel.className = "insp-input";
   // T0261: "CorridorKey (green glow)" is the explicit neural green-screen matte for soft
   // glow/translucent art — green-only, whole-element, and a ~15s GPU run (its own busy toast).
-  for (const [value, label] of [["matte", "Key matte"], ["corridorkey", "CorridorKey (green glow)"], ["dual", "Dual-plate"]]) {
+  // T0335: "ViTMatte (thin detail)" (green/magenta key, own GPU venv, ~1-3s) and "BiRefNet (any bg)"
+  // (no key, CPU ~25s) are the two new explicit neural methods — both WHOLE-ELEMENT only (never a
+  // region scope), both behind the same long-op busy toast.
+  for (const [value, label] of [["matte", "Key matte"], ["corridorkey", "CorridorKey (green glow)"], ["vitmatte", "ViTMatte (thin detail)"], ["birefnet", "BiRefNet (any bg)"], ["dual", "Dual-plate"]]) {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = label;
@@ -677,6 +684,16 @@ function renderAlpha(element, root) {
       alphaBtn.textContent = "Alpha cutout (neural ~15s)";
       return;
     }
+    if (methodSel.value === "vitmatte") {
+      // ViTMatte is whole-element only and GPU-neural (~1-3s on its own venv) — say so.
+      alphaBtn.textContent = "Alpha cutout (neural ~1-3s)";
+      return;
+    }
+    if (methodSel.value === "birefnet") {
+      // BiRefNet is whole-element only and CPU-neural (~25s, no key) — say so; it is a long op.
+      alphaBtn.textContent = "Alpha cutout (neural ~25s)";
+      return;
+    }
     const ids = selectedRegionIdsFor(element);
     alphaBtn.textContent = ids.length ? `Alpha cutout (${ids.length})` : "Alpha cutout";
   };
@@ -691,6 +708,16 @@ function renderAlpha(element, root) {
     if (methodSel.value === "corridorkey") {
       // Whole-element only — never pass region ids (the op refuses corridorkey+regions loudly).
       alphaCutoutFor(element.id, "corridorkey", undefined, alphaBtn);
+      return;
+    }
+    if (methodSel.value === "vitmatte") {
+      // Whole-element only — never pass region ids (the op refuses vitmatte+regions loudly).
+      alphaCutoutFor(element.id, "vitmatte", undefined, alphaBtn);
+      return;
+    }
+    if (methodSel.value === "birefnet") {
+      // Whole-element only — never pass region ids (the op refuses birefnet+regions loudly).
+      alphaCutoutFor(element.id, "birefnet", undefined, alphaBtn);
       return;
     }
     const ids = selectedRegionIdsFor(element);

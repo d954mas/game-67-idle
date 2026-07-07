@@ -670,6 +670,255 @@ test("corridorkey (real key gate) refuses a NEUTRAL key with a clean message BEF
   assert.deepEqual(getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id), original, "element untouched after a refusal");
 });
 
+// ---- vitmatte + birefnet (T0335: two EXPLICIT-only neural methods; bench 2026-07-07) ----
+//
+// Both real paths spend real GPU/CPU seconds (+ a one-time model download), so the suite NEVER runs
+// them: each inference is an injectable seam (`vitmatte` / `birefnet` on the op — the same
+// `corridorKey` precedent) that tests fake. The vitmatte key gate (route_cutout, shared repo venv,
+// NO GPU) is exercised by the neutral-key refusal test, which skips cleanly without the studio venv.
+// No live model runs here.
+
+// A fake ViTMatte invocation: writes a valid RGBA PNG to outAbs and returns a canvas alpha report,
+// so the op's src-swap/provenance/undo/journal contract runs with NO GPU/venv. The key gate lives in
+// the REAL invoke (route_cutout + classifyCorridorKeyBorder); this fake bypasses it (unit-covered).
+function fakeVitmatte(bytes = softGlowPng()) {
+  const calls = { n: 0 };
+  const invoke = (root, { outAbs }) => {
+    calls.n += 1;
+    writeFileSync(outAbs, bytes);
+    return {
+      schema: "ai_studio.canvas.alpha_cutout_report.v1",
+      method: "vitmatte",
+      tool: "vitmatte",
+      model: "hustvl/vitmatte-base-composition-1k",
+      device: "cuda",
+      despill: true,
+      license: "code MIT; weights local-only (Adobe-DIM caveat, T0335 gate)",
+      seconds: 1.4,
+      key_color: [255, 0, 255],
+      region_count: 0,
+      regions: [{ id: "*element*", method: "vitmatte", routed: "vitmatte", key: [255, 0, 255] }],
+    };
+  };
+  return { invoke, calls };
+}
+
+// A fake BiRefNet invocation: same shape, but NO key_color (birefnet has no chroma key) and the
+// CPU-onnxruntime device string the real tool reports.
+function fakeBirefnet(bytes = softGlowPng()) {
+  const calls = { n: 0 };
+  const invoke = (root, { outAbs }) => {
+    calls.n += 1;
+    writeFileSync(outAbs, bytes);
+    return {
+      schema: "ai_studio.canvas.alpha_cutout_report.v1",
+      method: "birefnet",
+      tool: "birefnet",
+      model: "birefnet-general",
+      device: "cpu-onnxruntime",
+      license: "MIT (rembg + BiRefNet-general)",
+      seconds: 12.3,
+      region_count: 0,
+      regions: [{ id: "*element*", method: "birefnet", routed: "birefnet" }],
+    };
+  };
+  return { invoke, calls };
+}
+
+test("alphaCutout unknown-method error names all five methods (auto/matte/corridorkey/vitmatte/birefnet)", async (t) => {
+  tempProjects(t);
+  const project = createProject(UNUSED_ROOT, { title: "Alpha five methods" });
+  const { element } = addImage(UNUSED_ROOT, project.id, { name: "s.png", bytes: magentaSheetPng() });
+  await assert.rejects(
+    () => alphaCutout(UNUSED_ROOT, { projectId: project.id, elementId: element.id, method: "bogus" }),
+    (error) => {
+      assert.match(error.message, /unknown alpha method/);
+      for (const method of ["auto", "matte", "corridorkey", "vitmatte", "birefnet"]) {
+        assert.match(error.message, new RegExp(method), `error lists ${method}`);
+      }
+      return true;
+    },
+  );
+});
+
+test("vitmatte + birefnet are explicit-only: each seam runs ONLY for its own method (auto/matte/corridorkey never yield it)", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "vm/bn method table" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "a.png", bytes: magentaSheetPng() });
+
+  // Explicit vitmatte: its seam runs once; the birefnet seam is never touched.
+  const vm = fakeVitmatte();
+  const bn = fakeBirefnet();
+  const res = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "vitmatte", vitmatte: vm.invoke, birefnet: bn.invoke });
+  assert.equal(vm.calls.n, 1, "vitmatte seam invoked once for method=vitmatte");
+  assert.equal(bn.calls.n, 0, "birefnet seam untouched by method=vitmatte");
+  assert.equal(res.element.meta.alpha.method, "vitmatte");
+
+  // No explicit method reaches either neural seam (auto/matte route to key_matte; corridorkey to CK
+  // — a CK fake stands in so the suite never spends the real GPU here). The spies stay put.
+  const ck = fakeCorridorKey();
+  for (const method of ["auto", "matte", "corridorkey"]) {
+    const p = createProject(REPO_ROOT, { title: `vm/bn not-${method}` });
+    const { element: el } = addImage(REPO_ROOT, p.id, { name: "b.png", bytes: magentaSheetPng() });
+    try {
+      await alphaCutout(REPO_ROOT, { projectId: p.id, elementId: el.id, method, corridorKey: ck.invoke, vitmatte: vm.invoke, birefnet: bn.invoke });
+    } catch {
+      // venv miss / refusal — irrelevant; the point is the spy counts below.
+    }
+    assert.equal(vm.calls.n, 1, `vitmatte seam not called for method=${method}`);
+    assert.equal(bn.calls.n, 0, `birefnet seam not called for method=${method}`);
+  }
+});
+
+test("vitmatte (faked GPU run) swaps src + records provenance/timings; ONE undo restores byte-exact, redo re-applies", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "vitmatte provenance" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "web.png", bytes: magentaSheetPng() });
+  const original = getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id);
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+  const vm = fakeVitmatte();
+
+  const result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "vitmatte", vitmatte: vm.invoke });
+  assert.equal(vm.calls.n, 1);
+  assert.notEqual(result.element.src, original.src, "src swapped to a new alpha file");
+  assert.equal(result.element.w, original.w, "geometry preserved (w)");
+  assert.equal(result.element.h, original.h, "geometry preserved (h)");
+  const meta = result.element.meta.alpha;
+  assert.equal(meta.method, "vitmatte");
+  assert.equal(meta.tool, "vitmatte");
+  assert.equal(meta.parentSrc, original.src);
+  assert.equal(meta.model, "hustvl/vitmatte-base-composition-1k");
+  assert.equal(meta.despill, true, "despill flag recorded");
+  assert.match(meta.license, /MIT/, "license recorded");
+  assert.match(meta.license, /local-only/, "weights-local-only caveat recorded");
+  assert.deepEqual(meta.key_color, [255, 0, 255], "detected key recorded");
+  assert.equal(typeof meta.timings.seconds, "number", "GPU seconds recorded");
+  assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "vitmatte keying is one journal entry");
+
+  assert.ok(existsSync(resolveProjectFile(REPO_ROOT, project.id, original.src)), "original file kept on disk");
+  const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "undo restores the exact pre-alpha element");
+  const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.equal(redone.elements.find((el) => el.id === element.id).src, result.element.src, "redo re-applies the alpha src");
+});
+
+test("birefnet (faked CPU run) swaps src + records provenance (no key_color); ONE undo restores byte-exact, redo re-applies", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "birefnet provenance" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "busy.png", bytes: magentaSheetPng() });
+  const original = getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id);
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+  const bn = fakeBirefnet();
+
+  const result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "birefnet", birefnet: bn.invoke });
+  assert.equal(bn.calls.n, 1);
+  assert.notEqual(result.element.src, original.src, "src swapped to a new alpha file");
+  assert.equal(result.element.w, original.w, "geometry preserved (w)");
+  assert.equal(result.element.h, original.h, "geometry preserved (h)");
+  const meta = result.element.meta.alpha;
+  assert.equal(meta.method, "birefnet");
+  assert.equal(meta.tool, "birefnet");
+  assert.equal(meta.parentSrc, original.src);
+  assert.equal(meta.model, "birefnet-general");
+  assert.match(meta.license, /MIT/, "license recorded");
+  assert.equal(meta.key_color, undefined, "birefnet records no chroma key");
+  assert.equal(typeof meta.timings.seconds, "number", "CPU seconds recorded");
+  assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "birefnet keying is one journal entry");
+
+  assert.ok(existsSync(resolveProjectFile(REPO_ROOT, project.id, original.src)), "original file kept on disk");
+  const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "undo restores the exact pre-alpha element");
+  const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.equal(redone.elements.find((el) => el.id === element.id).src, result.element.src, "redo re-applies the alpha src");
+});
+
+test("vitmatte batch (faked) keys 2 images in ONE journal entry; one undo restores both byte-exact", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "vitmatte batch" });
+  const { element: e1 } = addImage(REPO_ROOT, project.id, { name: "v1.png", bytes: magentaSheetPng() });
+  const { element: e2 } = addImage(REPO_ROOT, project.id, { name: "v2.png", bytes: magentaSheetPng() });
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+  const originals = getProject(REPO_ROOT, project.id).elements.map((el) => ({ ...el }));
+  const vm = fakeVitmatte();
+
+  const result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementIds: [e1.id, e2.id], method: "vitmatte", vitmatte: vm.invoke });
+  assert.equal(vm.calls.n, 2, "vitmatte seam runs once per element");
+  assert.equal(result.count, 2);
+  assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "batch is one journal entry");
+  for (const el of result.elements) assert.equal(el.meta.alpha.method, "vitmatte");
+  const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  for (const original of originals) {
+    assert.deepEqual(undone.elements.find((el) => el.id === original.id), original, `undo restores element ${original.id}`);
+  }
+});
+
+test("birefnet batch (faked) keys 2 images in ONE journal entry; one undo restores both byte-exact", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "birefnet batch" });
+  const { element: e1 } = addImage(REPO_ROOT, project.id, { name: "b1.png", bytes: magentaSheetPng() });
+  const { element: e2 } = addImage(REPO_ROOT, project.id, { name: "b2.png", bytes: magentaSheetPng() });
+  const seqBefore = getProject(REPO_ROOT, project.id).history_seq;
+  const originals = getProject(REPO_ROOT, project.id).elements.map((el) => ({ ...el }));
+  const bn = fakeBirefnet();
+
+  const result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementIds: [e1.id, e2.id], method: "birefnet", birefnet: bn.invoke });
+  assert.equal(bn.calls.n, 2, "birefnet seam runs once per element");
+  assert.equal(result.count, 2);
+  assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "batch is one journal entry");
+  for (const el of result.elements) assert.equal(el.meta.alpha.method, "birefnet");
+  const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  for (const original of originals) {
+    assert.deepEqual(undone.elements.find((el) => el.id === original.id), original, `undo restores element ${original.id}`);
+  }
+});
+
+test("vitmatte refuses a region-scoped request (whole-element only in v1) before any GPU/venv touch", async (t) => {
+  tempProjects(t);
+  const project = createProject(UNUSED_ROOT, { title: "vitmatte regions reject" });
+  const { element } = addImage(UNUSED_ROOT, project.id, { name: "s.png", bytes: magentaSheetPng() });
+  setRegions(UNUSED_ROOT, { projectId: project.id, elementId: element.id, regions: [{ id: "r1", rect: [8, 8, 20, 20] }] });
+  const vm = fakeVitmatte();
+  await assert.rejects(
+    () => alphaCutout(UNUSED_ROOT, { projectId: project.id, elementId: element.id, method: "vitmatte", regions: ["r1"], vitmatte: vm.invoke }),
+    /whole-element only/,
+  );
+  assert.equal(vm.calls.n, 0, "the GPU seam is never reached on a region refusal");
+});
+
+test("birefnet refuses a region-scoped request (whole-element only in v1) before any spawn", async (t) => {
+  tempProjects(t);
+  const project = createProject(UNUSED_ROOT, { title: "birefnet regions reject" });
+  const { element } = addImage(UNUSED_ROOT, project.id, { name: "s.png", bytes: magentaSheetPng() });
+  setRegions(UNUSED_ROOT, { projectId: project.id, elementId: element.id, regions: [{ id: "r1", rect: [8, 8, 20, 20] }] });
+  const bn = fakeBirefnet();
+  await assert.rejects(
+    () => alphaCutout(UNUSED_ROOT, { projectId: project.id, elementId: element.id, method: "birefnet", regions: ["r1"], birefnet: bn.invoke }),
+    /whole-element only/,
+  );
+  assert.equal(bn.calls.n, 0, "the CPU seam is never reached on a region refusal");
+});
+
+test("vitmatte (real key gate) refuses a NEUTRAL key with a clean message BEFORE any GPU call (skips without the studio venv)", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "vitmatte neutral reject" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "neutral.png", bytes: darkBgPng() });
+  const original = getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id);
+  // No injected seam: the DEFAULT invoke runs the real key gate (route_cutout, repo venv, NO GPU) and
+  // must refuse a key that is neither green nor magenta BEFORE the tool's own GPU venv is ever touched.
+  try {
+    await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "vitmatte" });
+    assert.fail("vitmatte on a neutral key must refuse (neither green nor magenta)");
+  } catch (error) {
+    if (/venv|Pillow|interpreter|setup_python|No module|ModuleNotFound/i.test(error.message)) {
+      t.skip(`vitmatte key gate unavailable (studio venv): ${error.message}`);
+      return;
+    }
+    assert.match(error.message, /neither/i, `neutral refusal expected, got: ${error.message}`);
+    assert.ok(!/Traceback|File "/.test(error.message), `traceback leaked to the operator: ${error.message}`);
+  }
+  assert.deepEqual(getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id), original, "element untouched after a refusal");
+});
+
 // ---- alphaDualPlate (T0237: white+black plate pair -> ONE new cut element) ----
 
 // ---- validation (no Python) --------------------------------------------------

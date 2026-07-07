@@ -912,6 +912,35 @@ implementation, and a missing module is a loud import error.
     (`tools/ck_pixel_ops.py`'s `compose_regions`) reuses `alpha_cutout.py`'s
     `region_mask`/`clamp_rect` **verbatim** (imported, not duplicated), so it is the exact
     mask/paste contract `key_matte`'s own region path already uses.
+- **`"vitmatte"` — neural ViTMatte thin-detail matte (T0335, alpha bench 2026-07-07).** The
+  fourth path, EXPLICIT-only, for **thin/fine detail** (spider-web, mesh, fur, hair strands) on a
+  flat **GREEN/MAGENTA** key — ~2× more accurate than CorridorKey on strand-level structure — and
+  the **second-priority glow** keyer (CorridorKey is first on glow: it despills natively; ViTMatte
+  wins raw alpha but leaves more residual tint, the lead's glow-wings ruling). Like corridorkey it
+  has a **key gate** (border key via `route_cutout`; a key that is neither green nor magenta is a
+  **loud refusal** pointing at `key_matte`/`birefnet`/`alphaDualPlate`) and **no auto-router entry**.
+  Two hard rules from the tool contract: it runs in its **OWN GPU-torch venv**
+  (`ai_studio/assets/tools/image/vitmatte_matte/.venv`, cu128 torch must not enter the shared repo
+  venv — a missing venv is a loud error naming `node …/vitmatte_matte/setup_python.mjs`, never a
+  fallback), and it is **whole-element only in v1** (a region-scoped request is a loud refusal — use
+  corridorkey for region-scoped neural keying). ~1-3s GPU. The trimap is auto-built from chroma
+  distance to the key (`T1=70`/`T2=150`, tuned once on magenta, frozen); despill is on by default.
+  Provenance records `{method:"vitmatte", tool:"vitmatte", model, key_color, despill, license,
+  timings:{seconds}}`. **License: ALLOW-WITH-CONDITIONS** — code MIT, weights **local-only** (the
+  Composition-1k / Adobe-DIM noncommercial caveat; final commercial call is the lead's, T0335 gate).
+  Injectable seam `vitmatte`; see `ai_studio/assets/tools/image/vitmatte_matte/README.md`.
+- **`"birefnet"` — neural BiRefNet-general cutout on any background (T0335, alpha bench 2026-07-07).**
+  The fifth path, EXPLICIT-only, for a **ready image on an arbitrary/unknown background** with **no
+  chroma key at all** — its niche is exactly where `route_cutout` finds no flat key, so it has **NO
+  key gate** (the key detector is never called) and **no auto-router entry**. Runs in the **shared
+  repo venv** (studio.config `pythonPath`) through the same warm-worker bridge every other canvas
+  python tool uses, **CPU onnxruntime ~10-30s** (plus a one-time ~930 MB model download). **Whole-
+  element only in v1** (a region-scoped request is a loud refusal). Weak on flat monochrome line-art
+  (a documented routing nuance — its SOD training distribution is photographic, not vector art — not
+  a bug). Provenance records `{method:"birefnet", tool:"birefnet", model, license, timings:{seconds}}`
+  (no `key_color` — there is no key). **License: MIT** (rembg + BiRefNet-general code AND weights;
+  `briaai/RMBG-2.0` is FORBIDDEN — non-commercial weights — enforced in the tool). Injectable seam
+  `birefnet`; see `ai_studio/assets/tools/image/birefnet_cutout/README.md`.
 - **Regions optional.** Without regions the whole element is keyed. With region ids, the
   op keys **only inside** each region's mask (rect, or the polygon when present) and pastes
   each keyed crop back over the **untouched original opaque pixels** — the region-mask
@@ -1823,7 +1852,10 @@ one document that swaps two views; the JS is split into focused ES modules under
   that select/enter region-edit on the canvas and inline-rename on double-click,
   plus **Detect**, **Slice** (selected regions, else all), an **Alpha cutout** control (a
   method dropdown Key matte / **CorridorKey (green glow)** (T0261/T0262 — neural green matte for
-  soft glow, green native/magenta via hue180 shim, region composite, ~15s GPU) / Dual-plate + a run button scoped to the selected
+  soft glow, green native/magenta via hue180 shim, region composite, ~15s GPU) / **ViTMatte (thin
+  detail)** (T0265 — neural thin-detail / 2nd-choice-glow on a green/magenta key, own GPU venv,
+  ~1-3s, whole-element only) / **BiRefNet (any bg)** (T0335 — SOD cutout for an arbitrary/unknown
+  background, no key, CPU ~25s, whole-element only) / Dual-plate + a run button scoped to the selected
   regions when any are selected, else the whole element — a long-op via the queue), which additionally shows
   two compact plate-thumbnail rows + role labels + a per-plate **Add to canvas** button
   (T0238) once `element.meta.alpha.plates` exists (an `alphaDualPlateGenerate` result)),

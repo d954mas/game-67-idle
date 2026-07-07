@@ -107,8 +107,10 @@ def alpha_one(image: Image.Image, method: str, label: str) -> tuple[Image.Image,
             f"{label}: auto routing selected dual_plate ({decision.reason}). A wide "
             "soft/semi-transparent zone (glow, glass, soft shadow) needs a white+black "
             "plate PAIR, which a single canvas element cannot provide (out of v1 scope). "
-            "Re-run with method=matte to force key_matte, or regenerate the art with a "
-            "dual-plate pair (gen_dual_plate.sh)."
+            "For soft glow on a GREEN/MAGENTA key try method=corridorkey (canvas neural, "
+            "first choice) or method=vitmatte (thin detail, own GPU venv); re-run with "
+            "method=matte to force key_matte; or regenerate the art with a dual-plate pair "
+            "(gen_dual_plate.sh)."
         )
     keyed = key_matte_cutout(work, decision.key)
     if not visible.all():
