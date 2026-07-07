@@ -2672,6 +2672,17 @@ function renderPackVaryField(group, recipe, body) {
   varyHint.className = "insp-region-hint";
   varyHint.textContent = "Cells vary by this axis. Every OTHER axis must appear in the prompt as {axis} — one sheet per combination.";
   body.appendChild(varyHint);
+  // Third bounce of the same stumble (lead hit the expander's missing-slot refusal from the
+  // Generate button itself, 2026-07-07): pre-check the slot rule CLIENT-side and warn before
+  // any button is pressed. Advisory only — the expander stays the real gate.
+  const bigAxes = Object.keys(recipe.pack.axes || {}).filter((axis) => axis !== recipe.pack.vary);
+  const missingSlots = bigAxes.filter((axis) => !(recipe.prompt || "").includes(`{${axis}}`));
+  if (missingSlots.length) {
+    const slotWarn = document.createElement("div");
+    slotWarn.className = "insp-pack-error";
+    slotWarn.textContent = `Prompt is missing ${missingSlots.map((axis) => `{${axis}}`).join(", ")} — Preview/Generate will refuse until every non-vary axis has its slot.`;
+    body.appendChild(slotWarn);
+  }
 }
 
 // Grid select: 2x2 / 3x3 (build-spec: "grid select (2x2|3x3)") — a stored grid outside that
