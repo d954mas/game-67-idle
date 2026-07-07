@@ -92,6 +92,7 @@ import {
   bakeFilters,
   cleanupApply,
   cleanupPreview,
+  createAnimCard,
   createGroup,
   createProject,
   createRecipeCard,
@@ -107,6 +108,7 @@ import {
   exportProject,
   extractFromElement,
   fitGroup,
+  generateAnimFromCard,
   generateFromRecipe,
   getProject,
   jumpHistory,
@@ -117,6 +119,7 @@ import {
   packPreview,
   packSlice,
   pasteNodes,
+  patchAnim,
   patchElement,
   patchElements,
   patchGroup,
@@ -279,6 +282,9 @@ function usage() {
   recipe-pack-slice <id> --group <gid> [--run <groupId>]   (T0332 B3: slice EVERY sheet of a pack run — for each sheet element (meta.pack with a cells manifest) in the run group: detectRegions, then a HARD gate region_count === cells.length (mismatch -> REJECT that sheet, others still slice); on a match, sliceRegions mints the cuts with a MINIMAL per-cut meta ({cardId, sheet_element_id, cell, axes} — the full manifest/prompt stay on the sheet, its provenance anchor) and reparents the fresh slices-group into the run group; --run <groupId> selects an explicit run group (must carry pack_run for this card), omitted resolves recipe.last_run.run_group_id; real region-detector/crop_regions.py spawns, same pipeline as plain detect-regions/slice — no fake seam; never throws mid-sheet (a detection failure lands that one sheet as MISSING); prints one "<name>: OK|REJECT|MISSING (got/expected)" line per sheet, then the final {contract:[{sheet_element_id,verdict,region_count,cells_len,cut_ids}], run_group_id} JSON)
   style-create <id> [--name <name>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0239 increment 3: mint a style card — a group with an additive 'style' blob: prompt + ONE ref image; omitted w/h default to a 360x280 frame; style cards never generate)
   style-set <id> --group <gid> [--prompt "<text>"] [--ref <elementId>|none]   (partial style blob update; --ref must be an existing member IMAGE element id of THIS card, or none to clear — the "Make ref" gesture; the first image dropped into an empty card auto-claims the ref)
+  anim-card <id> [--name <name>] [--member <eid>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0265 increment 1: mint an animation card — a group with an additive 'anim' blob; keyframes are its member IMAGE elements; omitted w/h default to a 360x280 frame. --member is the "Animate this image" promotion: fit the card around that image + move it in as the first keyframe in ONE journal entry; not combinable with --x/--y/--w/--h; no generation yet)
+  anim-patch <id> --group <gid> [--motion "<text>"] [--profile draft|final] [--seed <n>|none] [--matte corridorkey|key_matte] [--gen-fps <n>|none] [--loop true|false] [--columns <n>|none] [--trim true|false] [--style <id>|none] [--accepted <eid>|none]   (partial anim blob update)
+  anim-generate <id> --group <gid>   (T0265 increment 1: generate via the Track B video route — 1 keyframe = plain I2V; mints ONE flipbook element beside the card frame in its PARENT scope; one undo step; ComfyUI/CorridorKey run for real minutes — no --dry-run; the CLI always runs the DEFAULT generator, no fake injection)
   extract <id> --element <eid>   (T0239 increment 4: ONE codex VISION call, real seconds/minutes -> element.meta.extracted {prompt_full, prompt_subject, style, description}; no card minted; re-running overwrites; no fake-assistant injection from the CLI)
   animate <id> --element <eid> --text "<description>"   (T0264: ONE codex TEXT/VISION call, real seconds/minutes -> element.animation (the ai_studio.canvas.animation.v1 spec); authors fresh or minimally patches an existing spec; image (vision) + text; no fake-runner injection from the CLI)
   promote-recipe <id> --element <eid>   (mint a RECIPE card BELOW the element from its ALREADY-STORED meta.extracted; NO codex call; run extract first — loud otherwise)
@@ -1079,6 +1085,75 @@ async function runCommand(command, id, positional, flags) {
       if (!Object.keys(patch).length) fail("style-set requires --prompt and/or --ref");
       return print(patchStyle(repoRoot, { projectId: id, groupId: flags.group, patch }));
     }
+    case "anim-card": {
+      if (!id) fail("anim-card requires <id>");
+      const args = { projectId: id };
+      if (flags.name !== undefined && flags.name !== "true") args.name = flags.name;
+      // --member <eid> is the "Animate this image" promotion: fit the card around that image and
+      // move it in as the first keyframe (ONE journal entry). The op refuses it combined with
+      // explicit x/y/w/h (fit owns the box).
+      if (flags.member !== undefined) {
+        if (flags.member === "true") fail("anim-card --member requires an element id");
+        args.memberId = flags.member;
+      }
+      if (flags.x !== undefined) args.x = Number(flags.x);
+      if (flags.y !== undefined) args.y = Number(flags.y);
+      if (flags.w !== undefined) args.w = Number(flags.w);
+      if (flags.h !== undefined) args.h = Number(flags.h);
+      // --parent <gid> nests the new card; --parent none (or omitted) = top level.
+      if (flags.parent !== undefined && flags.parent !== "true") {
+        args.parentId = flags.parent === "none" ? null : flags.parent;
+      }
+      return print(createAnimCard(repoRoot, args));
+    }
+    case "anim-patch": {
+      if (!id) fail("anim-patch requires <id>");
+      if (!flags.group) fail("anim-patch requires --group <gid>");
+      const patch = {};
+      if (flags.motion !== undefined && flags.motion !== "true") patch.motion = flags.motion;
+      if (flags.profile !== undefined && flags.profile !== "true") patch.profile = flags.profile;
+      // --seed <n> pins the seed; --seed none|null = a fresh random seed on every Generate. A bare
+      // --seed (no value; the parser hands "true") is a LOUD error, not a silent NaN (F5).
+      if (flags.seed !== undefined) {
+        if (flags.seed === "true") fail("--seed requires a value or 'none'");
+        patch.seed = flags.seed === "none" || flags.seed === "null" ? null : Number(flags.seed);
+      }
+      if (flags.matte !== undefined && flags.matte !== "true") patch.matte = flags.matte;
+      // --gen-fps <n> overrides the workflow generation fps; --gen-fps none|null = workflow default.
+      if (flags["gen-fps"] !== undefined) {
+        if (flags["gen-fps"] === "true") fail("--gen-fps requires a value or 'none'");
+        patch.gen_fps = flags["gen-fps"] === "none" || flags["gen-fps"] === "null" ? null : Number(flags["gen-fps"]);
+      }
+      if (flags.loop !== undefined) patch.loop = parseBool("loop", flags.loop);
+      if (flags.columns !== undefined) {
+        if (flags.columns === "true") fail("--columns requires a value or 'none'");
+        patch.columns = flags.columns === "none" || flags.columns === "null" ? null : Number(flags.columns);
+      }
+      if (flags.trim !== undefined) patch.trim = parseBool("trim", flags.trim);
+      // --style <id> sets the style-card pointer; --style none clears it. A bare --style is a LOUD
+      // error, not a silent clear (F5) — an explicit clear stays 'none'.
+      if (flags.style !== undefined) {
+        if (flags.style === "true") fail("--style requires a value or 'none'");
+        patch.style_ref = flags.style === "none" ? null : flags.style;
+      }
+      // --accepted <eid> pins the accepted flipbook take; --accepted none clears it. Bare -> LOUD.
+      if (flags.accepted !== undefined) {
+        if (flags.accepted === "true") fail("--accepted requires a value or 'none'");
+        patch.accepted_ref = flags.accepted === "none" ? null : flags.accepted;
+      }
+      if (!Object.keys(patch).length) {
+        fail("anim-patch requires at least one of --motion, --profile, --seed, --matte, --gen-fps, --loop, --columns, --trim, --style, --accepted");
+      }
+      return print(patchAnim(repoRoot, { projectId: id, groupId: flags.group, patch }));
+    }
+    case "anim-generate": {
+      // T0265 increment 1: the real Track B video pipeline (ComfyUI + CorridorKey, minutes) —
+      // no fake-generator injection from the CLI (that is a test-only seam), so this always
+      // runs the DEFAULT generator (tools/anim_generate.mjs).
+      if (!id) fail("anim-generate requires <id>");
+      if (!flags.group) fail("anim-generate requires --group <gid>");
+      return print(await generateAnimFromCard(repoRoot, { projectId: id, groupId: flags.group }));
+    }
     case "extract": {
       // T0239 increment 4: real codex VISION spawn — no fake-assistant injection from the
       // CLI (test-only seam), so this always runs the DEFAULT extractFromImage impl.
@@ -1188,7 +1263,9 @@ async function runCommand(command, id, positional, flags) {
 // `slice` commands, which are also not self-locking. So the whole multi-sheet slice pass
 // needs the SAME single outer lock main() already gives every non-self-locking command; no
 // deadlock risk here since there is no inner acquire to collide with.
-const SELF_LOCKING_COMMANDS = new Set(["recipe-generate", "recipe-pack-generate", "recipe-expand", "extract", "animate", "alpha-dual-generate"]);
+// anim-generate (T0265) is self-locking too — generateAnimFromCard acquires the per-project
+// lock ONCE internally (short commit), so wrapping it here would deadlock the same way.
+const SELF_LOCKING_COMMANDS = new Set(["recipe-generate", "recipe-pack-generate", "recipe-expand", "extract", "animate", "alpha-dual-generate", "anim-generate"]);
 
 async function main(argv) {
   const [command, ...rest] = argv;

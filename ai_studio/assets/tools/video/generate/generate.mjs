@@ -4,7 +4,7 @@
 //
 // Contract:
 //   node generate.mjs --image <png> --text "<motion>" --profile draft|final
-//                     [--seed N] [--out <runDir>] [--name <slug>] [--host h:p]
+//                     [--seed N] [--fps N] [--out <runDir>] [--name <slug>] [--host h:p]
 //
 // What it does:
 //   1. Resolves videoGenRoot + the profile workflow JSON (draft/final).
@@ -126,6 +126,30 @@ function execSeconds(entry) {
   return null;
 }
 
+// Find the fps-bearing node in a ComfyUI prompt graph and, when `fps` is given, set it there
+// (T0265 §1.1: gen_fps must steer GENERATION, not playback — the workflow otherwise bakes its
+// own fps and the animation plays back in slow-motion). PURE: the node is located by the
+// presence of an `inputs.fps` field, not by hardcoding a node id (the graph already hardcodes
+// "16" for the fps READ; this does not hardcode it any harder). Returns the EFFECTIVE fps — the
+// override when set, else the workflow's own. A positive `fps` with NO fps-bearing node is a
+// LOUD error (the workflow shape changed — never silently ignore an override). `fps == null`
+// (no override) returns the graph's own fps, or null when the graph carries none.
+export function applyFpsToWorkflow(g, fps) {
+  const fpsNodeId = Object.keys(g).find(
+    (id) => g[id] && g[id].inputs && Object.prototype.hasOwnProperty.call(g[id].inputs, "fps"),
+  );
+  if (fps == null) return fpsNodeId ? Number(g[fpsNodeId].inputs.fps) : null;
+  const wanted = Number(fps);
+  if (!Number.isFinite(wanted) || wanted <= 0) {
+    throw new Error(`applyFpsToWorkflow: fps must be a positive number, got ${JSON.stringify(fps)}`);
+  }
+  if (!fpsNodeId) {
+    throw new Error("applyFpsToWorkflow: fps override requested but the workflow has no node carrying inputs.fps");
+  }
+  g[fpsNodeId].inputs.fps = wanted;
+  return wanted;
+}
+
 // ---- stage -------------------------------------------------------------------
 
 export async function runGenerate({
@@ -134,6 +158,7 @@ export async function runGenerate({
   text,
   profile = "draft",
   seed,
+  fps,
   outDir,
   name,
   host = "127.0.0.1:8188",
@@ -183,7 +208,10 @@ export async function runGenerate({
   const width = g["12"].inputs.width;
   const height = g["12"].inputs.height;
   const length = g["12"].inputs.length;
-  const fps = g["16"].inputs.fps;
+  // gen_fps steers GENERATION (§1.1): set the fps node when an override is passed, else keep
+  // the workflow's own. effectiveFps is the fps the frames are actually rendered at, so it is
+  // what lands in provenance (and what the flipbook plays back at — 1:1, no slow-motion).
+  const effectiveFps = applyFpsToWorkflow(g, fps);
   const negative = g["9"].inputs.text;
   const models = {
     unet_high: g["1"].inputs.unet_name,
@@ -235,7 +263,7 @@ export async function runGenerate({
     width,
     height,
     length,
-    fps,
+    fps: effectiveFps,
     frame_count: length,
     models,
     input_image: { source: imageAbs, comfy_input_name: inputName },
@@ -267,6 +295,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1
     text: a.text,
     profile: a.profile || "draft",
     seed: a.seed,
+    fps: a.fps,
     outDir: a.out,
     name: a.name,
     host: a.host || "127.0.0.1:8188",

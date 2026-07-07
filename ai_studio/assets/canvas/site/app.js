@@ -10,6 +10,13 @@
 import { childrenOf, isNodeHidden } from "../tree.mjs";
 import { toastError, toastInfo, toastPinned } from "./toasts.js";
 
+// Video-animation generation is frozen (lead, 2026-07-06): unreliable local motion model,
+// slow, no economics for iteration. Passport: docs/FREEZE_VIDEO_ANIM_2026-07-06.md. Gates
+// only the GENERATION UI (context menu's "Animate this image" / "New animation card", the
+// inspector's anim-card Generate section) — offline playback (renderFlipbook / Play-Stop)
+// is unaffected and stays on. Flip to false to bring the generation UI back once unfrozen.
+export const VIDEO_ANIM_FROZEN = true;
+
 export const el = (id) => document.getElementById(id);
 
 export const state = {
@@ -197,13 +204,22 @@ export function coverUrl(project) {
   return first ? `/api/canvas/projects/${project.id}/${first.src}` : null;
 }
 
-export function imageFor(element) {
-  if (imageCache.has(element.src)) return imageCache.get(element.src);
+// Content-addressed image cache lookup by a bare src string (T0265 F4). This is the ONE image
+// cache for the app: element images (imageFor) and flipbook keyframes (workspace's flipbook
+// player) both resolve through it, so there is no duplicated per-frame Map. Same
+// onload -> repaint path as before; a src is stable + content-addressed, so the cache never
+// goes stale.
+export function imageForSrc(src) {
+  if (imageCache.has(src)) return imageCache.get(src);
   const img = new Image();
   img.onload = () => hooks.renderCanvas();
-  img.src = fileUrl(element);
-  imageCache.set(element.src, img);
+  img.src = `/api/canvas/projects/${state.project.id}/${src}`;
+  imageCache.set(src, img);
   return img;
+}
+
+export function imageFor(element) {
+  return imageForSrc(element.src);
 }
 
 export function clearImageCache() {

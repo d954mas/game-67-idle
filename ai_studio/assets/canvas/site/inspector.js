@@ -26,6 +26,7 @@ import {
   selectRegionRange,
   setStatus,
   state,
+  VIDEO_ANIM_FROZEN,
 } from "./app.js";
 import {
   addPlateFromFile,
@@ -45,9 +46,11 @@ import {
   exportProjectAction,
   extractElementAction,
   fitGroupAction,
+  generateAnimFromCardAction,
   generateFromRecipeAction,
   packPreviewAction,
   packSliceAction,
+  patchAnimAction,
   patchElementBox,
   patchElementsBatch,
   patchGroupBox,
@@ -1925,6 +1928,44 @@ function renderAnimation(element, root) {
   body.appendChild(clearBtn);
 }
 
+// Flipbook section (T0265 increment 1): additive, shown only when the element carries a
+// `flipbook` blob (design §1.2 — the per-frame video-anim result). Increment 1 is a
+// read-only VIEWER: a frame/fps/mode counter + Play/Stop. Play/Stop is pure page-only
+// preview (NOT journaled), reusing the SAME shared rAF as the procedural preview via
+// toggleAnimationPreview — so a toggle repaints the canvas but not this panel (re-label in
+// place, like renderAnimation's Play). Frame trim/delete, fps + play_mode editing, and sheet
+// export are increment 2 (the animation mode) — deliberately absent here.
+function renderFlipbook(element, root) {
+  const fb = element.flipbook;
+  if (!fb || typeof fb !== "object") return;
+  const body = collapsible(root, "flipbook", "Flipbook");
+
+  const frames = Array.isArray(fb.frames) ? fb.frames : [];
+  const kept = frames.filter((frame) => frame && frame.kept !== false && frame.src);
+  const fps = Number(fb.fps) > 0 ? Number(fb.fps) : 12;
+  const mode = fb.play_mode || "loop";
+
+  const summary = document.createElement("div");
+  summary.className = "insp-region-hint";
+  summary.textContent = `${kept.length} ${kept.length === 1 ? "frame" : "frames"} · ${fps} fps · ${mode}`;
+  body.appendChild(summary);
+
+  const playing = isAnimationPreviewing(element.id);
+  const playBtn = document.createElement("button");
+  playBtn.type = "button";
+  playBtn.className = playing ? "primary insp-btn insp-alpha-btn" : "insp-btn insp-alpha-btn";
+  playBtn.textContent = playing ? "Stop" : "Play";
+  playBtn.disabled = kept.length === 0;
+  playBtn.title = kept.length === 0 ? "No frames to play" : "Play the flipbook on the canvas (page-only preview)";
+  playBtn.addEventListener("click", () => {
+    toggleAnimationPreview(element.id);
+    const now = isAnimationPreviewing(element.id);
+    playBtn.textContent = now ? "Stop" : "Play";
+    playBtn.classList.toggle("primary", now);
+  });
+  body.appendChild(playBtn);
+}
+
 // Generation section (T0250): additive, shown only when the element carries a frozen
 // meta.recipe run snapshot ({cardId, engine, at, prompt_snapshot, refs_snapshot,
 // params_snapshot} — minted by generateFromRecipeAction) — same "presence of the
@@ -2179,7 +2220,9 @@ function renderElement(element, root) {
   renderCleanup(element, root);
   renderFilters(element, root);
   renderSlice9(element, root);
-  renderAnimation(element, root);
+  renderFlipbook(element, root);
+  // procedural track rejected 2026-07-05, code dormant (T0260/T0264); re-enable = restore this call
+  // renderAnimation(element, root);
   renderExtracted(element, root);
   renderGeneration(element, root);
   renderPackMeta(element, root);
@@ -2308,7 +2351,8 @@ function renderTextElement(element, root) {
   root.appendChild(hint);
 
   renderTextStyle(element, style, root);
-  renderAnimation(element, root);
+  // procedural track rejected 2026-07-05, code dormant (T0260/T0264); re-enable = restore this call
+  // renderAnimation(element, root);
 }
 
 // ---- note element (T0268) ----------------------------------------------------
@@ -2986,6 +3030,104 @@ function renderStyle(group, root) {
   }
 }
 
+// ---- animation card (T0265 increment 1, video route) ---------------------------
+
+// Animation card surface: additive, shown only when the selected group carries an `anim`
+// blob (design §1.1 — same "presence of the additive field" pattern as renderRecipe/
+// renderStyle). Motion + Profile + Matte + Seed + Loop are live-editable through
+// patchAnimAction (one journal entry per commit, mirrors every other inspector field).
+// Generate runs the video route via generateAnimFromCardAction (long-op queue, minutes;
+// disabled on an empty motion — the op refuses loudly anyway, the disable just says WHY up
+// front). Increment 1 covers the generation inputs only; the frame-editing animation mode
+// (timeline/trim/fps/play_mode/takes/export) is increment 2. Mirrors renderRecipe.
+function renderAnim(group, root) {
+  const anim = group.anim;
+  if (!anim || typeof anim !== "object") return;
+  const body = collapsible(root, "anim", "Animation card");
+
+  const motionField = field("Motion", textareaInput(anim.motion, (next) => patchAnimAction(group.id, { motion: next })));
+  body.appendChild(motionField);
+
+  const editMotionBtn = smallBtn("Edit", () =>
+    openPromptModal(group.name || "Motion", anim.motion, (next) => patchAnimAction(group.id, { motion: next })),
+  );
+  editMotionBtn.classList.add("insp-prompt-edit-btn");
+  editMotionBtn.title = "Open the motion description in a large editor";
+  body.appendChild(editMotionBtn);
+
+  body.appendChild(
+    field(
+      "Profile",
+      selectInput(anim.profile || "draft", ["draft", "final"], (next) => patchAnimAction(group.id, { profile: next })),
+    ),
+  );
+
+  body.appendChild(
+    field(
+      "Matte",
+      selectInput(anim.matte || "corridorkey", ["corridorkey", "key_matte"], (next) => patchAnimAction(group.id, { matte: next })),
+    ),
+  );
+
+  // Seed: blank = null (random on each Generate); a number pins it. A text input keeps
+  // "clear = random" one clean gesture (a number input can't tell empty from 0). The op
+  // re-validates (number|null) loudly.
+  const seedInput = document.createElement("input");
+  seedInput.type = "text";
+  seedInput.className = "insp-input";
+  seedInput.placeholder = "random";
+  seedInput.value = anim.seed == null ? "" : String(anim.seed);
+  seedInput.title = "Blank = random on each Generate; a number pins the seed";
+  const commitSeed = () => {
+    const raw = seedInput.value.trim();
+    if (raw === "") {
+      if (anim.seed != null) patchAnimAction(group.id, { seed: null });
+      return;
+    }
+    const n = Number(raw);
+    if (!Number.isFinite(n)) {
+      // F5: invalid input is LOUD — say why and restore the field to the committed value
+      // (empty = random) instead of silently leaving unsaved bad text in the box.
+      setStatus("Seed must be a number (or empty for random).", true);
+      seedInput.value = anim.seed == null ? "" : String(anim.seed);
+      return;
+    }
+    if (n !== anim.seed) patchAnimAction(group.id, { seed: n });
+  };
+  seedInput.addEventListener("change", commitSeed);
+  seedInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      seedInput.blur();
+      focusStage();
+    }
+  });
+  body.appendChild(field("Seed", seedInput));
+
+  // Loop hint (design §1.1): seamless-loop hint for generation (a single keyframe becomes a
+  // same-image FLF). NOT the playback loop — that lives on the result (flipbook.play_mode).
+  const loopRow = document.createElement("label");
+  loopRow.className = "insp-check";
+  const loopCheck = document.createElement("input");
+  loopCheck.type = "checkbox";
+  loopCheck.checked = anim.loop !== false;
+  loopCheck.addEventListener("change", () => patchAnimAction(group.id, { loop: loopCheck.checked }));
+  const loopLabel = document.createElement("span");
+  loopLabel.textContent = "Loop";
+  loopRow.append(loopCheck, loopLabel);
+  body.appendChild(loopRow);
+
+  const generateBtn = document.createElement("button");
+  generateBtn.type = "button";
+  generateBtn.className = "primary insp-btn";
+  generateBtn.textContent = "Generate";
+  const emptyMotion = !String(anim.motion || "").trim();
+  generateBtn.disabled = emptyMotion;
+  generateBtn.title = emptyMotion ? "Describe the motion first" : "Generate the animation (video route — takes minutes)";
+  generateBtn.addEventListener("click", () => generateAnimFromCardAction(group.id, generateBtn));
+  body.appendChild(generateBtn);
+}
+
 function renderGroupInspector(group, root) {
   const name = field("Name", textInput(group.name, (next) => renameGroup(group.id, next)));
   name.classList.add("insp-name");
@@ -3032,8 +3174,8 @@ function renderGroupInspector(group, root) {
 
   // Screen (T0332 B1 — export flipped to opt-in): group.screen === true is the ONLY thing
   // that makes a top-level visible group count as an exportable "screen" (exportProject/
-  // visibleScreenCount both gate on it — a recipe/style/pack-run card simply never carries
-  // it, no special-case skip needed anywhere).
+  // visibleScreenCount both gate on it — a recipe/style/anim/pack-run card simply never
+  // carries it, no special-case skip needed anywhere).
   const screenRow = document.createElement("label");
   screenRow.className = "insp-check";
   const screenCheck = document.createElement("input");
@@ -3064,6 +3206,9 @@ function renderGroupInspector(group, root) {
   renderGroupBackground(group, root);
   renderRecipe(group, root);
   renderStyle(group, root);
+  // Video-anim generation frozen 2026-07-06 (VIDEO_ANIM_FROZEN, app.js) — hide the anim-card
+  // Generate section; renderFlipbook playback above is unaffected.
+  if (!VIDEO_ANIM_FROZEN) renderAnim(group, root);
 
   const render = collapsible(root, "render", "Render group");
   const controls = document.createElement("div");
@@ -3244,7 +3389,7 @@ function renderMulti(selected, root) {
 // (childrenOf(root).groups), not a hand-rolled scan, so the button label never counts
 // nested component groups (T0224 item 9: "Export project (N screens)" must match
 // exportProject, which is top-level only) — and, since the flip, never counts an unflagged
-// group either, recipe/style/pack_run cards included (they simply never carry `screen`).
+// group either, recipe/style/anim/pack_run cards included (they simply never carry `screen`).
 function visibleScreenCount() {
   if (!state.project) return 0;
   return childrenOf(state.project, null).groups.filter((group) => group.visible !== false && group.screen === true).length;
@@ -3281,7 +3426,7 @@ function inspectorSig() {
     // recipe/style ride in the signature so a prompt/engine/ref commit (or a CLI edit)
     // rebuilds the Recipe/Style section — the Generate button's empty-prompt disable and
     // the Style member/ref rows both depend on it.
-    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}|${group.parentId || ""}|${JSON.stringify(group.recipe || null)}|${JSON.stringify(group.style || null)}`;
+    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}|${group.parentId || ""}|${JSON.stringify(group.recipe || null)}|${JSON.stringify(group.style || null)}|${JSON.stringify(group.anim || null)}`;
   }
   // Multi-group selection (2+ groups, no loose elements): the signature carries each
   // group's id + shared toggle state so a batched visible/clip change rebuilds the panel.
@@ -3312,7 +3457,7 @@ function inspectorSig() {
     // depend on these, so they must rebuild the section too. element.slice9 (T0233
     // Packet 2): the Slice-9 section's Enable-vs-live-fields branch + every field's
     // displayed value depend on it, so an Enable/Clear/field commit must rebuild too.
-    return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.export || [])}|${JSON.stringify(e.slice9 || null)}|${JSON.stringify(e.meta || {})}|${e.groupId || ""}|${e.rotation || 0},${e.flipH ? 1 : 0},${e.flipV ? 1 : 0}|${JSON.stringify(e.animation || null)}`;
+    return `e:${e.id}|${e.name}|${e.x},${e.y},${e.w},${e.h}|${e.source_w},${e.source_h}|${regions}|${JSON.stringify(e.export || [])}|${JSON.stringify(e.slice9 || null)}|${JSON.stringify(e.meta || {})}|${e.groupId || ""}|${e.rotation || 0},${e.flipH ? 1 : 0},${e.flipV ? 1 : 0}|${JSON.stringify(e.animation || null)}|${JSON.stringify(e.flipbook || null)}`;
   }
   // Group ids that ride along with a loose-element multi-selection are folded in too (the
   // Align row's nodeIds come from the FULL selectedNodeIds(), not just `selected`).

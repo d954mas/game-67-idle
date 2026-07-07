@@ -5,7 +5,7 @@
 // exports ONLY a group carrying the explicit `screen === true` flag (patchGroup/
 // group-set --screen). For an EXISTING project this script restores today's exact export
 // set by flagging every top-level VISIBLE group that carries none of recipe/style/
-// pack_run (ops.migrateScreenFlags does the actual per-project work — see its own doc for
+// anim/pack_run (ops.migrateScreenFlags does the actual per-project work — see its own doc for
 // the exact rule, including why a pack_run run-group is deliberately NOT auto-flagged even
 // though the OLD filter would technically have exported one).
 //
@@ -30,7 +30,7 @@ const repoRoot = resolve(fileURLToPath(new URL("../../../..", import.meta.url)))
 function planFor(project) {
   const groups = Array.isArray(project.groups) ? project.groups : [];
   return groups
-    .filter((group) => group.parentId == null && group.visible !== false && !("screen" in group) && !group.recipe && !group.style && !group.pack_run)
+    .filter((group) => group.parentId == null && group.visible !== false && !("screen" in group) && !group.recipe && !group.style && !group.anim && !group.pack_run)
     .map((group) => ({ id: group.id, name: group.name || group.id }));
 }
 

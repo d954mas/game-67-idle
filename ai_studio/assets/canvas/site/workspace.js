@@ -27,6 +27,7 @@ import {
   isElementHidden,
   isSelected,
   imageFor,
+  imageForSrc,
   refresh,
   regionEditElement,
   selectedElements,
@@ -214,15 +215,14 @@ function groupChromeScreenAABB(group, vp) {
   const box = groupBoxScreenAABB(group, vp);
   // 12px pill font, wide-glyph upper bound ~12px/char + pill padding.
   let chromeW = String(group.name || "Group").length * 12 + 12;
-  // A recipe/style card adds a chip beside the pill (+gap) and an 11px prompt preview of up to
-  // RECIPE_PROMPT_PREVIEW_MAX chars inside the frame.
-  if (group.recipe || group.style) chromeW = Math.max(chromeW + 4 + 90, RECIPE_PROMPT_PREVIEW_MAX * 11 + 14);
+  // A recipe/style/anim card adds a chip beside the pill (+gap) and an 11px prompt preview of
+  // up to RECIPE_PROMPT_PREVIEW_MAX chars inside the frame.
+  if (group.recipe || group.style || group.anim) chromeW = Math.max(chromeW + 4 + 90, RECIPE_PROMPT_PREVIEW_MAX * 11 + 14);
   return { x0: box.x0, y0: box.y0, x1: Math.max(box.x1, box.x0 + chromeW), y1: box.y1 };
 }
 
 export function render() {
   if (!canvas || !state.project) return;
-  pruneFilterOffscreenCache();
   resizeCanvas();
   const vp = state.viewport;
   // Clear in DEVICE pixels, not CSS pixels: with a fractional devicePixelRatio
@@ -422,45 +422,48 @@ function cssFilterFor(filters) {
   return `brightness(${b}) saturate(${s}) contrast(${c})`;
 }
 
-// element.id -> { canvas, src, sig }. `sig` is the filters object's JSON (small, cheap to
-// compare) so the offscreen rebuilds exactly when the src OR the filters actually change —
-// pan/zoom/resize/rotate never invalidate it (built at the SOURCE's natural pixel size,
-// independent of the element's current display box / vp.scale).
-const filterOffscreenCache = new Map();
+// CONTENT-ADDRESSED tinted-offscreen cache (T0265 F3): key = `${img.src} ${filtersSig}`,
+// so a baked (brightness/saturation/contrast + tint scrim) frame is looked up by the SOURCE
+// IMAGE's own URL + the filters signature — NOT by element.id. This is what lets a PLAYING
+// flipbook stay tinted: each kept frame's <img> keys its own tinted bake, so swapping frames
+// mid-playback swaps the correct tinted offscreen instead of returning a stale frame-0 bake
+// (the paletteCountCache pattern — a content key never goes stale). A resting single-src image
+// keys by its one src exactly as before; pan/zoom/resize/rotate never invalidate an entry
+// (built at the SOURCE's natural pixel size, independent of the display box / vp.scale).
+const filterOffscreenCache = new Map(); // `${img.src} ${filtersSig}` -> HTMLCanvasElement
+// Bound: a content key never self-invalidates, so an explicit cap replaces the old
+// per-element prune. 96 comfortably holds a whole flipbook (design caps ~40 frames) plus a
+// second take and any resting tinted images, while staying bounded across takes/projects.
+const FILTER_OFFSCREEN_CACHE_MAX = 96;
 
-function tintedOffscreenFor(element, img) {
-  const filters = element.filters;
+function tintedOffscreenFor(img, filters) {
   const sig = JSON.stringify(filters);
-  let entry = filterOffscreenCache.get(element.id);
-  if (!entry || entry.src !== element.src || entry.sig !== sig) {
-    const offscreen = document.createElement("canvas");
-    offscreen.width = Math.max(1, img.naturalWidth || 1);
-    offscreen.height = Math.max(1, img.naturalHeight || 1);
-    const octx = offscreen.getContext("2d");
-    const cssFilter = cssFilterFor(filters);
-    if (cssFilter) octx.filter = cssFilter;
-    octx.drawImage(img, 0, 0);
-    if (cssFilter) octx.filter = "none";
-    const tint = filters.tint;
-    if (tint && tint.strength > 0) {
-      octx.globalCompositeOperation = "source-atop";
-      octx.globalAlpha = tint.strength;
-      octx.fillStyle = tint.color;
-      octx.fillRect(0, 0, offscreen.width, offscreen.height);
-      octx.globalCompositeOperation = "source-over";
-      octx.globalAlpha = 1;
-    }
-    entry = { canvas: offscreen, src: element.src, sig };
-    filterOffscreenCache.set(element.id, entry);
+  const key = `${img.src} ${sig}`;
+  const cached = filterOffscreenCache.get(key);
+  if (cached) return cached;
+  const offscreen = document.createElement("canvas");
+  offscreen.width = Math.max(1, img.naturalWidth || 1);
+  offscreen.height = Math.max(1, img.naturalHeight || 1);
+  const octx = offscreen.getContext("2d");
+  const cssFilter = cssFilterFor(filters);
+  if (cssFilter) octx.filter = cssFilter;
+  octx.drawImage(img, 0, 0);
+  if (cssFilter) octx.filter = "none";
+  const tint = filters.tint;
+  if (tint && tint.strength > 0) {
+    octx.globalCompositeOperation = "source-atop";
+    octx.globalAlpha = tint.strength;
+    octx.fillStyle = tint.color;
+    octx.fillRect(0, 0, offscreen.width, offscreen.height);
+    octx.globalCompositeOperation = "source-over";
+    octx.globalAlpha = 1;
   }
-  return entry.canvas;
-}
-
-// Drop cached offscreens for elements no longer in the project (mirrors layers_panel's
-// pruneThumbCache — keyed by id, bounded across deletes/project switches).
-function pruneFilterOffscreenCache() {
-  const live = new Set(elements().map((item) => item.id));
-  for (const id of filterOffscreenCache.keys()) if (!live.has(id)) filterOffscreenCache.delete(id);
+  // Evict oldest-inserted once over the cap (Map preserves insertion order).
+  if (filterOffscreenCache.size >= FILTER_OFFSCREEN_CACHE_MAX) {
+    filterOffscreenCache.delete(filterOffscreenCache.keys().next().value);
+  }
+  filterOffscreenCache.set(key, offscreen);
+  return offscreen;
 }
 
 // ---- animation preview (T0260 increment 2) ------------------------------------
@@ -482,14 +485,43 @@ function pruneFilterOffscreenCache() {
 const previewingElementIds = new Set();
 let previewClockT0 = 0;
 let previewRafId = 0;
+// T0265 F1/F2: per-element preview start (performance.now() captured at Play). ONLY the "once"
+// flipbook mode reads it — it measures adv from the element's OWN start, so a flipbook that
+// joins an already-running shared clock still plays from frame 0 (not a giant adv off
+// previewClockT0 that clamps instantly to the last frame), and a finished once can detect its
+// own completion here to retire itself. loop/pingpong deliberately keep the SHARED
+// previewClockT0 so duplicate takes stay phase-locked (design §3/§7). Set on start, deleted on
+// stop/prune; a fresh Play rewrites it, so once always replays from frame 0.
+const elementPreviewStart = new Map(); // element id -> performance.now() at Play
 
-// Drop previewing ids that no longer resolve to a live element carrying an animation (the
-// element was deleted/undone, its animation was cleared, or the project was switched) — the
-// self-clean that lets a mutation on ANY other path silently retire a preview.
+// Whether a "once" flipbook has played through and should retire (T0265 F2). Returns true once
+// adv passes the last kept frame plus one frame of grace (so the last frame is actually painted
+// before the shared rAF dies on the now-static scene — the perf culture here forbids an idle
+// rAF). A 0/1-frame or malformed once has nothing to advance, so it is "finished" immediately.
+function flipbookOnceFinished(element) {
+  const fb = element.flipbook;
+  if (!fb || (fb.play_mode || "loop") !== "once") return false;
+  if (!Array.isArray(fb.frames)) return true;
+  const K = fb.frames.filter((frame) => frame && frame.kept !== false && frame.src).length;
+  if (K < 2) return true;
+  const fps = Number(fb.fps) > 0 ? Number(fb.fps) : 12;
+  const start = elementPreviewStart.get(element.id) ?? previewClockT0;
+  const adv = Math.floor(((performance.now() - start) / 1000) * fps);
+  return adv >= K; // last frame is index K-1; adv>=K = shown for one frame-duration of grace
+}
+
+// Drop previewing ids that no longer resolve to a live element carrying a PLAYABLE spec —
+// a procedural `animation` OR (T0265) a `flipbook` blob (the element was deleted/undone, its
+// spec was cleared, or the project was switched) — AND retire a "once" flipbook that has
+// played through (F2). The self-clean that lets a mutation on ANY other path silently retire a
+// preview; the shared rAF dies once the set empties.
 function prunePreviewIds() {
   for (const id of previewingElementIds) {
     const element = elements().find((item) => item.id === id);
-    if (!element || !element.animation) previewingElementIds.delete(id);
+    if (!element || (!element.animation && !element.flipbook) || flipbookOnceFinished(element)) {
+      previewingElementIds.delete(id);
+      elementPreviewStart.delete(id);
+    }
   }
 }
 
@@ -510,6 +542,7 @@ export function isAnimationPreviewing(elementId) {
 export function startAnimationPreview(elementId) {
   if (!elementId || previewingElementIds.has(elementId)) return;
   if (!previewingElementIds.size) previewClockT0 = performance.now();
+  elementPreviewStart.set(elementId, performance.now()); // F1/F2: once measures from its OWN start
   previewingElementIds.add(elementId);
   if (!previewRafId) previewRafId = requestAnimationFrame(previewLoop);
   render(); // paint the first animated frame now, don't wait a whole rAF
@@ -519,6 +552,7 @@ export function startAnimationPreview(elementId) {
 // static box immediately; cancelling the rAF outright when it was the last preview.
 export function stopAnimationPreview(elementId) {
   if (!previewingElementIds.delete(elementId)) return;
+  elementPreviewStart.delete(elementId);
   if (!previewingElementIds.size && previewRafId) {
     cancelAnimationFrame(previewRafId);
     previewRafId = 0;
@@ -562,6 +596,61 @@ function drawWithAnimation(sample, element, vp, drawFn) {
   ctx.restore();
 }
 
+// ---- flipbook playback (T0265 increment 1, video route) -----------------------
+//
+// A flipbook is an IMAGE element carrying an additive `flipbook` blob (design §1.2 —
+// { frames:[{src,kept}], fps, play_mode, frame_w, frame_h }). element.src is frame 0 (the
+// static render), so a RESTING flipbook is just a normal image and paints through the
+// UNCHANGED image path below — the static render never changes. Only a PLAYING flipbook (in
+// previewingElementIds, the SAME set + shared previewClockT0 + self-cleaning rAF the
+// procedural preview uses) swaps in the current kept frame's <img>. Each element samples its
+// OWN fps from the shared clock (design §3), so two takes at different fps run in phase.
+//
+// Per-frame decode reuses app.js's SINGLE content-addressed imageCache via imageForSrc (T0265
+// F4 — one image cache per app; a flipbook frame is a project file keyed by its bare src,
+// exactly like every element image, so a duplicated cache is gone). Frames are immutable files,
+// so the cache never goes stale (the paletteCountCache pattern); a frame decodes lazily and
+// repaints on load, exactly like app.js imageFor.
+
+// The <img> to paint for a PLAYING flipbook element THIS frame, or null when the element is
+// not playing / carries no flipbook / has no kept frame / the chosen frame has not decoded
+// yet (caller then falls back to imageFor(element) = frame 0, so a not-yet-decoded frame
+// shows frame 0 for one repaint instead of a blank box). Index math is design §3 exactly,
+// over the EFFECTIVE (kept) sequence; a resting element never reaches here (the
+// previewingElementIds gate), so idx=0 rest is simply "not playing" = element.src.
+function flipbookFrameFor(element) {
+  if (!previewingElementIds.has(element.id)) return null;
+  const fb = element.flipbook;
+  if (!fb || !Array.isArray(fb.frames)) return null;
+  const kept = fb.frames.filter((frame) => frame && frame.kept !== false && frame.src);
+  const K = kept.length;
+  if (!K) return null;
+  let idx = 0;
+  if (K >= 2) {
+    const fps = Number(fb.fps) > 0 ? Number(fb.fps) : 12;
+    const mode = fb.play_mode || "loop";
+    if (mode === "once") {
+      // F1: once measures adv from the element's OWN start (elementPreviewStart), NOT the
+      // shared clock — so a once flipbook that joins an already-running preview still plays
+      // from frame 0 instead of getting a huge adv that clamps instantly to the last frame.
+      const start = elementPreviewStart.get(element.id) ?? previewClockT0;
+      const adv = Math.floor(((performance.now() - start) / 1000) * fps);
+      idx = Math.min(adv, K - 1); // holds the last frame (until prune retires it, F2)
+    } else if (mode === "pingpong") {
+      // loop/pingpong keep the SHARED clock so duplicate takes stay phase-locked (design §7).
+      const adv = Math.floor(((performance.now() - previewClockT0) / 1000) * fps);
+      const P = 2 * (K - 1);
+      const p = ((adv % P) + P) % P;
+      idx = p < K ? p : P - p;
+    } else {
+      const adv = Math.floor(((performance.now() - previewClockT0) / 1000) * fps);
+      idx = ((adv % K) + K) % K; // loop
+    }
+  }
+  const img = imageForSrc(kept[idx].src);
+  return img.complete && img.naturalWidth ? img : null;
+}
+
 function paintElement(element, vp, editEl) {
   if (element.type === "text") {
     paintTextElement(element, vp, editEl);
@@ -588,7 +677,11 @@ function paintElement(element, vp, editEl) {
   // about `element` or the store changes.
   const previewBitmap =
     cleanupPreview && cleanupPreview.elementId === element.id && !cleanupPreviewCompare ? cleanupPreview.bitmap : null;
-  const img = previewBitmap || imageFor(element);
+  // T0265: a PLAYING flipbook swaps in the current kept frame's <img> (design §3). Resting
+  // or mid-decode falls back to imageFor(element) = element.src = frame 0, so the static
+  // render is byte-identical to a plain image. A live cleanup preview always wins.
+  const flipbookImg = previewBitmap ? null : flipbookFrameFor(element);
+  const img = previewBitmap || flipbookImg || imageFor(element);
   const origin = imageToScreenPoint({ x: element.x, y: element.y }, vp);
   const w = element.w * vp.scale;
   const h = element.h * vp.scale;
@@ -611,8 +704,13 @@ function paintElement(element, vp, editEl) {
     // the tint bake (brightness/saturation/contrast still apply via ctx.filter) — a narrow,
     // deliberately-scoped gap: the tint reappears the instant the preview ends/commits.
     const filters = element.filters;
+    // T0265 F3: the tinted bake is CONTENT-ADDRESSED by the paint source image's own URL (see
+    // tintedOffscreenFor), so a PLAYING flipbook frame tints correctly too — the earlier
+    // `!flipbookImg` carve-out (tint vanished during playback, preview lied to the lead) is
+    // gone. Only the cleanup preview still skips it: its data-URL bitmap has no stable file
+    // identity to key on, and a live preview is transient (tint returns the instant it commits).
     const useTintOffscreen = !previewBitmap && !!(filters && filters.tint && filters.tint.strength > 0);
-    const paintSource = useTintOffscreen ? tintedOffscreenFor(element, img) : img;
+    const paintSource = useTintOffscreen ? tintedOffscreenFor(img, filters) : img;
     const cssFilter = useTintOffscreen ? "" : cssFilterFor(filters);
     const drawBody = () => {
       if (cssFilter) ctx.filter = cssFilter;
@@ -702,6 +800,36 @@ function paintElement(element, vp, editEl) {
       ctx.fillText(chipLabel, origin.x + chipPadX, origin.y + chipH / 2 + 0.5);
       ctx.restore();
     }
+  }
+  // Flipbook chrome badge (T0265, lead feedback 2026-07-06: "на канвасе flipbook в покое
+  // выглядит ровно как обычная картинка — типы неразличимы"): a small dark PILL in the
+  // element's bottom-right corner reporting kept-frame count + fps, so a flipbook reads apart
+  // from a plain image at rest AND while playing — element.src (frame 0) paints through the
+  // UNCHANGED image path above regardless. Pure chrome: drawn after the ctx.globalAlpha reset,
+  // same fixed-CSS-px/unrotated-box shortcut as the ref/cleanup chips above (never scales into
+  // an unreadable blob at high zoom), and never touches the pixel path above (renderGroup/
+  // export/the static image draw are untouched — this never runs for a plain image, since it
+  // gates on element.flipbook).
+  if (element.type === "image" && element.flipbook && Array.isArray(element.flipbook.frames)) {
+    const fb = element.flipbook;
+    const keptCount = fb.frames.filter((frame) => frame && frame.kept !== false).length;
+    const fps = Math.round(Number(fb.fps) > 0 ? Number(fb.fps) : 12);
+    const badgeLabel = `▶ ${keptCount} · ${fps}fps`;
+    ctx.save();
+    ctx.font = "11px system-ui, 'Segoe UI', sans-serif";
+    const badgePadX = 5;
+    const badgeH = 16;
+    const badgeTextW = Math.ceil(ctx.measureText(badgeLabel).width);
+    const badgeW = badgeTextW + badgePadX * 2;
+    const badgeX = origin.x + w - badgeW - 4;
+    const badgeY = origin.y + h - badgeH - 4;
+    roundRectPath(badgeX, badgeY, badgeW, badgeH, badgeH / 2);
+    ctx.fillStyle = "rgba(8, 20, 13, 0.8)";
+    ctx.fill();
+    ctx.fillStyle = ANIM_ACCENT;
+    ctx.textBaseline = "middle";
+    ctx.fillText(badgeLabel, badgeX + badgePadX, badgeY + badgeH / 2 + 0.5);
+    ctx.restore();
   }
   if (isSelected(element)) {
     ctx.strokeStyle = isEdit ? "#3fc7ba" : "#77a7ff";
@@ -1259,6 +1387,12 @@ const RECIPE_ACCENT = "#d7a14a";
 // the 2026-07-04 review (item 4): the original cyan collided with the region-edit accent.
 const STYLE_ACCENT = "#9d7fd8";
 
+// T0265 F7: animation-card accent — the third "special container" type after recipe (amber)
+// and style (violet). Green (canvas.css --green #65bd81, already in the palette), NOT the
+// region-edit cyan (which style deliberately avoided for the same collision reason) — reads
+// distinct from both other card accents at a glance. Same dashed-frame + chip contract.
+const ANIM_ACCENT = "#65bd81";
+
 // Recipe-card prompt preview (T0239 increment 2): mirrors layers_panel.js's textPreview
 // (T0231) — newlines collapsed to spaces, trimmed, truncated with an ellipsis. Empty/
 // whitespace-only prompt yields "" so the caller skips drawing it (no bare quotes on a
@@ -1278,9 +1412,10 @@ function drawGroupFrame(group, vp) {
   const selected = state.selectedGroupId === group.id || state.selectedGroupIds.has(group.id);
   const isRecipeCard = !!group.recipe;
   const isStyleCard = !!group.style;
+  const isAnimCard = !!group.anim;
   ctx.lineWidth = selected ? 2 : 1;
-  ctx.strokeStyle = isRecipeCard ? RECIPE_ACCENT : isStyleCard ? STYLE_ACCENT : selected ? "#d7a14a" : "#77a7ff";
-  if (isRecipeCard || isStyleCard) {
+  ctx.strokeStyle = isRecipeCard ? RECIPE_ACCENT : isStyleCard ? STYLE_ACCENT : isAnimCard ? ANIM_ACCENT : selected ? "#d7a14a" : "#77a7ff";
+  if (isRecipeCard || isStyleCard || isAnimCard) {
     // Dashed frame = "special container" (a card is a workshop widget, not a plain group) —
     // read at a glance regardless of selection state. Reset after so the marquee/guide
     // overlays that draw later this same frame never inherit the dash pattern.
@@ -1315,12 +1450,12 @@ function drawGroupFrame(group, vp) {
   ctx.fillText(label, rect.x + padX, rect.y + labelH / 2 + 0.5);
   groupLabelRects.push(rect);
 
-  // Recipe/Style-card chrome (T0239 increments 2/3): a tag chip beside the title (same
-  // accent as the frame stroke) + a truncated prompt preview inside the frame. Both are
-  // pure chrome — never pushed to groupLabelRects, so neither is click-selectable on its
-  // own (the existing name pill above stays the only interactive label hit-area). The two
-  // card types are mutually exclusive (a group never carries both blobs), so this is a
-  // plain if/else — never two chips on the same frame.
+  // Recipe/Style/Anim-card chrome (T0239 increments 2/3; T0265 F7): a tag chip beside the
+  // title (same accent as the frame stroke) + a truncated prompt/motion preview inside the
+  // frame. Both are pure chrome — never pushed to groupLabelRects, so neither is
+  // click-selectable on its own (the existing name pill above stays the only interactive label
+  // hit-area). The three card types are mutually exclusive (a group never carries two blobs),
+  // so this is a plain if/else — never two chips on the same frame.
   if (isRecipeCard) {
     const chipLabel = "Recipe";
     const chipTextW = Math.ceil(ctx.measureText(chipLabel).width);
@@ -1349,6 +1484,23 @@ function drawGroupFrame(group, vp) {
     ctx.fillText(chipLabel, chipX + padX, rect.y + labelH / 2 + 0.5);
 
     const preview = recipePromptPreview(group.style.prompt);
+    if (preview) {
+      ctx.font = "11px system-ui, 'Segoe UI', sans-serif";
+      ctx.fillStyle = "rgba(248, 251, 255, 0.6)";
+      ctx.textBaseline = "top";
+      ctx.fillText(preview, origin.x + padX, origin.y + 4);
+    }
+  } else if (isAnimCard) {
+    const chipLabel = "Anim";
+    const chipTextW = Math.ceil(ctx.measureText(chipLabel).width);
+    const chipX = rect.x + rect.w + 4;
+    ctx.fillStyle = ANIM_ACCENT;
+    ctx.fillRect(chipX, rect.y, chipTextW + padX * 2, labelH);
+    ctx.fillStyle = "#0a1f10"; // dark text for contrast against the green fill
+    ctx.textBaseline = "middle";
+    ctx.fillText(chipLabel, chipX + padX, rect.y + labelH / 2 + 0.5);
+
+    const preview = recipePromptPreview(group.anim.motion);
     if (preview) {
       ctx.font = "11px system-ui, 'Segoe UI', sans-serif";
       ctx.fillStyle = "rgba(248, 251, 255, 0.6)";
