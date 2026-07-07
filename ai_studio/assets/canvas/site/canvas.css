@@ -2184,6 +2184,30 @@ body.layers-resizing {
   margin: 4px 0 8px;
 }
 
+.insp-pack-preview-sheet {
+  font-size: 12px;
+  margin: 2px 0;
+}
+
+.insp-pack-preview-sheet > summary {
+  cursor: pointer;
+  color: var(--text);
+  padding: 3px 2px;
+}
+
+.insp-pack-preview-prompt {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin: 2px 0 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
 .insp-region-empty {
   color: var(--muted);
   font-size: 12px;

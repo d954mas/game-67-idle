@@ -1173,7 +1173,10 @@ export async function packPreviewAction(groupId, control) {
     "Previewing pack… (offline expander, no codex)",
     async () => {
       const result = await api("POST", `/projects/${pid()}/recipe-cards/${groupId}/pack-preview`, {});
-      state.packPreview = { cardId: groupId, ...result };
+      // `at` is the inspector-sig token: the preview is ephemeral (no project change), so
+      // without a changing marker in inspectorSig the panel never rebuilds and the result
+      // stays invisible (lead hit exactly this, 2026-07-07).
+      state.packPreview = { cardId: groupId, at: Date.now(), ...result };
       refresh();
       const refNote = result.style_ref_image ? " (style ref image included)" : "";
       return { kind: "success", message: `Preview: ${result.sheets} sheet(s)${refNote}.` };

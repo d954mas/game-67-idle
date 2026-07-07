@@ -2886,19 +2886,19 @@ function renderRecipe(group, root) {
       summary.className = "insp-align-caption";
       summary.textContent = `Preview: ${preview.sheets} sheet(s)${preview.style_ref_image ? " · style ref image included" : ""}`;
       body.appendChild(summary);
-      const previewWrap = document.createElement("div");
-      previewWrap.className = "insp-alpha-plates"; // reuse: same stacked thumb/row layout as Generation's References list
+      // Per-sheet prompts as inline SPOILERS, not View-buttons + modal (lead's ask,
+      // 2026-07-07): native <details> — expands in place, no collapsed-state bookkeeping.
       for (const job of preview.jobs || []) {
-        const row = document.createElement("div");
-        row.className = "insp-plate-row";
-        const label = document.createElement("span");
-        label.className = "insp-plate-role";
-        label.textContent = job.name;
-        const viewBtn = smallBtn("View", () => openPromptModal(job.name, job.prompt, null, { readOnly: true }));
-        row.append(label, viewBtn);
-        previewWrap.appendChild(row);
+        const spoiler = document.createElement("details");
+        spoiler.className = "insp-pack-preview-sheet";
+        const summaryEl = document.createElement("summary");
+        summaryEl.textContent = job.name;
+        const promptPre = document.createElement("pre");
+        promptPre.className = "insp-pack-preview-prompt";
+        promptPre.textContent = job.prompt;
+        spoiler.append(summaryEl, promptPre);
+        body.appendChild(spoiler);
       }
-      body.appendChild(previewWrap);
     }
   }
 
@@ -3455,7 +3455,10 @@ function inspectorSig() {
     // recipe/style ride in the signature so a prompt/engine/ref commit (or a CLI edit)
     // rebuilds the Recipe/Style section — the Generate button's empty-prompt disable and
     // the Style member/ref rows both depend on it.
-    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}|${group.parentId || ""}|${JSON.stringify(group.recipe || null)}|${JSON.stringify(group.style || null)}|${JSON.stringify(group.anim || null)}`;
+    // `pp:` — the ephemeral pack-preview token (actions.js stamps `at`): the preview never
+    // touches the project, so without this the panel would not rebuild to show it.
+    const packPreviewTok = state.packPreview && state.packPreview.cardId === group.id ? state.packPreview.at : 0;
+    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}|${group.parentId || ""}|${JSON.stringify(group.recipe || null)}|${JSON.stringify(group.style || null)}|${JSON.stringify(group.anim || null)}|pp:${packPreviewTok}`;
   }
   // Multi-group selection (2+ groups, no loose elements): the signature carries each
   // group's id + shared toggle state so a batched visible/clip change rebuilds the panel.
