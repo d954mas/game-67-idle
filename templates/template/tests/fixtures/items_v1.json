@@ -1,0 +1,12 @@
+{
+  "owned": {
+    "purse/tmpl.gold": {
+      "def_id": "tmpl.gold",
+      "container": "purse",
+      "count": "50",
+      "level": 1,
+      "durability": 1.0,
+      "quarantined": false
+    }
+  }
+}

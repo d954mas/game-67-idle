@@ -59,6 +59,8 @@
 #include "game_state.h"
 #include "game_state_events.gen.h" /* E2: game_ev_register (typed event labels) */
 #include "settings_state.h"        /* A6: SettingsState + settings_state_fragment (NOT the events header) */
+#include "items_state.h"           /* И2a: ItemsState + items_state_fragment (NOT the events header) */
+#include "items_state_events.gen.h" /* И2a: items_ev_register (typed items.txn label, R2: not empty) */
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -352,8 +354,10 @@ int main(int argc, char **argv) {
     nt_hash_init(&(nt_hash_desc_t){0});
     game_events_init(); // type-hashes/labels need hash init; arena is gfx-independent
     game_ev_register(); // register typed-event debug labels (effect under NT_HASH_LABELS, E3)
+    items_ev_register(); // И2a: register items.txn debug label (mirrors game_ev_register)
 #if NT_DEVAPI_ENABLED
     game_events_devapi_register_descs(game_ev_descs, game_ev_desc_count); // E3: tail descriptors
+    game_events_devapi_register_descs(items_ev_descs, items_ev_desc_count); // И2a: items.txn tail descriptor
 #endif
     game_log_register(); // E4.B: debug label "log" (UNCONDITIONAL; game_log.c is a leaf)
 #if NT_DEVAPI_ENABLED
@@ -361,6 +365,7 @@ int main(int argc, char **argv) {
 #endif
 #if FEATURE_GAME_ANALYTICS
     game_analytics_register_descs(game_ev_descs, game_ev_desc_count);   // E4: fragment descs (append)
+    game_analytics_register_descs(items_ev_descs, items_ev_desc_count); // И2a: items.txn (append)
     game_analytics_register_descs(game_log_descs, game_log_desc_count); // E4: log type (append)
     game_analytics_init();                                             // E4: open stream + header
 #endif
@@ -374,6 +379,7 @@ int main(int argc, char **argv) {
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});
     nt_text_renderer_init();
     game_save_register_fragment(&settings_state_fragment); /* settings before game (§14 п.2) */
+    game_save_register_fragment(&items_state_fragment);    /* И2a: L1, no deps -> between settings and game (OQ2) */
     game_save_register_fragment(&game_state_fragment);     /* `game` last (most dependent) */
     game_save_init();
     if (!s_fresh_state) {
@@ -391,6 +397,7 @@ int main(int argc, char **argv) {
         /* --fresh-state skips load; the static instances are 0-init, so seed real
            defaults through both generated descriptors. */
         settings_state_fragment.reset();
+        items_state_fragment.reset(); /* И2a: neutral empty owned{} (on_new_game stub, И2b bodies) */
         game_state_fragment.reset();
     }
 #ifdef NT_PLATFORM_WEB

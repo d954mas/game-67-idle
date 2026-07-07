@@ -143,6 +143,8 @@ add_executable(${GAME_TARGET}
     src/render/capture.c
     src/systems/sys_move.c
     src/features/settings/settings_screen.c
+    src/features/items/items_catalog.c        # И2a: catalog-lookup over the codegen tables below
+    "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.c" # И2a: const item/container tables (content codegen)
 )
 if(NOT EMSCRIPTEN)
     add_dependencies(${GAME_TARGET} game_asset_packs)
@@ -150,6 +152,36 @@ endif()
 # Game-state provisioning is always on (lead decision 2026-07-07: "a game without
 # state is impossible"); the former on/off CMake axis is gone (И2-0).
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
+
+# И2a: items CONTENT codegen (SECOND codegen, deliberately separate from the
+# game-state generator below -- design doc §9 "не смешивать"). Compile-time const
+# tables from content/items.json, referenced by the unconditional add_executable
+# above (items_catalog.c / items_catalog.gen.c) -- must run after find_package(Python3)
+# (code-review H1/#10); textual order vs. that add_executable use does not matter to
+# CMake (OUTPUT<->SOURCES path matching is order-independent within a directory).
+set(ITEMS_CATALOG_JSON "${CMAKE_CURRENT_SOURCE_DIR}/content/items.json")
+set(ITEMS_CATALOG_FIELDS_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/content/item_fields.schema.json")
+set(ITEMS_CATALOG_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_items_catalog.py")
+set(ITEMS_CATALOG_GENERATED_HEADER "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.h")
+set(ITEMS_CATALOG_GENERATED_SOURCE "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.c")
+add_custom_command(
+    OUTPUT
+        "${ITEMS_CATALOG_GENERATED_HEADER}"
+        "${ITEMS_CATALOG_GENERATED_SOURCE}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_SOURCE_GENERATED_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CATALOG_GENERATOR}"
+        --catalog "${ITEMS_CATALOG_JSON}"
+        --schema "${ITEMS_CATALOG_FIELDS_SCHEMA}"
+        --out-dir "${GAME_SOURCE_GENERATED_DIR}"
+    DEPENDS
+        "${ITEMS_CATALOG_JSON}"
+        "${ITEMS_CATALOG_FIELDS_SCHEMA}"
+        "${ITEMS_CATALOG_GENERATOR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Generating items content catalog (const C tables)"
+    VERBATIM
+)
+
 set(GAME_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
 set(GAME_STATE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/generate_state.py")
 set(GAME_STATE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state")
@@ -201,11 +233,36 @@ add_custom_command(
     COMMENT "Generating installed settings-state fragment sources"
     VERBATIM
 )
+# И2a: THIRD fragment `items` -- owned-map (plain ownership table, §2.2) + txn
+# event (NOT empty, unlike settings -- R2) + hooks (on_new_game/reconcile, Р9).
+set(ITEMS_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/items.schema.json")
+set(ITEMS_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/items_state.c")
+set(ITEMS_STATE_GENERATED_EVENTS_SOURCE "${GAME_STATE_GENERATED_DIR}/items_state_events.gen.c")
+add_custom_command(
+    OUTPUT
+        "${GAME_STATE_GENERATED_DIR}/items_state.h"
+        "${ITEMS_STATE_GENERATED_SOURCE}"
+        "${GAME_STATE_GENERATED_DIR}/items_state_schema.gen.h"
+        "${GAME_STATE_GENERATED_DIR}/items_state_events.gen.h"
+        "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_STATE_GENERATED_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
+        --schema "${ITEMS_STATE_SCHEMA}"
+        --out-dir "${GAME_STATE_GENERATED_DIR}"
+        --fragment items
+    DEPENDS "${ITEMS_STATE_SCHEMA}" "${GAME_STATE_GENERATOR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    COMMENT "Generating installed items-state fragment sources"
+    VERBATIM
+)
 target_sources(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_SOURCE}"   # A4: also carries the generated game_state_fragment descriptor
     "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # E2: typed event structs/emit/descriptors
     "${SETTINGS_STATE_GENERATED_SOURCE}"   # A6: generated settings fragment state layer
     src/features/settings/settings.c       # A6: hand-written settings logic (Р9)
+    "${ITEMS_STATE_GENERATED_SOURCE}"        # И2a: generated items fragment state layer
+    "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}" # И2a: items.txn event (R2: not empty, must link)
+    src/features/items/items_bootstrap.c     # И2a: on_new_game/reconcile stubs (H1)
     src/game_state_json.c
     src/game_storage.c
     src/game_save.c              # A3
@@ -527,4 +584,37 @@ if(NOT EMSCRIPTEN)
         "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
     target_link_libraries(check_mini_state_events PRIVATE nt_hash nt_log nt_core)  # headers only (OBJECT does not link)
     nt_set_warning_flags(check_mini_state_events)  # same -W set + -Werror toggle as the game target
+
+    # И2a: catalog-lookup over the generated const tables (content codegen, §6.3/§6.8).
+    add_executable(test_items_catalog
+        tests/test_items_catalog.c
+        src/features/items/items_catalog.c
+        "${ITEMS_CATALOG_GENERATED_SOURCE}")
+    target_link_libraries(test_items_catalog PRIVATE unity)
+    target_include_directories(test_items_catalog PRIVATE src "${GAME_SOURCE_GENERATED_DIR}")
+    target_compile_definitions(test_items_catalog PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_items_catalog PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_items_catalog COMMAND test_items_catalog)
+
+    # И2a skeleton -> И2b full (§6.6c/§6.8): round-trip over the generated items
+    # fragment state layer. Links items_state.c + the (non-empty, R2) events source +
+    # the on_new_game/reconcile stubs (H1) + gsj_* toolkit + game_events.c (event
+    # descriptor plumbing); game_save.c is NOT linked (no game_save_* calls here,
+    # same as test_game_state_roundtrip). Catalog/containers are NOT needed by the
+    # И2a skeleton tests (added in И2b).
+    add_executable(test_items_fragment
+        tests/test_items_fragment.c
+        "${ITEMS_STATE_GENERATED_SOURCE}"
+        "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
+        src/features/items/items_bootstrap.c
+        src/game_state_json.c
+        src/game_events.c)
+    target_link_libraries(test_items_fragment PRIVATE cjson unity nt_hash nt_log nt_core)
+    target_include_directories(test_items_fragment PRIVATE src "${GAME_STATE_GENERATED_DIR}")
+    target_compile_definitions(test_items_fragment PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_items_fragment PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_items_fragment COMMAND test_items_fragment
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 endif()
