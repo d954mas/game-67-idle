@@ -146,6 +146,9 @@ add_executable(${GAME_TARGET}
     src/features/items/items_catalog.c        # И2a: catalog-lookup over the codegen tables below
     "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.c" # И2a: const item/container tables (content codegen)
     "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c" # И3a: const progression track/curve tables (content codegen)
+    src/game_format.c                                # И3b: L0 int64-abbrev formatter
+    src/features/resource_panel/resource_panel.c     # И3b: generic counter/bar widget (zero feature headers)
+    src/ui/demo_hud.c                                # И3b: game composition (resource_panel over items/progression)
 )
 if(NOT EMSCRIPTEN)
     add_dependencies(${GAME_TARGET} game_asset_packs)
@@ -737,4 +740,13 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(test_progression_curve PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_progression_curve PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_progression_curve COMMAND test_progression_curve)
+
+    # И3b (§6.1/G8): L0 int64-abbrev formatter -- pure, no generated-file/state
+    # dependency, so a plain two-file test target (precedent test_game_state_json).
+    add_executable(test_game_format tests/test_game_format.c src/game_format.c)
+    target_link_libraries(test_game_format PRIVATE unity)
+    target_include_directories(test_game_format PRIVATE src)
+    target_compile_definitions(test_game_format PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_format PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_format COMMAND test_game_format)
 endif()

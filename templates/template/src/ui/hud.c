@@ -41,8 +41,15 @@ void hud_draw(nt_material_t text_material, nt_resource_t font_resource, nt_font_
 
     const float white[4] = {1.0F, 1.0F, 1.0F, 1.0F};
     const float cyan[4] = {0.35F, 0.82F, 1.0F, 1.0F};
-    const float h = (float)g_nt_window.fb_height;
-    hud_text("TEMPLATE", 30.0F, h - 50.0F, 30.0F, white);
+    /* M-fix (deep-review, И3b): this title used to sit top-left (h-50) --
+       the same corner И3b's resource_panel (src/features/resource_panel) now
+       occupies with the demo gold/hero HUD, so the two overlapped ("Gold 50"
+       read through "TEMPLATE"'s letters). Grouped both demo/placeholder
+       labels at the BOTTOM-left instead, clear of the top-left HUD real
+       estate. This is game-owned demo scaffolding (not a feature); the
+       generic resource_panel widget keeps its own fixed top-left placement
+       unchanged -- no game-specific offset was hardcoded into the widget. */
+    hud_text("TEMPLATE", 30.0F, 80.0F, 30.0F, white);
     hud_text("empty scene - gear (top-right) opens settings", 30.0F, 40.0F, 18.0F, cyan);
     nt_text_renderer_flush();
 }

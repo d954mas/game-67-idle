@@ -68,13 +68,21 @@ updated: 2026-07-07
       в шаблоне; спека → 2 ревью (ACCEPT-WITH-FIXES/ACCEPT) → фикс-раунд →
       исполнитель → deep-ревью ACCEPT-WITH-ADDITIONS (док-дрейф INSTALL.md/
       TEMPLATE.md закрыт в том же коммите).
-- [ ] И2 items + И3 progression+resource_panel в шаблоне собираются,
+- [x] И2 items + И3 progression+resource_panel в шаблоне собираются,
       слоёвое правило видно в коде (progression включает items.h,
       обратного нет); золото/опыт живут как currency-предметы в purse;
       resource_panel не инклюдит ни items.h, ни progression.h (entries
       с геттерами от игры).
-- [ ] features/README.md обновлён полями layer/provides/registers/assets_tag/
+      ФАКТ 2026-07-07: И2 четырьмя коммитами (см. Log) + хвост
+      9b911bdbe; И3a 5c784f8b3; И3b закоммичен следом (resource_panel
+      L2 generic + game_format L0 + demo_hud композиция игры). Грепы
+      слоёвости в обе стороны чисты (deep-ревью подтвердило: панель —
+      только self+engine+game_format), ctest 16/16, wasm линкуется,
+      скрины: панель читается, модалка settings не пробивается.
+- [x] features/README.md обновлён полями layer/provides/registers/assets_tag/
       art_needs в feature.json-контракте (декларативная арт-модель).
+      ФАКТ 2026-07-07: отгружено в И1 (027d7c212); первый реальный
+      feature.json с art_needs — resource_panel (И3b).
 - [ ] Дизайн-док перенесён из tmp/ в постоянное место.
 
 ## Open questions
@@ -173,6 +181,20 @@ updated: 2026-07-07
   фичи + скилл nt-game-items). Каждый срез: исполнитель → deep-ревью →
   фикс-раунд → контрольный прогон. ОСТАЛОСЬ: И3 progression +
   resource_panel (спека дальше).
+- 2026-07-07: И3b ГОТОВ — АРКА КОДА ЗАВЕРШЕНА. resource_panel (L2
+  generic-виджет: entries+getter от игры, counter+bar,
+  displayed≠logical, count-up ease-out/ретаргет/снап, punch в
+  фикс-ячейке, poll+diff, transient-only, graceful no-art, anchor
+  best-effort, НОЛЬ фича-хедеров) + game_format (L0 int64-abbrev,
+  INT64_MIN-safe) + demo_hud (композиция игры: золото-счётчик +
+  xp-бар, idle-доход loot:demo_idle). Deep-ревью: ACCEPT-WITH-FIXES —
+  z-order фикс (zIndex=-1: текст панели протекал бы поверх модалки
+  settings), UB-негация в rp_i64_abs, poll-once max(); визуальная
+  находка оркестратора: наезд панели на демо-титул — титул уехал вниз
+  (src/ui/hud.c). ctest 16/16, wasm, грепы чисты, 2 скрина одобрены.
+  Дизайн-доки уже в постоянном месте (templates/design/) — перенос
+  из tmp/ не требуется. Осталось лиду: приёмка глазами (count-up в
+  движении не headless-гейтится) + закрытие карточки.
 - 2026-07-07: И3 спека 962f771de (2 Opus-ревью ACCEPT-WITH-FIXES →
   19 фиксов + LEAN: on_level_up codegen-ветка вырезана, кривые
   exp-only + обязательный golden запекания, progression.json БЕЗ

@@ -2,6 +2,7 @@
 #include "systems/sys_move.h"
 #include "features/settings/settings.h"
 #include "features/progression/progression.h" /* И3a: progression_update() tick (auto/threshold level-ups) */
+#include "ui/demo_hud.h" /* И3b: demo composition (resource_panel over items/progression) */
 #include "ui/ui_runtime.h"
 #include "app/nt_app.h" /* g_nt_app.dt */
 #if NT_DEVAPI_ENABLED
@@ -22,6 +23,7 @@ void game_features_init(World *w) {
 
 void game_features_update(World *w, float dt) {
     sys_move(w, dt); /* мировая симуляция шаблона; здесь же фичи эмитят события */
+    demo_hud_update(dt); /* И3b: demo idle-доход ПЕРЕД авто-покупкой того же кадра */
     progression_update(); /* И3a: auto/threshold tick (T5 HARD-капы внутри) */
     /* TODO(feature-migration): <id>_update(w, dt) по строке на фичу */
 }
@@ -66,7 +68,8 @@ void game_features_draw_ui(World *w) {
     /* UI-слой фич: агрегатор владеет ui_runtime-кадром; каждая фича получает
        ctx и рисует свой слой ОДНОЙ строкой, порядок вызовов = z-order. */
     if (ui_runtime_begin(g_nt_app.dt)) {
-        settings_draw_ui(ui_runtime_ctx(), w); /* L2 settings overlay */
+        demo_hud_draw_ui(ui_runtime_ctx());    /* И3b: resource_panel (HUD, снизу) */
+        settings_draw_ui(ui_runtime_ctx(), w); /* settings overlay (сверху) */
         ui_runtime_end();
     }
 }

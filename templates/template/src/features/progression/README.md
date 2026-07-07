@@ -164,3 +164,17 @@ pass the items guard cleanly but break progression codegen loudly
 (`SystemExit`: currency_def not found / not a currency). Keep
 `content/progression.json` in sync when retiring a currency def; see the
 advisory note in `items/README.md`'s def-removal section.
+
+## Demo idle-income + autosave churn (И3b, cross-note — see also `resource_panel/README.md`)
+
+The И3b demo binding (`src/ui/demo_hud.c`) feeds a small idle xp income
+(`DEMO_XP_PER_SEC`, default 8/s) into `items` purse `tmpl.xp` every frame so
+the demo `hero` auto-track visibly counts up and levels on its own — the
+whole point of routing xp through `items_purse` (OQ6) is to make the L2->L1
+include a REAL, exercised path, not a latent one. This income marks the save
+dirty on every flush (autosave debounces at 2s, `main.c`
+`GAME_SAVE_DEBOUNCE_MS`) — a template that keeps ticking in the background
+is the INTENDED "idle game" demo, not a bug. A lead/game that wants a
+perfectly silent template can zero `DEMO_XP_PER_SEC` in `demo_hud.c`; `hero`
+then sits static at level 0/`cost[0]` and every §8 acceptance gate still
+passes (they gate rendering/state correctness, never the exact number).
