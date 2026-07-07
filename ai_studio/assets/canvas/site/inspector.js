@@ -2596,12 +2596,17 @@ export function estimatePackSheetCount(pack) {
   return count;
 }
 
-// Fresh pack-mode default (mirrors cli.mjs's own recipe-set fallback literal EXACTLY —
-// `{ axes: {}, vary: "", grid: [3, 3], max_jobs: 12 }`): an empty starting draft that passes
-// normalizeRecipePack's structural check (axes:{} / vary:"" are both legal, just not yet
-// USEFUL) — the axes textarea below prefills its OWN skeleton example text for the lead to
-// fill in and commit on blur, separate from this stored default.
-const DEFAULT_PACK_TEMPLATE = () => ({ axes: {}, vary: "", grid: [3, 3], max_jobs: 12 });
+// Fresh pack-mode default: a WORKING config, not an empty draft (lead walked a chain of
+// incomplete-config errors on 2026-07-07: empty vary -> pick vary -> other axis lacks a
+// {slot}). ONE axis with vary preselected has no big axes at all, so the prompt needs no
+// {slot} and Preview passes right after the toggle; errors only appear once the lead ADDS
+// axes — at which point the Vary hint below has already stated the slot rule.
+const DEFAULT_PACK_TEMPLATE = () => ({
+  axes: { grade: ["rusty", "plain", "gilded"] },
+  vary: "grade",
+  grid: [3, 3],
+  max_jobs: 12,
+});
 
 // `pack` REPLACES wholesale on every patch (ops.mjs's own doc: "patch ЗАМЕНЯЕТ pack
 // целиком") — every pack-field commit below sends the FULL `{...recipe.pack, ...fieldPatch}`
@@ -2642,7 +2647,13 @@ function renderPackAxesField(group, recipe, body) {
     errorEl.style.display = "none";
     errorEl.textContent = "";
     if (JSON.stringify(parsed) === JSON.stringify(recipe.pack.axes || {})) return; // unchanged: no commit
-    commitPackPatch(group, recipe, { axes: parsed });
+    // Never leave vary dangling after an axes edit (lead's stumble 2026-07-07): if the
+    // current vary is no longer a key of the new axes, re-point it at the first key in the
+    // SAME commit — one journal entry, and Preview can't hit "vary '' is not a key".
+    const patch = { axes: parsed };
+    const keys = Object.keys(parsed);
+    if (!keys.includes(recipe.pack.vary)) patch.vary = keys[0] || "";
+    commitPackPatch(group, recipe, patch);
   });
 }
 
@@ -2654,6 +2665,13 @@ function renderPackVaryField(group, recipe, body) {
   if (recipe.pack.vary && !options.includes(recipe.pack.vary)) options.push(recipe.pack.vary);
   if (!options.length) options.push("");
   body.appendChild(field("Vary", selectInput(recipe.pack.vary || "", options, (next) => commitPackPatch(group, recipe, { vary: next }))));
+  // The one rule the error chain was teaching one bounce at a time (2026-07-07) — state it
+  // upfront instead: vary spreads across the sheet cells, every OTHER axis must be a prompt
+  // slot (the expander refuses an axis that affects nothing).
+  const varyHint = document.createElement("div");
+  varyHint.className = "insp-region-hint";
+  varyHint.textContent = "Cells vary by this axis. Every OTHER axis must appear in the prompt as {axis} — one sheet per combination.";
+  body.appendChild(varyHint);
 }
 
 // Grid select: 2x2 / 3x3 (build-spec: "grid select (2x2|3x3)") — a stored grid outside that
