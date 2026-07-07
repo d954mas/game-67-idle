@@ -397,7 +397,7 @@ int main(int argc, char **argv) {
         /* --fresh-state skips load; the static instances are 0-init, so seed real
            defaults through both generated descriptors. */
         settings_state_fragment.reset();
-        items_state_fragment.reset(); /* И2a: neutral empty owned{} (on_new_game stub, И2b bodies) */
+        items_state_fragment.reset(); /* --fresh-state: deliberately reset-only, no on_new_game bootstrap */
         game_state_fragment.reset();
     }
 #ifdef NT_PLATFORM_WEB

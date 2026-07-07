@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -56,8 +57,13 @@ def c_bool(value: Any) -> str:
     return "true" if bool(value) else "false"
 
 
-def c_i64(value: Any) -> str:
-    return f"{int(value)}LL"
+def c_i64(value: Any, context: str) -> str:
+    # F2 (И2b deep-review): a JSON float/string/bool silently truncated via
+    # int(value) is a latent data-corruption bug for i64 fields -- reject it
+    # with a message that names the offending field, not a bare traceback.
+    if not isinstance(value, int) or isinstance(value, bool):
+        raise SystemExit(f"items catalog validation: {context}: expected an integer for i64 field, got {value!r}")
+    return f"{value}LL"
 
 
 def load_json(path: Path) -> Any:
@@ -134,12 +140,12 @@ def validate_catalog(doc: dict[str, Any], field_schema: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def stack_fields(item: dict[str, Any]) -> tuple[bool, int, bool]:
+def stack_fields(item: dict[str, Any]) -> tuple[bool, Any, bool]:
     stack = item.get("stack") or {}
     has_equip = "equip" in item
     stackable = bool(stack.get("stackable", not has_equip))
     unlimited = bool(stack.get("unlimited", False))
-    max_stack = int(stack.get("max_stack", 0))
+    max_stack = stack.get("max_stack", 0)  # raw JSON value; c_i64 validates it at render time
     return stackable, max_stack, unlimited
 
 
@@ -213,9 +219,10 @@ def render_source(doc: dict[str, Any]) -> str:
         currency = item.get("currency")
         if currency is not None:
             currency_sym = f"CURRENCY_{sym}"
+            cap_context = f"item {item['id']!r} currency.cap"
             lines.append(
                 f"static const item_currency_block_t {currency_sym} = "
-                f"{{ .hud_hint = {c_str(currency.get('hud_hint'))}, .cap = {c_i64(currency.get('cap', 0))} }};"
+                f"{{ .hud_hint = {c_str(currency.get('hud_hint'))}, .cap = {c_i64(currency.get('cap', 0), cap_context)} }};"
             )
             lines.append("")
             refs["currency"] = currency_sym
@@ -233,9 +240,10 @@ def render_source(doc: dict[str, Any]) -> str:
         lines.append(f"        .kind = {c_str(item.get('kind'))},")
         lines.append(f"        .tags = {refs.get('tags', 'NULL')},")
         lines.append(f"        .tag_count = {len(tags)},")
-        lines.append(f"        .base_value = {c_i64(item.get('base_value', 0))},")
+        item_id = item.get("id")
+        lines.append(f"        .base_value = {c_i64(item.get('base_value', 0), f'item {item_id!r} base_value')},")
         lines.append(f"        .stackable = {c_bool(stackable)},")
-        lines.append(f"        .max_stack = {c_i64(max_stack)},")
+        lines.append(f"        .max_stack = {c_i64(max_stack, f'item {item_id!r} stack.max_stack')},")
         lines.append(f"        .unlimited = {c_bool(unlimited)},")
         lines.append(f"        .equip = {('&' + refs['equip']) if 'equip' in refs else 'NULL'},")
         lines.append(f"        .use = {('&' + refs['use']) if 'use' in refs else 'NULL'},")
@@ -248,9 +256,10 @@ def render_source(doc: dict[str, Any]) -> str:
 
     lines.append("const game_container_def_t k_containers[] = {")
     for container in containers:
+        capacity_context = f"container {container.get('id')!r} capacity"
         lines.append("    {")
         lines.append(f"        .id = {c_str(container.get('id'))},")
-        lines.append(f"        .capacity = {c_i64(container.get('capacity', 0))},")
+        lines.append(f"        .capacity = {c_i64(container.get('capacity', 0), capacity_context)},")
         lines.append(f"        .accept_policy = {ACCEPT_POLICY_ENUM[container['accept_policy']]},")
         lines.append(f"        .hidden = {c_bool(container.get('hidden', False))},")
         lines.append("    },")
@@ -266,7 +275,9 @@ def write_if_changed(path: Path, text: str) -> bool:
     if old == text:
         return False
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    tmp_path = path.with_name(path.name + ".tmp")  # F4: atomic write (crash mid-write leaves the old file intact)
+    tmp_path.write_text(text, encoding="utf-8")
+    os.replace(tmp_path, path)
     return True
 
 
@@ -281,17 +292,29 @@ def main(argv: list[str] | None = None) -> int:
     schema_path = Path(args.schema).resolve()
     out_dir = Path(args.out_dir).resolve()
 
-    doc = load_json(catalog_path)
-    field_schema = load_json(schema_path)
-    validate_catalog(doc, field_schema)
+    # F3: a malformed catalog entry (wrong block shape, unexpected type) can trip
+    # a raw KeyError/TypeError deep in render_source/validate_catalog -- surface it
+    # with the same "items catalog validation: ..." prefix as the explicit checks
+    # instead of leaking a Python traceback to whoever runs the build.
+    try:
+        doc = load_json(catalog_path)
+        field_schema = load_json(schema_path)
+        validate_catalog(doc, field_schema)
 
-    header_path = out_dir / "items_catalog.gen.h"
-    source_path = out_dir / "items_catalog.gen.c"
+        header_path = out_dir / "items_catalog.gen.h"
+        source_path = out_dir / "items_catalog.gen.c"
+
+        header_text = render_header(len(doc.get("items", [])), len(doc.get("containers", [])))
+        source_text = render_source(doc)
+    except SystemExit:
+        raise
+    except (TypeError, KeyError, ValueError, AttributeError) as exc:
+        raise SystemExit(f"items catalog validation: {exc}") from exc
 
     changed = []
-    if write_if_changed(header_path, render_header(len(doc.get("items", [])), len(doc.get("containers", [])))):
+    if write_if_changed(header_path, header_text):
         changed.append(header_path)
-    if write_if_changed(source_path, render_source(doc)):
+    if write_if_changed(source_path, source_text):
         changed.append(source_path)
 
     if changed:

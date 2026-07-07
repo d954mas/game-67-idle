@@ -5,7 +5,8 @@
    в папке static. L1 foundation: зависит только от L0-шелла (game_save-toolkit +
    gsj_ + движок), НЕ от других фич. Владение ведётся в int64 ВЕЗДЕ (валюты тоже
    int64, НЕ double; большие счётчики в JSON — строкой, §14 п.8). Дробное
-   производство копит аккумулятор в game glue, НЕ в count (Р1; см. README). */
+   производство копит аккумулятор в game glue, НЕ в count (Р1; паттерн задокументирован
+   в build_spec_t0327_i2 §OQ5 и приземлится в скилл nt-game-items, И2c). */
 #include <stdbool.h>
 #include <stdint.h>
 

@@ -262,7 +262,8 @@ target_sources(${GAME_TARGET} PRIVATE
     src/features/settings/settings.c       # A6: hand-written settings logic (Р9)
     "${ITEMS_STATE_GENERATED_SOURCE}"        # И2a: generated items fragment state layer
     "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}" # И2a: items.txn event (R2: not empty, must link)
-    src/features/items/items_bootstrap.c     # И2a: on_new_game/reconcile stubs (H1)
+    src/features/items/items_bootstrap.c     # И2a stubs -> И2b real bodies (Р9 §7.3: on_new_game/reconcile)
+    src/features/items/items_containers.c    # И2b: ownership/containers/purse (add/remove/move/count/can_afford)
     src/game_state_json.c
     src/game_storage.c
     src/game_save.c              # A3
@@ -599,19 +600,23 @@ if(NOT EMSCRIPTEN)
 
     # И2a skeleton -> И2b full (§6.6c/§6.8): round-trip over the generated items
     # fragment state layer. Links items_state.c + the (non-empty, R2) events source +
-    # the on_new_game/reconcile stubs (H1) + gsj_* toolkit + game_events.c (event
-    # descriptor plumbing); game_save.c is NOT linked (no game_save_* calls here,
-    # same as test_game_state_roundtrip). Catalog/containers are NOT needed by the
-    # И2a skeleton tests (added in И2b).
+    # the real on_new_game/reconcile bodies (Р9 §7.3) + gsj_* toolkit + game_events.c
+    # (event descriptor plumbing) + И2b ownership (items_containers.c) + the catalog
+    # (item_core, reconcile/containers need it, code-review #11). game_save.c is
+    # NOT linked (engine-independent) -- the test TU stubs game_save_mark_dirty()
+    # itself instead (precedent: test_game_state_roundtrip, code-review #11).
     add_executable(test_items_fragment
         tests/test_items_fragment.c
         "${ITEMS_STATE_GENERATED_SOURCE}"
         "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
         src/features/items/items_bootstrap.c
+        src/features/items/items_containers.c
+        src/features/items/items_catalog.c
+        "${ITEMS_CATALOG_GENERATED_SOURCE}"
         src/game_state_json.c
         src/game_events.c)
     target_link_libraries(test_items_fragment PRIVATE cjson unity nt_hash nt_log nt_core)
-    target_include_directories(test_items_fragment PRIVATE src "${GAME_STATE_GENERATED_DIR}")
+    target_include_directories(test_items_fragment PRIVATE src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_items_fragment PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_items_fragment PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
