@@ -48,7 +48,10 @@ EM_JS(char *, game_storage_web_load, (const char *path_ptr), {
             return 0;
         }
         var size = lengthBytesUTF8(data) + 1;
-        var ptr = malloc(size);
+        /* Bare `malloc` is undefined in the EM_JS scope (the wasm export is
+           `_malloc`): the throw made every load look like "no save", so the
+           game wiped the real save with defaults on boot (T0333 finding). */
+        var ptr = _malloc(size);
         if (!ptr) {
             return 0;
         }

@@ -69,6 +69,12 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.dirname(TESTS_DIR)
+# The raw localStorage key game_storage.c resolves: "<GAME_STORAGE_APP_ID>/save/<slot>"
+# with APP_ID "template" (CMakeLists) and the fixed autosave slot. Read directly
+# in session 2 (before the game boots) to classify a failure as "browser did not
+# persist" vs "game read path broken" -- the T0333 investigation's malloc/_malloc
+# EM_JS bug looked exactly like a browser-persistence problem until split this way.
+STORAGE_KEY = "template/save/autosave"
 # game.state.set routes the FIRST path segment to the save-fragment id
 # (GAME_STATE_FRAGMENT_ID="game"); the rest is the field within it. hero.gold is
 # an int field, schema default 0, range [0, 999999] (see
@@ -418,8 +424,20 @@ def run(build_dir, chrome_path, http_port, cdp_port, keep_profile):
         chrome_proc = None
 
         # ---- session 2: brand-new Chrome process, SAME profile dir ----
-        chrome_proc = launch_chrome(resolved_chrome, url, cdp_port, profile_dir)
+        # Land on a wasm-free page of the SAME origin first (a 404 body keeps
+        # the origin) and read the raw saved value before the game can boot: a
+        # broken game read must not be able to overwrite the evidence.
+        chrome_proc = launch_chrome(resolved_chrome,
+                                    f"http://127.0.0.1:{http_port}/__lsprobe__",
+                                    cdp_port, profile_dir)
         cdp = Cdp(cdp_page_ws_url(cdp_port))
+        raw_saved = cdp.eval_js(f"window.localStorage.getItem({json.dumps(STORAGE_KEY)})")
+        if raw_saved is None:
+            print(f"FAIL: localStorage[{STORAGE_KEY!r}] is empty after the restart -- the "
+                  f"browser did not persist the save (stand/browser issue, not the game read path)")
+            return 1
+        print(f"localStorage survived the restart ({len(raw_saved)} chars); booting the game...")
+        cdp.call("Page.navigate", {"url": url})
         cdp.wait_for_devapi()
 
         load_resp = cdp.devapi_submit("game.state.load", {})
@@ -434,7 +452,9 @@ def run(build_dir, chrome_path, http_port, cdp_port, keep_profile):
 
         got_value = get_resp.get("result", {}).get("value")
         if got_value is None or float(got_value) != float(STATE_VALUE):
-            print(f"FAIL: expected {STATE_PATH}=={STATE_VALUE} after restart, got {got_value!r}")
+            print(f"FAIL: expected {STATE_PATH}=={STATE_VALUE} after restart, got {got_value!r} "
+                  f"(the save WAS in localStorage after the restart, {len(raw_saved)} chars -> "
+                  f"game read path / boot overwrite bug, not browser persistence)")
             return 1
 
         print(f"PASS: {STATE_PATH}=={got_value} survived a full Chrome quit+restart under the same profile dir.")
