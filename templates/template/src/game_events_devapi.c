@@ -33,6 +33,15 @@
 #ifndef GAME_EVENTS_DESC_REG_CAP /* max registered descriptors */
 #define GAME_EVENTS_DESC_REG_CAP 64
 #endif
+/* Optional log mirror of the per-frame event tail (lead 2026-07-07): when 1, each event
+   already rendered into the ring is also echoed to the engine log as `[ev] <json>`. OFF by
+   default -> zero cost. Available in devapi builds (this TU only compiles under
+   NT_DEVAPI_ENABLED, where the logs are read); enable via -DGAME_EVENTS_LOG_MIRROR=1 in the
+   game's config / target_compile_definitions. Reuses the already-rendered ring string — no
+   extra render. */
+#ifndef GAME_EVENTS_LOG_MIRROR
+#define GAME_EVENTS_LOG_MIRROR 0
+#endif
 
 /* Dev-only, single-threaded static buffer for handler error messages (must outlive the
    call). Local copy of the game_save_devapi.c helper -- not shared across TUs. */
@@ -106,6 +115,9 @@ void game_events_devapi_record(void) {
         const game_event_t *e = &log[i];
         const game_event_desc_t *d = reg_find(e->type);
         (void)game_event_render(e, d, s_ring[s_ring_head], GAME_EVENTS_TAIL_ENTRY_MAX);
+#if GAME_EVENTS_LOG_MIRROR
+        nt_log_info("[ev] %s", s_ring[s_ring_head]); /* reuse the just-rendered ring string */
+#endif
         s_ring_seq[s_ring_head] = e->seq;
         s_ring_head = (s_ring_head + 1u) % (uint32_t)GAME_EVENTS_TAIL_RING_CAP;
         if (s_ring_count < (uint32_t)GAME_EVENTS_TAIL_RING_CAP) {
