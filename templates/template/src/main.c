@@ -40,15 +40,26 @@
 #endif
 #endif
 
+#include "features/game_features.h"
+#include "game_events.h"
+#include "game_log.h" /* E4.B: built-in "log" event type (unconditional leaf) */
+#if FEATURE_GAME_STATE && NT_DEVAPI_ENABLED
+#include "game_events_devapi.h" /* E3: game.events.tail (tail ring + recorder) */
+#endif
+#if FEATURE_GAME_ANALYTICS
+#include "game_analytics.h" /* E4: local analytics NDJSON writer */
+#endif
 #include "render/capture.h"
 #include "render/render_mesh.h"
-#include "systems/sys_move.h"
 #include "systems/sys_settings.h"
 #include "ui/hud.h"
 #include "ui/ui_runtime.h"
 #include "world/world.h"
 #if FEATURE_GAME_STATE
+#include "game_save.h"
 #include "game_state.h"
+#include "game_state_events.gen.h" /* E2: game_ev_register (typed event labels) */
+#include "settings_state.h"        /* A6: SettingsState + settings_state_fragment (NOT the events header) */
 #endif
 
 #include <stdbool.h>
@@ -72,6 +83,10 @@ static World s_world;
 static char s_capture_path[260];
 static bool s_capture;
 static bool s_open_settings_on_start;
+#if FEATURE_GAME_STATE
+static bool s_fresh_state;
+static bool s_disable_autosave;
+#endif
 static int s_window_width = 1280;
 static int s_window_height = 720;
 static int s_frame_count;
@@ -142,7 +157,8 @@ static bool devapi_start(void) {
 #endif
     nt_devapi_register_default();
 #if FEATURE_GAME_STATE
-    game_state_register_devapi();
+    game_save_register_devapi();
+    game_events_register_devapi(); // E3: game.events.tail (+ enables the recorder)
 #endif
 #ifdef NT_DEVAPI_GROUP_UI
     nt_devapi_ui_register_context("hud", ui_runtime_ctx());
@@ -204,21 +220,23 @@ static void devapi_sample_metrics(double frame_begin) {
 #endif
 }
 
+#ifndef NT_PLATFORM_WEB
 static void devapi_shutdown_runtime(void) {
     if (!s_devapi_running) {
         return;
     }
-#ifndef NT_PLATFORM_WEB
     nt_devapi_net_stop();
-#endif
     nt_devapi_shutdown();
     s_devapi_running = false;
 }
+#endif
 #else
 static bool devapi_start(void) { return true; }
 static void devapi_update_frame(void) {}
 static void devapi_sample_metrics(double frame_begin) { (void)frame_begin; }
+#ifndef NT_PLATFORM_WEB
 static void devapi_shutdown_runtime(void) {}
+#endif
 #endif
 
 // The frame loop: poll, advance the world, render. Calls subsystems only.
@@ -236,8 +254,19 @@ static void frame(void) {
     nt_material_step();
     s_world.time_seconds += g_nt_app.dt;
 
-    // game systems update the world (settings logic now lives in its nt_ui build)
-    sys_move(&s_world, g_nt_app.dt);
+    // ---- feature two-phase event frame (event_system_design §2/§7) ----
+    game_features_update(&s_world, g_nt_app.dt);   // emit phase (sys_move moved in); phase=EMIT default
+    game_events_react_begin();                     // fixpoint baseline = count after update
+    do {
+        game_features_react(&s_world);             // reactors (may cascade-emit)
+    } while (game_events_react_progressed());       // fixpoint under generation cap
+    game_events_set_phase(GAME_EVENT_PHASE_RECORD);
+    game_features_record(&s_world);                // recorders (E3/E4 fill; empty now)
+#if FEATURE_GAME_STATE
+    // Autosave: after the RECORD phase (the anchor at the old sys_move site).
+    if (!s_disable_autosave) { game_save_tick(); }
+#endif
+    game_event_frame_reset();                       // close the event frame (poison in debug); phase->EMIT
 
     nt_gfx_begin_frame();
     if (g_nt_gfx.context_restored) {
@@ -255,6 +284,7 @@ static void frame(void) {
 
     // render systems read the world
     nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.75F, 0.96F, 1.0F}, .clear_depth = 1.0F});
+    // TODO(feature-migration): game_features_draw_world/draw_ui land here once render systems become features.
     render_mesh_draw(&s_world, s_frame_ubo);
     hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
 
@@ -289,8 +319,14 @@ int main(int argc, char **argv) {
                 fprintf(stderr, "invalid --window-size, expected WIDTHxHEIGHT\n");
                 return 2;
             }
-        } else if (strcmp(argv[i], "--fresh-state") == 0 || strcmp(argv[i], "--disable-autosave") == 0) {
-            /* Accepted for shared runtime automation launch compatibility; the template has no save flow yet. */
+        } else if (strcmp(argv[i], "--fresh-state") == 0) {
+#if FEATURE_GAME_STATE
+            s_fresh_state = true; /* skip load, start from reset defaults */
+#endif
+        } else if (strcmp(argv[i], "--disable-autosave") == 0) {
+#if FEATURE_GAME_STATE
+            s_disable_autosave = true; /* keep loading, but never autosave */
+#endif
 #if NT_DEVAPI_ENABLED
         } else if (strcmp(argv[i], "--devapi") == 0 && i + 1 < argc) {
             s_devapi_requested = true;
@@ -330,6 +366,24 @@ int main(int argc, char **argv) {
     nt_http_init();
     nt_fs_init();
     nt_hash_init(&(nt_hash_desc_t){0});
+    game_events_init(); // type-hashes/labels need hash init; arena is gfx-independent
+#if FEATURE_GAME_STATE
+    game_ev_register(); // register typed-event debug labels (effect under NT_HASH_LABELS, E3)
+#if NT_DEVAPI_ENABLED
+    game_events_devapi_register_descs(game_ev_descs, game_ev_desc_count); // E3: tail descriptors
+#endif
+#endif
+    game_log_register(); // E4.B: debug label "log" (UNCONDITIONAL; game_log.c is a leaf)
+#if FEATURE_GAME_STATE
+#if NT_DEVAPI_ENABLED
+    game_events_devapi_register_descs(game_log_descs, game_log_desc_count); // E3 tail: log type (append)
+#endif
+#if FEATURE_GAME_ANALYTICS
+    game_analytics_register_descs(game_ev_descs, game_ev_desc_count);   // E4: fragment descs (append)
+    game_analytics_register_descs(game_log_descs, game_log_desc_count); // E4: log type (append)
+    game_analytics_init();                                             // E4: open stream + header
+#endif
+#endif // FEATURE_GAME_STATE
     nt_resource_init(&(nt_resource_desc_t){0});
     nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader, nt_gfx_deactivate_shader);
     nt_resource_set_activator(NT_ASSET_MESH, nt_gfx_activate_mesh, nt_gfx_deactivate_mesh);
@@ -340,7 +394,29 @@ int main(int argc, char **argv) {
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});
     nt_text_renderer_init();
 #if FEATURE_GAME_STATE
-    game_state_init();
+    game_save_register_fragment(&settings_state_fragment); /* settings before game (§14 п.2) */
+    game_save_register_fragment(&game_state_fragment);     /* `game` last (most dependent) */
+    game_save_init();
+    if (!s_fresh_state) {
+        game_save_load_result_t load_result;
+        game_save_load(&load_result);
+        if (load_result.status == GAME_SAVE_LOAD_CORRUPT_RESET) {
+            /* load already did reset()+quarantine but NOT on_new_game (Р10); new_game() is the
+               single on_new_game on this path and also resumes autosave. */
+            char save_err[128];
+            (void)game_save_new_game(save_err, (int)sizeof save_err);
+        }
+        /* NEWER/RECOVERED_BAK: a game may show a toast (advisory); autosave is already
+           paused on NEWER, and RECOVERED_BAK has already rewritten the primary. */
+    } else {
+        /* --fresh-state skips load; the static instances are 0-init, so seed real
+           defaults through both generated descriptors. */
+        settings_state_fragment.reset();
+        game_state_fragment.reset();
+    }
+#ifdef NT_PLATFORM_WEB
+    game_save_install_web_flush();
+#endif
 #endif
 
     s_pack_id = nt_hash32_str("game");
@@ -390,6 +466,7 @@ int main(int argc, char **argv) {
 
     // engine UI stack (sprite renderer + slice9 atlas + nt_ui ctx); reuses the font + text material
     ui_runtime_init(s_text_material, s_font, s_font_resource);
+    game_features_init(&s_world); // world is constructed and spawned by this point
 
     if (!devapi_start()) {
         return 1;
@@ -405,6 +482,11 @@ int main(int argc, char **argv) {
 #ifndef NT_PLATFORM_WEB
     devapi_shutdown_runtime();
     ui_runtime_shutdown();
+    game_features_shutdown(&s_world);
+#if FEATURE_GAME_ANALYTICS
+    game_analytics_shutdown(); // E4: final flush + close (before event infra teardown)
+#endif
+    game_events_shutdown();
     nt_mem_scratch_shutdown();
     nt_text_renderer_shutdown();
     nt_font_destroy(s_font);

@@ -17,7 +17,9 @@ has no native image model. Generate, verify the PNG, then hand off to
   checks, composable prompts, Dead-ends, gemini CLI, `GEMINI_API_KEY`,
   `NODE_OPTIONS=--use-system-ca`.
 - `references/throughput-and-handoff.md`: batches, source-sheet workflow,
-  sidecars, `nt-asset-workflow` handoff, and quality evidence.
+  declarative pack configs (expand_jobs -> gen_batch -> slice_pack for
+  axis/grade families), sidecars, `nt-asset-workflow` handoff, and quality
+  evidence.
 
 ## Source First (before generating)
 

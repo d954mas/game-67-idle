@@ -29,16 +29,20 @@ class FakeGame:
             nodes = [{"id_string": "settings/gear"}]
             return {"nodes": nodes}
         if method == "game.state.schema":
-            return {"schema": "game_seed.state", "document": "game", "fields": []}
+            return {
+                "game": {"schema": "game_seed.state", "document": "game", "fields": []},
+                "settings": {"schema": "game_seed.settings", "fragment": "settings", "fields": []},
+            }
         if method == "game.state.get":
             return {
                 "path": params.get("path", "") if params else "",
                 "value": {
-                    "settings": {"master_volume": 0.8, "sfx_volume": 0.9},
-                    "tutorial": {"done": False},
-                    "inventory": {"item_ids": []},
+                    "settings": {"master_volume": 0.8, "music_volume": 0.7, "sfx_volume": 0.9},
+                    "game": {"tutorial": {"done": False}, "inventory": {"item_ids": []}},
                 },
             }
+        if method == "game.events.tail":
+            return {"events": [], "next_seq": 0, "dropped": 0, "evicted": 0}
         if method == "frame.current":
             return {"frame": 1}
         raise AssertionError(f"unexpected method: {method}")
@@ -73,16 +77,27 @@ class SmokeBotTest(unittest.TestCase):
         self.assertEqual(smoke_bot.find_ui_node(tree, "settings/gear"), tree["nodes"][0])
 
     def test_validate_game_state_requires_template_snapshot_shape(self):
-        state = {"path": "", "value": {"settings": {}, "tutorial": {}, "inventory": {}}}
+        state = {"path": "", "value": {"settings": {"master_volume": 0.8}, "game": {"tutorial": {}, "inventory": {}}}}
         self.assertIs(smoke_bot.validate_game_state(state), state)
-        with self.assertRaises(smoke_bot.DevApiError):
-            smoke_bot.validate_game_state({"path": "", "value": {"settings": {}}})
+        with self.assertRaises(smoke_bot.DevApiError):  # missing the settings fragment
+            smoke_bot.validate_game_state({"path": "", "value": {"game": {"tutorial": {}, "inventory": {}}}})
 
     def test_validate_game_state_schema_requires_template_schema(self):
-        schema = {"schema": "game_seed.state", "document": "game", "fields": []}
+        schema = {
+            "game": {"schema": "game_seed.state", "document": "game", "fields": []},
+            "settings": {"schema": "game_seed.settings", "fragment": "settings", "fields": []},
+        }
         self.assertIs(smoke_bot.validate_game_state_schema(schema), schema)
         with self.assertRaises(smoke_bot.DevApiError):
-            smoke_bot.validate_game_state_schema({"schema": "wrong"})
+            smoke_bot.validate_game_state_schema({})
+
+    def test_validate_events_tail_accepts_empty_and_rejects_bad(self):
+        ok = {"events": [], "next_seq": 0, "dropped": 0, "evicted": 0}
+        self.assertIs(smoke_bot.validate_events_tail(ok), ok)
+        with self.assertRaises(smoke_bot.DevApiError):  # events not a list
+            smoke_bot.validate_events_tail({"events": 0, "next_seq": 0, "dropped": 0, "evicted": 0})
+        with self.assertRaises(smoke_bot.DevApiError):  # missing numeric field
+            smoke_bot.validate_events_tail({"events": []})
 
     def test_default_executable_uses_ai_studio_game_exe_override(self):
         old = os.environ.get("AI_STUDIO_GAME_EXE")
@@ -101,8 +116,9 @@ class SmokeBotTest(unittest.TestCase):
             summary = smoke_bot.run_smoke(game, Path(tmp), audit=False)
             self.assertEqual(summary["stable_ui_id"], "settings/gear")
             self.assertEqual(summary["action"], "render.set_enabled false -> true")
-            self.assertEqual(summary["game_state_schema"]["schema"], "game_seed.state")
+            self.assertEqual(summary["game_state_schema"]["game"]["schema"], "game_seed.state")
             self.assertEqual(summary["game_state"]["path"], "")
+            self.assertIn("events_tail", summary)
             self.assertTrue(summary["render_enabled"]["enabled"])
             self.assertTrue(Path(summary["summary"]).exists())
             self.assertTrue(Path(summary["screenshot"]).exists())

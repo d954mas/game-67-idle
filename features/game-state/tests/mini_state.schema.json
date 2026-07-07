@@ -1,0 +1,38 @@
+{
+  "schema": "mini.state",
+  "schema_version": 2,
+  "fragment": "mini",
+  "version": 1,
+  "string_max": 32,
+  "enums": { "Mode": ["off", "on"] },
+  "types": {
+    "Cell": { "kind": "object", "fields": {
+      "def_id": { "type": "string", "max_length": 15 },
+      "count":  { "type": "i64", "default": 0, "min": 0, "max": 9000000000000000000 }
+    } }
+  },
+  "fields": {
+    "mode_index": { "type": "enum", "enum": "Mode", "default": "off" },
+    "label":      { "type": "string", "default": "hi", "max_length": 15 },
+    "total":      { "type": "i64", "default": 0, "min": 0, "max": 9000000000000000000 },
+    "cells":      { "type": "map<string,Cell>", "max_count": 8 },
+    "order":      { "type": "list<string>", "max_count": 8 }
+  },
+  "events": {
+    "cell_spawned": {
+      "fields": {
+        "total":  { "type": "i64" },
+        "rate":   { "type": "float" },
+        "kind":   { "type": "hash" },
+        "urgent": { "type": "bool" },
+        "label":  { "type": "string" },
+        "blob":   { "type": "bytes" }
+      }
+    },
+    "ticked": {
+      "fields": {
+        "count": { "type": "int" }
+      }
+    }
+  }
+}

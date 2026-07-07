@@ -7,6 +7,10 @@
 #include "ui/nt_ui_slider.h"
 #include "ui/theme.h"
 
+#if FEATURE_GAME_STATE
+#include "features/settings.h" /* A6: persist volumes through the settings feature-API */
+#endif
+
 #include <stdio.h>
 
 // Walker batches RECTs/IMAGEs first, then TEXT, within each Clay zIndex — so a
@@ -22,18 +26,31 @@ static float s_master = 0.8F, s_music = 0.7F, s_sfx = 0.9F;
 
 void sys_settings_force_open(void) { s_open = true; }
 bool sys_settings_is_open(void) { return s_open; }
+#if FEATURE_GAME_STATE
+float sys_settings_master(void) { return settings_master(); }
+float sys_settings_music(void) { return settings_music(); }
+float sys_settings_sfx(void) { return settings_sfx(); }
+#else
 float sys_settings_master(void) { return s_master; }
 float sys_settings_music(void) { return s_music; }
 float sys_settings_sfx(void) { return s_sfx; }
+#endif
 
 // Label + slider stacked; the slider mutates *value in place (engine owns the drag).
-static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, float *value) {
+// `commit` (nullable) persists a changed value through the settings feature-API,
+// which clamps and marks the save dirty; NULL when FEATURE_GAME_STATE is off.
+static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, float *value,
+                       void (*commit)(float)) {
     char buf[48];
     (void)snprintf(buf, sizeof buf, "%s   %d%%", name, (int)(*value * 100.0F + 0.5F));
+    const float before = *value;
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .layoutDirection = CLAY_TOP_TO_BOTTOM, .childGap = 4}}) {
         nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), buf, &g_theme.label);
         (void)nt_ui_slider_float(ctx, NT_UI_DATA_LAYER(LAYER_IMG), LAYER_TEXT, nt_ui_id(id), NULL, value, 0.0F, 1.0F, 0.0F, &g_theme.slider,
                                  &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_FIXED(380), CLAY_SIZING_FIXED(30)}}}, true);
+    }
+    if (*value != before && commit) {
+        commit(*value); // persist (clamps + marks dirty inside the setter)
     }
 }
 
@@ -68,9 +85,21 @@ void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
                                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
     nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "SETTINGS", &g_theme.title);
 
-    volume_row(ctx, "Master", "settings/master", &s_master);
-    volume_row(ctx, "Music", "settings/music", &s_music);
-    volume_row(ctx, "SFX", "settings/sfx", &s_sfx);
+#if FEATURE_GAME_STATE
+    // Authority is the persisted settings state: reseed the slider backing-floats
+    // from the feature each frame the panel is open; the commit callback is the
+    // single writer back into settings_state.
+    s_master = settings_master();
+    s_music = settings_music();
+    s_sfx = settings_sfx();
+    volume_row(ctx, "Master", "settings/master", &s_master, settings_set_master);
+    volume_row(ctx, "Music", "settings/music", &s_music, settings_set_music);
+    volume_row(ctx, "SFX", "settings/sfx", &s_sfx, settings_set_sfx);
+#else
+    volume_row(ctx, "Master", "settings/master", &s_master, NULL);
+    volume_row(ctx, "Music", "settings/music", &s_music, NULL);
+    volume_row(ctx, "SFX", "settings/sfx", &s_sfx, NULL);
+#endif
 
     // Action row: hold-to-reset (long press) + close.
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .layoutDirection = CLAY_LEFT_TO_RIGHT, .childGap = 12, .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {

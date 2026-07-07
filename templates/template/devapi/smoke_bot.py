@@ -47,6 +47,7 @@ REQUIRED_METHODS = {
     "capture.frame",
     "game.state.schema",
     "game.state.get",
+    "game.events.tail",
 }
 
 
@@ -102,18 +103,30 @@ def find_ui_node(tree: Any, element_id: str) -> dict[str, Any] | None:
 
 
 def validate_game_state_schema(schema: Any) -> dict[str, Any]:
+    # A5: game.state.schema returns a per-fragment aggregate { "game": <schema>, ... }.
+    # A6: the aggregate now also carries the `settings` fragment.
     if not isinstance(schema, dict):
         raise DevApiError(f"game.state.schema returned {type(schema).__name__}, expected object")
-    if schema.get("schema") != "game_seed.state":
-        raise DevApiError(f"unexpected game.state.schema id: {schema.get('schema')!r}")
-    if schema.get("document") != "game":
-        raise DevApiError(f"unexpected game.state.schema document: {schema.get('document')!r}")
-    if not isinstance(schema.get("fields"), list):
-        raise DevApiError("game.state.schema missing fields array")
+    frag = schema.get("game")
+    if not isinstance(frag, dict):
+        raise DevApiError("game.state.schema missing 'game' fragment")
+    if frag.get("schema") != "game_seed.state":
+        raise DevApiError(f"unexpected game.state.schema id: {frag.get('schema')!r}")
+    # The normalized schema carries both `fragment` and `document` (§A4.4) — accept either.
+    if frag.get("fragment") != "game" and frag.get("document") != "game":
+        raise DevApiError(f"unexpected game.state.schema fragment: {frag.get('fragment')!r}")
+    if not isinstance(frag.get("fields"), list):
+        raise DevApiError("game.state.schema 'game' missing fields array")
+    settings = schema.get("settings")
+    if not isinstance(settings, dict) or not isinstance(settings.get("fields"), list):
+        raise DevApiError("game.state.schema missing 'settings' fragment fields")
     return schema
 
 
 def validate_game_state(state: Any) -> dict[str, Any]:
+    # A6: get {path:""} returns the multi-fragment aggregate
+    # { path:"", value:{ settings:{...}, game:{...} } } — settings is now its own
+    # top-level fragment beside game (no longer nested under game.settings).
     if not isinstance(state, dict):
         raise DevApiError(f"game.state.get returned {type(state).__name__}, expected object")
     if state.get("path") != "":
@@ -121,10 +134,35 @@ def validate_game_state(state: Any) -> dict[str, Any]:
     value = state.get("value")
     if not isinstance(value, dict):
         raise DevApiError("game.state.get missing value object")
-    for key in ("settings", "tutorial", "inventory"):
-        if not isinstance(value.get(key), dict):
-            raise DevApiError(f"game.state.get missing value.{key} object")
+    game = value.get("game")
+    if not isinstance(game, dict):
+        raise DevApiError("game.state.get missing value.game fragment")
+    for key in ("tutorial", "inventory"):  # settings removed from the game set
+        if not isinstance(game.get(key), dict):
+            raise DevApiError(f"game.state.get missing value.game.{key} object")
+    settings = value.get("settings")  # new fragment beside game
+    if not isinstance(settings, dict):
+        raise DevApiError("game.state.get missing value.settings fragment")
+    if not isinstance(settings.get("master_volume"), (int, float)):
+        raise DevApiError("value.settings.master_volume is not a number")
     return state
+
+
+def validate_events_tail(tail: Any) -> dict[str, Any]:
+    # E3: game.events.tail returns the render-at-copy ring window. The template emits no
+    # events by default, so `events` is typically []; validate SHAPE, tolerate empty.
+    if not isinstance(tail, dict):
+        raise DevApiError(f"game.events.tail returned {type(tail).__name__}, expected object")
+    if not isinstance(tail.get("events"), list):
+        raise DevApiError("game.events.tail missing 'events' array")
+    for key in ("next_seq", "dropped", "evicted"):
+        if not isinstance(tail.get(key), (int, float)):
+            raise DevApiError(f"game.events.tail missing numeric '{key}'")
+    for ev in tail["events"]:  # each rendered event is a self-contained object
+        if not isinstance(ev, dict) or not isinstance(ev.get("seq"), (int, float)) \
+                or not isinstance(ev.get("type"), str):
+            raise DevApiError("game.events.tail event missing seq/type")
+    return tail
 
 
 def wait_for_ui_id(game: Any, element_id: str, *, max_frames: int = 90, stride: int = 3) -> dict[str, Any]:
@@ -153,12 +191,13 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
 
     described = {
         method: game.result("command.describe", {"method": method})
-        for method in ("render.set_enabled", "ui.click", "capture.frame", "game.state.schema", "game.state.get")
+        for method in ("render.set_enabled", "ui.click", "capture.frame", "game.state.schema", "game.state.get", "game.events.tail")
     }
 
     closed_tree = wait_for_ui_id(game, "settings/gear")
     state_schema = validate_game_state_schema(game.result("game.state.schema"))
     state_before = validate_game_state(game.result("game.state.get", {"path": ""}))
+    events_tail = validate_events_tail(game.result("game.events.tail", {}))
     render_before = game.result("render.info")
     game.result("render.set_enabled", {"enabled": False})
     game.wait_frames(2)
@@ -173,7 +212,7 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
 
     screenshot = game.capture_screenshot(str(out_dir / "first_screen.png"), wait_frames=2, audit=audit)
     summary = {
-        "schema": "template.devapi_smoke.v1",
+        "schema": "template.devapi_smoke.v4",
         "method_count": len(methods),
         "required_methods": sorted(REQUIRED_METHODS),
         "described_methods": sorted(described.keys()),
@@ -181,6 +220,7 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
         "stable_ui_id": "settings/gear",
         "game_state_schema": state_schema,
         "game_state": state_before,
+        "events_tail": events_tail,
         "render_before": render_before,
         "render_disabled": render_disabled,
         "render_enabled": render_enabled,

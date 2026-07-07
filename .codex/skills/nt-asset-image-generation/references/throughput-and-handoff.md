@@ -21,12 +21,40 @@ Use:
 ## Source-Sheet First
 
 For bulk opaque families such as UI icons, generate one source sheet and crop N
-assets through intake, crop, cutout, and review-atlas tools. This is usually much
-cheaper than one generation per asset.
+assets through the region tools (`ai_studio/assets/tools/image/`: bg_fix ->
+regions -> slice). This is usually much cheaper than one generation per asset.
 
 Reserve per-asset dual-plate generation for a few genuinely soft hero effects.
 Use route warnings from the asset tools to decide where the extra
 generation cost is justified.
+
+## Declarative Packs (config -> expander)
+
+When a family varies along axes (grade/material/shape), do NOT hand-write N
+prompts. Write a pack config and expand it (T0330, dual-reviewed spec + pilot:
+`references/build_spec_pack_expander_2026-07-07.md`; worked example configs:
+`tmp/packs/swords-grade-test/`):
+
+1. `scripts/expand_jobs.py --config <pack.json> [--out <jobs.json>]` — config =
+   `style_prefix` (verbatim style card / art_contract block) + `subject_template`
+   with `{axis}` slots + `axes` (a grade LADDER of descriptors is the progression
+   control) + `sheet.vary`/`grid` (vary <= 9 cells) + `background`
+   (magenta/green = prompt-level key color only; transparent = loud error, REST
+   only) + optional `anchor` (abs-resolved; editing the anchor file re-busts the
+   whole pack) + `candidates` N (overgen per sheet, `__cN`) + loud `max_jobs` cap.
+2. `scripts/gen_batch.py --jobs <jobs.json> --concurrency 3` — as above;
+   sheet-first = ~7 assets per paid call.
+3. `scripts/slice_pack.py --jobs <jobs.json>` — bg_fix -> detect_regions ->
+   HARD count gate (region_count == cells; mismatch rejects the whole sheet:
+   a merged/empty cell would silently mislabel axes) -> slice with axis-named
+   outputs into per-sheet subdirs.
+
+Soft-glow cells (fire/halo/mist) keep magenta spill after key_matte — re-key
+those from the raw sheet on the canvas (`alpha --method corridorkey`, needs the
+videoGenRoot CorridorKey install) or route dual-plate; hard silhouettes cut
+clean. Multiple configs sharing one `out_dir` need explicit distinct `--out`
+paths (default `<out_dir>/jobs.json` collides). Expansion is deterministic:
+re-running an edited config re-busts only the sheets whose prompts changed.
 
 ## Handoff To Asset Workflow
 

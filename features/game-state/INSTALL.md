@@ -17,20 +17,49 @@ project:
 ```text
 <project>/
   state/game_state.schema.json
+  state/settings.schema.json
   state/migrations/
+  src/game_state_json.c
+  src/game_state_json.h
   src/game_storage.c
   src/game_storage.h
+  src/game_save.c
+  src/game_save.h
+  src/game_save_devapi.c
+  src/features/settings.c
+  src/features/settings.h
 ```
+
+The generated `game_state.c` now defines the `game_state_fragment` descriptor
+itself (the hand-written `game_fragment.c` adapter was removed in A4), so there
+is no separate fragment source to copy. The DevAPI dispatch is the hand-written
+`src/game_save_devapi.c` (A5): universal over the fragment registry, compiled
+only under `GAME_DEVAPI_ENABLED`.
+
+`settings` (A6) is the second live fragment and the Р9 sample: its state layer
+(`SettingsState`, defaults, (de)serialization, schema, descriptor) is GENERATED
+from `state/settings.schema.json`; only the feature LOGIC —
+`src/features/settings.{c,h}` (getters/setters + clamp + `game_save_mark_dirty`)
+— is hand-written and copied. The registry, shell, dispatch, and generator are
+universal over `GameSaveFragment`, so a second fragment needs no edit to any of
+them. `src/systems/sys_settings.c` (the UI consumer) is a template system, not a
+feature deliverable, and is NOT part of this copy-list.
 
 Then add CMake wiring equivalent to `templates/template/CMakeLists.txt`:
 
 - define `FEATURE_GAME_STATE`, defaulting on or off for the project;
-- run `features/game-state/scripts/generate_state.py` with the project schema;
+- run `features/game-state/scripts/generate_state.py` with the project schema
+  (`--fragment game`);
+- run the generator a SECOND time with the settings schema
+  (`--fragment settings`) into the SAME generated dir — the two custom commands
+  write different filenames, so a parallel build is fine;
 - write generated outputs to `<build>/generated/game-state`;
-- compile generated `game_state.c`, `src/game_storage.c`, and migrations when
-  `FEATURE_GAME_STATE` is on;
-- compile generated `game_state_devapi.c` only when both `FEATURE_GAME_STATE`
-  and `GAME_DEVAPI_ENABLED` are on;
+- compile generated `game_state.c` and `settings_state.c`, the hand-written
+  `src/features/settings.c`, `src/game_storage.c`, and migrations when
+  `FEATURE_GAME_STATE` is on (`settings_state_events.gen.c` is an empty-events
+  stub and is NOT linked; do not call `settings_ev_register`);
+- compile the hand-written `src/game_save_devapi.c` only when both
+  `FEATURE_GAME_STATE` and `GAME_DEVAPI_ENABLED` are on;
 - add the generated directory to the target include paths.
 
 Wire runtime code in the app entry point. The DevAPI registration call must live
@@ -39,18 +68,48 @@ inside code that is compiled only when DevAPI is enabled:
 ```c
 #if FEATURE_GAME_STATE
 #include "game_state.h"
+#include "settings_state.h" /* A6: second fragment; NOT settings_state_events.gen.h */
 #endif
 
 /* after core/runtime init */
 #if FEATURE_GAME_STATE
-game_state_init();
+game_save_register_fragment(&settings_state_fragment); /* settings before game */
+game_save_register_fragment(&game_state_fragment);     /* generated descriptor; `game` last */
+game_save_init();                            /* after all fragments are registered */
+if (!fresh_state) {
+    game_save_load_result_t r;
+    game_save_load(&r);                      /* orchestrates FRESH/LOADED/RECOVERED/CORRUPT/NEWER */
+    if (r.status == GAME_SAVE_LOAD_CORRUPT_RESET) {
+        char err[128];
+        (void)game_save_new_game(err, (int)sizeof err); /* only on_new_game on this path */
+    }
+} else {
+    settings_state_fragment.reset();         /* --fresh-state skips load: seed both fragments */
+    game_state_fragment.reset();
+}
+#ifdef NT_PLATFORM_WEB
+game_save_install_web_flush();               /* synchronous visibility/pagehide flush */
+#endif
+#endif
+
+/* per frame, after the game systems (and, with E1, after the record phase) */
+#if FEATURE_GAME_STATE
+if (!disable_autosave) {
+    game_save_tick();                        /* debounced autosave */
+}
 #endif
 
 /* inside the DevAPI startup path, after nt_devapi_register_default() */
 #if FEATURE_GAME_STATE
-game_state_register_devapi();
+game_save_register_devapi();  /* A5: registry dispatch (src/game_save_devapi.c) */
 #endif
 ```
+
+Compile `src/game_save.c` with the generated `game_state.c` (both under
+`FEATURE_GAME_STATE`; the generated source now also defines the
+`game_state_fragment` descriptor), and define the save knobs
+(`GAME_SAVE_AUTOSAVE_SLOT`, `GAME_SAVE_DEBOUNCE_MS`, `GAME_SAVE_MAX_INTERVAL_MS`,
+`GAME_SAVE_DOC_VERSION`) — see `templates/template/CMakeLists.txt`.
 
 ## Enable / Disable
 
@@ -74,14 +133,26 @@ cmake -S <project> -B <project>/build/release -DFEATURE_GAME_STATE=ON -DGAME_DEV
 
 ## Generated Files
 
-Do not hand-edit generated files. The generator writes:
+Do not hand-edit generated files. Per fragment, the generator writes
+`<id>_state.h`, `<id>_state.c`, `<id>_state_schema.gen.h`,
+`<id>_state_events.gen.h`, and `<id>_state_events.gen.c`. The default template
+generates TWO fragments — `game` and `settings` — into the same generated dir:
 
 ```text
-game_state.h
-game_state.c
-game_state_devapi.c
-game_state_schema.gen.h
+game_state.h              settings_state.h
+game_state.c              settings_state.c
+game_state_schema.gen.h   settings_state_schema.gen.h
+game_state_events.gen.h   settings_state_events.gen.h
+game_state_events.gen.c   settings_state_events.gen.c
 ```
+
+A fragment with an empty `events` section still emits the events pair as a stub
+(`<id>_ev_desc_count = 0`, empty `<id>_ev_register`); the stub source is NOT
+linked into the target and its register function is never called.
+
+The DevAPI dispatch is no longer generated: it is the hand-written
+`src/game_save_devapi.c` (A5), a universal registry dispatch shared by every
+fragment.
 
 The default template generates them into:
 
@@ -143,7 +214,7 @@ cmake -S templates/template -B templates/template/build/feature-review-no-state 
 cmake --build templates/template/build/feature-review-no-state --target game
 ```
 
-Verify release excludes generated DevAPI source:
+Verify release excludes the DevAPI dispatch source (`src/game_save_devapi.c`):
 
 ```powershell
 cmake -S templates/template -B templates/template/build/feature-review-release -G Ninja -DFEATURE_GAME_STATE=ON -DGAME_DEVAPI_ENABLED=OFF -DCMAKE_BUILD_TYPE=Release
@@ -156,6 +227,50 @@ Run the template bot unit tests:
 py -3.12 templates/template/devapi/smoke_bot_test.py
 ```
 
+With the template's two fragments registered (`settings` before `game`),
+`game.state.get {path:""}` returns the multi-fragment aggregate
+`{ "settings": {...}, "game": {...} }` (registration order) and
+`game.state.schema` returns both fragment schemas. Retained orphan keys
+(unknown feature blobs round-tripped per §14 п.16) appear under a separate
+`"orphans"` section in `get {path:""}`, omitted entirely when there are none. A cross-fragment
+`game.state.patch` applies each fragment atomically per key; a failure in one
+fragment (e.g. `settings.master_volume:5.0` out of range) rolls that fragment
+back without touching the other.
+
+Run the native `game_storage`/`game_state_json` Unity tests (A2):
+
+```powershell
+ctest --test-dir templates/template/build/native-debug --output-on-failure
+```
+
+Web persistence check (A2.4 item 2, CI-optional/advisory -- headless-localStorage
+automation is capricious, so a failure here does not fail A2 acceptance):
+
+```powershell
+python templates/template/tests/web_persistence_check.py
+```
+
+Builds the template for wasm with `GAME_DEVAPI_ENABLED=ON`, serves it, drives a
+headless Chrome instance over the DevTools Protocol to `game.state.set` a known
+non-default value (`hero.gold=424242`) and `game.state.save` it to a probe key
+via `window.__devapi.submit`, then FULLY QUITS Chrome (CDP `Browser.close`, not
+a page reload -- reload barely exercises real persistence) and relaunches it
+with the same `--user-data-dir`, and confirms `game.state.load` + `game.state.get`
+return the same value -- i.e. the `GAME_STORAGE_APP_ID`-scoped localStorage key
+actually survives a browser restart. Requires `EMSDK` (Emscripten toolchain) and
+a local Chrome/Chromium; exits 2 (skip, not fail) if either is missing. Known
+pre-existing blocker as of A5 (verified on HEAD, engine-side, unrelated to
+`game-state`): a `GAME_DEVAPI_ENABLED=ON` wasm build compiles clean (every game
+TU, including `main.c` and `src/game_save_devapi.c`, builds warning-clean under
+`-Werror`) but fails to LINK the emscripten executable on engine-provided
+symbols — the EM_JS `nt_devapi_web_install_shim` resolves undefined out of the
+`nt_devapi_web` static archive, and (Debug wasm only) the ASan/UBSan-instrumented
+engine libs pull `__asan_*`/`__ubsan_*` runtime symbols the executable link does
+not provide. The engine is read-only; this script reports SKIP until the engine
+web-devapi link is fixed separately. (The earlier `-Werror`
+`devapi_shutdown_runtime` note was stale: `main.c` already carries a
+`#ifndef NT_PLATFORM_WEB` web stub and compiles clean on wasm.)
+
 ## Uninstall
 
 Soft uninstall is preferred for experiments:
@@ -165,5 +280,6 @@ cmake -S <project> -B <project>/build/no-state -DFEATURE_GAME_STATE=OFF
 ```
 
 Permanent uninstall requires removing the CMake feature block, generated include
-path, runtime calls to `game_state_init()` and `game_state_register_devapi()`,
-and the installed state/storage/migration files if no other feature uses them.
+path, runtime calls to `game_save_register_fragment(&game_state_fragment)` and
+`game_save_register_devapi()`, the hand-written `src/game_save_devapi.c`, and the
+installed state/storage files if no other feature uses them.

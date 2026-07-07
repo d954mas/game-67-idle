@@ -16,7 +16,15 @@ endif()
 # builds sharing one preset would overwrite each other's engine libs
 # (nt_input with/without inject symbols) — the exact parallel-build collision
 # the convention exists to prevent.
-if(CMAKE_BUILD_TYPE STREQUAL "Release")
+if(EMSCRIPTEN)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(NT_PRESET_NAME "wasm-release")
+    elseif(GAME_DEVAPI_ENABLED)
+        set(NT_PRESET_NAME "wasm-devapi-debug")
+    else()
+        set(NT_PRESET_NAME "wasm-debug")
+    endif()
+elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
     set(NT_PRESET_NAME "native-release")
 elseif(GAME_DEVAPI_ENABLED)
     set(NT_PRESET_NAME "devapi-debug")
@@ -47,6 +55,20 @@ else()
     foreach(_grp CORE TIME INPUT DISCOVERY UI OBS ENTITY_WRITE CAPTURE)
         set(NT_DEVAPI_GROUP_${_grp} OFF CACHE BOOL "Disabled with GAME_DEVAPI_ENABLED=OFF." FORCE)
     endforeach()
+endif()
+
+# E4: GAME_ANALYTICS_ENABLED gates the local analytics writer. A -D override wins (a cache
+# entry -> DEFINED -> persists between configures); otherwise the default = GAME_DEVAPI_ENABLED
+# as a PLAIN variable (recomputed EVERY configure, so flipping GAME_DEVAPI_ENABLED in a live
+# tree updates it -- a CACHE...FORCE default would go stale). NOT CACHE on the default path.
+if(NOT DEFINED GAME_ANALYTICS_ENABLED)
+    set(GAME_ANALYTICS_ENABLED ${GAME_DEVAPI_ENABLED})
+endif()
+# Analytics CONSTRUCTIVELY needs FEATURE_GAME_STATE (cJSON + generated descriptors + the E3
+# renderer); force it OFF when state is OFF so the flag never dangles (gate-independence).
+if(GAME_ANALYTICS_ENABLED AND NOT FEATURE_GAME_STATE)
+    message(STATUS "GAME_ANALYTICS_ENABLED requires FEATURE_GAME_STATE; disabling analytics.")
+    set(GAME_ANALYTICS_ENABLED OFF)
 endif()
 
 # Shared engine (one copy, referenced not copied). Templates and games live one
@@ -107,6 +129,9 @@ endif()
 # --- game executable (the conductor + systems) ---
 add_executable(${GAME_TARGET}
     src/main.c
+    src/game_events.c            # E1
+    src/game_log.c               # E4.B: built-in "log" event type (unconditional leaf)
+    src/features/game_features.c # E1
     src/ui/hud.c
     src/ui/ui_runtime.c
     src/ui/theme.c
@@ -122,40 +147,89 @@ if(FEATURE_GAME_STATE)
     find_package(Python3 COMPONENTS Interpreter REQUIRED)
     set(GAME_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
     set(GAME_STATE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/generate_state.py")
-    set(GAME_STATE_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/game_state.c.in")
     set(GAME_STATE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state")
     set(GAME_STATE_GENERATED_HEADER "${GAME_STATE_GENERATED_DIR}/game_state.h")
     set(GAME_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state.c")
     set(GAME_STATE_GENERATED_SCHEMA "${GAME_STATE_GENERATED_DIR}/game_state_schema.gen.h")
-    set(GAME_STATE_GENERATED_DEVAPI "${GAME_STATE_GENERATED_DIR}/game_state_devapi.c")
+    set(GAME_STATE_GENERATED_EVENTS_HEADER "${GAME_STATE_GENERATED_DIR}/game_state_events.gen.h")
+    set(GAME_STATE_GENERATED_EVENTS_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state_events.gen.c")
     add_custom_command(
         OUTPUT
             "${GAME_STATE_GENERATED_HEADER}"
             "${GAME_STATE_GENERATED_SOURCE}"
             "${GAME_STATE_GENERATED_SCHEMA}"
-            "${GAME_STATE_GENERATED_DEVAPI}"
+            "${GAME_STATE_GENERATED_EVENTS_HEADER}"
+            "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
         COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_STATE_GENERATED_DIR}"
         COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
             --schema "${GAME_STATE_SCHEMA}"
             --out-dir "${GAME_STATE_GENERATED_DIR}"
+            --fragment game
         DEPENDS
             "${GAME_STATE_SCHEMA}"
             "${GAME_STATE_GENERATOR}"
-            "${GAME_STATE_TEMPLATE}"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
         COMMENT "Generating installed game-state feature sources"
         VERBATIM
     )
+    # A6: SECOND fragment. The registry/dispatch/shell/generator are all universal
+    # over GameSaveFragment, so a second live fragment `settings` needs only its
+    # own schema generated + wired -- no dispatch or generator edit. Same generated
+    # dir (already on the include path); make_directory is idempotent and the two
+    # commands depend on files (not the dir), so parallel ninja is fine.
+    set(SETTINGS_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/settings.schema.json")
+    set(SETTINGS_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/settings_state.c")
+    add_custom_command(
+        OUTPUT
+            "${GAME_STATE_GENERATED_DIR}/settings_state.h"
+            "${SETTINGS_STATE_GENERATED_SOURCE}"
+            "${GAME_STATE_GENERATED_DIR}/settings_state_schema.gen.h"
+            "${GAME_STATE_GENERATED_DIR}/settings_state_events.gen.h"
+            "${GAME_STATE_GENERATED_DIR}/settings_state_events.gen.c"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_STATE_GENERATED_DIR}"
+        COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
+            --schema "${SETTINGS_STATE_SCHEMA}"
+            --out-dir "${GAME_STATE_GENERATED_DIR}"
+            --fragment settings
+        DEPENDS "${SETTINGS_STATE_SCHEMA}" "${GAME_STATE_GENERATOR}"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+        COMMENT "Generating installed settings-state fragment sources"
+        VERBATIM
+    )
     target_sources(${GAME_TARGET} PRIVATE
-        "${GAME_STATE_GENERATED_SOURCE}"
+        "${GAME_STATE_GENERATED_SOURCE}"   # A4: also carries the generated game_state_fragment descriptor
+        "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # E2: typed event structs/emit/descriptors
+        "${SETTINGS_STATE_GENERATED_SOURCE}"   # A6: generated settings fragment state layer
+        src/features/settings.c                # A6: hand-written settings logic (Р9)
+        src/game_state_json.c
         src/game_storage.c
-        state/migrations/v0_to_v1.c
+        src/game_save.c              # A3
     )
     target_link_libraries(${GAME_TARGET} PRIVATE cjson)
     target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=1)
+    target_compile_definitions(${GAME_TARGET} PRIVATE
+        GAME_SAVE_AUTOSAVE_SLOT="autosave"
+        GAME_SAVE_DEBOUNCE_MS=2000
+        GAME_SAVE_MAX_INTERVAL_MS=30000
+        GAME_SAVE_DOC_VERSION=1
+    )
     target_include_directories(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DIR}")
     if(GAME_DEVAPI_ENABLED)
-        target_sources(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DEVAPI}")
+        # A5: the DevAPI dispatch is a hand-written shell TU (universal over the
+        # fragment registry), no longer a generated per-fragment source.
+        target_sources(${GAME_TARGET} PRIVATE
+            src/game_save_devapi.c
+            src/game_events_devapi.c   # E3: event-log tail ring + game.events.tail
+            src/game_event_render.c)   # E3: descriptor-driven JSON renderer
+    endif()
+    # E4: the E3 renderer is ALSO the analytics writer's dependency. When devapi is OFF but
+    # analytics is ON, pull it in here -- guarded against the devapi block's copy above so it
+    # is never listed twice (E3 lines untouched; the renderer compiles if EITHER wants it).
+    if(GAME_ANALYTICS_ENABLED AND NOT GAME_DEVAPI_ENABLED)
+        target_sources(${GAME_TARGET} PRIVATE src/game_event_render.c)   # E3 renderer (shared with E4)
+    endif()
+    if(GAME_ANALYTICS_ENABLED)
+        target_sources(${GAME_TARGET} PRIVATE src/game_analytics.c)      # E4: local analytics writer
     endif()
 else()
     target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=0)
@@ -187,6 +261,10 @@ else()
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub glad stb_image_write)
 endif()
 if(GAME_DEVAPI_ENABLED)
+    # E3: readable event type/hash labels for game.events.tail. Consuming-CMake edit
+    # (engine tree untouched); devapi presets only -> no collision with native-debug's
+    # clean nt_hash (each preset has its own build/engine/<preset> tree).
+    target_compile_definitions(nt_hash PRIVATE NT_HASH_LABELS=1)
     if(EMSCRIPTEN)
         set(GAME_DEVAPI_TRANSPORT nt_devapi_web nt_platform_web)
     else()
@@ -209,6 +287,13 @@ target_compile_definitions(${GAME_TARGET} PRIVATE
     NT_INTROSPECT_WRITE_ENABLED=$<BOOL:${NT_INTROSPECT_WRITE_ENABLED}>
     _CRT_SECURE_NO_WARNINGS
 )
+# E4: FEATURE_GAME_ANALYTICS is defined ALWAYS (1/0) at target level -- game_features.c and
+# main.c carry #if FEATURE_GAME_ANALYTICS unconditionally, and an undefined macro under
+# -Wundef + -Werror would fail native-debug/release. Mirrors NT_DEVAPI_ENABLED=0.
+target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_ANALYTICS=$<BOOL:${GAME_ANALYTICS_ENABLED}>)
+# GAME_STORAGE_APP_ID namespaces the shared web-origin (itch) localStorage; "template" is
+# the template's own default, games override it (A2).
+target_compile_definitions(${GAME_TARGET} PRIVATE GAME_STORAGE_APP_ID="template")
 if(NOT GAME_DEVAPI_ENABLED)
     target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=0)
 endif()
@@ -241,4 +326,163 @@ if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)
             VERBATIM
         )
     endif()
+endif()
+
+# --- native C unit tests (Unity + CTest); introduced in A1, extended in A2/A3 ---
+if(NOT EMSCRIPTEN)
+    enable_testing()
+    add_executable(test_game_state_json tests/test_game_state_json.c src/game_state_json.c)
+    target_link_libraries(test_game_state_json PRIVATE cjson unity)
+    target_include_directories(test_game_state_json PRIVATE src)
+    target_compile_definitions(test_game_state_json PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_state_json PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_state_json COMMAND test_game_state_json)
+
+    add_executable(test_game_storage tests/test_game_storage.c src/game_storage.c)
+    target_link_libraries(test_game_storage PRIVATE unity)
+    target_include_directories(test_game_storage PRIVATE src)
+    target_compile_definitions(test_game_storage PRIVATE
+        GAME_STORAGE_APP_ID="template_test" _CRT_SECURE_NO_WARNINGS)
+    # MoveFileExA (native quarantine/atomic-replace) is in kernel32, linked by default.
+    set_target_properties(test_game_storage PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_storage COMMAND test_game_storage
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+
+    add_executable(test_game_save
+        tests/test_game_save.c
+        src/game_save.c src/game_storage.c src/game_state_json.c)
+    target_link_libraries(test_game_save PRIVATE cjson unity)
+    target_include_directories(test_game_save PRIVATE src)
+    target_compile_definitions(test_game_save PRIVATE
+        GAME_SAVE_TESTING=1
+        GAME_STORAGE_APP_ID="template_test"
+        GAME_SAVE_AUTOSAVE_SLOT="test_slot"
+        GAME_SAVE_DEBOUNCE_MS=2000
+        GAME_SAVE_MAX_INTERVAL_MS=30000
+        GAME_SAVE_DOC_VERSION=1
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_save PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_save COMMAND test_game_save
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+
+    # (1) основной: позитив + death-тесты переполнения/фазы (NT_ASSERT ФИРИТ)
+    add_executable(test_game_events tests/test_game_events.c src/game_events.c
+        "${ENGINE_DIR}/tests/unit/test_helpers/nt_assert_trap.c")
+    target_link_libraries(test_game_events PRIVATE unity nt_hash nt_log nt_core)
+    target_include_directories(test_game_events PRIVATE src "${ENGINE_DIR}/tests/unit")
+    target_compile_definitions(test_game_events PRIVATE
+        GAME_EVENTS_ARENA_BYTES=1024u   # маленькая арена -> переполнение дёшево (позитив влезает)
+        GAME_EVENTS_LOG_CAP=64          # маленький кап лога -> переполнение дёшево
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_events PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_events COMMAND test_game_events)
+
+    # (2) overflow-drop: тот же файл + GAME_EVENTS_SOFT_OVERFLOW=1 -> emit ДРОПАЕТ
+    # (не assert'ит) в debug-ctest, проверяет release-семантику (тест #10). Не
+    # звено с nt_assert_trap: этот бинарь не использует NT_TEST_EXPECT_ASSERT
+    # (test_game_events.c гейтит его #include под #ifndef GAME_EVENTS_SOFT_OVERFLOW).
+    add_executable(test_game_events_overflow tests/test_game_events.c src/game_events.c)
+    target_link_libraries(test_game_events_overflow PRIVATE unity nt_hash nt_log nt_core)
+    target_include_directories(test_game_events_overflow PRIVATE src)
+    target_compile_definitions(test_game_events_overflow PRIVATE
+        GAME_EVENTS_SOFT_OVERFLOW=1     # выключить debug-assert переполнения -> тестировать дроп
+        GAME_EVENTS_ARENA_BYTES=1024u GAME_EVENTS_LOG_CAP=64
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_events_overflow PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_events_overflow COMMAND test_game_events_overflow)
+
+    # A4: round-trip gate for the generated fragment state layer. Links the
+    # generated game_state.c (data + static wrappers, no game_save_* calls) so
+    # game_save.c is NOT needed and the engine is not pulled in. The generated
+    # source is an add_custom_command OUTPUT, so regen is an automatic build
+    # prerequisite. GAME_STATE_GENERATED_* only exist under FEATURE_GAME_STATE.
+    if(FEATURE_GAME_STATE)
+        add_executable(test_game_state_roundtrip
+            tests/test_game_state_roundtrip.c
+            "${GAME_STATE_GENERATED_SOURCE}" src/game_state_json.c)
+        target_link_libraries(test_game_state_roundtrip PRIVATE cjson unity)
+        target_include_directories(test_game_state_roundtrip PRIVATE src "${GAME_STATE_GENERATED_DIR}")
+        target_compile_definitions(test_game_state_roundtrip PRIVATE _CRT_SECURE_NO_WARNINGS)
+        set_target_properties(test_game_state_roundtrip PROPERTIES
+            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+        add_test(NAME test_game_state_roundtrip COMMAND test_game_state_roundtrip)
+    endif()
+
+    # E2: typed event layer round-trip over the COMMITTED golden mini events + frozen
+    # E1 transport (no build-time generation). Unconditional -- the golden is a
+    # committed fixture and game_events.{c,h}/game_event_desc.h exist independent of
+    # FEATURE_GAME_STATE. This double-serves as a compile check of the golden.
+    add_executable(test_game_events_typed
+        tests/test_game_events_typed.c
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
+        src/game_events.c)
+    target_link_libraries(test_game_events_typed PRIVATE unity nt_hash nt_log nt_core)
+    target_include_directories(test_game_events_typed PRIVATE
+        src
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+    target_compile_definitions(test_game_events_typed PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_events_typed PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_events_typed COMMAND test_game_events_typed)
+
+    # E3: descriptor-driven renderer over the COMMITTED golden mini events + frozen E1
+    # transport. Native, no devapi (renderer is pure). Unconditional (golden is committed).
+    # nt_hash inherits the preset's NT_HASH_LABELS -> asserts are label-agnostic (HIGH-1):
+    # devapi-debug exercises the label branch, native-debug the hex branch.
+    add_executable(test_game_event_render
+        tests/test_game_event_render.c
+        src/game_event_render.c
+        src/game_state_json.c        # E3: gsj_i64_to_string (i64->string, MED-3)
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
+        src/game_events.c)
+    target_link_libraries(test_game_event_render PRIVATE unity cjson nt_hash nt_log nt_core)
+    target_include_directories(test_game_event_render PRIVATE
+        src "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+    target_compile_definitions(test_game_event_render PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_event_render PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_event_render COMMAND test_game_event_render)
+
+    # E4: analytics writer over the COMMITTED golden mini events + the built-in log type +
+    # frozen E1 transport. Native, sink + clock injected (GAME_ANALYTICS_TESTING). Links
+    # game_state_json.c (game_event_render calls gsj_i64_to_string for FT_I64 -- undefined
+    # ref otherwise) and game_log.c (case #7 emits a log event). Label-agnostic asserts.
+    add_executable(test_game_analytics
+        tests/test_game_analytics.c
+        src/game_analytics.c
+        src/game_event_render.c   # E3 renderer (reused)
+        src/game_state_json.c     # gsj_i64_to_string (FT_I64 -> string link)
+        src/game_log.c            # case #7 game_log_emit
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
+        src/game_events.c)
+    target_link_libraries(test_game_analytics PRIVATE unity cjson nt_hash nt_log nt_core)
+    target_include_directories(test_game_analytics PRIVATE
+        src "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+    target_compile_definitions(test_game_analytics PRIVATE
+        FEATURE_GAME_ANALYTICS=1 GAME_ANALYTICS_TESTING=1
+        GAME_ANALYTICS_BUF_BYTES=256u        # small buffer -> threshold/drop are cheap
+        GAME_ANALYTICS_FLUSH_BYTES=192u
+        GAME_STORAGE_APP_ID="template_test"  # header app field
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_analytics PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_analytics COMMAND test_game_analytics)
+
+    # E2 (M3): warning-gated compile check of the richest generated branches
+    # (i64/f64/hash/bool/bytes+len, union staging, offset arithmetic) live ONLY in
+    # mini. An OBJECT lib compiles the golden mini events source under the SAME
+    # -W set + -Werror as the game target, WITHOUT Unity (compile-only, no link) so
+    # -Wconversion is not fighting the test framework's macros.
+    add_library(check_mini_state_events OBJECT
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c")
+    target_include_directories(check_mini_state_events PRIVATE
+        src
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+    target_link_libraries(check_mini_state_events PRIVATE nt_hash nt_log nt_core)  # headers only (OBJECT does not link)
+    nt_set_warning_flags(check_mini_state_events)  # same -W set + -Werror toggle as the game target
 endif()

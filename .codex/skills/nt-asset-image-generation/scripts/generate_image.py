@@ -250,8 +250,14 @@ def main():
         f.write(data)
     try:
         with open(sidecar, "w", encoding="utf-8") as f:
+            # Beyond the skip-hash, record the FULL generation inputs: canvas meta keeps
+            # the prompt only for ACCEPTED assets, so for rejects/batch audits this sidecar
+            # is the only place the exact prompt/refs/params survive.
             json.dump({"hash": key, "bytes": len(data), "model": a.model, "size": a.size,
-                       "quality": a.quality, "ts": int(time.time())}, f)
+                       "quality": a.quality, "ts": int(time.time()),
+                       "prompt": a.prompt, "input_image": a.input_image or [],
+                       "format": a.format, "background": a.background,
+                       "backend": kind}, f, ensure_ascii=False, indent=1)
     except OSError:
         pass
     print(f"OK wrote {a.out} ({len(data)} bytes) via {kind} in {time.time()-t0:.1f}s")

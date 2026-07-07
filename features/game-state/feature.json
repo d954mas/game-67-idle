@@ -4,7 +4,7 @@
   "title": "Game State",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
-  "summary": "Schema-first generated game state with JSON save/load, migrations, and DevAPI adapters.",
+  "summary": "Schema-first generated game state with JSON save/load and DevAPI adapters.",
   "copy_model": "manual-copy",
   "owners": [
     "features/game-state"
@@ -31,17 +31,25 @@
     "review": "features/game-state/references/review.md"
   },
   "outputs": [
-    "game_state.h",
-    "game_state.c",
-    "game_state_devapi.c",
-    "game_state_schema.gen.h"
+    "<id>_state.h",
+    "<id>_state.c",
+    "<id>_state_schema.gen.h",
+    "<id>_state_events.gen.h",
+    "<id>_state_events.gen.c"
   ],
   "default_template": {
     "schema": "templates/template/state/game_state.schema.json",
     "generated_dir": "templates/template/build/<config>/generated/game-state",
     "runtime_sources": [
+      "templates/template/src/game_state_json.c",
+      "templates/template/src/game_state_json.h",
       "templates/template/src/game_storage.c",
-      "templates/template/state/migrations/v0_to_v1.c"
+      "templates/template/src/game_storage.h",
+      "templates/template/src/game_save.c",
+      "templates/template/src/game_save.h",
+      "templates/template/src/game_save_devapi.c",
+      "templates/template/src/features/settings.c",
+      "templates/template/src/features/settings.h"
     ]
   }
 }
