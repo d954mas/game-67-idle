@@ -1,0 +1,20 @@
+# Tool-local Python dependencies for vitmatte_matte
+# (ai_studio/assets/tools/image/vitmatte_matte/). Installed into THIS TOOL's
+# OWN venv (vitmatte_matte/.venv/, gitignored) by setup_python.mjs -- NEVER the
+# shared repo .venv/. GPU torch (cu128, ~2.7GB) must not enter the shared venv
+# (studio law); this tool exists precisely to keep that weight isolated.
+#
+# The cu128 index is declared here so `pip install -r requirements.txt` alone
+# (as setup_python.mjs runs it) resolves the CUDA 12.8 torch/torchvision
+# wheels; --extra-index-url keeps every other package resolving from PyPI.
+--index-url https://download.pytorch.org/whl/cu128
+--extra-index-url https://pypi.org/simple
+
+# LAW: these are hard requirements. The tool does NOT fall back when a dep is
+# missing -- it raises a loud error pointing back at setup_python.mjs.
+torch==2.7.1+cu128
+transformers==4.57.1
+numpy==2.1.1
+scipy==1.17.1
+Pillow==12.2.0
+truststore==0.10.4

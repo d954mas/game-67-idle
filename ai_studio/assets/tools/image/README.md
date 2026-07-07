@@ -33,6 +33,14 @@ Pinned dependency versions live in `requirements.txt`.
   flat-key holes. `key_matte.py` + the `chroma_key_alpha.py` keying primitive.
 - `alpha_dualplate/` — fractional alpha from an aligned white/black plate pair
   (path 2): glow, glass, soft shadow. `dual_plate_alpha.py` + the pair gate.
+- `birefnet_cutout/` — neural cutout (path 3) for a ready image on an
+  arbitrary/unknown background, no key or plate pair needed; MIT-licensed
+  BiRefNet-general via rembg only, weak on line-art/soft-glow (bench-documented).
+- `vitmatte_matte/` — ViTMatte auto-trimap alpha matting (path 4) for thin/fine
+  detail (spider-web, mesh, fur, hair) on a flat-key plate; second priority on
+  glow/soft-bloom (CorridorKey is first). Runs in its OWN gitignored venv (GPU
+  torch, cu128) — never the shared `.venv/`; see its README for setup and the
+  mandatory license verdict (weights local-only, Adobe-DIM caveat).
 - `route/` — decides key-matte vs dual-plate for a flat-key source crop before a
   generation is spent.
 - `bg_fix/` — border-connected background chroma normalization (snap to key).

@@ -5,6 +5,12 @@
 #
 # LAW: these are hard requirements. The tools do NOT fall back when a dep is
 # missing -- they raise a loud error pointing back at the setup script.
-numpy==2.1.1
+# numpy bumped 2.1.1 -> 2.4.6 by birefnet_cutout's rembg pin below (rembg
+# requires numpy>=2.3.0,<3.0.0; scipy/Pillow stay compatible, image tool tests
+# re-verified green against 2.4.6).
+numpy==2.4.6
 scipy==1.17.1
 Pillow==12.2.0
+# birefnet_cutout (BiRefNet-general MIT cutout via rembg's ONNX bridge):
+rembg==2.0.76
+onnxruntime==1.27.0
