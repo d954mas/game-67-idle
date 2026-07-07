@@ -24,13 +24,10 @@ float settings_master(void);
 float settings_music(void);
 float settings_sfx(void);
 
-#if FEATURE_GAME_STATE
 /* clamp [0,1] -> запись в фрагмент settings_state -> game_save_mark_dirty().
-   Существуют только под FEATURE_GAME_STATE (persist-путь); экран передаёт их
-   как commit-колбэки. Под !FEATURE_GAME_STATE commit = NULL (сессионный store). */
+   Единственная версия (persist-путь); экран передаёт их как commit-колбэки. */
 void settings_set_master(float value);
 void settings_set_music(float value);
 void settings_set_sfx(float value);
-#endif
 
 #endif /* FEATURES_SETTINGS_H */

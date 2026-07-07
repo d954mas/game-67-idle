@@ -51,10 +51,6 @@ if(GAME_DEVAPI_ENABLED)
 else()
     set(GAME_WINDOW_TITLE "${GAME_TITLE}")
 endif()
-if(NOT DEFINED FEATURE_GAME_STATE)
-    set(FEATURE_GAME_STATE ON CACHE BOOL "Build the installed game-state feature." FORCE)
-endif()
-
 if(GAME_DEVAPI_ENABLED)
     set(NT_DEVAPI_ENABLED ON CACHE BOOL "Build the engine DevAPI command layer." FORCE)
     set(NT_UI_DEBUG_TOOLS ON CACHE BOOL "Build UI probe data for engine DevAPI ui.* commands." FORCE)
@@ -77,12 +73,6 @@ endif()
 # tree updates it -- a CACHE...FORCE default would go stale). NOT CACHE on the default path.
 if(NOT DEFINED GAME_ANALYTICS_ENABLED)
     set(GAME_ANALYTICS_ENABLED ${GAME_DEVAPI_ENABLED})
-endif()
-# Analytics CONSTRUCTIVELY needs FEATURE_GAME_STATE (cJSON + generated descriptors + the E3
-# renderer); force it OFF when state is OFF so the flag never dangles (gate-independence).
-if(GAME_ANALYTICS_ENABLED AND NOT FEATURE_GAME_STATE)
-    message(STATUS "GAME_ANALYTICS_ENABLED requires FEATURE_GAME_STATE; disabling analytics.")
-    set(GAME_ANALYTICS_ENABLED OFF)
 endif()
 
 # Shared engine (one copy, referenced not copied). Templates and games live one
@@ -157,96 +147,93 @@ add_executable(${GAME_TARGET}
 if(NOT EMSCRIPTEN)
     add_dependencies(${GAME_TARGET} game_asset_packs)
 endif()
-if(FEATURE_GAME_STATE)
-    find_package(Python3 COMPONENTS Interpreter REQUIRED)
-    set(GAME_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
-    set(GAME_STATE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/generate_state.py")
-    set(GAME_STATE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state")
-    set(GAME_STATE_GENERATED_HEADER "${GAME_STATE_GENERATED_DIR}/game_state.h")
-    set(GAME_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state.c")
-    set(GAME_STATE_GENERATED_SCHEMA "${GAME_STATE_GENERATED_DIR}/game_state_schema.gen.h")
-    set(GAME_STATE_GENERATED_EVENTS_HEADER "${GAME_STATE_GENERATED_DIR}/game_state_events.gen.h")
-    set(GAME_STATE_GENERATED_EVENTS_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state_events.gen.c")
-    add_custom_command(
-        OUTPUT
-            "${GAME_STATE_GENERATED_HEADER}"
-            "${GAME_STATE_GENERATED_SOURCE}"
-            "${GAME_STATE_GENERATED_SCHEMA}"
-            "${GAME_STATE_GENERATED_EVENTS_HEADER}"
-            "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_STATE_GENERATED_DIR}"
-        COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
-            --schema "${GAME_STATE_SCHEMA}"
-            --out-dir "${GAME_STATE_GENERATED_DIR}"
-            --fragment game
-        DEPENDS
-            "${GAME_STATE_SCHEMA}"
-            "${GAME_STATE_GENERATOR}"
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
-        COMMENT "Generating installed game-state feature sources"
-        VERBATIM
-    )
-    # A6: SECOND fragment. The registry/dispatch/shell/generator are all universal
-    # over GameSaveFragment, so a second live fragment `settings` needs only its
-    # own schema generated + wired -- no dispatch or generator edit. Same generated
-    # dir (already on the include path); make_directory is idempotent and the two
-    # commands depend on files (not the dir), so parallel ninja is fine.
-    set(SETTINGS_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/settings.schema.json")
-    set(SETTINGS_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/settings_state.c")
-    add_custom_command(
-        OUTPUT
-            "${GAME_STATE_GENERATED_DIR}/settings_state.h"
-            "${SETTINGS_STATE_GENERATED_SOURCE}"
-            "${GAME_STATE_GENERATED_DIR}/settings_state_schema.gen.h"
-            "${GAME_STATE_GENERATED_DIR}/settings_state_events.gen.h"
-            "${GAME_STATE_GENERATED_DIR}/settings_state_events.gen.c"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_STATE_GENERATED_DIR}"
-        COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
-            --schema "${SETTINGS_STATE_SCHEMA}"
-            --out-dir "${GAME_STATE_GENERATED_DIR}"
-            --fragment settings
-        DEPENDS "${SETTINGS_STATE_SCHEMA}" "${GAME_STATE_GENERATOR}"
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
-        COMMENT "Generating installed settings-state fragment sources"
-        VERBATIM
-    )
+# Game-state provisioning is always on (lead decision 2026-07-07: "a game without
+# state is impossible"); the former on/off CMake axis is gone (И2-0).
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+set(GAME_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
+set(GAME_STATE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/generate_state.py")
+set(GAME_STATE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state")
+set(GAME_STATE_GENERATED_HEADER "${GAME_STATE_GENERATED_DIR}/game_state.h")
+set(GAME_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state.c")
+set(GAME_STATE_GENERATED_SCHEMA "${GAME_STATE_GENERATED_DIR}/game_state_schema.gen.h")
+set(GAME_STATE_GENERATED_EVENTS_HEADER "${GAME_STATE_GENERATED_DIR}/game_state_events.gen.h")
+set(GAME_STATE_GENERATED_EVENTS_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state_events.gen.c")
+add_custom_command(
+    OUTPUT
+        "${GAME_STATE_GENERATED_HEADER}"
+        "${GAME_STATE_GENERATED_SOURCE}"
+        "${GAME_STATE_GENERATED_SCHEMA}"
+        "${GAME_STATE_GENERATED_EVENTS_HEADER}"
+        "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_STATE_GENERATED_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
+        --schema "${GAME_STATE_SCHEMA}"
+        --out-dir "${GAME_STATE_GENERATED_DIR}"
+        --fragment game
+    DEPENDS
+        "${GAME_STATE_SCHEMA}"
+        "${GAME_STATE_GENERATOR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    COMMENT "Generating installed game-state feature sources"
+    VERBATIM
+)
+# A6: SECOND fragment. The registry/dispatch/shell/generator are all universal
+# over GameSaveFragment, so a second live fragment `settings` needs only its
+# own schema generated + wired -- no dispatch or generator edit. Same generated
+# dir (already on the include path); make_directory is idempotent and the two
+# commands depend on files (not the dir), so parallel ninja is fine.
+set(SETTINGS_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/settings.schema.json")
+set(SETTINGS_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/settings_state.c")
+add_custom_command(
+    OUTPUT
+        "${GAME_STATE_GENERATED_DIR}/settings_state.h"
+        "${SETTINGS_STATE_GENERATED_SOURCE}"
+        "${GAME_STATE_GENERATED_DIR}/settings_state_schema.gen.h"
+        "${GAME_STATE_GENERATED_DIR}/settings_state_events.gen.h"
+        "${GAME_STATE_GENERATED_DIR}/settings_state_events.gen.c"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_STATE_GENERATED_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
+        --schema "${SETTINGS_STATE_SCHEMA}"
+        --out-dir "${GAME_STATE_GENERATED_DIR}"
+        --fragment settings
+    DEPENDS "${SETTINGS_STATE_SCHEMA}" "${GAME_STATE_GENERATOR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    COMMENT "Generating installed settings-state fragment sources"
+    VERBATIM
+)
+target_sources(${GAME_TARGET} PRIVATE
+    "${GAME_STATE_GENERATED_SOURCE}"   # A4: also carries the generated game_state_fragment descriptor
+    "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # E2: typed event structs/emit/descriptors
+    "${SETTINGS_STATE_GENERATED_SOURCE}"   # A6: generated settings fragment state layer
+    src/features/settings/settings.c       # A6: hand-written settings logic (Р9)
+    src/game_state_json.c
+    src/game_storage.c
+    src/game_save.c              # A3
+)
+target_link_libraries(${GAME_TARGET} PRIVATE cjson)
+target_compile_definitions(${GAME_TARGET} PRIVATE
+    GAME_SAVE_AUTOSAVE_SLOT="autosave"
+    GAME_SAVE_DEBOUNCE_MS=2000
+    GAME_SAVE_MAX_INTERVAL_MS=30000
+    GAME_SAVE_DOC_VERSION=1
+)
+target_include_directories(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DIR}")
+if(GAME_DEVAPI_ENABLED)
+    # A5: the DevAPI dispatch is a hand-written shell TU (universal over the
+    # fragment registry), no longer a generated per-fragment source.
     target_sources(${GAME_TARGET} PRIVATE
-        "${GAME_STATE_GENERATED_SOURCE}"   # A4: also carries the generated game_state_fragment descriptor
-        "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # E2: typed event structs/emit/descriptors
-        "${SETTINGS_STATE_GENERATED_SOURCE}"   # A6: generated settings fragment state layer
-        src/features/settings/settings.c       # A6: hand-written settings logic (Р9)
-        src/game_state_json.c
-        src/game_storage.c
-        src/game_save.c              # A3
-    )
-    target_link_libraries(${GAME_TARGET} PRIVATE cjson)
-    target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=1)
-    target_compile_definitions(${GAME_TARGET} PRIVATE
-        GAME_SAVE_AUTOSAVE_SLOT="autosave"
-        GAME_SAVE_DEBOUNCE_MS=2000
-        GAME_SAVE_MAX_INTERVAL_MS=30000
-        GAME_SAVE_DOC_VERSION=1
-    )
-    target_include_directories(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DIR}")
-    if(GAME_DEVAPI_ENABLED)
-        # A5: the DevAPI dispatch is a hand-written shell TU (universal over the
-        # fragment registry), no longer a generated per-fragment source.
-        target_sources(${GAME_TARGET} PRIVATE
-            src/game_save_devapi.c
-            src/game_events_devapi.c   # E3: event-log tail ring + game.events.tail
-            src/game_event_render.c)   # E3: descriptor-driven JSON renderer
-    endif()
-    # E4: the E3 renderer is ALSO the analytics writer's dependency. When devapi is OFF but
-    # analytics is ON, pull it in here -- guarded against the devapi block's copy above so it
-    # is never listed twice (E3 lines untouched; the renderer compiles if EITHER wants it).
-    if(GAME_ANALYTICS_ENABLED AND NOT GAME_DEVAPI_ENABLED)
-        target_sources(${GAME_TARGET} PRIVATE src/game_event_render.c)   # E3 renderer (shared with E4)
-    endif()
-    if(GAME_ANALYTICS_ENABLED)
-        target_sources(${GAME_TARGET} PRIVATE src/game_analytics.c)      # E4: local analytics writer
-    endif()
-else()
-    target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_STATE=0)
+        src/game_save_devapi.c
+        src/game_events_devapi.c   # E3: event-log tail ring + game.events.tail
+        src/game_event_render.c)   # E3: descriptor-driven JSON renderer
+endif()
+# E4: the E3 renderer is ALSO the analytics writer's dependency. When devapi is OFF but
+# analytics is ON, pull it in here -- guarded against the devapi block's copy above so it
+# is never listed twice (E3 lines untouched; the renderer compiles if EITHER wants it).
+if(GAME_ANALYTICS_ENABLED AND NOT GAME_DEVAPI_ENABLED)
+    target_sources(${GAME_TARGET} PRIVATE src/game_event_render.c)   # E3 renderer (shared with E4)
+endif()
+if(GAME_ANALYTICS_ENABLED)
+    target_sources(${GAME_TARGET} PRIVATE src/game_analytics.c)      # E4: local analytics writer
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/deps/glfw/deps")
 target_compile_definitions(${GAME_TARGET} PRIVATE GAME_WINDOW_TITLE="${GAME_WINDOW_TITLE}")
@@ -457,23 +444,21 @@ if(NOT EMSCRIPTEN)
     # generated game_state.c (data + static wrappers, no game_save_* calls) so
     # game_save.c is NOT needed and the engine is not pulled in. The generated
     # source is an add_custom_command OUTPUT, so regen is an automatic build
-    # prerequisite. GAME_STATE_GENERATED_* only exist under FEATURE_GAME_STATE.
-    if(FEATURE_GAME_STATE)
-        add_executable(test_game_state_roundtrip
-            tests/test_game_state_roundtrip.c
-            "${GAME_STATE_GENERATED_SOURCE}" src/game_state_json.c)
-        target_link_libraries(test_game_state_roundtrip PRIVATE cjson unity)
-        target_include_directories(test_game_state_roundtrip PRIVATE src "${GAME_STATE_GENERATED_DIR}")
-        target_compile_definitions(test_game_state_roundtrip PRIVATE _CRT_SECURE_NO_WARNINGS)
-        set_target_properties(test_game_state_roundtrip PROPERTIES
-            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-        add_test(NAME test_game_state_roundtrip COMMAND test_game_state_roundtrip)
-    endif()
+    # prerequisite. GAME_STATE_GENERATED_* is always defined (state is always on).
+    add_executable(test_game_state_roundtrip
+        tests/test_game_state_roundtrip.c
+        "${GAME_STATE_GENERATED_SOURCE}" src/game_state_json.c)
+    target_link_libraries(test_game_state_roundtrip PRIVATE cjson unity)
+    target_include_directories(test_game_state_roundtrip PRIVATE src "${GAME_STATE_GENERATED_DIR}")
+    target_compile_definitions(test_game_state_roundtrip PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_state_roundtrip PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_state_roundtrip COMMAND test_game_state_roundtrip)
 
     # E2: typed event layer round-trip over the COMMITTED golden mini events + frozen
     # E1 transport (no build-time generation). Unconditional -- the golden is a
-    # committed fixture and game_events.{c,h}/game_event_desc.h exist independent of
-    # FEATURE_GAME_STATE. This double-serves as a compile check of the golden.
+    # committed fixture and game_events.{c,h}/game_event_desc.h are always compiled.
+    # This double-serves as a compile check of the golden.
     add_executable(test_game_events_typed
         tests/test_game_events_typed.c
         "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"

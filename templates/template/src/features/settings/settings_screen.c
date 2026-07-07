@@ -23,15 +23,10 @@ static float s_master = 0.8F, s_music = 0.7F, s_sfx = 0.9F;
 void settings_open(void)  { s_open = true; }
 void settings_close(void) { s_open = false; }
 bool settings_is_open(void) { return s_open; }
-#if !FEATURE_GAME_STATE
-float settings_master(void) { return s_master; }
-float settings_music(void)  { return s_music; }
-float settings_sfx(void)    { return s_sfx; }
-#endif
 
 // Label + slider stacked; the slider mutates *value in place (engine owns the drag).
 // `commit` (nullable) persists a changed value through the settings feature-API,
-// which clamps and marks the save dirty; NULL when FEATURE_GAME_STATE is off.
+// which clamps and marks the save dirty.
 static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, float *value,
                        void (*commit)(float)) {
     char buf[48];
@@ -78,7 +73,6 @@ void settings_draw_ui(nt_ui_context_t *ctx, World *w) {
                                      .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_TOP}}});
     nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), "SETTINGS", &g_theme.title);
 
-#if FEATURE_GAME_STATE
     // Authority is the persisted settings state: reseed the slider backing-floats
     // from the feature each frame the panel is open; the commit callback is the
     // single writer back into settings_state.
@@ -88,11 +82,6 @@ void settings_draw_ui(nt_ui_context_t *ctx, World *w) {
     volume_row(ctx, "Master", "settings/master", &s_master, settings_set_master);
     volume_row(ctx, "Music", "settings/music", &s_music, settings_set_music);
     volume_row(ctx, "SFX", "settings/sfx", &s_sfx, settings_set_sfx);
-#else
-    volume_row(ctx, "Master", "settings/master", &s_master, NULL);
-    volume_row(ctx, "Music", "settings/music", &s_music, NULL);
-    volume_row(ctx, "SFX", "settings/sfx", &s_sfx, NULL);
-#endif
 
     // Action row: hold-to-reset (long press) + close.
     CLAY({.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_FIT(0)}, .layoutDirection = CLAY_LEFT_TO_RIGHT, .childGap = 12, .childAlignment = {CLAY_ALIGN_X_LEFT, CLAY_ALIGN_Y_CENTER}}}) {

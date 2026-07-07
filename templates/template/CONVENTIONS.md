@@ -29,7 +29,7 @@ dumps a whole game into one file. Keep them.
   them in the template. The HUD/UI tree lives in `ui/`, render + material
   setup in `render/` -- never inline in `main.c`.
   The installed `game-state` feature owns generated `game.state.*` DevAPI
-  commands. They compile only under `FEATURE_GAME_STATE && GAME_DEVAPI_ENABLED`.
+  commands. They compile only under `GAME_DEVAPI_ENABLED`.
   Add separate semantic commands only for game-specific actions and dev-editable
   fields.
 

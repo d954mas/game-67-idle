@@ -33,17 +33,16 @@ Debug builds enable the engine DevAPI path by default (`GAME_DEVAPI_ENABLED=ON`)
 `capture.*` groups. The installed `game-state` feature also registers
 `game.state.schema`, `game.state.get`, `game.state.set`, `game.state.patch`,
 `game.state.save`, `game.state.load`, and `game.state.reset` from generated
-sources when both `FEATURE_GAME_STATE` and `GAME_DEVAPI_ENABLED` are on. Release
+sources when `GAME_DEVAPI_ENABLED` is on. Release
 builds default DevAPI off, so those command registrations do not ship.
 Game-specific commands belong under `src/devapi/` when a copied game needs them.
 
 Feature flags:
 
-- `FEATURE_GAME_STATE=ON` builds the installed game-state runtime code.
-- `FEATURE_GAME_STATE=OFF` removes generated state runtime sources from the
-  target.
-- `GAME_DEVAPI_ENABLED=ON` enables engine DevAPI groups; generated state DevAPI
-  commands appear only when `FEATURE_GAME_STATE` is also on.
+- The game-state runtime always builds: the `FEATURE_GAME_STATE` on/off axis
+  was removed 2026-07-07 (lead: a game without state is impossible).
+- `GAME_DEVAPI_ENABLED=ON` enables engine DevAPI groups and the state DevAPI
+  commands.
 
 The state schema and migrations live in source under `state/`; CMake generates
 `game_state.*` into `build/<config>/generated/game-state/` before compiling.

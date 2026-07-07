@@ -3,7 +3,7 @@
 #include "features/settings/settings.h"
 #include "ui/ui_runtime.h"
 #include "app/nt_app.h" /* g_nt_app.dt */
-#if FEATURE_GAME_STATE && NT_DEVAPI_ENABLED
+#if NT_DEVAPI_ENABLED
 #include "game_events_devapi.h" /* E3: DevAPI tail recorder */
 #endif
 #if FEATURE_GAME_ANALYTICS
@@ -51,7 +51,7 @@ void game_features_react(World *w) {
 
 void game_features_record(World *w) {
     (void)w;
-#if FEATURE_GAME_STATE && NT_DEVAPI_ENABLED
+#if NT_DEVAPI_ENABLED
     game_events_devapi_record(); /* E3: DevAPI tail — render-at-copy into the ring */
 #endif
 #if FEATURE_GAME_ANALYTICS

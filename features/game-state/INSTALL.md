@@ -9,7 +9,8 @@ when checking that the installed copy is still wired correctly.
 ## Install
 
 For a new game copied from `templates/template`, no extra copy step is needed.
-The feature is installed and enabled by default through `FEATURE_GAME_STATE=ON`.
+The feature is installed and always on (no build flag: the `FEATURE_GAME_STATE`
+axis was removed 2026-07-07 — a game without state is impossible).
 
 For an existing project, copy or recreate these installed pieces in the target
 project:
@@ -48,7 +49,6 @@ game-state deliverable, and is NOT part of this copy-list.
 
 Then add CMake wiring equivalent to `templates/template/CMakeLists.txt`:
 
-- define `FEATURE_GAME_STATE`, defaulting on or off for the project;
 - run `features/game-state/scripts/generate_state.py` with the project schema
   (`--fragment game`);
 - run the generator a SECOND time with the settings schema
@@ -56,24 +56,21 @@ Then add CMake wiring equivalent to `templates/template/CMakeLists.txt`:
   write different filenames, so a parallel build is fine;
 - write generated outputs to `<build>/generated/game-state`;
 - compile generated `game_state.c` and `settings_state.c`, the hand-written
-  `src/features/settings/settings.c`, `src/game_storage.c`, and migrations when
-  `FEATURE_GAME_STATE` is on (`settings_state_events.gen.c` is an empty-events
+  `src/features/settings/settings.c`, `src/game_storage.c`, and migrations
+  unconditionally (`settings_state_events.gen.c` is an empty-events
   stub and is NOT linked; do not call `settings_ev_register`);
-- compile the hand-written `src/game_save_devapi.c` only when both
-  `FEATURE_GAME_STATE` and `GAME_DEVAPI_ENABLED` are on;
+- compile the hand-written `src/game_save_devapi.c` only when
+  `GAME_DEVAPI_ENABLED` is on;
 - add the generated directory to the target include paths.
 
 Wire runtime code in the app entry point. The DevAPI registration call must live
 inside code that is compiled only when DevAPI is enabled:
 
 ```c
-#if FEATURE_GAME_STATE
 #include "game_state.h"
 #include "settings_state.h" /* A6: second fragment; NOT settings_state_events.gen.h */
-#endif
 
-/* after core/runtime init */
-#if FEATURE_GAME_STATE
+/* after core/runtime init -- game-state provisioning is always on (unconditional) */
 game_save_register_fragment(&settings_state_fragment); /* settings before game */
 game_save_register_fragment(&game_state_fragment);     /* generated descriptor; `game` last */
 game_save_init();                            /* after all fragments are registered */
@@ -91,45 +88,32 @@ if (!fresh_state) {
 #ifdef NT_PLATFORM_WEB
 game_save_install_web_flush();               /* synchronous visibility/pagehide flush */
 #endif
-#endif
 
 /* per frame, after the game systems (and, with E1, after the record phase) */
-#if FEATURE_GAME_STATE
 if (!disable_autosave) {
     game_save_tick();                        /* debounced autosave */
 }
-#endif
 
 /* inside the DevAPI startup path, after nt_devapi_register_default() */
-#if FEATURE_GAME_STATE
 game_save_register_devapi();  /* A5: registry dispatch (src/game_save_devapi.c) */
-#endif
 ```
 
-Compile `src/game_save.c` with the generated `game_state.c` (both under
-`FEATURE_GAME_STATE`; the generated source now also defines the
+Compile `src/game_save.c` with the generated `game_state.c` (both
+unconditional; the generated source now also defines the
 `game_state_fragment` descriptor), and define the save knobs
 (`GAME_SAVE_AUTOSAVE_SLOT`, `GAME_SAVE_DEBOUNCE_MS`, `GAME_SAVE_MAX_INTERVAL_MS`,
 `GAME_SAVE_DOC_VERSION`) — see `templates/template/CMakeLists.txt`.
 
 ## Enable / Disable
 
-Enable runtime state:
+In the template, runtime state is ALWAYS enabled — there is no on/off flag (the
+`FEATURE_GAME_STATE` CMake option was removed 2026-07-07, lead: "a game without
+state is impossible"). The state provisioning (custom_commands, generated
+sources, `cjson` link) is unconditional CMake wiring; the only remaining knob is
+DevAPI:
 
 ```powershell
-cmake -S <project> -B <project>/build/state-on -DFEATURE_GAME_STATE=ON
-```
-
-Disable runtime state:
-
-```powershell
-cmake -S <project> -B <project>/build/state-off -DFEATURE_GAME_STATE=OFF
-```
-
-Keep runtime state but remove DevAPI commands:
-
-```powershell
-cmake -S <project> -B <project>/build/release -DFEATURE_GAME_STATE=ON -DGAME_DEVAPI_ENABLED=OFF
+cmake -S <project> -B <project>/build/release -DGAME_DEVAPI_ENABLED=OFF
 ```
 
 ## Generated Files
@@ -174,7 +158,7 @@ Pass `--out-dir` only when the project has an explicit generated-file policy.
 Generated DevAPI commands exist only under:
 
 ```text
-FEATURE_GAME_STATE && GAME_DEVAPI_ENABLED
+GAME_DEVAPI_ENABLED
 ```
 
 Commands:
@@ -204,21 +188,14 @@ py -3.12 features/game-state/scripts/generate_state_test.py
 Verify the template default build:
 
 ```powershell
-cmake -S templates/template -B templates/template/build/feature-review-devapi -G Ninja -DFEATURE_GAME_STATE=ON -DGAME_DEVAPI_ENABLED=ON -DCMAKE_BUILD_TYPE=Debug
+cmake -S templates/template -B templates/template/build/feature-review-devapi -G Ninja -DGAME_DEVAPI_ENABLED=ON -DCMAKE_BUILD_TYPE=Debug
 cmake --build templates/template/build/feature-review-devapi --target game
-```
-
-Verify the feature can be disabled:
-
-```powershell
-cmake -S templates/template -B templates/template/build/feature-review-no-state -G Ninja -DFEATURE_GAME_STATE=OFF -DGAME_DEVAPI_ENABLED=ON -DCMAKE_BUILD_TYPE=Debug
-cmake --build templates/template/build/feature-review-no-state --target game
 ```
 
 Verify release excludes the DevAPI dispatch source (`src/game_save_devapi.c`):
 
 ```powershell
-cmake -S templates/template -B templates/template/build/feature-review-release -G Ninja -DFEATURE_GAME_STATE=ON -DGAME_DEVAPI_ENABLED=OFF -DCMAKE_BUILD_TYPE=Release
+cmake -S templates/template -B templates/template/build/feature-review-release -G Ninja -DGAME_DEVAPI_ENABLED=OFF -DCMAKE_BUILD_TYPE=Release
 cmake --build templates/template/build/feature-review-release --target game
 ```
 
@@ -287,13 +264,10 @@ site+agent parity) is still future.
 
 ## Uninstall
 
-Soft uninstall is preferred for experiments:
-
-```powershell
-cmake -S <project> -B <project>/build/no-state -DFEATURE_GAME_STATE=OFF
-```
-
-Permanent uninstall requires removing the CMake feature block, generated include
-path, runtime calls to `game_save_register_fragment(&game_state_fragment)` and
+There is no soft (CMake-flag) uninstall — game-state provisioning is always on
+(the `FEATURE_GAME_STATE` on/off axis was removed 2026-07-07). Uninstalling the
+feature is permanent-only: remove the CMake state-provisioning block, the
+generated include path, runtime calls to
+`game_save_register_fragment(&game_state_fragment)` and
 `game_save_register_devapi()`, the hand-written `src/game_save_devapi.c`, and the
 installed state/storage files if no other feature uses them.

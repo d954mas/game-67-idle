@@ -44,7 +44,7 @@
 #include "features/settings/settings.h"
 #include "game_events.h"
 #include "game_log.h" /* E4.B: built-in "log" event type (unconditional leaf) */
-#if FEATURE_GAME_STATE && NT_DEVAPI_ENABLED
+#if NT_DEVAPI_ENABLED
 #include "game_events_devapi.h" /* E3: game.events.tail (tail ring + recorder) */
 #endif
 #if FEATURE_GAME_ANALYTICS
@@ -55,12 +55,10 @@
 #include "ui/hud.h"
 #include "ui/ui_runtime.h"
 #include "world/world.h"
-#if FEATURE_GAME_STATE
 #include "game_save.h"
 #include "game_state.h"
 #include "game_state_events.gen.h" /* E2: game_ev_register (typed event labels) */
 #include "settings_state.h"        /* A6: SettingsState + settings_state_fragment (NOT the events header) */
-#endif
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -83,10 +81,8 @@ static World s_world;
 static char s_capture_path[260];
 static bool s_capture;
 static bool s_open_settings_on_start;
-#if FEATURE_GAME_STATE
 static bool s_fresh_state;
 static bool s_disable_autosave;
-#endif
 static int s_window_width = 1280;
 static int s_window_height = 720;
 static int s_frame_count;
@@ -156,10 +152,8 @@ static bool devapi_start(void) {
     fprintf(stderr, "DevAPI listening on 127.0.0.1:%u\n", (unsigned)s_devapi_port);
 #endif
     nt_devapi_register_default();
-#if FEATURE_GAME_STATE
     game_save_register_devapi();
     game_events_register_devapi(); // E3: game.events.tail (+ enables the recorder)
-#endif
 #ifdef NT_DEVAPI_GROUP_UI
     nt_devapi_ui_register_context("hud", ui_runtime_ctx());
 #endif
@@ -262,10 +256,8 @@ static void frame(void) {
     } while (game_events_react_progressed());       // fixpoint under generation cap
     game_events_set_phase(GAME_EVENT_PHASE_RECORD);
     game_features_record(&s_world);                // recorders (E3/E4 fill; empty now)
-#if FEATURE_GAME_STATE
     // Autosave: after the RECORD phase (the anchor at the old sys_move site).
     if (!s_disable_autosave) { game_save_tick(); }
-#endif
     game_event_frame_reset();                       // close the event frame (poison in debug); phase->EMIT
 
     nt_gfx_begin_frame();
@@ -316,13 +308,9 @@ int main(int argc, char **argv) {
                 return 2;
             }
         } else if (strcmp(argv[i], "--fresh-state") == 0) {
-#if FEATURE_GAME_STATE
             s_fresh_state = true; /* skip load, start from reset defaults */
-#endif
         } else if (strcmp(argv[i], "--disable-autosave") == 0) {
-#if FEATURE_GAME_STATE
             s_disable_autosave = true; /* keep loading, but never autosave */
-#endif
 #if NT_DEVAPI_ENABLED
         } else if (strcmp(argv[i], "--devapi") == 0 && i + 1 < argc) {
             s_devapi_requested = true;
@@ -363,14 +351,11 @@ int main(int argc, char **argv) {
     nt_fs_init();
     nt_hash_init(&(nt_hash_desc_t){0});
     game_events_init(); // type-hashes/labels need hash init; arena is gfx-independent
-#if FEATURE_GAME_STATE
     game_ev_register(); // register typed-event debug labels (effect under NT_HASH_LABELS, E3)
 #if NT_DEVAPI_ENABLED
     game_events_devapi_register_descs(game_ev_descs, game_ev_desc_count); // E3: tail descriptors
 #endif
-#endif
     game_log_register(); // E4.B: debug label "log" (UNCONDITIONAL; game_log.c is a leaf)
-#if FEATURE_GAME_STATE
 #if NT_DEVAPI_ENABLED
     game_events_devapi_register_descs(game_log_descs, game_log_desc_count); // E3 tail: log type (append)
 #endif
@@ -379,7 +364,6 @@ int main(int argc, char **argv) {
     game_analytics_register_descs(game_log_descs, game_log_desc_count); // E4: log type (append)
     game_analytics_init();                                             // E4: open stream + header
 #endif
-#endif // FEATURE_GAME_STATE
     nt_resource_init(&(nt_resource_desc_t){0});
     nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader, nt_gfx_deactivate_shader);
     nt_resource_set_activator(NT_ASSET_MESH, nt_gfx_activate_mesh, nt_gfx_deactivate_mesh);
@@ -389,7 +373,6 @@ int main(int argc, char **argv) {
     nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});
     nt_text_renderer_init();
-#if FEATURE_GAME_STATE
     game_save_register_fragment(&settings_state_fragment); /* settings before game (§14 п.2) */
     game_save_register_fragment(&game_state_fragment);     /* `game` last (most dependent) */
     game_save_init();
@@ -412,7 +395,6 @@ int main(int argc, char **argv) {
     }
 #ifdef NT_PLATFORM_WEB
     game_save_install_web_flush();
-#endif
 #endif
 
     s_pack_id = nt_hash32_str("game");

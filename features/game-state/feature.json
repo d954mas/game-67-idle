@@ -16,9 +16,8 @@
     "Neotolis engine public APIs for runtime and DevAPI integration"
   ],
   "flags": {
-    "feature": "FEATURE_GAME_STATE",
     "devapi": "GAME_DEVAPI_ENABLED",
-    "devapi_condition": "FEATURE_GAME_STATE && GAME_DEVAPI_ENABLED"
+    "devapi_condition": "GAME_DEVAPI_ENABLED"
   },
   "commands": {
     "generate": "py -3.12 features/game-state/scripts/generate_state.py",

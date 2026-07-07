@@ -59,7 +59,8 @@ Default template integration uses:
 - schema source: `templates/template/state/game_state.schema.json`;
 - generated output: `templates/template/build/<config>/generated/game-state/`;
 - migrations: `templates/template/state/migrations/`;
-- CMake flag: `FEATURE_GAME_STATE`;
+- always compiled (the `FEATURE_GAME_STATE` on/off flag was removed
+  2026-07-07 — a game without state is impossible);
 - DevAPI registrations from the hand-written `src/game_save_devapi.c` registry
   dispatch (`game_save_register_devapi()`) only when `GAME_DEVAPI_ENABLED` is
   also on;
@@ -71,14 +72,8 @@ For a game-specific variant, pass explicit paths:
 py -3.12 features/game-state/scripts/generate_state.py --schema games/<game-id>/state/game_state.schema.json --out-dir games/<game-id>/src/generated
 ```
 
-To disable the installed feature in a template or game build:
-
-```powershell
-cmake -S templates/template -B templates/template/build/no-state -DFEATURE_GAME_STATE=OFF
-```
-
-To keep state runtime code but remove DevAPI commands from the build, leave
-`FEATURE_GAME_STATE=ON` and configure `GAME_DEVAPI_ENABLED=OFF`.
+Runtime state cannot be disabled (no build flag). To remove DevAPI commands
+from the build, configure `GAME_DEVAPI_ENABLED=OFF`.
 
 ## Commands
 
@@ -101,9 +96,9 @@ py -3.12 features/game-state/scripts/generate_state_test.py
 
 - The schema is source of truth. Do not hand-edit generated `game_state.*`
   files.
-- Runtime feature code is gated by `FEATURE_GAME_STATE`. Generated DevAPI
-  registration is gated by `FEATURE_GAME_STATE && GAME_DEVAPI_ENABLED`; release
-  builds must not compile or register those commands.
+- Runtime feature code always compiles. DevAPI registration is gated by
+  `GAME_DEVAPI_ENABLED`; release builds must not compile or register those
+  commands.
 - Generated state stores and serializes data. Gameplay rules belong in domain
   actions owned by the game or template.
 - Migrations transform old JSON before parsing into current runtime structs.
