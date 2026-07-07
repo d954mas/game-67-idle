@@ -1,8 +1,26 @@
 # src/features — конвенция фич в шаблоне
 
 Игра = набор фич. Здесь описано, как фича устроена ВНУТРИ этого шаблона/игры.
-Библиотечный контракт переиспользуемых фич — в корневом `features/README.md`.
-Каталог-указатель на settings/items/progression/resource_panel (без библиотечных копий — этот шаблон и есть их единственная референс-реализация) — секция «Features (reference implementations live in the template)» в корневом `features/README.md`.
+Библиотечный контракт переиспользуемых фич — в корневом `features/README.md`
+(там же решающее правило модуль/фича-указатель/игровой код, §T0337).
+
+- `settings/` и `resource_panel/` — фичи-указатели: единственная копия живёт
+  здесь, без библиотечной копии в `features/` (секция «Features (reference
+  implementations live in the template)» корневого `features/README.md`).
+- `items/` — ТЕПЕРЬ игровой уголок, не полная фича: инвариантное ядро
+  (`items.h`, ownership, каталог-лукап, кодогенератор, read-only op-CLI)
+  уехало в корневой in-place модуль `features/items-core/` (потребляется по
+  `../../features/items-core/`, спеллинг include `features/items/items.h`
+  сохранён через include-path — см. `features/items-core/README.md`); здесь
+  остаётся ТОЛЬКО игровая сторона: `reason_tags.h` (закрытый список верб) +
+  `items_bootstrap.c` (только `items_on_new_game` — посев). См.
+  `items/README.md` за HOW этой игры (content/lock/миграция-скелет).
+- `progression/` — ПАПКА УДАЛЕНА ЦЕЛИКОМ. У прогрессии нет игрового
+  C-уголка (нет посева, нет своих верб) — весь код уехал в корневой in-place
+  модуль `features/progression-core/` (см.
+  `features/progression-core/README.md`). Игровая сторона прогрессии — чистые
+  конфиги (`content/progression.json`, `state/progression.schema.json`) +
+  демо-композиция `src/ui/demo_hud.c`.
 
 ## Что такое фича
 

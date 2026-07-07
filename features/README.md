@@ -45,6 +45,51 @@ features/<feature-id>/
 Only add the folders a feature actually needs. For example, a settings screen can
 be a feature with UI code, state keys, assets, and a short integration note.
 
+## Categories: module vs feature-pointer vs game code
+
+Three categories of code live in or are pointed at from this folder:
+
+- **In-place module** (`features/<id>-core/`, `features/game-state/`) — one
+  copy of the source lives here; every consuming template/game compiles it
+  IN-PLACE against its own generated headers and content (relative path
+  `../../features/<id>-core/`, depth-2 invariant: both `templates/<x>` and
+  `games/<id>` sit exactly two levels below the repo root). Shared; edits are
+  under test discipline (every consumer's tests must stay green).
+- **Feature-pointer** (`templates/template/src/features/<id>/`, single copy,
+  copy-then-own) — the template IS the single source of truth; a new game
+  gets it via a full template copy, and any further move is copy-then-own
+  from that point on.
+- **Game code** (in the template or a specific `games/<id>`) — content/
+  config, seed data, closed verb/reason lists, save-history migrations,
+  composition. Never promoted to a shared copy; it encodes one game's
+  specifics.
+
+**Decisive rule (primary test = byte-invariance of the `.c`, not consumer
+count):** would this piece of `.c` be byte-IDENTICAL in a second game, with
+that game customizing it ONLY through data/config? YES -> **in-place
+module**. How many consumers exist RIGHT NOW is not the deciding factor —
+`game-state`, `items-core`, and `progression-core` each have exactly ONE
+consumer today (the template) and are still modules, because their `.c` is
+proven invariant. "One consumer" alone is never grounds for keeping
+something a feature-pointer.
+
+**Feature-pointer** applies when the `.c` is NOT yet proven invariant, OR
+there is high "repaint" pressure — UI/taste code every game is expected to
+edit directly, not just configure (`settings`, `resource_panel`).
+
+**Game code** applies when the piece encodes THIS game specifically — its
+seed, its verb vocabulary, its save history, its composition.
+
+### Backdoor: forking a module
+
+A game with genuinely different semantics (e.g. a different ownership model
+than `items-core` assumes) is not expected to get a speculative switch added
+to the shared module for it. Instead it copies the module's `src/`+`include/`
+out into its own tree (copy-then-own, same escape hatch `settings`/
+`resource_panel` already use) and owns that fork going forward. No code in
+the shared module exists to support this — it stays a documented
+possibility, not a feature.
+
 ## feature.json fields
 
 `feature.json` (schema `ai_studio.feature.v1`) описывает переиспользуемую фичу.
@@ -78,52 +123,89 @@ be a feature with UI code, state keys, assets, and a short integration note.
   reference shape for future reusable features. Unlike the pointer-only
   features below, `game-state/` actually lives here and is consumed in-place
   by templates/games (its scripts/tests are not a promoted copy of anything).
+- `items-core/` (`L1`): item/container/currency catalog lookup + ownership
+  model (`items_add`/`items_remove`/`items_move`/`items_count`/
+  `items_can_afford`/purse/unique instances) + content codegen
+  (`generate_items_catalog.py`) + the read-only op-layer CLI (`items_ops.py`,
+  `list`/`validate`/`schema`) + `items_ops_test.py`. In-place module, same
+  shape as `game-state/` (`../../features/items-core/` from any
+  `templates/<x>` or `games/<id>`). Extracted 2026-07-07 out of
+  `templates/template/src/features/items/` (T0337,
+  `templates/design/build_spec_t0337_2026-07-07.md`, increment M1) once its
+  `.c` was proven byte-identical across the decisive rule above. The
+  consuming template/game still owns its content (`content/items.json` +
+  `item_fields.schema.json` + `items.lock.json`), its state schema
+  (`state/items.schema.json`), and a small game-owned "items corner"
+  (`templates/template/src/features/items/`: `reason_tags.h` + the
+  `items_bootstrap.c`'s `items_on_new_game` seed — see that folder's own
+  `README.md`). Reference: `items-core/README.md` + `items-core/INSTALL.md`.
+- `progression-core/` (`L2`, depends on `items-core`): level/xp tracks
+  (manual/auto/threshold modes), T5 tick caps, lazy allocation, plus curve
+  codegen (`generate_progression_tracks.py`). In-place module, consumed the
+  same way via `../../features/progression-core/`. Extracted 2026-07-08 out
+  of `templates/template/src/features/progression/` (T0337, increment M2) —
+  that folder is now deleted entirely from the template because, unlike
+  items, progression has no game-owned C corner (no seed, no closed verb
+  list of its own). The consuming template/game still owns its content
+  (`content/progression.json`), its state schema
+  (`state/progression.schema.json`), and its own composition (e.g. the
+  template's `src/ui/demo_hud.c` idle-income binding). Reference:
+  `progression-core/README.md` + `progression-core/INSTALL.md`.
 
 ## Features (reference implementations live in the template)
 
-The four vertical-slice features below do NOT have a library copy under
-`features/`. Their single source of truth is the live implementation in
+`settings` and `resource_panel` do NOT have a library copy under `features/`.
+Their single source of truth is the live implementation in
 `templates/template/src/features/<id>/`, which ships with tests and a real
 consumer (the template itself). Entries are pointers, not copies:
 
 - **settings** (`L2`) — settings screen + persisted settings fragment.
   Reference: `templates/template/src/features/settings/` (`settings.c/.h`,
   `settings_screen.c`) + `templates/template/state/settings.schema.json`.
-- **items** (`L1`) — item/container/currency catalog + ownership save
-  fragment. Reference: `templates/template/src/features/items/` (incl. its
-  own `README.md`) + content `templates/template/content/items.json`,
-  `item_fields.schema.json`, `items.lock.json` + state
-  `templates/template/state/items.schema.json` + tools
-  `templates/template/tools/generate_items_catalog.py`, `items_ops.py`,
-  `items_ops_test.py` + tests `templates/template/tests/test_items_catalog.c`,
-  `test_items_fragment.c` (+ `templates/template/tests/fixtures/items_*.json`).
-- **progression** (`L2`) — level/xp tracks over the items purse
-  (manual/auto/threshold modes). Reference:
-  `templates/template/src/features/progression/` (incl. its own `README.md`)
-  + content `templates/template/content/progression.json` + state
-  `templates/template/state/progression.schema.json` + tools
-  `templates/template/tools/generate_progression_tracks.py` + tests
-  `templates/template/tests/test_progression.c`, `test_progression_catalog.c`,
-  `test_progression_curve.c`.
 - **resource_panel** (`L2`, UI widget) — generic counter/bar HUD driven by
   game-supplied entries/getters; zero items/progression coupling. Reference:
   `templates/template/src/features/resource_panel/` (`resource_panel.c/.h`,
   `README.md`, `feature.json`).
 
+`items` and `progression` used to be pointer-only entries in this same
+section. Their invariant core is no longer single-consumer-or-copy-then-own
+code — see `items-core/` and `progression-core/` under Current Packs above.
+What is left pointing at the template for them is game-side only:
+
+- **items** — game corner `templates/template/src/features/items/`
+  (`reason_tags.h` + `items_bootstrap.c`'s `items_on_new_game` seed, plus its
+  own `README.md`) + content `templates/template/content/items.json`,
+  `item_fields.schema.json`, `items.lock.json` + state
+  `templates/template/state/items.schema.json` + the template's own
+  content-coupled integration tests `templates/template/tests/test_items_catalog.c`,
+  `test_items_fragment.c` (+ `templates/template/tests/fixtures/items_*.json`).
+- **progression** — no game-side C corner at all (see
+  `progression-core/README.md` "No game-owned C hooks") — just content
+  `templates/template/content/progression.json` + state
+  `templates/template/state/progression.schema.json` + the demo composition
+  `templates/template/src/ui/demo_hud.c` + the template's own content-coupled
+  integration tests `templates/template/tests/test_progression.c`,
+  `test_progression_catalog.c`, `test_progression_curve.c`.
+
 ### Ownership model
 
-- Single source of truth = `templates/template` (live reference
-  implementation with tests and a real consumer). There is deliberately NO
-  library copy of these four features — zero copies means zero drift to keep
-  in sync.
+- Single source of truth for `settings`/`resource_panel` = `templates/template`
+  (live reference implementation with tests and a real consumer). There is
+  deliberately NO library copy of these TWO features — zero copies means
+  zero drift to keep in sync. (`items`/`progression` used to sit in this same
+  "no library copy" bucket; T0337 promoted their invariant core into
+  `items-core/`/`progression-core/` above once it was proven byte-identical
+  by the decisive rule — see "Categories" above. Their remaining game-side
+  slice still follows this pointer model.)
 - A brand-new game gets all of them via a full template copy
   (`games/new_game.mjs`).
-- Moving ONE of these features into an existing game, or into a second
+- Moving `settings`/`resource_panel` into an existing game, or into a second
   template, is copy-then-own straight from the template pointer above — that
   copy then belongs to its new project (see Rules).
-- Promoting a feature into an actual `features/<id>/` library copy is
-  deferred until there is a second template or real consumer divergence,
-  i.e. once copy-then-own from a single reference stops being enough.
+- Promoting a feature-pointer into an actual `features/<id>/` (or
+  `features/<id>-core/`) library copy is what happened to items/progression:
+  it becomes due once the `.c` is proven byte-identical across a real second
+  consumer/divergence test (see the decisive rule above), not before.
 
 ## Rules
 

@@ -5,9 +5,13 @@ description: "Use when working with the template's items feature (L1): item/cont
 
 # NT Game Items
 
-Use this as the agent-facing router for the `items` feature pack in
-`templates/template/src/features/items/`. Keep canonical code, schemas, and
-scripts in the feature/content folders, not in this skill folder.
+Use this as the agent-facing router for the `items` feature: the invariant
+ownership core lives in the root in-place module `features/items-core/`
+(`src`/`scripts`), and the game-owned corner (`reason_tags.h` +
+`items_on_new_game` seed) plus content/state config live in
+`templates/template/src/features/items/` and `templates/template/{content,state}/`
+(T0337 split — see "Boundary" below). Keep canonical code, schemas, and
+scripts in those folders, not in this skill folder.
 
 ## Start
 
@@ -33,10 +37,17 @@ scripts in the feature/content folders, not in this skill folder.
 op-layer, never hand-parse `items.json`:
 
 ```
-py -3.12 templates/template/tools/items_ops.py list     [--catalog content/items.json] [--json]
-py -3.12 templates/template/tools/items_ops.py validate [--catalog content/items.json] [--schema content/item_fields.schema.json] [--baseline content/items.lock.json] [--state-schema state/items.schema.json] [--json]
-py -3.12 templates/template/tools/items_ops.py schema   [--schema content/item_fields.schema.json] [--json]
+py -3.12 features/items-core/scripts/items_ops.py list     [--catalog content/items.json] [--json]
+py -3.12 features/items-core/scripts/items_ops.py validate [--catalog content/items.json] [--schema content/item_fields.schema.json] [--baseline content/items.lock.json] [--state-schema state/items.schema.json] [--json]
+py -3.12 features/items-core/scripts/items_ops.py schema   [--schema content/item_fields.schema.json] [--json]
 ```
+
+(T0337 moved the op-CLI out of the template into the `items-core` module;
+pass every path explicitly when running from a directory other than the
+module itself — the script's own argparse defaults are relative to
+`features/items-core/`, not the game, so a missing `--catalog`/`--schema`/
+`--baseline`/`--state-schema` resolves inside the module and either hard-
+fails or silently skips a check, §5.6/R7 of `templates/design/build_spec_t0337_2026-07-07.md`.)
 
 - `list`/`schema`/`validate` are the ONLY ops in И2 (read-v1, LEAN §3);
   upsert/deprecate are editor-era (T0316 web editor), not built yet.
@@ -71,12 +82,14 @@ py -3.12 templates/template/tools/items_ops.py schema   [--schema content/item_f
   (same source of truth, no second data model); errors/warnings are
   structured `{rule, id, field, msg}` objects, not free strings.
 - Editing the catalog content itself? Also see
-  `templates/template/tools/generate_items_catalog.py` (compile-time codegen:
-  `items.json` -> `items_catalog.gen.{h,c}` const tables) — this is a
-  SEPARATE codegen from the save-state generator; do not mix the two.
+  `features/items-core/scripts/generate_items_catalog.py` (compile-time
+  codegen: `items.json` -> `items_catalog.gen.{h,c}` const tables) — this is
+  a SEPARATE codegen from the save-state generator; do not mix the two.
 
 **Working IN THE GAME (runtime, via the feature API)** -- use
-`templates/template/src/features/items/items.h`, never raw
+`features/items-core/include/features/items/items.h` (spelling
+`features/items/items.h` preserved through the game's include-path, §2.2 of
+`templates/design/build_spec_t0337_2026-07-07.md`), never raw
 `items_state`/`owned[]` access from game code:
 
 - `items_add`/`items_remove`/`items_move`/`items_count`/`items_can_afford` —
@@ -109,13 +122,17 @@ do not re-derive the steps here, follow that section.
 
 ## Rules
 
-- `items.h` is the ONLY public header (feature-layer L1): it depends only on
-  the L0 shell (game_save toolkit + `gsj_` json helpers + engine), never on
-  another feature.
+- `items.h` is the ONLY public header (feature-layer L1), now living in the
+  root module `features/items-core/include/features/items/items.h`
+  (spelling preserved, §2.2 of `templates/design/build_spec_t0337_2026-07-07.md`):
+  it depends only on the L0 shell (game_save toolkit + `gsj_` json helpers +
+  engine), never on another feature.
 - Never key game logic off `display_name` — it is display-only; key off `id`.
 - The `<container>/<def_id>` composite key is built by exactly ONE helper
-  inside `items_containers.c` — do not hand-build it elsewhere; use
-  `items_ops.py validate` to catch length overflows before they reach a save.
+  inside `items_containers.c` (now `features/items-core/src/items_containers.c`)
+  — do not hand-build it elsewhere; use `items_ops.py validate`
+  (`features/items-core/scripts/items_ops.py`) to catch length overflows
+  before they reach a save.
 - `reconcile()` quarantines orphaned def_ids, never deletes (README.md
   "Quarantine" — includes the `owned.max_count` budget cost of churny
   catalogs).
@@ -127,6 +144,11 @@ do not re-derive the steps here, follow that section.
 
 ## Boundary
 
-Keep this skill as a router. Catalog content, op-layer CLI, generated code,
-ownership logic, and tests belong in
-`templates/template/{content,state,src/features/items,tools,tests}/`.
+Keep this skill as a router. Catalog content and state schema/migrations
+belong in `templates/template/{content,state}/`; the game-owned corner
+(closed reason-verb list, `on_new_game` seed, integration tests) in
+`templates/template/{src/features/items,tests}/`; the ownership core,
+content codegen, and op-layer CLI now live in the root in-place module
+`features/items-core/{src,scripts}/` (T0337 — see
+`features/items-core/README.md` + `INSTALL.md`, and the root
+`features/README.md` "Categories" for the decisive rule).

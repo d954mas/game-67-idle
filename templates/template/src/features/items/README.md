@@ -1,14 +1,22 @@
-# items — feature reference
+# items — game corner (reference)
 
-`src/features/items/` — L1 foundation feature (`items.h` first line:
-`// feature-layer: L1`). Depends only on the L0 shell (game_save toolkit +
-`gsj_` JSON helpers + engine); never includes another `src/features/*`
-header (grep-gate G10). No `#if FEATURE_GAME_STATE` — state is always on
-(T0327 И2-0), items is one version. Ships with build_spec
-`templates/design/build_spec_t0327_i2_2026-07-07.md` §2/§6-§8 as the source
-design; this file is the feature-local operational reference. For agent
+`src/features/items/` was the L1 `items` feature's full home through T0327;
+as of T0337 the invariant ownership core (`items.h`, `items_containers.c`,
+`items_catalog.c`, reconcile, content codegen, op-layer CLI) moved to the
+root in-place module `features/items-core/` (`../../features/items-core/`
+from here, depth-2 invariant) — see `features/items-core/README.md` for its
+WHAT and the root `features/README.md` "Categories" for the module-vs-
+feature-pointer-vs-game-code decisive rule. This folder now holds only the
+game-owned corner: `reason_tags.h` (closed, per-game reason-verb list) +
+`items_bootstrap.c`'s `items_on_new_game` (starting seed). No
+`#if FEATURE_GAME_STATE` — state is always on (T0327 И2-0), items is one
+version. Ships with build_spec
+`templates/design/build_spec_t0327_i2_2026-07-07.md` §2/§6-§8 as the
+original design and `templates/design/build_spec_t0337_2026-07-07.md` for
+the extraction; this file is the game-side operational reference. For agent
 workflow ("how do I..."), use the `nt-game-items` skill — this README is
-the WHAT, the skill is the HOW-TO; do not duplicate content between them.
+the WHAT of the game side, the skill is the HOW-TO; do not duplicate
+content between them.
 
 ## What it is
 
@@ -20,6 +28,12 @@ tracks and reports ownership. `use.effect_id` is a pointer for a future
 effects layer to interpret, not something items itself runs.
 
 ## Public API (`items.h`)
+
+> **`items.h` now lives in `features/items-core/include/features/items/items.h`
+> and resolves through this game's include-path (`ITEMS_CORE_INC`, ahead of
+> `src`, §2.2 of `templates/design/build_spec_t0337_2026-07-07.md`). Do NOT
+> recreate it here — a copy in this folder would shadow the module and the
+> `G-copies` grep-gate would catch it red.**
 
 **Catalog (const tables, always compiled):**
 - `item_core(def_id)` / `item_at(index)` / `items_def_count()` — lookups.
@@ -120,21 +134,35 @@ convention and its grep-gate).
    the source of truth for this since copy-then-own resets it,
    `games/new_game.mjs`). The future T0316 web editor will set `created`
    automatically; hand-authored entries must set it themselves.
-2. Build codegen: `py -3.12 tools/generate_items_catalog.py --catalog
-   content/items.json --schema content/item_fields.schema.json --out-dir
-   <dir>` — emits the compile-time const tables (`items_catalog.gen.{h,c}`).
-   Also runs a lightweight sanity net so a broken catalog fails the build,
-   not just the runtime. `created` is authoring metadata only — never
-   compiled into the tables.
-3. Run the STRICT gate before shipping: `py -3.12 tools/items_ops.py validate`
-   — a strict superset of the generator's sanity net (same source of truth,
-   imported not re-parsed) PLUS: the `created` field, the lock-file removal
-   workflow against `content/items.lock.json` + `state/items.schema.json`
-   (below), full `<namespace>.<slug>` charset check, the composite-key
-   length hard rule (`len(container) + 1 + len(def_id) <= 63`, since stack
-   keys are `"<container>/<def_id>"` under `string_max=64`), an `equip` ⇒
-   not `stack.unlimited` sanity check, and an advisory display_name-keying
-   lint. See the `nt-game-items` skill for the full CLI reference (`list`/
+2. Build codegen (run from `templates/template/`; the generator moved to the
+   `items-core` module in T0337): `py -3.12 ../../features/items-core/scripts/generate_items_catalog.py
+   --catalog content/items.json --schema content/item_fields.schema.json
+   --out-dir <dir>` — emits the compile-time const tables
+   (`items_catalog.gen.{h,c}`). Also runs a lightweight sanity net so a
+   broken catalog fails the build, not just the runtime. `created` is
+   authoring metadata only — never compiled into the tables.
+3. Run the STRICT gate before shipping (run from `templates/template/`; the
+   op-CLI moved to the `items-core` module too, and **every path must now be
+   passed explicitly** — the script's own argparse defaults are relative to
+   `features/items-core/`, not this game, §5.6/R7 of the build spec):
+   `py -3.12 ../../features/items-core/scripts/items_ops.py validate --catalog
+   content/items.json --schema content/item_fields.schema.json --baseline
+   content/items.lock.json --state-schema state/items.schema.json --src-dir
+   src/features/items` — a strict superset of the generator's sanity net
+   (same source of truth, imported not re-parsed) PLUS: the `created` field,
+   the lock-file removal workflow against `content/items.lock.json` +
+   `state/items.schema.json` (below), full `<namespace>.<slug>` charset
+   check, the composite-key length hard rule
+   (`len(container) + 1 + len(def_id) <= 63`, since stack keys are
+   `"<container>/<def_id>"` under `string_max=64`), an `equip` ⇒ not
+   `stack.unlimited` sanity check, and an advisory display_name-keying lint.
+   **L5 — `--src-dir src/features/items` now scans the display-name-keying
+   lint over ONLY this game corner** (`reason_tags.h` +
+   `items_bootstrap.c`) — the ownership core (`items_containers.c`) lives in
+   `features/items-core/src/` and is linted there instead (a standalone run
+   would pass `--src-dir ../../features/items-core/src`); this is a
+   deliberate narrowing, not a coverage regression (§5.6 of the build spec).
+   See the `nt-game-items` skill for the full CLI reference (`list`/
    `validate`/`schema`, `--json`). **This gate ALSO runs automatically in
    `ctest`** (target `items_ops_validate`) — a destructive change without a
    reaction now fails the build's test suite by itself, not only a manual
@@ -215,8 +243,8 @@ distinct versions per entry.
 by `content/progression.json`'s `currency_def` is not removed without a
 synchronized edit to `content/progression.json` — this lock workflow has no
 visibility into `progression`, so the removal passes this guard cleanly but
-breaks `tools/generate_progression_tracks.py` loudly instead (see
-`features/progression/README.md`).
+breaks `features/progression-core/scripts/generate_progression_tracks.py`
+loudly instead (see `features/progression-core/README.md`).
 
 **Data-shape guards:** an id listed in BOTH `def_ids` and `removed`
 simultaneously is `lock-inconsistent` (fix `items.lock.json` by hand — it
