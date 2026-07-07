@@ -14,8 +14,8 @@ copied from the template starts with this kit; replace/extend it with your own.
 ## Provenance
 
 - **Origin:** sourced
-- **License:** CC0 1.0 (public domain) вЂ” free to use, no attribution required.
-- **Author/source:** Kenney вЂ” UI Pack (https://kenney.nl/assets/ui-pack).
+- **License:** CC0 1.0 (public domain) — free to use, no attribution required.
+- **Author/source:** Kenney — UI Pack (https://kenney.nl/assets/ui-pack).
 - **How it got here:** source-first search did not find a matching UI kit in the
   shared asset library (`node ai_studio/assets/backlog/storage/search.mjs --query "ui kit" --kind ui --json`),
   so this falls back to the canonical

@@ -3,10 +3,10 @@
 A new game starts by **copying the template**. Reusable improvements go into
 AI Studio, the engine, or a reusable feature pack after review.
 
-**The template has two jobs:** (1) a runnable shell a game copies, and (2) вЂ” just
-as important вЂ” it **lays down the architecture for all future work**: the worked
+**The template has two jobs:** (1) a runnable shell a game copies, and (2) — just
+as important — it **lays down the architecture for all future work**: the worked
 example of how code is decomposed (thin entry + systems + world state), how assets
-flow (pull в†’ pack в†’ render), and how UI/state/audio are wired. Future games (and
+flow (pull → pack → render), and how UI/state/audio are wired. Future games (and
 the AI building them) follow the template's structure instead of inventing one or
 piling everything into one file. Investing in the template's architecture pays off
 in every game after it.
@@ -18,36 +18,36 @@ in every game after it.
   submodule and shared asset library are referenced, not copied.
 - The asset library is a registered external source; never copied wholesale.
 
-## Reuse tiers вЂ” what is shared vs copied-and-customized
+## Reuse tiers — what is shared vs copied-and-customized
 
 Two KINDS of reuse, different by nature:
 
-- **Dev pipeline** вЂ” `ai_studio/`, `.codex/skills/`, taskboard, reusable design
+- **Dev pipeline** — `ai_studio/`, `.codex/skills/`, taskboard, reusable design
   knowledge, and the shared asset library. Shared infra, ONE copy used by every
   game; improvements are reviewed in their owning module. A copied game also
   has its own private design knowledge base under `games/<id>/design/knowledge/`.
-- **Feature packs** вЂ” gameplay AND the shell (settings, audio, save, UI, terrain,
+- **Feature packs** — gameplay AND the shell (settings, audio, save, UI, terrain,
   character controller, ...). These inherently need PER-GAME tweaks, so they are
-  **COPIED into a game when needed and the game owns/customizes its copy** вЂ” the same
-  model as the asset library (pull a copy в†’ edit locally в†’ promote good ones back).
+  **COPIED into a game when needed and the game owns/customizes its copy** — the same
+  model as the asset library (pull a copy → edit locally → promote good ones back).
   NOT a frozen linked core: a single "terrain render" or "character controller" can't
   fit every game unchanged.
 
 Tiers:
-1. **Engine** вЂ” `external/neotolis-engine` (submodule; the ONLY truly linked,
+1. **Engine** — `external/neotolis-engine` (submodule; the ONLY truly linked,
    fix-once shared core; stable public API).
-2. **Features** вЂ” storage of reusable feature packs, each a folder with the code,
+2. **Features** — storage of reusable feature packs, each a folder with the code,
    assets, state, docs, and examples it actually needs. A game COPIES what it needs
-   and customizes it; good features are promoted back. (No separate frozen "core" вЂ” even shell/terrain/character systems
+   and customizes it; good features are promoted back. (No separate frozen "core" — even shell/terrain/character systems
    get per-game edits, so copy-then-own, not link.)
-3. **Template** (minimal) вЂ” thin `main.c` conductor + `world` + the basic shell as
+3. **Template** (minimal) — thin `main.c` conductor + `world` + the basic shell as
    its OWN files (settings, audio, save, UI gear/panel, font, coloured+textured mesh,
    pack builder) so a new game runs immediately; copying the template brings them, and
    the game then customizes them. The shell lives in the template, not `features/`.
-4. **Game-only** вЂ” a game's own systems, logic, pulled assets, tasks, design.
+4. **Game-only** — a game's own systems, logic, pulled assets, tasks, design.
 
 Trade-off (named honestly, per research): copy-then-customize IS "clone-and-own",
-which needs discipline вЂ” keep each feature self-contained and PROMOTE improvements
+which needs discipline — keep each feature self-contained and PROMOTE improvements
 back so `features/` stays the best version. The engine as the stable linked core
 absorbs the cross-cutting fixes that clone-and-own otherwise can't propagate.
 
@@ -86,52 +86,52 @@ The template is NOT a bare seed: a new game opens to a working shell and builds 
 - **Design scaffold**: `design/concept.md`, `design/gdd.md`,
   `design/knowledge/`, and `design/data/*.json`. This scaffold belongs in the
   template and is copied into each new game.
-- **Pack pipeline**: `src/build_packs.c` + CMake `build_game_packs` в†’ `<game>.ntpack`
+- **Pack pipeline**: `src/build_packs.c` + CMake `build_game_packs` → `<game>.ntpack`
   + generated asset-id header. Packs the items below.
 - **Text**: a starter **OFL font** (`assets/fonts/`) + `slug_text` shaders +
   `nt_text_renderer`. Every game has readable text from the first run.
 - **Meshes**: `mesh_inst` shaders through `nt_mesh_renderer`, with TWO worked
   examples so the AI learns both paths and uses the right one:
-  - **untextured / per-instance colour** вЂ” 1Г—1 white texture + `baseColorFactor`
+  - **untextured / per-instance colour** — 1×1 white texture + `baseColorFactor`
     (most library glb, e.g. poly.pizza, are vertex/colour-only),
-  - **textured** вЂ” a starter glb that ships a texture; pack the texture, bind it as
+  - **textured** — a starter glb that ships a texture; pack the texture, bind it as
     `u_texture`, sample it. So games take **textured** meshes from the first run, not
     only flat-coloured ones.
-  Ready to draw library glb: pull в†’ pack в†’ render (skill `nt-asset-workflow`). A small
+  Ready to draw library glb: pull → pack → render (skill `nt-asset-workflow`). A small
   CC0 textured glb is sourced into `assets/meshes/` as the textured example.
 - **State + saves**: base game state (`state/` schema + codegen) and
   `src/game_storage.*` (save/load, autosave).
 - **Audio**: `src/game_audio.*` (music/SFX buses).
 - **Startup UX**: the template opens to an **empty scene** with a **settings
-  (gear) button in the top-right** of the GUI. Settings are NOT shown on launch вЂ”
+  (gear) button in the top-right** of the GUI. Settings are NOT shown on launch —
   pressing the gear opens the panel below.
 - **Settings panel** (`src/features/settings/` + `src/ui/*`):
   - volume sliders (master / music / SFX),
   - a **Close** button,
   - a **Reset** button that **resets the game state on a long-press** (hold to
-    confirm вЂ” avoids an accidental wipe).
+    confirm — avoids an accidental wipe).
 - **Base GUI art** (CC0, sourced from the library/Kenney UI): panels, buttons,
-  a close (вњ•) icon вЂ” a 9-slice panel + button kit so menus look intentional day one.
+  a close (✕) icon — a 9-slice panel + button kit so menus look intentional day one.
 
-## Architecture вЂ” decomposition the template teaches BY EXAMPLE
+## Architecture — decomposition the template teaches BY EXAMPLE
 
 The biggest problem: agents dump the whole game into one file. The template ships
 a **decomposed reference structure** so a copied game inherits it instead of a
 mega-`main`. Rules the seed demonstrates:
 
-- **Thin entry point** (`src/main.c`): init systems в†’ run the frame loop в†’ tear
-  down. NO game logic lives here вЂ” it only wires systems together.
+- **Thin entry point** (`src/main.c`): init systems → run the frame loop → tear
+  down. NO game logic lives here — it only wires systems together.
 - **Systems, one file each** (`.c`/`.h`), single responsibility, data-oriented
   (SoA, typed handles) per the engine. The template ships a minimal but REAL set:
-  - **world state** (`world_state.*`) вЂ” the world's source of truth: entity
+  - **world state** (`world_state.*`) — the world's source of truth: entity
     handles/references, lookups, spawn/despawn. Other systems read/write it; they
     do not own entities.
   - a sample **character** entity with TWO separate systems:
-    - **movement** (`sys_character_move.*`) вЂ” walks the character around the world
-      (input/AI в†’ position in world state),
-    - **render** (`sys_character_render.*`) вЂ” draws it from world state (mesh +
+    - **movement** (`sys_character_move.*`) — walks the character around the world
+      (input/AI → position in world state),
+    - **render** (`sys_character_render.*`) — draws it from world state (mesh +
       transform), separate from movement.
-  - **settings** (`src/features/settings/`, the reference feature folder) вЂ” the gear panel, sliders, long-press reset.
+  - **settings** (`src/features/settings/`, the reference feature folder) — the gear panel, sliders, long-press reset.
   - input / camera as their own systems.
 - Systems communicate through the **world state**, not by calling each other's
   internals. A new game adds its own systems the same way (copy a system file,
