@@ -787,4 +787,37 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(test_game_format PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_game_format PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_format COMMAND test_game_format)
+
+    # T0327 tail: 4-fragment composition test -- lifts settings/items/progression/game
+    # through the REAL game_save registry (envelope + on_new_game fan-out + skip-reset).
+    # GAME_SAVE_TESTING injects clocks & avoids nt_time (precedent test_game_save).
+    add_executable(test_template_composition
+        tests/test_template_composition.c
+        src/game_save.c src/game_storage.c src/game_state_json.c src/game_events.c
+        "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
+        "${SETTINGS_STATE_GENERATED_SOURCE}" src/features/settings/settings.c
+        "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
+        src/features/items/items_bootstrap.c
+        "${ITEMS_CORE_SRC}/items_reconcile.c" "${ITEMS_CORE_SRC}/items_containers.c"
+        "${ITEMS_CORE_SRC}/items_catalog.c" "${ITEMS_CATALOG_GENERATED_SOURCE}"
+        "${PROGRESSION_STATE_GENERATED_SOURCE}" "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"
+        "${PROGRESSION_CORE_SRC}/progression.c"
+        "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c")   # REAL hero curve (cf. test_progression_curve)
+    add_dependencies(test_template_composition progression_tracks_gen)  # progression.c #includes .gen.h
+    # nt_ui_interface (review #1 smoke-check): settings.h pulls ui/nt_ui.h for
+    # nt_ui_context_t; header-only include-root + NT_UI_DEBUG_TOOLS define, no
+    # Clay/impl chain -- draw_ui is never called in this TU, only declared.
+    target_link_libraries(test_template_composition PRIVATE cjson unity nt_hash nt_log nt_core nt_ui_interface)
+    target_include_directories(test_template_composition PRIVATE
+        "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" src
+        "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
+    target_compile_definitions(test_template_composition PRIVATE
+        GAME_SAVE_TESTING=1 GAME_STORAGE_APP_ID="template_test"
+        GAME_SAVE_AUTOSAVE_SLOT="test_composition"
+        GAME_SAVE_DEBOUNCE_MS=2000 GAME_SAVE_MAX_INTERVAL_MS=30000 GAME_SAVE_DOC_VERSION=1
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_template_composition PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_template_composition COMMAND test_template_composition
+        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 endif()
