@@ -6,26 +6,50 @@ The minimal runnable game every new game is copied from. Spec + reuse model:
 Layout (decomposition the template teaches by example — no god-file):
 
     src/
-      main.c            THE CONDUCTOR: init -> nt_app_run(frame) -> teardown; frame()
-                        only calls subsystems. No game logic here.
-      world/world.h     the World: single source of truth (entity handles, sim state).
-      ui/hud.{c,h}      on-screen text/UI (its own system).
-      render/           render systems (setup + draw), separate from game logic.   [wip]
-      systems/          game systems, one file each (input, camera, character move). [wip]
-      scene/            build the starting world.                                    [wip]
-      devapi/           game-owned DevAPI commands only; engine groups are wired in CMake/main. [wip]
-      build_packs.c     pack builder -> game.ntpack + generated asset-id header.
-      game_audio.*, game_storage.*  seed infra.
-    devapi/             game-local Python bots and runtime smoke scenarios.
-    assets/shaders/     common/ + slug_text + sprite + mesh_inst.
-    state/              game-state schema (codegen source).
-    design/             game-owned concept, GDD, private knowledge base, and
-                        structured design data scaffold.
+      main.c                 THE CONDUCTOR: init -> nt_app_run(frame) -> teardown; frame()
+                             only calls subsystems. No game logic here.
+      world/world.h          the World: single source of truth (entity handles, sim state).
+      features/              feature-based architecture. `game_features.c` is the 7-phase
+                             aggregator (init/update/react/record/draw_world/draw_ui/
+                             shutdown; call order = z-order):
+                               settings/        gear panel, sliders, close, long-press reset.
+                               items/           game-local reason_tags.h + on_new_game seed
+                                                (ownership core lives in features/items-core/).
+                               resource_panel/  HUD widget: gold counter + xp bar.
+      systems/sys_move.c     game systems, one file each, over World.
+      render/                render systems, separate from game logic:
+                               render_mesh.{c,h}  draw meshes from world state + frame uniforms.
+                               capture.{c,h}      screenshot/capture support.
+      ui/                    hud.{c,h}, ui_runtime.{c,h} (per-feature draw_ui frame),
+                             theme.{c,h}, demo_hud.{c,h} (resource_panel composition).
+      game_{save,storage,state_json,events,event_render,log,analytics,format}.*
+                             L0 shell: fragment registry/orchestration, JSON save/load,
+                             typed events, formatting. `game_{save,events}_devapi.c` build
+                             only under `GAME_DEVAPI_ENABLED`.
+      build_packs.c          pack builder -> game.ntpack + generated asset-id header.
+      game_audio.*           seed infra (music/SFX buses); not yet compiled into the game target.
+    devapi/                  game-local Python bots and runtime smoke scenarios.
+    assets/shaders/          common/ + slug_text + sprite + mesh_inst + mesh_tex.
+    state/                   the 4 fragment schemas (codegen source): settings/items/
+                             progression/game.
+    content/                 items.json / progression.json / item_fields.schema.json /
+                             items.lock.json — item + progression catalog content, read by
+                             the codegen and the read-only op-CLI.
+    design/                  game-owned concept, GDD, private knowledge base, and
+                             structured design data scaffold.
 
-Status: starter shell (empty scene + text). Build wiring (`CMakeLists.txt` referencing
-`../../external/neotolis-engine`) and the full shell (settings panel + sliders + long-press
-reset + GUI art, coloured + textured mesh examples, a character-walks example system)
-are in progress — see epic E009.
+Dropped on purpose: a src-level `devapi/` dir and a `scene/` builder do NOT
+exist — game-owned DevAPI commands ship as `src/game_*_devapi.c` under
+`GAME_DEVAPI_ENABLED` (not a `src/devapi/` dir), and a scene builder is future work.
+
+Feature-based architecture: see `CONVENTIONS.md` + `src/features/README.md`;
+reusable-feature ownership model: `features/README.md`.
+
+Status: runnable shell — gear/settings panel (sliders + long-press reset), items
+(L1) + progression (L2) systems, and a live resource-panel HUD on launch (gold
+counter + xp bar via `resource_panel`/`demo_hud`) over two sample cubes;
+feature-based architecture; native + 3 web presets green; test base 16 (→17
+with this spec). The E009 arc is code-complete.
 
 Debug builds enable the engine DevAPI path by default (`GAME_DEVAPI_ENABLED=ON`):
 `--devapi <port>` starts the engine TCP transport and exposes engine-owned
@@ -43,6 +67,9 @@ Feature flags:
   was removed 2026-07-07 (lead: a game without state is impossible).
 - `GAME_DEVAPI_ENABLED=ON` enables engine DevAPI groups and the state DevAPI
   commands.
+
+Persistent state = 4 fragments (`settings`/`items`/`progression`/`game`) over the
+`features/game-state` registry, each registered by one line in `main.c`.
 
 The state schema and migrations live in source under `state/`; CMake generates
 `game_state.*` into `build/<config>/generated/game-state/` before compiling.

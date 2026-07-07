@@ -34,12 +34,15 @@ Two KINDS of reuse, different by nature:
   fit every game unchanged.
 
 Tiers:
-1. **Engine** — `external/neotolis-engine` (submodule; the ONLY truly linked,
-   fix-once shared core; stable public API).
-2. **Features** — storage of reusable feature packs, each a folder with the code,
-   assets, state, docs, and examples it actually needs. A game COPIES what it needs
-   and customizes it; good features are promoted back. (No separate frozen "core" — even shell/terrain/character systems
-   get per-game edits, so copy-then-own, not link.)
+1. **Engine** — `external/neotolis-engine` (submodule; a linked, fix-once
+   shared core; stable public API).
+2. **Features** — storage of reusable feature packs. Three categories live here
+   (`features/README.md` §"Categories: module vs feature-pointer vs game code"):
+   **in-place module** (one shared copy, linked in-place by every consumer, e.g.
+   `items-core`/`progression-core`/`game-state`) joins the engine as the
+   LINKED-shared tier; **feature-pointer** (copy-then-own, e.g. `settings`/
+   `resource_panel`) is the copy-then-own tier below. A game copies a
+   feature-pointer when it needs one; good feature-pointers are promoted back.
 3. **Template** (minimal) — thin `main.c` conductor + `world` + the basic shell as
    its OWN files (settings, audio, save, UI gear/panel, font, coloured+textured mesh,
    pack builder) so a new game runs immediately; copying the template brings them, and
@@ -48,15 +51,19 @@ Tiers:
 
 Trade-off (named honestly, per research): copy-then-customize IS "clone-and-own",
 which needs discipline — keep each feature self-contained and PROMOTE improvements
-back so `features/` stays the best version. The engine as the stable linked core
-absorbs the cross-cutting fixes that clone-and-own otherwise can't propagate.
+back so `features/` stays the best version. The LINKED-shared tier (engine +
+in-place modules) absorbs the cross-cutting fixes that clone-and-own otherwise
+can't propagate; the copy-then-own tier (feature-pointers + game code) is where
+per-game customization is expected and healthy.
 
 ## Feature library - copyable feature packs
 
 Besides the template, `features/` is the shared pool of optional game capabilities:
 browse what exists, copy what you need, customize the local copy, and promote useful
 generalized improvements back. A feature can contain code, assets, state schema,
-UI screens, DevAPI hooks, validation, and notes.
+UI screens, DevAPI hooks, validation, and notes. Not every entry here copy-then-owns
+the same way — see `features/README.md` §"Categories: module vs feature-pointer vs
+game code" for which is which.
 
 - **Each feature is its own folder.** e.g. `features/terrain/` can include
   source files, asset inputs, state keys, a copy note, and an `example/` when a tiny
@@ -102,9 +109,10 @@ The template is NOT a bare seed: a new game opens to a working shell and builds 
 - **State + saves**: base game state (`state/` schema + codegen) and
   `src/game_storage.*` (save/load, autosave).
 - **Audio**: `src/game_audio.*` (music/SFX buses).
-- **Startup UX**: the template opens to an **empty scene** with a **settings
-  (gear) button in the top-right** of the GUI. Settings are NOT shown on launch —
-  pressing the gear opens the panel below.
+- **Startup UX**: the template opens to a **live resource-panel HUD** (gold
+  counter + xp bar, via `resource_panel`/`demo_hud`) over two sample cubes, with a
+  **settings (gear) button in the top-right** of the GUI. Settings are NOT shown on
+  launch — pressing the gear opens the panel below.
 - **Settings panel** (`src/features/settings/` + `src/ui/*`):
   - volume sliders (master / music / SFX),
   - a **Close** button,
@@ -122,17 +130,17 @@ mega-`main`. Rules the seed demonstrates:
 - **Thin entry point** (`src/main.c`): init systems → run the frame loop → tear
   down. NO game logic lives here — it only wires systems together.
 - **Systems, one file each** (`.c`/`.h`), single responsibility, data-oriented
-  (SoA, typed handles) per the engine. The template ships a minimal but REAL set:
-  - **world state** (`world_state.*`) — the world's source of truth: entity
-    handles/references, lookups, spawn/despawn. Other systems read/write it; they
-    do not own entities.
-  - a sample **character** entity with TWO separate systems:
-    - **movement** (`sys_character_move.*`) — walks the character around the world
-      (input/AI → position in world state),
-    - **render** (`sys_character_render.*`) — draws it from world state (mesh +
-      transform), separate from movement.
-  - **settings** (`src/features/settings/`, the reference feature folder) — the gear panel, sliders, long-press reset.
-  - input / camera as their own systems.
+  per the engine. The template ships a minimal but REAL set:
+  - **world state** (`world/world.h`) — the World's source of truth (player
+    position/yaw, mesh entity handles). Other systems read/write it; they do
+    not own entities.
+  - **movement** (`systems/sys_move.c`) — WASD input drives the World's player
+    position/yaw, its own system, separate from rendering.
+  - **render** (`render/render_mesh.c`) — draws the World's mesh entities (a
+    coloured player cube + a textured prop cube) from world state, separate
+    from movement.
+  - **settings** (`src/features/settings/`, the reference feature-pointer) —
+    the gear panel, sliders, long-press reset.
 - Systems communicate through the **world state**, not by calling each other's
   internals. A new game adds its own systems the same way (copy a system file,
   register it in `main`), never by growing one file.
@@ -148,28 +156,38 @@ HUD/UI tree, material setup, and `main`. The template ships these as SEPARATE
 modules from day one so a copied game keeps them apart:
 
     src/
-      main.c                  THE CONDUCTOR: init subsystems -> nt_app_run(frame) ->
-                              teardown. frame() only CALLS subsystems in order
-                              (sys_input -> game-system updates -> render systems);
-                              it holds no game logic of its own.
-      world/world_state.{c,h} the world: entity handles, lookups, spawn/despawn.
-      scene/scene_setup.{c,h} build the starting world (add_object, create entities).
-      systems/                GAME SYSTEMS, one responsibility each, over world state:
-        sys_input.{c,h}         input -> intents
-        sys_character_move.{c,h} walk a character through the world
-        sys_camera.{c,h}        camera follow
-      features/               FEATURES: folder per feature, ONE public header
-                              (rules: src/features/README.md):
-        game_features.{c,h}     the frame aggregator (7 phases, list = z-order)
-        settings/               the reference feature: gear panel, sliders,
-                                close, long-press reset (public API: settings.h)
-      render/                 RENDER SYSTEMS, separate from game logic:
-        render_setup.{c,h}      materials (mesh + text), shaders, font, frame UBO,
-                                fallback texture  (was inline in main)
-        render_world.{c,h}      draw meshes from world state + frame uniforms
-        render_character.{c,h}  draw the character (separate from its movement)
+      main.c                   THE CONDUCTOR: init subsystems -> nt_app_run(frame) ->
+                               teardown. frame() only CALLS subsystems in order
+                               (game_features -> render); it holds no game logic
+                               of its own.
+      world/world.h            the World: single source of truth (player position/
+                               yaw, mesh entity handles).
+      systems/
+        sys_move.{c,h}          WASD input -> the World's player position/yaw.
+      features/                FEATURE-BASED ARCHITECTURE: folder per feature, ONE
+                               public header (rules: src/features/README.md):
+        game_features.{c,h}      the frame aggregator (7 phases: init/update/react/
+                                 record/draw_world/draw_ui/shutdown; list = z-order)
+        settings/                 feature-pointer: gear panel, sliders, close,
+                                 long-press reset (public API: settings.h)
+        items/                    game-local reason_tags.h + on_new_game seed; the
+                                 ownership core is the in-place module
+                                 features/items-core/ (L1)
+        resource_panel/           feature-pointer: HUD widget, gold counter + xp
+                                 bar over items/progression (L2)
+      render/                  RENDER SYSTEMS, separate from game logic:
+        render_mesh.{c,h}        materials (coloured + textured), the mesh
+                                 renderer, a follow camera; draws the World's
+                                 mesh entities from world state + frame uniforms
+        capture.{c,h}             screenshot/capture support
       ui/
-        hud.{c,h}               the HUD/UI tree (panels/buttons, the top-right gear)
+        hud.{c,h}                 the HUD/UI tree (panels/buttons, the top-right gear)
+        ui_runtime.{c,h}          per-feature draw_ui frame (ctx + z-order calls)
+        theme.{c,h}               shared UI theme
+        demo_hud.{c,h}            resource_panel composition (idle-income demo)
+      game_{save,storage,state_json,events,event_render,log,analytics,format}.*
+                               L0 SHELL: fragment registry/orchestration, JSON
+                               save/load, typed events, formatting.
       game_save_devapi.c      hand-written universal `game.state` DevAPI dispatch
                               over the fragment registry (A5); registered by
                               `game_save_register_devapi()`, built only under
@@ -177,6 +195,8 @@ modules from day one so a copied game keeps them apart:
                               (ui.*, input.*, frame/time, obs, capture.*) are
                               wired from the engine, NOT duplicated here
       build_packs.c           pack builder (font + shaders + white + textured sample)
+      game_audio.*            seed infra (music/SFX buses); not yet compiled into
+                              the game target
     devapi/
       smoke_bot.py            game-local Python runtime bot: launch via DevAPI,
                               discover commands, click a stable UI id, capture
@@ -184,6 +204,16 @@ modules from day one so a copied game keeps them apart:
       responsive_viewports.py reusable QCLR_002 helper: relaunch each viewport,
                               let a bot prepare a state, then capture screenshots
                               plus ui.tree bounds for responsive-layout review
+    state/                    the 4 fragment schemas (codegen source): settings/
+                              items/progression/game
+    content/                  items.json / progression.json / item_fields.schema.json /
+                              items.lock.json -- item + progression catalog content
+
+Outside `src/`, two in-place modules carry the L1/L2 learning-feature runtime
+(one shared copy, linked in-place, NOT copy-then-own): `features/items-core/`
+(ownership, catalog, reconcile) and `features/progression-core/` (curve,
+level-ups); see `features/README.md` §"Categories: module vs feature-pointer
+vs game code".
 
 Engine-owned pieces stay engine-side (public API): `nt_mesh_renderer`,
 `nt_text_renderer`, `nt_devapi`, `cjson`, ECS comps, `nt_resource`. Seed infra
