@@ -97,6 +97,11 @@ set(ITEMS_CORE_DIR        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/items-core
 set(ITEMS_CORE_INC        "${ITEMS_CORE_DIR}/include")
 set(ITEMS_CORE_SRC        "${ITEMS_CORE_DIR}/src")
 set(ITEMS_CORE_SCRIPTS    "${ITEMS_CORE_DIR}/scripts")
+# T0337 M2: progression-core (L2 -> items-core L1, §2.4). Same depth-2 invariant as above.
+set(PROGRESSION_CORE_DIR     "${CMAKE_CURRENT_SOURCE_DIR}/../../features/progression-core")
+set(PROGRESSION_CORE_INC     "${PROGRESSION_CORE_DIR}/include")
+set(PROGRESSION_CORE_SRC     "${PROGRESSION_CORE_DIR}/src")
+set(PROGRESSION_CORE_SCRIPTS "${PROGRESSION_CORE_DIR}/scripts")
 
 set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
@@ -200,7 +205,7 @@ add_custom_command(
 # into compile-time const int64 cost tables; --items cross-checks currency_def
 # against the items catalog (ITEMS_CATALOG_JSON, defined just above).
 set(PROG_TRACKS_JSON "${CMAKE_CURRENT_SOURCE_DIR}/content/progression.json")
-set(PROG_TRACKS_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_progression_tracks.py")
+set(PROG_TRACKS_GENERATOR "${PROGRESSION_CORE_SCRIPTS}/generate_progression_tracks.py")
 add_custom_command(
     OUTPUT
         "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.h"
@@ -322,7 +327,7 @@ target_sources(${GAME_TARGET} PRIVATE
     "${ITEMS_CORE_SRC}/items_containers.c"   # И2b: ownership/containers/purse (add/remove/move/count/can_afford; T0337 M1: in-place module)
     "${PROGRESSION_STATE_GENERATED_SOURCE}"        # И3a: generated progression fragment state layer
     "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}" # И3a: progression.levelup event (not empty, must link)
-    src/features/progression/progression.c   # И3a: queries/mutations/update (uses progression_state + items + tracks)
+    "${PROGRESSION_CORE_SRC}/progression.c"   # И3a: queries/mutations/update (uses progression_state + items + tracks; T0337 M2: in-place module)
     src/game_state_json.c
     src/game_storage.c
     src/game_save.c              # A3
@@ -353,7 +358,7 @@ if(GAME_ANALYTICS_ENABLED)
     target_sources(${GAME_TARGET} PRIVATE src/game_analytics.c)      # E4: local analytics writer
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE
-    "${ITEMS_CORE_INC}"
+    "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}"
     src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/deps/glfw/deps")
 target_compile_definitions(${GAME_TARGET} PRIVATE GAME_WINDOW_TITLE="${GAME_WINDOW_TITLE}")
 target_link_libraries(${GAME_TARGET} PRIVATE
@@ -737,7 +742,7 @@ if(NOT EMSCRIPTEN)
     add_executable(test_progression
         tests/test_progression.c
         tests/test_progression_catalog.c                        # РУКОПИСНЫЙ k_tracks (НЕ .gen.c, R10)
-        src/features/progression/progression.c
+        "${PROGRESSION_CORE_SRC}/progression.c"                   # T0337 M2: in-place module
         "${PROGRESSION_STATE_GENERATED_SOURCE}"                  # progression_state.c
         "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"           # progression_state_events.gen.c
         "${ITEMS_CORE_SRC}/items_containers.c"                    # items runtime (progression spends/reads purse; T0337 M1: in-place module)
@@ -748,7 +753,7 @@ if(NOT EMSCRIPTEN)
         src/game_state_json.c src/game_events.c)
     add_dependencies(test_progression progression_tracks_gen)   # H2: guarantees progression_tracks.gen.h before progression.c compiles
     target_link_libraries(test_progression PRIVATE cjson unity nt_hash nt_log nt_core)
-    target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
+    target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_progression PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_progression PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_progression COMMAND test_progression WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
@@ -761,14 +766,15 @@ if(NOT EMSCRIPTEN)
         tests/test_progression_curve.c
         "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c")
     target_link_libraries(test_progression_curve PRIVATE unity)
-    # T0337 M1 deviation (spec §5.6 labels this [M2] alongside PROGRESSION_CORE_INC,
-    # but items.h already moved out of src/ in M1 -- progression_tracks.gen.h
-    # includes features/progression/progression.h (still src/, unmoved) which
-    # includes features/items/items.h (H1 chain, §13). Without ITEMS_CORE_INC
-    # here NOW, this target would fail to compile mid-M1, breaking the
-    # per-increment-green invariant (§9/R8). PROGRESSION_CORE_INC stays M2
-    # (progression.h itself has not moved yet).
-    target_include_directories(test_progression_curve PRIVATE "${ITEMS_CORE_INC}" src "${GAME_SOURCE_GENERATED_DIR}")
+    # T0337 M1 added ITEMS_CORE_INC here ahead of schedule (spec §5.6 labels it
+    # [M2] alongside PROGRESSION_CORE_INC) because items.h had already moved out
+    # of src/ in M1 while progression.h had not: progression_tracks.gen.h
+    # includes features/progression/progression.h (then still src/) which
+    # includes features/items/items.h (H1 chain, §13) -- without ITEMS_CORE_INC
+    # this target would have failed to compile mid-M1, breaking the
+    # per-increment-green invariant (§9/R8). M2 now moves progression.h itself
+    # out of src/ (§3.3), so PROGRESSION_CORE_INC completes the include path.
+    target_include_directories(test_progression_curve PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" src "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_progression_curve PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_progression_curve PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_progression_curve COMMAND test_progression_curve)

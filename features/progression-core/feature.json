@@ -1,0 +1,50 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "progression-core",
+  "title": "Progression Core",
+  "status": "reusable",
+  "kind": "gameplay-infrastructure",
+  "summary": "In-place L2 module: manual/auto/threshold leveling tracks, baked int64 curve codegen (zero float in C), T5 tick hard-caps (per-track levelup cap + cascade-depth cap); reads/spends currency through items-core's purse API.",
+  "copy_model": "in-place",
+  "layer": "L2",
+  "dependencies": [
+    "items-core",
+    "Python 3.12",
+    "templates/template/content/progression.json + content/items.json (currency_def cross-check) (or a game-local progression catalog)",
+    "template or game C runtime using the generated progression_tracks.gen.{h,c} + the generated progression save fragment (features/game-state)"
+  ],
+  "owners": [
+    "features/progression-core"
+  ],
+  "commands": {
+    "generate": "py -3.12 features/progression-core/scripts/generate_progression_tracks.py"
+  },
+  "manuals": {
+    "install": "features/progression-core/INSTALL.md"
+  },
+  "outputs": [
+    "progression_tracks.gen.h",
+    "progression_tracks.gen.c"
+  ],
+  "registers": {
+    "note": "Describes the EXISTING wiring in templates/template/CMakeLists.txt (target_sources/ctest) -- progression-core is an in-place module (precedent features/game-state / features/items-core), not an install-script target. This section documents the consuming game's provisioning, it does not perform it.",
+    "target_sources": [
+      "${PROGRESSION_CORE_SRC}/progression.c"
+    ],
+    "include_dirs": [
+      "${PROGRESSION_CORE_INC}",
+      "${ITEMS_CORE_INC}"
+    ],
+    "ctest_targets": [
+      "test_progression",
+      "test_progression_curve"
+    ]
+  },
+  "default_template": {
+    "catalog": "templates/template/content/progression.json",
+    "items_catalog_crosscheck": "templates/template/content/items.json",
+    "state_schema": "templates/template/state/progression.schema.json",
+    "generated_dir": "templates/template/src/generated",
+    "game_side_sources": []
+  }
+}
