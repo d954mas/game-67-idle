@@ -1,0 +1,39 @@
+{
+  "schema": "game_seed.items_catalog",
+  "namespace": "tmpl",
+  "item_kinds": [
+    { "id": "currency", "label": "Currency" },
+    { "id": "consumable", "label": "Consumables" },
+    { "id": "weapon", "label": "Weapons" },
+    { "id": "material", "label": "Materials" }
+  ],
+  "containers": [
+    { "id": "backpack", "capacity": 20, "accept_policy": "any", "hidden": false },
+    { "id": "purse", "capacity": 0, "accept_policy": "currency_only", "hidden": true }
+  ],
+  "items": [
+    { "id": "gold", "display_name": "Gold", "kind": "currency", "icon_asset_id": "icon.gold",
+      "tags": ["currency"], "base_value": 1,
+      "stack": { "stackable": true, "unlimited": true },
+      "currency": { "hud_hint": "counter", "cap": 0 } },
+    { "id": "tmpl.xp", "display_name": "Experience", "kind": "currency", "icon_asset_id": "icon.xp",
+      "tags": ["currency"], "base_value": 0,
+      "stack": { "stackable": true, "unlimited": true },
+      "currency": { "hud_hint": "bar", "cap": 0 } },
+    { "id": "tmpl.energy", "display_name": "Energy", "kind": "currency", "icon_asset_id": "icon.energy",
+      "tags": ["currency"], "base_value": 0,
+      "stack": { "stackable": true, "unlimited": true },
+      "currency": { "hud_hint": "counter", "cap": 100 } },
+    { "id": "tmpl.potion", "display_name": "Healing Potion", "kind": "consumable", "icon_asset_id": "icon.potion",
+      "tags": ["consumable","heal"], "base_value": 10,
+      "stack": { "stackable": true, "max_stack": 99 },
+      "use": { "effect_id": "heal", "params": { "amount": 25 } } },
+    { "id": "tmpl.sword", "display_name": "Iron Sword", "kind": "weapon", "icon_asset_id": "icon.sword",
+      "tags": ["weapon","melee"], "base_value": 50,
+      "stack": { "stackable": false },
+      "equip": { "slot": "weapon" } },
+    { "id": "tmpl.wood", "display_name": "Wood", "kind": "material", "icon_asset_id": "icon.wood",
+      "tags": ["material"], "base_value": 2,
+      "stack": { "stackable": true, "max_stack": 999 } }
+  ]
+}
