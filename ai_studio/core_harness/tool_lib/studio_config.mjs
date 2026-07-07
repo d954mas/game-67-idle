@@ -127,6 +127,9 @@ export function canvasLocalCacheRoot(root) {
 // runs); otherwise the committed `videoGenRoot` (local override wins). Unlike
 // the canvas accessors this THROWS loudly when unset — a video stage cannot run
 // without the experiment stack, and a silent default would be a fallback.
+// NOTE (T0335): VIDEO_GEN_ROOT no longer covers CorridorKey — sandboxing or
+// redirecting the CorridorKey install (incl. its ClipsForInference staging)
+// is ONLY corridorKeyRoot / env CORRIDOR_KEY_ROOT below.
 export function videoGenRoot(root) {
   const fromEnv = String(process.env.VIDEO_GEN_ROOT || "").trim();
   if (fromEnv) return resolve(fromEnv);

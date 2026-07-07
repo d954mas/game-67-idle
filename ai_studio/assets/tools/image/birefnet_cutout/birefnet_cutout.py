@@ -68,7 +68,25 @@ def _check_model_allowed(model: str) -> None:
 
 def _require_rembg() -> Any:
     """Import rembg or fail loudly naming the setup command -- no silent
-    fallback to a different cutout method (LAW, lead 2026-07-02)."""
+    fallback to a different cutout method (LAW, lead 2026-07-02).
+
+    Also injects ``truststore`` into SSL FIRST: rembg's first run downloads the
+    ~930MB birefnet-general checkpoint over HTTPS, and this studio box sits
+    behind an Avast TLS-MITM proxy that certifi does not trust -- without the
+    OS trust store the first-run download dies with a raw certificate-verify
+    error (review T0335 finding 1; same pattern as vitmatte_matte.py). A warm
+    ``~/.u2net`` cache masks this, which is exactly why it must not be relied
+    on. truststore is a pinned hard dep -- missing means the venv is stale."""
+    try:
+        import truststore
+    except ImportError as exc:
+        raise RuntimeError(
+            "truststore is required for birefnet_cutout (Avast TLS-MITM boxes need the OS "
+            "trust store for the first-run model download); run "
+            "node ai_studio/assets/tools/image/_bridge/setup_python.mjs to install the "
+            "pinned studio Python deps."
+        ) from exc
+    truststore.inject_into_ssl()
     try:
         import rembg
     except ImportError as exc:

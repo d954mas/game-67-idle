@@ -121,14 +121,19 @@ def predict_alpha(processor, model, device: str, image_rgb: Image.Image, trimap_
 def predict_alpha_with_oom_fallback(processor, model, device: str, image_rgb: Image.Image, trimap_l: Image.Image):
     """``predict_alpha`` on ``device``, falling back to CPU on a CUDA OOM
     (matches the bench precedent: OOM is common on native-size high-res
-    plates on a shared/loaded GPU). Returns (alpha, device_used)."""
+    plates on a shared/loaded GPU). Returns (alpha, device_used).
+
+    Deliberately does NOT move the model back to the GPU after a CPU fallback:
+    this is a one-shot CLI (the process exits right after), and the move-back
+    itself can raise a SECOND OutOfMemoryError on the still-pressured GPU —
+    which would discard the alpha that was just successfully computed on CPU
+    (review T0335 finding 6)."""
     try:
         return predict_alpha(processor, model, device, image_rgb, trimap_l), device
     except torch.cuda.OutOfMemoryError:  # noqa: E722 - narrow, matches bench precedent
         torch.cuda.empty_cache()
         model.to("cpu")
         alpha = predict_alpha(processor, model, "cpu", image_rgb, trimap_l)
-        model.to(device)
         return alpha, "cpu (cuda OOM)"
 
 

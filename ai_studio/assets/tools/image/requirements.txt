@@ -14,3 +14,6 @@ Pillow==12.2.0
 # birefnet_cutout (BiRefNet-general MIT cutout via rembg's ONNX bridge):
 rembg==2.0.76
 onnxruntime==1.27.0
+# truststore: OS trust store for rembg's first-run ~930MB checkpoint download —
+# this studio box sits behind an Avast TLS-MITM proxy certifi does not trust.
+truststore==0.10.4

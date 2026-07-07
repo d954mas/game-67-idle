@@ -7,7 +7,9 @@ Two extractors, chosen by the asset (T0257 R2 verdict).
 
 ### `--tool corridorkey` (default) — glow / translucent / soft-edge
 Wraps the **exact invocation T0257 R2 used** against its venv under
-`videoGenRoot/tools/CorridorKey` (commit `97e55a4`):
+`corridorKeyRoot` (studio config / env `CORRIDOR_KEY_ROOT`; the permanent
+install at `C:\projects\ai_studio_tools\CorridorKey` since T0335 — no longer
+inside the deletable video-gen experiment; commit `97e55a4`):
 1. `corridorkey_prep.py` (repo `.venv`) builds `Input/` (raw frames) + a coarse
    green-dominance `AlphaHint/` per frame into a fresh `ClipsForInference/<shot>`.
 2. `corridorkey_cli.py run-inference --backend torch --srgb --despill 0

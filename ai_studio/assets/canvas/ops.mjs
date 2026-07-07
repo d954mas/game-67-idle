@@ -82,12 +82,15 @@ import { runAnimateFromText } from "./tools/animation_assist.mjs";
 // the video Track-B invocation VERBATIM (one source of truth for prep -> corridorkey_cli ->
 // EXR->RGBA). Cross-module import canvas->video tools is deliberate (documented in matte.mjs's
 // header too); it pulls in no torch/heavy deps at import time — the CorridorKey venv is only
-// spawned at call time, and a missing videoGenRoot/CK venv is that module's own LOUD error.
+// spawned at call time, and a missing corridorKeyRoot/CK venv is that module's own LOUD error.
 import { runCorridorKey } from "../tools/video/matte/matte.mjs";
 // Direct child spawn wrapper (quiet capture -> {code, stdout, stderr}) reused for the vitmatte
 // TOOL-VENV run — its own GPU-torch venv is invoked directly, never through the shared warm worker
 // (which is the shared repo interpreter). Same spawn helper the video pipeline uses for CorridorKey.
-import { runProcess } from "../tools/video/_lib.mjs";
+// resolveRepoPython: the studio-config pythonPath interpreter, for the birefnet DIRECT spawn — its
+// ~10-30s CPU inference (plus a first-run ~930MB checkpoint download) must never hold the single
+// serialized warm worker hostage; only sub-second tools stay on the warm-worker path.
+import { resolveRepoPython, runProcess } from "../tools/video/_lib.mjs";
 // Scene-tree math (shared, pure): computed per-scope z-order + the front-order hook.
 // Imported here so paint/composite order and the reorder op go through ONE
 // implementation the site also loads — ordering itself obeys tool parity.
@@ -5768,8 +5771,10 @@ function writeCkPixelOpsSpec(workDir, name, fields) {
 
 // Estimate the element's flat-key colour the SAME way the auto router does: route_cutout.py returns
 // the border-estimated key (lib/color.estimate_border_key — the one shared convention), through the
-// warm repo-venv worker (no GPU, sub-second) — the cheap gate BEFORE the expensive CK call.
-async function estimateBorderKeyRgb(root, sourceAbs) {
+// warm repo-venv worker (no GPU, sub-second) — the cheap gate BEFORE the expensive neural call.
+// `gate` labels the error with the METHOD that asked (corridorkey or vitmatte both gate through
+// here) so a failure is never blamed on a method the caller did not request.
+async function estimateBorderKeyRgb(root, sourceAbs, gate = "corridorkey green gate") {
   const stdout = await runToolPython(root, [
     "ai_studio/assets/tools/image/route/route_cutout.py",
     "--image",
@@ -5781,11 +5786,11 @@ async function estimateBorderKeyRgb(root, sourceAbs) {
   try {
     decision = JSON.parse(line);
   } catch (error) {
-    throw new Error(`corridorkey green gate: could not parse route_cutout output (${error.message}): ${stdout}`);
+    throw new Error(`${gate}: could not parse route_cutout output (${error.message}): ${stdout}`);
   }
   const key = decision && decision.key;
   if (!Array.isArray(key) || key.length < 3) {
-    throw new Error("corridorkey green gate: route_cutout returned no border key");
+    throw new Error(`${gate}: route_cutout returned no border key`);
   }
   return [Number(key[0]), Number(key[1]), Number(key[2])];
 }
@@ -5951,7 +5956,7 @@ function assertVitmatteSupportedKey(key) {
 // default (the tool's default). Writes a straight RGBA PNG to `outAbs` and returns a canvas alpha
 // report mirroring corridorkey's shape.
 async function defaultVitmatteInvoke(root, { sourceAbs, outAbs }) {
-  const key = await estimateBorderKeyRgb(root, sourceAbs);
+  const key = await estimateBorderKeyRgb(root, sourceAbs, "vitmatte key gate");
   assertVitmatteSupportedKey(key);
   const python = resolveVitmattePython(root); // LOUD if the tool venv is missing
   const workDir = mkdtempSync(join(tmpdir(), "canvas-vitmatte-"));
@@ -6020,23 +6025,34 @@ async function runVitmatteCutoutTool(root, projectId, element, invoke, specRegio
 //
 // BiRefNet is the EXPLICIT alpha method for an ARBITRARY/unknown background with NO chroma key at
 // all — its niche is exactly where route_cutout finds no flat key, so it has NO key gate (calling
-// the key detector would be wrong). It runs in the SHARED repo venv (studio.config pythonPath) via
-// the same warm-worker bridge every other canvas python tool uses (runToolPython), CPU onnxruntime
-// ~10-30s. MIT; weak on flat line-art (a documented routing nuance, not a bug). No auto-router entry.
+// the key detector would be wrong). It runs in the SHARED repo venv (studio.config pythonPath) but
+// as a DIRECT spawn, NOT through the serialized warm worker: its ~10-30s CPU inference (plus a
+// first-run ~930MB checkpoint download) would hold every other queued canvas python op (slice,
+// export, quantize, key_matte) hostage behind one keying — the warm-worker path is for sub-second
+// tools only (review T0335 finding 2). MIT; weak on flat line-art (a documented routing nuance,
+// not a bug). No auto-router entry.
 
 // The DEFAULT BiRefNet invocation. Injectable via the op's `birefnet` option so tests fake the
 // ~10-30s CPU run — the same seam shape as `corridorKey`. NO key gate. Writes a straight RGBA PNG to
 // `outAbs` and returns a canvas alpha report mirroring corridorkey's shape (no key_color — no key).
 async function defaultBirefnetInvoke(root, { sourceAbs, outAbs }) {
+  const python = resolveRepoPython(root); // LOUD if the shared venv is missing (names the setup cmd)
   const workDir = mkdtempSync(join(tmpdir(), "canvas-birefnet-"));
   try {
     const reportPath = join(workDir, "birefnet_report.json");
-    await runToolPython(root, [
-      "ai_studio/assets/tools/image/birefnet_cutout/birefnet_cutout.py",
+    const argv = [
+      join(root, "ai_studio/assets/tools/image/birefnet_cutout/birefnet_cutout.py"),
       "--in", sourceAbs,
       "--out", outAbs,
       "--report", reportPath,
-    ]);
+    ];
+    // quiet:true — the tool's stdout must never reach the CLI's JSON channel; we read the report file.
+    const { code, stdout, stderr } = await runProcess(python, argv, { cwd: root, quiet: true });
+    if (code !== 0) {
+      // Surface the tool's OWN message (missing-rembg setup pointer, license refusal, argparse
+      // error) as ONE clean line — never a swallowed or partial failure (no-fallbacks law).
+      throw new Error((stderr || stdout || `birefnet exited with code ${code}`).trim());
+    }
     if (!existsSync(outAbs)) throw new Error(`birefnet produced no RGBA output at ${outAbs}`);
     const tool = JSON.parse(readFileSync(reportPath, "utf8"));
     return {
@@ -6137,21 +6153,26 @@ function buildAlphaProvenance(elementId, chosen, specRegions, report, parentSrc)
     };
   }
   // vitmatte provenance (T0335): the neural thin-detail / second-priority-glow keyer, its own GPU
-  // venv. Record the model + license + despill flag + GPU seconds so the run is auditable, mirroring
-  // the CK block above. key_color is the detected border key (set generically above from report).
+  // venv. Record the model + license + despill flag + DEVICE + seconds so the run is auditable,
+  // mirroring the CK block above. `device` matters: the tool's one sanctioned fallback is
+  // CUDA-OOM -> CPU ("cpu (cuda OOM)", 10-30x slower) and the tool's own report JSON is deleted
+  // with its temp dir — this committed copy is the only after-the-fact answer to "did the GPU
+  // path actually run?". key_color is the detected border key (set generically above from report).
   if (report && report.tool === "vitmatte") {
     alphaMeta.tool = "vitmatte";
     alphaMeta.model = report.model;
     alphaMeta.license = report.license;
     alphaMeta.despill = report.despill;
+    alphaMeta.device = report.device ?? null;
     alphaMeta.timings = { seconds: report.seconds ?? null };
   }
   // birefnet provenance (T0335): the arbitrary-background (no-key) SOD cutout, shared repo venv (CPU
-  // onnxruntime). No key_color (there is no key). Record model + license + seconds.
+  // onnxruntime). No key_color (there is no key). Record model + license + device + seconds.
   if (report && report.tool === "birefnet") {
     alphaMeta.tool = "birefnet";
     alphaMeta.model = report.model;
     alphaMeta.license = report.license;
+    alphaMeta.device = report.device ?? null;
     alphaMeta.timings = { seconds: report.seconds ?? null };
   }
   return { run, alphaMeta };

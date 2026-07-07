@@ -792,6 +792,9 @@ test("vitmatte (faked GPU run) swaps src + records provenance/timings; ONE undo 
   assert.match(meta.license, /MIT/, "license recorded");
   assert.match(meta.license, /local-only/, "weights-local-only caveat recorded");
   assert.deepEqual(meta.key_color, [255, 0, 255], "detected key recorded");
+  // device is provenance-critical: the tool's one sanctioned fallback (CUDA OOM -> "cpu (cuda OOM)",
+  // 10-30x slower) is only auditable here — the tool's own report JSON dies with its temp dir.
+  assert.equal(meta.device, "cuda", "device recorded (OOM fallback audit trail)");
   assert.equal(typeof meta.timings.seconds, "number", "GPU seconds recorded");
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "vitmatte keying is one journal entry");
 
@@ -822,6 +825,7 @@ test("birefnet (faked CPU run) swaps src + records provenance (no key_color); ON
   assert.equal(meta.model, "birefnet-general");
   assert.match(meta.license, /MIT/, "license recorded");
   assert.equal(meta.key_color, undefined, "birefnet records no chroma key");
+  assert.equal(meta.device, "cpu-onnxruntime", "device recorded");
   assert.equal(typeof meta.timings.seconds, "number", "CPU seconds recorded");
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "birefnet keying is one journal entry");
 

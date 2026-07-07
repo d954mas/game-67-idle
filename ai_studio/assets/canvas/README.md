@@ -1853,7 +1853,7 @@ one document that swaps two views; the JS is split into focused ES modules under
   plus **Detect**, **Slice** (selected regions, else all), an **Alpha cutout** control (a
   method dropdown Key matte / **CorridorKey (green glow)** (T0261/T0262 — neural green matte for
   soft glow, green native/magenta via hue180 shim, region composite, ~15s GPU) / **ViTMatte (thin
-  detail)** (T0265 — neural thin-detail / 2nd-choice-glow on a green/magenta key, own GPU venv,
+  detail)** (T0335 — neural thin-detail / 2nd-choice-glow on a green/magenta key, own GPU venv,
   ~1-3s, whole-element only) / **BiRefNet (any bg)** (T0335 — SOD cutout for an arbitrary/unknown
   background, no key, CPU ~25s, whole-element only) / Dual-plate + a run button scoped to the selected
   regions when any are selected, else the whole element — a long-op via the queue), which additionally shows
