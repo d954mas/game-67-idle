@@ -3202,9 +3202,12 @@ const PACK_EXPANDER_SCRIPT = ".codex/skills/nt-asset-image-generation/scripts/ex
 // BG_KEY_BACKGROUND (loud if it is not EXACTLY the magenta/green pair — bg_key itself is generic
 // hex at patch-time, this is where the pack-specific pairing is actually enforced) and
 // `candidates` from `recipe.params.n_candidates`; `gen` (size/quality/model) is `recipe.params`
-// wholesale. Loud on `recipe.engine !== "codex"` (v1 targets codex only; gemini/both are a
-// later-version non-goal — checked HERE, i.e. in both packPreview and the generate pack branch,
-// never at patch-time, since a cross-field refusal at patch-time would depend on edit order) and
+// wholesale. Loud on engine "both" (a pack run is per-sheet resumable/replaceable by sheet_axes
+// identity — TWO engines per sheet would double every paid call AND break that identity; compare
+// mode stays the single-image branch's alone; codex and gemini/agy are both legal — agy grid
+// adherence smoke-checked 2026-07-07; checked HERE, i.e. in both packPreview and the generate
+// pack branch, never at patch-time, since a cross-field refusal at patch-time would depend on
+// edit order) and
 // on a SET `style_ref` that doesn't resolve to a real style-card group (defensive re-check;
 // patchRecipe already validates this at write time — a hand-edited project.json is the only way
 // to reach this). Callers add their OWN `out_dir` (a required expander key, but otherwise a stub
@@ -3218,8 +3221,8 @@ const PACK_EXPANDER_SCRIPT = ".codex/skills/nt-asset-image-generation/scripts/ex
 function buildPackConfig(project, card) {
   const recipe = card.recipe;
   const cardLabel = card.name || card.id;
-  if (recipe.engine !== "codex") {
-    throw new Error(`recipe card "${cardLabel}" (${card.id}) has engine ${JSON.stringify(recipe.engine)} — pack mode only supports "codex" in v1`);
+  if (recipe.engine !== "codex" && recipe.engine !== "gemini") {
+    throw new Error(`recipe card "${cardLabel}" (${card.id}) has engine ${JSON.stringify(recipe.engine)} — pack mode runs ONE engine per run: "codex" or "gemini" ("both" is the single-image branch's compare mode)`);
   }
   const pack = recipe.pack;
   // background: derived from params.bg_key, NOT a pack field. A hex that isn't exactly one of
@@ -3515,7 +3518,7 @@ async function commitPackSheetOutcome(root, projectId, {
         at,
         params: {
           subject_template: recipe.prompt,
-          engine: "codex",
+          engine: recipe.engine,
           refs: refSrcs,
           size: recipe.params.size,
           quality: recipe.params.quality,
@@ -3548,13 +3551,16 @@ async function commitPackSheetOutcome(root, projectId, {
 // set) are resolved ONCE here — the SAME resolve the single-image branch uses — and travel to
 // EVERY sheet's generation call unchanged. The expander is invoked FRESH (its own ephemeral tmp
 // dir, torn down before generation even starts) — never packPreview's, and never stale: build-
-// spec "никакого стейла по построению". Sheets generate SEQUENTIALLY via the codex-seam
-// (`generators` injection respected, exactly like the single-image branch); each finished sheet
+// spec "никакого стейла по построению". Sheets generate SEQUENTIALLY via the card's own engine
+// seam (`generators` injection respected, exactly like the single-image branch); each finished sheet
 // mints under its OWN short commit (commitPackSheetOutcome) as soon as it lands, so a crash on
 // sheet 3 never loses sheets 1-2 and per-sheet HEAD_CONFLICT tolerance never voids the whole
 // run. Never throws once the sheet loop starts (unlike the single-image branch's "every engine
 // failed" throw) — failures land in `failed`/`recipe.last_run.failed` instead, since a partial
-// pack run is a normal, resumable outcome, not an all-or-nothing gesture.
+// pack run is a normal, resumable outcome, not an all-or-nothing gesture. The generator is the
+// card's OWN recipe.engine (codex or gemini — buildPackConfig already refused "both"), same
+// `{prompt, refPaths, params}` seam as the single-image branch; each sheet records that engine
+// in meta.pack, so a run resumed after the lead flips the card's engine stays truthful per sheet.
 async function generatePackSheets(root, { projectId, groupId, generators, runGroupId, sheetSlug, before, card, recipe, cardLabel, startedAt }) {
   const { config: baseConfig, styleSnapshot } = buildPackConfig(before, card);
 
@@ -3692,7 +3698,7 @@ async function generatePackSheets(root, { projectId, groupId, generators, runGro
     let bytes = null;
     let genError = null;
     try {
-      const generated = await gens.codex({ prompt: job.prompt, refPaths, params: recipe.params });
+      const generated = await gens[recipe.engine]({ prompt: job.prompt, refPaths, params: recipe.params });
       bytes = Buffer.isBuffer(generated) ? generated : readFileSync(generated);
     } catch (error) {
       genError = error;
@@ -3712,6 +3718,7 @@ async function generatePackSheets(root, { projectId, groupId, generators, runGro
 
     const meta = {
       cardId: groupId,
+      engine: recipe.engine,
       at,
       sheet_axes: jobSheetAxes,
       cells: job.cells,

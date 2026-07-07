@@ -2070,6 +2070,9 @@ function renderPackMeta(element, root) {
   if (Array.isArray(pack.cells)) {
     const body = collapsible(root, "pack-sheet", "Pack sheet");
     body.appendChild(readOnly("Axes", JSON.stringify(pack.sheet_axes || {})));
+    // Which engine generated THIS sheet (recorded per sheet since 2026-07-07 — packs run on
+    // codex or agy; sheets minted before that have no field, shown as "—", i.e. codex-era).
+    body.appendChild(readOnly("Engine", pack.engine || "—"));
     body.appendChild(readOnly("At", pack.at ? new Date(pack.at).toLocaleString() : "—"));
 
     const promptText = String(pack.prompt_snapshot || "");
@@ -2094,19 +2097,22 @@ function renderPackMeta(element, root) {
     // of regenerating this sheet, a confusing footgun worth refusing up front.
     const card = groupById(pack.cardId);
     const cardStillPack = !!(card && card.recipe && card.recipe.pack);
+    // The label names the engine the regen will ACTUALLY use — the card's CURRENT recipe.engine,
+    // not this sheet's meta.pack.engine (a resumed/regen'd sheet runs on whatever the card says NOW).
+    const regenEngine = cardStillPack && card.recipe.engine === "gemini" ? "agy" : "codex";
     const regenBtn = document.createElement("button");
     regenBtn.type = "button";
     regenBtn.className = "insp-btn";
     regenBtn.textContent = "Regenerate";
     regenBtn.disabled = !cardStillPack;
     regenBtn.title = cardStillPack
-      ? "Force-regenerate exactly this sheet (codex, ~30-60s) into the same run group"
+      ? `Force-regenerate exactly this sheet (${regenEngine}, ~30-60s) into the same run group`
       : "The card is no longer in pack mode — Generate would mint a single image instead";
     regenBtn.addEventListener("click", () =>
       generateFromRecipeAction(pack.cardId, regenBtn, {
         runGroupId: element.groupId,
         sheetSlug: element.name,
-        busyLabel: "Regenerating sheet… (codex)",
+        busyLabel: `Regenerating sheet… (${regenEngine})`,
       }),
     );
     body.appendChild(regenBtn);
@@ -2790,15 +2796,17 @@ function renderRecipe(group, root) {
     selectInput(recipe.engine || "codex", ["codex", "gemini", "both"], (next) => patchRecipeAction(group.id, { engine: next })),
   );
   body.appendChild(engineField);
-  // T0332 v2 UX finding: pack mode is codex-only in v1 — the select is disabled (advisory;
-  // the real gate is packPreview/generateFromRecipe's pack branch), WITH a visible caption,
+  // Pack mode runs on ONE engine — codex or gemini/agy (agy grid adherence smoke-checked
+  // 2026-07-07); only "both" (the single-image compare mode) is off the table, so ONLY that
+  // option is disabled (advisory; the real gate is buildPackConfig's), WITH a visible caption,
   // not just a hover title (build-spec: "задизейблен С ПОДПИСЬЮ").
   if (recipe.pack) {
-    engineField.querySelector("select").disabled = true;
-    engineField.querySelector("select").title = "Packs are codex-only in v1";
+    const bothOption = [...engineField.querySelectorAll("option")].find((o) => o.value === "both");
+    if (bothOption) bothOption.disabled = true;
+    engineField.querySelector("select").title = "Packs run on one engine — codex or gemini (agy); 'both' is single-image compare only";
     const engineHint = document.createElement("div");
     engineHint.className = "insp-region-hint";
-    engineHint.textContent = "Packs are codex-only in v1";
+    engineHint.textContent = "Packs: codex or gemini (agy); 'both' is single-image only";
     body.appendChild(engineHint);
   }
 
@@ -2909,7 +2917,8 @@ function renderRecipe(group, root) {
   const emptyPrompt = !String(recipe.prompt || "").trim();
   generateBtn.disabled = emptyPrompt;
   const packSheetEstimate = recipe.pack ? estimatePackSheetCount(recipe.pack) : 0;
-  const packBusyLabel = `Generating pack… (~${packSheetEstimate} sheet(s), codex, ~30-60s each)`; // …
+  const packEngineLabel = recipe.engine === "gemini" ? "agy" : "codex";
+  const packBusyLabel = `Generating pack… (~${packSheetEstimate} sheet(s), ${packEngineLabel}, ~30-60s each)`; // …
   generateBtn.title = emptyPrompt
     ? "Write a prompt first"
     : recipe.pack
