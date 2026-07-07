@@ -2,6 +2,7 @@
 
 Игра = набор фич. Здесь описано, как фича устроена ВНУТРИ этого шаблона/игры.
 Библиотечный контракт переиспользуемых фич — в корневом `features/README.md`.
+Каталог-указатель на settings/items/progression/resource_panel (без библиотечных копий — этот шаблон и есть их единственная референс-реализация) — секция «Features (reference implementations live in the template)» в корневом `features/README.md`.
 
 ## Что такое фича
 

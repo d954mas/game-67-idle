@@ -75,7 +75,55 @@ be a feature with UI code, state keys, assets, and a short integration note.
 
 - `game-state/`: schema-first generated GameState, save/load contract,
   migrations, and DevAPI state adapters. This is the first feature pack and the
-  reference shape for future reusable features.
+  reference shape for future reusable features. Unlike the pointer-only
+  features below, `game-state/` actually lives here and is consumed in-place
+  by templates/games (its scripts/tests are not a promoted copy of anything).
+
+## Features (reference implementations live in the template)
+
+The four vertical-slice features below do NOT have a library copy under
+`features/`. Their single source of truth is the live implementation in
+`templates/template/src/features/<id>/`, which ships with tests and a real
+consumer (the template itself). Entries are pointers, not copies:
+
+- **settings** (`L2`) — settings screen + persisted settings fragment.
+  Reference: `templates/template/src/features/settings/` (`settings.c/.h`,
+  `settings_screen.c`) + `templates/template/state/settings.schema.json`.
+- **items** (`L1`) — item/container/currency catalog + ownership save
+  fragment. Reference: `templates/template/src/features/items/` (incl. its
+  own `README.md`) + content `templates/template/content/items.json`,
+  `item_fields.schema.json`, `items.lock.json` + state
+  `templates/template/state/items.schema.json` + tools
+  `templates/template/tools/generate_items_catalog.py`, `items_ops.py`,
+  `items_ops_test.py` + tests `templates/template/tests/test_items_catalog.c`,
+  `test_items_fragment.c` (+ `templates/template/tests/fixtures/items_*.json`).
+- **progression** (`L2`) — level/xp tracks over the items purse
+  (manual/auto/threshold modes). Reference:
+  `templates/template/src/features/progression/` (incl. its own `README.md`)
+  + content `templates/template/content/progression.json` + state
+  `templates/template/state/progression.schema.json` + tools
+  `templates/template/tools/generate_progression_tracks.py` + tests
+  `templates/template/tests/test_progression.c`, `test_progression_catalog.c`,
+  `test_progression_curve.c`.
+- **resource_panel** (`L2`, UI widget) — generic counter/bar HUD driven by
+  game-supplied entries/getters; zero items/progression coupling. Reference:
+  `templates/template/src/features/resource_panel/` (`resource_panel.c/.h`,
+  `README.md`, `feature.json`).
+
+### Ownership model
+
+- Single source of truth = `templates/template` (live reference
+  implementation with tests and a real consumer). There is deliberately NO
+  library copy of these four features — zero copies means zero drift to keep
+  in sync.
+- A brand-new game gets all of them via a full template copy
+  (`games/new_game.mjs`).
+- Moving ONE of these features into an existing game, or into a second
+  template, is copy-then-own straight from the template pointer above — that
+  copy then belongs to its new project (see Rules).
+- Promoting a feature into an actual `features/<id>/` library copy is
+  deferred until there is a second template or real consumer divergence,
+  i.e. once copy-then-own from a single reference stops being enough.
 
 ## Rules
 
