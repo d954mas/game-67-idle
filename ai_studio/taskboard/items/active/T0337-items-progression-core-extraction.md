@@ -7,7 +7,7 @@ epic: E009
 priority: P1
 tags: [template, architecture, features, modules]
 created: 2026-07-07
-updated: 2026-07-07
+updated: 2026-07-08
 ---
 
 ## What
@@ -126,3 +126,33 @@ updated: 2026-07-07
   подтверждено). Контекст-вилка: вариант А «указатели» (f99db5666)
   остаётся для фич; модули — это НЕ отказ от А, а перевод
   инвариантного ядра на прецедент game-state (in-place, без копий).
+- 2026-07-08: АРКА ИСПОЛНЕНА ЦЕЛИКОМ (спека e2882641b, 2 Opus-ревью
+  + 16 фиксов; каждый инкремент: исполнитель Sonnet → deep-ревью
+  Opus → контроль → коммит).
+  - М1 items-core 6da5d2e0f: pure-rename ×5 + разрез items_bootstrap
+    побайтно (посев остался игровым, reconcile уехал);
+    items_ops_test.py одна строка TEMPLATE_ROOT=parents[3].
+  - М2 progression-core 40221fb91: pure-rename ×3; папка
+    src/features/progression/ удалена целиком (C-уголка нет by
+    design); deep-ревью ACCEPT чистый.
+  - М3 475e511ec: доктрина категорий + решающее правило + задняя
+    дверь в features/README.md; конвенция в src/features/README.md;
+    аудит stale-путей items README + nt-game-items (оба); НОВЫЙ скилл
+    nt-game-feature; G-newgame проба t0337-probe (модули компилируются
+    из КОРНЯ из games/<id>, ctest 16/16, wasm линк, new_game.mjs без
+    правок — депт-2 инвариант доказан; следы вычищены). Deep-ревью
+    ACCEPT без фикс-листа.
+  - Гейты арки: ctest 16/16 оба пресета; G-bytes генвыход
+    байт-идентичен (4 пресета); G-relocation pure-rename 100%;
+    wasm оба пресета; G-smoke; G-copies/G-noleak/G-inc/G-rev;
+    G-doctrine (skills_sync --check exit 0 — буквальный diff-гейт
+    невыполним: .claude-скиллы = генерённые стабы, замена
+    задокументирована); G-newgame.
+  - Отклонения (легитимность подтверждена deep-ревью): id пробы
+    t0337-probe (regex new_game.mjs запрещает «_»); синк скиллов
+    через skills_sync.mjs вместо побайтного diff.
+  - ХВОСТЫ (вне арки): doc-only проход по баннерам генераторов
+    (+ докстринг items_ops.py:9-11 «py -3.12 tools/…» — та же цена
+    байт-идентичности); док-синк витрины README.md/TEMPLATE.md +
+    интеграционный ctest — хвост T0327. Done-when все 5 функционально
+    закрыты (оценка deep-ревью М3) — чекбоксы и закрытие за лидом.
