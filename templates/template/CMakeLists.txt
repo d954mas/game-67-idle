@@ -12,24 +12,38 @@ if(NOT DEFINED GAME_DEVAPI_ENABLED)
 endif()
 
 # Preset name must encode the devapi split: engine libs land in
-# build/engine/<preset> and build/tools/builder/<preset>, so human and agent
-# builds sharing one preset would overwrite each other's engine libs
-# (nt_input with/without inject symbols) — the exact parallel-build collision
-# the convention exists to prevent.
+# build/engine/<preset> and build/tools/builder/<preset>, so two builds sharing
+# one preset would overwrite each other's engine libs (nt_input with/without
+# inject symbols; nt_devapi_web presence) — the parallel-build collision the
+# convention exists to prevent. Every (platform x devapi x build-type) gets a
+# UNIQUE name, so no combination can ever alias into another's engine dir. Only
+# the four established names (native-debug/native-release/devapi-debug and the
+# three wasm human/agent presets) are "supported"; the two *-devapi-release names
+# exist solely so Release+DevAPI cannot clobber the clean release archives.
 if(EMSCRIPTEN)
-    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    if(GAME_DEVAPI_ENABLED)
+        if(CMAKE_BUILD_TYPE STREQUAL "Release")
+            set(NT_PRESET_NAME "wasm-devapi-release")
+        else()
+            set(NT_PRESET_NAME "wasm-devapi-debug")
+        endif()
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
         set(NT_PRESET_NAME "wasm-release")
-    elseif(GAME_DEVAPI_ENABLED)
-        set(NT_PRESET_NAME "wasm-devapi-debug")
     else()
         set(NT_PRESET_NAME "wasm-debug")
     endif()
-elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(NT_PRESET_NAME "native-release")
-elseif(GAME_DEVAPI_ENABLED)
-    set(NT_PRESET_NAME "devapi-debug")
 else()
-    set(NT_PRESET_NAME "native-debug")
+    if(GAME_DEVAPI_ENABLED)
+        if(CMAKE_BUILD_TYPE STREQUAL "Release")
+            set(NT_PRESET_NAME "native-devapi-release")
+        else()
+            set(NT_PRESET_NAME "devapi-debug")
+        endif()
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(NT_PRESET_NAME "native-release")
+    else()
+        set(NT_PRESET_NAME "native-debug")
+    endif()
 endif()
 set(GAME_TITLE "Template" CACHE STRING "Game window title base")
 if(GAME_DEVAPI_ENABLED)
@@ -244,9 +258,16 @@ target_link_libraries(${GAME_TARGET} PRIVATE
 )
 if(EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http nt_platform_web)
+    # Web-devapi host contract (nt_devapi_web.h): the host exports the JS
+    # transport entry points; the exports are also what pulls the EM_JS object
+    # out of libnt_devapi_web.a so nt_devapi_web_install_shim resolves at link.
+    set(GAME_WEB_EXPORTS "_main,_malloc,_free")
+    if(GAME_DEVAPI_ENABLED)
+        set(GAME_WEB_EXPORTS "${GAME_WEB_EXPORTS},_nt_devapi_web_submit,_nt_devapi_web_poll")
+    endif()
     target_link_options(${GAME_TARGET} PRIVATE
         "SHELL:-sFORCE_FILESYSTEM=1"
-        "SHELL:-sEXPORTED_FUNCTIONS=_main,_malloc,_free"
+        "SHELL:-sEXPORTED_FUNCTIONS=${GAME_WEB_EXPORTS}"
         "SHELL:-sMIN_WEBGL_VERSION=2"
         "SHELL:-sMAX_WEBGL_VERSION=2"
         "SHELL:-sFULL_ES3=1"
@@ -256,9 +277,29 @@ if(EMSCRIPTEN)
         "SHELL:-sALLOW_MEMORY_GROWTH=1"
         "SHELL:-sINITIAL_MEMORY=64MB"
     )
+    if(GAME_DEVAPI_ENABLED)
+        # The engine JS shim drives the transport through Module.ccall, which
+        # recent emcc no longer exports by default (runtime need, not link).
+        target_link_options(${GAME_TARGET} PRIVATE
+            "SHELL:-sEXPORTED_RUNTIME_METHODS=ccall,UTF8ToString")
+    endif()
 else()
     # glad/stb_image_write are native-only (no GL loader / file dump on web).
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub glad stb_image_write)
+endif()
+if(EMSCRIPTEN)
+    # Deliver the tracked web shell to bin/ at configure time. Two substitutions:
+    # the tab title (GAME_TITLE) and Module.arguments. The engine web devapi shim
+    # installs only if main() saw `--devapi <port>` in argv (main.c parses it, and
+    # on web argv comes ONLY from Module.arguments); the devapi presets carry the
+    # flag, the human presets (devapi OFF) expand to empty.
+    if(GAME_DEVAPI_ENABLED)
+        set(GAME_DEVAPI_MODULE_ARGS "arguments: ['--devapi', '17890'],")
+    else()
+        set(GAME_DEVAPI_MODULE_ARGS "")
+    endif()
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/web/index.html.in"
+                   "${GAME_OUTPUT_DIR}/index.html" @ONLY)
 endif()
 if(GAME_DEVAPI_ENABLED)
     # E3: readable event type/hash labels for game.events.tail. Consuming-CMake edit
@@ -281,8 +322,17 @@ endif()
 if(WIN32 AND NOT EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE winmm)
 endif()
+# On web the engine streams packs over HTTP relative to the page URL, so the
+# path must be RELATIVE and the pack ships as a plain file next to index.html
+# (tools/build_web.sh copies it from the native build). Native keeps the
+# absolute bin/assets path.
+if(EMSCRIPTEN)
+    set(GAME_PACK_RUNTIME_PATH "assets/game.ntpack")
+else()
+    set(GAME_PACK_RUNTIME_PATH "${GAME_ASSETS_DIR}/game.ntpack")
+endif()
 target_compile_definitions(${GAME_TARGET} PRIVATE
-    GAME_ASSET_PACK_PATH="${GAME_ASSETS_DIR}/game.ntpack"
+    GAME_ASSET_PACK_PATH="${GAME_PACK_RUNTIME_PATH}"
     NT_INTROSPECT_ENABLED=$<BOOL:${NT_INTROSPECT_ENABLED}>
     NT_INTROSPECT_WRITE_ENABLED=$<BOOL:${NT_INTROSPECT_WRITE_ENABLED}>
     _CRT_SECURE_NO_WARNINGS
@@ -298,6 +348,11 @@ if(NOT GAME_DEVAPI_ENABLED)
     target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=0)
 endif()
 nt_set_warning_flags(${GAME_TARGET})
+# Match the sanitizer posture of the engine archives we link: the engine
+# instruments Debug modules (non-Windows/Clang targets, incl. wasm) and expects
+# the consumer executable to carry the same flags -- without this the Debug
+# wasm link dies on undefined __asan_*/__ubsan_* (lead decision 2026-07-07).
+nt_set_sanitizer_flags(${GAME_TARGET})
 set_target_properties(${GAME_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}")
 
 if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)

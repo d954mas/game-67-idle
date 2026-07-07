@@ -91,6 +91,18 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
      наш consuming-конфиг: кто включил ASan в _engine-архивах, почему
      EM_JS-символ теряется у нас; прецедент 8c2295d2 — корни были в
      шаблоне). Issue только с доказанным корнем.
+     ИТОГ РАССЛЕДОВАНИЯ (2026-07-07): лид был прав, ОБА корня в шаблоне,
+     движок чист (его devapi_host зелёный). (1) движок инструментирует
+     Debug-модули ASan/UBSan на не-Windows, потребитель обязан нести те
+     же флаги → nt_set_sanitizer_flags(game) (решение лида: вариант «а»,
+     полная инструментация); (2) контракт web-devapi хоста требует
+     экспортов _nt_devapi_web_submit/_nt_devapi_web_poll (они же
+     вытягивают EM_JS-объект из архива) + EXPORTED_RUNTIME_METHODS=ccall.
+     ПОЧИНЕНО: wasm-devapi-debug линкуется (game.wasm 12.4МБ), бутается
+     под ASan headless-Chrome. Issue движку НЕ нужен (ручка opt-out
+     NT_ENABLE_SANITIZERS отклонена лидом как спекулятивная). Хвост:
+     живой shim round-trip в браузере — вместе с web-упаковкой шаблона
+     (пак по HTTP) и будущим web-ботом.
   3. E3 offset-курсор — РАТИФИЦИРОВАН (since_seq = «отдай начиная С
      этого id», next_seq = «с какого спрашивать дальше»).
   4. E4 кап — семантики оставить, кап поднять до штатно недостижимого:
@@ -231,3 +243,7 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
   сохраняет = блокер, JSON остаётся, автосейв-топология предрешена:
   debounced-on-dirty + visibilitychange + saved_at).
 - 2026-07-06: status fix: in_progress -> doing (invalid enum, board validate)
+- 2026-07-07: последний хвост «живой web-shim round-trip» ЗАКРЫТ через
+  T0333 (613afce55): tests/web_devapi_check.py PASS — endpoints → 49
+  команд, command.describe → дескриптор, всё через window.__devapi.submit
+  в headless Chrome. Карточка полностью готова, закрывает лид.

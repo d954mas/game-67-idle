@@ -36,6 +36,7 @@ import {
   getProject,
   historyEntryLabel,
   patchElement,
+  patchGroup,
   patchRecipe,
   patchStyle,
   pasteNodes,
@@ -145,6 +146,7 @@ const DEFAULT_RECIPE = {
     n_candidates: 1,
   },
   style_ref: null,
+  pack: null, // T0332 v2: pack mode is off by default — see pack.test.mjs
   last_run: null,
 };
 
@@ -295,11 +297,16 @@ test("copy/paste and duplicate carry the recipe blob through with a fresh group 
   assert.deepEqual(dupedGroup.recipe, seeded.recipe);
 });
 
-test("exportProject skips top-level recipe-card groups (a card is a workshop object, not a screen)", async (t) => {
+test("exportProject never exports a top-level recipe-card group (a card is a workshop object, not a screen) — T0332 B1: the card simply never carries screen:true, no special-case skip needed", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Export" });
-  createGroup(REPO_ROOT, { projectId: project.id, name: "Screen", x: 0, y: 0, w: 20, h: 20 });
-  createRecipeCard(REPO_ROOT, { projectId: project.id, name: "Card" });
+  const screen = createGroup(REPO_ROOT, { projectId: project.id, name: "Screen", x: 0, y: 0, w: 20, h: 20 }).group;
+  patchGroup(REPO_ROOT, { projectId: project.id, groupId: screen.id, screen: true });
+  const { group: card } = createRecipeCard(REPO_ROOT, { projectId: project.id, name: "Card" });
+  assert.equal(card.screen, undefined, "createRecipeCard never sets screen — unflagged by construction");
+  // Flagging the card's group as screen:true anyway (a caller bug or a hand-edit) is NOT
+  // blocked by exportProject — the flag is the only gate, no recipe-aware special-casing —
+  // but that is a deliberate lead choice to leave alone, not this test's concern.
 
   let result;
   try {

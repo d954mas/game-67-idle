@@ -169,6 +169,41 @@ test("patchGroup background=null on a plain group is a no-op (no journal entry)"
   assert.equal(Number(getProject(ROOT, projectId).history_seq), seqBefore, "None on already-none = no change");
 });
 
+// ---- patchGroup screen (T0332 B1: export opt-in flag) --------------------------
+
+test("patchGroup screen: absent by default; true sets it, journals one entry, undo restores; false clears to an absent field (mirrors clip)", (t) => {
+  tempProjects(t);
+  const { projectId, red } = seedScreen(ROOT);
+  const { group } = createGroup(ROOT, { projectId, name: "Screen", fromElements: [red.id] });
+  assert.equal(group.screen, undefined, "a freshly created group is not a screen");
+
+  const seqBefore = Number(getProject(ROOT, projectId).history_seq);
+  patchGroup(ROOT, { projectId, groupId: group.id, screen: true });
+  const after = getProject(ROOT, projectId);
+  assert.equal(after.groups[0].screen, true);
+  assert.equal(Number(after.history_seq), seqBefore + 1, "exactly one journal entry");
+
+  // undo restores the absent field (the prior group had none).
+  undoOp(ROOT, { projectId });
+  assert.equal(getProject(ROOT, projectId).groups[0].screen, undefined, "undo clears the flag");
+
+  patchGroup(ROOT, { projectId, groupId: group.id, screen: true });
+  patchGroup(ROOT, { projectId, groupId: group.id, screen: false });
+  assert.equal(getProject(ROOT, projectId).groups[0].screen, undefined, "screen:false clears to an ABSENT field, not a stored false");
+});
+
+test("patchGroup screen:false on an already-unflagged group is a no-op (no journal entry); a non-boolean value throws loudly", (t) => {
+  tempProjects(t);
+  const { projectId, red } = seedScreen(ROOT);
+  const { group } = createGroup(ROOT, { projectId, name: "Screen", fromElements: [red.id] });
+  const seqBefore = Number(getProject(ROOT, projectId).history_seq);
+  patchGroup(ROOT, { projectId, groupId: group.id, screen: false });
+  assert.equal(Number(getProject(ROOT, projectId).history_seq), seqBefore, "false on already-unflagged = no change");
+
+  assert.throws(() => patchGroup(ROOT, { projectId, groupId: group.id, screen: "true" }), /group screen must be a boolean/);
+  assert.throws(() => patchGroup(ROOT, { projectId, groupId: group.id, screen: 1 }), /group screen must be a boolean/);
+});
+
 // ---- patchGroups (batched shared toggles: multi-group inspector) ----------------
 
 test("patchGroups sets visible+clip across N groups in ONE entry; a single undo restores all", (t) => {

@@ -1627,6 +1627,22 @@ function normalizeGroupClip(clip) {
   return clip;
 }
 
+// Validate an optional group `screen` flag (additive field, T0332 build-spec "ЭКСПОРТ —
+// ИНВЕРСИЯ НА OPT-IN", lead 2026-07-07: "чтобы группа считалась экраном и экспортировалась,
+// я явно ставлю галочку"). This is now the ONLY thing that makes a top-level group an
+// exportable screen: exportProject/visibleScreenCount both filter on `screen === true` —
+// the old implicit "every top-level visible group except a recipe/style card" rule is gone
+// (see exportProject's own doc). Same shape as clip: a real boolean only (no silent coercion
+// — the CLI's own parseBool converts its string flag first), and `false` is stored as an
+// ABSENT field (mirrors clip/background), so an untouched or opted-out group stays clean and
+// re-sending `false` on an already-unflagged group is a no-op.
+function normalizeGroupScreen(screen) {
+  if (typeof screen !== "boolean") {
+    throw new Error(`group screen must be a boolean (true|false), got ${JSON.stringify(screen)}`);
+  }
+  return screen;
+}
+
 // Union bbox of a set of elements/groups, per-node via tree.nodeAABB (T0232 increment
 // 3a) so a ROTATED element's footprint — not its stored x/y/w/h — is what createGroup
 // (fromElements) pads around and fitGroup fits to; unrotated nodes are unaffected
@@ -1729,9 +1745,11 @@ export function createGroup(root, { projectId, name, x, y, w, h, fromElements, p
 // fallback). `clip` is the optional Figma-frame clip flag: `true` clips members to the
 // group bounds on canvas AND in the subgroup render; `false` (the default) clears it and
 // is stored as an ABSENT field, so an untouched group stays clean and clip:false on an
-// already-unclipped group makes no change (no journal entry). One journal entry restores
-// everything on undo.
-export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible, background, clip } = {}) {
+// already-unclipped group makes no change (no journal entry). `screen` (T0332 B1) is the
+// export opt-in flag: `true` makes this top-level group an exportable screen
+// (exportProject/visibleScreenCount); `false` (the default) clears it to an ABSENT field,
+// same convention as clip. One journal entry restores everything on undo.
+export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible, background, clip, screen } = {}) {
   if (!projectId) throw new Error("patchGroup requires projectId");
   if (!groupId) throw new Error("patchGroup requires groupId");
   const startedAt = performance.now();
@@ -1740,11 +1758,13 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
 
   const dx = finite(x) ? Number(x) - Number(current.x || 0) : 0;
   const dy = finite(y) ? Number(y) - Number(current.y || 0) : 0;
-  // Validate background + clip BEFORE any write so an invalid value throws atomically.
+  // Validate background + clip + screen BEFORE any write so an invalid value throws atomically.
   const bgProvided = background !== undefined;
   const bgResolved = bgProvided ? normalizeGroupBackground(background) : undefined;
   const clipProvided = clip !== undefined;
   const clipResolved = clipProvided ? normalizeGroupClip(clip) : undefined;
+  const screenProvided = screen !== undefined;
+  const screenResolved = screenProvided ? normalizeGroupScreen(screen) : undefined;
 
   // On a move, gather the FULL descendant closure once: nested subgroup frames AND
   // every element in the subtree translate with the group.
@@ -1770,6 +1790,10 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
         if (clipResolved === false) delete patched.clip; // unclipped -> absent field
         else patched.clip = true;
       }
+      if (screenProvided) {
+        if (screenResolved === false) delete patched.screen; // opted out -> absent field
+        else patched.screen = true;
+      }
       return patched;
     }
     // A nested subgroup frame translates with the closure (its own members are in the
@@ -1791,7 +1815,7 @@ export function patchGroup(root, { projectId, groupId, name, x, y, w, h, visible
   const after = updateProject(root, projectId, { groups: nextGroups, elements: nextElements });
   const project = commitMutation(root, projectId, {
     op: "patchGroup",
-    args_summary: { groupId, name, x, y, w, h, visible, dx, dy, background: bgProvided ? bgResolved : undefined, clip: clipProvided ? clipResolved : undefined },
+    args_summary: { groupId, name, x, y, w, h, visible, dx, dy, background: bgProvided ? bgResolved : undefined, clip: clipProvided ? clipResolved : undefined, screen: screenProvided ? screenResolved : undefined },
     before,
     after,
     startedAt,
@@ -1846,6 +1870,48 @@ export function patchGroups(root, { projectId, groupIds, visible, clip } = {}) {
     startedAt,
   });
   return { project, groups: (project.groups || []).filter((group) => idSet.has(group.id)), count: ids.length };
+}
+
+// ---- migrateScreenFlags (T0332 B1: export opt-in inversion, one-shot) ----------------
+
+// One-shot per-PROJECT migration for the export opt-in flip (build-spec "ЭКСПОРТ —
+// ИНВЕРСИЯ НА OPT-IN"): before this increment, exportProject exported every top-level
+// VISIBLE group except a recipe/style card; after it, exportProject exports ONLY a group
+// carrying the explicit `screen === true` flag. This restores an EXISTING project's exact
+// pre-flip export set by flagging every top-level VISIBLE group that carries none of
+// recipe/style/anim/pack_run (the same objects the old filter excluded — the anim card
+// is a workshop object exactly like recipe/style — plus a pack run group —
+// build-spec: pack_run is provenance-only post-flip, never auto-flagged as a screen, even
+// though the OLD filter would technically have exported one — see the caller's own doc for
+// why this is a deliberate, not an accidental, byte-exact gap).
+//
+// Idempotent: a group that ALREADY carries a `screen` key (true OR false — an explicit
+// prior choice, this migration or a hand-set patchGroup) is left untouched, so re-running
+// this on an already-migrated (or partially hand-edited) project changes nothing further.
+// ONE journal entry per project even when it flags zero groups — commitMutation's own
+// before-equals-after check no-ops that case silently (no empty journal noise).
+export function migrateScreenFlags(root, { projectId } = {}) {
+  if (!projectId) throw new Error("migrateScreenFlags requires projectId");
+  const startedAt = performance.now();
+  const before = getProject(root, projectId);
+  const flagged = [];
+  const nextGroups = groupsOf(before).map((group) => {
+    if (group.parentId != null) return group; // nested: never a top-level screen candidate
+    if (group.visible === false) return group; // hidden: the old filter excluded it too
+    if ("screen" in group) return group; // an explicit prior choice (migration or manual) stands
+    if (group.recipe || group.style || group.anim || group.pack_run) return group; // workshop/run object (recipe/style/anim card or pack run)
+    flagged.push(group.id);
+    return { ...group, screen: true };
+  });
+  const after = updateProject(root, projectId, { groups: nextGroups });
+  const project = commitMutation(root, projectId, {
+    op: "migrateScreenFlags",
+    args_summary: { flagged, count: flagged.length },
+    before,
+    after,
+    startedAt,
+  });
+  return { project, flagged };
 }
 
 // Resize a group's frame to fit its content (Figma "Resize to fit"). The new frame is
@@ -2194,8 +2260,15 @@ const RECIPE_ENGINES = new Set(["codex", "gemini", "both"]); // R2/R3: engine ch
 
 // Default recipe blob for a freshly-minted card (design doc §4.1). `engine` defaults to
 // "codex" (R2/R3 adds "gemini"/"both"); `style_ref` is a reserved nullable by-id pointer
-// (R1 — style cards land in increment 3); `expanded`/`use_expanded`/`last_run`/`params`
-// stay inert placeholders until increments 2-3 write/consume them.
+// (R1 — style cards land in increment 3); `expanded`/`use_expanded`/`last_run` stay inert
+// placeholders until increments 2-3 write/consume them. `params` was write-once-at-creation
+// too, until T0332 v2 unfroze four of its fields (bg_key/n_candidates/size/quality — see
+// normalizeRecipePatch's own `params` handling; `model`/`supersample` remain immutable).
+// `pack` (T0332 v2, build-spec build_spec_pack_card_2026-07-07.md — lead decision "Слить":
+// pack mode is NOT a third card type, it is an optional field on the recipe blob) defaults to
+// null — "no pack mode, a single Generate mints one image" (unchanged single-image behavior);
+// non-null turns Generate into a sheet-generation run instead (see
+// normalizeRecipePack/packPreview below).
 function defaultRecipe() {
   return {
     v: 1,
@@ -2212,6 +2285,7 @@ function defaultRecipe() {
       n_candidates: 1,
     },
     style_ref: null,
+    pack: null,
     last_run: null,
   };
 }
@@ -2223,7 +2297,29 @@ function defaultRecipe() {
 // `use_expanded` (a boolean — Generate sends `expanded` when this is true AND `expanded` is
 // set, else the short `prompt`; see resolveRecipePromptText, unchanged by increment 4),
 // `engine` (one of RECIPE_ENGINES), `style_ref` (null, or a non-empty string id — the
-// reserved R1 pointer; resolving/remapping it across canvases is increment 3, not this op).
+// reserved R1 pointer; resolving/remapping it across canvases is increment 3, not this op),
+// `pack` (T0332 v2: null to turn pack mode off, or a FULL pack object — see
+// normalizeRecipePack below). Unlike every other field here, a given `pack` REPLACES the
+// stored `recipe.pack` WHOLESALE rather than merging: the map in patchRecipe below only
+// merges the recipe blob one level deep (`{...group.recipe, ...resolved}`), so
+// `resolved.pack`, when present, IS the entire next value, never a delta onto the old one —
+// documented here since it is the one exception to this function's "partial patch" framing
+// (the caller — cli.mjs's recipe-set, a future UI — is responsible for assembling the full
+// object when it only means to change one pack field). `params` (T0332 v2 — two lead
+// decisions on top of the build-spec's focus-review, 2026-07-07: pack mode does NOT duplicate
+// background/candidates inside its own blob; instead recipe.params, previously immutable via
+// this op, is UNFROZEN for exactly four fields: `bg_key` (a hex color string — validated
+// generically via the shared `hexColor` helper, the SAME format check group backgrounds use;
+// the magenta/green PAIRING restriction pack mode actually needs is enforced later, in
+// packPreview/generateFromRecipe's pack branch, not here — bg_key remains free-form hex for
+// the single-image cutout path it already served), `n_candidates` (a positive integer),
+// `size`/`quality` (strings) — `model` is loud (immutable), same law patchPack applied to a
+// pack's own params in phase A. A `params` patch is PARTIAL and MERGES onto the stored
+// `recipe.params` one level deep (patchRecipe below, mirroring phase A's own
+// `pack.params` merge precedent) — unlike `pack`, which replaces wholesale; this file's one
+// precedent for "a patch that touches a nested object" is deep-merge, not replace, so params
+// follows it and pack (a deliberately different, all-or-nothing config surface) is the
+// documented exception, not params.
 // Returns the subset of resolved fields actually provided; throws before any write on
 // anything else (bad type, unknown key value, or an empty patch).
 function normalizeRecipePatch(patch) {
@@ -2259,8 +2355,59 @@ function normalizeRecipePatch(patch) {
     }
     out.style_ref = patch.style_ref;
   }
+  // T0332 v2: pack is null (pack mode off) or a FULL pack object — see normalizeRecipePack's
+  // own doc comment for why this one field replaces wholesale instead of merging.
+  if (patch.pack !== undefined) {
+    out.pack = patch.pack === null ? null : normalizeRecipePack(patch.pack);
+  }
+  // T0332 v2 (two lead decisions on top of the build-spec's focus-review): recipe.params is
+  // no longer fully immutable — bg_key/n_candidates/size/quality are patchable now (the root
+  // fix for pack mode needing an editable background/candidate-count, instead of duplicating
+  // them inside `pack`). `model` stays immutable (loud, even set to its current value) — the
+  // one field pack's own phase-A params-patch also refused. Returns only the given subset;
+  // patchRecipe below merges it one level deep onto the stored recipe.params (a PARTIAL patch,
+  // unlike `pack` above).
+  if (patch.params !== undefined) {
+    if (!patch.params || typeof patch.params !== "object" || Array.isArray(patch.params)) {
+      throw new Error(`recipe params must be an object, got ${JSON.stringify(patch.params)}`);
+    }
+    const params = {};
+    if (patch.params.bg_key !== undefined) {
+      // Generic hex validation only (any color) — the magenta/green PAIRING pack mode needs
+      // is checked later, in packPreview/generateFromRecipe's pack branch (build-spec: "иной
+      // hex — громкая ошибка в packPreview/pack-ветке generate, НЕ на patch-time").
+      const hex = hexColor(patch.params.bg_key);
+      if (!hex) throw new Error(`recipe params.bg_key must be a 6-digit hex color (e.g. #ff00ff), got ${JSON.stringify(patch.params.bg_key)}`);
+      params.bg_key = hex;
+    }
+    if (patch.params.n_candidates !== undefined) {
+      const nCandidates = Number(patch.params.n_candidates);
+      if (!Number.isInteger(nCandidates) || nCandidates < 1) {
+        throw new Error(`recipe params.n_candidates must be a positive integer, got ${JSON.stringify(patch.params.n_candidates)}`);
+      }
+      params.n_candidates = nCandidates;
+    }
+    if (patch.params.size !== undefined) {
+      if (typeof patch.params.size !== "string") throw new Error(`recipe params.size must be a string, got ${JSON.stringify(patch.params.size)}`);
+      params.size = patch.params.size;
+    }
+    if (patch.params.quality !== undefined) {
+      if (typeof patch.params.quality !== "string") throw new Error(`recipe params.quality must be a string, got ${JSON.stringify(patch.params.quality)}`);
+      params.quality = patch.params.quality;
+    }
+    // model (and supersample, and any typo) is immutable/unknown — a loud error, never a
+    // silent ignore (mirrors phase A's own pack.params rule verbatim).
+    const unknownParamKeys = Object.keys(patch.params).filter((key) => !["bg_key", "n_candidates", "size", "quality"].includes(key));
+    if (unknownParamKeys.length) {
+      throw new Error(`recipe params.${unknownParamKeys[0]} is immutable or unknown — only bg_key/n_candidates/size/quality are patchable (model is fixed)`);
+    }
+    if (!Object.keys(params).length) {
+      throw new Error("recipe params patch requires at least one of bg_key, n_candidates, size, quality");
+    }
+    out.params = params;
+  }
   if (!Object.keys(out).length) {
-    throw new Error("patchRecipe requires at least one of prompt, expanded, use_expanded, engine, style_ref");
+    throw new Error("patchRecipe requires at least one of prompt, expanded, use_expanded, engine, style_ref, pack, params");
   }
   return out;
 }
@@ -2281,8 +2428,10 @@ const CARD_FIT_PADDING = 16;
 // with just a placement point. Optional `parentId` nests the card like any group (null/
 // absent = top level; validated). Renders as a plain group frame today — the canvas
 // badge + prompt-preview land in increment 2 alongside generation. A card is a workshop
-// object, not an exportable screen: `exportProject` skips top-level groups that carry
-// `recipe` (see its filter below). One journal entry.
+// object, not an exportable screen BY CONSTRUCTION (T0332 B1): `createRecipeCard` never
+// sets `group.screen`, and only `group.screen === true` makes a top-level group an
+// exportable screen (see exportProject's own doc) — no special recipe/style skip needed.
+// One journal entry.
 export function createRecipeCard(root, { projectId, name, x, y, w, h, parentId } = {}) {
   if (!projectId) throw new Error("createRecipeCard requires projectId");
   const startedAt = performance.now();
@@ -2342,12 +2491,14 @@ export function createRecipeCard(root, { projectId, name, x, y, w, h, parentId }
   return { project, group: (project.groups || []).find((item) => item.id === groupId) };
 }
 
-// Partial update of a card's `recipe` blob (prompt/expanded/use_expanded/engine/style_ref —
-// see normalizeRecipePatch; `last_run`/`params` are written by generateFromRecipe, not this
-// general patch). Loud on a group that carries no `recipe` at all — a plain
-// group is not a card, so patching one here is a caller bug, not a silent no-op. One
-// journal entry; undo restores the prior recipe blob byte-exact (free via the group
-// snapshot).
+// Partial update of a card's `recipe` blob (prompt/expanded/use_expanded/engine/style_ref/pack/
+// params — see normalizeRecipePatch; `last_run` is written by generateFromRecipe, not this
+// general patch; `pack`, uniquely, REPLACES rather than merges, while `params` — the one other
+// field that itself nests — merges one level deeper than the rest of the blob, mirroring phase
+// A's own `pack.params` precedent; see normalizeRecipePatch's own doc comment for both). Loud
+// on a group that carries no `recipe` at all — a plain group is not a card, so patching one
+// here is a caller bug, not a silent no-op. One journal entry; undo restores the prior recipe
+// blob byte-exact (free via the group snapshot).
 export function patchRecipe(root, { projectId, groupId, patch } = {}) {
   if (!projectId) throw new Error("patchRecipe requires projectId");
   if (!groupId) throw new Error("patchRecipe requires groupId");
@@ -2368,9 +2519,18 @@ export function patchRecipe(root, { projectId, groupId, patch } = {}) {
     }
   }
 
-  const nextGroups = groupsOf(before).map((group) =>
-    group.id === groupId ? { ...group, recipe: { ...group.recipe, ...resolved } } : group,
-  );
+  const nextGroups = groupsOf(before).map((group) => {
+    if (group.id !== groupId) return group;
+    // `params` merges one level deeper than the rest of the blob (T0332 v2: bg_key/
+    // n_candidates/size/quality are individually patchable now — a PARTIAL params patch must
+    // not silently wipe out the OTHER params fields it didn't mention); `pack` needs no such
+    // special-casing — a plain spread already replaces it wholesale, which is the documented,
+    // intentional behavior for that one field (see normalizeRecipePatch's doc comment).
+    const { params: paramsPatch, ...rest } = resolved;
+    const nextRecipe = { ...group.recipe, ...rest };
+    if (paramsPatch) nextRecipe.params = { ...group.recipe.params, ...paramsPatch };
+    return { ...group, recipe: nextRecipe };
+  });
   const after = updateProject(root, projectId, { groups: nextGroups });
   const project = commitMutation(root, projectId, {
     op: "patchRecipe",
@@ -2603,7 +2763,7 @@ function recipeCardMembers(project, cardId) {
   return (project.elements || []).filter((el) => el.groupId === cardId && el.type === "image" && el.visible !== false);
 }
 
-export async function generateFromRecipe(root, { projectId, groupId, generators } = {}) {
+export async function generateFromRecipe(root, { projectId, groupId, generators, runGroupId, sheetSlug } = {}) {
   if (!projectId) throw new Error("generateFromRecipe requires projectId");
   if (!groupId) throw new Error("generateFromRecipe requires groupId");
   const startedAt = performance.now();
@@ -2614,6 +2774,16 @@ export async function generateFromRecipe(root, { projectId, groupId, generators 
   }
   const recipe = card.recipe;
   const cardLabel = card.name || groupId;
+
+  // T0332 v2 (build_spec_pack_card_2026-07-07.md §3): recipe.pack turns Generate into a
+  // SHEET-GENERATION run instead of a single mint — see generatePackSheets below (defined
+  // alongside packPreview, which shares its config-assembly helper, buildPackConfig).
+  // `runGroupId`/`sheetSlug` are pack-only options (resume / force-regen-one-sheet); the
+  // single-image branch below never reads them. Everything from here down this function is
+  // the ORIGINAL single-image branch, UNCHANGED by this increment.
+  if (recipe.pack) {
+    return generatePackSheets(root, { projectId, groupId, generators, runGroupId, sheetSlug, before, card, recipe, cardLabel, startedAt });
+  }
 
   const promptText = resolveRecipePromptText(recipe);
   if (!promptText) {
@@ -2895,6 +3065,679 @@ export async function expandRecipePrompt(root, { projectId, groupId, assistant }
   });
   const group = (project.groups || []).find((item) => item.id === groupId);
   return { project, group, expanded };
+}
+
+// ---- pack mode (T0332 v2: build_spec_pack_card_2026-07-07.md — lead decision "Слить"/
+// "Merge") -------------------------------------------------------------------------------
+//
+// `recipe.pack`, when non-null, turns Generate into a SHEET GENERATION run instead of a
+// single mint: the SAME recipe.prompt (subject template) + wildcard axes + one "vary" axis
+// that fills a grid of cells per sheet (build-spec §Принцип). There is no third card type, no
+// new element type, no new UI surface — every recipe widget (chrome/chip, layers panel,
+// inspectorSig, export-filter, paste-remap) already works for `group.recipe`; pack mode just
+// rides inside it. Prompt EXPANSION is not reimplemented here a second time:
+// `.codex/skills/nt-asset-image-generation/scripts/expand_jobs.py` is the ONE expander (T0330,
+// proven on the swords pilot) — this file only assembles its flat JSON config and calls it
+// through the shared warm-worker bridge (runToolPython), the same seam every other canvas
+// Python tool in this file uses. "One system" invariant: style/refs go through the SAME
+// resolve the single-image branch uses (recipe.style_ref's prompt as `style_prefix`, its ref
+// image travels as a generation ref exactly like the single-image branch) — the lead's
+// requirement that a style card's ref image work in packs is satisfied BY CONSTRUCTION, not a
+// separate code path.
+//
+// This is a TRANSPLANT, not a reimplementation: the build-spec's earlier v1 (a separate
+// pack-card TYPE, dual-reviewed, implemented, then superseded by the lead's merge decision)
+// proved the mechanics — normalizePackPatch's per-field rules -> normalizeRecipePack below
+// (axes/vary/grid/max_jobs, byte-for-byte the same validation); expandPack -> packPreview below
+// (reading recipe.* instead of a separate card's own `pack.*`; the old "picture is not sent"
+// warning is DELETED — the picture IS sent in the generate branch, see the "One system" note
+// above — replaced with an info flag, `style_ref_image`). `recipe.pack` itself is SLIM (v1,
+// axes, vary, grid, max_jobs only) — a first review draft put background/candidates inside it
+// too, but that was superseded by a SECOND lead decision (2026-07-07, on top of the
+// focus-review): rather than duplicate a background/candidate-count concept the recipe already
+// half-has (`params.bg_key`/`params.n_candidates`, previously write-once-at-creation, dead
+// weight since patchRecipe never touched `params` at all), `params` itself is UNFROZEN for
+// exactly those two fields (plus size/quality) — see normalizeRecipePatch's own `params`
+// handling. `subject_template`/`style_ref` are likewise NOT part of `recipe.pack` — they were
+// never duplicated in the first place, recipe's own `prompt`/`style_ref` cover them.
+
+const PACK_KNOWN_FIELDS = ["axes", "vary", "grid", "max_jobs"]; // `v` is a stamped constant
+// (like recipe's own top-level `v`) — never a patchable field.
+
+// Validate + normalize a FULL (non-null) `recipe.pack` value — NOT a partial patch.
+// normalizeRecipePatch's `pack` field REPLACES `recipe.pack` WHOLESALE (build-spec: "patch
+// ЗАМЕНЯЕТ pack целиком" — recipe itself only merges shallow, see patchRecipe's
+// `{...group.recipe, ...resolved}`), so every one of these four fields must be present in
+// full; a caller that only wants to tweak ONE field (cli.mjs's recipe-set, a future UI) is
+// responsible for reading the project's CURRENT recipe.pack first and merging its own change
+// on top BEFORE calling patchRecipe — a CLI/UI convenience, this op itself never merges onto
+// the stored value (missing a field here is a loud error, not a silent carry-forward from the
+// old blob). Field-level rules transplanted verbatim from phase A's normalizePackPatch: axes
+// (object of axisName -> non-empty array of non-empty strings, insertion order preserved for
+// expand_jobs.py's own cartesian-product order); grid ([rows, cols] integers in 1..3); max_jobs
+// (a positive integer). Unknown keys (including phase A's now-removed subject_template/
+// style_ref/params/background/candidates) are a loud error. Throws before any write.
+function normalizeRecipePack(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`recipe pack must be null or an object, got ${JSON.stringify(value)}`);
+  }
+  const unknownKeys = Object.keys(value).filter((key) => key !== "v" && !PACK_KNOWN_FIELDS.includes(key));
+  if (unknownKeys.length) {
+    throw new Error(`recipe pack: unknown field ${JSON.stringify(unknownKeys[0])} — known fields are ${PACK_KNOWN_FIELDS.join(", ")}`);
+  }
+  const missingKeys = PACK_KNOWN_FIELDS.filter((key) => value[key] === undefined);
+  if (missingKeys.length) {
+    throw new Error(
+      `recipe pack: missing field ${JSON.stringify(missingKeys[0])} — patch replaces pack wholesale, send the full object ` +
+        `(known fields: ${PACK_KNOWN_FIELDS.join(", ")})`,
+    );
+  }
+
+  if (!value.axes || typeof value.axes !== "object" || Array.isArray(value.axes)) {
+    throw new Error(`pack axes must be an object of axisName -> array of values, got ${JSON.stringify(value.axes)}`);
+  }
+  const axes = {};
+  // Object.entries walks insertion order — the given key order is preserved verbatim
+  // (expand_jobs.py's own big-axis cartesian product order, and axes_slug's file-path
+  // convention, both depend on that order being stable/intentional, not silently resorted).
+  for (const [axisName, values] of Object.entries(value.axes)) {
+    if (!Array.isArray(values) || !values.length || !values.every((v) => typeof v === "string" && v.trim())) {
+      throw new Error(`pack axes.${axisName} must be a non-empty array of non-empty strings, got ${JSON.stringify(values)}`);
+    }
+    axes[axisName] = [...values];
+  }
+
+  if (typeof value.vary !== "string") throw new Error(`pack vary must be a string, got ${JSON.stringify(value.vary)}`);
+
+  if (!Array.isArray(value.grid) || value.grid.length !== 2) {
+    throw new Error(`pack grid must be [rows, cols], got ${JSON.stringify(value.grid)}`);
+  }
+  const [rows, cols] = value.grid.map(Number);
+  if (!Number.isInteger(rows) || !Number.isInteger(cols) || rows < 1 || rows > 3 || cols < 1 || cols > 3) {
+    throw new Error(`pack grid must be two integers in 1..3, got ${JSON.stringify(value.grid)}`);
+  }
+
+  const maxJobs = Number(value.max_jobs);
+  if (!Number.isInteger(maxJobs) || maxJobs < 1) {
+    throw new Error(`pack max_jobs must be a positive integer, got ${JSON.stringify(value.max_jobs)}`);
+  }
+
+  return { v: 1, axes, vary: value.vary, grid: [rows, cols], max_jobs: maxJobs };
+}
+
+// bg_key -> expand_jobs.py's `background` enum — pack mode's own narrower pairing on top of
+// `params.bg_key`'s generic hex validation (normalizeRecipePatch accepts ANY hex there; this
+// mapping is where "must be exactly the magenta or green key" is actually enforced, loudly, at
+// preview/generate time — build-spec: "иной hex — громкая ошибка в packPreview/pack-ветке
+// generate, НЕ на patch-time"). Keys are lowercase to match hexColor's own normalization.
+const BG_KEY_BACKGROUND = { "#ff00ff": "magenta", "#00ff00": "green" };
+
+// Path-safe slug (mirrors expand_jobs.py's own `slugify`, JS-side, for the config's `pack`
+// field only — the expander re-slugifies internally for file stems regardless, so this does
+// not need to be byte-identical, just filesystem/display-safe on the canvas side).
+function slugifyPackName(value, fallback = "pack") {
+  const text = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return (text || fallback).slice(0, 80);
+}
+
+// The ONE expander (T0330) — never reimplemented on the canvas side. Path is relative to the
+// repo root, exactly like every other runToolPython call in this file.
+const PACK_EXPANDER_SCRIPT = ".codex/skills/nt-asset-image-generation/scripts/expand_jobs.py";
+
+// Shared pack-mode config assembly (T0332 v2 build-spec §3: "экспандер вызывается СВЕЖИМ" for
+// BOTH packPreview and generateFromRecipe's pack branch — extracted here so the two paths can
+// never disagree on what recipe.* maps to expand_jobs.py's flat config; the build-spec's own
+// config-assembly table lives in exactly ONE place, this function). Assembles `subject_template`
+// = `recipe.prompt` VERBATIM — NEVER resolveRecipePromptText/`expanded` (pack mode ignores
+// Expand-prompt entirely, by design: a stale/hand-edited `expanded` string must never silently
+// leak into an axes-driven sheet the lead did not review); `style_prefix` = a style card's
+// prompt, verbatim, "" when `style_ref` is null (unlike the single-image branch, pack mode never
+// appends "Style: ..." — that framing is the single-image branch's alone); `axes`/`vary`/`grid`/
+// `max_jobs` from `recipe.pack`; `background` DERIVED from `recipe.params.bg_key` via
+// BG_KEY_BACKGROUND (loud if it is not EXACTLY the magenta/green pair — bg_key itself is generic
+// hex at patch-time, this is where the pack-specific pairing is actually enforced) and
+// `candidates` from `recipe.params.n_candidates`; `gen` (size/quality/model) is `recipe.params`
+// wholesale. Loud on `recipe.engine !== "codex"` (v1 targets codex only; gemini/both are a
+// later-version non-goal — checked HERE, i.e. in both packPreview and the generate pack branch,
+// never at patch-time, since a cross-field refusal at patch-time would depend on edit order) and
+// on a SET `style_ref` that doesn't resolve to a real style-card group (defensive re-check;
+// patchRecipe already validates this at write time — a hand-edited project.json is the only way
+// to reach this). Callers add their OWN `out_dir` (a required expander key, but otherwise a stub
+// on the canvas path — job.out/job.input_image are dead fields here either way, since generation
+// goes through the codex-seam directly, never gen_batch.py). Does not call the expander itself
+// (no filesystem/subprocess work) — pure assembly + validation, so it never needs a workDir.
+// Returns `{ config, styleRefImage, styleSnapshot }`: `styleRefImage` is an INFO flag (the style
+// card's ref image IS sent as a generation ref in the pack branch, never phase A's old
+// "not sent" warning); `styleSnapshot`, present only when style_ref is set, mirrors the
+// single-image branch's own `{cardId, name, prompt}` shape for meta.pack's style_snapshot parity.
+function buildPackConfig(project, card) {
+  const recipe = card.recipe;
+  const cardLabel = card.name || card.id;
+  if (recipe.engine !== "codex") {
+    throw new Error(`recipe card "${cardLabel}" (${card.id}) has engine ${JSON.stringify(recipe.engine)} — pack mode only supports "codex" in v1`);
+  }
+  const pack = recipe.pack;
+  // background: derived from params.bg_key, NOT a pack field. A hex that isn't exactly one of
+  // the two known keys is loud HERE (not at patch-time — bg_key itself stays generic hex for
+  // the single-image cutout path).
+  const background = BG_KEY_BACKGROUND[String(recipe.params && recipe.params.bg_key).toLowerCase()];
+  if (!background) {
+    throw new Error(
+      `recipe card "${cardLabel}" (${card.id}) has params.bg_key ${JSON.stringify(recipe.params && recipe.params.bg_key)} — pack mode requires ` +
+        `exactly ${Object.entries(BG_KEY_BACKGROUND).map(([hex, name]) => `${hex} (${name})`).join(" or ")}`,
+    );
+  }
+  const candidates = Number(recipe.params && recipe.params.n_candidates);
+  if (!Number.isInteger(candidates) || candidates < 1) {
+    throw new Error(`recipe card "${cardLabel}" (${card.id}) has an invalid params.n_candidates: ${JSON.stringify(recipe.params && recipe.params.n_candidates)}`);
+  }
+
+  // style_ref resolution: `style_ref === null` is a legal "no style" pack — expand_jobs.py's
+  // `_require(config, "style_prefix")` only checks the KEY is present, not that it is non-empty
+  // — so "" is accepted, not a loud error.
+  let stylePrefix = "";
+  let styleRefImage = false;
+  let styleSnapshot; // stays undefined (key omitted) when style_ref is unset — mirrors meta.recipe
+  if (recipe.style_ref) {
+    const styleCard = groupsOf(project).find((group) => group.id === recipe.style_ref);
+    if (!styleCard || !styleCard.style || typeof styleCard.style !== "object") {
+      throw new Error(`recipe card "${cardLabel}" (${card.id}) has a style_ref that is not a style-card group: ${recipe.style_ref}`);
+    }
+    stylePrefix = typeof styleCard.style.prompt === "string" ? styleCard.style.prompt.trim() : "";
+    if (styleCard.style.ref) styleRefImage = true;
+    styleSnapshot = { cardId: styleCard.id, name: styleCard.name || styleCard.id, prompt: stylePrefix };
+  }
+
+  const config = {
+    pack: slugifyPackName(card.name || card.id),
+    style_prefix: stylePrefix,
+    subject_template: recipe.prompt, // VERBATIM — never resolveRecipePromptText/`expanded`
+    axes: pack.axes,
+    sheet: { vary: pack.vary, grid: pack.grid },
+    background,
+    candidates,
+    max_jobs: pack.max_jobs,
+    gen: recipe.params,
+  };
+
+  return { config, styleRefImage, styleSnapshot };
+}
+
+// packPreview: an EPHEMERAL preview, not a mutation — no commitMutation, no journal entry, no
+// write to the card at all (build-spec: "экспандер чист -> превью полностью деривативно от
+// блоба"). Config assembly + engine/bg_key/candidates/style_ref validation is shared with
+// generateFromRecipe's pack branch via buildPackConfig above; this function only adds its OWN
+// `out_dir` (an ephemeral tmp dir, torn down before returning) and strips the expander's raw
+// job objects down to `{name, prompt, cells}` (job.out/job.input_image are dead fields on the
+// canvas preview path). Loud on `recipe.pack === null` (pack mode is off — nothing to preview,
+// checked BEFORE buildPackConfig's own engine gate, so the two loud cases stay in a stable,
+// tested order). A bad/incomplete axes setup, a `vary` that is not a key of `axes`, too many
+// vary values — every one of those is expand_jobs.py's OWN law (SystemExit), surfaced verbatim
+// by runToolPython (bridge.mjs) as the thrown Error; nothing here re-validates or re-wraps that
+// message.
+export async function packPreview(root, { projectId, groupId } = {}) {
+  if (!projectId) throw new Error("packPreview requires projectId");
+  if (!groupId) throw new Error("packPreview requires groupId");
+  const project = getProject(root, projectId);
+  const card = findGroup(project, groupId); // loud "group not found" on an unknown id
+  if (!card.recipe || typeof card.recipe !== "object") {
+    throw new Error(`group is not a recipe card (no recipe blob): ${groupId}`);
+  }
+  const recipe = card.recipe;
+  const cardLabel = card.name || groupId;
+  if (!recipe.pack) {
+    throw new Error(`recipe card "${cardLabel}" (${groupId}) has no pack config — set recipe.pack before previewing (pack mode is off)`);
+  }
+
+  const { config: baseConfig, styleRefImage } = buildPackConfig(project, card);
+
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-pack-"));
+  try {
+    const config = {
+      ...baseConfig,
+      // `out_dir` is a required key for the expander (it builds each job's `out` path from
+      // it) but is otherwise a stub here: the canvas preview path never generates or writes
+      // images through gen_batch, so job.out/job.input_image below are dead fields, stripped
+      // from what this op returns.
+      out_dir: join(workDir, "out").replaceAll("\\", "/"),
+    };
+    const cfgPath = join(workDir, "pack_config.json");
+    const jobsPath = join(workDir, "jobs.json");
+    writeFileSync(cfgPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+
+    await runToolPython(root, [PACK_EXPANDER_SCRIPT, "--config", cfgPath, "--out", jobsPath]);
+
+    const jobs = JSON.parse(readFileSync(jobsPath, "utf8"));
+    // expand_jobs.py's own jobs.json is a FLAT list (sheets * candidates); "sheets" for the
+    // lead's readout is the sheet count alone (matches the expander's own stdout summary,
+    // `_summary`'s `len(jobs) // candidates`), not the raw job count.
+    const sheets = config.candidates > 0 ? Math.round(jobs.length / config.candidates) : jobs.length;
+    return {
+      sheets,
+      style_ref_image: styleRefImage,
+      jobs: jobs.map((job) => ({ name: job.name, prompt: job.prompt, cells: job.cells })),
+    };
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+}
+
+// The big-axis-only identity of a job (build-spec's `sheet_axes`): every cell in job.cells
+// shares the same big-axis values — only `vary` differs per cell (expand_jobs.py's own
+// row-major fill, see its `cells` comprehension) — so cells[0]'s axes minus the vary key IS
+// the sheet identity RESUME/`--sheet` key off of. Pure, no I/O.
+function sheetAxesFromJob(job, varyAxis) {
+  const axes = { ...(((job && job.cells) || [])[0] || {}).axes };
+  delete axes[varyAxis];
+  return axes;
+}
+
+// Order-independent equality for two flat string-valued axes objects (RESUME's own dedup key).
+// A plain JSON.stringify comparison would also work today (expand_jobs.py always builds a
+// job's axes in the SAME `recipe.pack.axes` key order), but this is robust even if the pack's
+// axes were edited/reordered between runs.
+function axesEqual(a, b) {
+  const keysA = Object.keys(a || {}).sort();
+  const keysB = Object.keys(b || {}).sort();
+  if (keysA.length !== keysB.length) return false;
+  return keysA.every((key, index) => key === keysB[index] && a[key] === b[keysB[index]]);
+}
+
+// Deep-review поправка (build-spec's "Поправка по deep-ревью", 2026-07-07): the artifacts a
+// forced `--sheet` regen REPLACES, scoped to `runGroupId` ONLY (build-spec: "продвинутые за
+// пределы run-группы копии не затрагиваются" — a promoted/copied cut living outside the run
+// group is untouched even though its `meta.pack.sheet_element_id` still points at the old
+// sheet). Two kinds of artifact fall out of one lookup:
+//   - the prior sheet element(s) themselves — this card's sheets inside `runGroupId` whose
+//     `meta.pack.sheet_axes` matches the forced job's sheet_axes (axesEqual — the SAME key the
+//     RESUME dedup check above already uses);
+//   - each such sheet's own slice subgroup, if packSlice already cut it. A slice subgroup
+//     carries no meta of its own — sliceRegions mints it bare, name + parentId only (its own
+//     doc comment, ~4809-4836) — so the durable link back to the ORIGINATING sheet lives on
+//     the subgroup's CHILD cut elements' `meta.pack.sheet_element_id` (packSlice's own
+//     perRegionMeta assembly, ~4986-4988: `{pack: {cardId, sheet_element_id: sheet.id, cell,
+//     axes}}`). A cut still living directly in the run group with no wrapper (T0246's
+//     single-crop edge case, sliceRegions ~4860-4863) has no subgroup to remove, but the lone
+//     cut is still this sheet's own artifact and is removed too. Only cuts/subgroups CURRENTLY
+//     inside `runGroupId`'s scope qualify (`cut.groupId === runGroupId` directly, or a group
+//     whose `parentId === runGroupId`) — a cut (or its group) moved out of that scope keeps its
+//     meta.pack pointer but falls outside this walk, so it survives untouched, matching the
+//     build-spec's "copy placed outside the run group survives".
+function findForcedSheetReplacementTargets(project, runGroupId, cardId, jobSheetAxes) {
+  const elements = project.elements || [];
+  const groups = groupsOf(project);
+  const oldSheets = elements.filter(
+    (el) =>
+      el.groupId === runGroupId &&
+      el.meta &&
+      el.meta.pack &&
+      Array.isArray(el.meta.pack.cells) &&
+      el.meta.pack.cardId === cardId &&
+      axesEqual(el.meta.pack.sheet_axes, jobSheetAxes),
+  );
+  const elementIds = new Set(oldSheets.map((el) => el.id));
+  const groupIds = new Set();
+  for (const oldSheet of oldSheets) {
+    const cuts = elements.filter((el) => el.meta && el.meta.pack && el.meta.pack.sheet_element_id === oldSheet.id);
+    for (const cut of cuts) {
+      if (cut.groupId === runGroupId) {
+        elementIds.add(cut.id); // T0246 single-crop edge case: no wrapper — the lone cut IS in-scope
+        continue;
+      }
+      const cutGroup = cut.groupId ? groups.find((g) => g.id === cut.groupId) : null;
+      if (cutGroup && cutGroup.parentId === runGroupId) {
+        elementIds.add(cut.id);
+        groupIds.add(cutGroup.id);
+      }
+      // else: the cut (or its group) lives outside runGroupId's scope — promoted/copied
+      // elsewhere — never touched.
+    }
+  }
+  return { elementIds, groupIds };
+}
+
+// One per-sheet commit (build-spec §3): optionally mints the run GROUP (first successful sheet
+// of a fresh run only) + an image element (`mintPayload` present), always updates
+// `recipe.last_run` to the CURRENT cumulative verdict/failed[] ("обновляется ПОСЛЕ КАЖДОГО
+// листа" — an unattended agent watching the project sees partial progress even mid-run), and
+// appends ONE tool_runs summary entry when `isLast` (parity with the single-image branch's own
+// one-entry-per-call tool_runs write — never one per sheet). `sheetBefore` is the snapshot taken
+// right before whatever (possibly slow, possibly skipped) work preceded THIS sheet only —
+// refuseIfHeadMoved's tolerance is scoped to ONE sheet, not the whole run: a HEAD_CONFLICT here
+// fails only this commit (the caller records it as this sheet's own failure), never voids
+// earlier already-minted sheets or blocks later ones, which re-snapshot fresh. A pure "nothing
+// changed" iteration (a skip that isn't the last sheet) safely no-ops via commitMutation's own
+// before/after diff — this function does not special-case that itself.
+async function commitPackSheetOutcome(root, projectId, {
+  groupId, sheetBefore, job, jobSheetAxes, mintPayload, currentRunGroupId, styleSnapshot, varyAxis,
+  at, failedSoFar, isLast, priorResults, outcomeStatus, outcomeError, refSrcs, recipe, startedAt, forced,
+}) {
+  return withProjectLock(root, projectId, () => {
+    const current = getProject(root, projectId);
+    refuseIfHeadMoved("generateFromRecipe", sheetBefore, current);
+    const currentCard = (current.groups || []).find((g) => g.id === groupId);
+    if (!currentCard) throw new Error(`group not found: ${groupId}`);
+
+    let workingProject = current;
+    let targetGroupId = currentRunGroupId;
+    let mintedElementId = null;
+
+    if (mintPayload) {
+      if (!targetGroupId) {
+        // First successful sheet of a fresh run mints the result-group RIGHT of the card
+        // (build-spec: "первый лист минтит result-группу рядом с картой"), carrying the
+        // pack_run PROVENANCE marker (resolve --run, gate the Slice-pack button — no export
+        // role, that is `group.screen`'s alone). Name: "<style card name | 'no-style'>/<vary>
+        // <ts>" — several runs stay distinguishable without digging through meta.
+        const styleNamePart = styleSnapshot ? styleSnapshot.name : "no-style";
+        const newGroup = {
+          id: `grp_${randomUUID().slice(0, 8)}`,
+          name: `${styleNamePart}/${varyAxis} ${at}`,
+          x: currentCard.x + currentCard.w + 16,
+          y: currentCard.y,
+          w: DEFAULT_RECIPE_CARD_SIZE.w,
+          h: DEFAULT_RECIPE_CARD_SIZE.h,
+          visible: true,
+          pack_run: { v: 1, cardId: groupId, at },
+        };
+        const parentScope = currentCard.parentId == null || currentCard.parentId === "" ? null : String(currentCard.parentId);
+        if (parentScope != null) newGroup.parentId = parentScope;
+        const groupFront = frontOrder(current, parentScope);
+        if (groupFront !== null) newGroup.order = groupFront;
+        // A small non-journaled write (like storeAddImage's own file writes below) — only the
+        // FINAL updateProject/commitMutation at the bottom of this function is journaled.
+        workingProject = updateProject(root, projectId, { groups: [...groupsOf(current), newGroup] });
+        targetGroupId = newGroup.id;
+      }
+
+      if (forced) {
+        // Deep-review поправка: REPLACE, not duplicate — drop the prior sheet(s) sharing this
+        // job's sheet_axes (and their own slice subgroup, if already cut) from the run group,
+        // in this SAME commit, right before minting the fresh sheet below. See
+        // findForcedSheetReplacementTargets's own doc comment for the identification rule.
+        const targets = findForcedSheetReplacementTargets(workingProject, targetGroupId, groupId, jobSheetAxes);
+        if (targets.elementIds.size || targets.groupIds.size) {
+          workingProject = updateProject(root, projectId, {
+            elements: (workingProject.elements || []).filter((el) => !targets.elementIds.has(el.id)),
+            groups: groupsOf(workingProject).filter((g) => !targets.groupIds.has(g.id)),
+          });
+        }
+      }
+
+      const added = storeAddImage(root, projectId, { name: job.name, bytes: mintPayload.bytes, meta: { pack: mintPayload.meta } });
+      workingProject = added.project;
+      mintedElementId = added.element.id;
+
+      // Place inside the run group, stacked top-to-bottom (16px gap) in mint order — mirrors
+      // the single-image branch's own placement convention.
+      const runGroupNow = (workingProject.groups || []).find((g) => g.id === targetGroupId);
+      const siblingCount = (workingProject.elements || []).filter((el) => el.groupId === targetGroupId && el.id !== added.element.id).length;
+      const fo = frontOrder(workingProject, targetGroupId);
+      workingProject = {
+        ...workingProject,
+        elements: (workingProject.elements || []).map((element) => {
+          if (element.id !== added.element.id) return element;
+          const next = { ...element, groupId: targetGroupId, x: runGroupNow.x, y: runGroupNow.y + siblingCount * (element.h + 16) };
+          if (fo !== null) next.order = fo;
+          return next;
+        }),
+      };
+    }
+
+    const verdict = isLast && failedSoFar.length === 0 ? "ok" : "partial";
+    const lastRun = { at, verdict, run_group_id: targetGroupId, failed: [...failedSoFar] };
+    const nextGroups = (workingProject.groups || []).map((group) =>
+      group.id === groupId ? { ...group, recipe: { ...group.recipe, last_run: lastRun } } : group,
+    );
+
+    const resultRow = {
+      name: job.name,
+      sheet_axes: jobSheetAxes,
+      status: outcomeStatus,
+      ...(outcomeStatus === "ok" ? { elementId: mintedElementId } : {}),
+      ...(outcomeStatus === "failed" ? { error: outcomeError } : {}),
+    };
+
+    const patch = { groups: nextGroups };
+    if (mintPayload) patch.elements = workingProject.elements;
+    if (isLast) {
+      // ONE tool_runs entry for the WHOLE pack run (parity with the single-image branch's own
+      // one-entry-per-call write — never one per sheet), landing in the FINAL sheet's commit.
+      const run = {
+        id: `run_${randomUUID().slice(0, 8)}`,
+        op: "generate_from_recipe_pack",
+        cardId: groupId,
+        at,
+        params: {
+          subject_template: recipe.prompt,
+          engine: "codex",
+          refs: refSrcs,
+          size: recipe.params.size,
+          quality: recipe.params.quality,
+          model: recipe.params.model,
+          pack: recipe.pack,
+        },
+        result_summary: { run_group_id: targetGroupId, results: [...priorResults, resultRow], failed: failedSoFar },
+      };
+      patch.tool_runs = capToolRuns(root, projectId, [...(workingProject.tool_runs || []), run]);
+    }
+
+    const after = updateProject(root, projectId, patch);
+    const project = commitMutation(root, projectId, {
+      op: "generateRecipePackSheet",
+      args_summary: { groupId, sheet: job.name, runGroupId: targetGroupId, verdict, minted: !!mintPayload },
+      before: current,
+      after,
+      startedAt,
+    });
+    return { project, targetGroupId, resultRow };
+  });
+}
+
+// generateFromRecipe's pack branch (T0332 v2 build-spec §3): `recipe.pack` set -> generate the
+// expander's flat job list as a SEQUENCE of sheets instead of one single mint. Loud, upfront,
+// BEFORE any generation call: the engine gate + bg_key/candidates/style_ref validation
+// (buildPackConfig, shared with packPreview), the ref-count cap (MAX_RECIPE_REFS, shared with
+// the single-image branch), an unresolvable `runGroupId` (resume) or `sheetSlug` (force-regen)
+// that doesn't match any expanded job. Refs (member images + the style card's ref image, when
+// set) are resolved ONCE here — the SAME resolve the single-image branch uses — and travel to
+// EVERY sheet's generation call unchanged. The expander is invoked FRESH (its own ephemeral tmp
+// dir, torn down before generation even starts) — never packPreview's, and never stale: build-
+// spec "никакого стейла по построению". Sheets generate SEQUENTIALLY via the codex-seam
+// (`generators` injection respected, exactly like the single-image branch); each finished sheet
+// mints under its OWN short commit (commitPackSheetOutcome) as soon as it lands, so a crash on
+// sheet 3 never loses sheets 1-2 and per-sheet HEAD_CONFLICT tolerance never voids the whole
+// run. Never throws once the sheet loop starts (unlike the single-image branch's "every engine
+// failed" throw) — failures land in `failed`/`recipe.last_run.failed` instead, since a partial
+// pack run is a normal, resumable outcome, not an all-or-nothing gesture.
+async function generatePackSheets(root, { projectId, groupId, generators, runGroupId, sheetSlug, before, card, recipe, cardLabel, startedAt }) {
+  const { config: baseConfig, styleSnapshot } = buildPackConfig(before, card);
+
+  // opts.sheetSlug WITHOUT an explicit opts.runGroupId (deep-review поправка, 2026-07-07): a
+  // silent new-group fork is forbidden — "принудительный реген" only ever means "into an
+  // EXISTING pack run", so resolve `recipe.last_run.run_group_id` here, loud if there is none
+  // (a forced regen with nowhere to land is a caller mistake, not "start a fresh run of one").
+  // An explicit opts.runGroupId always wins over this resolution.
+  let resolvedRunGroupId = runGroupId;
+  if (sheetSlug != null && !resolvedRunGroupId) {
+    resolvedRunGroupId = recipe.last_run && recipe.last_run.run_group_id;
+    if (!resolvedRunGroupId) {
+      throw new Error(
+        `generateFromRecipe: --sheet requires an existing pack run; pass --run or generate the pack first`,
+      );
+    }
+  }
+
+  // RESUME (opts.runGroupId, or the --sheet resolution above): validate the group up front
+  // (existence + carries pack_run for THIS card) — loud before any generation call AND before
+  // the (Python) expander spawn, since this check depends only on metadata already in `before`,
+  // never on the expanded job list.
+  let runGroup = null;
+  if (resolvedRunGroupId) {
+    runGroup = (before.groups || []).find((g) => g.id === resolvedRunGroupId);
+    if (!runGroup || !runGroup.pack_run || typeof runGroup.pack_run !== "object") {
+      throw new Error(`generateFromRecipe: run group not found or does not carry a pack_run marker: ${resolvedRunGroupId}`);
+    }
+    if (runGroup.pack_run.cardId !== groupId) {
+      throw new Error(
+        `generateFromRecipe: run group ${resolvedRunGroupId} belongs to a different recipe card (${runGroup.pack_run.cardId}), not this card (${groupId})`,
+      );
+    }
+  }
+
+  // Refs (build-spec: "референсы = те же refPaths, что собрала бы одиночная ветка") — resolved
+  // ONCE, before the sheet loop, exactly like the single-image branch's own members + style-ref-
+  // image resolution (never re-resolved per sheet).
+  const members = recipeCardMembers(before, groupId);
+  if (members.length > MAX_RECIPE_REFS) {
+    throw new Error(
+      `recipe card "${cardLabel}" (${groupId}) has ${members.length} reference images — generate_image.py accepts at most ${MAX_RECIPE_REFS} (--input-image)`,
+    );
+  }
+  let refPaths = members.map((el) => resolveProjectFile(root, projectId, el.src));
+  let refSrcs = members.map((el) => el.src);
+  if (recipe.style_ref) {
+    // buildPackConfig above already validated this resolves to a real style-card group.
+    const styleCard = groupsOf(before).find((group) => group.id === recipe.style_ref);
+    if (styleCard.style.ref) {
+      const refElement = (before.elements || []).find((el) => el.id === styleCard.style.ref);
+      if (!refElement || refElement.groupId !== styleCard.id) {
+        throw new Error(
+          `style card "${styleCard.name || styleCard.id}" (${styleCard.id}) ref points at a missing/non-member element: ${styleCard.style.ref}`,
+        );
+      }
+      refPaths = [...refPaths, resolveProjectFile(root, projectId, refElement.src)];
+      refSrcs = [...refSrcs, refElement.src];
+    }
+  }
+
+  // Expand FRESH (build-spec: "пересобрать config и вызвать экспандер СВЕЖИМ") — a brand-new
+  // tmp workDir + config, never packPreview's (torn down before generation even starts here;
+  // out_dir/job.out/job.input_image are dead fields on the canvas path either way).
+  const workDir = mkdtempSync(join(tmpdir(), "canvas-pack-gen-"));
+  let jobs;
+  try {
+    const config = { ...baseConfig, out_dir: join(workDir, "out").replaceAll("\\", "/") };
+    const cfgPath = join(workDir, "pack_config.json");
+    const jobsPath = join(workDir, "jobs.json");
+    writeFileSync(cfgPath, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    await runToolPython(root, [PACK_EXPANDER_SCRIPT, "--config", cfgPath, "--out", jobsPath]);
+    jobs = JSON.parse(readFileSync(jobsPath, "utf8"));
+  } finally {
+    rmSync(workDir, { recursive: true, force: true });
+  }
+
+  const varyAxis = recipe.pack.vary;
+
+  // opts.sheetSlug (build-spec: "принудительный реген именно этого листа ... по имени/слагу
+  // джобы экспандера") — matches the expander's own job.name verbatim, the only stable,
+  // human-legible identifier a caller could have copied off a prior run/preview. Forced jobs
+  // NEVER skip (even when their sheet_axes already exist in the group) — that IS the point of
+  // --sheet.
+  let jobsToRun = jobs;
+  const forcedNames = new Set();
+  if (sheetSlug != null) {
+    jobsToRun = jobs.filter((job) => job.name === sheetSlug);
+    if (!jobsToRun.length) {
+      throw new Error(
+        `generateFromRecipe: --sheet ${JSON.stringify(sheetSlug)} does not match any expanded job name for recipe card "${cardLabel}" (${groupId}) — known names: ${jobs.map((j) => j.name).join(", ")}`,
+      );
+    }
+    for (const job of jobsToRun) forcedNames.add(job.name);
+  }
+
+  const at = new Date().toISOString(); // ONE timestamp for the whole run — pack_run.at, every
+  // sheet's meta.pack.at, recipe.last_run.at, and the run group's name's <ts> all share it.
+  const paramsSnapshot = { ...recipe.params };
+  const gens = { codex: generateImageCodex, gemini: generateImageGemini, ...(generators || {}) };
+
+  let currentRunGroupId = runGroup ? runGroup.id : null;
+  const failed = []; // {sheet_axes, error}
+  const results = []; // {name, sheet_axes, status, elementId?, error?}
+  let finalProject = before;
+
+  for (let i = 0; i < jobsToRun.length; i += 1) {
+    const job = jobsToRun[i];
+    const jobSheetAxes = sheetAxesFromJob(job, varyAxis);
+    const forced = forcedNames.has(job.name);
+    const isLast = i === jobsToRun.length - 1;
+
+    // RESUME dedup: a sheet whose axes are already represented among the run group's minted
+    // sheet elements is SKIPPED (gen_batch's own skip-if-exists parity) — unless this exact job
+    // was explicitly forced via --sheet.
+    if (!forced && currentRunGroupId) {
+      const liveNow = getProject(root, projectId);
+      const already = (liveNow.elements || []).some(
+        (el) => el.groupId === currentRunGroupId && el.meta && el.meta.pack && el.meta.pack.cardId === groupId && axesEqual(el.meta.pack.sheet_axes, jobSheetAxes),
+      );
+      if (already) {
+        const sheetBefore = getProject(root, projectId);
+        const outcome = await commitPackSheetOutcome(root, projectId, {
+          groupId, sheetBefore, job, jobSheetAxes, mintPayload: null, currentRunGroupId, styleSnapshot, varyAxis, at,
+          failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "skipped", refSrcs, recipe, startedAt,
+        });
+        results.push(outcome.resultRow);
+        currentRunGroupId = outcome.targetGroupId;
+        finalProject = outcome.project;
+        continue;
+      }
+    }
+
+    const sheetBefore = getProject(root, projectId); // fresh snapshot right before the slow call
+    let bytes = null;
+    let genError = null;
+    try {
+      const generated = await gens.codex({ prompt: job.prompt, refPaths, params: recipe.params });
+      bytes = Buffer.isBuffer(generated) ? generated : readFileSync(generated);
+    } catch (error) {
+      genError = error;
+    }
+
+    if (genError) {
+      failed.push({ sheet_axes: jobSheetAxes, error: genError.message });
+      const outcome = await commitPackSheetOutcome(root, projectId, {
+        groupId, sheetBefore, job, jobSheetAxes, mintPayload: null, currentRunGroupId, styleSnapshot, varyAxis, at,
+        failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "failed", outcomeError: genError.message, refSrcs, recipe, startedAt,
+      });
+      results.push(outcome.resultRow);
+      currentRunGroupId = outcome.targetGroupId;
+      finalProject = outcome.project;
+      continue;
+    }
+
+    const meta = {
+      cardId: groupId,
+      at,
+      sheet_axes: jobSheetAxes,
+      cells: job.cells,
+      prompt_snapshot: job.prompt,
+      refs_snapshot: refSrcs,
+      params_snapshot: paramsSnapshot,
+      ...(styleSnapshot ? { style_snapshot: styleSnapshot } : {}),
+    };
+    const outcome = await commitPackSheetOutcome(root, projectId, {
+      groupId, sheetBefore, job, jobSheetAxes, mintPayload: { bytes, meta }, currentRunGroupId, styleSnapshot, varyAxis, at,
+      failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "ok", refSrcs, recipe, startedAt, forced,
+    });
+    results.push(outcome.resultRow);
+    currentRunGroupId = outcome.targetGroupId;
+    finalProject = outcome.project;
+  }
+
+  const finalGroup = (finalProject.groups || []).find((g) => g.id === groupId);
+  return {
+    project: finalProject,
+    group: finalGroup,
+    run_group_id: currentRunGroupId,
+    results,
+    failed,
+    last_run: finalGroup ? finalGroup.recipe.last_run : null,
+  };
 }
 
 // ---- animation card (T0265 increment 1, video route) --------------------------
@@ -4153,6 +4996,7 @@ export function historyEntryLabel(op, args = {}) {
     case "createGroup": return { label: "Group", summary: String(a.name || "") };
     case "patchGroup": return { label: "Edit group", summary: "" };
     case "patchGroups": return { label: "Edit groups", summary: plural(items(a.groupIds), "group") };
+    case "migrateScreenFlags": return { label: "Migrate screen flags", summary: a.count ? plural(count(a.count), "group") : "" };
     case "deleteGroup": return { label: "Delete group", summary: "" };
     case "assignToGroup": return { label: "Move to group", summary: "" };
     case "fitGroup": return { label: "Fit group", summary: "" };
@@ -4162,6 +5006,7 @@ export function historyEntryLabel(op, args = {}) {
     case "createRecipeCard": return { label: "Recipe card", summary: String(a.name || "") };
     case "patchRecipe": return { label: "Edit recipe", summary: "" };
     case "generateFromRecipe": return { label: "Generate from recipe", summary: String(a.engine || "") };
+    case "generateRecipePackSheet": return { label: "Generate pack sheet", summary: String(a.sheet || "") };
     case "createStyleCard": return { label: "Style card", summary: String(a.name || "") };
     case "patchStyle": return { label: "Edit style", summary: "" };
     case "createAnimCard": return { label: a.memberId ? "Anim card from image" : "Anim card", summary: String(a.name || "") };
@@ -4430,7 +5275,20 @@ export async function detectRegions(root, { projectId, elementId, params = {} } 
 // slice is ours. Per-region spec entries are objects carrying the rect and, for a
 // polygonal region, its vertex ring (the crop tool then alpha-masks outside it);
 // mixed rect + polygon sets stay one spawn.
-export async function sliceRegions(root, { projectId, elementId, regionIds } = {}) {
+//
+// Two optional opts (T0332 B3, packSlice — build-spec §4), both additive/backward-
+// compatible (absent -> today's exact behavior): `perRegionMeta` is an array of plain
+// objects, ONE per SELECTED region (same order — see below), shallow-merged onto each
+// crop's stored `meta` ALONGSIDE the existing `parent` provenance (never replacing it —
+// packSlice's own minimal `{pack: {...}}` entries ride here); `targetParentId` is an
+// existing group id that becomes the minted slices-group's parent (packSlice: the pack
+// run group), or — when the slice is a SINGLE crop with no wrapper group (T0246) — the
+// lone crop's own groupId directly, so a 1-cell pack sheet still lands inside the run
+// group. Order stability: crop_regions.py's own report preserves `spec.regions` order
+// (its `enumerate` never reorders), and `spec.regions` is built from `selected` in order,
+// so `selected[i]` <-> `created[i]` is a stable identity — perRegionMeta[i] belongs to
+// created[i].
+export async function sliceRegions(root, { projectId, elementId, regionIds, perRegionMeta, targetParentId } = {}) {
   if (!projectId) throw new Error("sliceRegions requires projectId");
   if (!elementId) throw new Error("sliceRegions requires elementId");
   const startedAt = performance.now();
@@ -4453,6 +5311,17 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
     if (missing.length) throw new Error(`unknown region id(s): ${missing.join(", ")}`);
   }
   if (!selected.length) throw new Error("no regions selected to slice");
+
+  // Validate both new opts loudly, BEFORE any python spawn (same "fail before work" law
+  // every other loud check in this op already follows).
+  if (perRegionMeta !== undefined && (!Array.isArray(perRegionMeta) || perRegionMeta.length !== selected.length)) {
+    throw new Error(
+      `sliceRegions: perRegionMeta must be an array aligned with the ${selected.length} selected region(s), got ${Array.isArray(perRegionMeta) ? `${perRegionMeta.length} entries` : typeof perRegionMeta}`,
+    );
+  }
+  if (targetParentId !== undefined && targetParentId !== null) {
+    findGroup(before, targetParentId); // loud "group not found" on an unknown id
+  }
 
   const sourceAbs = resolveProjectFile(root, projectId, parent.src);
   const workDir = mkdtempSync(join(tmpdir(), "canvas-slice-"));
@@ -4526,6 +5395,7 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
   // grid spot. Same journal entry either way: one undo removes the group (when present)
   // AND every crop together.
   let group = null;
+  const targetParentScope = targetParentId != null ? String(targetParentId) : null;
   if (created.length > 1) {
     const pad = 24;
     const { minX, minY, maxX, maxY } = elementsBBox(created);
@@ -4538,12 +5408,21 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
       h: maxY - minY + pad * 2,
       visible: true,
     };
-    // Top-level slices group: front order keeps an explicitly-ordered root explicit
-    // (no-op on a never-reordered root). The crops sit in the group's own fresh scope.
-    const sliceGroupFront = frontOrder(before, null);
+    // targetParentId (T0332 B3): nest the fresh slices-group under the caller's group
+    // (packSlice: the pack run group) instead of leaving it top-level.
+    if (targetParentScope != null) group.parentId = targetParentScope;
+    // Front order keeps an explicitly-ordered destination scope explicit (no-op on a
+    // never-reordered scope). The crops sit in the group's own fresh scope either way.
+    const sliceGroupFront = frontOrder(before, targetParentScope);
     if (sliceGroupFront !== null) group.order = sliceGroupFront;
   }
   const createdIds = new Set(created.map((element) => element.id));
+  // perRegionMeta[i] belongs to created[i] (see the doc comment above for why that index
+  // alignment holds) — mapped here so the final element patch below can merge it in.
+  const metaByCreatedId = new Map();
+  if (perRegionMeta !== undefined) {
+    created.forEach((element, index) => metaByCreatedId.set(element.id, perRegionMeta[index]));
+  }
 
   const run = {
     id: `run_${randomUUID().slice(0, 8)}`,
@@ -4556,11 +5435,17 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
   const current = getProject(root, projectId);
   const withRun = updateProject(root, projectId, {
     groups: group ? [...groupsOf(current), group] : groupsOf(current),
-    elements: group
-      ? (current.elements || []).map((element) =>
-          createdIds.has(element.id) ? { ...element, groupId: group.id } : element,
-        )
-      : current.elements || [],
+    elements: (current.elements || []).map((element) => {
+      if (!createdIds.has(element.id)) return element;
+      let next = element;
+      if (group) next = { ...next, groupId: group.id };
+      // No wrapper group (single crop, T0246) but a targetParentId was given: land the
+      // lone crop directly in that group (packSlice's 1-cell-sheet edge case) instead of
+      // leaving it loose — absent targetParentId, this is a no-op (today's behavior).
+      else if (targetParentScope != null) next = { ...next, groupId: targetParentScope };
+      if (metaByCreatedId.has(element.id)) next = { ...next, meta: { ...(next.meta || {}), ...metaByCreatedId.get(element.id) } };
+      return next;
+    }),
     tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
   });
   const project = commitMutation(root, projectId, {
@@ -4585,6 +5470,125 @@ export async function sliceRegions(root, { projectId, elementId, regionIds } = {
     run,
     regions: selected,
   };
+}
+
+// ---- packSlice (T0332 B3: slice every sheet of a pack run) --------------------------
+
+// The pack-mode counterpart to a manual detect+slice: for EVERY sheet element of a pack
+// run (build-spec §4), detect its regions, gate the count against the sheet's own
+// manifest (`meta.pack.cells`), and — only on a match — slice it, reparenting the fresh
+// cuts into the run group with a MINIMAL per-cut meta (`meta.pack = {cardId,
+// sheet_element_id, cell, axes}` — the full manifest/prompt stay on the sheet, the
+// provenance anchor; duplicating them onto every cut would balloon a 21-cut pack to
+// 100+KB of repeated JSON). Never throws mid-loop: every sheet lands in the returned
+// per-sheet contract with its own verdict, so a rejected/errored sheet never blocks its
+// siblings (build-spec: "остальные режутся"/"never throws mid-loop").
+//
+// Verdict meanings (the build-spec's prose only names the count gate explicitly as
+// REJECT; MISSING is this implementation's own, clearly-scoped reading, called out here
+// since the spec text does not fully enumerate it):
+//   - "OK": detection ran AND region_count === cells_len -> sliced; cut_ids populated.
+//   - "REJECT": detection ran but region_count !== cells_len (the build-spec's hard
+//     count gate) — including zero regions detected. `region_count`/`cells_len` ARE the
+//     got/expected pair the build-spec requires ("REJECT обязан называть got/expected").
+//   - "MISSING": the sheet's own data could not even be turned into a verdict — detection
+//     itself threw (unreadable/corrupt image, a rotated/transformed sheet, element
+//     deleted mid-run, an image-tools pipeline error) or a post-gate slice unexpectedly
+//     failed. `region_count`/`cut_ids` are 0/[] since neither ran to completion.
+// A sheet element is identified by carrying `meta.pack.cells` (an ARRAY — the full
+// manifest) as opposed to a CUT's own `meta.pack.cell` (singular) after a prior
+// packSlice run — this positively distinguishes "a sheet still to slice" from "a cut
+// already sliced" even in the single-cut-no-wrapper edge case (T0246), where a cut can
+// land directly in the run group next to sheets.
+export async function packSlice(root, { projectId, groupId, runGroupId } = {}) {
+  if (!projectId) throw new Error("packSlice requires projectId");
+  if (!groupId) throw new Error("packSlice requires groupId");
+  const project = getProject(root, projectId);
+  const card = findGroup(project, groupId); // loud "group not found" on an unknown id
+  if (!card.recipe || typeof card.recipe !== "object") {
+    throw new Error(`group is not a recipe card (no recipe blob): ${groupId}`);
+  }
+
+  // Resolve the run group: an explicit --run MUST carry a pack_run marker for THIS card
+  // (same validation generateFromRecipe's own --run resume path uses); omitted resolves
+  // recipe.last_run.run_group_id (the most recent run), loud if that is unset or dangling.
+  let resolvedRunGroupId = runGroupId;
+  if (resolvedRunGroupId) {
+    const runGroup = (project.groups || []).find((g) => g.id === resolvedRunGroupId);
+    if (!runGroup || !runGroup.pack_run || typeof runGroup.pack_run !== "object") {
+      throw new Error(`packSlice: run group not found or does not carry a pack_run marker: ${resolvedRunGroupId}`);
+    }
+    if (runGroup.pack_run.cardId !== groupId) {
+      throw new Error(
+        `packSlice: run group ${resolvedRunGroupId} belongs to a different recipe card (${runGroup.pack_run.cardId}), not this card (${groupId})`,
+      );
+    }
+  } else {
+    resolvedRunGroupId = card.recipe.last_run && card.recipe.last_run.run_group_id;
+    if (!resolvedRunGroupId) {
+      throw new Error(`packSlice: recipe card "${card.name || groupId}" (${groupId}) has no last_run.run_group_id — generate a pack run first, or pass --run`);
+    }
+    const runGroup = (project.groups || []).find((g) => g.id === resolvedRunGroupId);
+    if (!runGroup || !runGroup.pack_run || typeof runGroup.pack_run !== "object") {
+      throw new Error(`packSlice: last_run.run_group_id ${resolvedRunGroupId} does not resolve to a pack_run group (was it deleted?)`);
+    }
+  }
+
+  const sheetElements = (project.elements || []).filter(
+    (el) => el.groupId === resolvedRunGroupId && el.meta && el.meta.pack && Array.isArray(el.meta.pack.cells),
+  );
+  if (!sheetElements.length) {
+    throw new Error(`packSlice: run group ${resolvedRunGroupId} has no sheet elements (meta.pack with a cells manifest) to slice`);
+  }
+
+  const contract = [];
+  for (const sheet of sheetElements) {
+    const cells = sheet.meta.pack.cells;
+    let detected;
+    try {
+      detected = await detectRegions(root, { projectId, elementId: sheet.id });
+    } catch {
+      // Detection itself could not run to completion for this sheet — MISSING (see the
+      // doc comment above). The next sheet is still attempted (never throws mid-loop).
+      contract.push({ sheet_element_id: sheet.id, verdict: "MISSING", region_count: 0, cells_len: cells.length, cut_ids: [] });
+      continue;
+    }
+    const regionCount = (detected.regions || []).length;
+    if (regionCount !== cells.length) {
+      // The build-spec's hard count gate, named REJECT regardless of WHY the counts
+      // differ (0 detected is as much a mismatch as too many/too few).
+      contract.push({ sheet_element_id: sheet.id, verdict: "REJECT", region_count: regionCount, cells_len: cells.length, cut_ids: [] });
+      continue;
+    }
+    try {
+      // cells[i] <-> the i-th detected region, ROW-MAJOR (build-spec: expand_jobs.py
+      // already emits `cells` in row-major cell order; the region detector's own
+      // left-to-right/top-to-bottom scan order is assumed to line up — an accepted v1
+      // approximation, not re-litigated here).
+      const perRegionMeta = cells.map((cell) => ({
+        pack: { cardId: groupId, sheet_element_id: sheet.id, cell: cell.cell, axes: cell.axes },
+      }));
+      const sliced = await sliceRegions(root, {
+        projectId,
+        elementId: sheet.id,
+        perRegionMeta,
+        targetParentId: resolvedRunGroupId,
+      });
+      contract.push({
+        sheet_element_id: sheet.id,
+        verdict: "OK",
+        region_count: regionCount,
+        cells_len: cells.length,
+        cut_ids: sliced.created.map((el) => el.id),
+      });
+    } catch {
+      // Detection matched but slicing itself failed (e.g. a crop_regions.py spawn
+      // error) — the sheet's data could not be turned into cuts, so MISSING, not
+      // REJECT (which is reserved for the count gate specifically).
+      contract.push({ sheet_element_id: sheet.id, verdict: "MISSING", region_count: regionCount, cells_len: cells.length, cut_ids: [] });
+    }
+  }
+  return { contract, run_group_id: resolvedRunGroupId };
 }
 
 // ---- alphaCutout (own alpha tool) --------------------------------------------
@@ -6336,21 +7340,28 @@ export async function renderGroup(root, { projectId, groupId, scale, background 
 
 // ---- exportProject (no selection -> export every screen) ---------------------
 
-// Project-level export used when nothing is selected: render every visible TOP-LEVEL
-// group (screen) at its own default 1x png into ONE <project>/export/<utc-stamp>/
-// folder plus a combined manifest. A nested group is a component INSIDE its root
-// screen (composited by compositeGroup's recursion), never a separate screen, so only
-// parentId-less groups are exported here. A recipe card (`group.recipe`, T0239) or a
-// style card (`group.style`, T0239 increment 3) is a workshop object, not a screen, so
-// both are excluded here too. Like the other export ops it makes no project mutation,
-// so it is NOT journaled; it records one export_project tool_runs entry.
+// Project-level export used when nothing is selected: render every EXPLICITLY-FLAGGED
+// (`group.screen === true`) TOP-LEVEL group at its own default 1x png into ONE
+// <project>/export/<utc-stamp>/ folder plus a combined manifest. A nested group is a
+// component INSIDE its root screen (composited by compositeGroup's recursion), never a
+// separate screen, so only parentId-less groups are considered at all here. T0332 B1
+// (lead 2026-07-07, "ЭКСПОРТ — ИНВЕРСИЯ НА OPT-IN"): a group is a screen ONLY when the
+// lead explicitly ticks it — `screen` is absent by default (patchGroup/group-set), so a
+// freshly created top-level group does NOT export until flagged. This REPLACES the old
+// implicit rule ("every visible top-level group except a recipe/style card"); there is no
+// special-case skip for `group.recipe`/`group.style`/`group.pack_run` any more — they are
+// simply never auto-flagged (createRecipeCard/createStyleCard/the pack-run mint never set
+// `screen`), so they stay unflagged BY CONSTRUCTION, same as any other group the lead never
+// ticked. An EXISTING project migrates via tools/migrate_screen_flags.mjs (one-shot,
+// preserves today's export set). Like the other export ops it makes no project mutation, so
+// it is NOT journaled; it records one export_project tool_runs entry.
 export async function exportProject(root, { projectId } = {}) {
   if (!projectId) throw new Error("exportProject requires projectId");
   const project = getProject(root, projectId);
   const visibleGroups = groupsOf(project).filter(
-    (group) => group.parentId == null && group.visible !== false && !group.recipe && !group.style && !group.anim,
+    (group) => group.parentId == null && group.visible !== false && group.screen === true,
   );
-  if (!visibleGroups.length) throw new Error("no visible screens to export (project export renders every visible top-level group)");
+  if (!visibleGroups.length) throw new Error("no visible screens to export (project export renders every screen-flagged top-level group)");
 
   const stamp = new Date().toISOString().replace(/[:.]/g, "-");
   const folder = resolveProjectPath(root, projectId, "export", stamp);

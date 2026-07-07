@@ -172,10 +172,10 @@ Every capability is one op in `ops.mjs`:
   upload + detect pipeline, stores `element.regions` (and backfills
   `source_w`/`source_h`), records a `tool_runs` entry — journaled. Requires Python
   (numpy + Pillow), as the rest of the image tools pipeline.
-- `sliceRegions({ projectId, elementId, regionIds? })` — crops the element's
-  **stored** regions into new immutable content-addressed image elements, cropping
-  each region's rect **verbatim** from the element's own pixels (so moved, resized,
-  and hand-drawn regions all crop exactly where they sit). Requires
+- `sliceRegions({ projectId, elementId, regionIds?, perRegionMeta?, targetParentId? })` —
+  crops the element's **stored** regions into new immutable content-addressed image
+  elements, cropping each region's rect **verbatim** from the element's own pixels (so
+  moved, resized, and hand-drawn regions all crop exactly where they sit). Requires
   `element.regions` (errors clearly otherwise). Default: all regions. Each crop is
   a new image element named `<parent-name>#<region-id>`, placed in a grid to the
   right of the parent (16px gap in source pixels), with `meta.parent =
@@ -183,7 +183,28 @@ Every capability is one op in `ops.mjs`:
   `"<sheet name> slices"` group so a big slice never dumps N loose elements onto
   the scene. One journal entry per slice (undo removes the group and every
   created crop) plus a `slice_regions` `tool_runs` entry. Requires Python
-  (Pillow) via our own `tools/crop_regions.py`.
+  (Pillow) via our own `tools/crop_regions.py`. T0332 B3: two additional, optional,
+  backward-compatible opts (both absent = today's exact behavior) — `perRegionMeta` is an
+  array of plain objects, ONE per selected region in order, shallow-merged onto each
+  crop's `meta` **alongside** `meta.parent` (never replacing it); `targetParentId` nests
+  the fresh slices-group under an existing group (or, for a single-crop slice with no
+  wrapper group, the lone crop's own `groupId` directly). Used by `packSlice` below.
+- `packSlice({ projectId, groupId, runGroupId? })` — slice EVERY sheet of a pack run
+  (a recipe card's `group.recipe.pack` result) into cuts: for each sheet element
+  (`meta.pack` carrying the full `cells` manifest) in the resolved run group,
+  `detectRegions` then a **hard gate** `region_count === cells.length` — a mismatch
+  REJECTs that one sheet (siblings still slice); on a match, `sliceRegions` mints the
+  cuts with a **minimal** per-cut `meta.pack = {cardId, sheet_element_id, cell, axes}`
+  (the full manifest/prompt stay on the sheet — the provenance anchor) and reparents the
+  fresh slices-group into the run group. `runGroupId` (`--run`) selects an explicit run
+  group (must carry `pack_run` for this card); omitted resolves
+  `recipe.last_run.run_group_id`. Never throws mid-sheet: returns a per-sheet contract
+  `[{sheet_element_id, verdict: "OK"|"REJECT"|"MISSING", region_count, cells_len,
+  cut_ids}]` — `MISSING` covers a sheet whose detection could not even run (unreadable
+  image, transformed element, tool crash), `REJECT` is the count-gate mismatch (got/
+  expected = `region_count`/`cells_len`). One `detectRegions` + (on a match) one `slice`
+  journal entry per sheet, same as calling them by hand. CLI: `recipe-pack-slice <id>
+  --group g [--run <groupId>]`.
 - `alphaCutout({ projectId, elementId, method?, regions? })` — run the element's
   **current** pixels through the image-tools matte pipeline and **swap the element to a
   NEW content-addressed alpha PNG** in ONE journaled entry (undo restores the previous
@@ -312,12 +333,19 @@ Every capability is one op in `ops.mjs`:
   the produced file names; loud on a bad stamp / corrupt manifest / missing file. Backs the
   page's multi-output save dialog (served over `GET export-zip/<stamp>`) and the CLI
   `--zip` flag. No project mutation.
-- `exportProject({ projectId })` — no-selection project export: composite **every
-  visible TOP-LEVEL group** (`parentId` null/absent) at its own default 1x png into ONE
-  `<project>/export/<utc-stamp>/` folder plus a combined manifest, reusing the
-  `renderGroup` compositor. A nested group is a **component inside its root screen**
-  (composited by the recursive painter), never a separate screen. Not journaled; records
-  an `export_project` `tool_runs` entry. Errors clearly when there are no visible screens.
+- `exportProject({ projectId })` — no-selection project export: composite every
+  **`screen:true`-flagged, visible, TOP-LEVEL group** (`parentId` null/absent) at its own
+  default 1x png into ONE `<project>/export/<utc-stamp>/` folder plus a combined manifest,
+  reusing the `renderGroup` compositor. A nested group is a **component inside its root
+  screen** (composited by the recursive painter), never a separate screen. T0332 B1
+  (export opt-in inversion, 2026-07-07): a group is a screen ONLY when explicitly ticked —
+  `group.screen` is absent by default (`patchGroup`/CLI `group-set --screen true|false`),
+  so a freshly created top-level group does NOT export until flagged. There is no special
+  recipe/style/pack_run skip any more; those groups simply never carry `screen` by
+  construction. An existing (pre-flip) project migrates via
+  `tools/migrate_screen_flags.mjs` (one-shot, dry-run by default; preserves that project's
+  exact export set). Not journaled; records an `export_project` `tool_runs` entry. Errors
+  clearly when there are no screen-flagged visible groups.
 - `resolveExportScale(token, srcW, srcH)` / `parseScaleSpec(token)` — the scale-token
   parser (exported for reuse/tests): a multiplier (`0.5x`/`1x`/`2x`/`3x`/`4x` or a
   bare `2`) or a fixed target dimension (`512w` = 512px wide, `512h` = 512px tall;
@@ -355,7 +383,7 @@ scope-crossing walk (render, move cascade, delete, visibility) is cycle-safe.
   `fromElements`, a missing `parentId` defaults to the members' **common** `groupId`
   (nest a widget group inside the screen it was built from), root when they differ. One
   journal entry.
-- `patchGroup({projectId, groupId, name?, x?, y?, w?, h?, visible?, background?, clip?})` —
+- `patchGroup({projectId, groupId, name?, x?, y?, w?, h?, visible?, background?, clip?, screen?})` —
   when `x`/`y` change, the group's **full descendant closure** translates by the same
   delta — nested subgroup frames AND every element in the subtree — atomically (one
   journal entry; undo restores the frame and the whole closure). Resize (`w`/`h`) never
@@ -364,7 +392,11 @@ scope-crossing walk (render, move cascade, delete, visibility) is cycle-safe.
   silent fallback). `None` on an already-unfilled group is a no-op. `clip` is the optional
   Figma-frame clip flag (see **Group clip** below): a real `true` clips the group's members
   to its bounds, `false` clears it (stored as an **absent** field, so `clip:false` on an
-  already-unclipped group is a no-op); any non-boolean is a loud error.
+  already-unclipped group is a no-op); any non-boolean is a loud error. `screen` (T0332
+  B1) is the **export opt-in flag**: `true` makes this top-level group an exportable
+  screen (`exportProject`/the page's Export-project count key off `screen === true`
+  alone); `false` clears it to an **absent** field, same convention as `clip` — a group is
+  never a screen until explicitly ticked (CLI `group-set --screen true|false`).
 - `fitGroup({projectId, groupId, padding?})` — Figma **"Resize to fit"**: set the group's
   frame to the union bounding box of its **full descendant closure** (every descendant
   element AND every nested subgroup frame — both carry `x/y/w/h`; reuses the same
@@ -563,11 +595,12 @@ mode).
   "expanded": null,              // last Expand-prompt output — increment 3
   "use_expanded": true,          // increment 2: generate sends `expanded` when present+enabled, else `prompt`
   "engine": "codex",             // "codex" | "gemini" | "both" (R2/R3) — which generator(s) a run uses
-  "params": {                    // advisory in v1; increment 2's generate op consumes size/quality/model
+  "params": {                    // bg_key/n_candidates/size/quality are PATCHABLE (T0332 v2); model/supersample stay immutable
     "size": "1024x1024", "quality": "high", "model": "gpt-image-2",
     "bg_key": "#ff00ff", "supersample": true, "n_candidates": 1
   },
-  "style_ref": null,             // reserved nullable by-id pointer to a STYLE CARD (R1) — increment 3
+  "style_ref": null,             // nullable by-id pointer to a STYLE CARD (group.style, minted via createStyleCard)
+  "pack": null,                  // T0332 v2: null = single-image Generate (unchanged); set = pack mode, see Pack mode below
   "last_run": null                // set by generateFromRecipe; null = "draft", non-null = "done"/"partial"
 }
 ```
@@ -578,8 +611,9 @@ failed/skipped but the other landed — see **Generation** below).
 
 Refs are **not** in `recipe` — they are the card's ordinary members (image elements with
 `groupId === cardId`), discovered at generate time (increment 2). A card is a **workshop
-object, not a screen**: `exportProject` skips top-level groups that carry `recipe` (they
-never appear in a "every visible screen" export run).
+object, not a screen**: `createRecipeCard` never sets `group.screen`, so it stays
+unflagged by construction (T0332 B1) — `exportProject`/the page's Export-project count
+key off `screen === true` alone, no recipe-aware special-casing needed.
 
 - `createRecipeCard({projectId, name?, x?, y?, w?, h?, parentId?})` — mint a card: a
   group with a fresh default `recipe` blob. Bounds are optional (unlike `createGroup`, a
@@ -688,6 +722,95 @@ The generator seam (`tools/recipe_generate.mjs`) is injectable per engine
 tests inject fakes, so codex/agy **never** spawn in the suite. Pure argv/instruction
 builders (`buildGenerateCommand`, `buildAgyInstruction`, `buildAgyCommand`) are exported
 and tested directly, no spawn.
+
+#### Pack mode (`recipe.pack`, T0332 v2)
+
+An optional `pack` field on the SAME recipe blob turns a plain single-image card into a
+multi-sheet **axis pack** — not a new card type. `pack: null` (default) keeps today's
+single-image Generate unchanged; a non-null `pack` switches Generate to a sheet-generation
+run instead. Everything else a pack needs already lives on the recipe: `prompt` is the
+subject template, sent to the expander **verbatim** (pack mode never reads
+`expanded`/`use_expanded` — a stale hand-edited expansion must never silently leak into an
+axes-driven sheet); `style_ref` supplies `style_prefix` **and** the style card's ref image
+through the SAME resolve the single-image branch uses (a style card's ref image reaches
+every sheet by construction, no separate pack-only path); member images are refs for every
+sheet. `engine` must be `"codex"` in v1 — gemini/both are a loud error, checked at
+preview/generate time, never at patch-time.
+
+```jsonc
+"pack": {
+  "v": 1,
+  "axes": { "grade": ["common", "rare", "epic"] },  // axisName -> non-empty string[]; key order preserved
+  "vary": "grade",                                   // must be a key of axes — the per-cell axis
+  "grid": [3, 3],                                     // [rows, cols], each 1..3
+  "max_jobs": 12                                      // loud cap — expand_jobs.py's own law
+}
+```
+
+`patchRecipe({patch:{pack}})` **replaces `recipe.pack` wholesale** — unlike every other
+recipe field (including `params`, see below), this is not a merge: `pack: null` turns pack
+mode off, a non-null value must carry all four fields. A caller that wants to change ONE
+field must read the CURRENT pack first and send the full object back; `recipe-set`'s pack
+flags (below) do this read-modify-write for you — a raw `patchRecipe` call does not.
+
+`params` (`bg_key`/`n_candidates`/`size`/`quality`) is **patchable**, not advisory or
+write-once-at-creation: `patchRecipe({patch:{params}})` merges a partial object one level
+deep onto the stored `recipe.params` — the opposite convention from `pack` above, a
+genuine partial patch. `model`/`supersample` stay immutable (a loud error, even set to
+their current value). Pack mode derives two of its own config fields from `params`, not
+from `pack` itself: `bg_key` must be **exactly** `#ff00ff` (magenta) or `#00ff00` (green) —
+any other hex is a loud error at preview/generate time, not patch-time (`params.bg_key`
+itself stays generic hex, since it also serves the single-image cutout path); `n_candidates`
+becomes the expander's `candidates` (overgen per sheet).
+
+Three CLI verbs (mirror `ops.mjs`'s `packPreview` / `generateFromRecipe`'s pack branch /
+`packSlice`):
+
+- `recipe-pack-preview <id> --group g` — **ephemeral**: not journaled, writes nothing to
+  the blob. Assembles the config and runs the REAL `expand_jobs.py` expander, printing the
+  sheet count, a `style_ref_image` flag, and every sheet's prompt. **Always run this before
+  generate** — it is the only honest preview of a cell's prompt (single-image Generate
+  builds its prompt a different way).
+- `recipe-pack-generate <id> --group g [--run <runGroupId>] [--sheet <slug>]` — the pack
+  branch of `generateFromRecipe`: real codex spawns, one PER SHEET, sequential (N ×
+  30-60s+ — pass `timeout=max`, not a short default). Each finished sheet mints under its
+  own short commit as soon as it lands, so a crash on sheet 3 never loses sheets 1-2.
+  `--run <runGroupId>` resumes into an existing pack run group: sheets whose `sheet_axes`
+  are already represented there are **skipped** (gen_batch's skip-if-exists parity).
+  `--sheet <slug>` force-regenerates exactly ONE sheet (by the expander's own job name)
+  into that same group even if already present — "one bad candidate out of 21 doesn't
+  repay for the whole pack".
+- `recipe-pack-slice <id> --group g [--run <runGroupId>]` — slice EVERY sheet of a run:
+  per sheet, `detectRegions` then a **hard gate** `region_count === cells.length` (a
+  mismatch REJECTs only that one sheet; siblings still slice), then `sliceRegions`
+  reparented into the run group. Never throws mid-run — returns a per-sheet contract
+  `[{sheet_element_id, verdict: "OK"|"REJECT"|"MISSING", region_count, cells_len,
+  cut_ids}]` (`REJECT` always names got/expected via `region_count`/`cells_len`; `MISSING`
+  = detection itself couldn't run — unreadable/rotated/deleted sheet). Omitted `--run`
+  resolves `recipe.last_run.run_group_id`.
+
+**Run groups.** The first successful sheet of a fresh run mints a plain group named
+`"<style card name | 'no-style'>/<vary> <ts>"` beside the card; later sheets land inside
+it. The group carries a `pack_run = {v:1, cardId, at}` marker — **provenance only**
+(resolves `--run`, gates the Slice verb) — it has no export role. `renderGroup` still
+works on it like any group; to have it show up in `exportProject`/the page's Export
+project you must explicitly tick `group.screen` (`group-set --screen true`, see **Groups
+= screens** above) — a pack run group is never auto-flagged as a screen.
+
+**Sheet = provenance anchor — do not delete sheets before cuts are promoted.** A sheet
+element carries the FULL manifest, `meta.pack = {cardId, at, sheet_axes, cells,
+prompt_snapshot, refs_snapshot, params_snapshot, style_snapshot?}`; a cut's own `meta.pack`
+after `recipe-pack-slice` is deliberately **minimal**, `{cardId, sheet_element_id, cell,
+axes}` — just its own cell plus a pointer back to the sheet. The prompt/refs/params/style
+for every cut on a sheet live ONLY on that sheet (duplicating them onto each cut would
+balloon a 21-cut pack into 100+KB of repeated JSON) — deleting a sheet orphans its cuts'
+provenance. Do **not rename** a sheet element before regen/slice either: a forced `--sheet`
+regen identifies its target by matching the expander's own job name against the sheet
+verbatim, so a renamed sheet silently stops being reachable by `--sheet`. **Regenerate
+REPLACES**, it does not duplicate: a forced `--sheet` regen removes the OLD sheet AND its
+own in-run slice subgroup (if `recipe-pack-slice` already cut it) from the run group, in the
+SAME commit as minting the fresh sheet — any cut already promoted/copied OUTSIDE the run
+group is untouched.
 
 ### Render contract
 

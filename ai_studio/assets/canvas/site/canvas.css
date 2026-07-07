@@ -2159,6 +2159,31 @@ body.layers-resizing {
   padding: 2px 2px 0;
 }
 
+/* Pack mode (T0332 v2 phase C): a monospace-ish axes JSON textarea, an inline parse/
+   validation error (red — axes JSON syntax errors, an off-pair bg_key), and an inline
+   banner (amber left border, like the toast-progress accent) for the "expanded is ignored
+   in pack mode" UX finding — never JUST a toast, both read while the section is open. */
+.insp-pack-axes {
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+}
+
+.insp-pack-error {
+  font-size: 11px;
+  color: var(--red);
+  padding: 2px 2px 6px;
+}
+
+.insp-pack-banner {
+  font-size: 11px;
+  color: var(--text);
+  background: rgba(215, 161, 74, 0.12);
+  border-left: 2px solid var(--amber);
+  border-radius: 4px;
+  padding: 6px 8px;
+  margin: 4px 0 8px;
+}
+
 .insp-region-empty {
   color: var(--muted);
   font-size: 12px;

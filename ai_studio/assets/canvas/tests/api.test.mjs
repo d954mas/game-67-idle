@@ -10,6 +10,12 @@ import { URL, fileURLToPath } from "node:url";
 import { createCanvasApi, statusForError } from "../api.mjs";
 import { orderedChildren } from "../tree.mjs";
 import { magentaSheetPng, solidPng } from "./png_fixture.mjs";
+// T0332 v2 phase C: the new pack routes' tests build their fixtures directly through ops.mjs
+// (a hand-built recipe card / pack run group) rather than through the HTTP layer itself, the
+// same "setup via the lower-level API, exercise the route under test" split pack.test.mjs's
+// own packSlice fixtures use (seedPackRun) — there is no PATCH route for element.meta, so a
+// sheet/cut fixture cannot be built through HTTP alone.
+import { addImage, createRecipeCard, getProject, updateProject } from "../ops.mjs";
 
 // Computed element paint order (back -> front) by name for a project scope — reorderNode
 // writes `order` fields, not the raw elements[] array, so tests assert the computed order.
@@ -409,6 +415,28 @@ test("canvas API PATCH group sets and clears the clip flag", async (t) => {
   const bad = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/groups/${groupId}`, { clip: "yes" });
   assert.equal(bad.status, 400);
   assert.match(bad.json().error, /clip must be a boolean/);
+});
+
+test("canvas API PATCH group sets and clears the screen (export opt-in) flag — T0332 B1", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Screen API" })).json().project.id;
+  const groupId = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/groups`, {
+    name: "Frame", x: 0, y: 0, w: 100, h: 100,
+  })).json().group.id;
+  assert.equal("screen" in (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project.groups[0], false, "absent by default");
+
+  const flagged = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/groups/${groupId}`, { screen: true });
+  assert.equal(flagged.status, 200);
+  assert.equal(flagged.json().group.screen, true);
+
+  const unflagged = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/groups/${groupId}`, { screen: false });
+  assert.equal("screen" in unflagged.json().group, false, "screen:false removes the field over HTTP too");
+
+  // Invalid screen is a loud 400 (no silent coercion).
+  const bad = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/groups/${groupId}`, { screen: "yes" });
+  assert.equal(bad.status, 400);
+  assert.match(bad.json().error, /screen must be a boolean/);
 });
 
 test("canvas API groups reparent route nests a group and rejects a cycle", async (t) => {
@@ -814,4 +842,173 @@ test("canvas API nodes-duplicate / nodes-paste / nodes-delete parity (one entry 
   await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/undo`);
   project = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
   assert.equal(project.elements.length, 3, "one undo restores the batched delete");
+});
+
+// ---- pack routes (T0332 v2 phase C: build_spec_pack_card_2026-07-07.md) --------------------
+//
+// packPreview/packSlice are NOT codex/agy seams (the real expand_jobs.py expander is offline/
+// deterministic/stdlib; region detection/crop_regions.py are the SAME pipeline plain detect-
+// regions/slice already exercise above) so these run for real and skip cleanly without the
+// studio venv, mirroring the existing "canvas API slice route" test's own skip pattern. The
+// plain generate route, by contrast, has NO existing HTTP-level test anywhere in this file (no
+// createCanvasApi seam exists to inject a fake generator over HTTP — only the ops-layer tests
+// in recipe.test.mjs/pack.test.mjs do that, by importing generateFromRecipe directly) — the
+// build-spec packet asking to "mirror the existing recipe-generate route test" did not find
+// one; there is none to mirror. The test below instead proves the route reads/forwards
+// body.sheetSlug WITHOUT ever reaching a real codex call, by tripping generatePackSheets' own
+// loud "--sheet does not match any expanded job" refusal (which fires strictly AFTER the real,
+// offline expander runs but BEFORE any codex spawn).
+
+test("canvas API POST recipe-cards/<gid>/pack-preview: ephemeral real-expander preview, never journals (skips without the studio venv)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(REPO_ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Pack Preview API" })).json().project.id;
+  const card = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards`, {})).json().group;
+  const patched = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/recipe-cards/${card.id}`, {
+    prompt: "a {material} generator building",
+    pack: {
+      axes: { grade: ["rusty", "plain", "gilded", "mythic"], material: ["stone", "wood"] },
+      vary: "grade",
+      grid: [2, 2],
+      max_jobs: 12,
+    },
+  });
+  assert.equal(patched.status, 200);
+  const beforeSeq = patched.json().project.history_seq;
+
+  const preview = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/${card.id}/pack-preview`, {});
+  if (preview.status !== 200) {
+    t.skip(`pack preview pipeline unavailable: ${preview.json().error}`);
+    return;
+  }
+  const result = preview.json();
+  assert.equal(result.sheets, 2, "2 material values (big axis) x 1 candidate = 2 sheets");
+  assert.equal(result.jobs.length, 2);
+  assert.equal("project" in result, false, "packPreview is ephemeral -- plain sendJson, not sendMutation");
+
+  const after = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
+  assert.equal(after.history_seq, beforeSeq, "pack-preview never journals/mutates the blob");
+});
+
+test("canvas API POST recipe-cards/<gid>/pack-slice: per-sheet contract, reparented cuts (skips without Python)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(REPO_ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Pack Slice API" })).json().project.id;
+  const { group: card } = createRecipeCard(REPO_ROOT, { projectId, name: "Card" });
+
+  // Hand-built pack run (mirrors pack.test.mjs's own seedPackRun) -- packSlice itself is what
+  // is under test here, not the expander/codex pipeline that would normally produce this.
+  const at = new Date().toISOString();
+  const before = getProject(REPO_ROOT, projectId);
+  const runGroup = {
+    id: `grp_run_${Math.random().toString(36).slice(2, 8)}`,
+    name: "Run", x: 0, y: 0, w: 100, h: 100, visible: true,
+    pack_run: { v: 1, cardId: card.id, at },
+  };
+  updateProject(REPO_ROOT, projectId, { groups: [...(before.groups || []), runGroup] });
+  const img = addImage(REPO_ROOT, projectId, { name: "sheet", bytes: magentaSheetPng(1) }).element;
+  updateProject(REPO_ROOT, projectId, {
+    elements: getProject(REPO_ROOT, projectId).elements.map((el) =>
+      el.id === img.id
+        ? {
+            ...el,
+            groupId: runGroup.id,
+            meta: {
+              pack: {
+                cardId: card.id,
+                at,
+                sheet_axes: {},
+                cells: [{ cell: [0, 0], axes: {} }, { cell: [0, 1], axes: {} }],
+                prompt_snapshot: "x",
+                refs_snapshot: [],
+                params_snapshot: {},
+              },
+            },
+          }
+        : el,
+    ),
+  });
+
+  const sliced = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/${card.id}/pack-slice`, {
+    runGroupId: runGroup.id,
+  });
+  if (sliced.status !== 200) {
+    t.skip(`region detector/crop pipeline unavailable: ${sliced.json().error}`);
+    return;
+  }
+  const result = sliced.json();
+  assert.equal(result.run_group_id, runGroup.id);
+  assert.equal(result.contract.length, 1);
+  assert.equal(result.contract[0].verdict, "OK");
+  assert.equal(result.contract[0].region_count, 2);
+  assert.equal(result.contract[0].cut_ids.length, 2);
+});
+
+test("canvas API POST recipe-cards/<gid>/generate forwards body.sheetSlug into the pack branch (loud before any codex call; skips without the studio venv)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(REPO_ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Pack Generate Route" })).json().project.id;
+  const card = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards`, {})).json().group;
+  await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/recipe-cards/${card.id}`, {
+    prompt: "a {material} generator building",
+    pack: {
+      axes: { grade: ["rusty", "plain", "gilded", "mythic"], material: ["stone", "wood"] },
+      vary: "grade",
+      grid: [2, 2],
+      max_jobs: 12,
+    },
+  });
+
+  // FIX 2 (deep-review поправка): body.sheetSlug with no explicit body.runGroupId resolves
+  // recipe.last_run.run_group_id, loud if there is none ("no silent new-group fork"). Seed a
+  // resolvable prior run directly through ops.mjs (mirrors the pack-slice API test's own
+  // hand-built run group above) so this test still proves what it always proved -- the route
+  // forwards sheetSlug into the pack branch and trips the real expander's own "no such job
+  // name" refusal, not something new about missing runs (that path has its own coverage in
+  // pack.test.mjs).
+  const at = new Date().toISOString();
+  const before = getProject(REPO_ROOT, projectId);
+  const runGroup = {
+    id: `grp_run_${Math.random().toString(36).slice(2, 8)}`,
+    name: "Run", x: 0, y: 0, w: 100, h: 100, visible: true,
+    pack_run: { v: 1, cardId: card.id, at },
+  };
+  updateProject(REPO_ROOT, projectId, {
+    groups: [...(before.groups || []), runGroup].map((g) =>
+      g.id === card.id ? { ...g, recipe: { ...g.recipe, last_run: { at, verdict: "ok", run_group_id: runGroup.id, failed: [] } } } : g,
+    ),
+  });
+
+  const result = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/${card.id}/generate`, {
+    sheetSlug: "no-such-sheet",
+  });
+  const errorMessage = (result.json() && result.json().error) || "";
+  if (result.status === 500 || /venv|interpreter|setup_python|No module|ModuleNotFound/i.test(errorMessage)) {
+    t.skip(`pack expander pipeline unavailable: ${errorMessage}`);
+    return;
+  }
+  assert.equal(result.status, 400);
+  assert.match(errorMessage, /--sheet "no-such-sheet" does not match any expanded job name/);
+});
+
+test("canvas API POST recipe-cards/<gid>/generate: body.sheetSlug with no prior pack run at all is loud (FIX 2 -- no silent new-group fork)", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(REPO_ROOT);
+  const projectId = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Pack Generate Route No Run" })).json().project.id;
+  const card = (await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards`, {})).json().group;
+  await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}/recipe-cards/${card.id}`, {
+    prompt: "a {material} generator building",
+    pack: {
+      axes: { grade: ["rusty", "plain", "gilded", "mythic"], material: ["stone", "wood"] },
+      vary: "grade",
+      grid: [2, 2],
+      max_jobs: 12,
+    },
+  });
+
+  const result = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/${card.id}/generate`, {
+    sheetSlug: "whatever",
+  });
+  assert.equal(result.status, 400);
+  assert.match(result.json().error, /--sheet requires an existing pack run/);
 });

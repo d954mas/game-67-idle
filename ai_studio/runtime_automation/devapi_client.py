@@ -633,6 +633,33 @@ def connect_existing(
     return None
 
 
+def stop_game_process(proc: subprocess.Popen, graceful_timeout: float = 10.0) -> None:
+    """Stop the game so main() teardown actually runs (final analytics flush,
+    save flush). TerminateProcess skips teardown entirely, so first ask the
+    window to close (taskkill without /F posts WM_CLOSE -> the engine exits
+    its app loop cleanly), then escalate: terminate -> kill."""
+    if proc.poll() is not None:
+        return
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(proc.pid)],
+                capture_output=True,
+                timeout=5,
+                check=False,
+            )
+            proc.wait(timeout=graceful_timeout)
+            return
+        except (subprocess.TimeoutExpired, OSError):
+            pass  # window gone/hung or taskkill unavailable -> escalate
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=5)
+
+
 @contextmanager
 def running_game(
     port: int | None = None,
@@ -690,12 +717,7 @@ def running_game(
     if client is None:
         detail = format_launch_log_tail(launch_log_path, lines=120)
         if proc is not None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=3)
+            stop_game_process(proc, graceful_timeout=3.0)
         if launch_log is not None:
             launch_log.close()
         raise DevApiError("no devapi connection\n" + detail)
@@ -708,11 +730,6 @@ def running_game(
     finally:
         client.close()
         if proc is not None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                proc.wait(timeout=5)
+            stop_game_process(proc)
         if launch_log is not None:
             launch_log.close()

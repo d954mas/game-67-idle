@@ -10,7 +10,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { addImage, createProject, detectRegions, getProject, resolveProjectFile, setRegions, sliceRegions, undoOp } from "../ops.mjs";
+import { addImage, createGroup, createProject, detectRegions, getProject, resolveProjectFile, setRegions, sliceRegions, undoOp } from "../ops.mjs";
 import { decodePng, magentaSheetPng } from "./png_fixture.mjs";
 
 // raster2d runs Python with cwd = repo root and writes its session under
@@ -247,4 +247,86 @@ test("sliceRegions errors clearly when the element has no regions", (t) => {
     () => sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id }),
     /has no regions; run detectRegions first/,
   );
+});
+
+// ---- sliceRegions opts: perRegionMeta + targetParentId (T0332 B3, packSlice) --------
+
+test("sliceRegions: perRegionMeta merges onto each crop's meta (index-aligned with detected regions), targetParentId nests the slices-group; BOTH opts absent is byte-identical to today's behavior", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Slice opts" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
+  const runGroup = createGroup(REPO_ROOT, { projectId: project.id, name: "Run", x: 500, y: 0, w: 40, h: 40 }).group;
+
+  let detected;
+  try {
+    detected = await detectRegions(REPO_ROOT, { projectId: project.id, elementId: element.id });
+  } catch (error) {
+    t.skip(`raster2d/python pipeline unavailable: ${error.message}`);
+    return;
+  }
+  assert.equal(detected.regions.length, 2, "precondition: magentaSheetPng's two blobs both detect");
+
+  // perRegionMeta[i] <-> the i-th detected region (index-aligned, not id-aligned) —
+  // arbitrary extra fields, not just packSlice's own {pack:{...}} shape (sliceRegions
+  // itself is pack-agnostic).
+  const perRegionMeta = [{ tag: "first" }, { tag: "second" }];
+  let sliced;
+  try {
+    sliced = await sliceRegions(REPO_ROOT, {
+      projectId: project.id,
+      elementId: element.id,
+      perRegionMeta,
+      targetParentId: runGroup.id,
+    });
+  } catch (error) {
+    t.skip(`raster2d/python slicing unavailable: ${error.message}`);
+    return;
+  }
+
+  assert.equal(sliced.created.length, 2);
+  assert.equal(sliced.created[0].meta.tag, "first");
+  assert.equal(sliced.created[1].meta.tag, "second");
+  // The `parent` provenance is ADDITIVE, not replaced by perRegionMeta.
+  assert.equal(sliced.created[0].meta.parent.elementId, element.id);
+  assert.equal(sliced.created[1].meta.parent.elementId, element.id);
+
+  // targetParentId nests the fresh slices-group under the run group (not top-level).
+  assert.ok(sliced.group, "two crops still mint a wrapper group");
+  assert.equal(sliced.group.parentId, runGroup.id);
+
+  // An unknown targetParentId is a loud "group not found", same as any other group ref,
+  // BEFORE any python spawn (a fresh detect is not needed to prove this — same element,
+  // same stored regions).
+  await assert.rejects(
+    () => sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id, targetParentId: "grp_missing" }),
+    /group not found/,
+  );
+  // perRegionMeta with the wrong length is loud too.
+  await assert.rejects(
+    () => sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id, perRegionMeta: [{ tag: "only-one" }] }),
+    /perRegionMeta must be an array aligned with the 2 selected region/,
+  );
+});
+
+test("sliceRegions: targetParentId on a SINGLE-crop slice (no wrapper group, T0246) lands the lone crop directly in that group", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Slice opts single" });
+  const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
+  const runGroup = createGroup(REPO_ROOT, { projectId: project.id, name: "Run", x: 500, y: 0, w: 40, h: 40 }).group;
+  setRegions(REPO_ROOT, {
+    projectId: project.id,
+    elementId: element.id,
+    regions: [{ id: "only", name: "Hero", rect: [8, 8, 20, 20] }],
+  });
+
+  let sliced;
+  try {
+    sliced = await sliceRegions(REPO_ROOT, { projectId: project.id, elementId: element.id, targetParentId: runGroup.id });
+  } catch (error) {
+    t.skip(`crop_regions.py / PIL unavailable: ${error.message}`);
+    return;
+  }
+  assert.equal(sliced.created.length, 1);
+  assert.equal(sliced.group, null, "still no wrapper group for a single crop");
+  assert.equal(sliced.created[0].groupId, runGroup.id, "the lone crop lands directly in the target group");
 });

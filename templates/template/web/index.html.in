@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@GAME_TITLE@</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #0d0b09; overflow: hidden; }
+  canvas { display: block; width: 100vw; height: 100vh; outline: none; }
+  #status { position: absolute; top: 50%; left: 0; right: 0; text-align: center;
+            color: #b8a68a; font: 16px sans-serif; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="status">Loading…</div>
+<canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
+<script>
+  var statusEl = document.getElementById('status');
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    @GAME_DEVAPI_MODULE_ARGS@
+    onRuntimeInitialized: function () { statusEl.style.display = 'none'; },
+    setStatus: function (t) { if (statusEl && t) statusEl.textContent = t; }
+  };
+</script>
+<script src="game.js"></script>
+</body>
+</html>

@@ -45,3 +45,9 @@ load errors were visible in the browser console — catchable automatically.
 - 2026-07-06: created from VibeJam retro walkthrough (plan item 1 + template
   parity directive). CMake wasm flags + glad/stb guard already ported; native
   template build verified, emscripten build NOT yet verified.
+
+- 2026-07-07: T0333 (613afce55) забрал себе общий фундамент: сборка+копия
+  пака = templates/template/tools/build_web.sh (package_web.sh здесь должен
+  его ВЫЗЫВАТЬ и добавлять только zip), сервер = tools/serve_web.mjs
+  (web-load-smoke строить поверх него), туда же передан debug.html
+  (диагностический шелл). Не пере-реализовывать build+copy в package_web.sh.

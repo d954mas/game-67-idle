@@ -291,7 +291,10 @@ test("renderGroup prunes a hidden nested subtree (skips without Python)", async 
 
 test("exportProject renders only top-level groups; a nested group is not a separate screen (skips without Python)", async (t) => {
   tempProjects(t);
-  const { projectId } = seedNested(REPO_ROOT); // outer (top-level) + inner (nested)
+  const { projectId, outer } = seedNested(REPO_ROOT); // outer (top-level) + inner (nested)
+  // T0332 B1: the export opt-in flag — seedNested's plain groups carry no screen by
+  // default, so the outer screen must be ticked explicitly for this export to find it.
+  patchGroup(REPO_ROOT, { projectId, groupId: outer.id, screen: true });
   let result;
   try {
     result = await exportProject(REPO_ROOT, { projectId });
@@ -318,6 +321,10 @@ test("a v1-shaped project (no parentId) treats every group as a top-level screen
   assignToGroup(REPO_ROOT, { projectId, elementIds: [b.id], groupId: g2.id });
   assert.equal(g1.parentId, undefined);
   assert.equal(g2.parentId, undefined);
+  // T0332 B1: screen:true is orthogonal to top-level-ness — flag both so this test still
+  // exercises its own point (parentId-less v1 groups both count as top-level candidates).
+  patchGroup(REPO_ROOT, { projectId, groupId: g1.id, screen: true });
+  patchGroup(REPO_ROOT, { projectId, groupId: g2.id, screen: true });
 
   let result;
   try {

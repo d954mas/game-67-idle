@@ -39,11 +39,11 @@
 //   node ai_studio/assets/canvas/cli.mjs filters-bake <id> --elements e1,e2   (batch; one undo)
 //   node ai_studio/assets/canvas/cli.mjs add-image-from-file <id> --src files/<hash>.png [--name X] [--x n --y n]   (mint an element from an EXISTING project file, no re-upload)
 //   node ai_studio/assets/canvas/cli.mjs export-set <id> --element <eid> --json rows.json | --scale 2x [--format --quality --resample --base]
-//   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --resample --base] [--to <dir>] [--zip <path>]
+//   node ai_studio/assets/canvas/cli.mjs export <id> --elements e1,e2 | --all | --project [--scale --format --quality --resample --base] [--to <dir>] [--zip <path>]   (--project: T0332 B1 — exports only top-level groups with the explicit screen:true flag; group-set --screen sets it)
 //   node ai_studio/assets/canvas/cli.mjs group-create <id> --name X [--elements e1,e2 | --x --y --w --h] [--parent <gid>|none]
 //   node ai_studio/assets/canvas/cli.mjs group-reparent <id> --group g --parent <gid>|none [--index n]
 //   node ai_studio/assets/canvas/cli.mjs group-move <id> --group g --x --y
-//   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none] [--clip true|false]
+//   node ai_studio/assets/canvas/cli.mjs group-set <id> --group g [--name] [--visible true|false] [--w --h] [--background '#rrggbb'|none] [--clip true|false] [--screen true|false]   (T0332 B1: --screen is the export opt-in flag — ONLY a screen:true top-level group is composited by `export --project`/counted by the page's Export button; absent by default, even on a freshly created group)
 //   node ai_studio/assets/canvas/cli.mjs groups-set <id> --groups g1,g2 [--visible true|false] [--clip true|false]   (batched shared toggles; one undo)
 //   node ai_studio/assets/canvas/cli.mjs group-fit <id> --group g [--padding n]
 //   node ai_studio/assets/canvas/cli.mjs group-scale <id> --group g --x n --y n --w n --h n   (T0271: scale the group's full subtree -- frame + every descendant + text fontSize -- to a new frame; one undo step)
@@ -51,9 +51,12 @@
 //   node ai_studio/assets/canvas/cli.mjs group-ungroup <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs group-delete <id> --group g
 //   node ai_studio/assets/canvas/cli.mjs recipe-create <id> [--name X] [--x n --y n --w n --h n] [--parent <gid>|none]   (T0239 increment 1: mint a recipe card — a group with an additive `recipe` blob; no generation yet)
-//   node ai_studio/assets/canvas/cli.mjs recipe-set <id> --group g [--prompt "..."] [--engine codex|gemini|both] [--style <id>|none]   (--style is a style-card group id from style-create; none clears it)
+//   node ai_studio/assets/canvas/cli.mjs recipe-set <id> --group g [--prompt "..."] [--engine codex|gemini|both] [--style <id>|none] [--axes-json path] [--vary axisName] [--grid RxC] [--max-jobs n] [--pack none] [--bg-key '#rrggbb'] [--n-candidates n] [--size s] [--quality q]   (--style is a style-card group id from style-create; none clears it; T0332 v2: --axes-json/--vary/--grid/--max-jobs/--pack none patch recipe.pack — pack mode, full-replace, merged with the CURRENT pack in the CLI before sending; --bg-key/--n-candidates/--size/--quality patch recipe.params — partial, merges onto the existing params)
 //   node ai_studio/assets/canvas/cli.mjs recipe-generate <id> --group g   (T0239 increment 2/3: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one undo step; partial success allowed on engine=both; recipe.style_ref, when set, mixes the style card's prompt + ref image in)
 //   node ai_studio/assets/canvas/cli.mjs recipe-expand <id> --group g   (T0239 increment 4: Expand-prompt — ONE codex TEXT call, real seconds/minutes; writes recipe.expanded only, no card minted; Generate sends it when the card's use_expanded is true)
+//   node ai_studio/assets/canvas/cli.mjs recipe-pack-preview <id> --group g   (T0332 v2: EPHEMERAL preview — assembles a config from recipe.pack + recipe.prompt/style_ref/params and runs the REAL expand_jobs.py expander; NOT journaled, writes nothing to the blob; prints sheet count + per-sheet prompts)
+//   node ai_studio/assets/canvas/cli.mjs recipe-pack-generate <id> --group g [--run <groupId>] [--sheet <slug>]   (T0332 v2: the pack branch of generateFromRecipe — real codex spawns, one PER SHEET, sequential; each finished sheet mints under its own short commit; --run resumes into an existing pack run group, skipping sheets whose axes already landed; --sheet force-regenerates exactly one sheet into that group; prints per-sheet ok/failed/skipped lines + the final recipe.last_run summary)
+//   node ai_studio/assets/canvas/cli.mjs recipe-pack-slice <id> --group g [--run <groupId>]   (T0332 B3: slice every sheet of a pack run — detectRegions -> hard gate region_count===cells.length -> sliceRegions, reparented into the run group; --run selects an explicit run group (must carry pack_run for this card), omitted resolves recipe.last_run.run_group_id; real region-detector/crop_regions.py spawns, no fake seam; never throws mid-sheet — prints one name/verdict/got-expected line per sheet + the final {contract:[{sheet_element_id,verdict,region_count,cells_len,cut_ids}]} JSON)
 //   node ai_studio/assets/canvas/cli.mjs style-create <id> [--name X] [--x n --y n --w n --h n] [--parent <gid>|none]   (T0239 increment 3: mint a style card — a group with an additive `style` blob: prompt + ONE ref image; no generation, style cards never generate)
 //   node ai_studio/assets/canvas/cli.mjs style-set <id> --group g [--prompt "..."] [--ref <elementId>|none]   (partial style blob update; --ref must be a member IMAGE element id of THIS card, or none to clear — the "Make ref" gesture)
 //   node ai_studio/assets/canvas/cli.mjs extract <id> --element el   (T0239 increment 4: ONE codex VISION call, real seconds/minutes -> element.meta.extracted {prompt_full, prompt_subject, style, description}; no card minted; re-running overwrites)
@@ -113,6 +116,8 @@ import {
   listProjects,
   moveNodes,
   opsStats,
+  packPreview,
+  packSlice,
   pasteNodes,
   patchAnim,
   patchElement,
@@ -217,7 +222,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|filters-bake|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|filters-bake|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|recipe-pack-preview|recipe-pack-generate|recipe-pack-slice|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
   list [--full]   (summary by default: [{id,title,created,updated,elements,groups,head}]; --full = every project in full, today's original dump)
   create [--title <title>]     (omit --title for a random default)
   show <id>
@@ -257,11 +262,11 @@ function usage() {
   filters-bake <id> --element <eid>   (T0274 "Apply": rasterize the element's CURRENT filters+opacity — T0273/T0260 — into a NEW content-addressed source file, then clear both (sliders reset); loud when there is nothing to bake; one undo step)
   filters-bake <id> --elements e1,e2   (batch: 2+ images baked into ONE journal entry/undo; atomic — any refusal rejects the whole batch)
   export-set <id> --element <eid> --json <path> | --scale <t> [--format png|jpg|webp] [--quality 1-100] [--resample lanczos|nearest] [--base source|canvas]
-  export <id> --elements e1,e2 | --all | --project [--scale <t> --format <f> --quality <n> --resample <r> --base source|canvas] [--to <dir>] [--zip <path>]
+  export <id> --elements e1,e2 | --all | --project [--scale <t> --format <f> --quality <n> --resample <r> --base source|canvas] [--to <dir>] [--zip <path>]   (--project: T0332 B1 — composites only top-level groups with screen:true; see group-set --screen)
   group-create <id> --name <name> [--elements e1,e2 | --x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]
   group-reparent <id> --group <gid> --parent <gid>|none [--index <n>]   (nest a group; none = top level)
   group-move <id> --group <gid> --x <n> --y <n>
-  group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>] [--background '#rrggbb'|none] [--clip true|false]
+  group-set <id> --group <gid> [--name <name>] [--visible true|false] [--w <n> --h <n>] [--background '#rrggbb'|none] [--clip true|false] [--screen true|false]   (T0332 B1: --screen is the export opt-in flag, absent by default — see the "export" command's --project)
   groups-set <id> --groups g1,g2 [--visible true|false] [--clip true|false]   (batched shared toggles; one undo step)
   group-fit <id> --group <gid> [--padding <n>]   (resize the frame to fit its content; padding default 24)
   group-scale <id> --group <gid> --x <n> --y <n> --w <n> --h <n>   (T0271: scale the group's FULL subtree — the frame AND every descendant element/nested-group box, text fontSize scaled too — to the given frame; server computes every descendant patch, so page and CLI can't disagree; one undo step. Distinct from group-set's frame-only --w/--h, which pins children in place.)
@@ -269,9 +274,12 @@ function usage() {
   group-ungroup <id> --group <gid>   (dissolve one level; children keep the group's z-slot; one undo step)
   group-delete <id> --group <gid>
   recipe-create <id> [--name <name>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0239 increment 1: mint a recipe card — a group with an additive 'recipe' blob; omitted w/h default to a 360x280 frame; no generation yet)
-  recipe-set <id> --group <gid> [--prompt "<text>"] [--engine codex|gemini|both] [--style <id>|none]   (partial recipe blob update; --style is an existing style-card group id from style-create, or none to clear)
+  recipe-set <id> --group <gid> [--prompt "<text>"] [--engine codex|gemini|both] [--style <id>|none] [--axes-json <path>] [--vary <axisName>] [--grid <RxC>] [--max-jobs <n>] [--pack none] [--bg-key '#rrggbb'] [--n-candidates <n>] [--size <s>] [--quality <q>]   (partial recipe blob update; --style is an existing style-card group id from style-create, or none to clear; T0332 v2 pack mode — --axes-json reads {axisName:[values...]} from a file; --axes-json/--vary/--grid/--max-jobs assemble a FULL recipe.pack: the CLI reads the card's CURRENT pack (or a default template if pack mode is currently off) and merges the given flags on top before sending, since the op itself REPLACES pack wholesale, not a partial merge; --pack none clears pack mode (sets recipe.pack = null), taking priority over any axes/vary/grid/max-jobs given in the same call; --bg-key/--n-candidates/--size/--quality patch recipe.params instead — a PARTIAL patch, merged onto the existing params by the op itself)
   recipe-generate <id> --group <gid>   (T0239 increment 2/3: generate from the card's prompt + member-image refs; engine codex|gemini|both per the card's own recipe.engine; mints 1 or 2 new RAW elements beside the card frame in its PARENT scope; one undo step; codex/agy run for real minutes — no --dry-run; when recipe.style_ref is set, the style card's prompt is appended and its ref image travels alongside the card's own refs)
   recipe-expand <id> --group <gid>   (T0239 increment 4: Expand-prompt — ONE codex TEXT call, real seconds/minutes; writes recipe.expanded only, no card minted; the CLI always runs the DEFAULT codex impl, no fake-assistant injection)
+  recipe-pack-preview <id> --group <gid>   (T0332 v2: EPHEMERAL preview — requires recipe.pack; builds a config from recipe.pack (axes/vary/grid/max_jobs) + recipe.prompt (VERBATIM subject_template) + recipe.style_ref (style_prefix) + recipe.params (background from bg_key, candidates from n_candidates, size/quality/model) and runs the REAL expand_jobs.py expander, the ONE expander shared with the later pack-branch of recipe-generate; NOT journaled, writes nothing to the recipe blob; loud if recipe.engine is not "codex"; prints sheet count + style_ref_image flag + per-sheet name/prompt head, plus the full {sheets,style_ref_image,jobs} JSON)
+  recipe-pack-generate <id> --group <gid> [--run <groupId>] [--sheet <slug>]   (T0332 v2: the pack branch of generateFromRecipe — requires recipe.pack; re-expands FRESH (never packPreview's stale run), resolves refs (member images + style card ref image) ONCE, then generates sheets via codex SEQUENTIALLY, minting each finished sheet under its OWN short commit as it lands — a crash on sheet 3 never loses sheets 1-2; the FIRST minted sheet of a fresh run creates a result-group beside the card named "<style name|no-style>/<vary> <ts>" carrying a pack_run provenance marker, later sheets land in it; recipe.last_run updates after EVERY sheet (verdict partial while running/on any failure, ok once every requested sheet lands) plus one tool_runs entry at the end; --run <groupId> resumes into that group, skipping sheets whose axes already landed (gen_batch skip-if-exists parity — a killed/timed-out run is not repaid); --sheet <slug> force-regenerates exactly one sheet, by the expander's own job name, into the same group even if already present; codex/agy run for real minutes x N sheets — no --dry-run, agents should pass a generous timeout and resume via --run on a kill; prints one "<name>: ok|failed|skipped" line per sheet, then the final recipe.last_run JSON)
+  recipe-pack-slice <id> --group <gid> [--run <groupId>]   (T0332 B3: slice EVERY sheet of a pack run — for each sheet element (meta.pack with a cells manifest) in the run group: detectRegions, then a HARD gate region_count === cells.length (mismatch -> REJECT that sheet, others still slice); on a match, sliceRegions mints the cuts with a MINIMAL per-cut meta ({cardId, sheet_element_id, cell, axes} — the full manifest/prompt stay on the sheet, its provenance anchor) and reparents the fresh slices-group into the run group; --run <groupId> selects an explicit run group (must carry pack_run for this card), omitted resolves recipe.last_run.run_group_id; real region-detector/crop_regions.py spawns, same pipeline as plain detect-regions/slice — no fake seam; never throws mid-sheet (a detection failure lands that one sheet as MISSING); prints one "<name>: OK|REJECT|MISSING (got/expected)" line per sheet, then the final {contract:[{sheet_element_id,verdict,region_count,cells_len,cut_ids}], run_group_id} JSON)
   style-create <id> [--name <name>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0239 increment 3: mint a style card — a group with an additive 'style' blob: prompt + ONE ref image; omitted w/h default to a 360x280 frame; style cards never generate)
   style-set <id> --group <gid> [--prompt "<text>"] [--ref <elementId>|none]   (partial style blob update; --ref must be an existing member IMAGE element id of THIS card, or none to clear — the "Make ref" gesture; the first image dropped into an empty card auto-claims the ref)
   anim-card <id> [--name <name>] [--member <eid>] [--x <n> --y <n> --w <n> --h <n>] [--parent <gid>|none]   (T0265 increment 1: mint an animation card — a group with an additive 'anim' blob; keyframes are its member IMAGE elements; omitted w/h default to a 360x280 frame. --member is the "Animate this image" promotion: fit the card around that image + move it in as the first keyframe in ONE journal entry; not combinable with --x/--y/--w/--h; no generation yet)
@@ -844,6 +852,9 @@ async function runCommand(command, id, positional, flags) {
       // boolean here via the shared strict parser; the op validates strictly too (a
       // boolean, no silent coercion) — belt and suspenders.
       if (flags.clip !== undefined) args.clip = parseBool("clip", flags.clip);
+      // --screen true|false (T0332 B1): the export opt-in flag — same strict-boolean
+      // handling as --clip, belt and suspenders with the op's own check.
+      if (flags.screen !== undefined) args.screen = parseBool("screen", flags.screen);
       return print(patchGroup(repoRoot, args));
     }
     case "groups-set": {
@@ -926,7 +937,57 @@ async function runCommand(command, id, positional, flags) {
       if (flags.engine !== undefined && flags.engine !== "true") patch.engine = flags.engine;
       // --style <id> sets the reserved by-id pointer; --style none clears it.
       if (flags.style !== undefined) patch.style_ref = flags.style === "none" || flags.style === "true" ? null : flags.style;
-      if (!Object.keys(patch).length) fail("recipe-set requires --prompt, --engine, and/or --style");
+
+      // T0332 v2 pack-mode flags. `patchRecipe`'s own `pack` field REPLACES recipe.pack
+      // WHOLESALE (it never merges onto the stored value — see ops.mjs's normalizeRecipePack
+      // doc comment), so a caller that only means to tweak ONE field must assemble the FULL
+      // object itself; this CLI does that by reading the card's CURRENT recipe.pack (or a
+      // default template, when pack mode is currently off) and overlaying just the flags
+      // given in this call. --pack none clears pack mode outright (sets recipe.pack = null),
+      // and takes priority over any axes/vary/grid/max-jobs given in the SAME call — there is
+      // nothing sensible to merge them onto once the mode is off.
+      if (flags.pack !== undefined && flags.pack !== "true" && flags.pack !== "none") {
+        fail(`recipe-set --pack only accepts "none" (to clear pack mode), got ${JSON.stringify(flags.pack)}`);
+      }
+      const packFlagsGiven = ["axes-json", "vary", "grid", "max-jobs"].some((flag) => flags[flag] !== undefined);
+      if (flags.pack === "none") {
+        patch.pack = null;
+      } else if (packFlagsGiven) {
+        const current = getProject(repoRoot, id);
+        const card = (current.groups || []).find((group) => group.id === flags.group);
+        const currentPack = card && card.recipe ? card.recipe.pack : undefined;
+        const base = currentPack || { axes: {}, vary: "", grid: [3, 3], max_jobs: 12 };
+        const nextPack = { axes: base.axes, vary: base.vary, grid: base.grid, max_jobs: base.max_jobs };
+        // --axes-json reads {axisName: ["val1", "val2", ...], ...} from a file — the op itself
+        // validates every axis is a non-empty array of non-empty strings.
+        if (flags["axes-json"] !== undefined && flags["axes-json"] !== "true") {
+          nextPack.axes = JSON.parse(readFileSync(resolve(flags["axes-json"]), "utf8"));
+        }
+        if (flags.vary !== undefined && flags.vary !== "true") nextPack.vary = flags.vary;
+        if (flags.grid !== undefined && flags.grid !== "true") {
+          const match = /^(\d+)x(\d+)$/i.exec(String(flags.grid).trim());
+          if (!match) fail(`recipe-set --grid must look like RxC (e.g. 3x3), got ${JSON.stringify(flags.grid)}`);
+          nextPack.grid = [Number(match[1]), Number(match[2])];
+        }
+        if (flags["max-jobs"] !== undefined && flags["max-jobs"] !== "true") nextPack.max_jobs = Number(flags["max-jobs"]);
+        patch.pack = nextPack;
+      }
+
+      // T0332 v2 params flags — UNLIKE pack above, this is a PARTIAL patch: the op itself
+      // merges it onto the stored recipe.params one level deep (ops.mjs's patchRecipe), so
+      // there is nothing to assemble/read-back here.
+      const paramsPatch = {};
+      if (flags["bg-key"] !== undefined && flags["bg-key"] !== "true") paramsPatch.bg_key = flags["bg-key"];
+      if (flags["n-candidates"] !== undefined && flags["n-candidates"] !== "true") paramsPatch.n_candidates = Number(flags["n-candidates"]);
+      if (flags.size !== undefined && flags.size !== "true") paramsPatch.size = flags.size;
+      if (flags.quality !== undefined && flags.quality !== "true") paramsPatch.quality = flags.quality;
+      if (Object.keys(paramsPatch).length) patch.params = paramsPatch;
+
+      if (!Object.keys(patch).length) {
+        fail(
+          "recipe-set requires at least one of --prompt, --engine, --style, --axes-json, --vary, --grid, --max-jobs, --pack none, --bg-key, --n-candidates, --size, --quality",
+        );
+      }
       return print(patchRecipe(repoRoot, { projectId: id, groupId: flags.group, patch }));
     }
     case "recipe-generate": {
@@ -942,6 +1003,63 @@ async function runCommand(command, id, positional, flags) {
       if (!id) fail("recipe-expand requires <id>");
       if (!flags.group) fail("recipe-expand requires --group <gid>");
       return print(await expandRecipePrompt(repoRoot, { projectId: id, groupId: flags.group }));
+    }
+    case "recipe-pack-generate": {
+      // T0332 v2: the pack-mode branch of generateFromRecipe — requires recipe.pack. Real
+      // codex spawns, sequential, one PER SHEET (N x 30-60s+; timeout=max, resume via --run
+      // on a kill/timeout) — no fake-generator injection from the CLI, same law as
+      // recipe-generate. --run <groupId> resumes an existing pack run group (sheets whose
+      // axes already landed there are skipped); --sheet <slug> force-regenerates exactly
+      // one sheet (by the expander's own job name) into that same group even if present.
+      if (!id) fail("recipe-pack-generate requires <id>");
+      if (!flags.group) fail("recipe-pack-generate requires --group <gid>");
+      const args = { projectId: id, groupId: flags.group };
+      if (flags.run !== undefined && flags.run !== "true") args.runGroupId = flags.run;
+      if (flags.sheet !== undefined && flags.sheet !== "true") args.sheetSlug = flags.sheet;
+      const result = await generateFromRecipe(repoRoot, args);
+      for (const sheet of result.results || []) {
+        console.log(`${sheet.name}: ${sheet.status}`);
+      }
+      return print(result.last_run);
+    }
+    case "recipe-pack-preview": {
+      // T0332 v2: runs the REAL expand_jobs.py expander (no fake injection seam; it is
+      // offline/deterministic/stdlib, unlike recipe-generate/-expand's codex spawns). Not
+      // journaled; writes nothing to the recipe blob.
+      if (!id) fail("recipe-pack-preview requires <id>");
+      if (!flags.group) fail("recipe-pack-preview requires --group <gid>");
+      const result = await packPreview(repoRoot, { projectId: id, groupId: flags.group });
+      console.log(`sheets: ${result.sheets}`);
+      console.log(`style_ref_image: ${result.style_ref_image}`);
+      for (const job of result.jobs) {
+        const head = (job.prompt.split(/\r?\n/).find((line) => line.trim()) || "").slice(0, 120);
+        console.log(`- ${job.name}: ${head}`);
+      }
+      return print(result);
+    }
+    case "recipe-pack-slice": {
+      // T0332 B3 (build-spec §4): slice every sheet of a pack run into cuts — detectRegions
+      // -> hard gate region_count === meta.pack.cells.length -> sliceRegions, reparented
+      // into the run group. Real region-detector + crop_regions.py spawns (same pipeline as
+      // plain `detect-regions`/`slice` — no fake seam, unlike the codex-calling recipe-
+      // pack-generate). --run <groupId> selects an explicit run group (must carry a
+      // pack_run marker for THIS card); omitted resolves recipe.last_run.run_group_id.
+      // NOT in SELF_LOCKING_COMMANDS: unlike recipe-pack-generate's own codex-per-sheet
+      // branch, detectRegions/sliceRegions do not acquire the project lock themselves, so
+      // the WHOLE multi-sheet slice pass is meant to run under ONE outer lock (main()'s own
+      // wrap below) — the same shape plain detect-regions/slice already rely on.
+      if (!id) fail("recipe-pack-slice requires <id>");
+      if (!flags.group) fail("recipe-pack-slice requires --group <gid>");
+      const args = { projectId: id, groupId: flags.group };
+      if (flags.run !== undefined && flags.run !== "true") args.runGroupId = flags.run;
+      const result = await packSlice(repoRoot, args);
+      const project = getProject(repoRoot, id);
+      for (const sheet of result.contract) {
+        const element = (project.elements || []).find((el) => el.id === sheet.sheet_element_id);
+        const name = element ? element.name : sheet.sheet_element_id;
+        console.log(`${name}: ${sheet.verdict} (${sheet.region_count}/${sheet.cells_len})`);
+      }
+      return print(result);
     }
     case "style-create": {
       if (!id) fail("style-create requires <id>");
@@ -1134,7 +1252,20 @@ async function runCommand(command, id, positional, flags) {
 // — excluded on purpose. Every other project-scoped command is wrapped in main()
 // below so the CLI (a SEPARATE process from the server) respects the same
 // cross-process lockfile the API adapter does.
-const SELF_LOCKING_COMMANDS = new Set(["recipe-generate", "recipe-expand", "extract", "animate", "alpha-dual-generate", "anim-generate"]);
+// recipe-pack-generate (T0332 v2) is likewise self-locking — its own generateFromRecipe pack
+// branch acquires the per-project lock ONCE PER SHEET (short, per-sheet commits), so wrapping
+// the WHOLE multi-sheet, multi-minute call in an outer lock here would deadlock the same way
+// (the outer acquire never releases until every per-sheet inner acquire finishes, and the first
+// inner acquire waits on the outer).
+// recipe-pack-slice (T0332 B3) is the OPPOSITE case, deliberately left OUT of this set: it
+// calls detectRegions/sliceRegions in a loop, and NEITHER of those acquires the project lock
+// itself (unlike the five codex/agy ops above) — exactly like the plain `detect-regions`/
+// `slice` commands, which are also not self-locking. So the whole multi-sheet slice pass
+// needs the SAME single outer lock main() already gives every non-self-locking command; no
+// deadlock risk here since there is no inner acquire to collide with.
+// anim-generate (T0265) is self-locking too — generateAnimFromCard acquires the per-project
+// lock ONCE internally (short commit), so wrapping it here would deadlock the same way.
+const SELF_LOCKING_COMMANDS = new Set(["recipe-generate", "recipe-pack-generate", "recipe-expand", "extract", "animate", "alpha-dual-generate", "anim-generate"]);
 
 async function main(argv) {
   const [command, ...rest] = argv;

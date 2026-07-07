@@ -80,7 +80,11 @@ EM_JS(char *, game_storage_web_load, (const char *key_ptr), {
             return 0;
         }
         var size = lengthBytesUTF8(data) + 1;
-        var ptr = malloc(size);
+        /* Wasm exports are bound with a leading underscore in the EM_JS scope:
+           bare `malloc` is undefined here and would throw, making every load
+           look like "no save" (and the FRESH branch then overwrites the real
+           save with defaults on boot). */
+        var ptr = _malloc(size);
         if (!ptr) {
             return 0;
         }

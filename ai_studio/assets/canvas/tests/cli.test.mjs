@@ -231,6 +231,25 @@ test("cli group-set --clip toggles the frame clip flag (no python)", (t) => {
   assert.equal("clip" in run(env, "show", projectId).project.groups[0], false, "clip false removes the field");
 });
 
+test("cli group-set --screen toggles the export opt-in flag (T0332 B1, no python); absent by default", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-screen-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const projectId = run(env, "create", "--title", "CLI Screen").project.id;
+  const groupId = run(env, "group-create", projectId, "--name", "Frame", "--x", "0", "--y", "0", "--w", "80", "--h", "60").group.id;
+  assert.equal("screen" in run(env, "show", projectId).project.groups[0], false, "absent by default on a freshly created group");
+
+  run(env, "group-set", projectId, "--group", groupId, "--screen", "true");
+  assert.equal(run(env, "show", projectId).project.groups[0].screen, true, "screen true set");
+
+  run(env, "group-set", projectId, "--group", groupId, "--screen", "false");
+  assert.equal("screen" in run(env, "show", projectId).project.groups[0], false, "screen false removes the field");
+
+  const badScreen = runFail(env, "group-set", projectId, "--group", groupId, "--screen", "maybe");
+  assert.match(String(badScreen.stderr || badScreen.message), /--screen must be true, false, 1, or 0/);
+});
+
 test("cli nodes-duplicate / nodes-delete / nodes-paste parity (one undo each)", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-nodes-"));
   const env = { CANVAS_PROJECTS_ROOT: dir };
