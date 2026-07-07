@@ -460,6 +460,39 @@ static void load_from_doc(const cJSON *doc, game_save_load_result_t *result) {
     reconcile_all();
 }
 
+/* Shared .bak recovery (RECOVERED_BAK): read + decode + parse + validate the backup;
+   on success load it, rewrite the primary, THEN refresh the .bak (order matters: the
+   primary is currently bad — backing it up first would clobber the live .bak with
+   garbage, §A3.4 п.8), set RECOVERED_BAK + `reason`, return true. Returns false with
+   `result` untouched when there is no usable backup. Reused by BOTH the classic
+   unparseable-primary path AND the native read-ERROR path (лид 2026-07-07). Web
+   read_backup is always false, so web just falls through (no .bak there). */
+static bool try_recover_from_backup(game_save_load_result_t *result, const char *reason, char *err, int cap) {
+    char *baktext = NULL;
+    cJSON *bakdoc = NULL;
+    if (game_storage_read_backup(GAME_SAVE_AUTOSAVE_SLOT, &baktext, err, cap)) {
+        char *bakdec = transform_decode(baktext, err, cap);
+        free(baktext);
+        bakdoc = bakdec ? cJSON_Parse(bakdec) : NULL;
+        free(bakdec);
+    }
+    if (!(bakdoc && cJSON_IsObject(bakdoc) && !doc_is_newer(bakdoc))) {
+        if (bakdoc) {
+            cJSON_Delete(bakdoc);
+        }
+        return false;
+    }
+    load_from_doc(bakdoc, result);
+    cJSON_Delete(bakdoc);
+    s_autosave_paused = false;
+    result->status = GAME_SAVE_LOAD_RECOVERED_BAK;
+    set_message(result, reason);
+    (void)save_internal(err, cap);
+    (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, cap);
+    s_last_save_mono = mono_now();
+    return true;
+}
+
 void game_save_load(game_save_load_result_t *result) {
     game_save_load_result_t local;
     if (!result) {
@@ -477,13 +510,16 @@ void game_save_load(game_save_load_result_t *result) {
     game_storage_read_status_t rst = GAME_STORAGE_READ_ABSENT;
     if (!game_storage_read(GAME_SAVE_AUTOSAVE_SLOT, &text, &rst, err, (int)sizeof err)) {
         if (rst == GAME_STORAGE_READ_ERROR) {
-            /* Save EXISTS but could not be READ (not "no save"): the storage layer
-               has already copied the raw bytes to quarantine. Take the SAME shape as
-               the classic corrupt path below (reset + autosave paused, NO on_new_game/
-               save, primary untouched) so both CORRUPT_RESET flavors leave one state;
-               the shell's single new_game (main.c on CORRUPT_RESET) is what starts the
-               fresh game and atomically overwrites the primary. Never silently reborn
-               as FRESH (the malloc-load-failure data-loss bug). §A3.4 п.1, лид 2026-07-07. */
+            /* Primary EXISTS but could not be READ (not "no save"): storage already
+               copied the raw bytes to quarantine. Try the .bak FIRST via the same
+               RECOVERED_BAK flow as a corrupt primary (native only; web read_backup is
+               false). Only if there is no usable backup fall through to the classic
+               corrupt-reset body (reset + autosave paused, NO on_new_game/save, primary
+               untouched — the shell's single new_game overwrites it). Never silently
+               reborn as FRESH (the malloc-load-failure data-loss bug). §A3.4 п.1-2, лид 2026-07-07. */
+            if (try_recover_from_backup(result, "primary unreadable; recovered from backup", err, (int)sizeof err)) {
+                return;
+            }
             reset_all();
             s_autosave_paused = true;
             result->status = GAME_SAVE_LOAD_CORRUPT_RESET;
@@ -532,30 +568,8 @@ void game_save_load(game_save_load_result_t *result) {
     }
 
     /* Primary unparseable -> try backup (§A3.4 п.2). */
-    char *baktext = NULL;
-    cJSON *bakdoc = NULL;
-    if (game_storage_read_backup(GAME_SAVE_AUTOSAVE_SLOT, &baktext, err, (int)sizeof err)) {
-        char *bakdec = transform_decode(baktext, err, (int)sizeof err);
-        free(baktext);
-        bakdoc = bakdec ? cJSON_Parse(bakdec) : NULL;
-        free(bakdec);
-    }
-    if (bakdoc && cJSON_IsObject(bakdoc) && !doc_is_newer(bakdoc)) {
-        /* RECOVERED_BAK: load from bak, then rewrite primary, THEN write_backup
-           (order matters: primary is currently corrupt — backing it up first
-           would clobber the live .bak with garbage, §A3.4 п.8). */
-        load_from_doc(bakdoc, result);
-        cJSON_Delete(bakdoc);
-        s_autosave_paused = false;
-        result->status = GAME_SAVE_LOAD_RECOVERED_BAK;
-        set_message(result, "primary corrupt; recovered from backup");
-        (void)save_internal(err, (int)sizeof err);
-        (void)game_storage_write_backup(GAME_SAVE_AUTOSAVE_SLOT, err, (int)sizeof err);
-        s_last_save_mono = mono_now();
+    if (try_recover_from_backup(result, "primary corrupt; recovered from backup", err, (int)sizeof err)) {
         return;
-    }
-    if (bakdoc) {
-        cJSON_Delete(bakdoc);
     }
 
     /* CORRUPT_RESET: quarantine + reset only. No on_new_game, no save — the shell

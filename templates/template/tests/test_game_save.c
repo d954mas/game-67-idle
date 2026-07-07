@@ -702,6 +702,91 @@ void test_read_error_quarantines_and_corrupt_resets(void) {
     TEST_ASSERT_TRUE(primary_save_seq() > before);
 }
 
+/* 16. Native read ERROR on primary + VALID .bak -> RECOVERED_BAK via the existing
+   backup flow (лид 2026-07-07: try .bak before CORRUPT_RESET). The unreadable primary
+   is still quarantined (byte-identical) by the storage layer before recovery. */
+void test_read_error_recovers_from_backup(void) {
+    char err[128] = {0};
+    fake_reset();
+    s_frag_coins = 42;
+    TEST_ASSERT_TRUE(game_save_flush(err, (int)sizeof err)); /* valid primary, coins=42 */
+    make_backup_of_primary();                                /* .bak = copy of good primary */
+
+    const size_t big = (size_t)(1024 * 1024) + 64u;          /* oversize -> primary read ERROR */
+    char *payload = (char *)malloc(big + 1u);
+    TEST_ASSERT_NOT_NULL(payload);
+    memset(payload, 'X', big);
+    payload[big] = '\0';
+    write_raw(PRIMARY_PATH, payload);                        /* primary now unreadable; .bak still good */
+    s_frag_coins = 0;
+
+    game_save_load_result_t r;
+    game_save_load(&r);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_RECOVERED_BAK, r.status);
+    TEST_ASSERT_EQUAL_INT(42, s_frag_coins); /* state came from .bak */
+
+    /* storage quarantined a byte-identical copy of the unreadable primary */
+    TEST_ASSERT_EQUAL_INT(1, sweep_corrupt(false));
+    char name[256] = {0};
+    TEST_ASSERT_TRUE(first_corrupt_name(name, sizeof name));
+    char qpath[512];
+    (void)snprintf(qpath, sizeof qpath, "build/saves/%s", name);
+    char *q = read_raw(qpath);
+    TEST_ASSERT_NOT_NULL(q);
+    TEST_ASSERT_EQUAL_INT((int)big, (int)strlen(q));
+    TEST_ASSERT_EQUAL_INT(0, memcmp(q, payload, big));
+    free(q);
+    free(payload);
+
+    /* primary rewritten valid from .bak; .bak still parses (classic RECOVERED_BAK invariant) */
+    char *bakraw = read_raw(BAK_PATH);
+    TEST_ASSERT_NOT_NULL(bakraw);
+    cJSON *bakdoc = cJSON_Parse(bakraw);
+    free(bakraw);
+    TEST_ASSERT_NOT_NULL(bakdoc);
+    cJSON_Delete(bakdoc);
+
+    /* next boot: primary valid -> LOADED */
+    s_frag_coins = 0;
+    game_save_load_result_t r2;
+    game_save_load(&r2);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, r2.status);
+    TEST_ASSERT_EQUAL_INT(42, s_frag_coins);
+}
+
+/* 17. Native read ERROR on primary + present-but-BAD .bak -> CORRUPT_RESET (backup
+   unusable): reset + paused, primary untouched, one quarantine copy of the primary. */
+void test_read_error_bad_backup_corrupt_resets(void) {
+    const size_t big = (size_t)(1024 * 1024) + 64u;
+    char *payload = (char *)malloc(big + 1u);
+    TEST_ASSERT_NOT_NULL(payload);
+    memset(payload, 'X', big);
+    payload[big] = '\0';
+    write_raw(PRIMARY_PATH, payload);       /* unreadable primary */
+    write_raw(BAK_PATH, "NOT-JSON-BACKUP"); /* present but unparseable */
+    s_frag_coins = 555;
+
+    game_save_load_result_t r;
+    game_save_load(&r);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_CORRUPT_RESET, r.status);
+    TEST_ASSERT_EQUAL_INT(0, s_frag_coins);         /* reset only, no on_new_game */
+    TEST_ASSERT_EQUAL_INT(1, sweep_corrupt(false)); /* primary quarantine copy exists */
+
+    /* primary untouched (still the unreadable oversize original) + autosave paused */
+    char *prim = read_raw(PRIMARY_PATH);
+    TEST_ASSERT_NOT_NULL(prim);
+    TEST_ASSERT_EQUAL_INT((int)big, (int)strlen(prim));
+    free(prim);
+    game_save_mark_dirty();
+    g_mono_ms += 100000;
+    game_save_tick();
+    prim = read_raw(PRIMARY_PATH);
+    TEST_ASSERT_NOT_NULL(prim);
+    TEST_ASSERT_EQUAL_INT((int)big, (int)strlen(prim)); /* unchanged -> paused */
+    free(prim);
+    free(payload);
+}
+
 int main(void) {
     game_save_register_fragment(&s_extra_fragment);
     game_save_register_fragment(&s_fake_fragment); /* `game` registered last (§14 п.2) */
@@ -722,5 +807,7 @@ int main(void) {
     RUN_TEST(test_bad_fragment_isolation);
     RUN_TEST(test_orphan_read_access);
     RUN_TEST(test_read_error_quarantines_and_corrupt_resets);
+    RUN_TEST(test_read_error_recovers_from_backup);
+    RUN_TEST(test_read_error_bad_backup_corrupt_resets);
     return UNITY_END();
 }

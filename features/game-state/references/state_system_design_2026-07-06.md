@@ -123,9 +123,13 @@ v>current → толерантный from_json + warn (без шагов) → fr
     (иначе reset+save затирал бы живой сейв дефолтом — доказано malloc-багом).
     Слой storage сначала best-effort кладёт сырьё в карантин ТОЙ ЖЕ
     .corrupt-конвенции (native — файл-копия, web — ключ прямо в JS, не через
-    C-путь). Далее ERROR-ветка = ТЕЛО классического corrupt-пути: reset + автосейв
-    на паузе, БЕЗ on_new_game/save, primary НЕ трогаем; статус = CORRUPT_RESET
-    (не FRESH), message «save read failed; original quarantined; new game».
+    C-путь). Далее (native) ERROR идёт тем же порядком, что битый primary:
+    primary → `.bak` (тот же RECOVERED_BAK-поток) → карантин/новая игра — годный
+    `.bak` даёт RECOVERED_BAK (message «primary unreadable; recovered from backup»);
+    web `.bak` нет, потому там сразу фолбэк. Нет годного `.bak` → фолбэк = ТЕЛО
+    классического corrupt-пути: reset + автосейв на паузе, БЕЗ on_new_game/save,
+    primary НЕ трогаем; статус = CORRUPT_RESET (не FRESH), message «save read
+    failed; original quarantined; new game».
     Оба CORRUPT_RESET-вкуса оставляют ОДНО состояние — новую игру запускает
     ЕДИНСТВЕННЫЙ new_game шелла (main.c при CORRUPT_RESET), он же перезаписывает
     primary атомарно. Ошибка — в nt_log-warn (оба слоя).]
