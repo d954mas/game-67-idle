@@ -4,5 +4,6 @@
   "canvasLocalCacheRoot": "C:/Users/ROG/AppData/Local/ai_studio/canvas_cache",
   "canvasHistoryDepth": 200,
   "pythonPath": ".venv/Scripts/python.exe",
-  "videoGenRoot": "C:/projects/video_gen_experiment"
+  "videoGenRoot": "C:/projects/video_gen_experiment",
+  "corridorKeyRoot": "C:/projects/ai_studio_tools/CorridorKey"
 }

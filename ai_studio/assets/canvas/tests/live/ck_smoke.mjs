@@ -1,7 +1,7 @@
 // LIVE GPU smoke for the canvas "corridorkey" alpha method (T0261 native green; T0262 magenta
 // hue180 shim). This is NOT part of the test suite: it has no `.test.mjs` suffix (so
 // `node --test tests/*.test.mjs` never picks it up), it needs the CorridorKey venv + a CUDA GPU
-// under videoGenRoot, and it spends the real ~13-16s cold model load PER scenario. It drives the
+// under corridorKeyRoot, and it spends the real ~13-16s cold model load PER scenario. It drives the
 // WHOLE op layer end to end (real key gate -> [hue180 shim for magenta] -> runCorridorKey ->
 // EXR->RGBA -> [hue180 un-shim for magenta] -> content-addressed src swap + provenance) on
 // throwaway projects under a temp CANVAS_PROJECTS_ROOT, and reports timing for BOTH the native

@@ -50,10 +50,13 @@
 
 - `C:\projects\video_gen_experiment\` — ComfyUI portable + WAN 2.2 Q4 +
   Lightning (~28GB; модели передокачиваемы, README с инструкцией удаления);
-  tools/CorridorKey (венв ~8GB, коммит запинен в README), tools/MatAnyone
-  (резерв, НЕкоммерческая лицензия!); draft/final_workflow_api.json
+  tools/MatAnyone (резерв, НЕкоммерческая лицензия!); draft/final_workflow_api.json
   (профили скорости T0262); video_runs/ (golden-прогон крыльев);
   phase3/r2/compare/ + static_eval/ (доски улик вырезания, magenta_tricks).
+- `C:\projects\ai_studio_tools\CorridorKey` — ПОСТОЯННЫЙ дом CorridorKey
+  (переезд 2026-07-07, T0335; венв ~8GB, коммит запинен в README установки);
+  конфиг-ключ `corridorKeyRoot` / env `CORRIDOR_KEY_ROOT`; переживает снос
+  папки эксперимента.
 - `C:/Users/ROG/AppData/Local/ai_studio/canvas_cache` — undo-история
   проектов (локальная по дизайну, между машинами не ездит).
 

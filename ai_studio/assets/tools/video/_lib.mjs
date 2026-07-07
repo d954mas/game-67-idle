@@ -25,6 +25,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   STUDIO_CONFIG_SCHEMA,
+  corridorKeyRoot,
   loadStudioConfig,
   videoGenRoot,
 } from "../../../core_harness/tool_lib/studio_config.mjs";
@@ -98,8 +99,12 @@ export function embeddedPython(root = REPO_ROOT) {
   return abs;
 }
 
+// CorridorKey moved OUT of the deletable experiment to its permanent home
+// (T0335): studio config `corridorKeyRoot` / env CORRIDOR_KEY_ROOT — it is the
+// canvas's first-priority glow/translucency alpha method and outlives the
+// video-gen experiment folder.
 export function corridorKeyDir(root = REPO_ROOT) {
-  return resolve(videoGenRoot(root), "tools", "CorridorKey");
+  return corridorKeyRoot(root);
 }
 // CorridorKey's uv-managed venv interpreter. Invoked DIRECTLY (not via `uv run`)
 // on purpose: `uv run` re-syncs the pyproject and can strip the cuda extra (the

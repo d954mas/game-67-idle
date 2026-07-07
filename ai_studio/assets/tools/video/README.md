@@ -53,18 +53,23 @@ node matte/matte.mjs     --run-dir <runDir> --tool corridorkey|key_matte
 
 ## Configuration
 
-One new studio-config key (committed in `ai_studio/studio.config.json`,
-resolved by `videoGenRoot()` in `core_harness/tool_lib/studio_config.mjs`, same
-override chain as the canvas roots — `VIDEO_GEN_ROOT` env wins):
+Two studio-config keys (committed in `ai_studio/studio.config.json`,
+resolved in `core_harness/tool_lib/studio_config.mjs`, same override chain as
+the canvas roots — the matching env var wins):
 
 ```
 "videoGenRoot": "C:/projects/video_gen_experiment"
+"corridorKeyRoot": "C:/projects/ai_studio_tools/CorridorKey"
 ```
 
-It points at the **isolated, wholesale-deletable** video-gen experiment (T0257):
-the portable ComfyUI stack, the `draft_workflow_api.json` / `final_workflow_api.json`
-profiles, and the CorridorKey/MatAnyone tool venvs. The accessor throws LOUDLY
-when unset and a video stage needs it — no silent fallback.
+`videoGenRoot` (env `VIDEO_GEN_ROOT`) points at the **isolated,
+wholesale-deletable** video-gen experiment (T0257): the portable ComfyUI stack,
+the `draft_workflow_api.json` / `final_workflow_api.json` profiles, and the
+MatAnyone reserve venv. `corridorKeyRoot` (env `CORRIDOR_KEY_ROOT`) points at
+the **permanent** CorridorKey install — split out in T0335 because CorridorKey
+is the canvas's first-priority glow/translucency alpha method and outlives the
+experiment folder. Both accessors throw LOUDLY when unset and a stage needs
+them — no silent fallback.
 
 ## Profiles (T0262 speed ladder)
 
@@ -104,7 +109,7 @@ so it can never be dropped. The photoreal negative is left as the workflow ships
   `->` glyphs) doesn't crash the captured cp1251 stdout pipe.
 - **v1 does NOT autostart ComfyUI** and does NOT install anything — orchestration
   only. A down server / missing tool is a LOUD error naming the fix.
-- The `matte` stage stages frames into `videoGenRoot/tools/CorridorKey/
+- The `matte` stage stages frames into `corridorKeyRoot/
   ClipsForInference/<shot>/` (machine-local, not the repo); `--skip-existing`
   means other shots that already have Output are skipped.
 - `MatAnyone` is held in reserve (T0257 R2 PARTIAL — green-fringes glow); NOT

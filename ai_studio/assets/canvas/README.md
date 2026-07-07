@@ -901,7 +901,7 @@ implementation, and a missing module is a loud import error.
     copied through byte-exact, never touched by the color shim. Measured a **strict upgrade**
     over the blue-on-magenta path on the research's hard-edge fixtures (subject dE76 2.7 → 2.0,
     rim contamination → 0%; `tmp/research_corridorkey_magenta_2026-07-05.md`, runner precedent
-    `C:\projects\video_gen_experiment\static_eval\trick_run.py`) — **UNTESTED on soft/glow
+    `static_eval/trick_run.py` in the since-deleted video-gen experiment folder) — **UNTESTED on soft/glow
     magenta** so far (only hard-edge fixtures were measured); `key_matte` remains the
     recommended default for flat magenta. The HSV math is ported into
     `tools/ck_pixel_ops.py` (`hue_shift_image` — pure numpy, this repo's venv has no cv2).

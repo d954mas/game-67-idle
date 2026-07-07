@@ -333,6 +333,8 @@ in the phase-3 report and the "T0261" section below.
 - `phase3/r3/` — 3 edit workflow JSONs, extracted frames per edit, history JSONs with timings.
 - `tools/CorridorKey/` — pinned commit `97e55a453060745bead1befd293f6e523c4b845c` (2026-05-28); in
   T0261 the venv + weights were built and the tool run (see "T0261" section below).
+  **MOVED 2026-07-07 (T0335)** to its permanent home `C:\projects\ai_studio_tools\CorridorKey`
+  (studio config `corridorKeyRoot`) — it is NOT part of the deletable experiment anymore.
 - `tools/MatAnyone/` — added in T0261, pinned commit `e5ddc534c1fff9bb9e54cf476095d29071b7cb4f`.
 - `phase3/r2/compare/` — T0261 side-by-side montages, wingtip zooms, per-tool checker composites,
   `metrics.json`.

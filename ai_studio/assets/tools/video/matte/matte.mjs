@@ -4,7 +4,8 @@
 // Two tools, chosen by the asset:
 //   --tool corridorkey  (DEFAULT) neural unmixer for glow/translucent/soft-edge
 //       identity-critical assets. Wraps the EXACT invocation verified in T0257
-//       phase-3 R2 (its venv under videoGenRoot/tools/CorridorKey): build a
+//       phase-3 R2 (its venv under corridorKeyRoot — permanent home since
+//       T0335, split out of the deletable experiment): build a
 //       coarse chroma AlphaHint, run corridorkey_cli run-inference, convert the
 //       FG+Matte EXR pair to straight RGBA. The ONLY tool that keeps the soft
 //       gold glow AND despills. CC-BY-NC-SA-4.0 (asset-processing carve-out;

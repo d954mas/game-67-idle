@@ -118,11 +118,11 @@ export function canvasLocalCacheRoot(root) {
 
 // Absolute on-disk root of the ISOLATED, wholesale-deletable video-generation
 // experiment (T0257): the portable ComfyUI stack, the draft/final workflow
-// JSONs, and the CorridorKey/MatAnyone tool venvs. Deliberately OUTSIDE the repo
+// JSONs, and the MatAnyone tool venv. Deliberately OUTSIDE the repo
 // — its outputs and model weights are large and machine-local, and the whole
 // thing can be deleted without touching git. The Track B video-animation
 // pipeline (ai_studio/assets/tools/video/**) reads this to find the ComfyUI
-// server, the profile workflows, and the matte tool venvs. Resolution mirrors
+// server and the profile workflows. Resolution mirrors
 // canvasProjectsRoot: VIDEO_GEN_ROOT env overrides everything (tests/one-off
 // runs); otherwise the committed `videoGenRoot` (local override wins). Unlike
 // the canvas accessors this THROWS loudly when unset — a video stage cannot run
@@ -133,6 +133,26 @@ export function videoGenRoot(root) {
   const raw = String(loadStudioConfig(root).videoGenRoot || "").trim();
   if (!raw) {
     throw new Error(`studio config is missing videoGenRoot (schema ${STUDIO_CONFIG_SCHEMA})`);
+  }
+  return looksAbsolute(raw) ? resolve(raw) : resolve(root, raw);
+}
+
+// Absolute on-disk root of the PERMANENT CorridorKey install (upstream repo
+// clone + its uv-managed venv + checkpoints, ~9GB). Split out of videoGenRoot
+// in T0335: CorridorKey outlives the deletable video-gen experiment — it is the
+// canvas's first-priority alpha method for glow/translucent art (lead-ratified,
+// alpha bench 2026-07-07). Machine-local and never committed (CC-BY-NC-SA-4.0
+// upstream, asset-processing carve-out; only wrappers live in the repo).
+// CORRIDOR_KEY_ROOT env overrides (tests/one-off runs); otherwise the committed
+// `corridorKeyRoot` (local override wins). THROWS loudly when unset — the
+// CorridorKey stages cannot run without the install, and a silent default
+// would be a fallback.
+export function corridorKeyRoot(root) {
+  const fromEnv = String(process.env.CORRIDOR_KEY_ROOT || "").trim();
+  if (fromEnv) return resolve(fromEnv);
+  const raw = String(loadStudioConfig(root).corridorKeyRoot || "").trim();
+  if (!raw) {
+    throw new Error(`studio config is missing corridorKeyRoot (schema ${STUDIO_CONFIG_SCHEMA})`);
   }
   return looksAbsolute(raw) ? resolve(raw) : resolve(root, raw);
 }
