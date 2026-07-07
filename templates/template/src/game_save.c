@@ -579,6 +579,22 @@ const GameSaveFragment *game_save_find_fragment(const char *id) {
     return NULL;
 }
 
+/* ---- Orphan read-access (retained unknown feature keys, §14 п.16 / §A3.3). Additive,
+   read-only view of s_orphans, symmetric to the fragment read-access above. Subtree stays
+   OWNED by game_save (the DevAPI aggregate duplicates before handing out). ---- */
+
+int game_save_orphan_count(void) { return s_orphan_count; }
+
+const cJSON *game_save_orphan_at(int index, const char **id) {
+    if (index < 0 || index >= s_orphan_count) {
+        return NULL; /* out of range: leave *id untouched */
+    }
+    if (id) {
+        *id = s_orphans[index].id;
+    }
+    return s_orphans[index].subtree;
+}
+
 void game_save_init(void) {
     if (!s_mono_clock) {
         s_mono_clock = default_mono_ms;

@@ -551,6 +551,45 @@ void test_bad_fragment_isolation(void) {
     TEST_ASSERT_EQUAL_INT(7, s_extra_mark); /* neighbour intact */
 }
 
+/* 14. Orphan read-access getters (Q1 follow-up): unknown feature key -> count/at expose the
+   retained subtree; out-of-range -> NULL without touching the out-param; cleared by new_game. */
+void test_orphan_read_access(void) {
+    const char *withghost =
+        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":3,\"app\":\"template_test\","
+        "\"features\":{\"game\":{\"v\":1,\"coins\":55,\"name\":\"hero\"},"
+        "\"extra\":{\"v\":1,\"mark\":9},"
+        "\"ghost\":{\"v\":1,\"secret\":\"boo\",\"n\":123}}}";
+    write_raw(PRIMARY_PATH, withghost);
+
+    game_save_load_result_t r;
+    game_save_load(&r);
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, r.status);
+
+    /* exactly one orphan retained: "ghost" (game/extra are registered) */
+    TEST_ASSERT_EQUAL_INT(1, game_save_orphan_count());
+
+    const char *id = NULL;
+    const cJSON *sub = game_save_orphan_at(0, &id);
+    TEST_ASSERT_NOT_NULL(sub);
+    TEST_ASSERT_NOT_NULL(id);
+    TEST_ASSERT_EQUAL_STRING("ghost", id);
+    TEST_ASSERT_EQUAL_STRING("boo", cJSON_GetObjectItemCaseSensitive(sub, "secret")->valuestring);
+    TEST_ASSERT_EQUAL_INT(123, (int)cJSON_GetObjectItemCaseSensitive(sub, "n")->valuedouble);
+
+    /* out of range -> NULL, out-param left untouched */
+    const char sentinel = 'x';
+    const char *id2 = &sentinel;
+    TEST_ASSERT_NULL(game_save_orphan_at(1, &id2));
+    TEST_ASSERT_NULL(game_save_orphan_at(-1, &id2));
+    TEST_ASSERT_EQUAL_PTR(&sentinel, id2); /* not written on out-of-range */
+
+    /* new_game clears retained orphans */
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_EQUAL_INT(0, game_save_orphan_count());
+    TEST_ASSERT_NULL(game_save_orphan_at(0, &id));
+}
+
 int main(void) {
     game_save_register_fragment(&s_extra_fragment);
     game_save_register_fragment(&s_fake_fragment); /* `game` registered last (§14 п.2) */
@@ -569,5 +608,6 @@ int main(void) {
     RUN_TEST(test_export_import_round_trip);
     RUN_TEST(test_transform_seam);
     RUN_TEST(test_bad_fragment_isolation);
+    RUN_TEST(test_orphan_read_access);
     return UNITY_END();
 }

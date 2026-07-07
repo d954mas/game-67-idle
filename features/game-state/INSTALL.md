@@ -230,7 +230,9 @@ py -3.12 templates/template/devapi/smoke_bot_test.py
 With the template's two fragments registered (`settings` before `game`),
 `game.state.get {path:""}` returns the multi-fragment aggregate
 `{ "settings": {...}, "game": {...} }` (registration order) and
-`game.state.schema` returns both fragment schemas. A cross-fragment
+`game.state.schema` returns both fragment schemas. Retained orphan keys
+(unknown feature blobs round-tripped per §14 п.16) appear under a separate
+`"orphans"` section in `get {path:""}`, omitted entirely when there are none. A cross-fragment
 `game.state.patch` applies each fragment atomically per key; a failure in one
 fragment (e.g. `settings.master_volume:5.0` out of range) rolls that fragment
 back without touching the other.

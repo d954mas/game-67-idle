@@ -52,8 +52,14 @@ static const GameSaveFragment *route_path(const char *path, char *head_buf, size
     return game_save_find_fragment(head_buf);
 }
 
-/* { <frag.id>: frag->to_json() } over registered fragments; NO "v" (read view,
-   not a save — §8). Orphan blobs are excluded (no handler; Q1 default). */
+/* { <frag.id>: frag->to_json(), ... [, "orphans": {<id>: subtree, ...}] } over registered
+   fragments; NO "v" (read view, not a save — §8). Retained orphan blobs (§14 п.16) ride in
+   a SEPARATE "orphans" section, appended after the live fragments and omitted entirely when
+   there are none (Q1, lead 2026-07-07) — a healthy response stays byte-identical to before.
+   Key-collision note: a registered fragment whose id were literally "orphans" would shadow
+   this section, but "orphans" is reserved here for the orphan set (fragment ids are payload
+   keys, not "orphans"). Ownership: s_orphans is owned by game_save, so only cJSON_Duplicate
+   copies go out; a failed Duplicate skips that one orphan rather than dropping the aggregate. */
 static cJSON *build_aggregate(void) {
     cJSON *agg = cJSON_CreateObject();
     if (!agg) {
@@ -67,6 +73,24 @@ static cJSON *build_aggregate(void) {
             payload = cJSON_CreateObject();
         }
         cJSON_AddItemToObject(agg, f->id, payload);
+    }
+    const int orphan_n = game_save_orphan_count();
+    if (orphan_n > 0) {
+        cJSON *orphans = cJSON_CreateObject();
+        if (orphans) {
+            for (int i = 0; i < orphan_n; i++) {
+                const char *id = NULL;
+                const cJSON *sub = game_save_orphan_at(i, &id);
+                if (!sub || !id) {
+                    continue;
+                }
+                cJSON *dup = cJSON_Duplicate(sub, true); /* copy only; s_orphans keeps ownership */
+                if (dup) {
+                    cJSON_AddItemToObject(orphans, id, dup);
+                }
+            }
+            cJSON_AddItemToObject(agg, "orphans", orphans);
+        }
     }
     return agg;
 }

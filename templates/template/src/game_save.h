@@ -37,6 +37,13 @@ int  game_save_fragment_count(void);                             /* число �
 const GameSaveFragment *game_save_fragment_at(int index);        /* NULL если вне диапазона */
 const GameSaveFragment *game_save_find_fragment(const char *id); /* NULL если ключ неизвестен */
 
+/* ---- Orphan read-access (retained unknown feature keys, §14 п.16). Read-only view of the
+   retained-orphan set, symmetric to game_save_fragment_count/at, for the DevAPI aggregate's
+   "orphans" section. The returned subtree is OWNED by game_save — callers must not free or
+   mutate it (the aggregate hands out cJSON_Duplicate copies only). ---- */
+int  game_save_orphan_count(void);                               /* число удержанных сирот */
+const cJSON *game_save_orphan_at(int index, const char **id);    /* субтри + id (out-param); NULL вне диапазона (id не трогается) */
+
 #if NT_DEVAPI_ENABLED
 /* Регистрирует 7 команд game.state.* над реестром фрагментов (A5; заменяет
    генерируемый <id>_state_register_devapi). Хендлеры читают реестр ЛЕНИВО в момент
