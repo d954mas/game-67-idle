@@ -258,18 +258,20 @@ a page reload -- reload barely exercises real persistence) and relaunches it
 with the same `--user-data-dir`, and confirms `game.state.load` + `game.state.get`
 return the same value -- i.e. the `GAME_STORAGE_APP_ID`-scoped localStorage key
 actually survives a browser restart. Requires `EMSDK` (Emscripten toolchain) and
-a local Chrome/Chromium; exits 2 (skip, not fail) if either is missing. Known
-pre-existing blocker as of A5 (verified on HEAD, engine-side, unrelated to
-`game-state`): a `GAME_DEVAPI_ENABLED=ON` wasm build compiles clean (every game
-TU, including `main.c` and `src/game_save_devapi.c`, builds warning-clean under
-`-Werror`) but fails to LINK the emscripten executable on engine-provided
-symbols — the EM_JS `nt_devapi_web_install_shim` resolves undefined out of the
-`nt_devapi_web` static archive, and (Debug wasm only) the ASan/UBSan-instrumented
-engine libs pull `__asan_*`/`__ubsan_*` runtime symbols the executable link does
-not provide. The engine is read-only; this script reports SKIP until the engine
-web-devapi link is fixed separately. (The earlier `-Werror`
-`devapi_shutdown_runtime` note was stale: `main.c` already carries a
-`#ifndef NT_PLATFORM_WEB` web stub and compiles clean on wasm.)
+a local Chrome/Chromium; exits 2 (skip, not fail) if either is missing.
+History: the wasm-devapi LINK was red until 2026-07-07. Investigation proved
+both roots lived in the template's consumption, not the engine (the engine's
+own devapi_host example is green): (1) the engine instruments Debug modules
+with ASan/UBSan on non-Windows targets and expects the consumer executable to
+carry the same flags -- fixed by `nt_set_sanitizer_flags(game)`; (2) the
+web-devapi host contract (`nt_devapi_web.h`) requires exporting
+`_nt_devapi_web_submit`/`_nt_devapi_web_poll` (which also pulls the EM_JS
+object out of the archive so `nt_devapi_web_install_shim` resolves) plus
+`-sEXPORTED_RUNTIME_METHODS=ccall` for the JS shim at runtime -- both now in
+the template's EMSCRIPTEN link block, gated on `GAME_DEVAPI_ENABLED`. The
+Debug wasm executable links and boots under ASan; full live web-devapi
+(shim round-trip in a browser) still needs the template web packaging path
+(pack over HTTP) and lands together with a future web bot harness.
 
 ## Uninstall
 

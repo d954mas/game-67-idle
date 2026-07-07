@@ -244,9 +244,16 @@ target_link_libraries(${GAME_TARGET} PRIVATE
 )
 if(EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http nt_platform_web)
+    # Web-devapi host contract (nt_devapi_web.h): the host exports the JS
+    # transport entry points; the exports are also what pulls the EM_JS object
+    # out of libnt_devapi_web.a so nt_devapi_web_install_shim resolves at link.
+    set(GAME_WEB_EXPORTS "_main,_malloc,_free")
+    if(GAME_DEVAPI_ENABLED)
+        set(GAME_WEB_EXPORTS "${GAME_WEB_EXPORTS},_nt_devapi_web_submit,_nt_devapi_web_poll")
+    endif()
     target_link_options(${GAME_TARGET} PRIVATE
         "SHELL:-sFORCE_FILESYSTEM=1"
-        "SHELL:-sEXPORTED_FUNCTIONS=_main,_malloc,_free"
+        "SHELL:-sEXPORTED_FUNCTIONS=${GAME_WEB_EXPORTS}"
         "SHELL:-sMIN_WEBGL_VERSION=2"
         "SHELL:-sMAX_WEBGL_VERSION=2"
         "SHELL:-sFULL_ES3=1"
@@ -256,6 +263,12 @@ if(EMSCRIPTEN)
         "SHELL:-sALLOW_MEMORY_GROWTH=1"
         "SHELL:-sINITIAL_MEMORY=64MB"
     )
+    if(GAME_DEVAPI_ENABLED)
+        # The engine JS shim drives the transport through Module.ccall, which
+        # recent emcc no longer exports by default (runtime need, not link).
+        target_link_options(${GAME_TARGET} PRIVATE
+            "SHELL:-sEXPORTED_RUNTIME_METHODS=ccall,UTF8ToString")
+    endif()
 else()
     # glad/stb_image_write are native-only (no GL loader / file dump on web).
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub glad stb_image_write)
@@ -298,6 +311,11 @@ if(NOT GAME_DEVAPI_ENABLED)
     target_compile_definitions(${GAME_TARGET} PRIVATE NT_DEVAPI_ENABLED=0)
 endif()
 nt_set_warning_flags(${GAME_TARGET})
+# Match the sanitizer posture of the engine archives we link: the engine
+# instruments Debug modules (non-Windows/Clang targets, incl. wasm) and expects
+# the consumer executable to carry the same flags -- without this the Debug
+# wasm link dies on undefined __asan_*/__ubsan_* (lead decision 2026-07-07).
+nt_set_sanitizer_flags(${GAME_TARGET})
 set_target_properties(${GAME_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}")
 
 if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)
