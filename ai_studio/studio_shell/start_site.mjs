@@ -1,5 +1,14 @@
 // Cross-platform launcher for the AI Studio browser site.
-// On this Windows/Codex setup, prefer start_site_windows.ps1 for persistent browser use.
+//
+// ONE spawn shape for every platform: a direct detached `node server.mjs <port>` with
+// stdout/stderr redirected to log files. Windows used to go through a nested
+// `cmd -> start -> cmd -> runner.cmd` wrapper — that command line never survived Node's
+// argument re-quoting (nor windowsVerbatimArguments; probed 2026-07-07), so the inner
+// runner NEVER executed: the launcher timed out with "(missing)" log tails and the pid
+// file was never written, which also made --restart dead code. A plain detached spawn
+// with file-descriptor stdio is proven to outlive the parent on Windows (probe: parent
+// process.exit(0) immediately, server answers HTTP 200 afterwards), so the wrapper was
+// deleted rather than repaired.
 //
 // Usage:
 //   node ai_studio/studio_shell/start_site.mjs
@@ -26,7 +35,6 @@ const url = `http://127.0.0.1:${port}/`;
 const pidFile = join(stateDir, `studio_shell_${port}.pid`);
 const outLog = join(stateDir, `studio_shell_${port}.out.log`);
 const errLog = join(stateDir, `studio_shell_${port}.err.log`);
-const runnerCmd = join(stateDir, `studio_shell_${port}.cmd`);
 
 mkdirSync(stateDir, { recursive: true });
 
@@ -96,42 +104,6 @@ function stopRecordedProcess(path) {
 }
 
 function startServer() {
-  if (process.platform === "win32") return startWindowsServer();
-  return startPosixServer();
-}
-
-function startWindowsServer() {
-  writeFileSync(
-    runnerCmd,
-    [
-      "@echo off",
-      `cd /d "${repoRoot}"`,
-      `"${process.execPath}" "${serverPath}" ${port} >> "${outLog}" 2>> "${errLog}"`,
-      "",
-    ].join("\r\n"),
-    "utf8",
-  );
-
-  const command = `start "" /min cmd.exe /d /s /c ""${runnerCmd}""`;
-  const child = spawn("cmd.exe", ["/d", "/s", "/c", command], {
-    cwd: repoRoot,
-    detached: true,
-    stdio: "ignore",
-    windowsHide: true,
-  });
-  child.unref();
-  return child;
-}
-
-function rmIfExists(path) {
-  try {
-    rmSync(path, { force: true });
-  } catch {
-    // Best effort: startup validation will fail if a stale file matters.
-  }
-}
-
-function startPosixServer() {
   const outFd = openSync(outLog, "a");
   const errFd = openSync(errLog, "a");
   const child = spawn(process.execPath, [serverPath, String(port)], {
@@ -143,7 +115,18 @@ function startPosixServer() {
   child.unref();
   closeSync(outFd);
   closeSync(errFd);
+  // child.pid IS the server's pid on every platform now (no wrapper process between) —
+  // recorded so --restart's stopRecordedProcess has something real to kill.
+  if (child.pid) writeFileSync(pidFile, `${child.pid}\n`, "utf8");
   return child;
+}
+
+function rmIfExists(path) {
+  try {
+    rmSync(path, { force: true });
+  } catch {
+    // Best effort: startup validation will fail if a stale file matters.
+  }
 }
 
 function readRecordedPid(path) {
