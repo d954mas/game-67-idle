@@ -20,7 +20,7 @@ typedef enum progression_mode_t {
 /* on_level_up-эмиссия: РОВНО одна из форм (другой указатель NULL / поле игнор):
    currency (def_id!=NULL) -> items_add(purse, def_id, amount);
    xp-to-track (to_track!=NULL) -> progression_add_xp(to_track, amount) (каскад).
-   Codegen (tools/generate_progression_tracks.py) НЕ печёт эту ветку в И3 (LEAN-порез
+   Codegen (features/progression-core/scripts/generate_progression_tracks.py) НЕ печёт эту ветку в И3 (LEAN-порез
    A) — каждый испечённый трек несёт .on_level_up=NULL/.on_level_up_count=0; этот
    рантайм-путь покрыт ТОЛЬКО рукописным тест-каталогом (tests/test_progression_catalog.c). */
 typedef struct progression_emit_t {

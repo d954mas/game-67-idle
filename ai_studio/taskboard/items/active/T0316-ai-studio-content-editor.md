@@ -28,7 +28,8 @@ Schema-driven редактор каталога предметов. Дизайн
 
 Решения лида 2026-07-07 (после T0327 И2c, обновляют вводные):
 - items.json живёт в content/ (шаблон и игры), не в design/data/.
-- Op-слой read-v1 ГОТОВ: templates/template/tools/items_ops.py
+- Op-слой read-v1 ГОТОВ: features/items-core/scripts/items_ops.py
+  (переехал из templates/template/tools/ в T0337)
   (list/validate/schema, --json со структурными ошибками
   {rule,id,field,msg}) — редактор садится на него (фаза 2 = write-часть).
 - Редактор показывает состояние lock (content/items.lock.json v2):

@@ -6,11 +6,17 @@ parity, design §7): subprocess + `--json` gives the Node editor the exact same
 answers this CLI gives a human. read-v1 only (LEAN §3 -- upsert/deprecate are
 editor-era, out of scope here).
 
-    py -3.12 tools/items_ops.py list     [--catalog content/items.json] [--json]
-    py -3.12 tools/items_ops.py validate [--catalog content/items.json] [--schema content/item_fields.schema.json] [--baseline content/items.lock.json] [--state-schema state/items.schema.json] [--json]
-    py -3.12 tools/items_ops.py schema   [--schema content/item_fields.schema.json] [--json]
+Moved to features/items-core/scripts/ in T0337; its own argparse defaults are
+now script-relative to features/items-core/, NOT the game/template root, so
+every path below must be passed explicitly (never rely on the defaults).
+Canonical invocation runs from the game/template root, e.g. templates/template/
+(see src/features/items/README.md "Content workflow"):
 
-Shares its data model with tools/generate_items_catalog.py by IMPORTING it
+    py -3.12 ../../features/items-core/scripts/items_ops.py list     --catalog content/items.json [--json]
+    py -3.12 ../../features/items-core/scripts/items_ops.py validate --catalog content/items.json --schema content/item_fields.schema.json --baseline content/items.lock.json --state-schema state/items.schema.json --src-dir src/features/items [--json]
+    py -3.12 ../../features/items-core/scripts/items_ops.py schema   --schema content/item_fields.schema.json [--json]
+
+Shares its data model with features/items-core/scripts/generate_items_catalog.py by IMPORTING it
 (never re-parsing the catalog with a second, forkable set of rules): `list`
 and `validate` reuse generate_items_catalog.load_json/validate_catalog/
 render_header/render_source so the codegen's own sanity net (namespace

@@ -1,4 +1,4 @@
-"""Tests for tools/items_ops.py's destructive-change guard (T0327 И2c
+"""Tests for features/items-core/scripts/items_ops.py's destructive-change guard (T0327 И2c
 deep-review follow-up, F4). Precedent: features/game-state/scripts/
 generate_state_test.py (unittest against temp fixtures, module imported
 in-process rather than shelled out).
@@ -12,7 +12,11 @@ every test builds its own temp catalog/lock/state-schema triple (the real
 content/item_fields.schema.json IS reused -- it is the generic, stable field
 shape contract, not something these tests are exercising).
 
-    py -3.12 tools/items_ops_test.py
+Runs as a ctest via CMakeLists.txt's `items_ops_test` target (Python3_EXECUTABLE
++ "${ITEMS_CORE_SCRIPTS}/items_ops_test.py", WORKING_DIRECTORY = the game's
+template root), or directly via pytest from the repo root:
+
+    py -3.12 -m pytest features/items-core/scripts/items_ops_test.py
 """
 
 from __future__ import annotations

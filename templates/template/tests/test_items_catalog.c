@@ -5,7 +5,8 @@
 #include <string.h>
 
 /* И2a (§6.8): catalog-lookup over the const tables generated from
-   content/items.json by tools/generate_items_catalog.py. Compiles ALWAYS (no
+   content/items.json by features/items-core/scripts/generate_items_catalog.py.
+   Compiles ALWAYS (no
    #if FEATURE_GAME_STATE -- the axis is gone, И2-0). Lint note (G11/§10): this
    file never strcmp()s on display_name -- only ids/tags/kinds are compared. */
 

@@ -6,7 +6,7 @@
 
 /* GOLDEN (build_spec_t0327_i3 §5.8b/#7). Links the REAL demo
    progression_tracks.gen.c -- catches a FLOOR-vs-ROUND regression or a struct-
-   layout mismatch in tools/generate_progression_tracks.py against the actual
+   layout mismatch in features/progression-core/scripts/generate_progression_tracks.py against the actual
    compiled output, not a hand-computed expectation. Generation auto-triggers
    via the add_custom_command OUTPUT this target links (precedent: items
    :593-599 test_items_catalog). */
