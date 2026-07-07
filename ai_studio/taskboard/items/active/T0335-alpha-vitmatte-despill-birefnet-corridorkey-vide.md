@@ -1,7 +1,7 @@
 ---
 id: T0335
 title: "Alpha-портфель в прод: ViTMatte+despill и BiRefNet тулзы, ветки роутера, CorridorKey из video_gen_experiment в постоянный дом"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P2
@@ -36,3 +36,4 @@ video_gen_experiment/tools в постоянный дом ДО сноса пап
 - 2026-07-07: CorridorKey ПЕРЕЕХАЛ: C:/projects/ai_studio_tools/CorridorKey, конфиг corridorKeyRoot (env CORRIDOR_KEY_ROOT), venv жив (torch cu128+CUDA), live ck_smoke green+magenta ALL PASS с нового пути, канвас-сьют 710/710, паспорт/PAUSE_STATE/README правлены (коммит 13e9634c4). Снос video_gen_experiment для лида РАЗБЛОКИРОВАН. Тулзы vitmatte_matte + birefnet_cutout строятся параллельно (2 fast-worker).
 - 2026-07-07: Канвас-улика создана: проект alpha-bench-2026-07-07-t0335-329849 (canvasProjectsRoot) — борды поста (hero_full, routing_full) + 12 кураторских вырезок по нишам (свечение/тонкое/призрак/произвольный фон/опак) + 6 заметок с вердиктами и указателем на полный архив YandexDisk alpha_bench_2026-07-07. Группы по рядам.
 - 2026-07-07: Тулзы закоммичены (737816ebc): birefnet_cutout (rembg 2.0.76, allowlist-гейт лицензии в коде, 12 тестов, смок 25-28s CPU) + vitmatte_matte (свой venv torch cu128, matte_math pure-модуль 6 тестов, GPU-смок 1.04s, fractional 8.44%). Идёт parity-фаза (deep-reasoner): методы vitmatte/birefnet на канвасе + таблица маршрутизации в route/README.
+- 2026-07-07: ВСЁ РЕАЛИЗОВАНО (ветка alpha-portfolio-t0335, 3 коммита, запушена): (1) лицензия-гейт закрыт (BiRefNet MIT зелёный; ViTMatte ALLOW-WITH-CONDITIONS — Adobe-DIM каветс, веса local-only, финальное слово по коммерции за лидом); (2) CorridorKey переехал в C:/projects/ai_studio_tools/CorridorKey (corridorKeyRoot), live-смок PASS, снос video_gen_experiment разблокирован; (3) тулзы birefnet_cutout+vitmatte_matte (per-tool law, offline-тесты + live-смоки); (4) canvas методы vitmatte/birefnet explicit-only (op parity CLI/API/сайт, 717 pass, live e2e оба); (5) таблица маршрутизации в route/README; (6) канвас-улика alpha-bench-2026-07-07-t0335-329849. НА ЛИДЕ: приёмка + слово на мердж в мастер + снос папки эксперимента (после мерджа) + вердикт по коммерции ViTMatte-аутпутов.
