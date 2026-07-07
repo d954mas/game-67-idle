@@ -145,6 +145,7 @@ add_executable(${GAME_TARGET}
     src/features/settings/settings_screen.c
     src/features/items/items_catalog.c        # И2a: catalog-lookup over the codegen tables below
     "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.c" # И2a: const item/container tables (content codegen)
+    "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c" # И3a: const progression track/curve tables (content codegen)
 )
 if(NOT EMSCRIPTEN)
     add_dependencies(${GAME_TARGET} game_asset_packs)
@@ -181,6 +182,26 @@ add_custom_command(
     COMMENT "Generating items content catalog (const C tables)"
     VERBATIM
 )
+
+# И3a: progression tracks CONTENT codegen (mirrors the items content-codegen
+# block above -- deliberately a separate content-codegen invocation, not the
+# game-state generator below). Bakes content/progression.json's curve presets
+# into compile-time const int64 cost tables; --items cross-checks currency_def
+# against the items catalog (ITEMS_CATALOG_JSON, defined just above).
+set(PROG_TRACKS_JSON "${CMAKE_CURRENT_SOURCE_DIR}/content/progression.json")
+set(PROG_TRACKS_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_progression_tracks.py")
+add_custom_command(
+    OUTPUT
+        "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.h"
+        "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_SOURCE_GENERATED_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${PROG_TRACKS_GENERATOR}"
+        --catalog "${PROG_TRACKS_JSON}" --items "${ITEMS_CATALOG_JSON}"
+        --out-dir "${GAME_SOURCE_GENERATED_DIR}"
+    DEPENDS "${PROG_TRACKS_JSON}" "${ITEMS_CATALOG_JSON}" "${PROG_TRACKS_GENERATOR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Generating progression tracks catalog (const int64 curve tables)"
+    VERBATIM)
 
 set(GAME_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
 set(GAME_STATE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/generate_state.py")
@@ -255,6 +276,29 @@ add_custom_command(
     COMMENT "Generating installed items-state fragment sources"
     VERBATIM
 )
+# И3a: FOURTH fragment `progression` -- tracks-map (level+xp, same flat-map
+# shape as items' owned, §2.1) + levelup event (NOT empty) + NO hooks (§5.3
+# OQ3: fresh game = empty tracks = level 0 via lazy allocation; no bootstrap.c).
+set(PROGRESSION_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/progression.schema.json")
+set(PROGRESSION_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/progression_state.c")
+set(PROGRESSION_STATE_GENERATED_EVENTS_SOURCE "${GAME_STATE_GENERATED_DIR}/progression_state_events.gen.c")
+add_custom_command(
+    OUTPUT
+        "${GAME_STATE_GENERATED_DIR}/progression_state.h"
+        "${PROGRESSION_STATE_GENERATED_SOURCE}"
+        "${GAME_STATE_GENERATED_DIR}/progression_state_schema.gen.h"
+        "${GAME_STATE_GENERATED_DIR}/progression_state_events.gen.h"
+        "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_STATE_GENERATED_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
+        --schema "${PROGRESSION_STATE_SCHEMA}"
+        --out-dir "${GAME_STATE_GENERATED_DIR}"
+        --fragment progression
+    DEPENDS "${PROGRESSION_STATE_SCHEMA}" "${GAME_STATE_GENERATOR}"
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+    COMMENT "Generating installed progression-state fragment sources"
+    VERBATIM
+)
 target_sources(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_SOURCE}"   # A4: also carries the generated game_state_fragment descriptor
     "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # E2: typed event structs/emit/descriptors
@@ -264,6 +308,9 @@ target_sources(${GAME_TARGET} PRIVATE
     "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}" # И2a: items.txn event (R2: not empty, must link)
     src/features/items/items_bootstrap.c     # И2a stubs -> И2b real bodies (Р9 §7.3: on_new_game/reconcile)
     src/features/items/items_containers.c    # И2b: ownership/containers/purse (add/remove/move/count/can_afford)
+    "${PROGRESSION_STATE_GENERATED_SOURCE}"        # И3a: generated progression fragment state layer
+    "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}" # И3a: progression.levelup event (not empty, must link)
+    src/features/progression/progression.c   # И3a: queries/mutations/update (uses progression_state + items + tracks)
     src/game_state_json.c
     src/game_storage.c
     src/game_save.c              # A3
@@ -647,4 +694,47 @@ if(NOT EMSCRIPTEN)
     # features/game-state/scripts/generate_state_test.py.
     add_test(NAME items_ops_test COMMAND "${Python3_EXECUTABLE}" tools/items_ops_test.py
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    # И3a (§5.9d, H2/R11): test_progression compiles progression.c, which
+    # #includes progression_tracks.gen.h -- but does NOT link
+    # progression_tracks.gen.c (it links its OWN hand-written k_tracks catalog,
+    # tests/test_progression_catalog.c, to avoid a duplicate-symbol link error,
+    # R10). Without a linked OUTPUT of the codegen custom_command, ninja has no
+    # dependency edge forcing the .gen.h to exist before progression.c compiles
+    # on a clean/parallel build -- a phony target + add_dependencies closes that
+    # gap (items avoids this because it LINKS its generated .gen.c, §5.9d).
+    add_custom_target(progression_tracks_gen DEPENDS
+        "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.h"
+        "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c")
+
+    add_executable(test_progression
+        tests/test_progression.c
+        tests/test_progression_catalog.c                        # РУКОПИСНЫЙ k_tracks (НЕ .gen.c, R10)
+        src/features/progression/progression.c
+        "${PROGRESSION_STATE_GENERATED_SOURCE}"                  # progression_state.c
+        "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"           # progression_state_events.gen.c
+        src/features/items/items_containers.c                    # items runtime (progression spends/reads purse)
+        src/features/items/items_catalog.c "${ITEMS_CATALOG_GENERATED_SOURCE}"
+        "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
+        src/features/items/items_bootstrap.c                     # items on_new_game/reconcile (link completeness)
+        src/game_state_json.c src/game_events.c)
+    add_dependencies(test_progression progression_tracks_gen)   # H2: guarantees progression_tracks.gen.h before progression.c compiles
+    target_link_libraries(test_progression PRIVATE cjson unity nt_hash nt_log nt_core)
+    target_include_directories(test_progression PRIVATE src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
+    target_compile_definitions(test_progression PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_progression PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_progression COMMAND test_progression WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+
+    # GOLDEN (§5.8b): links the DEMO progression_tracks.gen.c (generation
+    # auto-triggers via the custom_command OUTPUT, precedent items :593) -- the
+    # ONLY target in this file that links the real generated catalog; no
+    # duplicate-k_tracks conflict with test_progression (which never links it).
+    add_executable(test_progression_curve
+        tests/test_progression_curve.c
+        "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c")
+    target_link_libraries(test_progression_curve PRIVATE unity)
+    target_include_directories(test_progression_curve PRIVATE src "${GAME_SOURCE_GENERATED_DIR}")
+    target_compile_definitions(test_progression_curve PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_progression_curve PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_progression_curve COMMAND test_progression_curve)
 endif()

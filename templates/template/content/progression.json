@@ -1,0 +1,13 @@
+{
+  "schema": "game_seed.progression_tracks",
+  "namespace": "tmpl",
+  "tracks": [
+    {
+      "id": "hero",
+      "mode": "auto",
+      "currency_def": "tmpl.xp",
+      "max_level": 20,
+      "curve": { "type": "exp", "base": 50, "growth_num": 3, "growth_den": 2 }
+    }
+  ]
+}

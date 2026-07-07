@@ -173,6 +173,19 @@ updated: 2026-07-07
   фичи + скилл nt-game-items). Каждый срез: исполнитель → deep-ревью →
   фикс-раунд → контрольный прогон. ОСТАЛОСЬ: И3 progression +
   resource_panel (спека дальше).
+- 2026-07-07: И3 спека 962f771de (2 Opus-ревью ACCEPT-WITH-FIXES →
+  19 фиксов + LEAN: on_level_up codegen-ветка вырезана, кривые
+  exp-only + обязательный golden запекания, progression.json БЕЗ
+  created/lock — решение записано в спеку). И3a ГОТОВ: progression
+  (L2) — треки-данные + codegen кривой FLOOR→int64, xp из purse
+  (включает items.h — единственное фича-ребро), T5-капы (64/8,
+  анти-хэнг доказан), 4-й фрагмент settings→items→progression→game,
+  событие levelup (old/new честные, только из тика). Deep-ревью
+  поймал data-loss ДО коммита (manual level_up списывал purse до
+  аллокации трек-записи — при 32/32 валюта сгорала) + гард усечения
+  ключа по §2.1; 7 фиксов + 3 новых loud-reject генератора. ctest
+  15/15, wasm оба пресета, грепы слоёвости чисты. ОСТАЛОСЬ: И3b
+  (resource_panel + game_format + demo_hud).
 - 2026-07-07: И2c фикс-раунд (ревью гарда) + разворот лида по дате:
   гард стал ОБЯЗАТЕЛЬНЫМ (items_ops validate + items_ops_test в ctest,
   13/13), new_game.mjs сбрасывает lock новой игры в пустой baseline

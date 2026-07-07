@@ -1,6 +1,7 @@
 #include "features/game_features.h"
 #include "systems/sys_move.h"
 #include "features/settings/settings.h"
+#include "features/progression/progression.h" /* И3a: progression_update() tick (auto/threshold level-ups) */
 #include "ui/ui_runtime.h"
 #include "app/nt_app.h" /* g_nt_app.dt */
 #if NT_DEVAPI_ENABLED
@@ -21,6 +22,7 @@ void game_features_init(World *w) {
 
 void game_features_update(World *w, float dt) {
     sys_move(w, dt); /* мировая симуляция шаблона; здесь же фичи эмитят события */
+    progression_update(); /* И3a: auto/threshold tick (T5 HARD-капы внутри) */
     /* TODO(feature-migration): <id>_update(w, dt) по строке на фичу */
 }
 

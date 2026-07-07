@@ -1,0 +1,28 @@
+{
+  "schema": "game_seed.progression",
+  "schema_version": 2,
+  "fragment": "progression",
+  "version": 1,
+  "string_max": 64,
+  "types": {
+    "TrackState": {
+      "kind": "object",
+      "fields": {
+        "level": { "type": "int", "default": 0, "min": 0, "max": 9999 },
+        "xp":    { "type": "i64", "default": 0, "min": 0, "max": 9000000000000000000 }
+      }
+    }
+  },
+  "fields": {
+    "tracks": { "type": "map<string,TrackState>", "max_count": 32 }
+  },
+  "events": {
+    "levelup": {
+      "fields": {
+        "track":     { "type": "string" },
+        "old_level": { "type": "i64" },
+        "new_level": { "type": "i64" }
+      }
+    }
+  }
+}

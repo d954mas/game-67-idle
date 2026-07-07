@@ -211,6 +211,13 @@ them. Example: deleting 10 defs in one release moves all 10 ids into
 (`items_migrate_2_to_3`) handles all 10 together. `validate` never requires
 distinct versions per entry.
 
+**Cross-feature note (T0327 И3, `progression`):** a currency def_id referenced
+by `content/progression.json`'s `currency_def` is not removed without a
+synchronized edit to `content/progression.json` — this lock workflow has no
+visibility into `progression`, so the removal passes this guard cleanly but
+breaks `tools/generate_progression_tracks.py` loudly instead (see
+`features/progression/README.md`).
+
 **Data-shape guards:** an id listed in BOTH `def_ids` and `removed`
 simultaneously is `lock-inconsistent` (fix `items.lock.json` by hand — it
 must be exactly one of "currently shipped" or "documented removal"); a
