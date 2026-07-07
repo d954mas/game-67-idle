@@ -80,7 +80,7 @@ second expander:
 |---|---|
 | `background`: `magenta`\|`green`\|`transparent` (transparent = loud error, REST-only — v1 targets codex) | `params.bg_key` hex — only `#ff00ff`/`#00ff00` accepted at preview/generate time; **no transparent path exists** on canvas v1 (no third hex maps to a background) |
 | `anchor` (one optional file, becomes every job's `input_image`) | no `anchor` field — the style card's ref image + the recipe card's own member images (<=5 total) are the refs, sent to every sheet |
-| `jobs.json`'s `out`/`input_image` (real — `gen_batch.py` writes to `out`, reads `input_image` from the anchor) | `out`/`input_image` are **dead fields** — canvas calls the codex-seam directly, never `gen_batch.py` |
+| `jobs.json`'s `out`/`input_image` (real — `gen_batch.py` writes to `out`, reads `input_image` from the anchor) | `out`/`input_image` are **dead fields** — canvas calls the engine seam directly (codex or agy, per the card's `recipe.engine`; `"both"` is a loud error in pack mode), never `gen_batch.py` |
 | `sheet.grid` — any positive `[rows, cols]` | `pack.grid` — each of `[rows, cols]` capped **1..3** (canvas-only restriction) |
 | `gen_batch.py` skip-if-exists keys per output file (so `candidates > 1` re-runs correctly) | `--run` resume dedups by `sheet_axes` only — with `n_candidates > 1` the first landed candidate "satisfies" the sheet and later candidates are skipped on resume (known v1 gap, T0332; harmless at the default `n_candidates: 1`) |
 
@@ -89,6 +89,16 @@ Rule: on a canvas pack, **ALWAYS run `recipe-pack-preview` before
 preview that reflects what the expander will actually send (single-image
 Generate builds its prompt a different way, and the generate verb itself has
 no dry-run).
+
+Rule (agy packs): on `engine: "gemini"` the model holds the grid and the flat
+key background, but with the template's default constraints it reliably draws
+thin separator lines between cells, and the slice count gate rejects the sheet
+(`region_count` = cells+1 — the line cross is an extra region; 2/2 REJECT in
+the 2026-07-07 smoke). Put an explicit no-lines clause in the CARD prompt —
+"objects float on the continuous flat background — ABSOLUTELY NO dividing
+lines, separators, borders or frames between cells, the background color runs
+unbroken across the whole image" — with it the smoke sheet sliced 4/4 first
+try. codex has not needed this clause.
 
 ## Handoff To Asset Workflow
 

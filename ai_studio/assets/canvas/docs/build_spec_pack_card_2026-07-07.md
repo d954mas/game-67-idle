@@ -314,3 +314,15 @@ engine-гейт на preview/generate, style ref-image идёт в рефы).
   хинтом; axes-ошибки с позицией; имена run-групп; README/скиллы как
   deliverables; CLI read-modify-write. Не внесено осознанно: prompt_hash в
   мете ката (lean: правило «лист = anchor» вместо дублирования данных).
+- 2026-07-07 agy-smoke (одобрен лидом, «Да, agy проверим»): codex-only гейт
+  снят — паки работают на engine `codex` ИЛИ `gemini` (один движок на ран;
+  `both` остаётся громкой ошибкой: два движка на лист удвоили бы каждый
+  платный вызов и сломали бы resume-идентичность по sheet_axes). Диспатч по
+  `recipe.engine` через тот же `{prompt, refPaths, params}`-шов; каждый лист
+  пишет `meta.pack.engine` (правдиво при смене движка между resume'ами);
+  tool_runs пишет реальный engine. Живой smoke (potion 2×2, 3 листа):
+  agy ДЕРЖИТ сетку и плоский #FF00FF, но с дефолтными констрейнтами шаблона
+  системно рисует тонкие линии-разделители → slice REJECT 5/4 (2/2 листа).
+  Лечение промпт-стороной в промпте КАРТЫ (явный запрет линий/рамок,
+  «background runs unbroken») — после него slice OK 4/4 с первой попытки.
+  Правило записано в README (Pack mode) и throughput-and-handoff.md.

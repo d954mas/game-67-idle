@@ -62,7 +62,7 @@ import { buildBlackPlatePrompt, buildWhitePlatePrompt, generatePlate } from "./t
 // module's own .seen.txt silent-divergence guard (generateImageGemini/verifyAgyRefProof) is
 // what keeps a ref from ever silently failing to reach agy, so ops.mjs just forwards refPaths
 // to whichever engine(s) are attempted, same as it always has for codex.
-import { generateImageCodex, generateImageGemini } from "./tools/recipe_generate.mjs";
+import { ENGINE_PARAMS_USED, generateImageCodex, generateImageGemini } from "./tools/recipe_generate.mjs";
 // Anim-card generation (T0265 increment 1): the ONE default generator seam ops.generateAnimFromCard
 // falls back to — orchestrates the Track B video pipeline generate->frames->matte stages and stops
 // at matte (see tools/anim_generate.mjs). Injectable: tests pass a fake `generators.run` so ComfyUI/
@@ -2270,7 +2270,14 @@ const RECIPE_ENGINES = new Set(["codex", "gemini", "both"]); // R2/R3: engine ch
 // (R1 — style cards land in increment 3); `expanded`/`use_expanded`/`last_run` stay inert
 // placeholders until increments 2-3 write/consume them. `params` was write-once-at-creation
 // too, until T0332 v2 unfroze four of its fields (bg_key/n_candidates/size/quality — see
-// normalizeRecipePatch's own `params` handling; `model`/`supersample` remain immutable).
+// normalizeRecipePatch's own `params` handling; `model` remains immutable). `supersample`
+// was REMOVED from the defaults 2026-07-07 (лид: "без техдолга") — nothing anywhere ever
+// consumed it (not generate_image.py, not either command builder, not the expander); cards
+// minted before then still carry `supersample: true` in their stored blob, which is harmless
+// legacy (snapshots are allow-listed via snapshotParamsForEngine, so it never leaks into
+// provenance, and patching it stays a loud unknown-key error below).
+// `model`/`quality` are consumed by the CODEX generator only; gemini/agy consumes only
+// `size` (ENGINE_PARAMS_USED in tools/recipe_generate.mjs — the seam owns that list).
 // `pack` (T0332 v2, build-spec build_spec_pack_card_2026-07-07.md — lead decision "Слить":
 // pack mode is NOT a third card type, it is an optional field on the recipe blob) defaults to
 // null — "no pack mode, a single Generate mints one image" (unchanged single-image behavior);
@@ -2288,7 +2295,6 @@ function defaultRecipe() {
       quality: "high",
       model: "gpt-image-2",
       bg_key: "#ff00ff",
-      supersample: true,
       n_candidates: 1,
     },
     style_ref: null,
@@ -2402,8 +2408,8 @@ function normalizeRecipePatch(patch) {
       if (typeof patch.params.quality !== "string") throw new Error(`recipe params.quality must be a string, got ${JSON.stringify(patch.params.quality)}`);
       params.quality = patch.params.quality;
     }
-    // model (and supersample, and any typo) is immutable/unknown — a loud error, never a
-    // silent ignore (mirrors phase A's own pack.params rule verbatim).
+    // model (and any typo, and legacy supersample) is immutable/unknown — a loud error, never
+    // a silent ignore (mirrors phase A's own pack.params rule verbatim).
     const unknownParamKeys = Object.keys(patch.params).filter((key) => !["bg_key", "n_candidates", "size", "quality"].includes(key));
     if (unknownParamKeys.length) {
       throw new Error(`recipe params.${unknownParamKeys[0]} is immutable or unknown — only bg_key/n_candidates/size/quality are patchable (model is fixed)`);
@@ -2754,6 +2760,24 @@ const MAX_RECIPE_REFS = 5; // generate_image.py --input-image cap (research: <=5
 // agy/Antigravity CLI is what actually runs behind the "gemini" engine choice, R2).
 const RECIPE_ENGINE_SUFFIX = { codex: "codex", gemini: "agy" };
 
+// Provenance truth (lead, 2026-07-07, "без техдолга"): params_snapshot/tool_runs record ONLY
+// the params the engine that ran actually consumed (ENGINE_PARAMS_USED — the generator seam's
+// own contract, owned next to the command builders in tools/recipe_generate.mjs) plus the
+// caller-named CANVAS-level params that genuinely shaped the run regardless of engine
+// (`extraKeys`: bg_key — baked into a pack sheet's prompt / cutout advisory on the
+// single-image path; n_candidates — the pack expander's overgen count, pack branch only).
+// A gemini run must never claim a gpt-image model or a quality it had no knob for.
+// `recipe.params` itself stays whole on the card — flipping the engine back loses nothing.
+// "both" is the caller's job to resolve per element/attempt; this helper takes ONE engine.
+function snapshotParamsForEngine(engine, params, extraKeys = []) {
+  const source = params || {};
+  const out = {};
+  for (const key of [...(ENGINE_PARAMS_USED[engine] || []), ...extraKeys]) {
+    if (source[key] !== undefined) out[key] = source[key];
+  }
+  return out;
+}
+
 // Resolve the text a generate call actually sends: `expanded` (increment 3's Expand-prompt
 // output) when present AND enabled, else the base `prompt` — trimmed either way. Returns ""
 // on an all-whitespace/missing value so the caller's emptiness check is a single truthiness
@@ -2896,7 +2920,6 @@ export async function generateFromRecipe(root, { projectId, groupId, generators,
     const startX = currentCard.x + currentCard.w + gap;
     let cursorY = currentCard.y;
 
-    const paramsSnapshot = { ...recipe.params };
     let workingProject = current;
     const minted = []; // {engine, element, bytes}
     for (const result of results) {
@@ -2912,7 +2935,9 @@ export async function generateFromRecipe(root, { projectId, groupId, generators,
             at,
             prompt_snapshot: effectivePromptText,
             refs_snapshot: finalRefSrcs,
-            params_snapshot: paramsSnapshot,
+            // Per ELEMENT, not per call — under engine="both" the codex element records
+            // size/quality/model while its agy sibling records only size (+ bg_key).
+            params_snapshot: snapshotParamsForEngine(result.engine, recipe.params, ["bg_key"]),
             ...(styleSnapshot ? { style_snapshot: styleSnapshot } : {}),
           },
         },
@@ -2953,9 +2978,10 @@ export async function generateFromRecipe(root, { projectId, groupId, generators,
         prompt_snapshot: effectivePromptText,
         engine: requestedEngine,
         refs: finalRefSrcs,
-        size: recipe.params.size,
-        quality: recipe.params.quality,
-        model: recipe.params.model,
+        // ONE entry per call, so "both" records the codex superset (size/quality/model —
+        // the union of what its two halves consumed); each element's own meta.recipe
+        // params_snapshot above is the per-engine exact record.
+        ...snapshotParamsForEngine(requestedEngine === "both" ? "codex" : requestedEngine, recipe.params, ["bg_key"]),
       },
       result_summary: {
         results: minted.map((m) => ({ engine: m.engine, elementId: m.element.id, bytes: m.bytes })),
@@ -3209,9 +3235,12 @@ const PACK_EXPANDER_SCRIPT = ".codex/skills/nt-asset-image-generation/scripts/ex
 // BG_KEY_BACKGROUND (loud if it is not EXACTLY the magenta/green pair — bg_key itself is generic
 // hex at patch-time, this is where the pack-specific pairing is actually enforced) and
 // `candidates` from `recipe.params.n_candidates`; `gen` (size/quality/model) is `recipe.params`
-// wholesale. Loud on `recipe.engine !== "codex"` (v1 targets codex only; gemini/both are a
-// later-version non-goal — checked HERE, i.e. in both packPreview and the generate pack branch,
-// never at patch-time, since a cross-field refusal at patch-time would depend on edit order) and
+// wholesale. Loud on engine "both" (a pack run is per-sheet resumable/replaceable by sheet_axes
+// identity — TWO engines per sheet would double every paid call AND break that identity; compare
+// mode stays the single-image branch's alone; codex and gemini/agy are both legal — agy grid
+// adherence smoke-checked 2026-07-07; checked HERE, i.e. in both packPreview and the generate
+// pack branch, never at patch-time, since a cross-field refusal at patch-time would depend on
+// edit order) and
 // on a SET `style_ref` that doesn't resolve to a real style-card group (defensive re-check;
 // patchRecipe already validates this at write time — a hand-edited project.json is the only way
 // to reach this). Callers add their OWN `out_dir` (a required expander key, but otherwise a stub
@@ -3225,8 +3254,8 @@ const PACK_EXPANDER_SCRIPT = ".codex/skills/nt-asset-image-generation/scripts/ex
 function buildPackConfig(project, card) {
   const recipe = card.recipe;
   const cardLabel = card.name || card.id;
-  if (recipe.engine !== "codex") {
-    throw new Error(`recipe card "${cardLabel}" (${card.id}) has engine ${JSON.stringify(recipe.engine)} — pack mode only supports "codex" in v1`);
+  if (recipe.engine !== "codex" && recipe.engine !== "gemini") {
+    throw new Error(`recipe card "${cardLabel}" (${card.id}) has engine ${JSON.stringify(recipe.engine)} — pack mode runs ONE engine per run: "codex" or "gemini" ("both" is the single-image branch's compare mode)`);
   }
   const pack = recipe.pack;
   // background: derived from params.bg_key, NOT a pack field. A hex that isn't exactly one of
@@ -3522,11 +3551,11 @@ async function commitPackSheetOutcome(root, projectId, {
         at,
         params: {
           subject_template: recipe.prompt,
-          engine: "codex",
+          engine: recipe.engine,
           refs: refSrcs,
-          size: recipe.params.size,
-          quality: recipe.params.quality,
-          model: recipe.params.model,
+          // Same engine-filtered record the sheets' params_snapshot carries — never a
+          // hardcoded codex triple (a gemini pack run must not claim a gpt-image model).
+          ...snapshotParamsForEngine(recipe.engine, recipe.params, ["bg_key", "n_candidates"]),
           pack: recipe.pack,
         },
         result_summary: { run_group_id: targetGroupId, results: [...priorResults, resultRow], failed: failedSoFar },
@@ -3555,13 +3584,16 @@ async function commitPackSheetOutcome(root, projectId, {
 // set) are resolved ONCE here — the SAME resolve the single-image branch uses — and travel to
 // EVERY sheet's generation call unchanged. The expander is invoked FRESH (its own ephemeral tmp
 // dir, torn down before generation even starts) — never packPreview's, and never stale: build-
-// spec "никакого стейла по построению". Sheets generate SEQUENTIALLY via the codex-seam
-// (`generators` injection respected, exactly like the single-image branch); each finished sheet
+// spec "никакого стейла по построению". Sheets generate SEQUENTIALLY via the card's own engine
+// seam (`generators` injection respected, exactly like the single-image branch); each finished sheet
 // mints under its OWN short commit (commitPackSheetOutcome) as soon as it lands, so a crash on
 // sheet 3 never loses sheets 1-2 and per-sheet HEAD_CONFLICT tolerance never voids the whole
 // run. Never throws once the sheet loop starts (unlike the single-image branch's "every engine
 // failed" throw) — failures land in `failed`/`recipe.last_run.failed` instead, since a partial
-// pack run is a normal, resumable outcome, not an all-or-nothing gesture.
+// pack run is a normal, resumable outcome, not an all-or-nothing gesture. The generator is the
+// card's OWN recipe.engine (codex or gemini — buildPackConfig already refused "both"), same
+// `{prompt, refPaths, params}` seam as the single-image branch; each sheet records that engine
+// in meta.pack, so a run resumed after the lead flips the card's engine stays truthful per sheet.
 async function generatePackSheets(root, { projectId, groupId, generators, runGroupId, sheetSlug, before, card, recipe, cardLabel, startedAt }) {
   const { config: baseConfig, styleSnapshot } = buildPackConfig(before, card);
 
@@ -3660,7 +3692,10 @@ async function generatePackSheets(root, { projectId, groupId, generators, runGro
 
   const at = new Date().toISOString(); // ONE timestamp for the whole run — pack_run.at, every
   // sheet's meta.pack.at, recipe.last_run.at, and the run group's name's <ts> all share it.
-  const paramsSnapshot = { ...recipe.params };
+  // Engine-filtered (see snapshotParamsForEngine): bg_key/n_candidates ride along on the pack
+  // branch because both genuinely shaped the run (bg baked into every sheet's prompt; overgen
+  // count expanded the job list) — unlike model/quality, which agy never consumed.
+  const paramsSnapshot = snapshotParamsForEngine(recipe.engine, recipe.params, ["bg_key", "n_candidates"]);
   const gens = { codex: generateImageCodex, gemini: generateImageGemini, ...(generators || {}) };
 
   let currentRunGroupId = runGroup ? runGroup.id : null;
@@ -3699,7 +3734,7 @@ async function generatePackSheets(root, { projectId, groupId, generators, runGro
     let bytes = null;
     let genError = null;
     try {
-      const generated = await gens.codex({ prompt: job.prompt, refPaths, params: recipe.params });
+      const generated = await gens[recipe.engine]({ prompt: job.prompt, refPaths, params: recipe.params });
       bytes = Buffer.isBuffer(generated) ? generated : readFileSync(generated);
     } catch (error) {
       genError = error;
@@ -3719,6 +3754,7 @@ async function generatePackSheets(root, { projectId, groupId, generators, runGro
 
     const meta = {
       cardId: groupId,
+      engine: recipe.engine,
       at,
       sheet_axes: jobSheetAxes,
       cells: job.cells,

@@ -381,7 +381,7 @@ test("CLI recipe-pack-generate: validation parity (no python/codex spawn) — mi
 // packPreview: validation (no python spawn).
 // ================================================================================
 
-test("packPreview requires projectId/groupId; an unknown group, a non-recipe group, pack:null, and a non-codex engine are all loud before any python spawn", async (t) => {
+test("packPreview requires projectId/groupId; an unknown group, a non-recipe group, pack:null, and engine \"both\" are all loud before any python spawn", async (t) => {
   tempProjects(t);
   await assert.rejects(() => packPreview(ROOT, {}), /requires projectId/);
   await assert.rejects(() => packPreview(ROOT, { projectId: "p" }), /requires groupId/);
@@ -397,10 +397,10 @@ test("packPreview requires projectId/groupId; an unknown group, a non-recipe gro
   const withPack = patchRecipe(ROOT, {
     projectId: project.id,
     groupId: card.id,
-    patch: { prompt: "a thing", pack: { axes: { grade: ["a"] }, vary: "grade", grid: [1, 1], max_jobs: 1 }, engine: "gemini" },
+    patch: { prompt: "a thing", pack: { axes: { grade: ["a"] }, vary: "grade", grid: [1, 1], max_jobs: 1 }, engine: "both" },
   }).group;
-  assert.equal(withPack.recipe.engine, "gemini", "engine is NOT gated at patch-time — a hand-off decision, not this file's to re-litigate");
-  await assert.rejects(() => packPreview(ROOT, { projectId: project.id, groupId: card.id }), /pack mode only supports "codex"/);
+  assert.equal(withPack.recipe.engine, "both", "engine is NOT gated at patch-time — a hand-off decision, not this file's to re-litigate");
+  await assert.rejects(() => packPreview(ROOT, { projectId: project.id, groupId: card.id }), /pack mode runs ONE engine per run/);
 });
 
 test("packPreview: its OWN defensive style_ref re-check fires on a hand-edited blob (patchRecipe already blocks this at write time)", async (t) => {
@@ -639,22 +639,58 @@ async function tryGenerate(t, args) {
   }
 }
 
-test("generateFromRecipe pack branch: engine gate mirrors packPreview's — loud before any generation call or python spawn", async (t) => {
+test("generateFromRecipe pack branch: engine gate mirrors packPreview's — \"both\" is loud before any generation call or python spawn", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Pack generate engine gate" });
   const { group: card } = createRecipeCard(REPO_ROOT, { projectId: project.id, name: "Lanterns" });
   patchRecipe(REPO_ROOT, {
     projectId: project.id,
     groupId: card.id,
-    patch: { prompt: "a {material} lantern", engine: "gemini", pack: { axes: { grade: ["rusty", "plain"], material: ["stone", "wood"] }, vary: "grade", grid: [1, 2], max_jobs: 12 } },
+    patch: { prompt: "a {material} lantern", engine: "both", pack: { axes: { grade: ["rusty", "plain"], material: ["stone", "wood"] }, vary: "grade", grid: [1, 2], max_jobs: 12 } },
   });
   const codex = fakeGenSequence([solidPng()]);
+  const gemini = fakeGenSequence([solidPng()]);
 
   await assert.rejects(
-    () => generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, generators: { codex } }),
-    /pack mode only supports "codex" in v1/,
+    () => generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, generators: { codex, gemini } }),
+    /pack mode runs ONE engine per run/,
   );
   assert.equal(codex.calls.length, 0, "no generation before the gate, no python spawn either");
+  assert.equal(gemini.calls.length, 0, "neither engine runs — 'both' never fans out in pack mode");
+});
+
+test("generateFromRecipe pack branch on engine=gemini (real expand_jobs.py, fake agy): dispatches EVERY sheet to the gemini generator, never codex, and stamps meta.pack.engine per sheet", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Pack generate agy" });
+  const { group: card } = createRecipeCard(REPO_ROOT, { projectId: project.id, name: "Lanterns" });
+  seedPackRecipe(project.id, card.id);
+  patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { engine: "gemini" } });
+
+  const codex = fakeGenSequence([solidPng()]);
+  const gemini = fakeGenSequence([solidPng(), solidPng()]);
+  const result = await tryGenerate(t, { projectId: project.id, groupId: card.id, generators: { codex, gemini } });
+  if (!result) return;
+
+  assert.equal(gemini.calls.length, 2, "one gemini call per sheet (2 material values)");
+  assert.equal(codex.calls.length, 0, "codex never runs on a gemini card");
+  assert.ok(result.results.every((r) => r.status === "ok"));
+
+  const after = getProject(REPO_ROOT, project.id);
+  const sheetElements = after.elements.filter((el) => el.groupId === result.run_group_id);
+  assert.equal(sheetElements.length, 2);
+  for (const el of sheetElements) {
+    assert.equal(el.meta.pack.engine, "gemini", "each sheet records the engine that ACTUALLY generated it");
+    assert.deepEqual(
+      el.meta.pack.params_snapshot,
+      { size: "1024x1024", bg_key: "#ff00ff", n_candidates: 1 },
+      "engine-filtered snapshot: agy consumed only size; bg_key/n_candidates are canvas-level — NO gpt-image model/quality on a gemini sheet",
+    );
+  }
+  const packRun = after.tool_runs.find((run) => run.op === "generate_from_recipe_pack" && run.cardId === card.id);
+  assert.ok(packRun, "the one-per-run tool_runs entry landed");
+  assert.equal(packRun.params.engine, "gemini", "tool_runs records the run's engine, not a hardcoded codex");
+  assert.equal(packRun.params.model, undefined, "tool_runs no longer claims a hardcoded gpt-image model on a gemini run");
+  assert.equal(packRun.params.size, "1024x1024", "what agy DID consume is still recorded");
 });
 
 test("generateFromRecipe pack branch: an unknown --run group id, or one belonging to a different card, is loud before any generation or python spawn", async (t) => {

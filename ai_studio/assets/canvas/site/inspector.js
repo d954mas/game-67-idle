@@ -2097,6 +2097,9 @@ function renderPackMeta(element, root) {
   if (Array.isArray(pack.cells)) {
     const body = collapsible(root, "pack-sheet", "Pack sheet");
     body.appendChild(readOnly("Axes", JSON.stringify(pack.sheet_axes || {})));
+    // Which engine generated THIS sheet (recorded per sheet since 2026-07-07 — packs run on
+    // codex or agy; sheets minted before that have no field, shown as "—", i.e. codex-era).
+    body.appendChild(readOnly("Engine", pack.engine || "—"));
     body.appendChild(readOnly("At", pack.at ? new Date(pack.at).toLocaleString() : "—"));
 
     const promptText = String(pack.prompt_snapshot || "");
@@ -2121,19 +2124,22 @@ function renderPackMeta(element, root) {
     // of regenerating this sheet, a confusing footgun worth refusing up front.
     const card = groupById(pack.cardId);
     const cardStillPack = !!(card && card.recipe && card.recipe.pack);
+    // The label names the engine the regen will ACTUALLY use — the card's CURRENT recipe.engine,
+    // not this sheet's meta.pack.engine (a resumed/regen'd sheet runs on whatever the card says NOW).
+    const regenEngine = cardStillPack && card.recipe.engine === "gemini" ? "agy" : "codex";
     const regenBtn = document.createElement("button");
     regenBtn.type = "button";
     regenBtn.className = "insp-btn";
     regenBtn.textContent = "Regenerate";
     regenBtn.disabled = !cardStillPack;
     regenBtn.title = cardStillPack
-      ? "Force-regenerate exactly this sheet (codex, ~30-60s) into the same run group"
+      ? `Force-regenerate exactly this sheet (${regenEngine}, ~30-60s) into the same run group`
       : "The card is no longer in pack mode — Generate would mint a single image instead";
     regenBtn.addEventListener("click", () =>
       generateFromRecipeAction(pack.cardId, regenBtn, {
         runGroupId: element.groupId,
         sheetSlug: element.name,
-        busyLabel: "Regenerating sheet… (codex)",
+        busyLabel: `Regenerating sheet… (${regenEngine})`,
       }),
     );
     body.appendChild(regenBtn);
@@ -2699,6 +2705,17 @@ function renderPackVaryField(group, recipe, body) {
   varyHint.className = "insp-region-hint";
   varyHint.textContent = "Cells vary by this axis. Every OTHER axis must appear in the prompt as {axis} — one sheet per combination.";
   body.appendChild(varyHint);
+  // Third bounce of the same stumble (lead hit the expander's missing-slot refusal from the
+  // Generate button itself, 2026-07-07): pre-check the slot rule CLIENT-side and warn before
+  // any button is pressed. Advisory only — the expander stays the real gate.
+  const bigAxes = Object.keys(recipe.pack.axes || {}).filter((axis) => axis !== recipe.pack.vary);
+  const missingSlots = bigAxes.filter((axis) => !(recipe.prompt || "").includes(`{${axis}}`));
+  if (missingSlots.length) {
+    const slotWarn = document.createElement("div");
+    slotWarn.className = "insp-pack-error";
+    slotWarn.textContent = `Prompt is missing ${missingSlots.map((axis) => `{${axis}}`).join(", ")} — Preview/Generate will refuse until every non-vary axis has its slot.`;
+    body.appendChild(slotWarn);
+  }
 }
 
 // Grid select: 2x2 / 3x3 (build-spec: "grid select (2x2|3x3)") — a stored grid outside that
@@ -2806,15 +2823,17 @@ function renderRecipe(group, root) {
     selectInput(recipe.engine || "codex", ["codex", "gemini", "both"], (next) => patchRecipeAction(group.id, { engine: next })),
   );
   body.appendChild(engineField);
-  // T0332 v2 UX finding: pack mode is codex-only in v1 — the select is disabled (advisory;
-  // the real gate is packPreview/generateFromRecipe's pack branch), WITH a visible caption,
+  // Pack mode runs on ONE engine — codex or gemini/agy (agy grid adherence smoke-checked
+  // 2026-07-07); only "both" (the single-image compare mode) is off the table, so ONLY that
+  // option is disabled (advisory; the real gate is buildPackConfig's), WITH a visible caption,
   // not just a hover title (build-spec: "задизейблен С ПОДПИСЬЮ").
   if (recipe.pack) {
-    engineField.querySelector("select").disabled = true;
-    engineField.querySelector("select").title = "Packs are codex-only in v1";
+    const bothOption = [...engineField.querySelectorAll("option")].find((o) => o.value === "both");
+    if (bothOption) bothOption.disabled = true;
+    engineField.querySelector("select").title = "Packs run on one engine — codex or gemini (agy); 'both' is single-image compare only";
     const engineHint = document.createElement("div");
     engineHint.className = "insp-region-hint";
-    engineHint.textContent = "Packs are codex-only in v1";
+    engineHint.textContent = "Packs: codex or gemini (agy); 'both' is single-image only";
     body.appendChild(engineHint);
   }
 
@@ -2902,19 +2921,19 @@ function renderRecipe(group, root) {
       summary.className = "insp-align-caption";
       summary.textContent = `Preview: ${preview.sheets} sheet(s)${preview.style_ref_image ? " · style ref image included" : ""}`;
       body.appendChild(summary);
-      const previewWrap = document.createElement("div");
-      previewWrap.className = "insp-alpha-plates"; // reuse: same stacked thumb/row layout as Generation's References list
+      // Per-sheet prompts as inline SPOILERS, not View-buttons + modal (lead's ask,
+      // 2026-07-07): native <details> — expands in place, no collapsed-state bookkeeping.
       for (const job of preview.jobs || []) {
-        const row = document.createElement("div");
-        row.className = "insp-plate-row";
-        const label = document.createElement("span");
-        label.className = "insp-plate-role";
-        label.textContent = job.name;
-        const viewBtn = smallBtn("View", () => openPromptModal(job.name, job.prompt, null, { readOnly: true }));
-        row.append(label, viewBtn);
-        previewWrap.appendChild(row);
+        const spoiler = document.createElement("details");
+        spoiler.className = "insp-pack-preview-sheet";
+        const summaryEl = document.createElement("summary");
+        summaryEl.textContent = job.name;
+        const promptPre = document.createElement("pre");
+        promptPre.className = "insp-pack-preview-prompt";
+        promptPre.textContent = job.prompt;
+        spoiler.append(summaryEl, promptPre);
+        body.appendChild(spoiler);
       }
-      body.appendChild(previewWrap);
     }
   }
 
@@ -2925,7 +2944,8 @@ function renderRecipe(group, root) {
   const emptyPrompt = !String(recipe.prompt || "").trim();
   generateBtn.disabled = emptyPrompt;
   const packSheetEstimate = recipe.pack ? estimatePackSheetCount(recipe.pack) : 0;
-  const packBusyLabel = `Generating pack… (~${packSheetEstimate} sheet(s), codex, ~30-60s each)`; // …
+  const packEngineLabel = recipe.engine === "gemini" ? "agy" : "codex";
+  const packBusyLabel = `Generating pack… (~${packSheetEstimate} sheet(s), ${packEngineLabel}, ~30-60s each)`; // …
   generateBtn.title = emptyPrompt
     ? "Write a prompt first"
     : recipe.pack
@@ -3471,7 +3491,10 @@ function inspectorSig() {
     // recipe/style ride in the signature so a prompt/engine/ref commit (or a CLI edit)
     // rebuilds the Recipe/Style section — the Generate button's empty-prompt disable and
     // the Style member/ref rows both depend on it.
-    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}|${group.parentId || ""}|${JSON.stringify(group.recipe || null)}|${JSON.stringify(group.style || null)}|${JSON.stringify(group.anim || null)}`;
+    // `pp:` — the ephemeral pack-preview token (actions.js stamps `at`): the preview never
+    // touches the project, so without this the panel would not rebuild to show it.
+    const packPreviewTok = state.packPreview && state.packPreview.cardId === group.id ? state.packPreview.at : 0;
+    return `g:${group.id}|${group.name}|${group.x},${group.y},${group.w},${group.h}|${group.visible !== false}|${group.clip === true}|${memberElements(group.id).length}|${JSON.stringify(group.background || null)}|${group.parentId || ""}|${JSON.stringify(group.recipe || null)}|${JSON.stringify(group.style || null)}|${JSON.stringify(group.anim || null)}|pp:${packPreviewTok}`;
   }
   // Multi-group selection (2+ groups, no loose elements): the signature carries each
   // group's id + shared toggle state so a batched visible/clip change rebuilds the panel.

@@ -595,9 +595,12 @@ mode).
   "expanded": null,              // last Expand-prompt output — increment 3
   "use_expanded": true,          // increment 2: generate sends `expanded` when present+enabled, else `prompt`
   "engine": "codex",             // "codex" | "gemini" | "both" (R2/R3) — which generator(s) a run uses
-  "params": {                    // bg_key/n_candidates/size/quality are PATCHABLE (T0332 v2); model/supersample stay immutable
+  "params": {                    // bg_key/n_candidates/size/quality are PATCHABLE (T0332 v2); model stays immutable.
+                                 // Engine usage: codex consumes size/quality/model; gemini/agy consumes ONLY size
+                                 // (its own model, no quality knob — ENGINE_PARAMS_USED in tools/recipe_generate.mjs);
+                                 // bg_key/n_candidates are canvas-level (cutout advisory / pack overgen count).
     "size": "1024x1024", "quality": "high", "model": "gpt-image-2",
-    "bg_key": "#ff00ff", "supersample": true, "n_candidates": 1
+    "bg_key": "#ff00ff", "n_candidates": 1
   },
   "style_ref": null,             // nullable by-id pointer to a STYLE CARD (group.style, minted via createStyleCard)
   "pack": null,                  // T0332 v2: null = single-image Generate (unchanged); set = pack mode, see Pack mode below
@@ -705,7 +708,10 @@ element.meta.recipe = {
   "prompt_snapshot": "a red fox riding a dragon",
   "refs_snapshot": ["files/<hash>.png", …],   // <=5, project-relative srcs
   "params_snapshot": { "size": "1024x1024", "quality": "high", "model": "gpt-image-2",
-                        "bg_key": "#ff00ff", "supersample": true, "n_candidates": 1 }
+                        "bg_key": "#ff00ff" }
+                       // ONLY what this element's engine actually consumed (+ bg_key, the
+                       // canvas-level cutout advisory) — a gemini element records just
+                       // {size, bg_key}, never a gpt-image model/quality it had no knob for
 }
 ```
 
@@ -734,8 +740,21 @@ subject template, sent to the expander **verbatim** (pack mode never reads
 axes-driven sheet); `style_ref` supplies `style_prefix` **and** the style card's ref image
 through the SAME resolve the single-image branch uses (a style card's ref image reaches
 every sheet by construction, no separate pack-only path); member images are refs for every
-sheet. `engine` must be `"codex"` in v1 — gemini/both are a loud error, checked at
-preview/generate time, never at patch-time.
+sheet. `engine` is `"codex"` or `"gemini"` — a pack runs on ONE engine (`"both"`, the
+single-image compare mode, is a loud error, checked at preview/generate time, never at
+patch-time), and each minted sheet records the engine that actually generated it in
+`meta.pack.engine`.
+
+**agy (gemini) packs — draw-no-lines rule** (smoke-checked 2026-07-07, 3 sheets): agy
+holds the grid layout and the flat key background well, but with the expander's default
+constraints it reliably **draws thin separator lines between cells** ("no grid lines" in
+the template was not enough — 2/2 sheets REJECTed at slice with `region_count` = cells+1,
+the line cross detected as an extra region). Cure is prompt-side, in the CARD's own
+prompt: state that objects float on one continuous flat background and forbid dividing
+lines/separators/borders explicitly (e.g. "…objects float on the continuous flat
+background — ABSOLUTELY NO dividing lines, separators, borders or frames between cells,
+the background color runs unbroken across the whole image") — with that line the smoke
+sheet passed the slice gate 4/4 on the first try. codex has not needed this.
 
 ```jsonc
 "pack": {
@@ -756,8 +775,9 @@ flags (below) do this read-modify-write for you — a raw `patchRecipe` call doe
 `params` (`bg_key`/`n_candidates`/`size`/`quality`) is **patchable**, not advisory or
 write-once-at-creation: `patchRecipe({patch:{params}})` merges a partial object one level
 deep onto the stored `recipe.params` — the opposite convention from `pack` above, a
-genuine partial patch. `model`/`supersample` stay immutable (a loud error, even set to
-their current value). Pack mode derives two of its own config fields from `params`, not
+genuine partial patch. `model` stays immutable (a loud error, even set to its current
+value; `supersample` was removed 2026-07-07 as dead — nothing ever consumed it, legacy
+blobs carrying it are harmless and patching it stays a loud unknown-key error). Pack mode derives two of its own config fields from `params`, not
 from `pack` itself: `bg_key` must be **exactly** `#ff00ff` (magenta) or `#00ff00` (green) —
 any other hex is a loud error at preview/generate time, not patch-time (`params.bg_key`
 itself stays generic hex, since it also serves the single-image cutout path); `n_candidates`
@@ -772,7 +792,8 @@ Three CLI verbs (mirror `ops.mjs`'s `packPreview` / `generateFromRecipe`'s pack 
   generate** — it is the only honest preview of a cell's prompt (single-image Generate
   builds its prompt a different way).
 - `recipe-pack-generate <id> --group g [--run <runGroupId>] [--sheet <slug>]` — the pack
-  branch of `generateFromRecipe`: real codex spawns, one PER SHEET, sequential (N ×
+  branch of `generateFromRecipe`: real engine spawns (codex or agy, per the card's own
+  `recipe.engine`), one PER SHEET, sequential (N ×
   30-60s+ — pass `timeout=max`, not a short default). Each finished sheet mints under its
   own short commit as soon as it lands, so a crash on sheet 3 never loses sheets 1-2.
   `--run <runGroupId>` resumes into an existing pack run group: sheets whose `sheet_axes`
@@ -798,8 +819,10 @@ project you must explicitly tick `group.screen` (`group-set --screen true`, see 
 = screens** above) — a pack run group is never auto-flagged as a screen.
 
 **Sheet = provenance anchor — do not delete sheets before cuts are promoted.** A sheet
-element carries the FULL manifest, `meta.pack = {cardId, at, sheet_axes, cells,
-prompt_snapshot, refs_snapshot, params_snapshot, style_snapshot?}`; a cut's own `meta.pack`
+element carries the FULL manifest, `meta.pack = {cardId, engine, at, sheet_axes, cells,
+prompt_snapshot, refs_snapshot, params_snapshot, style_snapshot?}` (`params_snapshot` is
+engine-filtered, same law as `meta.recipe`'s: a gemini sheet records `{size, bg_key,
+n_candidates}`, never a gpt-image model/quality); a cut's own `meta.pack`
 after `recipe-pack-slice` is deliberately **minimal**, `{cardId, sheet_element_id, cell,
 axes}` — just its own cell plus a pointer back to the sheet. The prompt/refs/params/style
 for every cut on a sheet live ONLY on that sheet (duplicating them onto each cut would

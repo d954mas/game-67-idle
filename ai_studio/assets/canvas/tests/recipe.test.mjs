@@ -142,7 +142,6 @@ const DEFAULT_RECIPE = {
     quality: "high",
     model: "gpt-image-2",
     bg_key: "#ff00ff",
-    supersample: true,
     n_candidates: 1,
   },
   style_ref: null,
@@ -634,13 +633,20 @@ test("generateFromRecipe (codex, top-level card): ONE new element in the ROOT sc
   assert.equal(result.failed.length, 0);
 
   // meta.recipe: frozen per-run snapshot; meta.alpha absent (raw, no alpha — decision 5).
+  // params_snapshot is engine-FILTERED (snapshotParamsForEngine): only what codex actually
+  // consumed (size/quality/model) + the canvas-level bg_key — never n_candidates (pack-only).
   assert.deepEqual(el.meta.recipe, {
     cardId: card.id,
     engine: "codex",
     at: result.run.at,
     prompt_snapshot: "a red fox riding a dragon",
     refs_snapshot: [],
-    params_snapshot: DEFAULT_RECIPE.params,
+    params_snapshot: {
+      size: DEFAULT_RECIPE.params.size,
+      quality: DEFAULT_RECIPE.params.quality,
+      model: DEFAULT_RECIPE.params.model,
+      bg_key: DEFAULT_RECIPE.params.bg_key,
+    },
   });
   assert.equal(el.meta.alpha, undefined);
 
