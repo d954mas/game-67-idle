@@ -90,6 +90,14 @@ if(NOT EMSCRIPTEN AND NOT TARGET nt_builder)
     endforeach()
 endif()
 
+# T0337: in-place modules (precedent features/game-state). Depth-2 invariant:
+# ../../ == repo root for BOTH templates/template and games/<id>, so these paths
+# survive games/new_game.mjs verbatim (like ENGINE_DIR :80 / GAME_STATE_GENERATOR :210).
+set(ITEMS_CORE_DIR        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/items-core")
+set(ITEMS_CORE_INC        "${ITEMS_CORE_DIR}/include")
+set(ITEMS_CORE_SRC        "${ITEMS_CORE_DIR}/src")
+set(ITEMS_CORE_SCRIPTS    "${ITEMS_CORE_DIR}/scripts")
+
 set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
 set(GAME_PACK_DIR "${CMAKE_BINARY_DIR}/pack")
@@ -143,7 +151,7 @@ add_executable(${GAME_TARGET}
     src/render/capture.c
     src/systems/sys_move.c
     src/features/settings/settings_screen.c
-    src/features/items/items_catalog.c        # И2a: catalog-lookup over the codegen tables below
+    "${ITEMS_CORE_SRC}/items_catalog.c"        # И2a: catalog-lookup over the codegen tables below (T0337 M1: in-place module)
     "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.c" # И2a: const item/container tables (content codegen)
     "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c" # И3a: const progression track/curve tables (content codegen)
     src/game_format.c                                # И3b: L0 int64-abbrev formatter
@@ -165,7 +173,7 @@ find_package(Python3 COMPONENTS Interpreter REQUIRED)
 # CMake (OUTPUT<->SOURCES path matching is order-independent within a directory).
 set(ITEMS_CATALOG_JSON "${CMAKE_CURRENT_SOURCE_DIR}/content/items.json")
 set(ITEMS_CATALOG_FIELDS_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/content/item_fields.schema.json")
-set(ITEMS_CATALOG_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/tools/generate_items_catalog.py")
+set(ITEMS_CATALOG_GENERATOR "${ITEMS_CORE_SCRIPTS}/generate_items_catalog.py")
 set(ITEMS_CATALOG_GENERATED_HEADER "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.h")
 set(ITEMS_CATALOG_GENERATED_SOURCE "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.c")
 add_custom_command(
@@ -309,8 +317,9 @@ target_sources(${GAME_TARGET} PRIVATE
     src/features/settings/settings.c       # A6: hand-written settings logic (Р9)
     "${ITEMS_STATE_GENERATED_SOURCE}"        # И2a: generated items fragment state layer
     "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}" # И2a: items.txn event (R2: not empty, must link)
-    src/features/items/items_bootstrap.c     # И2a stubs -> И2b real bodies (Р9 §7.3: on_new_game/reconcile)
-    src/features/items/items_containers.c    # И2b: ownership/containers/purse (add/remove/move/count/can_afford)
+    src/features/items/items_bootstrap.c     # И2a stubs -> И2b real bodies (Р9 §7.3: on_new_game only, T0337 M1 split)
+    "${ITEMS_CORE_SRC}/items_reconcile.c"    # T0337 M1: reconcile/seq-reseed split out of items_bootstrap.c (in-place module)
+    "${ITEMS_CORE_SRC}/items_containers.c"   # И2b: ownership/containers/purse (add/remove/move/count/can_afford; T0337 M1: in-place module)
     "${PROGRESSION_STATE_GENERATED_SOURCE}"        # И3a: generated progression fragment state layer
     "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}" # И3a: progression.levelup event (not empty, must link)
     src/features/progression/progression.c   # И3a: queries/mutations/update (uses progression_state + items + tracks)
@@ -343,7 +352,9 @@ endif()
 if(GAME_ANALYTICS_ENABLED)
     target_sources(${GAME_TARGET} PRIVATE src/game_analytics.c)      # E4: local analytics writer
 endif()
-target_include_directories(${GAME_TARGET} PRIVATE src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/deps/glfw/deps")
+target_include_directories(${GAME_TARGET} PRIVATE
+    "${ITEMS_CORE_INC}"
+    src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/deps/glfw/deps")
 target_compile_definitions(${GAME_TARGET} PRIVATE GAME_WINDOW_TITLE="${GAME_WINDOW_TITLE}")
 target_link_libraries(${GAME_TARGET} PRIVATE
     nt_core nt_app nt_input nt_window nt_gfx nt_text_renderer nt_font
@@ -639,10 +650,10 @@ if(NOT EMSCRIPTEN)
     # И2a: catalog-lookup over the generated const tables (content codegen, §6.3/§6.8).
     add_executable(test_items_catalog
         tests/test_items_catalog.c
-        src/features/items/items_catalog.c
+        "${ITEMS_CORE_SRC}/items_catalog.c"
         "${ITEMS_CATALOG_GENERATED_SOURCE}")
     target_link_libraries(test_items_catalog PRIVATE unity)
-    target_include_directories(test_items_catalog PRIVATE src "${GAME_SOURCE_GENERATED_DIR}")
+    target_include_directories(test_items_catalog PRIVATE "${ITEMS_CORE_INC}" src "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_items_catalog PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_items_catalog PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -660,13 +671,14 @@ if(NOT EMSCRIPTEN)
         "${ITEMS_STATE_GENERATED_SOURCE}"
         "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
         src/features/items/items_bootstrap.c
-        src/features/items/items_containers.c
-        src/features/items/items_catalog.c
+        "${ITEMS_CORE_SRC}/items_reconcile.c"
+        "${ITEMS_CORE_SRC}/items_containers.c"
+        "${ITEMS_CORE_SRC}/items_catalog.c"
         "${ITEMS_CATALOG_GENERATED_SOURCE}"
         src/game_state_json.c
         src/game_events.c)
     target_link_libraries(test_items_fragment PRIVATE cjson unity nt_hash nt_log nt_core)
-    target_include_directories(test_items_fragment PRIVATE src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
+    target_include_directories(test_items_fragment PRIVATE "${ITEMS_CORE_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_items_fragment PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_items_fragment PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -682,11 +694,23 @@ if(NOT EMSCRIPTEN)
     # manual step. Reads only committed source (content/items.json,
     # content/items.lock.json, state/items.schema.json) -- no generated-file
     # dependency, so no add_dependencies needed. WORKING_DIRECTORY is the
-    # template root so the relative script path `tools/items_ops.py` (and,
-    # were they ever passed as relative, its --catalog/--schema/--baseline/
-    # --state-schema defaults) resolves the same way a human running the
-    # command from templates/template/ would see it.
-    add_test(NAME items_ops_validate COMMAND "${Python3_EXECUTABLE}" tools/items_ops.py validate
+    # template root so the CWD-relative --catalog/--schema/--baseline/
+    # --state-schema/--src-dir arguments resolve the same way a human running
+    # the command from templates/template/ would see it.
+    # T0337 M1 (H2/R7, CRITICAL): items_ops.py's own argparse defaults are
+    # SCRIPT-relative (Path(__file__).parent.parent). After the move to
+    # features/items-core/scripts/, those defaults would resolve into a
+    # nonexistent features/items-core/content/ -- pass every path explicitly,
+    # CWD-relative to the template root (WORKING_DIRECTORY below). Principle:
+    # the module CLI takes paths ONLY from the caller (CWD/args), never from
+    # __file__. --src-dir now points at the game-side items corner only
+    # (src/features/items/) -- the display_name-keying lint no longer scans
+    # the (relocated) ownership core; see items README L5-note.
+    add_test(NAME items_ops_validate COMMAND "${Python3_EXECUTABLE}"
+        "${ITEMS_CORE_SCRIPTS}/items_ops.py" validate
+        --catalog content/items.json --schema content/item_fields.schema.json
+        --baseline content/items.lock.json --state-schema state/items.schema.json
+        --src-dir src/features/items
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     # F4 (deep-review): committed proof that the lock-workflow rules
@@ -695,7 +719,7 @@ if(NOT EMSCRIPTEN)
     # IO error, the happy batch path) -- not just a manually re-run scratch
     # check. unittest against temp fixtures, precedent
     # features/game-state/scripts/generate_state_test.py.
-    add_test(NAME items_ops_test COMMAND "${Python3_EXECUTABLE}" tools/items_ops_test.py
+    add_test(NAME items_ops_test COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_ops_test.py"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
     # И3a (§5.9d, H2/R11): test_progression compiles progression.c, which
@@ -716,14 +740,15 @@ if(NOT EMSCRIPTEN)
         src/features/progression/progression.c
         "${PROGRESSION_STATE_GENERATED_SOURCE}"                  # progression_state.c
         "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"           # progression_state_events.gen.c
-        src/features/items/items_containers.c                    # items runtime (progression spends/reads purse)
-        src/features/items/items_catalog.c "${ITEMS_CATALOG_GENERATED_SOURCE}"
+        "${ITEMS_CORE_SRC}/items_containers.c"                    # items runtime (progression spends/reads purse; T0337 M1: in-place module)
+        "${ITEMS_CORE_SRC}/items_catalog.c" "${ITEMS_CATALOG_GENERATED_SOURCE}"
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
-        src/features/items/items_bootstrap.c                     # items on_new_game/reconcile (link completeness)
+        src/features/items/items_bootstrap.c                     # items on_new_game (link completeness)
+        "${ITEMS_CORE_SRC}/items_reconcile.c"                     # items reconcile (T0337 M1 split, link completeness)
         src/game_state_json.c src/game_events.c)
     add_dependencies(test_progression progression_tracks_gen)   # H2: guarantees progression_tracks.gen.h before progression.c compiles
     target_link_libraries(test_progression PRIVATE cjson unity nt_hash nt_log nt_core)
-    target_include_directories(test_progression PRIVATE src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
+    target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_progression PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_progression PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_progression COMMAND test_progression WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
@@ -736,7 +761,14 @@ if(NOT EMSCRIPTEN)
         tests/test_progression_curve.c
         "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c")
     target_link_libraries(test_progression_curve PRIVATE unity)
-    target_include_directories(test_progression_curve PRIVATE src "${GAME_SOURCE_GENERATED_DIR}")
+    # T0337 M1 deviation (spec §5.6 labels this [M2] alongside PROGRESSION_CORE_INC,
+    # but items.h already moved out of src/ in M1 -- progression_tracks.gen.h
+    # includes features/progression/progression.h (still src/, unmoved) which
+    # includes features/items/items.h (H1 chain, §13). Without ITEMS_CORE_INC
+    # here NOW, this target would fail to compile mid-M1, breaking the
+    # per-increment-green invariant (§9/R8). PROGRESSION_CORE_INC stays M2
+    # (progression.h itself has not moved yet).
+    target_include_directories(test_progression_curve PRIVATE "${ITEMS_CORE_INC}" src "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_progression_curve PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_progression_curve PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_progression_curve COMMAND test_progression_curve)

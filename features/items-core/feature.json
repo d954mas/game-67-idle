@@ -1,0 +1,61 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "items-core",
+  "title": "Items Core",
+  "status": "reusable",
+  "kind": "gameplay-infrastructure",
+  "summary": "In-place L1 module: item/container/currency catalog codegen, ownership model (add/remove/move/count/can_afford/purse/unique instances), and a read-only op-layer CLI (list/validate/schema).",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/items-core"
+  ],
+  "dependencies": [
+    "Python 3.12",
+    "templates/template/content/items.json + content/item_fields.schema.json (or a game-local items catalog)",
+    "template or game C runtime using the generated items_catalog.gen.{h,c} + the generated items save fragment (features/game-state)",
+    "the consuming game's own src/features/items/reason_tags.h (closed reason-verb list, resolved via the game's include-path, §2.3 of build_spec_t0337_2026-07-07.md)"
+  ],
+  "commands": {
+    "generate": "py -3.12 features/items-core/scripts/generate_items_catalog.py",
+    "list": "py -3.12 features/items-core/scripts/items_ops.py list",
+    "validate": "py -3.12 features/items-core/scripts/items_ops.py validate",
+    "schema": "py -3.12 features/items-core/scripts/items_ops.py schema",
+    "test": "py -3.12 features/items-core/scripts/items_ops_test.py"
+  },
+  "manuals": {
+    "install": "features/items-core/INSTALL.md"
+  },
+  "outputs": [
+    "items_catalog.gen.h",
+    "items_catalog.gen.c"
+  ],
+  "registers": {
+    "note": "Describes the EXISTING wiring in templates/template/CMakeLists.txt (target_sources/ctest) -- items-core is an in-place module (precedent features/game-state), not an install-script target. This section documents the consuming game's provisioning, it does not perform it.",
+    "target_sources": [
+      "${ITEMS_CORE_SRC}/items_catalog.c",
+      "${ITEMS_CORE_SRC}/items_containers.c",
+      "${ITEMS_CORE_SRC}/items_reconcile.c"
+    ],
+    "include_dirs": [
+      "${ITEMS_CORE_INC}"
+    ],
+    "ctest_targets": [
+      "test_items_catalog",
+      "test_items_fragment",
+      "items_ops_validate",
+      "items_ops_test"
+    ]
+  },
+  "default_template": {
+    "catalog": "templates/template/content/items.json",
+    "field_schema": "templates/template/content/item_fields.schema.json",
+    "lock": "templates/template/content/items.lock.json",
+    "state_schema": "templates/template/state/items.schema.json",
+    "generated_dir": "templates/template/src/generated",
+    "game_side_sources": [
+      "templates/template/src/features/items/reason_tags.h",
+      "templates/template/src/features/items/items_bootstrap.c"
+    ]
+  }
+}

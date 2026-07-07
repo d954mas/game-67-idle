@@ -27,7 +27,7 @@ from typing import Any
 
 import items_ops
 
-TEMPLATE_ROOT = Path(__file__).resolve().parent.parent
+TEMPLATE_ROOT = Path(__file__).resolve().parents[3] / "templates" / "template"
 FIELD_SCHEMA = TEMPLATE_ROOT / "content" / "item_fields.schema.json"
 
 
