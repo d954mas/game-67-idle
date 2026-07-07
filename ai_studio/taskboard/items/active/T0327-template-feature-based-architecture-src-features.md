@@ -1,13 +1,13 @@
 ---
 id: T0327
 title: "Template: feature-based architecture (src/features, слои, per-feature state/assets)"
-status: backlog
+status: doing
 project: P001
 epic: E009
 priority: P1
 tags: [template, architecture, features]
 created: 2026-07-06
-updated: 2026-07-06
+updated: 2026-07-07
 ---
 
 ## What
@@ -58,13 +58,23 @@ updated: 2026-07-06
 
 ## Done when
 
-- [ ] Инкременты 1-4 в templates/template, сборка native+web зелёная,
-      поведение шаблона идентично (settings работает).
-- [ ] Инкремент 5: items+inventory+учебный shop в шаблоне собираются,
-      слоёвое правило видно в коде (shop включает items.h/inventory.h,
-      обратного нет); золото/опыт живут как currency-предметы в purse.
-- [ ] features/README.md обновлён полями layer/provides/registers/assets_tag
-      в feature.json-контракте.
+- [x] И1 (settings-эталон + README-конвенция) в templates/template: сборка
+      native+web зелёная, поведение идентично (settings работает через
+      game_features, sys_settings умер, папочная конвенция src/features/<id>/).
+      ФАКТ 2026-07-07 (027d7c212): гейты G1-G8 зелёные — ctest 9/9, smoke_bot
+      8/8 + живой смоук (settings/gear в ui.tree, master_volume в schema/get),
+      wasm-release и wasm-devapi-debug линкуются, FEATURE_GAME_STATE=OFF
+      линкуется под -Werror, скрин панели идентичен, grep: ноль sys_settings
+      в шаблоне; спека → 2 ревью (ACCEPT-WITH-FIXES/ACCEPT) → фикс-раунд →
+      исполнитель → deep-ревью ACCEPT-WITH-ADDITIONS (док-дрейф INSTALL.md/
+      TEMPLATE.md закрыт в том же коммите).
+- [ ] И2 items + И3 progression+resource_panel в шаблоне собираются,
+      слоёвое правило видно в коде (progression включает items.h,
+      обратного нет); золото/опыт живут как currency-предметы в purse;
+      resource_panel не инклюдит ни items.h, ни progression.h (entries
+      с геттерами от игры).
+- [ ] features/README.md обновлён полями layer/provides/registers/assets_tag/
+      art_needs в feature.json-контракте (декларативная арт-модель).
 - [ ] Дизайн-док перенесён из tmp/ в постоянное место.
 
 ## Open questions
@@ -76,6 +86,45 @@ updated: 2026-07-06
   LEAN-порезы инкремента 1: события, level_down→set_level/reset, хвост,
   bake, Diablo-статы, сетка, широкий op-слой, shop-стаб (§3 синтеза).
 
+РЕШЕНО лидом 2026-07-07 (старт арки):
+- Предпосылки сняты: doc-sync §7 сделан (4238ab89), T0328 закрыт целиком
+  (A0-A6, E1-E4). Карта разрыва: инкр.1 частично / инкр.3 полностью
+  поглощены T0328 (game_features 7 фаз, settings-фрагмент, реестр
+  фрагментов с on_new_game); инкр.2/4/5 были открыты.
+- Shop: ВНЕ шаблона («магазин слишком специфичен для игры») —
+  противоречие What/Done-when решено в пользу What, Done-when поправлен;
+  слоёвость доказывает progression.
+- bottom_nav-виджет ВЫРЕЗАН («просто набор кнопок»): кода не будет;
+  правило навигации (фичи экспортируют open/close/is_open, состав нава =
+  код игры, саморегистрации нет) → README-конвенция. Форма нава — при
+  первой реальной игре.
+- Ассет-шов <id>_pack_assets УМЕР, заменён декларативной моделью: фичи
+  никогда не пишут в паки; feature.json art_needs {slot, kind, hint} +
+  README-рецепт; example-ассеты в библиотечной копии
+  features/<id>/assets/ (с provenance); конкретные хендлы фича получает
+  от игры как конфиг; graceful-фолбэк без арта; build_packs.c остаётся
+  100% игровым. Кастомизация тремя ступенями: конфиг → правка копии
+  (поведение) → промоут обобщаемого в features/.
+- HUD-бейдж ЗАМЕНЁН generic-фичей resource_panel (золото/опыт/премиум-
+  валюта/…): entries {id, icon-хендл, label, getter} от игры, две
+  визформы (счётчик + прогресс-бар), displayed≠logical, count-up
+  (ease-out, ретаргет, снап на больших дельтах), акцент цвет/punch,
+  poll+diff внутри виджета (коалесит идл-спам, не занимает event-лог),
+  стейт только транзиентный, int64-abbrev форматтер общим хелпером.
+  Демо шаблона: золото (счётчик) + xp-бар с уровнем. Floater ±N и полёт
+  монет — ОТЛОЖЕНЫ в будущую отдельную фичу coin_fx; звук не нужен
+  (решение лида). Шов под полёт закладывается сразу и стоит один
+  аксессор: resource_panel_anchor(entry_id) в публичном API. Ресёрч:
+  индустрия (displayed/logical, коалесинг, K/M/B) + анти-уроки
+  rb-dark HUD (хардкод порогов уровней, reach в god-struct, int32 без
+  анимации; забрать хорошее: shadowed_label, бары track+fill).
+- Порядок остатка: И1 settings-эталон (папка src/features/settings/,
+  UI из sys_settings въезжает, main.c чистится от прямых sys_*-вызовов)
+  + README-конвенция + поля feature.json-контракта → И2 items →
+  И3 progression + resource_panel. Каждый инкремент через полный процесс
+  (спека → 2 ревью → исполнитель → deep-ревью → контрольный прогон →
+  коммит).
+
 ## Log
 
 - 2026-07-06: создана по решению лида после двух-угольного Opus-дизайна
@@ -83,3 +132,16 @@ updated: 2026-07-06
   (нав = задача игры; стейт = map по фичам). Контекст: коллизии параллельных
   агентов на общих файлах в VibeJam (game_actions.c 1769 строк, bottom_nav
   switch), пункт 4 плана ретро закрыт архитектурой вместо процессных правил.
+- 2026-07-07: старт арки, status=doing. Карта разрыва снята (Explore),
+  решения лида зафиксированы (см. Open questions: shop вне шаблона,
+  bottom_nav вырезан, декларативная арт-модель, resource_panel вместо
+  HUD-бейджа). Ресёрч плашки ресурсов выполнен (Opus: индустрия +
+  rb-dark). Спека И1 запущена.
+- 2026-07-07: И1 ГОТОВ (027d7c212). settings = эталонная фича-папка,
+  main.c чист от прямых UI-вызовов, game_features_draw_ui владеет
+  ui_runtime-кадром, README-конвенция отгружена (слои с persistence
+  toolkit=L0, навигационное правило, арт-модель art_needs, лестница
+  кастомизации), контракт feature.json в корневом features/README
+  (layer/provides/registers/assets_tag/art_needs). Полный процесс:
+  спека → 2 Opus-ревью → фикс-раунд (11 пунктов) → исполнитель (Sonnet)
+  → deep-ревью → контрольный прогон. ДАЛЬШЕ: И2 items (спека).
