@@ -283,11 +283,14 @@ void game_analytics__set_clock_for_test(int64_t (*wall)(void));
 #define GAME_ANALYTICS_FLUSH_BYTES (12u * 1024u)
 #endif
 #ifndef GAME_ANALYTICS_MAX_BYTES     /* байт-кап сессии (native файл); 0 = без капа */
-#define GAME_ANALYTICS_MAX_BYTES (8u * 1024u * 1024u)
+#define GAME_ANALYTICS_MAX_BYTES (256u * 1024u * 1024u)
 #endif
 #ifndef GAME_ANALYTICS_WEB_RING_BYTES /* in-memory ring (web) */
-#define GAME_ANALYTICS_WEB_RING_BYTES (256u * 1024u)
+#define GAME_ANALYTICS_WEB_RING_BYTES (1024u * 1024u)
 #endif
+[ПОПРАВЛЕНО 2026-07-07, решение лида: кап = чистый предохранитель от разгона для дебаг-артефакта,
+дефолт поднят 8МБ → 256МБ (штатно недостижим); web-ring 256КБ → 1МБ (~7к событий, память вкладки
+не проблема). Оба остаются per-game `#ifndef`-переопределяемыми.]
 #ifndef GAME_ANALYTICS_DESC_REG_CAP
 #define GAME_ANALYTICS_DESC_REG_CAP 64
 #endif
@@ -824,7 +827,10 @@ _Alignof(max_align_t))`.
 - **Q5 [ДЕФОЛТ]. Встроенный тип `log` — в E4 или отдельный E4b.** ДЕФОЛТ: **в E4** (дизайн §6
   бандлит его в E4-инкремент; ~1 малый leaf-модуль). Чисто отделяемо: если лид хочет E4 лазерно на
   писателе — `game_log.{c,h}` + его регистрация выносятся в E4b без изменения писателя.
-- **Q6 [ДЕФОЛТ, ЖДЁТ ПОДТВЕРЖДЕНИЯ — MED-I]. Семантика потери при капе РАЗНАЯ по платформам.**
+- **Q6 [РАТИФИЦИРОВАНО лидом 2026-07-07]: семантики оставлены как есть; вместо унификации кап
+  поднят до штатно недостижимого (256МБ native / 1МБ web-ring) — расхождение академично.
+  Firehose (писать все события) тоже ратифицирован; пересмотр — по реальным объёмам T0327.**
+  Исходная формулировка: Семантика потери при капе РАЗНАЯ по платформам.
   native байт-кап = **keep-oldest-stop** (пишет до `MAX_BYTES`, дальше стоп → теряется ХВОСТ
   сессии); web-ring = **keep-newest-roll** (вытесняет старейшее → теряется НАЧАЛО). Противоположно.
   ДЕФОЛТ: **оставить как есть** (native — полнота раннего геймплея для дебага краша; web — свежесть
