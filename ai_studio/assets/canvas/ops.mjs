@@ -62,7 +62,7 @@ import { buildBlackPlatePrompt, buildWhitePlatePrompt, generatePlate } from "./t
 // module's own .seen.txt silent-divergence guard (generateImageGemini/verifyAgyRefProof) is
 // what keeps a ref from ever silently failing to reach agy, so ops.mjs just forwards refPaths
 // to whichever engine(s) are attempted, same as it always has for codex.
-import { generateImageCodex, generateImageGemini } from "./tools/recipe_generate.mjs";
+import { ENGINE_PARAMS_USED, generateImageCodex, generateImageGemini } from "./tools/recipe_generate.mjs";
 // Anim-card generation (T0265 increment 1): the ONE default generator seam ops.generateAnimFromCard
 // falls back to — orchestrates the Track B video pipeline generate->frames->matte stages and stops
 // at matte (see tools/anim_generate.mjs). Injectable: tests pass a fake `generators.run` so ComfyUI/
@@ -2263,7 +2263,14 @@ const RECIPE_ENGINES = new Set(["codex", "gemini", "both"]); // R2/R3: engine ch
 // (R1 — style cards land in increment 3); `expanded`/`use_expanded`/`last_run` stay inert
 // placeholders until increments 2-3 write/consume them. `params` was write-once-at-creation
 // too, until T0332 v2 unfroze four of its fields (bg_key/n_candidates/size/quality — see
-// normalizeRecipePatch's own `params` handling; `model`/`supersample` remain immutable).
+// normalizeRecipePatch's own `params` handling; `model` remains immutable). `supersample`
+// was REMOVED from the defaults 2026-07-07 (лид: "без техдолга") — nothing anywhere ever
+// consumed it (not generate_image.py, not either command builder, not the expander); cards
+// minted before then still carry `supersample: true` in their stored blob, which is harmless
+// legacy (snapshots are allow-listed via snapshotParamsForEngine, so it never leaks into
+// provenance, and patching it stays a loud unknown-key error below).
+// `model`/`quality` are consumed by the CODEX generator only; gemini/agy consumes only
+// `size` (ENGINE_PARAMS_USED in tools/recipe_generate.mjs — the seam owns that list).
 // `pack` (T0332 v2, build-spec build_spec_pack_card_2026-07-07.md — lead decision "Слить":
 // pack mode is NOT a third card type, it is an optional field on the recipe blob) defaults to
 // null — "no pack mode, a single Generate mints one image" (unchanged single-image behavior);
@@ -2281,7 +2288,6 @@ function defaultRecipe() {
       quality: "high",
       model: "gpt-image-2",
       bg_key: "#ff00ff",
-      supersample: true,
       n_candidates: 1,
     },
     style_ref: null,
@@ -2395,8 +2401,8 @@ function normalizeRecipePatch(patch) {
       if (typeof patch.params.quality !== "string") throw new Error(`recipe params.quality must be a string, got ${JSON.stringify(patch.params.quality)}`);
       params.quality = patch.params.quality;
     }
-    // model (and supersample, and any typo) is immutable/unknown — a loud error, never a
-    // silent ignore (mirrors phase A's own pack.params rule verbatim).
+    // model (and any typo, and legacy supersample) is immutable/unknown — a loud error, never
+    // a silent ignore (mirrors phase A's own pack.params rule verbatim).
     const unknownParamKeys = Object.keys(patch.params).filter((key) => !["bg_key", "n_candidates", "size", "quality"].includes(key));
     if (unknownParamKeys.length) {
       throw new Error(`recipe params.${unknownParamKeys[0]} is immutable or unknown — only bg_key/n_candidates/size/quality are patchable (model is fixed)`);
@@ -2747,6 +2753,24 @@ const MAX_RECIPE_REFS = 5; // generate_image.py --input-image cap (research: <=5
 // agy/Antigravity CLI is what actually runs behind the "gemini" engine choice, R2).
 const RECIPE_ENGINE_SUFFIX = { codex: "codex", gemini: "agy" };
 
+// Provenance truth (lead, 2026-07-07, "без техдолга"): params_snapshot/tool_runs record ONLY
+// the params the engine that ran actually consumed (ENGINE_PARAMS_USED — the generator seam's
+// own contract, owned next to the command builders in tools/recipe_generate.mjs) plus the
+// caller-named CANVAS-level params that genuinely shaped the run regardless of engine
+// (`extraKeys`: bg_key — baked into a pack sheet's prompt / cutout advisory on the
+// single-image path; n_candidates — the pack expander's overgen count, pack branch only).
+// A gemini run must never claim a gpt-image model or a quality it had no knob for.
+// `recipe.params` itself stays whole on the card — flipping the engine back loses nothing.
+// "both" is the caller's job to resolve per element/attempt; this helper takes ONE engine.
+function snapshotParamsForEngine(engine, params, extraKeys = []) {
+  const source = params || {};
+  const out = {};
+  for (const key of [...(ENGINE_PARAMS_USED[engine] || []), ...extraKeys]) {
+    if (source[key] !== undefined) out[key] = source[key];
+  }
+  return out;
+}
+
 // Resolve the text a generate call actually sends: `expanded` (increment 3's Expand-prompt
 // output) when present AND enabled, else the base `prompt` — trimmed either way. Returns ""
 // on an all-whitespace/missing value so the caller's emptiness check is a single truthiness
@@ -2889,7 +2913,6 @@ export async function generateFromRecipe(root, { projectId, groupId, generators,
     const startX = currentCard.x + currentCard.w + gap;
     let cursorY = currentCard.y;
 
-    const paramsSnapshot = { ...recipe.params };
     let workingProject = current;
     const minted = []; // {engine, element, bytes}
     for (const result of results) {
@@ -2905,7 +2928,9 @@ export async function generateFromRecipe(root, { projectId, groupId, generators,
             at,
             prompt_snapshot: effectivePromptText,
             refs_snapshot: finalRefSrcs,
-            params_snapshot: paramsSnapshot,
+            // Per ELEMENT, not per call — under engine="both" the codex element records
+            // size/quality/model while its agy sibling records only size (+ bg_key).
+            params_snapshot: snapshotParamsForEngine(result.engine, recipe.params, ["bg_key"]),
             ...(styleSnapshot ? { style_snapshot: styleSnapshot } : {}),
           },
         },
@@ -2946,9 +2971,10 @@ export async function generateFromRecipe(root, { projectId, groupId, generators,
         prompt_snapshot: effectivePromptText,
         engine: requestedEngine,
         refs: finalRefSrcs,
-        size: recipe.params.size,
-        quality: recipe.params.quality,
-        model: recipe.params.model,
+        // ONE entry per call, so "both" records the codex superset (size/quality/model —
+        // the union of what its two halves consumed); each element's own meta.recipe
+        // params_snapshot above is the per-engine exact record.
+        ...snapshotParamsForEngine(requestedEngine === "both" ? "codex" : requestedEngine, recipe.params, ["bg_key"]),
       },
       result_summary: {
         results: minted.map((m) => ({ engine: m.engine, elementId: m.element.id, bytes: m.bytes })),
@@ -3520,9 +3546,9 @@ async function commitPackSheetOutcome(root, projectId, {
           subject_template: recipe.prompt,
           engine: recipe.engine,
           refs: refSrcs,
-          size: recipe.params.size,
-          quality: recipe.params.quality,
-          model: recipe.params.model,
+          // Same engine-filtered record the sheets' params_snapshot carries — never a
+          // hardcoded codex triple (a gemini pack run must not claim a gpt-image model).
+          ...snapshotParamsForEngine(recipe.engine, recipe.params, ["bg_key", "n_candidates"]),
           pack: recipe.pack,
         },
         result_summary: { run_group_id: targetGroupId, results: [...priorResults, resultRow], failed: failedSoFar },
@@ -3659,7 +3685,10 @@ async function generatePackSheets(root, { projectId, groupId, generators, runGro
 
   const at = new Date().toISOString(); // ONE timestamp for the whole run — pack_run.at, every
   // sheet's meta.pack.at, recipe.last_run.at, and the run group's name's <ts> all share it.
-  const paramsSnapshot = { ...recipe.params };
+  // Engine-filtered (see snapshotParamsForEngine): bg_key/n_candidates ride along on the pack
+  // branch because both genuinely shaped the run (bg baked into every sheet's prompt; overgen
+  // count expanded the job list) — unlike model/quality, which agy never consumed.
+  const paramsSnapshot = snapshotParamsForEngine(recipe.engine, recipe.params, ["bg_key", "n_candidates"]);
   const gens = { codex: generateImageCodex, gemini: generateImageGemini, ...(generators || {}) };
 
   let currentRunGroupId = runGroup ? runGroup.id : null;

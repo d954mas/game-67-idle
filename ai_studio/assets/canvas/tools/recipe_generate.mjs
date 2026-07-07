@@ -58,6 +58,18 @@ const GENERATE_TIMEOUT_MS = 500_000;
 // png in generate_image.py, same as dual_plate_generate.mjs). No --background: bg_key is
 // advisory metadata for a LATER cutout step (alphaDualPlateGenerate), never fed to
 // generation itself in this increment.
+// What each engine ACTUALLY consumes from recipe.params — the single source of truth for
+// provenance snapshots (ops.mjs snapshotParamsForEngine): buildGenerateCommand below sends
+// size/quality/model to generate_image.py; buildAgyCommand sends ONLY size (agy runs its own
+// model and has no quality knob). A param not listed for the engine that ran must never
+// appear in that run's params_snapshot/tool_runs — a gemini-generated element claiming a
+// gpt-image model in its provenance is a lie (lead, 2026-07-07). Owned HERE, next to the two
+// command builders, so the list can't drift from what the builders actually send.
+export const ENGINE_PARAMS_USED = Object.freeze({
+  codex: Object.freeze(["size", "quality", "model"]),
+  gemini: Object.freeze(["size"]),
+});
+
 export function buildGenerateCommand({ prompt, refPaths = [], size = DEFAULT_SIZE, quality = DEFAULT_QUALITY, model = DEFAULT_MODEL, outPath } = {}) {
   if (!prompt) throw new Error("buildGenerateCommand requires prompt");
   if (!outPath) throw new Error("buildGenerateCommand requires outPath");

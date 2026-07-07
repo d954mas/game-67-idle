@@ -680,10 +680,17 @@ test("generateFromRecipe pack branch on engine=gemini (real expand_jobs.py, fake
   assert.equal(sheetElements.length, 2);
   for (const el of sheetElements) {
     assert.equal(el.meta.pack.engine, "gemini", "each sheet records the engine that ACTUALLY generated it");
+    assert.deepEqual(
+      el.meta.pack.params_snapshot,
+      { size: "1024x1024", bg_key: "#ff00ff", n_candidates: 1 },
+      "engine-filtered snapshot: agy consumed only size; bg_key/n_candidates are canvas-level — NO gpt-image model/quality on a gemini sheet",
+    );
   }
   const packRun = after.tool_runs.find((run) => run.op === "generate_from_recipe_pack" && run.cardId === card.id);
   assert.ok(packRun, "the one-per-run tool_runs entry landed");
   assert.equal(packRun.params.engine, "gemini", "tool_runs records the run's engine, not a hardcoded codex");
+  assert.equal(packRun.params.model, undefined, "tool_runs no longer claims a hardcoded gpt-image model on a gemini run");
+  assert.equal(packRun.params.size, "1024x1024", "what agy DID consume is still recorded");
 });
 
 test("generateFromRecipe pack branch: an unknown --run group id, or one belonging to a different card, is loud before any generation or python spawn", async (t) => {
