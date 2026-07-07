@@ -40,26 +40,36 @@ py -3.12 templates/template/tools/items_ops.py schema   [--schema content/item_f
 
 - `list`/`schema`/`validate` are the ONLY ops in И2 (read-v1, LEAN §3);
   upsert/deprecate are editor-era (T0316 web editor), not built yet.
+- **New item def: set `created` (ISO date `"YYYY-MM-DD"`), required**
+  (`validate` rules `created-missing`/`created-invalid`; lead-ratified
+  2026-07-07 — git history was rejected as unreliable, copy-then-own
+  `games/new_game.mjs` resets it). `list --json` returns it; never compiled
+  into the C tables (authoring metadata only).
 - `validate` is the STRICT gate; rule ids surfaced in `--json` output:
   `generator-check` (reuses `generate_items_catalog.py`'s own sanity net —
-  never forked into a second parser), `namespace`, `composite-key-length`,
-  `equip-unlimited` (hard errors), the lock-file removal-workflow rules
-  `removed-without-reaction` / `removed-version-not-shipped` / `lock-invalid`
-  / `lock-inconsistent` (hard errors, lead-ratified 2026-07-07 — deleting a
-  SHIPPED def_id is destructive and must FORCE a reaction), plus advisory
-  warnings `display-name-keying`, `rename-guard-skipped` (default
-  `content/items.lock.json` absent), and `removed-def-restored` (a removed id
-  reappeared — legal, not an error). Full rule semantics and the step-by-step
-  removal recipe (including BATCHING many removals under one shared
-  `fragment_version`/migration step): README.md "Content workflow" / "Lock
-  workflow".
+  never forked into a second parser), `namespace`, `created-missing`,
+  `created-invalid`, `composite-key-length`, `equip-unlimited` (hard errors),
+  the lock-file removal-workflow rules `removed-without-reaction` /
+  `removed-version-not-shipped` / `lock-invalid` / `lock-inconsistent` (hard
+  errors, lead-ratified 2026-07-07 — deleting a SHIPPED def_id is destructive
+  and must FORCE a reaction), plus advisory warnings `display-name-keying`,
+  `rename-guard-skipped` (default `content/items.lock.json` absent), and
+  `removed-def-restored` (a removed id reappeared — legal, not an error).
+  Full rule semantics and the step-by-step removal recipe (including
+  BATCHING many removals under one shared `fragment_version`/migration
+  step): README.md "Content workflow" / "Lock workflow".
+- **This CLI is wired into `ctest`** (target `items_ops_validate`) — the
+  guard is no longer voluntary: a destructive change without a reaction
+  fails the build automatically. `items_ops_test.py` (a second ctest target)
+  is the committed proof that the lock-workflow rules themselves fire
+  correctly, against temp fixtures.
 - Exit codes: 0 OK, 1 validation FAIL, 2 usage/IO error (also: an explicitly
-  passed `--baseline`/`--state-schema` path that does not exist is an IO
-  error; a MISSING default `--baseline` is not — it just skips the lock-file
-  checks with a warning). `--json` gives the future Node web editor
-  subprocess parity with this CLI (same source of truth, no second data
-  model); errors/warnings are structured `{rule, id, field, msg}` objects,
-  not free strings.
+  passed `--baseline`/`--state-schema` path that does not exist, OR a
+  baseline with the wrong shape, is an IO error; a MISSING default
+  `--baseline` is not — it just skips the lock-file checks with a warning).
+  `--json` gives the future Node web editor subprocess parity with this CLI
+  (same source of truth, no second data model); errors/warnings are
+  structured `{rule, id, field, msg}` objects, not free strings.
 - Editing the catalog content itself? Also see
   `templates/template/tools/generate_items_catalog.py` (compile-time codegen:
   `items.json` -> `items_catalog.gen.{h,c}` const tables) — this is a

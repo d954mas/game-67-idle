@@ -173,6 +173,14 @@ updated: 2026-07-07
   фичи + скилл nt-game-items). Каждый срез: исполнитель → deep-ревью →
   фикс-раунд → контрольный прогон. ОСТАЛОСЬ: И3 progression +
   resource_panel (спека дальше).
+- 2026-07-07: И2c фикс-раунд (ревью гарда) + разворот лида по дате:
+  гард стал ОБЯЗАТЕЛЬНЫМ (items_ops validate + items_ops_test в ctest,
+  13/13), new_game.mjs сбрасывает lock новой игры в пустой baseline
+  (copy-then-own: шаблонные 6 демо-defs не наследуются как «отгруженные»),
+  битая форма lock = exit 2 (не тихое отключение гарда); поле `created`
+  (ISO-дата) обязательно в items.json (git-лог ненадёжен — copy-then-own
+  обнуляет историю), правила created-missing/created-invalid, в C-таблицы
+  не эмитится.
 - 2026-07-07: И1 ГОТОВ (027d7c212). settings = эталонная фича-папка,
   main.c чист от прямых UI-вызовов, game_features_draw_ui владеет
   ui_runtime-кадром, README-конвенция отгружена (слои с persistence

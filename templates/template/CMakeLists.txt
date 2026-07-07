@@ -622,4 +622,29 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_items_fragment COMMAND test_items_fragment
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
+
+    # F1 (deep-review, T0327 И2c destructive-change guard follow-up): the
+    # guard was VOLUNTARY until this line -- items_ops.py validate ran only
+    # when a human remembered to invoke it by hand. Wiring it into ctest
+    # means deleting a shipped def_id without a lock.removed reaction now
+    # turns the BUILD's test suite red automatically; the forcing chain
+    # (§ README "Lock workflow") finally starts at an automated gate, not a
+    # manual step. Reads only committed source (content/items.json,
+    # content/items.lock.json, state/items.schema.json) -- no generated-file
+    # dependency, so no add_dependencies needed. WORKING_DIRECTORY is the
+    # template root so the relative script path `tools/items_ops.py` (and,
+    # were they ever passed as relative, its --catalog/--schema/--baseline/
+    # --state-schema defaults) resolves the same way a human running the
+    # command from templates/template/ would see it.
+    add_test(NAME items_ops_validate COMMAND "${Python3_EXECUTABLE}" tools/items_ops.py validate
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+
+    # F4 (deep-review): committed proof that the lock-workflow rules
+    # themselves actually fire correctly (removed-without-reaction,
+    # removed-version-not-shipped, lock-inconsistent, the F3 malformed-lock
+    # IO error, the happy batch path) -- not just a manually re-run scratch
+    # check. unittest against temp fixtures, precedent
+    # features/game-state/scripts/generate_state_test.py.
+    add_test(NAME items_ops_test COMMAND "${Python3_EXECUTABLE}" tools/items_ops_test.py
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 endif()

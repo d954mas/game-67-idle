@@ -114,22 +114,31 @@ convention and its grep-gate).
 ## Content workflow (catalog authoring)
 
 1. Edit `content/items.json` (+ `content/item_fields.schema.json` if adding a
-   new field/block shape).
+   new field/block shape). **New item def:** set `created` (ISO date,
+   `"YYYY-MM-DD"`) — required (`validate` rules `created-missing`/
+   `created-invalid`; lead-ratified 2026-07-07, git history was rejected as
+   the source of truth for this since copy-then-own resets it,
+   `games/new_game.mjs`). The future T0316 web editor will set `created`
+   automatically; hand-authored entries must set it themselves.
 2. Build codegen: `py -3.12 tools/generate_items_catalog.py --catalog
    content/items.json --schema content/item_fields.schema.json --out-dir
    <dir>` — emits the compile-time const tables (`items_catalog.gen.{h,c}`).
    Also runs a lightweight sanity net so a broken catalog fails the build,
-   not just the runtime.
+   not just the runtime. `created` is authoring metadata only — never
+   compiled into the tables.
 3. Run the STRICT gate before shipping: `py -3.12 tools/items_ops.py validate`
    — a strict superset of the generator's sanity net (same source of truth,
-   imported not re-parsed) PLUS: the lock-file removal workflow against
-   `content/items.lock.json` + `state/items.schema.json` (below), full
-   `<namespace>.<slug>` charset check, the composite-key length hard rule
-   (`len(container) + 1 + len(def_id) <= 63`, since stack keys are
-   `"<container>/<def_id>"` under `string_max=64`), an `equip` ⇒ not
-   `stack.unlimited` sanity check, and an advisory display_name-keying lint.
-   See the `nt-game-items` skill for the full CLI reference (`list`/
-   `validate`/`schema`, `--json`).
+   imported not re-parsed) PLUS: the `created` field, the lock-file removal
+   workflow against `content/items.lock.json` + `state/items.schema.json`
+   (below), full `<namespace>.<slug>` charset check, the composite-key
+   length hard rule (`len(container) + 1 + len(def_id) <= 63`, since stack
+   keys are `"<container>/<def_id>"` under `string_max=64`), an `equip` ⇒
+   not `stack.unlimited` sanity check, and an advisory display_name-keying
+   lint. See the `nt-game-items` skill for the full CLI reference (`list`/
+   `validate`/`schema`, `--json`). **This gate ALSO runs automatically in
+   `ctest`** (target `items_ops_validate`) — a destructive change without a
+   reaction now fails the build's test suite by itself, not only a manual
+   run you might forget to do.
 
 ### Lock workflow (`content/items.lock.json`) — destructive-change guard
 
@@ -147,17 +156,32 @@ sections:
   declared. `note` is OPTIONAL free-text documentation; `validate` never
   requires it.
 
+**Fresh games start empty.** `games/new_game.mjs` resets a new game's copy of
+`content/items.lock.json` to an empty baseline (`def_ids: []`, `removed: {}`)
+right after copying the template (copy-then-own) — the TEMPLATE's own lock
+legitimately lists ITS shipped demo defs (`tmpl.gold` etc.), but a brand-new
+game has shipped NOTHING to ITS OWN players yet.
+
 **Everyday cases:**
-- **Adding a new item and shipping it:** once a def_id has gone out in a
-  release, append it to `def_ids`. Never remove an entry from `def_ids` once
-  it has actually shipped — move it to `removed` instead (below).
+- **Adding a new item and shipping it — READ THIS ONE TWICE.** Once a def_id
+  has gone out in a release, you MUST append it to `def_ids`. **This is the
+  ONE manual, unenforced link in the whole chain** — nothing currently
+  catches "you forgot to append a newly-shipped id to the lock" (only the
+  REVERSE mistake, removing a locked id, is machine-enforced). Miss this step
+  and the destructive-change guard is quietly blind to that def_id until
+  someone notices. Never remove an entry from `def_ids` once it has actually
+  shipped — move it to `removed` instead (below).
 - **Editing an item that is still unreleased** (not yet in `def_ids`): free
   to rename/remove, no guard fires — it never shipped.
 - **Restoring a previously removed def:** if a def_id in `removed` reappears
   in the catalog, `validate` only WARNS (`removed-def-restored`) —
   restoration is legal, `reconcile()` un-quarantines any matching saved
   records. Move the id back to `def_ids` and drop its `removed` entry once
-  you are sure the restoration is permanent.
+  you are sure the restoration is permanent. **If a def might come back,
+  prefer a no-op/quarantine migration step over a real delete step:** dropping
+  the `removed` receipt later does NOT undo a migration step that has already
+  shipped and run — a delete step that already executed cannot be un-run by
+  editing the lock file after the fact.
 
 **Deliberately removing a shipped def_id — the forced step-by-step:**
 1. Remove the def_id from `content/items.json`.
@@ -165,7 +189,9 @@ sections:
    still in `def_ids`, missing from the catalog, and not yet in `removed`).
    The error message spells out the next three steps.
 3. In `content/items.lock.json`: move the id from `def_ids` to `removed`
-   with `fragment_version = <current items fragment version> + 1`.
+   with `fragment_version = <current items fragment version> + 1` — or just
+   `= <current version>` if you already bumped `state/items.schema.json`'s
+   `"version"` earlier in THIS SAME release for an unrelated shape migration.
 4. Bump `state/items.schema.json`'s `"version"` to that same number, and add
    the migration step for it (`"migrations": [{"to_version": ..., "fn":
    "..."}]`, see "Migration skeleton" above) — a REAL step: delete or

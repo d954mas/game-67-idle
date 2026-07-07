@@ -11,7 +11,7 @@
 //   cmake -S games/mygame -B games/mygame/build/native-debug -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
 //   cmake --build games/mygame/build/native-debug --target game
 //   ./games/mygame/build/native-debug/bin/game.exe
-import { existsSync, mkdirSync, readdirSync, copyFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, copyFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gameRegistryPath, registerGameAssetSource } from "../ai_studio/assets/backlog/storage/sources/games.mjs";
@@ -93,6 +93,36 @@ if (existsSync(toDir) && !a.force) {
 }
 
 copyDir(fromDir, toDir);
+
+// F2 (T0327 И2c deep-review, lead-ratified 2026-07-07): copy-then-own for the
+// items destructive-change lock. The template's own content/items.lock.json
+// legitimately lists ITS shipped demo defs (tmpl.gold etc.) -- a fresh game
+// has shipped NOTHING to ITS OWN players yet, so its copy must start from an
+// empty baseline instead of inheriting the template's shipping history.
+// Games copied from a template without the items feature (no content/ dir,
+// or no lock file in it) are left alone -- existsSync on a missing nested
+// path just returns false, no error.
+const itemsLockPath = join(toDir, "content", "items.lock.json");
+const itemsLockReset = existsSync(itemsLockPath);
+if (itemsLockReset) {
+  writeFileSync(
+    itemsLockPath,
+    `${JSON.stringify(
+      {
+        schema: "game_seed.items_lock",
+        schema_version: 2,
+        comment:
+          "Baseline of def_id shipped to THIS game's players -- starts empty (copy-then-own reset by " +
+          "games/new_game.mjs; see src/features/items/README.md 'Lock workflow' for the destructive-change guard).",
+        def_ids: [],
+        removed: {},
+      },
+      null,
+      2,
+    )}\n`,
+  );
+}
+
 const registered = registerGameAssetSource(repoRoot, {
   id: a.id,
   title: a.id,
@@ -125,6 +155,9 @@ console.log(`new game '${a.id}' created from ${fromRel}/ -> games/${a.id}/`);
 console.log(`registered assets: ${gameRegistryPath(repoRoot)} -> ${registered.assets}`);
 console.log(`${taskboard.created ? "created" : "existing"} taskboard project: ${taskboard.project.fields.id}`);
 console.log(`updated VS Code tasks/launch for ${vscode.projects.length} playable project(s)`);
+if (itemsLockReset) {
+  console.log(`reset items lock baseline (fresh game -- no defs shipped yet): games/${a.id}/content/items.lock.json`);
+}
 console.log("\nbuild + run:");
 console.log(`  cmake -S games/${a.id} -B games/${a.id}/build/native-debug -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug`);
 console.log(`  cmake --build games/${a.id}/build/native-debug --target game`);

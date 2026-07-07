@@ -228,6 +228,12 @@ def render_source(doc: dict[str, Any]) -> str:
             refs["currency"] = currency_sym
         block_refs[item["id"]] = refs
 
+    # Lead reversal 2026-07-07: items.json items also carry a `created` (ISO
+    # date) authoring field now (item_fields.schema.json core, required) --
+    # it is intentionally NOT emitted below. It is authoring metadata (when
+    # was this def written), read by tooling/editors (items_ops.py `list
+    # --json`, future T0316 web editor), not something the runtime needs;
+    # game_item_def_t has no field for it and never will. Do not add one.
     lines.append("const game_item_def_t k_items[] = {")
     for item in items:
         refs = block_refs[item["id"]]

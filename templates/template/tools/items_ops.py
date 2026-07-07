@@ -26,22 +26,32 @@ tightens it.
 
 `validate --json` errors/warnings are structured objects
 `{rule, id, field, msg}` (stable kebab-case `rule` ids: "generator-check",
-"namespace", "removed-without-reaction", "removed-version-not-shipped",
-"lock-invalid", "lock-inconsistent", "removed-def-restored" (warning),
-"composite-key-length", "equip-unlimited", "display-name-keying",
-"rename-guard-skipped") -- not free strings, so the future web editor
-(T0316) can key UI off `rule`/`id` instead of parsing text.
+"namespace", "created-missing", "created-invalid", "removed-without-reaction",
+"removed-version-not-shipped", "lock-invalid", "lock-inconsistent",
+"removed-def-restored" (warning), "composite-key-length", "equip-unlimited",
+"display-name-keying", "rename-guard-skipped") -- not free strings, so the
+future web editor (T0316) can key UI off `rule`/`id` instead of parsing text.
 
-Exit codes: 0 = OK, 1 = validation FAIL, 2 = usage/IO error. A rename-guard
-baseline that is MISSING because it was never given (default path absent) is
-NOT an IO error -- it prints a warning (guard skipped, other checks still
-run); an EXPLICITLY passed `--baseline` path that does not exist IS an IO
-error (exit 2), consistent with `--catalog`/`--schema`/`--state-schema`.
+Exit codes: 0 = OK, 1 = validation FAIL, 2 = usage/IO error. A lock baseline
+that is MISSING because it was never given (default path absent) is NOT an
+IO error -- it prints a warning (lock-file checks skipped, other checks
+still run); an EXPLICITLY passed `--baseline` path that does not exist, OR a
+baseline that exists but has the WRONG SHAPE (schema_version != 2, def_ids
+not a list, removed not an object), IS an IO error (exit 2, consistent with
+`--catalog`/`--schema`/`--state-schema`) -- a broken lock file must never
+SILENTLY disable the destructive-change guard.
+
+This CLI is wired into `ctest` as `items_ops_validate` (CMakeLists.txt) --
+deleting a shipped def_id without reacting now fails the build's test suite
+automatically, not just a manual run. `items_ops_test.py` (unittest,
+precedent features/game-state/scripts/generate_state_test.py) is a second
+ctest target covering the lock-workflow rules directly against temp fixtures.
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import re
 import sys
@@ -70,6 +80,12 @@ MIN_REMOVED_FRAGMENT_VERSION = 2
 # NUL-terminated C string holds at most 63 payload chars (deep-review L2/L1;
 # §2.3/§8.3.4). Composite stack key is "<container>/<def_id>".
 OWNED_KEY_MAX_LEN = 63
+
+# Lead reversal 2026-07-07: git history was rejected as an unreliable source
+# of "when was this def created" (copy-then-own resets it, T0327 И2c) -- the
+# creation date lives IN THE DATA instead. "YYYY-MM-DD", checked for both
+# shape (regex) and calendar validity (datetime.date.fromisoformat below).
+CREATED_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 Issue = dict  # {"rule": str, "id": str | None, "field": str | None, "msg": str}
 
@@ -117,6 +133,7 @@ def item_json_record(item: dict[str, Any]) -> dict[str, Any]:
         "display_name": item.get("display_name"),
         "icon_asset_id": item.get("icon_asset_id"),
         "kind": item.get("kind"),
+        "created": item.get("created"),  # authoring metadata; never compiled into the C tables
         "tags": item.get("tags", []),
         "base_value": item.get("base_value"),
         "stack": {"stackable": stackable, "max_stack": max_stack, "unlimited": unlimited},
@@ -280,10 +297,15 @@ def check_lock_workflow(
     if baseline is None:
         return errors, warnings
 
-    def_ids_raw = baseline.get("def_ids", [])
-    def_ids = set(def_ids_raw) if isinstance(def_ids_raw, list) else set()
-    removed_raw = baseline.get("removed", {})
-    removed: dict[str, Any] = removed_raw if isinstance(removed_raw, dict) else {}
+    # F3 (deep-review): `baseline`'s shape (schema_version==2, def_ids is a
+    # list, removed is an object) is already HARD-enforced by
+    # validate_baseline_shape() before this function ever runs (resolve_baseline
+    # raises OpsError / exit 2 on a malformed lock) -- so no isinstance-guarded
+    # fallback-to-empty here. A silent "if not a list, treat as no ids" coercion
+    # is exactly the loophole that let a broken lock file silently disable the
+    # whole guard; it must never be reintroduced at this layer.
+    def_ids = set(baseline.get("def_ids", []))
+    removed: dict[str, Any] = baseline.get("removed", {})
     current_ids = {item.get("id") for item in doc.get("items", [])}
 
     both = sorted(def_ids & removed.keys())
@@ -308,10 +330,14 @@ def check_lock_workflow(
                 f"def_id {locked_id!r} is shipped (listed in items.lock.json def_ids) but missing from "
                 "the catalog -- this is destructive and needs an explicit developer reaction: move it to "
                 f"lock.removed with fragment_version={needed_version} (current items fragment version "
-                f"{current_version} + 1), bump state/items.schema.json 'version' to {needed_version} to "
-                "match, and add the corresponding migration step (a REAL step: delete or convert the "
-                "records, e.g. convert a currency by base_value; or an explicit no-op step = a conscious "
-                "decision that reconcile()'s quarantine is the handling). The generator enforces "
+                f"{current_version} + 1 -- or just {current_version} if you already bumped "
+                "state/items.schema.json's 'version' earlier in THIS SAME release for an unrelated shape "
+                f"migration), bump 'version' to that same number if you have not already, and add the "
+                "corresponding migration step (a REAL step: delete or convert the records, e.g. convert a "
+                "currency by base_value; or an explicit no-op step = a conscious decision that "
+                "reconcile()'s quarantine is the handling -- prefer the no-op/quarantine step over a real "
+                "delete if this def might come back: dropping the removed receipt later does NOT undo a "
+                "migration step that already shipped and ran). The generator enforces "
                 "version == len(migrations)+1, so the version bump forces you to add that step. (Multiple "
                 "removals in one release can share the SAME fragment_version/migration step -- batch "
                 "them.) If this id never actually shipped in any released build, you may instead remove "
@@ -439,6 +465,59 @@ def check_equip_unlimited(doc: dict[str, Any]) -> list[Issue]:
     return errors
 
 
+def check_created_field(doc: dict[str, Any]) -> list[Issue]:
+    """Lead reversal 2026-07-07: every item def carries a `created` (ISO
+    date) authoring field IN THE DATA -- git history was rejected as
+    unreliable for this (copy-then-own resets it when a game is spun up from
+    the template, games/new_game.mjs). `created` is REQUIRED on items only
+    (container defs do not need one); `item_fields.schema.json`'s generic
+    core-required-field check (run_generator_checks) also catches a MISSING
+    `created` as a side effect of it being `"required": true` there, but
+    this function is the dedicated, always-evaluated, stably-ruled check
+    (not gated behind the generator's fail-fast on some unrelated field) --
+    same pattern as check_equip_unlimited/check_composite_key_length. Never
+    compiled into the C tables (generate_items_catalog.py) -- authoring-only,
+    read by tooling/editors (T0316), not runtime."""
+    errors: list[Issue] = []
+    for item in doc.get("items", []):
+        item_id = item.get("id")
+        created = item.get("created")
+        if created is None:
+            errors.append(
+                issue(
+                    "created-missing",
+                    f"item {item_id!r} is missing required field 'created' (ISO date, e.g. \"2026-07-07\") -- "
+                    "set it when authoring a new item (the T0316 web editor will set it automatically).",
+                    id=item_id,
+                    field="created",
+                )
+            )
+            continue
+        if not isinstance(created, str) or not CREATED_DATE_RE.match(created):
+            errors.append(
+                issue(
+                    "created-invalid",
+                    f"item {item_id!r} 'created'={created!r} is not an ISO date string (\"YYYY-MM-DD\")",
+                    id=item_id,
+                    field="created",
+                )
+            )
+            continue
+        try:
+            datetime.date.fromisoformat(created)
+        except ValueError:
+            errors.append(
+                issue(
+                    "created-invalid",
+                    f"item {item_id!r} 'created'={created!r} matches YYYY-MM-DD shape but is not a real "
+                    "calendar date",
+                    id=item_id,
+                    field="created",
+                )
+            )
+    return errors
+
+
 DISPLAY_NAME_KEY_RE = re.compile(r"strcmp\s*\([^;]*display_name")
 
 
@@ -492,24 +571,50 @@ def run_generator_checks(doc: dict[str, Any], field_schema: dict[str, Any]) -> l
     return errors
 
 
+def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
+    """F3 (deep-review): a broken lock file must NEVER silently disable the
+    destructive-change guard. Before this check existed, check_lock_workflow
+    coerced a malformed `def_ids`/`removed` to an empty set/dict and moved on
+    -- a typo'd lock file (e.g. `def_ids` accidentally overwritten with a
+    string, or a stray `"removed": null`) would validate GREEN while quietly
+    skipping every lock-workflow rule. Same severity as a missing/unparsable
+    file: OpsError, exit 2, not a warning."""
+    schema_version = baseline.get("schema_version")
+    if schema_version != 2:
+        raise OpsError(f"lock baseline 'schema_version' must be 2, got {schema_version!r} ({path})")
+    def_ids = baseline.get("def_ids")
+    if not isinstance(def_ids, list):
+        raise OpsError(f"lock baseline 'def_ids' must be a list, got {type(def_ids).__name__} ({path})")
+    removed = baseline.get("removed")
+    if not isinstance(removed, dict):
+        raise OpsError(f"lock baseline 'removed' must be an object, got {type(removed).__name__} ({path})")
+
+
 def resolve_baseline(args: argparse.Namespace) -> tuple[dict[str, Any] | None, Issue | None]:
-    """An EXPLICIT --baseline that does not exist is an IO error (exit 2,
-    consistent with --catalog/--schema/--state-schema); the DEFAULT baseline
-    being absent is NOT an error -- the lock-file workflow is a convention
-    that only kicks in once a lock file exists, so it degrades to a visible
-    skip-warning instead of silently doing nothing."""
+    """An EXPLICIT --baseline that does not exist (or exists but has the
+    wrong shape, F3) is an IO error (exit 2, consistent with
+    --catalog/--schema/--state-schema); the DEFAULT baseline being absent is
+    NOT an error -- the lock-file workflow is a convention that only kicks in
+    once a lock file exists, so it degrades to a visible skip-warning instead
+    of silently doing nothing. A PRESENT default baseline is held to the same
+    shape check as an explicit one -- "it happened to exist" is not a reason
+    to accept a malformed lock file."""
     if args.baseline is not None:
         baseline_path = Path(args.baseline)
         if not baseline_path.exists():
             raise OpsError(f"baseline not found: {baseline_path}")
-        return load_json_or_die(baseline_path, "lock baseline"), None
+        baseline = load_json_or_die(baseline_path, "lock baseline")
+        validate_baseline_shape(baseline, baseline_path)
+        return baseline, None
 
     if DEFAULT_LOCK.exists():
-        return load_json_or_die(DEFAULT_LOCK, "lock baseline"), None
+        baseline = load_json_or_die(DEFAULT_LOCK, "lock baseline")
+        validate_baseline_shape(baseline, DEFAULT_LOCK)
+        return baseline, None
 
     skip_warning = issue(
         "rename-guard-skipped",
-        f"default baseline not found ({DEFAULT_LOCK}) -- rename-guard SKIPPED for this run",
+        f"default baseline not found ({DEFAULT_LOCK}) -- lock-file checks SKIPPED for this run",
     )
     return None, skip_warning
 
@@ -533,6 +638,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     errors: list[Issue] = []
     errors += run_generator_checks(doc, field_schema)
     errors += check_namespace_pattern(doc, field_schema)
+    errors += check_created_field(doc)
     errors += check_composite_key_length(doc)
     errors += check_equip_unlimited(doc)
 

@@ -4,6 +4,7 @@
   "namespace_pattern": "^[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*$",
   "core": {
     "id":            { "type": "string", "required": true },
+    "created":       { "type": "string", "required": true },
     "display_name":  { "type": "string", "required": true },
     "icon_asset_id": { "type": "string", "required": true },
     "kind":          { "type": "string", "required": true },
