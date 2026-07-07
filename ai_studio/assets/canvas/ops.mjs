@@ -6187,8 +6187,12 @@ async function runOneAlphaKeyer(root, projectId, element, chosen, specRegions, c
 }
 
 // Build the tool_runs row + element.meta.alpha provenance for one keyed element (shared by
-// the single and batch paths, so the recorded shape never drifts between them).
-function buildAlphaProvenance(elementId, chosen, specRegions, report, parentSrc) {
+// the single and batch paths, so the recorded shape never drifts between them). T0336: the
+// provenance now lives on the NEW copy element, so it records BOTH the parent's `src`
+// (parentSrc — the exact pixels that were keyed) and the parent's element id
+// (parentElementId — so a side-by-side A/B copy links back to the art it came from). The
+// tool_runs `elementId` stays the SOURCE (its pixels are what ran through the keyer).
+function buildAlphaProvenance(elementId, chosen, specRegions, report, parentSrc, parentElementId) {
   const at = new Date().toISOString();
   const run = {
     id: `run_${randomUUID().slice(0, 8)}`,
@@ -6206,6 +6210,7 @@ function buildAlphaProvenance(elementId, chosen, specRegions, report, parentSrc)
     method: chosen,
     tool: "alpha_cutout.py",
     parentSrc,
+    parentElementId,
     at,
     key_color: report && report.key_color,
     regions: run.params.regions,
@@ -6252,7 +6257,35 @@ function buildAlphaProvenance(elementId, chosen, specRegions, report, parentSrc)
   return { run, alphaMeta };
 }
 
-// Single-element path (unchanged behavior/journal shape from before batching landed).
+// Mint the alpha cutout as a NEW element beside the source (T0336 — "не ломать арт + легко
+// сравнивать разные методы бок о бок": the lead A/Bs key_matte vs corridorkey vs vitmatte vs
+// birefnet on the SAME art, so the cutout must never modify the original's pixels). The copy
+// is placed to the RIGHT of the source (16px gap, mirroring alphaDualPlate/alphaDualPlateGenerate's
+// own placement), named "<source> · <method>" so a stacked A/B reads at a glance, and carries
+// element.meta.alpha provenance (incl. parentElementId). storeAddImage mints it the SAME way every
+// other add does (id/type/source_w/h/name/meta) — no hand-rolled element shape. The copy's DISPLAY
+// box (w/h) is set to the source's exact box (the keyer output is always the source's pixel size,
+// so this is a pixel-perfect side-by-side twin even when the source was scaled on the canvas);
+// source_w/source_h stay the true output pixels. `before` drives the front-order hook (the copy
+// lands at the FRONT of the root scope when that scope is already explicitly ordered). Returns the
+// storeAddImage result + the front-order value so the caller folds the twin/order override into ONE
+// updateProject. The source element is never read for a write and never appears in `elements` map
+// changes — it is byte-identical before and after.
+function mintAlphaCopy(root, projectId, source, newSrc, chosen, alphaMeta) {
+  const gap = 16;
+  const bytes = readFileSync(resolveProjectFile(root, projectId, newSrc));
+  return storeAddImage(root, projectId, {
+    name: `${source.name} · ${chosen}`,
+    bytes,
+    x: source.x + source.w + gap,
+    y: source.y,
+    meta: { alpha: alphaMeta },
+  });
+}
+
+// Single-element path. T0336: the cutout is minted as a NEW element beside the source (see
+// mintAlphaCopy); the source element and its pixels are NEVER touched — undo removes the copy and
+// leaves the original byte-identical, because it was never written.
 async function alphaCutoutSingle(root, projectId, before, elementId, chosen, regions, startedAt, corridorKey, vitmatte, birefnet) {
   const element = (before.elements || []).find((item) => item.id === elementId);
   if (!element) throw new Error(`element not found: ${elementId}`);
@@ -6266,39 +6299,48 @@ async function alphaCutoutSingle(root, projectId, before, elementId, chosen, reg
 
   const { newSrc, report } = await runOneAlphaKeyer(root, projectId, element, chosen, specRegions, corridorKey, vitmatte, birefnet);
 
-  // Re-read to avoid clobbering concurrent edits, then swap src + record provenance on the
-  // SAME element (previous src file stays in files/, so undo restores the exact bytes).
+  // Re-read to avoid clobbering concurrent edits, read the SOURCE (untouched) for its
+  // placement/name, then mint the cutout as a NEW element beside it.
   const current = getProject(root, projectId);
-  const target = (current.elements || []).find((item) => item.id === elementId);
-  if (!target) throw new Error(`element not found: ${elementId}`);
-  const { run, alphaMeta } = buildAlphaProvenance(elementId, chosen, specRegions, report, target.src);
-  const nextElements = (current.elements || []).map((item) =>
-    item.id === elementId ? { ...item, src: newSrc, meta: { ...(item.meta || {}), alpha: alphaMeta } } : item,
-  );
+  const source = (current.elements || []).find((item) => item.id === elementId);
+  if (!source) throw new Error(`element not found: ${elementId}`);
+  const { run, alphaMeta } = buildAlphaProvenance(elementId, chosen, specRegions, report, source.src, elementId);
+  const added = mintAlphaCopy(root, projectId, source, newSrc, chosen, alphaMeta);
+
+  // Fold the display-box twin (w/h) + front-order into the SAME updateProject the tool_runs
+  // append rides (mirrors alphaDualPlateGenerate's post-mint map). The source element is left
+  // exactly as storeAddImage saw it — no map entry touches it.
+  const fo = frontOrder(before, null);
+  const nextElements = (added.project.elements || []).map((item) => {
+    if (item.id !== added.element.id) return item;
+    const twin = { ...item, w: source.w, h: source.h };
+    if (fo !== null) twin.order = fo;
+    return twin;
+  });
   const after = updateProject(root, projectId, {
     elements: nextElements,
     tool_runs: capToolRuns(root, projectId, [...(current.tool_runs || []), run]),
   });
   const project = commitMutation(root, projectId, {
     op: "alphaCutout",
-    args_summary: { elementId, method: chosen, regions: run.params.regions, region_count: run.params.regions.length },
+    args_summary: { elementId, method: chosen, regions: run.params.regions, region_count: run.params.regions.length, newElementId: added.element.id },
     before,
     after,
     startedAt,
   });
-  return { project, element: (project.elements || []).find((item) => item.id === elementId), run, method: chosen };
+  return { project, element: (project.elements || []).find((item) => item.id === added.element.id) || added.element, run, method: chosen };
 }
 
 // Batch path — the multi-selection "Apply to N images" gesture. Every element is
 // validated up front (exists, is an image; regions are NOT allowed here — regions stay
 // single-element). Each element is then keyed SEQUENTIALLY through its own worker spawn;
 // if ANY element fails (dual-plate refusal, not an image mid-run, tool error), the error
-// propagates immediately and NOTHING is written to project.json — no partial swap, no
+// propagates immediately and NOTHING is written to project.json — no new element, no
 // journal entry (any files/ bytes already written for earlier-succeeding elements are
 // inert content-addressed data, never referenced by any element, so nothing is
-// "mutated" in the non-destructive sense). Only once EVERY element has keyed
-// successfully does this commit ONE journal entry swapping every src + every
-// element.meta.alpha — one undo restores every element byte-exact.
+// "mutated"). Only once EVERY element has keyed successfully does this commit ONE journal
+// entry that MINTS N new copy elements beside their sources (T0336 — the sources are
+// never touched); one undo removes ALL the copies and leaves every original byte-exact.
 async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, startedAt, corridorKey, vitmatte, birefnet) {
   const ids = elementIds.map((value) => String(value));
   const unique = [...new Set(ids)];
@@ -6318,21 +6360,34 @@ async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, sta
   }
 
   // Re-read once (defensive against a concurrent edit across the whole sequential run),
-  // then swap every src + write every element's meta.alpha off the SAME snapshot.
+  // then MINT one copy per source off that SAME snapshot (each storeAddImage appends to disk,
+  // exactly like addImages' sequential mint loop). twinById remembers each copy's source so the
+  // display-box (w/h) twin + front-order can be folded in AFTER all mints, in ONE updateProject.
   const current = getProject(root, projectId);
   const runs = [];
-  const swapById = new Map();
+  const twinById = new Map(); // newElementId -> source element (for the w/h twin override)
+  const mintedIds = [];
   for (const item of processed) {
-    const target = (current.elements || []).find((el) => el.id === item.elementId);
-    if (!target) throw new Error(`element not found: ${item.elementId}`);
-    const { run, alphaMeta } = buildAlphaProvenance(item.elementId, chosen, null, item.report, target.src);
+    const source = (current.elements || []).find((el) => el.id === item.elementId);
+    if (!source) throw new Error(`element not found: ${item.elementId}`);
+    const { run, alphaMeta } = buildAlphaProvenance(item.elementId, chosen, null, item.report, source.src, item.elementId);
     runs.push(run);
-    swapById.set(item.elementId, { newSrc: item.newSrc, alphaMeta });
+    const added = mintAlphaCopy(root, projectId, source, item.newSrc, chosen, alphaMeta);
+    twinById.set(added.element.id, source);
+    mintedIds.push(added.element.id);
   }
-  const nextElements = (current.elements || []).map((item) => {
-    const swap = swapById.get(item.id);
-    if (!swap) return item;
-    return { ...item, src: swap.newSrc, meta: { ...(item.meta || {}), alpha: swap.alphaMeta } };
+
+  // Re-read after all mints (they each wrote project.json), fold the w/h twin + front-order
+  // for the minted copies, and append every tool_runs row — ONE updateProject, then ONE commit.
+  const minted = getProject(root, projectId);
+  let fo = frontOrder(before, null);
+  const orderById = fo !== null ? new Map(mintedIds.map((id) => [id, fo++])) : null;
+  const nextElements = (minted.elements || []).map((item) => {
+    const source = twinById.get(item.id);
+    if (!source) return item;
+    const twin = { ...item, w: source.w, h: source.h };
+    if (orderById) twin.order = orderById.get(item.id);
+    return twin;
   });
   const after = updateProject(root, projectId, {
     elements: nextElements,
@@ -6340,12 +6395,12 @@ async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, sta
   });
   const project = commitMutation(root, projectId, {
     op: "alphaCutout",
-    args_summary: { elementIds: unique, count: unique.length, method: chosen },
+    args_summary: { elementIds: unique, count: unique.length, method: chosen, newElementIds: mintedIds },
     before,
     after,
     startedAt,
   });
-  const resultIds = new Set(unique);
+  const resultIds = new Set(mintedIds);
   return {
     project,
     elements: (project.elements || []).filter((item) => resultIds.has(item.id)),
@@ -6355,9 +6410,12 @@ async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, sta
   };
 }
 
-// Run the element's CURRENT pixels through the image-tools alpha pipeline and swap the
-// element to a NEW content-addressed alpha PNG in ONE journaled entry — the missing bridge
-// that puts the matte pipeline on the canvas ("готовый арт сразу в альфу"). Cutting is done
+// Run the element's CURRENT pixels through the image-tools alpha pipeline and mint the cutout
+// as a NEW element beside the source in ONE journaled entry (T0336 — the original element and
+// its pixels are NEVER touched: "не ломать арт + легко сравнивать разные методы бок о бок", so
+// the lead can A/B key_matte vs corridorkey vs vitmatte vs birefnet on the same art side by
+// side). The missing bridge that puts the matte pipeline on the canvas ("готовый арт сразу в
+// альфу"). Cutting is done
 // by our OWN Python tool (tools/alpha_cutout.py) which REUSES the image-tools route +
 // key_matte modules unmodified (no matte logic duplicated in node or a second python impl);
 // ops writes an alpha spec (absolute source path + method + the element's selected regions
@@ -6374,12 +6432,15 @@ async function alphaCutoutBatch(root, projectId, before, elementIds, chosen, sta
 // alpha is applied ONLY inside those region masks and the rest is untouched (region-mask
 // composition happens IN python, one worker call — for corridorkey this composites the whole-frame
 // CK result into the requested regions, since CK itself has no per-region pass); omitted, the whole
-// element is keyed. Output
-// dimensions equal the source, so geometry never changes. The previous src file stays in
-// files/ (immutable), so undo restores the exact previous bytes; element.meta.alpha records the
-// run (method, params, parent src, routing metrics) like slice provenance, plus a tool_runs row.
-// `elementIds` (2+ images), given INSTEAD of `elementId`, batches a multi-selection into ONE
-// journal entry (T0230) — see alphaCutoutBatch; `regions` is not accepted with a batch.
+// element is keyed. The NEW element is placed to the RIGHT of the source (16px gap, mirroring
+// alphaDualPlate/alphaDualPlateGenerate), sized to the source's exact display box (a pixel-perfect
+// side-by-side twin — the keyer output always equals the source's pixel dims), named
+// "<source> · <method>", and carries element.meta.alpha (method, params, parentSrc,
+// parentElementId, routing metrics) like slice provenance, plus a tool_runs row. The source is
+// byte-identical before and after; undo removes ONLY the copy. `elementIds` (2+ images), given
+// INSTEAD of `elementId`, batches a multi-selection into ONE journal entry (T0230) that mints N
+// copies — see alphaCutoutBatch; `regions` is not accepted with a batch. Return: `result.element`
+// (single) / `result.elements` (batch) are the NEW copy element(s).
 export async function alphaCutout(root, { projectId, elementId, elementIds, method, regions, corridorKey, vitmatte, birefnet } = {}) {
   if (!projectId) throw new Error("alphaCutout requires projectId");
   const batch = elementIds !== undefined && elementIds !== null;

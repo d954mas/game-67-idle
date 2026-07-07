@@ -29,8 +29,8 @@
 //   node ai_studio/assets/canvas/cli.mjs nodes-duplicate <id> --nodes id1,id2 [--dx n --dy n] [--group <gid>|none]
 //   node ai_studio/assets/canvas/cli.mjs nodes-delete <id> --nodes id1,id2
 //   node ai_studio/assets/canvas/cli.mjs slice <id> --element <eid> [--regions r1,r2]
-//   node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte|corridorkey|vitmatte|birefnet] [--regions r1,r2]
-//   node ai_studio/assets/canvas/cli.mjs alpha <id> --elements e1,e2 [--method auto|matte|corridorkey|vitmatte|birefnet]   (batch; one undo)
+//   node ai_studio/assets/canvas/cli.mjs alpha <id> --element <eid> [--method auto|matte|corridorkey|vitmatte|birefnet] [--regions r1,r2]   (cutout -> NEW element beside the source; original untouched; one undo)
+//   node ai_studio/assets/canvas/cli.mjs alpha <id> --elements e1,e2 [--method auto|matte|corridorkey|vitmatte|birefnet]   (batch; N new copies; one undo)
 //   node ai_studio/assets/canvas/cli.mjs alpha-dual <id> --elements a,b   (white+black plate pair -> new element; one undo)
 //   node ai_studio/assets/canvas/cli.mjs alpha-dual-generate <id> --element <el> [--prompt "..."]   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; one undo)
 //   node ai_studio/assets/canvas/cli.mjs quantize <id> --element <eid> --colors N [--dither] [--preview <out.png>]   (T0207: with --preview, writes the preview PNG + prints the report, NO journal entry; without it, applies — one undo step)
@@ -253,8 +253,8 @@ function usage() {
   slice9-set <id> --element <eid> [--left <n> --top <n> --right <n> --bottom <n>] [--scale <n>] | --clear   (T0233: 9-slice insets in SOURCE pixels; corners stay fixed size, edges stretch one axis, center stretches both, when the element is resized; image-only; omitted flags merge over the element's current slice9, or 0 if unset; --scale multiplies the DESTINATION corner/edge band only (default 1, source pixels never move); --clear sends insets:null)
   animation-set <id> --element <eid> --json <path> | --clear   (T0260: set an element's procedural animation — the ai_studio.canvas.animation.v1 spec {channels:[...]} (a spec object or a bare channels array) from a file; --clear sends animation:null; image + text; validated loudly at set time)
   slice <id> --element <eid> [--regions r1,r2]
-  alpha <id> --element <eid> [--method auto|matte|corridorkey|vitmatte|birefnet] [--regions r1,r2]   (alpha-cutout the element; auto routes, matte forces key_matte, corridorkey = neural green-screen matte for soft glow (green native, magenta via hue180 shim; regions composite the whole-frame CK result into the requested regions; ~15s GPU); vitmatte = neural THIN detail (spider-web/mesh/fur/hair) on a green/magenta key + 2nd-choice glow, its OWN GPU venv, ~1-3s, whole-element only; birefnet = SOD cutout for ANY/unknown background, NO key, shared repo venv CPU ~10-30s, whole-element only; one undo)
-  alpha <id> --elements e1,e2 [--method auto|matte|corridorkey|vitmatte|birefnet]   (batch: 2+ images keyed into ONE journal entry/undo; no --regions with a batch; corridorkey/vitmatte/birefnet each pay their per-image cost — the batch runs sequentially)
+  alpha <id> --element <eid> [--method auto|matte|corridorkey|vitmatte|birefnet] [--regions r1,r2]   (alpha-cutout -> a NEW element beside the source (original untouched, for side-by-side A/B); auto routes, matte forces key_matte, corridorkey = neural green-screen matte for soft glow (green native, magenta via hue180 shim; regions composite the whole-frame CK result into the requested regions; ~15s GPU); vitmatte = neural THIN detail (spider-web/mesh/fur/hair) on a green/magenta key + 2nd-choice glow, its OWN GPU venv, ~1-3s, whole-element only; birefnet = SOD cutout for ANY/unknown background, NO key, shared repo venv CPU ~10-30s, whole-element only; one undo)
+  alpha <id> --elements e1,e2 [--method auto|matte|corridorkey|vitmatte|birefnet]   (batch: 2+ images each cut into a NEW copy beside itself, in ONE journal entry/undo; sources untouched; no --regions with a batch; corridorkey/vitmatte/birefnet each pay their per-image cost — the batch runs sequentially)
   alpha-dual <id> --elements a,b   (white-plate + black-plate pair -> ONE new cut element; either order; plates untouched; one undo step)
   alpha-dual-generate <id> --element <eid> [--prompt "<extra subject description>"]   (AUTOMATIC: the element's current pixels are the LIGHT plate; generates the DARK plate via codex edit, gates it (one automatic retry), cuts -> ONE new element beside the source; source untouched; one undo step)
   quantize <id> --element <eid> --colors <2-256> [--dither] [--preview <out.png>]   (T0207: palette-quantize the element's CURRENT pixels, alpha untouched; --preview writes the result PNG to <out.png> + prints the report, NO journal entry; without --preview, commits a new file + src swap as one undo step)
@@ -653,7 +653,8 @@ async function runCommand(command, id, positional, flags) {
     }
     case "alpha": {
       // Alpha-cutout the element's current pixels (whole element, or only --regions r1,r2)
-      // via the image-tools matte pipeline; swaps the element to a new alpha PNG (one undo).
+      // via the image-tools matte pipeline; mints the cutout as a NEW element beside the
+      // source (original untouched, for side-by-side A/B — T0336), one undo.
       // --method auto (route; refuses a dual-plate soft zone), matte (force key_matte),
       // corridorkey (T0261/T0262 — neural GREEN-screen matte for soft glow art; green native,
       // magenta via a hue180 shim, ~15s GPU; a key that is neither is a loud refusal; --regions

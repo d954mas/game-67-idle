@@ -672,30 +672,37 @@ function renderAlpha(element, root) {
   alphaBtn.type = "button";
   alphaBtn.className = "insp-btn insp-alpha-btn";
   alphaBtn.disabled = transformed;
-  // The run button says what the chosen method will actually do (the matte label also
-  // carries the live region-scope count).
+  // T0336: SHORT run-button labels ("Apply · ~15s") — the old method-specific labels
+  // ("Alpha cutout (neural ~25s)") overflowed the inspector row on the lead's laptop. The
+  // matte label still carries the live region-scope count. The long niche / whole-element-only
+  // explanation (and "result is a new element beside the source") moves into the button's
+  // `title` tooltip so the row stays compact.
   const relabel = () => {
     if (methodSel.value === "dual") {
       alphaBtn.textContent = "Generate";
+      alphaBtn.title = "Automatic dual-plate: generates a dark plate (codex, ~2-4 min), gates it, and cuts ONE new element beside the source.";
       return;
     }
     if (methodSel.value === "corridorkey") {
-      // CorridorKey is whole-element only (no region scope) and neural (~15s) — say so.
-      alphaBtn.textContent = "Alpha cutout (neural ~15s)";
+      alphaBtn.textContent = "Apply · ~15s";
+      alphaBtn.title = "CorridorKey neural green-screen matte for soft glow / translucent art — whole-element only, ~15s GPU. Result is a NEW element beside the source (original untouched).";
       return;
     }
     if (methodSel.value === "vitmatte") {
-      // ViTMatte is whole-element only and GPU-neural (~1-3s on its own venv) — say so.
-      alphaBtn.textContent = "Alpha cutout (neural ~1-3s)";
+      alphaBtn.textContent = "Apply · ~1-3s";
+      alphaBtn.title = "ViTMatte neural thin-detail matte (web / mesh / fur / hair) on a green/magenta key — whole-element only, own GPU venv ~1-3s. Result is a NEW element beside the source (original untouched).";
       return;
     }
     if (methodSel.value === "birefnet") {
-      // BiRefNet is whole-element only and CPU-neural (~25s, no key) — say so; it is a long op.
-      alphaBtn.textContent = "Alpha cutout (neural ~25s)";
+      alphaBtn.textContent = "Apply · ~25s";
+      alphaBtn.title = "BiRefNet SOD cutout for any/unknown background (no key) — whole-element only, CPU ~25s. Result is a NEW element beside the source (original untouched).";
       return;
     }
     const ids = selectedRegionIdsFor(element);
-    alphaBtn.textContent = ids.length ? `Alpha cutout (${ids.length})` : "Alpha cutout";
+    alphaBtn.textContent = ids.length ? `Apply (${ids.length})` : "Apply";
+    alphaBtn.title = ids.length
+      ? `Key matte inside the ${ids.length} selected region(s). Result is a NEW element beside the source (original untouched).`
+      : "Key matte the whole element (region-aware when regions are selected). Result is a NEW element beside the source (original untouched).";
   };
   relabel();
   methodSel.addEventListener("change", relabel);

@@ -8,7 +8,8 @@
 // WITHOUT touching the store at all (no files/ write, no journal entry); Apply commits a
 // fresh deterministic run of the SAME tool+params as ONE journal entry (new
 // content-addressed file + element.src swap + element.meta.cleanup) — undo restores the
-// previous src byte-exact, exactly like alphaCutout. The validation tests need no Python;
+// previous src byte-exact. (Cleanup keeps the in-place src-swap; alphaCutout since T0336
+// instead mints a NEW element beside the source.) The validation tests need no Python;
 // the pipeline tests run the real warm-worker path and skip cleanly when the studio venv
 // is missing.
 import test from "node:test";

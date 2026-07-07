@@ -2,10 +2,11 @@
 //   node --test ai_studio/assets/canvas/tests/alpha.test.mjs
 //
 // alphaCutout runs an element's CURRENT pixels through the image-tools matte pipeline
-// (route + key_matte, reused unmodified) and swaps the element to a NEW content-addressed
-// alpha PNG in ONE journaled entry; undo restores the previous src byte-exact. The
-// validation tests (non-image, bad method, unknown region) need no Python; the pipeline
-// tests run the real warm-worker path and skip cleanly when the studio venv is missing.
+// (route + key_matte, reused unmodified) and mints the cutout as a NEW element beside the
+// source in ONE journaled entry (T0336 — the original element and its pixels are never
+// touched; undo removes the copy and leaves the source byte-identical). The validation tests
+// (non-image, bad method, unknown region) need no Python; the pipeline tests run the real
+// warm-worker path and skip cleanly when the studio venv is missing.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -110,13 +111,20 @@ test("alphaCutout (auto) keys the whole element: alpha channel, transparent bg, 
   if (!ran) return;
   const { projectId, elementId, result, original } = ran;
 
-  // src swapped to a NEW file; geometry preserved.
-  assert.notEqual(result.element.src, original.src, "element swapped to a new alpha file");
-  assert.equal(result.element.w, original.w);
-  assert.equal(result.element.h, original.h);
-  // meta records the run like slice provenance.
+  // The cutout is a NEW element beside the source; the source is untouched (T0336 copy semantics).
+  assert.notEqual(result.element.id, elementId, "result is a NEW element, not the source");
+  const afterProj = getProject(REPO_ROOT, projectId);
+  assert.deepEqual(afterProj.elements.find((el) => el.id === elementId), original, "source element untouched");
+  assert.equal(afterProj.elements.length, 2, "one new element minted (source + copy)");
+  assert.notEqual(result.element.src, original.src, "the copy carries the new alpha file");
+  assert.equal(result.element.w, original.w, "copy sized to the source box (w)");
+  assert.equal(result.element.h, original.h, "copy sized to the source box (h)");
+  assert.equal(result.element.x, original.x + original.w + 16, "copy placed to the right of the source");
+  assert.equal(result.element.y, original.y, "copy shares the source's y");
+  // meta records the run like slice provenance, and links back to the source element.
   assert.equal(result.element.meta.alpha.method, "auto");
   assert.equal(result.element.meta.alpha.parentSrc, original.src);
+  assert.equal(result.element.meta.alpha.parentElementId, elementId);
   // auto ROUTED the hard-edged magenta sheet to key_matte (proves the router ran).
   assert.equal(result.element.meta.alpha.routing[0].routed, "key_matte");
 
@@ -128,7 +136,7 @@ test("alphaCutout (auto) keys the whole element: alpha channel, transparent bg, 
   assert.equal(png.at(18, 18)[3], 255, "inside the red blob is opaque");
 });
 
-test("alphaCutout is ONE journal entry: undo restores the previous src byte-exact, redo re-applies", async (t) => {
+test("alphaCutout is ONE journal entry: undo removes the copy (source untouched), redo re-adds it", async (t) => {
   tempProjects(t);
   const ran = await tryAlpha(t, "matte");
   if (!ran) return;
@@ -138,21 +146,22 @@ test("alphaCutout is ONE journal entry: undo restores the previous src byte-exac
   const originalAbs = resolveProjectFile(REPO_ROOT, projectId, original.src);
   assert.ok(existsSync(originalAbs), "original file kept on disk (non-destructive)");
 
-  // Undo -> the element is restored EXACTLY to its pre-alpha state (src + no alpha meta).
+  // Undo -> the COPY is removed; the source element is byte-identical (it was never written).
   const undone = undoOp(REPO_ROOT, { projectId }).project;
-  const afterUndo = undone.elements.find((el) => el.id === elementId);
-  assert.deepEqual(afterUndo, original, "undo restores the exact pre-alpha element");
-  assert.equal(afterUndo.src, original.src);
-  assert.ok(!afterUndo.meta || !afterUndo.meta.alpha, "alpha meta removed on undo");
+  assert.equal(undone.elements.find((el) => el.id === result.element.id), undefined, "undo removes the copy");
+  assert.deepEqual(undone.elements.find((el) => el.id === elementId), original, "source still byte-identical after undo");
+  assert.equal(undone.elements.length, 1, "only the source remains after undo");
 
-  // Redo -> the alpha src comes back.
+  // Redo -> the copy comes back with the same id + alpha src.
   const redone = redoOp(REPO_ROOT, { projectId }).project;
-  assert.equal(redone.elements.find((el) => el.id === elementId).src, result.element.src);
+  const redoneCopy = redone.elements.find((el) => el.id === result.element.id);
+  assert.ok(redoneCopy, "redo re-adds the copy");
+  assert.equal(redoneCopy.src, result.element.src);
 });
 
 // ---- batch (T0230: multi-selection, ONE journal entry / undo) -----------------
 
-test("alphaCutout batch (elementIds) keys 2 images in ONE journal entry; one undo restores both byte-exact", async (t) => {
+test("alphaCutout batch (elementIds) mints 2 copies in ONE journal entry; one undo removes both, sources untouched", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Alpha batch undo" });
   const { element: e1 } = addImage(REPO_ROOT, project.id, { name: "sheet1.png", bytes: magentaSheetPng() });
@@ -171,30 +180,38 @@ test("alphaCutout batch (elementIds) keys 2 images in ONE journal entry; one und
     throw error;
   }
 
-  // Exactly ONE new journal entry for the WHOLE batch (not one per element).
+  // Exactly ONE new journal entry for the WHOLE batch (not one per element); 2 sources + 2 copies.
   const after = getProject(REPO_ROOT, project.id);
   assert.equal(after.history_seq, seqBefore + 1, "batch is one journal entry");
   assert.equal(result.count, 2);
   assert.equal(result.elements.length, 2);
+  assert.equal(after.elements.length, 4, "2 sources + 2 copies");
+  // Both sources are byte-identical (never touched).
+  for (const original of originals) {
+    assert.deepEqual(after.elements.find((el) => el.id === original.id), original, `source ${original.id} untouched`);
+  }
+  // Each copy is a NEW element linking back to a source via parentElementId (parentSrc is
+  // ambiguous here — the two sources share content-addressed bytes, so the src is identical).
+  const parentIds = result.elements.map((element) => element.meta.alpha.parentElementId).sort();
+  assert.deepEqual(parentIds, [e1.id, e2.id].sort(), "copies link back to both sources");
   for (const element of result.elements) {
-    const original = originals.find((item) => item.id === element.id);
-    assert.notEqual(element.src, original.src, `element ${element.id} swapped to a new alpha file`);
     assert.equal(element.meta.alpha.method, "matte");
-    assert.equal(element.meta.alpha.parentSrc, original.src);
+    assert.ok(!originals.some((o) => o.id === element.id), "copy is a new element, not a source");
   }
 
-  // ONE undo restores BOTH elements byte-exact (src + no alpha meta), in one step.
+  // ONE undo removes BOTH copies; the sources remain byte-exact, in one step.
   const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.equal(undone.elements.length, 2, "both copies removed on one undo");
   for (const original of originals) {
     const restored = undone.elements.find((element) => element.id === original.id);
-    assert.deepEqual(restored, original, `undo restores element ${original.id} exactly`);
+    assert.deepEqual(restored, original, `source ${original.id} still byte-exact after undo`);
   }
   assert.equal(undone.history_seq, seqBefore);
 
-  // Redo re-applies both swaps together.
+  // Redo re-adds both copies together.
   const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
   for (const element of result.elements) {
-    assert.equal(redone.elements.find((item) => item.id === element.id).src, element.src);
+    assert.ok(redone.elements.find((item) => item.id === element.id), `redo re-adds copy ${element.id}`);
   }
 });
 
@@ -204,7 +221,10 @@ test("alphaCutout (regions) keys ONLY inside the region; outside stays untouched
   // and the far magenta corner sit OUTSIDE the region and must stay original + opaque.
   const ran = await tryAlpha(t, "matte", [{ id: "r1", rect: [4, 4, 28, 28] }]);
   if (!ran) return;
-  const { projectId, result } = ran;
+  const { projectId, elementId, result, original } = ran;
+  // The cut lives on the NEW copy element; the source is byte-identical (T0336).
+  assert.deepEqual(getProject(REPO_ROOT, projectId).elements.find((el) => el.id === elementId), original, "source untouched");
+  assert.equal(result.element.meta.alpha.parentElementId, elementId, "copy links back to the source");
   const png = decodePng(readFileSync(resolveProjectFile(REPO_ROOT, projectId, result.element.src)));
   assert.equal(png.channels, 4);
   // Inside the region: magenta margin keyed transparent, blob opaque.
@@ -374,10 +394,11 @@ test("alpha API route and CLI drive the same op", async (t) => {
   });
   const parsed = JSON.parse(out.trim().split("\n").pop());
   assert.equal(parsed.method, "matte");
-  // A matte re-run of the already-keyed pixels is a valid op; src stays a files/ ref.
+  // The CLI keys the (untouched) source again and mints its OWN new copy element beside it.
+  assert.notEqual(parsed.element.id, element.id, "CLI result is a new copy, not the source");
   assert.match(parsed.element.src, /^files\//);
-  assert.notEqual(parsed.element.src, undefined);
-  assert.ok(before, "had a src before the CLI run");
+  assert.equal(parsed.element.meta.alpha.parentElementId, element.id, "copy links back to the source");
+  assert.ok(before, "source still had a src before the CLI run");
 });
 
 test("alpha API and CLI both drive elementIds batches, one journal entry each (parity)", async (t) => {
@@ -406,7 +427,7 @@ test("alpha API and CLI both drive elementIds batches, one journal entry each (p
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBeforeApi + 1, "API batch is one journal entry");
 
   // CLI: alpha <id> --elements e1,e2 --method matte — same ops layer, different transport.
-  // (A matte re-run of already-keyed pixels is a valid op — see the single-element parity test.)
+  // (The sources are untouched, so this mints a SECOND pair of copies — see the single-element parity test.)
   const seqBeforeCli = getProject(REPO_ROOT, project.id).history_seq;
   const out = execFileSync("node", [CLI, "alpha", project.id, "--elements", `${e1.id},${e2.id}`, "--method", "matte"], {
     env: { ...process.env, CANVAS_PROJECTS_ROOT: dir },
@@ -429,7 +450,7 @@ test("alpha API and CLI both drive elementIds batches, one journal entry each (p
 // the native-green and magenta-shim paths.
 
 // A fake CorridorKey invocation: writes a valid RGBA PNG to outAbs and returns a canvas alpha
-// report, so the op's src-swap/provenance/undo/journal contract is exercised with NO GPU/venv.
+// report, so the op's copy-mint/provenance/undo/journal contract is exercised with NO GPU/venv.
 // The key gate lives inside the REAL invoke (route_cutout + isCorridorKeyGreenKey/
 // isCorridorKeyMagentaKey); this fake bypasses it, so the source pixels are irrelevant here (the
 // gate is unit-tested separately).
@@ -534,7 +555,7 @@ test("corridorkey is in the method table; the CK seam runs ONLY for method=corri
   }
 });
 
-test("corridorkey (faked GPU run) swaps src + records provenance/timings; ONE undo restores byte-exact, redo re-applies", async (t) => {
+test("corridorkey (faked GPU run) mints a copy + records provenance/timings; ONE undo removes it (source untouched), redo re-adds", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "CK provenance" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "green.png", bytes: magentaSheetPng() });
@@ -544,13 +565,18 @@ test("corridorkey (faked GPU run) swaps src + records provenance/timings; ONE un
 
   const result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "corridorkey", corridorKey: ck.invoke });
   assert.equal(ck.calls.n, 1);
-  assert.notEqual(result.element.src, original.src, "src swapped to a new alpha file");
-  assert.equal(result.element.w, original.w, "geometry preserved (w)");
-  assert.equal(result.element.h, original.h, "geometry preserved (h)");
+  // The cutout is a NEW element beside the source; the source is untouched (T0336).
+  assert.notEqual(result.element.id, element.id, "result is a NEW element, not the source");
+  assert.deepEqual(getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id), original, "source untouched");
+  assert.notEqual(result.element.src, original.src, "the copy carries the new alpha file");
+  assert.equal(result.element.w, original.w, "copy sized to the source box (w)");
+  assert.equal(result.element.h, original.h, "copy sized to the source box (h)");
+  assert.equal(result.element.x, original.x + original.w + 16, "copy placed to the right of the source");
   const meta = result.element.meta.alpha;
   assert.equal(meta.method, "corridorkey");
   assert.equal(meta.tool, "corridorkey");
   assert.equal(meta.parentSrc, original.src);
+  assert.equal(meta.parentElementId, element.id, "copy links back to the source");
   assert.deepEqual(meta.key_color, [0, 255, 0]);
   assert.equal(meta.screen_color, "green");
   assert.equal(meta.shim, undefined, "no shim recorded for the native-green path");
@@ -558,15 +584,16 @@ test("corridorkey (faked GPU run) swaps src + records provenance/timings; ONE un
   assert.equal(typeof meta.timings.wall_seconds, "number", "wall timing recorded");
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "corridorkey keying is one journal entry");
 
-  // Original file kept (non-destructive); undo restores byte-exact (src + no alpha meta); redo re-applies.
+  // Original file kept (non-destructive); undo removes the copy (source untouched); redo re-adds it.
   assert.ok(existsSync(resolveProjectFile(REPO_ROOT, project.id, original.src)), "original file kept on disk");
   const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "undo restores the exact pre-alpha element");
+  assert.equal(undone.elements.find((el) => el.id === result.element.id), undefined, "undo removes the copy");
+  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "source still byte-identical after undo");
   const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.equal(redone.elements.find((el) => el.id === element.id).src, result.element.src, "redo re-applies the alpha src");
+  assert.equal(redone.elements.find((el) => el.id === result.element.id).src, result.element.src, "redo re-adds the copy");
 });
 
-test("corridorkey batch (faked) keys 2 images in ONE journal entry; one undo restores both byte-exact", async (t) => {
+test("corridorkey batch (faked) mints 2 copies in ONE journal entry; one undo removes both, sources untouched", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "CK batch" });
   const { element: e1 } = addImage(REPO_ROOT, project.id, { name: "g1.png", bytes: magentaSheetPng() });
@@ -579,10 +606,14 @@ test("corridorkey batch (faked) keys 2 images in ONE journal entry; one undo res
   assert.equal(ck.calls.n, 2, "CK seam runs once per element");
   assert.equal(result.count, 2);
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "batch is one journal entry");
+  assert.equal(getProject(REPO_ROOT, project.id).elements.length, 4, "2 sources + 2 copies");
   for (const el of result.elements) assert.equal(el.meta.alpha.method, "corridorkey");
+  const parentIds = result.elements.map((el) => el.meta.alpha.parentElementId).sort();
+  assert.deepEqual(parentIds, [e1.id, e2.id].sort(), "copies link back to both sources");
   const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.equal(undone.elements.length, 2, "both copies removed on one undo");
   for (const original of originals) {
-    assert.deepEqual(undone.elements.find((el) => el.id === original.id), original, `undo restores element ${original.id}`);
+    assert.deepEqual(undone.elements.find((el) => el.id === original.id), original, `source ${original.id} untouched after undo`);
   }
 });
 
@@ -596,19 +627,24 @@ test("corridorkey magenta shim (faked GPU run) records meta.alpha.shim=\"hue180\
 
   const result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "corridorkey", corridorKey: ck.invoke });
   assert.equal(ck.calls.n, 1);
+  assert.notEqual(result.element.id, element.id, "result is a NEW element, not the source");
+  assert.deepEqual(getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id), original, "source untouched");
   const meta = result.element.meta.alpha;
   assert.equal(meta.method, "corridorkey");
   assert.equal(meta.tool, "corridorkey");
+  assert.equal(meta.parentElementId, element.id, "copy links back to the source");
   assert.deepEqual(meta.key_color, [255, 0, 255], "magenta border key recorded");
   assert.equal(meta.screen_color, "green", "CK itself always runs the green checkpoint (the shim did the color work)");
   assert.equal(meta.shim, "hue180", "magenta shim provenance recorded");
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "corridorkey keying is one journal entry");
 
   const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "undo restores the exact pre-alpha element");
+  assert.equal(undone.elements.find((el) => el.id === result.element.id), undefined, "undo removes the copy");
+  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "source still byte-identical after undo");
   const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.equal(redone.elements.find((el) => el.id === element.id).src, result.element.src, "redo re-applies the shimmed alpha src");
-  assert.equal(redone.elements.find((el) => el.id === element.id).meta.alpha.shim, "hue180", "redo keeps the shim provenance");
+  const redoneCopy = redone.elements.find((el) => el.id === result.element.id);
+  assert.equal(redoneCopy.src, result.element.src, "redo re-adds the shimmed copy");
+  assert.equal(redoneCopy.meta.alpha.shim, "hue180", "redo keeps the shim provenance");
 });
 
 test("corridorkey regions (faked GPU run, real compose_regions python) composes the whole-frame CK result INTO the region; outside the region the source is untouched; one undo", async (t) => {
@@ -635,7 +671,11 @@ test("corridorkey regions (faked GPU run, real compose_regions python) composes 
     corridorKey: ck.invoke,
   });
   assert.equal(ck.calls.n, 1, "CK seam invoked exactly once (whole-frame, never per-region)");
+  // The composite lives on the NEW copy; the source element is untouched (T0336).
+  assert.notEqual(result.element.id, element.id, "result is a NEW element, not the source");
+  assert.deepEqual(getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id), original, "source untouched");
   assert.equal(result.element.meta.alpha.method, "corridorkey");
+  assert.equal(result.element.meta.alpha.parentElementId, element.id, "copy links back to the source");
   assert.deepEqual(result.element.meta.alpha.regions, ["r1"], "provenance names the region");
   assert.deepEqual(result.element.meta.alpha.routing.map((r) => r.id), ["r1"], "routing entry names the region");
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "region-scoped corridorkey keying is one journal entry");
@@ -645,7 +685,8 @@ test("corridorkey regions (faked GPU run, real compose_regions python) composes 
   assert.deepEqual(png.at(2, 2), [255, 0, 255, 255], "outside the region: the original magenta pixel, untouched");
 
   const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "undo restores the exact pre-alpha element");
+  assert.equal(undone.elements.find((el) => el.id === result.element.id), undefined, "undo removes the copy");
+  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "source still byte-identical after undo");
 });
 
 test("corridorkey (real key gate) refuses a NEUTRAL key with a clean message BEFORE any GPU call (skips without the studio venv)", async (t) => {
@@ -679,7 +720,7 @@ test("corridorkey (real key gate) refuses a NEUTRAL key with a clean message BEF
 // No live model runs here.
 
 // A fake ViTMatte invocation: writes a valid RGBA PNG to outAbs and returns a canvas alpha report,
-// so the op's src-swap/provenance/undo/journal contract runs with NO GPU/venv. The key gate lives in
+// so the op's copy-mint/provenance/undo/journal contract runs with NO GPU/venv. The key gate lives in
 // the REAL invoke (route_cutout + classifyCorridorKeyBorder); this fake bypasses it (unit-covered).
 function fakeVitmatte(bytes = softGlowPng()) {
   const calls = { n: 0 };
@@ -770,7 +811,7 @@ test("vitmatte + birefnet are explicit-only: each seam runs ONLY for its own met
   }
 });
 
-test("vitmatte (faked GPU run) swaps src + records provenance/timings; ONE undo restores byte-exact, redo re-applies", async (t) => {
+test("vitmatte (faked GPU run) mints a copy + records provenance/timings; ONE undo removes it (source untouched), redo re-adds", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "vitmatte provenance" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "web.png", bytes: magentaSheetPng() });
@@ -780,13 +821,18 @@ test("vitmatte (faked GPU run) swaps src + records provenance/timings; ONE undo 
 
   const result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "vitmatte", vitmatte: vm.invoke });
   assert.equal(vm.calls.n, 1);
-  assert.notEqual(result.element.src, original.src, "src swapped to a new alpha file");
-  assert.equal(result.element.w, original.w, "geometry preserved (w)");
-  assert.equal(result.element.h, original.h, "geometry preserved (h)");
+  // The cutout is a NEW element beside the source; the source is untouched (T0336).
+  assert.notEqual(result.element.id, element.id, "result is a NEW element, not the source");
+  assert.deepEqual(getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id), original, "source untouched");
+  assert.notEqual(result.element.src, original.src, "the copy carries the new alpha file");
+  assert.equal(result.element.w, original.w, "copy sized to the source box (w)");
+  assert.equal(result.element.h, original.h, "copy sized to the source box (h)");
+  assert.equal(result.element.x, original.x + original.w + 16, "copy placed to the right of the source");
   const meta = result.element.meta.alpha;
   assert.equal(meta.method, "vitmatte");
   assert.equal(meta.tool, "vitmatte");
   assert.equal(meta.parentSrc, original.src);
+  assert.equal(meta.parentElementId, element.id, "copy links back to the source");
   assert.equal(meta.model, "hustvl/vitmatte-base-composition-1k");
   assert.equal(meta.despill, true, "despill flag recorded");
   assert.match(meta.license, /MIT/, "license recorded");
@@ -800,12 +846,13 @@ test("vitmatte (faked GPU run) swaps src + records provenance/timings; ONE undo 
 
   assert.ok(existsSync(resolveProjectFile(REPO_ROOT, project.id, original.src)), "original file kept on disk");
   const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "undo restores the exact pre-alpha element");
+  assert.equal(undone.elements.find((el) => el.id === result.element.id), undefined, "undo removes the copy");
+  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "source still byte-identical after undo");
   const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.equal(redone.elements.find((el) => el.id === element.id).src, result.element.src, "redo re-applies the alpha src");
+  assert.equal(redone.elements.find((el) => el.id === result.element.id).src, result.element.src, "redo re-adds the copy");
 });
 
-test("birefnet (faked CPU run) swaps src + records provenance (no key_color); ONE undo restores byte-exact, redo re-applies", async (t) => {
+test("birefnet (faked CPU run) mints a copy + records provenance (no key_color); ONE undo removes it (source untouched), redo re-adds", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "birefnet provenance" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "busy.png", bytes: magentaSheetPng() });
@@ -815,13 +862,18 @@ test("birefnet (faked CPU run) swaps src + records provenance (no key_color); ON
 
   const result = await alphaCutout(REPO_ROOT, { projectId: project.id, elementId: element.id, method: "birefnet", birefnet: bn.invoke });
   assert.equal(bn.calls.n, 1);
-  assert.notEqual(result.element.src, original.src, "src swapped to a new alpha file");
-  assert.equal(result.element.w, original.w, "geometry preserved (w)");
-  assert.equal(result.element.h, original.h, "geometry preserved (h)");
+  // The cutout is a NEW element beside the source; the source is untouched (T0336).
+  assert.notEqual(result.element.id, element.id, "result is a NEW element, not the source");
+  assert.deepEqual(getProject(REPO_ROOT, project.id).elements.find((el) => el.id === element.id), original, "source untouched");
+  assert.notEqual(result.element.src, original.src, "the copy carries the new alpha file");
+  assert.equal(result.element.w, original.w, "copy sized to the source box (w)");
+  assert.equal(result.element.h, original.h, "copy sized to the source box (h)");
+  assert.equal(result.element.x, original.x + original.w + 16, "copy placed to the right of the source");
   const meta = result.element.meta.alpha;
   assert.equal(meta.method, "birefnet");
   assert.equal(meta.tool, "birefnet");
   assert.equal(meta.parentSrc, original.src);
+  assert.equal(meta.parentElementId, element.id, "copy links back to the source");
   assert.equal(meta.model, "birefnet-general");
   assert.match(meta.license, /MIT/, "license recorded");
   assert.equal(meta.key_color, undefined, "birefnet records no chroma key");
@@ -831,12 +883,13 @@ test("birefnet (faked CPU run) swaps src + records provenance (no key_color); ON
 
   assert.ok(existsSync(resolveProjectFile(REPO_ROOT, project.id, original.src)), "original file kept on disk");
   const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "undo restores the exact pre-alpha element");
+  assert.equal(undone.elements.find((el) => el.id === result.element.id), undefined, "undo removes the copy");
+  assert.deepEqual(undone.elements.find((el) => el.id === element.id), original, "source still byte-identical after undo");
   const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.equal(redone.elements.find((el) => el.id === element.id).src, result.element.src, "redo re-applies the alpha src");
+  assert.equal(redone.elements.find((el) => el.id === result.element.id).src, result.element.src, "redo re-adds the copy");
 });
 
-test("vitmatte batch (faked) keys 2 images in ONE journal entry; one undo restores both byte-exact", async (t) => {
+test("vitmatte batch (faked) mints 2 copies in ONE journal entry; one undo removes both, sources untouched", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "vitmatte batch" });
   const { element: e1 } = addImage(REPO_ROOT, project.id, { name: "v1.png", bytes: magentaSheetPng() });
@@ -849,14 +902,18 @@ test("vitmatte batch (faked) keys 2 images in ONE journal entry; one undo restor
   assert.equal(vm.calls.n, 2, "vitmatte seam runs once per element");
   assert.equal(result.count, 2);
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "batch is one journal entry");
+  assert.equal(getProject(REPO_ROOT, project.id).elements.length, 4, "2 sources + 2 copies");
   for (const el of result.elements) assert.equal(el.meta.alpha.method, "vitmatte");
+  const parentIds = result.elements.map((el) => el.meta.alpha.parentElementId).sort();
+  assert.deepEqual(parentIds, [e1.id, e2.id].sort(), "copies link back to both sources");
   const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.equal(undone.elements.length, 2, "both copies removed on one undo");
   for (const original of originals) {
-    assert.deepEqual(undone.elements.find((el) => el.id === original.id), original, `undo restores element ${original.id}`);
+    assert.deepEqual(undone.elements.find((el) => el.id === original.id), original, `source ${original.id} untouched after undo`);
   }
 });
 
-test("birefnet batch (faked) keys 2 images in ONE journal entry; one undo restores both byte-exact", async (t) => {
+test("birefnet batch (faked) mints 2 copies in ONE journal entry; one undo removes both, sources untouched", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "birefnet batch" });
   const { element: e1 } = addImage(REPO_ROOT, project.id, { name: "b1.png", bytes: magentaSheetPng() });
@@ -869,10 +926,14 @@ test("birefnet batch (faked) keys 2 images in ONE journal entry; one undo restor
   assert.equal(bn.calls.n, 2, "birefnet seam runs once per element");
   assert.equal(result.count, 2);
   assert.equal(getProject(REPO_ROOT, project.id).history_seq, seqBefore + 1, "batch is one journal entry");
+  assert.equal(getProject(REPO_ROOT, project.id).elements.length, 4, "2 sources + 2 copies");
   for (const el of result.elements) assert.equal(el.meta.alpha.method, "birefnet");
+  const parentIds = result.elements.map((el) => el.meta.alpha.parentElementId).sort();
+  assert.deepEqual(parentIds, [e1.id, e2.id].sort(), "copies link back to both sources");
   const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.equal(undone.elements.length, 2, "both copies removed on one undo");
   for (const original of originals) {
-    assert.deepEqual(undone.elements.find((el) => el.id === original.id), original, `undo restores element ${original.id}`);
+    assert.deepEqual(undone.elements.find((el) => el.id === original.id), original, `source ${original.id} untouched after undo`);
   }
 });
 
