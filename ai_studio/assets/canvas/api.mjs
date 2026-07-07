@@ -24,7 +24,7 @@
 //   POST   /api/canvas/projects/<id>/export         {elementIds, rows?} | {project:true}
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/export {rows}  (export settings)
 //   POST   /api/canvas/projects/<id>/groups         {name, x?,y?,w?,h?, fromElements?, parentId?}
-//   PATCH  /api/canvas/projects/<id>/groups/<gid>   {name?,x?,y?,w?,h?,visible?,background?}
+//   PATCH  /api/canvas/projects/<id>/groups/<gid>   {name?,x?,y?,w?,h?,visible?,background?,clip?,screen?}   (T0332 B1: screen is the export opt-in flag — see exportProject/group-set --screen)
 //   POST   /api/canvas/projects/<id>/groups-set     {groupIds, visible?, clip?} (batched shared toggles)
 //   DELETE /api/canvas/projects/<id>/groups/<gid>
 //   POST   /api/canvas/projects/<id>/groups/<gid>/render {scale?, background?}
@@ -34,7 +34,9 @@
 //   POST   /api/canvas/projects/<id>/groups/<gid>/ungroup  (dissolve one level, keep children)
 //   POST   /api/canvas/projects/<id>/recipe-cards          {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 1: mint a recipe card — a group with an additive `recipe` blob)
 //   PATCH  /api/canvas/projects/<id>/recipe-cards/<gid>    {prompt?, expanded?, use_expanded?, engine?, style_ref?}     (partial recipe blob update; 400 on a group with no `recipe`; style_ref must be null or an existing style-card group id)
-//   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/generate  {}   (T0239 increment 2/3: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one entry; partial success allowed on engine=both; recipe.style_ref, when set, mixes the style card's prompt + ref image in)
+//   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/generate  {runGroupId?, sheetSlug?}   (T0239 increment 2/3: generate — mints 1 (codex/gemini) or 2 (both, compare mode) new RAW elements beside the card, in its PARENT scope; one entry; partial success allowed on engine=both; recipe.style_ref, when set, mixes the style card's prompt + ref image in. T0332 v2: recipe.pack set -> the SAME op branches into a per-sheet pack run instead; runGroupId resumes an existing run, sheetSlug force-regenerates exactly one sheet — both ignored by the single-image branch)
+//   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/pack-preview  {}   (T0332 v2 phase C: EPHEMERAL — sheet count + per-sheet {name,prompt,cells} from the real expand_jobs.py expander + a style_ref_image info flag; never journals/mutates recipe.pack)
+//   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/pack-slice  {runGroupId?}   (T0332 B3/phase C: slice every sheet of a pack run — detect + hard region-count gate + slice, per-sheet {sheet_element_id,verdict,region_count,cells_len,cut_ids} contract; omitted runGroupId resolves recipe.last_run.run_group_id)
 //   POST   /api/canvas/projects/<id>/recipe-cards/<gid>/expand    {}   (T0239 increment 4: Expand-prompt — ONE codex TEXT call; writes recipe.expanded only, no card minted; Generate sends it when use_expanded is true, else the short prompt)
 //   POST   /api/canvas/projects/<id>/style-cards           {name?, x?,y?,w?,h?, parentId?}   (T0239 increment 3: mint a style card — a group with an additive `style` blob: prompt + ONE ref image; no generate route, style cards never generate)
 //   PATCH  /api/canvas/projects/<id>/style-cards/<gid>     {prompt?, ref?}                    (partial style blob update; ref must be null or a member IMAGE element id — the "Make ref" gesture; 400 on a group with no `style`)
@@ -110,6 +112,8 @@ import {
   listProjects,
   moveNodes,
   opsStats,
+  packPreview,
+  packSlice,
   pasteNodes,
   patchElement,
   patchElements,
@@ -725,15 +729,56 @@ export function createCanvasApi(root) {
         return true;
       }
 
-      // /api/canvas/projects/<id>/recipe-cards/<gid>/generate  (T0239 increment 2)
+      // /api/canvas/projects/<id>/recipe-cards/<gid>/generate  (T0239 increment 2; T0332 v2
+      // pack branch)
       // Generation runs OUTSIDE the journal (a codex/agy spawn, minutes); only the final
       // mint commits. Mints 1 element (engine codex/gemini) or 2 (engine both, R3 compare
       // mode) beside the card frame, in its PARENT scope — one journal entry either way.
       // Partial success on engine=both surfaces as 200 with a `failed` array, never a 4xx.
+      // T0332 v2: `recipe.pack` set -> the SAME op branches into a per-sheet pack run instead
+      // (ops.generatePackSheets, one short commit PER SHEET); `runGroupId`/`sheetSlug` (both
+      // optional, pack-only — the single-image branch above ignores them, see
+      // generateFromRecipe's own doc) resume an existing run / force-regenerate exactly one
+      // sheet — the same body fields the inspector's Pack "Generate"/"Regenerate" buttons send.
       if (parts.length === 7 && sub === "recipe-cards" && parts[6] === "generate" && req.method === "POST") {
         const groupId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(201, await generateFromRecipe(root, {
+          projectId: id,
+          groupId,
+          runGroupId: body.runGroupId,
+          sheetSlug: body.sheetSlug,
+        }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/recipe-cards/<gid>/pack-preview  (T0332 v2 phase C)
+      // EPHEMERAL preview of the pack's expanded sheets (packPreview: sheet count + per-sheet
+      // {name,prompt,cells}, a style_ref_image info flag) — runs the real expand_jobs.py
+      // expander but NEVER journals/mutates the blob (mirrors the elements/<eid>/cleanup-
+      // preview route above: plain sendJson, not sendMutation — there is no project/history to
+      // fold in; not wrapped in `locked` either, for the same "never writes" reason
+      // cleanup-preview already relies on).
+      if (parts.length === 7 && sub === "recipe-cards" && parts[6] === "pack-preview" && req.method === "POST") {
+        const groupId = decodeURIComponent(parts[5]);
         await readJsonBody(req);
-        sendMutation(201, await generateFromRecipe(root, { projectId: id, groupId }));
+        sendJson(res, 200, await packPreview(root, { projectId: id, groupId }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/recipe-cards/<gid>/pack-slice  (T0332 B3/phase C)
+      // Slice every sheet of a pack run (detect -> hard region-count gate -> slice, per-sheet
+      // contract) — real region-detector/crop_regions.py spawns, no fake seam (same law as the
+      // plain detect-regions/slice routes above). Optional body.runGroupId selects an explicit
+      // run group; omitted resolves recipe.last_run.run_group_id. UNLIKE the codex/agy routes
+      // above, packSlice does not lock its own commits (its detectRegions/sliceRegions calls
+      // don't either — mirrors plain detect-regions/slice) — wrapped in `locked` here so the
+      // whole multi-sheet pass runs under ONE outer lock (mirrors cli.mjs's own
+      // SELF_LOCKING_COMMANDS exclusion + doc comment for recipe-pack-slice).
+      if (parts.length === 7 && sub === "recipe-cards" && parts[6] === "pack-slice" && req.method === "POST") {
+        const groupId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, await locked(id, () => packSlice(root, { projectId: id, groupId, runGroupId: body.runGroupId })));
         return true;
       }
 

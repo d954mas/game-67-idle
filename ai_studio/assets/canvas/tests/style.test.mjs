@@ -31,6 +31,7 @@ import {
   generateFromRecipe,
   getProject,
   historyEntryLabel,
+  patchGroup,
   patchRecipe,
   patchStyle,
   pasteNodes,
@@ -213,11 +214,13 @@ test("cards do not nest inside cards: createStyleCard refuses a recipe-card pare
   assert.equal(nestedRecipe.parentId, plain.id);
 });
 
-test("exportProject skips top-level style-card groups too (a card is a workshop object, not a screen — mirrors the recipe-card exclusion)", async (t) => {
+test("exportProject never exports a top-level style-card group either (mirrors the recipe-card case) — T0332 B1: createStyleCard never sets screen:true", async (t) => {
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Export style" });
-  createGroup(REPO_ROOT, { projectId: project.id, name: "Screen", x: 0, y: 0, w: 20, h: 20 });
-  createStyleCard(REPO_ROOT, { projectId: project.id, name: "Style card" });
+  const screen = createGroup(REPO_ROOT, { projectId: project.id, name: "Screen", x: 0, y: 0, w: 20, h: 20 }).group;
+  patchGroup(REPO_ROOT, { projectId: project.id, groupId: screen.id, screen: true });
+  const { group: card } = createStyleCard(REPO_ROOT, { projectId: project.id, name: "Style card" });
+  assert.equal(card.screen, undefined, "createStyleCard never sets screen — unflagged by construction");
 
   let result;
   try {

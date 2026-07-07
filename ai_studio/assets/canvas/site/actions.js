@@ -1024,6 +1024,14 @@ export async function setGroupClip(groupId, clip) {
   await patchGroupBox(groupId, { clip });
 }
 
+// Toggle a group's `screen` (export opt-in) flag (T0332 B1 — export flipped to opt-in:
+// group.screen === true is the ONLY thing that makes a top-level visible group count as an
+// exportable screen; exportProject/visibleScreenCount both gate on it). Mirrors setGroupClip
+// exactly — one journaled patchGroup, false clears to an absent field.
+export async function setGroupScreen(groupId, screen) {
+  await patchGroupBox(groupId, { screen });
+}
+
 // ---- recipe cards (T0239 increment 1) -----------------------------------------
 
 // Create a new recipe card: a group carrying an additive `recipe` blob (prompt/engine/
@@ -1091,11 +1099,49 @@ export async function expandRecipePromptAction(groupId, control) {
 // does NOT throw) — `result.failed` names what did not land, surfaced as a pinned (sticky)
 // toast instead of the plain success toast so it does not auto-dismiss unnoticed. Only
 // EVERY engine failing throws, which runLongOp already renders as its own error toast.
-export async function generateFromRecipeAction(groupId, control) {
+//
+// T0332 v2 (build_spec_pack_card_2026-07-07.md phase C): the SAME button/action also drives
+// the PACK branch now — ops.generateFromRecipe branches on recipe.pack itself, so this action
+// only forwards the two pack-only resume/force-regen options (`opts.runGroupId`/
+// `opts.sheetSlug` — both undefined for a plain single-image call OR a fresh pack run; the
+// inspector's Pack "Generate" button omits them, its per-sheet "Regenerate" button sets
+// sheetSlug to the sheet element's own `.name`, which IS the expander's job.name
+// verbatim — see commitPackSheetOutcome/storeAddImage — and runGroupId to that element's
+// `.groupId`; no extra field needed) and renders a DIFFERENT result toast for a pack run
+// (`result.results`/`result.last_run` — no `.elements`) vs the single-image branch's minted
+// elements. `opts.busyLabel` overrides the static busy label (the inspector computes a
+// "~N sheets" ESTIMATE client-side from recipe.pack.axes/vary before the real expander ever
+// runs — see estimatePackSheetCount below). No live per-sheet "лист k/N" progress: ops.mjs
+// commits each sheet as it lands, so the count is technically readable mid-flight by polling
+// GET /projects/<id>, but there is no polling precedent anywhere in this file/toasts.js
+// (runLongOp resolves once, from one await) and a correct poller would have to special-case
+// resume/skip/forced-regen dedup just to count "done so far" — real new engineering, not a
+// mechanical wire-up, so this stays the build-spec's own explicitly-endorsed fallback: a
+// static busy state + a full result refresh once the whole run settles.
+export async function generateFromRecipeAction(groupId, control, opts = {}) {
   await runLongOp(
-    "Generating… (codex/agy, minutes)",
+    opts.busyLabel || "Generating… (codex/agy, minutes)",
     async () => {
-      const result = await api("POST", `/projects/${pid()}/recipe-cards/${groupId}/generate`, {});
+      const body = {};
+      if (opts.runGroupId) body.runGroupId = opts.runGroupId;
+      if (opts.sheetSlug) body.sheetSlug = opts.sheetSlug;
+      const result = await api("POST", `/projects/${pid()}/recipe-cards/${groupId}/generate`, body);
+      if (Array.isArray(result.results)) {
+        // Pack branch: no `.elements` to select (many sheets, not one/two) — the layers
+        // panel already shows the fresh/updated run group once applyMutation refreshes.
+        applyMutation(result);
+        const lastRun = result.last_run || {};
+        const failedCount = Array.isArray(lastRun.failed) ? lastRun.failed.length : 0;
+        const sheetWord = result.results.length === 1 ? "sheet" : "sheets";
+        if (failedCount) {
+          return {
+            kind: "pinned",
+            message: `Pack run: ${result.results.length} ${sheetWord}, ${failedCount} failed (see the card's last_run for details).`,
+            links: [],
+          };
+        }
+        return { kind: "success", message: `Pack run: ${result.results.length} ${sheetWord} generated.` };
+      }
       const minted = result.elements || [];
       if (minted[0]) selectOnly(minted[0].id);
       applyMutation(result);
@@ -1109,6 +1155,53 @@ export async function generateFromRecipeAction(groupId, control) {
         };
       }
       return { kind: "success", message: `Generated ${names}.` };
+    },
+    { control },
+  );
+}
+
+// ---- pack mode (T0332 v2 phase C) ----------------------------------------------
+
+// Preview pack (build-spec §2/Phase C): an EPHEMERAL, non-journaled call — packPreview never
+// mutates recipe.pack, so there is nothing for applyMutation to fold in. The result (sheet
+// count, style_ref_image flag, per-sheet {name,prompt,cells}) is stashed on `state.packPreview`
+// (page-only view state, never persisted/journaled — mirrors the build-spec's own non-goal
+// "Персист превью развёртки" — no freshness tracking needed either) so renderRecipe can show
+// it inline; `refresh()` re-renders the inspector to pick it up.
+export async function packPreviewAction(groupId, control) {
+  await runLongOp(
+    "Previewing pack… (offline expander, no codex)",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/recipe-cards/${groupId}/pack-preview`, {});
+      state.packPreview = { cardId: groupId, ...result };
+      refresh();
+      const refNote = result.style_ref_image ? " (style ref image included)" : "";
+      return { kind: "success", message: `Preview: ${result.sheets} sheet(s)${refNote}.` };
+    },
+    { control },
+  );
+}
+
+// Slice pack (build-spec §4): detect + hard-gate + slice every sheet of the card's last pack
+// run, reparenting cuts into the run group. packSlice's own return has no `.project` —
+// applyMutation's existing "no project -> reloadProject" fallback (app.js) resyncs the page,
+// same as any other op that doesn't carry one.
+export async function packSliceAction(groupId, control) {
+  await runLongOp(
+    "Slicing pack…",
+    async () => {
+      const result = await api("POST", `/projects/${pid()}/recipe-cards/${groupId}/pack-slice`, {});
+      applyMutation(result);
+      const contract = result.contract || [];
+      const ok = contract.filter((c) => c.verdict === "OK").length;
+      const rejected = contract.filter((c) => c.verdict === "REJECT").length;
+      const missing = contract.filter((c) => c.verdict === "MISSING").length;
+      const parts = [`${ok} OK`];
+      if (rejected) parts.push(`${rejected} REJECT`);
+      if (missing) parts.push(`${missing} MISSING`);
+      const message = `Sliced pack: ${parts.join(", ")}.`;
+      if (rejected || missing) return { kind: "pinned", message, links: [] };
+      return { kind: "success", message };
     },
     { control },
   );

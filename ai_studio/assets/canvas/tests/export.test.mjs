@@ -23,6 +23,7 @@ import {
   getProject,
   parseScaleSpec,
   patchElement,
+  patchGroup,
   readHistory,
   redoOp,
   resolveExportScale,
@@ -353,7 +354,10 @@ test("exportProject renders every visible screen into one folder (skips without 
   tempProjects(t);
   const project = createProject(REPO_ROOT, { title: "Project export" });
   const { element } = addImage(REPO_ROOT, project.id, { name: "sheet.png", bytes: magentaSheetPng() });
-  const group = createGroup(REPO_ROOT, { projectId: project.id, name: "Screen A", fromElements: [element.id] }).group;
+  let group = createGroup(REPO_ROOT, { projectId: project.id, name: "Screen A", fromElements: [element.id] }).group;
+  // T0332 B1: a group is a screen ONLY with the explicit screen:true flag — a freshly
+  // created group does not export until ticked (group-set --screen true).
+  group = patchGroup(REPO_ROOT, { projectId: project.id, groupId: group.id, screen: true }).group;
 
   let result;
   try {
@@ -372,6 +376,32 @@ test("exportProject renders every visible screen into one folder (skips without 
   // A project with no visible screens is a clear error, not a silent empty export.
   const empty = createProject(REPO_ROOT, { title: "No screens" });
   await assert.rejects(() => exportProject(REPO_ROOT, { projectId: empty.id }), /no visible screens/);
+});
+
+test("exportProject: T0332 B1 opt-in inversion — a top-level visible group WITHOUT screen:true does not export, even though it has no recipe/style/pack_run blob (skips without Python)", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Opt-in inversion" });
+  const { element: a } = addImage(REPO_ROOT, project.id, { name: "a.png", bytes: magentaSheetPng() });
+  const { element: b } = addImage(REPO_ROOT, project.id, { name: "b.png", bytes: solidPng(6, 6, [10, 20, 30]) });
+  createGroup(REPO_ROOT, { projectId: project.id, name: "Unflagged", fromElements: [a.id] }); // no screen:true -> not a screen
+  let flagged = createGroup(REPO_ROOT, { projectId: project.id, name: "Flagged", fromElements: [b.id] }).group;
+  flagged = patchGroup(REPO_ROOT, { projectId: project.id, groupId: flagged.id, screen: true }).group;
+
+  let result;
+  try {
+    result = await exportProject(REPO_ROOT, { projectId: project.id });
+  } catch (error) {
+    t.skip(`render_group.py / PIL unavailable: ${error.message}`);
+    return;
+  }
+  assert.equal(result.screens.length, 1, "only the screen:true group exports");
+  assert.equal(result.screens[0].groupId, flagged.id);
+
+  // A project with plenty of top-level visible groups but NONE flagged is the same clear
+  // error as a project with no groups at all — the flag, not visibility, decides.
+  const noneFlagged = createProject(REPO_ROOT, { title: "None flagged" });
+  createGroup(REPO_ROOT, { projectId: noneFlagged.id, name: "Plain", x: 0, y: 0, w: 10, h: 10 });
+  await assert.rejects(() => exportProject(REPO_ROOT, { projectId: noneFlagged.id }), /no visible screens/);
 });
 
 // ---- CLI parity: --to lands files at an explicit path ------------------------

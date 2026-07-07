@@ -56,6 +56,40 @@ clean. Multiple configs sharing one `out_dir` need explicit distinct `--out`
 paths (default `<out_dir>/jobs.json` collides). Expansion is deterministic:
 re-running an edited config re-busts only the sheets whose prompts changed.
 
+## Disk Pack vs Canvas Pack
+
+Same expander (`expand_jobs.py`), two hosts — pick by how the pack gets USED, not
+by convenience:
+
+- **Disk** (above: `expand_jobs.py` -> `gen_batch.py` -> `slice_pack.py`): a
+  one-off tmp conveyor. Cheapest path, no UI, no persisted config — the pack
+  config is a file written once and the run ends in a **handoff** (below) to
+  `nt-asset-workflow`. Pick this for a throwaway batch nobody revisits.
+- **Canvas** (`recipe.pack` on a recipe card — `ai_studio/assets/canvas/README.md`'s
+  **Pack mode**): the config LIVES on a recipe card — visible, editable,
+  repeatable. Runs are resumable (`--run`) and single-sheet-regenerable
+  (`--sheet`); style comes from a composable style card (text + ref image
+  composition); the lead picks/reviews sheets in the UI before paying for a
+  slice. Pick this when the pack will be revisited, tuned, or needs the lead's
+  eyes on it before spending more generation calls.
+
+Both call the SAME `expand_jobs.py` — the table is host-side wiring, not a
+second expander:
+
+| Disk config (`pack.json`) | Canvas (`recipe.pack` + `recipe.params`) |
+|---|---|
+| `background`: `magenta`\|`green`\|`transparent` (transparent = loud error, REST-only — v1 targets codex) | `params.bg_key` hex — only `#ff00ff`/`#00ff00` accepted at preview/generate time; **no transparent path exists** on canvas v1 (no third hex maps to a background) |
+| `anchor` (one optional file, becomes every job's `input_image`) | no `anchor` field — the style card's ref image + the recipe card's own member images (<=5 total) are the refs, sent to every sheet |
+| `jobs.json`'s `out`/`input_image` (real — `gen_batch.py` writes to `out`, reads `input_image` from the anchor) | `out`/`input_image` are **dead fields** — canvas calls the codex-seam directly, never `gen_batch.py` |
+| `sheet.grid` — any positive `[rows, cols]` | `pack.grid` — each of `[rows, cols]` capped **1..3** (canvas-only restriction) |
+| `gen_batch.py` skip-if-exists keys per output file (so `candidates > 1` re-runs correctly) | `--run` resume dedups by `sheet_axes` only — with `n_candidates > 1` the first landed candidate "satisfies" the sheet and later candidates are skipped on resume (known v1 gap, T0332; harmless at the default `n_candidates: 1`) |
+
+Rule: on a canvas pack, **ALWAYS run `recipe-pack-preview` before
+`recipe-pack-generate`** and read the printed sheets/prompts — it is the only
+preview that reflects what the expander will actually send (single-image
+Generate builds its prompt a different way, and the generate verb itself has
+no dry-run).
+
 ## Handoff To Asset Workflow
 
 All generation paths produce raw source images only. The deterministic asset

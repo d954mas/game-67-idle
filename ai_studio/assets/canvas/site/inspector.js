@@ -21,6 +21,7 @@ import {
   rangeSelectIds,
   refresh,
   selectedElements,
+  selectOnly,
   selectRegion,
   selectRegionRange,
   setStatus,
@@ -45,6 +46,8 @@ import {
   extractElementAction,
   fitGroupAction,
   generateFromRecipeAction,
+  packPreviewAction,
+  packSliceAction,
   patchElementBox,
   patchElementsBatch,
   patchGroupBox,
@@ -63,6 +66,7 @@ import {
   setExportRows,
   setGroupBackground,
   setGroupClip,
+  setGroupScreen,
   setGroupsShared,
   setGroupVisible,
   setNoteBackground,
@@ -2008,6 +2012,79 @@ function renderGeneration(element, root) {
   }
 }
 
+// Pack meta (T0332 v2 phase C, build-spec §5): a SHEET element (meta.pack.cells is an
+// ARRAY — the full per-cell manifest, see generatePackSheets) gets its own axes/time/prompt-
+// modal (the SAME openPromptModal seam renderGeneration's Prompt row uses) plus a Regenerate
+// button that force-regens exactly this sheet (--sheet, by this element's OWN `.name` — that
+// IS the expander's job.name verbatim, the exact string generateFromRecipe's sheetSlug match
+// requires; see commitPackSheetOutcome/storeAddImage — no extra field needed) into its own
+// `.groupId` (the run group). A CUT (packSlice's own minimal per-cut meta.pack =
+// {cardId, sheet_element_id, cell, axes} — no `cells` array) instead gets its own cell/axes +
+// a link back to the parent sheet, where the full manifest/prompt actually live (packSlice's
+// own doc: duplicating them per cut would balloon a 21-cut pack to 100+KB of repeated JSON).
+function renderPackMeta(element, root) {
+  const pack = element.meta && element.meta.pack;
+  if (!pack || typeof pack !== "object") return;
+
+  if (Array.isArray(pack.cells)) {
+    const body = collapsible(root, "pack-sheet", "Pack sheet");
+    body.appendChild(readOnly("Axes", JSON.stringify(pack.sheet_axes || {})));
+    body.appendChild(readOnly("At", pack.at ? new Date(pack.at).toLocaleString() : "—"));
+
+    const promptText = String(pack.prompt_snapshot || "");
+    const promptPreview = promptText.length > 60 ? `${promptText.slice(0, 60)}…` : promptText || "—"; // …
+    const promptRow = document.createElement("div");
+    promptRow.className = "insp-field insp-generation-prompt-row";
+    const promptLabel = document.createElement("span");
+    promptLabel.className = "insp-label";
+    promptLabel.textContent = "Prompt";
+    const promptPreviewEl = document.createElement("span");
+    promptPreviewEl.className = "insp-generation-prompt-preview";
+    promptPreviewEl.textContent = promptPreview;
+    promptPreviewEl.title = promptText;
+    const viewBtn = smallBtn("View", () => openPromptModal(element.name || "Sheet prompt", promptText, null, { readOnly: true }));
+    viewBtn.classList.add("insp-generation-view-btn");
+    promptRow.append(promptLabel, promptPreviewEl, viewBtn);
+    body.appendChild(promptRow);
+
+    // Regenerate is grayed out once the card has left pack mode (recipe.pack cleared) — the
+    // op's single-image branch simply IGNORES sheetSlug/runGroupId (proven by
+    // recipe.test.mjs), so clicking it then would silently mint a normal single image instead
+    // of regenerating this sheet, a confusing footgun worth refusing up front.
+    const card = groupById(pack.cardId);
+    const cardStillPack = !!(card && card.recipe && card.recipe.pack);
+    const regenBtn = document.createElement("button");
+    regenBtn.type = "button";
+    regenBtn.className = "insp-btn";
+    regenBtn.textContent = "Regenerate";
+    regenBtn.disabled = !cardStillPack;
+    regenBtn.title = cardStillPack
+      ? "Force-regenerate exactly this sheet (codex, ~30-60s) into the same run group"
+      : "The card is no longer in pack mode — Generate would mint a single image instead";
+    regenBtn.addEventListener("click", () =>
+      generateFromRecipeAction(pack.cardId, regenBtn, {
+        runGroupId: element.groupId,
+        sheetSlug: element.name,
+        busyLabel: "Regenerating sheet… (codex)",
+      }),
+    );
+    body.appendChild(regenBtn);
+    return;
+  }
+
+  // A cut: own cell/axes + a link back to its sheet (selects it — the sheet's OWN Pack
+  // sheet/Generation/Meta sections show the rest).
+  const body = collapsible(root, "pack-cut", "Pack cut");
+  body.appendChild(readOnly("Cell", JSON.stringify(pack.cell || [])));
+  body.appendChild(readOnly("Axes", JSON.stringify(pack.axes || {})));
+  const sheetElement = pack.sheet_element_id ? elementById(pack.sheet_element_id) : null;
+  const linkBtn = smallBtn(sheetElement ? `View sheet: ${sheetElement.name}` : "Sheet not found", () => {
+    if (sheetElement) selectOnly(sheetElement.id);
+  });
+  linkBtn.disabled = !sheetElement;
+  body.appendChild(linkBtn);
+}
+
 // "Extracted" section (T0239 increment 4, final shape): ONE codex vision call
 // (extractElementAction) writes element.meta.extracted — a complete standalone prompt, a
 // subject-only prompt, and a style breakdown, plus a one-line description. No card is
@@ -2105,6 +2182,7 @@ function renderElement(element, root) {
   renderAnimation(element, root);
   renderExtracted(element, root);
   renderGeneration(element, root);
+  renderPackMeta(element, root);
 
   if (element.meta && element.meta.parent) {
     const prov = collapsible(root, "provenance", "Provenance");
@@ -2114,7 +2192,9 @@ function renderElement(element, root) {
     prov.appendChild(readOnly("Region", String(parent.regionId || "—")));
   }
 
-  const metaKeys = Object.keys(element.meta || {}).filter((key) => key !== "parent");
+  // "pack" is rendered by renderPackMeta above (sheet axes/prompt/Regenerate, or a cut's
+  // cell/axes/sheet-link) — excluded here so it is not ALSO dumped as raw JSON below.
+  const metaKeys = Object.keys(element.meta || {}).filter((key) => key !== "parent" && key !== "pack");
   if (metaKeys.length) {
     const meta = collapsible(root, "meta", "Meta");
     for (const key of metaKeys) {
@@ -2393,6 +2473,217 @@ function renderGroupBackground(group, root) {
   body.appendChild(controls);
 }
 
+// ---- pack mode (T0332 v2 phase C: build_spec_pack_card_2026-07-07.md) ---------------------
+//
+// Smart quotes (typed by a phone keyboard / autocorrect / pasted from a doc) are the single
+// most common way a hand-typed axes JSON silently fails to parse — JSON.parse has no notion
+// of «»/""/'' curly quotes. Straightened to ASCII BEFORE parsing (build-spec: "нормализация
+// «умных кавычек» перед parse"). Pure/testable in isolation from the DOM textarea that calls
+// it (tests/pack_ui.test.mjs).
+export function normalizeSmartQuotes(text) {
+  return String(text ?? "")
+    .replace(/[“”„«»]/g, '"')
+    .replace(/[‘’‚]/g, "'");
+}
+
+// A skeleton EXAMPLE prefilled into an empty axes textarea (build-spec: "префилл валидным
+// скелетом-примером") — a starting point to edit, never auto-committed on its own; the lead's
+// own blur still has to accept (or edit) it before patchRecipeAction ever sends anything.
+export const PACK_AXES_SKELETON = `{
+  "material": ["stone", "wood"],
+  "grade": ["rusty", "plain", "gilded"]
+}`;
+
+// JSON.parse with a LINE/COLUMN pointer on failure (build-spec: "ошибка парсера с ПОЗИЦИЕЙ
+// (строка/столбец)"). Modern V8 often ALREADY names a "(line X column Y)" pair right in the
+// SyntaxError message — reused verbatim when present (most accurate); when it names only a
+// 0-based character offset ("at position N") instead, this walks the text once to translate
+// that into a line/column; some V8 error shapes (e.g. a trailing comma inside an array) give
+// neither, and the raw message is shown as-is rather than a fabricated position. Throws a
+// plain Error (never the raw SyntaxError) so every caller shows ONE consistent message shape.
+// Also checks the coarse SHAPE (a plain object, not an array/primitive) — the per-axis
+// semantic rules (non-empty string arrays, etc.) stay server-side (ops.normalizeRecipePack is
+// the authority; a bad shape there still 400s, surfaced by patchRecipeAction's error toast).
+export function parseAxesJson(rawText) {
+  const text = normalizeSmartQuotes(rawText);
+  let value;
+  try {
+    value = JSON.parse(text);
+  } catch (error) {
+    const lineCol = /line (\d+) column (\d+)/i.exec(error.message);
+    if (lineCol) throw new Error(`Invalid JSON at line ${lineCol[1]}, column ${lineCol[2]}: ${error.message}`);
+    const positionOnly = /position (\d+)/.exec(error.message);
+    if (positionOnly) {
+      const offset = Number(positionOnly[1]);
+      let line = 1;
+      let col = 1;
+      for (let i = 0; i < offset && i < text.length; i += 1) {
+        if (text[i] === "\n") {
+          line += 1;
+          col = 1;
+        } else {
+          col += 1;
+        }
+      }
+      throw new Error(`Invalid JSON at line ${line}, column ${col}: ${error.message}`);
+    }
+    throw new Error(`Invalid JSON: ${error.message}`);
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`Axes must be a JSON object of axisName -> array of values, e.g.:\n${PACK_AXES_SKELETON}`);
+  }
+  return value;
+}
+
+// A client-side ESTIMATE of the pack's sheet count (mirrors expand_jobs.py's own
+// `itertools.product` over every axis EXCEPT `vary` — the "big" axes) — purely for the
+// Generate/Preview busy-label/title text, computed before the real expander ever runs; the
+// REAL count (and any axes/vary validation error) comes from Preview pack / Generate
+// themselves. `vary` not matching any axis key is not an error here (that is the expander's
+// own loud refusal at preview/generate time) — it just means no axis is excluded.
+export function estimatePackSheetCount(pack) {
+  if (!pack || typeof pack !== "object") return 0;
+  const axes = pack.axes && typeof pack.axes === "object" ? pack.axes : {};
+  let count = 1;
+  for (const [name, values] of Object.entries(axes)) {
+    if (name === pack.vary) continue;
+    count *= Array.isArray(values) ? values.length : 0;
+  }
+  return count;
+}
+
+// Fresh pack-mode default (mirrors cli.mjs's own recipe-set fallback literal EXACTLY —
+// `{ axes: {}, vary: "", grid: [3, 3], max_jobs: 12 }`): an empty starting draft that passes
+// normalizeRecipePack's structural check (axes:{} / vary:"" are both legal, just not yet
+// USEFUL) — the axes textarea below prefills its OWN skeleton example text for the lead to
+// fill in and commit on blur, separate from this stored default.
+const DEFAULT_PACK_TEMPLATE = () => ({ axes: {}, vary: "", grid: [3, 3], max_jobs: 12 });
+
+// `pack` REPLACES wholesale on every patch (ops.mjs's own doc: "patch ЗАМЕНЯЕТ pack
+// целиком") — every pack-field commit below sends the FULL `{...recipe.pack, ...fieldPatch}`
+// object, never a bare `{vary: next}`, mirroring cli.mjs's own recipe-set read-modify-write.
+function commitPackPatch(group, recipe, fieldPatch) {
+  patchRecipeAction(group.id, { pack: { ...recipe.pack, ...fieldPatch } });
+}
+
+const PACK_BG_KEYS = new Set(["#ff00ff", "#00ff00"]); // mirrors ops.mjs's BG_KEY_BACKGROUND keys
+
+// Axes JSON textarea: blur-only validation (build-spec: "валидация на blur"), a skeleton
+// prefill when axes is empty, smart-quote normalization, and a line/column-pointing error
+// shown INLINE (never just a toast) so the lead can see exactly where the JSON broke.
+function renderPackAxesField(group, recipe, body) {
+  const textarea = document.createElement("textarea");
+  textarea.className = "insp-input insp-pack-axes";
+  textarea.rows = 6;
+  const hasAxes = recipe.pack.axes && Object.keys(recipe.pack.axes).length;
+  textarea.value = hasAxes ? JSON.stringify(recipe.pack.axes, null, 2) : PACK_AXES_SKELETON;
+  body.appendChild(field("Axes (JSON)", textarea));
+
+  const errorEl = document.createElement("div");
+  errorEl.className = "insp-pack-error";
+  errorEl.style.display = "none";
+  body.appendChild(errorEl);
+
+  textarea.addEventListener("blur", () => {
+    const normalized = normalizeSmartQuotes(textarea.value);
+    if (normalized !== textarea.value) textarea.value = normalized;
+    let parsed;
+    try {
+      parsed = parseAxesJson(normalized);
+    } catch (error) {
+      errorEl.textContent = error.message;
+      errorEl.style.display = "";
+      return;
+    }
+    errorEl.style.display = "none";
+    errorEl.textContent = "";
+    if (JSON.stringify(parsed) === JSON.stringify(recipe.pack.axes || {})) return; // unchanged: no commit
+    commitPackPatch(group, recipe, { axes: parsed });
+  });
+}
+
+// Vary select: options come from the axes keys (build-spec: "vary select (from axes keys)")
+// — the CURRENT value is always included even if it is not (yet) an axes key, so the select
+// never silently jumps to a different displayed value out from under an in-progress edit.
+function renderPackVaryField(group, recipe, body) {
+  const options = Object.keys(recipe.pack.axes || {});
+  if (recipe.pack.vary && !options.includes(recipe.pack.vary)) options.push(recipe.pack.vary);
+  if (!options.length) options.push("");
+  body.appendChild(field("Vary", selectInput(recipe.pack.vary || "", options, (next) => commitPackPatch(group, recipe, { vary: next }))));
+}
+
+// Grid select: 2x2 / 3x3 (build-spec: "grid select (2x2|3x3)") — a stored grid outside that
+// pair (e.g. set via the CLI/an agent) is still shown, appended as its own option, same
+// never-silently-jump rule as Vary above.
+function renderPackGridField(group, recipe, body) {
+  const options = ["2x2", "3x3"];
+  const current = `${Number(recipe.pack.grid[0])}x${Number(recipe.pack.grid[1])}`;
+  if (!options.includes(current)) options.push(current);
+  const select = selectInput(current, options, (next) => {
+    const match = /^(\d+)x(\d+)$/i.exec(next);
+    if (!match) return;
+    commitPackPatch(group, recipe, { grid: [Number(match[1]), Number(match[2])] });
+  });
+  body.appendChild(field("Grid", select));
+}
+
+function renderPackMaxJobsField(group, recipe, body) {
+  body.appendChild(
+    field(
+      "Max jobs",
+      numberInput(recipe.pack.max_jobs, (next) => commitPackPatch(group, recipe, { max_jobs: Math.max(1, Math.round(next)) })),
+    ),
+  );
+}
+
+// bg_key/n_candidates (T0332 v2: `params` unfrozen for exactly these two fields, plus
+// size/quality — see ops.normalizeRecipePatch) live here, INSIDE the pack sub-block, since
+// this phase adds no other params UI. bg_key's mode-aware hint + pair-validation is
+// build-spec-mandated ("на blur, а не только на generate"): patch-time only checks generic
+// hex format (any color is a legal single-image bg_key), so an off-pair value still commits
+// here — the warning is ADVISORY, refusal itself stays where the build-spec puts it
+// (packPreview/generateFromRecipe's pack branch). A successful blur-commit re-renders the
+// whole inspector (applyMutation -> refresh), which recomputes this same warning from the
+// freshly-stored value — no separate on-blur DOM patch needed.
+function renderPackParamsFields(group, recipe, body) {
+  // Defensive guard (recipe.params SHOULD always be an object per defaultRecipe, but a
+  // hand-edited/legacy project.json could still omit it) — render sensible defaults instead
+  // of throwing on a missing blob.
+  const params = recipe.params || {};
+  const bgKey = params.bg_key;
+  const nCandidates = params.n_candidates != null ? params.n_candidates : 1;
+
+  const bgKeyInput = document.createElement("input");
+  bgKeyInput.type = "text";
+  bgKeyInput.className = "insp-input";
+  bgKeyInput.value = bgKey || "";
+  bgKeyInput.addEventListener("blur", () => {
+    const next = bgKeyInput.value.trim();
+    if (!next || next === bgKey) return;
+    patchRecipeAction(group.id, { params: { bg_key: next } });
+  });
+  body.appendChild(field("BG key", bgKeyInput));
+
+  const bgKeyHint = document.createElement("div");
+  bgKeyHint.className = "insp-region-hint";
+  bgKeyHint.textContent = "Pack mode: only #ff00ff / #00ff00 — the key color gets baked into the sheet.";
+  body.appendChild(bgKeyHint);
+
+  if (!PACK_BG_KEYS.has(String(bgKey || "").toLowerCase())) {
+    const warn = document.createElement("div");
+    warn.className = "insp-pack-error";
+    warn.textContent = `Current bg_key ${bgKey || "(none)"} is not #ff00ff/#00ff00 — Preview pack/Generate will refuse until this matches.`;
+    body.appendChild(warn);
+  }
+
+  body.appendChild(
+    field(
+      "Candidates",
+      numberInput(nCandidates, (next) => patchRecipeAction(group.id, { params: { n_candidates: Math.max(1, Math.round(next)) } })),
+    ),
+  );
+}
+
 // Recipe card surface (T0239 increment 1): additive, shown only when the selected group
 // carries a `recipe` blob (same "presence of the additive field" pattern as
 // renderGroupBackground/renderAlphaPlates — a plain group renders no Recipe section at
@@ -2426,6 +2717,17 @@ function renderRecipe(group, root) {
     selectInput(recipe.engine || "codex", ["codex", "gemini", "both"], (next) => patchRecipeAction(group.id, { engine: next })),
   );
   body.appendChild(engineField);
+  // T0332 v2 UX finding: pack mode is codex-only in v1 — the select is disabled (advisory;
+  // the real gate is packPreview/generateFromRecipe's pack branch), WITH a visible caption,
+  // not just a hover title (build-spec: "задизейблен С ПОДПИСЬЮ").
+  if (recipe.pack) {
+    engineField.querySelector("select").disabled = true;
+    engineField.querySelector("select").title = "Packs are codex-only in v1";
+    const engineHint = document.createElement("div");
+    engineHint.className = "insp-region-hint";
+    engineHint.textContent = "Packs are codex-only in v1";
+    body.appendChild(engineHint);
+  }
 
   const styleSelect = document.createElement("select");
   styleSelect.className = "insp-input";
@@ -2446,25 +2748,130 @@ function renderRecipe(group, root) {
   styleSelect.addEventListener("change", () => patchRecipeAction(group.id, { style_ref: styleSelect.value || null }));
   body.appendChild(field("Style", styleSelect));
 
+  // ---- Pack mode (T0332 v2 phase C) -----------------------------------------------
+  //
+  // "Слить": pack is a MODE of the recipe card, not a third card type — this toggle just
+  // sets/clears `recipe.pack` (a full default template on / null off); every other pack
+  // control below only renders once it is set. The Generate button further down is the SAME
+  // button either way — it branches on recipe.pack server-side (ops.generateFromRecipe).
+  const packToggleRow = document.createElement("label");
+  packToggleRow.className = "insp-check";
+  const packToggleCheck = document.createElement("input");
+  packToggleCheck.type = "checkbox";
+  packToggleCheck.checked = !!recipe.pack;
+  packToggleCheck.addEventListener("change", () => {
+    patchRecipeAction(group.id, { pack: packToggleCheck.checked ? DEFAULT_PACK_TEMPLATE() : null });
+  });
+  const packToggleLabel = document.createElement("span");
+  packToggleLabel.textContent = "Pack mode";
+  packToggleRow.append(packToggleCheck, packToggleLabel);
+  body.appendChild(packToggleRow);
+
+  if (recipe.pack) {
+    renderPackAxesField(group, recipe, body);
+    renderPackVaryField(group, recipe, body);
+    renderPackGridField(group, recipe, body);
+    renderPackMaxJobsField(group, recipe, body);
+    renderPackParamsFields(group, recipe, body);
+  }
+
+  // UX finding: recipe.expanded non-empty AND pack set — pack mode ignores it entirely (it
+  // always sends recipe.prompt VERBATIM, never resolveRecipePromptText/expanded), so without
+  // this the disappearing Expand-prompt button + a silently-ignored Expanded block would read
+  // as a bug, not a mode.
+  if (recipe.pack && recipe.expanded) {
+    const banner = document.createElement("div");
+    banner.className = "insp-pack-banner";
+    banner.textContent = "Pack generates from the base prompt — expanded is not used. Move any needed detail into the prompt or the style card.";
+    body.appendChild(banner);
+  }
+
+  // "last pack: <ts>, N sheets, M failed" (build-spec UX finding) — only for a PACK-shaped
+  // last_run ({at, verdict, run_group_id, failed}); the single-image branch's own last_run
+  // shape ({at, result_element_id, verdict}) has no `failed` array, so this line never shows
+  // for a plain single-image run. N sheets is derived from the run group's OWN sheet elements
+  // (nothing else persists a "sheets in this run" count) — a sheet is any element in
+  // last_run.run_group_id carrying this card's meta.pack.cells (the full-manifest marker).
+  if (recipe.last_run && Array.isArray(recipe.last_run.failed)) {
+    const runElements = recipe.last_run.run_group_id
+      ? (state.project ? state.project.elements || [] : []).filter(
+          (el) => el.groupId === recipe.last_run.run_group_id && el.meta && el.meta.pack && Array.isArray(el.meta.pack.cells) && el.meta.pack.cardId === group.id,
+        )
+      : [];
+    const ts = recipe.last_run.at ? new Date(recipe.last_run.at).toLocaleString() : "—";
+    body.appendChild(readOnly("Last pack", `${ts}, ${runElements.length} sheet(s), ${recipe.last_run.failed.length} failed`));
+  }
+
+  if (recipe.pack) {
+    const previewBtn = smallBtn("Preview pack", () => packPreviewAction(group.id, previewBtn));
+    previewBtn.title = "Ephemeral: shows sheet count + per-sheet prompts — the ONLY honest per-cell preview (single Generate assembles a different prompt)";
+    body.appendChild(previewBtn);
+
+    if (state.packPreview && state.packPreview.cardId === group.id) {
+      const preview = state.packPreview;
+      const summary = document.createElement("div");
+      summary.className = "insp-align-caption";
+      summary.textContent = `Preview: ${preview.sheets} sheet(s)${preview.style_ref_image ? " · style ref image included" : ""}`;
+      body.appendChild(summary);
+      const previewWrap = document.createElement("div");
+      previewWrap.className = "insp-alpha-plates"; // reuse: same stacked thumb/row layout as Generation's References list
+      for (const job of preview.jobs || []) {
+        const row = document.createElement("div");
+        row.className = "insp-plate-row";
+        const label = document.createElement("span");
+        label.className = "insp-plate-role";
+        label.textContent = job.name;
+        const viewBtn = smallBtn("View", () => openPromptModal(job.name, job.prompt, null, { readOnly: true }));
+        row.append(label, viewBtn);
+        previewWrap.appendChild(row);
+      }
+      body.appendChild(previewWrap);
+    }
+  }
+
   const generateBtn = document.createElement("button");
   generateBtn.type = "button";
   generateBtn.className = "primary insp-btn";
   generateBtn.textContent = "Generate";
   const emptyPrompt = !String(recipe.prompt || "").trim();
   generateBtn.disabled = emptyPrompt;
-  generateBtn.title = emptyPrompt ? "Write a prompt first" : "Generate (codex/agy — takes minutes)";
-  generateBtn.addEventListener("click", () => generateFromRecipeAction(group.id, generateBtn));
+  const packSheetEstimate = recipe.pack ? estimatePackSheetCount(recipe.pack) : 0;
+  const packBusyLabel = `Generating pack… (~${packSheetEstimate} sheet(s), codex, ~30-60s each)`; // …
+  generateBtn.title = emptyPrompt
+    ? "Write a prompt first"
+    : recipe.pack
+      ? `Generate the pack (~${packSheetEstimate} sheet(s) — see Preview pack for the exact count/prompts)`
+      : "Generate (codex/agy — takes minutes)";
+  generateBtn.addEventListener("click", () =>
+    generateFromRecipeAction(group.id, generateBtn, recipe.pack ? { busyLabel: packBusyLabel } : undefined),
+  );
   body.appendChild(generateBtn);
 
+  if (recipe.pack) {
+    const canSlice = !!(recipe.last_run && recipe.last_run.run_group_id);
+    const sliceBtn = document.createElement("button");
+    sliceBtn.type = "button";
+    sliceBtn.className = "insp-btn";
+    sliceBtn.textContent = "Slice pack";
+    sliceBtn.disabled = !canSlice;
+    sliceBtn.title = canSlice ? "Detect + slice every sheet of the last pack run" : "Generate a pack run first";
+    sliceBtn.addEventListener("click", () => packSliceAction(group.id, sliceBtn));
+    body.appendChild(sliceBtn);
+  }
+
   // ---- Expand-prompt (T0239 increment 4) ------------------------------------------
-  const expandBtn = document.createElement("button");
-  expandBtn.type = "button";
-  expandBtn.className = "insp-btn";
-  expandBtn.textContent = "Expand prompt";
-  expandBtn.disabled = emptyPrompt;
-  expandBtn.title = emptyPrompt ? "Write a prompt first" : "Expand into a labeled generation-prompt template (codex, ~1 min)";
-  expandBtn.addEventListener("click", () => expandRecipePromptAction(group.id, expandBtn));
-  body.appendChild(expandBtn);
+  // Hidden in pack mode (UX finding): pack always sends recipe.prompt verbatim, so Expand
+  // has nothing to feed — showing it would invite generating a text nothing ever reads.
+  if (!recipe.pack) {
+    const expandBtn = document.createElement("button");
+    expandBtn.type = "button";
+    expandBtn.className = "insp-btn";
+    expandBtn.textContent = "Expand prompt";
+    expandBtn.disabled = emptyPrompt;
+    expandBtn.title = emptyPrompt ? "Write a prompt first" : "Expand into a labeled generation-prompt template (codex, ~1 min)";
+    expandBtn.addEventListener("click", () => expandRecipePromptAction(group.id, expandBtn));
+    body.appendChild(expandBtn);
+  }
 
   // The Expanded block only renders once recipe.expanded exists: an editable textarea + a
   // large-editor Edit modal (both commit through patchRecipeAction({expanded}), same
@@ -2472,7 +2879,8 @@ function renderRecipe(group, root) {
   // patchRecipeAction({use_expanded})) + Discard (patches {expanded: null} — "remove the
   // stale expansion", one journal entry). The muted hint states which text Generate will
   // ACTUALLY send right now, mirroring resolveRecipePromptText's own rule exactly
-  // (`use_expanded && expanded ? expanded : prompt`, unchanged by this increment).
+  // (`use_expanded && expanded ? expanded : prompt`) — EXCEPT in pack mode, where it never
+  // reads expanded/use_expanded at all (T0332 v2), so the hint says that instead.
   if (recipe.expanded != null) {
     const expandedField = field(
       "Expanded",
@@ -2502,10 +2910,14 @@ function renderRecipe(group, root) {
     discardBtn.title = "Remove the expanded text — Generate falls back to the short prompt";
     body.appendChild(discardBtn);
 
-    const willSendExpanded = recipe.use_expanded !== false && recipe.expanded;
+    const willSendExpanded = !recipe.pack && recipe.use_expanded !== false && recipe.expanded;
     const hint = document.createElement("div");
     hint.className = "insp-region-hint";
-    hint.textContent = willSendExpanded ? "Generate sends the expanded text." : "Generate sends the short prompt (expanded text kept, not sent).";
+    hint.textContent = recipe.pack
+      ? "Pack mode ignores the expanded text — it always generates from the short prompt."
+      : willSendExpanded
+        ? "Generate sends the expanded text."
+        : "Generate sends the short prompt (expanded text kept, not sent).";
     body.appendChild(hint);
   }
 }
@@ -2617,6 +3029,31 @@ function renderGroupInspector(group, root) {
   clipLabel.textContent = "Clip content";
   clipRow.append(clipCheck, clipLabel);
   layout.appendChild(clipRow);
+
+  // Screen (T0332 B1 — export flipped to opt-in): group.screen === true is the ONLY thing
+  // that makes a top-level visible group count as an exportable "screen" (exportProject/
+  // visibleScreenCount both gate on it — a recipe/style/pack-run card simply never carries
+  // it, no special-case skip needed anywhere).
+  const screenRow = document.createElement("label");
+  screenRow.className = "insp-check";
+  const screenCheck = document.createElement("input");
+  screenCheck.type = "checkbox";
+  screenCheck.checked = group.screen === true;
+  screenCheck.addEventListener("change", () => setGroupScreen(group.id, screenCheck.checked));
+  const screenLabel = document.createElement("span");
+  screenLabel.textContent = "Screen";
+  screenRow.append(screenCheck, screenLabel);
+  layout.appendChild(screenRow);
+
+  // Nudge (build-spec UX finding): a top-level, VISIBLE, unflagged group otherwise sits
+  // outside Export project with no clue why — this only fires for exactly that case (a
+  // nested widget frame, or an already-hidden group, is not "missing" from the export).
+  if (group.parentId == null && group.visible !== false && group.screen !== true) {
+    const screenHint = document.createElement("div");
+    screenHint.className = "insp-region-hint";
+    screenHint.textContent = "Check Screen to include this group in Export project.";
+    layout.appendChild(screenHint);
+  }
 
   layout.appendChild(readOnly("Members", String(memberElements(group.id).length)));
 
@@ -2801,13 +3238,16 @@ function renderMulti(selected, root) {
   root.appendChild(button);
 }
 
-// Top-level VISIBLE screens — exactly what exportProject renders (every parentId-less
-// visible group). Computed via the shared tree helper (childrenOf(root).groups), not a
-// hand-rolled scan, so the button label never counts nested component groups (T0224 item 9:
-// "Export project (N screens)" must match exportProject, which is top-level only).
+// Top-level VISIBLE, SCREEN-FLAGGED groups — exactly what exportProject renders (every
+// parentId-less visible group with the explicit `screen === true` opt-in flag, T0332 B1:
+// "ЭКСПОРТ — ИНВЕРСИЯ НА OPT-IN"). Computed via the shared tree helper
+// (childrenOf(root).groups), not a hand-rolled scan, so the button label never counts
+// nested component groups (T0224 item 9: "Export project (N screens)" must match
+// exportProject, which is top-level only) — and, since the flip, never counts an unflagged
+// group either, recipe/style/pack_run cards included (they simply never carry `screen`).
 function visibleScreenCount() {
   if (!state.project) return 0;
-  return childrenOf(state.project, null).groups.filter((group) => group.visible !== false).length;
+  return childrenOf(state.project, null).groups.filter((group) => group.visible !== false && group.screen === true).length;
 }
 
 // Nothing selected: still offer a project-level export of every visible screen.

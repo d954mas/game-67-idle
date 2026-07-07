@@ -63,12 +63,16 @@ export function encodePng(width, height, pixel, { alpha = false } = {}) {
 
 // A 64x48 sheet: flat magenta (#ff00ff) background with two solid colored blobs
 // (each well above the 256px min area), placed away from the border so the
-// border-connected background normalization keeps them intact.
-export function magentaSheetPng() {
+// border-connected background normalization keeps them intact. Optional `tag`
+// (default 0, byte-identical to the original fixture) nudges the first blob's blue
+// channel so distinct tags produce distinct content-addressed files — pack.test.mjs's
+// packSlice tests need several "sheet" fixtures that must NOT collide in the
+// content-addressed store (T0332 B3).
+export function magentaSheetPng(tag = 0) {
   const width = 64;
   const height = 48;
   const blobs = [
-    { x0: 8, y0: 8, x1: 28, y1: 28, color: [220, 40, 40] },
+    { x0: 8, y0: 8, x1: 28, y1: 28, color: [220, 40, 40 + tag] },
     { x0: 36, y0: 16, x1: 56, y1: 40, color: [40, 180, 60] },
   ];
   return encodePng(width, height, (x, y) => {

@@ -48,6 +48,11 @@ element beside the source in a single call — see the README's **Automatic
 dual-plate generation** section for the full contract (retry, refusal
 messages, `meta.alpha` shape).
 
+Tiered/axis packs of icons on the canvas (a grade ladder, a family of variants)
+do NOT need a separate pack card or the disk conveyor: `recipe.pack` is an
+optional mode on the SAME recipe card (`recipe-pack-preview`/`-generate`/
+`-slice`) — see the README's **Recipe card** section, **Pack mode** subsection.
+
 ## History navigation (undo/redo/jump) — live-project guard
 
 The project may be live (a human editing it in the page) while an agent is also
