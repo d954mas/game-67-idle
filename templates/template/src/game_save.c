@@ -71,6 +71,8 @@ static const game_save_transform_t *s_transforms;
 static int s_transform_count;
 
 static bool    s_autosave_paused; /* CORRUPT_RESET/NEWER until game_save_new_game */
+static bool    s_new_game_pending;         /* Р11: deferred to the shell's next update (below) */
+static char    s_new_game_skip_id[32];     /* fragment id to leave untouched, or "" for none */
 static bool    s_dirty;
 static bool    s_unpersisted;
 static int64_t s_dirty_at;        /* mono ms of the first mark after clean (§14 п.6) */
@@ -261,21 +263,32 @@ static char *transform_decode(const char *raw, char *error, int error_cap) {
 
 /* ---- fragment fan-out ---- */
 
-static void reset_all(void) {
+/* skip_id NULLABLE: id of the ONE fragment to leave untouched (Р11 «Hold to reset
+   progress» -- settings/volumes are not this button's business, T0327 hygiene). */
+static void reset_all_except(const char *skip_id) {
     for (int i = 0; i < s_fragment_count; i++) {
+        if (skip_id && strcmp(s_fragments[i]->id, skip_id) == 0) {
+            continue;
+        }
         if (s_fragments[i]->reset) {
             s_fragments[i]->reset();
         }
     }
 }
 
-static void on_new_game_all(void) {
+static void on_new_game_all_except(const char *skip_id) {
     for (int i = 0; i < s_fragment_count; i++) {
+        if (skip_id && strcmp(s_fragments[i]->id, skip_id) == 0) {
+            continue;
+        }
         if (s_fragments[i]->on_new_game) {
             s_fragments[i]->on_new_game();
         }
     }
 }
+
+static void reset_all(void) { reset_all_except(NULL); }
+static void on_new_game_all(void) { on_new_game_all_except(NULL); }
 
 static void reconcile_all(void) {
     for (int i = 0; i < s_fragment_count; i++) {
@@ -638,6 +651,8 @@ void game_save_init(void) {
     s_dirty = false;
     s_autosave_paused = false;
     s_unpersisted = false;
+    s_new_game_pending = false;
+    s_new_game_skip_id[0] = '\0';
     s_dirty_at = 0;
     s_last_save_mono = 0;
     s_last_saved_at = 0;
@@ -650,15 +665,57 @@ void game_save_init(void) {
     }
 }
 
-bool game_save_new_game(char *error, int error_cap) {
+static bool new_game_except(const char *skip_id, char *error, int error_cap) {
     free_orphans();
-    reset_all();
-    on_new_game_all();
+    reset_all_except(skip_id);
+    on_new_game_all_except(skip_id);
     s_autosave_paused = false; /* resume autosave (Р10) */
     s_dirty = false;
     const bool ok = save_internal(error, error_cap);
     s_last_save_mono = mono_now();
     return ok;
+}
+
+bool game_save_new_game(char *error, int error_cap) {
+    return new_game_except(NULL, error, error_cap);
+}
+
+/* Р11 «Hold to reset progress» (T0327 hygiene): a feature calls this from ITS draw_ui
+   phase, which runs AFTER this frame's game_events phase already flipped back to EMIT
+   (main.c: game_event_frame_reset() before game_features_draw_ui) -- so emitting
+   items.txn from on_new_game here would not trip the phase debug-assert. It is still
+   deferred one frame on purpose: new_game_except() does synchronous file I/O
+   (save_internal), and running that -- plus the items.txn emit it triggers via
+   items_on_new_game -- INSIDE the live GPU render pass (between nt_gfx_begin_pass/
+   nt_gfx_end_pass, which draw_ui runs within) is an anti-pattern the rest of this
+   codebase avoids on principle (autosave itself is deliberately anchored right after
+   the RECORD phase, never inside render). Recording the request here and applying it
+   at the very start of the NEXT frame's update (game_save_apply_pending_new_game,
+   called from main.c before game_features_update) keeps the reset on the same
+   well-tested "emit during update" path as everything else, with zero risk of stalling
+   a frame already mid-render. skip_fragment_id NULLABLE -- see reset_all_except. */
+void game_save_request_new_game(const char *skip_fragment_id) {
+    s_new_game_pending = true;
+    if (skip_fragment_id) {
+        (void)snprintf(s_new_game_skip_id, sizeof s_new_game_skip_id, "%s", skip_fragment_id);
+    } else {
+        s_new_game_skip_id[0] = '\0';
+    }
+}
+
+/* Shell-only (main.c, start of frame, before game_features_update): applies a pending
+   request from game_save_request_new_game, if any. Returns true iff it applied one (so
+   game-composition state game_save does not own, e.g. player world position, can be
+   reset by the caller in the same beat); false is a plain no-op. */
+bool game_save_apply_pending_new_game(void) {
+    if (!s_new_game_pending) {
+        return false;
+    }
+    s_new_game_pending = false;
+    char err[128];
+    err[0] = '\0';
+    (void)new_game_except(s_new_game_skip_id[0] ? s_new_game_skip_id : NULL, err, (int)sizeof err);
+    return true;
 }
 
 bool game_save_flush(char *error, int error_cap) {

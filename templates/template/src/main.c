@@ -252,6 +252,11 @@ static void frame(void) {
     nt_material_step();
     s_world.time_seconds += g_nt_app.dt;
 
+    // Р11 «Hold to reset progress» (settings_screen.c): apply a deferred new-game
+    // request, if any, at the very start of update -- safe EMIT phase, before any GPU
+    // render pass this frame (see game_save_apply_pending_new_game's doc comment).
+    (void)game_save_apply_pending_new_game();
+
     // ---- feature two-phase event frame (event_system_design §2/§7) ----
     game_features_update(&s_world, g_nt_app.dt);   // emit phase (sys_move moved in); phase=EMIT default
     game_events_react_begin();                     // fixpoint baseline = count after update
@@ -328,6 +333,13 @@ int main(int argc, char **argv) {
             return 2;
 #endif
         }
+    }
+    // --fresh-state implies --disable-autosave (no opt-out flag exists, none is added):
+    // otherwise the 2s debounce would silently overwrite a REAL save on disk with the
+    // throwaway fresh session a few seconds later (T0327 hygiene; automation already
+    // always passes both, ai_studio/runtime_automation/devapi_client.py running_game()).
+    if (s_fresh_state) {
+        s_disable_autosave = true;
     }
     nt_engine_config_t config = {0};
     config.app_name = "Template";

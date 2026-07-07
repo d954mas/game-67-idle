@@ -787,6 +787,38 @@ void test_read_error_bad_backup_corrupt_resets(void) {
     free(payload);
 }
 
+/* 18. Р11 «Hold to reset progress» (T0327 hygiene): game_save_apply_pending_new_game
+   is a no-op until a game_save_request_new_game() call is pending; once applied, it
+   resets+on_new_game's every fragment EXCEPT the skipped one (settings/volumes
+   analogue: "extra" here) and force-saves immediately -- the skipped fragment's
+   in-memory state and its serialized value on disk are both untouched. */
+void test_pending_new_game_skips_one_fragment(void) {
+    TEST_ASSERT_FALSE(game_save_apply_pending_new_game()); /* nothing requested yet */
+
+    s_frag_coins = 5;   /* "game" fragment: will be reset -> on_new_game'd (coins=100) */
+    s_extra_mark = 77;  /* "extra" fragment: SKIPPED, must survive untouched */
+    game_save_mark_dirty();
+
+    game_save_request_new_game("extra");
+    TEST_ASSERT_TRUE(game_save_apply_pending_new_game());
+
+    TEST_ASSERT_EQUAL_INT(100, s_frag_coins); /* reset -> on_new_game ran */
+    TEST_ASSERT_EQUAL_INT(77, s_extra_mark);  /* skipped fragment untouched in memory */
+    TEST_ASSERT_TRUE(file_present(PRIMARY_PATH)); /* immediate force-save */
+
+    cJSON *doc = parse_primary();
+    const cJSON *game =
+        cJSON_GetObjectItemCaseSensitive(cJSON_GetObjectItemCaseSensitive(doc, "features"), "game");
+    const cJSON *extra =
+        cJSON_GetObjectItemCaseSensitive(cJSON_GetObjectItemCaseSensitive(doc, "features"), "extra");
+    TEST_ASSERT_EQUAL_INT(100, (int)cJSON_GetObjectItemCaseSensitive(game, "coins")->valuedouble);
+    TEST_ASSERT_EQUAL_INT(77, (int)cJSON_GetObjectItemCaseSensitive(extra, "mark")->valuedouble);
+    cJSON_Delete(doc);
+
+    /* nothing pending anymore -> a second apply is a clean no-op */
+    TEST_ASSERT_FALSE(game_save_apply_pending_new_game());
+}
+
 int main(void) {
     game_save_register_fragment(&s_extra_fragment);
     game_save_register_fragment(&s_fake_fragment); /* `game` registered last (§14 п.2) */
@@ -809,5 +841,6 @@ int main(void) {
     RUN_TEST(test_read_error_quarantines_and_corrupt_resets);
     RUN_TEST(test_read_error_recovers_from_backup);
     RUN_TEST(test_read_error_bad_backup_corrupt_resets);
+    RUN_TEST(test_pending_new_game_skips_one_fragment);
     return UNITY_END();
 }

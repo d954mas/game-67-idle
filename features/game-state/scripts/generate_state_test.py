@@ -194,8 +194,12 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn("const GameSaveFragment game_state_fragment", src)
         self.assertIn('#include "game_state_json.h"', src)
         self.assertIn("gsj_read_int_range", src)
-        self.assertIn("gsj_add_i64", src)   # i64 field
-        self.assertIn("gsj_read_i64", src)
+        # i64 wire coverage (gsj_add_i64/gsj_read_i64) is NOT asserted here: the
+        # template's `game` fragment carries no i64 field post-T0327-hygiene (rb-dark
+        # RPG model gutted to the honest demo shape). The property is still covered by
+        # test_v2_namespace_golden (MINI_SCHEMA's `total`/`Cell.count` i64 fields,
+        # golden/mini/mini_state.c) -- this test only needs to stay schema-agnostic
+        # about which downstream game happens to have an i64 field.
         self.assertIn(".steps         = NULL", src)  # no migrations for the template
 
         # E2: typed events are a SEPARATE file family (read the event keys, not the

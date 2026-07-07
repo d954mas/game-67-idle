@@ -1,5 +1,7 @@
 #include "features/settings/settings.h"
 
+#include "game_save.h" /* Р11 hold-to-reset: game_save_request_new_game (L0 shell) */
+
 #include "clay.h"
 #include "ui/nt_ui_button.h"
 #include "ui/nt_ui_label.h"
@@ -94,16 +96,24 @@ void settings_draw_ui(nt_ui_context_t *ctx, World *w) {
             const nt_ui_events_t re = nt_ui_query_events(ctx, reset_id);
             char rlabel[48];
             if (re.hold_progress > 0.0F && re.hold_progress < 1.0F) {
-                (void)snprintf(rlabel, sizeof rlabel, "Hold to reset  %d%%", (int)(re.hold_progress * 100.0F));
+                (void)snprintf(rlabel, sizeof rlabel, "Hold to reset progress  %d%%", (int)(re.hold_progress * 100.0F));
             } else {
-                (void)snprintf(rlabel, sizeof rlabel, "Hold to reset");
+                (void)snprintf(rlabel, sizeof rlabel, "Hold to reset progress");
             }
             nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), rlabel, &g_theme.label);
             (void)nt_ui_button_end(ctx);
             if (re.long_pressed) {
+                // New game IN SESSION (Р11): player position is game-composition state,
+                // not a save fragment -- safe to reset synchronously right here (plain
+                // field writes, no event emission / file I/O). Save-fragment reset (gold,
+                // items, progression tracks) is a REQUEST, applied by the shell at the
+                // start of the next frame's update (game_save.c: game_save_apply_pending_
+                // new_game) -- see that function's comment for why it is deferred.
+                // "settings" is skipped: volumes are not this button's business.
                 w->player_x = 0.0F;
                 w->player_z = 0.0F;
                 w->player_yaw = 0.0F;
+                game_save_request_new_game("settings");
                 s_open = false;
             }
         }

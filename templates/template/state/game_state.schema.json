@@ -7,21 +7,7 @@
   "reserved": ["grabbed", "settings.master_volume", "settings.sfx_volume"],
   "enums": {
     "Shape": ["cube", "sphere", "cylinder", "capsule"],
-    "RenderMode": ["solid_wire", "solid", "wire"],
-    "Location": ["old_gate", "north_road", "old_mine"],
-    "QuestStage": ["not_started", "accepted", "wolf_defeated", "completed"],
-    "BattleState": ["none", "ready", "running", "victory", "low_health", "defeat"]
-  },
-  "types": {
-    "ItemInstance": {
-      "kind": "object",
-      "fields": {
-        "def_id": { "type": "string", "max_length": 63 },
-        "count": { "type": "i64", "default": 1, "min": 1, "max": 999999999999 },
-        "level": { "type": "int", "default": 1, "min": 1, "max": 9999 },
-        "durability": { "type": "float", "default": 1, "min": 0, "max": 1 }
-      }
-    }
+    "RenderMode": ["solid_wire", "solid", "wire"]
   },
   "fields": {
     "shape_index": { "type": "enum", "enum": "Shape", "default": "cube" },
@@ -30,48 +16,7 @@
     "test_ui_clicks": { "type": "int", "default": 0, "min": 0, "max": 1000000 },
     "test_label_text": { "type": "string", "default": "Template ready", "max_length": 63 },
     "test_button_text": { "type": "string", "default": "Cycle", "max_length": 63 },
-    "tutorial.done": { "type": "bool", "default": false },
-    "wallet.soft": { "type": "i64", "default": 0, "min": 0, "max": 9000000000000000000 },
-    "wallet.hard": { "type": "i64", "default": 0, "min": 0, "max": 9000000000000000000 },
-    "items": { "type": "map<string,ItemInstance>", "max_count": 32 },
-    "inventory.item_ids": { "type": "list<string>", "max_count": 32 },
-    "equipment.hand_item_id": { "type": "string?", "default": null, "max_length": 63 },
-    "hero.level": { "type": "int", "default": 1, "min": 1, "max": 99 },
-    "hero.xp": { "type": "int", "default": 0, "min": 0, "max": 999999 },
-    "hero.hp": { "type": "int", "default": 30, "min": 0, "max": 9999 },
-    "hero.hp_max": { "type": "int", "default": 30, "min": 1, "max": 9999 },
-    "hero.attack": { "type": "int", "default": 5, "min": 1, "max": 999 },
-    "hero.defense": { "type": "int", "default": 1, "min": 0, "max": 999 },
-    "hero.gold": { "type": "int", "default": 0, "min": 0, "max": 999999 },
-    "location_index": { "type": "enum", "enum": "Location", "default": "old_gate" },
-    "quest_stage_index": { "type": "enum", "enum": "QuestStage", "default": "not_started" },
-    "battle_state_index": { "type": "enum", "enum": "BattleState", "default": "none" },
-    "battle.round": { "type": "int", "default": 0, "min": 0, "max": 99 },
-    "battle.enemy_hp": { "type": "int", "default": 18, "min": 0, "max": 9999 },
-    "battle.enemy_hp_max": { "type": "int", "default": 18, "min": 1, "max": 9999 },
-    "battle.enemy_attack": { "type": "int", "default": 4, "min": 1, "max": 999 },
-    "battle.enemy_defense": { "type": "int", "default": 0, "min": 0, "max": 999 },
-    "battle.last_damage": { "type": "int", "default": 0, "min": 0, "max": 9999 },
-    "battle.last_enemy_damage": { "type": "int", "default": 0, "min": 0, "max": 9999 },
-    "battle.wins": { "type": "int", "default": 0, "min": 0, "max": 999999 },
-    "quest.wolf_kills": { "type": "int", "default": 0, "min": 0, "max": 99 },
-    "reward.pending": { "type": "bool", "default": false },
-    "reward.item_ready": { "type": "bool", "default": false },
-    "gear.ring_equipped": { "type": "bool", "default": false },
-    "old_mine.scouted": { "type": "bool", "default": false },
-    "old_mine.depth": { "type": "int", "default": 0, "min": 0, "max": 99 },
-    "old_mine.ember_shards": { "type": "int", "default": 0, "min": 0, "max": 999999 },
-    "old_mine.depth_resolved": { "type": "bool", "default": false },
-    "old_mine.bat_defeated": { "type": "bool", "default": false },
-    "old_mine.bat_damage": { "type": "int", "default": 0, "min": 0, "max": 9999 },
-    "old_mine.depth_gold": { "type": "int", "default": 0, "min": 0, "max": 999999 },
-    "old_mine.delve_count": { "type": "int", "default": 0, "min": 0, "max": 999999 },
-    "old_mine.cache_claimed": { "type": "bool", "default": false },
-    "old_mine.last_delve_shards": { "type": "int", "default": 0, "min": 0, "max": 999999 },
-    "old_mine.last_delve_gold": { "type": "int", "default": 0, "min": 0, "max": 999999 },
-    "old_mine.last_delve_xp": { "type": "int", "default": 0, "min": 0, "max": 999999 },
-    "gear.mine_lantern": { "type": "bool", "default": false },
-    "old_mine.depth2_unlocked": { "type": "bool", "default": false }
+    "tutorial.done": { "type": "bool", "default": false }
   },
   "events": {
     "shape_changed": {

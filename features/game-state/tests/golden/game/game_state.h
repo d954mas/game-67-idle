@@ -26,107 +26,6 @@
 #define GAME_STATE_TEST_LABEL_TEXT_DEFAULT "Template ready"
 #define GAME_STATE_TEST_BUTTON_TEXT_DEFAULT "Cycle"
 #define GAME_STATE_TUTORIAL_DONE_DEFAULT 0
-#define GAME_STATE_WALLET_SOFT_DEFAULT 0LL
-#define GAME_STATE_WALLET_SOFT_MIN 0LL
-#define GAME_STATE_WALLET_SOFT_MAX 9000000000000000000LL
-#define GAME_STATE_WALLET_HARD_DEFAULT 0LL
-#define GAME_STATE_WALLET_HARD_MIN 0LL
-#define GAME_STATE_WALLET_HARD_MAX 9000000000000000000LL
-#define GAME_STATE_HERO_LEVEL_DEFAULT 1
-#define GAME_STATE_HERO_LEVEL_MIN 1
-#define GAME_STATE_HERO_LEVEL_MAX 99
-#define GAME_STATE_HERO_XP_DEFAULT 0
-#define GAME_STATE_HERO_XP_MIN 0
-#define GAME_STATE_HERO_XP_MAX 999999
-#define GAME_STATE_HERO_HP_DEFAULT 30
-#define GAME_STATE_HERO_HP_MIN 0
-#define GAME_STATE_HERO_HP_MAX 9999
-#define GAME_STATE_HERO_HP_MAX_DEFAULT 30
-#define GAME_STATE_HERO_HP_MAX_MIN 1
-#define GAME_STATE_HERO_HP_MAX_MAX 9999
-#define GAME_STATE_HERO_ATTACK_DEFAULT 5
-#define GAME_STATE_HERO_ATTACK_MIN 1
-#define GAME_STATE_HERO_ATTACK_MAX 999
-#define GAME_STATE_HERO_DEFENSE_DEFAULT 1
-#define GAME_STATE_HERO_DEFENSE_MIN 0
-#define GAME_STATE_HERO_DEFENSE_MAX 999
-#define GAME_STATE_HERO_GOLD_DEFAULT 0
-#define GAME_STATE_HERO_GOLD_MIN 0
-#define GAME_STATE_HERO_GOLD_MAX 999999
-#define GAME_STATE_LOCATION_INDEX_DEFAULT GAME_STATE_LOCATION_OLD_GATE
-#define GAME_STATE_QUEST_STAGE_INDEX_DEFAULT GAME_STATE_QUEST_STAGE_NOT_STARTED
-#define GAME_STATE_BATTLE_STATE_INDEX_DEFAULT GAME_STATE_BATTLE_STATE_NONE
-#define GAME_STATE_BATTLE_ROUND_DEFAULT 0
-#define GAME_STATE_BATTLE_ROUND_MIN 0
-#define GAME_STATE_BATTLE_ROUND_MAX 99
-#define GAME_STATE_BATTLE_ENEMY_HP_DEFAULT 18
-#define GAME_STATE_BATTLE_ENEMY_HP_MIN 0
-#define GAME_STATE_BATTLE_ENEMY_HP_MAX 9999
-#define GAME_STATE_BATTLE_ENEMY_HP_MAX_DEFAULT 18
-#define GAME_STATE_BATTLE_ENEMY_HP_MAX_MIN 1
-#define GAME_STATE_BATTLE_ENEMY_HP_MAX_MAX 9999
-#define GAME_STATE_BATTLE_ENEMY_ATTACK_DEFAULT 4
-#define GAME_STATE_BATTLE_ENEMY_ATTACK_MIN 1
-#define GAME_STATE_BATTLE_ENEMY_ATTACK_MAX 999
-#define GAME_STATE_BATTLE_ENEMY_DEFENSE_DEFAULT 0
-#define GAME_STATE_BATTLE_ENEMY_DEFENSE_MIN 0
-#define GAME_STATE_BATTLE_ENEMY_DEFENSE_MAX 999
-#define GAME_STATE_BATTLE_LAST_DAMAGE_DEFAULT 0
-#define GAME_STATE_BATTLE_LAST_DAMAGE_MIN 0
-#define GAME_STATE_BATTLE_LAST_DAMAGE_MAX 9999
-#define GAME_STATE_BATTLE_LAST_ENEMY_DAMAGE_DEFAULT 0
-#define GAME_STATE_BATTLE_LAST_ENEMY_DAMAGE_MIN 0
-#define GAME_STATE_BATTLE_LAST_ENEMY_DAMAGE_MAX 9999
-#define GAME_STATE_BATTLE_WINS_DEFAULT 0
-#define GAME_STATE_BATTLE_WINS_MIN 0
-#define GAME_STATE_BATTLE_WINS_MAX 999999
-#define GAME_STATE_QUEST_WOLF_KILLS_DEFAULT 0
-#define GAME_STATE_QUEST_WOLF_KILLS_MIN 0
-#define GAME_STATE_QUEST_WOLF_KILLS_MAX 99
-#define GAME_STATE_REWARD_PENDING_DEFAULT 0
-#define GAME_STATE_REWARD_ITEM_READY_DEFAULT 0
-#define GAME_STATE_GEAR_RING_EQUIPPED_DEFAULT 0
-#define GAME_STATE_OLD_MINE_SCOUTED_DEFAULT 0
-#define GAME_STATE_OLD_MINE_DEPTH_DEFAULT 0
-#define GAME_STATE_OLD_MINE_DEPTH_MIN 0
-#define GAME_STATE_OLD_MINE_DEPTH_MAX 99
-#define GAME_STATE_OLD_MINE_EMBER_SHARDS_DEFAULT 0
-#define GAME_STATE_OLD_MINE_EMBER_SHARDS_MIN 0
-#define GAME_STATE_OLD_MINE_EMBER_SHARDS_MAX 999999
-#define GAME_STATE_OLD_MINE_DEPTH_RESOLVED_DEFAULT 0
-#define GAME_STATE_OLD_MINE_BAT_DEFEATED_DEFAULT 0
-#define GAME_STATE_OLD_MINE_BAT_DAMAGE_DEFAULT 0
-#define GAME_STATE_OLD_MINE_BAT_DAMAGE_MIN 0
-#define GAME_STATE_OLD_MINE_BAT_DAMAGE_MAX 9999
-#define GAME_STATE_OLD_MINE_DEPTH_GOLD_DEFAULT 0
-#define GAME_STATE_OLD_MINE_DEPTH_GOLD_MIN 0
-#define GAME_STATE_OLD_MINE_DEPTH_GOLD_MAX 999999
-#define GAME_STATE_OLD_MINE_DELVE_COUNT_DEFAULT 0
-#define GAME_STATE_OLD_MINE_DELVE_COUNT_MIN 0
-#define GAME_STATE_OLD_MINE_DELVE_COUNT_MAX 999999
-#define GAME_STATE_OLD_MINE_CACHE_CLAIMED_DEFAULT 0
-#define GAME_STATE_OLD_MINE_LAST_DELVE_SHARDS_DEFAULT 0
-#define GAME_STATE_OLD_MINE_LAST_DELVE_SHARDS_MIN 0
-#define GAME_STATE_OLD_MINE_LAST_DELVE_SHARDS_MAX 999999
-#define GAME_STATE_OLD_MINE_LAST_DELVE_GOLD_DEFAULT 0
-#define GAME_STATE_OLD_MINE_LAST_DELVE_GOLD_MIN 0
-#define GAME_STATE_OLD_MINE_LAST_DELVE_GOLD_MAX 999999
-#define GAME_STATE_OLD_MINE_LAST_DELVE_XP_DEFAULT 0
-#define GAME_STATE_OLD_MINE_LAST_DELVE_XP_MIN 0
-#define GAME_STATE_OLD_MINE_LAST_DELVE_XP_MAX 999999
-#define GAME_STATE_GEAR_MINE_LANTERN_DEFAULT 0
-#define GAME_STATE_OLD_MINE_DEPTH2_UNLOCKED_DEFAULT 0
-#define GAME_STATE_ITEM_INSTANCE_COUNT_DEFAULT 1LL
-#define GAME_STATE_ITEM_INSTANCE_COUNT_MIN 1LL
-#define GAME_STATE_ITEM_INSTANCE_COUNT_MAX 999999999999LL
-#define GAME_STATE_ITEM_INSTANCE_LEVEL_DEFAULT 1
-#define GAME_STATE_ITEM_INSTANCE_LEVEL_MIN 1
-#define GAME_STATE_ITEM_INSTANCE_LEVEL_MAX 9999
-#define GAME_STATE_ITEM_INSTANCE_DURABILITY_DEFAULT 1.0F
-#define GAME_STATE_ITEM_INSTANCE_DURABILITY_MIN 0.0F
-#define GAME_STATE_ITEM_INSTANCE_DURABILITY_MAX 1.0F
-#define GAME_STATE_MAX_ITEMS 32
-#define GAME_STATE_MAX_INVENTORY_ITEM_IDS 32
 
 typedef enum GameStateShape {
     GAME_STATE_SHAPE_CUBE = 0,
@@ -143,39 +42,7 @@ typedef enum GameStateRenderMode {
     GAME_STATE_RENDER_MODE_COUNT,
 } GameStateRenderMode;
 
-typedef enum GameStateLocation {
-    GAME_STATE_LOCATION_OLD_GATE = 0,
-    GAME_STATE_LOCATION_NORTH_ROAD,
-    GAME_STATE_LOCATION_OLD_MINE,
-    GAME_STATE_LOCATION_COUNT,
-} GameStateLocation;
 
-typedef enum GameStateQuestStage {
-    GAME_STATE_QUEST_STAGE_NOT_STARTED = 0,
-    GAME_STATE_QUEST_STAGE_ACCEPTED,
-    GAME_STATE_QUEST_STAGE_WOLF_DEFEATED,
-    GAME_STATE_QUEST_STAGE_COMPLETED,
-    GAME_STATE_QUEST_STAGE_COUNT,
-} GameStateQuestStage;
-
-typedef enum GameStateBattleState {
-    GAME_STATE_BATTLE_STATE_NONE = 0,
-    GAME_STATE_BATTLE_STATE_READY,
-    GAME_STATE_BATTLE_STATE_RUNNING,
-    GAME_STATE_BATTLE_STATE_VICTORY,
-    GAME_STATE_BATTLE_STATE_LOW_HEALTH,
-    GAME_STATE_BATTLE_STATE_DEFEAT,
-    GAME_STATE_BATTLE_STATE_COUNT,
-} GameStateBattleState;
-
-typedef struct GameItemInstance {
-    bool used;
-    char key[GAME_STATE_STRING_MAX];
-    char def_id[GAME_STATE_STRING_MAX];
-    int64_t count;
-    int level;
-    float durability;
-} GameItemInstance;
 
 typedef struct GameState {
     int shape_index;
@@ -185,49 +52,6 @@ typedef struct GameState {
     char test_label_text[GAME_STATE_STRING_MAX];
     char test_button_text[GAME_STATE_STRING_MAX];
     bool tutorial_done;
-    int64_t wallet_soft;
-    int64_t wallet_hard;
-    GameItemInstance items[GAME_STATE_MAX_ITEMS];
-    char inventory_item_ids[GAME_STATE_MAX_INVENTORY_ITEM_IDS][GAME_STATE_STRING_MAX];
-    int inventory_item_ids_count;
-    bool has_equipment_hand_item_id;
-    char equipment_hand_item_id[GAME_STATE_STRING_MAX];
-    int hero_level;
-    int hero_xp;
-    int hero_hp;
-    int hero_hp_max;
-    int hero_attack;
-    int hero_defense;
-    int hero_gold;
-    int location_index;
-    int quest_stage_index;
-    int battle_state_index;
-    int battle_round;
-    int battle_enemy_hp;
-    int battle_enemy_hp_max;
-    int battle_enemy_attack;
-    int battle_enemy_defense;
-    int battle_last_damage;
-    int battle_last_enemy_damage;
-    int battle_wins;
-    int quest_wolf_kills;
-    bool reward_pending;
-    bool reward_item_ready;
-    bool gear_ring_equipped;
-    bool old_mine_scouted;
-    int old_mine_depth;
-    int old_mine_ember_shards;
-    bool old_mine_depth_resolved;
-    bool old_mine_bat_defeated;
-    int old_mine_bat_damage;
-    int old_mine_depth_gold;
-    int old_mine_delve_count;
-    bool old_mine_cache_claimed;
-    int old_mine_last_delve_shards;
-    int old_mine_last_delve_gold;
-    int old_mine_last_delve_xp;
-    bool gear_mine_lantern;
-    bool old_mine_depth2_unlocked;
 } GameState;
 
 /* Instance owned by this fragment TU (the shared global-state monolith is gone).
@@ -236,9 +60,6 @@ extern GameState game_state;
 
 const char *game_state_shape_name(int value);
 const char *game_state_render_mode_name(int value);
-const char *game_state_location_name(int value);
-const char *game_state_quest_stage_name(int value);
-const char *game_state_battle_state_name(int value);
 
 void   game_state_init_defaults(GameState *state);
 bool   game_state_validate(const GameState *state, char *error, int error_cap);

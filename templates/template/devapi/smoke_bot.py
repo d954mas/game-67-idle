@@ -137,7 +137,8 @@ def validate_game_state(state: Any) -> dict[str, Any]:
     game = value.get("game")
     if not isinstance(game, dict):
         raise DevApiError("game.state.get missing value.game fragment")
-    for key in ("tutorial", "inventory"):  # settings removed from the game set
+    for key in ("tutorial",):  # settings removed from the game set; T0327 hygiene
+        # gutted the dead rb-dark inventory.item_ids field (owned by items now)
         if not isinstance(game.get(key), dict):
             raise DevApiError(f"game.state.get missing value.game.{key} object")
     settings = value.get("settings")  # new fragment beside game

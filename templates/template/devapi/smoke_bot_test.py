@@ -38,7 +38,7 @@ class FakeGame:
                 "path": params.get("path", "") if params else "",
                 "value": {
                     "settings": {"master_volume": 0.8, "music_volume": 0.7, "sfx_volume": 0.9},
-                    "game": {"tutorial": {"done": False}, "inventory": {"item_ids": []}},
+                    "game": {"tutorial": {"done": False}},
                 },
             }
         if method == "game.events.tail":
@@ -77,10 +77,10 @@ class SmokeBotTest(unittest.TestCase):
         self.assertEqual(smoke_bot.find_ui_node(tree, "settings/gear"), tree["nodes"][0])
 
     def test_validate_game_state_requires_template_snapshot_shape(self):
-        state = {"path": "", "value": {"settings": {"master_volume": 0.8}, "game": {"tutorial": {}, "inventory": {}}}}
+        state = {"path": "", "value": {"settings": {"master_volume": 0.8}, "game": {"tutorial": {}}}}
         self.assertIs(smoke_bot.validate_game_state(state), state)
         with self.assertRaises(smoke_bot.DevApiError):  # missing the settings fragment
-            smoke_bot.validate_game_state({"path": "", "value": {"game": {"tutorial": {}, "inventory": {}}}})
+            smoke_bot.validate_game_state({"path": "", "value": {"game": {"tutorial": {}}}})
 
     def test_validate_game_state_schema_requires_template_schema(self):
         schema = {

@@ -81,6 +81,19 @@ void game_save_load(game_save_load_result_t *result);
 /* Явная новая игра: reset всех -> on_new_game всех -> save -> возобновляет автосейв (Р10). */
 bool game_save_new_game(char *error, int error_cap);
 
+/* Р11 «Hold to reset progress» (T0327 hygiene): фича (settings_screen) зовёт ИЗ draw_ui,
+   не немедленно -- шелл применяет в начале СЛЕДУЮЩЕГО кадра (см. game_save_apply_pending_
+   new_game). skip_fragment_id NULLABLE -- id ОДНОГО фрагмента, который НЕ трогать (settings/
+   громкости: "не их кнопка"); NULL = как game_save_new_game, без исключений. Повторный
+   запрос до применения просто перезаписывает предыдущий (идемпотентно). */
+void game_save_request_new_game(const char *skip_fragment_id);
+
+/* Шелл-only: применяет отложенный запрос (reset+on_new_game всех КРОМЕ skip -> force-save),
+   если есть; иначе no-op. Возвращает true, если применил -- сигнал вызывающему (main.c)
+   сбросить то, что game_save не знает (позицию игрока и т.п.) в том же кадре. Звать ОДИН
+   раз в начале frame(), до game_features_update (EMIT-фаза). */
+bool game_save_apply_pending_new_game(void);
+
 /* Синхронный форс-сейв в обход дебаунса (visibility-flush, §14 п.5). */
 bool game_save_flush(char *error, int error_cap);
 
