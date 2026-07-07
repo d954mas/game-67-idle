@@ -105,7 +105,7 @@ The template is NOT a bare seed: a new game opens to a working shell and builds 
 - **Startup UX**: the template opens to an **empty scene** with a **settings
   (gear) button in the top-right** of the GUI. Settings are NOT shown on launch вЂ”
   pressing the gear opens the panel below.
-- **Settings panel** (`src/systems/sys_settings.*` + `src/ui/*`):
+- **Settings panel** (`src/features/settings/` + `src/ui/*`):
   - volume sliders (master / music / SFX),
   - a **Close** button,
   - a **Reset** button that **resets the game state on a long-press** (hold to
@@ -131,7 +131,7 @@ mega-`main`. Rules the seed demonstrates:
       (input/AI в†’ position in world state),
     - **render** (`sys_character_render.*`) вЂ” draws it from world state (mesh +
       transform), separate from movement.
-  - **settings** (`sys_settings.*`) вЂ” the gear panel, sliders, long-press reset.
+  - **settings** (`src/features/settings/`, the reference feature folder) вЂ” the gear panel, sliders, long-press reset.
   - input / camera as their own systems.
 - Systems communicate through the **world state**, not by calling each other's
   internals. A new game adds its own systems the same way (copy a system file,
@@ -158,7 +158,11 @@ modules from day one so a copied game keeps them apart:
         sys_input.{c,h}         input -> intents
         sys_character_move.{c,h} walk a character through the world
         sys_camera.{c,h}        camera follow
-        sys_settings.{c,h}      gear panel: sliders, close, long-press reset
+      features/               FEATURES: folder per feature, ONE public header
+                              (rules: src/features/README.md):
+        game_features.{c,h}     the frame aggregator (7 phases, list = z-order)
+        settings/               the reference feature: gear panel, sliders,
+                                close, long-press reset (public API: settings.h)
       render/                 RENDER SYSTEMS, separate from game logic:
         render_setup.{c,h}      materials (mesh + text), shaders, font, frame UBO,
                                 fallback texture  (was inline in main)

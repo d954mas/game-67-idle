@@ -41,6 +41,7 @@
 #endif
 
 #include "features/game_features.h"
+#include "features/settings/settings.h"
 #include "game_events.h"
 #include "game_log.h" /* E4.B: built-in "log" event type (unconditional leaf) */
 #if FEATURE_GAME_STATE && NT_DEVAPI_ENABLED
@@ -51,7 +52,6 @@
 #endif
 #include "render/capture.h"
 #include "render/render_mesh.h"
-#include "systems/sys_settings.h"
 #include "ui/hud.h"
 #include "ui/ui_runtime.h"
 #include "world/world.h"
@@ -284,15 +284,11 @@ static void frame(void) {
 
     // render systems read the world
     nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.75F, 0.96F, 1.0F}, .clear_depth = 1.0F});
-    // TODO(feature-migration): game_features_draw_world/draw_ui land here once render systems become features.
+    // draw_world остаётся прямым вызовом шелла, пока render-системы не станут фичами (§E1.5).
     render_mesh_draw(&s_world, s_frame_ubo);
     hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
-
-    // settings UI: real nt_ui widgets (panel + sliders + buttons), built + walked here
-    if (ui_runtime_begin(g_nt_app.dt)) {
-        sys_settings_ui(ui_runtime_ctx(), &s_world);
-        ui_runtime_end();
-    }
+    // UI-слой фич: агрегатор владеет ui_runtime-кадром и рисует settings (z-order).
+    game_features_draw_ui(&s_world);
     nt_gfx_end_pass();
 
     // --capture: after a few frames (resources loaded + rendered), grab + quit.
@@ -473,7 +469,7 @@ int main(int argc, char **argv) {
     }
 
     if (s_open_settings_on_start) {
-        sys_settings_force_open();
+        settings_open();
     }
 
     g_nt_app.target_dt = 1.0F / 60.0F;

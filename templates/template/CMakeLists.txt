@@ -152,7 +152,7 @@ add_executable(${GAME_TARGET}
     src/render/render_mesh.c
     src/render/capture.c
     src/systems/sys_move.c
-    src/systems/sys_settings.c
+    src/features/settings/settings_screen.c
 )
 if(NOT EMSCRIPTEN)
     add_dependencies(${GAME_TARGET} game_asset_packs)
@@ -214,7 +214,7 @@ if(FEATURE_GAME_STATE)
         "${GAME_STATE_GENERATED_SOURCE}"   # A4: also carries the generated game_state_fragment descriptor
         "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # E2: typed event structs/emit/descriptors
         "${SETTINGS_STATE_GENERATED_SOURCE}"   # A6: generated settings fragment state layer
-        src/features/settings.c                # A6: hand-written settings logic (Р9)
+        src/features/settings/settings.c       # A6: hand-written settings logic (Р9)
         src/game_state_json.c
         src/game_storage.c
         src/game_save.c              # A3

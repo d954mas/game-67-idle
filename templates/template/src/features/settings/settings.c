@@ -1,4 +1,4 @@
-#include "features/settings.h"
+#include "features/settings/settings.h"
 
 #include "game_save.h"      /* game_save_mark_dirty */
 #include "settings_state.h" /* generated: SettingsState + settings_state instance */

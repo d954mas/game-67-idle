@@ -1,4 +1,4 @@
-#include "systems/sys_settings.h"
+#include "features/settings/settings.h"
 
 #include "clay.h"
 #include "ui/nt_ui_button.h"
@@ -6,10 +6,6 @@
 #include "ui/nt_ui_panel.h"
 #include "ui/nt_ui_slider.h"
 #include "ui/theme.h"
-
-#if FEATURE_GAME_STATE
-#include "features/settings.h" /* A6: persist volumes through the settings feature-API */
-#endif
 
 #include <stdio.h>
 
@@ -24,16 +20,13 @@
 static bool s_open;
 static float s_master = 0.8F, s_music = 0.7F, s_sfx = 0.9F;
 
-void sys_settings_force_open(void) { s_open = true; }
-bool sys_settings_is_open(void) { return s_open; }
-#if FEATURE_GAME_STATE
-float sys_settings_master(void) { return settings_master(); }
-float sys_settings_music(void) { return settings_music(); }
-float sys_settings_sfx(void) { return settings_sfx(); }
-#else
-float sys_settings_master(void) { return s_master; }
-float sys_settings_music(void) { return s_music; }
-float sys_settings_sfx(void) { return s_sfx; }
+void settings_open(void)  { s_open = true; }
+void settings_close(void) { s_open = false; }
+bool settings_is_open(void) { return s_open; }
+#if !FEATURE_GAME_STATE
+float settings_master(void) { return s_master; }
+float settings_music(void)  { return s_music; }
+float settings_sfx(void)    { return s_sfx; }
 #endif
 
 // Label + slider stacked; the slider mutates *value in place (engine owns the drag).
@@ -54,7 +47,7 @@ static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, f
     }
 }
 
-void sys_settings_ui(nt_ui_context_t *ctx, World *w) {
+void settings_draw_ui(nt_ui_context_t *ctx, World *w) {
     // Root: full screen; gear button parked top-right.
     CLAY({.id = CLAY_ID("settings_root"),
           .layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)}, .padding = CLAY_PADDING_ALL(16), .childAlignment = {CLAY_ALIGN_X_RIGHT, CLAY_ALIGN_Y_TOP}}}) {

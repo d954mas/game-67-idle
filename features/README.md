@@ -45,6 +45,32 @@ features/<feature-id>/
 Only add the folders a feature actually needs. For example, a settings screen can
 be a feature with UI code, state keys, assets, and a short integration note.
 
+## feature.json fields
+
+`feature.json` (schema `ai_studio.feature.v1`) описывает переиспользуемую фичу.
+Идентичность фичи = строковый `id` (= имя папки); НИКАКИХ числовых id-диапазонов
+(нет поля `state_id_range` — идентичность стейта = имя JSON-ключа фрагмента).
+
+Поля:
+
+- `schema` — всегда `ai_studio.feature.v1`.
+- `id` — строковый id (= имя папки, `[a-z_][a-z0-9_]*`), C-префикс символов.
+- `title`, `summary`, `status`, `kind` — человекочитаемая метаинформация.
+- `layer` — `L0` | `L1` | `L2` (слой; include-и строго вниз).
+- `provides` — список публичных API-имён/возможностей, которые фича даёт
+  фичам выше (напр. геттеры/операции её публичного хедера).
+- `registers` — список точек шелла, куда фича добавляет ОДНУ строку
+  (фазы `game_features.c`, сейв-фрагмент, DevAPI-команды), чтобы установка
+  сводилась к append.
+- `assets_tag` — значение тега `feature=<id>` в `assets.jsonl` игры (как
+  ассеты фичи помечаются в общем `assets/`-дереве).
+- `art_needs` — список деклараций арта `{slot, kind, hint}`: `slot` — роль
+  (icon/panel/…), `kind` — тип (sprite/atlas-region/…), `hint` — подсказка
+  подбора/генерации. Фича берёт арт ТОЛЬКО как хендлы в конфиге, с graceful-
+  фолбэком; `build_packs.c` остаётся кодом игры (фича в паки не пишет).
+- `dependencies`, `flags`, `commands`, `manuals`, `outputs`, `default_template`
+  — как прежде (движок/тулинг/инсталл/генвыходы/дефолтная привязка к шаблону).
+
 ## Current Packs
 
 - `game-state/`: schema-first generated GameState, save/load contract,

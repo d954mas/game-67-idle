@@ -26,8 +26,8 @@ project:
   src/game_save.c
   src/game_save.h
   src/game_save_devapi.c
-  src/features/settings.c
-  src/features/settings.h
+  src/features/settings/settings.c
+  src/features/settings/settings.h
 ```
 
 The generated `game_state.c` now defines the `game_state_fragment` descriptor
@@ -39,11 +39,12 @@ only under `GAME_DEVAPI_ENABLED`.
 `settings` (A6) is the second live fragment and the Р9 sample: its state layer
 (`SettingsState`, defaults, (de)serialization, schema, descriptor) is GENERATED
 from `state/settings.schema.json`; only the feature LOGIC —
-`src/features/settings.{c,h}` (getters/setters + clamp + `game_save_mark_dirty`)
+`src/features/settings/settings.{c,h}` (getters/setters + clamp + `game_save_mark_dirty`)
 — is hand-written and copied. The registry, shell, dispatch, and generator are
 universal over `GameSaveFragment`, so a second fragment needs no edit to any of
-them. `src/systems/sys_settings.c` (the UI consumer) is a template system, not a
-feature deliverable, and is NOT part of this copy-list.
+them. The settings UI (gear + panel) lives inside the feature as
+`src/features/settings/settings_screen.c`; it is template shell/UI wiring, not a
+game-state deliverable, and is NOT part of this copy-list.
 
 Then add CMake wiring equivalent to `templates/template/CMakeLists.txt`:
 
@@ -55,7 +56,7 @@ Then add CMake wiring equivalent to `templates/template/CMakeLists.txt`:
   write different filenames, so a parallel build is fine;
 - write generated outputs to `<build>/generated/game-state`;
 - compile generated `game_state.c` and `settings_state.c`, the hand-written
-  `src/features/settings.c`, `src/game_storage.c`, and migrations when
+  `src/features/settings/settings.c`, `src/game_storage.c`, and migrations when
   `FEATURE_GAME_STATE` is on (`settings_state_events.gen.c` is an empty-events
   stub and is NOT linked; do not call `settings_ev_register`);
 - compile the hand-written `src/game_save_devapi.c` only when both

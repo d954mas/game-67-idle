@@ -12,7 +12,7 @@
 // game systems only build widgets. main.c drives: init -> begin/build/end per
 // frame -> teardown. Reuses main's text material + font (one glyph atlas).
 //
-//   if (ui_runtime_begin(dt)) { sys_settings_ui(ui_runtime_ctx(), &world); ui_runtime_end(); }
+//   if (ui_runtime_begin(dt)) { settings_draw_ui(ui_runtime_ctx(), &world); ui_runtime_end(); }
 void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t font_resource);
 
 // Binds atlas/font when ready, sets the UI projection, opens the nt_ui frame.

@@ -1,5 +1,8 @@
 #include "features/game_features.h"
 #include "systems/sys_move.h"
+#include "features/settings/settings.h"
+#include "ui/ui_runtime.h"
+#include "app/nt_app.h" /* g_nt_app.dt */
 #if FEATURE_GAME_STATE && NT_DEVAPI_ENABLED
 #include "game_events_devapi.h" /* E3: DevAPI tail recorder */
 #endif
@@ -7,13 +10,10 @@
 #include "game_analytics.h" /* E4: local analytics NDJSON writer */
 #endif
 
-/* Что стало «фичей» в скелете (E1 решение): НИЧТО формально (папок
-   src/features/<id>/ E1 не создаёт — отдельный трек, feature_architecture §4
-   п.1). Единственный существующий game-системный вызов, продетый через
-   агрегатор, — sys_move в фазе update (мировая симуляция = естественный дом
-   эмиттеров). Рендер-системы (render_mesh_draw/hud_draw/sys_settings_ui)
-   ОСТАЮТСЯ прямыми вызовами шелла в frame() с TODO-якорем (§E1.4/§E1.5) —
-   поэтому draw_world/draw_ui объявлены и определены пустыми здесь. */
+/* settings — первая мигрированная фича (И1): draw_ui теперь владеет
+   ui_runtime-кадром и рисует settings по одной строке (z-order). Рендер-
+   системы (render_mesh_draw/hud_draw) ПОКА прямые вызовы шелла в main.c,
+   поэтому draw_world остаётся заглушкой. */
 
 void game_features_init(World *w) {
     (void)w; /* TODO(feature-migration): per-feature <id>_init(w) здесь */
@@ -60,5 +60,12 @@ void game_features_record(World *w) {
 }
 
 void game_features_draw_world(World *w) { (void)w; /* TODO: см. §E1.5 */ }
-void game_features_draw_ui(World *w) { (void)w; /* TODO: см. §E1.5 */ }
+void game_features_draw_ui(World *w) {
+    /* UI-слой фич: агрегатор владеет ui_runtime-кадром; каждая фича получает
+       ctx и рисует свой слой ОДНОЙ строкой, порядок вызовов = z-order. */
+    if (ui_runtime_begin(g_nt_app.dt)) {
+        settings_draw_ui(ui_runtime_ctx(), w); /* L2 settings overlay */
+        ui_runtime_end();
+    }
+}
 void game_features_shutdown(World *w) { (void)w; /* TODO: per-feature shutdown */ }
