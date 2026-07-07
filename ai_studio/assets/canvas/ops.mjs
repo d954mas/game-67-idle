@@ -3235,12 +3235,12 @@ const PACK_EXPANDER_SCRIPT = ".codex/skills/nt-asset-image-generation/scripts/ex
 // BG_KEY_BACKGROUND (loud if it is not EXACTLY the magenta/green pair — bg_key itself is generic
 // hex at patch-time, this is where the pack-specific pairing is actually enforced) and
 // `candidates` from `recipe.params.n_candidates`; `gen` (size/quality/model) is `recipe.params`
-// wholesale. Loud on engine "both" (a pack run is per-sheet resumable/replaceable by sheet_axes
-// identity — TWO engines per sheet would double every paid call AND break that identity; compare
-// mode stays the single-image branch's alone; codex and gemini/agy are both legal — agy grid
-// adherence smoke-checked 2026-07-07; checked HERE, i.e. in both packPreview and the generate
-// pack branch, never at patch-time, since a cross-field refusal at patch-time would depend on
-// edit order) and
+// wholesale. Every RECIPE_ENGINES value is legal here — codex, gemini/agy (grid adherence
+// smoke-checked 2026-07-07), and "both" (lead decision 2026-07-07: compare mode on packs —
+// every sheet generates on BOTH engines at 2x the paid calls, sheet identity = (sheet_axes,
+// engine); see generatePackSheets). Only a hand-edited unknown engine is loud (defensive,
+// checked HERE, i.e. in both packPreview and the generate pack branch, never at patch-time,
+// since a cross-field refusal at patch-time would depend on edit order) and
 // on a SET `style_ref` that doesn't resolve to a real style-card group (defensive re-check;
 // patchRecipe already validates this at write time — a hand-edited project.json is the only way
 // to reach this). Callers add their OWN `out_dir` (a required expander key, but otherwise a stub
@@ -3254,8 +3254,13 @@ const PACK_EXPANDER_SCRIPT = ".codex/skills/nt-asset-image-generation/scripts/ex
 function buildPackConfig(project, card) {
   const recipe = card.recipe;
   const cardLabel = card.name || card.id;
-  if (recipe.engine !== "codex" && recipe.engine !== "gemini") {
-    throw new Error(`recipe card "${cardLabel}" (${card.id}) has engine ${JSON.stringify(recipe.engine)} — pack mode runs ONE engine per run: "codex" or "gemini" ("both" is the single-image branch's compare mode)`);
+  if (!RECIPE_ENGINES.has(recipe.engine)) {
+    // Defensive only (mirrors the single-image branch's own check) — patchRecipe validates
+    // engine on write; a hand-edited project.json is the only way to reach this. "both" IS
+    // legal for packs (lead, 2026-07-07: «почему если я выбрал значит мне это нужно» — cost
+    // is the lead's call): every sheet generates on BOTH engines, identity = (sheet_axes,
+    // engine) — see generatePackSheets.
+    throw new Error(`recipe card "${cardLabel}" (${card.id}) has an invalid engine: ${JSON.stringify(recipe.engine)}`);
   }
   const pack = recipe.pack;
   // background: derived from params.bg_key, NOT a pack field. A hex that isn't exactly one of
@@ -3404,7 +3409,7 @@ function axesEqual(a, b) {
 //     whose `parentId === runGroupId`) — a cut (or its group) moved out of that scope keeps its
 //     meta.pack pointer but falls outside this walk, so it survives untouched, matching the
 //     build-spec's "copy placed outside the run group survives".
-function findForcedSheetReplacementTargets(project, runGroupId, cardId, jobSheetAxes) {
+function findForcedSheetReplacementTargets(project, runGroupId, cardId, jobSheetAxes, engine) {
   const elements = project.elements || [];
   const groups = groupsOf(project);
   const oldSheets = elements.filter(
@@ -3414,6 +3419,9 @@ function findForcedSheetReplacementTargets(project, runGroupId, cardId, jobSheet
       el.meta.pack &&
       Array.isArray(el.meta.pack.cells) &&
       el.meta.pack.cardId === cardId &&
+      // Same (axes, ENGINE) identity the resume dedup uses — a "both" regen must replace only
+      // ITS OWN engine's prior sheet, never the sibling's; a pre-engine legacy sheet is codex.
+      (el.meta.pack.engine || "codex") === engine &&
       axesEqual(el.meta.pack.sheet_axes, jobSheetAxes),
   );
   const elementIds = new Set(oldSheets.map((el) => el.id));
@@ -3450,7 +3458,7 @@ function findForcedSheetReplacementTargets(project, runGroupId, cardId, jobSheet
 // changed" iteration (a skip that isn't the last sheet) safely no-ops via commitMutation's own
 // before/after diff — this function does not special-case that itself.
 async function commitPackSheetOutcome(root, projectId, {
-  groupId, sheetBefore, job, jobSheetAxes, mintPayload, currentRunGroupId, styleSnapshot, varyAxis,
+  groupId, sheetBefore, job, sheetName, engine, jobSheetAxes, mintPayload, currentRunGroupId, styleSnapshot, varyAxis,
   at, failedSoFar, isLast, priorResults, outcomeStatus, outcomeError, refSrcs, recipe, startedAt, forced,
 }) {
   return withProjectLock(root, projectId, () => {
@@ -3496,7 +3504,7 @@ async function commitPackSheetOutcome(root, projectId, {
         // job's sheet_axes (and their own slice subgroup, if already cut) from the run group,
         // in this SAME commit, right before minting the fresh sheet below. See
         // findForcedSheetReplacementTargets's own doc comment for the identification rule.
-        const targets = findForcedSheetReplacementTargets(workingProject, targetGroupId, groupId, jobSheetAxes);
+        const targets = findForcedSheetReplacementTargets(workingProject, targetGroupId, groupId, jobSheetAxes, engine);
         if (targets.elementIds.size || targets.groupIds.size) {
           workingProject = updateProject(root, projectId, {
             elements: (workingProject.elements || []).filter((el) => !targets.elementIds.has(el.id)),
@@ -3505,7 +3513,7 @@ async function commitPackSheetOutcome(root, projectId, {
         }
       }
 
-      const added = storeAddImage(root, projectId, { name: job.name, bytes: mintPayload.bytes, meta: { pack: mintPayload.meta } });
+      const added = storeAddImage(root, projectId, { name: sheetName, bytes: mintPayload.bytes, meta: { pack: mintPayload.meta } });
       workingProject = added.project;
       mintedElementId = added.element.id;
 
@@ -3532,7 +3540,8 @@ async function commitPackSheetOutcome(root, projectId, {
     );
 
     const resultRow = {
-      name: job.name,
+      name: sheetName, // display name (engine-suffixed on a "both" run) — job.name lives in meta.pack.job
+      engine,
       sheet_axes: jobSheetAxes,
       status: outcomeStatus,
       ...(outcomeStatus === "ok" ? { elementId: mintedElementId } : {}),
@@ -3555,7 +3564,9 @@ async function commitPackSheetOutcome(root, projectId, {
           refs: refSrcs,
           // Same engine-filtered record the sheets' params_snapshot carries — never a
           // hardcoded codex triple (a gemini pack run must not claim a gpt-image model).
-          ...snapshotParamsForEngine(recipe.engine, recipe.params, ["bg_key", "n_candidates"]),
+          // "both" records the codex superset in this ONE aggregate row (single-image
+          // branch's own convention); each sheet's meta.pack is the per-engine exact record.
+          ...snapshotParamsForEngine(recipe.engine === "both" ? "codex" : recipe.engine, recipe.params, ["bg_key", "n_candidates"]),
           pack: recipe.pack,
         },
         result_summary: { run_group_id: targetGroupId, results: [...priorResults, resultRow], failed: failedSoFar },
@@ -3566,7 +3577,7 @@ async function commitPackSheetOutcome(root, projectId, {
     const after = updateProject(root, projectId, patch);
     const project = commitMutation(root, projectId, {
       op: "generateRecipePackSheet",
-      args_summary: { groupId, sheet: job.name, runGroupId: targetGroupId, verdict, minted: !!mintPayload },
+      args_summary: { groupId, sheet: job.name, engine, runGroupId: targetGroupId, verdict, minted: !!mintPayload },
       before: current,
       after,
       startedAt,
@@ -3589,11 +3600,13 @@ async function commitPackSheetOutcome(root, projectId, {
 // mints under its OWN short commit (commitPackSheetOutcome) as soon as it lands, so a crash on
 // sheet 3 never loses sheets 1-2 and per-sheet HEAD_CONFLICT tolerance never voids the whole
 // run. Never throws once the sheet loop starts (unlike the single-image branch's "every engine
-// failed" throw) — failures land in `failed`/`recipe.last_run.failed` instead, since a partial
-// pack run is a normal, resumable outcome, not an all-or-nothing gesture. The generator is the
-// card's OWN recipe.engine (codex or gemini — buildPackConfig already refused "both"), same
-// `{prompt, refPaths, params}` seam as the single-image branch; each sheet records that engine
-// in meta.pack, so a run resumed after the lead flips the card's engine stays truthful per sheet.
+// failed" throw) — failures land in `failed`/`recipe.last_run.failed` instead (each row naming
+// its sheet_axes AND engine), since a partial pack run is a normal, resumable outcome, not an
+// all-or-nothing gesture. The generator(s) are the card's OWN recipe.engine — codex, gemini, or
+// "both" (fan every job out to both engines, 2x the paid calls — lead decision 2026-07-07) —
+// same `{prompt, refPaths, params}` seam as the single-image branch; each sheet records the
+// engine that ACTUALLY generated it in meta.pack, and sheet identity everywhere (resume dedup,
+// forced replace) is the (sheet_axes, engine) pair, legacy engineless sheets counting as codex.
 async function generatePackSheets(root, { projectId, groupId, generators, runGroupId, sheetSlug, before, card, recipe, cardLabel, startedAt }) {
   const { config: baseConfig, styleSnapshot } = buildPackConfig(before, card);
 
@@ -3692,84 +3705,109 @@ async function generatePackSheets(root, { projectId, groupId, generators, runGro
 
   const at = new Date().toISOString(); // ONE timestamp for the whole run — pack_run.at, every
   // sheet's meta.pack.at, recipe.last_run.at, and the run group's name's <ts> all share it.
-  // Engine-filtered (see snapshotParamsForEngine): bg_key/n_candidates ride along on the pack
-  // branch because both genuinely shaped the run (bg baked into every sheet's prompt; overgen
-  // count expanded the job list) — unlike model/quality, which agy never consumed.
-  const paramsSnapshot = snapshotParamsForEngine(recipe.engine, recipe.params, ["bg_key", "n_candidates"]);
   const gens = { codex: generateImageCodex, gemini: generateImageGemini, ...(generators || {}) };
 
-  let currentRunGroupId = runGroup ? runGroup.id : null;
-  const failed = []; // {sheet_axes, error}
-  const results = []; // {name, sheet_axes, status, elementId?, error?}
-  let finalProject = before;
+  // The run's ATTEMPT engines: "both" (lead decision 2026-07-07) fans every job out to codex
+  // AND gemini — 2x the paid calls, the lead's explicit choice, exactly like the single-image
+  // compare mode. The unit of everything below (dedup, forced replace, mint, failed[], result
+  // rows) is a (job, engine) PAIR, never the bare job: sheet identity is (sheet_axes, engine).
+  // A sheet minted before engines were recorded (no meta.pack.engine, pre-2026-07-07) counts
+  // as codex — factually true, codex was the only pack engine then. Deliberate consequence:
+  // resuming --run after FLIPPING the card's engine regenerates every sheet on the new engine
+  // (the old engine's sheets stay put) — that IS the cheap "get the agy versions side by side"
+  // gesture, not double-billing: per-sheet skip lines still print for anything already landed.
+  const attemptEngines = recipe.engine === "both" ? ["codex", "gemini"] : [recipe.engine];
+  // Engine-filtered per attempt engine (see snapshotParamsForEngine): bg_key/n_candidates ride
+  // along on the pack branch because both genuinely shaped the run (bg baked into every sheet's
+  // prompt; overgen count expanded the job list) — unlike model/quality, which agy never consumed.
+  const paramsSnapshots = Object.fromEntries(
+    attemptEngines.map((engine) => [engine, snapshotParamsForEngine(engine, recipe.params, ["bg_key", "n_candidates"])]),
+  );
 
-  for (let i = 0; i < jobsToRun.length; i += 1) {
-    const job = jobsToRun[i];
+  let currentRunGroupId = runGroup ? runGroup.id : null;
+  const failed = []; // {sheet_axes, engine, error}
+  const results = []; // {name, engine, sheet_axes, status, elementId?, error?}
+  let finalProject = before;
+  const totalUnits = jobsToRun.length * attemptEngines.length;
+  let unitIndex = 0;
+
+  for (const job of jobsToRun) {
     const jobSheetAxes = sheetAxesFromJob(job, varyAxis);
     const forced = forcedNames.has(job.name);
-    const isLast = i === jobsToRun.length - 1;
+    for (const engine of attemptEngines) {
+      unitIndex += 1;
+      const isLast = unitIndex === totalUnits;
+      // Sheet element NAME: single-engine runs keep the expander's job.name verbatim
+      // (unchanged contract); a "both" run suffixes the engine (single-image branch's own
+      // "<card> codex"/"<card> agy" convention) so the two siblings stay distinguishable on
+      // the canvas. meta.pack.job below always carries the bare job.name — the stable regen
+      // pointer regardless of display name.
+      const sheetName = attemptEngines.length > 1 ? `${job.name} ${RECIPE_ENGINE_SUFFIX[engine]}` : job.name;
 
-    // RESUME dedup: a sheet whose axes are already represented among the run group's minted
-    // sheet elements is SKIPPED (gen_batch's own skip-if-exists parity) — unless this exact job
-    // was explicitly forced via --sheet.
-    if (!forced && currentRunGroupId) {
-      const liveNow = getProject(root, projectId);
-      const already = (liveNow.elements || []).some(
-        (el) => el.groupId === currentRunGroupId && el.meta && el.meta.pack && el.meta.pack.cardId === groupId && axesEqual(el.meta.pack.sheet_axes, jobSheetAxes),
-      );
-      if (already) {
-        const sheetBefore = getProject(root, projectId);
+      // RESUME dedup: a sheet whose (axes, ENGINE) pair is already represented among the run
+      // group's minted sheet elements is SKIPPED (gen_batch's own skip-if-exists parity) —
+      // unless this exact job was explicitly forced via --sheet.
+      if (!forced && currentRunGroupId) {
+        const liveNow = getProject(root, projectId);
+        const already = (liveNow.elements || []).some(
+          (el) => el.groupId === currentRunGroupId && el.meta && el.meta.pack && el.meta.pack.cardId === groupId
+            && (el.meta.pack.engine || "codex") === engine && axesEqual(el.meta.pack.sheet_axes, jobSheetAxes),
+        );
+        if (already) {
+          const sheetBefore = getProject(root, projectId);
+          const outcome = await commitPackSheetOutcome(root, projectId, {
+            groupId, sheetBefore, job, sheetName, engine, jobSheetAxes, mintPayload: null, currentRunGroupId, styleSnapshot, varyAxis, at,
+            failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "skipped", refSrcs, recipe, startedAt,
+          });
+          results.push(outcome.resultRow);
+          currentRunGroupId = outcome.targetGroupId;
+          finalProject = outcome.project;
+          continue;
+        }
+      }
+
+      const sheetBefore = getProject(root, projectId); // fresh snapshot right before the slow call
+      let bytes = null;
+      let genError = null;
+      try {
+        const generated = await gens[engine]({ prompt: job.prompt, refPaths, params: recipe.params });
+        bytes = Buffer.isBuffer(generated) ? generated : readFileSync(generated);
+      } catch (error) {
+        genError = error;
+      }
+
+      if (genError) {
+        failed.push({ sheet_axes: jobSheetAxes, engine, error: genError.message });
         const outcome = await commitPackSheetOutcome(root, projectId, {
-          groupId, sheetBefore, job, jobSheetAxes, mintPayload: null, currentRunGroupId, styleSnapshot, varyAxis, at,
-          failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "skipped", refSrcs, recipe, startedAt,
+          groupId, sheetBefore, job, sheetName, engine, jobSheetAxes, mintPayload: null, currentRunGroupId, styleSnapshot, varyAxis, at,
+          failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "failed", outcomeError: genError.message, refSrcs, recipe, startedAt,
         });
         results.push(outcome.resultRow);
         currentRunGroupId = outcome.targetGroupId;
         finalProject = outcome.project;
         continue;
       }
-    }
 
-    const sheetBefore = getProject(root, projectId); // fresh snapshot right before the slow call
-    let bytes = null;
-    let genError = null;
-    try {
-      const generated = await gens[recipe.engine]({ prompt: job.prompt, refPaths, params: recipe.params });
-      bytes = Buffer.isBuffer(generated) ? generated : readFileSync(generated);
-    } catch (error) {
-      genError = error;
-    }
-
-    if (genError) {
-      failed.push({ sheet_axes: jobSheetAxes, error: genError.message });
+      const meta = {
+        cardId: groupId,
+        engine,
+        job: job.name, // stable regen pointer: --sheet matches the expander's job.name, never the (possibly suffixed) display name
+        at,
+        sheet_axes: jobSheetAxes,
+        cells: job.cells,
+        prompt_snapshot: job.prompt,
+        refs_snapshot: refSrcs,
+        params_snapshot: paramsSnapshots[engine],
+        ...(styleSnapshot ? { style_snapshot: styleSnapshot } : {}),
+      };
       const outcome = await commitPackSheetOutcome(root, projectId, {
-        groupId, sheetBefore, job, jobSheetAxes, mintPayload: null, currentRunGroupId, styleSnapshot, varyAxis, at,
-        failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "failed", outcomeError: genError.message, refSrcs, recipe, startedAt,
+        groupId, sheetBefore, job, sheetName, engine, jobSheetAxes, mintPayload: { bytes, meta }, currentRunGroupId, styleSnapshot, varyAxis, at,
+        failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "ok", refSrcs, recipe, startedAt, forced,
       });
       results.push(outcome.resultRow);
       currentRunGroupId = outcome.targetGroupId;
       finalProject = outcome.project;
-      continue;
     }
-
-    const meta = {
-      cardId: groupId,
-      engine: recipe.engine,
-      at,
-      sheet_axes: jobSheetAxes,
-      cells: job.cells,
-      prompt_snapshot: job.prompt,
-      refs_snapshot: refSrcs,
-      params_snapshot: paramsSnapshot,
-      ...(styleSnapshot ? { style_snapshot: styleSnapshot } : {}),
-    };
-    const outcome = await commitPackSheetOutcome(root, projectId, {
-      groupId, sheetBefore, job, jobSheetAxes, mintPayload: { bytes, meta }, currentRunGroupId, styleSnapshot, varyAxis, at,
-      failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "ok", refSrcs, recipe, startedAt, forced,
-    });
-    results.push(outcome.resultRow);
-    currentRunGroupId = outcome.targetGroupId;
-    finalProject = outcome.project;
   }
 
   const finalGroup = (finalProject.groups || []).find((g) => g.id === groupId);

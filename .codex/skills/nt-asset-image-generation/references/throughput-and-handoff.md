@@ -80,7 +80,7 @@ second expander:
 |---|---|
 | `background`: `magenta`\|`green`\|`transparent` (transparent = loud error, REST-only — v1 targets codex) | `params.bg_key` hex — only `#ff00ff`/`#00ff00` accepted at preview/generate time; **no transparent path exists** on canvas v1 (no third hex maps to a background) |
 | `anchor` (one optional file, becomes every job's `input_image`) | no `anchor` field — the style card's ref image + the recipe card's own member images (<=5 total) are the refs, sent to every sheet |
-| `jobs.json`'s `out`/`input_image` (real — `gen_batch.py` writes to `out`, reads `input_image` from the anchor) | `out`/`input_image` are **dead fields** — canvas calls the engine seam directly (codex or agy, per the card's `recipe.engine`; `"both"` is a loud error in pack mode), never `gen_batch.py` |
+| `jobs.json`'s `out`/`input_image` (real — `gen_batch.py` writes to `out`, reads `input_image` from the anchor) | `out`/`input_image` are **dead fields** — canvas calls the engine seam directly per the card's `recipe.engine` (codex, agy, or `both` = every sheet on BOTH engines at 2x the calls; sheet identity = axes+engine), never `gen_batch.py` |
 | `sheet.grid` — any positive `[rows, cols]` | `pack.grid` — each of `[rows, cols]` capped **1..3** (canvas-only restriction) |
 | `gen_batch.py` skip-if-exists keys per output file (so `candidates > 1` re-runs correctly) | `--run` resume dedups by `sheet_axes` only — with `n_candidates > 1` the first landed candidate "satisfies" the sheet and later candidates are skipped on resume (known v1 gap, T0332; harmless at the default `n_candidates: 1`) |
 

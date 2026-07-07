@@ -2124,9 +2124,13 @@ function renderPackMeta(element, root) {
     // of regenerating this sheet, a confusing footgun worth refusing up front.
     const card = groupById(pack.cardId);
     const cardStillPack = !!(card && card.recipe && card.recipe.pack);
-    // The label names the engine the regen will ACTUALLY use — the card's CURRENT recipe.engine,
-    // not this sheet's meta.pack.engine (a resumed/regen'd sheet runs on whatever the card says NOW).
-    const regenEngine = cardStillPack && card.recipe.engine === "gemini" ? "agy" : "codex";
+    // The label names the engine(s) the regen will ACTUALLY use — the card's CURRENT
+    // recipe.engine, not this sheet's meta.pack.engine (a regen runs on whatever the card says
+    // NOW; on "both" the JOB regenerates on both engines, each replacing its own prior sheet).
+    const regenEngine = !cardStillPack ? "codex"
+      : card.recipe.engine === "gemini" ? "agy"
+      : card.recipe.engine === "both" ? "codex+agy — 2 calls"
+      : "codex";
     const regenBtn = document.createElement("button");
     regenBtn.type = "button";
     regenBtn.className = "insp-btn";
@@ -2138,7 +2142,10 @@ function renderPackMeta(element, root) {
     regenBtn.addEventListener("click", () =>
       generateFromRecipeAction(pack.cardId, regenBtn, {
         runGroupId: element.groupId,
-        sheetSlug: element.name,
+        // meta.pack.job is the expander's job name — the stable --sheet key (a "both" sheet's
+        // display name carries a codex/agy suffix that matches no job). Legacy sheets predate
+        // the field; their display name IS the job name.
+        sheetSlug: pack.job || element.name,
         busyLabel: `Regenerating sheet… (${regenEngine})`,
       }),
     );
@@ -2823,17 +2830,13 @@ function renderRecipe(group, root) {
     selectInput(recipe.engine || "codex", ["codex", "gemini", "both"], (next) => patchRecipeAction(group.id, { engine: next })),
   );
   body.appendChild(engineField);
-  // Pack mode runs on ONE engine — codex or gemini/agy (agy grid adherence smoke-checked
-  // 2026-07-07); only "both" (the single-image compare mode) is off the table, so ONLY that
-  // option is disabled (advisory; the real gate is buildPackConfig's), WITH a visible caption,
-  // not just a hover title (build-spec: "задизейблен С ПОДПИСЬЮ").
-  if (recipe.pack) {
-    const bothOption = [...engineField.querySelectorAll("option")].find((o) => o.value === "both");
-    if (bothOption) bothOption.disabled = true;
-    engineField.querySelector("select").title = "Packs run on one engine — codex or gemini (agy); 'both' is single-image compare only";
+  // Pack mode runs on any engine (agy grid adherence smoke-checked 2026-07-07; "both" allowed
+  // per lead decision 2026-07-07 — cost is the lead's call). The hint's one job is to make the
+  // "both" price visible BEFORE the click: every sheet generates on both engines, 2x the calls.
+  if (recipe.pack && (recipe.engine || "codex") === "both") {
     const engineHint = document.createElement("div");
     engineHint.className = "insp-region-hint";
-    engineHint.textContent = "Packs: codex or gemini (agy); 'both' is single-image only";
+    engineHint.textContent = "Engine 'both': every sheet generates on codex AND agy — 2× the paid calls.";
     body.appendChild(engineHint);
   }
 
@@ -2944,7 +2947,7 @@ function renderRecipe(group, root) {
   const emptyPrompt = !String(recipe.prompt || "").trim();
   generateBtn.disabled = emptyPrompt;
   const packSheetEstimate = recipe.pack ? estimatePackSheetCount(recipe.pack) : 0;
-  const packEngineLabel = recipe.engine === "gemini" ? "agy" : "codex";
+  const packEngineLabel = recipe.engine === "gemini" ? "agy" : recipe.engine === "both" ? "codex+agy, ×2 calls" : "codex";
   const packBusyLabel = `Generating pack… (~${packSheetEstimate} sheet(s), ${packEngineLabel}, ~30-60s each)`; // …
   generateBtn.title = emptyPrompt
     ? "Write a prompt first"

@@ -716,8 +716,11 @@ element.meta.recipe = {
 ```
 
 A `tool_runs` row (`op: "generate_from_recipe"`) records `cardId`, the sent prompt,
-`refs`, `size`/`quality`/`model`, and a `result_summary` of `{results: [{engine,
-elementId, bytes}], failed: [{engine, error}]}`. The card's own `recipe.last_run` is set
+`refs`, the requested `engine`, the engine-filtered params (same law as `params_snapshot`:
+a codex run records `size`/`quality`/`model` + `bg_key`, a gemini run just `size` +
+`bg_key`; a `"both"` run records the codex superset in this ONE aggregate row — each
+element's own `meta.recipe` is the per-engine exact record), and a `result_summary` of
+`{results: [{engine, elementId, bytes}], failed: [{engine, error}]}`. The card's own `recipe.last_run` is set
 in the SAME `commitMutation` as the mint(s) — one journal entry, one undo removes every
 minted element AND reverts `last_run` together. Generation itself runs **outside** the
 journal (a codex/agy spawn, minutes) — only the final mint commits, mirroring
@@ -740,10 +743,17 @@ subject template, sent to the expander **verbatim** (pack mode never reads
 axes-driven sheet); `style_ref` supplies `style_prefix` **and** the style card's ref image
 through the SAME resolve the single-image branch uses (a style card's ref image reaches
 every sheet by construction, no separate pack-only path); member images are refs for every
-sheet. `engine` is `"codex"` or `"gemini"` — a pack runs on ONE engine (`"both"`, the
-single-image compare mode, is a loud error, checked at preview/generate time, never at
-patch-time), and each minted sheet records the engine that actually generated it in
-`meta.pack.engine`.
+sheet. `engine` is `"codex"`, `"gemini"`, or `"both"` (lead decision 2026-07-07: cost is
+the lead's call) — `"both"` fans **every job out to both engines**, 2× the paid calls,
+minting two sheets per job named `"<job> codex"` / `"<job> agy"` (the single-image compare
+convention). Each minted sheet records the engine that actually generated it in
+`meta.pack.engine`, and **sheet identity everywhere is the `(sheet_axes, engine)` pair**:
+resume (`--run`) skips a sheet only when ITS engine's version already landed, and a forced
+`--sheet` regen replaces only its own engine's prior sheet. A sheet minted before engines
+were recorded counts as codex (factually true — codex was the only pack engine then).
+Deliberate consequence: flipping the card's engine and resuming `--run` generates the NEW
+engine's versions beside the old ones — the cheap "get the agy versions side by side"
+gesture, printed per sheet, never silent double-billing.
 
 **agy (gemini) packs — draw-no-lines rule** (smoke-checked 2026-07-07, 3 sheets): agy
 holds the grid layout and the flat key background well, but with the expander's default
@@ -819,10 +829,13 @@ project you must explicitly tick `group.screen` (`group-set --screen true`, see 
 = screens** above) — a pack run group is never auto-flagged as a screen.
 
 **Sheet = provenance anchor — do not delete sheets before cuts are promoted.** A sheet
-element carries the FULL manifest, `meta.pack = {cardId, engine, at, sheet_axes, cells,
+element carries the FULL manifest, `meta.pack = {cardId, engine, job, at, sheet_axes, cells,
 prompt_snapshot, refs_snapshot, params_snapshot, style_snapshot?}` (`params_snapshot` is
 engine-filtered, same law as `meta.recipe`'s: a gemini sheet records `{size, bg_key,
-n_candidates}`, never a gpt-image model/quality); a cut's own `meta.pack`
+n_candidates}`, never a gpt-image model/quality; `job` is the expander's bare job name —
+the stable `--sheet` key even when the display name carries a `"both"` run's codex/agy
+suffix, and the UI Regenerate button uses it, so renaming a sheet no longer breaks regen
+for sheets minted after 2026-07-07); a cut's own `meta.pack`
 after `recipe-pack-slice` is deliberately **minimal**, `{cardId, sheet_element_id, cell,
 axes}` — just its own cell plus a pointer back to the sheet. The prompt/refs/params/style
 for every cut on a sheet live ONLY on that sheet (duplicating them onto each cut would

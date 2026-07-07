@@ -15,7 +15,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
@@ -727,6 +727,19 @@ test("generateFromRecipe (engine=both, nested card): mints TWO elements in the P
   assert.equal(second.y, first.y + first.h + 16);
   assert.equal(first.meta.recipe.engine, "codex");
   assert.equal(second.meta.recipe.engine, "gemini");
+  // Per-ELEMENT engine-filtered snapshots even inside ONE both-run (review gap 2026-07-07):
+  // the codex element records what codex consumed; its agy sibling records only size+bg_key —
+  // never the gpt-image model/quality it had no knob for.
+  assert.deepEqual(first.meta.recipe.params_snapshot, {
+    size: DEFAULT_RECIPE.params.size,
+    quality: DEFAULT_RECIPE.params.quality,
+    model: DEFAULT_RECIPE.params.model,
+    bg_key: DEFAULT_RECIPE.params.bg_key,
+  });
+  assert.deepEqual(second.meta.recipe.params_snapshot, {
+    size: DEFAULT_RECIPE.params.size,
+    bg_key: DEFAULT_RECIPE.params.bg_key,
+  });
 
   const after = getProject(ROOT, project.id);
   assert.equal(after.history_seq, seqBefore + 1, "one journal entry for the pair");
@@ -756,6 +769,30 @@ test("generateFromRecipe (engine=both, partial success): one engine failing stil
 
   const stored = getProject(ROOT, project.id);
   assert.equal(stored.groups.find((g) => g.id === card.id).recipe.last_run.verdict, "partial");
+});
+
+test("legacy params.supersample (pre-2026-07-07 blob): survives an unrelated params patch inert AND never leaks into a run's params_snapshot", async (t) => {
+  const projectsDir = tempProjects(t);
+  const project = createProject(ROOT, { title: "Legacy supersample" });
+  const card = createRecipeCard(ROOT, { projectId: project.id, name: "Old card" }).group;
+  patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { prompt: "an old thing" } });
+
+  // Seed the legacy state directly in the store — no op can produce it anymore (supersample
+  // left the defaults 2026-07-07; patching it is a loud unknown-key error, pinned elsewhere).
+  const storeFile = join(projectsDir, project.id, "project.json");
+  const raw = JSON.parse(readFileSync(storeFile, "utf8"));
+  raw.groups.find((g) => g.id === card.id).recipe.params.supersample = true;
+  writeFileSync(storeFile, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+
+  // An unrelated params patch merges ONTO the stored params — the legacy key survives, inert.
+  const patched = patchRecipe(ROOT, { projectId: project.id, groupId: card.id, patch: { params: { bg_key: "#00ff00" } } }).group;
+  assert.equal(patched.recipe.params.supersample, true, "legacy key survives a shallow params merge");
+  assert.equal(patched.recipe.params.bg_key, "#00ff00");
+
+  // A run's snapshot is allow-listed per engine — the legacy key can never reach provenance.
+  const result = await generateFromRecipe(ROOT, { projectId: project.id, groupId: card.id, generators: { codex: fakeGen(solidPng()) } });
+  assert.equal(result.elements[0].meta.recipe.params_snapshot.supersample, undefined, "allow-listed snapshot: no leak");
+  assert.equal(result.elements[0].meta.recipe.params_snapshot.bg_key, "#00ff00");
 });
 
 // T0251: agy ref support is now VERIFIED — engine="both" with refs runs BOTH engines (no more

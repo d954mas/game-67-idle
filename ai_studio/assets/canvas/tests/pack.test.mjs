@@ -381,7 +381,7 @@ test("CLI recipe-pack-generate: validation parity (no python/codex spawn) — mi
 // packPreview: validation (no python spawn).
 // ================================================================================
 
-test("packPreview requires projectId/groupId; an unknown group, a non-recipe group, pack:null, and engine \"both\" are all loud before any python spawn", async (t) => {
+test("packPreview requires projectId/groupId; an unknown group, a non-recipe group, and pack:null are all loud before any python spawn; every RECIPE_ENGINES value is accepted (both = 2x cost, the lead's call)", async (t) => {
   tempProjects(t);
   await assert.rejects(() => packPreview(ROOT, {}), /requires projectId/);
   await assert.rejects(() => packPreview(ROOT, { projectId: "p" }), /requires groupId/);
@@ -399,8 +399,7 @@ test("packPreview requires projectId/groupId; an unknown group, a non-recipe gro
     groupId: card.id,
     patch: { prompt: "a thing", pack: { axes: { grade: ["a"] }, vary: "grade", grid: [1, 1], max_jobs: 1 }, engine: "both" },
   }).group;
-  assert.equal(withPack.recipe.engine, "both", "engine is NOT gated at patch-time — a hand-off decision, not this file's to re-litigate");
-  await assert.rejects(() => packPreview(ROOT, { projectId: project.id, groupId: card.id }), /pack mode runs ONE engine per run/);
+  assert.equal(withPack.recipe.engine, "both", "engine 'both' + pack is a LEGAL card state (lead decision 2026-07-07) — no engine gate anywhere in pack mode");
 });
 
 test("packPreview: its OWN defensive style_ref re-check fires on a hand-edited blob (patchRecipe already blocks this at write time)", async (t) => {
@@ -469,6 +468,24 @@ test("packPreview (real expand_jobs.py): sheets/jobs/cells shape, no style_ref -
   const after = getProject(REPO_ROOT, project.id);
   assert.equal(after.history_seq, before.history_seq, "packPreview never journals");
   assert.equal(JSON.stringify(after.groups), JSON.stringify(before.groups), "packPreview never mutates the blob");
+});
+
+test("packPreview (real expand_jobs.py): engine gemini and engine both both pass the gate and expand the SAME sheets — engines don't shape prompts, only who generates (review gap 2026-07-07)", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Preview engines" });
+  const { group: card } = createRecipeCard(REPO_ROOT, { projectId: project.id, name: "Generators" });
+  seedWellFormedRecipe(project.id, card.id);
+
+  patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { engine: "gemini" } });
+  const onGemini = await tryPreview(t, project.id, card.id);
+  if (!onGemini) return;
+  assert.equal(onGemini.sheets, 2, "gemini passes the gate — preview works");
+
+  patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { engine: "both" } });
+  const onBoth = await tryPreview(t, project.id, card.id);
+  if (!onBoth) return;
+  assert.equal(onBoth.sheets, 2, "both passes too — the fan-out (2x calls) happens at GENERATE, prompts are engine-independent");
+  assert.deepEqual(onBoth.jobs.map((j) => j.prompt), onGemini.jobs.map((j) => j.prompt), "identical prompts across engines");
 });
 
 test("packPreview (real expand_jobs.py): background is DERIVED from params.bg_key (magenta/green), candidates from params.n_candidates — an off-pair hex is loud only HERE, not at patch-time", async (t) => {
@@ -639,24 +656,114 @@ async function tryGenerate(t, args) {
   }
 }
 
-test("generateFromRecipe pack branch: engine gate mirrors packPreview's — \"both\" is loud before any generation call or python spawn", async (t) => {
+test("generateFromRecipe pack branch on engine=both: every job fans out to BOTH engines — two sheets per job with codex/agy-suffixed names, per-engine meta (engine, params_snapshot, job pointer)", async (t) => {
   tempProjects(t);
-  const project = createProject(REPO_ROOT, { title: "Pack generate engine gate" });
+  const project = createProject(REPO_ROOT, { title: "Pack generate both" });
   const { group: card } = createRecipeCard(REPO_ROOT, { projectId: project.id, name: "Lanterns" });
-  patchRecipe(REPO_ROOT, {
-    projectId: project.id,
-    groupId: card.id,
-    patch: { prompt: "a {material} lantern", engine: "both", pack: { axes: { grade: ["rusty", "plain"], material: ["stone", "wood"] }, vary: "grade", grid: [1, 2], max_jobs: 12 } },
-  });
-  const codex = fakeGenSequence([solidPng()]);
-  const gemini = fakeGenSequence([solidPng()]);
+  seedPackRecipe(project.id, card.id);
+  patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { engine: "both" } });
 
-  await assert.rejects(
-    () => generateFromRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, generators: { codex, gemini } }),
-    /pack mode runs ONE engine per run/,
-  );
-  assert.equal(codex.calls.length, 0, "no generation before the gate, no python spawn either");
-  assert.equal(gemini.calls.length, 0, "neither engine runs — 'both' never fans out in pack mode");
+  const codex = fakeGenSequence([solidPng(), solidPng()]);
+  const gemini = fakeGenSequence([solidPng(), solidPng()]);
+  const result = await tryGenerate(t, { projectId: project.id, groupId: card.id, generators: { codex, gemini } });
+  if (!result) return;
+
+  assert.equal(codex.calls.length, 2, "one codex call per job (2 material values)");
+  assert.equal(gemini.calls.length, 2, "one gemini call per job — 'both' = 2x the paid calls, the lead's explicit choice");
+  assert.equal(result.results.length, 4, "one result row per (job, engine) unit");
+  assert.ok(result.results.every((r) => r.status === "ok"));
+  assert.equal(result.last_run.verdict, "ok");
+
+  const after = getProject(REPO_ROOT, project.id);
+  const sheets = after.elements.filter((el) => el.groupId === result.run_group_id);
+  assert.equal(sheets.length, 4, "two sheets per job, one per engine");
+  for (const engine of ["codex", "gemini"]) {
+    const suffix = engine === "gemini" ? "agy" : "codex";
+    const engineSheets = sheets.filter((el) => el.meta.pack.engine === engine);
+    assert.equal(engineSheets.length, 2);
+    for (const el of engineSheets) {
+      assert.ok(el.name.endsWith(` ${suffix}`), `both-run sheet display names carry the engine suffix (got ${JSON.stringify(el.name)})`);
+      assert.equal(el.meta.pack.job, el.name.slice(0, -(` ${suffix}`.length)), "meta.pack.job = the expander's BARE job name — the stable --sheet key under a suffixed display name");
+    }
+  }
+  const geminiSheet = sheets.find((el) => el.meta.pack.engine === "gemini");
+  const codexSheet = sheets.find((el) => el.meta.pack.engine === "codex");
+  assert.deepEqual(geminiSheet.meta.pack.params_snapshot, { size: "1024x1024", bg_key: "#ff00ff", n_candidates: 1 }, "per-ENGINE snapshot even inside one both-run");
+  assert.deepEqual(codexSheet.meta.pack.params_snapshot, { size: "1024x1024", quality: "high", model: "gpt-image-2", bg_key: "#ff00ff", n_candidates: 1 });
+
+  const packRun = after.tool_runs.find((run) => run.op === "generate_from_recipe_pack" && run.cardId === card.id);
+  assert.equal(packRun.params.engine, "both");
+  assert.equal(packRun.params.model, "gpt-image-2", "the ONE aggregate row records the codex superset; per-sheet meta is the exact record");
+});
+
+test("generateFromRecipe pack branch on engine=both: resume dedups by (sheet_axes, ENGINE) — a failed gemini half regenerates without repaying its codex sibling", async (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Pack both resume" });
+  const { group: card } = createRecipeCard(REPO_ROOT, { projectId: project.id, name: "Lanterns" });
+  seedPackRecipe(project.id, card.id);
+  patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { engine: "both" } });
+
+  // First run: codex lands both jobs; gemini fails the FIRST job (stone), lands the second.
+  const firstRun = await tryGenerate(t, {
+    projectId: project.id, groupId: card.id,
+    generators: { codex: fakeGenSequence([solidPng(), solidPng()]), gemini: fakeGenSequence([new Error("agy exploded"), solidPng()]) },
+  });
+  if (!firstRun) return;
+  assert.equal(firstRun.last_run.verdict, "partial");
+  assert.deepEqual(firstRun.failed, [{ sheet_axes: { material: "stone" }, engine: "gemini", error: "agy exploded" }], "failed[] names the engine, not just the axes");
+
+  const codex2 = fakeGenSequence([solidPng()]);
+  const gemini2 = fakeGenSequence([solidPng()]);
+  const resumed = await tryGenerate(t, { projectId: project.id, groupId: card.id, runGroupId: firstRun.run_group_id, generators: { codex: codex2, gemini: gemini2 } });
+  if (!resumed) return;
+
+  assert.equal(codex2.calls.length, 0, "codex sheets already landed for BOTH jobs — skipped, not repaid");
+  assert.equal(gemini2.calls.length, 1, "only the missing (stone, gemini) unit regenerates");
+  assert.equal(resumed.last_run.verdict, "ok");
+  const after = getProject(REPO_ROOT, project.id);
+  assert.equal(after.elements.filter((el) => el.groupId === firstRun.run_group_id).length, 4, "run group converges to two sheets per job");
+});
+
+test("generateFromRecipe pack branch: flipping the card's engine between run and resume generates the NEW engine's sheets beside the old ones — (axes, engine) identity, and a legacy engineless sheet counts as codex", async (t) => {
+  const projectsDir = tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Pack engine flip resume" });
+  const { group: card } = createRecipeCard(REPO_ROOT, { projectId: project.id, name: "Lanterns" });
+  seedPackRecipe(project.id, card.id);
+
+  const firstRun = await tryGenerate(t, { projectId: project.id, groupId: card.id, generators: { codex: fakeGenSequence([solidPng(), solidPng()]) } });
+  if (!firstRun) return;
+
+  // Simulate a LEGACY sheet (minted before engines were recorded): strip engine/job from one
+  // sheet's meta.pack directly in the store — no op can produce this state anymore.
+  const stored = getProject(REPO_ROOT, project.id);
+  const oneSheet = stored.elements.find((el) => el.groupId === firstRun.run_group_id);
+  const storeFile = join(projectsDir, project.id, "project.json");
+  const raw = JSON.parse(readFileSync(storeFile, "utf8"));
+  for (const el of raw.elements) {
+    if (el.id === oneSheet.id) {
+      delete el.meta.pack.engine;
+      delete el.meta.pack.job;
+    }
+  }
+  writeFileSync(storeFile, `${JSON.stringify(raw, null, 2)}\n`, "utf8");
+
+  // Resume on codex: BOTH sheets (one modern, one legacy engineless) count as codex — skipped.
+  const codex2 = fakeGenSequence([solidPng()]);
+  const resumedSame = await tryGenerate(t, { projectId: project.id, groupId: card.id, runGroupId: firstRun.run_group_id, generators: { codex: codex2 } });
+  if (!resumedSame) return;
+  assert.equal(codex2.calls.length, 0, "legacy engineless sheet counts as codex — nothing repaid");
+
+  // Flip to gemini and resume: no (axes, gemini) sheets exist -> ALL jobs generate on gemini,
+  // codex sheets stay put — the cheap "agy versions side by side" gesture.
+  patchRecipe(REPO_ROOT, { projectId: project.id, groupId: card.id, patch: { engine: "gemini" } });
+  const gemini2 = fakeGenSequence([solidPng(), solidPng()]);
+  const resumedFlipped = await tryGenerate(t, { projectId: project.id, groupId: card.id, runGroupId: firstRun.run_group_id, generators: { gemini: gemini2 } });
+  if (!resumedFlipped) return;
+  assert.equal(gemini2.calls.length, 2, "every job generates on the NEW engine");
+  const after = getProject(REPO_ROOT, project.id);
+  const sheets = after.elements.filter((el) => el.groupId === firstRun.run_group_id);
+  assert.equal(sheets.length, 4, "codex sheets survive beside the fresh gemini ones");
+  assert.equal(sheets.filter((el) => el.meta.pack.engine === "gemini").length, 2);
 });
 
 test("generateFromRecipe pack branch on engine=gemini (real expand_jobs.py, fake agy): dispatches EVERY sheet to the gemini generator, never codex, and stamps meta.pack.engine per sheet", async (t) => {

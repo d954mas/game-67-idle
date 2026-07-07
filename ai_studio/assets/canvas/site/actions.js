@@ -1065,6 +1065,12 @@ export async function createRecipeCardAction(worldPoint) {
 export async function patchRecipeAction(groupId, patch) {
   try {
     applyMutation(await api("PATCH", `/projects/${pid()}/recipe-cards/${groupId}`, patch));
+    // A pack preview is a pure derivative of the recipe blob — after ANY successful edit of
+    // THIS card the stashed spoilers are stale (pre-edit prompts) and must not keep rendering
+    // as if they previewed the card's current state (review finding 2026-07-07). Dropping the
+    // stash also drops the `pp:` inspectorSig token, so the panel rebuilds without them; the
+    // lead re-clicks Preview (free) when he wants fresh prompts.
+    if (state.packPreview && state.packPreview.cardId === groupId) state.packPreview = null;
   } catch (error) {
     setStatus(error.message, true);
   }
