@@ -1,5 +1,7 @@
 #include "game_storage.h"
 
+#include "log/nt_log.h" /* nt_log_warn on a read ERROR (bot/obs-visible, lead 2026-07-07) */
+
 #include <errno.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -72,25 +74,41 @@ EM_JS(int, game_storage_web_save, (const char *key_ptr, const char *text_ptr), {
     }
 })
 
-EM_JS(char *, game_storage_web_load, (const char *key_ptr), {
+/* status_ptr (int*, nullable): 0=OK (ptr returned), 1=ABSENT, 2=ERROR --
+   MUST match game_storage_read_status_t. Distinguishing ABSENT (getItem===null)
+   from ERROR (throw / OOM) is what stops a transient read failure from looking
+   like "no save" and clobbering the live save with defaults on boot. On ERROR the
+   raw string is copied to the "<key>.corrupt" quarantine key PURELY IN JS -- never
+   through the C path, which may be the very thing that is broken (the _malloc-
+   undefined case). HEAP32 is indexed fresh (not cached) so memory growth in
+   _malloc cannot leave a stale view. */
+EM_JS(char *, game_storage_web_load, (const char *key_ptr, int *status_ptr), {
     try {
         var key = UTF8ToString(key_ptr);
         var data = window.localStorage.getItem(key);
         if (data === null) {
+            if (status_ptr) { HEAP32[status_ptr >> 2] = 1; } /* ABSENT */
             return 0;
         }
         var size = lengthBytesUTF8(data) + 1;
         /* Wasm exports are bound with a leading underscore in the EM_JS scope:
-           bare `malloc` is undefined here and would throw, making every load
-           look like "no save" (and the FRESH branch then overwrites the real
-           save with defaults on boot). */
+           bare `malloc` is undefined here and would throw. */
         var ptr = _malloc(size);
         if (!ptr) {
+            try { window.localStorage.setItem(key + ".corrupt", data); } catch (e2) {}
+            if (status_ptr) { HEAP32[status_ptr >> 2] = 2; } /* ERROR */
             return 0;
         }
         stringToUTF8(data, ptr, size);
+        if (status_ptr) { HEAP32[status_ptr >> 2] = 0; } /* OK */
         return ptr;
     } catch (e) {
+        try {
+            var k = UTF8ToString(key_ptr);
+            var raw = window.localStorage.getItem(k);
+            if (raw !== null) { window.localStorage.setItem(k + ".corrupt", raw); }
+        } catch (e2) {}
+        if (status_ptr) { HEAP32[status_ptr >> 2] = 2; } /* ERROR */
         return 0;
     }
 })
@@ -218,10 +236,25 @@ static bool write_file_atomic(const char *tmp_path, const char *primary_path, co
     return true;
 }
 
-static bool read_file_bytes(const char *path, char **out, char *error, int error_cap) {
+/* status (nullable): ABSENT only when the file genuinely is not there (ENOENT);
+   every other failure after the file was located (open-denied, seek, oversize,
+   short read, OOM) is ERROR -- the file exists but its bytes could not be trusted,
+   so the caller must quarantine rather than treat it as "no save". */
+static bool read_file_bytes(const char *path, char **out, game_storage_read_status_t *status, char *error, int error_cap) {
+    if (status) {
+        *status = GAME_STORAGE_READ_ERROR; /* default: present-but-unreadable */
+    }
+    errno = 0;
     FILE *file = fopen(path, "rb");
     if (!file) {
-        set_error(error, error_cap, "failed to open storage file for read");
+        if (errno == ENOENT) {
+            if (status) {
+                *status = GAME_STORAGE_READ_ABSENT;
+            }
+            set_error(error, error_cap, "no storage file for slot");
+        } else {
+            set_error(error, error_cap, "failed to open storage file for read");
+        }
         return false;
     }
     if (fseek(file, 0, SEEK_END) != 0) {
@@ -255,6 +288,9 @@ static bool read_file_bytes(const char *path, char **out, char *error, int error
     }
     data[size] = '\0';
     *out = data;
+    if (status) {
+        *status = GAME_STORAGE_READ_OK;
+    }
     return true;
 }
 
@@ -325,6 +361,53 @@ static bool resolve_native_paths(const char *slot, game_storage_native_paths_t *
     }
     return true;
 }
+
+/* Best-effort raw copy of an UNREADABLE primary into the SAME quarantine name the
+   corrupt-parse path uses (build/saves/<slot>.corrupt-<ts>[-n]), BEFORE the caller
+   resets+overwrites the slot with defaults. Streamed (no size cap: an oversize
+   primary is exactly a read-error we must preserve). A directory / unreadable
+   primary yields nothing to copy -> leave no empty or torn quarantine file. */
+static void quarantine_copy_native(const char *slot) {
+    game_storage_native_paths_t paths;
+    if (!resolve_native_paths(slot, &paths, NULL, 0)) {
+        return;
+    }
+    FILE *src = fopen(paths.primary, "rb");
+    if (!src) {
+        return; /* directory / open-denied: no bytes to preserve */
+    }
+    char corrupt_path[GAME_STORAGE_PATH_MAX];
+    if (!resolve_quarantine_path(slot, corrupt_path, sizeof(corrupt_path), NULL, 0)) {
+        fclose(src);
+        return;
+    }
+    FILE *dst = fopen(corrupt_path, "wb");
+    if (!dst) {
+        fclose(src);
+        return;
+    }
+    char buf[8192];
+    size_t chunk;
+    size_t total = 0;
+    bool write_failed = false;
+    while ((chunk = fread(buf, 1, sizeof(buf), src)) > 0) {
+        if (fwrite(buf, 1, chunk, dst) != chunk) {
+            write_failed = true;
+            break;
+        }
+        total += chunk;
+    }
+    const bool read_ok = (ferror(src) == 0);
+    fclose(src);
+    /* Capture the stream error BEFORE fclose: a prior fwrite failure sets ferror,
+       but fclose can still return 0 (nothing left to flush). Two explicit stmts --
+       && would not pin ferror to run before fclose's side effects. */
+    const bool dst_ferror = (ferror(dst) != 0);
+    const bool dst_closed = (fclose(dst) == 0);
+    if (write_failed || dst_ferror || !dst_closed || !read_ok || total == 0) {
+        (void)remove(corrupt_path); /* never leave a torn/empty quarantine */
+    }
+}
 #endif /* !__EMSCRIPTEN__ */
 
 /* ---- public slot API (game_storage.h) ---- */
@@ -353,7 +436,10 @@ bool game_storage_write(const char *slot, const char *text, char *error, int err
 #endif
 }
 
-bool game_storage_read(const char *slot, char **out, char *error, int error_cap) {
+bool game_storage_read(const char *slot, char **out, game_storage_read_status_t *status, char *error, int error_cap) {
+    if (status) {
+        *status = GAME_STORAGE_READ_ERROR;
+    }
     if (!out) {
         set_error(error, error_cap, "storage output pointer is required");
         return false;
@@ -362,21 +448,48 @@ bool game_storage_read(const char *slot, char **out, char *error, int error_cap)
 #if defined(__EMSCRIPTEN__)
     char key[GAME_STORAGE_KEY_MAX];
     if (!resolve_web_key(slot, key, sizeof(key), error, error_cap)) {
+        return false; /* bad slot: ERROR (default) */
+    }
+    int js_status = GAME_STORAGE_READ_ERROR;
+    char *data = game_storage_web_load(key, &js_status);
+    if (data) {
+        *out = data;
+        if (status) {
+            *status = GAME_STORAGE_READ_OK;
+        }
+        return true;
+    }
+    if (js_status == GAME_STORAGE_READ_ABSENT) {
+        if (status) {
+            *status = GAME_STORAGE_READ_ABSENT;
+        }
+        set_error(error, error_cap, "browser storage has no such slot");
         return false;
     }
-    char *data = game_storage_web_load(key);
-    if (!data) {
-        set_error(error, error_cap, "failed to open browser storage for read");
-        return false;
+    if (status) {
+        *status = GAME_STORAGE_READ_ERROR;
     }
-    *out = data;
-    return true;
+    set_error(error, error_cap, "failed to read browser storage");
+    nt_log_warn("game_storage: read slot '%s' failed; original quarantined best-effort (web)", slot);
+    return false;
 #else
     game_storage_native_paths_t paths;
     if (!resolve_native_paths(slot, &paths, error, error_cap)) {
-        return false;
+        return false; /* bad slot: ERROR (default) */
     }
-    return read_file_bytes(paths.primary, out, error, error_cap);
+    game_storage_read_status_t st = GAME_STORAGE_READ_ERROR;
+    const bool ok = read_file_bytes(paths.primary, out, &st, error, error_cap);
+    if (!ok && st == GAME_STORAGE_READ_ERROR) {
+        /* Slot present but unreadable: preserve the ORIGINAL bytes in quarantine
+           before the caller resets+overwrites the slot with defaults. */
+        quarantine_copy_native(slot);
+        nt_log_warn("game_storage: read slot '%s' failed (%s); original quarantined best-effort",
+                    slot, error ? error : "");
+    }
+    if (status) {
+        *status = st;
+    }
+    return ok;
 #endif
 }
 
@@ -411,7 +524,7 @@ bool game_storage_write_backup(const char *slot, char *error, int error_cap) {
         return true; /* nothing to back up */
     }
     char *data = NULL;
-    if (!read_file_bytes(paths.primary, &data, error, error_cap)) {
+    if (!read_file_bytes(paths.primary, &data, NULL, error, error_cap)) {
         return false;
     }
     bool ok = write_file_atomic(paths.bak_tmp, paths.bak, data, error, error_cap);
@@ -435,7 +548,7 @@ bool game_storage_read_backup(const char *slot, char **out, char *error, int err
     if (!resolve_native_paths(slot, &paths, error, error_cap)) {
         return false;
     }
-    return read_file_bytes(paths.bak, out, error, error_cap);
+    return read_file_bytes(paths.bak, out, NULL, error, error_cap);
 #endif
 }
 
@@ -445,7 +558,7 @@ bool game_storage_quarantine(const char *slot, char *error, int error_cap) {
     if (!resolve_web_key(slot, key, sizeof(key), error, error_cap)) {
         return false;
     }
-    char *data = game_storage_web_load(key);
+    char *data = game_storage_web_load(key, 0);
     if (!data) {
         set_error(error, error_cap, "no primary to quarantine");
         return false;

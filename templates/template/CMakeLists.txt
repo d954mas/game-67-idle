@@ -395,7 +395,8 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_game_state_json COMMAND test_game_state_json)
 
     add_executable(test_game_storage tests/test_game_storage.c src/game_storage.c)
-    target_link_libraries(test_game_storage PRIVATE unity)
+    # nt_log: game_storage.c warns via nt_log_warn on a read ERROR (nt_hash/nt_core are nt_log's deps).
+    target_link_libraries(test_game_storage PRIVATE unity nt_log nt_core nt_hash)
     target_include_directories(test_game_storage PRIVATE src)
     target_compile_definitions(test_game_storage PRIVATE
         GAME_STORAGE_APP_ID="template_test" _CRT_SECURE_NO_WARNINGS)
@@ -408,7 +409,8 @@ if(NOT EMSCRIPTEN)
     add_executable(test_game_save
         tests/test_game_save.c
         src/game_save.c src/game_storage.c src/game_state_json.c)
-    target_link_libraries(test_game_save PRIVATE cjson unity)
+    # nt_log: game_save.c/game_storage.c warn via nt_log_warn on the read-error path.
+    target_link_libraries(test_game_save PRIVATE cjson unity nt_log nt_core nt_hash)
     target_include_directories(test_game_save PRIVATE src)
     target_compile_definitions(test_game_save PRIVATE
         GAME_SAVE_TESTING=1

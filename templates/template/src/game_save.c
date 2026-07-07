@@ -9,6 +9,8 @@
 #include "game_state_json.h"
 #include "game_storage.h"
 
+#include "log/nt_log.h" /* nt_log_warn on the read-error path (bot/obs-visible, lead 2026-07-07) */
+
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -472,7 +474,24 @@ void game_save_load(game_save_load_result_t *result) {
     err[0] = '\0';
 
     char *text = NULL;
-    if (!game_storage_read(GAME_SAVE_AUTOSAVE_SLOT, &text, err, (int)sizeof err)) {
+    game_storage_read_status_t rst = GAME_STORAGE_READ_ABSENT;
+    if (!game_storage_read(GAME_SAVE_AUTOSAVE_SLOT, &text, &rst, err, (int)sizeof err)) {
+        if (rst == GAME_STORAGE_READ_ERROR) {
+            /* Save EXISTS but could not be READ (not "no save"): the storage layer
+               has already copied the raw bytes to quarantine. Take the SAME shape as
+               the classic corrupt path below (reset + autosave paused, NO on_new_game/
+               save, primary untouched) so both CORRUPT_RESET flavors leave one state;
+               the shell's single new_game (main.c on CORRUPT_RESET) is what starts the
+               fresh game and atomically overwrites the primary. Never silently reborn
+               as FRESH (the malloc-load-failure data-loss bug). §A3.4 п.1, лид 2026-07-07. */
+            reset_all();
+            s_autosave_paused = true;
+            result->status = GAME_SAVE_LOAD_CORRUPT_RESET;
+            set_message(result, "save read failed; original quarantined; new game");
+            nt_log_warn("game_save: autosave read failed; original quarantined; awaiting new game");
+            s_last_save_mono = mono_now();
+            return;
+        }
         /* No save -> FRESH: reset + on_new_game + save (§A3.4 п.1). */
         reset_all();
         on_new_game_all();

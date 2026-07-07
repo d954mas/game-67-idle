@@ -243,6 +243,11 @@ Run the native `game_storage`/`game_state_json` Unity tests (A2):
 ctest --test-dir templates/template/build/native-debug --output-on-failure
 ```
 
+These now also assert that a read FAILURE of an existing save (not its absence)
+is quarantined and reported `CORRUPT_RESET` rather than silently reborn as
+`FRESH`, so a transient/hardware read error can never overwrite a live save with
+defaults (absent → `FRESH` is unchanged; lead 2026-07-07).
+
 Web persistence check (A2.4 item 2, CI-optional/advisory -- headless-localStorage
 automation is capricious, so a failure here does not fail A2 acceptance):
 

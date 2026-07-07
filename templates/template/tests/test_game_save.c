@@ -181,6 +181,45 @@ static int sweep_corrupt(bool do_delete) {
     return count;
 }
 
+/* First build/saves/test_slot.corrupt-* bare filename; true when one exists. */
+static bool first_corrupt_name(char *name, size_t cap) {
+    const char *prefix = "test_slot.corrupt-";
+    const size_t prefix_len = strlen(prefix);
+#ifdef _WIN32
+    struct _finddata_t fd;
+    intptr_t h = _findfirst("build/saves/*", &fd);
+    if (h == -1) {
+        return false;
+    }
+    bool found = false;
+    do {
+        if (strncmp(fd.name, prefix, prefix_len) == 0) {
+            (void)snprintf(name, cap, "%s", fd.name);
+            found = true;
+            break;
+        }
+    } while (_findnext(h, &fd) == 0);
+    _findclose(h);
+    return found;
+#else
+    DIR *d = opendir("build/saves");
+    if (!d) {
+        return false;
+    }
+    struct dirent *e;
+    bool found = false;
+    while ((e = readdir(d)) != NULL) {
+        if (strncmp(e->d_name, prefix, prefix_len) == 0) {
+            (void)snprintf(name, cap, "%s", e->d_name);
+            found = true;
+            break;
+        }
+    }
+    closedir(d);
+    return found;
+#endif
+}
+
 static void cleanup_all(void) {
     (void)remove(PRIMARY_PATH);
     (void)remove(PRIMARY_TMP);
@@ -590,6 +629,79 @@ void test_orphan_read_access(void) {
     TEST_ASSERT_NULL(game_save_orphan_at(0, &id));
 }
 
+/* 15. Read ERROR (not absence): an UNREADABLE primary must NOT be silently reborn
+   as FRESH. The storage layer quarantines the original bytes; the loader takes the
+   SAME shape as the classic corrupt path -- reset + autosave paused, NO on_new_game/
+   save, primary UNTOUCHED -- and reports CORRUPT_RESET; the shell's explicit new_game
+   then overwrites the primary. An oversize primary (> GAME_STORAGE_MAX_BYTES) is a
+   readable-bytes read error, so the quarantine copy is byte-identical -- the malloc-
+   load-failure data-loss guard (lead 2026-07-07). */
+void test_read_error_quarantines_and_corrupt_resets(void) {
+    const size_t big = (size_t)(1024 * 1024) + 64u; /* > GAME_STORAGE_MAX_BYTES (1 MiB) -> read error */
+    char *payload = (char *)malloc(big + 1u);
+    TEST_ASSERT_NOT_NULL(payload);
+    memset(payload, 'X', big);
+    payload[big] = '\0';
+    write_raw(PRIMARY_PATH, payload);
+
+    s_frag_coins = 555;
+    game_save_load_result_t r;
+    game_save_load(&r);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_CORRUPT_RESET, r.status); /* NOT FRESH */
+    TEST_ASSERT_EQUAL_INT(0, s_frag_coins); /* reset ONLY -- NO on_new_game (would be 100), like classic */
+
+    /* exactly one quarantine file, byte-identical to the oversize original */
+    TEST_ASSERT_EQUAL_INT(1, sweep_corrupt(false));
+    char name[256] = {0};
+    TEST_ASSERT_TRUE(first_corrupt_name(name, sizeof name));
+    char qpath[512];
+    (void)snprintf(qpath, sizeof qpath, "build/saves/%s", name);
+    char *q = read_raw(qpath);
+    TEST_ASSERT_NOT_NULL(q);
+    TEST_ASSERT_EQUAL_INT((int)big, (int)strlen(q));
+    TEST_ASSERT_EQUAL_INT(0, memcmp(q, payload, big));
+    free(q);
+
+    /* PRIMARY untouched: still the unreadable oversize original (loader did NOT
+       overwrite it; the shell's explicit new_game will). */
+    char *prim = read_raw(PRIMARY_PATH);
+    TEST_ASSERT_NOT_NULL(prim);
+    TEST_ASSERT_EQUAL_INT((int)big, (int)strlen(prim));
+    TEST_ASSERT_EQUAL_INT(0, memcmp(prim, payload, big));
+    free(prim);
+
+    /* autosave paused: dirty + tick past the interval must NOT write -- primary
+       stays the oversize original (a save would have shrunk it to a default). */
+    game_save_mark_dirty();
+    g_mono_ms += 100000;
+    game_save_tick();
+    prim = read_raw(PRIMARY_PATH);
+    TEST_ASSERT_NOT_NULL(prim);
+    TEST_ASSERT_EQUAL_INT((int)big, (int)strlen(prim)); /* unchanged -> tick did not save */
+    free(prim);
+    free(payload);
+
+    /* explicit new_game (the single on_new_game on this path): primary overwritten
+       with a fresh, parseable default, autosave resumed. */
+    char err[128] = {0};
+    TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
+    TEST_ASSERT_EQUAL_INT(100, s_frag_coins); /* NOW on_new_game ran */
+    cJSON *doc = parse_primary();
+    const cJSON *game =
+        cJSON_GetObjectItemCaseSensitive(cJSON_GetObjectItemCaseSensitive(doc, "features"), "game");
+    TEST_ASSERT_EQUAL_INT(100, (int)cJSON_GetObjectItemCaseSensitive(game, "coins")->valuedouble);
+    cJSON_Delete(doc);
+
+    /* autosave resumed: dirty + debounce -> a save lands */
+    s_frag_coins = 7;
+    game_save_mark_dirty();
+    const int64_t before = primary_save_seq();
+    g_mono_ms += (int64_t)GAME_SAVE_DEBOUNCE_MS;
+    game_save_tick();
+    TEST_ASSERT_TRUE(primary_save_seq() > before);
+}
+
 int main(void) {
     game_save_register_fragment(&s_extra_fragment);
     game_save_register_fragment(&s_fake_fragment); /* `game` registered last (§14 п.2) */
@@ -609,5 +721,6 @@ int main(void) {
     RUN_TEST(test_transform_seam);
     RUN_TEST(test_bad_fragment_isolation);
     RUN_TEST(test_orphan_read_access);
+    RUN_TEST(test_read_error_quarantines_and_corrupt_resets);
     return UNITY_END();
 }

@@ -16,9 +16,22 @@
            false = квота/Safari-private (наверх как SAVE_UNPERSISTED). */
 bool game_storage_write(const char *slot, const char *text, char *error, int error_cap);
 
+/* Исход чтения: ABSENT («сейва ещё нет» → FRESH) отделён от ERROR («сейв есть,
+   но прочитать не удалось»). ERROR НЕ должен молча затираться дефолтом: слой
+   storage сначала кладёт сырьё в карантин (.corrupt-конвенция), а вызывающий
+   трактует это как порчу, а не как отсутствие (data-loss баг malloc-load). */
+typedef enum {
+    GAME_STORAGE_READ_OK = 0,      /* *out держит байты (return true) */
+    GAME_STORAGE_READ_ABSENT = 1,  /* слота нет (return false) */
+    GAME_STORAGE_READ_ERROR = 2,   /* слот есть, но чтение упало; оригинал скопирован в карантин (return false) */
+} game_storage_read_status_t;
+
 /* Чтение primary. *out — malloc'нутая NUL-строка (владелец вызывающий, free()).
-   false: слота нет / ошибка. */
-bool game_storage_read(const char *slot, char **out, char *error, int error_cap);
+   status (nullable) различает ABSENT и ERROR (см. enum выше). При ERROR сырьё
+   уже best-effort скопировано в карантин ТОЙ ЖЕ .corrupt-конвенции (native: файл
+   build/saves/<slot>.corrupt-<ts>; web: ключ "<key>.corrupt" прямо в JS).
+   false: ABSENT или ERROR; true: OK. */
+bool game_storage_read(const char *slot, char **out, game_storage_read_status_t *status, char *error, int error_cap);
 
 /* true если primary слота существует и читаем. */
 bool game_storage_exists(const char *slot);

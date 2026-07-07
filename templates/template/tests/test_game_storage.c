@@ -133,11 +133,25 @@ static void cleanup_replace_fail_dir(void) {
 #endif
 }
 
+/* test_read_status_absent_vs_error occupies the primary path with a DIRECTORY to
+   force read() past ENOENT into the ERROR class; like replace_fail this needs its
+   own teardown (the plain-file sweep never rmdir()s). */
+static void cleanup_read_error_dir(void) {
+    (void)remove("build/saves/read_error_dir.json"); /* if a plain file leaked */
+#ifdef _WIN32
+    (void)_rmdir("build/saves/read_error_dir.json");
+#else
+    (void)rmdir("build/saves/read_error_dir.json");
+#endif
+    (void)sweep_files_with_prefix("build/saves", "read_error_dir.corrupt-", true, NULL, 0);
+}
+
 static void cleanup_all_test_files(void) {
     for (size_t i = 0; i < GS_TEST_SLOT_COUNT; i++) {
         cleanup_slot(kAllTestSlots[i]);
     }
     cleanup_replace_fail_dir();
+    cleanup_read_error_dir();
 }
 
 /* Writes raw bytes directly to a path, bypassing game_storage_write -- used to
@@ -164,7 +178,7 @@ void test_write_read_round_trip_and_exists(void) {
     TEST_ASSERT_TRUE(game_storage_exists("write_read"));
 
     char *out = NULL;
-    TEST_ASSERT_TRUE(game_storage_read("write_read", &out, err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_read("write_read", &out, NULL, err, (int)sizeof(err)));
     TEST_ASSERT_NOT_NULL(out);
     TEST_ASSERT_EQUAL_STRING("{\"a\":1}", out);
     free(out);
@@ -176,7 +190,7 @@ void test_write_read_empty_text(void) {
     TEST_ASSERT_TRUE(game_storage_exists("empty_slot"));
 
     char *out = NULL;
-    TEST_ASSERT_TRUE(game_storage_read("empty_slot", &out, err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_read("empty_slot", &out, NULL, err, (int)sizeof(err)));
     TEST_ASSERT_NOT_NULL(out);
     TEST_ASSERT_EQUAL_STRING("", out);
     free(out);
@@ -186,7 +200,7 @@ void test_read_missing_slot_fails(void) {
     char err[128] = {0};
     char *out = NULL;
     TEST_ASSERT_FALSE(game_storage_exists("missing_slot"));
-    TEST_ASSERT_FALSE(game_storage_read("missing_slot", &out, err, (int)sizeof(err)));
+    TEST_ASSERT_FALSE(game_storage_read("missing_slot", &out, NULL, err, (int)sizeof(err)));
     TEST_ASSERT_NULL(out);
     TEST_ASSERT_TRUE(strlen(err) > 0);
 }
@@ -234,7 +248,7 @@ void test_atomicity_stale_tmp_is_invisible_to_read(void) {
     write_raw_file("build/saves/atomic_slot.json.tmp", "GARBAGE-TMP-LEFTOVER");
 
     char *out = NULL;
-    TEST_ASSERT_TRUE(game_storage_read("atomic_slot", &out, err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_read("atomic_slot", &out, NULL, err, (int)sizeof(err)));
     TEST_ASSERT_EQUAL_STRING("GOOD-PRIMARY", out);
     free(out);
 
@@ -250,7 +264,7 @@ void test_atomicity_stale_tmp_is_invisible_to_read(void) {
     /* A stale tmp must not block a later legitimate write+replace either. */
     TEST_ASSERT_TRUE(game_storage_write("atomic_slot", "SECOND-GOOD", err, (int)sizeof(err)));
     out = NULL;
-    TEST_ASSERT_TRUE(game_storage_read("atomic_slot", &out, err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_read("atomic_slot", &out, NULL, err, (int)sizeof(err)));
     TEST_ASSERT_EQUAL_STRING("SECOND-GOOD", out);
     free(out);
 }
@@ -265,12 +279,12 @@ void test_stale_tmp_with_absent_primary_recovers(void) {
 
     TEST_ASSERT_FALSE(game_storage_exists("stale_tmp_no_primary"));
     char *out = NULL;
-    TEST_ASSERT_FALSE(game_storage_read("stale_tmp_no_primary", &out, err, (int)sizeof(err)));
+    TEST_ASSERT_FALSE(game_storage_read("stale_tmp_no_primary", &out, NULL, err, (int)sizeof(err)));
     TEST_ASSERT_NULL(out);
 
     TEST_ASSERT_TRUE(game_storage_write("stale_tmp_no_primary", "RECOVERED-GOOD", err, (int)sizeof(err)));
     out = NULL;
-    TEST_ASSERT_TRUE(game_storage_read("stale_tmp_no_primary", &out, err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_read("stale_tmp_no_primary", &out, NULL, err, (int)sizeof(err)));
     TEST_ASSERT_EQUAL_STRING("RECOVERED-GOOD", out);
     free(out);
 }
@@ -329,7 +343,7 @@ void test_backup_fallback_survives_corrupted_primary(void) {
     write_raw_file("build/saves/bak_slot.json", "CORRUPT-NOT-JSON");
 
     char *primary_out = NULL;
-    TEST_ASSERT_TRUE(game_storage_read("bak_slot", &primary_out, err, (int)sizeof(err)));
+    TEST_ASSERT_TRUE(game_storage_read("bak_slot", &primary_out, NULL, err, (int)sizeof(err)));
     TEST_ASSERT_EQUAL_STRING("CORRUPT-NOT-JSON", primary_out);
     free(primary_out);
 
@@ -387,7 +401,7 @@ void test_quarantine_moves_primary_and_leaves_exactly_one_corrupt_file(void) {
 
     TEST_ASSERT_FALSE(game_storage_exists("quarantine_slot"));
     char *out = NULL;
-    TEST_ASSERT_FALSE(game_storage_read("quarantine_slot", &out, err, (int)sizeof(err)));
+    TEST_ASSERT_FALSE(game_storage_read("quarantine_slot", &out, NULL, err, (int)sizeof(err)));
     TEST_ASSERT_NULL(out);
 
     char corrupt_name[256] = {0};
@@ -430,6 +444,41 @@ void test_quarantine_twice_same_slot(void) {
     TEST_ASSERT_EQUAL_INT(2, sweep_files_with_prefix("build/saves", "quarantine_twice_slot.corrupt-", false, NULL, 0));
 }
 
+/* read() must tell ABSENT ("no save yet" -> caller starts fresh) apart from ERROR
+   ("save present but unreadable" -> caller quarantines, never overwrites as fresh).
+   A DIRECTORY at the primary path makes fopen()/fread() fail non-ENOENT -> ERROR
+   (lead 2026-07-07). A directory has no bytes, so best-effort quarantine copies
+   nothing (the byte-identical quarantine is proven in test_game_save's oversize case). */
+void test_read_status_absent_vs_error(void) {
+    char err[128] = {0};
+    char *out = NULL;
+    game_storage_read_status_t st = GAME_STORAGE_READ_OK;
+
+    /* absent -> ABSENT */
+    TEST_ASSERT_FALSE(game_storage_read("read_error_dir", &out, &st, err, (int)sizeof(err)));
+    TEST_ASSERT_NULL(out);
+    TEST_ASSERT_EQUAL_INT(GAME_STORAGE_READ_ABSENT, st);
+
+    /* present + readable -> OK */
+    TEST_ASSERT_TRUE(game_storage_write("read_error_dir", "OK-BYTES", err, (int)sizeof(err)));
+    out = NULL;
+    st = GAME_STORAGE_READ_ERROR;
+    TEST_ASSERT_TRUE(game_storage_read("read_error_dir", &out, &st, err, (int)sizeof(err)));
+    TEST_ASSERT_EQUAL_INT(GAME_STORAGE_READ_OK, st);
+    TEST_ASSERT_EQUAL_STRING("OK-BYTES", out);
+    free(out);
+
+    /* present but a DIRECTORY at the slot path -> ERROR (not ABSENT, not OK) */
+    (void)remove("build/saves/read_error_dir.json");
+    test_make_dir("build/saves");
+    test_make_dir("build/saves/read_error_dir.json");
+    out = NULL;
+    st = GAME_STORAGE_READ_ABSENT;
+    TEST_ASSERT_FALSE(game_storage_read("read_error_dir", &out, &st, err, (int)sizeof(err)));
+    TEST_ASSERT_NULL(out);
+    TEST_ASSERT_EQUAL_INT(GAME_STORAGE_READ_ERROR, st);
+}
+
 /* ---- probe (native path is trivially true; the real check is web-only) ---- */
 
 void test_probe_native_always_true(void) {
@@ -459,6 +508,8 @@ int main(void) {
     RUN_TEST(test_quarantine_moves_primary_and_leaves_exactly_one_corrupt_file);
     RUN_TEST(test_quarantine_without_primary_fails);
     RUN_TEST(test_quarantine_twice_same_slot);
+
+    RUN_TEST(test_read_status_absent_vs_error);
 
     RUN_TEST(test_probe_native_always_true);
 
