@@ -252,7 +252,9 @@ python templates/template/tests/web_persistence_check.py
 
 Builds the template for wasm with `GAME_DEVAPI_ENABLED=ON`, serves it, drives a
 headless Chrome instance over the DevTools Protocol to `game.state.set` a known
-non-default value (`hero.gold=424242`) and `game.state.save` it to a probe key
+non-default value (`game.hero.gold=424242`; the path's first segment is the
+save-fragment id) and `game.state.save` it (the fixed autosave slot; the DevAPI
+save/load handlers have no per-slot key)
 via `window.__devapi.submit`, then FULLY QUITS Chrome (CDP `Browser.close`, not
 a page reload -- reload barely exercises real persistence) and relaunches it
 with the same `--user-data-dir`, and confirms `game.state.load` + `game.state.get`
@@ -269,9 +271,13 @@ web-devapi host contract (`nt_devapi_web.h`) requires exporting
 object out of the archive so `nt_devapi_web_install_shim` resolves) plus
 `-sEXPORTED_RUNTIME_METHODS=ccall` for the JS shim at runtime -- both now in
 the template's EMSCRIPTEN link block, gated on `GAME_DEVAPI_ENABLED`. The
-Debug wasm executable links and boots under ASan; full live web-devapi
-(shim round-trip in a browser) still needs the template web packaging path
-(pack over HTTP) and lands together with a future web bot harness.
+Debug wasm executable links and boots under ASan. T0333 then delivered the
+template web packaging path (relative pack over HTTP, tracked `index.html`
+shell, `tools/build_web.sh` + `tools/serve_web.mjs`, preset `wasm-devapi-debug`):
+`python templates/template/tests/web_devapi_check.py` now proves the shim
+round-trip in a headless browser (`endpoints` + `command.describe` over
+`window.__devapi.submit`) with one command. A full web BOT driver (browser
+site+agent parity) is still future.
 
 ## Uninstall
 

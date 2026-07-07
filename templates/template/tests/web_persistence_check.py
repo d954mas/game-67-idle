@@ -25,14 +25,16 @@ exercises real persistence). This version:
   4. `game.state.set {path: STATE_PATH, value: STATE_VALUE}` -- writes a known,
      non-default value via DevAPI (STATE_VALUE != the field's schema default,
      so a no-op save could not accidentally "pass").
-  5. `game.state.save {key: PROBE_KEY}` -- persists it to localStorage under
-     the APP_ID-scoped key game_storage.c builds.
+  5. `game.state.save` -- persists it to localStorage under the APP_ID-scoped
+     key game_storage.c builds for the FIXED autosave slot (the DevAPI
+     save/load handlers ignore any `key` param; there is no per-slot
+     selection -- see game_save_devapi.c ep_state_save/ep_state_load).
   6. Fully QUITS Chrome (not Page.reload -- a full process exit + restart is
      the actual "does it survive" moment; a reload's in-memory localStorage
      object typically never even round-trips through disk).
   7. Relaunches Chrome with the SAME --user-data-dir (same profile -> same
      localStorage), reconnects DevTools.
-  8. `game.state.load {key: PROBE_KEY}` then `game.state.get {path: STATE_PATH}`
+  8. `game.state.load` then `game.state.get {path: STATE_PATH}`
      and compares the result against STATE_VALUE.
 
 If `game.state.set`/`game.state.get` are ever removed from the generated
@@ -40,7 +42,7 @@ DevAPI, this script has nothing honest left to check and must be rewritten
 (not patched to fall back on silently comparing default state).
 
 Usage:
-    python web_persistence_check.py [--build-dir build/wasm-devapi-check]
+    python web_persistence_check.py [--build-dir build/wasm-devapi-debug]
                                      [--chrome PATH] [--port 8934] [--cdp-port 9333]
                                      [--keep-profile]
 
@@ -67,11 +69,12 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 
 TESTS_DIR = os.path.dirname(os.path.abspath(__file__))
 TEMPLATE_DIR = os.path.dirname(TESTS_DIR)
-PROBE_KEY = "web_persistence_check"
-# hero.gold: int field, schema default 0, range [0, 999999] (see
-# templates/template/state/game_state.schema.json) -- 424242 is unambiguous
-# proof the SAVED value (not the default) survived the restart.
-STATE_PATH = "hero.gold"
+# game.state.set routes the FIRST path segment to the save-fragment id
+# (GAME_STATE_FRAGMENT_ID="game"); the rest is the field within it. hero.gold is
+# an int field, schema default 0, range [0, 999999] (see
+# templates/template/state/game_state.schema.json) -- 424242 is unambiguous proof
+# the SAVED value (not the default) survived the restart.
+STATE_PATH = "game.hero.gold"
 STATE_VALUE = 424242
 
 
@@ -235,7 +238,8 @@ class Cdp:
             raise Skip(f"JS exception evaluating {expression!r}: {result['exceptionDetails']}")
         return result.get("result", {}).get("value")
 
-    def wait_for_devapi(self, timeout=20.0):
+    def wait_for_devapi(self, timeout=90.0):
+        # Debug wasm carries ASan and boots slowly -> generous default (MED-5).
         deadline = time.time() + timeout
         while time.time() < deadline:
             ready = self.eval_js("(typeof window.__devapi !== 'undefined' && window.__devapi.ready) ? 1 : 0")
@@ -259,7 +263,40 @@ class Cdp:
 
 # ---- build + serve ----------------------------------------------------------
 
-def build_wasm_devapi(build_dir):
+def ensure_web_pack(wasm_bin_dir):
+    """Copy the native-built pack flat next to index.html. The pack builder is
+    native-only, so the wasm build never produces game.ntpack; the engine streams
+    it over HTTP relative to the page URL (GAME_ASSET_PACK_PATH="assets/game.ntpack"
+    on web). Mirrors tools/build_web.sh step 3."""
+    native_dir = os.path.join(TEMPLATE_DIR, "build", "native-debug")
+    if not os.path.isfile(os.path.join(native_dir, "CMakeCache.txt")):
+        configure = [
+            "cmake", "-S", TEMPLATE_DIR, "-B", native_dir, "-G", "Ninja",
+            "-DCMAKE_C_COMPILER=clang", "-DCMAKE_BUILD_TYPE=Debug",
+        ]
+        print("+ " + " ".join(configure))
+        if subprocess.run(configure, cwd=TEMPLATE_DIR).returncode != 0:
+            raise Skip("native configure (for pack) failed")
+    build = ["cmake", "--build", native_dir, "--target", "game_asset_packs"]
+    print("+ " + " ".join(build))
+    if subprocess.run(build, cwd=TEMPLATE_DIR).returncode != 0:
+        raise Skip("native pack build failed")
+    src_pack = os.path.join(native_dir, "bin", "assets", "game.ntpack")
+    if not os.path.isfile(src_pack):
+        raise Skip(f"native pack not found at {src_pack}")
+    dst_assets = os.path.join(wasm_bin_dir, "assets")
+    os.makedirs(dst_assets, exist_ok=True)
+    shutil.copyfile(src_pack, os.path.join(dst_assets, "game.ntpack"))
+
+
+def build_wasm_devapi(build_dir="build/wasm-devapi-debug"):
+    """Canonical wasm-devapi build helper (shared with web_devapi_check.py).
+
+    Debug+DevAPI -> preset wasm-devapi-debug -> its OWN build/engine dir, so it
+    never clobbers the clean human build/engine/wasm-release (Release+DevAPI
+    likewise resolves to its own preset name, wasm-devapi-release, so no
+    combination can collide). Debug wasm links thanks to the shared sanitizer
+    flags on the game target. Returns the bin dir with the pack copied in."""
     toolchain = find_emscripten_toolchain_file()
     if not toolchain:
         raise Skip("EMSDK env var not set or Emscripten.cmake toolchain file not found")
@@ -267,7 +304,7 @@ def build_wasm_devapi(build_dir):
     configure = [
         "cmake", "-S", TEMPLATE_DIR, "-B", abs_build_dir, "-G", "Ninja",
         f"-DCMAKE_TOOLCHAIN_FILE={toolchain}",
-        "-DCMAKE_BUILD_TYPE=Release",  # avoid Debug-only sanitizer flags on wasm
+        "-DCMAKE_BUILD_TYPE=Debug",   # preset wasm-devapi-debug (own engine dir; no clobber)
         "-DGAME_DEVAPI_ENABLED=ON",
     ]
     print("+ " + " ".join(configure))
@@ -280,8 +317,9 @@ def build_wasm_devapi(build_dir):
     if r.returncode != 0:
         raise Skip(f"wasm build failed (exit {r.returncode}) -- see build log above")
     bin_dir = os.path.join(abs_build_dir, "bin")
-    if not os.path.isfile(os.path.join(bin_dir, "game.html")) and not os.path.isfile(os.path.join(bin_dir, "game.js")):
-        raise Skip(f"build reported success but no game.html/game.js under {bin_dir}")
+    if not os.path.isfile(os.path.join(bin_dir, "game.js")):
+        raise Skip(f"build reported success but no game.js under {bin_dir}")
+    ensure_web_pack(bin_dir)
     return bin_dir
 
 
@@ -347,9 +385,9 @@ def quit_chrome(chrome_proc, cdp=None, timeout=10.0):
 def run(build_dir, chrome_path, http_port, cdp_port, keep_profile):
     bin_dir = build_wasm_devapi(build_dir)
 
-    html_name = "game.html" if os.path.isfile(os.path.join(bin_dir, "game.html")) else None
-    if html_name is None:
-        raise Skip(f"{bin_dir} has no game.html shell to load in the browser")
+    html_name = "index.html"
+    if not os.path.isfile(os.path.join(bin_dir, html_name)):
+        raise Skip(f"{bin_dir} has no index.html shell (configure_file should have delivered it)")
 
     resolved_chrome = find_chrome(chrome_path)
     if not resolved_chrome:
@@ -370,11 +408,11 @@ def run(build_dir, chrome_path, http_port, cdp_port, keep_profile):
         if not set_resp.get("ok"):
             raise Skip(f"game.state.set failed before we could test persistence: {set_resp}")
 
-        save_resp = cdp.devapi_submit("game.state.save", {"key": PROBE_KEY})
+        save_resp = cdp.devapi_submit("game.state.save", {})
         if not save_resp.get("ok"):
             raise Skip(f"game.state.save failed before we could test persistence: {save_resp}")
 
-        print(f"Set {STATE_PATH}={STATE_VALUE} and saved slot '{PROBE_KEY}'; quitting Chrome entirely...")
+        print(f"Set {STATE_PATH}={STATE_VALUE} and saved (fixed autosave slot); quitting Chrome entirely...")
         quit_chrome(chrome_proc, cdp=cdp)
         cdp = None
         chrome_proc = None
@@ -384,7 +422,7 @@ def run(build_dir, chrome_path, http_port, cdp_port, keep_profile):
         cdp = Cdp(cdp_page_ws_url(cdp_port))
         cdp.wait_for_devapi()
 
-        load_resp = cdp.devapi_submit("game.state.load", {"key": PROBE_KEY})
+        load_resp = cdp.devapi_submit("game.state.load", {})
         if not load_resp.get("ok"):
             print(f"FAIL: game.state.load after restart returned: {load_resp}")
             return 1
@@ -412,7 +450,7 @@ def run(build_dir, chrome_path, http_port, cdp_port, keep_profile):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--build-dir", default="build/wasm-devapi-check",
+    parser.add_argument("--build-dir", default="build/wasm-devapi-debug",
                          help="CMake binary dir, relative to templates/template/ (default: %(default)s)")
     parser.add_argument("--chrome", default=None, help="path to chrome/chromium binary")
     parser.add_argument("--port", type=int, default=8934, help="http.server port for bin/ (default: %(default)s)")

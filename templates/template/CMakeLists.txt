@@ -12,24 +12,38 @@ if(NOT DEFINED GAME_DEVAPI_ENABLED)
 endif()
 
 # Preset name must encode the devapi split: engine libs land in
-# build/engine/<preset> and build/tools/builder/<preset>, so human and agent
-# builds sharing one preset would overwrite each other's engine libs
-# (nt_input with/without inject symbols) — the exact parallel-build collision
-# the convention exists to prevent.
+# build/engine/<preset> and build/tools/builder/<preset>, so two builds sharing
+# one preset would overwrite each other's engine libs (nt_input with/without
+# inject symbols; nt_devapi_web presence) — the parallel-build collision the
+# convention exists to prevent. Every (platform x devapi x build-type) gets a
+# UNIQUE name, so no combination can ever alias into another's engine dir. Only
+# the four established names (native-debug/native-release/devapi-debug and the
+# three wasm human/agent presets) are "supported"; the two *-devapi-release names
+# exist solely so Release+DevAPI cannot clobber the clean release archives.
 if(EMSCRIPTEN)
-    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    if(GAME_DEVAPI_ENABLED)
+        if(CMAKE_BUILD_TYPE STREQUAL "Release")
+            set(NT_PRESET_NAME "wasm-devapi-release")
+        else()
+            set(NT_PRESET_NAME "wasm-devapi-debug")
+        endif()
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
         set(NT_PRESET_NAME "wasm-release")
-    elseif(GAME_DEVAPI_ENABLED)
-        set(NT_PRESET_NAME "wasm-devapi-debug")
     else()
         set(NT_PRESET_NAME "wasm-debug")
     endif()
-elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(NT_PRESET_NAME "native-release")
-elseif(GAME_DEVAPI_ENABLED)
-    set(NT_PRESET_NAME "devapi-debug")
 else()
-    set(NT_PRESET_NAME "native-debug")
+    if(GAME_DEVAPI_ENABLED)
+        if(CMAKE_BUILD_TYPE STREQUAL "Release")
+            set(NT_PRESET_NAME "native-devapi-release")
+        else()
+            set(NT_PRESET_NAME "devapi-debug")
+        endif()
+    elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(NT_PRESET_NAME "native-release")
+    else()
+        set(NT_PRESET_NAME "native-debug")
+    endif()
 endif()
 set(GAME_TITLE "Template" CACHE STRING "Game window title base")
 if(GAME_DEVAPI_ENABLED)
@@ -273,6 +287,20 @@ else()
     # glad/stb_image_write are native-only (no GL loader / file dump on web).
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub glad stb_image_write)
 endif()
+if(EMSCRIPTEN)
+    # Deliver the tracked web shell to bin/ at configure time. Two substitutions:
+    # the tab title (GAME_TITLE) and Module.arguments. The engine web devapi shim
+    # installs only if main() saw `--devapi <port>` in argv (main.c parses it, and
+    # on web argv comes ONLY from Module.arguments); the devapi presets carry the
+    # flag, the human presets (devapi OFF) expand to empty.
+    if(GAME_DEVAPI_ENABLED)
+        set(GAME_DEVAPI_MODULE_ARGS "arguments: ['--devapi', '17890'],")
+    else()
+        set(GAME_DEVAPI_MODULE_ARGS "")
+    endif()
+    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/web/index.html.in"
+                   "${GAME_OUTPUT_DIR}/index.html" @ONLY)
+endif()
 if(GAME_DEVAPI_ENABLED)
     # E3: readable event type/hash labels for game.events.tail. Consuming-CMake edit
     # (engine tree untouched); devapi presets only -> no collision with native-debug's
@@ -294,8 +322,17 @@ endif()
 if(WIN32 AND NOT EMSCRIPTEN)
     target_link_libraries(${GAME_TARGET} PRIVATE winmm)
 endif()
+# On web the engine streams packs over HTTP relative to the page URL, so the
+# path must be RELATIVE and the pack ships as a plain file next to index.html
+# (tools/build_web.sh copies it from the native build). Native keeps the
+# absolute bin/assets path.
+if(EMSCRIPTEN)
+    set(GAME_PACK_RUNTIME_PATH "assets/game.ntpack")
+else()
+    set(GAME_PACK_RUNTIME_PATH "${GAME_ASSETS_DIR}/game.ntpack")
+endif()
 target_compile_definitions(${GAME_TARGET} PRIVATE
-    GAME_ASSET_PACK_PATH="${GAME_ASSETS_DIR}/game.ntpack"
+    GAME_ASSET_PACK_PATH="${GAME_PACK_RUNTIME_PATH}"
     NT_INTROSPECT_ENABLED=$<BOOL:${NT_INTROSPECT_ENABLED}>
     NT_INTROSPECT_WRITE_ENABLED=$<BOOL:${NT_INTROSPECT_WRITE_ENABLED}>
     _CRT_SECURE_NO_WARNINGS

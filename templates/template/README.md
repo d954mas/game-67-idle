@@ -48,6 +48,54 @@ Feature flags:
 The state schema and migrations live in source under `state/`; CMake generates
 `game_state.*` into `build/<config>/generated/game-state/` before compiling.
 
+## Web build (browser, out of the box)
+
+The template builds and runs in a browser with two commands (no manual wiring).
+The tracked web shell is `web/index.html.in` (CMake `configure_file`s it into
+`build/<preset>/bin/index.html`, substituting the tab title `@GAME_TITLE@` and,
+on the DevAPI preset, `Module.arguments=['--devapi','17890']`). All three files
+(`web/`, `tools/`, `tests/`) are tracked and copy into a new game via
+`new_game.mjs`, so a copied game gets the same commands for free.
+
+Build one preset, then serve it:
+
+```bash
+bash tools/build_web.sh --preset wasm-release        # or wasm-debug / wasm-devapi-debug
+node tools/serve_web.mjs --preset wasm-release        # http://127.0.0.1:8080/
+```
+
+`build_web.sh` builds the wasm `game` target and copies the native asset pack
+flat to `bin/assets/game.ntpack` (the engine streams packs over HTTP relative to
+the page URL; the pack builder is native-only, so the pack is taken from the
+native build). `serve_web.mjs` is a self-contained static server that serves
+`game.wasm` as `application/wasm` (required for emscripten's streaming compile).
+
+| preset | configure flags | port | DevAPI | notes |
+|---|---|---|---|---|
+| `wasm-release` | `-DCMAKE_BUILD_TYPE=Release` | 8080 | no | human default |
+| `wasm-debug` | `-DCMAKE_BUILD_TYPE=Debug` | 8080 | no | carries ASan (larger/slower) |
+| `wasm-devapi-debug` | `-DCMAKE_BUILD_TYPE=Debug -DGAME_DEVAPI_ENABLED=ON` | 8081 | yes | engine DevAPI over the web transport |
+
+Each preset gets its own `build/engine/<preset>` archive dir, and every
+build-type x DevAPI combination resolves to a unique preset name, so no build can
+clobber another's engine archives. Use `wasm-devapi-debug` for DevAPI on web.
+
+A copied game only needs `-DGAME_TITLE="My Game"` at configure to brand the tab
+title; without it the title is `"Template"` (still works).
+
+Two advisory headless probes (not part of `ctest`; one command, real signal —
+they SKIP with exit 2 when EMSDK/Chrome is missing or a slow ASan boot times out):
+
+```bash
+python tests/web_devapi_check.py        # window.__devapi shim round-trip: endpoints + command.describe
+python tests/web_persistence_check.py   # localStorage save survives a full Chrome quit+restart
+```
+
+`web_devapi_check.py` builds `wasm-devapi-debug`, loads it headless, and proves
+`endpoints {}` returns a non-empty command list and `command.describe
+{"method":"endpoints"}` returns the 7-field descriptor — both over
+`window.__devapi.submit`. Exit 0 = PASS, 1 = FAIL, 2 = SKIP.
+
 Runtime bots and smoke scenarios live under top-level `devapi/`. Start with:
 
 ```powershell
