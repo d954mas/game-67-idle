@@ -13,6 +13,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { listRegisteredGames } from "../backlog/storage/sources/games.mjs";
 import { listRegisteredTemplates } from "../backlog/storage/sources/templates.mjs";
+import { buildIconPreview } from "./icon_preview.mjs";
 
 // items_ops.py's own documented invocation (its docstring, lines 15-17): `py -3.12`.
 // NOT the mechanism the rest of the pipeline uses (node asset tools spawn an absolute
@@ -182,6 +183,10 @@ export async function loadCatalogView(root, folderAbs, meta) {
       schema: null,
       lock: { status_by_id: {}, removed: {} },
       validate: { available: false, ok: null, errors: [], warnings: [], reason: "content/items.json not found for this catalog" },
+      // T0316: icon preview is independent of items.json (it reads the build
+      // tree, not content/) — computed even for the empty state so the page
+      // never has to special-case a missing view.icons.
+      icons: buildIconPreview(folderAbs),
     };
   }
 
@@ -230,6 +235,9 @@ export async function loadCatalogView(root, folderAbs, meta) {
     schema,
     lock: { status_by_id: buildStatusById(items, lockRaw), removed: lockRaw ? lockRaw.removed : {} },
     validate: validateResult,
+    // T0316 (spec §5): pixel crops for the catalog's icon_asset_id values, read
+    // from the BUILT pack (not committed source) — sync, no subprocess.
+    icons: buildIconPreview(folderAbs),
   };
   if (contentError) view.content_error = contentError;
   return view;

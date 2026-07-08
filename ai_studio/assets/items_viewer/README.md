@@ -3,7 +3,8 @@
 Read-only web surface that shows the item catalog of any registered game or
 template — "see the items", the cheapest, most valuable slice of the future
 item editor (T0316 phase 1). Full contract and design rationale:
-`docs/build_spec_phase1_2026-07-08.md`.
+`docs/build_spec_phase1_2026-07-08.md`. Icon previews (mini-round, real
+`icons/<name>` art for `templates/template`): `docs/build_spec_icons_2026-07-08.md`.
 
 ## Owner and boundary
 
@@ -25,11 +26,11 @@ Explicitly **not** built here — do not scaffold these without a new spec:
 
 - **Writing.** No edit forms, no `upsert`/`deprecate`. The write op-layer does
   not exist in `items_ops.py` yet.
-- **Icon resolve.** `resolveIcon()` in `site/items.js` always returns `null`
-  (an honest placeholder) — no gallery search, no `icon_asset_id -> file`
-  binding. That binding is `icon-link`, a phase-2+ `items_ops` command (spec
-  §5). The seam is one function wide; wiring it is all phase 2 needs to
-  change here.
+- **`icon-link` write command.** `icon_asset_id -> file` binding is authored
+  directly in `content/items.json` (slash form, `icons/<name>`) and resolved
+  by reading the BUILT pack (see "Icon preview" below) — there is still no
+  write op-layer command to author that binding from the viewer itself; that
+  remains a phase-2+ `items_ops` command (spec §5 of the phase-1 doc).
 - **A CLI client.** `items_ops.py` (`list` / `validate` / `schema --json`) IS
   the agent client — parity with the web client holds by construction because
   both read the exact same subprocess. There is no `cli.mjs` in this module
@@ -61,11 +62,66 @@ Explicitly **not** built here — do not scaffold these without a new spec:
   (query string preserved) that 302-redirects to
   `/ai_studio/assets/items_viewer/site/items.html`; see
   `ai_studio/studio_shell/server.mjs`.
-- `tests/` — `node:test` suite for `ops.mjs`. The live template
+- `icon_preview.mjs` — pure, no HTTP/subprocess: parses a BUILT
+  `game.ntpack` + its `<atlas>_pageN.png` debug image + the generated
+  `game_assets.h` into `view.icons` (`{page_data_uri, page_w, page_h, regions,
+  reason?}`). See "Icon preview" below.
+- `tests/` — `node:test` suite for `ops.mjs` (`ops.test.mjs`) and
+  `icon_preview.mjs` (`icon_preview.test.mjs`). The live template
   (`templates/template/content/items.json`, 6 items) is the committed
-  happy-path fixture; every failure branch (malformed catalog/schema/state
-  schema, missing `content/`, exit-code branches) builds a throwaway temp
-  folder from the template's own valid schema files.
+  happy-path fixture for `ops.mjs`; every failure branch (malformed
+  catalog/schema/state schema, missing `content/`, exit-code branches) builds
+  a throwaway temp folder from the template's own valid schema files.
+  `icon_preview.test.mjs` uses a REAL two-atlas (`ui`+`icons`) pack captured
+  from a native-debug build, committed under `tests/fixtures/icon_pack/`
+  (`game.ntpack`, `icons_page0.png`, and a trimmed `game_assets.h.slice`).
+
+## Icon preview
+
+`view.icons` (added to every `loadCatalogView` result by `ops.mjs`, populated
+by `icon_preview.mjs`) reads the catalog folder's BUILT asset pack — never a
+second parser of `content/items.json`, and never a git-committed binary — to
+turn each item's `icon_asset_id` (e.g. `icons/gold`) into a pixel rect on the
+atlas builder's debug-PNG page:
+
+- Tries `build/native-debug/pack/` then `build/devapi-debug/pack/` under the
+  catalog folder for `game.ntpack` + the generated `src/generated/game_assets.h`
+  (both are build products; `game_assets.h` is GITIGNORED and only exists
+  after a native build has run at least once).
+- Parses `NtPackHeader`/`NtAssetEntry` (`nt_pack_format.h`) to find EVERY
+  `asset_type==ATLAS` entry (a template pack has two: `ui` and `icons` — the
+  first-entry-only bug this guards against is the main risk called out in the
+  build spec), then each atlas's `NtAtlasRegion`/`NtAtlasVertex`
+  (`nt_atlas_format.h`) for pixel rects. `name_hash` is a 64-bit hash — read
+  with `DataView.getBigUint64`, never `Number()`/`parseInt()` (silent
+  precision loss above 2^53).
+- Version-asserts `NtPackHeader.version`/`NtAtlasHeader.version` FIRST; a
+  format newer than this parser degrades to a `reason` string instead of
+  misreading a changed byte layout.
+- Every rect gets a 2px inner inset: the builder's debug-PNG draws a 2px
+  magenta `{255,0,255,255}` outline at each region's boundary
+  (`nt_builder_atlas.c`) — without the inset every crop would show a magenta
+  ring.
+- The debug PNG is STRAIGHT alpha (copied before the pack encoder's
+  premultiply step) — `site/items.js` crops it with a bare
+  `ctx.drawImage(...)`, no alpha division. Dividing by alpha here (treating it
+  as premultiplied) would burn semi-transparent edges; `tests/icon_preview.test.mjs`
+  pins this by asserting `page_data_uri` round-trips the source PNG bytes
+  exactly (no server-side pixel processing at all).
+- No pack built yet, or the pack exists but the debug-PNG page is missing
+  (`debug_png` off) — two DISTINCT `reason` strings, never conflated, so a
+  missing icon reads as "why", not just "?".
+
+`site/items.js` decodes `page_data_uri` ONCE per catalog load (before
+rendering any card) and every card's icon slot is a small `<canvas>` cropped
+from that single decoded image — `resolveIcon(view, assetId)` is the
+one-line seam that looks up `view.icons.regions[assetId]`.
+
+Recommended long-term replacement for `icon_preview.mjs` (not built this
+round — see `docs/build_spec_icons_2026-07-08.md` §3b/§8): a native studio
+tool over the engine's own public runtime atlas reader
+(`nt_atlas_find_region`/`nt_atlas_get_region`, `engine/atlas/nt_atlas.h`)
+instead of a hand-rolled binary format parser in JS.
 
 ## Why the site can't import ops.mjs
 

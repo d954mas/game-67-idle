@@ -44,7 +44,7 @@ function makeItem(id, overrides = {}) {
     id,
     created: "2026-07-08",
     display_name: id,
-    icon_asset_id: `icon.${id}`,
+    icon_asset_id: `icons/${id}`, // T0316: slash-form contract (atlas/region), not the old dotted icon.<id>
     kind: "material",
     tags: [],
     base_value: 1,
@@ -108,6 +108,16 @@ test("getCatalogView happy path: live template renders 6 items, schema, containe
     assert.equal(view.lock.status_by_id[item.id], "shipped", `${item.id} should be shipped`);
   }
   assert.deepEqual(view.lock.removed, {});
+
+  // T0316: icon preview reads the BUILT pack (templates/template/build/<preset>/
+  // pack/), a real gate precondition of this round (spec §6 gate 1/2) -- same
+  // "live tree" coupling this whole test already has for items.lock.json/
+  // registries. All 6 items.json icon_asset_id values are "icons/<name>" and
+  // must resolve.
+  assert.equal(view.icons.reason, undefined, "expects templates/template to have been built (cmake --build .../native-debug)");
+  for (const item of view.items) {
+    assert.ok(view.icons.regions[item.icon_asset_id], `${item.icon_asset_id} should resolve to a packed region`);
+  }
 });
 
 test("getCatalogView returns null for an id that matches neither registry", async () => {

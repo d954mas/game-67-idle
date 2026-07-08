@@ -1,0 +1,23 @@
+// T0316 test fixture: a SLICE of templates/template/src/generated/game_assets.h
+// (the ATLAS + ATLAS_REGION sections only, both `icons` and `ui`), captured
+// verbatim from a real native-debug build alongside the sibling game.ntpack /
+// icons_page0.png in this folder. Real header, trimmed to the two sections the
+// parser actually reads -- the MESH/TEXTURE/SHADER/FONT sections are irrelevant
+// to icon_preview.mjs and are dropped to keep the fixture focused.
+/* --- ATLAS --- */
+#define ASSET_ATLAS_ICONS ((nt_hash64_t){0xAAEC96124CB4793BULL}) /* icons */
+#define ASSET_ATLAS_UI ((nt_hash64_t){0x13653010567B13D2ULL}) /* ui */
+
+/* --- ATLAS_REGION --- */
+#define ASSET_ATLAS_REGION_ICONS_ENERGY ((nt_hash64_t){0x3002FAA590D647AFULL}) /* icons/energy */
+#define ASSET_ATLAS_REGION_ICONS_GOLD ((nt_hash64_t){0x11BC737C9AB940E9ULL}) /* icons/gold */
+#define ASSET_ATLAS_REGION_ICONS_POTION ((nt_hash64_t){0x7B561179DB92B661ULL}) /* icons/potion */
+#define ASSET_ATLAS_REGION_ICONS_SWORD ((nt_hash64_t){0x3574DB61758EF82EULL}) /* icons/sword */
+#define ASSET_ATLAS_REGION_ICONS_WOOD ((nt_hash64_t){0xD679160847BAA5B8ULL}) /* icons/wood */
+#define ASSET_ATLAS_REGION_ICONS_XP ((nt_hash64_t){0xF34015B47535E3ABULL}) /* icons/xp */
+#define ASSET_ATLAS_REGION_UI__WHITE ((nt_hash64_t){0x27424DEE40744BBBULL}) /* ui/_white */
+#define ASSET_ATLAS_REGION_UI_BUTTON ((nt_hash64_t){0x15E2039EA50C0EC6ULL}) /* ui/button */
+#define ASSET_ATLAS_REGION_UI_PANEL ((nt_hash64_t){0xBB192329A6661D9AULL}) /* ui/panel */
+#define ASSET_ATLAS_REGION_UI_SLIDER_FILL ((nt_hash64_t){0xD11822EF85ABC3F9ULL}) /* ui/slider_fill */
+#define ASSET_ATLAS_REGION_UI_SLIDER_THUMB ((nt_hash64_t){0xFDD2EC32CE546256ULL}) /* ui/slider_thumb */
+#define ASSET_ATLAS_REGION_UI_SLIDER_TRACK ((nt_hash64_t){0xEF2FD147662BC816ULL}) /* ui/slider_track */

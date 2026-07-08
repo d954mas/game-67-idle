@@ -7,6 +7,10 @@ const state = {
   catalogs: [],
   selectedId: null,
   view: null,
+  // T0316: the view.icons.page_data_uri, decoded ONCE per loadCatalog (before
+  // render()) so every card's canvas crop reads from the same already-decoded
+  // <img> instead of each card re-decoding the same base64 PNG.
+  iconsImage: null,
 };
 
 const els = {
@@ -48,27 +52,35 @@ function setStatus(text, isError = false) {
   els.status.classList.toggle("is-error", Boolean(isError));
 }
 
-// Icons — decision (spec §5): honest placeholder only in phase 1, no gallery search
-// (100% miss rate today, no icon_asset_id -> file binding exists). Kept as a ONE
-// function-wide seam: phase 2 wires this to `icon-link` output and nothing else in
-// the page changes (it already renders "resolved img OR placeholder").
-function resolveIcon(_assetId) {
-  return null;
+// Icons (T0316 spec §5): view.icons.regions maps an icon_asset_id ("icons/gold")
+// straight to a pixel rect on the ALREADY-DECODED atlas debug-PNG page (decoded
+// once in loadCatalog, before render() — see state.iconsImage). No gallery
+// search, no icon-link write layer (phase 2) — this reads exactly what the
+// engine packed.
+function resolveIcon(view, assetId) {
+  return view.icons && view.icons.regions ? view.icons.regions[assetId] : undefined;
 }
 
-function renderIconSlot(item) {
+function renderIconSlot(item, view) {
   const box = make("div", "iv-icon-slot");
-  const resolved = resolveIcon(item.icon_asset_id);
-  if (resolved) {
-    const img = document.createElement("img");
-    img.src = resolved;
-    img.alt = item.icon_asset_id || "";
-    box.append(img);
+  const region = resolveIcon(view, item.icon_asset_id);
+  if (region && state.iconsImage) {
+    const canvas = document.createElement("canvas");
+    canvas.width = region.w;
+    canvas.height = region.h;
+    const ctx = canvas.getContext("2d");
+    // Straight alpha: the debug-PNG page is copied BEFORE the builder's
+    // premultiply step (nt_builder_atlas.c vs nt_builder_texture.c) — a bare
+    // drawImage crop is correct; dividing RGB by alpha here would burn edges
+    // that were never premultiplied in the first place (spec §5/§8).
+    ctx.drawImage(state.iconsImage, region.x, region.y, region.w, region.h, 0, 0, region.w, region.h);
+    box.append(canvas);
     return box;
   }
   box.classList.add("iv-icon-missing");
   box.append(make("span", "iv-icon-glyph", "?"));
   box.append(make("span", "iv-icon-caption", item.icon_asset_id || "no icon"));
+  if (view.icons && view.icons.reason) box.title = view.icons.reason;
   return box;
 }
 
@@ -135,7 +147,7 @@ function renderCard(item, view, issues) {
   const card = make("article", "iv-card");
 
   const top = make("div", "iv-card-top");
-  top.append(renderIconSlot(item));
+  top.append(renderIconSlot(item, view));
   const titleBox = make("div", "iv-card-title");
   titleBox.append(make("h3", "", item.display_name || item.id || "—"));
   titleBox.append(make("span", "iv-card-id", item.id || "—"));
@@ -353,6 +365,19 @@ async function loadCatalog(id) {
     if (!response.ok) throw new Error(`status ${response.status}`);
     const view = await response.json();
     state.view = view;
+    // One decode for the whole page, BEFORE render() (spec §5) — every card's
+    // canvas crop below reads from this same decoded <img>, never re-fetches.
+    state.iconsImage = null;
+    if (view.icons && view.icons.page_data_uri) {
+      const img = new Image();
+      img.src = view.icons.page_data_uri;
+      try {
+        await img.decode();
+        state.iconsImage = img;
+      } catch {
+        state.iconsImage = null; // decode failure degrades to the "?" placeholder, same as a missing region
+      }
+    }
     render(view);
     setStatus(`${view.items.length} item(s) in ${view.meta.title}`);
   } catch (error) {
