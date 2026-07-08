@@ -154,8 +154,8 @@ convention and its grep-gate).
    `state/items.schema.json` (below), full `<namespace>.<slug>` charset
    check, the composite-key length hard rule
    (`len(container) + 1 + len(def_id) <= 63`, since stack keys are
-   `"<container>/<def_id>"` under `string_max=64`), an `equip` ⇒ not
-   `stack.unlimited` sanity check, and an advisory display_name-keying lint.
+   `"<container>/<def_id>"` under `string_max=64`), an `equip` ⇒ `stack == 1`
+   sanity check, and an advisory display_name-keying lint.
    **L5 — `--src-dir src/features/items` now scans the display-name-keying
    lint over ONLY this game corner** (`reason_tags.h` +
    `items_bootstrap.c`) — the ownership core (`items_containers.c`) lives in

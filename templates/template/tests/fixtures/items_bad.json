@@ -14,26 +14,26 @@
   "items": [
     { "id": "gold", "display_name": "Gold", "kind": "currency", "icon_asset_id": "icon.gold",
       "tags": ["currency"], "base_value": 1,
-      "stack": { "stackable": true, "unlimited": true },
+      "stack": 0,
       "currency": { "hud_hint": "counter", "cap": 0 } },
     { "id": "tmpl.xp", "display_name": "Experience", "kind": "currency", "icon_asset_id": "icon.xp",
       "tags": ["currency"], "base_value": 0,
-      "stack": { "stackable": true, "unlimited": true },
+      "stack": 0,
       "currency": { "hud_hint": "bar", "cap": 0 } },
     { "id": "tmpl.energy", "display_name": "Energy", "kind": "currency", "icon_asset_id": "icon.energy",
       "tags": ["currency"], "base_value": 0,
-      "stack": { "stackable": true, "unlimited": true },
+      "stack": 0,
       "currency": { "hud_hint": "counter", "cap": 100 } },
     { "id": "tmpl.potion", "display_name": "Healing Potion", "kind": "consumable", "icon_asset_id": "icon.potion",
       "tags": ["consumable","heal"], "base_value": 10,
-      "stack": { "stackable": true, "max_stack": 99 },
+      "stack": 99,
       "use": { "effect_id": "heal", "params": { "amount": 25 } } },
     { "id": "tmpl.sword", "display_name": "Iron Sword", "kind": "weapon", "icon_asset_id": "icon.sword",
       "tags": ["weapon","melee"], "base_value": 50,
-      "stack": { "stackable": false },
+      "stack": 1,
       "equip": { "slot": "weapon" } },
     { "id": "tmpl.wood", "display_name": "Wood", "kind": "material", "icon_asset_id": "icon.wood",
       "tags": ["material"], "base_value": 2,
-      "stack": { "stackable": true, "max_stack": 999 } }
+      "stack": 999 }
   ]
 }

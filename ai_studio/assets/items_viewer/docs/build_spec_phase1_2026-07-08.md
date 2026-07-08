@@ -145,7 +145,7 @@ Card anatomy — split explicitly to kill the "designer order vs schema order" c
 - **Promoted chrome, hand-rendered** at fixed positions (NOT schema-iterated): icon slot (§5),
   `display_name` as the card title, `id` as subtitle, kind chip (label resolved from `item_kinds`).
 - **Generic rows, schema-iterated:** every OTHER key in `schema.core`, in schema order, as label/value rows.
-  Per-type render rules: `object` -> recurse into its `.fields` (e.g. `stack` -> stackable/max_stack/unlimited);
+  Per-type render rules: `object` -> recurse into its `.fields` (e.g. `use.params`);
   `list<string>` -> join (tags); `i64`/`string`/`bool` -> scalar; `enum` -> the value (e.g. container
   `accept_policy`). Values come from the `list --json` record; a schema key absent from the record renders as
   an em-dash.

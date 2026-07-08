@@ -49,7 +49,7 @@ def make_item(item_id: str, *, created: str = "2026-07-07", **overrides: Any) ->
         "kind": "material",
         "tags": [],
         "base_value": 1,
-        "stack": {"stackable": True, "max_stack": 999},
+        "stack": 999,
     }
     item.update(overrides)
     return item
@@ -117,6 +117,18 @@ def run_validate(tmp_path: Path, catalog: dict, lock: Any, state_version: int) -
 
 def error_rules(payload: dict) -> set[str]:
     return {e["rule"] for e in payload["errors"]}
+
+
+def run_list(catalog_path: Path) -> tuple[int, dict | None, str]:
+    """Runs `items_ops.py list --json` in-process, mirroring run_validate() above."""
+    argv = ["list", "--catalog", str(catalog_path), "--json"]
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+        rc = items_ops.main(argv)
+    stdout_text = stdout.getvalue()
+    payload = json.loads(stdout_text) if stdout_text.strip() else None
+    return rc, payload, stderr.getvalue()
 
 
 class LockWorkflowTests(unittest.TestCase):
@@ -259,6 +271,97 @@ class CreatedFieldTests(unittest.TestCase):
 
         self.assertEqual(rc, 1)
         self.assertIn("created-invalid", error_rules(payload))
+
+
+class StackFieldTests(unittest.TestCase):
+    """Locks the collapsed single-int stack model (build_spec_stack_int_2026-07-08):
+    schema requires `stack` to be a plain int >= 0, `equip` implies `stack == 1`,
+    and `list --json` emits the raw int (never the old derived object)."""
+
+    def test_stack_missing(self):
+        item = make_item("tmpl.a")
+        del item["stack"]
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = make_catalog([item])
+            lock = make_lock(def_ids=[])
+            rc, payload, _ = run_validate(tmp_path, catalog, lock, state_version=1)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("generator-check", error_rules(payload))
+
+    def test_stack_negative(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = make_catalog([make_item("tmpl.a", stack=-1)])
+            lock = make_lock(def_ids=[])
+            rc, payload, _ = run_validate(tmp_path, catalog, lock, state_version=1)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("generator-check", error_rules(payload))
+
+    def test_stack_bool_is_not_int(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = make_catalog([make_item("tmpl.a", stack=True)])
+            lock = make_lock(def_ids=[])
+            rc, payload, _ = run_validate(tmp_path, catalog, lock, state_version=1)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("generator-check", error_rules(payload))
+
+    def test_stack_old_object_shape_is_rejected(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = make_catalog([make_item("tmpl.a", stack={"stackable": True})])
+            lock = make_lock(def_ids=[])
+            rc, payload, _ = run_validate(tmp_path, catalog, lock, state_version=1)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("generator-check", error_rules(payload))
+
+    def test_equip_stack_unlimited_is_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            item = make_item("tmpl.a", stack=0, equip={"slot": "weapon"})
+            catalog = make_catalog([item])
+            lock = make_lock(def_ids=[])
+            rc, payload, _ = run_validate(tmp_path, catalog, lock, state_version=1)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("equip-stack", error_rules(payload))
+
+    def test_equip_stack_one_is_clean(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            item = make_item("tmpl.a", stack=1, equip={"slot": "weapon"})
+            catalog = make_catalog([item])
+            lock = make_lock(def_ids=[])
+            rc, payload, _ = run_validate(tmp_path, catalog, lock, state_version=1)
+
+        self.assertEqual(rc, 0)
+        self.assertEqual(payload["errors"], [])
+
+    def test_list_json_emits_raw_int(self):
+        # Pin: item_json_record must emit `stack` as the raw authored int, not
+        # the old derived {"stackable", "max_stack", "unlimited"} object -- the
+        # viewer renders it through the schema-v2 i64 path and would print
+        # "[object Object]" on every card if this regressed.
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = make_catalog([
+                make_item("tmpl.a", stack=0),
+                make_item("tmpl.b", stack=99),
+            ])
+            catalog_path = _write(tmp_path / "catalog.json", catalog)
+            rc, payload, _ = run_list(catalog_path)
+
+        self.assertEqual(rc, 0)
+        by_id = {rec["id"]: rec for rec in payload["items"]}
+        self.assertIsInstance(by_id["tmpl.a"]["stack"], int)
+        self.assertEqual(by_id["tmpl.a"]["stack"], 0)
+        self.assertIsInstance(by_id["tmpl.b"]["stack"], int)
+        self.assertEqual(by_id["tmpl.b"]["stack"], 99)
 
 
 if __name__ == "__main__":

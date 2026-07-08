@@ -39,6 +39,7 @@ typedef struct game_item_def_t {
     const char *const *tags;
     int tag_count;
     int64_t base_value;
+    /* derived from content items.json "stack" int: max_stack 0=unlimited, 1=unique, N=cap */
     bool stackable;
     int64_t max_stack;
     bool unlimited;

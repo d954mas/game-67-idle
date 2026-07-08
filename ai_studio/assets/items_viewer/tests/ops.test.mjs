@@ -48,7 +48,7 @@ function makeItem(id, overrides = {}) {
     kind: "material",
     tags: [],
     base_value: 1,
-    stack: { stackable: true, max_stack: 10 },
+    stack: 10,
     ...overrides,
   };
 }
@@ -101,6 +101,18 @@ test("getCatalogView happy path: live template renders 6 items, schema, containe
   assert.equal(view.validate.available, true);
   assert.equal(view.validate.ok, true);
   assert.deepEqual(view.validate.errors, []);
+
+  // build_spec_stack_int_2026-07-08 §9: regression guard on both the schema shape
+  // and the `list --json` output shape -- `stack` must be a raw int (0/1/N), NOT
+  // the old derived {stackable,max_stack,unlimited} object (which would render as
+  // "[object Object]" on every card under schema v2's i64 type).
+  assert.equal(view.schema.core.stack.type, "i64");
+  const sword = view.items.find((item) => item.id === "tmpl.sword");
+  assert.ok(sword, "tmpl.sword must be in the live template");
+  assert.equal(sword.stack, 1);
+  const gold = view.items.find((item) => item.id === "tmpl.gold");
+  assert.ok(gold, "tmpl.gold must be in the live template");
+  assert.equal(gold.stack, 0);
 
   // lock status_by_id: every shipped tmpl.* id maps to "shipped" (all 6 are in the
   // committed items.lock.json def_ids), removed is empty (nothing removed today).

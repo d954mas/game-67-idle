@@ -23,7 +23,7 @@ render_header/render_source so the codegen's own sanity net (namespace
 prefix, duplicate ids, required fields, container accept_policy, i64
 integer-ness) always runs first, and this CLI only ADDS strictly stronger
 checks on top (lock-file removal workflow, full namespace-pattern regex,
-composite-key length, equip/unlimited sanity, display_name-keying lint) --
+composite-key length, equip/stack sanity, display_name-keying lint) --
 see §8.3 of templates/design/build_spec_t0327_i2_2026-07-07.md and
 src/features/items/README.md ("Lock workflow" -- deleting/renaming a
 SHIPPED def_id is a destructive action that must FORCE an explicit developer
@@ -34,7 +34,7 @@ tightens it.
 `{rule, id, field, msg}` (stable kebab-case `rule` ids: "generator-check",
 "namespace", "created-missing", "created-invalid", "removed-without-reaction",
 "removed-version-not-shipped", "lock-invalid", "lock-inconsistent",
-"removed-def-restored" (warning), "composite-key-length", "equip-unlimited",
+"removed-def-restored" (warning), "composite-key-length", "equip-stack",
 "display-name-keying", "rename-guard-skipped") -- not free strings, so the
 future web editor (T0316) can key UI off `rule`/`id` instead of parsing text.
 
@@ -130,10 +130,10 @@ def block_names(item: dict[str, Any]) -> list[str]:
 def item_json_record(item: dict[str, Any]) -> dict[str, Any]:
     """Full record for `list --json` (M4/T0316 parity): everything a web
     editor needs to render/edit an item without re-reading items.json itself.
-    stack config is derived via generate_items_catalog.stack_fields -- the
-    SAME defaulting (equip -> not stackable unless overridden) the compiled
-    catalog actually uses, not a second guess at the defaults."""
-    stackable, max_stack, unlimited = gen.stack_fields(item)
+    `stack` is the raw authored int (0=unlimited, 1=unique/instance, N=cap) --
+    the derived (stackable, max_stack, unlimited) triple lives ONLY in the
+    compiled C catalog (single-sourced through generate_items_catalog.stack_fields),
+    never in this read layer."""
     record: dict[str, Any] = {
         "id": item.get("id"),
         "display_name": item.get("display_name"),
@@ -142,7 +142,7 @@ def item_json_record(item: dict[str, Any]) -> dict[str, Any]:
         "created": item.get("created"),  # authoring metadata; never compiled into the C tables
         "tags": item.get("tags", []),
         "base_value": item.get("base_value"),
-        "stack": {"stackable": stackable, "max_stack": max_stack, "unlimited": unlimited},
+        "stack": item.get("stack"),   # raw authored int (0=unlimited, 1=unique/instance, N=cap)
         "blocks": block_names(item),
     }
     equip = item.get("equip")
@@ -445,27 +445,26 @@ def check_composite_key_length(doc: dict[str, Any]) -> list[Issue]:
     return errors
 
 
-def check_equip_unlimited(doc: dict[str, Any]) -> list[Issue]:
-    """L1 (deep-review): a unique-instance def (has an `equip` block) must
-    never also be `stack.unlimited` -- uniques are per-copy records
-    (instance_id-keyed, count=1 each, §2.3); "unlimited stackable unique" is
-    a contradiction in the data that would only surface confusingly at
-    runtime (an unlimited currency-like stack that also carries an equip
-    slot makes no sense)."""
+def check_equip_stack(doc: dict[str, Any]) -> list[Issue]:
+    """L1 (adapted for the single-int stack model): an item with an `equip` block IS
+    a unique instance (per-copy record, instance_id-keyed, count=1, §2.3), which under
+    the collapsed model means stack == 1 exactly. 0 (unlimited) or N>1 (capped stack)
+    contradicts per-copy ownership."""
     errors: list[Issue] = []
     for item in doc.get("items", []):
-        item_id = item.get("id")
         if item.get("equip") is None:
             continue
-        stack = item.get("stack") or {}
-        if stack.get("unlimited") is True:
+        stack = item.get("stack")
+        if not isinstance(stack, int) or isinstance(stack, bool):
+            continue  # generator-check already reported the bad type
+        if stack != 1:
             errors.append(
                 issue(
-                    "equip-unlimited",
-                    f"item {item_id!r} has an equip block (unique instance) but stack.unlimited=true -- "
-                    "uniques are per-copy records, not an unlimited stack",
-                    id=item_id,
-                    field="stack.unlimited",
+                    "equip-stack",
+                    f"item {item.get('id')!r} has an equip block (unique instance) but stack={stack} -- "
+                    "uniques are single-instance per-copy records, so stack must be 1",
+                    id=item.get("id"),
+                    field="stack",
                 )
             )
     return errors
@@ -481,7 +480,7 @@ def check_created_field(doc: dict[str, Any]) -> list[Issue]:
     `created` as a side effect of it being `"required": true` there, but
     this function is the dedicated, always-evaluated, stably-ruled check
     (not gated behind the generator's fail-fast on some unrelated field) --
-    same pattern as check_equip_unlimited/check_composite_key_length. Never
+    same pattern as check_equip_stack/check_composite_key_length. Never
     compiled into the C tables (generate_items_catalog.py) -- authoring-only,
     read by tooling/editors (T0316), not runtime."""
     errors: list[Issue] = []
@@ -646,7 +645,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     errors += check_namespace_pattern(doc, field_schema)
     errors += check_created_field(doc)
     errors += check_composite_key_length(doc)
-    errors += check_equip_unlimited(doc)
+    errors += check_equip_stack(doc)
 
     lock_errors, lock_warnings = check_lock_workflow(doc, baseline, current_version)
     errors += lock_errors

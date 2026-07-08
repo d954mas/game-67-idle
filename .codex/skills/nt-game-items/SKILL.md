@@ -59,7 +59,7 @@ fails or silently skips a check, §5.6/R7 of `templates/design/build_spec_t0337_
 - `validate` is the STRICT gate; rule ids surfaced in `--json` output:
   `generator-check` (reuses `generate_items_catalog.py`'s own sanity net —
   never forked into a second parser), `namespace`, `created-missing`,
-  `created-invalid`, `composite-key-length`, `equip-unlimited` (hard errors),
+  `created-invalid`, `composite-key-length`, `equip-stack` (hard errors),
   the lock-file removal-workflow rules `removed-without-reaction` /
   `removed-version-not-shipped` / `lock-invalid` / `lock-inconsistent` (hard
   errors, lead-ratified 2026-07-07 — deleting a SHIPPED def_id is destructive

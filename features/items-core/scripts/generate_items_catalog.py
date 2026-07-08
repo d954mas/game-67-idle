@@ -105,8 +105,11 @@ def validate_catalog(doc: dict[str, Any], field_schema: dict[str, Any]) -> None:
                 require(field_name in item, f"item {item_id!r} missing required field '{field_name}'")
         stack = item.get("stack")
         if core.get("stack", {}).get("required"):
-            require(isinstance(stack, dict), f"item {item_id!r} missing required 'stack' block")
-            require("stackable" in stack, f"item {item_id!r} stack block missing 'stackable'")
+            require(
+                isinstance(stack, int) and not isinstance(stack, bool) and stack >= 0,
+                f"item {item_id!r} 'stack' must be an integer >= 0 "
+                "(0=unlimited, 1=unique/instance, N=cap)",
+            )
         for block_name, block_spec in blocks.items():
             block = item.get(block_name)
             if block is None:
@@ -140,12 +143,22 @@ def validate_catalog(doc: dict[str, Any], field_schema: dict[str, Any]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def stack_fields(item: dict[str, Any]) -> tuple[bool, Any, bool]:
-    stack = item.get("stack") or {}
-    has_equip = "equip" in item
-    stackable = bool(stack.get("stackable", not has_equip))
-    unlimited = bool(stack.get("unlimited", False))
-    max_stack = stack.get("max_stack", 0)  # raw JSON value; c_i64 validates it at render time
+def stack_fields(item: dict[str, Any]) -> tuple[bool, int, bool]:
+    """Derive the compiled (stackable, max_stack, unlimited) triple from the single
+    authoring `stack` int (validate_catalog guarantees int >= 0 first):
+        0   -> unlimited stackable    (stackable=True,  max_stack=0, unlimited=True)
+        1   -> unique / instance path (stackable=False, max_stack=1, unlimited=False)
+        N>1 -> capped stack           (stackable=True,  max_stack=N, unlimited=False)
+    """
+    stack = item.get("stack")
+    if not isinstance(stack, int) or isinstance(stack, bool):
+        # malformed / pre-migration catalog: validate() reports it separately.
+        # Treat unknown as unique (non-stackable) so `list` / composite-key-length
+        # never crash and default to the safe branch.
+        stack = 1
+    stackable = stack != 1
+    unlimited = stack == 0
+    max_stack = stack
     return stackable, max_stack, unlimited
 
 

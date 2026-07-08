@@ -59,6 +59,27 @@ void test_item_container_def_purse(void) {
     TEST_ASSERT_NULL(item_container_def("no_such_container"));
 }
 
+void test_item_core_stack_semantics(void) {
+    /* build_spec_stack_int_2026-07-08 §3: pins the derivation from the single
+       authoring `stack` int, including the one changed compiled value
+       (sword max_stack 0 -> 1). */
+    const game_item_def_t *potion = item_core("tmpl.potion");
+    TEST_ASSERT_NOT_NULL(potion);
+    TEST_ASSERT_TRUE(potion->stackable);
+    TEST_ASSERT_FALSE(potion->unlimited);
+    TEST_ASSERT_EQUAL_INT64(99, potion->max_stack);
+
+    const game_item_def_t *sword = item_core("tmpl.sword");
+    TEST_ASSERT_NOT_NULL(sword);
+    TEST_ASSERT_FALSE(sword->stackable);
+    TEST_ASSERT_EQUAL_INT64(1, sword->max_stack);
+
+    const game_item_def_t *gold = item_core("tmpl.gold");
+    TEST_ASSERT_NOT_NULL(gold);
+    TEST_ASSERT_TRUE(gold->unlimited);
+    TEST_ASSERT_EQUAL_INT64(0, gold->max_stack);
+}
+
 void test_items_def_count_and_at(void) {
     int count = items_def_count();
     TEST_ASSERT_EQUAL_INT(6, count); /* gold, xp, energy, potion, sword, wood */
@@ -73,6 +94,7 @@ int main(void) {
     RUN_TEST(test_item_core_known_currency);
     RUN_TEST(test_item_core_equip_not_stackable);
     RUN_TEST(test_item_core_unknown_is_null);
+    RUN_TEST(test_item_core_stack_semantics);
     RUN_TEST(test_items_with_tag_currency);
     RUN_TEST(test_item_container_def_purse);
     RUN_TEST(test_items_def_count_and_at);
