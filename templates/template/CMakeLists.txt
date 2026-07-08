@@ -128,6 +128,8 @@ if(NOT EMSCRIPTEN)
             assets/shaders/sprite.vert assets/shaders/sprite.frag
             assets/ui/panel.png assets/ui/button.png
             assets/ui/slider_track.png assets/ui/slider_fill.png assets/ui/slider_thumb.png
+            assets/icons/gold.png assets/icons/xp.png assets/icons/energy.png
+            assets/icons/potion.png assets/icons/sword.png assets/icons/wood.png
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         COMMENT "Building game asset pack"
         VERBATIM

@@ -146,6 +146,38 @@ int main(int argc, char *argv[]) {
 
     nt_builder_end_atlas(ctx);
 
+    // Item icons: SECOND atlas (ui is first). Explicit region names = the
+    // authored "icons/<name>" contract half. debug_png=true emits the page PNG
+    // the studio items-viewer previews from. allow_transform=false keeps every
+    // region an axis-aligned rect so a preview crop is a simple rectangle.
+    // Opts mirror the ui atlas (build_packs.c:104-117) for parity.
+    nt_atlas_opts_t icons_opts = nt_atlas_opts_defaults();
+    icons_opts.shape = NT_ATLAS_SHAPE_RECT;
+    icons_opts.allow_transform = false;   // -> region.transform == 0, simple rect
+    icons_opts.pixels_per_unit = 1.0F;    // parity with ui atlas
+    icons_opts.padding = 2;
+    icons_opts.margin = 2;
+    icons_opts.extrude = 1;               // outline lands in the extrude gutter
+    icons_opts.premultiplied = true;      // affects ONLY the packed texture (ui parity);
+                                          // debug-PNG is copied BEFORE premultiply -> straight alpha
+    icons_opts.compress = NULL;           // parity with ui atlas (raw RGBA page)
+    icons_opts.debug_png = true;          // -> <CMAKE_BINARY_DIR>/pack/icons_page0.png
+    icons_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
+    icons_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
+    icons_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
+    icons_opts.wrap_v = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
+    icons_opts.gen_mipmaps = false;
+    nt_builder_begin_atlas(ctx, "icons", &icons_opts);
+    static const char *icon_names[] = {"gold","xp","energy","potion","sword","wood"};
+    for (int i = 0; i < 6; ++i) {
+        nt_atlas_sprite_opts_t o = nt_atlas_sprite_opts_defaults();
+        o.name = icon_names[i];
+        char path[128];
+        (void)snprintf(path, sizeof path, "assets/icons/%s.png", icon_names[i]);
+        nt_builder_atlas_add(ctx, path, &o);
+    }
+    nt_builder_end_atlas(ctx);
+
     nt_build_result_t r = nt_builder_finish_pack(ctx);
     nt_builder_free_pack(ctx);
     if (r != NT_BUILD_OK) {
