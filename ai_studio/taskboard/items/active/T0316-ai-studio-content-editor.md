@@ -1,13 +1,13 @@
 ---
 id: T0316
 title: "AI Studio: универсальный редактор предметов (schema-driven, поверх items.json)"
-status: idea
+status: doing
 project: P001
 epic: E009
 priority: P2
 tags: [editor, items, tooling]
 created: 2026-07-05
-updated: 2026-07-06
+updated: 2026-07-08
 ---
 
 ## What
@@ -72,3 +72,14 @@ Schema-driven редактор каталога предметов. Дизайн
 - 2026-07-06: скоуп наполнен по итогам двух-угольного items-разбора
   (templates/design/items_feature_study_2026-07-06.md) и дизайна item-системы; привязан
   к E009; ждёт items-фичу из T0327.
+- 2026-07-08: СТАРТ ФАЗЫ 1 (read-only вьюер) по «дальше» лида после
+  закрытия арок T0327/T0337 — стартовое условие карточки выполнено
+  (op-слой read-v1 готов, схема = файл-артефакт). Скоуп раунда =
+  ТОЛЬКО фаза 1; фазы 2-3 ждут write-op-слоя и реальной игры.
+  Карта инфры снята (Explore): Studio Shell = хаб (surface-паттерн,
+  порт 8765), реестров ДВА (games.json + templates.json — объединять,
+  живой content/items.json только у шаблона), icon_asset_id
+  обязателен в схеме, но ассетов под tmpl.* нет нигде и резолва
+  id→файл не существует (иконки фазы 1 = честный плейсхолдер,
+  best-effort позже). Спека у deep-reasoner (место: ai_studio/assets/
+  items_viewer/docs/) → 2 Opus-ревью → исполнитель → deep-ревью.
