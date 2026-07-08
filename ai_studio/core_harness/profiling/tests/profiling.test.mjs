@@ -163,6 +163,27 @@ test("hook_record logs failed command result records", () => {
   }
 });
 
+test("hook_record records output size metrics without storing output text", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "hook-output-size.jsonl");
+    runHook({
+      hook_event_name: "PostToolUse",
+      tool_name: "Bash",
+      tool_input: { command: "node tools/chatty.js" },
+      tool_response: { exit_code: 0, output: "alpha\nbeta\n" },
+    }, profile);
+
+    const records = readJsonl(profile);
+    assert.equal(records.length, 1);
+    assert.equal(records[0].output_chars, 11);
+    assert.equal(records[0].output_lines, 2);
+    assert.doesNotMatch(readFileSync(profile, "utf8"), /alpha|beta/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("hook_record marks full Python dependency failures as environment blocked", () => {
   const dir = tempDir();
   try {
@@ -249,7 +270,7 @@ test("hook_record_fast records work and skips successful plumbing when built", {
       hook_event_name: "PostToolUse",
       tool_name: "Bash",
       tool_input: { command: "node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs" },
-      tool_response: { exit_code: 0 },
+      tool_response: { exit_code: 0, output: "alpha\nbeta\n" },
     }, profile);
 
     const records = readJsonl(profile);
@@ -257,6 +278,8 @@ test("hook_record_fast records work and skips successful plumbing when built", {
     assert.equal(records[0].event_type, "tool_call_result");
     assert.equal(records[0].category, "validation");
     assert.equal(records[0].result, "pass");
+    assert.equal(records[0].output_chars, 11);
+    assert.equal(records[0].output_lines, 2);
     assert.deepEqual(records[0].commands, ["node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs"]);
   } finally {
     cleanup(dir);
@@ -337,6 +360,8 @@ test("hook_record recovers missed Codex failed shell commands from session trans
     assert.equal(recovered[0].value, "rework");
     assert.equal(recovered[0].source_call_id, "call_failed_probe");
     assert.equal(recovered[0].exit_code, 9);
+    assert.equal(recovered[0].output_chars, 54);
+    assert.equal(recovered[0].output_lines, 4);
     assert.deepEqual(recovered[0].commands, ["Write-Error 'HOOK_FAIL'; exit 9"]);
   } finally {
     cleanup(dir);
@@ -466,6 +491,29 @@ test("status reads a session log and reports records, slowest, and rollup", () =
     assert.equal(status.command_rollup.by_count[0].count, 2);
     assert.match(result.stdout, /Records: 2/);
     assert.match(result.stdout, /Most-Run Commands/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status surfaces noisy-output commands from recorded size metrics", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "noisy-output.jsonl");
+    const statusJson = join(dir, "status.json");
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node tools/chatty.js"], output_chars: 1200, output_lines: 40, session_id: "s1" },
+      { ts: "2026-06-13T10:00:01+05:00", phase: "session", category: "research", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["rg TODO src"], output_chars: 300, output_lines: 10, session_id: "s1" },
+      { ts: "2026-06-13T10:00:02+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["node tools/chatty.js"], output_chars: 800, output_lines: 20, session_id: "s1" },
+    ]);
+
+    const result = run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson]);
+    const status = readJson(statusJson);
+    assert.equal(status.output_rollup.by_chars[0].key, "node chatty.js");
+    assert.equal(status.output_rollup.by_chars[0].total_chars, 2000);
+    assert.equal(status.output_rollup.by_chars[0].total_lines, 60);
+    assert.match(result.stdout, /Top Noisy Outputs/);
+    assert.match(result.stdout, /node chatty\.js: 2000 chars/);
   } finally {
     cleanup(dir);
   }

@@ -165,6 +165,12 @@ export function buildRecord(values, extra = {}) {
   const durationMs = numberArg(values, "duration-ms");
   if (durationMs !== undefined) record.duration_ms = durationMs;
 
+  const outputChars = numberArg(values, "output-chars");
+  if (outputChars !== undefined) record.output_chars = outputChars;
+
+  const outputLines = numberArg(values, "output-lines");
+  if (outputLines !== undefined) record.output_lines = outputLines;
+
   const contextRisk = stringArg(values, "context-risk", "");
   if (contextRisk) record.context_risk = contextRisk;
 
@@ -214,6 +220,12 @@ export function validateRecord(record) {
   }
   if (record.duration_ms !== undefined && (!Number.isFinite(record.duration_ms) || record.duration_ms < 0)) {
     errors.push("duration_ms must be a non-negative number");
+  }
+  if (record.output_chars !== undefined && (!Number.isFinite(record.output_chars) || record.output_chars < 0)) {
+    errors.push("output_chars must be a non-negative number");
+  }
+  if (record.output_lines !== undefined && (!Number.isFinite(record.output_lines) || record.output_lines < 0)) {
+    errors.push("output_lines must be a non-negative number");
   }
   return errors;
 }

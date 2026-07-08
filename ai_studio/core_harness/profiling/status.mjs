@@ -156,6 +156,11 @@ function formatPercent(value) {
   return `${(value * 100).toFixed(1)}%`;
 }
 
+function formatChars(value) {
+  const chars = Number(value || 0);
+  return `${Number.isFinite(chars) ? Math.round(chars) : 0} chars`;
+}
+
 /* Wall-clock coverage: long idle gaps (>= idleGapMs, e.g. overnight) are
  * excluded so a fully-recorded session does not look "low coverage" after a
  * pause; short gaps between events count as active hands-on work. */
@@ -323,6 +328,32 @@ function commandRollup(records) {
   };
 }
 
+function outputRollup(records) {
+  const map = new Map();
+  for (const record of records) {
+    if (record.event_type === "session_start") continue;
+    const outputChars = Number(record.output_chars || 0);
+    const outputLines = Number(record.output_lines || 0);
+    if (outputChars <= 0 && outputLines <= 0) continue;
+    const cmd = (record.commands && record.commands[0]) || "";
+    if (!cmd) continue;
+    const key = commandKey(cmd);
+    const entry = map.get(key) || { key, count: 0, total_chars: 0, total_lines: 0, max_chars: 0, fails: 0 };
+    entry.count += 1;
+    entry.total_chars += Number.isFinite(outputChars) ? outputChars : 0;
+    entry.total_lines += Number.isFinite(outputLines) ? outputLines : 0;
+    if (outputChars > entry.max_chars) entry.max_chars = outputChars;
+    if (record.result === "fail") entry.fails += 1;
+    map.set(key, entry);
+  }
+  return {
+    by_chars: [...map.values()]
+      .filter((entry) => entry.total_chars > 0 || entry.total_lines > 0)
+      .sort((a, b) => b.total_chars - a.total_chars || b.total_lines - a.total_lines)
+      .slice(0, 6),
+  };
+}
+
 function subagentRollup(records) {
   const spawns = records.filter((record) => record.event_type === "subagent_spawn");
   const byType = {};
@@ -392,6 +423,7 @@ function buildStatus(profilePaths, values = {}) {
     wall_clock_coverage: coverage,
     low_profile_coverage: lowCoverage,
     command_rollup: commandRollup(records),
+    output_rollup: outputRollup(records),
     subagent_rollup: subagentRollup(records),
     slowest_record: slowest ? {
       line: slowest.__line,
@@ -450,6 +482,15 @@ function renderStatus(status, { verbose }) {
     for (const entry of rollup.by_count) {
       if (entry.count < 2) continue;
       lines.push(`- ${entry.key}: ${entry.count} run(s)${entry.total_ms > 0 ? `, ${formatMs(entry.total_ms)} total` : ""}${entry.fails > 0 ? `, ${entry.fails} failed` : ""}`);
+    }
+  }
+
+  const outputRollupStatus = status.output_rollup;
+  if (outputRollupStatus.by_chars.length > 0) {
+    lines.push("");
+    lines.push("## Top Noisy Outputs (by recorded chars)");
+    for (const entry of outputRollupStatus.by_chars) {
+      lines.push(`- ${entry.key}: ${formatChars(entry.total_chars)} over ${entry.count} run(s), ${Math.round(entry.total_lines)} line(s), max ${formatChars(entry.max_chars)}${entry.fails > 0 ? `, ${entry.fails} failed` : ""}`);
     }
   }
 

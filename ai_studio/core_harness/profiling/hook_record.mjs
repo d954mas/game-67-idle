@@ -164,6 +164,37 @@ function responseText(response) {
   ].filter((value) => value !== undefined && value !== null).map(String).join("\n");
 }
 
+function outputLineCount(text) {
+  if (!text) return 0;
+  let lines = 0;
+  let previousWasCr = false;
+  let endedWithNewline = false;
+  for (const char of text) {
+    if (char === "\r") {
+      lines += 1;
+      previousWasCr = true;
+      endedWithNewline = true;
+    } else if (char === "\n") {
+      if (!previousWasCr) lines += 1;
+      previousWasCr = false;
+      endedWithNewline = true;
+    } else {
+      previousWasCr = false;
+      endedWithNewline = false;
+    }
+  }
+  return lines + (endedWithNewline ? 0 : 1);
+}
+
+function outputSizeMetrics(text) {
+  const output = String(text || "");
+  if (!output) return {};
+  return {
+    output_chars: output.length,
+    output_lines: outputLineCount(output),
+  };
+}
+
 function environmentBlockReason(command, output) {
   const text = `${command || ""}\n${output || ""}`;
   if (
@@ -241,6 +272,7 @@ async function recoverCodexFailedCommands(profilePath, harness, stamp = {}) {
       source_call_id: callId,
       source_session_file: sessionFile,
       exit_code: exitCode,
+      ...outputSizeMetrics(output),
       ...(blockedBy ? { failure_kind: "environment_blocked" } : {}),
       ...stamp,
     }));
@@ -367,13 +399,14 @@ function readStdin() {
     if (result !== "fail" && isReadOnlyPlumbingCommand(cmd1)) process.exit(0);
 
     const { appendRecord, buildRecord } = await loadProfileLib();
-    const blockedBy = result === "fail" ? environmentBlockReason(cmd1, responseText(response)) : "";
+    const output = responseText(response);
+    const blockedBy = result === "fail" ? environmentBlockReason(cmd1, output) : "";
     appendRecord(profilePath, buildRecord({
       ...baseValues,
       result,
       value: blockedBy ? "necessary_overhead" : (result === "fail" ? "rework" : "unknown"),
       ...(blockedBy ? { "blocked-by": blockedBy } : {}),
-    }, { event_type: "tool_call_result", ...(blockedBy ? { failure_kind: "environment_blocked" } : {}), ...stamp }));
+    }, { event_type: "tool_call_result", ...outputSizeMetrics(output), ...(blockedBy ? { failure_kind: "environment_blocked" } : {}), ...stamp }));
     await recoverCodexFailedCommands(profilePath, harness, stamp);
   } catch {
     // swallow — a profiling hook must never disrupt the agent

@@ -15,7 +15,7 @@ a plan that is already decided.
 - Follow AGENTS.md and match the style of surrounding code.
 - Do not revert unrelated edits or other agents' work.
 - Run the tests or checks named in the packet before reporting done.
-- Return a short report: files changed, test results verbatim, skipped items,
-  and blockers.
+- Return a short report: files changed, test command plus pass/fail status,
+  relevant failure excerpt, full log path if available, skipped items, and
+  blockers.
 """
-

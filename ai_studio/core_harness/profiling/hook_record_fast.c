@@ -28,6 +28,14 @@
 static char g_session_id[128] = "";
 static char g_cwd[1024] = "";
 
+typedef struct {
+    size_t chars;
+    size_t lines;
+    int fields;
+    bool previous_was_cr;
+    bool ended_with_newline;
+} OutputMetrics;
+
 static char *read_stdin_all(void) {
     size_t cap = 8192;
     size_t len = 0;
@@ -103,6 +111,64 @@ static bool json_error_value(const char *json) {
     if (strncmp(p, "true", 4) == 0) return true;
     if (*p == '"') return p[1] != '"';
     return false;
+}
+
+static void output_metrics_add_char(OutputMetrics *metrics, char c) {
+    metrics->chars++;
+    if (c == '\r') {
+        metrics->lines++;
+        metrics->previous_was_cr = true;
+        metrics->ended_with_newline = true;
+    } else if (c == '\n') {
+        if (!metrics->previous_was_cr) metrics->lines++;
+        metrics->previous_was_cr = false;
+        metrics->ended_with_newline = true;
+    } else {
+        metrics->previous_was_cr = false;
+        metrics->ended_with_newline = false;
+    }
+}
+
+static void output_metrics_start_field(OutputMetrics *metrics) {
+    if (metrics->fields > 0) output_metrics_add_char(metrics, '\n');
+    metrics->fields++;
+}
+
+static bool json_string_metrics(const char *json, const char *key, OutputMetrics *metrics) {
+    const char *p = find_key(json, key);
+    if (!p || *p != '"') return false;
+    p++;
+    output_metrics_start_field(metrics);
+    while (*p && *p != '"') {
+        if (*p == '\\' && p[1]) {
+            p++;
+            switch (*p) {
+                case 'n': output_metrics_add_char(metrics, '\n'); break;
+                case 'r': output_metrics_add_char(metrics, '\r'); break;
+                case 't': output_metrics_add_char(metrics, '\t'); break;
+                case 'u':
+                    output_metrics_add_char(metrics, '?');
+                    for (int i = 0; i < 4 && p[1] && isxdigit((unsigned char)p[1]); i++) p++;
+                    break;
+                default: output_metrics_add_char(metrics, *p); break;
+            }
+            p++;
+            continue;
+        }
+        output_metrics_add_char(metrics, *p++);
+    }
+    return true;
+}
+
+static OutputMetrics output_metrics_from_payload(const char *payload) {
+    OutputMetrics metrics = {0};
+    json_string_metrics(payload, "output", &metrics);
+    json_string_metrics(payload, "stdout", &metrics);
+    json_string_metrics(payload, "stderr", &metrics);
+    json_string_metrics(payload, "message", &metrics);
+    json_string_metrics(payload, "error", &metrics);
+    if (metrics.chars > 0 && !metrics.ended_with_newline) metrics.lines++;
+    return metrics;
 }
 
 static void lower_copy(char *dst, size_t dst_size, const char *src) {
@@ -401,7 +467,8 @@ static void trim_first_line(char *s) {
 
 static void append_record(const char *profile, const char *event_type, const char *harness,
                           const char *tool, const char *command, const char *result,
-                          const char *value, const char *category, const char *intent) {
+                          const char *value, const char *category, const char *intent,
+                          size_t output_chars, size_t output_lines) {
     char path[MAX_PATH * 2];
     if (profile && *profile) {
         snprintf(path, sizeof(path), "%s", profile);
@@ -429,6 +496,11 @@ static void append_record(const char *profile, const char *event_type, const cha
         append_str(line, sizeof(line), &len, ",\"commands\":[\"");
         append_json_escape(line, sizeof(line), &len, command);
         append_str(line, sizeof(line), &len, "\"]");
+    }
+    if (output_chars > 0 || output_lines > 0) {
+        append_fmt(line, sizeof(line), &len,
+                   ",\"output_chars\":%llu,\"output_lines\":%llu",
+                   (unsigned long long)output_chars, (unsigned long long)output_lines);
     }
     /* Per-session attribution so parallel work never mixes. */
     if (g_session_id[0]) {
@@ -523,7 +595,7 @@ int main(int argc, char **argv) {
     if (strcmp(event, "SessionStart") == 0) {
         char intent[128];
         snprintf(intent, sizeof(intent), "session start (%s)", harness);
-        append_record(profile, "session_start", harness, "session", "", "pass", "unknown", "context", intent);
+        append_record(profile, "session_start", harness, "session", "", "pass", "unknown", "context", intent, 0, 0);
         free(payload);
         return 0;
     }
@@ -539,7 +611,7 @@ int main(int argc, char **argv) {
             char intent[128];
             snprintf(intent, sizeof(intent), "auto:%s", tool[0] ? tool : "shell");
             append_record(profile, "tool_call_start", harness, tool[0] ? tool : "shell", command,
-                          "unknown", "necessary_overhead", category_for(command), intent);
+                          "unknown", "necessary_overhead", category_for(command), intent, 0, 0);
         }
         free(payload);
         return 0;
@@ -560,9 +632,10 @@ int main(int argc, char **argv) {
 
     char intent[128];
     snprintf(intent, sizeof(intent), "auto:%s", tool[0] ? tool : "shell");
+    OutputMetrics output_metrics = output_metrics_from_payload(payload);
     append_record(profile, "tool_call_result", harness, tool[0] ? tool : "shell", command,
                   failed ? "fail" : "pass", failed ? "rework" : "unknown",
-                  category_for(command), intent);
+                  category_for(command), intent, output_metrics.chars, output_metrics.lines);
     free(payload);
     return 0;
 }
