@@ -206,28 +206,35 @@ Every capability is one op in `ops.mjs`:
   journal entry per sheet, same as calling them by hand. CLI: `recipe-pack-slice <id>
   --group g [--run <groupId>]`.
 - `alphaCutout({ projectId, elementId, method?, regions? })` — run the element's
-  **current** pixels through the image-tools matte pipeline and **swap the element to a
-  NEW content-addressed alpha PNG** in ONE journaled entry (undo restores the previous
-  `src` byte-exact — the original file stays in `files/`). `method` is `"auto"` (the
+  **current** pixels through the image-tools matte pipeline and **mint the cutout as a NEW
+  element beside the source** in ONE journaled entry. **(T0336)** The original element and
+  its pixels are **never touched** — "не ломать арт + легко сравнивать разные методы бок о
+  бок", so the lead can A/B `key_matte` vs `corridorkey` vs `vitmatte` vs `birefnet` on the
+  same art side by side; undo removes the copy and the original is byte-identical because it
+  was never written. `method` is `"auto"` (the
   soft-score router picks `key_matte`, and **refuses** a wide soft zone that would need a
   dual-plate pair — a loud error, no silent single-plate fallback) or `"matte"` (force
   `key_matte`, the prod keyer). `regions`, when given, is a list of the element's **stored
   region ids**: the alpha is applied **only inside** those region masks (rect, or the
   polygon when present) and the rest of the element is left untouched; omitted = the whole
   element. `alpha_dualplate` (a white+black plate PAIR) is out of v1 scope on a single
-  element and is a loud error. Geometry is preserved (output size = source). Records
-  `element.meta.alpha` (method, params, parent src, routing metrics) like slice
-  provenance, plus an `alpha_cutout` `tool_runs` entry. Requires Python (numpy + scipy +
+  element and is a loud error. The new element is placed to the **right** of the source
+  (16px gap), sized to the source's exact display box (a pixel-perfect side-by-side twin —
+  the keyer output always equals the source's pixel dims), and named `"<source> · <method>"`.
+  Records `element.meta.alpha` (method, params, `parentSrc`, `parentElementId`, routing
+  metrics) like slice provenance, plus an `alpha_cutout` `tool_runs` row (its `elementId`
+  stays the source). Requires Python (numpy + scipy +
   Pillow) via our own `tools/alpha_cutout.py`, which reuses the image-tools
   `route`/`route_cutout` + `alpha_matte`/`key_matte` modules **unmodified**. `elementIds`
   (2+ images), given INSTEAD of `elementId`, **batches** a multi-selection into ONE
   journaled entry (T0230): each element keys its own current pixels sequentially (same
   spec/pipeline as the single-element path), and only once EVERY element succeeds does the
-  whole batch swap srcs + write every element's `meta.alpha` in one commit — one undo
-  restores every element byte-exact. If ANY element refuses, the whole batch throws with
-  that element's message and nothing is mutated (atomic — no partial swap, no journal
+  whole batch mint N new copies beside their sources in one commit — one undo removes **all**
+  the copies and leaves every source byte-exact. If ANY element refuses, the whole batch
+  throws with that element's message and nothing is mutated (atomic — no copy, no journal
   entry). `regions` is not accepted with a batch — a loud error; regions stay
-  single-element. Both clients: the page's inspector **Alpha cutout** control (single
+  single-element. Return: `result.element` (single) / `result.elements` (batch) are the NEW
+  copy element(s). Both clients: the page's inspector **Alpha cutout** control (single
   element or region scope) / multi-selection **Alpha** section ("Apply to N images") and
   the CLI `alpha --element`/`alpha --elements`.
 - `alphaDualPlate({ projectId, elementIds: [a, b] })` — **(T0237)** closes the loop
@@ -913,7 +920,7 @@ implementation, and a missing module is a loud import error.
   reuses the video Track-B invocation **`runCorridorKey()` verbatim**
   (`ai_studio/assets/tools/video/matte/matte.mjs`, imported cross-module) as the ONE source of
   truth for prep → `corridorkey_cli` → EXR→RGBA; ops.mjs adds the canvas seam (key gate, the
-  magenta hue180 shim, 1-frame staging, region composite, src swap, provenance). It is:
+  magenta hue180 shim, 1-frame staging, region composite, new-element mint, provenance). It is:
   **explicit-only** (the auto router NEVER yields it), **green-native + magenta-via-shim** (the
   element's border key is estimated via `route_cutout`; a key that is neither is a **loud
   refusal** naming the key and pointing at `key_matte`/`alphaDualPlate` — no silent fringe),
@@ -981,17 +988,22 @@ implementation, and a missing module is a loud import error.
   op keys **only inside** each region's mask (rect, or the polygon when present) and pastes
   each keyed crop back over the **untouched original opaque pixels** — the region-mask
   composition happens IN Python, in one worker call, never split across node.
-- **Non-destructive src swap.** The result is written as a new content-addressed file and
-  the element's `src` is swapped to it in one journal entry; the previous file stays in
-  `files/` (immutable), so undo restores the exact previous bytes. Output dimensions equal
-  the source, so the element box never changes. `element.meta.alpha` records the run.
+- **Always a NEW element beside the source (T0336).** The cutout is written as a new
+  content-addressed file and minted as a **new element** placed to the right of the source
+  (16px gap, mirroring the dual-plate tools), named `"<source> · <method>"`, sized to the
+  source's exact display box (the keyer output always equals the source's pixel dims, so it
+  is a pixel-perfect side-by-side twin). The original element and its pixels are **never
+  touched** — "не ломать арт + легко сравнивать разные методы бок о бок" (A/B the four keyers
+  on the same art side by side). `element.meta.alpha` on the copy records the run plus
+  `parentSrc` + `parentElementId`. One undo removes the copy; the source is byte-identical
+  because it was never written.
 - **Batch (T0230).** A multi-selection of 2+ image elements keys as ONE operation: each
   element runs through its own worker spawn sequentially (whole-element only — regions stay
   single-element, so a batch call never accepts `regions`), and only after EVERY element
-  keys successfully does the op commit ONE journal entry swapping every src + writing every
-  element's `meta.alpha`. A refusal on any element (dual-plate guard, non-image, tool error)
-  rejects the whole batch with that element's message and mutates nothing — no partial
-  swap. One undo restores every element byte-exact.
+  keys successfully does the op commit ONE journal entry minting a new copy beside each
+  source + writing every copy's `meta.alpha`. A refusal on any element (dual-plate guard,
+  non-image, tool error) rejects the whole batch with that element's message and mutates
+  nothing — no copy. One undo removes ALL the copies and leaves every source byte-exact.
 
 ### Dual-plate alpha tool
 
@@ -1017,7 +1029,7 @@ second Python implementation.
   gate's own message (`SystemExit`, no Python traceback) — nothing is written. A
   post-extraction sanity check (`build_report`, also reused) catches a degenerate result
   (no visible alpha pixels) even when the pair gate passed.
-- **Non-destructive, always a NEW element.** Unlike `alphaCutout`'s src-swap, this never
+- **Non-destructive, always a NEW element.** Like `alphaCutout` (T0336), this never
   touches the two plate elements — they stay on the canvas exactly as they were; the lead
   deletes them himself once happy with the result. The new element is minted the same way
   every other add is (`storeAddImage` — same id/type/src/x/y/w/h/meta shape as

@@ -5,7 +5,8 @@
 // bakeFilters burns an element's CURRENT non-destructive filters+opacity (T0273/T0260)
 // into a NEW content-addressed source file in ONE journaled entry, then clears both
 // fields ("принял -> получил новый арт -> ползунки снова в 0"); undo restores the
-// previous src + filters + opacity byte-exact, like alphaCutout/cleanupApply. The
+// previous src + filters + opacity byte-exact, like cleanupApply (both keep the in-place
+// src-swap; alphaCutout since T0336 instead mints a NEW element beside the source). The
 // validation tests (non-image, nothing-to-bake, bad elementId/elementIds shape) need no
 // Python; the pipeline tests run the real warm-worker path and skip cleanly when the
 // studio venv is missing (mirrors alpha.test.mjs/filters.test.mjs).

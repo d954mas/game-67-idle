@@ -127,6 +127,11 @@ Conditions this tool enforces / assumes:
   license-scope error instead of silently running.
 - This is the **second-priority** engine (CorridorKey first on glow; see
   Niche above) -- not the sole path, so exposure is bounded.
-- **Final commercial-use call belongs to the lead.** This README documents the
-  verdict as reviewed; it does not itself authorize shipping a commercial
-  product built on these weights.
+- **Commercial use of OUTPUTS: RATIFIED by the lead (2026-07-07, T0335).**
+  Mattes cut from the studio's own art may ship in commercial games. Rationale:
+  the lead never signed Adobe's dataset agreement (its noncommercial term binds
+  the researchers who downloaded the dataset), the outputs contain no pixel of
+  Adobe's images, and the weights themselves are never redistributed. The
+  ratification covers exactly this local, non-redistributing use — selling or
+  hosting the MODEL (or a paid inference API on it) stays out of scope, and the
+  LOCAL-ONLY / allowlist conditions above remain mandatory.

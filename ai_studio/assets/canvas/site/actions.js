@@ -517,9 +517,11 @@ export async function sliceRegionsFor(id, regionIds, control) {
   );
 }
 
-// Alpha-cutout the selected image element via the image-tools matte pipeline: swaps the
-// element to a new content-addressed alpha PNG in ONE journaled op (undo restores the
-// previous src). `method` is "auto" (route; refuses a dual-plate soft zone loudly),
+// Alpha-cutout the selected image element via the image-tools matte pipeline: mints the
+// cutout as a NEW element beside the source in ONE journaled op (T0336 — the original element
+// and its pixels are never touched, so the lead can compare keyers side by side; undo removes
+// the copy). The new element is selected on success (mirrors alphaDualPlateGenerateFor).
+// `method` is "auto" (route; refuses a dual-plate soft zone loudly),
 // "matte" (force key_matte), "corridorkey" (T0261 — the neural green-screen matte for soft
 // glow art; green-only + whole-element, ~15s GPU), "vitmatte" (T0335 — neural thin-detail /
 // 2nd-choice-glow matte on a green/magenta key, own GPU venv, ~1-3s, whole-element only), or
@@ -535,9 +537,12 @@ export async function alphaCutoutFor(id, method, regionIds, control) {
       const body = { elementId: id, method };
       if (Array.isArray(regionIds) && regionIds.length) body.regions = regionIds;
       const result = await api("POST", `/projects/${pid()}/alpha`, body);
+      // The cutout is a NEW element beside the source — select it so the lead sees the
+      // result immediately (mirrors alphaDualPlateGenerateFor); the source stays untouched.
+      selectOnly(result.element.id);
       applyMutation(result);
       const scope = Array.isArray(regionIds) && regionIds.length ? `${regionIds.length} region(s)` : "element";
-      return { kind: "success", message: `Alpha cutout applied to the ${scope} (${result.method}).` };
+      return { kind: "success", message: `Alpha cutout copy "${result.element.name}" (${scope}, ${result.method}).` };
     },
     { control },
   );
@@ -545,18 +550,22 @@ export async function alphaCutoutFor(id, method, regionIds, control) {
 
 // Alpha-cutout a MULTI-selection of image elements as ONE operation (T0230 — "Apply to N
 // images"): every element keys its own CURRENT pixels through the same pipeline as the
-// single-element Alpha row, but the whole batch swaps srcs in ONE journaled op (one
-// Ctrl+Z restores every element). No region scoping here — regions stay single-element
-// (select one image and use its own Regions section). Atomic: if any element refuses
-// (dual-plate guard, etc.) the whole batch is rejected and NOTHING changes. Long
-// (python-backed) op — same limiter/spinner/disable treatment as the single-element row.
+// single-element Alpha row, but the whole batch mints N NEW copies beside their sources in
+// ONE journaled op (T0336 — sources untouched; one Ctrl+Z removes every copy). No region
+// scoping here — regions stay single-element (select one image and use its own Regions
+// section). Atomic: if any element refuses (dual-plate guard, etc.) the whole batch is
+// rejected and NOTHING changes. The first minted copy is selected on success (mirrors the
+// batch-mint precedent in generateFakeShotsFor). Long (python-backed) op — same limiter/
+// spinner/disable treatment as the single-element row.
 export async function alphaCutoutBatchFor(ids, method, control) {
   await runLongOp(
     "Alpha cutout…",
     async () => {
       const result = await api("POST", `/projects/${pid()}/alpha`, { elementIds: ids, method });
+      const minted = result.elements || [];
+      if (minted[0]) selectOnly(minted[0].id);
       applyMutation(result);
-      return { kind: "success", message: `Alpha cutout applied to ${ids.length} images (${result.method}).` };
+      return { kind: "success", message: `Alpha cutout: ${minted.length} new copies (${result.method}).` };
     },
     { control },
   );

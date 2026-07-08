@@ -18,7 +18,7 @@
 //   POST   /api/canvas/projects/<id>/note          {x?, y?, w?, h?, content?, style?, background?, groupId?}  (T0268: a sticky-note annotation; fixed clipped box + wrap; excluded from renderGroup/exportProject)
 //   POST   /api/canvas/projects/<id>/detect-regions {elementId, params?}
 //   POST   /api/canvas/projects/<id>/slice          {elementId, regionIds?}
-//   POST   /api/canvas/projects/<id>/alpha          {elementId, method?, regions?} | {elementIds, method?} (batch, one entry)
+//   POST   /api/canvas/projects/<id>/alpha          {elementId, method?, regions?} | {elementIds, method?} (batch) -> NEW element(s) beside the source(s); original(s) untouched; one entry
 //   POST   /api/canvas/projects/<id>/alpha-dual     {elementIds:[a,b]}   (white+black plate pair -> new element; one entry)
 //   POST   /api/canvas/projects/<id>/alpha-dual-generate {elementId, prompt?}   (AUTOMATIC: element = light plate, generates the dark plate, gates, cuts; new element; one entry)
 //   POST   /api/canvas/projects/<id>/export         {elementIds, rows?} | {project:true}
@@ -402,8 +402,9 @@ export function createCanvasApi(root) {
 
       // /api/canvas/projects/<id>/alpha
       // Alpha-cutout the element's current pixels (whole element, or only the given stored
-      // region ids) via the image-tools matte pipeline; swaps the element to a new alpha PNG
-      // (one journal entry). method "auto" (route), "matte" (force key_matte), "corridorkey"
+      // region ids) via the image-tools matte pipeline; mints the cutout as a NEW element
+      // beside the source (original untouched, for side-by-side A/B — T0336), one journal
+      // entry. method "auto" (route), "matte" (force key_matte), "corridorkey"
       // (T0261/T0262 — neural GREEN-screen matte for soft glow art; green native, magenta via a
       // hue180 shim, ~15s GPU; a key that is neither is a loud refusal; regions composite the
       // whole-frame CK result into the requested regions), "vitmatte" (T0335 — neural thin-detail /
@@ -895,7 +896,8 @@ export function createCanvasApi(root) {
       // Apply: commits a FRESH deterministic run of the SAME tool+params (quantize/denoise
       // carry no randomness, so this reproduces the exact bytes the last preview showed) as
       // ONE journal entry — new content-addressed file + element.src swap + additive
-      // element.meta.cleanup; undo restores the previous src byte-exact, like alphaCutout.
+      // element.meta.cleanup; undo restores the previous src byte-exact. (Cleanup keeps the
+      // in-place src-swap; alphaCutout since T0336 mints a NEW element beside the source.)
       if (parts.length === 7 && sub === "elements" && parts[6] === "cleanup" && req.method === "POST") {
         const elementId = decodeURIComponent(parts[5]);
         const body = await readJsonBody(req);
@@ -906,7 +908,7 @@ export function createCanvasApi(root) {
       // /api/canvas/projects/<id>/elements/<eid>/filters-bake  (T0274 "Apply")
       // Rasterize the element's CURRENT non-destructive filters+opacity (T0273/T0260) into a
       // NEW content-addressed source file, then clear both (the sliders reset) — ONE journal
-      // entry; undo restores the previous src + filters + opacity byte-exact, like alphaCutout.
+      // entry; undo restores the previous src + filters + opacity byte-exact, like cleanupApply.
       // Loud (400) when the element has nothing to bake (filters/opacity already at defaults).
       if (parts.length === 7 && sub === "elements" && parts[6] === "filters-bake" && req.method === "POST") {
         const elementId = decodeURIComponent(parts[5]);
