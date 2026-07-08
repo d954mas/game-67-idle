@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Items Viewer</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/ai_studio/studio_shell/studio_shell.css">
+  <link rel="stylesheet" href="items.css">
+</head>
+<body>
+  <div class="studio-shell">
+    <!-- The SAME collapsible left sidebar every AI Studio page carries
+         (studio_shell.css/.js own layout, collapse state, and styling); see
+         assets/canvas/site/canvas.html for the precedent this block is copied from. -->
+    <aside class="studio-sidebar" aria-label="AI Studio navigation">
+      <div class="studio-sidebar-brand">
+        <span class="studio-brand-mark">AI</span>
+        <div class="studio-brand-copy">
+          <strong>AI Studio</strong>
+          <span>game pipeline</span>
+        </div>
+        <button class="studio-sidebar-toggle" type="button" data-studio-sidebar-toggle aria-label="Toggle sidebar" aria-expanded="true">&lt;</button>
+      </div>
+
+      <nav class="studio-side-nav" aria-label="Primary">
+        <p class="studio-nav-section">Workspace</p>
+        <a class="studio-nav-item" href="/">
+          <span class="studio-nav-icon">S</span>
+          <span class="studio-nav-label">Studio Home</span>
+        </a>
+        <a class="studio-nav-item" href="/architecture_map/">
+          <span class="studio-nav-icon map">M</span>
+          <span class="studio-nav-label">Architecture Map</span>
+        </a>
+        <a class="studio-nav-item" href="/taskboard/">
+          <span class="studio-nav-icon tasks">T</span>
+          <span class="studio-nav-label">Taskboard</span>
+        </a>
+        <a class="studio-nav-item" href="/asset_viewer/">
+          <span class="studio-nav-icon assets">A</span>
+          <span class="studio-nav-label">Asset Viewer</span>
+        </a>
+        <a class="studio-nav-item" href="/canvas">
+          <span class="studio-nav-icon prep">C</span>
+          <span class="studio-nav-label">Canvas</span>
+        </a>
+        <a class="studio-nav-item is-active" href="/items">
+          <span class="studio-nav-icon items">I</span>
+          <span class="studio-nav-label">Items</span>
+        </a>
+        <a class="studio-nav-item" href="/quality/">
+          <span class="studio-nav-icon quality">Q</span>
+          <span class="studio-nav-label">Quality Checks</span>
+        </a>
+      </nav>
+    </aside>
+
+    <main class="studio-content items-content">
+      <header class="items-header">
+        <div>
+          <p class="eyebrow">Items</p>
+          <h1>Items Viewer</h1>
+          <p id="statusLine" class="items-status">Loading catalogs...</p>
+        </div>
+        <div class="items-picker">
+          <label for="catalogSelect">Catalog</label>
+          <select id="catalogSelect" aria-label="Select a catalog"></select>
+        </div>
+      </header>
+
+      <div id="topBanner" class="items-top-banner is-hidden" role="status"></div>
+
+      <section id="summaryPanel" class="items-summary" aria-label="Catalog summary"></section>
+
+      <section id="removedSection" class="items-removed is-hidden" aria-label="Removed and lock issues"></section>
+
+      <section id="cardGrid" class="items-card-grid" aria-label="Items"></section>
+    </main>
+  </div>
+
+  <script src="/ai_studio/studio_shell/studio_shell.js"></script>
+  <script type="module" src="items.js"></script>
+</body>
+</html>
