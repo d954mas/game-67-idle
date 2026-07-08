@@ -1,7 +1,7 @@
 ---
 id: T0338
 title: "AI agent token-usage discipline: scoped search, compressed logs, short outputs"
-status: doing
+status: done
 project: P001
 epic: E001
 priority: P1
@@ -45,27 +45,24 @@ and explicitly requested sources only.
       no raw dumps.
 - [x] D5: decide whether taskboard needs a compact `show`/section mode.
 - [x] D6: decide whether profiling/status should flag large stdout/stderr.
-- [ ] D7: mirror accepted rules into `neotolis-engine` without changing its
+- [x] D7: mirror accepted rules into `neotolis-engine` without changing its
       engine code.
-- [ ] D8: pilot the accepted rules on 2-3 real tasks before promoting them to
+- [x] D8: pilot the accepted rules on 2-3 real tasks before promoting them to
       hooks/skills/automation.
 
 ## Done when
 
-- [ ] Each decision in the queue has an accepted/rejected/deferred note in
+- [x] Each decision in the queue has an accepted/rejected/deferred note in
       `## Log`.
-- [ ] Accepted `game-67-idle` documentation/tooling changes are implemented and
+- [x] Accepted `game-67-idle` documentation/tooling changes are implemented and
       validated with the narrowest relevant checks.
-- [ ] Accepted `neotolis-engine` changes are captured as a separate repo plan or
+- [x] Accepted `neotolis-engine` changes are captured as a separate repo plan or
       patch path; no direct engine-code edit is made from this repo.
-- [ ] Final report is short: changed files, checks run, unresolved decisions.
+- [x] Final report is short: changed files, checks run, unresolved decisions.
 
 ## Open questions
 
-- Should D1 start with root `AGENTS.md`, or should root stay minimal and the
-  first implementation target be `ai_studio/core_harness/workflow/README.md`?
-- For `neotolis-engine`, should the work be a local patch proposal only, or do
-  we prepare an issue/PR plan after the `game-67-idle` pilot?
+- None.
 
 ## Log
 
@@ -114,3 +111,10 @@ and explicitly requested sources only.
   Speed check against a temporary `HEAD` build of `hook_record_fast`: 500
   PostToolUse invocations averaged old/new 7.813/8.247 ms for 3-char output and
   8.409/8.514 ms for 96 KB output; added cost is process-spawn-level noise.
+- 2026-07-08: D7 lead decision: DROP/no-op. Do not touch `neotolis-engine`.
+  Accepted token-usage changes stay in AI Studio; `neotolis-engine` has its own
+  spec-first/review contracts, and its `autoresearch` command is a rare-mode
+  tool rather than the normal agent path.
+- 2026-07-08: D8 lead decision: DROP/no-op. Do not run a separate pilot and do
+  not promote anything to hooks/skills/automation. The only accepted code change
+  remains D6 numeric output telemetry plus the D3 fast-worker wording fix.
