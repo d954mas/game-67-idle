@@ -73,4 +73,6 @@ Current hosted surfaces:
 - `/asset_viewer/` -> Asset Viewer launcher.
 - `/canvas` -> 302 redirect (query string preserved) to the Canvas surface
   (`ai_studio/assets/canvas/site/canvas.html`), owned by `assets/canvas/`.
+- `/items` -> 302 redirect (query string preserved) to the Items Viewer surface
+  (`ai_studio/assets/items_viewer/site/items.html`), owned by `assets/items_viewer/`.
 - `/quality/` -> Quality Checks surface.

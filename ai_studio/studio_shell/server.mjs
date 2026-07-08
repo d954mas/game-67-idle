@@ -13,6 +13,7 @@ import { findRoot } from "../taskboard/lib.mjs";
 import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/gallery/api.mjs";
 import { createArchitectureMapApi } from "../architecture_map/api.mjs";
 import { createCanvasApi } from "../assets/canvas/api.mjs";
+import { createItemsViewerApi } from "../assets/items_viewer/api.mjs";
 import { createChatApi } from "./chat/api.mjs";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
 
@@ -27,6 +28,7 @@ const handleTaskboardApi = createTaskboardApi(root);
 const handleAssetViewerApi = createAssetViewerApi(root);
 const handleArchitectureMapApi = createArchitectureMapApi(root);
 const handleCanvasApi = createCanvasApi(root);
+const handleItemsViewerApi = createItemsViewerApi(root);
 // T0242: the chat panel's backend — spawns an UNSANDBOXED codex process per message
 // (agent.mjs), so this mount leans on the SAME 127.0.0.1-only trust boundary as the rest
 // of this server (see server.listen below); never widen the bind without revisiting that.
@@ -65,6 +67,13 @@ function safeResolve(base, relativePath) {
 function canvasRedirectLocation(pathname, search) {
   if (pathname !== "/canvas" && pathname !== "/canvas/") return null;
   return `/ai_studio/assets/canvas/site/canvas.html${search || ""}`;
+}
+
+// Short deep-link route: /items(/) redirects to the Items Viewer site page (T0316
+// phase 1), keeping the query string, mirroring canvasRedirectLocation above.
+function itemsViewerRedirectLocation(pathname, search) {
+  if (pathname !== "/items" && pathname !== "/items/") return null;
+  return `/ai_studio/assets/items_viewer/site/items.html${search || ""}`;
 }
 
 function staticPath(pathname) {
@@ -142,6 +151,12 @@ const server = createServer((req, res) => {
     res.end();
     return;
   }
+  const itemsViewerRedirect = itemsViewerRedirectLocation(url.pathname, url.search);
+  if (itemsViewerRedirect) {
+    res.writeHead(302, { location: itemsViewerRedirect });
+    res.end();
+    return;
+  }
   if (url.pathname.startsWith("/api/")) {
     if (url.pathname === "/api/quality-checks") {
       serveJson(res, loadQualityCatalog(root));
@@ -153,6 +168,10 @@ const server = createServer((req, res) => {
     }
     if (url.pathname.startsWith("/api/canvas/")) {
       handleCanvasApi(req, res, url);
+      return;
+    }
+    if (url.pathname.startsWith("/api/items-viewer/")) {
+      handleItemsViewerApi(req, res, url);
       return;
     }
     if (url.pathname.startsWith("/api/chat/")) {
