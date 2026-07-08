@@ -163,6 +163,20 @@
               ]
             }
           ]
+        },
+        {
+          "id": "features:platform-sdk",
+          "kind": "feature",
+          "path": "features/platform-sdk",
+          "title": "platform-sdk/",
+          "description": "Reusable L1 feature-pack contract for target-platform to platform-SDK adapter mapping and a game-facing SDK wrapper.",
+          "role": "platform SDK feature pack",
+          "tags": [
+            "features",
+            "platform-sdk",
+            "web",
+            "L1"
+          ]
         }
       ]
     },

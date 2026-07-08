@@ -186,6 +186,11 @@ What is left pointing at the template for them is game-side only:
   `templates/template/src/ui/demo_hud.c` + the template's own content-coupled
   integration tests `templates/template/tests/test_progression.c`,
   `test_progression_catalog.c`, `test_progression_curve.c`.
+- `platform-sdk/` (`L1`, draft): target-platform to platform-SDK adapter
+  contract for commercial web builds. Targets are `local`, `itch`, `poki`,
+  `yandex`, and `playgama`; SDK adapters are `mock`, `poki`, `yandex`, and
+  `playgama`. `local` and `itch` both use `mock` because `mock` is an SDK
+  adapter, not a target, and itch has no mandatory runtime game SDK.
 
 ### Ownership model
 

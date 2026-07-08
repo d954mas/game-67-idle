@@ -1,0 +1,50 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "platform-sdk",
+  "title": "Platform SDK",
+  "status": "draft",
+  "kind": "gameplay-infrastructure",
+  "summary": "L1 feature contract for target platform to platform SDK adapter mapping and a universal game-facing SDK wrapper.",
+  "copy_model": "manual-copy",
+  "layer": "L1",
+  "owners": [
+    "features/platform-sdk"
+  ],
+  "dependencies": [
+    "browser web build target",
+    "target-specific portal SDK documentation",
+    "local scorecard/event sink"
+  ],
+  "provides": [
+    "target-to-platform-sdk mapping",
+    "game-facing PlatformSdk wrapper contract",
+    "build-time adapter selection",
+    "runtime target and SDK identity",
+    "policy capabilities such as externalLinksAllowed",
+    "adapter semantics for mock, Poki, Yandex Games, and Playgama"
+  ],
+  "flags": {
+    "target": "local|itch|poki|yandex|playgama",
+    "platform_sdk": "mock|poki|yandex|playgama"
+  },
+  "manuals": {
+    "install": "features/platform-sdk/INSTALL.md",
+    "contract": "features/platform-sdk/references/contract.md"
+  },
+  "outputs": [],
+  "default_template": {
+    "target_platforms": [
+      "local",
+      "itch",
+      "poki",
+      "yandex",
+      "playgama"
+    ],
+    "platform_sdks": [
+      "mock",
+      "poki",
+      "yandex",
+      "playgama"
+    ]
+  }
+}
