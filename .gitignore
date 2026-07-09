@@ -27,6 +27,10 @@ ai_studio/architecture_map/validation-report.json
 # path). Only the committed ai_studio/studio.config.json defaults are tracked.
 ai_studio/studio.config.local.json
 
+# Local/private game workspace mounts. Public games stay in games/games.json;
+# private commercial game ids, remotes, aliases, and roots must stay local.
+ai_studio/workspace/games.local.json
+
 # Local Canvas project working copies. The committed studio config keeps the
 # canonical projects root outside the repo.
 ai_studio/assets/canvas/projects/

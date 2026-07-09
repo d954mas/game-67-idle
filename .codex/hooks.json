@@ -17,6 +17,16 @@
         "hooks": [
           {
             "type": "command",
+            "command": "node ai_studio/workspace/games.mjs hook-guard",
+            "commandWindows": "node ai_studio\\workspace\\games.mjs hook-guard"
+          }
+        ]
+      },
+      {
+        "matcher": "(?i)(bash|shell|exec)",
+        "hooks": [
+          {
+            "type": "command",
             "command": "ai_studio/core_harness/profiling/hook_record_fast codex",
             "commandWindows": "ai_studio\\core_harness\\profiling\\hook_record_fast.exe codex"
           }

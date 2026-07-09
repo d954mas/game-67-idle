@@ -12,6 +12,8 @@ public surface, internals, and validation path.
 - `architecture_map/`: live architecture map renderer and validation report for
   unmapped files.
 - `assets/`: reviewed asset-facing modules, starting with Asset Viewer.
+- `workspace/`: local/private workspace mounts and privacy preflight for nested
+  game repositories under `games/<id>`.
 - `runtime_automation/`: reviewed local DevAPI, capture, screenshot health, and
   UI readability proof helpers.
 - `core_harness/`: reviewed core routing and agent harness docs.
@@ -37,6 +39,13 @@ Load only the route that matches the current task:
 - New game folder creation: `node games/new_game.mjs --id <game-id>`.
 - VS Code task/launch regeneration:
   `node ai_studio/dev_environment/vscode_projects.mjs`.
+- Private/local game mounts and leak preflight:
+  `ai_studio/workspace/README.md` and
+  `node ai_studio/workspace/games.mjs preflight --json`.
+- Agent shell hooks are generated from
+  `ai_studio/core_harness/agent_surfaces/hooks_sync.mjs`; the workspace
+  `hook-guard` blocks unsafe parent Git commands for private mounts before the
+  passive profiler runs.
 - Agent workflow, context policy, Markdown shape, or multi-agent use:
   `ai_studio/core_harness/workflow/README.md`.
 - Broad read-heavy work that should be split before loading too much context:

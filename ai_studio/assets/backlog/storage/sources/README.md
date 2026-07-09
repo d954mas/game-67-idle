@@ -15,18 +15,24 @@ folders by scanning the repository root.
   asset sources.
 - `templates.mjs`: small helper for listing and upserting template
   asset sources. Template source data lives in `templates/templates.json`.
-- `games.mjs`: small helper for listing and upserting game asset
-  sources. Game source data lives in `games/games.json`.
+- `games.mjs`: small helper for listing and upserting public game asset
+  sources. Public game source data lives in `games/games.json`.
 
 `templates/templates.json` registers game template folders and their asset
 roots. `games/new_game.mjs --template <id>` resolves template ids
 from this file.
 
-`games/games.json` registers game folders and their asset roots. It is not a
-template lineage/provenance file; after copy, each game owns its folder.
+`games/games.json` registers public/tracked game folders and their asset roots.
+It is not a template lineage/provenance file; after copy, each game owns its
+folder.
 
 New games created through `games/new_game.mjs` are registered in
 `games/games.json`.
+
+Private commercial game mounts live in the ignored
+`ai_studio/workspace/games.local.json` overlay and are resolved through
+`ai_studio/workspace/games.mjs` only after explicit private opt-in and preflight.
+Do not add private game entries to this public source registry.
 
 ## Path Boundary
 

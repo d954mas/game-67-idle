@@ -11,7 +11,8 @@ different agent CLIs.
 - `.codex/skills/*/SKILL.md`: Codex-discoverable skill entrypoints. Small
   skills may keep canonical content there; reviewed module-owned skills may
   point to canonical instructions inside their owning `ai_studio/` module.
-- `hooks_sync.mjs`: canonical hook event/matcher/recorder source.
+- `hooks_sync.mjs`: canonical hook event/matcher source for passive profiling
+  and workspace-owned shell guards such as the private game Git guard.
 
 ## Generated Outputs
 
@@ -44,6 +45,7 @@ This module does not own:
 
 - skill content;
 - hook recorder implementation;
+- workspace guard implementation;
 - task state;
 - profiling analysis;
 - agent runtime permissions.

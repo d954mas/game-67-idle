@@ -1,0 +1,55 @@
+{
+  "id": "module:workspace",
+  "title": "Workspace",
+  "subtitle": "private/local mounts",
+  "kind": "module",
+  "moduleId": "workspace",
+  "color": "#0f766e",
+  "description": "Local/private workspace mount resolver for game repositories available under games/<id> without making private game state part of the public Studio repository.",
+  "tags": [
+    "workspace",
+    "private-repos",
+    "privacy"
+  ],
+  "children": [
+    {
+      "id": "workspace:readme",
+      "kind": "doc",
+      "path": "ai_studio/workspace/README.md",
+      "title": "README.md",
+      "description": "Workspace module contract: public game registry, local ignored private registry, private nested repo boundary, preflight command, and validation.",
+      "role": "workspace privacy contract",
+      "tags": [
+        "workspace",
+        "privacy",
+        "contract"
+      ]
+    },
+    {
+      "id": "workspace:games",
+      "kind": "tool",
+      "path": "ai_studio/workspace/games.mjs",
+      "title": "games.mjs",
+      "description": "Resolves public game mounts and explicit private local mounts, runs the private game preflight, and provides the parent Git command guard used by agent shell hooks.",
+      "role": "game mount resolver, privacy preflight, and git guard",
+      "tags": [
+        "workspace",
+        "private-repos",
+        "guard"
+      ]
+    },
+    {
+      "id": "workspace:games-test",
+      "kind": "test",
+      "path": "ai_studio/workspace/tests/private_games_registry.test.mjs",
+      "title": "private_games_registry.test.mjs",
+      "description": "Regression tests for public-only default resolution, explicit private mount inclusion, duplicate fixture overrides, pure privacy audit, and real git preflight fixtures.",
+      "role": "private game registry tests",
+      "tags": [
+        "workspace",
+        "test",
+        "private-repos"
+      ]
+    }
+  ]
+}

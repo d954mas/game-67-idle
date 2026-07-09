@@ -18,6 +18,7 @@
       "architecture_map/tree/studio-readme.json",
       "architecture_map/tree/workspace-folders.json",
       "architecture_map/tree/studio-shell.json",
+      "architecture_map/tree/module-workspace.json",
       "architecture_map/tree/module-dev-environment.json",
       "architecture_map/tree/runtime-automation.json",
       "architecture_map/tree/module-hot.json",
