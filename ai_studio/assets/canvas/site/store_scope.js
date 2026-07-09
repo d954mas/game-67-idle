@@ -65,7 +65,7 @@ export function canvasScopedAssetUrl(path, storeId) {
 }
 
 export function projectFileUrl(project, src) {
-  return canvasScopedAssetUrl(`/projects/${project.id}/${src}`, projectStoreId(project));
+  return canvasApiUrl(`/projects/${project.id}/${src}`);
 }
 
 export function projectCacheKey(project, src) {

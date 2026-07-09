@@ -47,7 +47,7 @@ test("site store scope separates file URLs, image-cache keys, project keys, and 
   assert.equal(projectKey(publicProject), "studio:same-id");
   assert.equal(projectKey(privateProject), "game:secret-game:same-id");
   assert.equal(projectFileUrl(publicProject, "files/a.png"), "/api/canvas/projects/same-id/files/a.png");
-  assert.equal(projectFileUrl(privateProject, "files/a.png"), "/api/canvas/projects/same-id/files/a.png?store=game%3Asecret-game");
+  assert.equal(projectFileUrl(privateProject, "files/a.png"), "/api/canvas/projects/same-id/files/a.png");
   assert.notEqual(projectCacheKey(publicProject, "files/a.png"), projectCacheKey(privateProject, "files/a.png"));
 
   assert.deepEqual(canvasRefBase(publicProject), { uri: "canvas://same-id", private: false, title: "Public" });

@@ -67,9 +67,10 @@ all mounted Canvas stores, remembers the selected home filter in `localStorage`,
 and sends store scope through request headers for normal JSON APIs. Project URLs
 keep the legacy `/canvas?project=<id>` shape and do not write `store=game:<id>`
 into the address bar; last-project restore keeps the private store id in
-`localStorage`. Public Copy ID refs keep their human-readable tail, while private
-Copy ID refs use `canvas://game/<gameId>/...` without project/object names in the
-tail.
+`localStorage`. Private thumbnails and canvas images are fetched with the same
+store header and shown as `blob:` URLs, because `<img>` cannot send custom
+headers. Public Copy ID refs keep their human-readable tail, while private Copy
+ID refs use `canvas://game/<gameId>/...` without project/object names in the tail.
 
 ## Object references (`canvas://`)
 

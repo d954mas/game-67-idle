@@ -15,8 +15,8 @@ import {
   decodeLastProject,
   encodeLastProject,
   projectCacheKey,
-  projectFileUrl,
   projectStoreId,
+  isStudioStore,
 } from "./store_scope.js";
 import { toastError, toastInfo, toastPinned } from "./toasts.js";
 
@@ -208,16 +208,63 @@ export function regionCount(element) {
 
 // ---- image cache -------------------------------------------------------------
 
-const imageCache = new Map(); // element.src -> HTMLImageElement
+const imageCache = new Map(); // store/project/src -> HTMLImageElement
+const fileObjectUrlCache = new Map(); // private store/project/src -> blob:
+const fileObjectUrlFetches = new Map();
+const fileObjectUrlFailures = new Set();
+
+function projectFileRequestUrl(project, src) {
+  return canvasApiUrl(`/projects/${project.id}/${src}`);
+}
+
+function rememberFileObjectUrl(key, url) {
+  const previous = fileObjectUrlCache.get(key);
+  if (previous && previous !== url) URL.revokeObjectURL(previous);
+  fileObjectUrlCache.set(key, url);
+  return url;
+}
+
+function privateFileObjectUrl(project, src, onReady = null) {
+  const key = projectCacheKey(project, src);
+  if (fileObjectUrlCache.has(key)) return fileObjectUrlCache.get(key);
+  if (!fileObjectUrlFetches.has(key) && !fileObjectUrlFailures.has(key)) {
+    const fetchPromise = fetch(projectFileRequestUrl(project, src), {
+      headers: canvasStoreHeaders(projectStoreId(project)),
+    })
+      .then((response) => {
+        if (!response.ok) throw new Error(`could not load ${src} (${response.status})`);
+        return response.blob();
+      })
+      .then((blob) => rememberFileObjectUrl(key, URL.createObjectURL(blob)))
+      .catch((error) => {
+        fileObjectUrlFailures.add(key);
+        setStatus(error.message, true);
+        return "";
+      })
+      .finally(() => {
+        fileObjectUrlFetches.delete(key);
+      });
+    fileObjectUrlFetches.set(key, fetchPromise);
+  }
+  const pending = fileObjectUrlFetches.get(key);
+  if (pending && onReady) pending.then((url) => { if (url) onReady(url); });
+  return "";
+}
+
+function fileUrlForProject(project, src, onReady = null) {
+  if (!project || !src) return "";
+  if (isStudioStore(projectStoreId(project))) return projectFileRequestUrl(project, src);
+  return privateFileObjectUrl(project, src, onReady);
+}
 
 export function fileUrl(element) {
-  return projectFileUrl(state.project, element.src);
+  return fileUrlForProject(state.project, element.src, () => refresh());
 }
 
 // The first image element of a project (used for a project card cover thumbnail).
 export function coverUrl(project) {
   const first = (project.elements || []).find((element) => element.type === "image" && element.src);
-  return first ? projectFileUrl(project, first.src) : null;
+  return first ? fileUrlForProject(project, first.src, () => hooks.renderHome()) : null;
 }
 
 // Content-addressed image cache lookup by a bare src string (T0265 F4). This is the ONE image
@@ -230,7 +277,10 @@ export function imageForSrc(src) {
   if (imageCache.has(key)) return imageCache.get(key);
   const img = new Image();
   img.onload = () => hooks.renderCanvas();
-  img.src = projectFileUrl(state.project, src);
+  const url = fileUrlForProject(state.project, src, (readyUrl) => {
+    img.src = readyUrl;
+  });
+  if (url) img.src = url;
   imageCache.set(key, img);
   return img;
 }
@@ -240,7 +290,11 @@ export function imageFor(element) {
 }
 
 export function clearImageCache() {
+  for (const url of fileObjectUrlCache.values()) URL.revokeObjectURL(url);
   imageCache.clear();
+  fileObjectUrlCache.clear();
+  fileObjectUrlFetches.clear();
+  fileObjectUrlFailures.clear();
 }
 
 // ---- selection ---------------------------------------------------------------
