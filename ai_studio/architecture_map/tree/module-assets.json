@@ -983,6 +983,20 @@
           ]
         },
         {
+          "id": "assets:canvas-stores",
+          "kind": "tool",
+          "path": "ai_studio/assets/canvas/stores.mjs",
+          "title": "stores.mjs",
+          "description": "Canvas store resolver for Studio-public and game-private project roots: selects the default Studio store, resolves explicit --game/--store selectors through workspace game mounts, aggregates private stores only on opt-in list queries, decorates project rows with storeId/visibility/qualifiedId, and rejects private CLI export copies into the parent public Studio checkout.",
+          "role": "canvas store selector and export guard",
+          "tags": [
+            "assets",
+            "canvas",
+            "storage",
+            "privacy"
+          ]
+        },
+        {
           "id": "assets:canvas-tree",
           "kind": "tool",
           "path": "ai_studio/assets/canvas/tree.mjs",

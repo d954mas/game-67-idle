@@ -12,6 +12,7 @@
 // The projects root is resolved lazily via studio config (CANVAS_PROJECTS_ROOT
 // env overrides for tests) and is only created on first project create.
 import { randomUUID } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   appendFileSync,
   closeSync,
@@ -34,9 +35,17 @@ import { sha256Hex } from "../../core_harness/tool_lib/hash.mjs";
 export const CANVAS_PROJECT_SCHEMA = "ai_studio.canvas.project.v1";
 
 const IMAGE_EXTENSIONS = ["png", "jpg", "jpeg", "gif", "webp"];
+const canvasProjectsRootContext = new AsyncLocalStorage();
 
 function projectsRoot(root) {
+  const override = canvasProjectsRootContext.getStore();
+  if (override && override.projectsRoot) return override.projectsRoot;
   return canvasProjectsRoot(root);
+}
+
+export function withCanvasProjectsRoot(projectsRoot, fn) {
+  const resolved = resolve(projectsRoot);
+  return canvasProjectsRootContext.run({ projectsRoot: resolved }, fn);
 }
 
 function nowIso() {

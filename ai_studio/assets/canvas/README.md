@@ -44,6 +44,20 @@ The same config carries `canvasHistoryDepth` (default 200) — the retained undo
 cap read via `canvasHistoryDepth(root)`; `CANVAS_HISTORY_DEPTH` overrides it for
 tests. See **History depth cap + compaction** below.
 
+## Canvas stores
+
+The default Canvas store is the public Studio projects root above. A private
+game mount may opt into Canvas by listing `canvas` in `enabledStores` (or by
+already having `.ai_studio/canvas/projects` under the game root); that store is
+selected explicitly with `--game <id>` or `--store game:<id>`.
+
+Agent CLI reads are public-only by default. `list --include-private` aggregates
+private game stores and decorates rows with `storeId`, `visibility`, and
+`qualifiedId`; selected `create`/`show`/mutating commands run inside the selected
+store's projects root. Private CLI exports may write inside the owning game store
+or outside the parent Studio checkout, but `--to`/`--zip` destinations inside the
+public parent repo are rejected to avoid copying private art into public git.
+
 ## Object references (`canvas://`)
 
 The page's right-click "Copy ID" copies a paste-into-chat reference so the lead

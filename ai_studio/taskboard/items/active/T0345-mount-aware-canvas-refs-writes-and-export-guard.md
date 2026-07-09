@@ -1,7 +1,7 @@
 ---
 id: T0345
 title: Mount-aware Canvas refs writes and export guard
-status: backlog
+status: doing
 project: P001
 epic: E014
 priority: P1
@@ -52,3 +52,5 @@ and leak prevention for private Canvas projects.
   side-channel risk before any current-game canvas migration.
 - 2026-07-09: Closed unsafe override gap: private exports to parent tracked
   destinations must be rejected, not overridden.
+- 2026-07-09: Started after T0344 store-qualified Taskboard commit fc3da87c5.
+- 2026-07-09: Canvas store-routing slice: CLI create/show/list/mutations can select private game stores; private --to/--zip exports into parent Studio repo are rejected, including Windows path-case variants. Verified with canvas/private-games tests and architecture-map validation.

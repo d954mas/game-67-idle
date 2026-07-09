@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -19,6 +19,40 @@ function run(env, ...args) {
   });
   const line = stdout.trim().split("\n").filter(Boolean).at(-1);
   return JSON.parse(line);
+}
+
+function ensurePrivateGameMount(root, gameId = "secret-game") {
+  const gameRoot = join(root, "games", gameId);
+  mkdirSync(gameRoot, { recursive: true });
+  execFileSync("git", ["init"], { cwd: root, encoding: "utf8" });
+  execFileSync("git", ["init"], { cwd: gameRoot, encoding: "utf8" });
+  mkdirSync(join(root, ".git", "info"), { recursive: true });
+  writeFileSync(
+    join(root, ".git", "info", "exclude"),
+    `ai_studio/workspace/games.local.json\ngames/${gameId}/\n`,
+    "utf8",
+  );
+  mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
+  writeFileSync(join(root, "ai_studio", "workspace", "games.local.json"), JSON.stringify({
+    schema: "ai_studio.workspace.games.local.v1",
+    games: [{
+      schemaVersion: 1,
+      storeId: `game:${gameId}`,
+      kind: "game",
+      gameId,
+      root: `games/${gameId}`,
+      visibility: "private",
+      gitRoot: `games/${gameId}`,
+      commitPolicy: "nested-private",
+      enabledStores: ["canvas"],
+      assetRoot: `games/${gameId}/assets`,
+    }],
+  }, null, 2) + "\n", "utf8");
+  return {
+    gameId,
+    gameRoot,
+    canvasRoot: join(gameRoot, ".ai_studio", "canvas", "projects"),
+  };
 }
 
 // Spawn the CLI expecting a non-zero exit (fail()'s contract: "error: <message>" to
@@ -65,6 +99,44 @@ test("cli create/add-image/undo/redo/history/export smoke", (t) => {
   assert.equal(ops.addImage.count, 1);
   assert.equal(ops.patchElement.count, 1);
   assert.equal(stats.errors.count, 0);
+});
+
+test("cli routes selected private game canvas store and keeps default list public-only", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "canvas-cli-private-root-"));
+  const publicRoot = join(root, "public-canvas");
+  const privateStore = ensurePrivateGameMount(root);
+  const env = { AI_STUDIO_ROOT: root, CANVAS_PROJECTS_ROOT: publicRoot };
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const publicProject = run(env, "create", "--title", "Public Canvas").project;
+  const privateProject = run(env, "create", "--game", privateStore.gameId, "--title", "Private Canvas").project;
+
+  assert.equal(existsSync(join(publicRoot, publicProject.id, "project.json")), true);
+  assert.equal(existsSync(join(privateStore.canvasRoot, privateProject.id, "project.json")), true);
+  assert.equal(existsSync(join(publicRoot, privateProject.id)), false);
+
+  const normal = run(env, "list");
+  assert.deepEqual(normal.projects.map((project) => project.title), ["Public Canvas"]);
+  assert.deepEqual(normal.projects.map((project) => project.storeId), ["studio"]);
+
+  const included = run(env, "list", "--include-private");
+  const privateRow = included.projects.find((project) => project.storeId === "game:secret-game");
+  assert.equal(privateRow.title, "Private Canvas");
+  assert.equal(privateRow.visibility, "private");
+  assert.equal(privateRow.qualifiedId, `game:secret-game:${privateProject.id}`);
+
+  const blockedExport = runFail(env, "export", privateProject.id, "--game", privateStore.gameId, "--all", "--to", join(root, "public-export-leak"));
+  assert.equal(blockedExport.status, 1);
+  assert.match(blockedExport.stderr, /private Canvas export/);
+  assert.equal(existsSync(join(root, "public-export-leak")), false);
+
+  if (process.platform === "win32") {
+    const caseVariantLeak = join(root.toUpperCase(), "public-export-case-leak");
+    const blockedCaseExport = runFail(env, "export", privateProject.id, "--game", privateStore.gameId, "--all", "--to", caseVariantLeak);
+    assert.equal(blockedCaseExport.status, 1);
+    assert.match(blockedCaseExport.stderr, /private Canvas export/);
+    assert.equal(existsSync(join(root, "public-export-case-leak")), false);
+  }
 });
 
 test("cli history-list + history-jump parity (Base spine + jump reaches panel states)", (t) => {
@@ -428,8 +500,11 @@ test("cli list: summary by default (id/title/created/updated/counts/head); --ful
   const summary = run(env, "list").projects;
   assert.equal(summary.length, 1);
   const row = summary[0];
-  assert.deepEqual(Object.keys(row).sort(), ["created", "elements", "groups", "head", "id", "title", "updated"].sort());
+  assert.deepEqual(Object.keys(row).sort(), ["created", "elements", "groups", "head", "id", "qualifiedId", "storeId", "title", "updated", "visibility"].sort());
   assert.equal(row.id, projectId);
+  assert.equal(row.storeId, "studio");
+  assert.equal(row.visibility, "public");
+  assert.equal(row.qualifiedId, `studio:${projectId}`);
   assert.equal(row.title, "List Summary");
   assert.equal(row.elements, 1);
   assert.equal(row.groups, 1);

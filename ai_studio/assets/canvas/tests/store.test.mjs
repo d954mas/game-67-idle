@@ -16,6 +16,7 @@ import {
   removeElement,
   resolveProjectFile,
   updateProject,
+  withCanvasProjectsRoot,
 } from "../store.mjs";
 import { solidPng } from "./png_fixture.mjs";
 
@@ -51,6 +52,25 @@ test("createProject writes a v1 project lazily and getProject reads it back", (t
   assert.equal(existsSync(join(projectsRoot, project.id, "project.json")), true);
   assert.equal(existsSync(join(projectsRoot, project.id, "files")), true);
   assert.deepEqual(getProject(ROOT, project.id), project);
+});
+
+test("withCanvasProjectsRoot routes one operation scope to a different project root", (t) => {
+  const publicRoot = tempProjects(t);
+  const privateRoot = mkdtempSync(join(tmpdir(), "canvas-store-private-"));
+  t.after(() => rmSync(privateRoot, { recursive: true, force: true }));
+
+  createProject(ROOT, { title: "Public Canvas" });
+  const privateProject = withCanvasProjectsRoot(privateRoot, () =>
+    createProject(ROOT, { title: "Private Canvas" })
+  );
+
+  assert.deepEqual(listProjects(ROOT).map((project) => project.title), ["Public Canvas"]);
+  assert.deepEqual(
+    withCanvasProjectsRoot(privateRoot, () => listProjects(ROOT).map((project) => project.title)),
+    ["Private Canvas"],
+  );
+  assert.equal(existsSync(join(publicRoot, privateProject.id)), false);
+  assert.equal(existsSync(join(privateRoot, privateProject.id, "project.json")), true);
 });
 
 test("listProjects tolerates broken project folders", (t) => {

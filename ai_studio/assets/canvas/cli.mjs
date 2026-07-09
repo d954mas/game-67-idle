@@ -151,8 +151,17 @@ import {
   withProjectLock,
   zipExport,
 } from "./ops.mjs";
+import {
+  assertCanvasExportDestination,
+  canvasStoreArgs,
+  canvasStoresForQuery,
+  canvasStoreSummary,
+  decorateCanvasProject,
+  selectCanvasStore,
+  withCanvasStore,
+} from "./stores.mjs";
 
-const repoRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+const repoRoot = resolve(process.env.AI_STUDIO_ROOT || fileURLToPath(new URL("../../..", import.meta.url)));
 
 function parseFlags(args) {
   const positional = [];
@@ -172,6 +181,14 @@ function parseFlags(args) {
 
 function print(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
+}
+
+function selectedCanvasStore(flags) {
+  return selectCanvasStore(repoRoot, canvasStoreArgs(flags));
+}
+
+function withSelectedCanvasStore(flags, fn) {
+  return withCanvasStore(selectedCanvasStore(flags), fn);
 }
 
 // Strict boolean flag parser (T0254 Tier 1 #4). Accepts true/false (case-insensitive)
@@ -309,9 +326,17 @@ async function runCommand(command, id, positional, flags) {
       // unbounded, and no consumer parses element data out of it — that's what `show`
       // is for). --full restores today's exact full-project dump (additive contract:
       // nothing that worked before stops working).
-      const projects = listProjects(repoRoot);
-      if (flags.full === "true") return print({ projects });
-      const summary = projects.map((project) => ({
+      const stores = canvasStoresForQuery(repoRoot, canvasStoreArgs(flags));
+      const projects = stores.flatMap((store) =>
+        withCanvasStore(store, () => listProjects(repoRoot).map((project) => ({ project, store })))
+      );
+      if (flags.full === "true") {
+        return print({
+          stores: stores.map(canvasStoreSummary),
+          projects: projects.map(({ project, store }) => decorateCanvasProject(project, store)),
+        });
+      }
+      const summary = projects.map(({ project, store }) => ({
         id: project.id,
         title: project.title,
         created: project.created,
@@ -319,16 +344,25 @@ async function runCommand(command, id, positional, flags) {
         elements: (project.elements || []).length,
         groups: (project.groups || []).length,
         head: Number(project.history_seq) || 0,
+        storeId: store.storeId,
+        visibility: store.visibility,
+        qualifiedId: `${store.storeId}:${project.id}`,
       }));
-      return print({ projects: summary });
+      return print({ stores: stores.map(canvasStoreSummary), projects: summary });
     }
     case "create":
       // --title is optional: a missing/empty title gets a random default
       // ("Amber Fox"-style) from the op layer, matching the page's instant-create.
-      return print({ project: createProject(repoRoot, { title: flags.title }) });
+      return withSelectedCanvasStore(flags, () => {
+        const store = selectedCanvasStore(flags);
+        return print({ project: decorateCanvasProject(createProject(repoRoot, { title: flags.title }), store) });
+      });
     case "show":
       if (!id) fail("show requires <id>");
-      return print({ project: getProject(repoRoot, id) });
+      return withSelectedCanvasStore(flags, () => {
+        const store = selectedCanvasStore(flags);
+        return print({ project: decorateCanvasProject(getProject(repoRoot, id), store) });
+      });
     case "rename":
       if (!id) fail("rename requires <id>");
       if (!flags.title || flags.title === "true") fail("rename requires --title <title>");
@@ -771,6 +805,13 @@ async function runCommand(command, id, positional, flags) {
     case "export": {
       if (!id) fail("export requires <id>");
       const rows = exportRowFromFlags(flags); // undefined => honor each element's stored rows
+      const store = selectedCanvasStore(flags);
+      if (flags.to && flags.to !== "true") {
+        assertCanvasExportDestination(repoRoot, store, resolve(flags.to));
+      }
+      if (flags.zip && flags.zip !== "true") {
+        assertCanvasExportDestination(repoRoot, store, resolve(flags.zip));
+      }
       let result;
       if (flags.project === "true") {
         result = await exportProject(repoRoot, { projectId: id });
@@ -1276,23 +1317,33 @@ async function main(argv) {
   const { positional, flags } = parseFlags(rest);
   const id = positional[0];
   const startedAt = performance.now();
+  const selectedArgs = canvasStoreArgs(flags);
+  const hasStoreSelector = Boolean(selectedArgs.store || selectedArgs.game);
+  const runInSelectedStore = (fn) => {
+    if (!hasStoreSelector) return fn();
+    return withCanvasStore(selectCanvasStore(repoRoot, selectedArgs), fn);
+  };
   try {
     // `id` is undefined for project-less commands (list/create/help/...) —
     // withProjectLock is a no-op pass-through in that case (see its doc in
     // store.mjs), so this is safe to apply unconditionally to everything else.
     if (id && !SELF_LOCKING_COMMANDS.has(command)) {
-      return await withProjectLock(repoRoot, id, () => runCommand(command, id, positional, flags));
+      return await runInSelectedStore(() => withProjectLock(repoRoot, id, () => runCommand(command, id, positional, flags)));
     }
-    return await runCommand(command, id, positional, flags);
+    return await runInSelectedStore(() => runCommand(command, id, positional, flags));
   } catch (error) {
     // Mirror the API: a project-resolvable failure leaves a trail in
     // <project>/errors.jsonl (recordOpFailure no-ops when id can't resolve).
-    recordOpFailure(repoRoot, id, {
-      op: command || "",
-      args_summary: flags || {},
-      error,
-      duration_ms: performance.now() - startedAt,
-    });
+    try {
+      await runInSelectedStore(() => recordOpFailure(repoRoot, id, {
+        op: command || "",
+        args_summary: flags || {},
+        error,
+        duration_ms: performance.now() - startedAt,
+      }));
+    } catch {
+      // Keep the original command error intact; failure logging is best effort.
+    }
     throw error;
   }
 }
