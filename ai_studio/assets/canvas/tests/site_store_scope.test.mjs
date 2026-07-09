@@ -4,6 +4,7 @@ import {
   appendStoreQuery,
   canvasApiUrl,
   canvasRefBase,
+  canvasStoreHeaders,
   decodeLastProject,
   encodeLastProject,
   projectCacheKey,
@@ -14,11 +15,13 @@ import {
   storeIdFromParams,
 } from "../site/store_scope.js";
 
-test("site store scope keeps public URLs backward-compatible and appends private store query", () => {
+test("site store scope keeps visible API URLs unqualified and sends private store headers", () => {
   assert.equal(projectStoreId({ id: "p1" }), "studio");
   assert.equal(appendStoreQuery("/projects/p1", "studio"), "/projects/p1");
   assert.equal(appendStoreQuery("/projects/p1?select=e1", "game:secret-game"), "/projects/p1?select=e1&store=game%3Asecret-game");
-  assert.equal(canvasApiUrl("/projects/p1/files/a.png", "game:secret-game"), "/api/canvas/projects/p1/files/a.png?store=game%3Asecret-game");
+  assert.equal(canvasApiUrl("/projects/p1/files/a.png", "game:secret-game"), "/api/canvas/projects/p1/files/a.png");
+  assert.deepEqual(canvasStoreHeaders("studio", { "content-type": "application/json" }), { "content-type": "application/json" });
+  assert.deepEqual(canvasStoreHeaders("game:secret-game"), { "x-ai-studio-store": "game:secret-game" });
 });
 
 test("site store scope reads and writes deep-link store params", () => {

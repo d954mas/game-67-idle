@@ -51,21 +51,25 @@ game mount may opt into Canvas by listing `canvas` in `enabledStores` (or by
 already having `.ai_studio/canvas/projects` under the game root); that store is
 selected explicitly with `--game <id>` or `--store game:<id>`.
 
-Agent CLI and HTTP API reads are public-only by default. `list --include-private`
-and `GET /api/canvas/projects?include-private=true` aggregate private game stores
-and decorate rows with `storeId`, `visibility`, and `qualifiedId`; selected
-`create`/`show`/mutating commands and API routes run inside the selected store's
-projects root via `--game <id>` / `--store game:<id>` or `?game=<id>` /
-`?store=game:<id>`. Private CLI exports may write inside the owning game store or
-outside the parent Studio checkout, but `--to`/`--zip` destinations inside the
-public parent repo are rejected to avoid copying private art into public git.
+Agent CLI reads are public-only by default. `list --include-private` and
+`GET /api/canvas/projects?include-private=true` aggregate private game stores and
+decorate rows with `storeId`, `visibility`, and `qualifiedId`; selected
+`create`/`show`/mutating CLI commands run inside the selected store's projects
+root via `--game <id>` / `--store game:<id>`. The HTTP API accepts
+`x-ai-studio-store: game:<id>` for selected store routing; `?game=<id>` and
+`?store=game:<id>` remain manual/legacy fallbacks, not the browser UI contract.
+Private CLI exports may write inside the owning game store or outside the parent
+Studio checkout, but `--to`/`--zip` destinations inside the public parent repo
+are rejected to avoid copying private art into public git.
 
-The browser page preserves the selected store in API calls, file/export download
-URLs, deep links, image-cache keys, and last-project restore. Public links keep
-the legacy `/canvas?project=<id>` shape; private links use
-`/canvas?store=game:<id>&project=<projectId>`. Public Copy ID refs keep their
-human-readable tail, while private Copy ID refs use `canvas://game/<gameId>/...`
-without project/object names in the tail.
+The browser page opens `/canvas` as a local store browser: the home screen lists
+all mounted Canvas stores, remembers the selected home filter in `localStorage`,
+and sends store scope through request headers for normal JSON APIs. Project URLs
+keep the legacy `/canvas?project=<id>` shape and do not write `store=game:<id>`
+into the address bar; last-project restore keeps the private store id in
+`localStorage`. Public Copy ID refs keep their human-readable tail, while private
+Copy ID refs use `canvas://game/<gameId>/...` without project/object names in the
+tail.
 
 ## Object references (`canvas://`)
 
@@ -93,8 +97,8 @@ canvas://game/<gameId>/<projectId>/element/<elementId>
 canvas://game/<gameId>/<projectId>/element/<eId>/region/<rId>
 ```
 
-Resolve them through the same store selector (`--game <gameId>` / `?game=<gameId>`);
-bare project ids never search private stores.
+Resolve them through the same store selector (`--game <gameId>` or
+`x-ai-studio-store: game:<gameId>`); bare project ids never search private stores.
 
 ## Operations
 

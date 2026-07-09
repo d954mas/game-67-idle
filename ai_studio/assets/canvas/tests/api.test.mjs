@@ -85,9 +85,10 @@ function ensurePrivateGameMount(root, gameId = "secret-game") {
 
 // Minimal req/res doubles. res collects Buffer chunks so both JSON responses and
 // piped binary file responses are captured.
-function invokeApi(handler, method, path, body) {
+function invokeApi(handler, method, path, body, headers = {}) {
   const req = new EventEmitter();
   req.method = method;
+  req.headers = Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
   req.setEncoding = () => {};
   req.destroy = () => {};
   const chunks = [];
@@ -184,7 +185,8 @@ test("canvas API routes explicitly selected private game stores and keeps defaul
   const handler = createCanvasApi(root);
 
   const publicProject = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Public API Canvas" })).json().project;
-  const privateProject = (await invokeApi(handler, "POST", `/api/canvas/projects?game=${privateStore.gameId}`, { title: "Private API Canvas" })).json().project;
+  const privateHeaders = { "x-ai-studio-store": "game:secret-game" };
+  const privateProject = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Private API Canvas" }, privateHeaders)).json().project;
 
   assert.equal(publicProject.storeId, "studio");
   assert.equal(privateProject.storeId, "game:secret-game");
@@ -203,21 +205,31 @@ test("canvas API routes explicitly selected private game stores and keeps defaul
   assert.equal(privateRow.qualifiedId, `game:secret-game:${privateProject.id}`);
 
   assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${privateProject.id}`)).status, 404);
-  const selectedGet = await invokeApi(handler, "GET", `/api/canvas/projects/${privateProject.id}?game=${privateStore.gameId}`);
+  const selectedGet = await invokeApi(handler, "GET", `/api/canvas/projects/${privateProject.id}`, undefined, privateHeaders);
   assert.equal(selectedGet.status, 200);
   assert.equal(selectedGet.json().project.storeId, "game:secret-game");
 
   const png = solidPng(5, 5, [40, 50, 60]);
-  const uploaded = await invokeApi(handler, "POST", `/api/canvas/projects/${privateProject.id}/images?game=${privateStore.gameId}`, {
+  const uploaded = await invokeApi(handler, "POST", `/api/canvas/projects/${privateProject.id}/images`, {
     name: "private.png",
     bytes_base64: png.toString("base64"),
-  });
+  }, privateHeaders);
   assert.equal(uploaded.status, 201);
   const fileName = uploaded.json().element.src.replace(/^files\//, "");
   assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${privateProject.id}/files/${fileName}`)).status, 404);
-  const file = await invokeApi(handler, "GET", `/api/canvas/projects/${privateProject.id}/files/${fileName}?game=${privateStore.gameId}`);
+  const file = await invokeApi(handler, "GET", `/api/canvas/projects/${privateProject.id}/files/${fileName}`, undefined, privateHeaders);
   assert.equal(file.status, 200);
   assert.ok(file.buffer.equals(png), "private API file route reads only with the selected private store");
+
+  const mismatch = await invokeApi(
+    handler,
+    "GET",
+    `/api/canvas/projects/${privateProject.id}?store=studio`,
+    undefined,
+    privateHeaders,
+  );
+  assert.equal(mismatch.status, 400);
+  assert.match(mismatch.json().error, /mismatch/);
 });
 
 test("canvas API renames a project (PATCH) and trashes it (DELETE)", async (t) => {

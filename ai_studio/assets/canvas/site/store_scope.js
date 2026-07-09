@@ -1,4 +1,6 @@
 export const STUDIO_STORE_ID = "studio";
+export const ALL_STORES_ID = "__all";
+export const STORE_HEADER = "x-ai-studio-store";
 export const LAST_PROJECT_SCHEMA = "ai_studio.canvas.last_project.v2";
 
 export function normalizeStoreId(storeId) {
@@ -48,11 +50,22 @@ export function appendStoreQuery(path, storeId) {
 }
 
 export function canvasApiUrl(path, storeId) {
+  return `/api/canvas${path}`;
+}
+
+export function canvasStoreHeaders(storeId, headers = {}) {
+  const out = { ...headers };
+  const store = normalizeStoreId(storeId);
+  if (!isStudioStore(store)) out[STORE_HEADER] = store;
+  return out;
+}
+
+export function canvasScopedAssetUrl(path, storeId) {
   return `/api/canvas${appendStoreQuery(path, storeId)}`;
 }
 
 export function projectFileUrl(project, src) {
-  return canvasApiUrl(`/projects/${project.id}/${src}`, projectStoreId(project));
+  return canvasScopedAssetUrl(`/projects/${project.id}/${src}`, projectStoreId(project));
 }
 
 export function projectCacheKey(project, src) {

@@ -48,16 +48,26 @@ function readBody(req) {
   });
 }
 
-function queryOptions(url) {
+function headerValue(req, name) {
+  const value = req.headers && req.headers[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] : (value || "");
+}
+
+function queryOptions(req, url) {
+  const headerStore = headerValue(req, "x-ai-studio-store");
+  const queryStore = url.searchParams.get("store") || "";
+  if (headerStore && queryStore && headerStore !== queryStore) {
+    throw new Error(`Taskboard store mismatch between header and query: ${headerStore} != ${queryStore}`);
+  }
   return {
-    store: url.searchParams.get("store") || "",
+    store: headerStore || queryStore,
     game: url.searchParams.get("game") || "",
     includePrivate: ["1", "true", "yes"].includes(String(url.searchParams.get("includePrivate") || "").toLowerCase()),
   };
 }
 
-function storesFromQuery(root, url) {
-  return taskboardStoresForQuery(root, queryOptions(url));
+function storesFromRequest(root, req, url) {
+  return taskboardStoresForQuery(root, queryOptions(req, url));
 }
 
 function collectionPayload(root, stores, kind) {
@@ -70,10 +80,15 @@ function collectionPayload(root, stores, kind) {
   };
 }
 
-function mutationOptionsFromInput(url, input) {
+function mutationOptionsFromInput(req, url, input) {
+  const headerStore = headerValue(req, "x-ai-studio-store");
+  const bodyStore = input.store || input.storeId || "";
+  if (headerStore && bodyStore && headerStore !== bodyStore) {
+    throw new Error(`Taskboard store mismatch between header and body: ${headerStore} != ${bodyStore}`);
+  }
   return {
-    ...queryOptions(url),
-    store: input.store || input.storeId || url.searchParams.get("store") || "",
+    ...queryOptions(req, url),
+    store: bodyStore || headerStore || url.searchParams.get("store") || "",
     game: input.game || input.gameId || url.searchParams.get("game") || "",
   };
 }
@@ -83,23 +98,23 @@ export function createTaskboardApi(root) {
     const parts = url.pathname.split("/").filter(Boolean);
     try {
       if (req.method === "GET" && url.pathname === "/api/board") {
-        return sendJson(res, 200, boardPayloadForStores(root, storesFromQuery(root, url)));
+        return sendJson(res, 200, boardPayloadForStores(root, storesFromRequest(root, req, url)));
       }
       if (req.method === "GET" && url.pathname === "/api/agent/context") {
-        return sendJson(res, 200, agentContextPayloadForStores(root, storesFromQuery(root, url)));
+        return sendJson(res, 200, agentContextPayloadForStores(root, storesFromRequest(root, req, url)));
       }
       if (req.method === "GET" && url.pathname === "/api/projects") {
-        return sendJson(res, 200, collectionPayload(root, storesFromQuery(root, url), "project"));
+        return sendJson(res, 200, collectionPayload(root, storesFromRequest(root, req, url), "project"));
       }
       if (req.method === "GET" && url.pathname === "/api/epics") {
-        return sendJson(res, 200, collectionPayload(root, storesFromQuery(root, url), "epic"));
+        return sendJson(res, 200, collectionPayload(root, storesFromRequest(root, req, url), "epic"));
       }
       if (req.method === "GET" && url.pathname === "/api/tasks") {
-        return sendJson(res, 200, collectionPayload(root, storesFromQuery(root, url), "task"));
+        return sendJson(res, 200, collectionPayload(root, storesFromRequest(root, req, url), "task"));
       }
       if (req.method === "GET" && parts.length === 3 && ["tasks", "epics", "projects"].includes(parts[1])) {
         const expectedKind = { tasks: "task", epics: "epic", projects: "project" }[parts[1]];
-        const resolved = findTaskboardDoc(root, parts[2], queryOptions(url));
+        const resolved = findTaskboardDoc(root, parts[2], queryOptions(req, url));
         const doc = resolved ? resolved.doc : null;
         if (!doc || doc.kind !== expectedKind) {
           return sendJson(res, 404, { error: `${expectedKind} not found: ${parts[2]}` });
@@ -108,22 +123,22 @@ export function createTaskboardApi(root) {
       }
       if (req.method === "POST" && url.pathname === "/api/tasks") {
         const input = await readBody(req);
-        const store = mutationStore(root, mutationOptionsFromInput(url, input));
+        const store = mutationStore(root, mutationOptionsFromInput(req, url, input));
         return sendJson(res, 201, publicDoc(createTask(root, input, storeOptions(store)), { store, includeBody: true }));
       }
       if (req.method === "POST" && url.pathname === "/api/epics") {
         const input = await readBody(req);
-        const store = mutationStore(root, mutationOptionsFromInput(url, input));
+        const store = mutationStore(root, mutationOptionsFromInput(req, url, input));
         return sendJson(res, 201, publicDoc(createEpic(root, input, storeOptions(store)), { store, includeBody: true }));
       }
       if (req.method === "POST" && url.pathname === "/api/projects") {
         const input = await readBody(req);
-        const store = mutationStore(root, mutationOptionsFromInput(url, input));
+        const store = mutationStore(root, mutationOptionsFromInput(req, url, input));
         return sendJson(res, 201, publicDoc(createProject(root, input, storeOptions(store)), { store, includeBody: true }));
       }
       if (req.method === "PATCH" && parts.length === 3 && ["tasks", "epics", "projects"].includes(parts[1])) {
         const expectedKind = { tasks: "task", epics: "epic", projects: "project" }[parts[1]];
-        const resolved = findTaskboardDoc(root, parts[2], queryOptions(url));
+        const resolved = findTaskboardDoc(root, parts[2], queryOptions(req, url));
         const doc = resolved ? resolved.doc : null;
         if (!doc || doc.kind !== expectedKind) {
           return sendJson(res, 404, { error: `${expectedKind} not found: ${parts[2]}` });

@@ -99,6 +99,26 @@ button:disabled {
   font-size: 12px;
 }
 
+#home-bar .home-spacer {
+  flex: 1;
+}
+
+.store-select-label {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.store-select {
+  min-width: 180px;
+  max-width: 280px;
+  background: var(--panel-soft);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font: inherit;
+}
+
 #home-grid {
   flex: 1;
   min-height: 0;

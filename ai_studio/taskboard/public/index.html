@@ -61,6 +61,10 @@
           <button type="button" class="view-tab" data-view="epics" role="tab" aria-selected="false">Epics</button>
         </div>
         <input id="search" type="search" placeholder="Search title, id, tag...">
+        <div class="multi-filter" id="storeFilterWrap">
+          <button type="button" id="storeFilterButton" class="filter-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="storeFilterMenu">Stores: all</button>
+          <div id="storeFilterMenu" class="filter-menu" role="group" aria-label="Stores" hidden></div>
+        </div>
         <div class="multi-filter" id="projectFilterWrap">
           <button type="button" id="projectFilterButton" class="filter-trigger" aria-haspopup="true" aria-expanded="false" aria-controls="projectFilterMenu">Projects: all</button>
           <div id="projectFilterMenu" class="filter-menu" role="group" aria-label="Projects" hidden></div>

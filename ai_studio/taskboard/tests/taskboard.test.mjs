@@ -84,9 +84,10 @@ ${title}
 `, "utf8");
 }
 
-function invokeApi(handler, method, path, body = {}) {
+function invokeApi(handler, method, path, body = {}, headers = {}) {
   const req = new EventEmitter();
   req.method = method;
+  req.headers = Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
   req.destroy = () => {};
   const res = {
     status: 0,
@@ -518,6 +519,34 @@ test("Taskboard API payloads are public-only by default and store-qualified with
   assert.equal(privateTask.fields.title, "Private task");
   assert.equal(privateTask.visibility, "private");
   assert.equal(privateTask.qualifiedId, "game:secret-game:T0001");
+});
+
+test("Taskboard API accepts private store scope through headers without query paths", async (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "Public task", status: "backlog" });
+  const privateStore = ensurePrivateGameMount(root);
+  writeTaskDoc(privateStore.itemsRoot, "T0001", "Private task");
+  const handler = createTaskboardApi(root);
+
+  const scoped = await invokeApi(handler, "GET", "/api/board", {}, { "x-ai-studio-store": "game:secret-game" });
+  assert.deepEqual(scoped.data.tasks.map((task) => task.fields.title), ["Private task"]);
+  assert.equal(scoped.data.tasks[0].qualifiedId, "game:secret-game:T0001");
+
+  const created = await invokeApi(handler, "POST", "/api/tasks", {
+    title: "Header created",
+    status: "backlog",
+  }, { "x-ai-studio-store": "game:secret-game" });
+  assert.equal(created.status, 201);
+  assert.equal(created.data.storeId, "game:secret-game");
+  assert.equal(existsSync(join(privateStore.itemsRoot, "active", "T0002-header-created.md")), true);
+
+  const mismatch = await invokeApi(handler, "POST", "/api/tasks", {
+    title: "Wrong store",
+    status: "backlog",
+    storeId: "studio",
+  }, { "x-ai-studio-store": "game:secret-game" });
+  assert.equal(mismatch.status, 400);
+  assert.match(mismatch.data.error, /mismatch/);
 });
 
 test("aggregate validation rejects ambiguous bare cross-store links and accepts qualified links", (t) => {

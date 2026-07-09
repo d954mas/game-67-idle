@@ -20,7 +20,7 @@ import { buildNodesSpec, orderedChildren, nodeScope } from "../tree.mjs";
 import { mergeTextStyle } from "../fonts.mjs";
 import { getFontManifest, measureTextBox } from "./fonts.js";
 import { screenToImagePoint } from "./viewport.mjs";
-import { canvasApiUrl } from "./store_scope.js";
+import { canvasApiUrl, canvasStoreHeaders, isStudioStore } from "./store_scope.js";
 import { saveBlobToFile } from "./export_dest.mjs";
 import { runLongOp } from "./toasts.js";
 // T0264: auto-play the preview the moment a text->animation spec lands (the lead's demo
@@ -38,6 +38,7 @@ function baseName(path) {
 
 // Clickable /export/<stamp>/<file> download links for the status line.
 function exportLinks(folder, files) {
+  if (!isStudioStore(state.storeId)) return [];
   const stamp = baseName(folder);
   return files.map((file) => ({
     href: canvasApiUrl(`/projects/${pid()}/export/${encodeURIComponent(stamp)}/${encodeURIComponent(file)}`, state.storeId),
@@ -852,7 +853,7 @@ async function deliverExport(result, { zipBaseName } = {}) {
     // Single output: fetch the one image and save it under its own (editable) name.
     const file = files[0];
     const url = canvasApiUrl(`/projects/${pid()}/export/${encodeURIComponent(stamp)}/${encodeURIComponent(file)}`, state.storeId);
-    const response = await fetch(url);
+    const response = await fetch(url, { headers: canvasStoreHeaders(state.storeId) });
     if (!response.ok) throw new Error(`could not fetch ${file} (${response.status})`);
     const blob = await response.blob();
     const dot = file.lastIndexOf(".");
@@ -867,7 +868,7 @@ async function deliverExport(result, { zipBaseName } = {}) {
 
   // Several outputs: build ONE zip server-side, then save it via the same dialog.
   const zipUrl = canvasApiUrl(`/projects/${pid()}/export-zip/${encodeURIComponent(stamp)}`, state.storeId);
-  const response = await fetch(zipUrl);
+  const response = await fetch(zipUrl, { headers: canvasStoreHeaders(state.storeId) });
   if (!response.ok) throw new Error(`could not build the zip archive (${response.status})`);
   const blob = await response.blob();
   const suggestedName = `${suggestedBase(zipBaseName)}.zip`;

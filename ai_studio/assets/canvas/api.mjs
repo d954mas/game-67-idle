@@ -182,9 +182,19 @@ function boolQueryParam(value) {
   return value === "true" || value === "1";
 }
 
-function canvasStoreQueryArgs(url) {
+function headerValue(req, name) {
+  const value = req.headers && req.headers[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] : (value || "");
+}
+
+function canvasStoreRequestArgs(req, url) {
+  const headerStore = headerValue(req, "x-ai-studio-store");
+  const queryStore = url.searchParams.get("store") || "";
+  if (headerStore && queryStore && headerStore !== queryStore) {
+    throw new Error(`Canvas store mismatch between header and query: ${headerStore} != ${queryStore}`);
+  }
   return {
-    store: url.searchParams.get("store") || "",
+    store: headerStore || queryStore,
     game: url.searchParams.get("game") || "",
     includePrivate: boolQueryParam(url.searchParams.get("include-private")) || boolQueryParam(url.searchParams.get("includePrivate")),
   };
@@ -259,9 +269,10 @@ export function createCanvasApi(root) {
   return async function handleCanvasApi(req, res, url) {
     const parts = url.pathname.split("/").filter(Boolean); // ["api","canvas","projects", id, ...]
     const t0 = performance.now();
-    const storeArgs = canvasStoreQueryArgs(url);
+    let storeArgs;
     let activeStore;
     try {
+      storeArgs = canvasStoreRequestArgs(req, url);
       activeStore = selectCanvasStore(root, storeArgs);
     } catch (error) {
       sendJson(res, statusForError(error), { error: error && error.message ? error.message : String(error) });

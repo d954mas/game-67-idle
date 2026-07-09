@@ -9,13 +9,14 @@
 
 import { childrenOf, isNodeHidden } from "../tree.mjs";
 import {
+  ALL_STORES_ID,
   canvasApiUrl,
+  canvasStoreHeaders,
   decodeLastProject,
   encodeLastProject,
   projectCacheKey,
   projectFileUrl,
   projectStoreId,
-  setStoreParams,
 } from "./store_scope.js";
 import { toastError, toastInfo, toastPinned } from "./toasts.js";
 
@@ -29,9 +30,11 @@ export const VIDEO_ANIM_FROZEN = true;
 export const el = (id) => document.getElementById(id);
 
 export const state = {
+  stores: [],
   projects: [],
   project: null,
   storeId: "studio",
+  homeStoreId: ALL_STORES_ID,
   selectedIds: new Set(),
   selectedGroupId: null,
   // Figma nested-selection scope: the group the user has "entered" (double-click drills
@@ -135,10 +138,13 @@ export function setStatusLinks(message, links = []) {
   toastPinned(message, links);
 }
 
-export async function api(method, path, body) {
-  const res = await fetch(canvasApiUrl(path, state.storeId), {
+export async function api(method, path, body, options = {}) {
+  const storeId = options.storeId === undefined ? state.storeId : options.storeId;
+  const baseHeaders = body ? { "content-type": "application/json" } : {};
+  const headers = storeId === null ? baseHeaders : canvasStoreHeaders(storeId, baseHeaders);
+  const res = await fetch(canvasApiUrl(path), {
     method,
-    headers: body ? { "content-type": "application/json" } : undefined,
+    headers,
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
@@ -393,6 +399,7 @@ export function selectRegionRange(elementId, regionIds) {
 // ---- project lifecycle -------------------------------------------------------
 
 const LAST_KEY = "canvas.lastProject";
+const HOME_STORE_KEY = "canvas.homeStore";
 
 export function rememberLastProject(id) {
   try {
@@ -416,18 +423,42 @@ export function lastProjectRef() {
   }
 }
 
+export function rememberHomeStore(storeId) {
+  try {
+    if (storeId) localStorage.setItem(HOME_STORE_KEY, storeId);
+    else localStorage.removeItem(HOME_STORE_KEY);
+  } catch {
+    // Private mode / disabled storage: the selector just falls back to all stores.
+  }
+}
+
+export function loadRememberedHomeStore() {
+  try {
+    return localStorage.getItem(HOME_STORE_KEY) || ALL_STORES_ID;
+  } catch {
+    return ALL_STORES_ID;
+  }
+}
+
 export function setProjectParam(id, storeId = state.storeId) {
   const url = new URL(window.location.href);
   if (id) url.searchParams.set("project", id);
   else url.searchParams.delete("project");
-  setStoreParams(url.searchParams, storeId);
+  url.searchParams.delete("store");
+  url.searchParams.delete("game");
   url.searchParams.delete("select"); // the debug select hook is one-shot
   url.searchParams.delete("regions"); // the debug region-edit hook is one-shot
   window.history.replaceState(null, "", url);
 }
 
 export async function loadProjects() {
-  state.projects = (await api("GET", "/projects")).projects;
+  const data = await api("GET", "/projects?includePrivate=1", undefined, { storeId: null });
+  state.stores = Array.isArray(data.stores) ? data.stores : [];
+  state.projects = Array.isArray(data.projects) ? data.projects : [];
+  const storeIds = new Set(state.stores.map((store) => store.storeId));
+  if (state.homeStoreId !== ALL_STORES_ID && !storeIds.has(state.homeStoreId)) {
+    state.homeStoreId = ALL_STORES_ID;
+  }
   return state.projects;
 }
 

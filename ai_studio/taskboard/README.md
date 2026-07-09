@@ -48,11 +48,17 @@ Taskboard is store-qualified:
 - Game stores live under `games/<id>/.ai_studio/taskboard/items/` and are
   discovered through `ai_studio/workspace/games.mjs`.
 - Private game stores are excluded unless a command/API request names the store
-  (`--store game:<id>`, `--game <id>`, `?store=game:<id>`, `?game=<id>`) or
-  explicitly asks for aggregate private visibility (`--include-private` or
-  `?includePrivate=1`).
+  (`--store game:<id>`, `--game <id>`, or HTTP `x-ai-studio-store: game:<id>`)
+  or explicitly asks for aggregate private visibility (`--include-private` or
+  `?includePrivate=1`). `?store=game:<id>` and `?game=<id>` remain manual
+  fallback API inputs, not the browser UI contract.
 - Rows include `storeId`, `visibility`, and `qualifiedId`. Bare IDs remain valid
   inside a selected store; aggregate reads reject ambiguous bare IDs.
+
+The browser board opens as a local aggregate view and shows a Store filter in
+the toolbar. It does not require a path or query parameter to see mounted private
+game stores. Creates go to the one selected store, or to Studio when the view is
+still aggregate; updates route by the edited row's store identity.
 
 The browser board uses `ai_studio/taskboard/api.mjs` for `/api/board`,
 `/api/projects`, `/api/epics`, `/api/tasks`, item reads like

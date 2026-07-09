@@ -14,6 +14,7 @@ import {
   groupById,
   hooks,
   lastProjectRef,
+  loadRememberedHomeStore,
   loadProjects,
   refresh,
   refreshHistory,
@@ -337,7 +338,9 @@ window.addEventListener("keyup", onKeyUp);
 
 (async () => {
   const params = new URLSearchParams(window.location.search);
+  const explicitStore = params.has("store") || params.has("game");
   state.storeId = storeIdFromParams(params);
+  state.homeStoreId = loadRememberedHomeStore();
   try {
     await loadProjects();
   } catch (error) {
@@ -350,12 +353,18 @@ window.addEventListener("keyup", onKeyUp);
   const known = (id, storeId = state.storeId) =>
     state.projects.some((project) => projectKey(project) === projectKey(id, storeId));
 
-  if (projectParam && known(projectParam)) {
-    await openProject(projectParam, { select: selectParam, regions: regionsParam });
+  if (projectParam) {
+    const last = lastProjectRef();
+    const hintedStore = explicitStore ? state.storeId : (last && last.projectId === projectParam ? last.storeId : state.storeId);
+    if (known(projectParam, hintedStore)) {
+      await openProject(projectParam, { select: selectParam, regions: regionsParam, storeId: hintedStore });
+    } else {
+      renderHome();
+    }
   } else {
     const last = lastProjectRef();
-    if (last && last.storeId === state.storeId && known(last.projectId, last.storeId)) {
-      await openProject(last.projectId);
+    if (last && known(last.projectId, last.storeId)) {
+      await openProject(last.projectId, { storeId: last.storeId });
     } else {
       renderHome();
     }
