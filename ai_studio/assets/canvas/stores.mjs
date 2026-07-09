@@ -39,11 +39,8 @@ function gameCanvasStore(root, mount) {
   };
 }
 
-function mountHasCanvas(root, mount) {
-  return (
-    (Array.isArray(mount.enabledStores) && mount.enabledStores.includes("canvas")) ||
-    existsSync(join(root, mount.root, ".ai_studio", "canvas", "projects"))
-  );
+function mountHasCanvas(mount) {
+  return Array.isArray(mount.enabledStores) && mount.enabledStores.includes("canvas");
 }
 
 export function listCanvasStores(root, options = {}) {
@@ -58,7 +55,7 @@ export function listCanvasStores(root, options = {}) {
     activeStoreId,
   });
   for (const mount of mounts) {
-    if (mountHasCanvas(root, mount)) {
+    if (mountHasCanvas(mount)) {
       stores.push(gameCanvasStore(root, mount));
     }
   }

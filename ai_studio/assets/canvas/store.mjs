@@ -230,7 +230,7 @@ function imageExtension(name, buffer) {
   return sniffExtension(buffer);
 }
 
-export function createProject(root, { title } = {}) {
+export function createProject(root, { title, ownership } = {}) {
   const cleanTitle = String(title || "").trim() || "Untitled canvas";
   const id = `${slugify(cleanTitle)}-${randomUUID().slice(0, 6)}`;
   const now = nowIso();
@@ -251,6 +251,7 @@ export function createProject(root, { title } = {}) {
     elements: [],
     tool_runs: [],
   };
+  if (ownership) project.ownership = ownership;
   // mkdir is recursive so this also creates the projects root on first use.
   mkdirSync(join(projectDir(root, id), "files"), { recursive: true });
   return writeProjectFile(root, project);
@@ -282,6 +283,9 @@ export function updateProject(root, id, patch = {}) {
   const project = readProjectFile(root, id);
   const { schema, id: _id, created, ...rest } = patch;
   const next = { ...project, ...rest, schema: project.schema, id: project.id, created: project.created, updated: nowIso() };
+  for (const key of Object.keys(next)) {
+    if (next[key] === undefined) delete next[key];
+  }
   return writeProjectFile(root, next);
 }
 

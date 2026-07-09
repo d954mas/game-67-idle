@@ -44,36 +44,41 @@ The same config carries `canvasHistoryDepth` (default 200) — the retained undo
 cap read via `canvasHistoryDepth(root)`; `CANVAS_HISTORY_DEPTH` overrides it for
 tests. See **History depth cap + compaction** below.
 
-## Canvas stores
+## Canvas stores and game ownership
 
-The default Canvas store is the public Studio projects root above. A private
-game mount may opt into Canvas by listing `canvas` in `enabledStores` (or by
-already having `.ai_studio/canvas/projects` under the game root); that store is
-selected explicitly with `--game <id>` or `--store game:<id>`.
+The default Canvas store is the shared external projects root above. In normal
+game workflows, raw Canvas project folders stay there (for example on
+YandexDisk), outside the Studio repo and outside game git repositories. A Canvas
+project belongs to a game by carrying project-owned metadata in its own
+`project.json`:
 
-Agent CLI reads are public-only by default. `list --include-private` and
-`GET /api/canvas/projects?include-private=true` aggregate private game stores and
-decorate rows with `storeId`, `visibility`, and `qualifiedId`; selected
-`create`/`show`/mutating CLI commands run inside the selected store's projects
-root via `--game <id>` / `--store game:<id>`. The HTTP API accepts
-`x-ai-studio-store: game:<id>` for selected store routing; `?game=<id>` and
-`?store=game:<id>` remain manual/legacy fallbacks, not the browser UI contract.
-Private CLI exports may write inside the owning game store or outside the parent
-Studio checkout, but `--to`/`--zip` destinations inside the public parent repo
-are rejected to avoid copying private art into public git.
+```json
+{
+  "ownership": { "kind": "game", "gameId": "rb-dark-rpg" }
+}
+```
 
-The browser page opens `/canvas` as a local store browser: the home screen lists
-all mounted Canvas stores, remembers the selected home filter in `localStorage`,
-and sends store scope through request headers for normal JSON APIs. Project URLs
-keep the legacy `/canvas?project=<id>` shape and do not write `store=game:<id>`
-into the address bar; last-project restore keeps the private store id in
-`localStorage`. Private thumbnails and canvas images are fetched with the same
-store header and shown as `blob:` URLs, because `<img>` cannot send custom
-headers. Canvas chat uses the same hidden store scope for transcript/context
-requests and tells spawned agents to pass `--store game:<id>` on private project
-CLI commands. Public Copy ID refs keep their human-readable tail, while private
-Copy ID refs use `canvas://game/<gameId>/...` without project/object names in
-the tail.
+Agents and the page can list all shared projects without passing a path. CLI and
+HTTP callers may filter by owner with `list --owner-game <gameId>` or
+`GET /api/canvas/projects?owner-game=<gameId>`. New or existing projects can set
+that metadata with `create --owner-game <gameId>` or
+`project-set <projectId> --owner-game <gameId|none>`.
+
+Private game Canvas stores still exist as an explicit advanced mount path for a
+game that really needs a separate projects root. Such stores are selected
+explicitly with `--game <id>` or `--store game:<id>`, and are included in
+aggregate reads only with `--include-private` /
+`GET /api/canvas/projects?include-private=true`. Private CLI exports may write
+inside the owning game store or outside the parent Studio checkout, but
+`--to`/`--zip` destinations inside the public parent repo are rejected to avoid
+copying private art into public git. This mount mechanism is not required for
+the common "shared Canvas root plus project ownership metadata" flow.
+
+The browser page opens `/canvas` as the shared local Canvas browser. Project URLs
+keep the legacy `/canvas?project=<id>` shape and do not need a game path. Public
+Copy ID refs keep their human-readable tail. Private mounted-store Copy ID refs,
+when a private store is explicitly selected, use `canvas://game/<gameId>/...`
+without project/object names in the tail.
 
 ## Object references (`canvas://`)
 
@@ -110,7 +115,8 @@ Every capability is one op in `ops.mjs`:
 
 - `listProjects` / `createProject` / `getProject` / `updateProject`
 - `patchProject({ projectId, title })` — rename a project. Journaled: the title
-  lives in the metadata snapshot, so undo/redo restore it with everything else.
+  and ownership live in the metadata snapshot, so undo/redo restore them with everything else.
+  The op accepts title changes, ownership changes, or both.
 - `deleteProject({ projectId })` — move the whole project folder to
   `<projectsRoot>/.trash/<id>-<stamp>/` instead of deleting it (safety: recoverable,
   never `rm`'d). A project-level action, so it is **not** journaled (the local

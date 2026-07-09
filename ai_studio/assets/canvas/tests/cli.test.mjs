@@ -21,7 +21,7 @@ function run(env, ...args) {
   return JSON.parse(line);
 }
 
-function ensurePrivateGameMount(root, gameId = "secret-game") {
+function ensurePrivateGameMount(root, gameId = "secret-game", enabledStores = ["canvas"]) {
   const gameRoot = join(root, "games", gameId);
   mkdirSync(gameRoot, { recursive: true });
   execFileSync("git", ["init"], { cwd: root, encoding: "utf8" });
@@ -44,7 +44,7 @@ function ensurePrivateGameMount(root, gameId = "secret-game") {
       visibility: "private",
       gitRoot: `games/${gameId}`,
       commitPolicy: "nested-private",
-      enabledStores: ["canvas"],
+      enabledStores,
       assetRoot: `games/${gameId}/assets`,
     }],
   }, null, 2) + "\n", "utf8");
@@ -101,6 +101,24 @@ test("cli create/add-image/undo/redo/history/export smoke", (t) => {
   assert.equal(stats.errors.count, 0);
 });
 
+test("cli stores Canvas project ownership and filters by owner game", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-owner-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const owned = run(env, "create", "--title", "Owned Canvas", "--owner-game", "rb-dark-rpg").project;
+  assert.deepEqual(owned.ownership, { kind: "game", gameId: "rb-dark-rpg" });
+  assert.match(runFail(env, "create", "--owner-game").stderr, /requires a game id/);
+  assert.equal(run(env, "list", "--owner-game", "rb-dark-rpg").projects[0].id, owned.id);
+  assert.equal(run(env, "list", "--owner-game", "web-dressup").projects.length, 0);
+
+  const changed = run(env, "project-set", owned.id, "--owner-game", "web-dressup").project;
+  assert.deepEqual(changed.ownership, { kind: "game", gameId: "web-dressup" });
+
+  const cleared = run(env, "project-set", owned.id, "--owner-game", "none").project;
+  assert.equal(Object.hasOwn(cleared, "ownership"), false);
+});
+
 test("cli routes selected private game canvas store and keeps default list public-only", (t) => {
   const root = mkdtempSync(join(tmpdir(), "canvas-cli-private-root-"));
   const publicRoot = join(root, "public-canvas");
@@ -109,7 +127,8 @@ test("cli routes selected private game canvas store and keeps default list publi
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
   const publicProject = run(env, "create", "--title", "Public Canvas").project;
-  const privateProject = run(env, "create", "--game", privateStore.gameId, "--title", "Private Canvas").project;
+  const privateProject = run(env, "create", "--game", privateStore.gameId, "--title", "Private Canvas", "--owner-game", privateStore.gameId).project;
+  assert.deepEqual(privateProject.ownership, { kind: "game", gameId: privateStore.gameId });
 
   assert.equal(existsSync(join(publicRoot, publicProject.id, "project.json")), true);
   assert.equal(existsSync(join(privateStore.canvasRoot, privateProject.id, "project.json")), true);
@@ -160,6 +179,19 @@ test("cli routes selected private game canvas store and keeps default list publi
     assert.match(blockedCaseExport.stderr, /private Canvas export/);
     assert.equal(existsSync(join(root, "public-export-case-leak")), false);
   }
+});
+
+test("cli ignores accidental game-local Canvas folders unless the mount explicitly enables Canvas", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "canvas-cli-no-auto-mount-"));
+  const publicRoot = join(root, "public-canvas");
+  const privateStore = ensurePrivateGameMount(root, "no-canvas", ["assets"]);
+  mkdirSync(privateStore.canvasRoot, { recursive: true });
+  const env = { CANVAS_PROJECTS_ROOT: publicRoot, AI_STUDIO_ROOT: root };
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const listed = run(env, "list", "--include-private");
+  assert.deepEqual(listed.stores.map((store) => store.storeId), ["studio"]);
+  assert.match(runFail(env, "create", "--game", privateStore.gameId, "--title", "Should Fail").stderr, /No Canvas store/);
 });
 
 test("cli history-list + history-jump parity (Base spine + jump reaches panel states)", (t) => {
@@ -523,7 +555,7 @@ test("cli list: summary by default (id/title/created/updated/counts/head); --ful
   const summary = run(env, "list").projects;
   assert.equal(summary.length, 1);
   const row = summary[0];
-  assert.deepEqual(Object.keys(row).sort(), ["created", "elements", "groups", "head", "id", "qualifiedId", "storeId", "title", "updated", "visibility"].sort());
+  assert.deepEqual(Object.keys(row).sort(), ["created", "elements", "groups", "head", "id", "ownerGame", "qualifiedId", "storeId", "title", "updated", "visibility"].sort());
   assert.equal(row.id, projectId);
   assert.equal(row.storeId, "studio");
   assert.equal(row.visibility, "public");

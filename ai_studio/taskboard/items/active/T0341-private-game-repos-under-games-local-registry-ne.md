@@ -24,10 +24,13 @@ The intended model:
 - private commercial games can be nested Git repositories at `games/<id>/.git`;
 - every game, public or private, owns game-specific files like:
   `games/<id>/.ai_studio/taskboard/items/`,
-  `games/<id>/.ai_studio/canvas/projects/`,
   `games/<id>/.ai_studio/evidence/`, and game-local provenance/manifests;
+- Canvas projects live in the shared external Canvas store and carry their
+  owning game inside each Canvas `project.json` as
+  `ownership: { kind: "game", gameId: "<id>" }`;
 - Studio tools resolve games from public and local/private registries, then
-  mount game-owned taskboard/canvas/asset roots;
+  mount game-owned taskboard/evidence/asset roots and filter Canvas by
+  project-owned game metadata;
 - public Studio files must not contain private game names, task logs, canvas
   project JSON, generated evidence, asset provenance, or IDE entries;
 - agents keep using the Studio cwd, skills, taskboard UI, feature packs, and
@@ -52,14 +55,16 @@ The intended model:
 - Existing public history is not scrubbed by this work. The first deliverable
   stops future leaks; any history rewrite, rename, or published artifact cleanup
   must be a separate explicit task.
-- Public games also own their taskboard/canvas/evidence state. Publishing a
-  public game is still allowed to require a sanitize/export step.
+- Public games also own taskboard state. Raw Canvas project folders stay in the
+  shared external Canvas store, outside the public git repository; each Canvas
+  project records its owning game in `project.json`. Publishing a public game is
+  still allowed to require a sanitize/export step.
 - Private Canvas exports to parent tracked destinations are hard-rejected. There
   is no unsafe override for this path; exports must stay inside the owning game
   store or another ignored/private destination.
-- Canvas project folders move as complete units. Old undo/cache continuity is
-  best-effort through aliases; loss is acceptable only when logged in the
-  migration evidence.
+- Canvas project folders are not moved into game repositories by default.
+  Ownership metadata lives in each Canvas project's own `project.json`; old
+  undo/cache continuity remains with the shared external Canvas store.
 
 ## Implementation slices
 
@@ -75,8 +80,9 @@ mounting or migrating private data.
      creation.
 3. `T0344` - Store-qualified Taskboard CLI API and UI.
    - Adds store identity, ambiguous-ID refusal, private opt-in, and validation.
-4. `T0345` - Mount-aware Canvas refs writes and export guard.
-   - Adds v2 refs, store-routed mutations, and private export destination checks.
+4. `T0345` - Canvas ownership metadata and export guard.
+   - Adds project-owned Canvas game metadata, owner filters, and private export
+     destination checks.
 5. `T0346` - IDE generators assets and reports privacy boundary.
    - Prevents private registry entries from leaking through generated parent
      files, asset discovery outputs, architecture maps, and reports.
@@ -91,13 +97,14 @@ mounting or migrating private data.
   read by any parent Studio generator.
 - Gate 1: public and private new-game flows write different registries and
   output locations; private flow never mutates tracked parent `.vscode`, public
-  registry, public Taskboard, or public Canvas roots.
+  registry, public Taskboard, or raw Canvas project roots.
 - Gate 2: Taskboard commands and APIs require store selection for ambiguous
   short IDs; private stores never appear in `/api/agent/context`, board search,
   list output, or generated reports without explicit opt-in.
 - Gate 3: Canvas writes, exports, manifests, `tool_runs.jsonl`, render reports,
-  and provenance are rooted in the owning store. Private Canvas export to a
-  parent tracked path is always rejected.
+  and provenance stay in the shared external Canvas store unless a separate
+  private store is explicitly selected. Private Canvas export to a parent
+  tracked path is always rejected.
 - Gate 4: migration moves files only after mount-aware reads/writes work and
   after preflight proves the parent repo will not stage private roots or leak
   private identifiers.
@@ -137,14 +144,14 @@ Additional critique:
 Refined critique after the lead accepted game-owned stores:
 
 - Moving only private games is too narrow. Public games should also own their
-  game-specific taskboard/canvas/evidence data so the model is consistent and a
-  future public-to-private transition is a Git visibility change, not a data
-  model migration.
+  game-specific taskboard/evidence data, while Canvas projects carry ownership
+  metadata in the shared external store. That keeps a future public-to-private
+  transition as a Git visibility change, not a data model migration.
 - Task IDs can collide once every game has its own task store. The Taskboard UI
   and API need source-store identity, not just bare `T####` IDs.
-- A game-owned Canvas root needs write routing, not only read listing. Every
-  mutate/export operation must carry the owning store root so private projects
-  do not fall back to the public canvas root.
+- Canvas ownership needs write routing through project metadata, not game-side
+  ref lists. Create/patch/list APIs must set and filter `ownership.kind/gameId`
+  without requiring a game path.
 - Migrating current `rb-dark-rpg` will expose existing public-history questions:
   the new model stops future leaks but cannot erase already-published commits.
 - Mount-aware APIs must land before file migration. Moving files first would
@@ -165,7 +172,7 @@ Refined critique after the lead accepted game-owned stores:
   archived task files.
 - `P003`, `E011`, `E012`, `E013`, and many active/archive `T####` files under
   `ai_studio/taskboard/items/` are game-specific `rb-dark-rpg` work state.
-- Current game-specific Canvas projects under `ai_studio/assets/canvas/projects/`
+- Current game-specific Canvas projects in the shared external Canvas store
   include:
   - `rb-dark-rpg-combat-actor-sprites-01-b24b3f`
   - `rb-dark-rpg-hud-gold-coin-5f30ae`
@@ -209,17 +216,18 @@ Refined critique after the lead accepted game-owned stores:
   stores, canvas/asset manifests, architecture reports, and public-by-default
   `new_game.mjs` are the main leak paths, not only `games/<id>` file tracking.
 - 2026-07-09: Lead accepted the stronger ownership model: taskboard items,
-  canvas projects, evidence, asset/provenance sidecars, and game-specific
-  Studio metadata should move inside each game under `.ai_studio/`; Studio apps
-  mount these stores instead of owning them. Added current-game migration scope
-  for existing `rb-dark-rpg` taskboard/canvas/registry/IDE references.
+  evidence, asset/provenance sidecars, and game-specific Studio metadata should
+  move inside each game under `.ai_studio/`; Canvas projects remain in the
+  shared external store and record their game in `project.json`. Added
+  current-game migration scope for existing `rb-dark-rpg`
+  taskboard/canvas/registry/IDE references.
 - 2026-07-09: Delegated refined research/critique to `fast-worker` and
   `deep-reasoner`. Integrated concrete current-game research: `rb-dark-rpg`
   has 46 taskboard files outside the game, 3 game-specific Canvas projects in
-  the public canvas root, and 2 tracked `.vscode` files with hardcoded game
-  paths. Integrated critique: store-qualified Taskboard IDs, mount-aware Canvas
-  refs, mount visibility/commit policy, and mount-aware APIs must precede
-  migration.
+  the shared external Canvas root, and 2 tracked `.vscode` files with hardcoded
+  game paths. Integrated critique: store-qualified Taskboard IDs, Canvas
+  ownership metadata, mount visibility/commit policy, and mount-aware APIs must
+  precede migration.
 - 2026-07-09: Review fix: split implementation into child tasks `T0342` through
   `T0347`, made private stores opt-in by default, chose
   `ai_studio/workspace/games.local.json` as the ignored private registry path,
@@ -228,3 +236,8 @@ Refined critique after the lead accepted game-owned stores:
 - 2026-07-09: Closed residual Canvas export policy gap from follow-up review:
   private Canvas exports to parent tracked destinations are hard-rejected with
   no unsafe override.
+- 2026-07-09: Corrected Canvas ownership decision after lead clarification:
+  raw Canvas projects are too large and stay in the shared external
+  `canvasProjectsRoot` (YandexDisk), not in game git repositories. A follow-up
+  correction removed game-side Canvas ref lists: each Canvas `project.json`
+  carries `ownership.kind/gameId`.

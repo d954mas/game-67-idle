@@ -236,13 +236,23 @@ test("canvas API renames a project (PATCH) and trashes it (DELETE)", async (t) =
   tempProjects(t);
   const handler = createCanvasApi(ROOT);
   const keep = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Keep" })).json().project.id;
-  const created = await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Before" });
+  const created = await invokeApi(handler, "POST", "/api/canvas/projects", {
+    title: "Before",
+    ownership: { kind: "game", gameId: "rb-dark-rpg" },
+  });
   const projectId = created.json().project.id;
+  assert.deepEqual(created.json().project.ownership, { kind: "game", gameId: "rb-dark-rpg" });
 
-  const renamed = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}`, { title: "After" });
+  const renamed = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}`, { title: "After", gameId: "web-dressup" });
   assert.equal(renamed.status, 200);
   assert.equal(renamed.json().project.title, "After");
+  assert.deepEqual(renamed.json().project.ownership, { kind: "game", gameId: "web-dressup" });
   assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project.title, "After");
+
+  const hiddenByOwner = await invokeApi(handler, "GET", "/api/canvas/projects?owner-game=rb-dark-rpg");
+  assert.deepEqual(hiddenByOwner.json().projects.map((p) => p.id), []);
+  const visibleByOwner = await invokeApi(handler, "GET", "/api/canvas/projects?owner-game=web-dressup");
+  assert.deepEqual(visibleByOwner.json().projects.map((p) => p.id), [projectId]);
 
   const deleted = await invokeApi(handler, "DELETE", `/api/canvas/projects/${projectId}`);
   assert.equal(deleted.status, 200);

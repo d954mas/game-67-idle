@@ -423,9 +423,10 @@ function sanitizeFiltersPatch(project, elementId, patch = {}) {
 
 function snapshotOf(project) {
   return {
-    // The project title is metadata like elements/groups, so carrying it in the
-    // before/after snapshot makes a rename (patchProject) fully undoable too.
+    // Project-level metadata is carried with elements/groups, so patchProject is
+    // fully undoable too.
     title: project.title,
+    ownership: project.ownership ? JSON.parse(JSON.stringify(project.ownership)) : null,
     elements: JSON.parse(JSON.stringify(project.elements || [])),
     // Groups are metadata like elements, so the same before/after snapshot makes
     // every group + visibility mutation fully undoable with no file changes.
@@ -1554,23 +1555,59 @@ function randomProjectTitle() {
 // "Adjective Noun" default (Title Case) instead of a name prompt. The id still
 // derives from the (possibly generated) title via the store's existing slug
 // scheme, so a random title yields ids like amber-fox-a1b2c3.
-export function createProject(root, { title } = {}) {
+export function createProject(root, { title, ownership, gameId } = {}) {
+  const cleanOwnership = normalizeProjectOwnership(ownership ?? (gameId ? { kind: "game", gameId } : undefined));
   const cleanTitle = String(title || "").trim() || randomProjectTitle();
-  return storeCreateProject(root, { title: cleanTitle });
+  return storeCreateProject(root, { title: cleanTitle, ownership: cleanOwnership });
 }
 
-// Rename a project. Journaled like any metadata mutation: the title lives in the
-// snapshot, so undo/redo restore it together with elements/groups/tool_runs.
-export function patchProject(root, { projectId, title } = {}) {
+function normalizeProjectGameId(value) {
+  if (value === undefined || value === null) {
+    throw new Error("Canvas project ownership.gameId must be lowercase kebab-case");
+  }
+  const text = String(value).trim();
+  if (!/^[a-z][a-z0-9-]*$/.test(text)) {
+    throw new Error("Canvas project ownership.gameId must be lowercase kebab-case");
+  }
+  return text;
+}
+
+function normalizeProjectOwnership(value, { allowClear = false } = {}) {
+  if (value === undefined) return undefined;
+  if (value === null) return allowClear ? undefined : value;
+  if (typeof value === "string") {
+    const text = value.trim();
+    if (allowClear && (!text || text === "none" || text === "null")) return undefined;
+    return { kind: "game", gameId: normalizeProjectGameId(text) };
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("Canvas project ownership must be an object");
+  }
+  const kind = String(value.kind || "").trim();
+  if (kind !== "game") throw new Error("Canvas project ownership.kind must be game");
+  return { kind, gameId: normalizeProjectGameId(value.gameId) };
+}
+
+// Patch project-level metadata. Journaled like any metadata mutation: title and
+// ownership live in the snapshot, so undo/redo restore them with elements/groups.
+export function patchProject(root, { projectId, title, ownership, gameId } = {}) {
   if (!projectId) throw new Error("patchProject requires projectId");
-  if (title === undefined) throw new Error("patchProject requires a title");
+  const hasTitle = title !== undefined;
+  const args = arguments[1] || {};
+  const hasOwnership = Object.hasOwn(args, "ownership") || Object.hasOwn(args, "gameId");
+  if (!hasTitle && !hasOwnership) throw new Error("patchProject requires a title and/or ownership");
   const startedAt = performance.now();
   const before = getProject(root, projectId);
-  const cleanTitle = String(title).trim() || before.title;
-  const after = updateProject(root, projectId, { title: cleanTitle });
+  const patch = {};
+  if (hasTitle) patch.title = String(title).trim() || before.title;
+  if (hasOwnership) patch.ownership = normalizeProjectOwnership(ownership ?? gameId, { allowClear: true });
+  const after = updateProject(root, projectId, patch);
   const project = commitMutation(root, projectId, {
     op: "patchProject",
-    args_summary: { title: cleanTitle },
+    args_summary: {
+      ...(hasTitle ? { title: patch.title } : {}),
+      ...(hasOwnership ? { ownership: patch.ownership || null } : {}),
+    },
     before,
     after,
     startedAt,
@@ -4899,6 +4936,9 @@ export function undoOp(root, { projectId, expectHead } = {}) {
   // Older snapshots predate title-in-snapshot; only restore title when present so
   // updateProject never clobbers the live title with undefined.
   if (undoPatch.title !== undefined) restore.title = undoPatch.title;
+  if (Object.hasOwn(undoPatch, "ownership")) {
+    restore.ownership = undoPatch.ownership === null ? undefined : undoPatch.ownership;
+  }
   const saved = updateProject(root, projectId, restore);
   appendJournal(root, projectId, { op: "undo", target_seq: head, duration_ms: ms(performance.now() - startedAt) });
   return { project: saved, undone_seq: head, history_seq: saved.history_seq };
@@ -4922,6 +4962,9 @@ export function redoOp(root, { projectId, expectHead } = {}) {
     history_seq: Number(entry.seq),
   };
   if (state.title !== undefined) restore.title = state.title;
+  if (Object.hasOwn(state, "ownership")) {
+    restore.ownership = state.ownership === null ? undefined : state.ownership;
+  }
   const saved = updateProject(root, projectId, restore);
   appendJournal(root, projectId, { op: "redo", target_seq: entry.seq, duration_ms: ms(performance.now() - startedAt) });
   return { project: saved, redone_seq: entry.seq, history_seq: saved.history_seq };
@@ -5231,6 +5274,9 @@ export function jumpHistory(root, { projectId, seq, expectHead } = {}) {
     history_seq: target,
   };
   if (snap.title !== undefined) restore.title = snap.title;
+  if (Object.hasOwn(snap, "ownership")) {
+    restore.ownership = snap.ownership === null ? undefined : snap.ownership;
+  }
   const saved = updateProject(root, projectId, restore);
   appendJournal(root, projectId, { op: "jump", target_seq: target, from_seq: head, duration_ms: ms(performance.now() - startedAt) });
   return { project: saved, history_seq: saved.history_seq, jumped_from: head, jumped_to: target };

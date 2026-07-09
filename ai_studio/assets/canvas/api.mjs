@@ -316,15 +316,21 @@ export function createCanvasApi(root) {
       if (parts.length === 3) {
         if (req.method === "GET") {
           const stores = canvasStoresForQuery(root, storeArgs);
-          const projects = stores.flatMap((store) =>
+          const ownerGame = url.searchParams.get("owner-game") || url.searchParams.get("ownerGame") || "";
+          let projects = stores.flatMap((store) =>
             withCanvasStore(store, () => listProjects(root).map((project) => decorateCanvasProject(project, store)))
           );
+          if (ownerGame) {
+            projects = projects.filter((project) =>
+              project.ownership?.kind === "game" && project.ownership.gameId === ownerGame
+            );
+          }
           sendJson(res, 200, { stores: stores.map(canvasStoreSummary), projects });
           return true;
         }
         if (req.method === "POST") {
           const body = await readJsonBody(req);
-          sendMutation(201, { project: createProject(root, { title: body.title }) });
+          sendMutation(201, { project: createProject(root, { title: body.title, ownership: body.ownership, gameId: body.gameId }) });
           return true;
         }
         sendJson(res, 405, { error: "method not allowed" });
@@ -341,7 +347,11 @@ export function createCanvasApi(root) {
         }
         if (req.method === "PATCH") {
           const body = await readJsonBody(req);
-          sendMutation(200, await locked(id, () => patchProject(root, { projectId: id, title: body.title })));
+          const patch = { projectId: id };
+          if (Object.hasOwn(body, "title")) patch.title = body.title;
+          if (Object.hasOwn(body, "ownership")) patch.ownership = body.ownership;
+          if (Object.hasOwn(body, "gameId")) patch.gameId = body.gameId;
+          sendMutation(200, await locked(id, () => patchProject(root, patch)));
           return true;
         }
         if (req.method === "DELETE") {

@@ -31,28 +31,29 @@ are done.
 - [x] Game-owned taskboard items move from `ai_studio/taskboard/items/` into
       `games/rb-dark-rpg/.ai_studio/taskboard/items/` only after Taskboard can
       read/write mounted game stores.
-- [ ] Game-owned Canvas projects move from
-      `ai_studio/assets/canvas/projects/` into
-      `games/rb-dark-rpg/.ai_studio/canvas/projects/` only after Canvas v2 refs
-      and store-routed writes exist.
-- [ ] Canvas project folders are preserved together: `project.json`, `files/`,
-      `export/`, `tool_runs.jsonl`, `errors.jsonl`, and local chat/history
-      sidecars.
-- [ ] Canvas local undo/history cache is handled explicitly before moving each
-      project: either migrate the per-machine cache with the project or log that
-      undo history is intentionally not preserved. Do not treat local cache
-      loss as a privacy leak, but do not hide it during migration.
+- [ ] Each current `rb-dark-rpg` Canvas project records
+      `ownership: { kind: "game", gameId: "rb-dark-rpg" }` inside its own
+      `project.json`.
+- [ ] Raw Canvas project folders remain in the shared external
+      `canvasProjectsRoot` (YandexDisk), not in the public parent repository or
+      game git repositories.
+- [ ] Canvas project folders are verified in the shared store as complete units:
+      `project.json`, `files/`, `export/`, `tool_runs.jsonl`, `errors.jsonl`,
+      and local chat/history sidecars where present.
+- [ ] Canvas local undo/history cache stays with the shared external Canvas
+      store. Do not move it into game git repositories.
 - [ ] Evidence, provenance, manifests, screenshots, and runtime logs move or
       relink into the owning game store where they are game-specific.
-- [ ] Raw game-local Canvas project folders and evidence files are ignored by
-      the parent repository unless an explicit sanitize/publish step promotes a
-      safe artifact into tracked game `assets/` or `design/` paths.
+- [ ] Raw Canvas project folders are not staged or tracked by the parent
+      repository; there is no game-side Canvas ref list. Sanitized game
+      assets/design artifacts are promoted separately when needed.
 - [ ] Studio-level references that remain are sanitized public fixture notes or
       migration notes, not private task/canvas/evidence content.
 - [ ] Old public history is not rewritten by this task; any history scrub is
       captured as separate explicit work if the lead asks for it.
 - [ ] Final leak scan reports no private IDs, paths, remotes, gitlinks, task
-      metadata, Canvas refs, or evidence paths in tracked public Studio files.
+      metadata, raw Canvas project content, or evidence paths in tracked public
+      Studio files.
 - [ ] `node ai_studio/taskboard/cli.mjs validate --json` passes, or unrelated
       validation failures are recorded.
 
@@ -60,8 +61,9 @@ are done.
 
 - Does `rb-dark-rpg` remain a public sample after migration, or should it be
   converted to a local/private mount later?
-- Raw Canvas/evidence working stores are ignored in the parent repo for the
-  current migration. Public release artifacts should be promoted separately
+- Raw Canvas project folders stay in the shared external YandexDisk-backed
+  Canvas store. Canvas ownership belongs in each Canvas `project.json`, not in
+  a game-side ref list. Public release artifacts should be promoted separately
   through sanitized game `assets/` or `design/` paths.
 
 ## Log
@@ -85,7 +87,13 @@ are done.
   zero problems.
 - 2026-07-09: Canvas/evidence migration audit found two current Canvas sources:
   the configured YandexDisk Studio projects root has three `rb-dark-rpg`
-  projects, and the legacy repo-local ignored root has three more. Added a
-  tracked game `.ai_studio` scaffold and parent ignore rules so raw Canvas
-  project folders and evidence can move into the game-owned store without
-  entering the public parent repository by default.
+  projects, and the legacy repo-local ignored root has three more. The initial
+  game-local Canvas scaffold was removed after the lead clarified that raw
+  Canvas stays in the shared external store; parent ignore rules now defensively
+  block accidental game-local Canvas folders from entering git.
+- 2026-07-09: Lead clarified the intended Canvas model: raw Canvas projects are
+  too large for git and should remain in the shared external YandexDisk-backed
+  store. Moved the three legacy repo-local ignored `rb-dark-rpg` Canvas
+  projects into the shared `canvasProjectsRoot`; the three configured YandexDisk
+  projects were already there. Follow-up correction: no game-side Canvas ref
+  list is needed; each Canvas project must carry `ownership.kind/gameId`.

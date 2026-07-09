@@ -10,7 +10,7 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { addImage, createGroup, createProject, detectRegions, getProject, resolveProjectFile, setRegions, sliceRegions, undoOp } from "../ops.mjs";
+import { addImage, createGroup, createProject, detectRegions, getProject, jumpHistory, patchProject, redoOp, resolveProjectFile, setRegions, sliceRegions, undoOp } from "../ops.mjs";
 import { decodePng, magentaSheetPng } from "./png_fixture.mjs";
 
 // raster2d runs Python with cwd = repo root and writes its session under
@@ -34,6 +34,39 @@ test("createProject without a title generates a random default", (t) => {
   const project = createProject(REPO_ROOT, {});
   assert.match(project.title, /^[A-Z][a-z]+ [A-Z][a-z]+$/);
   assert.ok(project.id.length > 0);
+});
+
+test("project game ownership is stored on the canvas project and undoable", (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, { title: "Owned", ownership: { kind: "game", gameId: "rb-dark-rpg" } });
+  assert.deepEqual(project.ownership, { kind: "game", gameId: "rb-dark-rpg" });
+
+  const reassigned = patchProject(REPO_ROOT, { projectId: project.id, gameId: "web-dressup" }).project;
+  assert.deepEqual(reassigned.ownership, { kind: "game", gameId: "web-dressup" });
+
+  const cleared = patchProject(REPO_ROOT, { projectId: project.id, ownership: null }).project;
+  assert.equal(Object.hasOwn(cleared, "ownership"), false);
+
+  const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.deepEqual(undone.ownership, { kind: "game", gameId: "web-dressup" });
+
+  const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
+  assert.equal(Object.hasOwn(redone, "ownership"), false);
+
+  const jumpedToOwned = jumpHistory(REPO_ROOT, { projectId: project.id, seq: 1 }).project;
+  assert.deepEqual(jumpedToOwned.ownership, { kind: "game", gameId: "web-dressup" });
+
+  const jumpedToBase = jumpHistory(REPO_ROOT, { projectId: project.id, seq: 0 }).project;
+  assert.deepEqual(jumpedToBase.ownership, { kind: "game", gameId: "rb-dark-rpg" });
+
+  assert.throws(
+    () => patchProject(REPO_ROOT, { projectId: project.id, gameId: "Bad Name" }),
+    /ownership\.gameId must be lowercase kebab-case/,
+  );
+  assert.throws(
+    () => createProject(REPO_ROOT, { title: "Broken Owner", ownership: { kind: "game" } }),
+    /ownership\.gameId must be lowercase kebab-case/,
+  );
 });
 
 test("detectRegions bridges raster2d and stores regions + a tool_run", async (t) => {

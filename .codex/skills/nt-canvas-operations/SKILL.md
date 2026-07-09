@@ -13,6 +13,30 @@ canvas module's operation contract here.
 - Module contract (single source of truth): `ai_studio/assets/canvas/README.md`.
 - Working plan + non-negotiable laws: `ai_studio/assets/canvas/PLAN.md`.
 
+## Game ownership
+
+Canvas working projects live in the shared external projects root configured by
+`canvasProjectsRoot` (usually YandexDisk). A project belongs to a game through
+metadata in that Canvas project's own `project.json`:
+
+```
+ownership: { kind: "game", gameId: "<game-id>" }
+```
+
+To find a game's Canvas projects, use the shared-root filter instead of a path or
+a game-side refs list:
+
+```
+node ai_studio/assets/canvas/cli.mjs list --owner-game <game-id>
+```
+
+To set or clear ownership, use the CLI so the normal journal/parity path runs:
+
+```
+node ai_studio/assets/canvas/cli.mjs project-set <projectId> --owner-game <game-id>
+node ai_studio/assets/canvas/cli.mjs project-set <projectId> --owner-game none
+```
+
 ## Resolving a `canvas://` ref
 
 The page's right-click **Copy ID** pastes one of these (verified against
@@ -31,7 +55,7 @@ resolve: take the bare ids out of the URI, then run
 element/group/region by id in the returned JSON (`show` includes `groups`).
 Drive the normal CLI from there with those ids.
 
-Private game-store refs are store-qualified and intentionally omit
+Private mounted-store refs are store-qualified and intentionally omit
 human-readable name tails:
 
 ```

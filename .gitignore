@@ -35,13 +35,13 @@ ai_studio/workspace/games.local.json
 # canonical projects root outside the repo.
 ai_studio/assets/canvas/projects/
 
-# Game-owned Canvas/evidence working stores can contain private prompts,
-# generated source sheets, screenshots, reports, and absolute local paths.
-# Keep only the scaffold tracked unless a game intentionally publishes a
-# sanitized artifact through its normal assets/design folders.
-games/*/.ai_studio/canvas/projects/*
-!games/*/.ai_studio/canvas/projects/.gitignore
-!games/*/.ai_studio/canvas/projects/README.md
+# Raw Canvas project folders must not enter game/template repositories. Canvas
+# ownership is stored in each shared-root project.json instead.
+games/*/.ai_studio/canvas/
+templates/*/.ai_studio/canvas/
+
+# Game-local evidence can contain private screenshots, reports, and absolute
+# local paths. Promote sanitized artifacts through normal assets/design folders.
 games/*/.ai_studio/evidence/*
 !games/*/.ai_studio/evidence/.gitignore
 !games/*/.ai_studio/evidence/README.md
@@ -58,3 +58,10 @@ templates/*/build/
 templates/*/src/generated/
 games/*/build/
 games/*/src/generated/
+
+# Browser automation scratch/profile files can contain cookies, history, local
+# storage, and screenshots.
+chrome-cdp-profile/
+web_browser_console.txt
+web_browser_shot.png
+web_launch.txt

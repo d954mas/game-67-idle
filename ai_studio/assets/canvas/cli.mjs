@@ -240,11 +240,12 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|filters-bake|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|recipe-pack-preview|recipe-pack-generate|recipe-pack-slice|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
-  list [--full]   (summary by default: [{id,title,created,updated,elements,groups,head}]; --full = every project in full, today's original dump)
-  create [--title <title>]     (omit --title for a random default)
+  console.log(`usage: cli.mjs <list|create|show|rename|project-set|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|filters-bake|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|recipe-pack-preview|recipe-pack-generate|recipe-pack-slice|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
+  list [--full] [--owner-game <gameId>]   (summary by default: [{id,title,ownerGame,created,updated,elements,groups,head}]; --full = every project in full, today's original dump)
+  create [--title <title>] [--owner-game <gameId>]     (omit --title for a random default)
   show <id>
   rename <id> --title <title>
+  project-set <id> [--title <title>] [--owner-game <gameId|none>]
   delete <id>
   add-image <id> --file <path>
   add-images <id> --files a.png,b.png   (batched multi-image add; one undo step)
@@ -331,15 +332,20 @@ async function runCommand(command, id, positional, flags) {
       const projects = stores.flatMap((store) =>
         withCanvasStore(store, () => listProjects(repoRoot).map((project) => ({ project, store })))
       );
+      const ownerGame = flags["owner-game"] && flags["owner-game"] !== "true" ? String(flags["owner-game"]).trim() : "";
+      const filteredProjects = ownerGame
+        ? projects.filter(({ project }) => project.ownership?.kind === "game" && project.ownership.gameId === ownerGame)
+        : projects;
       if (flags.full === "true") {
         return print({
           stores: stores.map(canvasStoreSummary),
-          projects: projects.map(({ project, store }) => decorateCanvasProject(project, store)),
+          projects: filteredProjects.map(({ project, store }) => decorateCanvasProject(project, store)),
         });
       }
-      const summary = projects.map(({ project, store }) => ({
+      const summary = filteredProjects.map(({ project, store }) => ({
         id: project.id,
         title: project.title,
+        ownerGame: project.ownership?.kind === "game" ? project.ownership.gameId : "",
         created: project.created,
         updated: project.updated,
         elements: (project.elements || []).length,
@@ -354,9 +360,10 @@ async function runCommand(command, id, positional, flags) {
     case "create":
       // --title is optional: a missing/empty title gets a random default
       // ("Amber Fox"-style) from the op layer, matching the page's instant-create.
+      if (flags["owner-game"] === "true") fail("create --owner-game requires a game id");
       return withSelectedCanvasStore(flags, () => {
         const store = selectedCanvasStore(flags);
-        return print({ project: decorateCanvasProject(createProject(repoRoot, { title: flags.title }), store) });
+        return print({ project: decorateCanvasProject(createProject(repoRoot, { title: flags.title, gameId: flags["owner-game"] }), store) });
       });
     case "show":
       if (!id) fail("show requires <id>");
@@ -368,6 +375,19 @@ async function runCommand(command, id, positional, flags) {
       if (!id) fail("rename requires <id>");
       if (!flags.title || flags.title === "true") fail("rename requires --title <title>");
       return print(patchProject(repoRoot, { projectId: id, title: flags.title }));
+    case "project-set": {
+      if (!id) fail("project-set requires <id>");
+      const patch = { projectId: id };
+      if (flags.title !== undefined && flags.title !== "true") patch.title = flags.title;
+      if (flags["owner-game"] !== undefined) {
+        if (flags["owner-game"] === "true") fail("project-set --owner-game requires a game id or 'none'");
+        patch.gameId = flags["owner-game"];
+      }
+      if (patch.title === undefined && !Object.hasOwn(patch, "gameId")) {
+        fail("project-set requires --title and/or --owner-game");
+      }
+      return print(patchProject(repoRoot, patch));
+    }
     case "delete":
       if (!id) fail("delete requires <id>");
       return print(deleteProject(repoRoot, { projectId: id }));
