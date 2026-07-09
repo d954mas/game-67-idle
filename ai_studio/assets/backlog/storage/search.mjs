@@ -2,6 +2,7 @@
 import { existsSync } from "node:fs";
 import { basename, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { listGameMounts } from "../../../workspace/games.mjs";
 import { ensureAssetIndex, queryIndexedAssets, refreshAssetIndex } from "./index/index.mjs";
 import { defaultLibrarySourceRoot } from "./sources/libraries.mjs";
 
@@ -12,7 +13,6 @@ function parseCsv(value = "") {
 function parseArgs(argv) {
   const args = {
     sourceId: "",
-    sourcePath: defaultLibrarySourceRoot(process.cwd()),
     type: "library",
     query: "",
     limit: 24,
@@ -21,6 +21,9 @@ function parseArgs(argv) {
     filters: {},
     refresh: false,
     json: false,
+    game: "",
+    includePrivate: false,
+    explicitSourcePath: false,
   };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
@@ -32,6 +35,10 @@ function parseArgs(argv) {
       args.refresh = true;
       continue;
     }
+    if (arg === "--include-private" || arg === "--includePrivate") {
+      args.includePrivate = true;
+      continue;
+    }
     const next = argv[i + 1];
     if (next === undefined || next.startsWith("--")) throw new Error(`missing value for ${arg}`);
     i += 1;
@@ -39,8 +46,10 @@ function parseArgs(argv) {
     else if (arg === "--source-path") {
       args.sourcePath = resolve(next);
       args.type = "local";
+      args.explicitSourcePath = true;
     } else if (arg === "--source-type" || arg === "--type") args.type = next;
     else if (arg === "--mode") args.type = next === "library" ? "library" : "local";
+    else if (arg === "--game") args.game = next;
     else if (arg === "--query" || arg === "--q") args.query = next;
     else if (arg === "--kind") args.filters.kind = parseCsv(next);
     else if (arg === "--tags") args.filters.tags = parseCsv(next);
@@ -59,8 +68,33 @@ function safeSlug(value) {
   return String(value || "assets").replace(/[^a-zA-Z0-9_.-]+/g, "_").replace(/^_+|_+$/g, "") || "assets";
 }
 
-function sourceFromOptions(options) {
-  const sourcePath = resolve(options.sourcePath || defaultLibrarySourceRoot(process.cwd()));
+function sourceFromGame(root, options) {
+  const gameId = String(options.game || "").trim();
+  if (!gameId) return null;
+  if (options.explicitSourcePath || Object.hasOwn(options, "sourcePath")) {
+    throw new Error("--game cannot be combined with --source-path");
+  }
+  const mounts = listGameMounts(root, {
+    activeGameId: gameId,
+    includePrivate: options.includePrivate === true,
+  });
+  const mount = mounts.find((item) => item.gameId === gameId);
+  if (!mount) throw new Error(`unknown game asset source: ${gameId}`);
+  const sourcePath = resolve(root, mount.assetRoot);
+  return {
+    id: options.sourceId || mount.storeId,
+    type: "game",
+    label: mount.publicAlias || mount.title || mount.gameId,
+    path: sourcePath,
+    available: existsSync(sourcePath),
+    visibility: mount.visibility,
+  };
+}
+
+function sourceFromOptions(root, options) {
+  const gameSource = sourceFromGame(root, options);
+  if (gameSource) return gameSource;
+  const sourcePath = resolve(options.sourcePath || defaultLibrarySourceRoot(root));
   const type = options.type || (options.mode === "library" ? "library" : "local");
   const sourceId = options.sourceId || (type === "library" ? "global-library" : `local-${safeSlug(basename(sourcePath))}`);
   return {
@@ -73,7 +107,7 @@ function sourceFromOptions(options) {
 }
 
 export async function searchAssets(root, options = {}) {
-  const source = sourceFromOptions(options);
+  const source = sourceFromOptions(root, options);
   if (!source.available) throw new Error(`asset source is not available: ${source.path}`);
   if (options.refresh) await refreshAssetIndex(root, source);
   else await ensureAssetIndex(root, source);

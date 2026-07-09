@@ -1,9 +1,16 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
+import { localGameRegistryRelPath } from "../../../../workspace/games.mjs";
 import { searchAssets } from "../search.mjs";
+
+function writeJson(path, value) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
 
 test("searchAssets queries generated index for a pack manifest source", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "asset-search-"));
@@ -94,4 +101,87 @@ test("searchAssets uses the existing index until refresh is requested", async (t
 
   const withRefresh = await searchAssets(root, { ...baseOptions, refresh: true });
   assert.equal(withRefresh.total, 2);
+});
+
+test("searchAssets resolves a public game source by game id", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "asset-search-public-game-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const assets = join(root, "games", "public-game", "assets");
+  mkdirSync(join(assets, "ui"), { recursive: true });
+  writeFileSync(join(assets, "ui", "button.png"), "png", "utf8");
+  mkdirSync(join(root, "games"), { recursive: true });
+  writeJson(join(root, "games", "games.json"), {
+    schema: "ai_studio.assets.games.v1",
+    games: [
+      {
+        id: "public-game",
+        title: "Public Game",
+        folder: "games/public-game",
+        assets: "games/public-game/assets",
+        status: "active",
+      },
+    ],
+  });
+
+  const result = await searchAssets(root, {
+    game: "public-game",
+    query: "button",
+    refresh: true,
+    limit: 24,
+  });
+
+  assert.equal(result.sourceId, "game:public-game");
+  assert.equal(result.total, 1);
+});
+
+test("searchAssets resolves a private game source through preflighted mounts", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "asset-search-private-game-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  writeFileSync(join(root, ".gitignore"), `${localGameRegistryRelPath()}\n`, "utf8");
+  writeFileSync(join(root, ".git", "info", "exclude"), "games/secret-game/\n", "utf8");
+
+  const gameRoot = join(root, "games", "secret-game");
+  const assets = join(gameRoot, "assets");
+  mkdirSync(join(assets, "ui"), { recursive: true });
+  writeFileSync(join(assets, "ui", "private-button.png"), "png", "utf8");
+  execFileSync("git", ["init"], { cwd: gameRoot, stdio: "ignore" });
+  writeJson(join(root, "ai_studio", "workspace", "games.local.json"), {
+    schema: "ai_studio.workspace.games.local.v1",
+    games: [
+      {
+        schemaVersion: 1,
+        storeId: "game:secret-game",
+        kind: "game",
+        gameId: "secret-game",
+        root: "games/secret-game",
+        visibility: "private",
+        gitRoot: "games/secret-game",
+        commitPolicy: "nested-private",
+        enabledStores: ["assets", "taskboard", "canvas", "evidence"],
+        assetRoot: "games/secret-game/assets",
+      },
+    ],
+  });
+
+  const result = await searchAssets(root, {
+    game: "secret-game",
+    query: "private-button",
+    refresh: true,
+    limit: 24,
+  });
+
+  assert.equal(result.sourceId, "game:secret-game");
+  assert.equal(result.total, 1);
+});
+
+test("searchAssets rejects ambiguous explicit game and source path options", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "asset-search-game-source-path-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  await assert.rejects(
+    searchAssets(root, { game: "secret-game", sourcePath: join(root, "games", "secret-game", "assets") }),
+    /--game cannot be combined with --source-path/,
+  );
 });

@@ -256,9 +256,91 @@ test("root-file and child-directory scan roots report workspace root commands", 
   ]);
 });
 
+test("scan roots skip explicit excluded prefixes", () => {
+  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+  write(root, "games/public-game/README.md", "# public game");
+  write(root, "games/secret-game/README.md", "# private game");
+
+  assert.deepEqual(
+    collectScannedPaths(root, [{ path: "games", mode: "root-files-and-child-directories" }], {
+      excludedPrefixes: ["games/secret-game"],
+    }),
+    ["games/public-game"],
+  );
+});
+
+test("validation report excludes local private game mounts from game scans", () => {
+  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+  write(
+    root,
+    "ai_studio/tree.json",
+    JSON.stringify({
+      schema: 1,
+      root: {
+        id: "studio",
+        title: "studio",
+        children: [
+          {
+            id: "games-root",
+            kind: "dir",
+            path: "games",
+            coverage: "self",
+            description: "Public games container.",
+          },
+        ],
+      },
+    }),
+  );
+  write(root, "games/public-game/README.md", "# public game");
+  write(root, "games/secret-game/README.md", "# private game");
+  write(
+    root,
+    "games/games.json",
+    JSON.stringify({
+      schema: "ai_studio.assets.games.v1",
+      games: [
+        { id: "public-game", title: "Public Game", folder: "games/public-game", assets: "games/public-game/assets" },
+      ],
+    }),
+  );
+  write(
+    root,
+    "ai_studio/workspace/games.local.json",
+    JSON.stringify({
+      schema: "ai_studio.workspace.games.local.v1",
+      games: [
+        {
+          schemaVersion: 1,
+          storeId: "game:secret-game",
+          kind: "game",
+          gameId: "secret-game",
+          root: "games/secret-game",
+          visibility: "private",
+          gitRoot: "games/secret-game",
+          commitPolicy: "nested-private",
+          enabledStores: ["assets", "taskboard", "canvas", "evidence"],
+        },
+      ],
+    }),
+  );
+
+  const report = createValidationReport({
+    repoRoot: root,
+    scanRoots: [{ path: "games", mode: "root-files-and-child-directories" }],
+  });
+  const reportText = JSON.stringify(report);
+
+  assert.equal(reportText.includes("secret-game"), false);
+  assert.deepEqual(report.issues.unmappedOutsideAiStudio, [
+    { path: "games/games.json" },
+    { path: "games/public-game" },
+  ]);
+});
+
 test("repo tree maps game, template, feature, and game-design knowledge ownership without listing their files", () => {
   const nodes = collectNodes(loadRepoTreeRoot());
   const byId = new Map(nodes.map((node) => [node.id, node]));
+  const byPath = new Map(nodes.filter((node) => node.path).map((node) => [node.path, node]));
   const paths = nodes.map((node) => node.path).filter(Boolean);
 
   assert.equal(byId.get("workspace:templates")?.path, "templates");
@@ -270,8 +352,8 @@ test("repo tree maps game, template, feature, and game-design knowledge ownershi
   assert.equal(byId.get("workspace:features")?.coverage, "self");
   assert.equal(byId.get("workspace:features-readme")?.path, "features/README.md");
   assert.equal(byId.get("game-design:knowledge-base")?.path, "ai_studio/game_design/knowledge_base");
-  assert.equal(byId.get("workspace:games")?.path, "games");
-  assert.equal(byId.get("workspace:games")?.coverage, "self");
+  assert.equal(byPath.get("games")?.id, "workspace:games");
+  assert.equal(byPath.get("games")?.coverage, "self");
   assert.equal(byId.get("workspace:games-readme")?.path, "games/README.md");
 
   assert.deepEqual(paths.filter((path) => path.startsWith("templates/template/")), []);

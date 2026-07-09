@@ -18,7 +18,10 @@ The map is data-driven:
   merging `tree/` parts client-side).
 - `validate_map.mjs` merges the tree, scans AI Studio source locations and
   shallow workspace folder roots, and writes a local `validation-report.json`
-  for offline inspection. That file is **git-ignored, not committed**.
+  for offline inspection. That file is **git-ignored, not committed**. Local
+  private game mounts from `ai_studio/workspace/games.local.json` are excluded
+  from parent architecture scans so their ids and paths do not appear in the
+  generated report.
 - `api.mjs` is the Studio Shell adapter. `GET /api/architecture-validation`
   returns a freshly computed report so the page never depends on a committed
   file; `GET /api/architecture-tree` returns the merged tree.
@@ -84,3 +87,10 @@ http://127.0.0.1:8765/architecture_map/
 - `missingDescriptions`: a visible node lacks a useful description.
 
 Scanning is validation only. It does not edit `tree.json`.
+
+Before sharing architecture validation output or running a workflow that turns
+local reports into tracked evidence, run:
+
+```powershell
+node ai_studio/workspace/games.mjs preflight --json
+```

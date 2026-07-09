@@ -27,7 +27,7 @@ runtime evidence.
 - [ ] Asset/provenance/source-first rules remain unchanged for private games:
       committed assets still require license, provenance, integrity, and origin;
       paid or non-redistributable binaries stay out of git.
-- [ ] Architecture-map validation and reports do not scan ignored private nested
+- [x] Architecture-map validation and reports do not scan ignored private nested
       repo internals from the parent Studio repo.
 - [ ] Generated validation reports, screenshots, runtime logs, and evidence paths
       are ignored or game-owned, and cannot become committed private path leaks.
@@ -52,3 +52,10 @@ runtime evidence.
   `ai_studio/workspace/games.local.json` private mounts do not enter tracked
   tasks or launch configs; documented that private IDE entries must stay
   game-owned or ignored local workspace state.
+- 2026-07-09: Updated architecture-map validation to exclude private local game
+  mounts from shallow parent scans before report/API output; added regression
+  coverage proving `games/secret-game` does not appear in the report JSON.
+- 2026-07-09: Added asset search `--game <game-id>` resolution through the
+  workspace game resolver/preflight. This covers agent search; gallery and item
+  viewer surfaces still need the same private-aware resolver before the asset
+  discovery checklist item can close.

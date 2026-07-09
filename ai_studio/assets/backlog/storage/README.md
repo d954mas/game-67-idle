@@ -138,6 +138,7 @@ Refresh is explicit. No filesystem watch mode belongs here.
 ```powershell
 node ai_studio/assets/backlog/storage/search.mjs --query "wooden crate" --kind model
 node ai_studio/assets/backlog/storage/search.mjs --source-path templates/template/assets --source-type local --tags ui,button
+node ai_studio/assets/backlog/storage/search.mjs --game <game-id> --query "button" --refresh --json
 node ai_studio/assets/backlog/storage/search.mjs --query "metal floor" --license CC0 --json
 ```
 
@@ -147,3 +148,9 @@ default. If that source is disabled, it falls back to another active library.
 Add `--refresh` only when local files or manifests changed and the query must
 update the index first. Unchanged sources use a snapshot check; changed sources
 rebuild from Pack Manifest metadata or a raw folder scan.
+
+For game-owned assets, prefer `--game <game-id>` over raw `--source-path`.
+Public games resolve from `games/games.json`. Private games resolve through
+`ai_studio/workspace/games.local.json` with the workspace preflight, and their
+generated indexes, snapshots, and previews stay under ignored `tmp/ai_studio/`
+paths.

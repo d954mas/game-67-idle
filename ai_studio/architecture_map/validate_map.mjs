@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, extname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { listGameMounts } from "../workspace/games.mjs";
 import { loadArchitectureTree } from "./tree_loader.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -65,7 +66,24 @@ function shouldTrack(rel) {
   return trackedExtensions.has(extname(posix));
 }
 
-function walkRepo(repoRoot, rel, out = []) {
+function excludedByPrefix(rel, prefixes = []) {
+  const posix = normalizeMapPath(rel);
+  return prefixes.some((prefix) => posix === prefix || posix.startsWith(`${prefix}/`));
+}
+
+function privateMountScanExclusions(repoRoot) {
+  try {
+    return listGameMounts(repoRoot, { includePrivate: true, skipPreflight: true })
+      .filter((mount) => mount.visibility !== "public")
+      .map((mount) => normalizeMapPath(mount.root))
+      .filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+function walkRepo(repoRoot, rel, options = {}, out = []) {
+  if (excludedByPrefix(rel, options.excludedPrefixes)) return out;
   const abs = repoPath(repoRoot, rel);
   if (!existsSync(abs)) return out;
   const stat = statSync(abs);
@@ -77,22 +95,23 @@ function walkRepo(repoRoot, rel, out = []) {
   if (!stat.isDirectory()) return out;
   for (const entry of readdirSync(abs, { withFileTypes: true })) {
     if (entry.name === ".git" || entry.name === "node_modules" || entry.name === "__pycache__") continue;
-    walkRepo(repoRoot, join(rel, entry.name), out);
+    walkRepo(repoRoot, join(rel, entry.name), options, out);
   }
   return out;
 }
 
-function listChildDirectories(repoRoot, rel) {
+function listChildDirectories(repoRoot, rel, options = {}) {
   const abs = repoPath(repoRoot, rel);
   if (!existsSync(abs)) return [];
   const stat = statSync(abs);
   if (!stat.isDirectory()) return [];
   return readdirSync(abs, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith(".") && entry.name !== "node_modules" && entry.name !== "__pycache__")
-    .map((entry) => normalizeMapPath(join(rel, entry.name)));
+    .map((entry) => normalizeMapPath(join(rel, entry.name)))
+    .filter((path) => !excludedByPrefix(path, options.excludedPrefixes));
 }
 
-function listRootFilesAndChildDirectories(repoRoot, rel) {
+function listRootFilesAndChildDirectories(repoRoot, rel, options = {}) {
   const abs = repoPath(repoRoot, rel);
   if (!existsSync(abs)) return [];
   const stat = statSync(abs);
@@ -103,6 +122,7 @@ function listRootFilesAndChildDirectories(repoRoot, rel) {
       return entry.isDirectory() || entry.isFile();
     })
     .map((entry) => normalizeMapPath(join(rel, entry.name)))
+    .filter((path) => !excludedByPrefix(path, options.excludedPrefixes))
     .filter((path) => {
       const entry = statSync(repoPath(repoRoot, path));
       return entry.isDirectory() || shouldTrack(path);
@@ -117,12 +137,14 @@ function normalizeScanRoot(scanRoot) {
   };
 }
 
-function collectScannedPaths(repoRoot, scanRoots = defaultScanRoots) {
+function collectScannedPaths(repoRoot, scanRoots = defaultScanRoots, options = {}) {
+  const scanOptions = { excludedPrefixes: (options.excludedPrefixes || []).map(normalizeMapPath).filter(Boolean) };
   return [...new Set(scanRoots.flatMap((root) => {
     const spec = normalizeScanRoot(root);
-    if (spec.mode === "tracked-files") return walkRepo(repoRoot, spec.path);
-    if (spec.mode === "child-directories") return listChildDirectories(repoRoot, spec.path);
-    if (spec.mode === "root-files-and-child-directories") return listRootFilesAndChildDirectories(repoRoot, spec.path);
+    if (excludedByPrefix(spec.path, scanOptions.excludedPrefixes)) return [];
+    if (spec.mode === "tracked-files") return walkRepo(repoRoot, spec.path, scanOptions);
+    if (spec.mode === "child-directories") return listChildDirectories(repoRoot, spec.path, scanOptions);
+    if (spec.mode === "root-files-and-child-directories") return listRootFilesAndChildDirectories(repoRoot, spec.path, scanOptions);
     throw new Error(`Unknown architecture map scan mode: ${spec.mode}`);
   }))].sort((a, b) => a.localeCompare(b));
 }
@@ -169,6 +191,7 @@ function createValidationReport(options = {}) {
   const repoRoot = options.repoRoot || defaultRepoRoot;
   const mapPath = options.mapPath || defaultMapPath;
   const scanRoots = options.scanRoots || defaultScanRoots;
+  const scanExclusions = options.excludedPrefixes || privateMountScanExclusions(repoRoot);
   const map = loadArchitectureTree(repoRoot, mapPath);
   const { entries, missingDescriptions } = collectMapEntries(map);
   const pathToEntries = new Map();
@@ -195,7 +218,7 @@ function createValidationReport(options = {}) {
     }
   }
 
-  const scanned = collectScannedPaths(repoRoot, scanRoots);
+  const scanned = collectScannedPaths(repoRoot, scanRoots, { excludedPrefixes: scanExclusions });
   const unmapped = scanned.filter((file) => !mappedExactPaths.has(file) && !isCoveredByMappedDirectory(file, mappedDirectories));
   const unmappedInAiStudio = unmapped.filter((file) => file.startsWith("ai_studio/"));
   const unmappedOutsideAiStudio = unmapped.filter((file) => !file.startsWith("ai_studio/"));
