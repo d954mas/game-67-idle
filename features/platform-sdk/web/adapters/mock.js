@@ -63,6 +63,7 @@ export function createMockPlatformAdapter({ emitVisibilityChange, host, target }
 
   return {
     destroy,
+    gameLoadingProgress() {},
     gameLoadingFinished() {},
     gameReady() {},
     gameplayStart() {},

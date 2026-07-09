@@ -41,6 +41,7 @@
 #endif
 
 #include "features/game_features.h"
+#include "features/platform_sdk/platform_sdk.h"
 #include "features/platform_sdk/platform_sdk_events.h"
 #include "features/settings/settings.h"
 #include "game_events.h"
@@ -100,6 +101,14 @@ static uint16_t s_devapi_port = NT_DEVAPI_DEFAULT_PORT;
 #endif
 
 static nt_hash64_t rid(const char *s) { return nt_hash64_str(s); }
+
+static float initial_pack_loading_progress(void) {
+    uint32_t received = 0u;
+    uint32_t total = 0u;
+    const nt_pack_state_t state = nt_resource_pack_state(s_pack_id);
+    nt_resource_pack_progress(s_pack_id, &received, &total);
+    return platform_lifecycle_loading_progress_from_pack(received, total, state == NT_PACK_STATE_READY);
+}
 
 static bool parse_window_size_arg(const char *raw, int *out_w, int *out_h) {
     const char *sep = raw ? strchr(raw, 'x') : NULL;
@@ -253,7 +262,9 @@ static void frame(void) {
 #endif
     nt_resource_step();
     nt_material_step();
-    platform_lifecycle_update(render_mesh_ready(&s_world) && ui_runtime_ready(), !settings_is_open());
+    const bool playable_shell_ready = render_mesh_ready(&s_world) && ui_runtime_ready();
+    (void)platform_sdk_game_loading_progress(initial_pack_loading_progress());
+    platform_lifecycle_update(playable_shell_ready, !settings_is_open());
     s_world.time_seconds += g_nt_app.dt;
 
     // Р11 «Hold to reset progress» (settings_screen.c): apply a deferred new-game
@@ -305,6 +316,7 @@ static void frame(void) {
 
     nt_gfx_end_frame();
     nt_window_swap_buffers();
+    platform_lifecycle_after_frame_present(playable_shell_ready);
     devapi_sample_metrics(frame_begin);
 }
 

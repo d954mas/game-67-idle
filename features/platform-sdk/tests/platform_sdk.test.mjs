@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 
 import { createPlatformSdkWebBackend } from "../web/platform-sdk-core.js";
 import { createMockPlatformAdapter } from "../web/adapters/mock.js";
+import { createPokiPlatformAdapter } from "../web/adapters/poki.js";
 import {
   inspectPlatformSdkArtifact,
   sdkForTarget,
@@ -198,7 +199,7 @@ test("web backend exposes only thin adapter methods and lifecycle calls stay dir
   await backend.gameReady();
   await backend.gameReady();
 
-  assert.deepEqual(calls, ["ready", "ready", "gameLoadingFinished", "gameLoadingFinished", "gameReady", "gameReady"]);
+  assert.deepEqual(calls, ["ready", "gameLoadingFinished", "gameLoadingFinished", "gameReady", "gameReady"]);
   assert.equal(Object.hasOwn(backend, "track"), false);
   assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);
 });
@@ -219,8 +220,59 @@ test("web backend reports selected SDK readiness without owning boot policy", as
 
   assert.equal(await backend.ready(), false);
   assert.equal(await backend.ready(), false);
-  assert.deepEqual(calls, ["ready", "ready"]);
+  assert.deepEqual(calls, ["ready"]);
   assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);
+});
+
+test("web backend forwards loading progress without analytics events", async () => {
+  const host = createHost(TargetPlatform.POKI);
+  const progress = [];
+  const backend = createPlatformSdkWebBackend({
+    adapterFactory: () => ({
+      gameLoadingProgress(value) {
+        progress.push(value);
+      },
+    }),
+    config: { target: TargetPlatform.POKI, platformSdk: "poki" },
+    host,
+  });
+
+  await backend.gameLoadingProgress(0.35);
+
+  assert.deepEqual(progress, [0.35]);
+  assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);
+});
+
+test("poki adapter coalesces loading progress queued before SDK init completes", async () => {
+  const host = createHost(TargetPlatform.POKI);
+  const progress = [];
+  let resolveInit;
+  host.PokiSDK = {
+    init() {
+      return new Promise((resolve) => {
+        resolveInit = resolve;
+      });
+    },
+    gameLoadingProgress(payload) {
+      progress.push(payload.percentageDone);
+    },
+  };
+  const adapter = createPokiPlatformAdapter({ host });
+
+  const p1 = adapter.gameLoadingProgress(0.10);
+  const p2 = adapter.gameLoadingProgress(0.45);
+  const p3 = adapter.gameLoadingProgress(1.0);
+  assert.deepEqual(progress, []);
+
+  await Promise.resolve();
+  await Promise.resolve();
+  resolveInit();
+  await Promise.all([p1, p2, p3]);
+  assert.deepEqual(progress, [1]);
+
+  await adapter.gameLoadingProgress(0.75);
+  await adapter.gameLoadingProgress(1.0);
+  assert.deepEqual(progress, [1]);
 });
 
 test("web backend delegates gameplay calls without owning input state or guards", async () => {
@@ -368,15 +420,21 @@ test("web runtime does not expose game-facing platform SDK globals", () => {
   assert.equal(mock.includes("createOverlay"), false);
   assert.equal(mock.includes("platformSdkOverlay"), false);
   assert.equal(poki.includes("gameplayActive"), false);
+  assert.equal(poki.includes("sdk.gameLoadingProgress({ percentageDone"), true);
 });
 
 test("template web shell loads selected platform backend before game.js", () => {
   const shell = readFileSync(join(HERE, "../../../templates/template/web/index.html.in"), "utf8");
+  const source = readFileSync(join(HERE, "../web/platform-sdk.js"), "utf8");
 
   assert.equal(shell.includes('import \'./platform-sdk.js\';'), true);
   assert.equal(shell.includes("gameScript.src = 'game.js';"), true);
   assert.equal(shell.includes('<script type="module" src="platform-sdk.js"></script>'), false);
   assert.equal(shell.includes('<script src="game.js"></script>'), false);
+  assert.equal(shell.includes("__platformSdkSetLoadingProgress"), true);
+  assert.equal(shell.includes("__platformSdkHideLoadingOverlay"), true);
+  assert.equal(shell.includes("statusEl.style.display = 'none'"), false);
+  assert.equal(source.includes("platformSdkInternalBackend.ready()"), true);
 });
 
 test("production staged artifacts exclude debug labels and unused SDK URLs", () => {

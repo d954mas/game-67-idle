@@ -56,6 +56,7 @@ bool platform_sdk_storage_supported(void);
 
 platform_sdk_result_t platform_sdk_init(void);
 platform_sdk_boot_status_t platform_sdk_status(void);
+platform_sdk_result_t platform_sdk_game_loading_progress(float progress01);
 platform_sdk_result_t platform_sdk_game_loading_finished(void);
 platform_sdk_result_t platform_sdk_game_ready(void);
 
@@ -174,11 +175,24 @@ Implementation rules:
 - `platform_sdk_init()` is the one-shot boot barrier, not a readiness getter. It
   initializes the selected backend; if the SDK is absent, blocked, or
   unavailable, it moves to `PLATFORM_SDK_BOOT_FAILED` because the selected
-  portal build cannot run correctly. JavaScript may cache portal script loading
-  inside the selected backend, but that cache is not a game-facing policy API.
+  portal build cannot run correctly. For web portal SDKs, init may be async:
+  `platform_sdk_init()` returns `PLATFORM_SDK_RESULT_NOT_READY` while the
+  selected backend is still loading, and the backend completes the C facade with
+  `platform_sdk_backend_complete_init()`. JavaScript may cache portal script
+  loading inside the selected backend, but that cache is not a game-facing
+  policy API.
+- `platform_sdk_game_loading_progress(progress01)` is a monotonic, clamped
+  `0..1` loading signal. It is allowed before SDK init has completed so the web
+  shell can show boot progress while the selected portal SDK and game runtime
+  load in parallel. It may forward to portal APIs such as Poki
+  `gameLoadingProgress`, but it is not a game event and must not emit
+  `game.loading_progress`.
 - `platform_sdk_game_loading_finished()` is one-shot. It emits
   `game.loading_finished` through `features/game-events`, and calls the selected
-  backend's loading-finished hook at most once per wrapper instance.
+  backend's loading-finished hook at most once per wrapper instance. Web games
+  should call it only after the initial required assets are ready and at least
+  one playable frame has been presented behind the loading overlay; do not hide
+  the HTML loading screen directly from `onRuntimeInitialized`.
 - `platform_sdk_game_ready()` is also one-shot and is only for portals with a
   distinct game-ready SDK call, such as Playgama `game_ready`; it does not emit
   an analytics event.
@@ -238,6 +252,9 @@ Do not add platform-sdk events for pure queries or cleanup:
 - `game.ready` remains a wrapper method for portal SDK calls such as Playgama
   `game_ready`, but it is not a required analytics event because
   `game.loading_finished` already marks the first interactive handoff.
+- `game.loading_progress` is not an event. Loading progress is a platform/web
+  shell lifecycle signal from `platform_sdk_game_loading_progress()`, not
+  telemetry for analytics subscribers.
 - `session.end` belongs to the app/game lifecycle, not platform-sdk.
 - `save.write` belongs to game-state/save code; platform-sdk may emit only
   platform storage operation failures as warnings or health counters if needed.
@@ -289,6 +306,8 @@ Used by `local` and `itch`.
 ### `poki`
 
 - Loads the Poki SDK script from the official CDN and calls `PokiSDK.init()`.
+- Forwards monotonic loading progress to `PokiSDK.gameLoadingProgress()` when
+  that SDK method exists.
 - Calls `gameLoadingFinished()` when the game can be played.
 - Uses `gameplayStart()` and `gameplayStop()` around active play, pause, menus,
   settings, dialogs, game over screens, and ads. `gameReady()` or first menu

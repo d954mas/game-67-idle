@@ -5,12 +5,14 @@
 
 typedef struct fake_backend_state_t {
     int init_calls;
+    int loading_progress_calls;
     int loading_finished_calls;
     int game_ready_calls;
     int gameplay_start_calls;
     int gameplay_stop_calls;
     int interstitial_calls;
     int rewarded_calls;
+    float last_loading_progress;
     platform_sdk_ad_result_t next_interstitial;
     platform_sdk_rewarded_result_t next_rewarded;
 } fake_backend_state_t;
@@ -21,6 +23,18 @@ static bool fake_backend_init(void *userdata) {
     fake_backend_state_t *state = (fake_backend_state_t *)userdata;
     state->init_calls++;
     return true;
+}
+
+static bool pending_backend_init(void *userdata) {
+    fake_backend_state_t *state = (fake_backend_state_t *)userdata;
+    state->init_calls++;
+    return false;
+}
+
+static void fake_backend_loading_progress(float progress01, void *userdata) {
+    fake_backend_state_t *state = (fake_backend_state_t *)userdata;
+    state->loading_progress_calls++;
+    state->last_loading_progress = progress01;
 }
 
 static void fake_backend_loading_finished(void *userdata) {
@@ -62,6 +76,7 @@ static platform_sdk_result_t fake_backend_show_rewarded(const char *placement, v
 static platform_sdk_backend_t fake_backend(void) {
     platform_sdk_backend_t backend = {
         .init = fake_backend_init,
+        .game_loading_progress = fake_backend_loading_progress,
         .game_loading_finished = fake_backend_loading_finished,
         .game_ready = fake_backend_game_ready,
         .gameplay_start = fake_backend_gameplay_start,
@@ -93,6 +108,20 @@ static platform_sdk_backend_t pending_backend(void) {
         .show_rewarded = pending_backend_show_rewarded,
     };
     return backend;
+}
+
+static platform_sdk_backend_t async_init_backend(void) {
+    platform_sdk_backend_t backend = fake_backend();
+    backend.init = pending_backend_init;
+    return backend;
+}
+
+static bool float_close(float actual, float expected) {
+    float diff = actual - expected;
+    if (diff < 0.0f) {
+        diff = -diff;
+    }
+    return diff < 0.0001f;
 }
 
 void setUp(void) {
@@ -195,6 +224,56 @@ static void test_template_boot_and_loading_calls_are_one_shot(void) {
     TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_game_ready());
     TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_game_ready());
     TEST_ASSERT_EQUAL_INT(1, g_backend_state.game_ready_calls);
+}
+
+static void test_template_async_init_waits_for_backend_completion(void) {
+    platform_sdk_backend_t backend = async_init_backend();
+    platform_sdk_set_backend(&backend, &g_backend_state);
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_NOT_READY, platform_sdk_init());
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_BOOT_INITIALIZING, platform_sdk_status());
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.init_calls);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_NOT_READY, platform_sdk_init());
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.init_calls);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_NOT_READY, platform_sdk_game_loading_finished());
+    TEST_ASSERT_EQUAL_INT(0, g_backend_state.loading_finished_calls);
+
+    platform_sdk_backend_complete_init(true);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_BOOT_READY, platform_sdk_status());
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_game_loading_finished());
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.loading_finished_calls);
+}
+
+static void test_template_async_init_failure_is_terminal(void) {
+    platform_sdk_backend_t backend = async_init_backend();
+    platform_sdk_set_backend(&backend, &g_backend_state);
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_NOT_READY, platform_sdk_init());
+    platform_sdk_backend_complete_init(false);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_BOOT_FAILED, platform_sdk_status());
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_FAILED, platform_sdk_init());
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.init_calls);
+}
+
+static void test_template_loading_progress_is_clamped_and_monotonic(void) {
+    platform_sdk_backend_t backend = fake_backend();
+    platform_sdk_set_backend(&backend, &g_backend_state);
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_game_loading_progress(-1.0f));
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.loading_progress_calls);
+    TEST_ASSERT_TRUE(float_close(g_backend_state.last_loading_progress, 0.0f));
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_game_loading_progress(0.25f));
+    TEST_ASSERT_EQUAL_INT(2, g_backend_state.loading_progress_calls);
+    TEST_ASSERT_TRUE(float_close(g_backend_state.last_loading_progress, 0.25f));
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_game_loading_progress(0.20f));
+    TEST_ASSERT_EQUAL_INT(2, g_backend_state.loading_progress_calls);
+    TEST_ASSERT_TRUE(float_close(g_backend_state.last_loading_progress, 0.25f));
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_game_loading_progress(2.0f));
+    TEST_ASSERT_EQUAL_INT(3, g_backend_state.loading_progress_calls);
+    TEST_ASSERT_TRUE(float_close(g_backend_state.last_loading_progress, 1.0f));
 }
 
 static void test_template_gameplay_requires_first_input_and_tracks_state(void) {
@@ -401,6 +480,9 @@ int main(void) {
     RUN_TEST(test_template_target_identity);
     RUN_TEST(test_template_capabilities);
     RUN_TEST(test_template_boot_and_loading_calls_are_one_shot);
+    RUN_TEST(test_template_async_init_waits_for_backend_completion);
+    RUN_TEST(test_template_async_init_failure_is_terminal);
+    RUN_TEST(test_template_loading_progress_is_clamped_and_monotonic);
     RUN_TEST(test_template_gameplay_requires_first_input_and_tracks_state);
     RUN_TEST(test_template_ad_flow_pauses_resumes_once_and_preserves_userdata);
     RUN_TEST(test_template_rewarded_decline_does_not_grant_reward);

@@ -143,6 +143,7 @@ export function createYandexPlatformAdapter({ host }) {
     destroy() {
       destroyed = true;
     },
+    gameLoadingProgress() {},
     gameLoadingFinished,
     gameReady,
     gameplayStart,

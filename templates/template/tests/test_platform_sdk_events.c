@@ -199,10 +199,24 @@ static void test_gameplay_start_blocked_before_input_has_no_event(void) {
     TEST_ASSERT_EQUAL_INT(0, count_type(platform_sdk_ev_gameplay_start_type()));
 }
 
+static void test_loading_progress_is_not_a_game_event(void) {
+    platform_sdk_backend_t backend = make_backend();
+    platform_sdk_set_backend(&backend, &g_backend);
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_init());
+    game_event_frame_reset();
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_game_loading_progress(0.5f));
+
+    int n = 0;
+    (void)game_event_log(&n);
+    TEST_ASSERT_EQUAL_INT(0, n);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_lifecycle_events_are_semantic_and_one_shot);
     RUN_TEST(test_ad_events_capture_request_and_result_payloads);
     RUN_TEST(test_gameplay_start_blocked_before_input_has_no_event);
+    RUN_TEST(test_loading_progress_is_not_a_game_event);
     return UNITY_END();
 }

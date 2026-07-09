@@ -3,6 +3,9 @@ const POKI_SDK_URL = "https://game-cdn.poki.com/scripts/v2/poki-sdk.js";
 export function createPokiPlatformAdapter({ host }) {
   let sdkReady = null;
   let destroyed = false;
+  let lastLoadingProgress = 0;
+  let lastSentLoadingProgress = -1;
+  let loadingProgressFlush = null;
 
   function windowRef() {
     return (host && host.window) || host || globalThis;
@@ -48,6 +51,34 @@ export function createPokiPlatformAdapter({ host }) {
     await withSdk((sdk) => sdk.gameLoadingFinished && sdk.gameLoadingFinished());
   }
 
+  async function gameLoadingProgress(progress01) {
+    const progress = Math.max(0, Math.min(1, Number(progress01) || 0));
+    if (progress < lastLoadingProgress) return;
+    lastLoadingProgress = progress;
+    if (loadingProgressFlush) return loadingProgressFlush;
+
+    loadingProgressFlush = (async () => {
+      const ok = await ready();
+      const sdk = windowRef().PokiSDK;
+      if (!ok || !sdk || destroyed) {
+        lastSentLoadingProgress = lastLoadingProgress;
+        return;
+      }
+      if (lastLoadingProgress <= lastSentLoadingProgress) return;
+      const progressToSend = lastLoadingProgress;
+      lastSentLoadingProgress = progressToSend;
+      if (typeof sdk.gameLoadingProgress === "function") {
+        sdk.gameLoadingProgress({ percentageDone: progressToSend });
+      }
+    })().finally(() => {
+      loadingProgressFlush = null;
+      if (lastLoadingProgress > lastSentLoadingProgress) {
+        void gameLoadingProgress(lastLoadingProgress);
+      }
+    });
+    return loadingProgressFlush;
+  }
+
   async function gameReady() {
     // Poki has no separate game_ready call; the facade uses gameLoadingFinished().
   }
@@ -88,6 +119,7 @@ export function createPokiPlatformAdapter({ host }) {
     destroy() {
       destroyed = true;
     },
+    gameLoadingProgress,
     gameLoadingFinished,
     gameReady,
     gameplayStart,

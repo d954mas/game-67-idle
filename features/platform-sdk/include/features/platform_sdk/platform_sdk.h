@@ -88,6 +88,7 @@ typedef unsigned int platform_sdk_listener_id_t;
 
 typedef struct platform_sdk_backend_t {
     bool (*init)(void *userdata);
+    void (*game_loading_progress)(float progress01, void *userdata);
     void (*game_loading_finished)(void *userdata);
     void (*game_ready)(void *userdata);
     void (*gameplay_start)(void *userdata);
@@ -110,6 +111,7 @@ bool platform_sdk_storage_supported(void);
 void platform_sdk_set_backend(const platform_sdk_backend_t *backend, void *userdata);
 platform_sdk_boot_status_t platform_sdk_status(void);
 platform_sdk_result_t platform_sdk_init(void);
+platform_sdk_result_t platform_sdk_game_loading_progress(float progress01);
 platform_sdk_result_t platform_sdk_game_loading_finished(void);
 platform_sdk_result_t platform_sdk_game_ready(void);
 
@@ -134,6 +136,7 @@ platform_sdk_result_t platform_sdk_show_rewarded(
     void *userdata);
 void platform_sdk_backend_complete_interstitial(platform_sdk_ad_result_t result);
 void platform_sdk_backend_complete_rewarded(platform_sdk_rewarded_result_t result);
+void platform_sdk_backend_complete_init(bool ready);
 
 void platform_sdk_destroy(void);
 

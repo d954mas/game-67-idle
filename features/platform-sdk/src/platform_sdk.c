@@ -70,8 +70,10 @@ typedef struct platform_sdk_runtime_t {
     bool has_input;
     bool has_gameplay_started;
     bool gameplay_active;
+    bool loading_progress_sent;
     bool loading_finished_sent;
     bool game_ready_sent;
+    float last_loading_progress;
     platform_sdk_listener_id_t next_listener_id;
     platform_sdk_listener_slot_t pause_listeners[PLATFORM_SDK_MAX_LISTENERS];
     platform_sdk_listener_slot_t resume_listeners[PLATFORM_SDK_MAX_LISTENERS];
@@ -383,6 +385,24 @@ static bool platform_sdk_default_backend_ready(void) {
     return platform_sdk_current() == PLATFORM_SDK_MOCK;
 }
 
+static float clamp_progress(float progress01) {
+    if (progress01 < 0.0f) {
+        return 0.0f;
+    }
+    if (progress01 > 1.0f) {
+        return 1.0f;
+    }
+    return progress01;
+}
+
+static void complete_init_once(bool ready) {
+    if (g_platform_sdk.status != PLATFORM_SDK_BOOT_INITIALIZING) {
+        return;
+    }
+    g_platform_sdk.status = ready ? PLATFORM_SDK_BOOT_READY : PLATFORM_SDK_BOOT_FAILED;
+    platform_sdk_emit_ready(ready);
+}
+
 static platform_sdk_listener_id_t add_listener(
     platform_sdk_listener_slot_t *slots,
     platform_sdk_lifecycle_callback_t callback,
@@ -543,10 +563,11 @@ platform_sdk_boot_status_t platform_sdk_status(void) {
 }
 
 platform_sdk_result_t platform_sdk_init(void) {
-    bool ready = false;
-
     if (g_platform_sdk.status == PLATFORM_SDK_BOOT_READY) {
         return PLATFORM_SDK_RESULT_OK;
+    }
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_INITIALIZING) {
+        return PLATFORM_SDK_RESULT_NOT_READY;
     }
     if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) {
         return PLATFORM_SDK_RESULT_DESTROYED;
@@ -557,14 +578,41 @@ platform_sdk_result_t platform_sdk_init(void) {
 
     g_platform_sdk.status = PLATFORM_SDK_BOOT_INITIALIZING;
     if (g_platform_sdk.has_backend && g_platform_sdk.backend.init != NULL) {
-        ready = g_platform_sdk.backend.init(g_platform_sdk.backend_userdata);
+        const bool ready = g_platform_sdk.backend.init(g_platform_sdk.backend_userdata);
+        if (g_platform_sdk.status == PLATFORM_SDK_BOOT_READY) {
+            return PLATFORM_SDK_RESULT_OK;
+        }
+        if (g_platform_sdk.status == PLATFORM_SDK_BOOT_FAILED) {
+            return PLATFORM_SDK_RESULT_FAILED;
+        }
+        if (ready) {
+            complete_init_once(true);
+            return PLATFORM_SDK_RESULT_OK;
+        }
+        return PLATFORM_SDK_RESULT_NOT_READY;
     } else {
-        ready = platform_sdk_default_backend_ready();
+        complete_init_once(platform_sdk_default_backend_ready());
     }
 
-    g_platform_sdk.status = ready ? PLATFORM_SDK_BOOT_READY : PLATFORM_SDK_BOOT_FAILED;
-    platform_sdk_emit_ready(ready);
-    return ready ? PLATFORM_SDK_RESULT_OK : PLATFORM_SDK_RESULT_FAILED;
+    return g_platform_sdk.status == PLATFORM_SDK_BOOT_READY ? PLATFORM_SDK_RESULT_OK : PLATFORM_SDK_RESULT_FAILED;
+}
+
+platform_sdk_result_t platform_sdk_game_loading_progress(float progress01) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) {
+        return PLATFORM_SDK_RESULT_DESTROYED;
+    }
+
+    float clamped = clamp_progress(progress01);
+    if (g_platform_sdk.loading_progress_sent && clamped <= g_platform_sdk.last_loading_progress) {
+        return PLATFORM_SDK_RESULT_OK;
+    }
+
+    g_platform_sdk.loading_progress_sent = true;
+    g_platform_sdk.last_loading_progress = clamped;
+    if (g_platform_sdk.has_backend && g_platform_sdk.backend.game_loading_progress != NULL) {
+        g_platform_sdk.backend.game_loading_progress(clamped, g_platform_sdk.backend_userdata);
+    }
+    return PLATFORM_SDK_RESULT_OK;
 }
 
 platform_sdk_result_t platform_sdk_game_loading_finished(void) {
@@ -855,6 +903,10 @@ void platform_sdk_backend_complete_rewarded(platform_sdk_rewarded_result_t resul
     if (callback != NULL) {
         callback(result, userdata);
     }
+}
+
+void platform_sdk_backend_complete_init(bool ready) {
+    complete_init_once(ready);
 }
 
 void platform_sdk_destroy(void) {

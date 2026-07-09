@@ -148,6 +148,7 @@ export function createPlaygamaPlatformAdapter({ host }) {
     destroy() {
       destroyed = true;
     },
+    gameLoadingProgress() {},
     gameLoadingFinished() {},
     gameReady,
     gameplayStart,

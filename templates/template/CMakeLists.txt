@@ -458,7 +458,7 @@ if(EMSCRIPTEN)
     # Web-devapi host contract (nt_devapi_web.h): the host exports the JS
     # transport entry points; the exports are also what pulls the EM_JS object
     # out of libnt_devapi_web.a so nt_devapi_web_install_shim resolves at link.
-    set(GAME_WEB_EXPORTS "_main,_malloc,_free,_platform_sdk_web_complete_interstitial,_platform_sdk_web_complete_rewarded")
+    set(GAME_WEB_EXPORTS "_main,_malloc,_free,_platform_sdk_web_complete_init,_platform_sdk_web_complete_interstitial,_platform_sdk_web_complete_rewarded")
     if(GAME_DEVAPI_ENABLED)
         set(GAME_WEB_EXPORTS "${GAME_WEB_EXPORTS},_nt_devapi_web_submit,_nt_devapi_web_poll")
     endif()

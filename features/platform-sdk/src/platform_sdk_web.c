@@ -10,25 +10,51 @@
 
 void platform_sdk_web_complete_interstitial(int supported, int shown, int reason);
 void platform_sdk_web_complete_rewarded(int supported, int shown, int rewarded, int reason);
+void platform_sdk_web_complete_init(int ready);
 
 /* clang-format off */
 EM_JS_DEPS(platform_sdk_web_backend, "$UTF8ToString")
 
 EM_JS(int, platform_sdk_web_backend_init, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
-    if (!backend) return 0;
+    if (!backend || typeof backend.ready !== "function") {
+        _platform_sdk_web_complete_init(0);
+        return 0;
+    }
     try {
-        if (typeof backend.ready === "function") {
-            Promise.resolve(backend.ready()).catch(function () {});
-        }
-        return 1;
+        Promise.resolve(backend.ready()).then(function (ready) {
+            _platform_sdk_web_complete_init(ready ? 1 : 0);
+        }, function () {
+            _platform_sdk_web_complete_init(0);
+        });
+        return 0;
     } catch (e) {
+        _platform_sdk_web_complete_init(0);
         return 0;
     }
 })
 
+EM_JS(void, platform_sdk_web_backend_game_loading_progress, (double progress01), {
+    var progress = Math.max(0, Math.min(1, Number(progress01) || 0));
+    if (typeof globalThis.__platformSdkSetLoadingProgress === "function") {
+        try {
+            globalThis.__platformSdkSetLoadingProgress(progress);
+        } catch (e) {}
+    }
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.gameLoadingProgress !== "function") return;
+    try {
+        Promise.resolve(backend.gameLoadingProgress(progress)).catch(function () {});
+    } catch (e) {}
+})
+
 EM_JS(void, platform_sdk_web_backend_game_loading_finished, (void), {
     var backend = globalThis.__platformSdkInternalBackend;
+    if (typeof globalThis.__platformSdkHideLoadingOverlay === "function") {
+        try {
+            globalThis.__platformSdkHideLoadingOverlay();
+        } catch (e) {}
+    }
     if (!backend || typeof backend.gameLoadingFinished !== "function") return;
     try {
         Promise.resolve(backend.gameLoadingFinished()).catch(function () {});
@@ -160,9 +186,19 @@ void platform_sdk_web_complete_rewarded(int supported, int shown, int rewarded, 
     });
 }
 
+EMSCRIPTEN_KEEPALIVE
+void platform_sdk_web_complete_init(int ready) {
+    platform_sdk_backend_complete_init(ready != 0);
+}
+
 static bool web_backend_init(void *userdata) {
     (void)userdata;
     return platform_sdk_web_backend_init() != 0;
+}
+
+static void web_backend_game_loading_progress(float progress01, void *userdata) {
+    (void)userdata;
+    platform_sdk_web_backend_game_loading_progress((double)progress01);
 }
 
 static void web_backend_game_loading_finished(void *userdata) {
@@ -207,6 +243,7 @@ static void web_backend_destroy(void *userdata) {
 void platform_sdk_install_web_backend(void) {
     platform_sdk_backend_t backend = {
         .init = web_backend_init,
+        .game_loading_progress = web_backend_game_loading_progress,
         .game_loading_finished = web_backend_game_loading_finished,
         .game_ready = web_backend_game_ready,
         .gameplay_start = web_backend_gameplay_start,

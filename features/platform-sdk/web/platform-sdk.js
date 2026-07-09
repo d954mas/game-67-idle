@@ -18,3 +18,13 @@ const platformSdkInternalBackend = createPlatformSdkWebBackend({
 });
 
 root.__platformSdkInternalBackend = platformSdkInternalBackend;
+if (typeof root.__platformSdkSetLoadingProgress === "function") {
+  root.__platformSdkSetLoadingProgress(0.02);
+}
+platformSdkInternalBackend.ready()
+  .then((ready) => {
+    if (ready && typeof root.__platformSdkSetLoadingProgress === "function") {
+      root.__platformSdkSetLoadingProgress(0.10);
+    }
+  })
+  .catch(() => {});

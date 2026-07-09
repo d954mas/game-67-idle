@@ -7,10 +7,12 @@
 
 typedef struct lifecycle_backend_state_t {
     int init_calls;
+    int loading_progress_calls;
     int loading_finished_calls;
     int game_ready_calls;
     int gameplay_start_calls;
     int gameplay_stop_calls;
+    float last_loading_progress;
 } lifecycle_backend_state_t;
 
 static lifecycle_backend_state_t g_backend_state;
@@ -19,6 +21,12 @@ static bool backend_init(void *userdata) {
     lifecycle_backend_state_t *state = (lifecycle_backend_state_t *)userdata;
     state->init_calls++;
     return true;
+}
+
+static void backend_loading_progress(float progress01, void *userdata) {
+    lifecycle_backend_state_t *state = (lifecycle_backend_state_t *)userdata;
+    state->loading_progress_calls++;
+    state->last_loading_progress = progress01;
 }
 
 static void backend_loading_finished(void *userdata) {
@@ -44,11 +52,20 @@ static void backend_gameplay_stop(void *userdata) {
 static platform_sdk_backend_t backend(void) {
     return (platform_sdk_backend_t){
         .init = backend_init,
+        .game_loading_progress = backend_loading_progress,
         .game_loading_finished = backend_loading_finished,
         .game_ready = backend_game_ready,
         .gameplay_start = backend_gameplay_start,
         .gameplay_stop = backend_gameplay_stop,
     };
+}
+
+static bool float_close(float actual, float expected) {
+    float diff = actual - expected;
+    if (diff < 0.0f) {
+        diff = -diff;
+    }
+    return diff < 0.0001f;
 }
 
 void setUp(void) {
@@ -74,8 +91,15 @@ static void test_lifecycle_init_and_playable_ready_are_one_shot(void) {
 
     platform_lifecycle_update(true, true);
     platform_lifecycle_update(true, true);
+    TEST_ASSERT_EQUAL_INT(0, g_backend_state.loading_finished_calls);
+    TEST_ASSERT_EQUAL_INT(0, g_backend_state.game_ready_calls);
+
+    platform_lifecycle_after_frame_present(true);
+    platform_lifecycle_after_frame_present(true);
     TEST_ASSERT_EQUAL_INT(1, g_backend_state.loading_finished_calls);
     TEST_ASSERT_EQUAL_INT(1, g_backend_state.game_ready_calls);
+    TEST_ASSERT_EQUAL_INT(2, g_backend_state.loading_progress_calls);
+    TEST_ASSERT_TRUE(float_close(g_backend_state.last_loading_progress, 1.0f));
 }
 
 static void test_menu_input_does_not_start_gameplay(void) {
@@ -109,10 +133,18 @@ static void test_gameplay_intent_starts_and_menu_stops_gameplay(void) {
     TEST_ASSERT_EQUAL_INT(2, g_backend_state.gameplay_start_calls);
 }
 
+static void test_loading_progress_mapping_handles_unknown_total(void) {
+    TEST_ASSERT_TRUE(float_close(platform_lifecycle_loading_progress_from_pack(0u, 0u, false), 0.45f));
+    TEST_ASSERT_TRUE(float_close(platform_lifecycle_loading_progress_from_pack(25u, 100u, false), 0.5875f));
+    TEST_ASSERT_TRUE(float_close(platform_lifecycle_loading_progress_from_pack(125u, 100u, false), 1.0f));
+    TEST_ASSERT_TRUE(float_close(platform_lifecycle_loading_progress_from_pack(0u, 0u, true), 1.0f));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_lifecycle_init_and_playable_ready_are_one_shot);
     RUN_TEST(test_menu_input_does_not_start_gameplay);
     RUN_TEST(test_gameplay_intent_starts_and_menu_stops_gameplay);
+    RUN_TEST(test_loading_progress_mapping_handles_unknown_total);
     return UNITY_END();
 }

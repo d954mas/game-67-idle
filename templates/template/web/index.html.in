@@ -5,27 +5,160 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>@GAME_TITLE@</title>
 <style>
-  html, body { margin: 0; padding: 0; height: 100%; background: #0d0b09; overflow: hidden; }
-  canvas { display: block; width: 100vw; height: 100vh; outline: none; }
-  #status { position: absolute; top: 50%; left: 0; right: 0; text-align: center;
-            color: #b8a68a; font: 16px sans-serif; pointer-events: none; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #111418;
+    overflow: hidden;
+  }
+
+  canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+    outline: none;
+    background: #111418;
+  }
+
+  #loading-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    color: #f4f0e6;
+    background: #111418;
+    font: 15px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    opacity: 1;
+    pointer-events: none;
+    transition: opacity 180ms ease;
+  }
+
+  #loading-overlay.is-hidden {
+    opacity: 0;
+  }
+
+  .loading-shell {
+    width: min(360px, calc(100vw - 48px));
+  }
+
+  .loading-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    gap: 16px;
+  }
+
+  #loading-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #f4f0e6;
+    font-weight: 650;
+  }
+
+  #loading-percent {
+    min-width: 44px;
+    color: #b7c4cd;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .progress-track {
+    width: 100%;
+    height: 8px;
+    overflow: hidden;
+    background: #27303a;
+  }
+
+  #loading-bar {
+    width: 0%;
+    height: 100%;
+    background: #f2b84b;
+    transition: width 120ms linear;
+  }
 </style>
 </head>
 <body>
-<div id="status">Loading…</div>
+<div id="loading-overlay" role="status" aria-live="polite">
+  <div class="loading-shell">
+    <div class="loading-row">
+      <div id="loading-label">Loading</div>
+      <div id="loading-percent">0%</div>
+    </div>
+    <div class="progress-track" aria-hidden="true">
+      <div id="loading-bar"></div>
+    </div>
+  </div>
+</div>
 <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 <script>
-  var statusEl = document.getElementById('status');
-  window.__PLATFORM_SDK_CONFIG__ = Object.freeze({
-    target: '@GAME_PUBLISH_TARGET@',
-    platformSdk: '@GAME_PLATFORM_SDK@',
-    release: @GAME_PLATFORM_SDK_RELEASE_JS@
-  });
+  (function () {
+    var overlay = document.getElementById('loading-overlay');
+    var label = document.getElementById('loading-label');
+    var percent = document.getElementById('loading-percent');
+    var bar = document.getElementById('loading-bar');
+    var progress = 0;
+    var hidden = false;
+
+    function clamp(value) {
+      value = Number(value);
+      if (!Number.isFinite(value)) return 0;
+      if (value < 0) return 0;
+      if (value > 1) return 1;
+      return value;
+    }
+
+    function render() {
+      var whole = Math.floor(progress * 100);
+      if (bar) bar.style.width = whole + '%';
+      if (percent) percent.textContent = whole + '%';
+      if (label && whole >= 100) label.textContent = 'Finalizing';
+    }
+
+    window.__platformSdkSetLoadingProgress = function (value) {
+      if (hidden) return;
+      progress = Math.max(progress, clamp(value));
+      render();
+    };
+
+    window.__platformSdkHideLoadingOverlay = function () {
+      if (hidden) return;
+      hidden = true;
+      progress = 1;
+      render();
+      var raf = window.requestAnimationFrame || function (callback) { return setTimeout(callback, 16); };
+      raf(function () {
+        raf(function () {
+          if (!overlay) return;
+          overlay.classList.add('is-hidden');
+          setTimeout(function () {
+            if (overlay) overlay.style.display = 'none';
+          }, 220);
+        });
+      });
+    };
+
+    window.__PLATFORM_SDK_CONFIG__ = Object.freeze({
+      target: '@GAME_PUBLISH_TARGET@',
+      platformSdk: '@GAME_PLATFORM_SDK@',
+      release: @GAME_PLATFORM_SDK_RELEASE_JS@
+    });
+    window.__platformSdkSetLoadingProgress(0.01);
+  }());
+
   var Module = {
     canvas: document.getElementById('canvas'),
     @GAME_DEVAPI_MODULE_ARGS@
-    onRuntimeInitialized: function () { statusEl.style.display = 'none'; },
-    setStatus: function (t) { if (statusEl && t) statusEl.textContent = t; }
+    onRuntimeInitialized: function () {
+      window.__platformSdkSetLoadingProgress(0.45);
+    },
+    setStatus: function (text) {
+      var label = document.getElementById('loading-label');
+      if (label && text) label.textContent = text;
+    }
   };
 </script>
 <script type="module">

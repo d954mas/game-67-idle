@@ -7,6 +7,8 @@ void platform_lifecycle_init(void);
 void platform_lifecycle_after_input_poll(void);
 void platform_lifecycle_mark_gameplay_input(void);
 void platform_lifecycle_update(bool playable_shell_ready, bool gameplay_allowed);
+void platform_lifecycle_after_frame_present(bool playable_shell_ready);
+float platform_lifecycle_loading_progress_from_pack(unsigned int received, unsigned int total, bool pack_ready);
 void platform_lifecycle_shutdown(void);
 
 #endif /* GAME_PLATFORM_LIFECYCLE_H */

@@ -31,6 +31,7 @@ static bool has_gameplay_input_edge(void) {
 
 void platform_lifecycle_init(void) {
     s_platform_lifecycle_initialized = true;
+    (void)platform_sdk_game_loading_progress(0.10f);
     (void)platform_sdk_init();
 }
 
@@ -56,11 +57,6 @@ void platform_lifecycle_update(bool playable_shell_ready, bool gameplay_allowed)
         return;
     }
 
-    if (playable_shell_ready) {
-        (void)platform_sdk_game_loading_finished();
-        (void)platform_sdk_game_ready();
-    }
-
     const bool should_play = playable_shell_ready && gameplay_allowed && platform_sdk_has_input() &&
                              (s_gameplay_input_seen || platform_sdk_has_gameplay_started());
     if (should_play) {
@@ -68,6 +64,32 @@ void platform_lifecycle_update(bool playable_shell_ready, bool gameplay_allowed)
     } else if (platform_sdk_gameplay_active()) {
         (void)platform_sdk_gameplay_stop();
     }
+}
+
+void platform_lifecycle_after_frame_present(bool playable_shell_ready) {
+    if (!s_platform_lifecycle_initialized || !playable_shell_ready) {
+        return;
+    }
+    (void)platform_sdk_game_loading_progress(1.0f);
+    if (platform_sdk_game_loading_finished() == PLATFORM_SDK_RESULT_OK) {
+        (void)platform_sdk_game_ready();
+    }
+}
+
+float platform_lifecycle_loading_progress_from_pack(unsigned int received, unsigned int total, bool pack_ready) {
+    if (pack_ready) {
+        return 1.0f;
+    }
+    if (total == 0u) {
+        return 0.45f;
+    }
+    float pack_progress = (float)received / (float)total;
+    if (pack_progress < 0.0f) {
+        pack_progress = 0.0f;
+    } else if (pack_progress > 1.0f) {
+        pack_progress = 1.0f;
+    }
+    return 0.45f + (pack_progress * 0.55f);
 }
 
 void platform_lifecycle_shutdown(void) {

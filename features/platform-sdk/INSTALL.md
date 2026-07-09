@@ -72,7 +72,12 @@ A consuming template or game should wire this as an L1 feature:
    `features/game-events`. Do not emit events from the JavaScript backend or
    create a second event bus.
 
-10. If the template/game wants the built-in debug controls, compile the
+10. For web builds, keep the loading screen as template-owned HTML over the
+    canvas. Import `platform-sdk.js` before appending `game.js`, expose only the
+    internal progress/hide hooks used by `platform_sdk_web.c`, and let the C
+    lifecycle call hide only after the first playable frame has been presented.
+
+11. If the template/game wants the built-in debug controls, compile the
     template-local C/Clay UI module (`src/ui/platform_sdk_debug.c`) and pass
     `GAME_PLATFORM_SDK_DEBUG_UI=1` only in non-release builds. Release builds
     must keep that define off.

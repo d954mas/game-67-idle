@@ -61,6 +61,8 @@ export function createPlatformSdkWebBackend({
         target,
       })
     : null;
+  const adapterReady = bindMethod(adapter, "ready", () => false);
+  let readyPromise = null;
 
   return {
     destroy() {
@@ -68,6 +70,7 @@ export function createPlatformSdkWebBackend({
       destroyed = true;
       if (adapter && typeof adapter.destroy === "function") adapter.destroy();
     },
+    gameLoadingProgress: bindMethod(adapter, "gameLoadingProgress", noopAsync),
     gameLoadingFinished: bindMethod(adapter, "gameLoadingFinished", noopAsync),
     gameReady: bindMethod(adapter, "gameReady", noopAsync),
     gameplayStart: bindMethod(adapter, "gameplayStart", noopAsync),
@@ -75,7 +78,14 @@ export function createPlatformSdkWebBackend({
     getLocale: bindMethod(adapter, "getLocale", () => null),
     hideBanner: bindMethod(adapter, "hideBanner", noopAsync),
     loadData: bindMethod(adapter, "loadData", () => Promise.resolve(null)),
-    ready: bindMethod(adapter, "ready", () => false),
+    ready() {
+      if (!readyPromise) {
+        readyPromise = Promise.resolve(adapterReady())
+          .then((ready) => !destroyed && Boolean(ready))
+          .catch(() => false);
+      }
+      return readyPromise;
+    },
     saveData: bindMethod(adapter, "saveData", noopAsync),
     showBanner: bindMethod(adapter, "showBanner", () => unsupportedAd()),
     showInterstitial: bindMethod(adapter, "showInterstitial", () => unsupportedAd()),
