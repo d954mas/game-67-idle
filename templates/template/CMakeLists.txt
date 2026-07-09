@@ -95,6 +95,13 @@ endif()
 if(NOT DEFINED GAME_ANALYTICS_ENABLED)
     set(GAME_ANALYTICS_ENABLED ${GAME_DEVAPI_ENABLED})
 endif()
+if(NOT DEFINED GAME_EVENTS_LOG_MIRROR)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(GAME_EVENTS_LOG_MIRROR OFF)
+    else()
+        set(GAME_EVENTS_LOG_MIRROR ON)
+    endif()
+endif()
 
 if(GAME_PUBLISH_TARGET STREQUAL "local")
     set(GAME_PLATFORM_SDK "mock")
@@ -436,11 +443,14 @@ endif()
 # E4: the E3 renderer is ALSO the analytics writer's dependency. When devapi is OFF but
 # analytics is ON, pull it in here -- guarded against the devapi block's copy above so it
 # is never listed twice (E3 lines untouched; the renderer compiles if EITHER wants it).
-if(GAME_ANALYTICS_ENABLED AND NOT GAME_DEVAPI_ENABLED)
-    target_sources(${GAME_TARGET} PRIVATE "${GAME_EVENTS_SRC}/game_event_render.c") # E3 renderer (shared with E4)
+if((GAME_ANALYTICS_ENABLED OR GAME_EVENTS_LOG_MIRROR) AND NOT GAME_DEVAPI_ENABLED)
+    target_sources(${GAME_TARGET} PRIVATE "${GAME_EVENTS_SRC}/game_event_render.c") # E3 renderer (shared with E4/mirror)
 endif()
 if(GAME_ANALYTICS_ENABLED)
     target_sources(${GAME_TARGET} PRIVATE "${GAME_EVENTS_SRC}/game_analytics.c") # E4: local analytics writer
+endif()
+if(GAME_EVENTS_LOG_MIRROR)
+    target_sources(${GAME_TARGET} PRIVATE "${GAME_EVENTS_SRC}/game_events_log_mirror.c")
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE
     "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${PLATFORM_SDK_INC}" "${GAME_EVENTS_INC}"
@@ -592,7 +602,8 @@ target_compile_definitions(${GAME_TARGET} PRIVATE
 # -Wundef + -Werror would fail native-debug/release. Mirrors NT_DEVAPI_ENABLED=0.
 target_compile_definitions(${GAME_TARGET} PRIVATE
     FEATURE_GAME_ANALYTICS=$<BOOL:${GAME_ANALYTICS_ENABLED}>
-    FEATURE_GAME_EVENTS=1)
+    FEATURE_GAME_EVENTS=1
+    GAME_EVENTS_LOG_MIRROR=$<BOOL:${GAME_EVENTS_LOG_MIRROR}>)
 # GAME_STORAGE_APP_ID namespaces the shared web-origin (itch) localStorage; "template" is
 # the template's own default, games override it (A2).
 target_compile_definitions(${GAME_TARGET} PRIVATE GAME_STORAGE_APP_ID="template")
@@ -777,6 +788,22 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_game_analytics PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_analytics COMMAND test_game_analytics)
+
+    add_executable(test_game_events_log_mirror
+        tests/test_game_events_log_mirror.c
+        "${GAME_EVENTS_SRC}/game_events_log_mirror.c"
+        "${GAME_EVENTS_SRC}/game_event_render.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
+        "${GAME_EVENTS_SRC}/game_events.c")
+    target_link_libraries(test_game_events_log_mirror PRIVATE unity cjson nt_hash nt_log nt_core)
+    target_include_directories(test_game_events_log_mirror PRIVATE
+        "${GAME_EVENTS_INC}" src "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+    target_compile_definitions(test_game_events_log_mirror PRIVATE
+        GAME_EVENTS_LOG_MIRROR=1
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_events_log_mirror PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_events_log_mirror COMMAND test_game_events_log_mirror)
 
     # E2 (M3): warning-gated compile check of the richest generated branches
     # (i64/f64/hash/bool/bytes+len, union staging, offset arithmetic) live ONLY in

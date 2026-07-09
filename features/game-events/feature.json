@@ -4,7 +4,7 @@
   "title": "Game Events",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
-  "summary": "In-place L0 event spine with fixed per-frame event log, descriptor-based rendering, DevAPI tail, and local NDJSON analytics writer.",
+  "summary": "In-place L0 event spine with fixed per-frame event log, descriptor-based rendering, optional nt_log mirror, DevAPI tail, and local NDJSON analytics writer.",
   "copy_model": "in-place",
   "layer": "L0",
   "owners": [
@@ -22,11 +22,13 @@
     "game_event_emit and per-frame game_event_log",
     "game_event_desc_t descriptor contract",
     "descriptor-driven game_event_render",
+    "GAME_EVENTS_LOG_MIRROR nt_log event mirror",
     "game.events.tail DevAPI command",
     "local analytics NDJSON writer"
   ],
   "flags": {
     "feature": "FEATURE_GAME_EVENTS=1 in consuming game/template targets",
+    "log_mirror": "GAME_EVENTS_LOG_MIRROR pulls game_events_log_mirror.c and mirrors events to nt_log",
     "devapi": "GAME_DEVAPI_ENABLED pulls game_events_devapi.c",
     "analytics": "GAME_ANALYTICS_ENABLED pulls game_analytics.c"
   },
@@ -37,7 +39,8 @@
     "note": "Describes the template's existing in-place wiring.",
     "target_sources": [
       "${GAME_EVENTS_SRC}/game_events.c",
-      "${GAME_EVENTS_SRC}/game_event_render.c when DevAPI or analytics is enabled",
+      "${GAME_EVENTS_SRC}/game_event_render.c when GAME_EVENTS_LOG_MIRROR, DevAPI, or analytics is enabled",
+      "${GAME_EVENTS_SRC}/game_events_log_mirror.c when GAME_EVENTS_LOG_MIRROR is on",
       "${GAME_EVENTS_SRC}/game_events_devapi.c when GAME_DEVAPI_ENABLED is on",
       "${GAME_EVENTS_SRC}/game_analytics.c when GAME_ANALYTICS_ENABLED is on"
     ],
@@ -49,6 +52,7 @@
       "test_game_events_overflow",
       "test_game_events_typed",
       "test_game_event_render",
+      "test_game_events_log_mirror",
       "test_game_analytics",
       "test_platform_sdk_events"
     ]
@@ -57,6 +61,7 @@
     "event_log_api": "game_events.h",
     "descriptor_api": "game_event_desc.h",
     "render_api": "game_event_render.h",
+    "log_mirror_api": "game_events_log_mirror.h",
     "devapi_tail_api": "game_events_devapi.h",
     "analytics_api": "game_analytics.h"
   }

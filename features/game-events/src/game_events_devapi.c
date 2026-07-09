@@ -1,13 +1,13 @@
 /* game_events_devapi.c -- DevAPI tail for the per-frame feature event log.
 
    Registry (hash -> descriptor) + a private fixed ring of render-at-copy JSON slots +
-   the RECORD-phase recorder + the game.events.tail command. render-at-copy (design §4):
+   the RECORD-phase recorder + the game.events.tail command. render-at-copy (design section 4):
    the recorder renders each event to a self-contained JSON string while the event arena
    is alive (RECORD phase), so the bot can poll asynchronously and never touches arena
    pointers. Mirrors the game_save_devapi.c model.
 
-   Compiled ONLY under GAME_DEVAPI_ENABLED (CMake target_sources guard); native-debug/
-   release never pull it in. Dev-only, single thread. */
+   Compiled ONLY under GAME_DEVAPI_ENABLED (CMake target_sources guard).
+   Dev-only, single thread. */
 
 #if NT_DEVAPI_ENABLED
 
@@ -24,23 +24,14 @@
 #include "hash/nt_hash.h" /* nt_hash64_str */
 #include "log/nt_log.h"
 
-#ifndef GAME_EVENTS_TAIL_RING_CAP /* design §4: N=256 */
+#ifndef GAME_EVENTS_TAIL_RING_CAP /* design section 4: N=256 */
 #define GAME_EVENTS_TAIL_RING_CAP 256
 #endif
-#ifndef GAME_EVENTS_TAIL_ENTRY_MAX /* design §4: <=512B with slice-marker */
+#ifndef GAME_EVENTS_TAIL_ENTRY_MAX /* design section 4: <=512B with slice-marker */
 #define GAME_EVENTS_TAIL_ENTRY_MAX 512
 #endif
 #ifndef GAME_EVENTS_DESC_REG_CAP /* max registered descriptors */
 #define GAME_EVENTS_DESC_REG_CAP 64
-#endif
-/* Optional log mirror of the per-frame event tail (lead 2026-07-07): when 1, each event
-   already rendered into the ring is also echoed to the engine log as `[ev] <json>`. OFF by
-   default -> zero cost. Available in devapi builds (this TU only compiles under
-   NT_DEVAPI_ENABLED, where the logs are read); enable via -DGAME_EVENTS_LOG_MIRROR=1 in the
-   game's config / target_compile_definitions. Reuses the already-rendered ring string — no
-   extra render. */
-#ifndef GAME_EVENTS_LOG_MIRROR
-#define GAME_EVENTS_LOG_MIRROR 0
 #endif
 
 /* Dev-only, single-threaded static buffer for handler error messages (must outlive the
@@ -115,9 +106,6 @@ void game_events_devapi_record(void) {
         const game_event_t *e = &log[i];
         const game_event_desc_t *d = reg_find(e->type);
         (void)game_event_render(e, d, s_ring[s_ring_head], GAME_EVENTS_TAIL_ENTRY_MAX);
-#if GAME_EVENTS_LOG_MIRROR
-        nt_log_info("[ev] %s", s_ring[s_ring_head]); /* reuse the just-rendered ring string */
-#endif
         s_ring_seq[s_ring_head] = e->seq;
         s_ring_head = (s_ring_head + 1u) % (uint32_t)GAME_EVENTS_TAIL_RING_CAP;
         if (s_ring_count < (uint32_t)GAME_EVENTS_TAIL_RING_CAP) {

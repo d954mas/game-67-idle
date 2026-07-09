@@ -19,11 +19,13 @@ features/game-events/
     game_events.h
     game_event_desc.h
     game_event_render.h
+    game_events_log_mirror.h
     game_events_devapi.h
     game_analytics.h
   src/
     game_events.c
     game_event_render.c
+    game_events_log_mirror.c
     game_events_devapi.c
     game_analytics.c
 ```
@@ -33,6 +35,7 @@ features/game-events/
 - Fixed per-frame event log and payload arena.
 - Descriptor contract for generated or hand-written typed event payloads.
 - Generic descriptor-driven JSON rendering.
+- Optional `nt_log` mirror for ordinary local/debug builds (`[ev] ...`).
 - DevAPI tail recorder and `game.events.tail` command in DevAPI builds.
 - Local NDJSON analytics writer in analytics-enabled builds.
 

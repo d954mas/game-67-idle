@@ -21,16 +21,20 @@ target_include_directories(game PRIVATE "${GAME_EVENTS_INC}" ...)
 target_compile_definitions(game PRIVATE FEATURE_GAME_EVENTS=1)
 ```
 
-Compile the renderer wherever DevAPI tail or analytics is enabled:
+Compile the renderer wherever the log mirror, DevAPI tail, or analytics is enabled:
 
 ```cmake
 target_sources(game PRIVATE "${GAME_EVENTS_SRC}/game_event_render.c")
 ```
 
-Compile `game_events_devapi.c` only when the engine DevAPI is enabled, and compile
+Compile `game_events_log_mirror.c` only when `GAME_EVENTS_LOG_MIRROR` is enabled,
+compile `game_events_devapi.c` only when the engine DevAPI is enabled, and compile
 `game_analytics.c` only when local analytics are enabled:
 
 ```cmake
+if(GAME_EVENTS_LOG_MIRROR)
+  target_sources(game PRIVATE "${GAME_EVENTS_SRC}/game_events_log_mirror.c")
+endif()
 if(GAME_DEVAPI_ENABLED)
   target_sources(game PRIVATE "${GAME_EVENTS_SRC}/game_events_devapi.c")
 endif()
@@ -72,8 +76,15 @@ example:
 
 ```c
 game_ev_register();
+#if GAME_EVENTS_LOG_MIRROR
+game_events_log_mirror_register_descs(game_ev_descs, game_ev_desc_count);
+#endif
+#if NT_DEVAPI_ENABLED
 game_events_devapi_register_descs(game_ev_descs, game_ev_desc_count);
+#endif
+#if FEATURE_GAME_ANALYTICS
 game_analytics_register_descs(game_ev_descs, game_ev_desc_count);
+#endif
 ```
 
 `platform-sdk` is a consumer of this L0 feature. It registers
@@ -86,8 +97,8 @@ Configure and run the focused native tests:
 
 ```powershell
 cmake -S templates/template -B templates/template/build/native-debug -G Ninja -DCMAKE_BUILD_TYPE=Debug
-cmake --build templates/template/build/native-debug --target test_game_events test_game_events_typed test_game_event_render test_game_analytics test_platform_sdk_events
-ctest --test-dir templates/template/build/native-debug -R "test_game_events|test_game_events_typed|test_game_event_render|test_game_analytics|test_platform_sdk_events" --output-on-failure
+cmake --build templates/template/build/native-debug --target test_game_events test_game_events_typed test_game_event_render test_game_events_log_mirror test_game_analytics test_platform_sdk_events
+ctest --test-dir templates/template/build/native-debug -R "test_game_events|test_game_events_typed|test_game_event_render|test_game_events_log_mirror|test_game_analytics|test_platform_sdk_events" --output-on-failure
 ```
 
 Run full taskboard validation before closing taskboard work:

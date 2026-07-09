@@ -9,6 +9,9 @@
 #include "ui/platform_sdk_debug.h"
 #include "ui/ui_runtime.h"
 #include "app/nt_app.h" /* g_nt_app.dt */
+#if GAME_EVENTS_LOG_MIRROR
+#include "game_events_log_mirror.h"
+#endif
 #if NT_DEVAPI_ENABLED
 #include "game_events_devapi.h" /* E3: DevAPI tail recorder */
 #endif
@@ -63,6 +66,9 @@ void game_features_react(World *w) {
 
 void game_features_record(World *w) {
     (void)w;
+#if GAME_EVENTS_LOG_MIRROR
+    game_events_log_mirror_record();
+#endif
 #if NT_DEVAPI_ENABLED
     game_events_devapi_record(); /* E3: DevAPI tail — render-at-copy into the ring */
 #endif

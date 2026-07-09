@@ -45,6 +45,9 @@
 #include "features/platform_sdk/platform_sdk_events.h"
 #include "features/settings/settings.h"
 #include "game_events.h"
+#if GAME_EVENTS_LOG_MIRROR
+#include "game_events_log_mirror.h"
+#endif
 #include "game_log.h" /* E4.B: built-in "log" event type (unconditional leaf) */
 #if NT_DEVAPI_ENABLED
 #include "game_events_devapi.h" /* E3: game.events.tail (tail ring + recorder) */
@@ -410,6 +413,15 @@ int main(int argc, char **argv) {
 #endif
     game_analytics_register_descs(game_log_descs, game_log_desc_count); // E4: log type (append)
     game_analytics_init();                                             // E4: open stream + header
+#endif
+#if GAME_EVENTS_LOG_MIRROR
+    game_events_log_mirror_register_descs(game_ev_descs, game_ev_desc_count);
+    game_events_log_mirror_register_descs(items_ev_descs, items_ev_desc_count);
+    game_events_log_mirror_register_descs(progression_ev_descs, progression_ev_desc_count);
+#if FEATURE_GAME_EVENTS
+    game_events_log_mirror_register_descs(platform_sdk_ev_descs, platform_sdk_ev_desc_count);
+#endif
+    game_events_log_mirror_register_descs(game_log_descs, game_log_desc_count);
 #endif
     nt_resource_init(&(nt_resource_desc_t){0});
     nt_resource_set_activator(NT_ASSET_SHADER_CODE, nt_gfx_activate_shader, nt_gfx_deactivate_shader);
