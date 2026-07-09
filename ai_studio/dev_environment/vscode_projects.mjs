@@ -5,14 +5,16 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { listRegisteredGames } from "../assets/backlog/storage/sources/games.mjs";
 import { listRegisteredTemplates } from "../assets/backlog/storage/sources/templates.mjs";
+import { listGameMounts } from "../workspace/games.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
 function parseArgs(argv) {
-  const args = { root: "" };
+  const args = { root: "", game: "" };
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === "--root") args.root = argv[++i];
+    else if (arg === "--game") args.game = argv[++i];
     else if (arg === "--help" || arg === "-h") args.help = true;
     else throw new Error(`unknown argument: ${arg}`);
   }
@@ -52,11 +54,12 @@ function taskPrefix(project) {
 }
 
 function buildDir(project, config) {
-  return `\${workspaceFolder}/${project.folder}/build/native-${config}`;
+  const prefix = project.folder === "." ? "" : `${project.folder}/`;
+  return `\${workspaceFolder}/${prefix}build/native-${config}`;
 }
 
 function sourceDir(project) {
-  return `\${workspaceFolder}/${project.folder}`;
+  return project.folder === "." ? "${workspaceFolder}" : `\${workspaceFolder}/${project.folder}`;
 }
 
 function exePath(project, config) {
@@ -197,11 +200,50 @@ function writeVscodeProjectFiles(root = defaultRepoRoot) {
   };
 }
 
+function privateGameProject(root, gameId) {
+  const mounts = listGameMounts(root, { activeGameId: gameId });
+  const mount = mounts.find((item) => item.gameId === gameId);
+  if (!mount) throw new Error(`unknown private game mount: ${gameId}`);
+  if (mount.visibility === "public") {
+    throw new Error(`game '${gameId}' is public; use the parent .vscode generator`);
+  }
+  const gameRoot = join(root, mount.root);
+  const project = {
+    kind: "game",
+    id: mount.gameId,
+    title: mount.publicAlias || mount.title || mount.gameId,
+    folder: ".",
+  };
+  if (!projectExists(gameRoot, project)) {
+    throw new Error(`private game is not playable: ${mount.root}/CMakeLists.txt`);
+  }
+  return { mount, gameRoot, project };
+}
+
+function writePrivateGameVscodeProjectFiles(root = defaultRepoRoot, gameId = "") {
+  const id = String(gameId || "").trim();
+  if (!id) throw new Error("--game requires a game id");
+  const { gameRoot, project } = privateGameProject(root, id);
+  const vscodeDir = join(gameRoot, ".vscode");
+  const tasksPath = join(vscodeDir, "tasks.json");
+  const launchPath = join(vscodeDir, "launch.json");
+  writeJson(tasksPath, renderTasks([project]));
+  writeJson(launchPath, renderLaunch([project]));
+  return {
+    project,
+    projects: [project],
+    tasksPath,
+    launchPath,
+  };
+}
+
 function printUsage() {
   console.log(`usage:
   node ai_studio/dev_environment/vscode_projects.mjs [--root <repo>]
+  node ai_studio/dev_environment/vscode_projects.mjs [--root <repo>] --game <private-game-id>
 
-Regenerates .vscode/tasks.json and .vscode/launch.json from templates/templates.json and games/games.json.`);
+Regenerates parent .vscode/tasks.json and .vscode/launch.json from templates/templates.json and games/games.json.
+With --game, writes game-local .vscode files inside a private mounted game after workspace preflight.`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -212,7 +254,7 @@ if (import.meta.url === pathToFileURL(process.argv[1]).href) {
       process.exit(0);
     }
     const root = args.root ? resolve(args.root) : defaultRepoRoot;
-    const result = writeVscodeProjectFiles(root);
+    const result = args.game ? writePrivateGameVscodeProjectFiles(root, args.game) : writeVscodeProjectFiles(root);
     console.log(`wrote ${result.tasksPath}`);
     console.log(`wrote ${result.launchPath}`);
     console.log(`projects=${result.projects.map((project) => `${project.kind}:${project.id}`).join(", ") || "none"}`);
@@ -226,5 +268,6 @@ export {
   collectPlayableProjects,
   renderLaunch,
   renderTasks,
+  writePrivateGameVscodeProjectFiles,
   writeVscodeProjectFiles,
 };

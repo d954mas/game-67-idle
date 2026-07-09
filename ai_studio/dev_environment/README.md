@@ -22,6 +22,18 @@ remotes. Private game IDE entries belong inside the private game repository or
 in ignored local workspace files after `node ai_studio/workspace/games.mjs
 preflight --json` passes.
 
+To generate VS Code wiring for one mounted private game, write inside that game
+repo:
+
+```powershell
+node ai_studio/dev_environment/vscode_projects.mjs --game <game-id>
+```
+
+This resolves `game:<game-id>` through `ai_studio/workspace/games.local.json`,
+runs the workspace preflight, and writes `games/<game-id>/.vscode/tasks.json`
+plus `games/<game-id>/.vscode/launch.json`. It does not touch parent
+`.vscode/`.
+
 Games and templates call this generator after creating a project, but the
 project creation commands live with their workspace roots:
 

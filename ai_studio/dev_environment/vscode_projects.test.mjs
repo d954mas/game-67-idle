@@ -1,10 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { collectPlayableProjects, renderLaunch, renderTasks, writeVscodeProjectFiles } from "./vscode_projects.mjs";
+import { localGameRegistryRelPath } from "../workspace/games.mjs";
+import {
+  collectPlayableProjects,
+  renderLaunch,
+  renderTasks,
+  writePrivateGameVscodeProjectFiles,
+  writeVscodeProjectFiles,
+} from "./vscode_projects.mjs";
 
 function writeJson(path, value) {
   mkdirSync(dirname(path), { recursive: true });
@@ -14,6 +22,31 @@ function writeJson(path, value) {
 function makePlayable(root, rel) {
   mkdirSync(join(root, rel), { recursive: true });
   writeFileSync(join(root, rel, "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.25)\n", "utf8");
+}
+
+function privateGameFixture(root, gameId = "secret-game") {
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  writeFileSync(join(root, ".gitignore"), `${localGameRegistryRelPath()}\n`, "utf8");
+  writeFileSync(join(root, ".git", "info", "exclude"), `games/${gameId}/\n`, "utf8");
+  makePlayable(root, `games/${gameId}`);
+  execFileSync("git", ["init"], { cwd: join(root, "games", gameId), stdio: "ignore" });
+  writeJson(join(root, "ai_studio", "workspace", "games.local.json"), {
+    schema: "ai_studio.workspace.games.local.v1",
+    games: [
+      {
+        schemaVersion: 1,
+        storeId: `game:${gameId}`,
+        kind: "game",
+        gameId,
+        root: `games/${gameId}`,
+        visibility: "private",
+        gitRoot: `games/${gameId}`,
+        commitPolicy: "nested-private",
+        enabledStores: ["assets", "taskboard", "canvas", "evidence"],
+        assetRoot: `games/${gameId}/assets`,
+      },
+    ],
+  });
 }
 
 test("collectPlayableProjects reads active registered templates and games", (t) => {
@@ -126,4 +159,20 @@ test("writeVscodeProjectFiles excludes local private game mounts", (t) => {
   assert.match(launchText, /public-game/);
   assert.doesNotMatch(tasksText, /secret-game|games\/secret-game|game:secret-game/);
   assert.doesNotMatch(launchText, /secret-game|games\/secret-game|game:secret-game/);
+});
+
+test("writePrivateGameVscodeProjectFiles writes game-local IDE files for private mounts", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "vscode-projects-private-local-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  privateGameFixture(root);
+
+  const result = writePrivateGameVscodeProjectFiles(root, "secret-game");
+  const tasksText = readFileSync(join(root, "games", "secret-game", ".vscode", "tasks.json"), "utf8");
+  const launch = JSON.parse(readFileSync(join(root, "games", "secret-game", ".vscode", "launch.json"), "utf8"));
+
+  assert.equal(result.tasksPath, join(root, "games", "secret-game", ".vscode", "tasks.json"));
+  assert.equal(existsSync(join(root, ".vscode", "tasks.json")), false);
+  assert.match(tasksText, /Game: secret-game: configure native debug/);
+  assert.doesNotMatch(tasksText, /games\/secret-game|game:secret-game/);
+  assert.equal(launch.configurations[0].program, "${workspaceFolder}/build/native-debug/bin/game.exe");
 });

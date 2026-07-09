@@ -182,6 +182,30 @@ test("auditPrivateGamePreflight allows explicit public aliases in tracked text",
   assert.equal(result.ok, true, JSON.stringify(result.violations));
 });
 
+test("auditPrivateGamePreflight rejects generated report and evidence path leaks", () => {
+  const result = auditPrivateGamePreflight([privateMount()], {
+    ignoredPaths: new Set([localGameRegistryRelPath(), "games/secret-game"]),
+    trackedPaths: new Set(),
+    stagedPaths: new Set(),
+    gitlinks: new Set(),
+    nestedGitRoots: new Set(["games/secret-game"]),
+    trackedTextFiles: [
+      {
+        path: "ai_studio/architecture_map/validation-report.json",
+        text: JSON.stringify({ issues: [{ path: "games/secret-game" }] }),
+      },
+      {
+        path: "ai_studio/taskboard/items/active/T9999.md",
+        text: "runtime evidence: games/secret-game/.ai_studio/evidence/smoke.json",
+      },
+    ],
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => `${item.path}: ${item.reason}`).join("\n"), /validation-report\.json: tracked file leaks private token/);
+  assert.match(result.violations.map((item) => `${item.path}: ${item.reason}`).join("\n"), /T9999\.md: tracked file leaks private token/);
+});
+
 function privateGitFixture(t, prefix = "ai-studio-workspace-games-git-") {
   const root = tempRoot(prefix);
   t.after(() => rmSync(root, { recursive: true, force: true }));
