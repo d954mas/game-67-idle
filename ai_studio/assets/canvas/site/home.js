@@ -126,7 +126,7 @@ function projectCard(project) {
   card.appendChild(body);
   card.appendChild(projectActions(project));
 
-  card.addEventListener("click", () => hooks.openProject(project.id));
+  card.addEventListener("click", () => hooks.openProject(project.id, { storeId: project.storeId }));
   return card;
 }
 
@@ -137,7 +137,7 @@ async function createProject() {
   try {
     const { project } = await api("POST", "/projects");
     await loadProjects();
-    hooks.openProject(project.id);
+    hooks.openProject(project.id, { storeId: project.storeId });
   } catch (error) {
     setStatus(error.message, true);
   }

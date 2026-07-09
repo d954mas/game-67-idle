@@ -20,6 +20,7 @@ import { buildNodesSpec, orderedChildren, nodeScope } from "../tree.mjs";
 import { mergeTextStyle } from "../fonts.mjs";
 import { getFontManifest, measureTextBox } from "./fonts.js";
 import { screenToImagePoint } from "./viewport.mjs";
+import { canvasApiUrl } from "./store_scope.js";
 import { saveBlobToFile } from "./export_dest.mjs";
 import { runLongOp } from "./toasts.js";
 // T0264: auto-play the preview the moment a text->animation spec lands (the lead's demo
@@ -39,7 +40,7 @@ function baseName(path) {
 function exportLinks(folder, files) {
   const stamp = baseName(folder);
   return files.map((file) => ({
-    href: `/api/canvas/projects/${pid()}/export/${encodeURIComponent(stamp)}/${encodeURIComponent(file)}`,
+    href: canvasApiUrl(`/projects/${pid()}/export/${encodeURIComponent(stamp)}/${encodeURIComponent(file)}`, state.storeId),
     label: file,
   }));
 }
@@ -850,7 +851,7 @@ async function deliverExport(result, { zipBaseName } = {}) {
   if (files.length === 1) {
     // Single output: fetch the one image and save it under its own (editable) name.
     const file = files[0];
-    const url = `/api/canvas/projects/${pid()}/export/${encodeURIComponent(stamp)}/${encodeURIComponent(file)}`;
+    const url = canvasApiUrl(`/projects/${pid()}/export/${encodeURIComponent(stamp)}/${encodeURIComponent(file)}`, state.storeId);
     const response = await fetch(url);
     if (!response.ok) throw new Error(`could not fetch ${file} (${response.status})`);
     const blob = await response.blob();
@@ -865,7 +866,7 @@ async function deliverExport(result, { zipBaseName } = {}) {
   }
 
   // Several outputs: build ONE zip server-side, then save it via the same dialog.
-  const zipUrl = `/api/canvas/projects/${pid()}/export-zip/${encodeURIComponent(stamp)}`;
+  const zipUrl = canvasApiUrl(`/projects/${pid()}/export-zip/${encodeURIComponent(stamp)}`, state.storeId);
   const response = await fetch(zipUrl);
   if (!response.ok) throw new Error(`could not build the zip archive (${response.status})`);
   const blob = await response.blob();

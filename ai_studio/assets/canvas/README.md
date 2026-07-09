@@ -60,6 +60,13 @@ projects root via `--game <id>` / `--store game:<id>` or `?game=<id>` /
 outside the parent Studio checkout, but `--to`/`--zip` destinations inside the
 public parent repo are rejected to avoid copying private art into public git.
 
+The browser page preserves the selected store in API calls, file/export download
+URLs, deep links, image-cache keys, and last-project restore. Public links keep
+the legacy `/canvas?project=<id>` shape; private links use
+`/canvas?store=game:<id>&project=<projectId>`. Public Copy ID refs keep their
+human-readable tail, while private Copy ID refs use `canvas://game/<gameId>/...`
+without project/object names in the tail.
+
 ## Object references (`canvas://`)
 
 The page's right-click "Copy ID" copies a paste-into-chat reference so the lead
@@ -76,6 +83,18 @@ A human-readable tail follows after ` — ` (project/element/region names); it i
 display sugar only. When you receive such a reference, take the bare ids out of
 the URI part and drive the normal CLI/ops (`show <projectId>`, element/region
 ids as-is). Multi-selection copies one reference per line.
+
+Private game-store refs are qualified without the human-readable tail:
+
+```
+canvas://game/<gameId>/<projectId>
+canvas://game/<gameId>/<projectId>/group/<groupId>
+canvas://game/<gameId>/<projectId>/element/<elementId>
+canvas://game/<gameId>/<projectId>/element/<eId>/region/<rId>
+```
+
+Resolve them through the same store selector (`--game <gameId>` / `?game=<gameId>`);
+bare project ids never search private stores.
 
 ## Operations
 

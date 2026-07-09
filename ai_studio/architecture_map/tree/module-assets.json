@@ -1195,9 +1195,18 @@
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/app.js",
               "title": "app.js",
-              "description": "Shared page state, the fetch API helper, read-only view helpers over project.json, the image cache, selection helpers, deep-link/localStorage plumbing, and a refresh bus every panel renders through.",
+              "description": "Shared page state, the fetch API helper, read-only view helpers over project.json, the image cache, selection helpers, store-aware deep-link/localStorage plumbing, and a refresh bus every panel renders through.",
               "role": "canvas page shared state",
               "tags": ["assets", "canvas", "ui", "browser-js"]
+            },
+            {
+              "id": "assets:canvas-site-store-scope",
+              "kind": "ui-component",
+              "path": "ai_studio/assets/canvas/site/store_scope.js",
+              "title": "store_scope.js",
+              "description": "Pure browser-side Canvas store-scope helpers: normalize Studio vs game store ids, append store query strings to API/file/export URLs, read/write deep-link store params, encode/decode the v2 last-project localStorage pair, separate image-cache keys by store, and format private canvas://game/<gameId>/ refs without leaking project/object names.",
+              "role": "canvas browser store-scope helper",
+              "tags": ["assets", "canvas", "ui", "browser-js", "privacy", "testable-logic"]
             },
             {
               "id": "assets:canvas-site-actions",

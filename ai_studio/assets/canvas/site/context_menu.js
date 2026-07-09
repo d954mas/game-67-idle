@@ -28,6 +28,7 @@ import {
   ungroup,
 } from "./actions.js";
 import { isNodeTransformed } from "../tree.mjs";
+import { canvasRefBase } from "./store_scope.js";
 
 // R7 (T0232 increment 3a): the same grayed-out reason the inspector shows on its
 // Detect/Slice/Alpha controls, here as a disabled-button title (mirrors the ops-layer
@@ -91,17 +92,18 @@ function targetElementIds(elementId) {
 
 // ---- Copy ID -------------------------------------------------------------------
 // A paste-into-agent-chat reference: the canvas://<project>/<kind>/<id> part is
-// canonical (bare ids the API/CLI take verbatim), the tail names the project and
-// object so a human can tell references apart at a glance.
+// canonical (bare ids the API/CLI take verbatim). Public refs keep the human tail;
+// private game-store refs omit titles/names so Copy ID does not leak private context.
 function projectRefBase() {
   const project = state.project;
-  return project ? { uri: `canvas://${project.id}`, title: project.title || project.id } : null;
+  return project ? canvasRefBase(project) : null;
 }
 
 function elementRef(elementId) {
   const base = projectRefBase();
   const element = elementById(elementId);
   if (!base || !element) return null;
+  if (base.private) return `${base.uri}/element/${element.id}`;
   return `${base.uri}/element/${element.id} — project "${base.title}", element "${element.name || element.id}"`;
 }
 
@@ -132,6 +134,10 @@ function copyIdItemFor(target) {
         const element = elementById(target.elementId);
         const region = (element?.regions || []).find((item) => item.id === target.regionId);
         if (!base || !element || !region) return;
+        if (base.private) {
+          copyRefs([`${base.uri}/element/${element.id}/region/${region.id}`]);
+          return;
+        }
         copyRefs([
           `${base.uri}/element/${element.id}/region/${region.id} — project "${base.title}", element "${element.name || element.id}", region "${region.name || region.id}"`,
         ]);
@@ -145,6 +151,10 @@ function copyIdItemFor(target) {
         const base = projectRefBase();
         const group = groupById(target.groupId);
         if (!base || !group) return;
+        if (base.private) {
+          copyRefs([`${base.uri}/group/${group.id}`]);
+          return;
+        }
         copyRefs([`${base.uri}/group/${group.id} — project "${base.title}", group "${group.name || "Group"}"`]);
       },
     };
@@ -154,6 +164,10 @@ function copyIdItemFor(target) {
     label: "Copy project ID",
     onClick: () => {
       const base = projectRefBase();
+      if (base?.private) {
+        copyRefs([base.uri]);
+        return;
+      }
       if (base) copyRefs([`${base.uri} — project "${base.title}"`]);
     },
   };

@@ -8,6 +8,15 @@
 // canvas/business logic beyond fetching and re-rendering.
 
 import { childrenOf, isNodeHidden } from "../tree.mjs";
+import {
+  canvasApiUrl,
+  decodeLastProject,
+  encodeLastProject,
+  projectCacheKey,
+  projectFileUrl,
+  projectStoreId,
+  setStoreParams,
+} from "./store_scope.js";
 import { toastError, toastInfo, toastPinned } from "./toasts.js";
 
 // Video-animation generation is frozen (lead, 2026-07-06): unreliable local motion model,
@@ -22,6 +31,7 @@ export const el = (id) => document.getElementById(id);
 export const state = {
   projects: [],
   project: null,
+  storeId: "studio",
   selectedIds: new Set(),
   selectedGroupId: null,
   // Figma nested-selection scope: the group the user has "entered" (double-click drills
@@ -126,7 +136,7 @@ export function setStatusLinks(message, links = []) {
 }
 
 export async function api(method, path, body) {
-  const res = await fetch(`/api/canvas${path}`, {
+  const res = await fetch(canvasApiUrl(path, state.storeId), {
     method,
     headers: body ? { "content-type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
@@ -195,13 +205,13 @@ export function regionCount(element) {
 const imageCache = new Map(); // element.src -> HTMLImageElement
 
 export function fileUrl(element) {
-  return `/api/canvas/projects/${state.project.id}/${element.src}`;
+  return projectFileUrl(state.project, element.src);
 }
 
 // The first image element of a project (used for a project card cover thumbnail).
 export function coverUrl(project) {
   const first = (project.elements || []).find((element) => element.type === "image" && element.src);
-  return first ? `/api/canvas/projects/${project.id}/${first.src}` : null;
+  return first ? projectFileUrl(project, first.src) : null;
 }
 
 // Content-addressed image cache lookup by a bare src string (T0265 F4). This is the ONE image
@@ -210,11 +220,12 @@ export function coverUrl(project) {
 // onload -> repaint path as before; a src is stable + content-addressed, so the cache never
 // goes stale.
 export function imageForSrc(src) {
-  if (imageCache.has(src)) return imageCache.get(src);
+  const key = projectCacheKey(state.project, src);
+  if (imageCache.has(key)) return imageCache.get(key);
   const img = new Image();
   img.onload = () => hooks.renderCanvas();
-  img.src = `/api/canvas/projects/${state.project.id}/${src}`;
-  imageCache.set(src, img);
+  img.src = projectFileUrl(state.project, src);
+  imageCache.set(key, img);
   return img;
 }
 
@@ -385,7 +396,7 @@ const LAST_KEY = "canvas.lastProject";
 
 export function rememberLastProject(id) {
   try {
-    if (id) localStorage.setItem(LAST_KEY, id);
+    if (id) localStorage.setItem(LAST_KEY, encodeLastProject(id, state.storeId));
     else localStorage.removeItem(LAST_KEY);
   } catch {
     // Private mode / disabled storage: deep links still work, restore just no-ops.
@@ -393,17 +404,23 @@ export function rememberLastProject(id) {
 }
 
 export function lastProjectId() {
+  const ref = lastProjectRef();
+  return ref ? ref.projectId : null;
+}
+
+export function lastProjectRef() {
   try {
-    return localStorage.getItem(LAST_KEY);
+    return decodeLastProject(localStorage.getItem(LAST_KEY));
   } catch {
     return null;
   }
 }
 
-export function setProjectParam(id) {
+export function setProjectParam(id, storeId = state.storeId) {
   const url = new URL(window.location.href);
   if (id) url.searchParams.set("project", id);
   else url.searchParams.delete("project");
+  setStoreParams(url.searchParams, storeId);
   url.searchParams.delete("select"); // the debug select hook is one-shot
   url.searchParams.delete("regions"); // the debug region-edit hook is one-shot
   window.history.replaceState(null, "", url);
@@ -436,6 +453,7 @@ export async function refreshHistory() {
 // paths treat the incoming project identically.
 function ingestProject(project) {
   state.project = project;
+  state.storeId = projectStoreId(project);
   const alive = new Set(elements().map((element) => element.id));
   state.selectedIds = new Set([...state.selectedIds].filter((id) => alive.has(id)));
   const aliveGroups = new Set(groups().map((group) => group.id));

@@ -13,7 +13,7 @@ import {
   exitRegionEdit,
   groupById,
   hooks,
-  lastProjectId,
+  lastProjectRef,
   loadProjects,
   refresh,
   refreshHistory,
@@ -24,6 +24,7 @@ import {
   setStatus,
   state,
 } from "./app.js";
+import { projectKey, projectStoreId, storeIdFromParams } from "./store_scope.js";
 import {
   bringNodeForward,
   bringNodeToFront,
@@ -84,8 +85,11 @@ async function showHome() {
 // hook (documented in the README) that pre-selects one element for screenshots;
 // `regions` is the sibling ?regions=<id> hook that opens straight into region-edit
 // isolation (mode B) with the element's first region selected, for screenshots.
-async function openProject(id, { select, regions } = {}) {
+async function openProject(id, { select, regions, storeId } = {}) {
   closeContextMenu();
+  const listed = state.projects.find((project) => project.id === id);
+  if (storeId) state.storeId = projectStoreId(storeId);
+  else if (listed) state.storeId = projectStoreId(listed);
   try {
     state.project = (await api("GET", `/projects/${id}`)).project;
   } catch (error) {
@@ -105,8 +109,8 @@ async function openProject(id, { select, regions } = {}) {
     selectOnly(select);
   }
   await refreshHistory();
-  rememberLastProject(id);
-  setProjectParam(id);
+  rememberLastProject(state.project);
+  setProjectParam(id, state.storeId);
   enterWorkspace();
   fit();
   refresh();
@@ -332,23 +336,28 @@ window.addEventListener("keydown", onKeyDown);
 window.addEventListener("keyup", onKeyUp);
 
 (async () => {
+  const params = new URLSearchParams(window.location.search);
+  state.storeId = storeIdFromParams(params);
   try {
     await loadProjects();
   } catch (error) {
     setStatus(error.message, true);
     return;
   }
-  const params = new URLSearchParams(window.location.search);
   const projectParam = params.get("project");
   const selectParam = params.get("select") || undefined;
   const regionsParam = params.get("regions") || undefined;
-  const known = (id) => state.projects.some((project) => project.id === id);
+  const known = (id, storeId = state.storeId) =>
+    state.projects.some((project) => projectKey(project) === projectKey(id, storeId));
 
   if (projectParam && known(projectParam)) {
     await openProject(projectParam, { select: selectParam, regions: regionsParam });
-  } else if (lastProjectId() && known(lastProjectId())) {
-    await openProject(lastProjectId());
   } else {
-    renderHome();
+    const last = lastProjectRef();
+    if (last && last.storeId === state.storeId && known(last.projectId, last.storeId)) {
+      await openProject(last.projectId);
+    } else {
+      renderHome();
+    }
   }
 })();
