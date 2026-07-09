@@ -82,3 +82,48 @@ test("writeVscodeProjectFiles writes tasks and launch files", (t) => {
   assert.equal(tasks.tasks[0].label, "Template: base: configure native debug");
   assert.equal(launch.configurations[0].name, "Debug Template: base (native debug)");
 });
+
+test("writeVscodeProjectFiles excludes local private game mounts", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "vscode-projects-private-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  makePlayable(root, "games/public-game");
+  makePlayable(root, "games/secret-game");
+  writeJson(join(root, "games", "games.json"), {
+    schema: "ai_studio.assets.games.v1",
+    games: [
+      {
+        id: "public-game",
+        title: "Public Game",
+        folder: "games/public-game",
+        assets: "games/public-game/assets",
+        status: "active",
+      },
+    ],
+  });
+  writeJson(join(root, "ai_studio", "workspace", "games.local.json"), {
+    schema: "ai_studio.workspace.games.local.v1",
+    games: [
+      {
+        schemaVersion: 1,
+        storeId: "game:secret-game",
+        kind: "game",
+        gameId: "secret-game",
+        root: "games/secret-game",
+        visibility: "private",
+        gitRoot: "games/secret-game",
+        commitPolicy: "nested-private",
+        enabledStores: ["assets", "taskboard", "canvas", "evidence"],
+      },
+    ],
+  });
+
+  const result = writeVscodeProjectFiles(root);
+  const tasksText = readFileSync(join(root, ".vscode", "tasks.json"), "utf8");
+  const launchText = readFileSync(join(root, ".vscode", "launch.json"), "utf8");
+
+  assert.deepEqual(result.projects.map((project) => `${project.kind}:${project.id}`), ["game:public-game"]);
+  assert.match(tasksText, /public-game/);
+  assert.match(launchText, /public-game/);
+  assert.doesNotMatch(tasksText, /secret-game|games\/secret-game|game:secret-game/);
+  assert.doesNotMatch(launchText, /secret-game|games\/secret-game|game:secret-game/);
+});

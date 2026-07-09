@@ -1,7 +1,7 @@
 ---
 id: T0346
 title: IDE generators assets and reports privacy boundary
-status: backlog
+status: doing
 project: P001
 epic: E014
 priority: P1
@@ -18,7 +18,7 @@ runtime evidence.
 
 ## Done when
 
-- [ ] Tracked parent `.vscode` generation includes public/tracked games only.
+- [x] Tracked parent `.vscode` generation includes public/tracked games only.
 - [ ] Private-game IDE entries are generated inside the private game repo or
       ignored local workspace files.
 - [ ] Asset discovery can see private games only through explicit active
@@ -47,3 +47,8 @@ runtime evidence.
 
 - 2026-07-09: Created as child task from `T0341` review to handle non-Taskboard
   and non-Canvas leak surfaces.
+- 2026-07-09: Started privacy-boundary implementation after T0345 closure commits 608846c78 and 2f2cbe845.
+- 2026-07-09: Added parent `.vscode` regression coverage proving
+  `ai_studio/workspace/games.local.json` private mounts do not enter tracked
+  tasks or launch configs; documented that private IDE entries must stay
+  game-owned or ignored local workspace state.
