@@ -2,7 +2,8 @@
 // Run: node --test ai_studio/assets/canvas/tests/api.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
@@ -38,6 +39,48 @@ function tempProjects(t) {
     rmSync(dir, { recursive: true, force: true });
   });
   return dir;
+}
+
+function withCanvasProjectsRoot(t, dir) {
+  const previous = process.env.CANVAS_PROJECTS_ROOT;
+  process.env.CANVAS_PROJECTS_ROOT = dir;
+  t.after(() => {
+    if (previous === undefined) delete process.env.CANVAS_PROJECTS_ROOT;
+    else process.env.CANVAS_PROJECTS_ROOT = previous;
+  });
+}
+
+function ensurePrivateGameMount(root, gameId = "secret-game") {
+  const gameRoot = join(root, "games", gameId);
+  mkdirSync(gameRoot, { recursive: true });
+  execFileSync("git", ["init"], { cwd: root, encoding: "utf8" });
+  execFileSync("git", ["init"], { cwd: gameRoot, encoding: "utf8" });
+  mkdirSync(join(root, ".git", "info"), { recursive: true });
+  writeFileSync(
+    join(root, ".git", "info", "exclude"),
+    `ai_studio/workspace/games.local.json\ngames/${gameId}/\n`,
+    "utf8",
+  );
+  mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
+  writeFileSync(join(root, "ai_studio", "workspace", "games.local.json"), JSON.stringify({
+    schema: "ai_studio.workspace.games.local.v1",
+    games: [{
+      schemaVersion: 1,
+      storeId: `game:${gameId}`,
+      kind: "game",
+      gameId,
+      root: `games/${gameId}`,
+      visibility: "private",
+      gitRoot: `games/${gameId}`,
+      commitPolicy: "nested-private",
+      enabledStores: ["canvas"],
+    }],
+  }, null, 2) + "\n", "utf8");
+  return {
+    gameId,
+    gameRoot,
+    canvasRoot: join(gameRoot, ".ai_studio", "canvas", "projects"),
+  };
 }
 
 // Minimal req/res doubles. res collects Buffer chunks so both JSON responses and
@@ -130,6 +173,51 @@ test("canvas API supports the full project + element lifecycle", async (t) => {
 
   const afterRemove = await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`);
   assert.equal(afterRemove.json().project.elements.length, 0);
+});
+
+test("canvas API routes explicitly selected private game stores and keeps default reads public-only", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "canvas-api-private-root-"));
+  const publicRoot = join(root, "public-canvas");
+  const privateStore = ensurePrivateGameMount(root);
+  withCanvasProjectsRoot(t, publicRoot);
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const handler = createCanvasApi(root);
+
+  const publicProject = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Public API Canvas" })).json().project;
+  const privateProject = (await invokeApi(handler, "POST", `/api/canvas/projects?game=${privateStore.gameId}`, { title: "Private API Canvas" })).json().project;
+
+  assert.equal(publicProject.storeId, "studio");
+  assert.equal(privateProject.storeId, "game:secret-game");
+  assert.equal(privateProject.visibility, "private");
+  assert.equal(existsSync(join(publicRoot, publicProject.id, "project.json")), true);
+  assert.equal(existsSync(join(privateStore.canvasRoot, privateProject.id, "project.json")), true);
+  assert.equal(existsSync(join(publicRoot, privateProject.id)), false);
+
+  const normalList = (await invokeApi(handler, "GET", "/api/canvas/projects")).json();
+  assert.deepEqual(normalList.projects.map((project) => project.title), ["Public API Canvas"]);
+  assert.deepEqual(normalList.projects.map((project) => project.storeId), ["studio"]);
+
+  const included = (await invokeApi(handler, "GET", "/api/canvas/projects?include-private=true")).json();
+  const privateRow = included.projects.find((project) => project.storeId === "game:secret-game");
+  assert.equal(privateRow.title, "Private API Canvas");
+  assert.equal(privateRow.qualifiedId, `game:secret-game:${privateProject.id}`);
+
+  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${privateProject.id}`)).status, 404);
+  const selectedGet = await invokeApi(handler, "GET", `/api/canvas/projects/${privateProject.id}?game=${privateStore.gameId}`);
+  assert.equal(selectedGet.status, 200);
+  assert.equal(selectedGet.json().project.storeId, "game:secret-game");
+
+  const png = solidPng(5, 5, [40, 50, 60]);
+  const uploaded = await invokeApi(handler, "POST", `/api/canvas/projects/${privateProject.id}/images?game=${privateStore.gameId}`, {
+    name: "private.png",
+    bytes_base64: png.toString("base64"),
+  });
+  assert.equal(uploaded.status, 201);
+  const fileName = uploaded.json().element.src.replace(/^files\//, "");
+  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${privateProject.id}/files/${fileName}`)).status, 404);
+  const file = await invokeApi(handler, "GET", `/api/canvas/projects/${privateProject.id}/files/${fileName}?game=${privateStore.gameId}`);
+  assert.equal(file.status, 200);
+  assert.ok(file.buffer.equals(png), "private API file route reads only with the selected private store");
 });
 
 test("canvas API renames a project (PATCH) and trashes it (DELETE)", async (t) => {

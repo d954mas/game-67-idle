@@ -54,3 +54,4 @@ and leak prevention for private Canvas projects.
   destinations must be rejected, not overridden.
 - 2026-07-09: Started after T0344 store-qualified Taskboard commit fc3da87c5.
 - 2026-07-09: Canvas store-routing slice: CLI create/show/list/mutations can select private game stores; private --to/--zip exports into parent Studio repo are rejected, including Windows path-case variants. Verified with canvas/private-games tests and architecture-map validation.
+- 2026-07-09: Canvas API store-routing slice: /api/canvas/projects is public-only by default, ?include-private aggregates explicit private stores, and ?game/ ?store wraps project/file/mutation routes in the selected Canvas store. Verified targeted API route tests plus existing public API smoke tests.

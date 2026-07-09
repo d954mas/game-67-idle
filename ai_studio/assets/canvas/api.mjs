@@ -153,6 +153,13 @@ import {
   withProjectLock,
   zipExport,
 } from "./ops.mjs";
+import {
+  canvasStoreSummary,
+  canvasStoresForQuery,
+  decorateCanvasProject,
+  selectCanvasStore,
+  withCanvasStore,
+} from "./stores.mjs";
 
 // Images are the big payload here; allow up to ~20MB for a base64 upload body.
 const maxBodyBytes = 20 * 1024 * 1024;
@@ -169,6 +176,18 @@ const mimeByExt = {
 function sendJson(res, status, data) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(data));
+}
+
+function boolQueryParam(value) {
+  return value === "true" || value === "1";
+}
+
+function canvasStoreQueryArgs(url) {
+  return {
+    store: url.searchParams.get("store") || "",
+    game: url.searchParams.get("game") || "",
+    includePrivate: boolQueryParam(url.searchParams.get("include-private")) || boolQueryParam(url.searchParams.get("includePrivate")),
+  };
 }
 
 // Map a thrown op error to an HTTP status (T0254 Tier 1 #2 — previously everything
@@ -240,6 +259,14 @@ export function createCanvasApi(root) {
   return async function handleCanvasApi(req, res, url) {
     const parts = url.pathname.split("/").filter(Boolean); // ["api","canvas","projects", id, ...]
     const t0 = performance.now();
+    const storeArgs = canvasStoreQueryArgs(url);
+    let activeStore;
+    try {
+      activeStore = selectCanvasStore(root, storeArgs);
+    } catch (error) {
+      sendJson(res, statusForError(error), { error: error && error.message ? error.message : String(error) });
+      return true;
+    }
     // Mutating responses carry the API-observed duration_ms AND the folded history
     // flags (canUndo/canRedo/seq) whenever the op returned a project, so the page
     // drives its re-render from the response alone — no reload GET, no /history GET.
@@ -254,6 +281,7 @@ export function createCanvasApi(root) {
         } catch {
           // history is a convenience; a successful mutation must still 200.
         }
+        payload.project = decorateCanvasProject(project, activeStore);
       }
       sendJson(res, status, payload);
     };
@@ -266,6 +294,7 @@ export function createCanvasApi(root) {
     // own final commit internally (ops.mjs), so a multi-minute generation never blocks
     // other mutations on the project. See withProjectLock's doc in store.mjs.
     const locked = (projectId, fn) => withProjectLock(root, projectId, fn);
+    return await withCanvasStore(activeStore, async () => {
     try {
       if (parts[0] !== "api" || parts[1] !== "canvas" || parts[2] !== "projects") {
         sendJson(res, 404, { error: "not found" });
@@ -275,7 +304,11 @@ export function createCanvasApi(root) {
       // /api/canvas/projects
       if (parts.length === 3) {
         if (req.method === "GET") {
-          sendJson(res, 200, { projects: listProjects(root) });
+          const stores = canvasStoresForQuery(root, storeArgs);
+          const projects = stores.flatMap((store) =>
+            withCanvasStore(store, () => listProjects(root).map((project) => decorateCanvasProject(project, store)))
+          );
+          sendJson(res, 200, { stores: stores.map(canvasStoreSummary), projects });
           return true;
         }
         if (req.method === "POST") {
@@ -292,7 +325,7 @@ export function createCanvasApi(root) {
       // /api/canvas/projects/<id>
       if (parts.length === 4) {
         if (req.method === "GET") {
-          sendJson(res, 200, { project: getProject(root, id) });
+          sendJson(res, 200, { project: decorateCanvasProject(getProject(root, id), activeStore) });
           return true;
         }
         if (req.method === "PATCH") {
@@ -1133,5 +1166,6 @@ export function createCanvasApi(root) {
       sendJson(res, statusForError(error), { error: error && error.message ? error.message : String(error) });
       return true;
     }
+    });
   };
 }

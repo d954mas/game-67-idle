@@ -51,11 +51,13 @@ game mount may opt into Canvas by listing `canvas` in `enabledStores` (or by
 already having `.ai_studio/canvas/projects` under the game root); that store is
 selected explicitly with `--game <id>` or `--store game:<id>`.
 
-Agent CLI reads are public-only by default. `list --include-private` aggregates
-private game stores and decorates rows with `storeId`, `visibility`, and
-`qualifiedId`; selected `create`/`show`/mutating commands run inside the selected
-store's projects root. Private CLI exports may write inside the owning game store
-or outside the parent Studio checkout, but `--to`/`--zip` destinations inside the
+Agent CLI and HTTP API reads are public-only by default. `list --include-private`
+and `GET /api/canvas/projects?include-private=true` aggregate private game stores
+and decorate rows with `storeId`, `visibility`, and `qualifiedId`; selected
+`create`/`show`/mutating commands and API routes run inside the selected store's
+projects root via `--game <id>` / `--store game:<id>` or `?game=<id>` /
+`?store=game:<id>`. Private CLI exports may write inside the owning game store or
+outside the parent Studio checkout, but `--to`/`--zip` destinations inside the
 public parent repo are rejected to avoid copying private art into public git.
 
 ## Object references (`canvas://`)
