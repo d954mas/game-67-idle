@@ -1,6 +1,7 @@
 #include "platform_lifecycle.h"
 
 #include "features/platform_sdk/platform_sdk.h"
+#include "input/nt_input_internal.h"
 #include "unity.h"
 
 #include <string.h>
@@ -70,6 +71,7 @@ static bool float_close(float actual, float expected) {
 
 void setUp(void) {
     memset(&g_backend_state, 0, sizeof(g_backend_state));
+    nt_input_init();
     platform_sdk_reset_for_tests();
     platform_sdk_backend_t sdk_backend = backend();
     platform_sdk_set_backend(&sdk_backend, &g_backend_state);
@@ -78,6 +80,7 @@ void setUp(void) {
 void tearDown(void) {
     platform_lifecycle_shutdown();
     platform_sdk_reset_for_tests();
+    nt_input_shutdown();
 }
 
 static void test_lifecycle_init_and_playable_ready_are_one_shot(void) {
@@ -113,6 +116,48 @@ static void test_menu_input_does_not_start_gameplay(void) {
     TEST_ASSERT_EQUAL_INT(0, g_backend_state.gameplay_start_calls);
 }
 
+static void test_any_keyboard_input_starts_gameplay(void) {
+    platform_lifecycle_init();
+
+    nt_input_set_key(NT_KEY_SPACE, true);
+    platform_lifecycle_after_input_poll();
+    platform_lifecycle_update(true, true);
+
+    TEST_ASSERT_TRUE(platform_sdk_has_input());
+    TEST_ASSERT_TRUE(platform_sdk_has_gameplay_started());
+    TEST_ASSERT_TRUE(platform_sdk_gameplay_active());
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.gameplay_start_calls);
+}
+
+static void test_touch_input_starts_gameplay(void) {
+    platform_lifecycle_init();
+
+    nt_input_pointer_down(7u, 320.0f, 240.0f, 1.0f, NT_POINTER_TOUCH, 1u);
+    platform_lifecycle_after_input_poll();
+    platform_lifecycle_update(true, true);
+
+    TEST_ASSERT_TRUE(platform_sdk_has_input());
+    TEST_ASSERT_TRUE(platform_sdk_has_gameplay_started());
+    TEST_ASSERT_TRUE(platform_sdk_gameplay_active());
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.gameplay_start_calls);
+}
+
+static void test_input_does_not_start_gameplay_while_gameplay_is_disallowed(void) {
+    platform_lifecycle_init();
+
+    nt_input_set_key(NT_KEY_SPACE, true);
+    platform_lifecycle_after_input_poll();
+    platform_lifecycle_update(true, false);
+
+    TEST_ASSERT_TRUE(platform_sdk_has_input());
+    TEST_ASSERT_FALSE(platform_sdk_gameplay_active());
+    TEST_ASSERT_EQUAL_INT(0, g_backend_state.gameplay_start_calls);
+
+    platform_lifecycle_update(true, true);
+    TEST_ASSERT_TRUE(platform_sdk_gameplay_active());
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.gameplay_start_calls);
+}
+
 static void test_gameplay_intent_starts_and_menu_stops_gameplay(void) {
     platform_lifecycle_init();
     platform_lifecycle_mark_gameplay_input();
@@ -144,6 +189,9 @@ int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_lifecycle_init_and_playable_ready_are_one_shot);
     RUN_TEST(test_menu_input_does_not_start_gameplay);
+    RUN_TEST(test_any_keyboard_input_starts_gameplay);
+    RUN_TEST(test_touch_input_starts_gameplay);
+    RUN_TEST(test_input_does_not_start_gameplay_while_gameplay_is_disallowed);
     RUN_TEST(test_gameplay_intent_starts_and_menu_stops_gameplay);
     RUN_TEST(test_loading_progress_mapping_handles_unknown_total);
     return UNITY_END();

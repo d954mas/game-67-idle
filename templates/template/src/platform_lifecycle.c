@@ -24,11 +24,6 @@ static bool has_pointer_input_edge(void) {
     return false;
 }
 
-static bool has_gameplay_input_edge(void) {
-    return nt_input_key_is_pressed(NT_KEY_W) || nt_input_key_is_pressed(NT_KEY_A) ||
-           nt_input_key_is_pressed(NT_KEY_S) || nt_input_key_is_pressed(NT_KEY_D);
-}
-
 void platform_lifecycle_init(void) {
     s_platform_lifecycle_initialized = true;
     (void)platform_sdk_game_loading_progress(0.10f);
@@ -39,10 +34,8 @@ void platform_lifecycle_after_input_poll(void) {
     if (!s_platform_lifecycle_initialized) {
         return;
     }
-    if (!platform_sdk_has_input() && (nt_input_any_key_pressed() || has_pointer_input_edge())) {
-        platform_sdk_mark_input();
-    }
-    if (has_gameplay_input_edge()) {
+    const bool input_seen = nt_input_any_key_pressed() || has_pointer_input_edge();
+    if (input_seen) {
         platform_lifecycle_mark_gameplay_input();
     }
 }
