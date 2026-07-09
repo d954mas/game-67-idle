@@ -1,7 +1,7 @@
 ---
 id: T0343
 title: Game-owned scaffold and private new-game flow
-status: doing
+status: done
 project: P001
 epic: E014
 priority: P1
@@ -52,3 +52,4 @@ without mutating tracked parent Studio outputs.
 - 2026-07-09: Started after T0342 private registry/guard commit 63fff6007; implementing game-owned scaffold and explicit private new-game flow.
 - 2026-07-09: Implemented template `.ai_studio/` scaffold, `games/new_game.mjs --private`, local registry upsert, parent `.git/info/exclude` updates, nested private git init/verify, private preflight, and public alias handling. Targeted tests pass: `node --test ai_studio/workspace/tests/private_games_registry.test.mjs games/new_game.test.mjs`.
 - 2026-07-09: Addressed review findings: private `--force` refuses parent-tracked target roots before copy, nested git verification checks the game top-level, and parent exclude path uses `git rev-parse --git-path info/exclude` for worktree compatibility. PASS: `node --test ai_studio/workspace/tests/private_games_registry.test.mjs games/new_game.test.mjs ai_studio/assets/backlog/storage/sources/tests/games.test.mjs ai_studio/dev_environment/vscode_projects.test.mjs`; PASS: `node ai_studio/workspace/games.mjs preflight --json`; PASS: `node ai_studio/taskboard/cli.mjs validate --json`.
+- 2026-07-09: Archived after commit ab435349e verified private new-game flow and scaffold.
