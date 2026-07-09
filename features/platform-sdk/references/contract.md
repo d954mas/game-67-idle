@@ -322,7 +322,7 @@ Used by `local` and `itch`.
 ### `yandex`
 
 - For Yandex-hosted archives, load `/sdk.js`. For custom-domain integration,
-  load the absolute Yandex SDK URL.
+  load the absolute Yandex SDK URL (`https://sdk.games.s3.yandex.net/sdk.js`).
 - Initialize with `YaGames.init()`.
 - Call `ysdk.features.LoadingAPI?.ready()` only when the game is ready for
   interaction.
@@ -342,6 +342,9 @@ Used by `local` and `itch`.
 - Initializes with `bridge.initialize()`.
 - Calls `bridge.platform.sendMessage("game_ready")` after all loading screens
   are gone.
+- Sends Playgama gameplay messages with the documented platform-message names:
+  first gameplay start uses `level_started`, resume after a stop uses
+  `level_resumed`, and gameplay stop uses `level_pause`.
 - Forwards Playgama advertisement/runtime state changes as callbacks to the C
   facade. The C facade dispatches pause/resume listeners; game code decides how
   simulation, input, and audio respond.

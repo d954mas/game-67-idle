@@ -4,6 +4,7 @@ export function createPlaygamaPlatformAdapter({ host }) {
   let bridgeReady = null;
   let bridge = null;
   let destroyed = false;
+  let hasStartedGameplay = false;
 
   function windowRef() {
     return (host && host.window) || host || globalThis;
@@ -64,14 +65,15 @@ export function createPlaygamaPlatformAdapter({ host }) {
   async function gameplayStart() {
     if (!(await ready())) return;
     try {
-      bridge.platform.sendMessage("gameplay_started");
+      bridge.platform.sendMessage(hasStartedGameplay ? "level_resumed" : "level_started");
+      hasStartedGameplay = true;
     } catch {}
   }
 
   async function gameplayStop() {
     if (!(await ready())) return;
     try {
-      bridge.platform.sendMessage("gameplay_stopped");
+      bridge.platform.sendMessage("level_pause");
     } catch {}
   }
 

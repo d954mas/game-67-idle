@@ -7,7 +7,9 @@ import { fileURLToPath } from "node:url";
 
 import { createPlatformSdkWebBackend } from "../web/platform-sdk-core.js";
 import { createMockPlatformAdapter } from "../web/adapters/mock.js";
+import { createPlaygamaPlatformAdapter } from "../web/adapters/playgama.js";
 import { createPokiPlatformAdapter } from "../web/adapters/poki.js";
+import { createYandexPlatformAdapter } from "../web/adapters/yandex.js";
 import {
   inspectPlatformSdkArtifact,
   sdkForTarget,
@@ -273,6 +275,166 @@ test("poki adapter coalesces loading progress queued before SDK init completes",
   await adapter.gameLoadingProgress(0.75);
   await adapter.gameLoadingProgress(1.0);
   assert.deepEqual(progress, [1]);
+});
+
+test("yandex adapter uses documented loading, gameplay, and ad callbacks", async () => {
+  const host = createHost(TargetPlatform.YANDEX);
+  const calls = [];
+  const ysdk = {
+    features: {
+      LoadingAPI: {
+        ready() {
+          calls.push("loading.ready");
+        },
+      },
+      GameplayAPI: {
+        start() {
+          calls.push("gameplay.start");
+        },
+        stop() {
+          calls.push("gameplay.stop");
+        },
+      },
+    },
+    adv: {
+      showFullscreenAdv({ callbacks }) {
+        calls.push("fullscreen");
+        callbacks.onOpen();
+        callbacks.onClose(true);
+      },
+      showRewardedVideo({ callbacks }) {
+        calls.push("rewarded");
+        callbacks.onOpen();
+        callbacks.onRewarded();
+        callbacks.onClose(true);
+      },
+    },
+  };
+  host.YaGames = {
+    init() {
+      calls.push("init");
+      return Promise.resolve(ysdk);
+    },
+  };
+
+  const adapter = createYandexPlatformAdapter({ host });
+
+  assert.equal(await adapter.ready(), true);
+  await adapter.gameLoadingFinished();
+  await adapter.gameplayStart();
+  await adapter.gameplayStop();
+  assert.deepEqual(await adapter.showInterstitial("level_break"), {
+    supported: true,
+    shown: true,
+  });
+  assert.deepEqual(await adapter.showRewarded("double_reward"), {
+    supported: true,
+    shown: true,
+    rewarded: true,
+  });
+  assert.deepEqual(calls, [
+    "init",
+    "loading.ready",
+    "gameplay.start",
+    "gameplay.stop",
+    "fullscreen",
+    "rewarded",
+  ]);
+});
+
+test("yandex adapter can load the documented custom-domain SDK URL", async () => {
+  const host = createHost(TargetPlatform.YANDEX);
+  const adapter = createYandexPlatformAdapter({
+    host,
+    sdkUrl: "https://sdk.games.s3.yandex.net/sdk.js",
+  });
+  const readyPromise = adapter.ready();
+
+  assert.equal(host.document.head.children.length, 1);
+  const script = host.document.head.children[0];
+  assert.equal(script.src, "https://sdk.games.s3.yandex.net/sdk.js");
+
+  host.YaGames = {
+    init() {
+      return Promise.resolve({});
+    },
+  };
+  script.onload();
+
+  assert.equal(await readyPromise, true);
+});
+
+test("playgama adapter uses documented bridge lifecycle and gameplay messages", async () => {
+  const host = createHost(TargetPlatform.PLAYGAMA);
+  const calls = [];
+  host.bridge = {
+    EVENT_NAME: {
+      INTERSTITIAL_STATE_CHANGED: "interstitial_state_changed",
+      REWARDED_STATE_CHANGED: "rewarded_state_changed",
+    },
+    initialize() {
+      calls.push("initialize");
+      return Promise.resolve();
+    },
+    platform: {
+      language: "en",
+      sendMessage(message) {
+        calls.push(`message:${message}`);
+      },
+    },
+    advertisement: {
+      isInterstitialSupported: true,
+      isRewardedSupported: true,
+      handlers: new Map(),
+      on(name, handler) {
+        calls.push(`on:${name}`);
+        this.handlers.set(name, handler);
+      },
+      off(name, handler) {
+        calls.push(`off:${name}`);
+        if (this.handlers.get(name) === handler) this.handlers.delete(name);
+      },
+      showInterstitial(placement) {
+        calls.push(`interstitial:${placement}`);
+        this.handlers.get("interstitial_state_changed")("closed");
+      },
+      showRewarded(placement) {
+        calls.push(`rewarded:${placement}`);
+        this.handlers.get("rewarded_state_changed")("rewarded");
+        this.handlers.get("rewarded_state_changed")("closed");
+      },
+    },
+  };
+
+  const adapter = createPlaygamaPlatformAdapter({ host });
+
+  assert.equal(await adapter.ready(), true);
+  await adapter.gameReady();
+  await adapter.gameplayStart();
+  await adapter.gameplayStop();
+  await adapter.gameplayStart();
+  assert.deepEqual(await adapter.showInterstitial("level_break"), {
+    supported: true,
+    shown: true,
+  });
+  assert.deepEqual(await adapter.showRewarded("double_reward"), {
+    supported: true,
+    shown: true,
+    rewarded: true,
+  });
+  assert.deepEqual(calls, [
+    "initialize",
+    "message:game_ready",
+    "message:level_started",
+    "message:level_pause",
+    "message:level_resumed",
+    "on:interstitial_state_changed",
+    "interstitial:level_break",
+    "off:interstitial_state_changed",
+    "on:rewarded_state_changed",
+    "rewarded:double_reward",
+    "off:rewarded_state_changed",
+  ]);
 });
 
 test("web backend delegates gameplay calls without owning input state or guards", async () => {

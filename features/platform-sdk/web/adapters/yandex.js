@@ -1,6 +1,6 @@
 const YANDEX_SDK_URL = "/sdk.js";
 
-export function createYandexPlatformAdapter({ host }) {
+export function createYandexPlatformAdapter({ host, sdkUrl = YANDEX_SDK_URL }) {
   let sdkReady = null;
   let playerReady = null;
   let ysdkInstance = null;
@@ -22,7 +22,7 @@ export function createYandexPlatformAdapter({ host }) {
     return new Promise((resolve) => {
       const script = document.createElement("script");
       script.async = true;
-      script.src = YANDEX_SDK_URL;
+      script.src = sdkUrl;
       script.onload = () => resolve(root.YaGames || null);
       script.onerror = () => resolve(null);
       document.head.appendChild(script);
