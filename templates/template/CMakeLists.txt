@@ -228,6 +228,7 @@ endif()
 # --- game executable (the conductor + systems) ---
 add_executable(${GAME_TARGET}
     src/main.c
+    src/platform_lifecycle.c
     "${GAME_EVENTS_SRC}/game_events.c" # E1
     src/game_log.c               # E4.B: built-in "log" event type (unconditional leaf)
     src/features/game_features.c # E1
@@ -943,6 +944,24 @@ if(NOT EMSCRIPTEN)
         _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_platform_sdk PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_platform_sdk COMMAND test_platform_sdk)
+
+    add_executable(test_platform_lifecycle
+        tests/test_platform_lifecycle.c
+        src/platform_lifecycle.c
+        "${PLATFORM_SDK_SRC}/platform_sdk.c")
+    target_link_libraries(test_platform_lifecycle PRIVATE unity nt_input_stub)
+    target_include_directories(test_platform_lifecycle PRIVATE src "${PLATFORM_SDK_INC}")
+    target_compile_definitions(test_platform_lifecycle PRIVATE
+        PLATFORM_SDK_TARGET_ID=${GAME_PLATFORM_TARGET_ID}
+        PLATFORM_SDK_CURRENT_ID=${GAME_PLATFORM_SDK_ID}
+        PLATFORM_SDK_EXTERNAL_LINKS_ALLOWED=${GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED}
+        PLATFORM_SDK_ADS_SUPPORTED=${GAME_PLATFORM_ADS_SUPPORTED}
+        PLATFORM_SDK_REWARDED_SUPPORTED=${GAME_PLATFORM_REWARDED_SUPPORTED}
+        PLATFORM_SDK_STORAGE_SUPPORTED=${GAME_PLATFORM_STORAGE_SUPPORTED}
+        PLATFORM_SDK_TESTING=1
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_platform_lifecycle PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_platform_lifecycle COMMAND test_platform_lifecycle)
 
     add_executable(test_platform_sdk_events
         tests/test_platform_sdk_events.c

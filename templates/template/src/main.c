@@ -59,6 +59,7 @@
 #include "game_save.h"
 #include "game_state.h"
 #include "game_state_events.gen.h" /* E2: game_ev_register (typed event labels) */
+#include "platform_lifecycle.h"
 #include "settings_state.h"        /* A6: SettingsState + settings_state_fragment (NOT the events header) */
 #include "items_state.h"           /* И2a: ItemsState + items_state_fragment (NOT the events header) */
 #include "items_state_events.gen.h" /* И2a: items_ev_register (typed items.txn label, R2: not empty) */
@@ -244,6 +245,7 @@ static void frame(void) {
     nt_window_poll();
     devapi_update_frame();
     nt_input_poll();
+    platform_lifecycle_after_input_poll();
 #ifndef NT_PLATFORM_WEB
     if (nt_window_should_close() || nt_input_key_is_pressed(NT_KEY_ESCAPE)) {
         nt_app_quit();
@@ -251,6 +253,7 @@ static void frame(void) {
 #endif
     nt_resource_step();
     nt_material_step();
+    platform_lifecycle_update(render_mesh_ready(&s_world) && ui_runtime_ready(), !settings_is_open());
     s_world.time_seconds += g_nt_app.dt;
 
     // Р11 «Hold to reset progress» (settings_screen.c): apply a deferred new-game
@@ -481,6 +484,7 @@ int main(int argc, char **argv) {
     // engine UI stack (sprite renderer + slice9 atlas + nt_ui ctx); reuses the font + text material
     ui_runtime_init(s_text_material, s_font, s_font_resource);
     game_features_init(&s_world); // world is constructed and spawned by this point
+    platform_lifecycle_init();
 
     if (!devapi_start()) {
         return 1;
@@ -495,6 +499,7 @@ int main(int argc, char **argv) {
 
 #ifndef NT_PLATFORM_WEB
     devapi_shutdown_runtime();
+    platform_lifecycle_shutdown();
     ui_runtime_shutdown();
     game_features_shutdown(&s_world);
 #if FEATURE_GAME_ANALYTICS

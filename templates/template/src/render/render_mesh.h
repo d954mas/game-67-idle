@@ -12,6 +12,7 @@
 void render_mesh_init(nt_resource_t mesh_vs, nt_resource_t mesh_fs, nt_resource_t tex_vs, nt_resource_t tex_fs, nt_resource_t texture);
 void render_mesh_spawn_player(World *w, nt_resource_t cube_mesh, const float color[4]); // coloured cube
 void render_mesh_spawn_prop(World *w, nt_resource_t cube_mesh);                         // textured cube
+bool render_mesh_ready(const World *w);
 void render_mesh_draw(World *w, nt_buffer_t frame_ubo);
 void render_mesh_restore_gpu(void);
 

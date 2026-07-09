@@ -96,7 +96,7 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
     theme_init(s_atlas);
 }
 
-bool ui_runtime_begin(float dt) {
+static void resolve_runtime_bindings(void) {
     if (!s_atlas_bound && nt_resource_is_ready(s_atlas)) {
         const uint32_t white = nt_atlas_find_region(s_atlas, ASSET_ATLAS_REGION_UI__WHITE.value);
         if (white != NT_ATLAS_INVALID_REGION) {
@@ -108,6 +108,20 @@ bool ui_runtime_begin(float dt) {
         nt_ui_set_font(s_ctx, 0U, s_font);
         s_font_bound = true;
     }
+}
+
+bool ui_runtime_ready(void) {
+    resolve_runtime_bindings();
+    const nt_material_info_t *si = nt_material_get_info(s_sprite_material);
+    const nt_material_info_t *ti = nt_material_get_info(s_text_material);
+    return s_atlas_bound && s_font_bound && si != NULL && si->ready && ti != NULL && ti->ready;
+}
+
+bool ui_runtime_begin(float dt) {
+    if (!ui_runtime_ready()) {
+        return false;
+    }
+
     const nt_material_info_t *si = nt_material_get_info(s_sprite_material);
     const nt_material_info_t *ti = nt_material_get_info(s_text_material);
     if (!s_atlas_bound || !s_font_bound || !si || !si->ready || !ti || !ti->ready) {

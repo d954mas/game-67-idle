@@ -96,6 +96,11 @@ void render_mesh_restore_gpu(void) {
     nt_mesh_renderer_restore_gpu();
 }
 
+bool render_mesh_ready(const World *w) {
+    const nt_material_info_t *info = nt_material_get_info(s_material);
+    return w != NULL && w->player_spawned && info != NULL && info->ready && nt_resource_is_ready(s_cube_mesh);
+}
+
 void render_mesh_draw(World *w, nt_buffer_t frame_ubo) {
     const nt_material_info_t *info = nt_material_get_info(s_material);
     const nt_material_info_t *info_tex = nt_material_get_info(s_material_tex);

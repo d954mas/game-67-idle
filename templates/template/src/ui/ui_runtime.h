@@ -18,6 +18,7 @@ void ui_runtime_init(nt_material_t text_material, nt_font_t font, nt_resource_t 
 // Binds atlas/font when ready, sets the UI projection, opens the nt_ui frame.
 // Returns false (skip widget build) until the atlas + font + materials are ready.
 bool ui_runtime_begin(float dt);
+bool ui_runtime_ready(void);
 
 // Closes the frame, walks the tree, flushes the sprite + text renderers.
 void ui_runtime_end(void);
