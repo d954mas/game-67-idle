@@ -38,6 +38,10 @@ are done.
 - [ ] Canvas project folders are preserved together: `project.json`, `files/`,
       `export/`, `tool_runs.jsonl`, `errors.jsonl`, and local chat/history
       sidecars.
+- [ ] Canvas local undo/history cache is handled explicitly before moving each
+      project: either migrate the per-machine cache with the project or log that
+      undo history is intentionally not preserved. Do not treat local cache
+      loss as a privacy leak, but do not hide it during migration.
 - [ ] Evidence, provenance, manifests, screenshots, and runtime logs move or
       relink into the owning game store where they are game-specific.
 - [ ] Studio-level references that remain are sanitized public fixture notes or
@@ -58,3 +62,7 @@ are done.
 
 - 2026-07-09: Created as final child task from `T0341` review. Migration is
   intentionally behind the privacy, Taskboard, Canvas, and generator gates.
+- 2026-07-09: T0345 closure review clarified a migration caveat: Canvas
+  `chat/` lives under the project folder, but undo/history sidecars live in a
+  per-machine local cache keyed by projects root. T0347 owns deciding whether to
+  preserve that cache during current-game migration or log intentional loss.

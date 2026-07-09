@@ -113,8 +113,9 @@ Every capability is one op in `ops.mjs`:
   lives in the metadata snapshot, so undo/redo restore it with everything else.
 - `deleteProject({ projectId })` — move the whole project folder to
   `<projectsRoot>/.trash/<id>-<stamp>/` instead of deleting it (safety: recoverable,
-  never `rm`'d). A project-level action, so it is **not** journaled (the per-project
-  journal moves with the folder). `listProjects` skips the dot-prefixed `.trash`.
+  never `rm`'d). A project-level action, so it is **not** journaled (the local
+  undo/history cache is per-machine and not part of the portable project folder).
+  `listProjects` skips the dot-prefixed `.trash`.
 - `addImage` (parses real PNG/JPEG/GIF dimensions, persists `source_w`/`source_h`,
   writes an immutable file) — journaled
 - `addText({ projectId, x?, y?, content?, style?, groupId? })` — add a Figma-style

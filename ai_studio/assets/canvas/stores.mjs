@@ -3,7 +3,7 @@ import { isAbsolute, join, resolve, sep } from "node:path";
 
 import { canvasProjectsRoot } from "../../core_harness/tool_lib/studio_config.mjs";
 import { listGameMounts } from "../../workspace/games.mjs";
-import { withCanvasProjectsRoot } from "./store.mjs";
+import { resolveProjectPath, withCanvasProjectsRoot } from "./store.mjs";
 
 export const STUDIO_CANVAS_STORE_ID = "studio";
 
@@ -117,6 +117,21 @@ export function decorateCanvasProject(project, store) {
     visibility: store.visibility,
     qualifiedId: `${store.storeId}:${project.id}`,
   };
+}
+
+export function assertBareCanvasProjectIdIsUnambiguous(root, projectId) {
+  if (!projectId) return;
+  const matches = [];
+  for (const store of listCanvasStores(root, { includePrivate: true })) {
+    const exists = withCanvasStore(store, () => existsSync(resolveProjectPath(root, projectId, "project.json")));
+    if (exists) matches.push(store);
+  }
+  if (matches.length === 0) return;
+  if (matches.length === 1 && matches[0].storeId === STUDIO_CANVAS_STORE_ID) return;
+  if (matches.length === 1) {
+    throw new Error("Canvas project id belongs to a non-studio store; pass --store or --game");
+  }
+  throw new Error("Canvas project id is ambiguous across mounted stores; pass --store or --game");
 }
 
 function pathIsInside(parent, child) {

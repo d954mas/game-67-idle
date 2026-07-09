@@ -152,6 +152,7 @@ import {
   zipExport,
 } from "./ops.mjs";
 import {
+  assertBareCanvasProjectIdIsUnambiguous,
   assertCanvasExportDestination,
   canvasStoreArgs,
   canvasStoresForQuery,
@@ -1324,6 +1325,9 @@ async function main(argv) {
     return withCanvasStore(selectCanvasStore(repoRoot, selectedArgs), fn);
   };
   try {
+    if (id && !hasStoreSelector) {
+      assertBareCanvasProjectIdIsUnambiguous(repoRoot, id);
+    }
     // `id` is undefined for project-less commands (list/create/help/...) —
     // withProjectLock is a no-op pass-through in that case (see its doc in
     // store.mjs), so this is safe to apply unconditionally to everything else.

@@ -31,6 +31,27 @@ resolve: take the bare ids out of the URI, then run
 element/group/region by id in the returned JSON (`show` includes `groups`).
 Drive the normal CLI from there with those ids.
 
+Private game-store refs are store-qualified and intentionally omit
+human-readable name tails:
+
+```
+canvas://game/<gameId>/<projectId>
+canvas://game/<gameId>/<projectId>/group/<groupId>
+canvas://game/<gameId>/<projectId>/element/<elementId>
+canvas://game/<gameId>/<projectId>/element/<eId>/region/<rId>
+```
+
+When resolving a private ref, extract both `gameId` and `projectId`, then pass
+`--store game:<gameId>` or `--game <gameId>` on every Canvas CLI command:
+
+```
+node ai_studio/assets/canvas/cli.mjs show <projectId> --store game:<gameId>
+node ai_studio/assets/canvas/cli.mjs history-list <projectId> --store game:<gameId>
+```
+
+Do not strip the store and run a bare project id for a private ref. Bare CLI ids
+are public/studio-only and reject private-only or ambiguous mounted-store ids.
+
 ## CLI surface
 
 `node ai_studio/assets/canvas/cli.mjs` with no args (or an unknown command)

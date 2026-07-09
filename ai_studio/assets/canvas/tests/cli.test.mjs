@@ -130,6 +130,29 @@ test("cli routes selected private game canvas store and keeps default list publi
   assert.match(blockedExport.stderr, /private Canvas export/);
   assert.equal(existsSync(join(root, "public-export-leak")), false);
 
+  const barePrivateShow = runFail(env, "show", privateProject.id);
+  assert.equal(barePrivateShow.status, 1);
+  assert.match(barePrivateShow.stderr, /non-studio store/);
+  assert.match(barePrivateShow.stderr, /pass --store or --game/);
+
+  const privateDuplicateDir = join(privateStore.canvasRoot, publicProject.id);
+  mkdirSync(privateDuplicateDir, { recursive: true });
+  writeFileSync(join(privateDuplicateDir, "project.json"), JSON.stringify({
+    schema: "ai_studio.canvas.project.v1",
+    id: publicProject.id,
+    title: "Private duplicate",
+    created: "2026-07-09T00:00:00.000Z",
+    updated: "2026-07-09T00:00:00.000Z",
+    elements: [],
+    groups: [],
+    tool_runs: [],
+  }, null, 2) + "\n", "utf8");
+
+  const ambiguousShow = runFail(env, "show", publicProject.id);
+  assert.equal(ambiguousShow.status, 1);
+  assert.match(ambiguousShow.stderr, /ambiguous across mounted stores/);
+  assert.match(ambiguousShow.stderr, /pass --store or --game/);
+
   if (process.platform === "win32") {
     const caseVariantLeak = join(root.toUpperCase(), "public-export-case-leak");
     const blockedCaseExport = runFail(env, "export", privateProject.id, "--game", privateStore.gameId, "--all", "--to", caseVariantLeak);
