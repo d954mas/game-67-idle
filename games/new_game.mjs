@@ -5,27 +5,32 @@
 //   node games/new_game.mjs --id mygame
 //   node games/new_game.mjs --id mygame --template template
 //   node games/new_game.mjs --id mygame --from templates/template --force
+//   node games/new_game.mjs --id mygame --private [--public-alias "Safe Alias"]
 //   node games/new_game.mjs --root <repo> --id mygame
 //
 // Build/run the new game:
 //   cmake -S games/mygame -B games/mygame/build/native-debug -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
 //   cmake --build games/mygame/build/native-debug --target game
 //   ./games/mygame/build/native-debug/bin/game.exe
-import { existsSync, mkdirSync, readdirSync, copyFileSync, statSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, copyFileSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { gameRegistryPath, registerGameAssetSource } from "../ai_studio/assets/backlog/storage/sources/games.mjs";
+import { spawnSync } from "node:child_process";
+import { gameRegistryPath, listRegisteredGames, registerGameAssetSource } from "../ai_studio/assets/backlog/storage/sources/games.mjs";
 import { listRegisteredTemplates } from "../ai_studio/assets/backlog/storage/sources/templates.mjs";
 import { writeVscodeProjectFiles } from "../ai_studio/dev_environment/vscode_projects.mjs";
 import { ensureProject } from "../ai_studio/taskboard/lib.mjs";
+import { localGameRegistryRelPath, runPrivateGamePreflight, upsertLocalGameMount } from "../ai_studio/workspace/games.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 function parseArgs(argv) {
-  const a = { id: "", template: "", from: "templates/template", root: "", force: false, help: false };
+  const a = { id: "", template: "", from: "templates/template", root: "", force: false, private: false, publicAlias: "", help: false };
   for (let i = 0; i < argv.length; i += 1) {
     const k = argv[i];
     if (k === "--force") a.force = true;
+    else if (k === "--private") a.private = true;
+    else if (k === "--public-alias") a.publicAlias = argv[++i];
     else if (k === "--id") a.id = argv[++i];
     else if (k === "--template") a.template = argv[++i];
     else if (k === "--from") a.from = argv[++i];
@@ -37,7 +42,7 @@ function parseArgs(argv) {
 }
 
 function usageText() {
-  return "usage: node games/new_game.mjs [--root <repo>] --id <game-id> [--template <template-id>|--from <path>] [--force]  (lowercase, kebab)";
+  return "usage: node games/new_game.mjs [--root <repo>] --id <game-id> [--template <template-id>|--from <path>] [--private] [--public-alias <safe-name>] [--force]  (lowercase, kebab)";
 }
 
 // Per-game build output is not copied. Tracked source files under src/generated
@@ -53,6 +58,92 @@ function copyDir(src, dst) {
     if (statSync(s).isDirectory()) copyDir(s, d);
     else copyFileSync(s, d);
   }
+}
+
+function writeJson(path, value) {
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function ensureGameStudioScaffold(gameDir, gameId, visibility) {
+  const studioDir = join(gameDir, ".ai_studio");
+  mkdirSync(join(studioDir, "taskboard", "items"), { recursive: true });
+  mkdirSync(join(studioDir, "canvas", "projects"), { recursive: true });
+  mkdirSync(join(studioDir, "evidence"), { recursive: true });
+  writeJson(join(studioDir, "workspace.json"), {
+    schema: "ai_studio.game.workspace.v1",
+    gameId,
+    visibility,
+    stores: {
+      taskboard: ".ai_studio/taskboard/items",
+      canvas: ".ai_studio/canvas/projects",
+      evidence: ".ai_studio/evidence",
+      assets: "assets",
+    },
+  });
+  for (const [rel, text] of [
+    ["taskboard/items/README.md", "Game-local taskboard items live here for private or game-owned work.\n"],
+    ["canvas/projects/README.md", "Game-local canvas projects live here when they must stay with this game.\n"],
+    ["evidence/README.md", "Game-local validation evidence, screenshots, and reports live here.\n"],
+  ]) {
+    const path = join(studioDir, rel);
+    if (!existsSync(path)) writeFileSync(path, text, "utf8");
+  }
+}
+
+function runGit(root, args) {
+  return spawnSync("git", ["-C", root, ...args], { encoding: "utf8", shell: false });
+}
+
+function requireParentGitExcludePath(repoRoot) {
+  const result = runGit(repoRoot, ["rev-parse", "--git-path", "info/exclude"]);
+  if (result.error || result.status !== 0) {
+    throw new Error("private game creation requires the parent Studio checkout to be a Git repository");
+  }
+  const text = result.stdout.trim();
+  const excludePath = isAbsolute(text) ? text : resolve(repoRoot, text);
+  mkdirSync(dirname(excludePath), { recursive: true });
+  return excludePath;
+}
+
+function ensureParentExclude(repoRoot, relRoot, options = {}) {
+  const excludePath = requireParentGitExcludePath(repoRoot);
+  const normalized = relRoot.replace(/\\/g, "/").replace(/\/+$/, "");
+  const line = options.directory ? `${normalized}/` : normalized;
+  const existing = existsSync(excludePath) ? readFileSync(excludePath, "utf8") : "";
+  if (!existing.split(/\r?\n/).includes(line)) {
+    appendFileSync(excludePath, `${existing.endsWith("\n") || existing.length === 0 ? "" : "\n"}${line}\n`, "utf8");
+  }
+}
+
+function parentTracksPath(repoRoot, relRoot) {
+  const result = runGit(repoRoot, ["ls-files", "--", relRoot.replace(/\\/g, "/").replace(/\/+$/, "")]);
+  if (result.error || result.status !== 0) {
+    throw new Error(`failed to inspect parent git tracking: ${result.error ? result.error.message : result.stderr}`);
+  }
+  return result.stdout.trim().length > 0;
+}
+
+function ensureNestedGit(gameDir, gameId) {
+  const nested = join(gameDir, ".git");
+  const created = !existsSync(nested);
+  if (created) {
+    const init = runGit(gameDir, ["init"]);
+    if (init.error || init.status !== 0) {
+      throw new Error(`failed to initialize private game git repository: ${init.error ? init.error.message : init.stderr}`);
+    }
+  }
+  const top = runGit(gameDir, ["rev-parse", "--show-toplevel"]);
+  const actual = top.stdout.trim().replace(/\\/g, "/").toLowerCase();
+  const expected = resolve(gameDir).replace(/\\/g, "/").toLowerCase();
+  if (top.error || top.status !== 0 || actual !== expected) {
+    throw new Error(`games/${gameId} does not contain a valid nested git repository`);
+  }
+  return created ? "created" : "existing";
+}
+
+function verifyExistingNestedGitBeforeCopy(gameDir, gameId) {
+  if (!existsSync(join(gameDir, ".git"))) return;
+  ensureNestedGit(gameDir, gameId);
 }
 
 let a;
@@ -92,7 +183,28 @@ if (existsSync(toDir) && !a.force) {
   process.exit(1);
 }
 
+if (a.private) {
+  const publicGame = listRegisteredGames(repoRoot).find((game) => game.id === a.id && game.status !== "fixture");
+  if (publicGame) {
+    console.error(`error: private game id '${a.id}' is already registered as a public game`);
+    process.exit(1);
+  }
+  try {
+    requireParentGitExcludePath(repoRoot);
+    if (parentTracksPath(repoRoot, `games/${a.id}`)) {
+      throw new Error(`games/${a.id} is already tracked by the parent repository; cannot create it as private`);
+    }
+    verifyExistingNestedGitBeforeCopy(toDir, a.id);
+    ensureParentExclude(repoRoot, localGameRegistryRelPath());
+    ensureParentExclude(repoRoot, `games/${a.id}`, { directory: true });
+  } catch (error) {
+    console.error(error && error.message ? error.message : String(error));
+    process.exit(1);
+  }
+}
+
 copyDir(fromDir, toDir);
+ensureGameStudioScaffold(toDir, a.id, a.private ? "private" : "public");
 
 // F2 (T0327 И2c deep-review, lead-ratified 2026-07-07): copy-then-own for the
 // items destructive-change lock. The template's own content/items.lock.json
@@ -121,6 +233,29 @@ if (itemsLockReset) {
       2,
     )}\n`,
   );
+}
+
+if (a.private) {
+  const nestedGit = ensureNestedGit(toDir, a.id);
+  const mount = upsertLocalGameMount(repoRoot, {
+    gameId: a.id,
+    visibility: "private",
+    commitPolicy: "nested-private",
+    publicAlias: a.publicAlias,
+  });
+  const preflight = runPrivateGamePreflight(repoRoot, { mounts: [mount] });
+  if (!preflight.ok) {
+    console.error(`error: private game preflight failed:\n${preflight.violations.map((item) => `- ${item.path}: ${item.reason}`).join("\n")}`);
+    process.exit(1);
+  }
+  console.log(`new private game '${a.id}' created from ${fromRel}/ -> games/${a.id}/`);
+  console.log(`nested git repository: ${nestedGit}`);
+  console.log(`local private registry: ${localGameRegistryRelPath()} -> ${mount.root}`);
+  console.log("public Studio registries, Taskboard, Canvas, and VS Code files were not updated");
+  if (itemsLockReset) {
+    console.log(`reset items lock baseline (fresh game -- no defs shipped yet): games/${a.id}/content/items.lock.json`);
+  }
+  process.exit(0);
 }
 
 const registered = registerGameAssetSource(repoRoot, {

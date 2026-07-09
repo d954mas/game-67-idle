@@ -37,6 +37,13 @@ test("new_game copies template and registers game assets in AI Studio", (t) => {
   assert.equal(existsSync(join(root, "games", "test-game", "assets", "readme.txt")), true);
   assert.equal(existsSync(join(root, "games", "test-game", "src", "generated", "game.h")), true);
   assert.equal(existsSync(join(root, "games", "test-game", "build", "stale.obj")), false);
+  assert.equal(existsSync(join(root, "games", "test-game", ".ai_studio", "workspace.json")), true);
+  assert.equal(existsSync(join(root, "games", "test-game", ".ai_studio", "taskboard", "items")), true);
+  assert.equal(existsSync(join(root, "games", "test-game", ".ai_studio", "canvas", "projects")), true);
+  assert.equal(existsSync(join(root, "games", "test-game", ".ai_studio", "evidence")), true);
+  const workspace = JSON.parse(readFileSync(join(root, "games", "test-game", ".ai_studio", "workspace.json"), "utf8"));
+  assert.equal(workspace.gameId, "test-game");
+  assert.equal(workspace.visibility, "public");
 
   const registryPath = join(root, "games", "games.json");
   assert.equal(existsSync(registryPath), true);
@@ -57,6 +64,116 @@ test("new_game copies template and registers game assets in AI Studio", (t) => {
   const taskboardProject = readFileSync(join(taskboardItems(root), "projects", "P001-test-game.md"), "utf8");
   assert.match(taskboardProject, /kind: game/);
   assert.match(taskboardProject, /target: games\/test-game/);
+});
+
+test("new_game --private creates a nested private game without public Studio writes", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+
+  const output = execFileSync(process.execPath, [
+    script,
+    "--root",
+    root,
+    "--id",
+    "secret-game",
+    "--private",
+    "--public-alias",
+    "Private Slot",
+  ], { encoding: "utf8" });
+
+  assert.match(output, /new private game 'secret-game' created/);
+  assert.equal(existsSync(join(root, "games", "secret-game", "CMakeLists.txt")), true);
+  assert.equal(existsSync(join(root, "games", "secret-game", ".git")), true);
+  assert.equal(existsSync(join(root, "games", "secret-game", ".ai_studio", "workspace.json")), true);
+  assert.equal(existsSync(join(root, "games", "secret-game", ".ai_studio", "taskboard", "items")), true);
+  assert.equal(existsSync(join(root, "games", "secret-game", ".ai_studio", "canvas", "projects")), true);
+  assert.equal(existsSync(join(root, "games", "secret-game", ".ai_studio", "evidence")), true);
+
+  const workspace = JSON.parse(readFileSync(join(root, "games", "secret-game", ".ai_studio", "workspace.json"), "utf8"));
+  assert.equal(workspace.gameId, "secret-game");
+  assert.equal(workspace.visibility, "private");
+
+  assert.equal(existsSync(join(root, "games", "games.json")), false);
+  assert.equal(existsSync(join(root, ".vscode", "tasks.json")), false);
+  assert.equal(existsSync(join(root, ".vscode", "launch.json")), false);
+  assert.equal(existsSync(join(taskboardItems(root), "projects", "P001-secret-game.md")), false);
+
+  const localRegistry = JSON.parse(readFileSync(join(root, "ai_studio", "workspace", "games.local.json"), "utf8"));
+  assert.deepEqual(localRegistry.games.map((game) => ({
+    gameId: game.gameId,
+    root: game.root,
+    publicAlias: game.publicAlias,
+    commitPolicy: game.commitPolicy,
+  })), [{
+    gameId: "secret-game",
+    root: "games/secret-game",
+    publicAlias: "Private Slot",
+    commitPolicy: "nested-private",
+  }]);
+  assert.match(readFileSync(join(root, ".git", "info", "exclude"), "utf8"), /games\/secret-game\//);
+});
+
+test("new_game --private rejects public game id collisions", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  mkdirSync(dirname(join(root, "games", "games.json")), { recursive: true });
+  writeFileSync(join(root, "games", "games.json"), JSON.stringify({
+    schema: "ai_studio.assets.games.v1",
+    games: [{ id: "secret-game", title: "Public", folder: "games/secret-game", assets: "games/secret-game/assets", status: "active" }],
+  }, null, 2), "utf8");
+
+  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "secret-game", "--private"], { encoding: "utf8" });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /already registered as a public game/);
+  assert.equal(existsSync(join(root, "ai_studio", "workspace", "games.local.json")), false);
+});
+
+test("new_game --private --force refuses parent-tracked target roots before copying", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  mkdirSync(join(root, "games", "secret-game"), { recursive: true });
+  writeFileSync(join(root, "games", "secret-game", "CMakeLists.txt"), "tracked parent file\n", "utf8");
+  execFileSync("git", ["add", "games/secret-game/CMakeLists.txt"], { cwd: root, stdio: "ignore" });
+
+  const result = spawnSync(process.execPath, [
+    script,
+    "--root",
+    root,
+    "--id",
+    "secret-game",
+    "--private",
+    "--force",
+  ], { encoding: "utf8" });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /tracked by the parent repository/);
+  assert.equal(readFileSync(join(root, "games", "secret-game", "CMakeLists.txt"), "utf8"), "tracked parent file\n");
+});
+
+test("new_game --private verifies an existing nested git repo", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  mkdirSync(join(root, "games", "secret-game", ".git"), { recursive: true });
+  writeFileSync(join(root, "games", "secret-game", "CMakeLists.txt"), "existing private file\n", "utf8");
+
+  const result = spawnSync(process.execPath, [
+    script,
+    "--root",
+    root,
+    "--id",
+    "secret-game",
+    "--private",
+    "--force",
+  ], { encoding: "utf8" });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /does not contain a valid nested git repository/);
+  assert.equal(readFileSync(join(root, "games", "secret-game", "CMakeLists.txt"), "utf8"), "existing private file\n");
 });
 
 test("new_game --force updates the same registry entry", (t) => {

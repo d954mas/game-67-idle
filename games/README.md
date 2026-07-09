@@ -11,9 +11,20 @@ Register public/tracked active game asset roots in
 game-local assets alongside template and library sources.
 Use `node games/new_game.mjs --id <game-id>` when creating a new
 game; it registers the game, creates/reuses a Taskboard project, lays down the
-game-owned `design/` scaffold, and refreshes VS Code build/run entries.
+game-owned `design/` and `.ai_studio/` scaffolds, and refreshes VS Code
+build/run entries.
 
-Private commercial games can be mounted locally through the ignored registry
+Private commercial games must be explicit:
+
+```powershell
+node games/new_game.mjs --id <private-game-id> --private
+```
+
+The private flow creates `games/<private-game-id>/`, initializes or verifies its
+nested Git repository, creates the game-owned `.ai_studio/` scaffold, updates
+only local ignored registry/exclude files, and skips public `games/games.json`,
+parent Taskboard, parent Canvas, and generated `.vscode` entries. Private games
+can then be mounted locally through the ignored registry
 `ai_studio/workspace/games.local.json`; see `ai_studio/workspace/README.md`.
 Do not put private game ids, remotes, task logs, canvas refs, or evidence paths
 in `games/games.json` or other tracked Studio files.

@@ -14,8 +14,11 @@ that copy, the game owns its files; later template edits do not automatically
 change existing games.
 
 The template includes a `design/` scaffold with `concept.md`, `gdd.md`,
-`knowledge/`, and starter structured data. A new game gets its private GDD and
-knowledge base by copying this template.
+`knowledge/`, and starter structured data. It also includes a game-owned
+`.ai_studio/` scaffold with `workspace.json`, `taskboard/items/`,
+`canvas/projects/`, and `evidence/`. A new game gets its private GDD,
+knowledge base, local task/canvas/evidence roots, and asset workspace contract
+by copying this template.
 
 Optional reusable feature packs live in `features/`. Copy a feature into a
 template when every game from that template should inherit it, or into a game

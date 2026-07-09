@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { basename, isAbsolute, join, posix, resolve } from "node:path";
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, posix, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
@@ -85,6 +85,12 @@ function readLocalRegistry(root) {
   };
 }
 
+function writeLocalRegistry(root, registry) {
+  const path = localRegistryPath(root);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
+}
+
 function normalizeLocalMount(raw, index = 0) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error(`${localGameRegistryRelPath()}: games[${index}] must be an object`);
@@ -119,7 +125,7 @@ function normalizeLocalMount(raw, index = 0) {
     storeId: String(raw.storeId || `game:${gameId}`).trim(),
     kind,
     gameId,
-    title: String(raw.title || raw.publicAlias || gameId),
+    title: String(raw.title || gameId),
     root,
     visibility,
     gitRoot,
@@ -143,6 +149,49 @@ function normalizeLocalMount(raw, index = 0) {
 
 function readLocalGameMounts(root) {
   return readLocalRegistry(root).games.map((game, index) => normalizeLocalMount(game, index));
+}
+
+export function upsertLocalGameMount(root, options = {}) {
+  const gameId = normalizeId(options.gameId || options.id, "game id");
+  const next = normalizeLocalMount({
+    schemaVersion: MOUNT_SCHEMA_VERSION,
+    storeId: `game:${gameId}`,
+    kind: "game",
+    gameId,
+    root: `games/${gameId}`,
+    visibility: options.visibility || "private",
+    gitRoot: `games/${gameId}`,
+    commitPolicy: options.commitPolicy || "nested-private",
+    enabledStores: options.enabledStores || DEFAULT_PRIVATE_STORES,
+    assetRoot: `games/${gameId}/assets`,
+    publicAlias: options.publicAlias || "",
+    aliases: options.aliases || [],
+    remoteHints: options.remoteHints || [],
+    overridesPublicFixture: options.overridesPublicFixture === true,
+  });
+  const registry = readLocalRegistry(root);
+  const existing = registry.games.findIndex((game) => game && (game.gameId === gameId || game.id === gameId));
+  const raw = {
+    schemaVersion: next.schemaVersion,
+    storeId: next.storeId,
+    kind: next.kind,
+    gameId: next.gameId,
+    root: next.root,
+    visibility: next.visibility,
+    gitRoot: next.gitRoot,
+    commitPolicy: next.commitPolicy,
+    enabledStores: next.enabledStores,
+    assetRoot: next.assetRoot,
+    aliases: next.aliases,
+    remoteHints: next.remoteHints,
+  };
+  if (next.publicAlias) raw.publicAlias = next.publicAlias;
+  if (next.overridesPublicFixture) raw.overridesPublicFixture = true;
+  if (existing >= 0) registry.games[existing] = raw;
+  else registry.games.push(raw);
+  registry.games.sort((a, b) => String(a.gameId || a.id).localeCompare(String(b.gameId || b.id)));
+  writeLocalRegistry(root, registry);
+  return next;
 }
 
 function localMountIsIncluded(mount, options) {
@@ -471,6 +520,22 @@ function stagedLeakTextFiles(root, paths, mounts) {
   return { matches: [{ path: "<staged index>", text: result.stdout, source: "index" }], unscanned: [] };
 }
 
+function validNestedGitRoots(root, mounts) {
+  const out = [];
+  for (const mount of mounts) {
+    if (!existsSync(join(root, mount.gitRoot, ".git"))) continue;
+    const result = spawnSync("git", ["-C", join(root, mount.gitRoot), "rev-parse", "--show-toplevel"], {
+      cwd: root,
+      encoding: "utf8",
+      shell: false,
+    });
+    const actual = slash(result.stdout || "").trim().toLowerCase();
+    const expected = slash(resolve(root, mount.gitRoot)).toLowerCase();
+    if (!result.error && result.status === 0 && actual === expected) out.push(mount.gitRoot);
+  }
+  return out;
+}
+
 export function runPrivateGamePreflight(root, options = {}) {
   const repoRoot = resolve(root || process.cwd());
   const mounts = options.mounts || readLocalGameMounts(repoRoot);
@@ -494,7 +559,7 @@ export function runPrivateGamePreflight(root, options = {}) {
     trackedPaths: stage.paths,
     stagedPaths,
     gitlinks: stage.gitlinks,
-    nestedGitRoots: privateMounts.flatMap((mount) => existsSync(join(repoRoot, mount.gitRoot, ".git")) ? [mount.gitRoot] : []),
+    nestedGitRoots: validNestedGitRoots(repoRoot, privateMounts),
     trackedTextFiles: [
       ...worktreeTextFiles(repoRoot, stage.paths),
       ...stagedLeaks.matches,

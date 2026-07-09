@@ -169,6 +169,19 @@ test("auditPrivateGamePreflight requires ignored roots and rejects tracked, stag
   assert.match(bad.violations.map((item) => item.reason).join("\n"), /could not inspect this file/);
 });
 
+test("auditPrivateGamePreflight allows explicit public aliases in tracked text", () => {
+  const result = auditPrivateGamePreflight([privateMount({ publicAlias: "Private Slot" })], {
+    ignoredPaths: new Set([localGameRegistryRelPath(), "games/secret-game"]),
+    trackedPaths: new Set(),
+    stagedPaths: new Set(),
+    gitlinks: new Set(),
+    nestedGitRoots: new Set(["games/secret-game"]),
+    trackedTextFiles: [{ path: "README.md", text: "Private Slot is a safe display alias" }],
+  });
+
+  assert.equal(result.ok, true, JSON.stringify(result.violations));
+});
+
 function privateGitFixture(t, prefix = "ai-studio-workspace-games-git-") {
   const root = tempRoot(prefix);
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -176,7 +189,8 @@ function privateGitFixture(t, prefix = "ai-studio-workspace-games-git-") {
   writeFileSync(join(root, ".gitignore"), `${localGameRegistryRelPath()}\n`, "utf8");
   writeFileSync(join(root, ".git", "info", "exclude"), "games/secret-game/\n", "utf8");
   writeLocalGames(root, [privateMount({ title: "Secret Title" })]);
-  mkdirSync(join(root, "games", "secret-game", ".git"), { recursive: true });
+  mkdirSync(join(root, "games", "secret-game"), { recursive: true });
+  execFileSync("git", ["init"], { cwd: join(root, "games", "secret-game"), stdio: "ignore" });
   writeFileSync(join(root, "games", "secret-game", "README.md"), "private game\n", "utf8");
   return root;
 }
@@ -220,6 +234,17 @@ test("runPrivateGamePreflight blocks an index-only staged local registry", (t) =
 
   assert.equal(result.ok, false);
   assert.match(result.violations.map((item) => item.reason).join("\n"), /local private registry is tracked or staged/);
+});
+
+test("runPrivateGamePreflight rejects invalid nested git metadata", (t) => {
+  const root = privateGitFixture(t, "ai-studio-workspace-games-invalid-nested-");
+  rmSync(join(root, "games", "secret-game", ".git"), { recursive: true, force: true });
+  mkdirSync(join(root, "games", "secret-game", ".git"), { recursive: true });
+
+  const result = runPrivateGamePreflight(root);
+
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /missing nested git metadata/);
 });
 
 test("parent git guard blocks broad add and hook-clean commands with private mounts", (t) => {
