@@ -42,6 +42,18 @@ Prefer JSON when an agent needs task state:
   `node ai_studio/taskboard/cli.mjs set T0001 --status doing --log "..." --json`.
 - Validate store shape: `node ai_studio/taskboard/cli.mjs validate --json`.
 
+Taskboard is store-qualified:
+
+- The default store is public Studio state under `ai_studio/taskboard/items/`.
+- Game stores live under `games/<id>/.ai_studio/taskboard/items/` and are
+  discovered through `ai_studio/workspace/games.mjs`.
+- Private game stores are excluded unless a command/API request names the store
+  (`--store game:<id>`, `--game <id>`, `?store=game:<id>`, `?game=<id>`) or
+  explicitly asks for aggregate private visibility (`--include-private` or
+  `?includePrivate=1`).
+- Rows include `storeId`, `visibility`, and `qualifiedId`. Bare IDs remain valid
+  inside a selected store; aggregate reads reject ambiguous bare IDs.
+
 The browser board uses `ai_studio/taskboard/api.mjs` for `/api/board`,
 `/api/projects`, `/api/epics`, `/api/tasks`, item reads like
 `/api/tasks/T0001`, and `/api/agent/context`. List endpoints return compact
@@ -54,6 +66,8 @@ Reusable integrations should treat Taskboard as a feature boundary:
 - Use `ai_studio/taskboard/lib.mjs` only for direct store operations:
   `findRoot`, list/find, project ensure/create, item create/update, payload
   builders, and validate.
+- Use `ai_studio/taskboard/stores.mjs` when a caller needs workspace-mounted
+  Studio/game store selection or aggregate store-qualified payloads.
 - Do not import the HTTP adapter for payload construction.
 - Do not treat private store details as public API.
 
@@ -62,6 +76,8 @@ Internal module ownership is intentionally small:
 - `store.mjs`: markdown store, frontmatter parse/serialize, path layout,
   constants, templates, create/update/list/find, archive movement, stable JSON
   payloads, and validation.
+- `stores.mjs`: workspace store resolver for Studio/game Taskboard stores,
+  explicit private inclusion, qualified IDs, and aggregate payloads.
 - `cli.mjs`: public human/agent command surface.
 - `api.mjs`: HTTP adapter only; Studio Shell mounts it but does not own the
   Taskboard domain.

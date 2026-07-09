@@ -179,3 +179,14 @@ updated: 2026-06-11
 
 Prefer `node ai_studio/taskboard/cli.mjs new` over hand-created files so IDs do not
 collide. Run `node ai_studio/taskboard/cli.mjs validate` after bulk edits.
+
+## Store Qualification
+
+Each Taskboard store has its own local `P###`, `E###`, and `T####` counters.
+The Studio store uses `storeId: studio`; game stores use `storeId: game:<id>`.
+Rows exposed through CLI/API include `qualifiedId` such as
+`game:rb-dark-rpg:T0001`.
+
+Use bare IDs only inside one selected store. When a reference intentionally
+crosses stores, write it as a qualified ID so aggregate validation can resolve
+the target unambiguously.

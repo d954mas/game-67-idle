@@ -25,6 +25,65 @@ function tempRoot(t) {
   return dir;
 }
 
+function ensurePrivateGameMount(root, gameId = "secret-game") {
+  const gameRoot = join(root, "games", gameId);
+  mkdirSync(gameRoot, { recursive: true });
+  spawnSync("git", ["init"], { cwd: root, encoding: "utf8" });
+  spawnSync("git", ["init"], { cwd: gameRoot, encoding: "utf8" });
+  mkdirSync(join(root, ".git", "info"), { recursive: true });
+  writeFileSync(
+    join(root, ".git", "info", "exclude"),
+    `ai_studio/workspace/games.local.json\ngames/${gameId}/\n`,
+    "utf8",
+  );
+  mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
+  writeFileSync(join(root, "ai_studio", "workspace", "games.local.json"), JSON.stringify({
+    schema: "ai_studio.workspace.games.local.v1",
+    games: [{
+      schemaVersion: 1,
+      storeId: `game:${gameId}`,
+      kind: "game",
+      gameId,
+      root: `games/${gameId}`,
+      visibility: "private",
+      gitRoot: `games/${gameId}`,
+      commitPolicy: "nested-private",
+      enabledStores: ["taskboard"],
+      assetRoot: `games/${gameId}/assets`,
+    }],
+  }, null, 2) + "\n", "utf8");
+  return {
+    gameId,
+    gameRoot,
+    itemsRoot: join(gameRoot, ".ai_studio", "taskboard", "items"),
+  };
+}
+
+function writeTaskDoc(itemsRoot, id, title, status = "backlog", fields = {}) {
+  const dir = join(itemsRoot, "active");
+  mkdirSync(dir, { recursive: true });
+  const extraFields = Object.entries(fields).map(([key, value]) => `${key}: ${value}`).join("\n");
+  writeFileSync(join(dir, `${id}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.md`), `---
+id: ${id}
+title: ${title}
+status: ${status}
+priority: P1
+${extraFields ? `${extraFields}\n` : ""}created: 2026-07-09
+updated: 2026-07-09
+---
+
+## What
+
+${title}
+
+## Done when
+
+- [ ] done
+
+## Log
+`, "utf8");
+}
+
 function invokeApi(handler, method, path, body = {}) {
   const req = new EventEmitter();
   req.method = method;
@@ -367,6 +426,114 @@ Detailed body.
   assert.equal(showPayload.schema, "ai_studio.taskboard.doc.v1");
   assert.equal(showPayload.doc.id, "T0001");
   assert.match(showPayload.doc.body, /Detailed body/);
+});
+
+test("cli list is public-only by default and can explicitly include private game stores", (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "Public task", status: "backlog" });
+  const privateStore = ensurePrivateGameMount(root);
+  writeTaskDoc(privateStore.itemsRoot, "T0001", "Private task");
+
+  const normal = spawnSync(process.execPath, [cliPath, "list", "--json"], { cwd: root, encoding: "utf8" });
+  assert.equal(normal.status, 0, normal.stderr);
+  const normalPayload = JSON.parse(normal.stdout);
+  assert.deepEqual(normalPayload.tasks.map((task) => task.title), ["Public task"]);
+  assert.deepEqual(normalPayload.tasks.map((task) => task.storeId), ["studio"]);
+
+  const included = spawnSync(process.execPath, [cliPath, "list", "--json", "--include-private"], { cwd: root, encoding: "utf8" });
+  assert.equal(included.status, 0, included.stderr);
+  const includedPayload = JSON.parse(included.stdout);
+  const privateTask = includedPayload.tasks.find((task) => task.storeId === "game:secret-game");
+  assert.equal(privateTask.title, "Private task");
+  assert.equal(privateTask.visibility, "private");
+  assert.equal(privateTask.qualifiedId, "game:secret-game:T0001");
+});
+
+test("cli rejects ambiguous bare ids in aggregate context and accepts qualified ids", (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "Public task", status: "backlog" });
+  const privateStore = ensurePrivateGameMount(root);
+  writeTaskDoc(privateStore.itemsRoot, "T0001", "Private task");
+
+  const ambiguous = spawnSync(process.execPath, [cliPath, "show", "T0001", "--json", "--include-private"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(ambiguous.status, 0);
+  assert.match(ambiguous.stderr || ambiguous.stdout, /ambiguous/i);
+
+  const qualified = spawnSync(process.execPath, [cliPath, "show", "game:secret-game:T0001", "--json", "--include-private"], { cwd: root, encoding: "utf8" });
+  assert.equal(qualified.status, 0, qualified.stderr);
+  const payload = JSON.parse(qualified.stdout);
+  assert.equal(payload.doc.title, "Private task");
+  assert.equal(payload.doc.storeId, "game:secret-game");
+  assert.equal(payload.doc.qualifiedId, "game:secret-game:T0001");
+});
+
+test("cli new task and project write to explicit private game store without public fallback", (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "Public task", status: "backlog" });
+  const privateStore = ensurePrivateGameMount(root);
+
+  const taskResult = spawnSync(process.execPath, [
+    cliPath, "new", "task",
+    "--game", privateStore.gameId,
+    "--title", "Private created",
+    "--status", "backlog",
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+
+  assert.equal(taskResult.status, 0, taskResult.stderr);
+  const taskPayload = JSON.parse(taskResult.stdout);
+  assert.equal(taskPayload.doc.storeId, "game:secret-game");
+  assert.equal(taskPayload.doc.id, "T0001");
+  assert.match(taskPayload.doc.file, /games\/secret-game\/\.ai_studio\/taskboard\/items\/active\/T0001-/);
+
+  const projectResult = spawnSync(process.execPath, [
+    cliPath, "new", "project",
+    "--game", privateStore.gameId,
+    "--title", "Private project",
+    "--status", "idea",
+    "--json",
+  ], { cwd: root, encoding: "utf8" });
+  assert.equal(projectResult.status, 0, projectResult.stderr);
+  const projectPayload = JSON.parse(projectResult.stdout);
+  assert.equal(projectPayload.doc.storeId, "game:secret-game");
+  assert.equal(projectPayload.doc.id, "P001");
+  assert.match(projectPayload.doc.file, /games\/secret-game\/\.ai_studio\/taskboard\/items\/projects\/P001-/);
+  assert.deepEqual(listTasks(root).map((task) => task.fields.title), ["Public task"]);
+  assert.deepEqual(listProjects(root).map((project) => project.fields.title), []);
+});
+
+test("Taskboard API payloads are public-only by default and store-qualified with explicit private include", async (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "Public task", status: "backlog" });
+  const privateStore = ensurePrivateGameMount(root);
+  writeTaskDoc(privateStore.itemsRoot, "T0001", "Private task");
+  const handler = createTaskboardApi(root);
+
+  const normal = await invokeApi(handler, "GET", "/api/board");
+  assert.deepEqual(normal.data.tasks.map((task) => task.fields.title), ["Public task"]);
+  assert.deepEqual(normal.data.tasks.map((task) => task.storeId), ["studio"]);
+
+  const included = await invokeApi(handler, "GET", "/api/board?includePrivate=1");
+  const privateTask = included.data.tasks.find((task) => task.storeId === "game:secret-game");
+  assert.equal(privateTask.fields.title, "Private task");
+  assert.equal(privateTask.visibility, "private");
+  assert.equal(privateTask.qualifiedId, "game:secret-game:T0001");
+});
+
+test("aggregate validation rejects ambiguous bare cross-store links and accepts qualified links", (t) => {
+  const root = tempRoot(t);
+  createProject(root, { title: "Public project", status: "idea" });
+  const privateStore = ensurePrivateGameMount(root);
+  writeTaskDoc(privateStore.itemsRoot, "T0001", "Ambiguous private task", "backlog", { project: "P001" });
+
+  const ambiguous = spawnSync(process.execPath, [cliPath, "validate", "--json", "--include-private"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(ambiguous.status, 0);
+  assert.match(ambiguous.stdout, /bare cross-store reference/);
+
+  rmSync(join(privateStore.itemsRoot, "active"), { recursive: true, force: true });
+  writeTaskDoc(privateStore.itemsRoot, "T0001", "Qualified private task", "backlog", { project: "studio:P001" });
+  const qualified = spawnSync(process.execPath, [cliPath, "validate", "--json", "--include-private"], { cwd: root, encoding: "utf8" });
+  assert.equal(qualified.status, 0, qualified.stderr || qualified.stdout);
 });
 
 test("taskboard cli help exits successfully and documents commands", () => {

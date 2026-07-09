@@ -7,15 +7,20 @@ import {
   createEpic,
   createProject,
   createTask,
-  findDoc,
-  agentContextPayload,
-  boardPayload,
   listEpics,
   listProjects,
   listTasks,
   publicDoc,
   updateDoc,
 } from "./lib.mjs";
+import {
+  agentContextPayloadForStores,
+  boardPayloadForStores,
+  findTaskboardDoc,
+  mutationStore,
+  storeOptions,
+  taskboardStoresForQuery,
+} from "./stores.mjs";
 
 function sendJson(res, status, data) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -43,53 +48,88 @@ function readBody(req) {
   });
 }
 
+function queryOptions(url) {
+  return {
+    store: url.searchParams.get("store") || "",
+    game: url.searchParams.get("game") || "",
+    includePrivate: ["1", "true", "yes"].includes(String(url.searchParams.get("includePrivate") || "").toLowerCase()),
+  };
+}
+
+function storesFromQuery(root, url) {
+  return taskboardStoresForQuery(root, queryOptions(url));
+}
+
+function collectionPayload(root, stores, kind) {
+  const key = `${kind}s`;
+  const list = kind === "project" ? listProjects : (kind === "epic" ? listEpics : listTasks);
+  return {
+    [key]: stores.flatMap((store) =>
+      list(root, storeOptions(store)).map((doc) => publicDoc(doc, { store }))
+    ),
+  };
+}
+
+function mutationOptionsFromInput(url, input) {
+  return {
+    ...queryOptions(url),
+    store: input.store || input.storeId || url.searchParams.get("store") || "",
+    game: input.game || input.gameId || url.searchParams.get("game") || "",
+  };
+}
+
 export function createTaskboardApi(root) {
   return async function handleTaskboardApi(req, res, url) {
     const parts = url.pathname.split("/").filter(Boolean);
     try {
       if (req.method === "GET" && url.pathname === "/api/board") {
-        return sendJson(res, 200, boardPayload(root));
+        return sendJson(res, 200, boardPayloadForStores(root, storesFromQuery(root, url)));
       }
       if (req.method === "GET" && url.pathname === "/api/agent/context") {
-        return sendJson(res, 200, agentContextPayload(root));
+        return sendJson(res, 200, agentContextPayloadForStores(root, storesFromQuery(root, url)));
       }
       if (req.method === "GET" && url.pathname === "/api/projects") {
-        return sendJson(res, 200, { projects: listProjects(root).map((doc) => publicDoc(doc)) });
+        return sendJson(res, 200, collectionPayload(root, storesFromQuery(root, url), "project"));
       }
       if (req.method === "GET" && url.pathname === "/api/epics") {
-        return sendJson(res, 200, { epics: listEpics(root).map((doc) => publicDoc(doc)) });
+        return sendJson(res, 200, collectionPayload(root, storesFromQuery(root, url), "epic"));
       }
       if (req.method === "GET" && url.pathname === "/api/tasks") {
-        return sendJson(res, 200, { tasks: listTasks(root).map((doc) => publicDoc(doc)) });
+        return sendJson(res, 200, collectionPayload(root, storesFromQuery(root, url), "task"));
       }
       if (req.method === "GET" && parts.length === 3 && ["tasks", "epics", "projects"].includes(parts[1])) {
         const expectedKind = { tasks: "task", epics: "epic", projects: "project" }[parts[1]];
-        const doc = findDoc(root, parts[2]);
+        const resolved = findTaskboardDoc(root, parts[2], queryOptions(url));
+        const doc = resolved ? resolved.doc : null;
         if (!doc || doc.kind !== expectedKind) {
           return sendJson(res, 404, { error: `${expectedKind} not found: ${parts[2]}` });
         }
-        return sendJson(res, 200, publicDoc(doc, { includeBody: true }));
+        return sendJson(res, 200, publicDoc(doc, { store: resolved.store, includeBody: true }));
       }
       if (req.method === "POST" && url.pathname === "/api/tasks") {
         const input = await readBody(req);
-        return sendJson(res, 201, publicDoc(createTask(root, input), { includeBody: true }));
+        const store = mutationStore(root, mutationOptionsFromInput(url, input));
+        return sendJson(res, 201, publicDoc(createTask(root, input, storeOptions(store)), { store, includeBody: true }));
       }
       if (req.method === "POST" && url.pathname === "/api/epics") {
         const input = await readBody(req);
-        return sendJson(res, 201, publicDoc(createEpic(root, input), { includeBody: true }));
+        const store = mutationStore(root, mutationOptionsFromInput(url, input));
+        return sendJson(res, 201, publicDoc(createEpic(root, input, storeOptions(store)), { store, includeBody: true }));
       }
       if (req.method === "POST" && url.pathname === "/api/projects") {
         const input = await readBody(req);
-        return sendJson(res, 201, publicDoc(createProject(root, input), { includeBody: true }));
+        const store = mutationStore(root, mutationOptionsFromInput(url, input));
+        return sendJson(res, 201, publicDoc(createProject(root, input, storeOptions(store)), { store, includeBody: true }));
       }
       if (req.method === "PATCH" && parts.length === 3 && ["tasks", "epics", "projects"].includes(parts[1])) {
         const expectedKind = { tasks: "task", epics: "epic", projects: "project" }[parts[1]];
-        const doc = findDoc(root, parts[2]);
+        const resolved = findTaskboardDoc(root, parts[2], queryOptions(url));
+        const doc = resolved ? resolved.doc : null;
         if (!doc || doc.kind !== expectedKind) {
           return sendJson(res, 404, { error: `${expectedKind} not found: ${parts[2]}` });
         }
         const patch = await readBody(req);
-        return sendJson(res, 200, publicDoc(updateDoc(root, parts[2], patch), { includeBody: true }));
+        return sendJson(res, 200, publicDoc(updateDoc(root, resolved.id, patch, storeOptions(resolved.store)), { store: resolved.store, includeBody: true }));
       }
       return sendJson(res, 404, { error: "not found" });
     } catch (err) {

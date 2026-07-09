@@ -14,6 +14,10 @@ export const PROJECT_STATUSES = ["idea", "active", "done"];
 export const PROJECT_KINDS = ["ai-studio", "game", "template", "tooling", "research", "other"];
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
 export const ACTIVE_TASK_STATUSES = ["backlog", "todo", "doing", "review"];
+export const DEFAULT_TASKBOARD_STORE = {
+  storeId: "studio",
+  visibility: "public",
+};
 
 const TASK_BODY_TEMPLATE = `## What
 
@@ -61,24 +65,25 @@ export function findRoot(start = process.cwd()) {
   }
 }
 
-function itemDir(root) {
-  return join(root, "ai_studio", "taskboard", "items");
+function itemDir(root, options = {}) {
+  const itemsRoot = options.itemsRoot || (options.store && options.store.itemsRoot);
+  return itemsRoot ? resolve(root, itemsRoot) : join(root, "ai_studio", "taskboard", "items");
 }
 
-function projectDir(root) {
-  return join(itemDir(root), "projects");
+function projectDir(root, options = {}) {
+  return join(itemDir(root, options), "projects");
 }
 
-function activeTaskDir(root) {
-  return join(itemDir(root), "active");
+function activeTaskDir(root, options = {}) {
+  return join(itemDir(root, options), "active");
 }
 
-function archiveTaskDir(root) {
-  return join(itemDir(root), "archive");
+function archiveTaskDir(root, options = {}) {
+  return join(itemDir(root, options), "archive");
 }
 
-function epicDir(root) {
-  return join(itemDir(root), "epics");
+function epicDir(root, options = {}) {
+  return join(itemDir(root, options), "epics");
 }
 
 function todayStamp() {
@@ -250,8 +255,8 @@ function findDocInDir(dir, kind, id, options = {}) {
   return null;
 }
 
-function findArchivedTask(root, id) {
-  const archive = archiveTaskDir(root);
+function findArchivedTask(root, id, options = {}) {
+  const archive = archiveTaskDir(root, options);
   if (!existsSync(archive)) {
     return null;
   }
@@ -268,8 +273,8 @@ function findArchivedTask(root, id) {
   return null;
 }
 
-function listArchiveTasks(root) {
-  const archive = archiveTaskDir(root);
+function listArchiveTasks(root, options = {}) {
+  const archive = archiveTaskDir(root, options);
   if (!existsSync(archive)) {
     return [];
   }
@@ -285,39 +290,39 @@ function listArchiveTasks(root) {
 }
 
 export function listTasks(root, options = {}) {
-  const active = listDocs(activeTaskDir(root), "task");
-  return options.includeArchive ? [...active, ...listArchiveTasks(root)] : active;
+  const active = listDocs(activeTaskDir(root, options), "task");
+  return options.includeArchive ? [...active, ...listArchiveTasks(root, options)] : active;
 }
 
-export function listProjects(root) {
-  return listDocs(projectDir(root), "project");
+export function listProjects(root, options = {}) {
+  return listDocs(projectDir(root, options), "project");
 }
 
-export function listEpics(root) {
-  return listDocs(epicDir(root), "epic");
+export function listEpics(root, options = {}) {
+  return listDocs(epicDir(root, options), "epic");
 }
 
-export function findDoc(root, id) {
+export function findDoc(root, id, options = {}) {
   const docId = String(id || "");
   if (docId.startsWith("P")) {
-    return findDocInDir(projectDir(root), "project", docId);
+    return findDocInDir(projectDir(root, options), "project", docId);
   }
   if (docId.startsWith("E")) {
-    return findDocInDir(epicDir(root), "epic", docId);
+    return findDocInDir(epicDir(root, options), "epic", docId);
   }
   if (docId.startsWith("T")) {
-    return findDocInDir(activeTaskDir(root), "task", docId) || findArchivedTask(root, docId);
+    return findDocInDir(activeTaskDir(root, options), "task", docId) || findArchivedTask(root, docId, options);
   }
-  const all = [...listProjects(root), ...listEpics(root), ...listTasks(root, { includeArchive: true })];
+  const all = [...listProjects(root, options), ...listEpics(root, options), ...listTasks(root, { ...options, includeArchive: true })];
   return all.find((doc) => doc.fields.id === docId) || null;
 }
 
-function countersPath(root) {
-  return join(itemDir(root), ".counters.json");
+function countersPath(root, options = {}) {
+  return join(itemDir(root, options), ".counters.json");
 }
 
-function readCounters(root) {
-  const path = countersPath(root);
+function readCounters(root, options = {}) {
+  const path = countersPath(root, options);
   if (!existsSync(path)) return {};
   try {
     const parsed = JSON.parse(readFileSync(path, "utf8"));
@@ -331,8 +336,8 @@ function readCounters(root) {
 // rewinds the sequence when history is deleted (T0001 would be reissued while
 // old docs still reference it), so the high-water mark persists in
 // items/.counters.json and the scan only ever raises it.
-function nextId(root, docs, prefix, pad) {
-  const counters = readCounters(root);
+function nextId(root, docs, prefix, pad, options = {}) {
+  const counters = readCounters(root, options);
   let max = Number(counters[prefix]) || 0;
   for (const doc of docs) {
     const match = String(doc.fields.id || doc.name).match(new RegExp(`^${prefix}(\\d+)`));
@@ -342,15 +347,15 @@ function nextId(root, docs, prefix, pad) {
   }
   const next = max + 1;
   counters[prefix] = next;
-  mkdirSync(itemDir(root), { recursive: true });
-  writeFileSync(countersPath(root), JSON.stringify(counters, null, 2) + "\n");
+  mkdirSync(itemDir(root, options), { recursive: true });
+  writeFileSync(countersPath(root, options), JSON.stringify(counters, null, 2) + "\n");
   return prefix + String(next).padStart(pad, "0");
 }
 
-export function createProject(root, input = {}) {
-  const dir = projectDir(root);
+export function createProject(root, input = {}, options = {}) {
+  const dir = projectDir(root, options);
   mkdirSync(dir, { recursive: true });
-  const id = nextId(root, listProjects(root), "P", 3);
+  const id = nextId(root, listProjects(root, options), "P", 3, options);
   const fields = {
     id,
     title: input.title || "Untitled project",
@@ -368,9 +373,9 @@ export function createProject(root, input = {}) {
   return { kind: "project", file, fields, body };
 }
 
-export function ensureProject(root, input = {}) {
+export function ensureProject(root, input = {}, options = {}) {
   const target = String(input.target || "");
-  const existing = target ? listProjects(root).find((project) => project.fields.target === target) : null;
+  const existing = target ? listProjects(root, options).find((project) => project.fields.target === target) : null;
   if (existing) {
     return { project: existing, created: false };
   }
@@ -379,7 +384,7 @@ export function ensureProject(root, input = {}) {
       ...input,
       status: input.status || "active",
       body: input.body || defaultEnsureProjectBody(input),
-    }),
+    }, options),
     created: true,
   };
 }
@@ -401,10 +406,10 @@ Track work for \`${input.target || input.title || "this project"}\`.
 `;
 }
 
-export function createEpic(root, input = {}) {
-  const dir = epicDir(root);
+export function createEpic(root, input = {}, options = {}) {
+  const dir = epicDir(root, options);
   mkdirSync(dir, { recursive: true });
-  const id = nextId(root, listEpics(root), "E", 3);
+  const id = nextId(root, listEpics(root, options), "E", 3, options);
   const fields = {
     id,
     title: input.title || "Untitled epic",
@@ -421,11 +426,11 @@ export function createEpic(root, input = {}) {
   return { kind: "epic", file, fields, body };
 }
 
-export function createTask(root, input = {}) {
-  const dir = activeTaskDir(root);
+export function createTask(root, input = {}, options = {}) {
+  const dir = activeTaskDir(root, options);
   mkdirSync(dir, { recursive: true });
-  const id = nextId(root, listTasks(root, { includeArchive: true }), "T", 4);
-  const epic = input.epic ? findDoc(root, input.epic) : null;
+  const id = nextId(root, listTasks(root, { ...options, includeArchive: true }), "T", 4, options);
+  const epic = input.epic ? findDoc(root, input.epic, options) : null;
   const fields = {
     id,
     title: input.title || "Untitled task",
@@ -443,8 +448,8 @@ export function createTask(root, input = {}) {
   return { kind: "task", file, fields, body };
 }
 
-export function updateDoc(root, id, patch = {}) {
-  const doc = findDoc(root, id);
+export function updateDoc(root, id, patch = {}, options = {}) {
+  const doc = findDoc(root, id, options);
   if (!doc) {
     throw new Error(`No task, epic, or project with id ${id}`);
   }
@@ -476,7 +481,7 @@ export function updateDoc(root, id, patch = {}) {
     fields[key] = value;
   }
   if (doc.kind === "task" && patch.fields && Object.hasOwn(patch.fields, "epic") && !Object.hasOwn(patch.fields, "project")) {
-    const epic = fields.epic ? findDoc(root, fields.epic) : null;
+    const epic = fields.epic ? findDoc(root, fields.epic, options) : null;
     fields.project = epic && epic.kind === "epic" ? (epic.fields.project || "") : "";
   }
   fields.updated = todayStamp();
@@ -484,7 +489,7 @@ export function updateDoc(root, id, patch = {}) {
   let file = doc.file;
   let targetFile = doc.file;
   if (doc.kind === "task") {
-    targetFile = join(taskStorageDir(root, fields), basename(doc.file));
+    targetFile = join(taskStorageDir(root, fields, options), basename(doc.file));
     if (resolve(targetFile) !== resolve(doc.file) && existsSync(targetFile)) {
       throw new Error(`Cannot move ${id}; target already exists: ${targetFile}`);
     }
@@ -498,22 +503,22 @@ export function updateDoc(root, id, patch = {}) {
   return { ...doc, file, fields, body };
 }
 
-function taskStorageDir(root, fields) {
+function taskStorageDir(root, fields, options = {}) {
   if (fields.status === "done") {
-    return join(archiveTaskDir(root), fields.epic || "unassigned");
+    return join(archiveTaskDir(root, options), fields.epic || "unassigned");
   }
-  return activeTaskDir(root);
+  return activeTaskDir(root, options);
 }
 
-export function validateStore(root) {
-  return validateStoreDetailed(root).map((problem) => typeof problem === "string" ? problem : problem.message);
+export function validateStore(root, options = {}) {
+  return validateStoreDetailed(root, options).map((problem) => typeof problem === "string" ? problem : problem.message);
 }
 
-export function validateStoreDetailed(root) {
+export function validateStoreDetailed(root, options = {}) {
   const problems = [];
-  const projects = listProjects(root);
-  const epics = listEpics(root);
-  const tasks = listTasks(root, { includeArchive: true });
+  const projects = listProjects(root, options);
+  const epics = listEpics(root, options);
+  const tasks = listTasks(root, { ...options, includeArchive: true });
   const seen = new Map();
   for (const doc of [...projects, ...epics, ...tasks]) {
     const id = doc.fields.id;
@@ -543,19 +548,26 @@ export function validateStoreDetailed(root) {
   const epicIds = new Set(epics.map((epic) => epic.fields.id));
   const epicsById = new Map(epics.map((epic) => [epic.fields.id, epic]));
   for (const epic of epics) {
-    if (epic.fields.project && !projectIds.has(epic.fields.project)) {
+    if (epic.fields.project && !isQualifiedRef(epic.fields.project) && !projectIds.has(epic.fields.project)) {
       problems.push(problem(`${epic.fields.id}: references missing project "${epic.fields.project}"`, { taskId: epic.fields.id }));
     }
   }
   for (const task of tasks) {
-    if (task.fields.epic && !epicIds.has(task.fields.epic)) {
+    if (task.fields.epic && !isQualifiedRef(task.fields.epic) && !epicIds.has(task.fields.epic)) {
       problems.push(problem(`${task.fields.id}: references missing epic "${task.fields.epic}"`, { taskId: task.fields.id }));
     }
-    if (task.fields.project && !projectIds.has(task.fields.project)) {
+    if (task.fields.project && !isQualifiedRef(task.fields.project) && !projectIds.has(task.fields.project)) {
       problems.push(problem(`${task.fields.id}: references missing project "${task.fields.project}"`, { taskId: task.fields.id }));
     }
     const epic = task.fields.epic ? epicsById.get(task.fields.epic) : null;
-    if (epic && task.fields.project && epic.fields.project && task.fields.project !== epic.fields.project) {
+    if (
+      epic &&
+      task.fields.project &&
+      epic.fields.project &&
+      !isQualifiedRef(task.fields.project) &&
+      !isQualifiedRef(epic.fields.project) &&
+      task.fields.project !== epic.fields.project
+    ) {
       problems.push(problem(`${task.fields.id}: project ${task.fields.project} does not match epic ${epic.fields.id} project ${epic.fields.project}`, { taskId: task.fields.id }));
     }
     if (ACTIVE_TASK_STATUSES.includes(task.fields.status) && !hasActionableTaskBody(task.body)) {
@@ -565,12 +577,24 @@ export function validateStoreDetailed(root) {
   return problems;
 }
 
+function storeMeta(options = {}) {
+  return options.store || DEFAULT_TASKBOARD_STORE;
+}
+
+function addStoreFields(out, id, options = {}) {
+  const store = storeMeta(options);
+  out.storeId = store.storeId;
+  out.visibility = store.visibility;
+  out.qualifiedId = `${store.storeId}:${id || ""}`;
+  return out;
+}
+
 export function publicDoc(doc, options = {}) {
   const out = { kind: doc.kind, fields: doc.fields, rev: doc.rev };
   if (options.includeBody) {
     out.body = doc.body;
   }
-  return out;
+  return addStoreFields(out, doc.fields.id, options);
 }
 
 function relativeFile(root, doc) {
@@ -581,7 +605,7 @@ function epicsById(root, options = {}) {
   if (options.epicsById) {
     return options.epicsById;
   }
-  const epics = options.epics || listEpics(root);
+  const epics = options.epics || listEpics(root, options);
   return new Map(epics.map((epic) => [epic.fields.id, epic]));
 }
 
@@ -607,7 +631,7 @@ export function agentProjectRow(root, doc, options = {}) {
   if (options.includeBody) {
     row.body = doc.body;
   }
-  return row;
+  return addStoreFields(row, doc.fields.id, options);
 }
 
 export function agentEpicRow(root, doc, options = {}) {
@@ -623,7 +647,7 @@ export function agentEpicRow(root, doc, options = {}) {
   if (options.includeBody) {
     row.body = doc.body;
   }
-  return row;
+  return addStoreFields(row, doc.fields.id, options);
 }
 
 export function agentTaskRow(root, doc, options = {}) {
@@ -641,26 +665,26 @@ export function agentTaskRow(root, doc, options = {}) {
   if (options.includeBody) {
     row.body = doc.body;
   }
-  return row;
+  return addStoreFields(row, doc.fields.id, options);
 }
 
 export function currentWorkRows(root, limit = 25, options = {}) {
   const epics = epicsById(root, options);
-  const tasks = options.tasks || listTasks(root);
+  const tasks = options.tasks || listTasks(root, options);
   return tasks
     .filter((task) => ACTIVE_TASK_STATUSES.includes(task.fields.status))
     .sort((a, b) => taskRank(a) - taskRank(b) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)))
     .slice(0, limit)
-    .map((task) => agentTaskRow(root, task, { epicsById: epics }));
+    .map((task) => agentTaskRow(root, task, { ...options, epicsById: epics }));
 }
 
 export function agentContextPayload(root, options = {}) {
   const limit = Number.isFinite(Number(options.limit)) ? Number(options.limit) : 25;
-  const tasks = listTasks(root);
-  const epics = listEpics(root);
-  const projects = listProjects(root);
+  const tasks = listTasks(root, options);
+  const epics = listEpics(root, options);
+  const projects = listProjects(root, options);
   const epicsByIdMap = new Map(epics.map((epic) => [epic.fields.id, epic]));
-  const currentWork = currentWorkRows(root, limit, { tasks, epicsById: epicsByIdMap });
+  const currentWork = currentWorkRows(root, limit, { ...options, tasks, epicsById: epicsByIdMap });
   return {
     schema: "ai_studio.taskboard.agent_context.v1",
     root,
@@ -677,6 +701,7 @@ export function agentContextPayload(root, options = {}) {
 }
 
 export function boardPayload(root) {
+  const store = DEFAULT_TASKBOARD_STORE;
   return {
     root,
     projectStatuses: PROJECT_STATUSES,
@@ -684,14 +709,21 @@ export function boardPayload(root) {
     epicStatuses: EPIC_STATUSES,
     taskStatuses: TASK_STATUSES,
     priorities: PRIORITIES,
-    projects: listProjects(root).map((doc) => publicDoc(doc)),
-    epics: listEpics(root).map((doc) => publicDoc(doc)),
-    tasks: listTasks(root).map((doc) => publicDoc(doc)),
+    stores: [store],
+    projects: listProjects(root).map((doc) => publicDoc(doc, { store })),
+    epics: listEpics(root).map((doc) => publicDoc(doc, { store })),
+    tasks: listTasks(root).map((doc) => publicDoc(doc, { store })),
   };
 }
 
 function problem(message, extras = {}) {
   return { code: "taskboard_problem", message, ...extras };
+}
+
+function isQualifiedRef(value) {
+  const text = String(value || "");
+  const colon = text.lastIndexOf(":");
+  return colon > 0 && /^[PET]\d+$/i.test(text.slice(colon + 1));
 }
 
 function hasActionableTaskBody(body) {

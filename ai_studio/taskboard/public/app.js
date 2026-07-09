@@ -463,26 +463,27 @@ function wireWorkCards() {
 
 function renderCard(task) {
   const f = task.fields;
+  const rowId = task.qualifiedId || f.id;
   const project = projectForTask(task);
   const card = document.createElement("article");
   card.className = `card prio-${f.priority} status-${f.status}`;
   card.draggable = true;
-  card.dataset.id = f.id;
+  card.dataset.id = rowId;
   const title = document.createElement("div");
   title.className = "title";
   title.textContent = f.title;
   const meta = document.createElement("div");
   meta.className = "meta";
-  const pills = [f.id, f.priority];
+  const pills = [rowId, f.priority];
   if (project) pills.push(project);
   if (f.epic) pills.push(f.epic);
   for (const tag of f.tags || []) pills.push("#" + tag);
   meta.innerHTML = pills.map((p) => `<span class="pill">${escapeHtml(p)}</span>`).join("");
   card.append(title, meta);
-  card.addEventListener("click", () => openEditor("task", f.id).catch(() => {}));
+  card.addEventListener("click", () => openEditor("task", rowId).catch(() => {}));
   card.addEventListener("dragstart", (ev) => {
     state.dragging = true;
-    ev.dataTransfer.setData("text/plain", f.id);
+    ev.dataTransfer.setData("text/plain", rowId);
     ev.dataTransfer.effectAllowed = "move";
   });
   card.addEventListener("dragend", () => { state.dragging = false; });
@@ -596,7 +597,7 @@ function fillSelect(select, values, current) {
 
 function findDoc(kind, id) {
   const pool = kind === "task" ? state.board.tasks : (kind === "epic" ? state.board.epics : state.board.projects);
-  return pool.find((d) => d.fields.id === id) || null;
+  return pool.find((d) => d.qualifiedId === id || d.fields.id === id) || null;
 }
 
 async function loadFullDoc(kind, id) {

@@ -20,6 +20,15 @@ import {
   updateDoc, validateStoreDetailed,
 } from "./lib.mjs";
 import { ACTIVE_TASK_STATUSES, idNumber, priorityRank, TASK_STATUSES, taskRank } from "./store.mjs";
+import {
+  agentContextPayloadForStores,
+  findTaskboardDoc,
+  mutationStore,
+  storeOptions,
+  taskboardStoresForQuery,
+  taskboardStoreSummary,
+  validateTaskboardStoresDetailed,
+} from "./stores.mjs";
 import { relative } from "node:path";
 import { fail } from "../core_harness/tool_lib/cli.mjs";
 
@@ -29,14 +38,14 @@ const [cmd, ...rest] = process.argv.slice(2);
 const USAGE = `usage: cli.mjs <list|summary|context|show|new|set|validate|help> ...
 
 Commands:
-  list [--json] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
-  summary [--json] [--tasks-limit 5]
-  context [--json] [--tasks-limit 25]
-  show <P###|E###|T####> [--json]
-  new project --title "..." [--kind ai-studio|game|template|tooling|research|other] [--target path] [--tags a,b]
-  new epic --title "..." [--project P001] [--status active] [--tags a,b]
-  new task --title "..." [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
-  set <id> [--status s] [--project P001] [--epic E001] [--priority P1] [--title "..."] [--log "..."] [--json]
+  list [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
+  summary [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 5]
+  context [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 25]
+  show <P###|E###|T####|store:id> [--json] [--store studio|game:<id>] [--game <id>] [--include-private]
+  new project --title "..." [--store studio|game:<id>] [--game <id>] [--kind ai-studio|game|template|tooling|research|other] [--target path] [--tags a,b]
+  new epic --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--status active] [--tags a,b]
+  new task --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
+  set <id|store:id> [--store studio|game:<id>] [--game <id>] [--status s] [--project P001] [--epic E001] [--priority P1] [--title "..."] [--log "..."] [--json]
   validate [--json]
 `;
 
@@ -59,13 +68,22 @@ function parseArgs(args) {
   return out;
 }
 
-function shortRow(d) {
+function storeQueryArgs(args) {
+  return {
+    store: typeof args.store === "string" ? args.store : "",
+    game: typeof args.game === "string" ? args.game : "",
+    includePrivate: args["include-private"] === true,
+  };
+}
+
+function shortRow(d, store = null) {
   const f = d.fields;
+  const id = store && store.storeId !== "studio" ? `${store.storeId}:${f.id}` : f.id;
   const tags = (f.tags || []).length ? ` [${f.tags.join(",")}]` : "";
   const archive = d.archived ? " (archive)" : "";
   const project = d.kind === "project" ? (f.kind || "-") : (f.project || "-");
   const epic = d.kind === "task" ? (f.epic || "-") : "-";
-  return `${f.id}  ${String(f.status).padEnd(7)} ${String(f.priority || "").padEnd(3)} ${String(project).padEnd(8)} ${String(epic).padEnd(5)} ${f.title}${tags}${archive}`;
+  return `${id}  ${String(f.status).padEnd(7)} ${String(f.priority || "").padEnd(3)} ${String(project).padEnd(8)} ${String(epic).padEnd(5)} ${f.title}${tags}${archive}`;
 }
 
 function numberArg(value, fallback) {
@@ -91,53 +109,65 @@ function statusCounts(tasks) {
   return TASK_STATUSES.map((status) => `${status}:${counts.get(status) || 0}`).join(" ");
 }
 
-function currentWorkTasks(tasks) {
-  tasks = tasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.fields.status));
-  tasks.sort((a, b) => taskRank(a) - taskRank(b) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)));
-  return tasks;
-}
-
 function reviewTasks(tasks) {
   tasks = tasks.filter((task) => task.fields.status === "review");
   tasks.sort((a, b) => priorityRank(a.fields.priority) - priorityRank(b.fields.priority) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)));
   return tasks;
 }
 
-function appendCurrentWork(lines, tasks, limit, overflowCommand) {
-  if (tasks.length === 0) return;
+function taskEntriesForOptions(root, options) {
+  return taskboardStoresForQuery(root, storeQueryArgs(options)).flatMap((store) =>
+    listTasks(root, storeOptions(store)).map((task) => ({ task, store }))
+  );
+}
+
+function currentWorkTaskEntries(entries) {
+  const out = entries.filter(({ task }) => ACTIVE_TASK_STATUSES.includes(task.fields.status));
+  out.sort((a, b) =>
+    taskRank(a.task) - taskRank(b.task) ||
+    idNumber(b.task) - idNumber(a.task) ||
+    a.store.storeId.localeCompare(b.store.storeId) ||
+    String(a.task.fields.id).localeCompare(String(b.task.fields.id))
+  );
+  return out;
+}
+
+function appendCurrentWorkEntries(lines, entries, limit, overflowCommand) {
+  if (entries.length === 0) return;
   lines.push("");
   lines.push("## Current Work");
   lines.push("");
-  for (const task of tasks.slice(0, limit)) {
-    lines.push(`- ${shortRow(task)}`);
+  for (const { task, store } of entries.slice(0, limit)) {
+    lines.push(`- ${shortRow(task, store)}`);
   }
-  if (tasks.length > limit) {
-    lines.push(`- ... ${tasks.length - limit} more; run \`${overflowCommand}\` only when needed.`);
+  if (entries.length > limit) {
+    lines.push(`- ... ${entries.length - limit} more; run \`${overflowCommand}\` only when needed.`);
   }
 }
 
 function renderSummary(root, options) {
   const tasksLimit = numberArg(options["tasks-limit"], 5);
-  const allTasks = listTasks(root);
-  const openTasks = currentWorkTasks(allTasks);
+  const taskEntries = taskEntriesForOptions(root, options);
+  const allTasks = taskEntries.map(({ task }) => task);
+  const openEntries = currentWorkTaskEntries(taskEntries);
   const reviewCount = reviewTasks(allTasks).length;
   const lines = [];
   lines.push("# Taskboard Summary");
   lines.push("");
   lines.push(`active_task_counts: ${statusCounts(allTasks)}`);
-  lines.push(`open_work_items: ${openTasks.length}`);
+  lines.push(`open_work_items: ${openEntries.length}`);
   lines.push(`review_tasks: ${reviewCount}`);
-  appendCurrentWork(lines, openTasks, tasksLimit, "node ai_studio/taskboard/cli.mjs context --json");
+  appendCurrentWorkEntries(lines, openEntries, tasksLimit, "node ai_studio/taskboard/cli.mjs context --json");
   lines.push("");
   lines.push("## Top Open Tasks");
   lines.push("");
-  for (const task of openTasks.slice(0, tasksLimit)) {
-    lines.push(`- ${shortRow(task)}`);
+  for (const { task, store } of openEntries.slice(0, tasksLimit)) {
+    lines.push(`- ${shortRow(task, store)}`);
   }
-  if (openTasks.length > tasksLimit) {
-    lines.push(`- ... ${openTasks.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs context --json\` or \`list --json\` only when needed.`);
+  if (openEntries.length > tasksLimit) {
+    lines.push(`- ... ${openEntries.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs context --json\` or \`list --json\` only when needed.`);
   }
-  if (openTasks.length === 0) {
+  if (openEntries.length === 0) {
     lines.push("- none");
   }
   return `${lines.join("\n")}\n`;
@@ -145,25 +175,26 @@ function renderSummary(root, options) {
 
 function renderContext(root, options) {
   const tasksLimit = numberArg(options["tasks-limit"], 25);
-  const allTasks = listTasks(root);
-  const tasks = currentWorkTasks(allTasks);
+  const taskEntries = taskEntriesForOptions(root, options);
+  const allTasks = taskEntries.map(({ task }) => task);
+  const entries = currentWorkTaskEntries(taskEntries);
 
   const lines = [];
   lines.push("# Current Context Digest");
   lines.push("");
   lines.push(`active_task_counts: ${statusCounts(allTasks)}`);
-  appendCurrentWork(lines, tasks, tasksLimit, "node ai_studio/taskboard/cli.mjs list --json");
+  appendCurrentWorkEntries(lines, entries, tasksLimit, "node ai_studio/taskboard/cli.mjs list --json");
   lines.push("");
 
   lines.push("## Actionable Tasks");
   lines.push("");
-  for (const task of tasks.slice(0, tasksLimit)) {
-    lines.push(`- ${shortRow(task)}`);
+  for (const { task, store } of entries.slice(0, tasksLimit)) {
+    lines.push(`- ${shortRow(task, store)}`);
   }
-  if (tasks.length > tasksLimit) {
-    lines.push(`- ... ${tasks.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs list --json\` or show a specific task only if needed.`);
+  if (entries.length > tasksLimit) {
+    lines.push(`- ... ${entries.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs list --json\` or show a specific task only if needed.`);
   }
-  if (tasks.length === 0) {
+  if (entries.length === 0) {
     lines.push("- none");
   }
   lines.push("");
@@ -184,9 +215,21 @@ switch (cmd) {
     if (args.ideas) hidden.delete("idea");
     if (args.review) hidden.delete("review");
     if (args.status) hidden.clear();
-    const projects = listProjects(root);
-    const epics = listEpics(root);
-    const tasks = listTasks(root, { includeArchive: args.archive === true }).filter((t) => {
+    const stores = taskboardStoresForQuery(root, storeQueryArgs(args));
+    const storeDocs = stores.map((store) => {
+      const opts = storeOptions(store);
+      const epics = listEpics(root, opts);
+      return {
+        store,
+        projects: listProjects(root, opts),
+        epics,
+        epicsById: new Map(epics.map((epic) => [epic.fields.id, epic])),
+        tasks: listTasks(root, { ...opts, includeArchive: args.archive === true }),
+      };
+    });
+    const projects = storeDocs.flatMap((entry) => entry.projects.map((project) => ({ ...entry, project })));
+    const epics = storeDocs.flatMap((entry) => entry.epics.map((epic) => ({ ...entry, epic })));
+    const tasks = storeDocs.flatMap((entry) => entry.tasks.map((task) => ({ ...entry, task }))).filter(({ task: t }) => {
       if (hidden.has(t.fields.status)) return false;
       if (args.status && t.fields.status !== args.status) return false;
       if (args.project && t.fields.project !== args.project) return false;
@@ -196,11 +239,12 @@ switch (cmd) {
     });
     const order = new Map(TASK_STATUSES.map((s, i) => [s, i]));
     tasks.sort((a, b) =>
-      (order.get(a.fields.status) ?? 99) - (order.get(b.fields.status) ?? 99) ||
-      String(a.fields.priority).localeCompare(String(b.fields.priority)));
+      (order.get(a.task.fields.status) ?? 99) - (order.get(b.task.fields.status) ?? 99) ||
+      String(a.task.fields.priority).localeCompare(String(b.task.fields.priority)));
     if (args.json) {
       writeJson({
         schema: "ai_studio.taskboard.list.v1",
+        stores: stores.map(taskboardStoreSummary),
         filters: {
           status: args.status || "",
           project: args.project || "",
@@ -209,26 +253,28 @@ switch (cmd) {
           includeArchive: args.archive === true,
           includeAllStatuses: args.all === true,
         },
-        tasks: tasks.map((task) => agentTaskRow(root, task)),
-        projects: projects.map((project) => agentProjectRow(root, project)),
-        epics: epics.map((epic) => agentEpicRow(root, epic)),
+        tasks: tasks.map(({ task, store, epicsById }) => agentTaskRow(root, task, { store, epicsById })),
+        projects: projects.map(({ project, store }) => agentProjectRow(root, project, { store })),
+        epics: epics.map(({ epic, store }) => agentEpicRow(root, epic, { store })),
       });
       break;
     }
-    for (const p of projects) {
+    for (const { project: p, store } of projects) {
       if (!args.status && !args.tag && !args.epic && (!args.project || args.project === p.fields.id)) {
         if (!args.all && p.fields.status === "done") continue;
-        console.log(`# ${p.fields.id} ${p.fields.title} (${p.fields.status}, ${p.fields.kind || "other"})`);
+        const id = store.storeId === "studio" ? p.fields.id : `${store.storeId}:${p.fields.id}`;
+        console.log(`# ${id} ${p.fields.title} (${p.fields.status}, ${p.fields.kind || "other"})`);
       }
     }
-    for (const e of epics) {
+    for (const { epic: e, store } of epics) {
       if (!args.status && !args.tag && (!args.project || args.project === e.fields.project) && (!args.epic || args.epic === e.fields.id)) {
         if (!args.all && !args.archive && e.fields.status === "done") continue;
-        console.log(`# ${e.fields.id} ${e.fields.title} (${e.fields.status}, ${e.fields.project || "no-project"})`);
+        const id = store.storeId === "studio" ? e.fields.id : `${store.storeId}:${e.fields.id}`;
+        console.log(`# ${id} ${e.fields.title} (${e.fields.status}, ${e.fields.project || "no-project"})`);
       }
     }
-    for (const t of tasks) {
-      console.log(shortRow(t));
+    for (const { task: t, store } of tasks) {
+      console.log(shortRow(t, store));
     }
     if (!tasks.length) {
       console.log("(no tasks match)");
@@ -237,7 +283,8 @@ switch (cmd) {
   }
   case "summary": {
     if (args.json) {
-      writeJson(agentContextPayload(root, { limit: numberArg(args["tasks-limit"], 5) }));
+      const stores = taskboardStoresForQuery(root, storeQueryArgs(args));
+      writeJson(agentContextPayloadForStores(root, stores, { limit: numberArg(args["tasks-limit"], 5) }));
       break;
     }
     process.stdout.write(renderSummary(root, args));
@@ -245,7 +292,8 @@ switch (cmd) {
   }
   case "context": {
     if (args.json) {
-      writeJson(agentContextPayload(root, { limit: numberArg(args["tasks-limit"], 25) }));
+      const stores = taskboardStoresForQuery(root, storeQueryArgs(args));
+      writeJson(agentContextPayloadForStores(root, stores, { limit: numberArg(args["tasks-limit"], 25) }));
       break;
     }
     process.stdout.write(renderContext(root, args));
@@ -253,15 +301,23 @@ switch (cmd) {
   }
   case "show": {
     const id = args._[0] || fail("usage: show <id>");
-    const doc = findDoc(root, id) || fail(`no doc with id ${id}`);
+    let resolved;
+    try {
+      resolved = findTaskboardDoc(root, id, storeQueryArgs(args));
+    } catch (err) {
+      fail(err.message);
+    }
+    const doc = resolved ? resolved.doc : null;
+    const store = resolved ? resolved.store : null;
+    if (!doc) fail(`no doc with id ${id}`);
     if (args.json) {
       let row;
       if (doc.kind === "task") {
-        row = agentTaskRow(root, doc, { includeBody: true });
+        row = agentTaskRow(root, doc, { store, includeBody: true });
       } else if (doc.kind === "epic") {
-        row = agentEpicRow(root, doc, { includeBody: true });
+        row = agentEpicRow(root, doc, { store, includeBody: true });
       } else {
-        row = agentProjectRow(root, doc, { includeBody: true });
+        row = agentProjectRow(root, doc, { store, includeBody: true });
       }
       writeJson({
         schema: "ai_studio.taskboard.doc.v1",
@@ -290,8 +346,22 @@ switch (cmd) {
       target: args.target,
       tags: args.tags ? String(args.tags).split(",").map((s) => s.trim()).filter(Boolean) : [],
     };
-    const doc = kind === "task" ? createTask(root, input) : (kind === "epic" ? createEpic(root, input) : createProject(root, input));
-    console.log(`created ${doc.fields.id}: ${relative(root, doc.file)}`);
+    let store;
+    try {
+      store = mutationStore(root, storeQueryArgs(args));
+    } catch (err) {
+      fail(err.message);
+    }
+    const opts = storeOptions(store);
+    const doc = kind === "task" ? createTask(root, input, opts) : (kind === "epic" ? createEpic(root, input, opts) : createProject(root, input, opts));
+    if (args.json) {
+      const row = kind === "task"
+        ? agentTaskRow(root, doc, { store })
+        : (kind === "epic" ? agentEpicRow(root, doc, { store }) : agentProjectRow(root, doc, { store }));
+      writeJson({ ok: true, doc: row });
+    } else {
+      console.log(`created ${doc.fields.id}: ${relative(root, doc.file)}`);
+    }
     break;
   }
   case "set": {
@@ -304,18 +374,27 @@ switch (cmd) {
       fields.tags = String(args.tags).split(",").map((s) => s.trim()).filter(Boolean);
     }
     const patch = { fields };
+    let resolvedForLog = null;
     if (typeof args.log === "string" && args.log) {
-      const doc = findDoc(root, id) || fail(`no doc with id ${id}`);
+      try {
+        resolvedForLog = findTaskboardDoc(root, id, storeQueryArgs(args));
+      } catch (err) {
+        fail(err.message);
+      }
+      const doc = resolvedForLog ? resolvedForLog.doc : null;
+      if (!doc) fail(`no doc with id ${id}`);
       const stamp = new Date().toISOString().slice(0, 10);
       patch.body = `${doc.body.replace(/\s+$/, "")}\n- ${stamp}: ${args.log}\n`;
     }
     if (!Object.keys(fields).length && !patch.body) fail("nothing to set");
     try {
-      const doc = updateDoc(root, id, patch);
+      const resolved = resolvedForLog || findTaskboardDoc(root, id, storeQueryArgs(args));
+      if (!resolved) fail(`no doc with id ${id}`);
+      const doc = updateDoc(root, resolved.id, patch, storeOptions(resolved.store));
       if (args.json) {
-        writeJson({ ok: true, doc: { id: doc.fields.id, status: doc.fields.status, file: relative(root, doc.file) } });
+        writeJson({ ok: true, doc: { id: doc.fields.id, storeId: resolved.store.storeId, qualifiedId: `${resolved.store.storeId}:${doc.fields.id}`, status: doc.fields.status, file: relative(root, doc.file) } });
       } else {
-        console.log(`updated ${id}: ${shortRow(doc)}`);
+        console.log(`updated ${id}: ${shortRow(doc, resolved.store)}`);
       }
     } catch (err) {
       if (args.json) {
@@ -327,7 +406,8 @@ switch (cmd) {
     break;
   }
   case "validate": {
-    const detailedProblems = validateStoreDetailed(root);
+    const stores = taskboardStoresForQuery(root, storeQueryArgs(args));
+    const detailedProblems = validateTaskboardStoresDetailed(root, stores);
     if (args.json) {
       writeJson({ ok: detailedProblems.length === 0, problems: detailedProblems });
       process.exit(detailedProblems.length ? 1 : 0);

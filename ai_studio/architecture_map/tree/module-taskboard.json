@@ -83,6 +83,19 @@
       ]
     },
     {
+      "id": "taskboard:stores",
+      "kind": "tool",
+      "path": "ai_studio/taskboard/stores.mjs",
+      "description": "Workspace-mounted Taskboard store resolver for public Studio and explicit game stores, qualified IDs, aggregate payloads, and private-store inclusion policy.",
+      "role": "taskboard workspace store resolver",
+      "tags": [
+        "internal",
+        "workspace",
+        "privacy",
+        "routing"
+      ]
+    },
+    {
       "id": "taskboard:items",
       "kind": "folder",
       "path": "ai_studio/taskboard/items",
