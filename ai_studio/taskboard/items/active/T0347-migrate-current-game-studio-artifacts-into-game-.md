@@ -44,6 +44,9 @@ are done.
       loss as a privacy leak, but do not hide it during migration.
 - [ ] Evidence, provenance, manifests, screenshots, and runtime logs move or
       relink into the owning game store where they are game-specific.
+- [ ] Raw game-local Canvas project folders and evidence files are ignored by
+      the parent repository unless an explicit sanitize/publish step promotes a
+      safe artifact into tracked game `assets/` or `design/` paths.
 - [ ] Studio-level references that remain are sanitized public fixture notes or
       migration notes, not private task/canvas/evidence content.
 - [ ] Old public history is not rewritten by this task; any history scrub is
@@ -57,6 +60,9 @@ are done.
 
 - Does `rb-dark-rpg` remain a public sample after migration, or should it be
   converted to a local/private mount later?
+- Raw Canvas/evidence working stores are ignored in the parent repo for the
+  current migration. Public release artifacts should be promoted separately
+  through sanitized game `assets/` or `design/` paths.
 
 ## Log
 
@@ -77,3 +83,9 @@ are done.
   returns the moved project/epics/tasks with `game:rb-dark-rpg:*` qualified ids,
   parent Taskboard validate passes, and direct game-store validation reports
   zero problems.
+- 2026-07-09: Canvas/evidence migration audit found two current Canvas sources:
+  the configured YandexDisk Studio projects root has three `rb-dark-rpg`
+  projects, and the legacy repo-local ignored root has three more. Added a
+  tracked game `.ai_studio` scaffold and parent ignore rules so raw Canvas
+  project folders and evidence can move into the game-owned store without
+  entering the public parent repository by default.

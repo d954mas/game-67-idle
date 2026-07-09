@@ -35,6 +35,17 @@ ai_studio/workspace/games.local.json
 # canonical projects root outside the repo.
 ai_studio/assets/canvas/projects/
 
+# Game-owned Canvas/evidence working stores can contain private prompts,
+# generated source sheets, screenshots, reports, and absolute local paths.
+# Keep only the scaffold tracked unless a game intentionally publishes a
+# sanitized artifact through its normal assets/design folders.
+games/*/.ai_studio/canvas/projects/*
+!games/*/.ai_studio/canvas/projects/.gitignore
+!games/*/.ai_studio/canvas/projects/README.md
+games/*/.ai_studio/evidence/*
+!games/*/.ai_studio/evidence/.gitignore
+!games/*/.ai_studio/evidence/README.md
+
 # Restricted paid/licensed asset binaries: never commit to an open repo.
 # Only catalog/license metadata is committed; binaries live locally and in the
 # private library. See ai_studio/assets/storage/license/.
