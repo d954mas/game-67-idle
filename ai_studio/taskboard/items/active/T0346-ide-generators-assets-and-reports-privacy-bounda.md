@@ -21,7 +21,7 @@ runtime evidence.
 - [x] Tracked parent `.vscode` generation includes public/tracked games only.
 - [ ] Private-game IDE entries are generated inside the private game repo or
       ignored local workspace files.
-- [ ] Asset discovery can see private games only through explicit active
+- [x] Asset discovery can see private games only through explicit active
       workspace or `--include-private`, and does not write private asset metadata
       into tracked public files.
 - [ ] Asset/provenance/source-first rules remain unchanged for private games:
@@ -59,3 +59,7 @@ runtime evidence.
   workspace game resolver/preflight. This covers agent search; gallery and item
   viewer surfaces still need the same private-aware resolver before the asset
   discovery checklist item can close.
+- 2026-07-09: Routed Asset Viewer gallery sources and Items Viewer catalog lists
+  through workspace game mounts: public games remain visible by default,
+  `include-private`/`game:<id>` explicitly exposes private mounts after
+  preflight, and raw private `games/<id>/assets` paths are rejected.

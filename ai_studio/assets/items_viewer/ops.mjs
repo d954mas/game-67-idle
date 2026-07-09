@@ -11,8 +11,8 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { listRegisteredGames } from "../backlog/storage/sources/games.mjs";
 import { listRegisteredTemplates } from "../backlog/storage/sources/templates.mjs";
+import { listGameMounts } from "../../workspace/games.mjs";
 import { buildIconPreview } from "./icon_preview.mjs";
 
 // items_ops.py's own documented invocation (its docstring, lines 15-17): `py -3.12`.
@@ -243,15 +243,22 @@ export async function loadCatalogView(root, folderAbs, meta) {
   return view;
 }
 
-function resolveCatalogEntry(root, id) {
+function resolveCatalogEntry(root, id, options = {}) {
   const raw = String(id || "");
   const sep = raw.indexOf(":");
   if (sep <= 0) return null;
   const kind = raw.slice(0, sep);
   const registryId = raw.slice(sep + 1);
   if (kind !== "template" && kind !== "game") return null;
-  const list = kind === "template" ? listRegisteredTemplates(root) : listRegisteredGames(root);
+  const list = kind === "template"
+    ? listRegisteredTemplates(root)
+    : listGameMounts(root, { activeGameId: registryId, includePrivate: options.includePrivate === true });
   const found = list.find((entry) => entry.id === registryId);
+  if (!found && kind === "game") {
+    const mount = list.find((entry) => entry.gameId === registryId);
+    if (!mount) return null;
+    return { kind, title: mount.publicAlias || mount.title, folder: mount.root, status: mount.status || mount.visibility };
+  }
   if (!found) return null;
   return { kind, title: found.title, folder: found.folder, status: found.status };
 }
@@ -260,7 +267,7 @@ function resolveCatalogEntry(root, id) {
 // disambiguates a template and a game sharing an id (mirrors the gallery's
 // `game:${id}` convention, assets/gallery/api.mjs:48). hasItems is never hidden or
 // fatal (decision (д)) — a game with no items still appears, flagged.
-export function listCatalogs(root) {
+export function listCatalogs(root, options = {}) {
   const templates = listRegisteredTemplates(root).map((entry) => ({
     id: `template:${entry.id}`,
     kind: "template",
@@ -269,13 +276,14 @@ export function listCatalogs(root) {
     hasItems: existsSync(join(root, entry.folder, "content", "items.json")),
     status: entry.status,
   }));
-  const games = listRegisteredGames(root).map((entry) => ({
-    id: `game:${entry.id}`,
+  const games = listGameMounts(root, { includePrivate: options.includePrivate === true }).map((entry) => ({
+    id: entry.storeId,
     kind: "game",
     title: entry.title,
-    folder: entry.folder,
-    hasItems: existsSync(join(root, entry.folder, "content", "items.json")),
+    folder: entry.root,
+    hasItems: existsSync(join(root, entry.root, "content", "items.json")),
     status: entry.status,
+    visibility: entry.visibility,
   }));
   return { catalogs: [...templates, ...games] };
 }
@@ -284,8 +292,8 @@ export function listCatalogs(root) {
 // Returns null when `id` matches neither registry; api.mjs turns that into a 404. The
 // page always calls this for the selected id (single code path, no dropdown-flag
 // short-circuit — spec §3/§4).
-export async function getCatalogView(root, id) {
-  const entry = resolveCatalogEntry(root, id);
+export async function getCatalogView(root, id, options = {}) {
+  const entry = resolveCatalogEntry(root, id, options);
   if (!entry) return null;
   const folderAbs = join(root, entry.folder);
   return loadCatalogView(root, folderAbs, { id, kind: entry.kind, title: entry.title, folder: entry.folder });

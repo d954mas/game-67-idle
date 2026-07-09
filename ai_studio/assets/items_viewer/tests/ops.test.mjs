@@ -7,10 +7,12 @@
 // copies), so a fixture is never a second guess at what "valid" looks like.
 import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { localGameRegistryRelPath } from "../../../workspace/games.mjs";
 import {
   getCatalogView,
   listCatalogs,
@@ -35,8 +37,37 @@ function tempFixtureDir(t) {
 }
 
 function writeJson(path, value) {
-  mkdirSync(join(path, ".."), { recursive: true });
+  mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, JSON.stringify(value, null, 2), "utf8");
+}
+
+function writePrivateGameMount(root, gameId = "secret-game") {
+  writeJson(join(root, "ai_studio", "workspace", "games.local.json"), {
+    schema: "ai_studio.workspace.games.local.v1",
+    games: [
+      {
+        schemaVersion: 1,
+        storeId: `game:${gameId}`,
+        kind: "game",
+        gameId,
+        root: `games/${gameId}`,
+        visibility: "private",
+        gitRoot: `games/${gameId}`,
+        commitPolicy: "nested-private",
+        enabledStores: ["assets", "taskboard", "canvas", "evidence"],
+        assetRoot: `games/${gameId}/assets`,
+      },
+    ],
+  });
+}
+
+function privateGameFixture(root, gameId = "secret-game") {
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  writeFileSync(join(root, ".gitignore"), `${localGameRegistryRelPath()}\n`, "utf8");
+  writeFileSync(join(root, ".git", "info", "exclude"), `games/${gameId}/\n`, "utf8");
+  mkdirSync(join(root, "games", gameId, "content"), { recursive: true });
+  execFileSync("git", ["init"], { cwd: join(root, "games", gameId), stdio: "ignore" });
+  writePrivateGameMount(root, gameId);
 }
 
 function makeItem(id, overrides = {}) {
@@ -83,6 +114,38 @@ test("listCatalogs merges the template and game registries with hasItems flags (
   assert.ok(game, "game:rb-dark-rpg must be in the merged catalog list");
   assert.equal(game.kind, "game");
   assert.equal(game.hasItems, false, "rb-dark-rpg has no content/items.json today");
+});
+
+test("listCatalogs hides private game mounts unless explicitly included", () => {
+  const root = mkdtempSync(join(tmpdir(), "items-viewer-private-catalogs-"));
+  try {
+    privateGameFixture(root);
+    writeJson(join(root, "templates", "templates.json"), {
+      schema: "ai_studio.assets.templates.v1",
+      templates: [],
+    });
+    writeJson(join(root, "games", "games.json"), {
+      schema: "ai_studio.assets.games.v1",
+      games: [{
+        id: "public-game",
+        title: "Public Game",
+        folder: "games/public-game",
+        assets: "games/public-game/assets",
+        status: "active",
+      }],
+    });
+    mkdirSync(join(root, "games", "public-game", "content"), { recursive: true });
+    writeFileSync(join(root, "games", "public-game", "content", "items.json"), "{}", "utf8");
+    writeFileSync(join(root, "games", "secret-game", "content", "items.json"), "{}", "utf8");
+
+    assert.deepEqual(listCatalogs(root).catalogs.map((catalog) => catalog.id), ["game:public-game"]);
+    assert.deepEqual(listCatalogs(root, { includePrivate: true }).catalogs.map((catalog) => catalog.id), [
+      "game:public-game",
+      "game:secret-game",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("getCatalogView happy path: live template renders 6 items, schema, containers, validate.ok", async () => {

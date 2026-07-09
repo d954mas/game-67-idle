@@ -8,6 +8,10 @@
 //   GET /api/items-viewer/catalog?id=<id>  -- the whole view for one catalog
 import { getCatalogView, listCatalogs } from "./ops.mjs";
 
+function boolQueryParam(value) {
+  return value === "true" || value === "1" || value === "yes";
+}
+
 function sendJson(res, status, data) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(data));
@@ -21,7 +25,9 @@ export function createItemsViewerApi(root) {
           sendJson(res, 405, { error: "method not allowed" });
           return true;
         }
-        sendJson(res, 200, listCatalogs(root));
+        sendJson(res, 200, listCatalogs(root, {
+          includePrivate: boolQueryParam(url.searchParams.get("include-private")) || boolQueryParam(url.searchParams.get("includePrivate")),
+        }));
         return true;
       }
 
@@ -35,7 +41,9 @@ export function createItemsViewerApi(root) {
           return true;
         }
         const id = url.searchParams.get("id");
-        const view = await getCatalogView(root, id);
+        const view = await getCatalogView(root, id, {
+          includePrivate: boolQueryParam(url.searchParams.get("include-private")) || boolQueryParam(url.searchParams.get("includePrivate")),
+        });
         if (!view) {
           sendJson(res, 404, { error: "catalog not found" });
           return true;

@@ -1,8 +1,10 @@
-﻿import test from "node:test";
+import test from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
+import { localGameRegistryRelPath } from "../../../workspace/games.mjs";
 import { listAssetViewerSources, resolveAssetViewerGalleryPath, safeResolve, selectSource } from "../api.mjs";
 
 function tempRoot() {
@@ -13,6 +15,40 @@ function mkTemp(prefix) {
   const root = join(tmpdir(), `${prefix}${process.pid}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
   mkdirSync(root, { recursive: true });
   return root;
+}
+
+function writeJson(path, value) {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function writePrivateGameMount(root, gameId = "secret-game") {
+  writeJson(join(root, "ai_studio", "workspace", "games.local.json"), {
+    schema: "ai_studio.workspace.games.local.v1",
+    games: [
+      {
+        schemaVersion: 1,
+        storeId: `game:${gameId}`,
+        kind: "game",
+        gameId,
+        root: `games/${gameId}`,
+        visibility: "private",
+        gitRoot: `games/${gameId}`,
+        commitPolicy: "nested-private",
+        enabledStores: ["assets", "taskboard", "canvas", "evidence"],
+        assetRoot: `games/${gameId}/assets`,
+      },
+    ],
+  });
+}
+
+function privateGameFixture(root, gameId = "secret-game") {
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  writeFileSync(join(root, ".gitignore"), `${localGameRegistryRelPath()}\n`, "utf8");
+  writeFileSync(join(root, ".git", "info", "exclude"), `games/${gameId}/\n`, "utf8");
+  mkdirSync(join(root, "games", gameId, "assets"), { recursive: true });
+  execFileSync("git", ["init"], { cwd: join(root, "games", gameId), stdio: "ignore" });
+  writePrivateGameMount(root, gameId);
 }
 
 test("safeResolve keeps paths inside the selected base", () => {
@@ -90,6 +126,55 @@ test("listAssetViewerSources keeps global library with workspace template and ga
         { id: "template", type: "template", available: true },
         { id: "game:test-game", type: "game", available: true },
       ],
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("listAssetViewerSources hides private game mounts unless explicitly included", async () => {
+  const root = tempRoot();
+  try {
+    mkdirSync(join(root, "shared-library", "packs"), { recursive: true });
+    mkdirSync(join(root, "games", "public-game", "assets"), { recursive: true });
+    privateGameFixture(root);
+    writeJson(join(root, "games", "games.json"), {
+      schema: "ai_studio.assets.games.v1",
+      games: [{
+        id: "public-game",
+        title: "Public Game",
+        folder: "games/public-game",
+        assets: "games/public-game/assets",
+        status: "active",
+      }],
+    });
+
+    const visible = await listAssetViewerSources(root);
+    assert.deepEqual(visible.sources.filter((source) => source.type === "game").map((source) => source.id), ["game:public-game"]);
+
+    const included = await listAssetViewerSources(root, { includePrivate: true });
+    assert.deepEqual(included.sources.filter((source) => source.type === "game").map((source) => source.id), [
+      "game:public-game",
+      "game:secret-game",
+    ]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("selectSource resolves private games by id and blocks raw private paths", () => {
+  const root = tempRoot();
+  try {
+    privateGameFixture(root);
+
+    const selected = selectSource([], { sourceId: "game:secret-game" }, root);
+    assert.equal(selected.id, "game:secret-game");
+    assert.equal(selected.visibility, "private");
+    assert.equal(selected.path, resolve(root, "games/secret-game/assets"));
+
+    assert.throws(
+      () => selectSource([], { type: "game", path: "games/secret-game/assets" }, root),
+      /private game assets must be selected by game id/,
     );
   } finally {
     rmSync(root, { recursive: true, force: true });

@@ -36,6 +36,13 @@ automatically as `<game-id>/assets`. Private games stay out of `games/games.json
 unless mounted through a private-aware workspace flow. The gallery does not scan
 root folders to guess games.
 
+Private game sources are hidden from the source list by default. Explicit
+private browsing uses the workspace game resolver (`game:<id>` /
+`include-private`) and runs the private game preflight before exposing the
+source. Do not open private game assets in the gallery by passing raw
+`games/<id>/assets` paths; select the mounted game id instead. Generated gallery
+metadata, indexes, and previews stay under ignored `tmp/` paths.
+
 The gallery does not run filesystem watch mode. When assets are added or
 changed locally, use the `Refresh` button. It checks the selected source
 signature and only rebuilds the generated SQLite index when manifest metadata
@@ -83,12 +90,14 @@ node ai_studio/assets/gallery/pull.mjs --ids <asset-ids> --to <game>/assets
 - `api.mjs` lists available sources, opens the selected source in the gallery,
   rebuilds/queries `../backlog/storage/index/`, and maps gallery media back
   into the Studio Shell server.
-- The gallery consumes registered sources through backlog storage helpers. It
-  does not own registry data: global library data currently lives in
+- The gallery consumes registered sources through backlog storage and workspace
+  helpers. It does not own registry data: global library data currently lives in
   `../backlog/storage/sources/libraries.json`, template data in
-  `templates/templates.json`, and game data in `games/games.json`.
-- `../backlog/storage/sources/libraries.mjs`, `templates.mjs`, and `games.mjs`
-  read and update those registries for the gallery and CLI commands.
+  `templates/templates.json`, public game data in `games/games.json`, and local
+  private mounts in ignored `ai_studio/workspace/games.local.json`.
+- `../backlog/storage/sources/libraries.mjs`, `templates.mjs`, `games.mjs`, and
+  `../../workspace/games.mjs` read/update those registries for the gallery and
+  CLI commands.
 - `viewer.js` and `viewer.css` are surface implementation details.
 - `serve_gallery.mjs` is kept because library mode can reference a large
   external asset library through `/lib/` instead of copying every model.

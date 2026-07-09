@@ -4,9 +4,9 @@ import { basename, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { listIndexedPacks, queryIndexedAssets, refreshAssetIndex, resolveIndexedModel } from "../backlog/storage/index/index.mjs";
 import { refreshPreviewCache } from "../backlog/storage/previews/cache.mjs";
-import { listRegisteredGames } from "../backlog/storage/sources/games.mjs";
 import { listRegisteredLibraries, resolveRegisteredSourcePath } from "../backlog/storage/sources/libraries.mjs";
 import { listRegisteredTemplates } from "../backlog/storage/sources/templates.mjs";
+import { listGameMounts } from "../../workspace/games.mjs";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const builder = join(here, "build_review.mjs");
@@ -36,16 +36,17 @@ function sourceAvailable(path) {
   return Boolean(path && existsSync(path));
 }
 
-function registeredGameSources(root) {
-  return listRegisteredGames(root).map((game) => {
-    const assetsPath = safeResolve(root, game.assets);
+function registeredGameSources(root, options = {}) {
+  return listGameMounts(root, { includePrivate: options.includePrivate === true }).map((game) => {
+    const assetsPath = safeResolve(root, game.assetRoot);
     return {
-      id: `game:${game.id}`,
+      id: game.storeId,
       type: "game",
-      label: game.title || game.id,
-      description: "Registered game-local assets folder.",
+      label: game.publicAlias || game.title || game.gameId,
+      description: game.visibility === "public" ? "Registered game-local assets folder." : "Private game-local assets folder.",
       path: assetsPath || "",
       available: sourceAvailable(assetsPath),
+      visibility: game.visibility,
     };
   });
 }
@@ -80,10 +81,10 @@ function registeredTemplateSources(root) {
   });
 }
 
-export async function listAssetViewerSources(root) {
+export async function listAssetViewerSources(root, options = {}) {
   const sources = registeredLibrarySources(root);
   sources.push(...registeredTemplateSources(root));
-  sources.push(...registeredGameSources(root));
+  sources.push(...registeredGameSources(root, options));
   return {
     sources,
   };
@@ -194,13 +195,67 @@ function runBuilder(args, cwd) {
   });
 }
 
+function boolValue(value) {
+  return value === true || value === "true" || value === "1" || value === "yes";
+}
+
+function gameSourceFromMount(root, mount) {
+  const assetsPath = safeResolve(root, mount.assetRoot);
+  return {
+    id: mount.storeId,
+    type: "game",
+    label: mount.publicAlias || mount.title || mount.gameId,
+    description: mount.visibility === "public" ? "Registered game-local assets folder." : "Private game-local assets folder.",
+    path: assetsPath || "",
+    available: sourceAvailable(assetsPath),
+    visibility: mount.visibility,
+  };
+}
+
+function resolveGameSource(root, gameId, body = {}) {
+  const id = String(gameId || "").trim();
+  if (!id) throw new Error("missing game asset source id");
+  const mounts = listGameMounts(root, {
+    activeGameId: id,
+    includePrivate: boolValue(body.includePrivate) || boolValue(body["include-private"]),
+  });
+  const mount = mounts.find((item) => item.gameId === id);
+  if (!mount) throw new Error(`unknown game asset source: ${id}`);
+  return gameSourceFromMount(root, mount);
+}
+
+function pathInside(base, candidate) {
+  const resolvedBase = resolve(base);
+  const resolvedCandidate = resolve(candidate);
+  return resolvedCandidate === resolvedBase || resolvedCandidate.startsWith(resolvedBase + sep);
+}
+
+function isPrivateMountedAssetPath(root, abs) {
+  let mounts = [];
+  try {
+    mounts = listGameMounts(root, { includePrivate: true, skipPreflight: true });
+  } catch {
+    return false;
+  }
+  return mounts
+    .filter((mount) => mount.visibility !== "public")
+    .some((mount) => pathInside(resolve(root, mount.root), abs) || pathInside(resolve(root, mount.assetRoot), abs));
+}
+
 export function selectSource(sources, body, root) {
   const byId = new Map(sources.map((source) => [source.id, source]));
   if (body.sourceId && byId.has(body.sourceId)) return byId.get(body.sourceId);
+  if (body.game) return resolveGameSource(root, body.game, body);
+  if (body.sourceId && String(body.sourceId).startsWith("game:")) {
+    return resolveGameSource(root, String(body.sourceId).slice("game:".length), body);
+  }
 
   if (body.type === "game" && body.path) {
     const abs = safeResolve(root, body.path);
     if (!abs) throw new Error("game assets path must stay inside the repository");
+    if (isPrivateMountedAssetPath(root, abs)) {
+      throw new Error("private game assets must be selected by game id, not by raw path");
+    }
     return {
       id: `game:${safeSlug(body.path)}`,
       type: "game",
@@ -214,8 +269,14 @@ export function selectSource(sources, body, root) {
   throw new Error("unknown asset source");
 }
 
+function sourceListOptions(body = {}) {
+  return {
+    includePrivate: boolValue(body.includePrivate) || boolValue(body["include-private"]),
+  };
+}
+
 export async function buildAssetViewerGallery(root, body) {
-  const { sources } = await listAssetViewerSources(root);
+  const { sources } = await listAssetViewerSources(root, sourceListOptions(body));
   const source = selectSource(sources, body, root);
   if (!source.available) throw new Error(`asset source is not available: ${source.path}`);
 
@@ -257,7 +318,7 @@ export async function buildAssetViewerGallery(root, body) {
 }
 
 export async function openAssetViewerSource(root, body) {
-  const { sources } = await listAssetViewerSources(root);
+  const { sources } = await listAssetViewerSources(root, sourceListOptions(body));
   const source = selectSource(sources, body, root);
   if (!source.available) throw new Error(`asset source is not available: ${source.path}`);
 
@@ -277,7 +338,7 @@ export async function openAssetViewerSource(root, body) {
 }
 
 export async function reindexAssetViewerSource(root, body) {
-  const { sources } = await listAssetViewerSources(root);
+  const { sources } = await listAssetViewerSources(root, sourceListOptions(body));
   const source = selectSource(sources, body, root);
   if (!source.available) throw new Error(`asset source is not available: ${source.path}`);
   viewerCache.delete(cacheKeyForSource(source));
@@ -297,7 +358,7 @@ export async function reindexAssetViewerSource(root, body) {
 export const refreshAssetViewerSource = reindexAssetViewerSource;
 
 export async function refreshAssetViewerPreviews(root, body) {
-  const { sources } = await listAssetViewerSources(root);
+  const { sources } = await listAssetViewerSources(root, sourceListOptions(body));
   const source = selectSource(sources, body, root);
   if (!source.available) throw new Error(`asset source is not available: ${source.path}`);
   await refreshAssetIndex(root, source);
@@ -352,7 +413,9 @@ export function createAssetViewerApi(root) {
   return async function handleAssetViewerApi(req, res, url) {
     try {
       if (req.method === "GET" && url.pathname === "/api/asset-viewer/sources") {
-        writeJson(res, 200, await listAssetViewerSources(root));
+        writeJson(res, 200, await listAssetViewerSources(root, {
+          includePrivate: boolValue(url.searchParams.get("include-private")) || boolValue(url.searchParams.get("includePrivate")),
+        }));
         return true;
       }
       if (req.method === "POST" && url.pathname === "/api/asset-viewer/build") {
@@ -405,7 +468,9 @@ export async function resolveAssetViewerAssets(root, url) {
   const limit = Math.min(500, Math.max(24, Number.parseInt(url.searchParams.get("limit") || "240", 10) || 240));
   const filters = readAssetFilters(url);
 
-  const { sources } = await listAssetViewerSources(root);
+  const { sources } = await listAssetViewerSources(root, {
+    includePrivate: boolValue(url.searchParams.get("include-private")) || boolValue(url.searchParams.get("includePrivate")),
+  });
   const source = selectSource(sources, { sourceId }, root);
 
   writeGalleryMeta(root, source);
@@ -427,7 +492,9 @@ export async function resolveAssetViewerModel(root, url) {
   const assetId = url.searchParams.get("id") || "";
   if (!assetId) throw new Error("missing model asset id");
 
-  const { sources } = await listAssetViewerSources(root);
+  const { sources } = await listAssetViewerSources(root, {
+    includePrivate: boolValue(url.searchParams.get("include-private")) || boolValue(url.searchParams.get("includePrivate")),
+  });
   const source = selectSource(sources, { sourceId }, root);
 
   writeGalleryMeta(root, source);

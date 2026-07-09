@@ -41,12 +41,15 @@ Explicitly **not** built here — do not scaffold these without a new spec:
 
 ## Layout
 
-- `ops.mjs` — pure logic, no HTTP. Merges `listRegisteredTemplates`/
-  `listRegisteredGames` (`assets/backlog/storage/sources/`) into the dropdown
-  list; spawns `items_ops.py` (`execFile("py", ["-3.12", ...])`, cwd = repo
-  root, every path ABSOLUTE) for `list`/`schema`/`validate --json`; reads
-  `items.lock.json` directly (a separate artifact — see "Lock status" below);
-  folds everything into one catalog view object. `loadCatalogView(root,
+- `ops.mjs` — pure logic, no HTTP. Merges `listRegisteredTemplates`
+  (`assets/backlog/storage/sources/`) and workspace game mounts
+  (`ai_studio/workspace/games.mjs`) into the dropdown list. Public games are
+  visible by default; private game catalogs require explicit `include-private`
+  or direct `game:<id>` selection and pass the private game preflight before
+  exposure. It then spawns `items_ops.py` (`execFile("py", ["-3.12", ...])`,
+  cwd = repo root, every path ABSOLUTE) for `list`/`schema`/`validate --json`;
+  reads `items.lock.json` directly (a separate artifact — see "Lock status"
+  below); folds everything into one catalog view object. `loadCatalogView(root,
   folderAbs, meta)` is decoupled from the registry lookup so tests can point
   it at a throwaway temp folder. All `node:test` coverage lives in `tests/`.
 - `api.mjs` — `createItemsViewerApi(root)`, an `async (req,res,url) => bool`
@@ -54,7 +57,8 @@ Explicitly **not** built here — do not scaffold these without a new spec:
   `assets/canvas/api.mjs`'s shape — HTTP <-> ops marshalling only, no items
   logic). Two read-only GET endpoints; see the spec §3 for the full response
   shapes and exit-code -> HTTP-status mapping.
-  - `GET /api/items-viewer/catalogs` — the dropdown list.
+  - `GET /api/items-viewer/catalogs` — the dropdown list; add
+    `?include-private=true` only when private mounted games should be listed.
   - `GET /api/items-viewer/catalog?id=<kind>:<id>` — the whole view for one
     catalog in one fetch.
 - `site/` — one page (`items.html` + `items.js` + `items.css`), bare ESM, no
