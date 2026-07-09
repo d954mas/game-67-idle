@@ -69,8 +69,11 @@ keep the legacy `/canvas?project=<id>` shape and do not write `store=game:<id>`
 into the address bar; last-project restore keeps the private store id in
 `localStorage`. Private thumbnails and canvas images are fetched with the same
 store header and shown as `blob:` URLs, because `<img>` cannot send custom
-headers. Public Copy ID refs keep their human-readable tail, while private Copy
-ID refs use `canvas://game/<gameId>/...` without project/object names in the tail.
+headers. Canvas chat uses the same hidden store scope for transcript/context
+requests and tells spawned agents to pass `--store game:<id>` on private project
+CLI commands. Public Copy ID refs keep their human-readable tail, while private
+Copy ID refs use `canvas://game/<gameId>/...` without project/object names in
+the tail.
 
 ## Object references (`canvas://`)
 

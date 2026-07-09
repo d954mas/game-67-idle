@@ -16,8 +16,10 @@ canvas page itself, it never gets a privileged shortcut into `project.json`.
   `chat/agent.mjs` prints the CLI's own bare-invocation help + the driving
   contract into the prompt and tells the agent to run
   `node ai_studio/assets/canvas/cli.mjs <verb> <projectId> [flags]` for
-  everything — the same command a terminal-driven agent runs today, so the
-  "one ops layer" invariant holds by construction. This module's own code
+  everything; for private Canvas stores the context digest also requires
+  `--store game:<id>` on every CLI command. This is the same command a
+  terminal-driven agent runs today, so the "one ops layer" invariant holds by
+  construction. This module's own code
   (`context.mjs`) imports `ops.getProject` / `ops.listHistory` **read-only**,
   for the context digest and the seq-range math — it never imports or calls
   any mutating op.
@@ -47,7 +49,9 @@ verification transcript).
   current `chat/transcript.jsonl` is **archived by rename** (never deleted)
   and `chat/state.json`'s `sessionId` resets to `null`, so the next message
   spawns a fresh `codex exec` with no memory of the old session.
-- `chat/transcript.jsonl` is **PANEL DISPLAY ONLY** — an append-only log of
+- `chat/transcript.jsonl` is **PANEL DISPLAY ONLY** — an append-only log under
+  the selected Canvas project's own store directory, including private
+  `games/<id>/.ai_studio/canvas/projects/<project>/chat/`, of
   `{role, text, seqRange?, at}` the page reads back on open/reload so the chat
   stream survives a page refresh. It is never replayed into the prompt and it
   is not the model's memory; the codex session is. The two are bridged
@@ -80,7 +84,9 @@ loud `flags` the panel renders in red — a tripwire, not a guarantee.
 
 - `context.mjs` — `buildChatContext()` (pure, read-only digest over
   `ops.getProject`/`ops.listHistory`: selection refs + counts + head, bounded
-  by selection size, never full project JSON) + the per-project `chat/` store
+  by selection size, never full project JSON; private refs use
+  `canvas://game/<gameId>/<projectId>/...` without project/object name tails)
+  + the per-project `chat/` store
   (`transcript.jsonl` append/read, `state.json` session id read/write,
   `clearConversation()`'s archive-and-reset).
 - `agent.mjs` — the codex spawn seam. Pure prompt/argv builders
@@ -92,7 +98,10 @@ loud `flags` the panel renders in red — a tripwire, not a guarantee.
   the suite; tests inject a fake transport, mirroring
   `tools/dual_plate_generate.mjs`'s `generatePlate`).
 - `api.mjs` — `createChatApi(root, { transport })`, the HTTP/SSE adapter
-  mounted on `/api/chat/` by `server.mjs`:
+  mounted on `/api/chat/` by `server.mjs`. It accepts
+  `x-ai-studio-store: game:<id>` for private Canvas stores; `?store=`/`?game=`
+  remain manual legacy fallbacks, while the browser keeps store out of visible
+  paths:
   - `POST /api/chat/projects/<id>/message {text, selection?}` → SSE
     `progress` → optional `op-committed {seqRange}` → `final {text,
     sessionId, seqRange, flags}` | `error {message}`. Exactly one of
@@ -109,7 +118,8 @@ loud `flags` the panel renders in red — a tripwire, not a guarantee.
   a collapsible right-side column mirroring the history palette's
   toggle/localStorage/hidden-by-default state, streaming SSE via `fetch` +
   `ReadableStream` (no `EventSource`, since that is GET-only), auto-attaching
-  the current canvas selection as `selection` refs, and calling the page's
+  the current canvas selection as `selection` refs, sending private store scope
+  through `x-ai-studio-store` headers, and calling the page's
   existing `reloadProject()` on every `op-committed`/`final` with a
   `seqRange` — it never applies a mutation itself, only re-reads.
 - `tests/` — `node:test` suites for `context.mjs`, `agent.mjs`, and

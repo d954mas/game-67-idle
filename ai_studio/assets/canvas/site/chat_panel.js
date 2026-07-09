@@ -26,13 +26,14 @@
 // its own toggle, its own SSE stream — is already reachable directly from here or from
 // canvas.js, which calls renderChat() at the same points it calls refresh()).
 import { el, elementById, groupById, reloadProject, setStatus, state } from "./app.js";
+import { canvasRefBase, canvasStoreHeaders, projectKey } from "./store_scope.js";
 
 const OPEN_KEY = "canvas.chatOpen";
 const CHAT_BASE = "/api/chat";
 
 let open = false;
 let turns = []; // display records: {role:"user"|"assistant"|"note", text, at, seqRange?, refs?, flags?, pending?, pendingMessage?, error?, cancelled?}
-let loadedProjectId = null; // which project's transcript `turns` currently reflects
+let loadedProjectKey = null; // which store-qualified project's transcript `turns` currently reflects
 let sending = false;
 let cancelledByUser = false; // distinguishes a Cancel-click error event from a genuine failure
 let clearConfirmOpen = false;
@@ -72,7 +73,7 @@ function syncToggle() {
 async function chatApi(method, path, body) {
   const res = await fetch(`${CHAT_BASE}${path}`, {
     method,
-    headers: body ? { "content-type": "application/json" } : undefined,
+    headers: canvasStoreHeaders(state.storeId, body ? { "content-type": "application/json" } : {}),
     body: body ? JSON.stringify(body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
@@ -107,7 +108,7 @@ function dispatchSseBlock(raw, handlers) {
 async function streamChatMessage(projectId, body, handlers) {
   const res = await fetch(`${CHAT_BASE}/projects/${encodeURIComponent(projectId)}/message`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: canvasStoreHeaders(state.storeId, { "content-type": "application/json" }),
     body: JSON.stringify(body),
   });
   if (!res.body) throw new Error("chat: streaming is not supported by this browser/response");
@@ -131,21 +132,23 @@ async function streamChatMessage(projectId, body, handlers) {
 
 function projectRefBase() {
   const project = state.project;
-  return project ? { uri: `canvas://${project.id}`, title: project.title || project.id } : null;
+  return project ? canvasRefBase(project) : null;
 }
 
 function elementRefFor(id) {
   const base = projectRefBase();
   const element = elementById(id);
   if (!base || !element) return null;
-  return `${base.uri}/element/${element.id} — project "${base.title}", element "${element.name || element.id}"`;
+  const ref = `${base.uri}/element/${element.id}`;
+  return base.private ? ref : `${ref} — project "${base.title}", element "${element.name || element.id}"`;
 }
 
 function groupRefFor(id) {
   const base = projectRefBase();
   const group = groupById(id);
   if (!base || !group) return null;
-  return `${base.uri}/group/${group.id} — project "${base.title}", group "${group.name || "Group"}"`;
+  const ref = `${base.uri}/group/${group.id}`;
+  return base.private ? ref : `${ref} — project "${base.title}", group "${group.name || "Group"}"`;
 }
 
 // Shortens a full ref string to just the "element/group "Name"" tail for a compact chip —
@@ -292,14 +295,16 @@ async function performClear() {
     return;
   }
   turns = [{ role: "note", text: "New conversation — previous context cleared (transcript archived).", at: new Date().toISOString() }];
-  loadedProjectId = project.id;
+  loadedProjectKey = projectKey(project);
   renderStream();
   setStatus("Chat context cleared.");
 }
 
 // ---- transcript load (open / project switch) ----------------------------------------
 
-async function loadTranscript(projectId) {
+async function loadTranscript(project) {
+  const projectId = project.id;
+  const expectedKey = projectKey(project);
   let data;
   try {
     data = await chatApi("GET", `/projects/${encodeURIComponent(projectId)}/transcript`);
@@ -309,9 +314,9 @@ async function loadTranscript(projectId) {
   }
   // A project switch mid-fetch (fast double-click) must not paint the wrong project's
   // transcript — only adopt the result if it is still the panel's current project.
-  if (state.project?.id !== projectId) return;
+  if (!state.project || projectKey(state.project) !== expectedKey) return;
   turns = (data.transcript || []).map((entry) => ({ ...entry }));
-  loadedProjectId = projectId;
+  loadedProjectKey = expectedKey;
   renderStream();
 }
 
@@ -418,15 +423,15 @@ export function renderChat() {
   const project = state.project;
   if (!project) {
     turns = [];
-    loadedProjectId = null;
+    loadedProjectKey = null;
     setClearConfirmOpen(false);
     renderStream();
     return;
   }
   if (!open) return; // load lazily on next open
-  if (loadedProjectId !== project.id) {
+  if (loadedProjectKey !== projectKey(project)) {
     setClearConfirmOpen(false);
-    void loadTranscript(project.id);
+    void loadTranscript(project);
     return; // loadTranscript() renders once it resolves
   }
   renderStream();

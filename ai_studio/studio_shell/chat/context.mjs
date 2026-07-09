@@ -33,12 +33,27 @@ import { appendFileSync } from "node:fs";
 import { getProject, listHistory, resolveProjectPath } from "../../assets/canvas/ops.mjs";
 
 const CHAT_DIGEST_SCHEMA = "ai_studio.studio_shell.chat_context.v1";
+const STUDIO_STORE_ID = "studio";
 // Built from a code point (not a literal BOM character in source) so the file itself stays
 // plain ASCII/UTF-8 with no invisible leading byte of its own.
 const BOM_RE = new RegExp(`^${String.fromCharCode(0xfeff)}`);
 
+function decorateProjectForChat(project, store) {
+  const storeId = store && store.storeId ? store.storeId : STUDIO_STORE_ID;
+  return {
+    ...project,
+    storeId,
+    visibility: store && store.visibility ? store.visibility : "public",
+    qualifiedId: `${storeId}:${project.id}`,
+    gameId: store && store.gameId ? store.gameId : "",
+  };
+}
+
 function projectRefBase(project) {
-  return { uri: `canvas://${project.id}`, title: project.title || project.id };
+  if (project.storeId && project.storeId !== STUDIO_STORE_ID && project.gameId) {
+    return { uri: `canvas://game/${project.gameId}/${project.id}`, title: project.title || project.id, private: true };
+  }
+  return { uri: `canvas://${project.id}`, title: project.title || project.id, private: false };
 }
 
 // Mirrors site/context_menu.js's Copy ID formatter (elementRef/copyIdItemFor,
@@ -54,8 +69,9 @@ export function formatSelectionRef(project, target) {
   if (target.kind === "element") {
     const element = (project.elements || []).find((item) => item.id === target.id);
     if (!element) throw new Error(`buildChatContext: selection element not found: ${target.id}`);
+    const ref = `${base.uri}/element/${element.id}`;
     return {
-      ref: `${base.uri}/element/${element.id} — project "${base.title}", element "${element.name || element.id}"`,
+      ref: base.private ? ref : `${ref} — project "${base.title}", element "${element.name || element.id}"`,
       id: element.id,
       kind: "element",
       type: element.type,
@@ -68,8 +84,9 @@ export function formatSelectionRef(project, target) {
   if (target.kind === "group") {
     const group = (project.groups || []).find((item) => item.id === target.id);
     if (!group) throw new Error(`buildChatContext: selection group not found: ${target.id}`);
+    const ref = `${base.uri}/group/${group.id}`;
     return {
-      ref: `${base.uri}/group/${group.id} — project "${base.title}", group "${group.name || "Group"}"`,
+      ref: base.private ? ref : `${ref} — project "${base.title}", group "${group.name || "Group"}"`,
       id: group.id,
       kind: "group",
       type: null,
@@ -85,10 +102,11 @@ export function formatSelectionRef(project, target) {
     if (!element || !region) {
       throw new Error(`buildChatContext: selection region not found: ${target.elementId}/${target.regionId}`);
     }
+    const ref = `${base.uri}/element/${element.id}/region/${region.id}`;
     return {
-      ref:
-        `${base.uri}/element/${element.id}/region/${region.id} — project "${base.title}", ` +
-        `element "${element.name || element.id}", region "${region.name || region.id}"`,
+      ref: base.private
+        ? ref
+        : `${ref} — project "${base.title}", element "${element.name || element.id}", region "${region.name || region.id}"`,
       id: region.id,
       kind: "region",
       type: null,
@@ -108,15 +126,19 @@ export function formatSelectionRef(project, target) {
 // selection is valid ("act on the project as a whole"). `head` is the current journal head
 // (listHistory's own value — the T0234 `--expect-head` seed the driving contract points the
 // agent at before any undo/redo/history-jump).
-export function buildChatContext(root, { projectId, selection } = {}) {
+export function buildChatContext(root, { projectId, selection, store } = {}) {
   if (!projectId) throw new Error("buildChatContext requires projectId");
-  const project = getProject(root, projectId);
+  const project = decorateProjectForChat(getProject(root, projectId), store);
   const resolvedSelection = (selection || []).map((target) => formatSelectionRef(project, target));
   const history = listHistory(root, { projectId });
   return {
     schema: CHAT_DIGEST_SCHEMA,
     projectId: project.id,
     title: project.title || project.id,
+    storeId: project.storeId,
+    visibility: project.visibility,
+    qualifiedId: project.qualifiedId,
+    gameId: project.gameId,
     selection: resolvedSelection,
     counts: { elements: (project.elements || []).length, groups: (project.groups || []).length },
     head: history.head,

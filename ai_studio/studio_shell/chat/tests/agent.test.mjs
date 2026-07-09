@@ -31,6 +31,16 @@ const CONTEXT = {
 };
 
 const EMPTY_CONTEXT = { ...CONTEXT, selection: [] };
+const PRIVATE_CONTEXT = {
+  ...CONTEXT,
+  storeId: "game:secret-game",
+  visibility: "private",
+  qualifiedId: "game:secret-game:proj-1",
+  gameId: "secret-game",
+  selection: [
+    { ...CONTEXT.selection[0], ref: "canvas://game/secret-game/proj-1/element/el_1" },
+  ],
+};
 
 // ---- buildDrivingContract ------------------------------------------------------------
 
@@ -44,6 +54,12 @@ test("buildDrivingContract: states the CLI path, the run-bare-for-verbs law, T02
   assert.match(contract, /delete the project/i);
   assert.match(contract, /outside this project's own store directory/i);
   assert.match(contract, /journaled, undoable canvas operation/i);
+});
+
+test("buildDrivingContract: private contexts require --store on every canvas CLI command", () => {
+  const contract = buildDrivingContract(PRIVATE_CONTEXT);
+  assert.match(contract, /--store game:secret-game/);
+  assert.match(contract, /every canvas CLI command/i);
 });
 
 // ---- buildContextDigestText -----------------------------------------------------------
@@ -60,6 +76,13 @@ test("buildContextDigestText: embeds title, counts, head, and every selection re
 test("buildContextDigestText: an empty selection says so instead of an empty list", () => {
   const text = buildContextDigestText(EMPTY_CONTEXT);
   assert.match(text, /Selection: \(none/);
+});
+
+test("buildContextDigestText: private contexts print the store scope command hint", () => {
+  const text = buildContextDigestText(PRIVATE_CONTEXT);
+  assert.match(text, /Canvas store: game:secret-game/);
+  assert.match(text, /--store game:secret-game/);
+  assert.match(text, /canvas:\/\/game\/secret-game\/proj-1\/element\/el_1/);
 });
 
 // ---- buildFirstTurnPrompt / buildResumeMessage -----------------------------------------
@@ -89,6 +112,13 @@ test("buildResumeMessage: a COMPACT head+selection line, not the full contract/d
 test("buildResumeMessage: no selection reads as (none)", () => {
   const resumeMsg = buildResumeMessage({ context: EMPTY_CONTEXT, message: "hi" });
   assert.match(resumeMsg, /selection: \(none\)/);
+});
+
+test("buildResumeMessage: private resumes keep the selected store in the compact line", () => {
+  const resumeMsg = buildResumeMessage({ context: PRIVATE_CONTEXT, message: "continue" });
+  assert.match(resumeMsg, /^current head: 7; canvas store: game:secret-game/);
+  assert.match(resumeMsg, /--store game:secret-game/);
+  assert.match(resumeMsg, /selection: canvas:\/\/game\/secret-game\/proj-1\/element\/el_1/);
 });
 
 // ---- pure argv builders (no spawn) -----------------------------------------------------

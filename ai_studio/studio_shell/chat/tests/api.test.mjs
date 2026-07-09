@@ -4,7 +4,8 @@
 // Run: node --test ai_studio/studio_shell/chat/tests/api.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
@@ -12,6 +13,7 @@ import { fileURLToPath, URL } from "node:url";
 import { createChatApi } from "../api.mjs";
 import { addImage, createProject } from "../../../assets/canvas/ops.mjs";
 import { solidPng } from "../../../assets/canvas/tests/png_fixture.mjs";
+import { selectCanvasStore, withCanvasStore } from "../../../assets/canvas/stores.mjs";
 
 // Metadata-only ops (createProject, no text/font reads), so any placeholder root works —
 // same convention as the canvas suite's own metadata-only tests.
@@ -29,13 +31,65 @@ function tempProjects(t) {
   return dir;
 }
 
+function tempPrivateWorkspace(t) {
+  const root = mkdtempSync(join(tmpdir(), "chat-api-private-root-"));
+  const publicRoot = join(root, "public-canvas");
+  const previous = process.env.CANVAS_PROJECTS_ROOT;
+  process.env.CANVAS_PROJECTS_ROOT = publicRoot;
+  t.after(() => {
+    if (previous === undefined) delete process.env.CANVAS_PROJECTS_ROOT;
+    else process.env.CANVAS_PROJECTS_ROOT = previous;
+    rmSync(root, { recursive: true, force: true });
+  });
+  return { root, publicRoot };
+}
+
+function ensurePrivateGameMount(root, gameId = "secret-game") {
+  const gameRoot = join(root, "games", gameId);
+  mkdirSync(gameRoot, { recursive: true });
+  execFileSync("git", ["init"], { cwd: root, encoding: "utf8" });
+  execFileSync("git", ["init"], { cwd: gameRoot, encoding: "utf8" });
+  mkdirSync(join(root, ".git", "info"), { recursive: true });
+  writeFileSync(
+    join(root, ".git", "info", "exclude"),
+    `ai_studio/workspace/games.local.json\ngames/${gameId}/\n`,
+    "utf8",
+  );
+  mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
+  writeFileSync(join(root, "ai_studio", "workspace", "games.local.json"), JSON.stringify({
+    schema: "ai_studio.workspace.games.local.v1",
+    games: [{
+      schemaVersion: 1,
+      storeId: `game:${gameId}`,
+      kind: "game",
+      gameId,
+      root: `games/${gameId}`,
+      visibility: "private",
+      gitRoot: `games/${gameId}`,
+      commitPolicy: "nested-private",
+      enabledStores: ["canvas"],
+    }],
+  }, null, 2) + "\n", "utf8");
+  return {
+    gameId,
+    gameRoot,
+    storeId: `game:${gameId}`,
+    canvasRoot: join(gameRoot, ".ai_studio", "canvas", "projects"),
+  };
+}
+
+function createPrivateProject(root, storeId, title = "Private Chat Fixture") {
+  return withCanvasStore(selectCanvasStore(root, { store: storeId }), () => createProject(root, { title }));
+}
+
 // Minimal req/res doubles for a plain JSON (non-SSE) route: collects Buffer chunks and
 // resolves with the parsed status/headers/body on res.end() — mirrors api.test.mjs's own
 // invokeApi.
-function invokeJson(handler, method, path, body) {
+function invokeJson(handler, method, path, body, headers = {}) {
   return new Promise((resolveCall) => {
     const req = new EventEmitter();
     req.method = method;
+    req.headers = Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
     req.setEncoding = () => {};
     req.destroy = () => {};
     const chunks = [];
@@ -77,10 +131,11 @@ function invokeJson(handler, method, path, body) {
 
 // SSE double: collects every res.write() call as one raw string in order (each is one
 // `event: X\ndata: {...}\n\n` block), parsed into {event, data} pairs for assertions.
-function invokeSSE(handler, method, path, body) {
+function invokeSSE(handler, method, path, body, headers = {}) {
   return new Promise((resolveCall) => {
     const req = new EventEmitter();
     req.method = method;
+    req.headers = Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
     req.setEncoding = () => {};
     req.destroy = () => {};
     const writes = [];
@@ -205,6 +260,74 @@ test("POST .../message: unknown project surfaces as an SSE error (buildChatConte
     ["progress", "error"],
   );
   assert.match(result.events[1].data.message, /canvas project not found/);
+});
+
+test("chat API routes project chat through the selected private Canvas store header", async (t) => {
+  const { root, publicRoot } = tempPrivateWorkspace(t);
+  const privateStore = ensurePrivateGameMount(root);
+  const privateProject = createPrivateProject(root, privateStore.storeId);
+  const privateHeaders = { "x-ai-studio-store": privateStore.storeId };
+  const seenContexts = [];
+  const handler = createChatApi(root, {
+    transport: async ({ context }) => {
+      seenContexts.push(context);
+      return { text: "private reply", sessionId: "sess-private" };
+    },
+  });
+
+  const publicMiss = await invokeSSE(handler, "POST", `/api/chat/projects/${privateProject.id}/message`, { text: "hi" });
+  assert.deepEqual(
+    publicMiss.events.map((event) => event.event),
+    ["progress", "error"],
+  );
+  assert.match(publicMiss.events[1].data.message, /canvas project not found/);
+
+  const privateResult = await invokeSSE(
+    handler,
+    "POST",
+    `/api/chat/projects/${privateProject.id}/message`,
+    { text: "hi private" },
+    privateHeaders,
+  );
+  assert.deepEqual(
+    privateResult.events.map((event) => event.event),
+    ["progress", "final"],
+  );
+  assert.equal(privateResult.events[1].data.text, "private reply");
+  assert.equal(seenContexts.length, 1);
+  assert.equal(seenContexts[0].storeId, privateStore.storeId);
+  assert.equal(seenContexts[0].visibility, "private");
+  assert.equal(seenContexts[0].qualifiedId, `${privateStore.storeId}:${privateProject.id}`);
+
+  const privateTranscriptPath = join(privateStore.canvasRoot, privateProject.id, "chat", "transcript.jsonl");
+  assert.equal(existsSync(privateTranscriptPath), true, "private transcript is stored under the game-owned Canvas store");
+  assert.equal(
+    existsSync(join(publicRoot, privateProject.id, "chat", "transcript.jsonl")),
+    false,
+    "private transcript is not mirrored into the public Studio Canvas store",
+  );
+
+  const privateTranscript = await invokeJson(
+    handler,
+    "GET",
+    `/api/chat/projects/${privateProject.id}/transcript`,
+    undefined,
+    privateHeaders,
+  );
+  assert.deepEqual(privateTranscript.json.transcript.map((row) => row.role), ["user", "assistant"]);
+
+  const publicTranscript = await invokeJson(handler, "GET", `/api/chat/projects/${privateProject.id}/transcript`);
+  assert.deepEqual(publicTranscript.json.transcript, []);
+
+  const mismatch = await invokeJson(
+    handler,
+    "GET",
+    `/api/chat/projects/${privateProject.id}/transcript?store=studio`,
+    undefined,
+    privateHeaders,
+  );
+  assert.equal(mismatch.status, 400);
+  assert.match(mismatch.json.error, /mismatch/);
 });
 
 test("POST .../message: a resumed conversation persists the transport's sessionId and passes the PRIOR one in", async (t) => {

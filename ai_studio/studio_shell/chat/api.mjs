@@ -24,6 +24,7 @@
 import { readTranscript, appendTurn, buildChatContext, clearConversation, readChatState, writeChatState } from "./context.mjs";
 import { runChatTurn } from "./agent.mjs";
 import { listHistory } from "../../assets/canvas/ops.mjs";
+import { selectCanvasStore, withCanvasStore } from "../../assets/canvas/stores.mjs";
 
 // Chat message bodies are small (text + a handful of selection refs) — nowhere near
 // image-upload size, so a much tighter cap than the canvas API's 20MB image cap.
@@ -75,26 +76,48 @@ function errorMessage(error) {
   return error && error.message ? error.message : String(error);
 }
 
+function headerValue(req, name) {
+  const value = req.headers && req.headers[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] : (value || "");
+}
+
+function chatStoreRequestArgs(req, url) {
+  const headerStore = headerValue(req, "x-ai-studio-store");
+  const queryStore = url.searchParams.get("store") || "";
+  if (headerStore && queryStore && headerStore !== queryStore) {
+    throw new Error(`Chat store mismatch between header and query: ${headerStore} != ${queryStore}`);
+  }
+  return {
+    store: headerStore || queryStore,
+    game: url.searchParams.get("game") || "",
+  };
+}
+
+function chatRunKey(store, projectId) {
+  return `${store.storeId}:${projectId}`;
+}
+
 // Runs one full chat turn over an already-open SSE stream. `runningChildren` is the
-// per-project Map<projectId, ChildProcess> the cancel route reads — populated via
-// runChatTurn's `onChild` seam, which the default transport (agent.mjs) calls synchronously
-// right after spawn.
-async function handleMessage(root, projectId, body, res, transport, runningChildren) {
+// store-qualified Map<storeId:projectId, ChildProcess> the cancel route reads — populated
+// via runChatTurn's `onChild` seam, which the default transport (agent.mjs) calls
+// synchronously right after spawn.
+async function handleMessage(root, activeStore, projectId, body, res, transport, runningChildren) {
   sseHead(res);
   sseEvent(res, "progress", { message: "spawn started" });
   const text = body && typeof body.text === "string" ? body.text.trim() : "";
+  const runKey = chatRunKey(activeStore, projectId);
   try {
     if (!text) throw new Error("message requires non-empty text");
     // v1 keeps this simple: reject a second concurrent Send rather than queue it (design
     // doc section 4's Cancel/kill note) — one running child per project at a time.
-    if (runningChildren.has(projectId)) {
+    if (runningChildren.has(runKey)) {
       throw new Error(`a turn is already running for project ${projectId} — cancel it or wait for it to finish`);
     }
-    const context = buildChatContext(root, { projectId, selection: body.selection || [] });
+    const context = buildChatContext(root, { projectId, selection: body.selection || [], store: activeStore });
     const before = listHistory(root, { projectId }).head;
     appendTurn(root, { projectId, role: "user", text });
     const state = readChatState(root, { projectId });
-    const onChild = (child) => runningChildren.set(projectId, child);
+    const onChild = (child) => runningChildren.set(runKey, child);
     let result;
     try {
       result = await runChatTurn({ context, message: text, sessionId: state.sessionId, transport, onChild });
@@ -111,7 +134,7 @@ async function handleMessage(root, projectId, body, res, transport, runningChild
       }
       throw turnError;
     } finally {
-      runningChildren.delete(projectId);
+      runningChildren.delete(runKey);
     }
     const after = listHistory(root, { projectId }).head;
     const seqRange = after > before ? [before, after] : null;
@@ -120,7 +143,7 @@ async function handleMessage(root, projectId, body, res, transport, runningChild
     writeChatState(root, { projectId, sessionId: result.sessionId });
     sseEvent(res, "final", { text: result.text, sessionId: result.sessionId, seqRange, flags: result.flags });
   } catch (error) {
-    runningChildren.delete(projectId);
+    runningChildren.delete(runKey);
     sseEvent(res, "error", { message: errorMessage(error) });
   } finally {
     res.end();
@@ -132,8 +155,8 @@ async function handleMessage(root, projectId, body, res, transport, runningChild
 // server.mjs calls createChatApi(root) with no override, so production always gets
 // agent.mjs's default codex-exec transport).
 export function createChatApi(root, { transport } = {}) {
-  // One entry per project with a turn currently in flight — Map, not a single slot, so a
-  // stuck/slow project never blocks chat on a different project.
+  // One entry per store-qualified project with a turn currently in flight — Map, not a
+  // single slot, so a stuck/slow project never blocks chat on a different project.
   const runningChildren = new Map();
 
   return async function handleChatApi(req, res, url) {
@@ -144,6 +167,13 @@ export function createChatApi(root, { transport } = {}) {
     }
     const projectId = decodeURIComponent(parts[3]);
     const sub = parts[4];
+    let activeStore;
+    try {
+      activeStore = selectCanvasStore(root, chatStoreRequestArgs(req, url));
+    } catch (error) {
+      sendJson(res, 400, { error: errorMessage(error) });
+      return true;
+    }
 
     if (sub === "message") {
       if (req.method !== "POST") {
@@ -157,7 +187,7 @@ export function createChatApi(root, { transport } = {}) {
         sendJson(res, 400, { error: errorMessage(error) });
         return true;
       }
-      await handleMessage(root, projectId, body, res, transport, runningChildren);
+      await withCanvasStore(activeStore, () => handleMessage(root, activeStore, projectId, body, res, transport, runningChildren));
       return true;
     }
 
@@ -166,10 +196,11 @@ export function createChatApi(root, { transport } = {}) {
         sendJson(res, 405, { error: "method not allowed" });
         return true;
       }
-      const child = runningChildren.get(projectId);
+      const runKey = chatRunKey(activeStore, projectId);
+      const child = runningChildren.get(runKey);
       if (child) {
         child.kill("SIGTERM");
-        runningChildren.delete(projectId);
+        runningChildren.delete(runKey);
       }
       sendJson(res, 200, { ok: true, cancelled: Boolean(child) });
       return true;
@@ -184,7 +215,7 @@ export function createChatApi(root, { transport } = {}) {
       // chat/transcript.jsonl on disk, which readTranscript reads as "nothing yet" — same
       // tolerant-read stance as store.mjs's own readErrors/readJournal for their sidecar
       // files. Always 200; an empty array IS the "sane" answer for a fresh project.
-      sendJson(res, 200, { transcript: readTranscript(root, { projectId }) });
+      sendJson(res, 200, { transcript: withCanvasStore(activeStore, () => readTranscript(root, { projectId })) });
       return true;
     }
 
@@ -194,7 +225,7 @@ export function createChatApi(root, { transport } = {}) {
         return true;
       }
       try {
-        const result = clearConversation(root, { projectId });
+        const result = withCanvasStore(activeStore, () => clearConversation(root, { projectId }));
         sendJson(res, 200, { ok: true, ...result });
       } catch (error) {
         sendJson(res, 400, { error: errorMessage(error) });

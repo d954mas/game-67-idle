@@ -79,6 +79,28 @@ test("buildChatContext: element selection resolves ref/name/type/w/h/groupId mat
   assert.equal(entry.ref, `canvas://${projectId}/element/${elementId} — project "Fixture Screen", element "Hero art"`);
 });
 
+test("buildChatContext: private store refs use canvas://game and omit private names", (t) => {
+  tempProjects(t);
+  const { projectId, elementId } = seedProject();
+  patchElement(ROOT, projectId, elementId, { name: "Secret Hero" });
+  const digest = buildChatContext(ROOT, {
+    projectId,
+    selection: [{ kind: "element", id: elementId }],
+    store: {
+      storeId: "game:secret-game",
+      visibility: "private",
+      kind: "game",
+      gameId: "secret-game",
+    },
+  });
+
+  assert.equal(digest.storeId, "game:secret-game");
+  assert.equal(digest.visibility, "private");
+  assert.equal(digest.qualifiedId, `game:secret-game:${projectId}`);
+  assert.equal(digest.selection[0].ref, `canvas://game/secret-game/${projectId}/element/${elementId}`);
+  assert.doesNotMatch(digest.selection[0].ref, /Fixture Screen|Secret Hero/);
+});
+
 test("buildChatContext: group selection resolves the group ref format", (t) => {
   tempProjects(t);
   const { projectId, groupId } = seedProject();
