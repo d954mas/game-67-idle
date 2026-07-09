@@ -2,7 +2,7 @@
 #include "features/items/reason_tags.h"
 
 #include "items_state.h"            /* generated: ItemsState + items_state instance, ItemsItemOwned */
-#include "items_state_events.gen.h" /* items_emit_txn (generated items.txn event) */
+#include "items_state_events.gen.h" /* generated items.txn/items.move events */
 
 #include "core/nt_assert.h" /* NT_ASSERT (L2: catch key truncation loudly in debug) */
 #include "game_save.h"      /* game_save_mark_dirty */
@@ -72,8 +72,8 @@ static int container_record_count(const char *container_id) {
 
 /* Core add, shared by the public items_add() and items_move()'s strict
    remove+add re-key (§7.1) -- neither reason-checks nor emits txn here (the
-   caller owns both: items_add emits with its own reason; items_move must NOT
-   emit at all since ownership of the def does not change, only its container).
+   caller owns both: items_add emits txn; items_move emits move, not txn, since
+   ownership of the def does not change, only its container).
    capacity (M1) REJECTs only when allocating a genuinely NEW record; growing an
    existing stack is never capacity-limited. currency.cap (M3) CLAMPs the
    resulting sum, never rejects. *out_delta (if non-NULL) receives the actual
@@ -170,11 +170,16 @@ bool items_add(const char *container_id, const char *def_id, int64_t count, cons
     const char *target =
         (container_id != NULL && container_id[0] != '\0') ? container_id : (item_is_currency(def) ? "purse" : "backpack");
 
+    char key[ITEMS_STATE_STRING_MAX];
+    if (!build_stack_key(key, sizeof key, target, def_id)) {
+        return false;
+    }
+    const int64_t before = items_count(target, def_id);
     int64_t delta = 0;
     if (!add_raw(target, def_id, count, &delta)) {
         return false;
     }
-    items_emit_txn(def_id, delta, reason);
+    items_emit_txn("add", def_id, target, key, count, delta, before, before + delta, reason);
     return true;
 }
 
@@ -183,10 +188,15 @@ bool items_remove(const char *container_id, const char *def_id, int64_t count, c
     if (container_id == NULL || def_id == NULL) {
         return false;
     }
+    char key[ITEMS_STATE_STRING_MAX];
+    if (!build_stack_key(key, sizeof key, container_id, def_id)) {
+        return false;
+    }
+    const int64_t before = items_count(container_id, def_id);
     if (!remove_raw(container_id, def_id, count)) {
         return false;
     }
-    items_emit_txn(def_id, -count, reason);
+    items_emit_txn("remove", def_id, container_id, key, -count, -count, before, before - count, reason);
     return true;
 }
 
@@ -257,6 +267,9 @@ bool items_move(const char *from, const char *to, const char *entry_key, int64_t
             stack_rec->count = remaining;
         }
         game_save_mark_dirty();
+        if (accepted > 0) {
+            items_emit_move(def_id, entry_key, from, to, count, accepted, reason);
+        }
         return true;
     }
 
@@ -279,8 +292,11 @@ bool items_move(const char *from, const char *to, const char *entry_key, int64_t
         if (cdef->capacity > 0 && container_record_count(to) >= cdef->capacity) {
             return false;
         }
+        char def_id[ITEMS_STATE_STRING_MAX];
+        (void)snprintf(def_id, sizeof def_id, "%s", unique->def_id);
         (void)snprintf(unique->container, sizeof unique->container, "%s", to);
         game_save_mark_dirty();
+        items_emit_move(def_id, entry_key, from, to, count, 1, reason);
         return true;
     }
 
@@ -323,7 +339,7 @@ const char *items_instance_create(const char *container_id, const char *def_id, 
     rec->quarantined = false;
 
     game_save_mark_dirty();
-    items_emit_txn(def_id, 1, reason);
+    items_emit_txn("create", def_id, container_id, rec->key, 1, 1, 0, rec->count, reason);
     return rec->key;
 }
 
@@ -343,10 +359,14 @@ bool items_instance_destroy(const char *instance_id, const char *reason) {
     }
     char def_id[ITEMS_STATE_STRING_MAX];
     (void)snprintf(def_id, sizeof def_id, "%s", rec->def_id);
+    char container_id[ITEMS_STATE_STRING_MAX];
+    (void)snprintf(container_id, sizeof container_id, "%s", rec->container);
+    char entry_key[ITEMS_STATE_STRING_MAX];
+    (void)snprintf(entry_key, sizeof entry_key, "%s", rec->key);
     int64_t count = rec->count;
     memset(rec, 0, sizeof(*rec));
     game_save_mark_dirty();
-    items_emit_txn(def_id, -count, reason);
+    items_emit_txn("destroy", def_id, container_id, entry_key, -count, -count, count, 0, reason);
     return true;
 }
 

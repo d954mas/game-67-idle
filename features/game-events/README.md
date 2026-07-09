@@ -56,6 +56,11 @@ Typed event producers register descriptors from their owning feature or game
 layer. `game-events` renders any descriptor-compatible event generically, so
 DevAPI and analytics do not need per-feature code.
 
+`game_analytics` writes the same descriptor-rendered event shape and appends
+`time_ms` at record time for local NDJSON/scorecard use. The in-frame event log,
+DevAPI tail, and ordinary `[ev]` log mirror remain frame-scoped and do not carry
+wall-clock timestamps.
+
 ## Backdoor
 
 A game with a fundamentally different event spine can copy this pack into its own

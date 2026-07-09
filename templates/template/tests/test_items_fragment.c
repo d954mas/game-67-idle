@@ -483,9 +483,8 @@ void test_byte_stable_after_on_new_game(void) {
     cJSON_Delete(jb);
 }
 
-/* items.txn (§10): add emits items.txn{def_id,delta,reason} in the shared event
-   log (canon idiom, game_features.c:30-47); move does NOT emit (ownership of
-   the def does not change, only its container). */
+/* items.txn/items.move (§10): raw event lines must explain the exact mutation
+   without requiring a state snapshot or source-code inference. */
 void test_items_txn_event_emitted_on_add(void) {
     items_state_fragment.reset();
     TEST_ASSERT_TRUE(items_add("purse", "tmpl.gold", 42, "loot:test_txn"));
@@ -497,7 +496,12 @@ void test_items_txn_event_emitted_on_add(void) {
     for (int i = 0; i < n; ++i) {
         if (log[i].type.value == txn_type.value) {
             const ItemsEvTxn *e = (const ItemsEvTxn *)log[i].payload;
-            if (strcmp(items_ev_txn_def_id(e), "tmpl.gold") == 0 && e->delta == 42 &&
+            if (strcmp(items_ev_txn_op(e), "add") == 0 &&
+                strcmp(items_ev_txn_def_id(e), "tmpl.gold") == 0 &&
+                strcmp(items_ev_txn_container(e), "purse") == 0 &&
+                strcmp(items_ev_txn_entry_key(e), "purse/tmpl.gold") == 0 &&
+                e->requested_delta == 42 && e->applied_delta == 42 &&
+                e->before_count == 0 && e->after_count == 42 &&
                 strcmp(items_ev_txn_reason(e), "loot:test_txn") == 0) {
                 found = true;
             }
@@ -506,7 +510,7 @@ void test_items_txn_event_emitted_on_add(void) {
     TEST_ASSERT_TRUE(found);
 }
 
-void test_items_move_does_not_emit_txn(void) {
+void test_items_move_emits_move_event_not_txn(void) {
     items_state_fragment.reset();
     TEST_ASSERT_TRUE(items_add("purse", "tmpl.gold", 5, "loot:test_txn"));
     game_event_frame_reset(); /* isolate the move -- clear the add's own txn */
@@ -515,20 +519,50 @@ void test_items_move_does_not_emit_txn(void) {
     int n = 0;
     const game_event_t *log = game_event_log(&n);
     nt_hash64_t txn_type = items_ev_txn_type();
+    nt_hash64_t move_type = items_ev_move_type();
+    bool found_move = false;
     for (int i = 0; i < n; ++i) {
         TEST_ASSERT_FALSE(log[i].type.value == txn_type.value);
+        if (log[i].type.value == move_type.value) {
+            const ItemsEvMove *e = (const ItemsEvMove *)log[i].payload;
+            if (strcmp(items_ev_move_def_id(e), "tmpl.gold") == 0 &&
+                strcmp(items_ev_move_entry_key(e), "tmpl.gold") == 0 &&
+                strcmp(items_ev_move_from_container(e), "purse") == 0 &&
+                strcmp(items_ev_move_to_container(e), "backpack") == 0 &&
+                e->requested_count == 5 && e->moved_count == 5 &&
+                strcmp(items_ev_move_reason(e), "loot:test_txn") == 0) {
+                found_move = true;
+            }
+        }
     }
+    TEST_ASSERT_TRUE(found_move);
 }
 
 /* Shared scan helpers for the txn-log assertions below (T3-T6). */
-static bool txn_event_exists(const char *def_id, int64_t delta, const char *reason) {
+static bool txn_event_exists(
+    const char *op,
+    const char *def_id,
+    const char *container,
+    const char *entry_key,
+    int64_t requested_delta,
+    int64_t applied_delta,
+    int64_t before_count,
+    int64_t after_count,
+    const char *reason) {
     int n = 0;
     const game_event_t *log = game_event_log(&n);
     nt_hash64_t txn_type = items_ev_txn_type();
     for (int i = 0; i < n; ++i) {
         if (log[i].type.value == txn_type.value) {
             const ItemsEvTxn *e = (const ItemsEvTxn *)log[i].payload;
-            if (strcmp(items_ev_txn_def_id(e), def_id) == 0 && e->delta == delta &&
+            if (strcmp(items_ev_txn_op(e), op) == 0 &&
+                strcmp(items_ev_txn_def_id(e), def_id) == 0 &&
+                strcmp(items_ev_txn_container(e), container) == 0 &&
+                strcmp(items_ev_txn_entry_key(e), entry_key) == 0 &&
+                e->requested_delta == requested_delta &&
+                e->applied_delta == applied_delta &&
+                e->before_count == before_count &&
+                e->after_count == after_count &&
                 strcmp(items_ev_txn_reason(e), reason) == 0) {
                 return true;
             }
@@ -555,7 +589,8 @@ void test_txn_delta_equals_clamped_amount(void) {
     items_state_fragment.reset();
     TEST_ASSERT_TRUE(items_add("purse", "tmpl.energy", 150, "loot:test_txn"));
     TEST_ASSERT_EQUAL_INT64(100, items_count("purse", "tmpl.energy"));
-    TEST_ASSERT_TRUE(txn_event_exists("tmpl.energy", 100, "loot:test_txn"));
+    TEST_ASSERT_TRUE(txn_event_exists(
+        "add", "tmpl.energy", "purse", "purse/tmpl.energy", 150, 100, 0, 100, "loot:test_txn"));
 }
 
 /* T4: remove/instance_create/instance_destroy all emit items.txn with the
@@ -566,18 +601,21 @@ void test_txn_emitted_on_remove_and_instance_lifecycle(void) {
     TEST_ASSERT_TRUE(items_add("purse", "tmpl.gold", 20, "loot:test_txn"));
     game_event_frame_reset();
     TEST_ASSERT_TRUE(items_remove("purse", "tmpl.gold", 5, "sell:test_txn"));
-    TEST_ASSERT_TRUE(txn_event_exists("tmpl.gold", -5, "sell:test_txn"));
+    TEST_ASSERT_TRUE(txn_event_exists(
+        "remove", "tmpl.gold", "purse", "purse/tmpl.gold", -5, -5, 20, 15, "sell:test_txn"));
 
     game_event_frame_reset();
     const char *iid = items_instance_create("backpack", "tmpl.sword", "loot:test_txn");
     TEST_ASSERT_NOT_NULL(iid);
     char iid_copy[ITEMS_STATE_STRING_MAX];
     (void)snprintf(iid_copy, sizeof iid_copy, "%s", iid);
-    TEST_ASSERT_TRUE(txn_event_exists("tmpl.sword", 1, "loot:test_txn"));
+    TEST_ASSERT_TRUE(txn_event_exists(
+        "create", "tmpl.sword", "backpack", iid_copy, 1, 1, 0, 1, "loot:test_txn"));
 
     game_event_frame_reset();
     TEST_ASSERT_TRUE(items_instance_destroy(iid_copy, "sell:test_txn"));
-    TEST_ASSERT_TRUE(txn_event_exists("tmpl.sword", -1, "sell:test_txn"));
+    TEST_ASSERT_TRUE(txn_event_exists(
+        "destroy", "tmpl.sword", "backpack", iid_copy, -1, -1, 1, 0, "sell:test_txn"));
 }
 
 /* T5: a REJECTed add (capacity full) must not emit a txn -- failed mutations
@@ -609,7 +647,16 @@ void test_add_overflow_clamps_to_schema_max(void) {
     game_event_frame_reset();
     TEST_ASSERT_TRUE(items_add("backpack", "tmpl.wood", 1000, "loot:test_txn")); /* would overflow past MAX */
     TEST_ASSERT_EQUAL_INT64(ITEMS_STATE_ITEM_OWNED_COUNT_MAX, items_count("backpack", "tmpl.wood"));
-    TEST_ASSERT_TRUE(txn_event_exists("tmpl.wood", 10, "loot:test_txn")); /* honest: only 10 fit before MAX */
+    TEST_ASSERT_TRUE(txn_event_exists(
+        "add",
+        "tmpl.wood",
+        "backpack",
+        "backpack/tmpl.wood",
+        1000,
+        10,
+        near_max,
+        ITEMS_STATE_ITEM_OWNED_COUNT_MAX,
+        "loot:test_txn")); /* honest: only 10 fit before MAX */
 }
 
 int main(void) {
@@ -636,7 +683,7 @@ int main(void) {
     RUN_TEST(test_quarantine_round_trip);
     RUN_TEST(test_byte_stable_after_on_new_game);
     RUN_TEST(test_items_txn_event_emitted_on_add);
-    RUN_TEST(test_items_move_does_not_emit_txn);
+    RUN_TEST(test_items_move_emits_move_event_not_txn);
     RUN_TEST(test_txn_delta_equals_clamped_amount);
     RUN_TEST(test_txn_emitted_on_remove_and_instance_lifecycle);
     RUN_TEST(test_capacity_reject_emits_no_txn);

@@ -15,6 +15,9 @@ One catalog (item/container/currency definitions, compiled from a game's
 a read-only op-layer CLI. No UI, no DevAPI commands of its own, no gameplay
 logic — items NEVER executes effects, it only tracks and reports ownership.
 
+Successful mutations emit typed events: `items.txn` for add/remove/create/destroy
+and `items.move` for container transfers.
+
 ## Contents
 
 ```text

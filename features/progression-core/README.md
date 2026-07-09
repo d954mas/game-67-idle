@@ -49,16 +49,20 @@ not exist — items code never mentions progression (grep-gated, G-rev). See
 ## Three modes (one axis: `mode` in the catalog)
 
 - **`manual`** — xp lives in purse (`currency_def`); `progression_level_up(track,
-  reason)` spends `cost(level)` from purse on call. Does NOT tick, does NOT
-  emit `progression.levelup` (the caller already knows the result).
+  reason)` spends `cost(level)` from purse on call. Does NOT tick. Successful
+  calls emit `progression.levelup` with `mode: "manual"` and resource before/after
+  context so analytics does not infer levelups from item transactions.
 - **`auto`** — xp lives in purse; `progression_update()` (the frame tick)
   auto-buys levels while purse can afford it.
 - **`threshold`** — xp is an internal accumulator
   (`progression_add_xp(track, n, reason)`); `progression_update()`
   auto-levels while the accumulator covers `cost(level)`.
 
-Both `auto` and `threshold` emit `progression.levelup {track, old_level,
-new_level}` from inside `progression_update()`, never from a direct call.
+Successful `manual`, `auto`, and `threshold` level changes emit
+`progression.levelup` with `track`, `mode`, `cause`, `reason`, `old_level`,
+`new_level`, cost/resource before-after fields, and `cascade_depth`. Additional
+fact events cover non-levelup mutations: `progression.xp_added`,
+`progression.level_set`, and `progression.reset`.
 
 ## Curve = baked int64 table (zero float in C)
 

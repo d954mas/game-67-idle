@@ -49,7 +49,6 @@ function recommendation({ first60sCompletion, sessionLengthSec, rewardOrUpgradeI
 export function scorecardFromEvents(events) {
   let startedAt = null;
   let lastTs = null;
-  let sessionEnd = null;
   let first60sCompletion = false;
   let rewardOrUpgradeInteraction = false;
   let adBreakOpportunity = false;
@@ -67,7 +66,6 @@ export function scorecardFromEvents(events) {
 
     const name = eventName(event);
     if (name === "first_60s.complete") first60sCompletion = true;
-    if (name === "session.end") sessionEnd = ts;
     if (name === "ad.interstitial.request" || name === "ad.rewarded.request") adBreakOpportunity = true;
     if (
       name === "ad.rewarded.result" && (event.rewarded === true || (event.data && event.data.rewarded === true))
@@ -80,7 +78,7 @@ export function scorecardFromEvents(events) {
   }
 
   const start = startedAt ?? (ordered.length ? ordered[0].__ts ?? 0 : 0);
-  const end = sessionEnd ?? lastTs ?? start;
+  const end = lastTs ?? start;
   const sessionLengthSec = Math.max(0, Math.round((end - start) / 1000));
   const keyDropOff = classifyDropOff(ordered);
 

@@ -19,9 +19,43 @@
   "events": {
     "levelup": {
       "fields": {
+        "track":           { "type": "string" },
+        "mode":            { "type": "string" },
+        "cause":           { "type": "string" },
+        "reason":          { "type": "string" },
+        "old_level":       { "type": "i64" },
+        "new_level":       { "type": "i64" },
+        "cost_def_id":     { "type": "string" },
+        "cost_amount":     { "type": "i64" },
+        "resource_before": { "type": "i64" },
+        "resource_after":  { "type": "i64" },
+        "cascade_depth":   { "type": "i64" }
+      }
+    },
+    "xp_added": {
+      "fields": {
         "track":     { "type": "string" },
+        "reason":    { "type": "string" },
+        "delta":     { "type": "i64" },
+        "before_xp": { "type": "i64" },
+        "after_xp":  { "type": "i64" }
+      }
+    },
+    "level_set": {
+      "fields": {
+        "track":           { "type": "string" },
+        "reason":          { "type": "string" },
+        "requested_level": { "type": "i64" },
+        "old_level":       { "type": "i64" },
+        "new_level":       { "type": "i64" }
+      }
+    },
+    "reset": {
+      "fields": {
+        "track":     { "type": "string" },
+        "reason":    { "type": "string" },
         "old_level": { "type": "i64" },
-        "new_level": { "type": "i64" }
+        "old_xp":    { "type": "i64" }
       }
     }
   }

@@ -22,7 +22,7 @@ content between them.
 
 One catalog (item/container/currency definitions, compiled from
 `content/items.json`) + one ownership model (who has what, in which
-container) + one typed event (`items.txn`). No UI, no DevAPI commands of its
+container) + typed ownership events (`items.txn`, `items.move`). No UI, no DevAPI commands of its
 own, no kind of gameplay logic — items NEVER executes effects, it only
 tracks and reports ownership. `use.effect_id` is a pointer for a future
 effects layer to interpret, not something items itself runs.

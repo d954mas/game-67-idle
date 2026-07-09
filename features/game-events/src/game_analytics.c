@@ -249,6 +249,73 @@ static const game_event_desc_t *reg_find(nt_hash64_t type) {
     return NULL;
 }
 
+static int copy_printed_json(char *printed, char *out, int cap) {
+    if (!printed) {
+        return 0;
+    }
+    const int len = (int)strlen(printed);
+    if (len < cap) {
+        memcpy(out, printed, (size_t)len + 1u);
+        return len;
+    }
+    return 0;
+}
+
+static int render_analytics_event(const game_event_t *event, const game_event_desc_t *desc, char *out, int cap) {
+    char line[GAME_ANALYTICS_LINE_MAX];
+    const int len = game_event_render(event, desc, line, (int)sizeof line);
+    if (len <= 0) {
+        return len;
+    }
+
+    const int64_t event_time_ms = wall_now();
+    cJSON *root = cJSON_Parse(line);
+    if (!root) {
+        if (len < cap) {
+            memcpy(out, line, (size_t)len + 1u);
+            return len;
+        }
+        return 0;
+    }
+    cJSON_AddNumberToObject(root, "time_ms", (double)event_time_ms);
+
+    char *printed = cJSON_PrintUnformatted(root);
+    int written = copy_printed_json(printed, out, cap);
+    if (printed) {
+        cJSON_free(printed);
+    }
+    if (written > 0) {
+        cJSON_Delete(root);
+        return written;
+    }
+
+    cJSON *truncated = cJSON_CreateObject();
+    if (truncated) {
+        cJSON *seq = cJSON_GetObjectItem(root, "seq");
+        cJSON *tick = cJSON_GetObjectItem(root, "tick");
+        cJSON *type = cJSON_GetObjectItem(root, "type");
+        if (cJSON_IsNumber(seq)) {
+            cJSON_AddNumberToObject(truncated, "seq", seq->valuedouble);
+        }
+        if (cJSON_IsNumber(tick)) {
+            cJSON_AddNumberToObject(truncated, "tick", tick->valuedouble);
+        }
+        if (cJSON_IsString(type)) {
+            cJSON_AddStringToObject(truncated, "type", type->valuestring);
+        }
+        cJSON_AddNumberToObject(truncated, "time_ms", (double)event_time_ms);
+        cJSON_AddBoolToObject(truncated, "truncated", true);
+        printed = cJSON_PrintUnformatted(truncated);
+        written = copy_printed_json(printed, out, cap);
+        if (printed) {
+            cJSON_free(printed);
+        }
+        cJSON_Delete(truncated);
+    }
+    cJSON_Delete(root);
+    return written;
+}
+
 /* ---- lifecycle ---- */
 void game_analytics_init(void) {
     if (s_open) {
@@ -300,7 +367,7 @@ void game_analytics_record(void) {
     const game_event_t *log = game_event_log(&n);
     for (int i = 0; i < n; ++i) {
         char line[GAME_ANALYTICS_LINE_MAX];
-        const int len = game_event_render(&log[i], reg_find(log[i].type), line, (int)sizeof line);
+        const int len = render_analytics_event(&log[i], reg_find(log[i].type), line, (int)sizeof line);
         if (len <= 0) {
             continue;
         }

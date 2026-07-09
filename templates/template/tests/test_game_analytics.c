@@ -144,6 +144,9 @@ static void test_event_serialization(void) {
 
     TEST_ASSERT_TRUE(cJSON_IsNumber(cJSON_GetObjectItem(root, "seq")));
     TEST_ASSERT_TRUE(cJSON_IsNumber(cJSON_GetObjectItem(root, "tick")));
+    const cJSON *time_ms = cJSON_GetObjectItem(root, "time_ms");
+    TEST_ASSERT_TRUE(cJSON_IsNumber(time_ms));
+    TEST_ASSERT_TRUE(time_ms->valuedouble == 1720000000000.0);
     cJSON_Delete(root);
 }
 

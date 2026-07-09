@@ -469,13 +469,13 @@ test("debug UI is owned by C and is not staged as a JS artifact", () => {
 test("scorecard summarizes local NDJSON without a portal account", () => {
   const scorecard = scorecardFromNdjson(`
 {"schema":"analytics.v1","kind":"header","started_at":1000}
-{"name":"game.loading_finished","ts":2000}
-{"name":"gameplay.start","ts":3000}
-{"name":"upgrade.interact","ts":10000}
-{"name":"ad.interstitial.request","ts":20000}
-{"name":"ad.interstitial.result","ts":22000,"shown":true}
-{"name":"first_60s.complete","ts":59000}
-{"name":"session.end","ts":76000}
+{"seq":0,"tick":1,"type":"game.loading_finished","time_ms":2000}
+{"seq":1,"tick":2,"type":"gameplay.start","time_ms":3000}
+{"seq":2,"tick":3,"type":"items.txn","op":"add","def_id":"tmpl.xp","container":"purse","entry_key":"purse/tmpl.xp","requested_delta":"8","applied_delta":"8","before_count":"0","after_count":"8","reason":"loot:demo_idle","time_ms":10000}
+{"seq":3,"tick":4,"type":"ad.rewarded.request","placement":"double_reward","time_ms":20000}
+{"seq":4,"tick":4,"type":"ad.rewarded.result","supported":true,"shown":true,"rewarded":true,"placement":"double_reward","reason":"completed","time_ms":22000}
+{"seq":5,"tick":60,"type":"first_60s.complete","time_ms":59000}
+{"seq":6,"tick":75,"type":"gameplay.stop","time_ms":76000}
 `);
 
   assert.equal(scorecard.first60sCompletion, true);

@@ -32,6 +32,42 @@ static inline void progression_reason_check(const char *reason) {
    ЧТЕНИЯ (никогда не аллоцирует); find_or_alloc_track вызывается ТОЛЬКО перед
    первым фактическим инкрементом (§2.1/§5.6 -- ленивая аллокация, orphan-record
    от простого чтения/пустого тика не создаётся). */
+static const char *mode_name(progression_mode_t mode) {
+    switch (mode) {
+    case PROGRESSION_MODE_MANUAL:
+        return "manual";
+    case PROGRESSION_MODE_AUTO:
+        return "auto";
+    case PROGRESSION_MODE_THRESHOLD:
+        return "threshold";
+    }
+    return "unknown";
+}
+
+static void emit_levelup(
+    const progression_track_def_t *def,
+    const char *cause,
+    const char *reason,
+    int64_t old_level,
+    int64_t new_level,
+    int64_t cost,
+    int64_t resource_before,
+    int64_t resource_after,
+    int depth) {
+    progression_emit_levelup(
+        def->id,
+        mode_name(def->mode),
+        cause,
+        reason,
+        old_level,
+        new_level,
+        def->currency_def != NULL ? def->currency_def : "",
+        cost,
+        resource_before,
+        resource_after,
+        depth);
+}
+
 static ProgressionTrackState *find_track(const char *id) {
     if (id == NULL) {
         return NULL;
@@ -184,13 +220,16 @@ bool progression_level_up(const char *track, const char *reason) {
     if (st == NULL) {
         return false; /* PROGRESSION_STATE_MAX_TRACKS budget exhausted -- purse untouched */
     }
+    int old_level = st->level;
+    int64_t resource_before = items_purse(def->currency_def);
     if (!items_remove("purse", def->currency_def, cost, reason)) {
         return false; /* defensive: items-side verb-check/purse mismatch; level not bumped */
     }
     st->level += 1;
+    emit_levelup(def, "manual", reason, old_level, st->level, cost, resource_before, items_purse(def->currency_def), 0);
     apply_on_level_up(def, 0); /* Cut A: shipped/demo on_level_up is always empty -> no-op */
     game_save_mark_dirty();
-    return true; /* manual level_up does NOT emit progression.levelup (дизайн §5) */
+    return true;
 }
 
 void progression_add_xp(const char *track, int64_t n, const char *reason) {
@@ -212,6 +251,7 @@ void progression_add_xp(const char *track, int64_t n, const char *reason) {
     } else {
         st->xp = before + n;
     }
+    progression_emit_xp_added(def->id, reason, st->xp - before, before, st->xp);
     game_save_mark_dirty();
 }
 
@@ -231,7 +271,9 @@ void progression_set_level(const char *track, int level, const char *reason) {
     if (st == NULL) {
         return; /* PROGRESSION_STATE_MAX_TRACKS budget exhausted (defensive) */
     }
+    int old_level = st->level;
     st->level = clamped; /* xp untouched -- set_level (prologue) != reset (prestige), §5/R5 */
+    progression_emit_level_set(def->id, reason, level, old_level, st->level);
     game_save_mark_dirty();
 }
 
@@ -241,6 +283,8 @@ void progression_reset(const char *track, const char *reason) {
     if (st == NULL) {
         return; /* no record -- already at the reset state, no-op */
     }
+    int old_level = st->level;
+    int64_t old_xp = st->xp;
     /* L-fix (deep-review #4): free the slot entirely (used=false), not just
        zero level/xp in place -- precedent items remove_raw at count<=0
        (items_containers.c:156-158). A record parked at level=0/xp=0 is
@@ -248,6 +292,7 @@ void progression_reset(const char *track, const char *reason) {
        0, §2.1) but needlessly holds a tracks-map slot forever after a
        prestige reset. */
     memset(st, 0, sizeof(*st)); /* used=false -> slot freed; reset does NOT touch purse (#15) */
+    progression_emit_reset(track, reason, old_level, old_xp);
     game_save_mark_dirty();
 }
 
@@ -296,17 +341,23 @@ static void resolve_track(const progression_track_def_t *def, int depth) {
                path already does (progression_level_up above); this was the
                one asymmetric spot that granted a "free" level on an
                items-side rejection instead of treating it as a hard stop. */
+            int64_t resource_before = items_purse(def->currency_def);
             if (!items_remove("purse", def->currency_def, cost, "level_cost:auto")) {
                 nt_log_warn("progression: items_remove failed for '%s' despite affordability check (purse desync?)", def->id);
                 break; /* do not grant a level the player didn't pay for */
             }
+            int old_level = st->level;
+            st->level += 1;
+            level = st->level;
+            emit_levelup(def, "auto", "level_cost:auto", old_level, st->level, cost, resource_before, items_purse(def->currency_def), depth);
         } else {
+            int64_t resource_before = st->xp;
             st->xp -= cost;
+            int old_level = st->level;
+            st->level += 1;
+            level = st->level;
+            emit_levelup(def, "threshold", "level_cost:threshold", old_level, st->level, cost, resource_before, st->xp, depth);
         }
-        int old_level = st->level;
-        st->level += 1;
-        level = st->level;
-        progression_emit_levelup(def->id, old_level, st->level); /* факт-событие (§10) */
         apply_on_level_up(def, depth);                            /* каскад внутрь той же глубины-проверки */
         iters += 1;
     }

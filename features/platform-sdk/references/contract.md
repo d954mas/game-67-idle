@@ -283,8 +283,11 @@ Do not add platform-sdk events for pure queries or cleanup:
   appropriate, but do not call `platform_sdk_game_loading_finished()` again.
 
 Scorecards may consume a mixed stream containing these platform-sdk events plus
-game/app events such as `first_60s.complete`, `items.txn`,
-`progression.levelup`, `save.write`, and `session.end`.
+game/app events such as `first_60s.complete`, `gameplay.stop`, `items.txn`,
+`items.move`, `progression.levelup`, `progression.xp_added`,
+`progression.level_set`, and `progression.reset`. Session length is derived from
+timestamps in the exported NDJSON stream, not from a required `session.end`
+event.
 
 ## Platform SDK Adapters
 
