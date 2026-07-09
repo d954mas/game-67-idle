@@ -1,8 +1,12 @@
 #include "features/game_features.h"
 #include "systems/sys_move.h"
 #include "features/settings/settings.h"
+#if defined(__EMSCRIPTEN__)
+#include "features/platform_sdk/platform_sdk_web.h"
+#endif
 #include "features/progression/progression.h" /* И3a: progression_update() tick (auto/threshold level-ups) */
 #include "ui/demo_hud.h" /* И3b: demo composition (resource_panel over items/progression) */
+#include "ui/platform_sdk_debug.h"
 #include "ui/ui_runtime.h"
 #include "app/nt_app.h" /* g_nt_app.dt */
 #if NT_DEVAPI_ENABLED
@@ -18,6 +22,10 @@
    поэтому draw_world остаётся заглушкой. */
 
 void game_features_init(World *w) {
+#if defined(__EMSCRIPTEN__)
+    platform_sdk_install_web_backend();
+#endif
+    platform_sdk_debug_init();
     (void)w; /* TODO(feature-migration): per-feature <id>_init(w) здесь */
 }
 
@@ -70,7 +78,11 @@ void game_features_draw_ui(World *w) {
     if (ui_runtime_begin(g_nt_app.dt)) {
         demo_hud_draw_ui(ui_runtime_ctx());    /* И3b: resource_panel (HUD, снизу) */
         settings_draw_ui(ui_runtime_ctx(), w); /* settings overlay (сверху) */
+        platform_sdk_debug_draw_ui(ui_runtime_ctx());
         ui_runtime_end();
     }
 }
-void game_features_shutdown(World *w) { (void)w; /* TODO: per-feature shutdown */ }
+void game_features_shutdown(World *w) {
+    (void)w; /* TODO: per-feature shutdown */
+    platform_sdk_debug_shutdown();
+}

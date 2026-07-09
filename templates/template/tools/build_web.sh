@@ -4,16 +4,21 @@
 # One command from the done-when; mirror of rb-dark's package_web.sh minus the
 # itch zip (that stays in T0323's package_web.sh, which calls this script).
 #
-#   bash tools/build_web.sh [--preset wasm-release|wasm-debug|wasm-devapi-debug]
+#   bash tools/build_web.sh [--preset wasm-release|wasm-debug|wasm-devapi-debug] [--target local|itch|poki|yandex|playgama]
 #
 # Presets: wasm-release (default, human), wasm-debug (human, carries ASan),
 #          wasm-devapi-debug (agent; engine DevAPI over the web transport).
 set -e
 
 PRESET="wasm-release"
+PUBLISH_TARGET="local"
+DEBUG_UI_FLAG=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --preset) PRESET="$2"; shift 2 ;;
+        --target) PUBLISH_TARGET="$2"; shift 2 ;;
+        --debug-ui) DEBUG_UI_FLAG="-DGAME_PLATFORM_SDK_DEBUG_UI=ON"; shift ;;
+        --no-debug-ui) DEBUG_UI_FLAG="-DGAME_PLATFORM_SDK_DEBUG_UI=OFF"; shift ;;
         *) echo "unknown option: $1" >&2; exit 2 ;;
     esac
 done
@@ -24,8 +29,25 @@ case "$PRESET" in
     wasm-devapi-debug) CFG_FLAGS="-DCMAKE_BUILD_TYPE=Debug -DGAME_DEVAPI_ENABLED=ON" ;;
     *) echo "unknown preset: $PRESET (use wasm-release|wasm-debug|wasm-devapi-debug)" >&2; exit 2 ;;
 esac
+case "$PUBLISH_TARGET" in
+    local|itch|poki|yandex|playgama) ;;
+    *) echo "unknown target: $PUBLISH_TARGET (use local|itch|poki|yandex|playgama)" >&2; exit 2 ;;
+esac
+if [ "$PRESET" = "wasm-release" ] && [ "$DEBUG_UI_FLAG" = "-DGAME_PLATFORM_SDK_DEBUG_UI=ON" ]; then
+    echo "debug UI is not allowed in wasm-release artifacts; use wasm-debug or --no-debug-ui" >&2
+    exit 2
+fi
+
+BUILD_NAME="$PRESET"
+if [ "$PUBLISH_TARGET" != "local" ]; then
+    BUILD_NAME="$PRESET-$PUBLISH_TARGET"
+fi
 
 GAME_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -z "${EM_CACHE:-}" ]; then
+    export EM_CACHE="$GAME_DIR/build/emscripten-cache"
+fi
+mkdir -p "$EM_CACHE"
 
 # EMSDK: resolve the root ($EMSDK first, then the rb-dark hardcoded fallback --
 # a portability wart, kept as fallback). Source emsdk_env.sh to put emcc/ninja on
@@ -55,19 +77,18 @@ cmake --build "$NATIVE_DIR" --target game_asset_packs
 # directly: `emcmake` is not a bash command on Windows (only emcmake.bat/.py
 # exist, no extensionless wrapper), so relying on it breaks a fresh game. The
 # toolchain file finds emcc by its own location, so emcc need not be on PATH.
-WEB_DIR="$GAME_DIR/build/$PRESET"
-if [ ! -f "$WEB_DIR/CMakeCache.txt" ]; then
-    if [ -f "$EM_TOOLCHAIN" ]; then
-        cmake -S "$GAME_DIR" -B "$WEB_DIR" -G Ninja -DCMAKE_TOOLCHAIN_FILE="$EM_TOOLCHAIN" $CFG_FLAGS
-    else
-        emcmake cmake -S "$GAME_DIR" -B "$WEB_DIR" -G Ninja $CFG_FLAGS  # fallback: emcmake on PATH (e.g. Linux CI)
-    fi
+WEB_DIR="$GAME_DIR/build/$BUILD_NAME"
+if [ -f "$EM_TOOLCHAIN" ]; then
+    cmake -S "$GAME_DIR" -B "$WEB_DIR" -G Ninja -DCMAKE_TOOLCHAIN_FILE="$EM_TOOLCHAIN" $CFG_FLAGS -DGAME_PUBLISH_TARGET="$PUBLISH_TARGET" $DEBUG_UI_FLAG
+else
+    emcmake cmake -S "$GAME_DIR" -B "$WEB_DIR" -G Ninja $CFG_FLAGS -DGAME_PUBLISH_TARGET="$PUBLISH_TARGET" $DEBUG_UI_FLAG  # fallback: emcmake on PATH (e.g. Linux CI)
 fi
 cmake --build "$WEB_DIR" --target game
+cmake --build "$WEB_DIR" --target platform_sdk_web_assets
 
 # 3) Copy the pack flat next to index.html (engine streams it over HTTP,
 # relative to the page URL).
 mkdir -p "$WEB_DIR/bin/assets"
 cp "$NATIVE_DIR/bin/assets/game.ntpack" "$WEB_DIR/bin/assets/game.ntpack"
 
-echo "built $PRESET; serve with: node tools/serve_web.mjs --preset $PRESET"
+echo "built $BUILD_NAME ($PUBLISH_TARGET -> platform-sdk); serve with: node tools/serve_web.mjs --preset $PRESET --target $PUBLISH_TARGET"

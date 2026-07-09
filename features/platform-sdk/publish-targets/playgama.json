@@ -1,0 +1,39 @@
+{
+  "schema": "ai_studio.publish_target.v1",
+  "target": "playgama",
+  "platform_sdk": "playgama",
+  "required_files": [
+    "index.html",
+    "game.js",
+    "game.wasm",
+    "assets/game.ntpack",
+    "platform-sdk.js",
+    "platform-sdk-core.js",
+    "platform-sdk-adapter.js",
+    "playgama-bridge-config.json"
+  ],
+  "zip_layout": "Playgama upload root: index.html, game.js, game.wasm, platform-sdk*.js, playgama-bridge-config.json, and assets/game.ntpack.",
+  "metadata": {
+    "portal": "Playgama",
+    "requires_account": true,
+    "config_file": "playgama-bridge-config.json",
+    "orientation": "game-owned",
+    "viewport": "responsive canvas"
+  },
+  "sdk_policy": {
+    "adapter": "playgama",
+    "sdk_url": "https://bridge.playgama.com/v1/stable/playgama-bridge.js",
+    "load_policy": "platform-sdk-adapter.js loads Playgama Bridge during selected web backend init; no universal wrapper.",
+    "ads": "bridge.advertisement.showInterstitial/showRewarded; reward only on rewarded state",
+    "storage": "bridge.storage through wrapper only",
+    "debug_ui": "forbidden in release artifact",
+    "forbidden_markers": [
+      "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
+      "YaGames.init",
+      "Show interstitial ad",
+      "Show rewarded ad",
+      "debug_test"
+    ]
+  },
+  "validation_command": "node features/platform-sdk/scripts/artifact_tools.mjs inspect --target playgama --artifact <artifact-dir>"
+}

@@ -1,0 +1,5 @@
+{
+  "schema": "ai_studio.playgama_bridge_config.placeholder.v1",
+  "replace_before_submission": true,
+  "note": "Placeholder for local artifact validation. Replace with the portal-owned Playgama Bridge config before submitting a real build."
+}

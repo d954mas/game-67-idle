@@ -11,15 +11,33 @@ if(NOT DEFINED GAME_DEVAPI_ENABLED)
     set(GAME_DEVAPI_ENABLED OFF CACHE BOOL "Build the template with engine DevAPI automation support." FORCE)
 endif()
 
+set(GAME_PUBLISH_TARGET "local" CACHE STRING "Publish target: local, itch, poki, yandex, or playgama.")
+set_property(CACHE GAME_PUBLISH_TARGET PROPERTY STRINGS local itch poki yandex playgama)
+if(NOT GAME_PUBLISH_TARGET MATCHES "^(local|itch|poki|yandex|playgama)$")
+    message(FATAL_ERROR "GAME_PUBLISH_TARGET must be one of: local, itch, poki, yandex, playgama")
+endif()
+
+if(EMSCRIPTEN)
+    set(_game_default_em_cache "${CMAKE_SOURCE_DIR}/build/emscripten-cache")
+    if(DEFINED ENV{EM_CACHE} AND NOT "$ENV{EM_CACHE}" STREQUAL "")
+        set(_game_default_em_cache "$ENV{EM_CACHE}")
+    endif()
+    set(GAME_EMSCRIPTEN_CACHE_DIR "${_game_default_em_cache}" CACHE PATH "Emscripten cache directory for this game checkout.")
+    file(MAKE_DIRECTORY "${GAME_EMSCRIPTEN_CACHE_DIR}")
+    set(ENV{EM_CACHE} "${GAME_EMSCRIPTEN_CACHE_DIR}")
+    set(_game_emcache_launcher "${CMAKE_COMMAND} -E env EM_CACHE=${GAME_EMSCRIPTEN_CACHE_DIR}")
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "${_game_emcache_launcher}")
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_LINK "${_game_emcache_launcher}")
+endif()
+
 # Preset name must encode the devapi split: engine libs land in
 # build/engine/<preset> and build/tools/builder/<preset>, so two builds sharing
 # one preset would overwrite each other's engine libs (nt_input with/without
 # inject symbols; nt_devapi_web presence) — the parallel-build collision the
-# convention exists to prevent. Every (platform x devapi x build-type) gets a
-# UNIQUE name, so no combination can ever alias into another's engine dir. Only
-# the four established names (native-debug/native-release/devapi-debug and the
-# three wasm human/agent presets) are "supported"; the two *-devapi-release names
-# exist solely so Release+DevAPI cannot clobber the clean release archives.
+# convention exists to prevent. Every web (publish-target x devapi x build-type)
+# gets a UNIQUE name, so no combination can alias into another's engine dir.
+# Local keeps the legacy wasm preset names because it is the default developer
+# path; portal targets append the publish target.
 if(EMSCRIPTEN)
     if(GAME_DEVAPI_ENABLED)
         if(CMAKE_BUILD_TYPE STREQUAL "Release")
@@ -44,6 +62,9 @@ else()
     else()
         set(NT_PRESET_NAME "native-debug")
     endif()
+endif()
+if(EMSCRIPTEN AND NOT GAME_PUBLISH_TARGET STREQUAL "local")
+    set(NT_PRESET_NAME "${NT_PRESET_NAME}-${GAME_PUBLISH_TARGET}")
 endif()
 set(GAME_TITLE "Template" CACHE STRING "Game window title base")
 if(GAME_DEVAPI_ENABLED)
@@ -75,6 +96,58 @@ if(NOT DEFINED GAME_ANALYTICS_ENABLED)
     set(GAME_ANALYTICS_ENABLED ${GAME_DEVAPI_ENABLED})
 endif()
 
+if(GAME_PUBLISH_TARGET STREQUAL "local")
+    set(GAME_PLATFORM_SDK "mock")
+    set(GAME_PLATFORM_TARGET_ID 0)
+    set(GAME_PLATFORM_SDK_ID 0)
+    set(GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED 1)
+    set(GAME_PLATFORM_ADS_SUPPORTED 1)
+    set(GAME_PLATFORM_REWARDED_SUPPORTED 1)
+    set(GAME_PLATFORM_STORAGE_SUPPORTED 1)
+elseif(GAME_PUBLISH_TARGET STREQUAL "itch")
+    set(GAME_PLATFORM_SDK "mock")
+    set(GAME_PLATFORM_TARGET_ID 1)
+    set(GAME_PLATFORM_SDK_ID 0)
+    set(GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED 1)
+    set(GAME_PLATFORM_ADS_SUPPORTED 0)
+    set(GAME_PLATFORM_REWARDED_SUPPORTED 0)
+    set(GAME_PLATFORM_STORAGE_SUPPORTED 0)
+elseif(GAME_PUBLISH_TARGET STREQUAL "poki")
+    set(GAME_PLATFORM_SDK "poki")
+    set(GAME_PLATFORM_TARGET_ID 2)
+    set(GAME_PLATFORM_SDK_ID 1)
+    set(GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED 0)
+    set(GAME_PLATFORM_ADS_SUPPORTED 1)
+    set(GAME_PLATFORM_REWARDED_SUPPORTED 1)
+    set(GAME_PLATFORM_STORAGE_SUPPORTED 0)
+elseif(GAME_PUBLISH_TARGET STREQUAL "yandex")
+    set(GAME_PLATFORM_SDK "yandex")
+    set(GAME_PLATFORM_TARGET_ID 3)
+    set(GAME_PLATFORM_SDK_ID 2)
+    set(GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED 0)
+    set(GAME_PLATFORM_ADS_SUPPORTED 1)
+    set(GAME_PLATFORM_REWARDED_SUPPORTED 1)
+    set(GAME_PLATFORM_STORAGE_SUPPORTED 1)
+elseif(GAME_PUBLISH_TARGET STREQUAL "playgama")
+    set(GAME_PLATFORM_SDK "playgama")
+    set(GAME_PLATFORM_TARGET_ID 4)
+    set(GAME_PLATFORM_SDK_ID 3)
+    set(GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED 0)
+    set(GAME_PLATFORM_ADS_SUPPORTED 1)
+    set(GAME_PLATFORM_REWARDED_SUPPORTED 1)
+    set(GAME_PLATFORM_STORAGE_SUPPORTED 1)
+endif()
+if(NOT DEFINED GAME_PLATFORM_SDK_DEBUG_UI)
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(GAME_PLATFORM_SDK_DEBUG_UI OFF)
+    else()
+        set(GAME_PLATFORM_SDK_DEBUG_UI ON)
+    endif()
+endif()
+if(CMAKE_BUILD_TYPE STREQUAL "Release" AND GAME_PLATFORM_SDK_DEBUG_UI)
+    message(FATAL_ERROR "GAME_PLATFORM_SDK_DEBUG_UI must be OFF for Release artifacts.")
+endif()
+
 # Shared engine (one copy, referenced not copied). Templates and games live one
 # folder below the repo groups, so the engine is two levels up.
 set(ENGINE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../external/neotolis-engine")
@@ -102,6 +175,10 @@ set(PROGRESSION_CORE_DIR     "${CMAKE_CURRENT_SOURCE_DIR}/../../features/progres
 set(PROGRESSION_CORE_INC     "${PROGRESSION_CORE_DIR}/include")
 set(PROGRESSION_CORE_SRC     "${PROGRESSION_CORE_DIR}/src")
 set(PROGRESSION_CORE_SCRIPTS "${PROGRESSION_CORE_DIR}/scripts")
+set(PLATFORM_SDK_DIR         "${CMAKE_CURRENT_SOURCE_DIR}/../../features/platform-sdk")
+set(PLATFORM_SDK_INC         "${PLATFORM_SDK_DIR}/include")
+set(PLATFORM_SDK_SRC         "${PLATFORM_SDK_DIR}/src")
+set(PLATFORM_SDK_WEB         "${PLATFORM_SDK_DIR}/web")
 
 set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
@@ -152,6 +229,7 @@ add_executable(${GAME_TARGET}
     src/game_log.c               # E4.B: built-in "log" event type (unconditional leaf)
     src/features/game_features.c # E1
     src/ui/hud.c
+    src/ui/platform_sdk_debug.c
     src/ui/ui_runtime.c
     src/ui/theme.c
     src/render/render_mesh.c
@@ -162,6 +240,7 @@ add_executable(${GAME_TARGET}
     "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.c" # И2a: const item/container tables (content codegen)
     "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c" # И3a: const progression track/curve tables (content codegen)
     src/game_format.c                                # И3b: L0 int64-abbrev formatter
+    "${PLATFORM_SDK_SRC}/platform_sdk.c"             # T0339: target/sdk identity + policy capabilities
     src/features/resource_panel/resource_panel.c     # И3b: generic counter/bar widget (zero feature headers)
     src/ui/demo_hud.c                                # И3b: game composition (resource_panel over items/progression)
 )
@@ -360,7 +439,7 @@ if(GAME_ANALYTICS_ENABLED)
     target_sources(${GAME_TARGET} PRIVATE src/game_analytics.c)      # E4: local analytics writer
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE
-    "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}"
+    "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${PLATFORM_SDK_INC}"
     src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/deps/glfw/deps")
 target_compile_definitions(${GAME_TARGET} PRIVATE GAME_WINDOW_TITLE="${GAME_WINDOW_TITLE}")
 target_link_libraries(${GAME_TARGET} PRIVATE
@@ -370,11 +449,12 @@ target_link_libraries(${GAME_TARGET} PRIVATE
     nt_ui nt_sprite_renderer nt_atlas nt_mem_scratch nt_clipboard
 )
 if(EMSCRIPTEN)
+    target_sources(${GAME_TARGET} PRIVATE "${PLATFORM_SDK_SRC}/platform_sdk_web.c")
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http nt_platform_web)
     # Web-devapi host contract (nt_devapi_web.h): the host exports the JS
     # transport entry points; the exports are also what pulls the EM_JS object
     # out of libnt_devapi_web.a so nt_devapi_web_install_shim resolves at link.
-    set(GAME_WEB_EXPORTS "_main,_malloc,_free")
+    set(GAME_WEB_EXPORTS "_main,_malloc,_free,_platform_sdk_web_complete_interstitial,_platform_sdk_web_complete_rewarded")
     if(GAME_DEVAPI_ENABLED)
         set(GAME_WEB_EXPORTS "${GAME_WEB_EXPORTS},_nt_devapi_web_submit,_nt_devapi_web_poll")
     endif()
@@ -401,6 +481,52 @@ else()
     target_link_libraries(${GAME_TARGET} PRIVATE nt_http_stub glad stb_image_write)
 endif()
 if(EMSCRIPTEN)
+    set(GAME_PLATFORM_SDK_RELEASE_JS "false")
+    if(CMAKE_BUILD_TYPE STREQUAL "Release")
+        set(GAME_PLATFORM_SDK_RELEASE_JS "true")
+    endif()
+
+    file(MAKE_DIRECTORY "${GAME_OUTPUT_DIR}")
+    configure_file("${PLATFORM_SDK_WEB}/platform-sdk.js"
+                   "${GAME_OUTPUT_DIR}/platform-sdk.js" COPYONLY)
+    configure_file("${PLATFORM_SDK_WEB}/platform-sdk-core.js"
+                   "${GAME_OUTPUT_DIR}/platform-sdk-core.js" COPYONLY)
+    configure_file("${PLATFORM_SDK_WEB}/adapters/${GAME_PLATFORM_SDK}.js"
+                   "${GAME_OUTPUT_DIR}/platform-sdk-adapter.js" COPYONLY)
+    file(REMOVE "${GAME_OUTPUT_DIR}/platform-sdk-debug-ui.js")
+    if(GAME_PUBLISH_TARGET STREQUAL "playgama")
+        configure_file("${PLATFORM_SDK_WEB}/portal/playgama-bridge-config.json"
+                       "${GAME_OUTPUT_DIR}/playgama-bridge-config.json" COPYONLY)
+    else()
+        file(REMOVE "${GAME_OUTPUT_DIR}/playgama-bridge-config.json")
+    endif()
+
+    add_custom_target(platform_sdk_web_assets
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_OUTPUT_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${PLATFORM_SDK_WEB}/platform-sdk.js" "${GAME_OUTPUT_DIR}/platform-sdk.js"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${PLATFORM_SDK_WEB}/platform-sdk-core.js" "${GAME_OUTPUT_DIR}/platform-sdk-core.js"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${PLATFORM_SDK_WEB}/adapters/${GAME_PLATFORM_SDK}.js" "${GAME_OUTPUT_DIR}/platform-sdk-adapter.js"
+        COMMAND ${CMAKE_COMMAND} -E rm -f "${GAME_OUTPUT_DIR}/platform-sdk-debug-ui.js"
+        DEPENDS
+            "${PLATFORM_SDK_WEB}/platform-sdk.js"
+            "${PLATFORM_SDK_WEB}/platform-sdk-core.js"
+            "${PLATFORM_SDK_WEB}/adapters/${GAME_PLATFORM_SDK}.js"
+        COMMENT "Staging platform-sdk web backend assets (${GAME_PUBLISH_TARGET} -> ${GAME_PLATFORM_SDK})"
+        VERBATIM)
+    if(GAME_PUBLISH_TARGET STREQUAL "playgama")
+        add_custom_target(platform_sdk_playgama_config_asset
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${PLATFORM_SDK_WEB}/portal/playgama-bridge-config.json"
+                "${GAME_OUTPUT_DIR}/playgama-bridge-config.json"
+            DEPENDS "${PLATFORM_SDK_WEB}/portal/playgama-bridge-config.json"
+            COMMENT "Staging Playgama Bridge placeholder config"
+            VERBATIM)
+        add_dependencies(platform_sdk_web_assets platform_sdk_playgama_config_asset)
+    endif()
+
     # Deliver the tracked web shell to bin/ at configure time. Two substitutions:
     # the tab title (GAME_TITLE) and Module.arguments. The engine web devapi shim
     # installs only if main() saw `--devapi <port>` in argv (main.c parses it, and
@@ -446,6 +572,13 @@ else()
 endif()
 target_compile_definitions(${GAME_TARGET} PRIVATE
     GAME_ASSET_PACK_PATH="${GAME_PACK_RUNTIME_PATH}"
+    PLATFORM_SDK_TARGET_ID=${GAME_PLATFORM_TARGET_ID}
+    PLATFORM_SDK_CURRENT_ID=${GAME_PLATFORM_SDK_ID}
+    PLATFORM_SDK_EXTERNAL_LINKS_ALLOWED=${GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED}
+    PLATFORM_SDK_ADS_SUPPORTED=${GAME_PLATFORM_ADS_SUPPORTED}
+    PLATFORM_SDK_REWARDED_SUPPORTED=${GAME_PLATFORM_REWARDED_SUPPORTED}
+    PLATFORM_SDK_STORAGE_SUPPORTED=${GAME_PLATFORM_STORAGE_SUPPORTED}
+    GAME_PLATFORM_SDK_DEBUG_UI=$<BOOL:${GAME_PLATFORM_SDK_DEBUG_UI}>
     NT_INTROSPECT_ENABLED=$<BOOL:${NT_INTROSPECT_ENABLED}>
     NT_INTROSPECT_WRITE_ENABLED=$<BOOL:${NT_INTROSPECT_WRITE_ENABLED}>
     _CRT_SECURE_NO_WARNINGS
@@ -789,6 +922,30 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(test_game_format PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_game_format PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_format COMMAND test_game_format)
+
+    add_executable(test_platform_sdk
+        tests/test_platform_sdk.c
+        "${PLATFORM_SDK_SRC}/platform_sdk.c")
+    target_link_libraries(test_platform_sdk PRIVATE unity)
+    target_include_directories(test_platform_sdk PRIVATE "${PLATFORM_SDK_INC}")
+    target_compile_definitions(test_platform_sdk PRIVATE
+        PLATFORM_SDK_TARGET_ID=${GAME_PLATFORM_TARGET_ID}
+        PLATFORM_SDK_CURRENT_ID=${GAME_PLATFORM_SDK_ID}
+        PLATFORM_SDK_EXTERNAL_LINKS_ALLOWED=${GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED}
+        PLATFORM_SDK_ADS_SUPPORTED=${GAME_PLATFORM_ADS_SUPPORTED}
+        PLATFORM_SDK_REWARDED_SUPPORTED=${GAME_PLATFORM_REWARDED_SUPPORTED}
+        PLATFORM_SDK_STORAGE_SUPPORTED=${GAME_PLATFORM_STORAGE_SUPPORTED}
+        PLATFORM_SDK_TESTING=1
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_platform_sdk PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_platform_sdk COMMAND test_platform_sdk)
+
+    find_program(Node_EXECUTABLE node)
+    if(Node_EXECUTABLE)
+        add_test(NAME platform_sdk_node_test
+            COMMAND "${Node_EXECUTABLE}" --test features/platform-sdk/tests/platform_sdk.test.mjs
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+    endif()
 
     # T0327 tail: 4-fragment composition test -- lifts settings/items/progression/game
     # through the REAL game_save registry (envelope + on_new_game fan-out + skip-reset).

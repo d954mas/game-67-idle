@@ -16,6 +16,11 @@
 <canvas id="canvas" oncontextmenu="event.preventDefault()" tabindex="-1"></canvas>
 <script>
   var statusEl = document.getElementById('status');
+  window.__PLATFORM_SDK_CONFIG__ = Object.freeze({
+    target: '@GAME_PUBLISH_TARGET@',
+    platformSdk: '@GAME_PLATFORM_SDK@',
+    release: @GAME_PLATFORM_SDK_RELEASE_JS@
+  });
   var Module = {
     canvas: document.getElementById('canvas'),
     @GAME_DEVAPI_MODULE_ARGS@
@@ -23,6 +28,11 @@
     setStatus: function (t) { if (statusEl && t) statusEl.textContent = t; }
   };
 </script>
-<script src="game.js"></script>
+<script type="module">
+  import './platform-sdk.js';
+  var gameScript = document.createElement('script');
+  gameScript.src = 'game.js';
+  document.body.appendChild(gameScript);
+</script>
 </body>
 </html>

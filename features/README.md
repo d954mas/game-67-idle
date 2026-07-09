@@ -186,11 +186,23 @@ What is left pointing at the template for them is game-side only:
   `templates/template/src/ui/demo_hud.c` + the template's own content-coupled
   integration tests `templates/template/tests/test_progression.c`,
   `test_progression_catalog.c`, `test_progression_curve.c`.
-- `platform-sdk/` (`L1`, draft): target-platform to platform-SDK adapter
-  contract for commercial web builds. Targets are `local`, `itch`, `poki`,
-  `yandex`, and `playgama`; SDK adapters are `mock`, `poki`, `yandex`, and
-  `playgama`. `local` and `itch` both use `mock` because `mock` is an SDK
-  adapter, not a target, and itch has no mandatory runtime game SDK.
+- `platform-sdk/` (`L1`): in-place platform SDK facade for commercial web
+  builds. Targets are `local`, `itch`, `poki`, `yandex`, and `playgama`; SDK
+  adapters are `mock`, `poki`, `yandex`, and `playgama`. `local` and `itch`
+  both use `mock` because `mock` is an SDK adapter, not a target, and itch has
+  no mandatory runtime game SDK. Web builds copy only the selected adapter into
+  `platform-sdk-adapter.js`; the pack also owns target manifest inspection and
+  local NDJSON scorecards.
+
+## Planned Promotions
+
+- `game-events/` (`L0`, planned): reusable event/analytics spine that should
+  own `game_events`, event descriptors/rendering, DevAPI tail, and
+  `game_analytics` NDJSON export. The implementation currently still lives in
+  `templates/template/src/game_events*` and `game_analytics*` as a T0328
+  intermediate state. T0328 is not complete for this slice until those files
+  are promoted into an in-place feature pack like `game-state`. `platform-sdk`
+  SDK-originated events must target this pack, not a parallel event system.
 
 ### Ownership model
 

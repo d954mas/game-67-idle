@@ -1,25 +1,34 @@
 # platform-sdk Install
 
-This feature is currently contract-first. Do not install runtime code from this
-folder yet; the implementation slice must add source files and tests first.
+This feature is installed in-place by the template. It is not copied into
+`templates/template/src/features`; CMake references `../../features/platform-sdk`
+the same way it references `items-core` and `progression-core`.
 
-Use this manual to keep the future install shape explicit.
+## Install
 
-## Planned Install
+A consuming template or game should wire this as an L1 feature:
 
-When implementation files exist, a consuming template or game should wire this
-as an L1 feature:
+1. Add module paths near the other in-place modules:
 
-1. Add the feature's include/source or JS module path according to the
-   implementation language chosen by the target template.
-2. Configure target platform separately from platform SDK adapter:
-
-   ```text
-   target: local | itch | poki | yandex | playgama
-   platformSdk: mock | poki | yandex | playgama
+   ```cmake
+   set(PLATFORM_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/platform-sdk")
+   set(PLATFORM_SDK_INC "${PLATFORM_SDK_DIR}/include")
+   set(PLATFORM_SDK_SRC "${PLATFORM_SDK_DIR}/src")
+   set(PLATFORM_SDK_WEB "${PLATFORM_SDK_DIR}/web")
    ```
 
-3. Use the canonical mapping unless a test fixture overrides it:
+2. Compile `features/platform-sdk/src/platform_sdk.c` and include
+   `features/platform-sdk/include`. Web/Emscripten builds should also compile
+   `features/platform-sdk/src/platform_sdk_web.c`; it installs the selected
+   JavaScript backend behind the C facade.
+
+3. Configure target platform through the CMake cache variable:
+
+   ```text
+   GAME_PUBLISH_TARGET=local|itch|poki|yandex|playgama
+   ```
+
+   CMake computes the SDK adapter from the target:
 
    ```text
    local    -> mock
@@ -30,43 +39,120 @@ as an L1 feature:
    ```
 
 4. Make the target selection a build-time define/config value so only the
-   selected SDK adapter is imported, compiled, or linked. A release build must
-   not ship unused portal SDK URLs.
+   selected SDK adapter is imported, compiled, copied, or linked. A release
+   build must not ship unused portal SDK URLs.
+
 5. Route game code through the wrapper only. Game code must not call platform
    globals directly.
-6. Read runtime identity and policy from the wrapper:
+
+6. Read runtime identity and policy from the C wrapper:
 
    ```text
    target platform
    platform SDK
    externalLinksAllowed
+   adsSupported
+   rewardedSupported
+   storageSupported
    ```
 
    Prefer capability checks for UI decisions. Example: show Telegram links only
    when `externalLinksAllowed` is true.
-7. Emit local scorecard events from the wrapper regardless of target.
+
+7. Install the platform backend through `platform_sdk_set_backend()` for the
+   current runtime. Web builds call `platform_sdk_install_web_backend()` before
+   `platform_sdk_init()`; mobile/desktop builds can provide a native backend
+   with the same C semantics.
+
+8. Route input/gameplay/ad calls through the C facade. Async callbacks use
+   `callback + userdata`; `userdata` is caller-owned context, not a platform
+   player/account user.
+
+9. Emit SDK-originated lifecycle/ad-flow events from the C facade through
+   `features/game-events` once that L0 pack exists. Do not emit events from the
+   JavaScript backend or create a second event bus.
+
+10. If the template/game wants the built-in debug controls, compile the
+    template-local C/Clay UI module (`src/ui/platform_sdk_debug.c`) and pass
+    `GAME_PLATFORM_SDK_DEBUG_UI=1` only in non-release builds. Release builds
+    must keep that define off.
+
+## Template Web Build
+
+The current template command is:
+
+```powershell
+bash tools/build_web.sh --preset wasm-release --target poki
+```
+
+Web builds default to a checkout-local Emscripten cache:
+
+```text
+templates/template/build/emscripten-cache
+```
+
+The template CMake also prefixes Emscripten compile/link rules with that cache
+when `EM_CACHE` is not already set. This keeps release web links independent
+from a stale or locked global emsdk cache.
+
+`local` keeps the historic output directory:
+
+```text
+templates/template/build/wasm-release/bin
+```
+
+Portal targets use target-specific directories:
+
+```text
+templates/template/build/wasm-release-itch/bin
+templates/template/build/wasm-release-poki/bin
+templates/template/build/wasm-release-yandex/bin
+templates/template/build/wasm-release-playgama/bin
+```
+
+The CMake web step copies:
+
+```text
+platform-sdk.js          # internal web backend bootstrap for C bridge
+platform-sdk-core.js
+platform-sdk-adapter.js   # selected adapter only
+```
+
+The debug/test panel is C UI in the game/template binary. It is not copied as a
+web JavaScript file.
 
 ## Verify
 
-Contract-only validation:
+Current validation:
 
 ```powershell
+node --test features/platform-sdk/tests/platform_sdk.test.mjs
 node ai_studio/taskboard/cli.mjs validate --json
 node ai_studio/architecture_map/validate_map.mjs
 ```
 
-Future runtime validation must add:
+Artifact inspection:
 
-- mock SDK unit tests with deterministic ad outcomes;
-- fake injected SDK tests for Poki, Yandex, and Playgama adapters;
-- browser smoke for local and itch targets with no network dependency;
-- release artifact inspection proving only the selected SDK adapter URL is
-  present;
-- one real-SDK smoke per portal before submission.
+```powershell
+node features/platform-sdk/scripts/artifact_tools.mjs inspect --target itch --artifact templates/template/build/wasm-release-itch/bin
+node features/platform-sdk/scripts/artifact_tools.mjs inspect --target poki --artifact templates/template/build/wasm-release-poki/bin
+```
+
+Scorecard fixture:
+
+```powershell
+node features/platform-sdk/scripts/scorecard.mjs --input features/platform-sdk/tests/fixtures/scorecard-sample.ndjson --pretty
+```
+
+Still required before real portal submission:
+
+- one real-SDK smoke per portal;
+- portal-side inspector/debug panel check;
+- account-owned metadata review.
 
 ## Uninstall
 
-For the contract-only state, remove references to this feature from planning
-docs and taskboard items. After runtime implementation exists, remove wrapper
-wiring, feature sources, target config, scorecard event hooks, and tests from
-the consuming template/game.
+Remove `platform_sdk.c` from target sources, remove `PLATFORM_SDK_*` compile
+definitions, remove the web asset staging block, remove target config from
+`web/index.html.in`, and remove platform-sdk tests from the consuming template
+or game.

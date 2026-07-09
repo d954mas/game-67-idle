@@ -3,7 +3,7 @@
 // Self-contained on purpose (inline MIME, stdlib http only) so a copied game
 // stays portable if it is ever moved out of the repo -- no ai_studio import.
 //
-//   node tools/serve_web.mjs [--preset wasm-release|wasm-debug|wasm-devapi-debug] [--port N] [--dir <bin>]
+//   node tools/serve_web.mjs [--preset wasm-release|wasm-debug|wasm-devapi-debug] [--target local|itch|poki|yandex|playgama] [--port N] [--dir <bin>]
 //
 // Serves build/<preset>/bin/ over http://127.0.0.1:<port>/. game.wasm is served
 // as application/wasm so emscripten's streaming compile does not fall back.
@@ -34,10 +34,11 @@ const mimeType = (p) => MIME[extname(p).toLowerCase()] || "application/octet-str
 const DEFAULT_PORT = { "wasm-release": 8080, "wasm-debug": 8080, "wasm-devapi-debug": 8081 };
 
 function parseArgs(argv) {
-  const a = { preset: "wasm-release", port: 0, dir: "" };
+  const a = { preset: "wasm-release", target: "local", port: 0, dir: "" };
   for (let i = 0; i < argv.length; i += 1) {
     const k = argv[i];
     if (k === "--preset") a.preset = argv[++i];
+    else if (k === "--target") a.target = argv[++i];
     else if (k === "--port") a.port = Number(argv[++i]) || 0;
     else if (k === "--dir") a.dir = argv[++i];
     else throw new Error(`unknown option: ${k}`);
@@ -60,7 +61,11 @@ function requestRel(urlPath) {
 
 function main() {
   const a = parseArgs(process.argv.slice(2));
-  const root = resolve(a.dir || join(GAME_DIR, "build", a.preset, "bin"));
+  if (!["local", "itch", "poki", "yandex", "playgama"].includes(a.target)) {
+    throw new Error(`unknown target: ${a.target}`);
+  }
+  const buildName = a.target === "local" ? a.preset : `${a.preset}-${a.target}`;
+  const root = resolve(a.dir || join(GAME_DIR, "build", buildName, "bin"));
   const port = a.port || DEFAULT_PORT[a.preset] || 8080;
 
   if (!existsSync(join(root, "assets", "game.ntpack"))) {
@@ -86,7 +91,7 @@ function main() {
     process.exit(1);
   });
   server.listen(port, "127.0.0.1", () => {
-    console.log(`serve_web: http://127.0.0.1:${port}/ (preset ${a.preset}, dir ${root})`);
+    console.log(`serve_web: http://127.0.0.1:${port}/ (preset ${a.preset}, target ${a.target}, dir ${root})`);
   });
 }
 

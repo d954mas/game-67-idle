@@ -1,0 +1,8 @@
+{"schema":"analytics.v1","kind":"header","started_at":1000}
+{"name":"game.loading_finished","ts":2000}
+{"name":"gameplay.start","ts":3000}
+{"name":"upgrade.interact","ts":10000}
+{"name":"ad.interstitial.request","ts":20000}
+{"name":"ad.interstitial.result","ts":22000,"shown":true}
+{"name":"first_60s.complete","ts":59000}
+{"name":"session.end","ts":76000}

@@ -1,0 +1,6 @@
+#ifndef FEATURES_PLATFORM_SDK_PLATFORM_SDK_WEB_H
+#define FEATURES_PLATFORM_SDK_PLATFORM_SDK_WEB_H
+
+void platform_sdk_install_web_backend(void);
+
+#endif /* FEATURES_PLATFORM_SDK_PLATFORM_SDK_WEB_H */

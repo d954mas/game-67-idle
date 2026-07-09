@@ -1,0 +1,36 @@
+{
+  "schema": "ai_studio.publish_target.v1",
+  "target": "itch",
+  "platform_sdk": "mock",
+  "required_files": [
+    "index.html",
+    "game.js",
+    "game.wasm",
+    "assets/game.ntpack",
+    "platform-sdk.js",
+    "platform-sdk-core.js",
+    "platform-sdk-adapter.js"
+  ],
+  "zip_layout": "Flat web root: index.html, game.js, game.wasm, platform-sdk*.js, and assets/game.ntpack at assets/game.ntpack.",
+  "metadata": {
+    "portal": "itch.io HTML5",
+    "requires_account": true,
+    "orientation": "game-owned",
+    "viewport": "responsive canvas"
+  },
+  "sdk_policy": {
+    "adapter": "mock",
+    "network": "none",
+    "ads": "unsupported no-op",
+    "debug_ui": "forbidden in release artifact",
+    "forbidden_markers": [
+      "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
+      "YaGames.init",
+      "https://bridge.playgama.com/v1/stable/playgama-bridge.js",
+      "Show interstitial ad",
+      "Show rewarded ad",
+      "debug_test"
+    ]
+  },
+  "validation_command": "node features/platform-sdk/scripts/artifact_tools.mjs inspect --target itch --artifact <artifact-dir>"
+}

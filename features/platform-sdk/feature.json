@@ -2,10 +2,10 @@
   "schema": "ai_studio.feature.v1",
   "id": "platform-sdk",
   "title": "Platform SDK",
-  "status": "draft",
+  "status": "reusable",
   "kind": "gameplay-infrastructure",
-  "summary": "L1 feature contract for target platform to platform SDK adapter mapping and a universal game-facing SDK wrapper.",
-  "copy_model": "manual-copy",
+  "summary": "In-place L1 feature pack for publish-target to platform-SDK adapter mapping, C-owned SDK facade, selected web SDK backends, runtime identity/capabilities, artifact inspection, and local analytics scorecards.",
+  "copy_model": "in-place",
   "layer": "L1",
   "owners": [
     "features/platform-sdk"
@@ -13,25 +13,60 @@
   "dependencies": [
     "browser web build target",
     "target-specific portal SDK documentation",
-    "local scorecard/event sink"
+    "features/game-events L0 event/analytics spine for SDK event bridging",
+    "Node.js for platform-sdk tests and scorecard/artifact CLIs"
   ],
+  "commands": {
+    "test": "node --test features/platform-sdk/tests/platform_sdk.test.mjs",
+    "scorecard": "node features/platform-sdk/scripts/scorecard.mjs --input <events.ndjson> --pretty",
+    "inspect": "node features/platform-sdk/scripts/artifact_tools.mjs inspect --target <target> --artifact <artifact-dir>"
+  },
   "provides": [
     "target-to-platform-sdk mapping",
-    "game-facing PlatformSdk wrapper contract",
+    "C-owned game-facing PlatformSdk wrapper contract",
     "build-time adapter selection",
     "runtime target and SDK identity",
     "policy capabilities such as externalLinksAllowed",
-    "adapter semantics for mock, Poki, Yandex Games, and Playgama"
+    "selected backend call semantics for mock, Poki, Yandex Games, and Playgama",
+    "C/template mock ad overlays for local development",
+    "publish target manifest validation",
+    "local NDJSON scorecard CLI"
   ],
   "flags": {
     "target": "local|itch|poki|yandex|playgama",
-    "platform_sdk": "mock|poki|yandex|playgama"
+    "platform_sdk": "mock|poki|yandex|playgama",
+    "debug_ui": "off in release, on by explicit/debug build"
   },
   "manuals": {
     "install": "features/platform-sdk/INSTALL.md",
-    "contract": "features/platform-sdk/references/contract.md"
+    "contract": "features/platform-sdk/references/contract.md",
+    "publish_targets": "features/platform-sdk/references/publish-targets.md"
   },
-  "outputs": [],
+  "outputs": [
+    "platform-sdk.js",
+    "platform-sdk-core.js",
+    "platform-sdk-adapter.js"
+  ],
+  "registers": {
+    "note": "Describes the template's existing in-place wiring; this feature is selected by CMake GAME_PUBLISH_TARGET.",
+    "target_sources": [
+      "${PLATFORM_SDK_SRC}/platform_sdk.c",
+      "${PLATFORM_SDK_SRC}/platform_sdk_web.c (Emscripten only)"
+    ],
+    "include_dirs": [
+      "${PLATFORM_SDK_INC}"
+    ],
+    "web_outputs": [
+      "platform-sdk.js",
+      "platform-sdk-core.js",
+      "platform-sdk-adapter.js"
+    ],
+    "template_debug_ui": "templates/template/src/ui/platform_sdk_debug.c (C/Clay, debug builds only)",
+    "ctest_targets": [
+      "test_platform_sdk",
+      "platform_sdk_node_test"
+    ]
+  },
   "default_template": {
     "target_platforms": [
       "local",
@@ -45,6 +80,9 @@
       "poki",
       "yandex",
       "playgama"
-    ]
+    ],
+    "c_api": "features/platform_sdk/platform_sdk.h",
+    "web_entry": "platform-sdk.js",
+    "web_bridge": "features/platform-sdk/src/platform_sdk_web.c"
   }
 }

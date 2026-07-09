@@ -1,0 +1,37 @@
+{
+  "schema": "ai_studio.publish_target.v1",
+  "target": "poki",
+  "platform_sdk": "poki",
+  "required_files": [
+    "index.html",
+    "game.js",
+    "game.wasm",
+    "assets/game.ntpack",
+    "platform-sdk.js",
+    "platform-sdk-core.js",
+    "platform-sdk-adapter.js"
+  ],
+  "zip_layout": "Flat upload root accepted by Poki Inspector: index.html, game.js, game.wasm, platform-sdk*.js, and assets/game.ntpack.",
+  "metadata": {
+    "portal": "Poki Inspector",
+    "requires_account": true,
+    "submission_tool": "https://inspector.poki.dev",
+    "orientation": "game-owned",
+    "viewport": "responsive canvas"
+  },
+  "sdk_policy": {
+    "adapter": "poki",
+    "sdk_url": "https://game-cdn.poki.com/scripts/v2/poki-sdk.js",
+    "load_policy": "platform-sdk-adapter.js loads the SDK during selected web backend init; no HTML injection.",
+    "ads": "commercialBreak for interstitial, rewardedBreak for rewarded opt-in",
+    "debug_ui": "forbidden in release artifact",
+    "forbidden_markers": [
+      "YaGames.init",
+      "https://bridge.playgama.com/v1/stable/playgama-bridge.js",
+      "Show interstitial ad",
+      "Show rewarded ad",
+      "debug_test"
+    ]
+  },
+  "validation_command": "node features/platform-sdk/scripts/artifact_tools.mjs inspect --target poki --artifact <artifact-dir>"
+}
