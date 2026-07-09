@@ -7,6 +7,13 @@
       "folder": "games/rb-dark-rpg",
       "assets": "games/rb-dark-rpg/assets",
       "status": "active"
+    },
+    {
+      "id": "web-dressup",
+      "title": "Dressup",
+      "folder": "games/web-dressup",
+      "assets": "games/web-dressup/assets",
+      "status": "active"
     }
   ]
 }

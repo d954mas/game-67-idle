@@ -1,0 +1,72 @@
+{
+  "schema": "ai_studio.game_design.ui_flow.v1",
+  "game_id": "web-dressup",
+  "status": "draft",
+  "distribution": "poki",
+  "multiplayer": false,
+  "orientations": ["portrait", "landscape"],
+  "screens": [
+    {
+      "id": "dress_room",
+      "label": "Dress Room",
+      "role": "primary",
+      "entry": "boot",
+      "regions": [
+        { "id": "top_bar", "content": "Theme chip, optional settings; minimal text" },
+        { "id": "stage", "content": "2D character base + equipped layers" },
+        { "id": "categories", "content": "Slot chips: hair, top, bottom, shoes, acc" },
+        { "id": "catalog", "content": "Scroll/grid of items for active category" },
+        { "id": "actions", "content": "Random, Reset, Show (enter Fake Show)" }
+      ],
+      "exits": ["theme_picker", "fake_show", "settings"]
+    },
+    {
+      "id": "theme_picker",
+      "label": "Theme Picker",
+      "role": "sheet_or_modal",
+      "entry": "from dress_room theme chip",
+      "regions": [
+        { "id": "theme_list", "content": "Icon + short label themes (Y2K, formal, beach, goth, etc.)" },
+        { "id": "confirm", "content": "Apply theme banner; close sheet" }
+      ],
+      "exits": ["dress_room"]
+    },
+    {
+      "id": "fake_show",
+      "label": "Fake Show",
+      "role": "sequence",
+      "entry": "from dress_room Show",
+      "regions": [
+        { "id": "runway_stage", "content": "Player outfit walk + pose" },
+        { "id": "rival_lane", "content": "2-5 fake NPC outfits (no real players)" },
+        { "id": "score_fx", "content": "Stars / crowd juice / fake nameplates" },
+        { "id": "podium", "content": "Rank result + Play again / Restyle CTAs" }
+      ],
+      "exits": ["dress_room"]
+    },
+    {
+      "id": "settings",
+      "label": "Settings",
+      "role": "modal",
+      "entry": "from dress_room gear",
+      "regions": [
+        { "id": "audio", "content": "Optional volume" },
+        { "id": "close", "content": "Close to dress room" }
+      ],
+      "exits": ["dress_room"]
+    }
+  ],
+  "first_path": [
+    "boot",
+    "dress_room",
+    "pick_category",
+    "pick_item",
+    "fake_show",
+    "restyle"
+  ],
+  "layout_notes": {
+    "portrait": "Stage top 45-55%; categories, catalog, actions stacked below; min 44px taps",
+    "landscape": "Stage left/center 50-60% width; categories+catalog right or bottom strip; Show/Random reachable without covering face",
+    "orientation_change": "Reflow chrome; keep equipped outfit and selected category"
+  }
+}

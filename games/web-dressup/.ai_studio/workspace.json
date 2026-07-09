@@ -1,0 +1,11 @@
+{
+  "schema": "ai_studio.game.workspace.v1",
+  "gameId": "web-dressup",
+  "visibility": "public",
+  "stores": {
+    "taskboard": ".ai_studio/taskboard/items",
+    "canvas": ".ai_studio/canvas/projects",
+    "evidence": ".ai_studio/evidence",
+    "assets": "assets"
+  }
+}

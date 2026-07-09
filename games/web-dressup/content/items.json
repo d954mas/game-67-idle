@@ -1,0 +1,39 @@
+{
+  "schema": "game_seed.items_catalog",
+  "namespace": "tmpl",
+  "item_kinds": [
+    { "id": "currency", "label": "Currency" },
+    { "id": "consumable", "label": "Consumables" },
+    { "id": "weapon", "label": "Weapons" },
+    { "id": "material", "label": "Materials" }
+  ],
+  "containers": [
+    { "id": "backpack", "capacity": 20, "accept_policy": "any", "hidden": false },
+    { "id": "purse", "capacity": 0, "accept_policy": "currency_only", "hidden": true }
+  ],
+  "items": [
+    { "id": "tmpl.gold", "created": "2026-07-07", "display_name": "Gold", "kind": "currency", "icon_asset_id": "icons/gold",
+      "tags": ["currency"], "base_value": 1,
+      "stack": 0,
+      "currency": { "hud_hint": "counter", "cap": 0 } },
+    { "id": "tmpl.xp", "created": "2026-07-07", "display_name": "Experience", "kind": "currency", "icon_asset_id": "icons/xp",
+      "tags": ["currency"], "base_value": 0,
+      "stack": 0,
+      "currency": { "hud_hint": "bar", "cap": 0 } },
+    { "id": "tmpl.energy", "created": "2026-07-07", "display_name": "Energy", "kind": "currency", "icon_asset_id": "icons/energy",
+      "tags": ["currency"], "base_value": 0,
+      "stack": 0,
+      "currency": { "hud_hint": "counter", "cap": 100 } },
+    { "id": "tmpl.potion", "created": "2026-07-07", "display_name": "Healing Potion", "kind": "consumable", "icon_asset_id": "icons/potion",
+      "tags": ["consumable","heal"], "base_value": 10,
+      "stack": 99,
+      "use": { "effect_id": "heal", "params": { "amount": 25 } } },
+    { "id": "tmpl.sword", "created": "2026-07-07", "display_name": "Iron Sword", "kind": "weapon", "icon_asset_id": "icons/sword",
+      "tags": ["weapon","melee"], "base_value": 50,
+      "stack": 1,
+      "equip": { "slot": "weapon" } },
+    { "id": "tmpl.wood", "created": "2026-07-07", "display_name": "Wood", "kind": "material", "icon_asset_id": "icons/wood",
+      "tags": ["material"], "base_value": 2,
+      "stack": 999 }
+  ]
+}

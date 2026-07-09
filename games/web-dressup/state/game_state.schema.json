@@ -1,0 +1,30 @@
+{
+  "schema": "game_seed.state",
+  "schema_version": 2,
+  "fragment": "game",
+  "version": 1,
+  "string_max": 64,
+  "reserved": ["grabbed", "settings.master_volume", "settings.sfx_volume"],
+  "enums": {
+    "Shape": ["cube", "sphere", "cylinder", "capsule"],
+    "RenderMode": ["solid_wire", "solid", "wire"]
+  },
+  "fields": {
+    "shape_index": { "type": "enum", "enum": "Shape", "default": "cube" },
+    "render_mode_index": { "type": "enum", "enum": "RenderMode", "default": "solid_wire" },
+    "camera_distance": { "type": "float", "default": 6, "min": 2.5, "max": 10 },
+    "test_ui_clicks": { "type": "int", "default": 0, "min": 0, "max": 1000000 },
+    "test_label_text": { "type": "string", "default": "Dressup ready", "max_length": 63 },
+    "test_button_text": { "type": "string", "default": "Cycle", "max_length": 63 },
+    "tutorial.done": { "type": "bool", "default": false }
+  },
+  "events": {
+    "shape_changed": {
+      "fields": {
+        "from_index": { "type": "int" },
+        "to_index":   { "type": "int" },
+        "note":       { "type": "string" }
+      }
+    }
+  }
+}

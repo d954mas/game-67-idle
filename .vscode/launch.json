@@ -26,6 +26,30 @@
       "preLaunchTask": "Game: rb-dark-rpg: build native release"
     },
     {
+      "name": "Debug Game: web-dressup (native debug)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/games/web-dressup/build/native-debug/bin/game.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/games/web-dressup",
+      "environment": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "Game: web-dressup: build native debug"
+    },
+    {
+      "name": "Run Game: web-dressup (native release)",
+      "type": "cppvsdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/games/web-dressup/build/native-release/bin/game.exe",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/games/web-dressup",
+      "environment": [],
+      "console": "integratedTerminal",
+      "preLaunchTask": "Game: web-dressup: build native release"
+    },
+    {
       "name": "Debug Template: template (native debug)",
       "type": "cppvsdbg",
       "request": "launch",

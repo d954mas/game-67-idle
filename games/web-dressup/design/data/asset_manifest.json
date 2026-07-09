@@ -1,0 +1,73 @@
+{
+  "schema": "ai_studio.game_design.asset_manifest.v1",
+  "game_id": "web-dressup",
+  "status": "draft",
+  "notes": "First playable needs layered 2D pieces. Source-first, then generate only if library/CC0 has no fit.",
+  "assets": [
+    {
+      "id": "char_base_body",
+      "role": "character_base",
+      "slot": "body",
+      "status": "needed",
+      "description": "Neutral standing body/mannequin, Y-up game space, transparent background"
+    },
+    {
+      "id": "slot_hair_set",
+      "role": "catalog_layer",
+      "slot": "hair",
+      "count_min": 4,
+      "status": "needed",
+      "description": "Hair styles aligned to the same head anchor"
+    },
+    {
+      "id": "slot_top_set",
+      "role": "catalog_layer",
+      "slot": "top",
+      "count_min": 4,
+      "status": "needed",
+      "description": "Tops / upper outfits aligned to torso"
+    },
+    {
+      "id": "slot_bottom_set",
+      "role": "catalog_layer",
+      "slot": "bottom",
+      "count_min": 4,
+      "status": "needed",
+      "description": "Bottoms aligned to hips/legs"
+    },
+    {
+      "id": "slot_shoes_set",
+      "role": "catalog_layer",
+      "slot": "shoes",
+      "count_min": 4,
+      "status": "needed",
+      "description": "Shoes aligned to feet"
+    },
+    {
+      "id": "slot_acc_set",
+      "role": "catalog_layer",
+      "slot": "acc",
+      "count_min": 4,
+      "status": "needed",
+      "description": "Accessories (hat/glasses/bag) with clear silhouette"
+    },
+    {
+      "id": "ui_category_chip",
+      "role": "ui",
+      "status": "optional_reuse",
+      "description": "Prefer Kenney UI pack / template panel+button until custom UI art is needed"
+    },
+    {
+      "id": "ui_item_thumb_frame",
+      "role": "ui",
+      "status": "optional_reuse",
+      "description": "Thumbnail frame for catalog cells"
+    },
+    {
+      "id": "bg_dress_room",
+      "role": "background",
+      "status": "needed",
+      "description": "Simple room or soft gradient stage background; must not hide avatar"
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "schema": "game_seed.progression",
+  "schema_version": 2,
+  "fragment": "progression",
+  "version": 1,
+  "string_max": 64,
+  "types": {
+    "TrackState": {
+      "kind": "object",
+      "fields": {
+        "level": { "type": "int", "default": 0, "min": 0, "max": 9999 },
+        "xp":    { "type": "i64", "default": 0, "min": 0, "max": 9000000000000000000 }
+      }
+    }
+  },
+  "fields": {
+    "tracks": { "type": "map<string,TrackState>", "max_count": 32 }
+  },
+  "events": {
+    "levelup": {
+      "fields": {
+        "track":           { "type": "string" },
+        "mode":            { "type": "string" },
+        "cause":           { "type": "string" },
+        "reason":          { "type": "string" },
+        "old_level":       { "type": "i64" },
+        "new_level":       { "type": "i64" },
+        "cost_def_id":     { "type": "string" },
+        "cost_amount":     { "type": "i64" },
+        "resource_before": { "type": "i64" },
+        "resource_after":  { "type": "i64" },
+        "cascade_depth":   { "type": "i64" }
+      }
+    },
+    "xp_added": {
+      "fields": {
+        "track":     { "type": "string" },
+        "reason":    { "type": "string" },
+        "delta":     { "type": "i64" },
+        "before_xp": { "type": "i64" },
+        "after_xp":  { "type": "i64" }
+      }
+    },
+    "level_set": {
+      "fields": {
+        "track":           { "type": "string" },
+        "reason":          { "type": "string" },
+        "requested_level": { "type": "i64" },
+        "old_level":       { "type": "i64" },
+        "new_level":       { "type": "i64" }
+      }
+    },
+    "reset": {
+      "fields": {
+        "track":     { "type": "string" },
+        "reason":    { "type": "string" },
+        "old_level": { "type": "i64" },
+        "old_xp":    { "type": "i64" }
+      }
+    }
+  }
+}
