@@ -101,8 +101,8 @@ add_executable(test_progression
     "${ITEMS_CORE_SRC}/items_containers.c" "${ITEMS_CORE_SRC}/items_catalog.c" "${ITEMS_CATALOG_GENERATED_SOURCE}"
     "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
     src/features/items/items_bootstrap.c "${ITEMS_CORE_SRC}/items_reconcile.c"
-    src/game_state_json.c src/game_events.c)
-target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" src ...)
+    src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c")
+target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src ...)
 ```
 
 `test_progression_curve` — golden test over the demo's REAL generated

@@ -151,6 +151,11 @@ possibility, not a feature.
   (`state/progression.schema.json`), and its own composition (e.g. the
   template's `src/ui/demo_hud.c` idle-income binding). Reference:
   `progression-core/README.md` + `progression-core/INSTALL.md`.
+- `game-events/` (`L0`): reusable in-place event/analytics spine. Owns
+  `game_events`, event descriptor/rendering contracts, DevAPI tail
+  (`game.events.tail`), and the local `game_analytics` NDJSON writer. Higher
+  features emit through this pack; analytics subscribes to it. Reference:
+  `game-events/README.md` + `game-events/INSTALL.md`.
 
 ## Features (reference implementations live in the template)
 
@@ -193,16 +198,6 @@ What is left pointing at the template for them is game-side only:
   no mandatory runtime game SDK. Web builds copy only the selected adapter into
   `platform-sdk-adapter.js`; the pack also owns target manifest inspection and
   local NDJSON scorecards.
-
-## Planned Promotions
-
-- `game-events/` (`L0`, planned): reusable event/analytics spine that should
-  own `game_events`, event descriptors/rendering, DevAPI tail, and
-  `game_analytics` NDJSON export. The implementation currently still lives in
-  `templates/template/src/game_events*` and `game_analytics*` as a T0328
-  intermediate state. T0328 is not complete for this slice until those files
-  are promoted into an in-place feature pack like `game-state`. `platform-sdk`
-  SDK-originated events must target this pack, not a parallel event system.
 
 ### Ownership model
 

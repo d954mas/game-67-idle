@@ -179,6 +179,9 @@ set(PLATFORM_SDK_DIR         "${CMAKE_CURRENT_SOURCE_DIR}/../../features/platfor
 set(PLATFORM_SDK_INC         "${PLATFORM_SDK_DIR}/include")
 set(PLATFORM_SDK_SRC         "${PLATFORM_SDK_DIR}/src")
 set(PLATFORM_SDK_WEB         "${PLATFORM_SDK_DIR}/web")
+set(GAME_EVENTS_DIR          "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-events")
+set(GAME_EVENTS_INC          "${GAME_EVENTS_DIR}/include")
+set(GAME_EVENTS_SRC          "${GAME_EVENTS_DIR}/src")
 
 set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
@@ -225,7 +228,7 @@ endif()
 # --- game executable (the conductor + systems) ---
 add_executable(${GAME_TARGET}
     src/main.c
-    src/game_events.c            # E1
+    "${GAME_EVENTS_SRC}/game_events.c" # E1
     src/game_log.c               # E4.B: built-in "log" event type (unconditional leaf)
     src/features/game_features.c # E1
     src/ui/hud.c
@@ -426,20 +429,20 @@ if(GAME_DEVAPI_ENABLED)
     # fragment registry), no longer a generated per-fragment source.
     target_sources(${GAME_TARGET} PRIVATE
         src/game_save_devapi.c
-        src/game_events_devapi.c   # E3: event-log tail ring + game.events.tail
-        src/game_event_render.c)   # E3: descriptor-driven JSON renderer
+        "${GAME_EVENTS_SRC}/game_events_devapi.c" # E3: event-log tail ring + game.events.tail
+        "${GAME_EVENTS_SRC}/game_event_render.c") # E3: descriptor-driven JSON renderer
 endif()
 # E4: the E3 renderer is ALSO the analytics writer's dependency. When devapi is OFF but
 # analytics is ON, pull it in here -- guarded against the devapi block's copy above so it
 # is never listed twice (E3 lines untouched; the renderer compiles if EITHER wants it).
 if(GAME_ANALYTICS_ENABLED AND NOT GAME_DEVAPI_ENABLED)
-    target_sources(${GAME_TARGET} PRIVATE src/game_event_render.c)   # E3 renderer (shared with E4)
+    target_sources(${GAME_TARGET} PRIVATE "${GAME_EVENTS_SRC}/game_event_render.c") # E3 renderer (shared with E4)
 endif()
 if(GAME_ANALYTICS_ENABLED)
-    target_sources(${GAME_TARGET} PRIVATE src/game_analytics.c)      # E4: local analytics writer
+    target_sources(${GAME_TARGET} PRIVATE "${GAME_EVENTS_SRC}/game_analytics.c") # E4: local analytics writer
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE
-    "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${PLATFORM_SDK_INC}"
+    "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${PLATFORM_SDK_INC}" "${GAME_EVENTS_INC}"
     src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/deps/glfw/deps")
 target_compile_definitions(${GAME_TARGET} PRIVATE GAME_WINDOW_TITLE="${GAME_WINDOW_TITLE}")
 target_link_libraries(${GAME_TARGET} PRIVATE
@@ -586,7 +589,9 @@ target_compile_definitions(${GAME_TARGET} PRIVATE
 # E4: FEATURE_GAME_ANALYTICS is defined ALWAYS (1/0) at target level -- game_features.c and
 # main.c carry #if FEATURE_GAME_ANALYTICS unconditionally, and an undefined macro under
 # -Wundef + -Werror would fail native-debug/release. Mirrors NT_DEVAPI_ENABLED=0.
-target_compile_definitions(${GAME_TARGET} PRIVATE FEATURE_GAME_ANALYTICS=$<BOOL:${GAME_ANALYTICS_ENABLED}>)
+target_compile_definitions(${GAME_TARGET} PRIVATE
+    FEATURE_GAME_ANALYTICS=$<BOOL:${GAME_ANALYTICS_ENABLED}>
+    FEATURE_GAME_EVENTS=1)
 # GAME_STORAGE_APP_ID namespaces the shared web-origin (itch) localStorage; "template" is
 # the template's own default, games override it (A2).
 target_compile_definitions(${GAME_TARGET} PRIVATE GAME_STORAGE_APP_ID="template")
@@ -672,10 +677,10 @@ if(NOT EMSCRIPTEN)
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
 
     # (1) основной: позитив + death-тесты переполнения/фазы (NT_ASSERT ФИРИТ)
-    add_executable(test_game_events tests/test_game_events.c src/game_events.c
+    add_executable(test_game_events tests/test_game_events.c "${GAME_EVENTS_SRC}/game_events.c"
         "${ENGINE_DIR}/tests/unit/test_helpers/nt_assert_trap.c")
     target_link_libraries(test_game_events PRIVATE unity nt_hash nt_log nt_core)
-    target_include_directories(test_game_events PRIVATE src "${ENGINE_DIR}/tests/unit")
+    target_include_directories(test_game_events PRIVATE "${GAME_EVENTS_INC}" src "${ENGINE_DIR}/tests/unit")
     target_compile_definitions(test_game_events PRIVATE
         GAME_EVENTS_ARENA_BYTES=1024u   # маленькая арена -> переполнение дёшево (позитив влезает)
         GAME_EVENTS_LOG_CAP=64          # маленький кап лога -> переполнение дёшево
@@ -688,9 +693,9 @@ if(NOT EMSCRIPTEN)
     # (не assert'ит) в debug-ctest, проверяет release-семантику (тест #10). Не
     # звено с nt_assert_trap: этот бинарь не использует NT_TEST_EXPECT_ASSERT
     # (test_game_events.c гейтит его #include под #ifndef GAME_EVENTS_SOFT_OVERFLOW).
-    add_executable(test_game_events_overflow tests/test_game_events.c src/game_events.c)
+    add_executable(test_game_events_overflow tests/test_game_events.c "${GAME_EVENTS_SRC}/game_events.c")
     target_link_libraries(test_game_events_overflow PRIVATE unity nt_hash nt_log nt_core)
-    target_include_directories(test_game_events_overflow PRIVATE src)
+    target_include_directories(test_game_events_overflow PRIVATE "${GAME_EVENTS_INC}" src)
     target_compile_definitions(test_game_events_overflow PRIVATE
         GAME_EVENTS_SOFT_OVERFLOW=1     # выключить debug-assert переполнения -> тестировать дроп
         GAME_EVENTS_ARENA_BYTES=1024u GAME_EVENTS_LOG_CAP=64
@@ -721,9 +726,10 @@ if(NOT EMSCRIPTEN)
     add_executable(test_game_events_typed
         tests/test_game_events_typed.c
         "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
-        src/game_events.c)
+        "${GAME_EVENTS_SRC}/game_events.c")
     target_link_libraries(test_game_events_typed PRIVATE unity nt_hash nt_log nt_core)
     target_include_directories(test_game_events_typed PRIVATE
+        "${GAME_EVENTS_INC}"
         src
         "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
     target_compile_definitions(test_game_events_typed PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -737,13 +743,12 @@ if(NOT EMSCRIPTEN)
     # devapi-debug exercises the label branch, native-debug the hex branch.
     add_executable(test_game_event_render
         tests/test_game_event_render.c
-        src/game_event_render.c
-        src/game_state_json.c        # E3: gsj_i64_to_string (i64->string, MED-3)
+        "${GAME_EVENTS_SRC}/game_event_render.c"
         "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
-        src/game_events.c)
+        "${GAME_EVENTS_SRC}/game_events.c")
     target_link_libraries(test_game_event_render PRIVATE unity cjson nt_hash nt_log nt_core)
     target_include_directories(test_game_event_render PRIVATE
-        src "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+        "${GAME_EVENTS_INC}" src "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
     target_compile_definitions(test_game_event_render PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_game_event_render PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -751,19 +756,17 @@ if(NOT EMSCRIPTEN)
 
     # E4: analytics writer over the COMMITTED golden mini events + the built-in log type +
     # frozen E1 transport. Native, sink + clock injected (GAME_ANALYTICS_TESTING). Links
-    # game_state_json.c (game_event_render calls gsj_i64_to_string for FT_I64 -- undefined
-    # ref otherwise) and game_log.c (case #7 emits a log event). Label-agnostic asserts.
+    # game_log.c (case #7 emits a log event). Label-agnostic asserts.
     add_executable(test_game_analytics
         tests/test_game_analytics.c
-        src/game_analytics.c
-        src/game_event_render.c   # E3 renderer (reused)
-        src/game_state_json.c     # gsj_i64_to_string (FT_I64 -> string link)
+        "${GAME_EVENTS_SRC}/game_analytics.c"
+        "${GAME_EVENTS_SRC}/game_event_render.c" # E3 renderer (reused)
         src/game_log.c            # case #7 game_log_emit
         "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c"
-        src/game_events.c)
+        "${GAME_EVENTS_SRC}/game_events.c")
     target_link_libraries(test_game_analytics PRIVATE unity cjson nt_hash nt_log nt_core)
     target_include_directories(test_game_analytics PRIVATE
-        src "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
+        "${GAME_EVENTS_INC}" src "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
     target_compile_definitions(test_game_analytics PRIVATE
         FEATURE_GAME_ANALYTICS=1 GAME_ANALYTICS_TESTING=1
         GAME_ANALYTICS_BUF_BYTES=256u        # small buffer -> threshold/drop are cheap
@@ -782,6 +785,7 @@ if(NOT EMSCRIPTEN)
     add_library(check_mini_state_events OBJECT
         "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini/mini_state_events.gen.c")
     target_include_directories(check_mini_state_events PRIVATE
+        "${GAME_EVENTS_INC}"
         src
         "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/golden/mini")
     target_link_libraries(check_mini_state_events PRIVATE nt_hash nt_log nt_core)  # headers only (OBJECT does not link)
@@ -816,9 +820,9 @@ if(NOT EMSCRIPTEN)
         "${ITEMS_CORE_SRC}/items_catalog.c"
         "${ITEMS_CATALOG_GENERATED_SOURCE}"
         src/game_state_json.c
-        src/game_events.c)
+        "${GAME_EVENTS_SRC}/game_events.c")
     target_link_libraries(test_items_fragment PRIVATE cjson unity nt_hash nt_log nt_core)
-    target_include_directories(test_items_fragment PRIVATE "${ITEMS_CORE_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
+    target_include_directories(test_items_fragment PRIVATE "${ITEMS_CORE_INC}" "${GAME_EVENTS_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_items_fragment PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_items_fragment PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -885,10 +889,10 @@ if(NOT EMSCRIPTEN)
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
         src/features/items/items_bootstrap.c                     # items on_new_game (link completeness)
         "${ITEMS_CORE_SRC}/items_reconcile.c"                     # items reconcile (T0337 M1 split, link completeness)
-        src/game_state_json.c src/game_events.c)
+        src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c")
     add_dependencies(test_progression progression_tracks_gen)   # H2: guarantees progression_tracks.gen.h before progression.c compiles
     target_link_libraries(test_progression PRIVATE cjson unity nt_hash nt_log nt_core)
-    target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
+    target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_progression PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_progression PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_progression COMMAND test_progression WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
@@ -940,6 +944,25 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_platform_sdk PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_platform_sdk COMMAND test_platform_sdk)
 
+    add_executable(test_platform_sdk_events
+        tests/test_platform_sdk_events.c
+        "${PLATFORM_SDK_SRC}/platform_sdk.c"
+        "${GAME_EVENTS_SRC}/game_events.c")
+    target_link_libraries(test_platform_sdk_events PRIVATE unity nt_hash nt_log nt_core)
+    target_include_directories(test_platform_sdk_events PRIVATE "${PLATFORM_SDK_INC}" "${GAME_EVENTS_INC}")
+    target_compile_definitions(test_platform_sdk_events PRIVATE
+        PLATFORM_SDK_TARGET_ID=${GAME_PLATFORM_TARGET_ID}
+        PLATFORM_SDK_CURRENT_ID=${GAME_PLATFORM_SDK_ID}
+        PLATFORM_SDK_EXTERNAL_LINKS_ALLOWED=${GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED}
+        PLATFORM_SDK_ADS_SUPPORTED=${GAME_PLATFORM_ADS_SUPPORTED}
+        PLATFORM_SDK_REWARDED_SUPPORTED=${GAME_PLATFORM_REWARDED_SUPPORTED}
+        PLATFORM_SDK_STORAGE_SUPPORTED=${GAME_PLATFORM_STORAGE_SUPPORTED}
+        PLATFORM_SDK_TESTING=1
+        FEATURE_GAME_EVENTS=1
+        _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_platform_sdk_events PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_platform_sdk_events COMMAND test_platform_sdk_events)
+
     find_program(Node_EXECUTABLE node)
     if(Node_EXECUTABLE)
         add_test(NAME platform_sdk_node_test
@@ -952,7 +975,7 @@ if(NOT EMSCRIPTEN)
     # GAME_SAVE_TESTING injects clocks & avoids nt_time (precedent test_game_save).
     add_executable(test_template_composition
         tests/test_template_composition.c
-        src/game_save.c src/game_storage.c src/game_state_json.c src/game_events.c
+        src/game_save.c src/game_storage.c src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c"
         "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
         "${SETTINGS_STATE_GENERATED_SOURCE}" src/features/settings/settings.c
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
@@ -968,7 +991,7 @@ if(NOT EMSCRIPTEN)
     # Clay/impl chain -- draw_ui is never called in this TU, only declared.
     target_link_libraries(test_template_composition PRIVATE cjson unity nt_hash nt_log nt_core nt_ui_interface)
     target_include_directories(test_template_composition PRIVATE
-        "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" src
+        "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src
         "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_template_composition PRIVATE
         GAME_SAVE_TESTING=1 GAME_STORAGE_APP_ID="template_test"

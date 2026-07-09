@@ -176,10 +176,9 @@ Implementation rules:
   unavailable, it moves to `PLATFORM_SDK_BOOT_FAILED` because the selected
   portal build cannot run correctly. JavaScript may cache portal script loading
   inside the selected backend, but that cache is not a game-facing policy API.
-- `platform_sdk_game_loading_finished()` is one-shot. It will emit
-  `game.loading_finished` through `features/game-events` once that bridge
-  exists, and calls the selected backend's loading-finished hook at most once per
-  wrapper instance.
+- `platform_sdk_game_loading_finished()` is one-shot. It emits
+  `game.loading_finished` through `features/game-events`, and calls the selected
+  backend's loading-finished hook at most once per wrapper instance.
 - `platform_sdk_game_ready()` is also one-shot and is only for portals with a
   distinct game-ready SDK call, such as Playgama `game_ready`; it does not emit
   an analytics event.

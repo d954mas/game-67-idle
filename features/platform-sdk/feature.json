@@ -64,6 +64,7 @@
     "template_debug_ui": "templates/template/src/ui/platform_sdk_debug.c (C/Clay, debug builds only)",
     "ctest_targets": [
       "test_platform_sdk",
+      "test_platform_sdk_events",
       "platform_sdk_node_test"
     ]
   },

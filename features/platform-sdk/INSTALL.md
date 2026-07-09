@@ -69,8 +69,8 @@ A consuming template or game should wire this as an L1 feature:
    player/account user.
 
 9. Emit SDK-originated lifecycle/ad-flow events from the C facade through
-   `features/game-events` once that L0 pack exists. Do not emit events from the
-   JavaScript backend or create a second event bus.
+   `features/game-events`. Do not emit events from the JavaScript backend or
+   create a second event bus.
 
 10. If the template/game wants the built-in debug controls, compile the
     template-local C/Clay UI module (`src/ui/platform_sdk_debug.c`) and pass

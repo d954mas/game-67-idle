@@ -41,6 +41,7 @@
 #endif
 
 #include "features/game_features.h"
+#include "features/platform_sdk/platform_sdk_events.h"
 #include "features/settings/settings.h"
 #include "game_events.h"
 #include "game_log.h" /* E4.B: built-in "log" event type (unconditional leaf) */
@@ -375,14 +376,23 @@ int main(int argc, char **argv) {
     game_events_devapi_register_descs(items_ev_descs, items_ev_desc_count); // И2a: items.txn tail descriptor
     game_events_devapi_register_descs(progression_ev_descs, progression_ev_desc_count); // И3a: progression.levelup tail descriptor
 #endif
+#if FEATURE_GAME_EVENTS
+    platform_sdk_events_register(); // T0339: platform SDK lifecycle/ad-flow labels
+#endif
     game_log_register(); // E4.B: debug label "log" (UNCONDITIONAL; game_log.c is a leaf)
 #if NT_DEVAPI_ENABLED
+#if FEATURE_GAME_EVENTS
+    game_events_devapi_register_descs(platform_sdk_ev_descs, platform_sdk_ev_desc_count); // T0339: SDK event descriptors
+#endif
     game_events_devapi_register_descs(game_log_descs, game_log_desc_count); // E3 tail: log type (append)
 #endif
 #if FEATURE_GAME_ANALYTICS
     game_analytics_register_descs(game_ev_descs, game_ev_desc_count);   // E4: fragment descs (append)
     game_analytics_register_descs(items_ev_descs, items_ev_desc_count); // И2a: items.txn (append)
     game_analytics_register_descs(progression_ev_descs, progression_ev_desc_count); // И3a: progression.levelup (append)
+#if FEATURE_GAME_EVENTS
+    game_analytics_register_descs(platform_sdk_ev_descs, platform_sdk_ev_desc_count); // T0339: SDK events
+#endif
     game_analytics_register_descs(game_log_descs, game_log_desc_count); // E4: log type (append)
     game_analytics_init();                                             // E4: open stream + header
 #endif

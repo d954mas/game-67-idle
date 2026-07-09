@@ -1,0 +1,63 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "game-events",
+  "title": "Game Events",
+  "status": "reusable",
+  "kind": "gameplay-infrastructure",
+  "summary": "In-place L0 event spine with fixed per-frame event log, descriptor-based rendering, DevAPI tail, and local NDJSON analytics writer.",
+  "copy_model": "in-place",
+  "layer": "L0",
+  "owners": [
+    "features/game-events"
+  ],
+  "dependencies": [
+    "engine nt_hash, nt_log, nt_core",
+    "cJSON for descriptor JSON rendering, DevAPI tail, and analytics writer",
+    "engine DevAPI only when GAME_DEVAPI_ENABLED is on"
+  ],
+  "commands": {
+    "ctest": "ctest --test-dir templates/template/build/native-debug -R \"test_game_events|test_game_events_typed|test_game_event_render|test_game_analytics|test_platform_sdk_events\" --output-on-failure"
+  },
+  "provides": [
+    "game_event_emit and per-frame game_event_log",
+    "game_event_desc_t descriptor contract",
+    "descriptor-driven game_event_render",
+    "game.events.tail DevAPI command",
+    "local analytics NDJSON writer"
+  ],
+  "flags": {
+    "feature": "FEATURE_GAME_EVENTS=1 in consuming game/template targets",
+    "devapi": "GAME_DEVAPI_ENABLED pulls game_events_devapi.c",
+    "analytics": "GAME_ANALYTICS_ENABLED pulls game_analytics.c"
+  },
+  "manuals": {
+    "install": "features/game-events/INSTALL.md"
+  },
+  "registers": {
+    "note": "Describes the template's existing in-place wiring.",
+    "target_sources": [
+      "${GAME_EVENTS_SRC}/game_events.c",
+      "${GAME_EVENTS_SRC}/game_event_render.c when DevAPI or analytics is enabled",
+      "${GAME_EVENTS_SRC}/game_events_devapi.c when GAME_DEVAPI_ENABLED is on",
+      "${GAME_EVENTS_SRC}/game_analytics.c when GAME_ANALYTICS_ENABLED is on"
+    ],
+    "include_dirs": [
+      "${GAME_EVENTS_INC}"
+    ],
+    "ctest_targets": [
+      "test_game_events",
+      "test_game_events_overflow",
+      "test_game_events_typed",
+      "test_game_event_render",
+      "test_game_analytics",
+      "test_platform_sdk_events"
+    ]
+  },
+  "default_template": {
+    "event_log_api": "game_events.h",
+    "descriptor_api": "game_event_desc.h",
+    "render_api": "game_event_render.h",
+    "devapi_tail_api": "game_events_devapi.h",
+    "analytics_api": "game_analytics.h"
+  }
+}

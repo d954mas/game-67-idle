@@ -83,8 +83,7 @@ JavaScript artifact.
   operations. The C facade owns ad-flow policy and listener dispatch; selected
   JavaScript backends only call portal SDK methods and report outcomes.
 - The compact SDK lifecycle/ad-flow event contract, owned by the C facade and
-  bridged into `features/game-events` once that L0 pack exists, plus a
-  fixture-driven scorecard CLI.
+  bridged into `features/game-events`, plus a fixture-driven scorecard CLI.
 - Publish target manifest contracts for itch, Poki, Yandex Games, and Playgama.
 
 ## What It Does Not Own

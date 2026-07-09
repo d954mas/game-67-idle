@@ -65,7 +65,7 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
       миграционная таблица + extern-хуки; --fragment, монолит умер);
       живой миграционный шаг/hook-провод тренируется в T0327.
 
-- [ ] E5: `game_events`/`game_analytics` promoted from template root files into
+- [x] E5: `game_events`/`game_analytics` promoted from template root files into
       an L0 reusable `features/game-events` feature pack like `game-state`, with
       README/INSTALL/feature.json, stable public include path, in-place template
       CMake wiring, DevAPI tail + NDJSON analytics tests green, and no behavior
@@ -133,6 +133,12 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
   as anonymous template shell files. Added explicit remaining acceptance for
   `features/game-events`; T0339 platform SDK event bridging depends on this
   pack rather than on ad hoc root template files.
+- 2026-07-09: E5 completed under T0339 continuation: `game_events`,
+  `game_event_desc`, `game_event_render`, `game_events_devapi`, and
+  `game_analytics` now live in `features/game-events` as an in-place L0 feature
+  pack with README/INSTALL/feature.json. Template CMake consumes
+  `${GAME_EVENTS_SRC}`/`${GAME_EVENTS_INC}`; focused event, render, analytics,
+  and platform SDK bridge tests passed.
 - 2026-07-07 (ночь): E4 ГОТОВ — ВСЕ ИНКРЕМЕНТЫ ПЛАНА (A0-A6, E1-E4)
   ЗАКРЫТЫ. Аналитика-писатель: game_analytics.{c,h} — пассивный
   подписчик RECORD-фазы, реюз E3-рендерера (0 правок), NDJSON:

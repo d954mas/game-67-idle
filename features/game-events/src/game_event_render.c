@@ -7,7 +7,6 @@
 #include <string.h> /* memcpy, memchr, strlen */
 
 #include "cJSON.h"
-#include "game_state_json.h" /* gsj_i64_to_string (i64 -> string, parity with game.state.get) */
 #include "hash/nt_hash.h"    /* nt_hash64_label */
 
 /* Read of `width` bytes at `off` is legal only if the whole word fits in `size`.
@@ -64,7 +63,7 @@ static void render_add_field(cJSON *root, const game_event_field_t *f, const uin
             int64_t v = 0;
             memcpy(&v, base + f->offset, sizeof v);
             char b[24];
-            (void)gsj_i64_to_string(v, b, sizeof b); /* string, NOT double (§14 п.8) */
+            (void)snprintf(b, sizeof b, "%lld", (long long)v); /* string, NOT double */
             cJSON_AddStringToObject(root, f->name, b);
             return;
         }
