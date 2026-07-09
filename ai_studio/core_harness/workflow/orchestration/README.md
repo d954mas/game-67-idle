@@ -36,6 +36,11 @@ Return: <short result shape>
 Stop: <when to stop>
 ```
 
+When delegation is for review or verification, make the packet adversarial by
+default: assume the proposed change is wrong, find concrete bugs, regressions,
+missing validation, and contract drift; do not implement fixes unless explicitly
+asked.
+
 Example:
 
 ```text

@@ -30,6 +30,12 @@ paths.
 
 Reusable agent roles live in the active harness catalog. Codex custom agents
 live in `.codex/agents/*.toml`; Claude agents live in `.claude/agents/*.md`.
+Standing lead directive: non-trivial work in this checkout authorizes required
+subagent use. If higher-priority tool policy still prevents spawning without
+explicit user authorization, ask once per chat/session when delegation is first
+required and no valid approval is already present. Reuse that approval for this
+checkout unless the lead revokes it, scope leaves this repo, or the session
+changes. Do not do substantial inline work to bypass required delegation.
 Work that is non-trivial, context-heavy, architecture/research/debugging-heavy,
 or faster to describe as a bounded packet than to execute inline must be
 delegated to the closest existing role when subagent tooling is available. The
