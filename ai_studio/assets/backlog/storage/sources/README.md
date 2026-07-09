@@ -26,8 +26,10 @@ from this file.
 It is not a template lineage/provenance file; after copy, each game owns its
 folder.
 
-New games created through `games/new_game.mjs` are registered in
-`games/games.json`.
+New public games created through
+`games/new_game.mjs --visibility public` are registered in `games/games.json`.
+Private games created through `games/new_game.mjs --visibility private` must not
+be added here.
 
 Private commercial game mounts live in the ignored
 `ai_studio/workspace/games.local.json` overlay and are resolved through

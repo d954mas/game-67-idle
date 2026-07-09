@@ -24,15 +24,17 @@ The gallery header lets the user choose which source to display:
   `ai_studio/assets/backlog/storage/sources/libraries.json`.
 - Templates: registered template asset roots from
   `templates/templates.json`.
-- Registered Games: game-local asset folders from
+- Registered Games: public/tracked game-local asset folders from
   `games/games.json`.
 
 The generated static-gallery command remains for review exports and standalone
 sharing, but it is not the normal browser entry.
 
-New games created through `games/new_game.mjs --id <game-id>` are
-registered automatically as `<game-id>/assets`. The gallery does not scan root
-folders to guess games.
+Public games created through
+`games/new_game.mjs --id <game-id> --visibility public` are registered
+automatically as `<game-id>/assets`. Private games stay out of `games/games.json`
+unless mounted through a private-aware workspace flow. The gallery does not scan
+root folders to guess games.
 
 The gallery does not run filesystem watch mode. When assets are added or
 changed locally, use the `Refresh` button. It checks the selected source

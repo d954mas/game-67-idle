@@ -30,7 +30,9 @@ implementation-facing primary GDD.
 - For reusable sources, knowledge promotion, or reference deconstruction, use
   `nt-design-knowledge` and `ai_studio/game_design/knowledge/README.md`.
 - For quality checks, use `nt-quality-checks` and `ai_studio/quality/README.md`.
-- For creating a new game folder, use `games/new_game.mjs`;
+- For creating a new game folder, first choose public/tracked vs private nested
+  repo, then use
+  `games/new_game.mjs --visibility public|private --require-visibility`;
   project-specific design and private knowledge stay under
   `games/<game-id>/design/`.
 

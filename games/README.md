@@ -9,15 +9,20 @@ place.
 Register public/tracked active game asset roots in
 `games/games.json`. This lets Asset Viewer and asset tools show public
 game-local assets alongside template and library sources.
-Use `node games/new_game.mjs --id <game-id>` when creating a new
-game; it registers the game, creates/reuses a Taskboard project, lays down the
-game-owned `design/` and `.ai_studio/` scaffolds, and refreshes VS Code
-build/run entries.
+Use an explicit visibility choice when creating a new game:
+
+```powershell
+node games/new_game.mjs --id <game-id> --visibility public
+```
+
+The public/tracked flow registers the game in `games/games.json`,
+creates/reuses a parent Taskboard project, lays down the game-owned `design/`
+and `.ai_studio/` scaffolds, and refreshes VS Code build/run entries.
 
 Private commercial games must be explicit:
 
 ```powershell
-node games/new_game.mjs --id <private-game-id> --private
+node games/new_game.mjs --id <private-game-id> --visibility private
 ```
 
 The private flow creates `games/<private-game-id>/`, initializes or verifies its
@@ -28,6 +33,12 @@ can then be mounted locally through the ignored registry
 `ai_studio/workspace/games.local.json`; see `ai_studio/workspace/README.md`.
 Do not put private game ids, remotes, task logs, canvas refs, or evidence paths
 in `games/games.json` or other tracked Studio files.
+
+For backward compatibility, omitting `--visibility` still creates a public
+tracked game. Human-facing, agent-facing, or Studio browser flows should add
+`--require-visibility` so a missing public/private choice fails before any game
+files are copied. `--private` remains a compatibility alias for
+`--visibility private`.
 
 Each game owns its private design knowledge base under
 `games/<game-id>/design/knowledge/`. Keep accepted game-specific facts, reference

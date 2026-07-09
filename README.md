@@ -20,7 +20,7 @@ knowledge. Templates live under `templates/`; reusable feature packs live under
 
 ```powershell
 git submodule update --init --recursive
-node games/new_game.mjs --id <game-id>   # copies templates/template/ -> games/<game-id>/
+node games/new_game.mjs --id <game-id> --visibility public|private --require-visibility
 ```
 
 Then customise the copy and pull assets/features. The new game starts with

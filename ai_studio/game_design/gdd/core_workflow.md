@@ -54,7 +54,8 @@ Add more files only when they remove implementation ambiguity.
 ## Start Checklist
 
 1. Locate or create the active game design folder under `games/<game-id>/design/`.
-   For a new game folder, use `node games/new_game.mjs --id <id>`.
+   For a new game folder, choose visibility first, then use
+   `node games/new_game.mjs --id <id> --visibility public|private --require-visibility`.
 2. Check `git status` and confirm temporary/generated folders are ignored.
 3. Write the Definition of Done: what must exist, what is out of scope, and what
    proof is accepted.

@@ -114,6 +114,154 @@ test("new_game --private creates a nested private game without public Studio wri
   assert.match(readFileSync(join(root, ".git", "info", "exclude"), "utf8"), /games\/secret-game\//);
 });
 
+test("new_game --visibility public explicitly creates a tracked public game", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const output = execFileSync(process.execPath, [
+    script,
+    "--root",
+    root,
+    "--id",
+    "test-game",
+    "--visibility",
+    "public",
+  ], { encoding: "utf8" });
+
+  assert.match(output, /new game 'test-game' created/);
+
+  const workspace = JSON.parse(readFileSync(join(root, "games", "test-game", ".ai_studio", "workspace.json"), "utf8"));
+  assert.equal(workspace.visibility, "public");
+
+  const registry = JSON.parse(readFileSync(join(root, "games", "games.json"), "utf8"));
+  assert.deepEqual(registry.games.map((game) => game.id), ["test-game"]);
+  assert.equal(existsSync(join(taskboardItems(root), "projects", "P001-test-game.md")), true);
+  assert.equal(existsSync(join(root, ".vscode", "tasks.json")), true);
+});
+
+test("new_game --visibility private creates a nested private game without public Studio writes", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+
+  const output = execFileSync(process.execPath, [
+    script,
+    "--root",
+    root,
+    "--id",
+    "secret-game",
+    "--visibility",
+    "private",
+  ], { encoding: "utf8" });
+
+  assert.match(output, /new private game 'secret-game' created/);
+
+  const workspace = JSON.parse(readFileSync(join(root, "games", "secret-game", ".ai_studio", "workspace.json"), "utf8"));
+  assert.equal(workspace.visibility, "private");
+  assert.equal(existsSync(join(root, "games", "games.json")), false);
+  assert.equal(existsSync(join(taskboardItems(root), "projects", "P001-secret-game.md")), false);
+  assert.equal(existsSync(join(root, ".vscode", "tasks.json")), false);
+});
+
+test("new_game --require-visibility rejects missing public or private choice before copying", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const result = spawnSync(process.execPath, [
+    script,
+    "--root",
+    root,
+    "--id",
+    "test-game",
+    "--require-visibility",
+  ], { encoding: "utf8" });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /missing visibility choice/);
+  assert.equal(existsSync(join(root, "games", "test-game")), false);
+});
+
+test("new_game rejects conflicting private compatibility flag and public visibility", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const result = spawnSync(process.execPath, [
+    script,
+    "--root",
+    root,
+    "--id",
+    "test-game",
+    "--private",
+    "--visibility",
+    "public",
+  ], { encoding: "utf8" });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /--private conflicts with --visibility public/);
+  assert.equal(existsSync(join(root, "games", "test-game")), false);
+});
+
+test("new_game rejects missing visibility value", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const result = spawnSync(process.execPath, [
+    script,
+    "--root",
+    root,
+    "--id",
+    "test-game",
+    "--visibility",
+  ], { encoding: "utf8" });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /--visibility requires public or private/);
+  assert.equal(existsSync(join(root, "games", "test-game")), false);
+});
+
+test("new_game rejects invalid visibility values before copying", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const result = spawnSync(process.execPath, [
+    script,
+    "--root",
+    root,
+    "--id",
+    "test-game",
+    "--visibility",
+    "secret",
+  ], { encoding: "utf8" });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /invalid --visibility 'secret'/);
+  assert.equal(existsSync(join(root, "games", "test-game")), false);
+  assert.equal(existsSync(join(root, "games", "games.json")), false);
+  assert.equal(existsSync(join(root, "ai_studio", "workspace", "games.local.json")), false);
+});
+
+test("new_game rejects public aliases outside private visibility", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const result = spawnSync(process.execPath, [
+    script,
+    "--root",
+    root,
+    "--id",
+    "test-game",
+    "--visibility",
+    "public",
+    "--public-alias",
+    "Safe Alias",
+  ], { encoding: "utf8" });
+
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /--public-alias is only valid with private visibility/);
+  assert.equal(existsSync(join(root, "games", "test-game")), false);
+  assert.equal(existsSync(join(root, "games", "games.json")), false);
+});
+
 test("new_game --private rejects public game id collisions", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -259,6 +407,8 @@ test("new_game --help prints usage", () => {
 
   assert.equal(result.status, 0);
   assert.match(result.stdout, /usage: node games\/new_game\.mjs/);
+  assert.match(result.stdout, /--visibility public\|private/);
+  assert.match(result.stdout, /omitting --visibility still creates a public\/tracked game/);
 });
 
 test("new_game rejects unknown arguments", () => {

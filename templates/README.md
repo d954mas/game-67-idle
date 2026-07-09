@@ -13,6 +13,20 @@ Creating a game copies the selected template into `games/<game-id>/`. After
 that copy, the game owns its files; later template edits do not automatically
 change existing games.
 
+New games can be created from a template as either public/tracked or private:
+
+```powershell
+node games/new_game.mjs --id <game-id> --template <template-id> --visibility public
+node games/new_game.mjs --id <game-id> --template <template-id> --visibility private
+```
+
+Use `--visibility public` when the game may be registered in tracked Studio
+files such as `games/games.json`, parent Taskboard projects, and generated
+VS Code entries. Use `--visibility private` for a nested private repository
+under `games/<game-id>/`; that path keeps game-local taskboard, canvas, evidence,
+and workspace state inside the game and only writes local ignored Studio mount
+metadata.
+
 The template includes a `design/` scaffold with `concept.md`, `gdd.md`,
 `knowledge/`, and starter structured data. It also includes a game-owned
 `.ai_studio/` scaffold with `workspace.json`, `taskboard/items/`,

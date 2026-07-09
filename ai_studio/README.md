@@ -36,7 +36,8 @@ Load only the route that matches the current task:
 
 - Repository contract and hard invariants: `AGENTS.md`.
 - Current game context: `games/<game-id>/`.
-- New game folder creation: `node games/new_game.mjs --id <game-id>`.
+- New game folder creation:
+  `node games/new_game.mjs --id <game-id> --visibility public|private --require-visibility`.
 - VS Code task/launch regeneration:
   `node ai_studio/dev_environment/vscode_projects.mjs`.
 - Private/local game mounts and leak preflight:

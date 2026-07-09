@@ -14,8 +14,10 @@ in every game after it.
 **Layout: in THIS repo, as folders** - `templates/<template-id>/` and
 `games/<game-id>/`. Each game is a self-contained folder copied from a template.
 
-- `games/new_game.mjs` - copy `templates/template/` -> `games/gameN/`; the engine
-  submodule and shared asset library are referenced, not copied.
+- `games/new_game.mjs --visibility public|private` - copy `templates/template/`
+  -> `games/<game-id>/`; the engine submodule and shared asset library are
+  referenced, not copied. Public games are tracked by the parent Studio repo;
+  private games are nested repos under `games/<game-id>/`.
 - The asset library is a registered external source; never copied wholesale.
 
 ## Reuse tiers — what is shared vs copied-and-customized

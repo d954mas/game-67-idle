@@ -2,11 +2,12 @@
 // Start a new game by COPYING a templates/<template-id>/ folder into
 // games/<game-id>/. The game then owns and customizes its copy.
 //
-//   node games/new_game.mjs --id mygame
-//   node games/new_game.mjs --id mygame --template template
-//   node games/new_game.mjs --id mygame --from templates/template --force
+//   node games/new_game.mjs --id mygame --visibility public
+//   node games/new_game.mjs --id mygame --template template --visibility public
+//   node games/new_game.mjs --id mygame --from templates/template --visibility public --force
+//   node games/new_game.mjs --id mygame --visibility private [--public-alias "Safe Alias"]
 //   node games/new_game.mjs --id mygame --private [--public-alias "Safe Alias"]
-//   node games/new_game.mjs --root <repo> --id mygame
+//   node games/new_game.mjs --root <repo> --id mygame --visibility public
 //
 // Build/run the new game:
 //   cmake -S games/mygame -B games/mygame/build/native-debug -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
@@ -25,11 +26,29 @@ import { localGameRegistryRelPath, runPrivateGamePreflight, upsertLocalGameMount
 const defaultRepoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
 function parseArgs(argv) {
-  const a = { id: "", template: "", from: "templates/template", root: "", force: false, private: false, publicAlias: "", help: false };
+  const a = {
+    id: "",
+    template: "",
+    from: "templates/template",
+    root: "",
+    force: false,
+    private: false,
+    visibility: "",
+    requireVisibility: false,
+    publicAlias: "",
+    help: false,
+  };
   for (let i = 0; i < argv.length; i += 1) {
     const k = argv[i];
     if (k === "--force") a.force = true;
     else if (k === "--private") a.private = true;
+    else if (k === "--visibility") {
+      const value = argv[i + 1];
+      if (!value || value.startsWith("--")) throw new Error("--visibility requires public or private");
+      a.visibility = value;
+      i += 1;
+    }
+    else if (k === "--require-visibility") a.requireVisibility = true;
     else if (k === "--public-alias") a.publicAlias = argv[++i];
     else if (k === "--id") a.id = argv[++i];
     else if (k === "--template") a.template = argv[++i];
@@ -42,7 +61,32 @@ function parseArgs(argv) {
 }
 
 function usageText() {
-  return "usage: node games/new_game.mjs [--root <repo>] --id <game-id> [--template <template-id>|--from <path>] [--private] [--public-alias <safe-name>] [--force]  (lowercase, kebab)";
+  return [
+    "usage: node games/new_game.mjs [--root <repo>] --id <game-id> [--visibility public|private] [--template <template-id>|--from <path>] [--private] [--public-alias <safe-name>] [--require-visibility] [--force]  (lowercase, kebab)",
+    "",
+    "visibility: pass --visibility public for tracked parent Studio registration or --visibility private for a nested private repo.",
+    "compatibility: omitting --visibility still creates a public/tracked game; human/Studio flows should pass --require-visibility so missing choices fail.",
+    "--private is a compatibility alias for --visibility private.",
+    "--public-alias is only valid with private visibility.",
+  ].join("\n");
+}
+
+function resolveVisibility(a) {
+  if (a.visibility && a.visibility !== "public" && a.visibility !== "private") {
+    throw new Error(`invalid --visibility '${a.visibility}' (use public or private)`);
+  }
+  if (a.private && a.visibility === "public") {
+    throw new Error("--private conflicts with --visibility public");
+  }
+  const visibility = a.private ? "private" : a.visibility;
+  if (a.publicAlias && visibility !== "private") {
+    throw new Error("--public-alias is only valid with private visibility");
+  }
+  if (visibility) return visibility;
+  if (a.requireVisibility) {
+    throw new Error("missing visibility choice: pass --visibility public or --visibility private");
+  }
+  return "public";
 }
 
 // Per-game build output is not copied. Tracked source files under src/generated
@@ -162,6 +206,15 @@ if (!a.id || !/^[a-z][a-z0-9-]*$/.test(a.id)) {
   console.error(usageText());
   process.exit(1);
 }
+let visibility;
+try {
+  visibility = resolveVisibility(a);
+} catch (error) {
+  console.error(error && error.message ? error.message : String(error));
+  console.error(usageText());
+  process.exit(1);
+}
+const isPrivate = visibility === "private";
 const repoRoot = a.root ? resolve(a.root) : defaultRepoRoot;
 let fromRel = a.from;
 if (a.template) {
@@ -183,7 +236,7 @@ if (existsSync(toDir) && !a.force) {
   process.exit(1);
 }
 
-if (a.private) {
+if (isPrivate) {
   const publicGame = listRegisteredGames(repoRoot).find((game) => game.id === a.id && game.status !== "fixture");
   if (publicGame) {
     console.error(`error: private game id '${a.id}' is already registered as a public game`);
@@ -204,7 +257,7 @@ if (a.private) {
 }
 
 copyDir(fromDir, toDir);
-ensureGameStudioScaffold(toDir, a.id, a.private ? "private" : "public");
+ensureGameStudioScaffold(toDir, a.id, visibility);
 
 // F2 (T0327 И2c deep-review, lead-ratified 2026-07-07): copy-then-own for the
 // items destructive-change lock. The template's own content/items.lock.json
@@ -235,7 +288,7 @@ if (itemsLockReset) {
   );
 }
 
-if (a.private) {
+if (isPrivate) {
   const nestedGit = ensureNestedGit(toDir, a.id);
   const mount = upsertLocalGameMount(repoRoot, {
     gameId: a.id,
