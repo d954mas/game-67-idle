@@ -1,7 +1,7 @@
 ---
 id: T0347
 title: Migrate current game Studio artifacts into game stores
-status: backlog
+status: doing
 project: P001
 epic: E014
 priority: P1
@@ -28,7 +28,7 @@ are done.
       `.vscode` entries, docs/tests references, and provenance/manifest records.
 - [ ] Migration plan distinguishes reusable public fixture references from
       game-owned private work state.
-- [ ] Game-owned taskboard items move from `ai_studio/taskboard/items/` into
+- [x] Game-owned taskboard items move from `ai_studio/taskboard/items/` into
       `games/rb-dark-rpg/.ai_studio/taskboard/items/` only after Taskboard can
       read/write mounted game stores.
 - [ ] Game-owned Canvas projects move from
@@ -66,3 +66,14 @@ are done.
   `chat/` lives under the project folder, but undo/history sidecars live in a
   per-machine local cache keyed by projects root. T0347 owns deciding whether to
   preserve that cache during current-game migration or log intentional loss.
+- 2026-07-09: Started with Taskboard-only migration slice. Inventory confirms
+  `rb-dark-rpg` has one project (`P003`), three epics (`E011`, `E012`, `E013`),
+  28 active tasks, and 14 archived tasks in the parent Studio store. Canvas
+  migration is separate because the configured Canvas projects root is outside
+  the repo (`canvasProjectsRoot`) and needs an explicit move/copy policy.
+- 2026-07-09: Moved all 46 `rb-dark-rpg` Taskboard files into
+  `games/rb-dark-rpg/.ai_studio/taskboard/items/`. Verified parent Studio query
+  for `--project P003` returns no tasks, `--game rb-dark-rpg --all --archive`
+  returns the moved project/epics/tasks with `game:rb-dark-rpg:*` qualified ids,
+  parent Taskboard validate passes, and direct game-store validation reports
+  zero problems.
