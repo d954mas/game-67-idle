@@ -25,4 +25,8 @@ void audio_core_backend_set_enabled(bool enabled);
 void audio_core_backend_set_paused(bool paused);
 bool audio_core_backend_user_gesture(void);
 
+#if defined(AUDIO_MINIAUDIO_TEST_NO_DEVICE)
+uint64_t audio_miniaudio_test_allocation_count(void);
+#endif
+
 #endif
