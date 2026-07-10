@@ -29,8 +29,6 @@ new work. Do not create a generic framework from this holding card.
 
 ## Open questions
 
-- Does the reference template need a reusable audio/composition feature, or is
-  the current engine/game boundary already sufficient?
 - Which audit quality gaps are real after the Taskboard and CI tasks land?
 - Which runtime/template path is actually slow under measurement, and is it
   Studio-owned, feature-owned, game-owned, or engine-owned?
@@ -40,3 +38,7 @@ new work. Do not create a generic framework from this holding card.
 - 2026-07-10: These areas were still in the original full-audit queue when the
   conversation pivoted into Balance. They are preserved as undecided work, not
   accepted findings.
+- 2026-07-10: Audio is decided and extracted to T0393. The lead requires sound
+  now; accepted ownership is invariant `audio-core`, game-owned cue/music
+  composition, miniaudio on native, and WebAudio on Emscripten. This holding
+  card remains `idea` for the two unreviewed quality/performance questions.
