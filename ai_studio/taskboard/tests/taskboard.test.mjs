@@ -1,10 +1,10 @@
 // Taskboard core tests. Run: node --test ai_studio/taskboard/tests/taskboard.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, utimesSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, renameSync, utimesSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { URL } from "node:url";
 import vm from "node:vm";
@@ -23,6 +23,54 @@ function tempRoot(t) {
   const dir = mkdtempSync(join(tmpdir(), "taskboard-test-"));
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;
+}
+
+function waitFor(predicate, timeoutMs = 10000) {
+  const deadline = Date.now() + timeoutMs;
+  return new Promise((resolve, reject) => {
+    const poll = () => {
+      if (predicate()) return resolve();
+      if (Date.now() >= deadline) return reject(new Error("Timed out waiting for child processes"));
+      setTimeout(poll, 10);
+    };
+    poll();
+  });
+}
+
+function spawnConcurrentCreator(root, workerId, kind) {
+  const source = `
+    import { existsSync, writeFileSync } from "node:fs";
+    import { join } from "node:path";
+    import { createTask, createEpic, createProject } from ${JSON.stringify(new URL("../lib.mjs", import.meta.url).href)};
+    const [root, workerId, kind] = process.argv.slice(1);
+    writeFileSync(join(root, \`.ready-\${workerId}\`), "ready");
+    while (!existsSync(join(root, ".go"))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+    const create = { task: createTask, epic: createEpic, project: createProject }[kind];
+    const doc = create(root, { title: \`Concurrent \${kind} \${workerId}\` });
+    process.stdout.write(JSON.stringify({ id: doc.fields.id, file: doc.file, kind }));
+  `;
+  const child = spawn(process.execPath, ["--input-type=module", "--eval", source, root, String(workerId), kind], {
+    cwd: root,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  const result = new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) return reject(new Error(`worker ${workerId} exited ${code}: ${stderr}`));
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (error) {
+        reject(new Error(`worker ${workerId} returned invalid JSON: ${error.message}; stdout=${stdout}`));
+      }
+    });
+  });
+  result.catch(() => {});
+  const closed = new Promise((resolve) => child.once("close", resolve));
+  return { child, result, closed };
 }
 
 function ensurePrivateGameMount(root, gameId = "secret-game") {
@@ -659,4 +707,129 @@ test("nextId stays monotonic across archive pruning via items/.counters.json", (
 
   const counters = JSON.parse(readFileSync(join(itemsDir, ".counters.json"), "utf8"));
   assert.equal(counters.T, 201);
+});
+
+test("concurrent processes preserve unique ids and all shared counter keys", async (t) => {
+  const root = tempRoot(t);
+  const workerCount = 24;
+  const kinds = ["task", "epic", "project"];
+  const workers = Array.from({ length: workerCount }, (_, index) => spawnConcurrentCreator(root, index, kinds[index % kinds.length]));
+  let created;
+  try {
+    await waitFor(() => Array.from({ length: workerCount }, (_, index) => existsSync(join(root, `.ready-${index}`))).every(Boolean));
+    writeFileSync(join(root, ".go"), "go");
+    created = await Promise.all(workers.map(({ result }) => result));
+  } finally {
+    for (const { child } of workers) {
+      if (child.exitCode === null) child.kill();
+    }
+    await Promise.allSettled(workers.map(({ closed }) => closed));
+    await Promise.allSettled(workers.map(({ result }) => result));
+  }
+
+  for (const kind of kinds) {
+    const ids = created.filter((doc) => doc.kind === kind).map(({ id }) => id);
+    assert.equal(new Set(ids).size, workerCount / kinds.length);
+  }
+  assert.equal(listTasks(root).length, workerCount / kinds.length);
+  assert.equal(listEpics(root).length, workerCount / kinds.length);
+  assert.equal(listProjects(root).length, workerCount / kinds.length);
+  const counters = JSON.parse(readFileSync(join(root, "ai_studio", "taskboard", "items", ".counters.json"), "utf8"));
+  assert.deepEqual(counters, { T: 8, E: 8, P: 8 });
+});
+
+test("allocation failure after counter commit preserves valid monotonic state", (t) => {
+  const root = tempRoot(t);
+  const activeDir = join(root, "ai_studio", "taskboard", "items", "active");
+  const itemsDir = dirname(activeDir);
+  mkdirSync(itemsDir, { recursive: true });
+  writeFileSync(join(itemsDir, ".counters.json"), JSON.stringify({ E: 9, P: 4 }));
+  mkdirSync(join(activeDir, "T0001-injected-failure.md"), { recursive: true });
+
+  assert.throws(
+    () => createTask(root, { title: "Injected failure" }, { allocationMaxAttempts: 1 }),
+    /Could not allocate a unique task id after 1 attempts/,
+  );
+
+  const countersAfterFailure = JSON.parse(readFileSync(join(root, "ai_studio", "taskboard", "items", ".counters.json"), "utf8"));
+  assert.deepEqual(countersAfterFailure, { E: 9, P: 4, T: 1 });
+  assert.equal(listTasks(root).length, 0);
+  rmSync(join(activeDir, "T0001-injected-failure.md"), { recursive: true });
+  const recovered = createTask(root, { title: "Recovered" });
+  assert.equal(recovered.fields.id, "T0002");
+});
+
+test("allocation reclaims a stale lock without blocking reads", (t) => {
+  const root = tempRoot(t);
+  const itemsDir = join(root, "ai_studio", "taskboard", "items");
+  const lockDir = join(itemsDir, ".allocation.lock");
+  mkdirSync(lockDir, { recursive: true });
+  writeFileSync(join(lockDir, "owner.json"), JSON.stringify({ pid: 999999, acquiredAt: "2000-01-01T00:00:00.000Z" }));
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(lockDir, old, old);
+
+  assert.deepEqual(listTasks(root), []);
+  const task = createTask(root, { title: "After stale lock" }, { allocationLockStaleMs: 100 });
+
+  assert.equal(task.fields.id, "T0001");
+  assert.equal(existsSync(lockDir), false);
+});
+
+test("allocation release does not delete a successor lock with a different token", (t) => {
+  const root = tempRoot(t);
+  const itemsDir = join(root, "ai_studio", "taskboard", "items");
+  const lockDir = join(itemsDir, ".allocation.lock");
+  const displacedLock = join(itemsDir, ".allocation.lock.displaced");
+  let replaced = false;
+  const title = {
+    toString() {
+      if (!replaced) {
+        replaced = true;
+        renameSync(lockDir, displacedLock);
+        mkdirSync(lockDir);
+        writeFileSync(join(lockDir, "owner.json"), JSON.stringify({
+          pid: process.pid,
+          token: "successor-token",
+          acquiredAt: new Date().toISOString(),
+        }));
+      }
+      return "ABA replacement";
+    },
+  };
+
+  const task = createTask(root, { title });
+
+  assert.equal(task.fields.id, "T0001");
+  assert.equal(JSON.parse(readFileSync(join(lockDir, "owner.json"), "utf8")).token, "successor-token");
+  assert.equal(existsSync(displacedLock), true);
+});
+
+test("fresh live lock times out without blocking reads or edits", (t) => {
+  const root = tempRoot(t);
+  const existing = createTask(root, { title: "Existing", status: "todo" });
+  const lockDir = join(root, "ai_studio", "taskboard", "items", ".allocation.lock");
+  mkdirSync(lockDir);
+  writeFileSync(join(lockDir, "owner.json"), JSON.stringify({
+    pid: process.pid,
+    token: "live-token",
+    acquiredAt: new Date().toISOString(),
+  }));
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(lockDir, old, old);
+
+  assert.equal(listTasks(root).length, 1);
+  assert.equal(updateDoc(root, existing.fields.id, { fields: { priority: "P0" } }).fields.priority, "P0");
+  const startedAt = Date.now();
+  assert.throws(
+    () => createTask(root, { title: "Must time out" }, {
+      allocationLockRetryMs: 5,
+      allocationLockTimeoutMs: 30,
+      allocationLockStaleMs: 10,
+    }),
+    /Timed out waiting for Taskboard allocation lock/,
+  );
+  const elapsedMs = Date.now() - startedAt;
+  assert.ok(elapsedMs >= 20, `timeout returned too early after ${elapsedMs}ms`);
+  assert.ok(elapsedMs < 250, `timeout exceeded its bounded margin at ${elapsedMs}ms`);
+  assert.equal(JSON.parse(readFileSync(join(lockDir, "owner.json"), "utf8")).token, "live-token");
 });

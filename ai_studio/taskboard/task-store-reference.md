@@ -187,6 +187,18 @@ The Studio store uses `storeId: studio`; game stores use `storeId: game:<id>`.
 Rows exposed through CLI/API include `qualifiedId` such as
 `game:rb-dark-rpg:T0001`.
 
+Creation serializes only ID allocation and the initial markdown write through
+`items/.allocation.lock`; reads and edits do not take this lock. The allocator
+updates `.counters.json` by atomic replacement and creates the target markdown
+with exclusive-create semantics. A failed create may consume an ID, but never
+rewinds or corrupts the counter.
+
+The allocator automatically reclaims a lock older than 30 seconds when its
+recorded PID is no longer alive. If a create times out on a stale lock, inspect
+`items/.allocation.lock/owner.json`; remove the lock directory manually only
+after confirming that PID is gone and no Taskboard create command is running.
+The next create scans existing documents before advancing the counter.
+
 Use bare IDs only inside one selected store. When a reference intentionally
 crosses stores, write it as a qualified ID so aggregate validation can resolve
 the target unambiguously.
