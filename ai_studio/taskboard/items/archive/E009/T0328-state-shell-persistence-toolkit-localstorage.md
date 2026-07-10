@@ -1,13 +1,13 @@
 ---
 id: T0328
 title: "State: shell persistence toolkit — хирургия генератора, атомарность, localStorage, фрагменты"
-status: doing
+status: done
 project: P001
 epic: E009
 priority: P1
 tags: [state, persistence, template, codegen]
 created: 2026-07-06
-updated: 2026-07-09
+updated: 2026-07-10
 ---
 
 ## What
@@ -271,3 +271,4 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
   T0333 (613afce55): tests/web_devapi_check.py PASS — endpoints → 49
   команд, command.describe → дескриптор, всё через window.__devapi.submit
   в headless Chrome. Карточка полностью готова, закрывает лид.
+- 2026-07-11: T0375 status reconciliation: done; all five criteria were already checked with generator, persistence, migration, native/web, and game-events evidence.

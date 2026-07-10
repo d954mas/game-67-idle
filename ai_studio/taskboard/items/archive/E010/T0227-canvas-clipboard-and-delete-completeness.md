@@ -1,13 +1,13 @@
 ---
 id: T0227
 title: "Canvas: copy/paste/duplicate of nodes + batched deleteNodes (Delete key completeness)"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
 tags: []
 created: 2026-07-03
-updated: 2026-07-03
+updated: 2026-07-10
 ---
 
 ## What
@@ -70,3 +70,4 @@ fallbacks, non-destructive (deep-restore on undo).
   - **Z-order on paste**: top-level roots use the frontOrder hook (explicit scope → front orders in spec order = on top preserving relative order; implicit scope → array-append order, same effect); nested pasted scopes are fresh so children get explicit contiguous 0..N-1 (exact internal z).
   - **Parity**: HTTP `POST nodes-paste`/`nodes-duplicate`/`nodes-delete`; CLI `nodes-paste --spec file.json`, `nodes-duplicate --nodes id1,id2`, `nodes-delete --nodes id1,id2` (all `[--dx --dy] [--group gid|none]` where relevant).
   - **Deliberately deferred**: NO context-menu Copy/Paste entries added (menu diet respected; allowed but not required by done-when — keyboard + CLI/HTTP cover it). The empty-canvas menu's existing "Paste" stays OS-image-only. Cross-project paste + OS-clipboard node-spec interchange remain out of scope v1 as specified.
+- 2026-07-11: T0375 status reconciliation: done; all 6 acceptance criteria are checked and the card log contains clipboard/delete verification evidence.

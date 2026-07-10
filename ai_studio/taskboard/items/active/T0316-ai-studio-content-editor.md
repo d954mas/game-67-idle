@@ -1,7 +1,7 @@
 ---
 id: T0316
 title: "AI Studio: Items Workbench поверх Lua Snapshot"
-status: doing
+status: backlog
 project: P001
 epic: E009
 priority: P2
@@ -75,3 +75,4 @@ The full contract is E016 plus
 - 2026-07-10: Lead clarified the product serves both developers and AI. The
   read-only surface remains the migration slice, not the final product; safe
   literal/table/curve/override editing must use the same semantic ops as AI.
+- 2026-07-11: T0375 status reconciliation: moved stale doing to backlog. Phase 1 is accepted, but all six current cutover/Workbench criteria remain pending on E016 T0366/T0367/T0386; E016 is outside E015 execution scope.

@@ -1,13 +1,13 @@
 ---
 id: T0220
 title: "Legacy sweep: delete frozen viewer, close canvas seam, purge stale legacy refs"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
 tags: []
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-07-10
 ---
 
 ## What
@@ -47,3 +47,4 @@ releases canvas/**.
 - 2026-07-02: Lead clarified SCOPE (terminology collision resolved): the ASSET LIBRARY VIEWER (просмотр ассетов, gallery/source-first browsing) is NEEDED and SURVIVES - it is unrelated to canvas. Delete ONLY the legacy asset_tools EDITOR (asset_prep page: region editing, old alpha preview). If the gallery shares the folder, it MOVES to its own module, never dies.
 - 2026-07-02: EXECUTED (deep-reasoner agent, tmp/t0220_legacy_sweep_plan_2026-07-02.md) and ACCEPTED: I re-ran all gates green (canvas 91/0, image bridge 4/0, gallery 37/0, python 30 OK, validate_map --strict clean, doc_reference_check ok), footprint clean, committed 494ae3dd (-4368 lines), live :8780 restarted. 61 files: 19 deleted, 16 git-mv viewer/->gallery/, viewport.mjs extracted into canvas. Agent deviations accepted: /asset_prep replaced (not just purged) with /canvas in all 5 shared navs; extra stale doc refs fixed.
 - 2026-07-02: Lead REJECTED the agent's ad-hoc top strip ("у меня есть левое меню... все страницы его добавляют") - reworked to the standard collapsible AI Studio left sidebar (studio_shell.css/.js, same markup as taskboard/quality pages, Canvas item active) in 59eb9df0. -> review.
+- 2026-07-11: T0375 status reconciliation: done; all 6 acceptance criteria are checked and the card log contains legacy-sweep verification evidence.

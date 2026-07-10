@@ -7,7 +7,7 @@ epic: ""
 priority: P1
 tags: [template, engine, builder, perf, vibejam-retro]
 created: 2026-07-06
-updated: 2026-07-06
+updated: 2026-07-10
 ---
 
 ## What
@@ -44,3 +44,4 @@ tool — always build it with full optimizations.
   CMake-only change; build verified via game tree). Note: leftover measurement
   backup at games/rb-dark-rpg/build/_cache_bak_measure (gitignored) — safe to
   delete manually.
+- 2026-07-11: T0375 storage reconciliation: card was already status done with all criteria checked and evidence logged; moved from active storage into archive through the canonical CLI.

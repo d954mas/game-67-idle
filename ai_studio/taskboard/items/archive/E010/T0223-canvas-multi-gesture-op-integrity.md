@@ -1,13 +1,13 @@
 ---
 id: T0223
 title: "Canvas: multi-gesture op integrity - batched mixed move, batched reorder, true ungroup op"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
 tags: []
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-07-10
 ---
 
 ## What
@@ -98,3 +98,4 @@ gesture and list what's left (should be none).
     (`addImageFiles`, actions.js) still issues one `POST /images` per file = N journal
     entries for one drop gesture. Fixing needs a new batched `addImages` op (not in
     moveNodes/reorderNodes/ungroupGroup scope), so left for the lead to schedule.
+- 2026-07-11: T0375 status reconciliation: done; all 6 acceptance criteria are checked and the card log contains multi-gesture ops verification evidence.

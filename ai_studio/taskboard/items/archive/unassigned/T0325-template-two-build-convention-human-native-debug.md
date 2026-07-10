@@ -7,7 +7,7 @@ epic: ""
 priority: P1
 tags: [template, devapi, builds, vibejam-retro]
 created: 2026-07-06
-updated: 2026-07-06
+updated: 2026-07-10
 ---
 
 ## What
@@ -50,3 +50,4 @@ native-debug.
 - 2026-07-06: implemented + verified (grep title/devapi markers in both exes,
   cross-rebuild check green). rb-dark-rpg CMake intentionally untouched (game
   closed); its VS Code task now passes OFF for hand-play rebuilds.
+- 2026-07-11: T0375 storage reconciliation: card was already status done with all criteria checked and evidence logged; moved from active storage into archive through the canonical CLI.

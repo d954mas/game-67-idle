@@ -1,13 +1,13 @@
 ---
 id: T0228
 title: "Canvas: history actor attribution - mark agent-made ops (robot icon)"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P2
 tags: []
 created: 2026-07-03
-updated: 2026-07-03
+updated: 2026-07-10
 ---
 
 ## What
@@ -43,3 +43,4 @@ this lands AFTER T0202 is accepted.
 ## Log
 - 2026-07-03: Created from lead request during live verify of T0204.
 - 2026-07-03: DONE by orchestrator (small seam, one writer on ops.mjs after T0202). setOpsActor("user"|"agent") module-level in ops.mjs; commitMutation records actor on every mutation entry (additive; absent = user for pre-T0228 lines). cli.mjs sets agent INSIDE the isMain guard only - importing the module (tests do) must not flip the process actor. listHistory row carries actor AND prefixes the label "🤖 " for agent rows - page palette + CLI render identical text with zero page changes. Base row actor=user. Tests: journal.test.mjs actor attribution + cli.test.mjs parity now pins CLI=agent labels. Tests 226.
+- 2026-07-11: T0375 status reconciliation: done; all 3 acceptance criteria are checked and the card log contains actor-attribution evidence.

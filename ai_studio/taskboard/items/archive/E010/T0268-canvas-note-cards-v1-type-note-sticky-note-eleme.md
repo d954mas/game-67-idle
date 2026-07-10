@@ -1,13 +1,13 @@
 ---
 id: T0268
 title: "Canvas note cards v1: type:note sticky-note element - plain text w/ browser-side wrap, fixed clipped box + resize, background color presets, excluded from renderGroup/exportProject, site+CLI parity"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
 tags: [canvas, notes]
 created: 2026-07-04
-updated: 2026-07-04
+updated: 2026-07-10
 ---
 
 ## What
@@ -73,3 +73,4 @@ Design v1:
   renders inconsistently (consider gating off); no multi-select Note
   inspector section; note name = full first line (parity w/ text, but long).
 - 2026-07-04: impl+verified 2026-07-04: 577/577 tests, live CLI+page smoke green, render exclusion proven; awaiting lead look
+- 2026-07-11: T0375 status reconciliation: done; all 5 acceptance criteria are checked and the card log contains note-card site/CLI verification evidence.

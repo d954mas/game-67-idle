@@ -1,13 +1,13 @@
 ---
 id: T0224
 title: "Canvas: groups v2 + export panel UX polish (no-hack leftovers)"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P2
 tags: []
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-07-10
 ---
 
 ## What
@@ -115,3 +115,4 @@ deferred with a note; none should survive long-term:
     for consistency + simpler apply-at-init. Flag for lead if per-project is preferred (trivial to key by id).
   - Tests: +9 (patchGroups ×3 in groups.test, addImages ×2 in batched.test, CLI parity ×2, API parity ×2).
     Gates: node --test → 204 pass/0 fail; validate_map --strict → 0 unmapped/0 missing; doc_reference_check → ok.
+- 2026-07-11: T0375 status reconciliation: done; all 10 acceptance criteria are checked and the card log contains groups/export UX evidence.

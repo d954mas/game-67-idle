@@ -1,13 +1,13 @@
 ---
 id: T0242
 title: "Studio site: AI chat panel on canvas - selection as context, agent acts via ops"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
 tags: []
 created: 2026-07-03
-updated: 2026-07-03
+updated: 2026-07-10
 ---
 
 ## What
@@ -40,7 +40,7 @@ Concept sketch (design phase to settle):
 
 ## Done when
 
-- [ ] Design phase: backend choice, session model, refresh mechanism,
+- [x] Design phase: backend choice, session model, refresh mechanism,
       permissions/cost guardrails, v1 scope + increments.
 
 ## Open questions
@@ -60,3 +60,6 @@ Concept sketch (design phase to settle):
 - 2026-07-03: Lead challenged spawn-per-message; verified codex exec resume exists on the box. Design R3: conversation = codex session (resume per message, no history replay, no resident daemon); clear context = new session; transcript jsonl = panel display only; replay window demoted to fallback.
 - 2026-07-03: Backend inc 1-3 LANDED+committed (chat/context+agent+api, codex sessions w/ live MANGO continuity proof, SSE, 51 chat tests, canvas 457 intact, :8780 restarted+smoked). Panel worker (inc 4-5) launched: site/chat_panel.js follows history_panel pattern, SSE via fetch stream, selection chips, Cancel keeps session, Clear rotates; README.
 - 2026-07-03: Inc 4-5 landed+committed: chat panel docked column (toggle, SSE stream, selection chips, ops range chips, Cancel keeps session, Clear two-step confirm) + chat/README. All 5 increments done. Suites canvas 457 / chat 51. :8780 restarted, smoke 200. Awaiting lead browser verify.
+- 2026-07-11: T0375 reconciliation: the design criterion was already satisfied by the recorded R1-R3 decisions and the implementation evidence above. The prompt-only permission model and transport are intentionally superseded by E015 T0350/T0351; this card owns no remaining implementation.
+- 2026-07-11: Quality: QTECH_001=pass; evidence: existing 457 Canvas tests, 51 chat tests, HTTP smoke, and explicit E015 successor ownership recorded above.
+- 2026-07-11: T0375 status reconciliation: done; its sole design criterion is checked from recorded R1-R3 decisions and 457 Canvas/51 chat test evidence. E015 T0350/T0351 own successor permission/transport changes.

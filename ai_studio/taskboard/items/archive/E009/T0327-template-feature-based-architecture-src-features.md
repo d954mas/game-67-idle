@@ -1,13 +1,13 @@
 ---
 id: T0327
 title: "Template: feature-based architecture (src/features, слои, per-feature state/assets)"
-status: doing
+status: done
 project: P001
 epic: E009
 priority: P1
 tags: [template, architecture, features]
 created: 2026-07-06
-updated: 2026-07-07
+updated: 2026-07-10
 ---
 
 ## What
@@ -83,7 +83,7 @@ updated: 2026-07-07
       art_needs в feature.json-контракте (декларативная арт-модель).
       ФАКТ 2026-07-07: отгружено в И1 (027d7c212); первый реальный
       feature.json с art_needs — resource_panel (И3b).
-- [ ] Дизайн-док перенесён из tmp/ в постоянное место.
+- [x] Дизайн-док перенесён из tmp/ в постоянное место.
 
 ## Open questions
 
@@ -159,6 +159,9 @@ updated: 2026-07-07
   validate или красная сборка с точным указанием, чего не хватает.
 
 ## Log
+
+- 2026-07-11: T0375 reconciliation: the remaining doc criterion was already satisfied by tracked `templates/design/feature_architecture_2026-07-06.md`; prior implementation and verification evidence remains authoritative.
+- 2026-07-11: Quality: QTECH_001=pass; evidence: recorded native/web builds, ctest, smoke, layering checks, and permanent design document.
 
 - 2026-07-06: создана по решению лида после двух-угольного Opus-дизайна
   (bottom-up от кода rb-dark-rpg + top-down от целей студии) и правок лида
@@ -288,3 +291,4 @@ updated: 2026-07-07
     §4 называет pytest-базу 44 (фактическая 41 — док-нит истории);
     финальный прогон после коммитов 17/17. Карточку закрывает лид
     (приёмка count-up глазами уже сделана).
+- 2026-07-11: T0375 status reconciliation: done; the last doc criterion exists at templates/design/feature_architecture_2026-07-06.md and prior native/web/ctest evidence proves implementation.

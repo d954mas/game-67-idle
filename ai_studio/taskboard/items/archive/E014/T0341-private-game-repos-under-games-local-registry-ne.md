@@ -1,13 +1,13 @@
 ---
 id: T0341
 title: Game-owned Studio artifacts and private nested game repos
-status: backlog
+status: done
 project: P001
 epic: E014
 priority: P1
 tags: [private-repos, workspace, games, taskboard, canvas]
 created: 2026-07-09
-updated: 2026-07-09
+updated: 2026-07-10
 ---
 
 ## What
@@ -188,16 +188,16 @@ Refined critique after the lead accepted game-owned stores:
 
 ## Done when
 
-- [ ] `T0342` through `T0347` exist as the executable slices for this parent
+- [x] `T0342` through `T0347` exist as the executable slices for this parent
       plan.
-- [ ] Blocking decisions are captured here: private opt-in default, registry
+- [x] Blocking decisions are captured here: private opt-in default, registry
       location, store ID format, short-ID rules, game-local project policy,
       history-scrub scope, public-game sanitize requirement, and Canvas
       undo/cache policy.
-- [ ] The child-task order makes leak guard/preflight the first implementation
+- [x] The child-task order makes leak guard/preflight the first implementation
       gate, before private store reads, generator integration, or migration.
-- [ ] Each child task has checkable done criteria and names its privacy boundary.
-- [ ] `node ai_studio/taskboard/cli.mjs validate --json` passes, or unrelated
+- [x] Each child task has checkable done criteria and names its privacy boundary.
+- [x] `node ai_studio/taskboard/cli.mjs validate --json` passes, or unrelated
       legacy validation failures are recorded explicitly.
 
 ## Open questions
@@ -206,6 +206,9 @@ Refined critique after the lead accepted game-owned stores:
   is redaction enough until publishing?
 
 ## Log
+
+- 2026-07-11: T0375 reconciliation: this parent decision/plan card was complete when T0342-T0347 and all blocking privacy decisions were recorded. T0347's obsolete migration is superseded by E015 T0356 deletion; that later decision does not reopen this parent planning scope.
+- 2026-07-11: Quality: QTECH_001=pass; evidence: child-task structure, recorded independent reviews, and passing Taskboard validation.
 
 - 2026-07-09: Captured lead decision direction: prefer Studio-hosted private
   nested game repos under `games/<id>` over public parent submodules, while
@@ -241,3 +244,4 @@ Refined critique after the lead accepted game-owned stores:
   `canvasProjectsRoot` (YandexDisk), not in game git repositories. A follow-up
   correction removed game-side Canvas ref lists: each Canvas `project.json`
   carries `ownership.kind/gameId`.
+- 2026-07-11: T0375 status reconciliation: done as a completed parent decision record; T0342-T0347 and blocking privacy decisions exist, while obsolete T0347 execution is separately superseded.

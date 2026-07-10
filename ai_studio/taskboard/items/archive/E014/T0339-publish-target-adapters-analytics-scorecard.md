@@ -7,7 +7,7 @@ epic: E014
 priority: P1
 tags: [publish, web, analytics, monetization]
 created: 2026-07-08
-updated: 2026-07-09
+updated: 2026-07-10
 ---
 
 ## What
@@ -143,3 +143,4 @@ event payload.
 - 2026-07-09: Reviewed the visible game-event payloads after log mirroring. Tightened event data so ordinary `[ev]`/DevAPI/analytics lines explain what changed without reading state snapshots: `items.txn` now carries op/container/entry_key/requested_delta/applied_delta/before_count/after_count; `items.move` covers container transfers; `progression.levelup` carries mode/cause/reason/cost/resource/cascade context; `progression.xp_added`, `progression.level_set`, and `progression.reset` cover non-levelup progression mutations. `game_analytics` now appends `time_ms` only in the NDJSON/export writer, and the scorecard fixture uses real typed event lines instead of synthetic `name/ts` rows or `session.end`.
 - 2026-07-09: PASS event-payload checks: `cmake --build templates\template\build\native-debug --target test_items_fragment test_progression test_game_analytics test_game_event_render test_game_events_log_mirror test_platform_sdk_events game`; `ctest --test-dir templates\template\build\native-debug -R "test_items_fragment|test_progression|test_game_analytics|test_game_event_render|test_game_events_log_mirror|test_platform_sdk_events" --output-on-failure` (7/7 passed, including `test_progression_curve`); `node --test features\platform-sdk\tests\platform_sdk.test.mjs` (18/18 passed); `node features\platform-sdk\scripts\scorecard.mjs --input features\platform-sdk\tests\fixtures\scorecard-sample.ndjson --pretty` returned `continue`, 75s session.
 - 2026-07-09: Compared Yandex/Playgama readiness with the Poki Inspector path. No public no-registration Yandex upload inspector comparable to Poki Inspector was found in official docs; Yandex exposes local `/sdk.js`/custom-domain SDK loading plus debug panel for a registered game id. Playgama exposes public Bridge CDN/mock-platform local behavior, but no Poki-like upload inspector was found. Fixed what is locally verifiable now: Yandex adapter supports the documented custom-domain SDK URL override and has tests for `LoadingAPI.ready`, `GameplayAPI.start/stop`, fullscreen and rewarded callbacks; Playgama adapter now sends documented platform messages (`game_ready`, first `level_started`, later `level_resumed`, `level_pause`) and has tests for Bridge init, messages, interstitial state, and rewarded state. PASS `node --test features\platform-sdk\tests\platform_sdk.test.mjs` (21/21).
+- 2026-07-11: T0375 storage reconciliation: card was already status done with all criteria checked and evidence logged; moved from active storage into archive through the canonical CLI.

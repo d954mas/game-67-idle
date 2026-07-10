@@ -1,13 +1,13 @@
 ---
 id: T0226
 title: "Skill: nt-canvas-operations - teach agents to act on canvas:// refs and canvas projects"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P2
 tags: []
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-07-10
 ---
 
 ## What
@@ -58,3 +58,4 @@ Keep it LEAN (lean-process law: skills grow from real friction, cut meta).
   group-create/export/undo/redo/history) appears in the `cli.mjs` no-args
   usage banner. Live-smoke box left unticked for the orchestrator.
 - 2026-07-03: LIVE SMOKE PASSED (orchestrator): throwaway project drifting-voyager-34bb8a + text element; a fast-worker given ONLY `canvas://drifting-voyager-34bb8a/element/el_724c0139 — move to x=777,y=333` resolved the ref and ran `cli.mjs move` unaided; journal verified (seq 2 patchElement {x:777,y:333}, canUndo true); project trashed after. Skill committed 838f3d95; task -> review. Discovered by the author agent: README documents an `ops-stats` CLI command missing from the live banner (doc/banner drift, minor — noted here, not blocking).
+- 2026-07-11: T0375 status reconciliation: done; all 3 acceptance criteria are checked and the card log contains skill validation evidence.

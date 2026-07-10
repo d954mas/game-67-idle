@@ -1,13 +1,13 @@
 ---
 id: T0202
 title: "Canvas perf: warm Python worker (JSON-RPC stdio) for raster2d bridge"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
 tags: []
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-07-10
 ---
 
 ## What
@@ -31,3 +31,4 @@ Kill the 165-278ms Python cold-spawn floor under every detect/slice/render (benc
   - Converted spawn sites (all of them): detectRegions (2 spawns/call), sliceRegions (crop_regions.py), exportElements (export_images.py), renderGroup + exportProject (render_group.py per screen). None left cold.
   - Manager (`_bridge/worker.mjs`): lazy spawn per interpreter; FIFO queue, one op in flight (the page long-op queue caps concurrency at 2 → they serialize on the single worker, second waits, no deadlock). Idle-timeout kill (5 min; `AI_STUDIO_IMAGE_WORKER_IDLE_MS` override for tests). Crash/external-kill/failed-spawn → the in-flight op rejects LOUDLY with the worker stderr tail, then a fresh worker respawns for the queue (no silent retry; no cold-spawn fallback). Lifecycle: child + stdio unref'd while idle so a one-shot host (CLI/tests) still exits; `process.once('exit')` + SIGINT/SIGTERM/SIGHUP hook kills the child so nothing is orphaned on Windows.
   - Proof: new `_bridge/worker.test.mjs` (warm<cold, loud script failure keeps worker alive, crash-mid-request loud-reject + respawn, FIFO, idle-kill) and `canvas/tests/worker_warm.test.mjs` (renderGroup + detectRegions warm<cold + parity). Gates green: canvas `node --test` 225 pass / 0 skip; arch-map `--strict` 0 unmapped/0 missing; doc_reference_check ok. Store/journal/page untouched (pure transport). No task-status change.
+- 2026-07-11: T0375 status reconciliation: done; all 4 acceptance criteria are checked and the card log contains worker/protocol test evidence.

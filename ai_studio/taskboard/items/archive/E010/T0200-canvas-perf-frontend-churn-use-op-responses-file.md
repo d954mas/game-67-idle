@@ -1,13 +1,13 @@
 ---
 id: T0200
 title: "Canvas perf: frontend churn — use op responses, file cache headers, img reuse, rAF drag, batched multi-ops"
-status: review
+status: done
 project: P001
 epic: E010
 priority: P1
 tags: []
 created: 2026-07-02
-updated: 2026-07-02
+updated: 2026-07-10
 ---
 
 ## What
@@ -29,3 +29,4 @@ Cut the per-op frontend churn found by the perf research: mutating actions re-fe
 - 2026-07-02: Undo audit: marquee-move and multi-delete journal N entries per gesture (undo steps one element at a time) - batched ops (patchElements/removeElements) land here.
 - 2026-07-02: BUILT (deep-reasoner agent) + ACCEPTED, commit e37d8a5a. A: sendMutation folds history{seq,canUndo,canRedo} into every response carrying a project (shared historyFlags in ops.mjs, no duplication with readHistory); page applyMutation/ingestProject keeps the reconcileRegionEdit semantics; reloadProject kept only for genuine resync. B: /files route sends Cache-Control public,max-age=31536000,immutable + ETag(sha-name) + Last-Modified; layers thumbnails reuse <img> nodes keyed by element.id (id not src: content-addressed dedup can share one src across elements) with src guard + pruneThumbCache. G: resizeCanvas reallocs backing store only on real size/DPR change; requestRender() rAF-coalesces all drag-path renders (marquee stays on refresh - needs live layer selection, not a hotspot). H: patchElements/removeElements in store+ops (one commitMutation = one journal entry, atomic, empty batch no-op), HTTP elements-set/elements-remove, CLI parity (elements-set --json / elements-remove --elements); page multi-delete = one call, marquee drag commit = reparent-first then ONE elements-set so single Ctrl+Z undoes the move.
 - 2026-07-02: MEASURED: journal entries per 8-element move gesture 8->1, delete 8->1; follow-up GETs per mutating op 2->0; HTTP calls per N-element gesture N->1; PATCH e2e 7.5ms (historyFlags read within noise); no metadata-path regression (patchElement 2.4-2.9ms, readHistory@1023 0.79ms). Gates re-run by lead-side acceptance: canvas 110/110 (10 new batched/API/CLI tests), map strict 296 mapped, docs ok. Deliberately NOT done: browser FPS harness (rAF verified by code, not faked numbers), bench.mjs batched row (honest deltas above), 304 short-circuit (immutable already prevents revalidation). Server :8780 restarted on the new backend.
+- 2026-07-11: T0375 status reconciliation: done; all 5 acceptance criteria are checked and the card log contains implementation/performance verification evidence.

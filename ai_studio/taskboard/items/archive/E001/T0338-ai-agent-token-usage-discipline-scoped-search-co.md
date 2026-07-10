@@ -7,7 +7,7 @@ epic: E001
 priority: P1
 tags: [ai-studio, agents, token-usage, workflow]
 created: 2026-07-08
-updated: 2026-07-08
+updated: 2026-07-10
 ---
 
 ## What
@@ -118,3 +118,4 @@ and explicitly requested sources only.
 - 2026-07-08: D8 lead decision: DROP/no-op. Do not run a separate pilot and do
   not promote anything to hooks/skills/automation. The only accepted code change
   remains D6 numeric output telemetry plus the D3 fast-worker wording fix.
+- 2026-07-11: T0375 storage reconciliation: card was already status done with all criteria checked and evidence logged; moved from active storage into archive through the canonical CLI.

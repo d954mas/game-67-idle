@@ -7,7 +7,7 @@ epic: ""
 priority: P1
 tags: [template, ui, vibejam-retro]
 created: 2026-07-06
-updated: 2026-07-06
+updated: 2026-07-10
 ---
 
 ## What
@@ -45,3 +45,4 @@ next game would hit the same assert. Fix: template starts at game-proven scale.
   native-debug `game` OK. Skill `nt-game-ui-layout` already teaches clearing
   states on close + `used_slots` reopen-baseline verification — confirmed
   present, added in the same c8819ec9 commit.
+- 2026-07-11: T0375 storage reconciliation: card was already status done with all criteria checked and evidence logged; moved from active storage into archive through the canonical CLI.

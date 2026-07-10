@@ -1,13 +1,13 @@
 ---
 id: T0337
 title: "Template: items-core + progression-core как игровые модули (features/, in-place)"
-status: idea
+status: done
 project: P001
 epic: E009
 priority: P1
 tags: [template, architecture, features, modules]
 created: 2026-07-07
-updated: 2026-07-08
+updated: 2026-07-10
 ---
 
 ## What
@@ -61,20 +61,20 @@ updated: 2026-07-08
 
 ## Done when
 
-- [ ] features/items-core и features/progression-core существуют,
+- [x] features/items-core и features/progression-core существуют,
       шаблон собирает их in-place (CMake-пути), поведение
       байт-идентично до/после (G-relocation pure-rename + G-bytes
       генвыход + полный ctest зелёный + wasm-линк обоих пресетов +
       живой G-smoke; «SHA скринов» списан лидом 2026-07-08 — флейк
       по построению, см. Open questions п.3).
-- [ ] В шаблоне остались только игровые части (json-конфиги, lock,
+- [x] В шаблоне остались только игровые части (json-конфиги, lock,
       схемы стейта, посев, вербы, миграционный скелет) — грепом
       доказано отсутствие копий кода ядра.
-- [ ] Игровая сторона документирована: как игра добавляет предметы,
+- [x] Игровая сторона документирована: как игра добавляет предметы,
       треки, миграции, вербы БЕЗ правок модулей.
-- [ ] Доктрина трёх слоёв в обоих README + скилл nt-game-feature
+- [x] Доктрина трёх слоёв в обоих README + скилл nt-game-feature
       (синк .codex → .claude).
-- [ ] new_game.mjs-копия игры собирается против модулей из корня
+- [x] new_game.mjs-копия игры собирается против модулей из корня
       (пути переживают games/<id>-глубину).
 
 ## Open questions
@@ -120,6 +120,9 @@ updated: 2026-07-08
 
 ## Log
 
+- 2026-07-11: T0375 reconciliation: status and unchecked boxes were stale. Existing `features/items-core`, `features/progression-core`, root-module CMake wiring, the documented three-layer contract, `nt-game-feature`, and the recorded 16/16/new-game/wasm proof satisfy every criterion without new implementation.
+- 2026-07-11: Quality: QTECH_001=pass; evidence: commits and verification gates already enumerated below, plus current tracked module/skill presence.
+
 - 2026-07-07: создана по решению лида после арка-ревью T0327 и
   двухшагового разбора (items → progression аналогично; «по сути core
   для items или progression это игровые модули с конфигами» —
@@ -156,3 +159,4 @@ updated: 2026-07-08
     байт-идентичности); док-синк витрины README.md/TEMPLATE.md +
     интеграционный ctest — хвост T0327. Done-when все 5 функционально
     закрыты (оценка deep-ревью М3) — чекбоксы и закрытие за лидом.
+- 2026-07-11: T0375 status reconciliation: done; log records the complete M1-M3 arc and current module/skill paths plus 16/16/new-game/wasm proof satisfy all criteria.

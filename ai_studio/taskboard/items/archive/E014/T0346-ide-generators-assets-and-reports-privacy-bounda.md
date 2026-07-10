@@ -7,7 +7,7 @@ epic: E014
 priority: P1
 tags: [workspace, private-repos, assets, ide]
 created: 2026-07-09
-updated: 2026-07-09
+updated: 2026-07-10
 ---
 
 ## What
@@ -70,3 +70,4 @@ runtime evidence.
   report and evidence path leaks. Verified private ids stay out of parent
   `.vscode`, architecture reports, asset search/viewer source lists, and Items
   Viewer catalog lists unless explicitly selected through workspace mounts.
+- 2026-07-11: T0375 storage reconciliation: card was already status done with all criteria checked and evidence logged; moved from active storage into archive through the canonical CLI.
