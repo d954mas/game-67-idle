@@ -24,11 +24,14 @@ and `items.move` for container transfers.
 features/items-core/
   include/features/items/items.h   public API, spelling preserved (see "Include spelling" below)
   src/
+    items_api.c                    T0364 typed catalog API proof core (opt-in until cutover)
     items_catalog.c                catalog lookup over the codegen tables
     items_containers.c             ownership (add/remove/move/count/purse/instances/seq)
     items_reconcile.c              post-load quarantine + unique-seq reseed
   scripts/
     generate_items_catalog.py      content codegen (content/items.json -> const C tables)
+    generate_items_api_proof.py    normalized proof Snapshot -> typed C API/reference data/LuaLS
+    generate_items_api_proof_test.py  schema/API proof regression suite
     items_ops.py                   read-only op-layer CLI (list/validate/schema)
     items_ops_test.py              self-contained unittest for items_ops.py's rules
   feature.json
@@ -84,6 +87,21 @@ collide with one already on disk.
   rules themselves fire correctly (does not touch a game's real `content/*`,
   except the reused `content/item_fields.schema.json`, treated as the generic
   stable field-shape contract).
+
+### T0364 typed API proof
+
+`generate_items_api_proof.py` is a bounded reference exporter, not the Lua
+evaluator or production blob builder. It consumes the normalized fixtures in
+`tests/fixtures/items_api_*_proof.json` and atomically emits build-local
+`items_game.gen.h`, `items_game.internal.gen.h`, `items_game.gen.c`, and
+`items_game.luau`. The core-only and weapon CTest targets compile the same
+`src/items_api.c` against different generated capability schemas. See
+`docs/items_lua_schema_api_contract_2026-07-10.md` for the exact boundary.
+
+```powershell
+py -3.12 features/items-core/scripts/generate_items_api_proof_test.py
+cmake --build templates/template/build/native-debug --target test_items_api_core_only test_items_api
+```
 
 ## Layer
 

@@ -831,6 +831,58 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_items_catalog COMMAND test_items_catalog)
 
+    # T0364 proof: the same stable Items header compiles against either a
+    # core-only or weapon-specific generated API. Outputs stay build-local.
+    set(ITEMS_API_PROOF_SCRIPT "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof.py")
+    set(ITEMS_API_PROOF_FIXTURES "${ITEMS_CORE_DIR}/tests/fixtures")
+    set(ITEMS_API_CORE_ONLY_DIR "${CMAKE_BINARY_DIR}/generated/items-api-core-only")
+    set(ITEMS_API_WEAPON_DIR "${CMAKE_BINARY_DIR}/generated/items-api-weapon")
+    foreach(_variant core-only weapon)
+        if(_variant STREQUAL "core-only")
+            set(_snapshot "${ITEMS_API_PROOF_FIXTURES}/items_api_core_proof.json")
+            set(_out_dir "${ITEMS_API_CORE_ONLY_DIR}")
+        else()
+            set(_snapshot "${ITEMS_API_PROOF_FIXTURES}/items_api_weapon_proof.json")
+            set(_out_dir "${ITEMS_API_WEAPON_DIR}")
+        endif()
+        add_custom_command(
+            OUTPUT
+                "${_out_dir}/items_game.gen.h"
+                "${_out_dir}/items_game.internal.gen.h"
+                "${_out_dir}/items_game.gen.c"
+                "${_out_dir}/items_game.luau"
+            COMMAND "${Python3_EXECUTABLE}" "${ITEMS_API_PROOF_SCRIPT}"
+                --snapshot "${_snapshot}" --out-dir "${_out_dir}"
+            DEPENDS "${ITEMS_API_PROOF_SCRIPT}" "${_snapshot}"
+            COMMENT "Generating ${_variant} Items API proof"
+            VERBATIM)
+    endforeach()
+
+    add_executable(test_items_api_core_only
+        tests/test_items_api_core_only.c
+        "${ITEMS_CORE_SRC}/items_api.c"
+        "${ITEMS_API_CORE_ONLY_DIR}/items_game.gen.c")
+    target_link_libraries(test_items_api_core_only PRIVATE unity nt_hash nt_core)
+    target_include_directories(test_items_api_core_only PRIVATE "${ITEMS_CORE_INC}" "${ITEMS_API_CORE_ONLY_DIR}")
+    target_compile_definitions(test_items_api_core_only PRIVATE ITEMS_GAME_API_ENABLED=1 _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_items_api_core_only)
+    set_target_properties(test_items_api_core_only PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_items_api_core_only COMMAND test_items_api_core_only)
+
+    add_executable(test_items_api
+        tests/test_items_api.c
+        "${ITEMS_CORE_SRC}/items_api.c"
+        "${ITEMS_API_WEAPON_DIR}/items_game.gen.c")
+    target_link_libraries(test_items_api PRIVATE unity nt_hash nt_core)
+    target_include_directories(test_items_api PRIVATE "${ITEMS_CORE_INC}" "${ITEMS_API_WEAPON_DIR}")
+    target_compile_definitions(test_items_api PRIVATE ITEMS_GAME_API_ENABLED=1 _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_items_api)
+    set_target_properties(test_items_api PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_items_api COMMAND test_items_api)
+
+    add_test(NAME generate_items_api_proof_test
+        COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof_test.py")
+
     # И2a skeleton -> И2b full (§6.6c/§6.8): round-trip over the generated items
     # fragment state layer. Links items_state.c + the (non-empty, R2) events source +
     # the real on_new_game/reconcile bodies (Р9 §7.3) + gsj_* toolkit + game_events.c

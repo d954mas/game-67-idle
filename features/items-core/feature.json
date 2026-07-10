@@ -21,14 +21,21 @@
     "list": "py -3.12 features/items-core/scripts/items_ops.py list",
     "validate": "py -3.12 features/items-core/scripts/items_ops.py validate",
     "schema": "py -3.12 features/items-core/scripts/items_ops.py schema",
-    "test": "py -3.12 features/items-core/scripts/items_ops_test.py"
+    "test": "py -3.12 features/items-core/scripts/items_ops_test.py",
+    "api_proof": "py -3.12 features/items-core/scripts/generate_items_api_proof.py --snapshot features/items-core/tests/fixtures/items_api_weapon_proof.json --out-dir <build-dir>",
+    "api_proof_test": "py -3.12 features/items-core/scripts/generate_items_api_proof_test.py"
   },
   "manuals": {
-    "install": "features/items-core/INSTALL.md"
+    "install": "features/items-core/INSTALL.md",
+    "typed_api_proof": "features/items-core/docs/items_lua_schema_api_contract_2026-07-10.md"
   },
   "outputs": [
     "items_catalog.gen.h",
-    "items_catalog.gen.c"
+    "items_catalog.gen.c",
+    "items_game.gen.h",
+    "items_game.internal.gen.h",
+    "items_game.gen.c",
+    "items_game.luau"
   ],
   "registers": {
     "note": "Describes the EXISTING wiring in templates/template/CMakeLists.txt (target_sources/ctest) -- items-core is an in-place module (precedent features/game-state), not an install-script target. This section documents the consuming game's provisioning, it does not perform it.",
@@ -44,7 +51,10 @@
       "test_items_catalog",
       "test_items_fragment",
       "items_ops_validate",
-      "items_ops_test"
+      "items_ops_test",
+      "test_items_api_core_only",
+      "test_items_api",
+      "generate_items_api_proof_test"
     ]
   },
   "default_template": {

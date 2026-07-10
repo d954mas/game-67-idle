@@ -10,6 +10,57 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+/* ---- Typed game catalog API (proof opt-in until the T0386 cutover) ---- */
+#if defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED
+typedef struct item_id_t {
+    uint64_t value;
+} item_id_t;
+
+typedef struct item_def_ref_t {
+    uint32_t _index;
+} item_def_ref_t;
+
+/* Opaque index into generated immutable cost spans. */
+typedef struct item_cost_ref_t {
+    uint32_t _opaque;
+} item_cost_ref_t;
+
+typedef enum item_transition_kind_t {
+    ITEM_TRANSITION_UNAVAILABLE = 0,
+    ITEM_TRANSITION_FREE,
+    ITEM_TRANSITION_COST,
+} item_transition_kind_t;
+
+typedef struct item_transition_t {
+    item_transition_kind_t kind;
+    item_cost_ref_t cost;
+} item_transition_t;
+
+typedef struct item_cost_entry_t {
+    item_id_t item;
+    int64_t count;
+} item_cost_entry_t;
+
+typedef struct item_core_t {
+    item_id_t id;
+    int64_t stack;
+} item_core_t;
+
+item_def_ref_t items_get(item_id_t id); /* required: asserts when absent */
+bool items_exists(item_id_t id);
+bool items_try_get(item_id_t id, item_def_ref_t *out);
+bool items_try_get_string(const char *def_id, item_def_ref_t *out);
+item_core_t items_core(item_def_ref_t ref); /* copy; asserts on invalid ref */
+item_transition_t items_acquire_transition(item_def_ref_t ref);
+uint32_t items_cost_count(item_cost_ref_t cost);
+item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index); /* copy; asserts on invalid range */
+void items_register_debug_labels(void);
+
+/* The build selects exactly one game-generated capability header. Consumers
+   continue to include only features/items/items.h. */
+#include "items_game.gen.h"
+#endif
+
 /* ---- Каталог (const-таблица из content/items.json; компилируется ВСЕГДА) ---- */
 typedef enum item_accept_policy_t {
     ITEM_ACCEPT_ANY = 0,
