@@ -41,6 +41,7 @@ static float s_sfx;
 static bool s_enabled;
 static bool s_paused;
 static bool s_available;
+static bool s_backend_unlocked;
 static bool s_gesture_result;
 
 void fake_audio_reset(void) {
@@ -60,6 +61,7 @@ void fake_audio_reset(void) {
     s_enabled = true;
     s_paused = false;
     s_available = true;
+    s_backend_unlocked = false;
     s_gesture_result = true;
 }
 
@@ -124,6 +126,7 @@ void fake_audio_finish_oldest_voice(void) {
 }
 
 void fake_audio_set_backend_available(bool available) { s_available = available; }
+void fake_audio_set_backend_unlocked(bool unlocked) { s_backend_unlocked = unlocked; }
 void fake_audio_set_gesture_result(bool result) { s_gesture_result = result; }
 uint32_t fake_audio_backend_decode_begin_count(void) { return s_decode_begins; }
 uint32_t fake_audio_backend_clip_destroy_count(void) { return s_clip_destroys; }
@@ -219,4 +222,9 @@ void audio_core_backend_set_mix(float master, float music, float sfx) {
 }
 void audio_core_backend_set_enabled(bool enabled) { s_enabled = enabled; }
 void audio_core_backend_set_paused(bool paused) { s_paused = paused; }
-bool audio_core_backend_user_gesture(void) { ++s_gestures; return s_gesture_result; }
+bool audio_core_backend_user_gesture(void) {
+    ++s_gestures;
+    if (s_gesture_result) s_backend_unlocked = true;
+    return s_gesture_result;
+}
+bool audio_core_backend_is_unlocked(void) { return s_backend_unlocked; }

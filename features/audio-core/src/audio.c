@@ -133,6 +133,7 @@ void audio_shutdown(void) {
 void audio_update(void) {
     if (!s_initialized || !s_status.available) return;
     audio_core_backend_update();
+    s_status.unlocked = audio_core_backend_is_unlocked();
     for (uint32_t i = 0; i < AUDIO_MAX_CLIPS; ++i) {
         audio_clip_slot_t *slot = &s_clips[i];
         if (!slot->occupied || slot->state != AUDIO_CLIP_STATE_LOADING) continue;

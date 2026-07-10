@@ -162,6 +162,13 @@ void test_user_gesture_is_forwarded_and_status_records_success_only(void) {
     TEST_ASSERT_EQUAL_UINT32(2, fake_audio_backend_gesture_count());
 }
 
+void test_update_reconciles_an_async_backend_unlock_rejection(void) {
+    unlock_audio();
+    fake_audio_set_backend_unlocked(false);
+    audio_update();
+    TEST_ASSERT_FALSE(audio_status().unlocked);
+}
+
 void test_finished_voice_is_cleaned_and_reused_with_new_generation(void) {
     audio_clip_t clip = make_ready_clip(ASSET_READY);
     unlock_audio();
@@ -236,6 +243,7 @@ int main(void) {
     RUN_TEST(test_play_requires_available_unlocked_enabled_and_not_paused);
     RUN_TEST(test_unavailable_backend_is_reported_and_refuses_load_and_play);
     RUN_TEST(test_user_gesture_is_forwarded_and_status_records_success_only);
+    RUN_TEST(test_update_reconciles_an_async_backend_unlock_rejection);
     RUN_TEST(test_finished_voice_is_cleaned_and_reused_with_new_generation);
     RUN_TEST(test_full_voice_pool_evicts_oldest_voice_without_growing);
     RUN_TEST(test_loading_failed_and_stale_clips_refuse_play);

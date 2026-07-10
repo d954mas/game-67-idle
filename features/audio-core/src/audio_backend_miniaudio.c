@@ -281,6 +281,10 @@ bool audio_core_backend_user_gesture(void) {
     return s_started == MA_TRUE;
 }
 
+bool audio_core_backend_is_unlocked(void) {
+    return s_unlocked == MA_TRUE && s_started == MA_TRUE;
+}
+
 #if defined(AUDIO_MINIAUDIO_TEST_NO_DEVICE)
 uint64_t audio_miniaudio_test_allocation_count(void) { return s_allocation_count; }
 #endif
