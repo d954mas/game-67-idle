@@ -21,3 +21,7 @@
 *.ogg  binary
 *.wav  binary
 *.mp3  binary
+
+# Preserve pinned third-party bytes exactly; upstream miniaudio.h contains a
+# few intentional trailing spaces covered by its recorded SHA-256.
+features/audio-core/vendor/miniaudio/miniaudio.h -whitespace
