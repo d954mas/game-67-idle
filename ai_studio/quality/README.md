@@ -63,6 +63,10 @@ line:
 ```
 
 Allowed outcomes are `pass`, `block`, `review`, `skip`, and `unverified`.
+The Taskboard close-transition presence contract, including the explicit
+`Quality: not-applicable; reason: ...` form, is owned by
+[`task-store-reference.md`](../taskboard/task-store-reference.md#done-and-evidence).
+Quality owns rule meaning; Taskboard only validates the canonical log shape.
 
 Summarize rule usage with:
 
@@ -71,8 +75,9 @@ node ai_studio/quality/profile.mjs
 node ai_studio/quality/profile.mjs --include-archive --json
 ```
 
-The profile scans task logs only. It does not count quality outcomes recorded
-only in final responses, PR/review comments, or other non-task artifacts.
+The profile uses Taskboard's canonical dated-log scanner. It ignores bare,
+fenced, commented, and post-section examples, and does not count outcomes
+recorded only in final responses, PR/review comments, or other artifacts.
 
 The profile is diagnostic. It shows which rules are used often and which ones
 block or remain unverified, but it is not a global validator.

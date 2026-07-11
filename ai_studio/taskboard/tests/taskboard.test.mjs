@@ -192,6 +192,33 @@ test("createTask allocates sequential ids and createEpic separate sequence", (t)
   assert.equal(listEpics(root).length, 1);
 });
 
+test("createTask rejects status done before allocating or writing", (t) => {
+  const root = tempRoot(t);
+
+  assert.throws(
+    () => createTask(root, { title: "Invalid closed creation", status: "done" }),
+    (error) => {
+      assert.equal(error.problem.code, "task_create_done_forbidden");
+      return true;
+    },
+  );
+  assert.equal(createTask(root, { title: "First valid task" }).fields.id, "T0001");
+  assert.equal(listTasks(root, { includeArchive: true }).length, 1);
+});
+
+test("CLI and API reject creating a done task with a machine problem", async (t) => {
+  const root = tempRoot(t);
+  const cli = spawnSync(process.execPath, [cliPath, "new", "task", "--title", "CLI done", "--status", "done", "--json"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(cli.status, 0);
+  assert.equal(JSON.parse(cli.stdout).problem.code, "task_create_done_forbidden");
+
+  const handler = createTaskboardApi(root);
+  const api = await invokeApi(handler, "POST", "/api/tasks", { title: "API done", status: "done" });
+  assert.equal(api.status, 400);
+  assert.equal(api.data.problem.code, "task_create_done_forbidden");
+  assert.equal(createTask(root, { title: "Counter remains clean" }).fields.id, "T0001");
+});
+
 test("projects are first-class parents for epics and tasks", (t) => {
   const root = tempRoot(t);
   const project = createProject(root, {
@@ -308,7 +335,12 @@ test("Taskboard API exposes explicit project, epic, and task collections", async
 test("done tasks move to archive and stay addressable by id", (t) => {
   const root = tempRoot(t);
   createEpic(root, { title: "Epic" });
-  createTask(root, { title: "Archive me", epic: "E001", status: "todo" });
+  createTask(root, {
+    title: "Archive me",
+    epic: "E001",
+    status: "todo",
+    body: "## Done when\n\n- [x] archived\n\n## Log\n\n- 2026-07-11: Quality: not-applicable; reason: storage behavior fixture\n",
+  });
   const updated = updateDoc(root, "T0001", { fields: { status: "done" } });
   assert.match(updated.file, /ai_studio[\\/]taskboard[\\/]items[\\/]archive[\\/]E001[\\/]T0001-/);
   assert.equal(existsSync(updated.file), true);
@@ -641,13 +673,329 @@ test("updateDoc rejects invalid status", (t) => {
   assert.throws(() => updateDoc(root, "T0001", { fields: { status: "dropped" } }), /Invalid status/);
 });
 
+test("updateDoc requires truthful closure and an explicit quality decision for a new done task", (t) => {
+  const root = tempRoot(t);
+  const task = createTask(root, {
+    title: "Close truthfully",
+    status: "review",
+    body: "## What\n\nClose it.\n\n## Done when\n\n- [ ] behavior is proven\n\n## Log\n",
+  });
+  const original = readFileSync(task.file, "utf8");
+
+  assert.throws(
+    () => updateDoc(root, "T0001", { fields: { status: "done" } }),
+    (error) => {
+      assert.equal(error.problem.code, "task_closure_required");
+      assert.deepEqual(error.problem.details.unchecked, ["behavior is proven"]);
+      return true;
+    },
+  );
+  assert.equal(readFileSync(task.file, "utf8"), original, "rejected close must not write or archive");
+});
+
+test("updateDoc accepts checked criteria plus canonical quality evidence", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Checked close",
+    status: "review",
+    body: "## Done when\n\n- [x] implementation\n- [x] tests\n\n## Log\n\n- 2026-07-11: Quality: QCLR_001=pass; QTECH_002=review; evidence: focused tests and review\n",
+  });
+
+  const updated = updateDoc(root, "T0001", { fields: { status: "done" } });
+  assert.equal(updated.fields.status, "done");
+  assert.match(updated.file, /archive/);
+});
+
+test("updateDoc requires a non-empty canonical checked Done when list unless waived", (t) => {
+  const invalidSections = [
+    "",
+    "## Done when\n",
+    "## Done when\n\n- [ ]\n",
+    "## Done when\n\n- [x]\n",
+    "## Done when\n\n* [x] alternate bullet\n",
+    "## Done when\n\n- [X] alternate marker\n",
+    "## Done when\n\n- [-] bad marker\n",
+  ];
+  for (const [index, section] of invalidSections.entries()) {
+    const root = tempRoot(t);
+    createTask(root, {
+      title: `Invalid criteria ${index}`,
+      status: "review",
+      body: `${section}\n## Log\n\n- 2026-07-11: Quality: QTECH_001=pass; evidence: isolated closure test\n`,
+    });
+    assert.throws(
+      () => updateDoc(root, "T0001", { fields: { status: "done" } }),
+      (error) => error.problem.code === "task_closure_required",
+      `invalid Done when variant ${index} must require a waiver`,
+    );
+  }
+
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Criterion continuation",
+    status: "review",
+    body: "## Done when\n\n- [x] primary criterion\n      with legitimate continuation text\n\n## Log\n\n- 2026-07-11: Quality: QTECH_001=pass; evidence: continuation test\n",
+  });
+  assert.equal(updateDoc(root, "T0001", { fields: { status: "done" } }).fields.status, "done");
+});
+
+test("updateDoc ignores bare and fenced closeout examples in Log", (t) => {
+  const qualityVariants = [
+    "Quality: QTECH_001=pass; evidence: bare line",
+    "```text\n- 2026-07-11: Quality: QTECH_001=pass; evidence: fenced example\n```",
+  ];
+  for (const [index, qualityLog] of qualityVariants.entries()) {
+    const root = tempRoot(t);
+    createTask(root, { title: `Invalid quality log ${index}`, status: "review", body: `## Done when\n\n- [x] done\n\n## Log\n\n${qualityLog}\n` });
+    assert.throws(
+      () => updateDoc(root, "T0001", { fields: { status: "done" } }),
+      (error) => error.problem.code === "task_quality_decision_required",
+    );
+  }
+
+  const closureVariants = [
+    "Closure: waived; reason: bare; evidence: example",
+    "```text\n- 2026-07-11: Closure: waived; reason: fenced; evidence: example\n```",
+  ];
+  for (const [index, closureLog] of closureVariants.entries()) {
+    const root = tempRoot(t);
+    createTask(root, { title: `Invalid closure log ${index}`, status: "review", body: `## Done when\n\n- [ ] open\n\n## Log\n\n${closureLog}\n- 2026-07-11: Quality: QTECH_001=pass; evidence: isolated closure log test\n` });
+    assert.throws(
+      () => updateDoc(root, "T0001", { fields: { status: "done" } }),
+      (error) => error.problem.code === "task_closure_required",
+    );
+  }
+});
+
+test("closeout discovery ignores an entire fenced fake task document", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Fenced fake document",
+    status: "review",
+    body: "```markdown\n## Done when\n\n- [x] fake criterion\n\n## Log\n\n- 2026-07-11: Quality: QTECH_001=pass; evidence: fake fenced evidence\n```\n",
+  });
+
+  assert.throws(
+    () => updateDoc(root, "T0001", { fields: { status: "done" } }),
+    (error) => error.problem.code === "task_closure_required",
+  );
+});
+
+test("closeout discovery ignores fake sections and records inside HTML comments", (t) => {
+  const multilineRoot = tempRoot(t);
+  createTask(multilineRoot, {
+    title: "Commented fake document",
+    status: "review",
+    body: "<!--\n## Done when\n\n- [x] fake criterion\n\n## Log\n\n- 2026-07-11: Quality: QTECH_001=pass; evidence: fake comment evidence\n-->\n",
+  });
+  assert.throws(
+    () => updateDoc(multilineRoot, "T0001", { fields: { status: "done" } }),
+    (error) => error.problem.code === "task_closure_required",
+  );
+
+  const sameLineRoot = tempRoot(t);
+  createTask(sameLineRoot, {
+    title: "Commented quality record",
+    status: "review",
+    body: "## Done when\n\n- [x] real criterion\n\n## Log\n\n<!-- - 2026-07-11: Quality: QTECH_001=pass; evidence: same-line comment -->\n",
+  });
+  assert.throws(
+    () => updateDoc(sameLineRoot, "T0001", { fields: { status: "done" } }),
+    (error) => error.problem.code === "task_quality_decision_required",
+  );
+});
+
+test("closeout H2 sections end at the next H1 or H2 outside comments and fences", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Appendix example",
+    status: "review",
+    body: "## Done when\n\n- [x] real criterion\n\n## Log\n\n### Notes\n\nNo decision yet.\n\n# Appendix\n\n- 2026-07-11: Quality: QTECH_001=pass; evidence: appendix example only\n",
+  });
+  assert.throws(
+    () => updateDoc(root, "T0001", { fields: { status: "done" } }),
+    (error) => error.problem.code === "task_quality_decision_required",
+  );
+
+  const hashesRoot = tempRoot(t);
+  createTask(hashesRoot, {
+    title: "ATX closing hashes",
+    status: "review",
+    body: "## Done when ##\n\n- [x] real criterion\n\n## Log ###\n\n- 2026-07-11: Quality: QTECH_001=pass; evidence: closing hash regression\n",
+  });
+  assert.equal(updateDoc(hashesRoot, "T0001", { fields: { status: "done" } }).fields.status, "done");
+});
+
+test("closeout fences require the same marker and sufficient opening length with no suffix", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Long fence",
+    status: "review",
+    body: "## Done when\n\n- [x] real criterion\n\n## Log\n\n````markdown\n- 2026-07-11: Quality: QTECH_001=pass; evidence: before short pseudo-close\n```\n- 2026-07-11: Quality: QTECH_001=pass; evidence: after short pseudo-close\n```` suffix\n- 2026-07-11: Quality: QTECH_001=pass; evidence: after suffixed pseudo-close\n````\n",
+  });
+
+  assert.throws(
+    () => updateDoc(root, "T0001", { fields: { status: "done" } }),
+    (error) => error.problem.code === "task_quality_decision_required",
+  );
+});
+
+test("Done when ignores fenced and indented examples but rejects ordered checkbox forms", (t) => {
+  const ignoredRoot = tempRoot(t);
+  createTask(ignoredRoot, {
+    title: "Ignored examples",
+    status: "review",
+    body: "## Done when\n\n```markdown\n- [ ] fenced example\n```\n    - [ ] indented code example\n- [x] real criterion\n\n## Log\n\n- 2026-07-11: Quality: QTECH_001=pass; evidence: scanner regression\n",
+  });
+  assert.equal(updateDoc(ignoredRoot, "T0001", { fields: { status: "done" } }).fields.status, "done");
+
+  const orderedRoot = tempRoot(t);
+  createTask(orderedRoot, {
+    title: "Ordered checkbox",
+    status: "review",
+    body: "## Done when\n\n- [x] real criterion\n1. [ ] ordered open criterion\n\n## Log\n\n- 2026-07-11: Quality: QTECH_001=pass; evidence: ordered regression\n",
+  });
+  assert.throws(
+    () => updateDoc(orderedRoot, "T0001", { fields: { status: "done" } }),
+    (error) => error.problem.code === "task_closure_required" && error.problem.details.malformed.includes("1. [ ] ordered open criterion"),
+  );
+});
+
+test("closeout headings consistently allow up to three leading spaces", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Indented headings",
+    status: "review",
+    body: "   ## Done when\n\n   - [x] real criterion\n\n   ## Log\n\n- 2026-07-11: Quality: QTECH_001=pass; evidence: heading indentation regression\n",
+  });
+
+  assert.equal(updateDoc(root, "T0001", { fields: { status: "done" } }).fields.status, "done");
+});
+
+test("quality decisions reject duplicate rule ids", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Duplicate quality",
+    status: "review",
+    body: "## Done when\n\n- [x] done\n\n## Log\n\n- 2026-07-11: Quality: QTECH_001=pass; QTECH_001=block; evidence: conflicting duplicates\n",
+  });
+  assert.throws(
+    () => updateDoc(root, "T0001", { fields: { status: "done" } }),
+    (error) => error.problem.code === "task_quality_decision_required",
+  );
+
+  const cli = spawnSync(process.execPath, [cliPath, "set", "T0001", "--quality", "QTECH_001=pass; QTECH_001=pass", "--quality-evidence", "duplicate", "--json"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(cli.status, 0);
+  assert.equal(JSON.parse(cli.stdout).problem.code, "quality_input_invalid");
+});
+
+test("updateDoc accepts canonical closure waiver and quality not-applicable decision", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Waived close",
+    status: "review",
+    body: "## Done when\n\n- [ ] obsolete criterion\n\n## Log\n\n- 2026-07-11: Closure: waived; reason: superseded by T0002; evidence: decision recorded in E001\n- 2026-07-11: Quality: not-applicable; reason: planning-only replacement\n",
+  });
+
+  assert.equal(updateDoc(root, "T0001", { fields: { status: "done" } }).fields.status, "done");
+});
+
+test("updateDoc rejects malformed or missing quality decisions with a machine problem", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Bad quality close",
+    status: "review",
+    body: "## Done when\n\n- [x] done\n\n## Log\n\n- 2026-07-11: Quality: QCLR_001=maybe; evidence: unsupported outcome\n",
+  });
+
+  assert.throws(
+    () => updateDoc(root, "T0001", { fields: { status: "done" } }),
+    (error) => {
+      assert.equal(error.problem.code, "task_quality_decision_required");
+      assert.equal(error.problem.details.allowedOutcomes.includes("pass"), true);
+      return true;
+    },
+  );
+});
+
+test("updateDoc grandfathers existing done tasks and leaves other document transitions unaffected", (t) => {
+  const root = tempRoot(t);
+  writeTaskDoc(join(root, "ai_studio", "taskboard", "items"), "T0001", "Legacy done", "done");
+  createEpic(root, { title: "Epic" });
+
+  assert.equal(updateDoc(root, "T0001", { fields: { priority: "P0" } }).fields.priority, "P0");
+  assert.equal(updateDoc(root, "E001", { fields: { status: "done" } }).fields.status, "done");
+});
+
+test("taskboard cli appends structured closeout log lines before updateDoc", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "CLI close",
+    status: "review",
+    body: "## Done when\n\n- [ ] waived\n\n## Log\n",
+  });
+
+  const result = spawnSync(process.execPath, [cliPath, "set", "T0001", "--status", "done",
+    "--waiver-reason", "criterion superseded", "--closure-evidence", "E001 decision",
+    "--quality", "QCLR_001=pass; QTECH_002=skip", "--quality-evidence", "tests and scope review", "--json"],
+  { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const closed = findDoc(root, "T0001");
+  assert.match(closed.body, /Closure: waived; reason: criterion superseded; evidence: E001 decision/);
+  assert.match(closed.body, /Quality: QCLR_001=pass; QTECH_002=skip; evidence: tests and scope review/);
+});
+
+test("taskboard cli rejects incomplete or conflicting structured closeout inputs early", (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "CLI invalid", status: "review" });
+  const incomplete = spawnSync(process.execPath, [cliPath, "set", "T0001", "--waiver-reason", "because", "--json"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(incomplete.status, 0);
+  assert.equal(JSON.parse(incomplete.stdout).problem.code, "closure_input_invalid");
+
+  const conflicting = spawnSync(process.execPath, [cliPath, "set", "T0001", "--quality", "QCLR_001=pass", "--quality-evidence", "proof", "--quality-not-applicable", "docs only", "--json"], { cwd: root, encoding: "utf8" });
+  assert.notEqual(conflicting.status, 0);
+  assert.equal(JSON.parse(conflicting.stdout).problem.code, "quality_input_conflict");
+});
+
+test("taskboard cli appends a structured quality not-applicable decision", (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "CLI not applicable", status: "review", body: "## Done when\n\n- [x] docs updated\n\n## Log\n" });
+
+  const result = spawnSync(process.execPath, [cliPath, "set", "T0001", "--status", "done", "--quality-not-applicable", "documentation-only", "--json"], { cwd: root, encoding: "utf8" });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(findDoc(root, "T0001").body, /Quality: not-applicable; reason: documentation-only/);
+});
+
+test("Taskboard API guards raw final task body and returns the machine problem", async (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "API close", status: "review", body: "## Done when\n\n- [x] done\n\n## Log\n" });
+  const handler = createTaskboardApi(root);
+
+  const response = await invokeApi(handler, "PATCH", "/api/tasks/T0001", {
+    fields: { status: "done" },
+  });
+
+  assert.equal(response.status, 400);
+  assert.equal(response.data.problem.code, "task_quality_decision_required");
+  assert.equal(findDoc(root, "T0001").fields.status, "review");
+
+  const accepted = await invokeApi(handler, "PATCH", "/api/tasks/T0001", {
+    fields: { status: "done" },
+    body: "## Done when\n\n- [x] done\n\n## Log\n\n- 2026-07-11: Quality: QTECH_001=pass; evidence: API contract test\n",
+  });
+  assert.equal(accepted.status, 200);
+  assert.equal(accepted.data.fields.status, "done");
+});
+
 test("updateDoc checks archive move conflicts before rewriting source", (t) => {
   const root = tempRoot(t);
   const task = createTask(root, {
     title: "Conflict move",
     status: "doing",
     epic: "E001",
-    body: "## What\n\nKeep source stable.\n\n## Done when\n\n- [ ] source unchanged on move conflict\n",
+    body: "## What\n\nKeep source stable.\n\n## Done when\n\n- [x] source unchanged on move conflict\n\n## Log\n\n- 2026-07-11: Quality: not-applicable; reason: storage conflict fixture\n",
   });
   const original = readFileSync(task.file, "utf8");
   const archiveDir = join(root, "ai_studio", "taskboard", "items", "archive", "E001");

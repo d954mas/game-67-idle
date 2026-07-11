@@ -78,3 +78,24 @@ test("quality profile text marks the report as advisory", (t) => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Report kind: advisory task-log summary; not enforcement\./);
 });
+
+test("quality profile counts only canonical Taskboard Log records", (t) => {
+  const root = tempRoot(t);
+  writeTask(root, "T0001", `- 2026-06-26: Quality: QCLR_001=pass; QTECH_001=review; evidence: canonical record.
+Quality: QART_001=block; evidence: bare example.
+\`\`\`text
+- 2026-06-26: Quality: QGDD_001=pass; evidence: fenced example.
+\`\`\`
+<!-- - 2026-06-26: Quality: QDES_001=pass; evidence: comment example. -->
+# Appendix
+
+- 2026-06-26: Quality: QASSET_001=pass; evidence: appendix example.
+`);
+
+  const result = run(root, "--json");
+  assert.equal(result.status, 0, result.stderr);
+  const profile = JSON.parse(result.stdout);
+  assert.equal(profile.quality_lines, 1);
+  assert.equal(profile.entries, 2);
+  assert.deepEqual(profile.rules.map((item) => item.rule), ["QCLR_001", "QTECH_001"]);
+});

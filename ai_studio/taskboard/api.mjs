@@ -148,7 +148,7 @@ export function createTaskboardApi(root) {
       }
       return sendJson(res, 404, { error: "not found" });
     } catch (err) {
-      return sendJson(res, err.conflict ? 409 : 400, { error: err.message });
+      return sendJson(res, err.conflict ? 409 : 400, { error: err.message, ...(err.problem ? { problem: err.problem } : {}) });
     }
   };
 }

@@ -31,6 +31,8 @@ Studio work, one project per active game, one project per active template, and
 lightweight tooling/research projects when they own durable cross-cutting work.
 
 Task statuses: `idea -> backlog -> todo -> doing -> review -> done`.
+Tasks cannot be created directly as `done`; create an active record, then close
+it through the guarded update path so closure evidence is evaluated.
 
 Epic statuses: `idea -> active -> done`.
 
@@ -70,8 +72,39 @@ references and task project/epic mismatches.
 
 ## Done And Evidence
 
-A task is done only when `## Done when` boxes are checked and `## Log` explains
-the evidence that proves them.
+A transition of a task from any non-`done` status to `done` must satisfy both
+presence checks below through the final markdown body passed to `updateDoc`:
+
+1. `## Done when` contains at least one nonblank canonical `- [x] criterion`,
+   every checkbox there is canonical and checked, or `## Log` contains:
+   `Closure: waived; reason: <non-empty>; evidence: <non-empty>`.
+2. `## Log` contains either
+   `Quality: Q...=<outcome>[; Q...=<outcome>]; evidence: <non-empty>` or
+   `Quality: not-applicable; reason: <non-empty>`.
+
+Log decisions count only as canonical dated bullets such as
+`- YYYY-MM-DD: Quality: ...` or `- YYYY-MM-DD: Closure: ...`, outside fenced
+code blocks. Bare lines and documentation examples do not satisfy the gate.
+
+Quality outcomes are `pass`, `block`, `review`, `skip`, or `unverified`. This
+guard checks explicit shape only; it does not select rules, run checks, or infer
+whether an outcome is sufficient for release. Projects, epics, non-`done`
+transitions, and edits to already-`done` tasks are unaffected. Existing direct
+markdown history is grandfathered and needs no migration.
+
+The CLI can append canonical dated lines before calling the same `updateDoc`
+path:
+
+```powershell
+node ai_studio/taskboard/cli.mjs set T0001 --status done --waiver-reason "superseded" --closure-evidence "E001 decision" --quality-not-applicable "planning-only" --json
+node ai_studio/taskboard/cli.mjs set T0001 --status done --quality "QCLR_001=pass; QTECH_001=review" --quality-evidence "tests and review" --json
+```
+
+`--waiver-reason` pairs with `--closure-evidence`; `--quality` pairs with
+`--quality-evidence`; `--quality-not-applicable` is mutually exclusive with
+those quality options. Raw `--log` remains supported. Missing, malformed, or
+conflicting input fails before write/archive with a concise message and a
+machine-readable `problem` code/details in JSON CLI and HTTP API responses.
 
 Smallest reliable validation by change type starts from the Quality rules:
 `ai_studio/quality/README.md`.

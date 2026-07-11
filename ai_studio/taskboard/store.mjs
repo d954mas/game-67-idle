@@ -554,6 +554,13 @@ export function createEpic(root, input = {}, options = {}) {
 }
 
 export function createTask(root, input = {}, options = {}) {
+  if (input.status === "done") {
+    throw closeoutError(
+      "task_create_done_forbidden",
+      "Cannot create a task with status done; create it in an active status and close it through updateDoc",
+      { allowedInitialStatuses: TASK_STATUSES.filter((status) => status !== "done") },
+    );
+  }
   const dir = activeTaskDir(root, options);
   const epic = input.epic ? findDoc(root, input.epic, options) : null;
   const body = input.body || TASK_BODY_TEMPLATE;
@@ -612,6 +619,9 @@ export function updateDoc(root, id, patch = {}, options = {}) {
   }
   fields.updated = todayStamp();
   const body = patch.body !== undefined ? patch.body : doc.body;
+  if (doc.kind === "task" && doc.fields.status !== "done" && fields.status === "done") {
+    assertTaskCloseout(id, body);
+  }
   let file = doc.file;
   let targetFile = doc.file;
   if (doc.kind === "task") {
@@ -627,6 +637,149 @@ export function updateDoc(root, id, patch = {}, options = {}) {
     file = targetFile;
   }
   return { ...doc, file, fields, body };
+}
+
+const QUALITY_OUTCOMES = ["pass", "block", "review", "skip", "unverified"];
+
+function stripHtmlCommentContent(line, state) {
+  let cursor = 0;
+  let visible = "";
+  while (cursor < line.length) {
+    if (state.inComment) {
+      const end = line.indexOf("-->", cursor);
+      if (end === -1) return visible;
+      state.inComment = false;
+      cursor = end + 3;
+      continue;
+    }
+    const start = line.indexOf("<!--", cursor);
+    if (start === -1) return visible + line.slice(cursor);
+    visible += line.slice(cursor, start);
+    state.inComment = true;
+    cursor = start + 4;
+  }
+  return visible;
+}
+
+function atxHeading(line) {
+  const match = line.match(/^ {0,3}(#{1,6})(?:[ \t]+(.*)|[ \t]*)$/);
+  if (!match) return null;
+  const text = String(match[2] || "").replace(/[ \t]+#+[ \t]*$/, "").trim();
+  return { level: match[1].length, text };
+}
+
+function markdownSectionLines(body, heading) {
+  const lines = String(body).split(/\r?\n/);
+  const sectionLines = [];
+  let inSection = false;
+  let fence = null;
+  const commentState = { inComment: false };
+  for (const rawLine of lines) {
+    if (fence) {
+      const closing = rawLine.match(/^ {0,3}(`+|~+)[ \t]*$/);
+      if (closing && closing[1][0] === fence.marker && closing[1].length >= fence.length) {
+        fence = null;
+      }
+      continue;
+    }
+    if (!commentState.inComment && /^(?: {4,}|\t)/.test(rawLine)) continue;
+    const line = stripHtmlCommentContent(rawLine, commentState);
+    const indentedCode = /^(?: {4,}|\t)/.test(line);
+    if (!indentedCode) {
+      const opening = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      if (opening) {
+        fence = { marker: opening[1][0], length: opening[1].length };
+        continue;
+      }
+      const sectionHeading = atxHeading(line);
+      if (sectionHeading) {
+        if (inSection && sectionHeading.level <= 2) return sectionLines;
+        if (!inSection && sectionHeading.level === 2) {
+          inSection = sectionHeading.text.toLowerCase() === heading.toLowerCase();
+        }
+        continue;
+      }
+    }
+    if (inSection && !indentedCode) sectionLines.push(line);
+  }
+  return sectionLines;
+}
+
+export function canonicalTaskLogPayloads(body) {
+  const payloads = [];
+  for (const line of markdownSectionLines(body, "Log")) {
+    const record = line.match(/^- \d{4}-\d{2}-\d{2}: (.+)$/);
+    if (record) payloads.push(record[1]);
+  }
+  return payloads;
+}
+
+function canonicalLogPayloads(body, label) {
+  return canonicalTaskLogPayloads(body).filter((payload) => payload.startsWith(`${label}:`));
+}
+
+export function canonicalQualityAssignments(value) {
+  const assignments = String(value || "").split(";").map((entry) => entry.trim()).filter(Boolean);
+  const parsed = assignments.map((entry) => entry.match(/^(Q[A-Z0-9_]+)=(pass|block|review|skip|unverified)$/));
+  if (!assignments.length || parsed.some((match) => !match)) {
+    return null;
+  }
+  const ruleIds = parsed.map((match) => match[1]);
+  if (new Set(ruleIds).size !== ruleIds.length) {
+    return null;
+  }
+  return assignments.join("; ");
+}
+
+function hasClosureWaiver(body) {
+  return canonicalLogPayloads(body, "Closure").some((line) => {
+    const match = line.match(/^Closure: waived; reason: (.+); evidence: (.+)$/);
+    return Boolean(match && match[1].trim() && match[2].trim());
+  });
+}
+
+function hasQualityDecision(body) {
+  return canonicalLogPayloads(body, "Quality").some((line) => {
+    const notApplicable = line.match(/^Quality: not-applicable; reason: (.+)$/);
+    if (notApplicable) return Boolean(notApplicable[1].trim());
+    const evidence = line.match(/^Quality: (.+); evidence: (.+)$/);
+    return Boolean(evidence && canonicalQualityAssignments(evidence[1]) && evidence[2].trim());
+  });
+}
+
+function closeoutError(code, message, details) {
+  const err = new Error(message);
+  err.problem = { code, message, details };
+  return err;
+}
+
+function assertTaskCloseout(id, body) {
+  const criteria = [];
+  const malformed = [];
+  for (const line of markdownSectionLines(body, "Done when")) {
+    const criterion = line.match(/^ {0,3}- \[([ x])\][ \t]+(\S.*)$/);
+    if (criterion) {
+      criteria.push({ checked: criterion[1] === "x", text: criterion[2].trim() });
+    } else if (/^ {0,3}(?:[-+*]|\d+[.)])[ \t]+\[/.test(line)) {
+      malformed.push(line.trim());
+    }
+  }
+  const unchecked = criteria.filter((criterion) => !criterion.checked).map((criterion) => criterion.text);
+  const closureComplete = criteria.length > 0 && unchecked.length === 0 && malformed.length === 0;
+  if (!closureComplete && !hasClosureWaiver(body)) {
+    throw closeoutError(
+      "task_closure_required",
+      `${id} cannot move to done: add and check canonical Done when items or log a canonical closure waiver`,
+      { unchecked, malformed, canonicalCriteria: criteria.length },
+    );
+  }
+  if (!hasQualityDecision(body)) {
+    throw closeoutError(
+      "task_quality_decision_required",
+      `${id} cannot move to done: log canonical quality evidence or a not-applicable reason`,
+      { allowedOutcomes: QUALITY_OUTCOMES },
+    );
+  }
 }
 
 function taskStorageDir(root, fields, options = {}) {

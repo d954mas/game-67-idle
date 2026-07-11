@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
-import { findRoot, listTasks } from "../taskboard/lib.mjs";
+import { canonicalTaskLogPayloads, findRoot, listTasks } from "../taskboard/lib.mjs";
 
 const OUTCOMES = ["pass", "block", "review", "skip", "unverified"];
 const GROUPS = {
@@ -40,8 +40,7 @@ function parseArgs(argv) {
 }
 
 function qualityLines(body) {
-  return String(body || "")
-    .split(/\r?\n/)
+  return canonicalTaskLogPayloads(body)
     .filter((line) => /\bQuality:\s*/i.test(line));
 }
 

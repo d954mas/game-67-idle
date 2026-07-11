@@ -19,7 +19,7 @@ import {
   findRoot, listTasks, listEpics, listProjects, findDoc, createTask, createEpic, createProject,
   updateDoc, validateStoreDetailed,
 } from "./lib.mjs";
-import { ACTIVE_TASK_STATUSES, idNumber, priorityRank, TASK_STATUSES, taskRank } from "./store.mjs";
+import { ACTIVE_TASK_STATUSES, canonicalQualityAssignments, idNumber, priorityRank, TASK_STATUSES, taskRank } from "./store.mjs";
 import {
   agentContextPayloadForStores,
   findTaskboardDoc,
@@ -45,7 +45,7 @@ Commands:
   new project --title "..." [--store studio|game:<id>] [--game <id>] [--kind ai-studio|game|template|tooling|research|other] [--target path] [--tags a,b]
   new epic --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--status active] [--tags a,b]
   new task --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
-  set <id|store:id> [--store studio|game:<id>] [--game <id>] [--status s] [--project P001] [--epic E001] [--priority P1] [--title "..."] [--log "..."] [--json]
+  set <id|store:id> [--store studio|game:<id>] [--game <id>] [--status s] [--project P001] [--epic E001] [--priority P1] [--title "..."] [--log "..."] [--waiver-reason "..."] [--closure-evidence "..."] [--quality "QCLR_001=pass; ..."] [--quality-evidence "..."] [--quality-not-applicable "reason"] [--json]
   validate [--json]
 `;
 
@@ -94,6 +94,18 @@ function numberArg(value, fallback) {
 
 function writeJson(value) {
   process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+}
+
+function failProblem(args, code, message, details = {}) {
+  if (args.json) {
+    writeJson({ ok: false, problem: { code, message, details } });
+    process.exit(1);
+  }
+  fail(message);
+}
+
+function textOption(value) {
+  return typeof value === "string" && value.trim() ? value.trim() : "";
 }
 
 function printUsage() {
@@ -353,7 +365,16 @@ switch (cmd) {
       fail(err.message);
     }
     const opts = storeOptions(store);
-    const doc = kind === "task" ? createTask(root, input, opts) : (kind === "epic" ? createEpic(root, input, opts) : createProject(root, input, opts));
+    let doc;
+    try {
+      doc = kind === "task" ? createTask(root, input, opts) : (kind === "epic" ? createEpic(root, input, opts) : createProject(root, input, opts));
+    } catch (err) {
+      if (args.json) {
+        writeJson({ ok: false, problem: err.problem || { code: "taskboard_error", message: err.message } });
+        process.exit(1);
+      }
+      fail(err.message);
+    }
     if (args.json) {
       const row = kind === "task"
         ? agentTaskRow(root, doc, { store })
@@ -373,9 +394,38 @@ switch (cmd) {
     if (args.tags !== undefined) {
       fields.tags = String(args.tags).split(",").map((s) => s.trim()).filter(Boolean);
     }
+    const waiverReason = textOption(args["waiver-reason"]);
+    const closureEvidence = textOption(args["closure-evidence"]);
+    const closureInputPresent = args["waiver-reason"] !== undefined || args["closure-evidence"] !== undefined;
+    if (closureInputPresent && (!waiverReason || !closureEvidence)) {
+      failProblem(args, "closure_input_invalid", "--waiver-reason and --closure-evidence must be provided together");
+    }
+    const qualityInputPresent = args.quality !== undefined || args["quality-evidence"] !== undefined;
+    const quality = textOption(args.quality);
+    const qualityEvidence = textOption(args["quality-evidence"]);
+    const qualityNotApplicablePresent = args["quality-not-applicable"] !== undefined;
+    const qualityNotApplicable = textOption(args["quality-not-applicable"]);
+    if (qualityInputPresent && qualityNotApplicablePresent) {
+      failProblem(args, "quality_input_conflict", "--quality-not-applicable cannot be combined with --quality or --quality-evidence");
+    }
+    if (qualityInputPresent && (!quality || !qualityEvidence)) {
+      failProblem(args, "quality_input_invalid", "--quality and --quality-evidence must be provided together");
+    }
+    const canonicalQuality = quality ? canonicalQualityAssignments(quality) : "";
+    if (quality && !canonicalQuality) {
+      failProblem(args, "quality_input_invalid", "--quality must contain semicolon-separated Q...=pass|block|review|skip|unverified assignments");
+    }
+    if (qualityNotApplicablePresent && !qualityNotApplicable) {
+      failProblem(args, "quality_input_invalid", "--quality-not-applicable requires a non-empty reason");
+    }
     const patch = { fields };
     let resolvedForLog = null;
-    if (typeof args.log === "string" && args.log) {
+    const logEntries = [];
+    if (textOption(args.log)) logEntries.push(textOption(args.log));
+    if (waiverReason) logEntries.push(`Closure: waived; reason: ${waiverReason}; evidence: ${closureEvidence}`);
+    if (canonicalQuality) logEntries.push(`Quality: ${canonicalQuality}; evidence: ${qualityEvidence}`);
+    if (qualityNotApplicable) logEntries.push(`Quality: not-applicable; reason: ${qualityNotApplicable}`);
+    if (logEntries.length) {
       try {
         resolvedForLog = findTaskboardDoc(root, id, storeQueryArgs(args));
       } catch (err) {
@@ -384,7 +434,7 @@ switch (cmd) {
       const doc = resolvedForLog ? resolvedForLog.doc : null;
       if (!doc) fail(`no doc with id ${id}`);
       const stamp = new Date().toISOString().slice(0, 10);
-      patch.body = `${doc.body.replace(/\s+$/, "")}\n- ${stamp}: ${args.log}\n`;
+      patch.body = `${doc.body.replace(/\s+$/, "")}\n${logEntries.map((entry) => `- ${stamp}: ${entry}`).join("\n")}\n`;
     }
     if (!Object.keys(fields).length && !patch.body) fail("nothing to set");
     try {

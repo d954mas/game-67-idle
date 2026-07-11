@@ -40,6 +40,8 @@ Prefer JSON when an agent needs task state:
   `node ai_studio/taskboard/cli.mjs new epic --title "..." --project P001`,
   `node ai_studio/taskboard/cli.mjs new task --title "..." --project P001 --epic E001 --priority P1`,
   `node ai_studio/taskboard/cli.mjs set T0001 --status doing --log "..." --json`.
+- Close with structured evidence:
+  `node ai_studio/taskboard/cli.mjs set T0001 --status done --quality "QTECH_001=pass" --quality-evidence "tests passed" --json`.
 - Validate store shape: `node ai_studio/taskboard/cli.mjs validate --json`.
 
 Taskboard is store-qualified:
@@ -110,9 +112,9 @@ artifacts unless linked.
 
 ## Done And Validation
 
-A task is done only when `## Done when` is checked and `## Log` explains the
-evidence. Use the guide for lifecycle, scope intake, evidence, checkpoints, and
-manual format.
+A new task transition to `done` is guarded by the closure and quality-decision
+contract in `task-store-reference.md`. Existing `done` history is grandfathered.
+Use the guide for lifecycle, evidence, CLI options, and canonical log formats.
 
 Validation by change type: `ai_studio/quality/README.md`.
 Repeated quality failures should be visible in task logs and summarized with
