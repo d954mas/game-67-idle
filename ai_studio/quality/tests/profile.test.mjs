@@ -59,6 +59,7 @@ test("quality profile counts rule outcomes from task logs", (t) => {
   const art001 = profile.rules.find((item) => item.rule === "QART_001");
   const tech001 = profile.rules.find((item) => item.rule === "QTECH_001");
 
+  assert.equal(profile.report_kind, "advisory-task-log-summary");
   assert.equal(profile.entries, 5);
   assert.equal(clarity001.total, 2);
   assert.equal(clarity001.group, "player_clarity");
@@ -69,4 +70,11 @@ test("quality profile counts rule outcomes from task logs", (t) => {
   assert.equal(tech001.group, "technical");
   assert.equal(tech001.outcomes.skip, 1);
   assert.equal(tech001.outcomes.unverified, 1);
+});
+
+test("quality profile text marks the report as advisory", (t) => {
+  const root = tempRoot(t);
+  const result = run(root);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Report kind: advisory task-log summary; not enforcement\./);
 });

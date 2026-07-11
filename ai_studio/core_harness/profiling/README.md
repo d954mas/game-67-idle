@@ -8,6 +8,10 @@ subagent spawn diagnostics.
 Profiling is passive. Hooks write JSONL records under `tmp/session_profiles/`.
 The raw telemetry is local evidence and should not be committed.
 
+Reports distinguish observed hook/session records from advisory diagnosis.
+They do not prove process conventions, select models, or replace the explicit
+post-restart role/model smoke in `../validation/agent_role_smoke.mjs`.
+
 Stay local-first for AI observability. Do not add external tracing, eval, or
 dashboard services unless a concrete repeated need exists, such as shared human
 review, comparable datasets/evals, production telemetry, OTLP integration, or a

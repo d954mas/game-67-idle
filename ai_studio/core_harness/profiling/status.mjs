@@ -401,6 +401,7 @@ function buildStatus(profilePaths, values = {}) {
 
   return {
     schema_version: 2,
+    report_kind: "observed-telemetry-advisory-diagnosis",
     profile: files.length === 1 ? files[0] : `${files.length} session logs`,
     profile_files: files,
     exists: parsed.exists,
@@ -442,6 +443,7 @@ function renderStatus(status, { verbose }) {
   const lines = [];
   lines.push(`# AI Profile - ${basename(status.profile)}`);
   lines.push("");
+  lines.push("Report kind: observed telemetry with advisory diagnosis; not enforcement.");
   lines.push(`Profile: ${status.profile}`);
   if (status.profile_files.length > 1) lines.push(`Profile files: ${status.profile_files.join(", ")}`);
   lines.push(`Records: ${status.records}`);

@@ -116,6 +116,15 @@
           ]
         },
         {
+          "id": "core-harness:enforcement-contract",
+          "kind": "contract",
+          "path": "ai_studio/core_harness/workflow/enforcement_contract.json",
+          "title": "enforcement_contract.json",
+          "description": "Classifies material agent and workflow rules by their actual host, validator, or process enforcement boundary.",
+          "role": "agent workflow enforcement classification",
+          "tags": ["workflow", "agents", "contract"]
+        },
+        {
           "id": "core-harness:workflow-orchestration",
           "title": "Orchestration",
           "subtitle": "early subagent split",
@@ -582,6 +591,38 @@
             "test",
             "docs"
           ]
+        },
+        {
+          "id": "core-harness:enforcement-check",
+          "kind": "validation",
+          "path": "ai_studio/core_harness/validation/enforcement_check.mjs",
+          "description": "Validates enforcement labels and repository-confined evidence links.",
+          "role": "enforcement contract validator",
+          "tags": ["validator", "agents", "contracts"]
+        },
+        {
+          "id": "core-harness:agent-role-smoke",
+          "kind": "validation",
+          "path": "ai_studio/core_harness/validation/agent_role_smoke.mjs",
+          "description": "Checks native Codex evidence for the requested stock role and actual selected model.",
+          "role": "post-restart Codex role and model smoke",
+          "tags": ["validator", "agents", "codex"]
+        },
+        {
+          "id": "core-harness:enforcement-check-test",
+          "kind": "test",
+          "path": "ai_studio/core_harness/validation/tests/enforcement_check.test.mjs",
+          "description": "Verifies enforcement classification and evidence-link validation.",
+          "role": "enforcement contract validator tests",
+          "tags": ["test", "agents", "contracts"]
+        },
+        {
+          "id": "core-harness:agent-role-smoke-test",
+          "kind": "test",
+          "path": "ai_studio/core_harness/validation/tests/agent_role_smoke.test.mjs",
+          "description": "Verifies role and model smoke success, fallback, mismatch, and malformed evidence handling.",
+          "role": "Codex role and model smoke tests",
+          "tags": ["test", "agents", "codex"]
         }
       ]
     },

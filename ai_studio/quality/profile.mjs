@@ -94,6 +94,7 @@ function buildProfile(root, options = {}) {
   const rules = [...byRule.values()].sort((a, b) => a.rule.localeCompare(b.rule));
   return {
     schema: "ai_studio.quality_profile",
+    report_kind: "advisory-task-log-summary",
     root,
     include_archive: Boolean(options.includeArchive),
     tasks_scanned: tasks.length,
@@ -107,6 +108,7 @@ function renderText(profile) {
   const lines = [
     "# Quality Rule Profile",
     "",
+    "Report kind: advisory task-log summary; not enforcement.",
     `Tasks scanned: ${profile.tasks_scanned}`,
     `Quality lines: ${profile.quality_lines}`,
     `Rule entries: ${profile.entries}`,

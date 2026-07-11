@@ -77,6 +77,11 @@ only in final responses, PR/review comments, or other non-task artifacts.
 The profile is diagnostic. It shows which rules are used often and which ones
 block or remain unverified, but it is not a global validator.
 
+Quality outcomes are process records. Name executed host or repository proof
+as observed evidence; name review guidance as advisory. The enforcement labels
+and evidence routes live in
+[`enforcement_contract.json`](../core_harness/workflow/enforcement_contract.json).
+
 Module implementation tests stay with the owning module.
 
 ## Principle

@@ -4,6 +4,10 @@ This folder is Codex's project-scoped custom agent catalog. Codex automatically
 loads standalone TOML files in `.codex/agents/` as custom subagent definitions.
 Global subagent limits stay under `[agents]` in `.codex/config.toml`.
 
+Host, repository-validator, and process-convention boundaries are classified
+in `ai_studio/core_harness/workflow/enforcement_contract.json`; this catalog
+declares roles but does not prove which role/model the host selected.
+
 Each custom agent file must define:
 
 - `name`

@@ -484,12 +484,14 @@ test("status reads a session log and reports records, slowest, and rollup", () =
     const result = run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson]);
     const status = readJson(statusJson);
     assert.equal(status.schema_version, 2);
+    assert.equal(status.report_kind, "observed-telemetry-advisory-diagnosis");
     assert.equal(status.records, 2); // start records dropped after pairing
     assert.ok(status.slowest_record);
     assert.equal(status.slowest_record.duration_ms, 3000);
     assert.equal(status.command_rollup.by_count[0].key, "node x.test.mjs");
     assert.equal(status.command_rollup.by_count[0].count, 2);
     assert.match(result.stdout, /Records: 2/);
+    assert.match(result.stdout, /Report kind: observed telemetry with advisory diagnosis; not enforcement\./);
     assert.match(result.stdout, /Most-Run Commands/);
   } finally {
     cleanup(dir);
