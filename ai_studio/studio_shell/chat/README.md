@@ -63,22 +63,20 @@ verification transcript).
 ## Trust boundary
 
 This API is mounted next to `/api/canvas/` on the **same 127.0.0.1-only**
-Studio Shell server (`server.mjs`) — **not a weaker boundary, the same one**.
-It must stay that way, because this surface is more dangerous than the rest of
-Studio Shell: `agent.mjs`'s default transport spawns codex with
-`--dangerously-bypass-approvals-and-sandbox -C <repoRoot>`, i.e. an
-**unsandboxed shell-capable process**, on every message. That is the same
-trust level as the lead's own terminal — acceptable single-user-localhost, not
-acceptable if this port were ever reachable from anything else.
+Studio Shell server (`server.mjs`). T0350 adds a second boundary: every chat
+POST requires the per-launch token obtained from the same-origin bootstrap,
+an exact allowlisted `Host`/`Origin`, and `application/json`. The token never
+appears in a URL. The legacy `codex exec` transport is not approval-aware and
+therefore fails closed before spawn; T0351 owns replacing that transport.
 
 Permission line (design R2, stated in `agent.mjs`'s `buildDrivingContract`):
 the agent may perform **any journaled, undoable** canvas operation the lead
 asks for. It must refuse project deletion (`cli.mjs delete` — a `.trash` move
 that happens *outside* the journal, not undoable) and refuse touching any file
-outside the project's own store directory. Enforcement is honest, not a hard
-sandbox: (a) the prompt states the rule and instructs refusal, (b)
-`checkDeniedVerbs` post-checks the reply text for the denied verb and returns
-loud `flags` the panel renders in red — a tripwire, not a guarantee.
+outside the project's own store directory. The prompt rule and
+`checkDeniedVerbs` remain defense-in-depth only. The hard mutation gate is
+`permission_broker.mjs`: a transport must submit the exact opaque request and
+await its one-shot `allowed`, `denied`, `cancelled`, or `expired` result.
 
 ## File map
 
@@ -93,23 +91,29 @@ loud `flags` the panel renders in red — a tripwire, not a guarantee.
   (`buildDrivingContract`, `buildContextDigestText`, `buildFirstTurnPrompt`,
   `buildResumeMessage`, `buildFirstTurnCommand`, `buildResumeCommand`,
   `extractSessionId`, `checkDeniedVerbs`) plus the injectable `transport` seam
-  `runChatTurn({ context, message, sessionId, transport, onChild })` defaults
+  `runChatTurn({ context, message, sessionId, transport, onChild,
+  requestPermission })` defaults
   to `runCodexTransport` — the one un-unit-tested edge (codex never runs in
   the suite; tests inject a fake transport, mirroring
   `tools/dual_plate_generate.mjs`'s `generatePlate`).
-- `api.mjs` — `createChatApi(root, { transport })`, the HTTP/SSE adapter
+- `permission_broker.mjs` — store/project/turn-bound pending permission
+  lifecycle with one-shot decisions, cancellation, expiry, and stale refusal.
+- `api.mjs` — `createChatApi(root, { transport, allowedHosts })`, the HTTP/SSE adapter
   mounted on `/api/chat/` by `server.mjs`. It accepts
   `x-ai-studio-store: game:<id>` for private Canvas stores; `?store=`/`?game=`
   remain manual legacy fallbacks, while the browser keeps store out of visible
   paths:
   - `POST /api/chat/projects/<id>/message {text, selection?}` → SSE
-    `progress` → optional `op-committed {seqRange}` → `final {text,
+    `progress` → optional `permission-request {id, exactRequest}` →
+    `permission-decision {id, state}` → optional `op-committed {seqRange}` → `final {text,
     sessionId, seqRange, flags}` | `error {message}`. Exactly one of
     `final`/`error` ends every stream; the HTTP response itself is always 200
     (errors travel *inside* the stream, per the SSE contract comment at the
     top of the file).
   - `POST /api/chat/projects/<id>/cancel` — SIGTERMs the tracked child of the
-    project's current in-flight turn, if any.
+    project's current in-flight turn, if any, after cancelling pending approval.
+  - `POST /api/chat/projects/<id>/permissions/<permissionId>/decision` —
+    same-store/project-bound `allow` or `deny` decision.
   - `GET /api/chat/projects/<id>/transcript` — the parsed `transcript.jsonl`;
     always 200 (a project with no chat yet is `{transcript: []}`, not a 404).
   - `POST /api/chat/projects/<id>/clear` — `clearConversation()`.

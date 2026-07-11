@@ -10,7 +10,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
 import { fileURLToPath, URL } from "node:url";
-import { createChatApi } from "../api.mjs";
+import { createChatApi as createChatApiImpl, ensurePermissionAllowed } from "../api.mjs";
 import { addImage, createProject } from "../../../assets/canvas/ops.mjs";
 import { solidPng } from "../../../assets/canvas/tests/png_fixture.mjs";
 import { selectCanvasStore, withCanvasStore } from "../../../assets/canvas/stores.mjs";
@@ -18,6 +18,21 @@ import { selectCanvasStore, withCanvasStore } from "../../../assets/canvas/store
 // Metadata-only ops (createProject, no text/font reads), so any placeholder root works —
 // same convention as the canvas suite's own metadata-only tests.
 const ROOT = "C:/unused-repo-root";
+const TEST_TOKEN = "launch-secret";
+const TEST_SECURITY_HEADERS = {
+  host: "localhost",
+  origin: "http://localhost",
+  "content-type": "application/json",
+  "x-ai-studio-chat-token": TEST_TOKEN,
+};
+
+function createChatApi(root, options = {}) {
+  const configured = { launchToken: TEST_TOKEN, allowedHosts: ["localhost"], ...options };
+  if (configured.transport && configured.transport.approvalAware === undefined) {
+    configured.transport.approvalAware = true;
+  }
+  return createChatApiImpl(root, configured);
+}
 
 function tempProjects(t) {
   const dir = mkdtempSync(join(tmpdir(), "chat-api-"));
@@ -89,7 +104,8 @@ function invokeJson(handler, method, path, body, headers = {}) {
   return new Promise((resolveCall) => {
     const req = new EventEmitter();
     req.method = method;
-    req.headers = Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
+    const requestHeaders = method === "POST" ? { ...TEST_SECURITY_HEADERS, ...headers } : headers;
+    req.headers = Object.fromEntries(Object.entries(requestHeaders).map(([key, value]) => [key.toLowerCase(), value]));
     req.setEncoding = () => {};
     req.destroy = () => {};
     const chunks = [];
@@ -131,11 +147,12 @@ function invokeJson(handler, method, path, body, headers = {}) {
 
 // SSE double: collects every res.write() call as one raw string in order (each is one
 // `event: X\ndata: {...}\n\n` block), parsed into {event, data} pairs for assertions.
-function invokeSSE(handler, method, path, body, headers = {}) {
+function invokeSSE(handler, method, path, body, headers = {}, onEvent) {
   return new Promise((resolveCall) => {
     const req = new EventEmitter();
     req.method = method;
-    req.headers = Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value]));
+    const requestHeaders = method === "POST" ? { ...TEST_SECURITY_HEADERS, ...headers } : headers;
+    req.headers = Object.fromEntries(Object.entries(requestHeaders).map(([key, value]) => [key.toLowerCase(), value]));
     req.setEncoding = () => {};
     req.destroy = () => {};
     const writes = [];
@@ -147,7 +164,11 @@ function invokeSSE(handler, method, path, body, headers = {}) {
         this.headers = headers || {};
       },
       write(chunk) {
-        writes.push(String(chunk));
+        const block = String(chunk);
+        writes.push(block);
+        const eventMatch = /^event: (.+)\n/.exec(block);
+        const dataMatch = /\ndata: (.+)\n\n$/.exec(block);
+        if (onEvent && eventMatch && dataMatch) onEvent(eventMatch[1], JSON.parse(dataMatch[1]));
         return true;
       },
       end() {
@@ -194,6 +215,208 @@ test("POST .../message: progress -> final on a clean turn with no head advance",
   assert.equal(result.events[1].data.sessionId, "sess-1");
   assert.equal(result.events[1].data.seqRange, null);
   assert.deepEqual(result.events[1].data.flags, []);
+});
+
+test("chat mutations require exact launch token, Origin, Host, and JSON before SSE", async (t) => {
+  tempProjects(t);
+  const projectId = seedProject();
+  const handler = createChatApi(ROOT, {
+    launchToken: "launch-secret",
+    allowedHosts: ["localhost"],
+    transport: Object.assign(async () => ({ text: "no", sessionId: "s" }), { approvalAware: true }),
+  });
+  const missing = await invokeSSE(handler, "POST", `/api/chat/projects/${projectId}/message`, { text: "hi" }, {
+    host: "localhost", origin: "http://localhost", "content-type": "application/json", "x-ai-studio-chat-token": "",
+  });
+  assert.equal(missing.status, 403);
+  assert.deepEqual(missing.events, []);
+  const wrongOrigin = await invokeJson(handler, "POST", `/api/chat/projects/${projectId}/clear`, {}, {
+    host: "localhost", origin: "http://evil.test", "content-type": "application/json", "x-ai-studio-chat-token": "launch-secret",
+  });
+  assert.equal(wrongOrigin.status, 403);
+  const wrongType = await invokeJson(handler, "POST", `/api/chat/projects/${projectId}/clear`, {}, {
+    host: "localhost", origin: "http://localhost", "content-type": "text/plain", "x-ai-studio-chat-token": "launch-secret",
+  });
+  assert.equal(wrongType.status, 415);
+});
+
+test("bootstrap returns the launch token only for an allowed same-origin host", async () => {
+  const handler = createChatApi(ROOT, { launchToken: "launch-secret", allowedHosts: ["localhost"] });
+  const allowed = await invokeJson(handler, "GET", "/api/chat/bootstrap", undefined, { host: "localhost", origin: "http://localhost" });
+  assert.equal(allowed.status, 200);
+  assert.equal(allowed.json.token, "launch-secret");
+  assert.equal(allowed.headers["cache-control"], "no-store");
+  const browserGet = await invokeJson(handler, "GET", "/api/chat/bootstrap", undefined, {
+    host: "localhost", "sec-fetch-site": "same-origin",
+  });
+  assert.equal(browserGet.status, 200, "same-origin browser GETs do not reliably include Origin");
+  const crossSite = await invokeJson(handler, "GET", "/api/chat/bootstrap", undefined, {
+    host: "localhost", "sec-fetch-site": "cross-site",
+  });
+  assert.equal(crossSite.status, 403);
+  const denied = await invokeJson(handler, "GET", "/api/chat/bootstrap", undefined, { host: "evil.test", origin: "http://evil.test" });
+  assert.equal(denied.status, 403);
+});
+
+test("permission SSE preserves exact request and allow decision gates mutation", async (t) => {
+  tempProjects(t);
+  const projectId = seedProject();
+  const exactRequest = { method: "tools/call", params: { name: "shell", arguments: { command: "sentinel" } } };
+  let executedCommand = null;
+  const transport = Object.assign(async ({ requestPermission }) => {
+    const permission = requestPermission(exactRequest);
+    exactRequest.params.arguments.command = "tampered after request";
+    const approved = await permission;
+    executedCommand = approved.exactRequest.params.arguments.command;
+    return { text: "allowed", sessionId: "permission-session" };
+  }, { approvalAware: true });
+  const security = { host: "localhost", origin: "http://localhost", "content-type": "application/json", "x-ai-studio-chat-token": "launch-secret" };
+  const handler = createChatApi(ROOT, { launchToken: "launch-secret", allowedHosts: ["localhost"], transport });
+  let decisionPromise;
+  const result = await invokeSSE(handler, "POST", `/api/chat/projects/${projectId}/message`, { text: "mutate" }, security, (event, data) => {
+    if (event === "permission-request") {
+      assert.deepEqual(data.exactRequest, exactRequest);
+      assert.equal(executedCommand, null);
+      decisionPromise = invokeJson(handler, "POST", `/api/chat/projects/${projectId}/permissions/${data.id}/decision`, { decision: "allow" }, security);
+    }
+  });
+  await decisionPromise;
+  assert.equal(executedCommand, "sentinel");
+  assert.deepEqual(result.events.map((event) => event.event), ["progress", "permission-request", "permission-decision", "final"]);
+});
+
+test("simultaneous cancel and allow never lets the transport mutate", async (t) => {
+  tempProjects(t);
+  const projectId = seedProject();
+  let mutated = false;
+  let actions;
+  const transport = Object.assign(async ({ requestPermission }) => {
+    await requestPermission({ command: "sentinel" });
+    mutated = true;
+    return { text: "must not run", sessionId: "race" };
+  }, { approvalAware: true });
+  const handler = createChatApi(ROOT, { transport });
+  const result = await invokeSSE(handler, "POST", `/api/chat/projects/${projectId}/message`, { text: "race" }, {}, (event, data) => {
+    if (event !== "permission-request") return;
+    actions = Promise.all([
+      invokeJson(
+        handler,
+        "POST",
+        `/api/chat/projects/${projectId}/permissions/${data.id}/decision`,
+        { decision: "allow" },
+      ),
+      invokeJson(handler, "POST", `/api/chat/projects/${projectId}/cancel`, {}),
+    ]);
+  });
+  await actions;
+  assert.equal(mutated, false);
+  assert.equal(result.events.at(-1).event, "error");
+  assert.match(result.events.at(-1).data.message, /cancelled/);
+});
+
+test("an allowed settlement is refused when cancel wins before transport continuation", () => {
+  assert.throws(
+    () => ensurePermissionAllowed({ cancelled: true }, { state: "allowed", exactRequest: { command: "sentinel" } }),
+    /permission cancelled/,
+  );
+});
+
+test("deny, cancel, and expiry settle pending permission before mutation or child spawn", async (t) => {
+  tempProjects(t);
+  const projectId = seedProject();
+  const exactRequest = { capability: "opaque", scope: { command: "sentinel" } };
+
+  for (const terminalState of ["denied", "cancelled", "expired"]) {
+    let mutated = false;
+    let childSpawned = false;
+    let actionPromise;
+    const transport = Object.assign(async ({ requestPermission, onChild }) => {
+      await requestPermission(exactRequest);
+      childSpawned = true;
+      onChild({ kill() {} });
+      mutated = true;
+      return { text: "must not run", sessionId: "blocked" };
+    }, { approvalAware: true });
+    const handler = createChatApi(ROOT, {
+      transport,
+      permissionTtlMs: terminalState === "expired" ? 5 : 1000,
+    });
+    const result = await invokeSSE(
+      handler,
+      "POST",
+      `/api/chat/projects/${projectId}/message`,
+      { text: terminalState },
+      {},
+      (event, data) => {
+        if (event !== "permission-request") return;
+        if (terminalState === "denied") {
+          actionPromise = invokeJson(
+            handler,
+            "POST",
+            `/api/chat/projects/${projectId}/permissions/${data.id}/decision`,
+            { decision: "deny" },
+          );
+        } else if (terminalState === "cancelled") {
+          actionPromise = invokeJson(handler, "POST", `/api/chat/projects/${projectId}/cancel`, {});
+        }
+      },
+    );
+    if (actionPromise) await actionPromise;
+    assert.equal(mutated, false, `${terminalState} must gate the sentinel mutation`);
+    assert.equal(childSpawned, false, `${terminalState} must settle before child spawn`);
+    const decision = result.events.find((event) => event.event === "permission-decision");
+    assert.equal(decision.data.state, terminalState);
+    assert.equal(result.events.at(-1).event, "error");
+  }
+});
+
+test("permission decisions are same-store/project bound and stale decisions are refused", async (t) => {
+  tempProjects(t);
+  const projectId = seedProject();
+  const otherProjectId = seedProject();
+  const transport = Object.assign(async ({ requestPermission }) => {
+    await requestPermission({ arbitrary: ["exact", "request"] });
+    return { text: "denied", sessionId: "never" };
+  }, { approvalAware: true });
+  const handler = createChatApi(ROOT, { transport });
+  let wrongProject;
+  let denied;
+  const result = await invokeSSE(handler, "POST", `/api/chat/projects/${projectId}/message`, { text: "bind" }, {}, (event, data) => {
+    if (event !== "permission-request") return;
+    wrongProject = invokeJson(
+      handler,
+      "POST",
+      `/api/chat/projects/${otherProjectId}/permissions/${data.id}/decision`,
+      { decision: "allow" },
+    ).then((response) => {
+      denied = invokeJson(
+        handler,
+        "POST",
+        `/api/chat/projects/${projectId}/permissions/${data.id}/decision`,
+        { decision: "deny" },
+      );
+      return response;
+    });
+  });
+  assert.equal((await wrongProject).status, 409);
+  assert.equal((await denied).status, 200);
+  const permissionId = result.events.find((event) => event.event === "permission-request").data.id;
+  const stale = await invokeJson(
+    handler,
+    "POST",
+    `/api/chat/projects/${projectId}/permissions/${permissionId}/decision`,
+    { decision: "allow" },
+  );
+  assert.equal(stale.status, 409);
+});
+
+test("default legacy codex-exec transport fails closed before spawning", async (t) => {
+  tempProjects(t);
+  const projectId = seedProject();
+  const handler = createChatApiImpl(ROOT, { launchToken: TEST_TOKEN, allowedHosts: ["localhost"] });
+  const result = await invokeSSE(handler, "POST", `/api/chat/projects/${projectId}/message`, { text: "mutate" });
+  assert.deepEqual(result.events.map((event) => event.event), ["progress", "error"]);
+  assert.match(result.events[1].data.message, /not approval-aware/);
 });
 
 test("POST .../message: emits op-committed with the seq range BEFORE final when the transport's turn advances the head", async (t) => {

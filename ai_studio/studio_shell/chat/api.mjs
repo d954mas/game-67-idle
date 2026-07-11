@@ -1,15 +1,14 @@
 // Chat HTTP/SSE adapter (T0242 increment 3). Studio Shell mounts this handler on the
 // /api/chat/ prefix, beside /api/canvas/ (server.mjs) — bind stays 127.0.0.1, the SAME
-// local-only trust boundary as the rest of studio_shell (server.mjs:162): this API can
-// spawn an UNSANDBOXED codex process per message (agent.mjs's
-// --dangerously-bypass-approvals-and-sandbox, R2), so it must never be reachable from
-// anything but the lead's own machine.
+// local-only trust boundary as the rest of studio_shell. T0350 additionally authenticates
+// every POST and refuses the legacy codex transport because it cannot await approvals.
 //
 // Routes:
 //   POST /api/chat/projects/<id>/message    {text, selection?}   -> SSE stream
 //   POST /api/chat/projects/<id>/cancel                          -> kill the CURRENT turn's child
 //   GET  /api/chat/projects/<id>/transcript                      -> the jsonl parsed to JSON
 //   POST /api/chat/projects/<id>/clear                           -> archive + reset session
+//   POST /api/chat/projects/<id>/permissions/<id>/decision       -> allow/deny pending request
 //
 // SSE event contract (POST .../message), one per line as `event: <name>\ndata: <json>\n\n`:
 //   progress      {message}                              spawn started (v1: coarse, one event)
@@ -23,15 +22,17 @@
 // Exactly one of `final`/`error` ends every stream; the HTTP response itself always ends 200.
 import { readTranscript, appendTurn, buildChatContext, clearConversation, readChatState, writeChatState } from "./context.mjs";
 import { runChatTurn } from "./agent.mjs";
+import { createPermissionBroker } from "./permission_broker.mjs";
 import { listHistory } from "../../assets/canvas/ops.mjs";
 import { selectCanvasStore, withCanvasStore } from "../../assets/canvas/stores.mjs";
+import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 // Chat message bodies are small (text + a handful of selection refs) — nowhere near
 // image-upload size, so a much tighter cap than the canvas API's 20MB image cap.
 const maxBodyBytes = 256 * 1024;
 
-function sendJson(res, status, data) {
-  res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+function sendJson(res, status, data, headers = {}) {
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8", ...headers });
   res.end(JSON.stringify(data));
 }
 
@@ -81,6 +82,46 @@ function headerValue(req, name) {
   return Array.isArray(value) ? value[0] : (value || "");
 }
 
+function tokenMatches(expected, actual) {
+  const expectedBytes = Buffer.from(expected);
+  const actualBytes = Buffer.from(actual);
+  return expectedBytes.length === actualBytes.length && timingSafeEqual(expectedBytes, actualBytes);
+}
+
+function sameOriginRequest(req, allowedHosts) {
+  const host = headerValue(req, "host");
+  const origin = headerValue(req, "origin");
+  if (!allowedHosts.has(host) || !origin) return false;
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === "http:" && parsed.host === host && parsed.origin === origin;
+  } catch {
+    return false;
+  }
+}
+
+function bootstrapRequestAllowed(req, allowedHosts) {
+  const host = headerValue(req, "host");
+  if (!allowedHosts.has(host)) return false;
+  const origin = headerValue(req, "origin");
+  if (origin) return sameOriginRequest(req, allowedHosts);
+  const fetchSite = headerValue(req, "sec-fetch-site");
+  return !fetchSite || fetchSite === "same-origin";
+}
+
+function authorizeMutation(req, res, security) {
+  if (!sameOriginRequest(req, security.allowedHosts)
+      || !tokenMatches(security.launchToken, headerValue(req, "x-ai-studio-chat-token"))) {
+    sendJson(res, 403, { error: "chat request rejected" });
+    return false;
+  }
+  if (headerValue(req, "content-type").split(";", 1)[0].trim().toLowerCase() !== "application/json") {
+    sendJson(res, 415, { error: "content-type must be application/json" });
+    return false;
+  }
+  return true;
+}
+
 function chatStoreRequestArgs(req, url) {
   const headerStore = headerValue(req, "x-ai-studio-store");
   const queryStore = url.searchParams.get("store") || "";
@@ -97,30 +138,59 @@ function chatRunKey(store, projectId) {
   return `${store.storeId}:${projectId}`;
 }
 
+export function ensurePermissionAllowed(turn, settled) {
+  if (turn.cancelled) throw new Error("permission cancelled");
+  if (settled.state !== "allowed") throw new Error(`permission ${settled.state}`);
+  return settled;
+}
+
 // Runs one full chat turn over an already-open SSE stream. `runningChildren` is the
 // store-qualified Map<storeId:projectId, ChildProcess> the cancel route reads — populated
 // via runChatTurn's `onChild` seam, which the default transport (agent.mjs) calls
 // synchronously right after spawn.
-async function handleMessage(root, activeStore, projectId, body, res, transport, runningChildren) {
+async function handleMessage(root, activeStore, projectId, body, res, transport, runningChildren, runningTurns, permissions) {
   sseHead(res);
   sseEvent(res, "progress", { message: "spawn started" });
   const text = body && typeof body.text === "string" ? body.text.trim() : "";
   const runKey = chatRunKey(activeStore, projectId);
+  const turn = { turnId: randomUUID(), cancelled: false };
+  const binding = { storeId: activeStore.storeId, projectId, turnId: turn.turnId };
   try {
     if (!text) throw new Error("message requires non-empty text");
     // v1 keeps this simple: reject a second concurrent Send rather than queue it (design
     // doc section 4's Cancel/kill note) — one running child per project at a time.
-    if (runningChildren.has(runKey)) {
+    if (runningTurns.has(runKey)) {
       throw new Error(`a turn is already running for project ${projectId} — cancel it or wait for it to finish`);
     }
+    if (!transport || transport.approvalAware !== true) {
+      throw new Error("chat transport is not approval-aware; legacy codex-exec is disabled until T0351");
+    }
+    runningTurns.set(runKey, turn);
     const context = buildChatContext(root, { projectId, selection: body.selection || [], store: activeStore });
     const before = listHistory(root, { projectId }).head;
     appendTurn(root, { projectId, role: "user", text });
     const state = readChatState(root, { projectId });
-    const onChild = (child) => runningChildren.set(runKey, child);
+    const onChild = (child) => {
+      if (turn.cancelled) child.kill("SIGTERM");
+      else runningChildren.set(runKey, child);
+    };
+    const requestPermission = async (exactRequest) => {
+      if (turn.cancelled) throw new Error("permission cancelled");
+      const pending = permissions.request({ ...binding, exactRequest });
+      sseEvent(res, "permission-request", {
+        id: pending.permission.id,
+        state: pending.permission.state,
+        exactRequest: pending.permission.exactRequest,
+      });
+      const settled = await pending.settled;
+      sseEvent(res, "permission-decision", { id: settled.id, state: settled.state });
+      return ensurePermissionAllowed(turn, settled);
+    };
     let result;
     try {
-      result = await runChatTurn({ context, message: text, sessionId: state.sessionId, transport, onChild });
+      result = await runChatTurn({
+        context, message: text, sessionId: state.sessionId, transport, onChild, requestPermission,
+      });
     } catch (turnError) {
       // A cancelled-but-already-started turn may still have captured a session id
       // (agent.mjs attaches it to the thrown Error) — persist it so R3's "the session
@@ -135,6 +205,8 @@ async function handleMessage(root, activeStore, projectId, body, res, transport,
       throw turnError;
     } finally {
       runningChildren.delete(runKey);
+      permissions.cancelTurn(binding);
+      runningTurns.delete(runKey);
     }
     const after = listHistory(root, { projectId }).head;
     const seqRange = after > before ? [before, after] : null;
@@ -144,6 +216,8 @@ async function handleMessage(root, activeStore, projectId, body, res, transport,
     sseEvent(res, "final", { text: result.text, sessionId: result.sessionId, seqRange, flags: result.flags });
   } catch (error) {
     runningChildren.delete(runKey);
+    permissions.cancelTurn(binding);
+    runningTurns.delete(runKey);
     sseEvent(res, "error", { message: errorMessage(error) });
   } finally {
     res.end();
@@ -152,16 +226,38 @@ async function handleMessage(root, activeStore, projectId, body, res, transport,
 
 // `transport`, when given, is forwarded into every runChatTurn call — the ONE seam tests
 // use to keep codex out of the suite (mirrors createCanvasApi(root)'s own factory shape;
-// server.mjs calls createChatApi(root) with no override, so production always gets
-// agent.mjs's default codex-exec transport).
-export function createChatApi(root, { transport } = {}) {
+// Production deliberately leaves the legacy transport unset, so it fails closed until T0351.
+export function createChatApi(root, {
+  transport,
+  launchToken = randomBytes(32).toString("base64url"),
+  allowedHosts = [],
+  permissionTtlMs,
+} = {}) {
   // One entry per store-qualified project with a turn currently in flight — Map, not a
   // single slot, so a stuck/slow project never blocks chat on a different project.
   const runningChildren = new Map();
+  const runningTurns = new Map();
+  const permissions = createPermissionBroker(permissionTtlMs === undefined ? {} : { ttlMs: permissionTtlMs });
+  const security = { launchToken, allowedHosts: new Set(allowedHosts) };
 
   return async function handleChatApi(req, res, url) {
     const parts = url.pathname.split("/").filter(Boolean); // ["api","chat","projects", id, sub]
-    if (parts[0] !== "api" || parts[1] !== "chat" || parts[2] !== "projects" || parts.length !== 5) {
+    if (parts[0] !== "api" || parts[1] !== "chat") {
+      sendJson(res, 404, { error: "not found" });
+      return true;
+    }
+
+    if (parts.length === 3 && parts[2] === "bootstrap") {
+      if (req.method !== "GET") sendJson(res, 405, { error: "method not allowed" });
+      else if (!bootstrapRequestAllowed(req, security.allowedHosts)) sendJson(res, 403, { error: "chat request rejected" });
+      else sendJson(res, 200, { token: security.launchToken }, { "cache-control": "no-store" });
+      return true;
+    }
+
+    const isProjectRoute = parts[2] === "projects" && parts.length === 5;
+    const isDecisionRoute = parts[2] === "projects" && parts.length === 7
+      && parts[4] === "permissions" && parts[6] === "decision";
+    if (!isProjectRoute && !isDecisionRoute) {
       sendJson(res, 404, { error: "not found" });
       return true;
     }
@@ -175,11 +271,33 @@ export function createChatApi(root, { transport } = {}) {
       return true;
     }
 
+    if (isDecisionRoute) {
+      if (req.method !== "POST") {
+        sendJson(res, 405, { error: "method not allowed" });
+        return true;
+      }
+      if (!authorizeMutation(req, res, security)) return true;
+      try {
+        const body = await readJsonBody(req);
+        const settled = permissions.decide({
+          storeId: activeStore.storeId,
+          projectId,
+          permissionId: decodeURIComponent(parts[5]),
+          decision: body.decision,
+        });
+        sendJson(res, 200, { ok: true, id: settled.id, state: settled.state });
+      } catch (error) {
+        sendJson(res, 409, { error: errorMessage(error) });
+      }
+      return true;
+    }
+
     if (sub === "message") {
       if (req.method !== "POST") {
         sendJson(res, 405, { error: "method not allowed" });
         return true;
       }
+      if (!authorizeMutation(req, res, security)) return true;
       let body;
       try {
         body = await readJsonBody(req);
@@ -187,7 +305,9 @@ export function createChatApi(root, { transport } = {}) {
         sendJson(res, 400, { error: errorMessage(error) });
         return true;
       }
-      await withCanvasStore(activeStore, () => handleMessage(root, activeStore, projectId, body, res, transport, runningChildren));
+      await withCanvasStore(activeStore, () => handleMessage(
+        root, activeStore, projectId, body, res, transport, runningChildren, runningTurns, permissions,
+      ));
       return true;
     }
 
@@ -196,13 +316,19 @@ export function createChatApi(root, { transport } = {}) {
         sendJson(res, 405, { error: "method not allowed" });
         return true;
       }
+      if (!authorizeMutation(req, res, security)) return true;
       const runKey = chatRunKey(activeStore, projectId);
+      const turn = runningTurns.get(runKey);
+      if (turn) {
+        turn.cancelled = true;
+        permissions.cancelTurn({ storeId: activeStore.storeId, projectId, turnId: turn.turnId });
+      }
       const child = runningChildren.get(runKey);
       if (child) {
         child.kill("SIGTERM");
         runningChildren.delete(runKey);
       }
-      sendJson(res, 200, { ok: true, cancelled: Boolean(child) });
+      sendJson(res, 200, { ok: true, cancelled: Boolean(turn || child) });
       return true;
     }
 
@@ -224,6 +350,7 @@ export function createChatApi(root, { transport } = {}) {
         sendJson(res, 405, { error: "method not allowed" });
         return true;
       }
+      if (!authorizeMutation(req, res, security)) return true;
       try {
         const result = withCanvasStore(activeStore, () => clearConversation(root, { projectId }));
         sendJson(res, 200, { ok: true, ...result });

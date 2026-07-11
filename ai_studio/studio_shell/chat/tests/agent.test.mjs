@@ -255,6 +255,23 @@ test("runChatTurn: forwards onChild to the transport call unchanged", async () =
   assert.equal(seenOnChild[0], marker);
 });
 
+test("runChatTurn: forwards the approval callback to the transport unchanged", async () => {
+  const marker = async () => {};
+  let seen;
+  const fakeTransport = async (call) => {
+    seen = call.requestPermission;
+    return { text: "ok", sessionId: "s1" };
+  };
+  await runChatTurn({
+    context: CONTEXT,
+    message: "hi",
+    sessionId: null,
+    transport: fakeTransport,
+    requestPermission: marker,
+  });
+  assert.equal(seen, marker);
+});
+
 test("runChatTurn: sessionId passthrough — the transport's returned sessionId is what comes back", async () => {
   const fakeTransport = async () => ({ text: "x", sessionId: "sess-777" });
   const result = await runChatTurn({ context: CONTEXT, message: "hi", sessionId: "sess-666", transport: fakeTransport });

@@ -316,7 +316,7 @@ export function checkDeniedVerbs(text) {
 // `transport` is the injectable seam (default runCodexTransport); `onChild`, when given, is
 // forwarded to the transport unchanged (see runCodexTransport's own doc). Returns
 // { text, sessionId, flags } — flags is the R2 post-check result, always an array.
-export async function runChatTurn({ context, message, sessionId, transport, onChild } = {}) {
+export async function runChatTurn({ context, message, sessionId, transport, onChild, requestPermission } = {}) {
   if (!context) throw new Error("runChatTurn requires context");
   if (!message) throw new Error("runChatTurn requires message");
   const run = transport || runCodexTransport;
@@ -327,6 +327,7 @@ export async function runChatTurn({ context, message, sessionId, transport, onCh
     message: isFirstTurn ? undefined : buildResumeMessage({ context, message }),
     sessionId: sessionId || null,
     onChild,
+    requestPermission,
   });
   if (!result || typeof result.text !== "string" || !result.sessionId) {
     throw new Error("runChatTurn: transport must return { text, sessionId }");

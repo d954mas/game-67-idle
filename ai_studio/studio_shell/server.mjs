@@ -29,10 +29,11 @@ const handleAssetViewerApi = createAssetViewerApi(root);
 const handleArchitectureMapApi = createArchitectureMapApi(root);
 const handleCanvasApi = createCanvasApi(root);
 const handleItemsViewerApi = createItemsViewerApi(root);
-// T0242: the chat panel's backend — spawns an UNSANDBOXED codex process per message
-// (agent.mjs), so this mount leans on the SAME 127.0.0.1-only trust boundary as the rest
-// of this server (see server.listen below); never widen the bind without revisiting that.
-const handleChatApi = createChatApi(root);
+// Chat owns its per-launch token internally. The server only supplies the exact loopback
+// hosts for this launch; the legacy production transport remains fail-closed until T0351.
+const handleChatApi = createChatApi(root, {
+  allowedHosts: [`127.0.0.1:${port}`, `localhost:${port}`],
+});
 const stateDir = join(root, "tmp", "ai_studio");
 const pidFile = join(stateDir, `studio_shell_${port}.pid`);
 
