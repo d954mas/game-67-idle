@@ -131,6 +131,17 @@
       "tags": [
         "test"
       ]
+    },
+    {
+      "id": "architecture-map:surface-legacy-removal-tests",
+      "kind": "test",
+      "path": "ai_studio/architecture_map/tests/surface_legacy_removal.test.mjs",
+      "title": "surface_legacy_removal.test.mjs",
+      "description": "Verifies that the map surface keeps the ownership hierarchy contract without legacy relationship-model code or controls.",
+      "role": "architecture map hierarchy-only surface contract test",
+      "tags": [
+        "test"
+      ]
     }
   ]
 }

@@ -1,6 +1,7 @@
 # Architecture Map
 
-This module owns the visual AI Studio architecture map.
+This module owns the visual AI Studio ownership hierarchy. It renders only the
+explicit tree; it does not infer relationships between nodes.
 
 The map is data-driven:
 
@@ -13,9 +14,11 @@ The map is data-driven:
   `../tree.json`.
 - `tree_loader.mjs` merges the index and its parts back into one tree. A legacy
   single-file tree (`root.children` with no `root.parts`) is returned unchanged.
-- `index.html` renders the map in the browser. It loads the merged tree from
+- `index.html` renders the hierarchy in the browser. It loads the merged tree from
   `GET /api/architecture-tree` (falling back to reading `../tree.json` and
-  merging `tree/` parts client-side).
+  merging `tree/` parts client-side). The surface provides drill-down cards,
+  breadcrumbs, type filters, and local layout positions; it has no second
+  relationship model.
 - `validate_map.mjs` merges the tree, derives coverage from `git ls-files`,
   scans AI Studio ownership locations and shallow workspace roots, and writes a local `validation-report.json`
   for offline inspection. That file is **git-ignored, not committed**. Local

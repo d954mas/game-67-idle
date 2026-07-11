@@ -100,7 +100,7 @@ h4 { font-size: 15px; line-height: 1.2; }
   font-weight: 800;
 }
 
-.type-pill.graph { --pill: var(--studio-blue); }
+.type-pill.tree { --pill: var(--studio-blue); }
 .type-pill.state { --pill: var(--studio-teal); }
 .type-pill.assets { --pill: var(--studio-amber); }
 .type-pill.prep { --pill: var(--studio-teal); }
