@@ -53,7 +53,7 @@ template schema lives in `templates/template/state/game_state.schema.json`.
 Run:
 
 ```powershell
-py -3.12 features/game-state/scripts/generate_state.py
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema templates/template/state/game_state.schema.json
 ```
 
 The generator writes `game_state.h`, `game_state.c`, `game_state_schema.gen.h`,

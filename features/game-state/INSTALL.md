@@ -182,7 +182,15 @@ adds them.
 Run generator tests:
 
 ```powershell
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/run_tests.py
+```
+
+Focused equivalents:
+
+```powershell
 node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state_test.py
+node ai_studio/dev_environment/python_run.mjs -m unittest features/game-state/scripts/state_modules_test.py
+node ai_studio/dev_environment/python_run.mjs -m unittest features/game-state/benchmarks/benchmark_codegen_test.py
 ```
 
 Verify the template default build:

@@ -62,6 +62,15 @@ add_custom_command(
 
 set(GAME_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/game_state.schema.json")
 set(GAME_STATE_GENERATOR "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/generate_state.py")
+set(GAME_STATE_GENERATOR_SOURCES
+    "${GAME_STATE_GENERATOR}"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/__init__.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/naming.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/schema.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/model.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/render_state.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/render_events.py"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/scripts/state_codegen/output.py")
 set(GAME_STATE_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state")
 set(GAME_STATE_GENERATED_HEADER "${GAME_STATE_GENERATED_DIR}/game_state.h")
 set(GAME_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state.c")
@@ -82,7 +91,7 @@ add_custom_command(
         --fragment game
     DEPENDS
         "${GAME_STATE_SCHEMA}"
-        "${GAME_STATE_GENERATOR}"
+        ${GAME_STATE_GENERATOR_SOURCES}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
     COMMENT "Generating installed game-state feature sources"
     VERBATIM
@@ -106,7 +115,7 @@ add_custom_command(
         --schema "${SETTINGS_STATE_SCHEMA}"
         --out-dir "${GAME_STATE_GENERATED_DIR}"
         --fragment settings
-    DEPENDS "${SETTINGS_STATE_SCHEMA}" "${GAME_STATE_GENERATOR}"
+    DEPENDS "${SETTINGS_STATE_SCHEMA}" ${GAME_STATE_GENERATOR_SOURCES}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
     COMMENT "Generating installed settings-state fragment sources"
     VERBATIM
@@ -128,7 +137,7 @@ add_custom_command(
         --schema "${ITEMS_STATE_SCHEMA}"
         --out-dir "${GAME_STATE_GENERATED_DIR}"
         --fragment items
-    DEPENDS "${ITEMS_STATE_SCHEMA}" "${GAME_STATE_GENERATOR}"
+    DEPENDS "${ITEMS_STATE_SCHEMA}" ${GAME_STATE_GENERATOR_SOURCES}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
     COMMENT "Generating installed items-state fragment sources"
     VERBATIM
@@ -151,7 +160,7 @@ add_custom_command(
         --schema "${PROGRESSION_STATE_SCHEMA}"
         --out-dir "${GAME_STATE_GENERATED_DIR}"
         --fragment progression
-    DEPENDS "${PROGRESSION_STATE_SCHEMA}" "${GAME_STATE_GENERATOR}"
+    DEPENDS "${PROGRESSION_STATE_SCHEMA}" ${GAME_STATE_GENERATOR_SOURCES}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
     COMMENT "Generating installed progression-state fragment sources"
     VERBATIM

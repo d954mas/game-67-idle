@@ -33,6 +33,13 @@ features/game-state/
   scripts/
     generate_state.py
     generate_state_test.py
+    run_tests.py
+    state_modules_test.py
+    state_codegen/
+  benchmarks/
+    benchmark_codegen.py
+    baseline.json
+    fixtures/multi_fragment.schema.json
 ```
 
 ## Integration Model
@@ -77,19 +84,33 @@ from the build, configure `GAME_DEVAPI_ENABLED=OFF`.
 
 ## Commands
 
-Generate from the default schema:
+Generate from the template schema:
 
 ```powershell
-node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema templates/template/state/game_state.schema.json
 ```
 
 Without `--out-dir`, the command writes to `build/generated/game-state` under
-the template or game that owns the selected schema.
+the template or game that owns the required `--schema` path.
 
 Run generator tests:
 
 ```powershell
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/run_tests.py
+```
+
+The aggregate runner executes these focused suites:
+
+```powershell
 node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state_test.py
+node ai_studio/dev_environment/python_run.mjs -m unittest features/game-state/scripts/state_modules_test.py
+node ai_studio/dev_environment/python_run.mjs -m unittest features/game-state/benchmarks/benchmark_codegen_test.py
+```
+
+Run the advisory local benchmark:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/game-state/benchmarks/benchmark_codegen.py
 ```
 
 ## Boundaries
