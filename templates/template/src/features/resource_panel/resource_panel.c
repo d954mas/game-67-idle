@@ -106,7 +106,7 @@ static float clampf(float value, float min_value, float max_value) {
 
 static int64_t rp_max_i64(int64_t a, int64_t b) { return a > b ? a : b; }
 
-/* ---- Dynamic Clay ids (precedent: rb-dark shop_screen.c semantic_clay_id) ----
+/* ---- Dynamic Clay ids (established semantic_clay_id pattern) ----
    Clay retains a POINTER into the id string for introspection (devapi ui.tree
    id_string) -- MUST be file-static, never a stack-local, or the pointer
    dangles once this TU's frame returns. Ring-buffered so several ids stay
@@ -138,7 +138,7 @@ static Clay_Color rp_lerp_color(Clay_Color a, Clay_Color b, float t) {
     };
 }
 
-/* Ported locally from rb-dark first_screen_hud.c:82-97 (ui-kit has no built-in
+/* Local panel helper (ui-kit has no built-in
    text shadow). `slot` is a plain int differentiator (Clay id collision guard
    across calls in one frame) -- distinct from rp_slot_t/RESOURCE_PANEL_MAX_SLOTS. */
 static void rp_shadowed_label(nt_ui_context_t *ctx, int slot, const char *text, const nt_ui_label_style_t *style) {

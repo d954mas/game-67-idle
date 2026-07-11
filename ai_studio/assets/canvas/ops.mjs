@@ -14,7 +14,7 @@
 //   - Each mutating op appends a THIN metadata line
 //     {seq, at, op, args_summary, parent, duration_ms, has_snapshot:true}; the fat
 //     before/after project snapshot lives in a sidecar <project>/snapshots/<seq>.json
-//     ({undo_patch, state}). undo_patch is the {title, elements, groups, tool_runs}
+//     ({undo_patch, state}). undo_patch is the {title, ownership, archived, elements, groups, tool_runs}
 //     snapshot BEFORE the op (restore target for undo); state is the snapshot AFTER
 //     (re-apply target for redo); parent is the history head that was current when
 //     the op ran, so the journal forms a linked chain. Files are immutable, so a
@@ -427,6 +427,7 @@ function snapshotOf(project) {
     // fully undoable too.
     title: project.title,
     ownership: project.ownership ? JSON.parse(JSON.stringify(project.ownership)) : null,
+    archived: project.archived === true,
     elements: JSON.parse(JSON.stringify(project.elements || [])),
     // Groups are metadata like elements, so the same before/after snapshot makes
     // every group + visibility mutation fully undoable with no file changes.
@@ -1588,25 +1589,29 @@ function normalizeProjectOwnership(value, { allowClear = false } = {}) {
   return { kind, gameId: normalizeProjectGameId(value.gameId) };
 }
 
-// Patch project-level metadata. Journaled like any metadata mutation: title and
-// ownership live in the snapshot, so undo/redo restore them with elements/groups.
-export function patchProject(root, { projectId, title, ownership, gameId } = {}) {
+// Patch project-level metadata. Journaled like any metadata mutation: title,
+// ownership, and archived live in the snapshot, so undo/redo restore them too.
+export function patchProject(root, { projectId, title, ownership, gameId, archived } = {}) {
   if (!projectId) throw new Error("patchProject requires projectId");
   const hasTitle = title !== undefined;
   const args = arguments[1] || {};
   const hasOwnership = Object.hasOwn(args, "ownership") || Object.hasOwn(args, "gameId");
-  if (!hasTitle && !hasOwnership) throw new Error("patchProject requires a title and/or ownership");
+  const hasArchived = Object.hasOwn(args, "archived");
+  if (!hasTitle && !hasOwnership && !hasArchived) throw new Error("patchProject requires a title, ownership, and/or archived");
+  if (hasArchived && typeof archived !== "boolean") throw new Error("Canvas project archived must be boolean");
   const startedAt = performance.now();
   const before = getProject(root, projectId);
   const patch = {};
   if (hasTitle) patch.title = String(title).trim() || before.title;
   if (hasOwnership) patch.ownership = normalizeProjectOwnership(ownership ?? gameId, { allowClear: true });
+  if (hasArchived) patch.archived = archived;
   const after = updateProject(root, projectId, patch);
   const project = commitMutation(root, projectId, {
     op: "patchProject",
     args_summary: {
       ...(hasTitle ? { title: patch.title } : {}),
       ...(hasOwnership ? { ownership: patch.ownership || null } : {}),
+      ...(hasArchived ? { archived } : {}),
     },
     before,
     after,
@@ -4939,6 +4944,7 @@ export function undoOp(root, { projectId, expectHead } = {}) {
   if (Object.hasOwn(undoPatch, "ownership")) {
     restore.ownership = undoPatch.ownership === null ? undefined : undoPatch.ownership;
   }
+  if (Object.hasOwn(undoPatch, "archived")) restore.archived = undoPatch.archived === true;
   const saved = updateProject(root, projectId, restore);
   appendJournal(root, projectId, { op: "undo", target_seq: head, duration_ms: ms(performance.now() - startedAt) });
   return { project: saved, undone_seq: head, history_seq: saved.history_seq };
@@ -4965,6 +4971,7 @@ export function redoOp(root, { projectId, expectHead } = {}) {
   if (Object.hasOwn(state, "ownership")) {
     restore.ownership = state.ownership === null ? undefined : state.ownership;
   }
+  if (Object.hasOwn(state, "archived")) restore.archived = state.archived === true;
   const saved = updateProject(root, projectId, restore);
   appendJournal(root, projectId, { op: "redo", target_seq: entry.seq, duration_ms: ms(performance.now() - startedAt) });
   return { project: saved, redone_seq: entry.seq, history_seq: saved.history_seq };
@@ -5277,6 +5284,7 @@ export function jumpHistory(root, { projectId, seq, expectHead } = {}) {
   if (Object.hasOwn(snap, "ownership")) {
     restore.ownership = snap.ownership === null ? undefined : snap.ownership;
   }
+  if (Object.hasOwn(snap, "archived")) restore.archived = snap.archived === true;
   const saved = updateProject(root, projectId, restore);
   appendJournal(root, projectId, { op: "jump", target_seq: target, from_seq: head, duration_ms: ms(performance.now() - startedAt) });
   return { project: saved, history_seq: saved.history_seq, jumped_from: head, jumped_to: target };

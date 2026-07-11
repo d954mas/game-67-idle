@@ -3,15 +3,6 @@
   "mounts": [
     {
       "kind": "game",
-      "root": "games/rb-dark-rpg",
-      "visibility": "public",
-      "gitRoot": "",
-      "commitPolicy": "parent-public",
-      "enabledStores": ["assets"],
-      "aliases": []
-    },
-    {
-      "kind": "game",
       "root": "games/web-dressup",
       "visibility": "public",
       "gitRoot": "",

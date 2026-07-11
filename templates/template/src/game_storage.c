@@ -47,8 +47,8 @@ static bool is_safe_segment(const char *value) {
     return true;
 }
 
-/* ---- web backend (localStorage). Ported from games/rb-dark-rpg/src/game_storage.c
-   (EM_JS shape + try/catch), but the "rb-dark-rpg:" hardcoded prefix is gone: the
+/* ---- web backend (localStorage). The EM_JS shape uses guarded localStorage access,
+   and the storage key is derived from the game identity rather than a hardcoded
    caller resolves the FULL "<APP_ID>/save/<slot>" key on the C side (resolve_web_key
    below) and these EM_JS shims just use whatever key string they are handed. ---- */
 #if defined(__EMSCRIPTEN__)

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build one wasm preset and place the asset pack next to index.html, so
 # `node tools/serve_web.mjs --preset <preset>` immediately serves a working game.
-# One command from the done-when; mirror of rb-dark's package_web.sh minus the
+# One command from the done-when; generic package workflow minus the
 # itch zip (that stays in T0323's package_web.sh, which calls this script).
 #
 #   bash tools/build_web.sh [--preset wasm-release|wasm-debug|wasm-devapi-debug] [--target local|itch|poki|yandex|playgama]
@@ -49,7 +49,7 @@ if [ -z "${EM_CACHE:-}" ]; then
 fi
 mkdir -p "$EM_CACHE"
 
-# EMSDK: resolve the root ($EMSDK first, then the rb-dark hardcoded fallback --
+# EMSDK: resolve the root ($EMSDK first, then the legacy hardcoded fallback --
 # a portability wart, kept as fallback). Source emsdk_env.sh to put emcc/ninja on
 # PATH for the build step, and derive the toolchain file for configure.
 EMSDK_ROOT="${EMSDK:-}"

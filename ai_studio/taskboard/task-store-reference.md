@@ -218,7 +218,7 @@ collide. Run `node ai_studio/taskboard/cli.mjs validate` after bulk edits.
 Each Taskboard store has its own local `P###`, `E###`, and `T####` counters.
 The Studio store uses `storeId: studio`; game stores use `storeId: game:<id>`.
 Rows exposed through CLI/API include `qualifiedId` such as
-`game:rb-dark-rpg:T0001`.
+`game:fixture-game:T0001`.
 
 Creation serializes only ID allocation and the initial markdown write through
 `items/.allocation.lock`; reads and edits do not take this lock. The allocator

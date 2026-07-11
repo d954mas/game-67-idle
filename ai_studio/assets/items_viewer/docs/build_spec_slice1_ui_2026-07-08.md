@@ -438,7 +438,7 @@ still carries the "Items not connected" line; the health strip shows validate
      Checklist: table shows only the matching subset; `#filterCount` "N of 6";
      health-strip counts still reflect the full catalog; the search/kind/status
      controls reflect the URL state.
-   - **D — Degraded / honest empty** `/items?cat=game:rb-dark-rpg&tab=items`.
+   - **D — Degraded / honest empty** `/items?cat=game:fixture-game&tab=items`.
      Checklist: `#topBanner` "Items not connected for this game."; empty master
      (no rows), inspector empty state "Select an item"; validate badge
      "unavailable"; page does not error. (This is the honest-degradation proof for

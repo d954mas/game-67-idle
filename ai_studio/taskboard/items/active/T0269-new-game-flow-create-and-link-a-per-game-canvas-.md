@@ -35,5 +35,5 @@ game workspace so agents and the lead can open it later without manual setup.
 
 ## Log
 
-- 2026-07-04: captured from rb-dark-rpg setup; its game canvas was created
+- 2026-07-04: captured from a prototype setup where its game canvas was created
   manually after the game, so future game creation should do this by default.

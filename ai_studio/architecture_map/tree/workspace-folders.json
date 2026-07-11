@@ -315,19 +315,6 @@
           ]
         },
         {
-          "id": "workspace:game:rb-dark-rpg",
-          "kind": "folder",
-          "path": "games/rb-dark-rpg",
-          "title": "rb-dark-rpg/",
-          "description": "Represents the tracked closed-prototype game workspace pending its owned retirement task.",
-          "role": "closed prototype game workspace",
-          "tags": [
-            "games",
-            "prototype",
-            "tracked"
-          ]
-        },
-        {
           "id": "workspace:game:web-dressup",
           "kind": "folder",
           "path": "games/web-dressup",

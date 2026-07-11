@@ -84,10 +84,10 @@ class StateCodegenTests(unittest.TestCase):
         self.assertFalse((out_dir / "game_state_devapi.c").exists())
 
     def test_player_state_schema_supports_owned_maps_and_lists(self):
-        # v2 form of the rb_dark player state: fragment "player" -> PlayerState
+        # v2 form of a fixture player state: fragment "player" -> PlayerState
         # namespace, fields/type-fields as maps, no numeric ids/document.
         schema = {
-            "schema": "rb_dark_rpg.player_state",
+            "schema": "fixture_game.player_state",
             "schema_version": 2,
             "fragment": "player",
             "version": 1,
@@ -141,7 +141,7 @@ class StateCodegenTests(unittest.TestCase):
             schema_path.write_text(json.dumps(schema), encoding="utf-8")
             text = generate_and_join(schema_path, Path(tmp) / "generated", "player_state", "player")
 
-        self.assertIn("PLAYER_STATE_SCHEMA_ID \"rb_dark_rpg.player_state\"", text)
+        self.assertIn("PLAYER_STATE_SCHEMA_ID \"fixture_game.player_state\"", text)
         self.assertIn("typedef struct PlayerStackInstance", text)
         self.assertIn("typedef struct PlayerGearInstance", text)
         self.assertIn("typedef struct PlayerQuestState", text)
@@ -195,8 +195,8 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn('#include "game_state_json.h"', src)
         self.assertIn("gsj_read_int_range", src)
         # i64 wire coverage (gsj_add_i64/gsj_read_i64) is NOT asserted here: the
-        # template's `game` fragment carries no i64 field post-T0327-hygiene (rb-dark
-        # RPG model gutted to the honest demo shape). The property is still covered by
+        # template's `game` fragment carries no i64 field post-T0327-hygiene. The
+        # property is still covered by
         # test_v2_namespace_golden (MINI_SCHEMA's `total`/`Cell.count` i64 fields,
         # golden/mini/mini_state.c) -- this test only needs to stay schema-agnostic
         # about which downstream game happens to have an i64 field.

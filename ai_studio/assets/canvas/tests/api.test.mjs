@@ -231,10 +231,10 @@ test("canvas API renames a project (PATCH) and trashes it (DELETE)", async (t) =
   const keep = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Keep" })).json().project.id;
   const created = await invokeApi(handler, "POST", "/api/canvas/projects", {
     title: "Before",
-    ownership: { kind: "game", gameId: "rb-dark-rpg" },
+    ownership: { kind: "game", gameId: "fixture-game" },
   });
   const projectId = created.json().project.id;
-  assert.deepEqual(created.json().project.ownership, { kind: "game", gameId: "rb-dark-rpg" });
+  assert.deepEqual(created.json().project.ownership, { kind: "game", gameId: "fixture-game" });
 
   const renamed = await invokeApi(handler, "PATCH", `/api/canvas/projects/${projectId}`, { title: "After", gameId: "web-dressup" });
   assert.equal(renamed.status, 200);
@@ -242,7 +242,7 @@ test("canvas API renames a project (PATCH) and trashes it (DELETE)", async (t) =
   assert.deepEqual(renamed.json().project.ownership, { kind: "game", gameId: "web-dressup" });
   assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project.title, "After");
 
-  const hiddenByOwner = await invokeApi(handler, "GET", "/api/canvas/projects?owner-game=rb-dark-rpg");
+  const hiddenByOwner = await invokeApi(handler, "GET", "/api/canvas/projects?owner-game=fixture-game");
   assert.deepEqual(hiddenByOwner.json().projects.map((p) => p.id), []);
   const visibleByOwner = await invokeApi(handler, "GET", "/api/canvas/projects?owner-game=web-dressup");
   assert.deepEqual(visibleByOwner.json().projects.map((p) => p.id), [projectId]);
@@ -256,6 +256,32 @@ test("canvas API renames a project (PATCH) and trashes it (DELETE)", async (t) =
   // (T0254 Tier 1 #2: statusForError maps "not found" to 404, not the old catch-all 400).
   assert.deepEqual((await invokeApi(handler, "GET", "/api/canvas/projects")).json().projects.map((p) => p.id), [keep]);
   assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).status, 404);
+});
+
+test("canvas API hides archived projects unless explicitly requested and keeps direct GET available", async (t) => {
+  tempProjects(t);
+  const handler = createCanvasApi(ROOT);
+  const active = (await invokeApi(handler, "POST", "/api/canvas/projects", { title: "Active" })).json().project;
+  const archived = (await invokeApi(handler, "POST", "/api/canvas/projects", {
+    title: "Archived",
+    ownership: { kind: "game", gameId: "fixture-game" },
+  })).json().project;
+
+  const patched = await invokeApi(handler, "PATCH", `/api/canvas/projects/${archived.id}`, { archived: true });
+  assert.equal(patched.status, 200);
+  assert.equal(patched.json().project.archived, true);
+  assert.deepEqual(patched.json().project.ownership, archived.ownership);
+  assert.deepEqual((await invokeApi(handler, "GET", "/api/canvas/projects")).json().projects.map((project) => project.id), [active.id]);
+
+  const included = await invokeApi(handler, "GET", "/api/canvas/projects?include-archived=true");
+  assert.deepEqual(new Set(included.json().projects.map((project) => project.id)), new Set([active.id, archived.id]));
+  assert.equal((await invokeApi(handler, "GET", `/api/canvas/projects/${archived.id}`)).json().project.archived, true);
+
+  const restored = await invokeApi(handler, "PATCH", `/api/canvas/projects/${archived.id}`, { archived: false });
+  assert.equal(restored.status, 200);
+  assert.equal(restored.json().project.archived, false);
+  assert.deepEqual(restored.json().project.ownership, archived.ownership);
+  assert.deepEqual(new Set((await invokeApi(handler, "GET", "/api/canvas/projects")).json().projects.map((project) => project.id)), new Set([active.id, archived.id]));
 });
 
 test("canvas API export download route serves a confined file and rejects traversal", async (t) => {

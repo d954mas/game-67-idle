@@ -257,14 +257,15 @@ export function createProject(root, { title, ownership } = {}) {
   return writeProjectFile(root, project);
 }
 
-export function listProjects(root) {
+export function listProjects(root, { includeArchived = false } = {}) {
   const base = projectsRoot(root);
   if (!existsSync(base)) return [];
   const projects = [];
   for (const entry of readdirSync(base, { withFileTypes: true })) {
     if (!entry.isDirectory() || entry.name.startsWith(".")) continue;
     try {
-      projects.push(readProjectFile(root, entry.name));
+      const project = readProjectFile(root, entry.name);
+      if (includeArchived || project.archived !== true) projects.push(project);
     } catch {
       // Tolerate broken/foreign project folders: skip rather than fail the list.
     }

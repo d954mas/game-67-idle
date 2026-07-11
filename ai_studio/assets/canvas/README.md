@@ -54,7 +54,7 @@ project belongs to a game by carrying project-owned metadata in its own
 
 ```json
 {
-  "ownership": { "kind": "game", "gameId": "rb-dark-rpg" }
+  "ownership": { "kind": "game", "gameId": "fixture-game" }
 }
 ```
 

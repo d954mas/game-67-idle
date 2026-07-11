@@ -150,7 +150,7 @@ def load_schema(schema_path: Path) -> dict[str, Any]:
     # in a renderer). A v1 schema has no schema_version and/or carries "document".
     if "schema_version" not in raw or "document" in raw:
         raise SystemExit(
-            "v1 schema unsupported by v2 generator; rebuild rb-dark from its shipping tag"
+            "v1 schema unsupported by v2 generator; rebuild the game from its shipping tag"
         )
     if raw.get("schema_version") != 2:
         raise SystemExit("schema_version must be 2")

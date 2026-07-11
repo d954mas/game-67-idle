@@ -43,9 +43,7 @@ Start with the smallest matching source set:
 - Current game UI: `games/<game-id>/src/ui/`, `games/<game-id>/tests/`,
   `games/<game-id>/devapi/`, and `games/<game-id>/design/ui_ux/`.
 - Current game runtime glue: `games/<game-id>/src/ui/ui_runtime.*`, then
-  surface-specific files when present. For `rb-dark-rpg`, useful examples
-  include `dialogue_panel`, `bottom_nav`, `equipment_screen`,
-  `world_map_screen`, `combat_flow`, and tutorial callouts.
+  the surface-specific files present in that game.
 - Runtime proof tools: `ai_studio/runtime_automation/README.md`,
   `ai_studio/runtime_automation/pixel_health.py`,
   `ai_studio/runtime_automation/ui_readability.py`, and the game-local
@@ -53,10 +51,6 @@ Start with the smallest matching source set:
 - If proof requires DevAPI, screenshots, or `ui.tree` interaction, also load
   `nt-runtime-automation`. If selecting AI Studio quality gates, also load
   `nt-quality-checks`.
-
-When updating this skill or auditing why it exists, read the historical
-`references/friction-review-2026-07-05.md`. Do not load that review during
-ordinary layout work unless the same failure pattern is recurring.
 
 ## Inventory Checklist
 

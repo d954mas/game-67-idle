@@ -4,7 +4,7 @@
 Second codegen of the template (deliberately separate from
 features/game-state/scripts/generate_state.py; content and state codegen stay separate):
 this one is compile-time content embed (const tables), not a save-state
-fragment generator. Pattern mirrors games/rb-dark-rpg/tools/generate_dialogue_content.py.
+fragment generator. It is intentionally repository-neutral and fixture-driven.
 
     node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_catalog.py \
         --catalog content/items.json --schema content/item_fields.schema.json \
@@ -201,7 +201,7 @@ def render_source(doc: dict[str, Any]) -> str:
     ]
 
     # Per-item static sub-tables (tags array + equip/use/currency blocks), only
-    # when present -- mirrors the rb-dark game_content generator's NULL-when-absent style.
+    # when present -- preserves the established NULL-when-absent generator style.
     block_refs: dict[str, dict[str, str]] = {}
     for item in items:
         sym = c_ident(item["id"])

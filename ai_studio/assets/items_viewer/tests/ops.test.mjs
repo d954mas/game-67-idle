@@ -54,6 +54,23 @@ function writeGameIdentity(root, gameId) {
   writeJson(join(root, "games", gameId, "dependencies.json"), { schema: "ai_studio.game.dependencies.v1", engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" });
 }
 
+function writeNeutralPublicWorkspace(root, gameId = "fixture-game") {
+  writeGameIdentity(root, gameId);
+  writeJson(join(root, "templates", "fixture-template", "template.json"), {
+    schema: "ai_studio.template.v1",
+    id: "fixture-template",
+    title: "Fixture Template",
+    storageNamespace: "fixture-template",
+  });
+  writeJson(join(root, "ai_studio", "workspace", "catalog.json"), {
+    schema: "ai_studio.workspace.catalog.v1",
+    mounts: [
+      { kind: "template", root: "templates/fixture-template", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
+      { kind: "game", root: `games/${gameId}`, visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
+    ],
+  });
+}
+
 function privateGameFixture(root, gameId = "secret-game") {
   execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
   writeFileSync(join(root, ".gitignore"), `${localWorkspaceCatalogRelPath()}\n`, "utf8");
@@ -93,20 +110,18 @@ function writeValidFixture(dir, { namespace = "fx", items, stateSchema = STATE_S
   writeJson(join(dir, "state", "items.schema.json"), stateSchema);
 }
 
-test("listCatalogs merges the template and game registries with hasItems flags (live registries)", () => {
-  const { catalogs } = listCatalogs(REPO_ROOT);
-  assert.ok(Array.isArray(catalogs) && catalogs.length > 0);
+test("listCatalogs merges neutral template and game fixtures with hasItems flags", (t) => {
+  const root = tempFixtureDir(t);
+  writeNeutralPublicWorkspace(root);
+  writeJson(join(root, "templates", "fixture-template", "content", "items.json"), {});
 
-  const template = catalogs.find((c) => c.id === "template:template");
-  assert.ok(template, "template:template must be in the merged catalog list");
-  assert.equal(template.kind, "template");
-  assert.equal(template.hasItems, true);
-  assert.equal(template.folder, "templates/template");
-
-  const game = catalogs.find((c) => c.id === "game:rb-dark-rpg");
-  assert.ok(game, "game:rb-dark-rpg must be in the merged catalog list");
-  assert.equal(game.kind, "game");
-  assert.equal(game.hasItems, false, "rb-dark-rpg has no content/items.json today");
+  const { catalogs } = listCatalogs(root);
+  assert.deepEqual(catalogs.map((catalog) => catalog.id), ["template:fixture-template", "game:fixture-game"]);
+  assert.equal(catalogs[0].kind, "template");
+  assert.equal(catalogs[0].hasItems, true);
+  assert.equal(catalogs[0].folder, "templates/fixture-template");
+  assert.equal(catalogs[1].kind, "game");
+  assert.equal(catalogs[1].hasItems, false);
 });
 
 test("listCatalogs hides private game mounts unless explicitly included", () => {
@@ -185,8 +200,10 @@ test("getCatalogView returns null for an id that matches neither registry", asyn
   assert.equal(await getCatalogView(REPO_ROOT, "no-colon-at-all"), null);
 });
 
-test("getCatalogView: a registered game with no content/items.json -> hasItems:false, honest empty state", async () => {
-  const view = await getCatalogView(REPO_ROOT, "game:rb-dark-rpg");
+test("getCatalogView: a registered game with no content/items.json -> hasItems:false, honest empty state", async (t) => {
+  const root = tempFixtureDir(t);
+  writeNeutralPublicWorkspace(root);
+  const view = await getCatalogView(root, "game:fixture-game");
   assert.ok(view);
   assert.equal(view.meta.hasItems, false);
   assert.deepEqual(view.items, []);

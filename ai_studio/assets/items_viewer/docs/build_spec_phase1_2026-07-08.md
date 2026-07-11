@@ -66,8 +66,8 @@ Two GET endpoints (read-only; no POST/PUT/PATCH in phase 1).
 ```
 { catalogs: [ { id: "template:template", kind: "template", title: "Template",
                 folder: "templates/template", hasItems: true, status: "active" },
-              { id: "game:rb-dark-rpg", kind: "game", title: "RB Dark RPG",
-                folder: "games/rb-dark-rpg", hasItems: false, status: "active" } ] }
+              { id: "game:fixture-game", kind: "game", title: "Fixture Game",
+                folder: "games/fixture-game", hasItems: false, status: "active" } ] }
 ```
 `id` = `<kind>:<registryId>` (disambiguates a template and a game that share an id; mirrors gallery's
 `game:${id}` convention, `assets/gallery/api.mjs:48`). `hasItems` = `existsSync(<folder>/content/items.json)`.
@@ -126,7 +126,7 @@ Layout, top to bottom: shared studio sidebar (copy the `<aside class="studio-sid
 validate summary panel -> Removed/lock section -> card grid.
 
 - Dropdown: from `/catalogs`. A `hasItems:false` entry is selectable and renders an honest empty state
-  ("items not connected for this game") — the rb-dark-rpg case today. If the response carries `content_error`,
+  ("items not connected for this game") — the neutral fixture-game case. If the response carries `content_error`,
   show it prominently at the top ("catalog broken: <stderr>") — the game's own data is invalid and must be seen.
 - Summary panel: `validate.ok`/`available` badge, error/warning counts, `namespace`, container list
   (id / capacity / accept_policy / hidden). Catalog-level and homeless issues live here (routing rule below).

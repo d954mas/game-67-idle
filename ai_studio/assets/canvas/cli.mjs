@@ -241,11 +241,11 @@ function copyExportTo(result, toDir) {
 
 function usage() {
   console.log(`usage: cli.mjs <list|create|show|rename|project-set|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|filters-bake|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|recipe-pack-preview|recipe-pack-generate|recipe-pack-slice|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
-  list [--full] [--owner-game <gameId>]   (summary by default: [{id,title,ownerGame,created,updated,elements,groups,head}]; --full = every project in full, today's original dump)
+  list [--full] [--owner-game <gameId>] [--include-archived]   (summary by default: [{id,title,ownerGame,created,updated,elements,groups,head}]; --include-archived adds archived; --full = every project in full, today's original dump)
   create [--title <title>] [--owner-game <gameId>]     (omit --title for a random default)
   show <id>
   rename <id> --title <title>
-  project-set <id> [--title <title>] [--owner-game <gameId|none>]
+  project-set <id> [--title <title>] [--owner-game <gameId|none>] [--archived true|false]
   delete <id>
   add-image <id> --file <path>
   add-images <id> --files a.png,b.png   (batched multi-image add; one undo step)
@@ -329,8 +329,9 @@ async function runCommand(command, id, positional, flags) {
       // is for). --full restores today's exact full-project dump (additive contract:
       // nothing that worked before stops working).
       const stores = canvasStoresForQuery(repoRoot, canvasStoreArgs(flags));
+      const includeArchived = flags["include-archived"] === "true";
       const projects = stores.flatMap((store) =>
-        withCanvasStore(store, () => listProjects(repoRoot).map((project) => ({ project, store })))
+        withCanvasStore(store, () => listProjects(repoRoot, { includeArchived }).map((project) => ({ project, store })))
       );
       const ownerGame = flags["owner-game"] && flags["owner-game"] !== "true" ? String(flags["owner-game"]).trim() : "";
       const filteredProjects = ownerGame
@@ -346,6 +347,7 @@ async function runCommand(command, id, positional, flags) {
         id: project.id,
         title: project.title,
         ownerGame: project.ownership?.kind === "game" ? project.ownership.gameId : "",
+        ...(includeArchived ? { archived: project.archived === true } : {}),
         created: project.created,
         updated: project.updated,
         elements: (project.elements || []).length,
@@ -383,8 +385,9 @@ async function runCommand(command, id, positional, flags) {
         if (flags["owner-game"] === "true") fail("project-set --owner-game requires a game id or 'none'");
         patch.gameId = flags["owner-game"];
       }
-      if (patch.title === undefined && !Object.hasOwn(patch, "gameId")) {
-        fail("project-set requires --title and/or --owner-game");
+      if (flags.archived !== undefined) patch.archived = parseBool("archived", flags.archived);
+      if (patch.title === undefined && !Object.hasOwn(patch, "gameId") && !Object.hasOwn(patch, "archived")) {
+        fail("project-set requires --title, --owner-game, and/or --archived");
       }
       return print(patchProject(repoRoot, patch));
     }

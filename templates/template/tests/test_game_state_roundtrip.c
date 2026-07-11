@@ -59,7 +59,7 @@ void test_from_json_tolerant(void) {
 /* get/set path for a plain int + transitional-devapi semantics (L6). i64-on-the-wire
    coverage (string encoding, gsj_read_i64/gsj_add_i64) is NOT exercised through this
    fragment post-T0327-hygiene: the `game` fragment carries no i64 field once the dead
-   rb-dark wallet.soft/hard fields were gutted (honest demo shape). That coverage lives
+   prototype wallet.soft/hard fields were gutted (honest demo shape). That coverage lives
    in test_game_state_json.c (test_read_i64_string_round_trip et al., the generic gsj_
    toolkit) and test_items_fragment.c (a REAL i64 field, ItemOwned.count, through a
    live fragment) -- both keep exercising the exact same wire path. */
