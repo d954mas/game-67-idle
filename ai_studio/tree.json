@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "description": "Declarative source for the AI Studio workspace tree. The architecture map page is only a renderer; serve ai_studio/architecture_map/index.html and validate this JSON with ai_studio/architecture_map/validate_map.mjs.",
+  "description": "Declarative ownership index for the AI Studio architecture tree.",
   "index": true,
   "root": {
     "id": "studio",

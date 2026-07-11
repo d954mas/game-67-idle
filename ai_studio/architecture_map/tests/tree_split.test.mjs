@@ -76,10 +76,21 @@ test("split index + parts round-trips to the original single-file tree", () => {
   assert.deepEqual(merged, single);
 });
 
-test("the repo index merges into 11 ordered top-level children without root.parts", () => {
+const requiredTopLevelIds = [
+  "studio-readme",
+  "workspace-folders",
+  "studio-shell",
+  "module:hot",
+  "runtime-automation",
+  "architecture-map",
+];
+
+test("the repo index merges required ownership roots without exposing root.parts", () => {
   const merged = loadArchitectureTree(repoRoot, "ai_studio/tree.json");
   assert.ok(Array.isArray(merged.root.children));
-  assert.equal(merged.root.children.length, 11);
+  const ids = merged.root.children.map((child) => child.id);
+  assert.equal(new Set(ids).size, ids.length, "top-level ownership ids must be unique");
+  for (const id of requiredTopLevelIds) assert.ok(ids.includes(id), `missing required ownership root ${id}`);
   assert.ok(!("parts" in merged.root), "merged root must not expose the parts index");
   assert.equal(merged.root.id, "studio");
 });
@@ -91,7 +102,8 @@ test("GET /api/architecture-tree serves the merged tree", async () => {
   assert.equal(handled, true);
   assert.equal(res.statusCode, 200);
   const payload = JSON.parse(res.body);
-  assert.equal(payload.root.children.length, 11);
+  const ids = payload.root.children.map((child) => child.id);
+  for (const id of requiredTopLevelIds) assert.ok(ids.includes(id), `API omitted required ownership root ${id}`);
   assert.ok(!("parts" in payload.root));
 });
 

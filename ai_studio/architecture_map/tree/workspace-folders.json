@@ -40,6 +40,18 @@
           ]
         },
         {
+          "id": "workspace:templates-design",
+          "kind": "dir",
+          "path": "templates/design",
+          "title": "design/",
+          "description": "Groups reusable design scaffolding owned by the template workspace.",
+          "role": "template design scaffold ownership",
+          "tags": [
+            "templates",
+            "design"
+          ]
+        },
+        {
           "id": "workspace:templates:registry-data",
           "kind": "config",
           "path": "templates/templates.json",
@@ -98,7 +110,7 @@
           "kind": "test",
           "path": "templates/new_template.test.mjs",
           "title": "new_template.test.mjs",
-          "description": "Regression tests proving new_template copies template files, registers template asset roots, creates a Taskboard project, and refreshes generated VS Code project entries without touching the real repository.",
+          "description": "Verifies new template creation contracts.",
           "role": "new template creation tests",
           "tags": [
             "templates",
@@ -132,6 +144,54 @@
             "features",
             "workspace",
             "docs"
+          ]
+        },
+        {
+          "id": "features:audio-core",
+          "kind": "feature",
+          "path": "features/audio-core",
+          "title": "audio-core/",
+          "description": "Owns the reusable native and web audio runtime feature pack.",
+          "role": "audio runtime feature pack",
+          "tags": [
+            "features",
+            "audio"
+          ]
+        },
+        {
+          "id": "features:game-events",
+          "kind": "feature",
+          "path": "features/game-events",
+          "title": "game-events/",
+          "description": "Owns reusable game-event contracts and dispatch helpers.",
+          "role": "game event feature pack",
+          "tags": [
+            "features",
+            "events"
+          ]
+        },
+        {
+          "id": "features:items-core",
+          "kind": "feature",
+          "path": "features/items-core",
+          "title": "items-core/",
+          "description": "Owns reusable item catalog, inventory, and currency contracts.",
+          "role": "items feature pack",
+          "tags": [
+            "features",
+            "items"
+          ]
+        },
+        {
+          "id": "features:progression-core",
+          "kind": "feature",
+          "path": "features/progression-core",
+          "title": "progression-core/",
+          "description": "Owns reusable progression schema and generation contracts.",
+          "role": "progression feature pack",
+          "tags": [
+            "features",
+            "progression"
           ]
         },
         {
@@ -207,6 +267,32 @@
           ]
         },
         {
+          "id": "workspace:game:rb-dark-rpg",
+          "kind": "folder",
+          "path": "games/rb-dark-rpg",
+          "title": "rb-dark-rpg/",
+          "description": "Represents the tracked closed-prototype game workspace pending its owned retirement task.",
+          "role": "closed prototype game workspace",
+          "tags": [
+            "games",
+            "prototype",
+            "tracked"
+          ]
+        },
+        {
+          "id": "workspace:game:web-dressup",
+          "kind": "folder",
+          "path": "games/web-dressup",
+          "title": "web-dressup/",
+          "description": "Represents the tracked Web Dressup game workspace ownership boundary.",
+          "role": "Web Dressup game workspace",
+          "tags": [
+            "games",
+            "web-dressup",
+            "tracked"
+          ]
+        },
+        {
           "id": "workspace:games:registry-data",
           "kind": "config",
           "path": "games/games.json",
@@ -240,7 +326,7 @@
           "kind": "test",
           "path": "games/new_game.test.mjs",
           "title": "new_game.test.mjs",
-          "description": "Regression tests proving new_game copies template files, registers game asset roots, creates a Taskboard project, and refreshes generated VS Code project entries without touching the real repository.",
+          "description": "Verifies new game creation contracts.",
           "role": "new game creation tests",
           "tags": [
             "games",

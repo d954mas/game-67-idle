@@ -44,7 +44,7 @@
       "kind": "test",
       "path": "ai_studio/dev_environment/vscode_projects.test.mjs",
       "title": "vscode_projects.test.mjs",
-      "description": "Regression tests for generated VS Code tasks and launch configurations from template/game registries.",
+      "description": "Verifies VS Code project entry generator contracts.",
       "role": "VS Code project entry generator tests",
       "tags": [
         "dev-environment",

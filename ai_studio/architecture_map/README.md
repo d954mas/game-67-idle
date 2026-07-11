@@ -16,8 +16,8 @@ The map is data-driven:
 - `index.html` renders the map in the browser. It loads the merged tree from
   `GET /api/architecture-tree` (falling back to reading `../tree.json` and
   merging `tree/` parts client-side).
-- `validate_map.mjs` merges the tree, scans AI Studio source locations and
-  shallow workspace folder roots, and writes a local `validation-report.json`
+- `validate_map.mjs` merges the tree, derives coverage from `git ls-files`,
+  scans AI Studio ownership locations and shallow workspace roots, and writes a local `validation-report.json`
   for offline inspection. That file is **git-ignored, not committed**. Local
   private game mounts from `ai_studio/workspace/games.local.json` are excluded
   from parent architecture scans so their ids and paths do not appear in the
@@ -28,9 +28,13 @@ The map is data-driven:
 - `../studio_shell/server.mjs` hosts the map surface and mounts `api.mjs` so
   browser `fetch()` can read the merged tree and the live report.
 
-The page must not infer architecture from the repository. New files are not
-silently added to the map. They appear in validation until a human decides
+The page must not infer architecture from the repository. New tracked files are
+not silently added to the map. They appear in validation until a human decides
 whether to map, ignore, open a task, or delete them.
+
+Untracked or generated local files are not architecture coverage truth. Pass
+`--hygiene` to include them in a separate non-gating `hygiene.untrackedPaths`
+report when local cleanup is relevant.
 
 `ai_studio/game_design/knowledge_base/` is owned by the Game Design module and is
 mapped there as one covered folder. `templates/` and `games/` are shown as
@@ -64,6 +68,7 @@ stable color in the page legend.
 
 ```powershell
 node ai_studio/architecture_map/validate_map.mjs
+node ai_studio/architecture_map/validate_map.mjs --hygiene
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
 ```
 
@@ -85,6 +90,9 @@ http://127.0.0.1:8765/architecture_map/
   paths are root-level tracked files plus immediate child directories, not files
   inside those child directories.
 - `missingDescriptions`: a visible node lacks a useful description.
+- `invalidDescriptions`: a description exceeds 240 characters or contains
+  command syntax, routes, test-case detail, or UI micro-behavior instead of an
+  architectural responsibility.
 
 Scanning is validation only. It does not edit `tree.json`.
 

@@ -62,7 +62,7 @@
           "subtitle": "source picker inside gallery",
           "kind": "surface",
           "color": "#0891b2",
-          "description": "Asset Viewer entry hosted at /viewer/. The gallery itself lists available sources and switches between all assets, template assets, and the current game.",
+          "description": "Presents asset viewer gallery entry.",
           "role": "asset viewer gallery entry",
           "tags": [
             "surface",
@@ -99,7 +99,7 @@
               "kind": "test",
               "path": "ai_studio/assets/gallery/tests/api.test.mjs",
               "title": "api.test.mjs",
-              "description": "Regression tests for Asset Viewer API source selection and confined gallery/library/repo media path resolution.",
+              "description": "Verifies asset viewer API boundary contracts.",
               "role": "asset viewer API boundary tests",
               "tags": [
                 "assets",
@@ -127,7 +127,7 @@
           "kind": "server",
           "path": "ai_studio/assets/gallery/serve_gallery.mjs",
           "title": "serve_gallery.mjs",
-          "description": "Serves a generated asset gallery and maps a large external asset library at /lib/ so library browsing can avoid copying every media file.",
+          "description": "Hosts asset gallery media server.",
           "role": "asset gallery media server",
           "tags": [
             "server",
@@ -140,7 +140,7 @@
           "kind": "test",
           "path": "ai_studio/assets/gallery/tests/serve_gallery.test.mjs",
           "title": "serve_gallery.test.mjs",
-          "description": "Regression tests for standalone Asset Viewer gallery server argument parsing and safe gallery/library request path resolution.",
+          "description": "Verifies asset gallery server contracts.",
           "role": "asset gallery server tests",
           "tags": [
             "assets",
@@ -179,7 +179,7 @@
           "kind": "test",
           "path": "ai_studio/assets/gallery/tests/pull.test.mjs",
           "title": "pull.test.mjs",
-          "description": "Regression tests for Asset Viewer pull argument parsing and preservation of publishability metadata in game-local manifest rows.",
+          "description": "Verifies asset pull contracts.",
           "role": "asset pull tests",
           "tags": [
             "assets",
@@ -205,7 +205,7 @@
           "kind": "test",
           "path": "ai_studio/assets/gallery/tests/record_gallery.test.mjs",
           "title": "record_gallery.test.mjs",
-          "description": "Regression tests for Asset Viewer recorder argument parsing and gallery hero selection without launching Chrome.",
+          "description": "Verifies asset gallery recorder contracts.",
           "role": "asset gallery recorder tests",
           "tags": [
             "assets",
@@ -261,7 +261,7 @@
           "subtitle": "asset viewer regressions",
           "kind": "test",
           "color": "#0891b2",
-          "description": "Regression tests for Asset Viewer generation and promotion behavior.",
+          "description": "Verifies asset viewer contracts files.",
           "role": "asset viewer test files",
           "tags": [
             "test",
@@ -273,7 +273,7 @@
               "kind": "test",
               "path": "ai_studio/assets/gallery/tests/build_review.test.mjs",
               "title": "build_review.test.mjs",
-              "description": "Regression tests for asset kind classification, origin detection, escaping, and gallery HTML rendering.",
+              "description": "Verifies asset gallery generator contracts.",
               "role": "asset gallery generator tests",
               "tags": [
                 "test",
@@ -285,7 +285,7 @@
               "kind": "test",
               "path": "ai_studio/assets/gallery/tests/promote.test.mjs",
               "title": "promote.test.mjs",
-              "description": "Regression tests for promoting picked assets into Pack Manifest storage with license and integrity records.",
+              "description": "Verifies asset promotion contracts.",
               "role": "asset promotion tests",
               "tags": [
                 "test",
@@ -298,9 +298,22 @@
       "coverage": "self"
     },
     {
+      "id": "assets:items-viewer",
+      "title": "Items Viewer",
+      "kind": "surface",
+      "path": "ai_studio/assets/items_viewer",
+      "description": "Presents item catalogs, icons, and container data for inspection without owning game item state.",
+      "role": "item catalog inspection surface",
+      "tags": [
+        "assets",
+        "items",
+        "surface"
+      ]
+    },
+    {
       "id": "assets:nt-asset-image-generation-skill",
       "kind": "skill",
-      "path": ".codex/skills/nt-asset-image-generation/SKILL.md",
+      "path": ".codex/skills/nt-asset-image-generation",
       "title": "nt-asset-image-generation",
       "description": "Raster generation skill used only after source-first search fails. It is the generation entrypoint; asset tools handle file preparation and games own any game-specific prompt/provenance records.",
       "role": "asset image generation skill",
@@ -459,6 +472,19 @@
           ]
         },
         {
+          "id": "assets:tools-video",
+          "title": "Video Tools",
+          "kind": "group",
+          "path": "ai_studio/assets/tools/video",
+          "description": "Groups video generation, frame extraction, matte preparation, and sheet workflows.",
+          "role": "video asset tool ownership",
+          "tags": [
+            "assets",
+            "video",
+            "tools"
+          ]
+        },
+        {
           "id": "assets:tools-lib",
           "title": "Tools Library",
           "subtitle": "shared python helpers",
@@ -508,7 +534,7 @@
           "kind": "group",
           "path": "ai_studio/assets/tools/image",
           "color": "#0d9488",
-          "description": "Media-type umbrella for raster image work, decomposed into per-tool folders (sourcing, background normalization, region detection, slicing, key-matte and dual-plate alpha, routing) over a shared _bridge. Peer tier to future model3d/audio tool umbrellas; runs against a repo-local studio Python venv resolved from studio.config.json pythonPath.",
+          "description": "Groups 2D image workflow tools.",
           "role": "2D image workflow tools",
           "tags": [
             "assets",
@@ -535,7 +561,7 @@
               "kind": "group",
               "path": "ai_studio/assets/tools/image/_bridge",
               "title": "_bridge",
-              "description": "Shared image-tool plumbing: config-only Python interpreter resolution, tmp-path confinement, session dirs, JSON/image helpers, and the one-shot venv setup script. Owns the warm Python worker (worker.mjs manager + worker.py process, T0202): runPython routes every image-tool AND canvas Python spawn through one long-lived interpreter that pays the numpy/scipy/PIL import floor once, so the second and later detect/slice/render/export calls skip the cold-spawn tax; lazy spawn, FIFO-serialized, loud crash → respawn on next request (no cold-spawn fallback), idle-kill, and a process-exit/signal hook so no Python child is orphaned. Not a tool.",
+              "description": "Groups shared image tool plumbing.",
               "role": "shared image tool plumbing",
               "tags": [
                 "assets",
@@ -746,7 +772,7 @@
               "kind": "test",
               "path": "ai_studio/assets/tools/source_sheets/tests",
               "title": "source_sheets/tests",
-              "description": "Regression tests for source-sheet chroma normalization and intake audit behavior.",
+              "description": "Verifies source sheet tools contracts.",
               "role": "source sheet tools tests",
               "tags": [
                 "assets",
@@ -802,7 +828,7 @@
               "kind": "test",
               "path": "ai_studio/assets/tools/crop/plan_prepared_crops_from_intake_test.py",
               "title": "plan_prepared_crops_from_intake_test.py",
-              "description": "Regression tests for named crop-plan generation.",
+              "description": "Verifies crop tools contracts.",
               "role": "crop tools tests",
               "tags": [
                 "assets",
@@ -913,7 +939,7 @@
               "kind": "test",
               "path": "ai_studio/assets/tools/textures/tests/audit_tileable_texture.test.py",
               "title": "audit_tileable_texture.test.py",
-              "description": "Regression tests for tileable texture preview output and seam failure reporting.",
+              "description": "Verifies texture tools contracts.",
               "role": "texture tools tests",
               "tags": [
                 "assets",
@@ -934,7 +960,7 @@
       "path": "ai_studio/assets/canvas",
       "color": "#7c3aed",
       "coverage": "self",
-      "description": "Figma/Recraft-like multi-image canvas projects. Every capability is one operation in a shared ops layer with two equal clients: the agent (CLI/import) and the thin browser page. Owns project persistence, an append-only operation journal with linear undo/redo, groups as named game screens (Figma-frame regions that own elements, hide/show, move as a whole, and export as one composited PNG), region slicing into new elements, and selected-element export; bridges detect_regions and slice to the image tools pipeline unmodified and composites screens with its own render_group.py tool.",
+      "description": "Owns Canvas project persistence, journaled operations, agent APIs, and browser-surface parity.",
       "role": "canvas projects module",
       "tags": [
         "assets",
@@ -957,6 +983,43 @@
           ]
         },
         {
+          "id": "assets:canvas-docs",
+          "kind": "dir",
+          "path": "ai_studio/assets/canvas/docs",
+          "title": "docs/",
+          "description": "Groups Canvas design records, research, reviews, and frozen workflow references.",
+          "role": "Canvas design and review records",
+          "tags": [
+            "canvas",
+            "docs",
+            "history"
+          ]
+        },
+        {
+          "id": "assets:canvas-animation",
+          "kind": "library",
+          "path": "ai_studio/assets/canvas/animation.mjs",
+          "title": "animation.mjs",
+          "description": "Provides Canvas animation-card data and transformation helpers.",
+          "role": "Canvas animation model helpers",
+          "tags": [
+            "canvas",
+            "animation"
+          ]
+        },
+        {
+          "id": "assets:canvas-slice9",
+          "kind": "library",
+          "path": "ai_studio/assets/canvas/slice9.mjs",
+          "title": "slice9.mjs",
+          "description": "Provides Canvas nine-slice geometry and validation helpers.",
+          "role": "Canvas nine-slice model helpers",
+          "tags": [
+            "canvas",
+            "slice9"
+          ]
+        },
+        {
           "id": "assets:canvas-plan",
           "kind": "doc",
           "path": "ai_studio/assets/canvas/PLAN.md",
@@ -974,7 +1037,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/store.mjs",
           "title": "store.mjs",
-          "description": "Canvas project persistence: one folder per project with project.json (schema ai_studio.canvas.project.v1), a thin append-only journal.jsonl (op metadata only) with fat before/after snapshots in a sidecar snapshots/<seq>.json, and an immutable content-addressed files/. Atomic writes, path-confined ids/filenames/export paths, pure PNG/JPEG/GIF dimension parsing with persisted source_w/source_h, and lazy projects-root creation. Owns the journal plumbing: O(1) tail-read seq allocation, sidecar snapshot read/write/delete, thin-journal rewrite/archive, a transparent idempotent one-time migration of legacy fat journals (kept as journal.jsonl.bak), a capped tool_runs array with a tool_runs.jsonl spill, and the per-project errors.jsonl failure sink.",
+          "description": "Provides canvas project store.",
           "role": "canvas project store",
           "tags": [
             "assets",
@@ -987,7 +1050,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/stores.mjs",
           "title": "stores.mjs",
-          "description": "Canvas store resolver for Studio-public and game-private project roots: selects the default Studio store, resolves explicit --game/--store selectors through workspace game mounts, aggregates private stores only on opt-in list queries, decorates project rows with storeId/visibility/qualifiedId, and rejects private CLI export copies into the parent public Studio checkout.",
+          "description": "Provides canvas store selector and export guard.",
           "role": "canvas store selector and export guard",
           "tags": [
             "assets",
@@ -1001,7 +1064,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/tree.mjs",
           "title": "tree.mjs",
-          "description": "Pure, dependency-free scene-tree math shared by ops.mjs (node) AND the site (static /ai_studio/ import), so paint order itself obeys tool parity — one implementation, two clients. Over the flat Defold-style model (elements[]/groups[] with additive optional group.parentId and per-node numeric order fields, no stored tree) it computes per-scope children (childrenOf), back-to-front z-order (orderedChildren: the explicit numeric order when every sibling has it, else a v1 fallback where an element keys on its elements[] index and a group anchors at its backmost subtree member so legacy projects paint unchanged, empty group to front), subtree collection (descendantsOf), the ancestor chain (ancestorsOf, cycle-capped), the visibility cascade (isNodeHidden: self or any ancestor group hidden), and the reparent cycle guard (wouldCycle). All downward/upward walks are cycle-safe and resolve a dangling/corrupt parent to root so a bad project never hangs or hides content.",
+          "description": "Provides canvas scene-tree math.",
           "role": "canvas scene-tree math",
           "tags": [
             "assets",
@@ -1014,7 +1077,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/fonts.mjs",
           "title": "fonts.mjs",
-          "description": "Pure, dependency-free text/font contract shared by ops.mjs (node) AND the site (static /ai_studio/ import), so a text element renders the same on the browser canvas and in the PIL export. Holds the DEFAULT_TEXT_STYLE, the loud validation + shallow-merge normalizer (mergeTextStyle: unknown family/weight vs the fonts.json manifest, bad align/color, non-finite size, malformed stroke/shadow all throw), the (family, weight, style) -> manifest entry resolver, family/weight lists for the inspector pickers, line splitting on explicit newlines (no auto-wrap in v1), the canvas font-string builder, and a rough offline nominal-box estimate. ops.mjs owns the node-only disk read of site/fonts/fonts.json and resolves each entry to an absolute .ttf for render_group.py; the site fetches the same manifest and builds FontFaces.",
+          "description": "Provides canvas text/font contract.",
           "role": "canvas text/font contract",
           "tags": [
             "assets",
@@ -1027,7 +1090,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/zip.mjs",
           "title": "zip.mjs",
-          "description": "Minimal STORE-mode ZIP writer (node built-ins only, no npm deps): zipStore([{name, data}]) returns a standard .zip Buffer with the entry bytes copied verbatim (method 0 = no compression, since PNG/JPG/WebP exports are already compressed). CRC-32 comes from node:zlib crc32 when present with a table-based fallback for older Node. Pure (no canvas/store knowledge); ops.zipExport is the canvas caller that gathers a finished export run's image files and hands them here, and the page's multi-output save-dialog + CLI --zip both bundle through it (tool parity).",
+          "description": "Provides canvas store-mode zip writer.",
           "role": "canvas store-mode zip writer",
           "tags": [
             "assets",
@@ -1040,7 +1103,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/ops.mjs",
           "title": "ops.mjs",
-          "description": "The one operation layer both clients call: journaled store wrappers (addImage/patchElement/removeElement/reorderElement), project-level patchProject (journaled rename; title carried in the snapshot) and deleteProject (moves the folder to the projects-root .trash, not journaled), group (screen) ops (createGroup/patchGroup/assignToGroup/deleteGroup) whose metadata-only snapshots also carry groups so undo restores frames and members together, linear undo/redo/history over the thin sidecar-snapshot journal, the bridged detectRegions and sliceRegions (which reuse the image tools upload/detect/slice functions unmodified; setRegions applies polygon validation and bbox derivation, and slice alpha-masks polygonal regions), the Figma-style export surface (setExportSettings journals per-element export rows [{scale, format, quality?, resample}] with resolveExportScale/parseScaleSpec token parsing — the T0229 suffix field is removed: a new write carrying suffix is rejected loudly, readers ignore a legacy stored suffix; exportElements scales+encodes each element x row via one tools/export_images.py spawn with a byte-identical 1x-png Node copy fast path and AUTOMATIC file naming: element/screen name + a Figma scale marker (name@2x.png) only when several rows collide, then a deterministic numeric _NN across the run; exportProject composites every visible screen at 1x png into one folder reusing the renderGroup compositor; zipExport bundles a finished run's images into one STORE-mode .zip via zip.mjs for the page's multi-output save-dialog and the CLI --zip flag), and renderGroup (spawns tools/render_group.py to composite a screen PNG). reorderElement is the z-order op: it moves an element to a target index among its siblings (root or its group), permuting only that sibling subsequence within the flat array slots it occupies (array order IS paint/composite order everywhere), clamps the index, and journals one undoable entry. commitMutation writes fat snapshots to a sidecar + a thin duration_ms line and compacts history past canvasHistoryDepth (default 200) with a clean undo horizon; observability adds duration_ms on every entry, recordOpFailure into errors.jsonl, and an opsStats timing rollup. Records regions, slice crops with provenance, and capped tool_runs entries on the project.",
+          "description": "Defines the single journaled mutation boundary shared by Canvas agents and browser clients.",
           "role": "canvas operation layer",
           "tags": [
             "assets",
@@ -1054,7 +1117,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/api.mjs",
           "title": "api.mjs",
-          "description": "Studio Shell HTTP adapter for canvas projects (list/create/get/rename via PATCH/delete-to-trash via DELETE), elements, base64 image upload with optional drop x/y, region detection, region slicing, element z-order (POST elements/<eid>/reorder {index}), per-element export settings (PUT elements/<eid>/export {rows}), export (POST export {elementIds, rows?} for elements or {project:true} for every visible screen), group create/patch/assign/delete and screen render, undo/redo/history, an ops-stats timing rollup route, confined image-file serving, a confined export-file download route (export/<stamp>/<file>), and a confined export-zip route (GET export-zip/<stamp>) returning a STORE-mode application/zip bundle of a run's images for the page's multi-output save dialog, under the /api/canvas/ prefix. Store selection is explicit and public-by-default: ?game=<id> or ?store=game:<id> wraps the whole request in that Canvas store, while include-private list aggregation remains opt-in and decorates rows with store metadata. Mutating responses add a duration_ms field (existing fields untouched) and project-resolvable failures are logged to the project errors.jsonl via recordOpFailure. Marshals HTTP to the ops layer only.",
+          "description": "Provides canvas HTTP API adapter.",
           "role": "canvas HTTP API adapter",
           "tags": [
             "assets",
@@ -1067,7 +1130,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/cli.mjs",
           "title": "cli.mjs",
-          "description": "Agent client over the same ops layer: list, create, show, rename, delete, add-image, detect-regions, move, element-set/remove, element-reorder (z-order among siblings), slice, export-set (persist per-element export rows), export (--elements/--all/--project with inline --scale/--format/--quality/--resample override rows, a --to directory copy, and an optional --zip <path> STORE-mode archive — the T0229 --suffix flag is gone since file names are automatic), group-create/move/set/assign/delete, render-screen, undo, redo, history, and ops-stats commands printing compact JSON. Project-resolvable failures are logged to the project errors.jsonl (mirrors the API adapter).",
+          "description": "Provides canvas agent CLI.",
           "role": "canvas agent CLI",
           "tags": [
             "assets",
@@ -1078,9 +1141,9 @@
         {
           "id": "assets:canvas-skill",
           "kind": "skill",
-          "path": ".codex/skills/nt-canvas-operations/SKILL.md",
+          "path": ".codex/skills/nt-canvas-operations",
           "title": "nt-canvas-operations",
-          "description": "Thin Codex skill router for canvas work: how to resolve a canvas:// ref (Copy ID) via the CLI show command, the CLI/HTTP surface pointer, the non-destructive/journaled/tool-parity/YandexDisk-root laws, and routing to the canvas README as the single source of truth.",
+          "description": "Guides canvas agent skill entrypoint.",
           "role": "canvas agent skill entrypoint",
           "tags": [
             "skill",
@@ -1095,7 +1158,7 @@
           "kind": "group",
           "path": "ai_studio/assets/canvas/tools",
           "color": "#7c3aed",
-          "description": "The canvas module's own Python tools (not image-tools steps), run by the ops layer through the shared _bridge warm worker (config-only studio interpreter, kept warm across calls). render_group.py composites screens, crop_regions.py crops region rects, and alpha_cutout.py alpha-cuts an element (whole or per-region) by REUSING the image-tools route + key_matte modules unmodified.",
+          "description": "Groups canvas python tools.",
           "role": "canvas python tools",
           "tags": [
             "assets",
@@ -1108,7 +1171,7 @@
               "kind": "tool",
               "path": "ai_studio/assets/canvas/tools/render_group.py",
               "title": "render_group.py",
-              "description": "PIL compositor for renderGroup: reads a render spec JSON (absolute element paths, group bounds, scale, background), alpha-composites the visible member elements in z-order clipped to the group box, and writes one screen PNG plus a JSON report atomically.",
+              "description": "Provides canvas screen compositor.",
               "role": "canvas screen compositor",
               "tags": [
                 "assets",
@@ -1122,7 +1185,7 @@
               "kind": "tool",
               "path": "ai_studio/assets/canvas/tools/export_images.py",
               "title": "export_images.py",
-              "description": "PIL scale+encode tool for exportElements: reads one export spec JSON (a flat list of jobs, each an absolute source path, output path, explicit target pixels, format, quality, resample) and encodes the whole batch in one spawn — png (RGBA), jpg (flattened onto white, quality), webp (quality) — with lanczos/nearest resampling; writes each file plus a JSON report atomically. The scale math lives in the JS op (resolveExportScale) and byte-identical 1x-png copies never reach this tool. Uses the T0218 _bridge config-only Python.",
+              "description": "Provides canvas export encoder.",
               "role": "canvas export encoder",
               "tags": [
                 "assets",
@@ -1136,7 +1199,7 @@
               "kind": "tool",
               "path": "ai_studio/assets/canvas/tools/alpha_cutout.py",
               "title": "alpha_cutout.py",
-              "description": "Alpha-cutout tool for ops.alphaCutout: reads one alpha spec JSON (absolute source path, method auto|matte, optional stored regions with their exact rects/polygons) and writes one RGBA PNG plus a report. REUSES the image-tools matte pipeline unmodified — route/route_cutout for the border key + soft/opaque routing (a wide soft zone under auto raises a loud dual-plate error, no silent single-plate fallback) and alpha_matte/key_matte for the keying. With regions it keys only inside each region mask and pastes back over the untouched original opaque pixels (composition in one worker call); without regions it keys the whole element. Output dimensions equal the source. Runs through the T0218 _bridge warm worker.",
+              "description": "Provides canvas alpha cutout.",
               "role": "canvas alpha cutout",
               "tags": [
                 "assets",
@@ -1154,7 +1217,7 @@
           "kind": "surface",
           "path": "ai_studio/assets/canvas/site",
           "color": "#7c3aed",
-          "description": "Thin Figma/Recraft-like browser page served via the /ai_studio/ static route. One HTML document swaps a home view (project card grid + inline new/rename/delete) and a workspace view (DPR-crisp pan/zoom canvas, left tool rail, collapsible group-aware layers panel, right inspector, right-click context menu, OS drag&drop + clipboard paste, zoom controls). Feedback is a Figma-like toast stack (there is no status bar): transient success/info, persistent errors, and pinned export/render results with download links, plus a busy spinner + client-side FIFO limiter for long python-backed ops. Behavior is split into small ES modules; every action is one HTTP API call and there is no logic beyond rendering/input.",
+          "description": "Presents canvas browser page.",
           "role": "canvas browser page",
           "tags": [
             "assets",
@@ -1168,108 +1231,169 @@
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/canvas.html",
               "title": "canvas.html",
-              "description": "Single page document holding both the home (project card grid) and workspace (top bar, tool rail, layers panel, stage, inspector) views that the controller swaps between. Feedback is a toast stack appended at runtime (no status bar element).",
+              "description": "Presents canvas page document.",
               "role": "canvas page document",
-              "tags": ["assets", "canvas", "ui"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui"
+              ]
             },
             {
               "id": "assets:canvas-site-css",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/canvas.css",
               "title": "canvas.css",
-              "description": "Dark-theme styling for the home card grid, workspace top bar, tool rail, layers panel (incl. the collapsed slim rail + reorder drop-line and styled scrollbars), stage overlays, inspector (titled collapsible sections + stable-gutter region list), the bottom-right toast/feedback stack (kind accents, CSS spinner, download links), inline editors, and context menu.",
+              "description": "Presents canvas page styling.",
               "role": "canvas page styling",
-              "tags": ["assets", "canvas", "ui", "style"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "style"
+              ]
             },
             {
               "id": "assets:canvas-site-controller",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/canvas.js",
               "title": "canvas.js",
-              "description": "Page controller: boots the feature modules, owns view routing (deep link ?project=, last-opened localStorage restore, ?select= debug hook) and the global keyboard shortcuts, including z-order by physical key (event.code so any layout works): Ctrl+] / Ctrl+[ nudge a single selected element forward/backward and Ctrl+Alt+] / Ctrl+Alt+[ send it to front/back. No rendering/business logic of its own.",
+              "description": "Presents canvas page controller.",
               "role": "canvas page controller",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-app",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/app.js",
               "title": "app.js",
-              "description": "Shared page state, the fetch API helper, read-only view helpers over project.json, the image cache, selection helpers, store-aware deep-link/localStorage plumbing, and a refresh bus every panel renders through.",
+              "description": "Presents canvas page shared state.",
               "role": "canvas page shared state",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-store-scope",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/store_scope.js",
               "title": "store_scope.js",
-              "description": "Pure browser-side Canvas store-scope helpers: normalize Studio vs game store ids, append store query strings to API/file/export URLs, read/write deep-link store params, encode/decode the v2 last-project localStorage pair, separate image-cache keys by store, and format private canvas://game/<gameId>/ refs without leaking project/object names.",
+              "description": "Presents canvas browser store-scope helper.",
               "role": "canvas browser store-scope helper",
-              "tags": ["assets", "canvas", "ui", "browser-js", "privacy", "testable-logic"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js",
+                "privacy",
+                "testable-logic"
+              ]
             },
             {
               "id": "assets:canvas-site-actions",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/actions.js",
               "title": "actions.js",
-              "description": "The one place UI intents become a single HTTP API call: add/drop/paste image, patch/rename/hide/delete element, z-order (reorderElementTo + bring-forward/backward/to-front/to-back that translate the Figma intent into a sibling index for the one reorder op), detect/slice, export (setExportRows persists per-element rows; exportElementIds/exportProjectAction run the export op then deliver via export_dest's save-file dialog — one output = the image saved under its own editable name, several = one STORE zip from the export-zip route, dialog-cancel = a quiet info toast), group create/patch/render/ungroup/delete, undo/redo, and rename project. Panels never call the API directly.",
+              "description": "Presents canvas page action layer.",
               "role": "canvas page action layer",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-home",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/home.js",
               "title": "home.js",
-              "description": "Home view: a full-page grid of project cards (cover thumbnail, title, image count, updated date) plus a + New project card with an inline title input, and hover rename/delete.",
+              "description": "Presents canvas home screen.",
               "role": "canvas home screen",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-workspace",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/workspace.js",
               "title": "workspace.js",
-              "description": "Workspace view: the devicePixelRatio-crisp pan/zoom canvas (imageSmoothing off at >=2x), the tool rail (Select/Hand), zoom controls + indicator, top bar sync, group frame drawing, the region-edit tool row (Select/Rect/Polygon) with live polygon-draft drawing, and all pointer interaction (select, drag-move, pan with tool/Space/middle-mouse).",
+              "description": "Presents canvas workspace and rendering.",
               "role": "canvas workspace and rendering",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-layers",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/layers_panel.js",
               "title": "layers_panel.js",
-              "description": "Group-aware layers list of ELEMENTS and GROUPS only (the region list lives in the inspector now): ungrouped elements at top level, groups as collapsible sections with eye toggle and inline-rename name, indented member rows with 24px thumbnail, region-count badge, and eye toggle; selection syncs both ways with the canvas. Render is structure-signature guarded so a selection-only change updates classes in place instead of rebuilding the DOM (keeps a row stable across a double-click, so dblclick rename works). Row drag reorders among siblings (a between-rows drop shows an insertion line and calls the reorder op) or reparents (drop onto a screen header / other group / top level). The panel collapses to a slim ~34px rail with a visible re-open control; collapsed state persists in localStorage.",
+              "description": "Presents canvas layers panel.",
               "role": "canvas layers panel",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-inspector",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/inspector.js",
               "title": "inspector.js",
-              "description": "Right inspector for the selection, organized into titled collapsible sections (Figma Design-tab style) whose collapsed state persists in localStorage per section: single element (name; Position & Size with source; a compact Regions section — count badge, per-region rows with rename/select/delete and a generous always-present delete target, plus Edit/Detect/+Add and Slice; Provenance; Meta; and a Figma-style Export section at the BOTTOM — a collapsible list of rows [scale + suffix + format, a quality slider only for jpg/webp, a resample toggle], + Add export setting, a destination hint, and a target-labeled Export button committing per-element export rows through setExportSettings), group/screen (name; Position & Size with visible + member count; Render screen with scale + background), multi-select (count + each-exports-its-own-settings + Export), or an empty state with a project-export button when there are visible screens. Render is structure-signature guarded so a region-selection-only change re-applies selection classes in place rather than rebuilding, keeping region rows stable across a double-click so dblclick rename opens its editor. The region list scrolls with a stable gutter + styled scrollbar (no hover layout shift).",
+              "description": "Presents canvas inspector panel.",
               "role": "canvas inspector panel",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-history",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/history_panel.js",
               "title": "history_panel.js",
-              "description": "Photoshop-style history palette: a hideable floating list of journal steps (Base + the applied undo chain + the dimmed, still-clickable redo tail), toggled from the top-bar History button or the backtick key, hidden by default with its open state persisted in localStorage (view-state only, never journaled). A THIN view over the op layer's listHistory (labeled rows {seq,label,summary,current,undone} — no journal parsing on the page); clicking a row jumps the project to that step via the one jumpHistory op (the same op the CLI's history-jump drives). Renders through the shared refresh bus so it stays live: the current step re-highlights instantly from the folded op-response head, then the labeled list re-fetches (structure-signature guarded so Ctrl+Z spam re-highlights instead of rebuilding). Quiet like undo/redo (the highlight is the feedback, no toast).",
+              "description": "Presents canvas history panel.",
               "role": "canvas history panel",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-context-menu",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/context_menu.js",
               "title": "context_menu.js",
-              "description": "Right-click context menu whose items depend on the target (element / region / group label / empty canvas); every item calls an existing action and the menu closes on click-away or Escape. The element menu is a short list of frequent object actions — Edit regions, an Order submenu (bring forward/backward, to front/back → the reorder op), Move to screen / Group, Delete (no Rename or Hide; those are double-click and the layers eye dot; detect/slice and export live in the inspector).",
+              "description": "Presents canvas context menu.",
               "role": "canvas context menu",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-dnd",
@@ -1278,7 +1402,12 @@
               "title": "dnd.js",
               "description": "OS drag & drop (drop images at the drop point with a drop highlight, offsetting multiples) and Ctrl/Cmd+V clipboard paste at the viewport center, over the shared actions.",
               "role": "canvas drag-drop and paste",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-inline",
@@ -1287,70 +1416,112 @@
               "title": "inline.js",
               "description": "Inline text-editing helper: swaps a label for a text input that commits on Enter/blur and cancels on Escape, used to rename projects, elements, and groups without a browser prompt().",
               "role": "canvas inline edit helper",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-export-dest",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/export_dest.mjs",
               "title": "export_dest.mjs",
-              "description": "Export destination delivery (delivery-to-disk only, an allowed page concern): saveBlobToFile hands a Blob to a save-FILE dialog (showSaveFilePicker) with an editable suggested name — the T0229 Figma flow that replaced the T0206 directory picker Chrome refused for Downloads/системные папки. A dialog abort is a quiet cancel (the caller shows an info toast); any other picker/write failure is loud (thrown → error toast) with NO silent fallback; a plain browser download runs ONLY when showSaveFilePicker is absent. actions.js fetches the single image (download route) or the STORE zip (export-zip route) and calls this to save it.",
+              "description": "Presents canvas export destination.",
               "role": "canvas export destination",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-toasts",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/toasts.js",
               "title": "toasts.js",
-              "description": "Feedback layer that replaced the bottom status bar: a fixed bottom-right toast stack (clear of the inspector Export button + the breadcrumb chips) with kinds success/info (auto-hide ~3s, hover pauses), error (persists with op name + message, never swallowed), and pinned-result (export/render outcome with download links, persists). Toasts never block input (container pointer-events:none, cards only) and the stack caps at ~5, dropping the oldest transient toast first. Also hosts runLongOp: it wraps a python-backed op (detect/slice/render/export) with the long_op_queue limiter, shows a queued/running progress toast that resolves in place into the result, and disables the triggering control while in flight. Import-safe in node (no DOM at module load). setStatus/setStatusLinks in app.js are thin shims into this layer.",
+              "description": "Presents canvas feedback layer.",
               "role": "canvas feedback layer",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-long-op-queue",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/long_op_queue.mjs",
               "title": "long_op_queue.mjs",
-              "description": "Pure, DOM-free FIFO concurrency limiter for the page's long (python-backed) ops — detect/slice/render/export. Caps concurrent runs at N=2 so one browser never spawns a swarm of Python processes; extra requests queue and run FIFO as slots free, a failed op frees its slot, and a still-queued op can be cancelled before it fires (a running op cannot — no server cancellation). In-memory only: a page reload clears the queue. A page concern only (the CLI/ops path is unlimited). Node-unit-tested (slot accounting, FIFO order, failure-frees-slot, cancel-queued); toasts.js wraps it for the UI.",
+              "description": "Presents canvas long-op limiter.",
               "role": "canvas long-op limiter",
-              "tags": ["assets", "canvas", "ui", "browser-js", "testable-logic"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js",
+                "testable-logic"
+              ]
             },
             {
               "id": "assets:canvas-site-regions",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/regions.js",
               "title": "regions.js",
-              "description": "Region workbench geometry: convert region rects and polygon rings to world/screen boxes, hit-test region bodies and resize handles (even-odd point-in-polygon for polygonal regions), map vertices via transformPolygon, and draw the bright numbered overlays. Pure DOM-free helpers for the workspace; region edits still persist through the shared setRegions op.",
+              "description": "Presents canvas region geometry.",
               "role": "canvas region geometry",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-viewport",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/viewport.mjs",
               "title": "viewport.mjs",
-              "description": "Pure canvas viewport math shared by the site modules (workspace, actions, dnd, regions): screen<->image point conversion, fit-to-frame centering, and zoom-at-cursor. No DOM and no rect-editing helpers (the region workbench owns rect/polygon geometry). The canvas owns its own viewport code here.",
+              "description": "Presents canvas viewport geometry.",
               "role": "canvas viewport geometry",
-              "tags": ["assets", "canvas", "ui", "browser-js", "testable-logic"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js",
+                "testable-logic"
+              ]
             },
             {
               "id": "assets:canvas-site-fonts",
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/fonts.js",
               "title": "fonts.js",
-              "description": "Browser font loading + text measurement for canvas text elements (the page side of the shared fonts.mjs contract): fetches the same site/fonts/fonts.json the ops layer reads, registers every static .ttf as a FontFace (so the 2D canvas and the inline-edit textarea both render with it), and gates the first text paint on document.fonts.ready — no FOUT mismatch with the PIL export. Exposes the manifest, family/weight picker lists, and measureTextBox/measureTextLines (auto-width box + per-line widths) via a throwaway 2D context. All style/line logic is imported from ../fonts.mjs so the browser and the agent normalize a style identically.",
+              "description": "Presents canvas font loading + measurement.",
               "role": "canvas font loading + measurement",
-              "tags": ["assets", "canvas", "ui", "browser-js"]
+              "tags": [
+                "assets",
+                "canvas",
+                "ui",
+                "browser-js"
+              ]
             },
             {
               "id": "assets:canvas-site-fonts-bundle",
               "kind": "asset",
               "path": "ai_studio/assets/canvas/site/fonts",
               "title": "fonts/",
-              "description": "The bundled text fonts + the fonts.json manifest that is the canvas/export parity contract. Static TTF instances (produced from Google Fonts variable sources with fontTools varLib.instancer, all axes pinned) per family with its OFL.txt: Inter 400/600/700, Rubik 500/700, Bitter 400/700, JetBrains Mono 400/700 — all OFL-1.1 with Cyrillic. fonts.json maps family+weight+style to a relative .ttf with its origin URL (license/provenance/origin law). The page builds FontFaces from it; ops.mjs resolves the same entries to absolute paths for render_group.py (PIL), which loads the exact files.",
+              "description": "Represents canvas text font bundle.",
               "role": "canvas text font bundle",
-              "tags": ["assets", "canvas", "font", "license"]
+              "tags": [
+                "assets",
+                "canvas",
+                "font",
+                "license"
+              ]
             }
           ]
         },
@@ -1359,7 +1530,7 @@
           "kind": "test",
           "path": "ai_studio/assets/canvas/tests",
           "title": "tests",
-          "description": "Regression tests for the canvas store round-trip and confinement, deleteProject trash-move, studio config resolution incl. canvasHistoryDepth, the operation journal with undo/redo and redo-tail invalidation, journaled patchProject rename, element export folder/manifest, group create-from-elements bbox, group move + member translation with undo, delete-keeps-elements, visibility, renderGroup composite pixel checks via a tiny PNG decoder, the z-order reorderElement op (root + group sibling reorder, index clamp, interleaved-scope preservation, one-entry undo, and CLI element-reorder + API reorder-route parity), the HTTP API lifecycle plus rename/delete/undo/slice/export/group/render/reorder routes and the confined export-download route (rejecting traversal), the T0200 perf pass (batched patchElements/removeElements = one journal entry + single-undo restore with atomic validation, mutation responses folding canUndo/canRedo/seq so the page needs no follow-up GET, and immutable Cache-Control + ETag on the content-addressed files route), a CLI smoke incl. group + ops-stats + batched elements-set/elements-remove commands, the bridged detectRegions/sliceRegions/renderGroup ops (skips cleanly when the Python pipeline is unavailable), the T0229 export changes (suffix removed — rejected loudly on a new write, ignored on read; automatic name disambiguation with Figma scale markers + numeric fallback; the minimal STORE-mode zip writer round-tripped through an inline unzip reader; the export-zip HTTP route and CLI --zip), and the journal restructure: thin sidecar-snapshot lines, tail-read seq, idempotent fat-journal migration, history-depth compaction with a clean undo horizon, tool_runs cap/spill, duration_ms, and the errors.jsonl failure sink, plus the page's pure long-op FIFO limiter (slot accounting at max 2, FIFO order, a failed op freeing its slot, and cancel of a still-queued op).",
+          "description": "Verifies canvas module contracts.",
           "role": "canvas module tests",
           "tags": [
             "assets",
@@ -1404,7 +1575,7 @@
           "kind": "module",
           "path": "ai_studio/assets/backlog/storage",
           "color": "#0e7490",
-          "description": "Functional storage/source-registry layer kept in backlog until it is decomposed into clearer ownership groups. It currently owns library registry data, source helpers, intake, manifests, indexes, snapshots, preview cache, and license policy.",
+      "description": "Owns temporary asset manifests, registries, previews, and license metadata pending decomposition.",
           "role": "backlog asset storage",
           "tags": [
             "assets",
@@ -1457,7 +1628,7 @@
               "kind": "test",
               "path": "ai_studio/assets/backlog/storage/tests/search.test.mjs",
               "title": "search.test.mjs",
-              "description": "Regression test proving agent asset search uses the generated index for a pack manifest source.",
+              "description": "Verifies asset storage search contracts.",
               "role": "asset storage search tests",
               "tags": [
                 "assets",
@@ -1537,7 +1708,7 @@
                   "kind": "test",
                   "path": "ai_studio/assets/backlog/storage/intake/tests/intake.test.mjs",
                   "title": "intake.test.mjs",
-                  "description": "Regression tests for staging, manifest accept, restricted accept, and reject behavior.",
+                  "description": "Verifies asset intake contracts.",
                   "role": "asset intake tests",
                   "tags": [
                     "assets",
@@ -1553,7 +1724,7 @@
               "subtitle": "explicit asset roots",
               "kind": "group",
               "color": "#0e7490",
-              "description": "Helper modules and tests for explicit asset source roots. Global library registry data remains in backlog storage; template and game registry data lives with templates/ and games/.",
+              "description": "Groups asset source registry helpers.",
               "role": "asset source registry helpers",
               "tags": [
                 "assets",
@@ -1604,7 +1775,7 @@
                   "kind": "test",
                   "path": "ai_studio/assets/backlog/storage/sources/tests/libraries.test.mjs",
                   "title": "libraries.test.mjs",
-                  "description": "Regression tests for default library source listing, path resolution, and library source upserts.",
+                  "description": "Verifies library asset registry contracts.",
                   "role": "library asset registry tests",
                   "tags": [
                     "assets",
@@ -1628,7 +1799,7 @@
                   "kind": "test",
                   "path": "ai_studio/assets/backlog/storage/sources/tests/templates.test.mjs",
                   "title": "templates.test.mjs",
-                  "description": "Regression tests for default template source listing and template source upserts.",
+                  "description": "Verifies template asset registry contracts.",
                   "role": "template asset registry tests",
                   "tags": [
                     "assets",
@@ -1652,7 +1823,7 @@
                   "kind": "test",
                   "path": "ai_studio/assets/backlog/storage/sources/tests/games.test.mjs",
                   "title": "games.test.mjs",
-                  "description": "Regression tests for creating, listing, normalizing, and upserting registered game asset sources.",
+                  "description": "Verifies game asset registry contracts.",
                   "role": "game asset registry tests",
                   "tags": [
                     "assets",
@@ -1707,7 +1878,7 @@
                   "kind": "test",
                   "path": "ai_studio/assets/backlog/storage/manifests/tests/manifest.test.mjs",
                   "title": "manifest.test.mjs",
-                  "description": "Regression tests for pack.json/assets.jsonl reading, inherited pack metadata, relative paths, previews, and model paths.",
+                  "description": "Verifies pack manifest reader contracts.",
                   "role": "pack manifest reader tests",
                   "tags": [
                     "assets",
@@ -1763,7 +1934,7 @@
                   "kind": "test",
                   "path": "ai_studio/assets/backlog/storage/snapshots/tests/snapshots.test.mjs",
                   "title": "snapshots.test.mjs",
-                  "description": "Regression tests for source snapshot diffing and generated snapshot persistence.",
+                  "description": "Verifies source snapshot contracts.",
                   "role": "source snapshot tests",
                   "tags": [
                     "assets",
@@ -1819,7 +1990,7 @@
                   "kind": "test",
                   "path": "ai_studio/assets/backlog/storage/index/tests/index.test.mjs",
                   "title": "index.test.mjs",
-                  "description": "Regression tests for index rebuild, pack summary, search, filters, facets, paging, and model lookup.",
+                  "description": "Verifies asset index contracts.",
                   "role": "asset index tests",
                   "tags": [
                     "assets",
@@ -1914,7 +2085,7 @@
                   "kind": "test",
                   "path": "ai_studio/assets/backlog/storage/license/restricted_assets_guard.test.mjs",
                   "title": "restricted_assets_guard.test.mjs",
-                  "description": "Regression tests for publishable assets, restricted routing, unregistered binaries, per-game paths, and CC-BY attribution metadata.",
+                  "description": "Verifies license guard contracts.",
                   "role": "license guard tests",
                   "tags": [
                     "assets",
@@ -2021,7 +2192,7 @@
                   "kind": "test",
                   "path": "ai_studio/assets/backlog/storage/previews/tests/cache.test.mjs",
                   "title": "cache.test.mjs",
-                  "description": "Regression tests for missing, cached, and stale source-aware preview refresh.",
+                  "description": "Verifies preview cache contracts.",
                   "role": "preview cache tests",
                   "tags": [
                     "assets",
@@ -2037,7 +2208,7 @@
         {
           "id": "assets:nt-asset-workflow-skill",
           "kind": "skill",
-          "path": ".codex/skills/nt-asset-workflow/SKILL.md",
+          "path": ".codex/skills/nt-asset-workflow",
           "title": "nt-asset-workflow",
           "description": "Broad asset workflow skill kept in backlog while the asset architecture is split into viewer, tools, the image-generation skill, and storage/backlog responsibilities.",
           "role": "backlog broad asset workflow skill",

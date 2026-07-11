@@ -43,7 +43,7 @@
       "kind": "test",
       "path": "ai_studio/workspace/tests/private_games_registry.test.mjs",
       "title": "private_games_registry.test.mjs",
-      "description": "Regression tests for public-only default resolution, explicit private mount inclusion, duplicate fixture overrides, pure privacy audit, and real git preflight fixtures.",
+      "description": "Verifies private game registry contracts.",
       "role": "private game registry tests",
       "tags": [
         "workspace",

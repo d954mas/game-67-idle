@@ -48,6 +48,47 @@
       ]
     },
     {
+      "id": "core-harness:agent-catalogs",
+      "title": "Agent Role Catalogs",
+      "kind": "group",
+      "color": "#0f766e",
+      "description": "Groups reusable Codex and Claude role definitions consumed by repository orchestration.",
+      "role": "reusable agent role catalog ownership",
+      "tags": [
+        "core",
+        "agents",
+        "roles"
+      ],
+      "children": [
+        {
+          "id": "core-harness:codex-agent-catalog",
+          "kind": "config",
+          "path": ".codex/agents",
+          "title": ".codex/agents/",
+          "description": "Defines reusable Codex roles for repository orchestration.",
+          "role": "Codex agent role catalog",
+          "tags": [
+            "agents",
+            "codex",
+            "catalog"
+          ]
+        },
+        {
+          "id": "core-harness:claude-agent-catalog",
+          "kind": "config",
+          "path": ".claude/agents",
+          "title": ".claude/agents/",
+          "description": "Defines reusable Claude roles for repository orchestration.",
+          "role": "Claude agent role catalog",
+          "tags": [
+            "agents",
+            "claude",
+            "catalog"
+          ]
+        }
+      ]
+    },
+    {
       "id": "core-harness:workflow",
       "title": "Workflow",
       "subtitle": "task execution order",
@@ -146,6 +187,32 @@
             "layout",
             "engine-ui",
             "cross-cutting"
+          ]
+        },
+        {
+          "id": "core-harness:nt-game-feature-skill",
+          "kind": "skill",
+          "path": ".codex/skills/nt-game-feature",
+          "title": "nt-game-feature",
+          "description": "Routes reusable feature-pack and game-local module ownership decisions.",
+          "role": "game feature ownership workflow skill",
+          "tags": [
+            "skill",
+            "features",
+            "ownership"
+          ]
+        },
+        {
+          "id": "core-harness:nt-game-items-skill",
+          "kind": "skill",
+          "path": ".codex/skills/nt-game-items",
+          "title": "nt-game-items",
+          "description": "Routes item catalog, ownership, validation, and runtime integration work.",
+          "role": "game items workflow skill",
+          "tags": [
+            "skill",
+            "items",
+            "gameplay"
           ]
         }
       ]
@@ -274,7 +341,7 @@
           "subtitle": "sync regressions",
           "kind": "test",
           "color": "#0f766e",
-          "description": "Regression tests for generated skill pointers and hook config rendering.",
+          "description": "Verifies agent surface contracts files.",
           "role": "agent surface test files",
           "tags": [
             "test"
@@ -285,7 +352,7 @@
               "kind": "test",
               "path": "ai_studio/core_harness/agent_surfaces/tests/skills_sync.test.mjs",
               "title": "skills_sync.test.mjs",
-              "description": "Regression tests for generated skill pointer creation, stale pointer detection, and hand-written skill preservation.",
+              "description": "Verifies skills sync contracts.",
               "role": "skills sync tests",
               "tags": [
                 "test",
@@ -297,7 +364,7 @@
               "kind": "test",
               "path": "ai_studio/core_harness/agent_surfaces/tests/hooks_sync.test.mjs",
               "title": "hooks_sync.test.mjs",
-              "description": "Regression tests that hook generation reproduces committed Codex/Claude config and preserves tool-specific matcher vocabularies.",
+              "description": "Verifies hooks sync contracts.",
               "role": "hooks sync tests",
               "tags": [
                 "test",
@@ -353,7 +420,7 @@
           "kind": "tool",
           "path": "ai_studio/core_harness/profiling/hook_record.mjs",
           "title": "hook_record.mjs",
-          "description": "JS hook recorder fallback for command results, Codex failure recovery, manual --recover-only import, and subagent spawn telemetry. Called by generated hooks for non-hot-path cases.",
+          "description": "Provides profiling hook recorder fallback.",
           "role": "profiling hook recorder fallback",
           "tags": [
             "internal-helper",
@@ -444,7 +511,7 @@
           "subtitle": "session retrospective instructions",
           "kind": "skill",
           "color": "#0e7490",
-          "path": ".codex/skills/nt-chat-session-reflection/SKILL.md",
+          "path": ".codex/skills/nt-chat-session-reflection",
           "description": "Skill instructions for full retrospective analysis of long AI-assisted sessions using durable evidence, profiling telemetry, and chat/session context.",
           "role": "full session reflection skill",
           "tags": [
@@ -458,7 +525,7 @@
           "kind": "test",
           "path": "ai_studio/core_harness/profiling/tests/profiling.test.mjs",
           "title": "profiling.test.mjs",
-          "description": "Focused profiling regression tests for hook records, Codex recovery, status reports, coverage, and subagent rollups.",
+          "description": "Verifies profiling contracts.",
           "role": "profiling regression tests",
           "tags": [
             "test",
@@ -509,7 +576,7 @@
           "id": "core-harness:doc-reference-check-test",
           "kind": "test",
           "path": "ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs",
-          "description": "Regression tests for the stale-reference guard.",
+          "description": "Verifies stale reference guard contracts.",
           "role": "stale reference guard tests",
           "tags": [
             "test",
@@ -549,7 +616,7 @@
           "kind": "tool",
           "path": "ai_studio/core_harness/tool_lib/studio_config.mjs",
           "title": "studio_config.mjs",
-          "description": "Shared reader for studio-wide settings: merges the committed ai_studio/studio.config.json with an optional gitignored studio.config.local.json override and resolves the canvas projects root (CANVAS_PROJECTS_ROOT env overrides for tests). Creates nothing on disk.",
+          "description": "Provides studio config reader.",
           "role": "studio config reader",
           "tags": [
             "core-harness",
@@ -586,7 +653,7 @@
           "kind": "test",
           "path": "ai_studio/core_harness/tool_lib/cli.test.mjs",
           "title": "cli.test.mjs",
-          "description": "Regression tests for the shared cli helper.",
+          "description": "Verifies shared cli helper contracts.",
           "role": "shared cli helper tests",
           "tags": [
             "core-harness",
@@ -622,7 +689,7 @@
           "kind": "test",
           "path": "ai_studio/core_harness/tool_lib/json.test.mjs",
           "title": "json.test.mjs",
-          "description": "Regression tests for the shared json helper.",
+          "description": "Verifies shared json helper contracts.",
           "role": "shared json helper tests",
           "tags": [
             "core-harness",
@@ -646,7 +713,7 @@
           "kind": "test",
           "path": "ai_studio/core_harness/tool_lib/mime.test.mjs",
           "title": "mime.test.mjs",
-          "description": "Regression tests for the shared mime helper.",
+          "description": "Verifies shared mime helper contracts.",
           "role": "shared mime helper tests",
           "tags": [
             "core-harness",
@@ -671,7 +738,7 @@
           "kind": "test",
           "path": "ai_studio/core_harness/tool_lib/tmp_sweep.test.mjs",
           "title": "tmp_sweep.test.mjs",
-          "description": "Regression tests for tmp scratch reporting, dry-run behavior, deletion guardrails, and validation export retention.",
+          "description": "Verifies tmp scratch cleanup command contracts.",
           "role": "tmp scratch cleanup command tests",
           "tags": [
             "core-harness",
