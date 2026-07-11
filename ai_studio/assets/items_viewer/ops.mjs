@@ -165,7 +165,7 @@ export function routeIssues(itemIds, issues) {
 
 // Build the full view for one catalog from an ABSOLUTE folder path (a registered
 // game/template folder). Decoupled from the registry lookup so tests can point it at a
-// throwaway temp folder without touching templates.json/games.json.
+// throwaway temp folder without touching workspace catalog state.
 export async function loadCatalogView(root, folderAbs, meta) {
   const catalogPath = join(folderAbs, "content", "items.json");
   const hasItems = existsSync(catalogPath);

@@ -37,7 +37,9 @@ function sourceAvailable(path) {
 }
 
 function registeredGameSources(root, options = {}) {
-  return listGameMounts(root, { includePrivate: options.includePrivate === true }).map((game) => {
+  return listGameMounts(root, { includePrivate: options.includePrivate === true })
+    .filter((game) => game.enabledStores.includes("assets"))
+    .map((game) => {
     const assetsPath = safeResolve(root, game.assetRoot);
     return {
       id: game.storeId,
@@ -48,7 +50,7 @@ function registeredGameSources(root, options = {}) {
       available: sourceAvailable(assetsPath),
       visibility: game.visibility,
     };
-  });
+    });
 }
 
 function registeredLibrarySources(root) {

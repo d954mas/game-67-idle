@@ -3,8 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { listRegisteredGames } from "../assets/backlog/storage/sources/games.mjs";
-import { listRegisteredTemplates } from "../assets/backlog/storage/sources/templates.mjs";
+import { listWorkspaceMounts } from "../workspace/catalog.mjs";
 import { listGameMounts } from "../workspace/games.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -21,13 +20,12 @@ function parseArgs(argv) {
   return args;
 }
 
-function activeProject(kind, item) {
-  if (item.status === "disabled") return null;
+function activeProject(item) {
   return {
-    kind,
+    kind: item.kind,
     id: item.id,
-    title: item.title || item.id,
-    folder: item.folder,
+    title: item.title,
+    folder: item.root,
   };
 }
 
@@ -36,11 +34,8 @@ function projectExists(root, project) {
 }
 
 function collectPlayableProjects(root) {
-  return [
-    ...listRegisteredTemplates(root).map((item) => activeProject("template", item)),
-    ...listRegisteredGames(root).map((item) => activeProject("game", item)),
-  ]
-    .filter(Boolean)
+  return listWorkspaceMounts(root)
+    .map((item) => activeProject(item))
     .filter((project) => projectExists(root, project))
     .sort((a, b) => `${a.kind}:${a.id}`.localeCompare(`${b.kind}:${b.id}`));
 }
@@ -242,7 +237,7 @@ function printUsage() {
   node ai_studio/dev_environment/vscode_projects.mjs [--root <repo>]
   node ai_studio/dev_environment/vscode_projects.mjs [--root <repo>] --game <private-game-id>
 
-Regenerates parent .vscode/tasks.json and .vscode/launch.json from templates/templates.json and games/games.json.
+Regenerates parent .vscode/tasks.json and .vscode/launch.json from the tracked workspace catalog.
 With --game, writes game-local .vscode files inside a private mounted game after workspace preflight.`);
 }
 

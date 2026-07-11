@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
-import { localGameRegistryRelPath } from "../workspace/games.mjs";
+import { localWorkspaceCatalogRelPath } from "../workspace/games.mjs";
 import {
   collectPlayableProjects,
   renderLaunch,
@@ -22,31 +22,29 @@ function writeJson(path, value) {
 function makePlayable(root, rel) {
   mkdirSync(join(root, rel), { recursive: true });
   writeFileSync(join(root, rel, "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.25)\n", "utf8");
+  const [folder, id] = rel.split("/");
+  const kind = folder === "games" ? "game" : "template";
+  writeJson(join(root, rel, `${kind}.json`), { schema: `ai_studio.${kind}.v1`, id, title: id, storageNamespace: id });
+  if (kind === "game") writeJson(join(root, rel, "dependencies.json"), {
+    schema: "ai_studio.game.dependencies.v1", engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test",
+  });
+}
+
+function writeCatalog(root, mounts, local = false) {
+  writeJson(join(root, "ai_studio", "workspace", `catalog${local ? ".local" : ""}.json`), {
+    schema: "ai_studio.workspace.catalog.v1",
+    mounts: mounts.map(({ kind, id }) => ({ kind, root: `${kind === "game" ? "games" : "templates"}/${id}`, visibility: local ? "private" : "public", gitRoot: local ? `games/${id}` : "", commitPolicy: local ? "nested-private" : "parent-public", enabledStores: ["assets", "taskboard", "canvas", "evidence"], aliases: [] })),
+  });
 }
 
 function privateGameFixture(root, gameId = "secret-game") {
   execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
-  writeFileSync(join(root, ".gitignore"), `${localGameRegistryRelPath()}\n`, "utf8");
+  writeFileSync(join(root, ".gitignore"), `${localWorkspaceCatalogRelPath()}\n`, "utf8");
   writeFileSync(join(root, ".git", "info", "exclude"), `games/${gameId}/\n`, "utf8");
   makePlayable(root, `games/${gameId}`);
   execFileSync("git", ["init"], { cwd: join(root, "games", gameId), stdio: "ignore" });
-  writeJson(join(root, "ai_studio", "workspace", "games.local.json"), {
-    schema: "ai_studio.workspace.games.local.v1",
-    games: [
-      {
-        schemaVersion: 1,
-        storeId: `game:${gameId}`,
-        kind: "game",
-        gameId,
-        root: `games/${gameId}`,
-        visibility: "private",
-        gitRoot: `games/${gameId}`,
-        commitPolicy: "nested-private",
-        enabledStores: ["assets", "taskboard", "canvas", "evidence"],
-        assetRoot: `games/${gameId}/assets`,
-      },
-    ],
-  });
+  writeCatalog(root, [], false);
+  writeCatalog(root, [{ kind: "game", id: gameId }], true);
 }
 
 test("collectPlayableProjects reads active registered templates and games", (t) => {
@@ -56,20 +54,11 @@ test("collectPlayableProjects reads active registered templates and games", (t) 
   makePlayable(root, "games/first-game");
   mkdirSync(join(root, "templates/disabled"), { recursive: true });
   mkdirSync(join(root, "games/missing-cmake"), { recursive: true });
-  writeJson(join(root, "templates", "templates.json"), {
-    schema: "ai_studio.assets.templates.v1",
-    templates: [
-      { id: "base", title: "Base", folder: "templates/base", assets: "templates/base/assets", status: "active" },
-      { id: "disabled", title: "Disabled", folder: "templates/disabled", assets: "templates/disabled/assets", status: "disabled" },
-    ],
-  });
-  writeJson(join(root, "games", "games.json"), {
-    schema: "ai_studio.assets.games.v1",
-    games: [
-      { id: "first-game", title: "First Game", folder: "games/first-game", assets: "games/first-game/assets", status: "active" },
-      { id: "missing-cmake", title: "Missing CMake", folder: "games/missing-cmake", assets: "games/missing-cmake/assets", status: "active" },
-    ],
-  });
+  makePlayable(root, "templates/disabled");
+  makePlayable(root, "games/missing-cmake");
+  rmSync(join(root, "templates", "disabled", "CMakeLists.txt"));
+  rmSync(join(root, "games", "missing-cmake", "CMakeLists.txt"));
+  writeCatalog(root, [{ kind: "template", id: "base" }, { kind: "template", id: "disabled" }, { kind: "game", id: "first-game" }, { kind: "game", id: "missing-cmake" }]);
 
   assert.deepEqual(collectPlayableProjects(root).map((project) => `${project.kind}:${project.id}`), [
     "game:first-game",
@@ -100,10 +89,7 @@ test("writeVscodeProjectFiles writes tasks and launch files", (t) => {
   const root = mkdtempSync(join(tmpdir(), "vscode-projects-write-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   makePlayable(root, "templates/base");
-  writeJson(join(root, "templates", "templates.json"), {
-    schema: "ai_studio.assets.templates.v1",
-    templates: [{ id: "base", title: "Base", folder: "templates/base", assets: "templates/base/assets", status: "active" }],
-  });
+  writeCatalog(root, [{ kind: "template", id: "base" }]);
 
   const result = writeVscodeProjectFiles(root);
 
@@ -121,34 +107,8 @@ test("writeVscodeProjectFiles excludes local private game mounts", (t) => {
   t.after(() => rmSync(root, { recursive: true, force: true }));
   makePlayable(root, "games/public-game");
   makePlayable(root, "games/secret-game");
-  writeJson(join(root, "games", "games.json"), {
-    schema: "ai_studio.assets.games.v1",
-    games: [
-      {
-        id: "public-game",
-        title: "Public Game",
-        folder: "games/public-game",
-        assets: "games/public-game/assets",
-        status: "active",
-      },
-    ],
-  });
-  writeJson(join(root, "ai_studio", "workspace", "games.local.json"), {
-    schema: "ai_studio.workspace.games.local.v1",
-    games: [
-      {
-        schemaVersion: 1,
-        storeId: "game:secret-game",
-        kind: "game",
-        gameId: "secret-game",
-        root: "games/secret-game",
-        visibility: "private",
-        gitRoot: "games/secret-game",
-        commitPolicy: "nested-private",
-        enabledStores: ["assets", "taskboard", "canvas", "evidence"],
-      },
-    ],
-  });
+  writeCatalog(root, [{ kind: "game", id: "public-game" }]);
+  writeCatalog(root, [{ kind: "game", id: "secret-game" }], true);
 
   const result = writeVscodeProjectFiles(root);
   const tasksText = readFileSync(join(root, ".vscode", "tasks.json"), "utf8");

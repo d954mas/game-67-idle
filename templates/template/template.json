@@ -1,0 +1,6 @@
+{
+  "schema": "ai_studio.template.v1",
+  "id": "template",
+  "title": "Template",
+  "storageNamespace": "template"
+}

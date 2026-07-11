@@ -1,0 +1,17 @@
+{
+  "schema": "ai_studio.game.dependencies.v1",
+  "engine": {
+    "source": "external/neotolis-engine",
+    "revision": "cf6a60fd36285c7948a3d1fac218e5b5a5f807a8",
+    "compatibility": "validated by the game build and test suite in this checkout"
+  },
+  "features": [
+    {
+      "id": "game-state",
+      "source": "features/game-state",
+      "revision": "fbb3ecafa4db4b782bcdd17836b3f5889ffedccb",
+      "compatibility": "validated by the game build and test suite in this checkout"
+    }
+  ],
+  "compatibility": "records the exact engine and shared feature revisions tested with this game checkout"
+}

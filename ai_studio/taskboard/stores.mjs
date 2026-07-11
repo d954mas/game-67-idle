@@ -52,10 +52,7 @@ function gameTaskboardStore(root, mount) {
 }
 
 function mountHasTaskboard(root, mount) {
-  return (
-    (Array.isArray(mount.enabledStores) && mount.enabledStores.includes("taskboard")) ||
-    existsSync(join(root, mount.root, ".ai_studio", "taskboard", "items"))
-  );
+  return Array.isArray(mount.enabledStores) && mount.enabledStores.includes("taskboard");
 }
 
 export function listTaskboardStores(root, options = {}) {

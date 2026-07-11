@@ -27,8 +27,8 @@ scaffolds, prompt contracts, or prompt records. If a game needs durable
 generation context, keep it with that game's design/assets metadata.
 
 Asset sources are explicit. Global libraries are registered in
-`backlog/storage/sources/libraries.json`, templates in
-`templates/templates.json`, and games in `games/games.json`.
+`backlog/storage/sources/libraries.json`; templates and games resolve through
+the workspace catalog plus their identity manifests.
 Asset Viewer does not scan the repository to guess source folders.
 
 Asset refresh is explicit. Do not add filesystem watch mode to this module.

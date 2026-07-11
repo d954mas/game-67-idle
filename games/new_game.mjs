@@ -13,7 +13,7 @@
 //   cmake -S games/mygame -B games/mygame/build/native-debug -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug
 //   cmake --build games/mygame/build/native-debug --target game
 //   ./games/mygame/build/native-debug/bin/game.exe
-import { appendFileSync, existsSync, mkdirSync, readdirSync, copyFileSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, copyFileSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -21,7 +21,8 @@ import { gameRegistryPath, listRegisteredGames, registerGameAssetSource } from "
 import { listRegisteredTemplates } from "../ai_studio/assets/backlog/storage/sources/templates.mjs";
 import { writeVscodeProjectFiles } from "../ai_studio/dev_environment/vscode_projects.mjs";
 import { ensureProject } from "../ai_studio/taskboard/lib.mjs";
-import { localGameRegistryRelPath, runPrivateGamePreflight, upsertLocalGameMount } from "../ai_studio/workspace/games.mjs";
+import { localWorkspaceCatalogRelPath, runPrivateGamePreflight, upsertLocalWorkspaceGameMount } from "../ai_studio/workspace/games.mjs";
+import { writeGameDependencies, writeIdentityManifest } from "../ai_studio/workspace/catalog.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
 
@@ -138,6 +139,43 @@ function runGit(root, args) {
   return spawnSync("git", ["-C", root, ...args], { encoding: "utf8", shell: false });
 }
 
+function requireGitRevision(root, args, label) {
+  const result = runGit(root, args);
+  const revision = result.status === 0 ? result.stdout.trim() : "";
+  if (!/^[0-9a-f]{40,64}$/i.test(revision)) {
+    throw new Error(`${label} requires an exact Git revision`);
+  }
+  return revision;
+}
+
+function readTemplateDependencySeed(templateDir) {
+  const path = join(templateDir, "game-dependencies.json");
+  if (!existsSync(path)) throw new Error(`template dependency seed not found at ${path}`);
+  const value = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
+  const known = (object, keys, label) => {
+    if (!object || typeof object !== "object" || Array.isArray(object)) throw new Error(`${label} must be an object`);
+    for (const key of Object.keys(object)) if (!keys.includes(key)) throw new Error(`${label}: unknown field '${key}'`);
+  };
+  known(value, ["schema", "engine", "features", "compatibility"], "template dependency seed");
+  if (value.schema !== "ai_studio.game.dependencies.seed.v1") throw new Error("template dependency seed has an unsupported schema");
+  known(value.engine, ["source", "compatibility"], "template dependency seed engine");
+  if (value.engine.source !== "external/neotolis-engine" || !String(value.engine.compatibility || "").trim()) {
+    throw new Error("template dependency seed engine must identify external/neotolis-engine with compatibility evidence");
+  }
+  if (!Array.isArray(value.features)) throw new Error("template dependency seed features must be an array");
+  const ids = new Set();
+  for (const feature of value.features) {
+    known(feature, ["id", "source", "compatibility"], "template dependency seed feature");
+    if (!/^[a-z][a-z0-9-]*$/.test(feature.id) || feature.source !== `features/${feature.id}` || !String(feature.compatibility || "").trim()) {
+      throw new Error("template dependency seed feature must have a strict id, matching source, and compatibility evidence");
+    }
+    if (ids.has(feature.id)) throw new Error(`template dependency seed has duplicate feature '${feature.id}'`);
+    ids.add(feature.id);
+  }
+  if (!String(value.compatibility || "").trim()) throw new Error("template dependency seed compatibility must not be empty");
+  return value;
+}
+
 function requireParentGitExcludePath(repoRoot) {
   const result = runGit(repoRoot, ["rev-parse", "--git-path", "info/exclude"]);
   if (result.error || result.status !== 0) {
@@ -216,6 +254,17 @@ try {
 }
 const isPrivate = visibility === "private";
 const repoRoot = a.root ? resolve(a.root) : defaultRepoRoot;
+let repoRevision;
+let engineRevision;
+try {
+  repoRevision = requireGitRevision(repoRoot, ["rev-parse", "HEAD"], "game dependency record");
+  const engineGitlink = requireGitRevision(repoRoot, ["rev-parse", "HEAD:external/neotolis-engine"], "parent engine gitlink");
+  engineRevision = requireGitRevision(join(repoRoot, "external", "neotolis-engine"), ["rev-parse", "HEAD"], "engine dependency record");
+  if (engineRevision !== engineGitlink) throw new Error("engine checkout HEAD must match the parent engine gitlink");
+} catch (error) {
+  console.error(`error: ${error && error.message ? error.message : String(error)}`);
+  process.exit(1);
+}
 let fromRel = a.from;
 if (a.template) {
   const template = listRegisteredTemplates(repoRoot).find((item) => item.id === a.template && item.status !== "disabled");
@@ -226,6 +275,35 @@ if (a.template) {
   fromRel = template.folder;
 }
 const fromDir = join(repoRoot, fromRel);
+let dependencySeed;
+try {
+  dependencySeed = readTemplateDependencySeed(fromDir);
+} catch (error) {
+  console.error(`error: ${error && error.message ? error.message : String(error)}`);
+  process.exit(1);
+}
+const templateDirty = runGit(repoRoot, ["status", "--porcelain", "--", fromRel]);
+if (templateDirty.status !== 0 || templateDirty.stdout.trim()) {
+  console.error(`error: template ${fromRel} must be clean before recording exact dependency revisions`);
+  process.exit(1);
+}
+const engineDirty = runGit(join(repoRoot, "external", "neotolis-engine"), ["status", "--porcelain"]);
+if (engineDirty.status !== 0 || engineDirty.stdout.trim()) {
+  console.error("error: external/neotolis-engine must be clean before recording its exact dependency revision");
+  process.exit(1);
+}
+for (const feature of dependencySeed.features) {
+  const featureId = feature.id;
+  if (!existsSync(join(repoRoot, "features", featureId))) {
+    console.error(`error: template references missing shared feature features/${featureId}`);
+    process.exit(1);
+  }
+  const dirty = runGit(repoRoot, ["status", "--porcelain", "--", `features/${featureId}`]);
+  if (dirty.status !== 0 || dirty.stdout.trim()) {
+    console.error(`error: feature features/${featureId} must be clean before recording exact dependency revisions`);
+    process.exit(1);
+  }
+}
 const toDir = join(repoRoot, "games", a.id);
 if (!existsSync(join(fromDir, "CMakeLists.txt"))) {
   console.error(`error: template not found at ${fromDir}`);
@@ -248,7 +326,7 @@ if (isPrivate) {
       throw new Error(`games/${a.id} is already tracked by the parent repository; cannot create it as private`);
     }
     verifyExistingNestedGitBeforeCopy(toDir, a.id);
-    ensureParentExclude(repoRoot, localGameRegistryRelPath());
+    ensureParentExclude(repoRoot, localWorkspaceCatalogRelPath());
     ensureParentExclude(repoRoot, `games/${a.id}`, { directory: true });
   } catch (error) {
     console.error(error && error.message ? error.message : String(error));
@@ -257,6 +335,23 @@ if (isPrivate) {
 }
 
 copyDir(fromDir, toDir);
+rmSync(join(toDir, "template.json"), { force: true });
+rmSync(join(toDir, "game-dependencies.json"), { force: true });
+writeIdentityManifest(repoRoot, "game", { id: a.id, title: a.id });
+writeGameDependencies(repoRoot, a.id, {
+  engine: {
+    source: dependencySeed.engine.source,
+    revision: engineRevision,
+    compatibility: dependencySeed.engine.compatibility,
+  },
+  features: dependencySeed.features.map((feature) => ({
+    id: feature.id,
+    source: feature.source,
+    revision: repoRevision,
+    compatibility: feature.compatibility,
+  })),
+  compatibility: `${dependencySeed.compatibility}; created from ${fromRel} at exact Studio revision ${repoRevision}`,
+});
 ensureGameStudioScaffold(toDir, a.id, visibility);
 
 // F2 (T0327 И2c deep-review, lead-ratified 2026-07-07): copy-then-own for the
@@ -290,7 +385,7 @@ if (itemsLockReset) {
 
 if (isPrivate) {
   const nestedGit = ensureNestedGit(toDir, a.id);
-  const mount = upsertLocalGameMount(repoRoot, {
+  const mount = upsertLocalWorkspaceGameMount(repoRoot, {
     gameId: a.id,
     visibility: "private",
     commitPolicy: "nested-private",
@@ -303,7 +398,7 @@ if (isPrivate) {
   }
   console.log(`new private game '${a.id}' created from ${fromRel}/ -> games/${a.id}/`);
   console.log(`nested git repository: ${nestedGit}`);
-  console.log(`local private registry: ${localGameRegistryRelPath()} -> ${mount.root}`);
+  console.log(`local workspace catalog: ${localWorkspaceCatalogRelPath()} -> ${mount.root}`);
   console.log("public Studio registries, Taskboard, Canvas, and VS Code files were not updated");
   if (itemsLockReset) {
     console.log(`reset items lock baseline (fresh game -- no defs shipped yet): games/${a.id}/content/items.lock.json`);

@@ -1,13 +1,11 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { basename, dirname, isAbsolute, join, posix, resolve } from "node:path";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { basename, isAbsolute, join, posix, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
-import { listRegisteredGames } from "../assets/backlog/storage/sources/games.mjs";
+import { catalogRelPath, listWorkspaceMounts, upsertWorkspaceMount } from "./catalog.mjs";
 
-const LOCAL_GAMES_SCHEMA = "ai_studio.workspace.games.local.v1";
-const MOUNT_SCHEMA_VERSION = 1;
 const DEFAULT_PRIVATE_STORES = ["assets", "taskboard", "canvas", "evidence"];
 
 function slash(value) {
@@ -18,26 +16,12 @@ function stripTrailingSlash(value) {
   return slash(value).replace(/\/+$/, "");
 }
 
-function normalizeRelPath(value, label = "path") {
-  const text = stripTrailingSlash(String(value || "").trim().replace(/^\.?\//, ""));
-  if (!text) return "";
-  if (isAbsolute(text) || /^[a-zA-Z]:\//.test(text) || text.startsWith("//") || text.split("/").includes("..")) {
-    throw new Error(`${label} must be repo-relative and stay inside the repository`);
-  }
-  return text;
-}
-
 function normalizeId(value, label = "game id") {
   const id = String(value || "").trim();
   if (!/^[a-z][a-z0-9-]*$/.test(id)) {
     throw new Error(`${label} must be lowercase kebab-case`);
   }
   return id;
-}
-
-function readJson(path, fallback) {
-  if (!existsSync(path)) return fallback;
-  return JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
 }
 
 function asStringArray(value, label, fallback = []) {
@@ -48,181 +32,17 @@ function asStringArray(value, label, fallback = []) {
   return value.map((item) => String(item).trim()).filter(Boolean);
 }
 
-function localRegistryPath(root) {
-  return join(root, "ai_studio", "workspace", "games.local.json");
-}
-
-function publicMountFromGame(game) {
-  return {
-    schemaVersion: MOUNT_SCHEMA_VERSION,
-    storeId: `game:${game.id}`,
-    kind: "game",
-    gameId: game.id,
-    title: game.title || game.id,
-    root: normalizeRelPath(game.folder || `games/${game.id}`, "game root"),
-    visibility: "public",
-    gitRoot: "",
-    commitPolicy: "parent-public",
-    enabledStores: ["assets"],
-    assetRoot: normalizeRelPath(game.assets || `games/${game.id}/assets`, "game asset root"),
-    status: game.status || "active",
-    source: "public",
-  };
-}
-
-function readPublicGameMounts(root) {
-  return listRegisteredGames(root).map((game) => publicMountFromGame(game));
-}
-
-function readLocalRegistry(root) {
-  const registry = readJson(localRegistryPath(root), { schema: LOCAL_GAMES_SCHEMA, games: [] });
-  if (registry.schema !== LOCAL_GAMES_SCHEMA) {
-    throw new Error(`${localGameRegistryRelPath()}: expected schema ${LOCAL_GAMES_SCHEMA}`);
-  }
-  return {
-    schema: registry.schema,
-    games: Array.isArray(registry.games) ? registry.games : [],
-  };
-}
-
-function writeLocalRegistry(root, registry) {
-  const path = localRegistryPath(root);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(registry, null, 2)}\n`, "utf8");
-}
-
-function normalizeLocalMount(raw, index = 0) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new Error(`${localGameRegistryRelPath()}: games[${index}] must be an object`);
-  }
-  const gameId = normalizeId(raw.gameId || raw.id, `games[${index}].gameId`);
-  const root = normalizeRelPath(raw.root || `games/${gameId}`, `games[${index}].root`);
-  if (root !== `games/${gameId}`) {
-    throw new Error(`${localGameRegistryRelPath()}: games[${index}].root must be games/${gameId}`);
-  }
-  const kind = String(raw.kind || "game").trim();
-  if (kind !== "game") {
-    throw new Error(`${localGameRegistryRelPath()}: games[${index}].kind must be game`);
-  }
-  const visibility = String(raw.visibility || "private").trim();
-  if (!["private", "local"].includes(visibility)) {
-    throw new Error(`${localGameRegistryRelPath()}: games[${index}].visibility must be private or local`);
-  }
-  const schemaVersion = Number(raw.schemaVersion || MOUNT_SCHEMA_VERSION);
-  if (schemaVersion !== MOUNT_SCHEMA_VERSION) {
-    throw new Error(`${localGameRegistryRelPath()}: games[${index}].schemaVersion must be ${MOUNT_SCHEMA_VERSION}`);
-  }
-  const gitRoot = normalizeRelPath(raw.gitRoot || root, `games[${index}].gitRoot`);
-  if (gitRoot !== root) {
-    throw new Error(`${localGameRegistryRelPath()}: games[${index}].gitRoot must match root for nested private games`);
-  }
-  const commitPolicy = String(raw.commitPolicy || "nested-private").trim();
-  if (!["nested-private", "local-only"].includes(commitPolicy)) {
-    throw new Error(`${localGameRegistryRelPath()}: games[${index}].commitPolicy must be nested-private or local-only`);
-  }
-  const mount = {
-    schemaVersion,
-    storeId: String(raw.storeId || `game:${gameId}`).trim(),
-    kind,
-    gameId,
-    title: String(raw.title || gameId),
-    root,
-    visibility,
-    gitRoot,
-    commitPolicy,
-    enabledStores: asStringArray(raw.enabledStores, `games[${index}].enabledStores`, DEFAULT_PRIVATE_STORES),
-    assetRoot: normalizeRelPath(raw.assetRoot || `${root}/assets`, `games[${index}].assetRoot`),
-    publicAlias: raw.publicAlias ? String(raw.publicAlias).trim() : "",
-    aliases: asStringArray(raw.aliases, `games[${index}].aliases`),
-    remoteHints: asStringArray(raw.remoteHints, `games[${index}].remoteHints`),
-    overridesPublicFixture: raw.overridesPublicFixture === true,
-    source: "local",
-  };
-  if (mount.storeId !== `game:${gameId}`) {
-    throw new Error(`${localGameRegistryRelPath()}: games[${index}].storeId must be game:${gameId}`);
-  }
-  if (!mount.enabledStores.length) {
-    throw new Error(`${localGameRegistryRelPath()}: games[${index}].enabledStores must not be empty`);
-  }
-  return mount;
-}
-
-function readLocalGameMounts(root) {
-  return readLocalRegistry(root).games.map((game, index) => normalizeLocalMount(game, index));
-}
-
-export function upsertLocalGameMount(root, options = {}) {
+export function upsertLocalWorkspaceGameMount(root, options = {}) {
   const gameId = normalizeId(options.gameId || options.id, "game id");
-  const next = normalizeLocalMount({
-    schemaVersion: MOUNT_SCHEMA_VERSION,
-    storeId: `game:${gameId}`,
+  return upsertWorkspaceMount(root, {
     kind: "game",
-    gameId,
     root: `games/${gameId}`,
     visibility: options.visibility || "private",
     gitRoot: `games/${gameId}`,
     commitPolicy: options.commitPolicy || "nested-private",
     enabledStores: options.enabledStores || DEFAULT_PRIVATE_STORES,
-    assetRoot: `games/${gameId}/assets`,
-    publicAlias: options.publicAlias || "",
-    aliases: options.aliases || [],
-    remoteHints: options.remoteHints || [],
-    overridesPublicFixture: options.overridesPublicFixture === true,
-  });
-  const registry = readLocalRegistry(root);
-  const existing = registry.games.findIndex((game) => game && (game.gameId === gameId || game.id === gameId));
-  const raw = {
-    schemaVersion: next.schemaVersion,
-    storeId: next.storeId,
-    kind: next.kind,
-    gameId: next.gameId,
-    root: next.root,
-    visibility: next.visibility,
-    gitRoot: next.gitRoot,
-    commitPolicy: next.commitPolicy,
-    enabledStores: next.enabledStores,
-    assetRoot: next.assetRoot,
-    aliases: next.aliases,
-    remoteHints: next.remoteHints,
-  };
-  if (next.publicAlias) raw.publicAlias = next.publicAlias;
-  if (next.overridesPublicFixture) raw.overridesPublicFixture = true;
-  if (existing >= 0) registry.games[existing] = raw;
-  else registry.games.push(raw);
-  registry.games.sort((a, b) => String(a.gameId || a.id).localeCompare(String(b.gameId || b.id)));
-  writeLocalRegistry(root, registry);
-  return next;
-}
-
-function localMountIsIncluded(mount, options) {
-  if (options.includePrivate === true) return true;
-  if (options.activeGameId && options.activeGameId === mount.gameId) return true;
-  if (options.activeStoreId && options.activeStoreId === mount.storeId) return true;
-  return false;
-}
-
-function mergeMounts(publicMounts, localMounts) {
-  const byGameId = new Map(publicMounts.map((mount, index) => [mount.gameId, { mount, index }]));
-  const out = [...publicMounts];
-  for (const local of localMounts) {
-    const existing = byGameId.get(local.gameId);
-    if (!existing) {
-      out.push(local);
-      byGameId.set(local.gameId, { mount: local, index: out.length - 1 });
-      continue;
-    }
-    if (local.overridesPublicFixture === true && existing.mount.status === "fixture") {
-      out[existing.index] = local;
-      byGameId.set(local.gameId, { mount: local, index: existing.index });
-      continue;
-    }
-    throw new Error(`duplicate game id '${local.gameId}' in local private registry; only public fixture overrides are allowed`);
-  }
-  return out.sort((a, b) => visibilityRank(a) - visibilityRank(b) || a.storeId.localeCompare(b.storeId));
-}
-
-function visibilityRank(mount) {
-  return mount.visibility === "public" ? 0 : 1;
+    aliases: options.aliases || (options.publicAlias ? [options.publicAlias] : []),
+  }, { local: true });
 }
 
 function formatPreflightError(result) {
@@ -230,27 +50,20 @@ function formatPreflightError(result) {
   return `private game preflight failed:\n${lines.join("\n")}`;
 }
 
-export function localGameRegistryRelPath() {
-  return "ai_studio/workspace/games.local.json";
-}
-
-export function publicGameRegistryRelPath() {
-  return "games/games.json";
+export function localWorkspaceCatalogRelPath() {
+  return catalogRelPath(true);
 }
 
 export function listGameMounts(root, options = {}) {
-  const publicMounts = readPublicGameMounts(root);
-  if (options.includePrivate !== true && !options.activeGameId && !options.activeStoreId) {
-    return publicMounts;
-  }
-  const localMounts = readLocalGameMounts(root).filter((mount) => localMountIsIncluded(mount, options));
+  const mounts = listWorkspaceMounts(root, { ...options, kinds: ["game"] });
+  const localMounts = mounts.filter((mount) => mount.visibility !== "public");
   if (localMounts.length && options.skipPreflight !== true) {
     const preflight = runPrivateGamePreflight(root, { mounts: localMounts });
     if (!preflight.ok) {
       throw new Error(formatPreflightError(preflight));
     }
   }
-  return mergeMounts(publicMounts, localMounts);
+  return mounts;
 }
 
 function pathMatchesPrefix(path, prefix) {
@@ -351,7 +164,7 @@ export function auditPrivateGamePreflight(mounts, state = {}) {
   const checkNestedGitRoots = Object.hasOwn(state, "nestedGitRoots");
   const trackedTextFiles = Array.isArray(state.trackedTextFiles) ? state.trackedTextFiles : [];
   const unscannedTextFiles = Array.isArray(state.unscannedTextFiles) ? state.unscannedTextFiles : [];
-  const localRegistry = localGameRegistryRelPath();
+  const localRegistry = localWorkspaceCatalogRelPath();
   const violations = [];
 
   const localRegistryTracked = trackedPaths.has(localRegistry) || stagedPaths.has(localRegistry);
@@ -538,19 +351,20 @@ function validNestedGitRoots(root, mounts) {
 
 export function runPrivateGamePreflight(root, options = {}) {
   const repoRoot = resolve(root || process.cwd());
-  const mounts = options.mounts || readLocalGameMounts(repoRoot);
+  const mounts = options.mounts || listWorkspaceMounts(repoRoot, { includePrivate: true, kinds: ["game"] })
+    .filter((mount) => mount.visibility !== "public");
   const privateMounts = mounts.filter((mount) => mount.visibility !== "public");
   const stage = gitListStage(repoRoot);
   const stagedPaths = gitListStaged(repoRoot);
   if (
     !privateMounts.length &&
-    !normalizedSet(stage.paths).has(localGameRegistryRelPath()) &&
-    !normalizedSet(stagedPaths).has(localGameRegistryRelPath())
+    !normalizedSet(stage.paths).has(localWorkspaceCatalogRelPath()) &&
+    !normalizedSet(stagedPaths).has(localWorkspaceCatalogRelPath())
   ) {
     return { ok: true, violations: [] };
   }
   const ignoreProbePaths = [
-    localGameRegistryRelPath(),
+    localWorkspaceCatalogRelPath(),
     ...privateMounts.map((mount) => mount.root),
   ];
   const stagedLeaks = stagedLeakTextFiles(repoRoot, stagedPaths, privateMounts);
@@ -792,12 +606,13 @@ function commandTouchesPrivateRoot(args, mounts, root = "", cwd = "") {
 }
 
 function commandTouchesLocalRegistry(args, root = "", cwd = "") {
-  return pathArgs(args, root, cwd).some((path) => pathMayMatchLiteral(path, localGameRegistryRelPath()));
+  return pathArgs(args, root, cwd).some((path) => pathMayMatchLiteral(path, localWorkspaceCatalogRelPath()));
 }
 
 export function auditParentGitCommand(root, commandText, options = {}) {
   const repoRoot = resolve(root || process.cwd());
-  const mounts = options.mounts || readLocalGameMounts(repoRoot);
+  const mounts = options.mounts || listWorkspaceMounts(repoRoot, { includePrivate: true, kinds: ["game"] })
+    .filter((mount) => mount.visibility !== "public");
   const privateMounts = mounts.filter((mount) => mount.visibility !== "public");
   const operations = parseGitOperations(commandText);
   const violations = [];
@@ -816,7 +631,7 @@ export function auditParentGitCommand(root, commandText, options = {}) {
     }
     if (commandTouchesLocalRegistry(operation.args, repoRoot, operation.cwd)) {
       violations.push({
-        path: localGameRegistryRelPath(),
+        path: localWorkspaceCatalogRelPath(),
         reason: `parent git ${operation.op} command can affect the local private registry; keep it ignored/local`,
       });
       continue;
@@ -923,8 +738,3 @@ function main() {
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   main();
 }
-
-export {
-  LOCAL_GAMES_SCHEMA,
-  MOUNT_SCHEMA_VERSION,
-};

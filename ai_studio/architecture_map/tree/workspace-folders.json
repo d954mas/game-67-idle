@@ -52,12 +52,12 @@
           ]
         },
         {
-          "id": "workspace:templates:registry-data",
+          "id": "workspace:template:template:identity",
           "kind": "config",
-          "path": "templates/templates.json",
-          "title": "templates.json",
-          "description": "Template workspace registry data. Asset Viewer and backlog source helpers read it, but templates/ owns the file.",
-          "role": "template workspace registry data",
+          "path": "templates/template/template.json",
+          "title": "template.json",
+          "description": "Canonical identity manifest for the reusable template workspace.",
+          "role": "template identity manifest",
           "tags": [
             "templates",
             "workspace",
@@ -293,12 +293,12 @@
           ]
         },
         {
-          "id": "workspace:games:registry-data",
+          "id": "workspace:game:web-dressup:identity",
           "kind": "config",
-          "path": "games/games.json",
-          "title": "games.json",
-          "description": "Game workspace registry data for game-local asset roots. Asset Viewer and backlog source helpers read it, but games/ owns the file.",
-          "role": "game workspace registry data",
+          "path": "games/web-dressup/game.json",
+          "title": "game.json",
+          "description": "Canonical identity manifest for the tracked Web Dressup game workspace.",
+          "role": "game identity manifest",
           "tags": [
             "games",
             "workspace",

@@ -16,8 +16,8 @@ Generated outputs:
 - `.vscode/launch.json`
 
 These files are tracked parent-Studio outputs. They are generated from
-`templates/templates.json` and `games/games.json` only, and must not read
-`ai_studio/workspace/games.local.json` or include private mount ids, paths, or
+the tracked `ai_studio/workspace/catalog.json` only, and must not read
+`ai_studio/workspace/catalog.local.json` or include private mount ids, paths, or
 remotes. Private game IDE entries belong inside the private game repository or
 in ignored local workspace files after `node ai_studio/workspace/games.mjs
 preflight --json` passes.
@@ -29,7 +29,7 @@ repo:
 node ai_studio/dev_environment/vscode_projects.mjs --game <game-id>
 ```
 
-This resolves `game:<game-id>` through `ai_studio/workspace/games.local.json`,
+This resolves `game:<game-id>` through `ai_studio/workspace/catalog.local.json`,
 runs the workspace preflight, and writes `games/<game-id>/.vscode/tasks.json`
 plus `games/<game-id>/.vscode/launch.json`. It does not touch parent
 `.vscode/`.

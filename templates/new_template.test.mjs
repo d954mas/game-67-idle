@@ -20,6 +20,20 @@ function tempRepo() {
   writeFileSync(join(root, "templates", "template", "assets", "readme.txt"), "asset\n", "utf8");
   writeFileSync(join(root, "templates", "template", "src", "generated", "game.h"), "#pragma once\n", "utf8");
   writeFileSync(join(root, "templates", "template", "build", "stale.obj"), "generated\n", "utf8");
+  mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
+  writeFileSync(join(root, "templates", "template", "template.json"), JSON.stringify({
+    schema: "ai_studio.template.v1", id: "template", title: "Template", storageNamespace: "template",
+  }), "utf8");
+  writeFileSync(join(root, "templates", "template", "game-dependencies.json"), JSON.stringify({
+    schema: "ai_studio.game.dependencies.seed.v1",
+    engine: { source: "external/neotolis-engine", compatibility: "tested" },
+    features: [],
+    compatibility: "tested",
+  }), "utf8");
+  writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify({
+    schema: "ai_studio.workspace.catalog.v1",
+    mounts: [{ kind: "template", root: "templates/template", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] }],
+  }), "utf8");
   return root;
 }
 
@@ -37,23 +51,10 @@ test("new_template copies template, registers it, and refreshes VS Code files", 
   assert.equal(existsSync(join(root, "templates", "mobile-template", "src", "generated", "game.h")), true);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "build", "stale.obj")), false);
 
-  const registry = JSON.parse(readFileSync(join(root, "templates", "templates.json"), "utf8"));
-  assert.deepEqual(registry.templates, [
-    {
-      id: "mobile-template",
-      title: "mobile-template",
-      folder: "templates/mobile-template",
-      assets: "templates/mobile-template/assets",
-      status: "active",
-    },
-    {
-      id: "template",
-      title: "Template",
-      folder: "templates/template",
-      assets: "templates/template/assets",
-      status: "active",
-    },
-  ]);
+  const registry = JSON.parse(readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8"));
+  assert.deepEqual(registry.mounts.map((mount) => mount.root), ["templates/mobile-template", "templates/template"]);
+  assert.equal(existsSync(join(root, "templates", "mobile-template", "template.json")), true);
+  assert.equal(existsSync(join(root, "templates", "mobile-template", "game-dependencies.json")), true);
 
   const tasks = JSON.parse(readFileSync(join(root, ".vscode", "tasks.json"), "utf8"));
   const launch = JSON.parse(readFileSync(join(root, ".vscode", "launch.json"), "utf8"));
@@ -68,7 +69,7 @@ test("new_template copies template, registers it, and refreshes VS Code files", 
 test("new_template rejects existing template folders without --force", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(dirname(join(root, "templates", "templates.json")), { recursive: true });
+  mkdirSync(join(root, "templates"), { recursive: true });
 
   const result = spawnSync(process.execPath, [script, "--root", root, "--id", "template"], { encoding: "utf8" });
 

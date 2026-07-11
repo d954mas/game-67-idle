@@ -5,7 +5,7 @@
   "kind": "module",
   "moduleId": "workspace",
   "color": "#0f766e",
-  "description": "Local/private workspace mount resolver for game repositories available under games/<id> without making private game state part of the public Studio repository.",
+  "description": "Workspace-owned mount catalog, identity resolution, and privacy boundaries for public and local game or template repositories.",
   "tags": [
     "workspace",
     "private-repos",
@@ -17,7 +17,7 @@
       "kind": "doc",
       "path": "ai_studio/workspace/README.md",
       "title": "README.md",
-      "description": "Workspace module contract: public game registry, local ignored private registry, private nested repo boundary, preflight command, and validation.",
+      "description": "Defines workspace catalog, identity, private nested repository, preflight, and parent Git boundaries.",
       "role": "workspace privacy contract",
       "tags": [
         "workspace",
@@ -26,11 +26,37 @@
       ]
     },
     {
+      "id": "workspace:catalog-data",
+      "kind": "config",
+      "path": "ai_studio/workspace/catalog.json",
+      "title": "catalog.json",
+      "description": "Records tracked public workspace mount facts without duplicating game or template identity.",
+      "role": "public workspace mount catalog",
+      "tags": [
+        "workspace",
+        "catalog",
+        "config"
+      ]
+    },
+    {
+      "id": "workspace:catalog",
+      "kind": "tool",
+      "path": "ai_studio/workspace/catalog.mjs",
+      "title": "catalog.mjs",
+      "description": "Validates mount catalogs and derives game or template identity from owned manifests.",
+      "role": "workspace catalog resolver",
+      "tags": [
+        "workspace",
+        "catalog",
+        "resolver"
+      ]
+    },
+    {
       "id": "workspace:games",
       "kind": "tool",
       "path": "ai_studio/workspace/games.mjs",
       "title": "games.mjs",
-      "description": "Resolves public game mounts and explicit private local mounts, runs the private game preflight, and provides the parent Git command guard used by agent shell hooks.",
+      "description": "Filters resolved game mounts, runs private preflight, and provides the parent Git guard used by agent hooks.",
       "role": "game mount resolver, privacy preflight, and git guard",
       "tags": [
         "workspace",
@@ -39,12 +65,25 @@
       ]
     },
     {
+      "id": "workspace:catalog-test",
+      "kind": "test",
+      "path": "ai_studio/workspace/tests/catalog.test.mjs",
+      "title": "catalog.test.mjs",
+      "description": "Verifies catalog schemas, derived identity, collision handling, and dependency record preservation.",
+      "role": "workspace catalog contract tests",
+      "tags": [
+        "workspace",
+        "catalog",
+        "test"
+      ]
+    },
+    {
       "id": "workspace:games-test",
       "kind": "test",
       "path": "ai_studio/workspace/tests/private_games_registry.test.mjs",
       "title": "private_games_registry.test.mjs",
-      "description": "Verifies private game registry contracts.",
-      "role": "private game registry tests",
+      "description": "Verifies private catalog inclusion, leak preflight, and parent Git guard contracts.",
+      "role": "private workspace guard tests",
       "tags": [
         "workspace",
         "test",

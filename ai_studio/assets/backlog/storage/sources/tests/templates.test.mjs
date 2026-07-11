@@ -1,92 +1,28 @@
-﻿import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import assert from "node:assert/strict";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+
 import { listRegisteredTemplates, registerTemplateAssetSource, templateRegistryPath } from "../templates.mjs";
 
-function tempRoot() {
-  return mkdtempSync(join(tmpdir(), "ai-studio-templates-registry-"));
+function fixture(t) {
+  const root = mkdtempSync(join(tmpdir(), "catalog-templates-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  return root;
 }
 
-test("listRegisteredTemplates falls back to the repository template source", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  assert.deepEqual(listRegisteredTemplates(root), [{
-    id: "template",
-    title: "Template",
-    folder: "templates/template",
-    assets: "templates/template/assets",
-    status: "active",
-  }]);
+test("template asset source is a workspace catalog adapter", (t) => {
+  const root = fixture(t);
+  assert.deepEqual(registerTemplateAssetSource(root, { id: "demo-template", title: "Demo" }), {
+    id: "demo-template", title: "Demo", folder: "templates/demo-template", assets: "templates/demo-template/assets", status: "active",
+  });
+  assert.equal(templateRegistryPath(root), "ai_studio/workspace/catalog.json");
+  assert.deepEqual(listRegisteredTemplates(root).map((template) => template.id), ["demo-template"]);
 });
 
-test("registerTemplateAssetSource creates and lists a template asset source", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  const registered = registerTemplateAssetSource(root, { id: "mobile-template", title: "Mobile Template" });
-
-  assert.equal(registered.assets, "templates/mobile-template/assets");
-  assert.equal(templateRegistryPath(root), "templates/templates.json");
-  assert.deepEqual(listRegisteredTemplates(root), [
-    {
-      id: "mobile-template",
-      title: "Mobile Template",
-      folder: "templates/mobile-template",
-      assets: "templates/mobile-template/assets",
-      status: "active",
-    },
-    {
-      id: "template",
-      title: "Template",
-      folder: "templates/template",
-      assets: "templates/template/assets",
-      status: "active",
-    },
-  ]);
-
-  const parsed = JSON.parse(readFileSync(join(root, "templates", "templates.json"), "utf8"));
-  assert.equal(parsed.templates.length, 2);
-});
-
-test("registerTemplateAssetSource rejects non-kebab ids", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  assert.throws(() => registerTemplateAssetSource(root, { id: "Bad Template" }), /lowercase kebab-case/);
-});
-
-test("registerTemplateAssetSource keeps folder and assets inside the repository", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  assert.throws(
-    () => registerTemplateAssetSource(root, { id: "bad-template", folder: "../outside" }),
-    /template folder must be repo-relative/,
-  );
-  assert.throws(
-    () => registerTemplateAssetSource(root, { id: "bad-template", assets: "C:/outside/assets" }),
-    /template assets must be repo-relative/,
-  );
-});
-
-test("listRegisteredTemplates accepts UTF-8 BOM registry files", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const path = join(root, "templates", "templates.json");
-  mkdirSync(join(root, "templates"), { recursive: true });
-  writeFileSync(path, `\uFEFF${JSON.stringify({
-    schema: "ai_studio.assets.templates.v1",
-    templates: [{ id: "template", title: "Template", folder: "templates/template", assets: "templates/template/assets" }],
-  })}`, "utf8");
-
-  assert.deepEqual(listRegisteredTemplates(root), [{
-    id: "template",
-    title: "Template",
-    folder: "templates/template",
-    assets: "templates/template/assets",
-    status: "active",
-  }]);
+test("template asset source enforces derived roots and strict ids", (t) => {
+  const root = fixture(t);
+  assert.throws(() => registerTemplateAssetSource(root, { id: "Bad" }), /lowercase kebab-case/);
+  assert.throws(() => registerTemplateAssetSource(root, { id: "demo", folder: "../escape" }), /folder must be templates\/demo/);
 });

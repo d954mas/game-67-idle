@@ -316,32 +316,22 @@ test("validation report excludes local private game mounts from game scans", () 
   write(root, "games/secret-game/README.md", "# private game");
   write(
     root,
-    "games/games.json",
+    "ai_studio/workspace/catalog.json",
     JSON.stringify({
-      schema: "ai_studio.assets.games.v1",
-      games: [
-        { id: "public-game", title: "Public Game", folder: "games/public-game", assets: "games/public-game/assets" },
-      ],
+      schema: "ai_studio.workspace.catalog.v1",
+      mounts: [{ kind: "game", root: "games/public-game", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] }],
     }),
   );
+  write(root, "games/public-game/game.json", JSON.stringify({ schema: "ai_studio.game.v1", id: "public-game", title: "Public Game", storageNamespace: "public-game" }));
+  write(root, "games/public-game/dependencies.json", JSON.stringify({ schema: "ai_studio.game.dependencies.v1", engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }));
+  write(root, "games/secret-game/game.json", JSON.stringify({ schema: "ai_studio.game.v1", id: "secret-game", title: "Secret Game", storageNamespace: "secret-game" }));
+  write(root, "games/secret-game/dependencies.json", JSON.stringify({ schema: "ai_studio.game.dependencies.v1", engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }));
   write(
     root,
-    "ai_studio/workspace/games.local.json",
+    "ai_studio/workspace/catalog.local.json",
     JSON.stringify({
-      schema: "ai_studio.workspace.games.local.v1",
-      games: [
-        {
-          schemaVersion: 1,
-          storeId: "game:secret-game",
-          kind: "game",
-          gameId: "secret-game",
-          root: "games/secret-game",
-          visibility: "private",
-          gitRoot: "games/secret-game",
-          commitPolicy: "nested-private",
-          enabledStores: ["assets", "taskboard", "canvas", "evidence"],
-        },
-      ],
+      schema: "ai_studio.workspace.catalog.v1",
+      mounts: [{ kind: "game", root: "games/secret-game", visibility: "private", gitRoot: "games/secret-game", commitPolicy: "nested-private", enabledStores: ["assets"], aliases: [] }],
     }),
   );
 
@@ -353,7 +343,6 @@ test("validation report excludes local private game mounts from game scans", () 
 
   assert.equal(reportText.includes("secret-game"), false);
   assert.deepEqual(validation.issues.unmappedOutsideAiStudio, [
-    { path: "games/games.json" },
     { path: "games/public-game" },
   ]);
 });
@@ -377,9 +366,9 @@ test("repo tree maps game, template, feature, and game-design knowledge ownershi
   assert.equal(byPath.get("games")?.coverage, "self");
   assert.equal(byId.get("workspace:games-readme")?.path, "games/README.md");
 
-  assert.deepEqual(paths.filter((path) => path.startsWith("templates/template/")), []);
+  assert.deepEqual(paths.filter((path) => path.startsWith("templates/template/")), ["templates/template/template.json"]);
   assert.deepEqual(paths.filter((path) => path.startsWith("features/") && path !== "features/README.md" && path.split("/").length > 2), []);
-  assert.deepEqual(paths.filter((path) => path.startsWith("games/") && path.split("/").length > 2), []);
+  assert.deepEqual(paths.filter((path) => path.startsWith("games/") && path.split("/").length > 2), ["games/web-dressup/game.json"]);
 });
 
 test("coverage truth comes from git ls-files while untracked hygiene stays optional", () => {

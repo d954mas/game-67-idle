@@ -1,0 +1,6 @@
+{
+  "schema": "ai_studio.game.v1",
+  "id": "rb-dark-rpg",
+  "title": "RB Dark RPG",
+  "storageNamespace": "rb-dark-rpg"
+}

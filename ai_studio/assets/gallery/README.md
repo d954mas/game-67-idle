@@ -23,16 +23,16 @@ The gallery header lets the user choose which source to display:
 - All Assets: the shared manifest-backed asset library from
   `ai_studio/assets/backlog/storage/sources/libraries.json`.
 - Templates: registered template asset roots from
-  `templates/templates.json`.
+  the workspace catalog and template identity manifests.
 - Registered Games: public/tracked game-local asset folders from
-  `games/games.json`.
+  the workspace catalog and game identity manifests.
 
 The generated static-gallery command remains for review exports and standalone
 sharing, but it is not the normal browser entry.
 
 Public games created through
 `games/new_game.mjs --id <game-id> --visibility public` are registered
-automatically as `<game-id>/assets`. Private games stay out of `games/games.json`
+automatically as `<game-id>/assets`. Private games stay out of the tracked workspace catalog
 unless mounted through a private-aware workspace flow. The gallery does not scan
 root folders to guess games.
 
@@ -93,8 +93,8 @@ node ai_studio/assets/gallery/pull.mjs --ids <asset-ids> --to <game>/assets
 - The gallery consumes registered sources through backlog storage and workspace
   helpers. It does not own registry data: global library data currently lives in
   `../backlog/storage/sources/libraries.json`, template data in
-  `templates/templates.json`, public game data in `games/games.json`, and local
-  private mounts in ignored `ai_studio/workspace/games.local.json`.
+  `ai_studio/workspace/catalog.json`, and local private mounts in ignored
+  `ai_studio/workspace/catalog.local.json`.
 - `../backlog/storage/sources/libraries.mjs`, `templates.mjs`, `games.mjs`, and
   `../../workspace/games.mjs` read/update those registries for the gallery and
   CLI commands.

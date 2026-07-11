@@ -1,0 +1,16 @@
+{
+  "schema": "ai_studio.game.dependencies.seed.v1",
+  "engine": {
+    "source": "external/neotolis-engine",
+    "compatibility": "validated by the template build and test suite"
+  },
+  "features": [
+    { "id": "audio-core", "source": "features/audio-core", "compatibility": "validated by the template build and test suite" },
+    { "id": "game-events", "source": "features/game-events", "compatibility": "validated by the template build and test suite" },
+    { "id": "game-state", "source": "features/game-state", "compatibility": "validated by the template build and test suite" },
+    { "id": "items-core", "source": "features/items-core", "compatibility": "validated by the template build and test suite" },
+    { "id": "platform-sdk", "source": "features/platform-sdk", "compatibility": "validated by the template build and test suite" },
+    { "id": "progression-core", "source": "features/progression-core", "compatibility": "validated by the template build and test suite" }
+  ],
+  "compatibility": "seed for exact game-owned dependency records created from this template"
+}

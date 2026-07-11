@@ -4,12 +4,21 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
-import { localGameRegistryRelPath } from "../../../../workspace/games.mjs";
+import { localWorkspaceCatalogRelPath } from "../../../../workspace/games.mjs";
 import { searchAssets } from "../search.mjs";
 
 function writeJson(path, value) {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+function writeGameCatalog(root, id, local = false) {
+  writeJson(join(root, "games", id, "game.json"), { schema: "ai_studio.game.v1", id, title: id, storageNamespace: id });
+  writeJson(join(root, "games", id, "dependencies.json"), {
+    schema: "ai_studio.game.dependencies.v1", engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test",
+  });
+  writeJson(join(root, "ai_studio", "workspace", "catalog.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: local ? [] : [{ kind: "game", root: `games/${id}`, visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] }] });
+  if (local) writeJson(join(root, "ai_studio", "workspace", "catalog.local.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [{ kind: "game", root: `games/${id}`, visibility: "private", gitRoot: `games/${id}`, commitPolicy: "nested-private", enabledStores: ["assets"], aliases: [] }] });
 }
 
 test("searchAssets queries generated index for a pack manifest source", async (t) => {
@@ -110,19 +119,7 @@ test("searchAssets resolves a public game source by game id", async (t) => {
   const assets = join(root, "games", "public-game", "assets");
   mkdirSync(join(assets, "ui"), { recursive: true });
   writeFileSync(join(assets, "ui", "button.png"), "png", "utf8");
-  mkdirSync(join(root, "games"), { recursive: true });
-  writeJson(join(root, "games", "games.json"), {
-    schema: "ai_studio.assets.games.v1",
-    games: [
-      {
-        id: "public-game",
-        title: "Public Game",
-        folder: "games/public-game",
-        assets: "games/public-game/assets",
-        status: "active",
-      },
-    ],
-  });
+  writeGameCatalog(root, "public-game");
 
   const result = await searchAssets(root, {
     game: "public-game",
@@ -139,7 +136,7 @@ test("searchAssets resolves a private game source through preflighted mounts", a
   const root = mkdtempSync(join(tmpdir(), "asset-search-private-game-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
-  writeFileSync(join(root, ".gitignore"), `${localGameRegistryRelPath()}\n`, "utf8");
+  writeFileSync(join(root, ".gitignore"), `${localWorkspaceCatalogRelPath()}\n`, "utf8");
   writeFileSync(join(root, ".git", "info", "exclude"), "games/secret-game/\n", "utf8");
 
   const gameRoot = join(root, "games", "secret-game");
@@ -147,23 +144,7 @@ test("searchAssets resolves a private game source through preflighted mounts", a
   mkdirSync(join(assets, "ui"), { recursive: true });
   writeFileSync(join(assets, "ui", "private-button.png"), "png", "utf8");
   execFileSync("git", ["init"], { cwd: gameRoot, stdio: "ignore" });
-  writeJson(join(root, "ai_studio", "workspace", "games.local.json"), {
-    schema: "ai_studio.workspace.games.local.v1",
-    games: [
-      {
-        schemaVersion: 1,
-        storeId: "game:secret-game",
-        kind: "game",
-        gameId: "secret-game",
-        root: "games/secret-game",
-        visibility: "private",
-        gitRoot: "games/secret-game",
-        commitPolicy: "nested-private",
-        enabledStores: ["assets", "taskboard", "canvas", "evidence"],
-        assetRoot: "games/secret-game/assets",
-      },
-    ],
-  });
+  writeGameCatalog(root, "secret-game", true);
 
   const result = await searchAssets(root, {
     game: "secret-game",

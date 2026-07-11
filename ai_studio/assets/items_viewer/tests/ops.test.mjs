@@ -12,7 +12,7 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { localGameRegistryRelPath } from "../../../workspace/games.mjs";
+import { localWorkspaceCatalogRelPath } from "../../../workspace/games.mjs";
 import {
   getCatalogView,
   listCatalogs,
@@ -42,28 +42,21 @@ function writeJson(path, value) {
 }
 
 function writePrivateGameMount(root, gameId = "secret-game") {
-  writeJson(join(root, "ai_studio", "workspace", "games.local.json"), {
-    schema: "ai_studio.workspace.games.local.v1",
-    games: [
-      {
-        schemaVersion: 1,
-        storeId: `game:${gameId}`,
-        kind: "game",
-        gameId,
-        root: `games/${gameId}`,
-        visibility: "private",
-        gitRoot: `games/${gameId}`,
-        commitPolicy: "nested-private",
-        enabledStores: ["assets", "taskboard", "canvas", "evidence"],
-        assetRoot: `games/${gameId}/assets`,
-      },
-    ],
-  });
+  writeGameIdentity(root, gameId);
+  writeJson(join(root, "ai_studio", "workspace", "catalog.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [] });
+  writeJson(join(root, "ai_studio", "workspace", "catalog.local.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [
+    { kind: "game", root: `games/${gameId}`, visibility: "private", gitRoot: `games/${gameId}`, commitPolicy: "nested-private", enabledStores: ["assets", "taskboard", "canvas", "evidence"], aliases: [] },
+  ] });
+}
+
+function writeGameIdentity(root, gameId) {
+  writeJson(join(root, "games", gameId, "game.json"), { schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace: gameId });
+  writeJson(join(root, "games", gameId, "dependencies.json"), { schema: "ai_studio.game.dependencies.v1", engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" });
 }
 
 function privateGameFixture(root, gameId = "secret-game") {
   execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
-  writeFileSync(join(root, ".gitignore"), `${localGameRegistryRelPath()}\n`, "utf8");
+  writeFileSync(join(root, ".gitignore"), `${localWorkspaceCatalogRelPath()}\n`, "utf8");
   writeFileSync(join(root, ".git", "info", "exclude"), `games/${gameId}/\n`, "utf8");
   mkdirSync(join(root, "games", gameId, "content"), { recursive: true });
   execFileSync("git", ["init"], { cwd: join(root, "games", gameId), stdio: "ignore" });
@@ -120,20 +113,10 @@ test("listCatalogs hides private game mounts unless explicitly included", () => 
   const root = mkdtempSync(join(tmpdir(), "items-viewer-private-catalogs-"));
   try {
     privateGameFixture(root);
-    writeJson(join(root, "templates", "templates.json"), {
-      schema: "ai_studio.assets.templates.v1",
-      templates: [],
-    });
-    writeJson(join(root, "games", "games.json"), {
-      schema: "ai_studio.assets.games.v1",
-      games: [{
-        id: "public-game",
-        title: "Public Game",
-        folder: "games/public-game",
-        assets: "games/public-game/assets",
-        status: "active",
-      }],
-    });
+    writeGameIdentity(root, "public-game");
+    writeJson(join(root, "ai_studio", "workspace", "catalog.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [
+      { kind: "game", root: "games/public-game", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
+    ] });
     mkdirSync(join(root, "games", "public-game", "content"), { recursive: true });
     writeFileSync(join(root, "games", "public-game", "content", "items.json"), "{}", "utf8");
     writeFileSync(join(root, "games", "secret-game", "content", "items.json"), "{}", "utf8");

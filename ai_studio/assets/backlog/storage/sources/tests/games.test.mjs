@@ -1,85 +1,41 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
+
 import { gameRegistryPath, listRegisteredGames, registerGameAssetSource } from "../games.mjs";
 
-function tempRoot() {
-  return mkdtempSync(join(tmpdir(), "ai-studio-games-registry-"));
+function fixture(t) {
+  const root = mkdtempSync(join(tmpdir(), "catalog-games-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  return root;
 }
 
-test("registerGameAssetSource creates and lists a game asset source", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+function dependencies(root, id) {
+  const path = join(root, "games", id, "dependencies.json");
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, JSON.stringify({
+    schema: "ai_studio.game.dependencies.v1",
+    engine: { source: "external/neotolis-engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" },
+    features: [], compatibility: "test",
+  }));
+}
 
-  const registered = registerGameAssetSource(root, { id: "test-game", title: "Test Game" });
-
-  assert.equal(registered.assets, "games/test-game/assets");
-  assert.equal(gameRegistryPath(root), "games/games.json");
-  assert.deepEqual(listRegisteredGames(root), [{
-    id: "test-game",
-    title: "Test Game",
-    folder: "games/test-game",
-    assets: "games/test-game/assets",
-    status: "active",
-  }]);
+test("game asset source is a workspace catalog adapter", (t) => {
+  const root = fixture(t);
+  dependencies(root, "demo-game");
+  assert.deepEqual(registerGameAssetSource(root, { id: "demo-game", title: "Demo" }), {
+    id: "demo-game", title: "Demo", folder: "games/demo-game", assets: "games/demo-game/assets", status: "active",
+  });
+  assert.equal(gameRegistryPath(root), "ai_studio/workspace/catalog.json");
+  assert.deepEqual(listRegisteredGames(root).map((game) => game.id), ["demo-game"]);
+  const catalog = JSON.parse(readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8"));
+  assert.deepEqual(catalog.mounts[0].enabledStores, ["assets"]);
 });
 
-test("registerGameAssetSource upserts by game id", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  registerGameAssetSource(root, { id: "test-game", title: "Old" });
-  registerGameAssetSource(root, { id: "test-game", title: "New", folder: "./games/test-game/", assets: "./games/test-game/assets/" });
-
-  const parsed = JSON.parse(readFileSync(join(root, "games", "games.json"), "utf8"));
-  assert.equal(parsed.games.length, 1);
-  assert.deepEqual(listRegisteredGames(root), [{
-    id: "test-game",
-    title: "New",
-    folder: "games/test-game",
-    assets: "games/test-game/assets",
-    status: "active",
-  }]);
-});
-
-test("registerGameAssetSource rejects non-kebab ids", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  assert.throws(() => registerGameAssetSource(root, { id: "Bad Game" }), /lowercase kebab-case/);
-});
-
-test("registerGameAssetSource keeps folder and assets inside the repository", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  assert.throws(
-    () => registerGameAssetSource(root, { id: "bad-game", folder: "../outside" }),
-    /game folder must be repo-relative/,
-  );
-  assert.throws(
-    () => registerGameAssetSource(root, { id: "bad-game", assets: "C:/outside/assets" }),
-    /game assets must be repo-relative/,
-  );
-});
-
-test("listRegisteredGames accepts UTF-8 BOM registry files", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  const path = join(root, "games", "games.json");
-  mkdirSync(join(root, "games"), { recursive: true });
-  writeFileSync(path, `\uFEFF${JSON.stringify({
-    schema: "ai_studio.assets.games.v1",
-    games: [{ id: "test-game", title: "Test Game", folder: "games/test-game", assets: "games/test-game/assets" }],
-  })}`, "utf8");
-
-  assert.deepEqual(listRegisteredGames(root), [{
-    id: "test-game",
-    title: "Test Game",
-    folder: "games/test-game",
-    assets: "games/test-game/assets",
-    status: "active",
-  }]);
+test("game asset source enforces derived roots and strict ids", (t) => {
+  const root = fixture(t);
+  assert.throws(() => registerGameAssetSource(root, { id: "Bad" }), /lowercase kebab-case/);
+  assert.throws(() => registerGameAssetSource(root, { id: "demo", folder: "../escape" }), /folder must be games\/demo/);
 });

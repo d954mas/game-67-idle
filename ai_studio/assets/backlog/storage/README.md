@@ -150,7 +150,7 @@ update the index first. Unchanged sources use a snapshot check; changed sources
 rebuild from Pack Manifest metadata or a raw folder scan.
 
 For game-owned assets, prefer `--game <game-id>` over raw `--source-path`.
-Public games resolve from `games/games.json`. Private games resolve through
-`ai_studio/workspace/games.local.json` with the workspace preflight, and their
+Public games resolve from `ai_studio/workspace/catalog.json`. Private games resolve through
+`ai_studio/workspace/catalog.local.json` with the workspace preflight, and their
 generated indexes, snapshots, and previews stay under ignored `tmp/ai_studio/`
 paths.

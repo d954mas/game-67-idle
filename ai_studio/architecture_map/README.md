@@ -19,7 +19,7 @@ The map is data-driven:
 - `validate_map.mjs` merges the tree, derives coverage from `git ls-files`,
   scans AI Studio ownership locations and shallow workspace roots, and writes a local `validation-report.json`
   for offline inspection. That file is **git-ignored, not committed**. Local
-  private game mounts from `ai_studio/workspace/games.local.json` are excluded
+  private game mounts from `ai_studio/workspace/catalog.local.json` are excluded
   from parent architecture scans so their ids and paths do not appear in the
   generated report.
 - `api.mjs` is the Studio Shell adapter. `GET /api/architecture-validation`
