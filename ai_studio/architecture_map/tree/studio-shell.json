@@ -105,6 +105,19 @@
       ]
     },
     {
+      "id": "studio-shell:tests",
+      "title": "Studio Shell Tests",
+      "kind": "test",
+      "path": "ai_studio/studio_shell/tests",
+      "description": "Verifies Studio Shell boundary contracts.",
+      "role": "Studio Shell integration coverage",
+      "tags": [
+        "test",
+        "server",
+        "http"
+      ]
+    },
+    {
       "id": "studio-shell:implementation",
       "title": "Shared UI Implementation",
       "subtitle": "css/js internals",
