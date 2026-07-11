@@ -40,3 +40,7 @@ without coupling that content rewrite to the storage split.
 - 2026-07-11: Independent review cycle 1 found 0 HIGH and 4 actionable findings: tautological descriptions, ignored-tree hygiene noise, missing real-repo strict proof, and CLI help drift. All were fixed. Cycle 2 reported 0 HIGH and 0 actionable MEDIUM/LOW across architecture, correctness, ownership, tests, process, performance, and context cost.
 - 2026-07-11: Quality: QTECH_001=pass; evidence: focused validator tests, real-repository strict/hygiene report, import smoke, documentation references, and independent diff review.
 - 2026-07-11: Closed after tracked coverage, description policy, strict live validation, documentation checks, and two independent review cycles passed.
+- 2026-07-11: Wave 1 integration correction: `extensions/` is now a shallow
+  tracked scan root with explicit container, contract, experimental, and
+  skeletal-quarantine ownership nodes. Architecture Map passes 22/22; strict
+  coverage reports 352 mapped / 784 scanned with 0 issues.

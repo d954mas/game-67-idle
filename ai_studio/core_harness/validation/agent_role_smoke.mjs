@@ -19,7 +19,6 @@ export function readCodexRoleEvidence(text) {
   const observedRoles = new Set();
   const actualModels = new Set();
   const rolloutIds = new Set();
-  const sessionIds = new Set();
   const parentThreadIds = new Set();
   const depths = new Set();
   const agentPaths = new Set();
@@ -30,10 +29,10 @@ export function readCodexRoleEvidence(text) {
     try { record = JSON.parse(line); } catch { malformedRecords += 1; continue; }
     if (record.type === "session_meta") {
       const payload = record.payload || {};
+      if (payload.thread_source !== "subagent") continue;
       const spawn = payload.source?.subagent?.thread_spawn || {};
       threadSources.add(payload.thread_source || "");
       rolloutIds.add(payload.id || "");
-      sessionIds.add(payload.session_id || "");
       parentThreadIds.add(spawn.parent_thread_id || "");
       depths.add(spawn.depth ?? "");
       agentPaths.add(spawn.agent_path || "");
@@ -49,7 +48,6 @@ export function readCodexRoleEvidence(text) {
     observed_roles: [...observedRoles],
     actual_models: [...actualModels],
     rollout_ids: [...rolloutIds],
-    session_ids: [...sessionIds],
     parent_thread_ids: [...parentThreadIds],
     depths: [...depths],
     agent_paths: [...agentPaths],
@@ -66,7 +64,6 @@ export function verifyCodexRoleEvidence(evidence, requestedRole, expectedModel) 
   if (evidence.observed_roles?.length > 1) errors.push("transcript contains conflicting agent_role values");
   if (evidence.actual_models?.length > 1) errors.push("transcript contains conflicting model values");
   if (evidence.rollout_ids?.length !== 1 || !UUID_RE.test(evidence.rollout_ids[0])) errors.push("native rollout id is missing or conflicting");
-  if (evidence.session_ids?.length !== 1 || !UUID_RE.test(evidence.session_ids[0])) errors.push("native session id is missing or conflicting");
   if (evidence.parent_thread_ids?.length !== 1 || !UUID_RE.test(evidence.parent_thread_ids[0])) errors.push("native parent_thread_id is missing or conflicting");
   if (evidence.depths?.length !== 1 || !Number.isInteger(evidence.depths[0]) || evidence.depths[0] < 1) errors.push("native subagent depth is missing or invalid");
   if (evidence.agent_paths?.length !== 1 || !/^\/root\/[a-z0-9_/-]+$/i.test(evidence.agent_paths[0])) errors.push("native agent_path is missing or invalid");

@@ -41,3 +41,12 @@ test("feature command metadata uses the canonical Studio Python runner", () => {
     }
   }
 });
+
+test("ordinary Python requirements state their direct-only reproducibility boundary", () => {
+  const requirements = readFileSync(join(root, "ai_studio/python/requirements.direct.txt"), "utf8");
+  const readme = readFileSync(join(root, "ai_studio/dev_environment/README.md"), "utf8");
+  assert.match(requirements, /top-level requirements/i);
+  assert.match(requirements, /not a reproducible full lock/i);
+  assert.match(readme, /pip resolves transitive dependencies/i);
+  assert.doesNotMatch(readme, /requirements\.lock\.txt/);
+});

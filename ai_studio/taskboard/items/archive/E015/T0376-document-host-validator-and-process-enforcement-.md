@@ -43,3 +43,8 @@ not imply that a process convention was technically checked.
 - 2026-07-11: Independent review cycle 1 found 0 HIGH and 4 actionable findings; cycle 2 found 0 HIGH and 3 additional actionable findings across architecture, correctness, ownership, tests, process, performance, and context cost. All were fixed. Cycle 3 was clean from both independent reviewers: 0 HIGH, 0 actionable MEDIUM/LOW.
 - 2026-07-11: Quality: QTECH_001=pass; evidence: truthful proof_kind semantics, trusted native-rollout smoke boundary, 51 focused tests, strict repository validation, expected real fallback rejection, and two clean independent final reviews.
 - 2026-07-11: Closed after truthful enforcement classification, trusted native role/model smoke, explicit advisory report labels, green validation, and clean cycle-3 reviews.
+- 2026-07-11: Wave 1 integration correction: native rollout identity now uses
+  `session_meta.payload.id`, ignores unrelated parent session metadata, and no
+  longer requires the non-canonical child `payload.session_id`. Missing/generic
+  roles and model mismatches still fail; 23 focused validation tests pass and a
+  real fallback rollout is rejected for both missing role and wrong model.

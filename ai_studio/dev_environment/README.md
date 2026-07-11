@@ -14,9 +14,12 @@ node ai_studio/dev_environment/python_check.mjs
 node ai_studio/dev_environment/python_run.mjs -m unittest discover -s ai_studio/runtime_automation -p "*_test.py"
 ```
 
-Dependencies are pinned in `ai_studio/python/requirements.lock.txt`. To create
-or repair the environment, first install/repair Python 3.12 for the current
-Windows user, then pass that known executable once:
+Top-level ordinary Studio requirements use exact pins in
+`ai_studio/python/requirements.direct.txt`; `python_check.mjs` verifies those
+direct distributions. pip resolves transitive dependencies, so this is not a
+reproducible full dependency lock. To create or repair the environment, first
+install/repair Python 3.12 for the current Windows user, then pass that known
+executable once:
 
 ```powershell
 winget install --id Python.Python.3.12 --scope user

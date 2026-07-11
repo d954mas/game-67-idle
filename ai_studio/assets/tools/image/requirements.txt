@@ -1,1 +1,1 @@
--r ../../../python/requirements.lock.txt
+-r ../../../python/requirements.direct.txt

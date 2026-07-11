@@ -347,7 +347,7 @@ test("validation report excludes local private game mounts from game scans", () 
   ]);
 });
 
-test("repo tree maps game, template, feature, and game-design knowledge ownership without listing their files", () => {
+test("repo tree maps workspace and experimental extension ownership without listing implementation files", () => {
   const nodes = collectNodes(loadRepoTreeRoot());
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const byPath = new Map(nodes.filter((node) => node.path).map((node) => [node.path, node]));
@@ -365,6 +365,14 @@ test("repo tree maps game, template, feature, and game-design knowledge ownershi
   assert.equal(byPath.get("games")?.id, "workspace:games");
   assert.equal(byPath.get("games")?.coverage, "self");
   assert.equal(byId.get("workspace:games-readme")?.path, "games/README.md");
+  assert.equal(byId.get("workspace:extensions")?.path, "extensions");
+  assert.equal(byId.get("workspace:extensions")?.coverage, "self");
+  assert.equal(byId.get("workspace:extensions-readme")?.path, "extensions/README.md");
+  assert.equal(byId.get("workspace:extensions:experimental")?.path, "extensions/experimental");
+  assert.equal(
+    byId.get("workspace:extensions:experimental:skeletal-animation")?.path,
+    "extensions/experimental/skeletal_animation",
+  );
 
   assert.deepEqual(paths.filter((path) => path.startsWith("templates/template/")), ["templates/template/template.json"]);
   assert.deepEqual(paths.filter((path) => path.startsWith("features/") && path !== "features/README.md" && path.split("/").length > 2), []);
@@ -463,5 +471,9 @@ test("CLI help documents every strict description gate", () => {
 
 test("the tracked repository architecture report is strict-clean", () => {
   const validation = createValidationReport({ repoRoot });
+  assert.deepEqual(
+    validation.scanRoots.find((root) => typeof root === "object" && root.path === "extensions"),
+    { path: "extensions", mode: "root-files-and-child-directories" },
+  );
   assert.equal(hasStrictFailures(validation), false, JSON.stringify(validation.issues, null, 2));
 });

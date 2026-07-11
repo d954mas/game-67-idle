@@ -19,7 +19,9 @@ and benchmark startup/build cost before adding abstraction.
 ## Done when
 
 - [x] `studio.config` exposes the Python path and every ordinary Studio command
-      resolves the same root `.venv`; dependencies are pinned and checked.
+      resolves the same root `.venv`; top-level requirements are pinned and
+      checked, while pip-resolved transitive dependencies are not claimed as a
+      reproducible full lock.
 - [x] Heavy specialist tools may keep isolated environments, but no bundled
       Python or second general-purpose environment is introduced.
 - [x] The documented Windows repair path fixes the user-level Python association
@@ -47,3 +49,7 @@ None.
 - 2026-07-11: Independent review cycle 1 found the Windows-only resolver HIGH plus actionable dependency, parity, hermetic-test, benchmark, URL-path, and stale-comment issues; all were fixed. Cycles 2-3 converged at 0 HIGH and 0 actionable MEDIUM/LOW across architecture, correctness, ownership, tests, process, performance, and context cost. Lead completion audit then migrated remaining active ordinary Python contracts and added a focused regression scan.
 - 2026-07-11: Quality: QTECH_001=pass; evidence: strict Python prefix/pin checks, cross-platform resolver tests, active-contract scan, Node/Python suites, native CTest, CMake parity, measured benchmarks, Architecture Map strict validation, and independent diff review.
 - 2026-07-11: Closed after canonical cross-platform Python, mechanical CMake ownership splits, measured build baselines, strict integration checks, and three review cycles passed.
+- 2026-07-11: Wave 1 integration correction: renamed the six exact top-level
+  pins to `requirements.direct.txt` and documented that transitive packages are
+  pip-resolved, removing the earlier full-lock implication without changing the
+  installed dependency set.

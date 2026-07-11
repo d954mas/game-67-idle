@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import {
   activeTurnRequestTarget,
   activeTurnsForProject,
+  chatApi,
   permissionDecisionTarget,
   renderPermission,
 } from "../../../assets/canvas/site/chat_panel.js";
@@ -15,6 +16,63 @@ const css = readFileSync(resolve(import.meta.dirname, "../../../assets/canvas/si
 test("chat UI bootstraps a launch token and sends it on protected requests", () => {
   assert.match(panel, /\/api\/chat\/bootstrap/);
   assert.match(panel, /x-ai-studio-chat-token/);
+});
+
+test("a protected request refreshes one stale launch token and retries once", async () => {
+  const calls = [];
+  const responses = [
+    { status: 200, body: { token: "old-token" } },
+    { status: 200, body: { ok: true } },
+    { status: 403, body: { error: "forbidden" } },
+    { status: 200, body: { token: "fresh-token" } },
+    { status: 200, body: { ok: true } },
+    { status: 403, body: { error: "still forbidden" } },
+    { status: 200, body: { token: "newest-token" } },
+    { status: 403, body: { error: "still forbidden" } },
+    { status: 200, body: { token: "latest-token" } },
+    { status: 200, body: { ok: true } },
+  ];
+  const previousFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ url, init });
+    const response = responses.shift();
+    return {
+      ok: response.status >= 200 && response.status < 300,
+      status: response.status,
+      statusText: response.status === 403 ? "Forbidden" : "OK",
+      json: async () => response.body,
+    };
+  };
+  try {
+    await chatApi("POST", "/projects/p/clear", {}, "game:a");
+    await chatApi("POST", "/projects/p/clear", {}, "game:a");
+    await assert.rejects(
+      chatApi("POST", "/projects/p/clear", {}, "game:a"),
+      /still forbidden/,
+    );
+    await chatApi("POST", "/projects/p/clear", {}, "game:a");
+  } finally {
+    globalThis.fetch = previousFetch;
+  }
+
+  assert.deepEqual(calls.map(({ url }) => url), [
+    "/api/chat/bootstrap",
+    "/api/chat/projects/p/clear",
+    "/api/chat/projects/p/clear",
+    "/api/chat/bootstrap",
+    "/api/chat/projects/p/clear",
+    "/api/chat/projects/p/clear",
+    "/api/chat/bootstrap",
+    "/api/chat/projects/p/clear",
+    "/api/chat/bootstrap",
+    "/api/chat/projects/p/clear",
+  ]);
+  assert.equal(calls[1].init.headers["x-ai-studio-chat-token"], "old-token");
+  assert.equal(calls[2].init.headers["x-ai-studio-chat-token"], "old-token");
+  assert.equal(calls[4].init.headers["x-ai-studio-chat-token"], "fresh-token");
+  assert.equal(calls[5].init.headers["x-ai-studio-chat-token"], "fresh-token");
+  assert.equal(calls[7].init.headers["x-ai-studio-chat-token"], "newest-token");
+  assert.equal(calls[9].init.headers["x-ai-studio-chat-token"], "latest-token");
 });
 
 test("chat UI renders opaque permission JSON as text and exposes native decisions", () => {

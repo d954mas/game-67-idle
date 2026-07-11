@@ -7,9 +7,9 @@ import { spawnSync } from "node:child_process";
 import { studioPythonPath } from "../core_harness/tool_lib/studio_config.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const lockPath = join(repoRoot, "ai_studio", "python", "requirements.lock.txt");
+const requirementsPath = join(repoRoot, "ai_studio", "python", "requirements.direct.txt");
 const venvRoot = join(repoRoot, ".venv");
-const pins = readFileSync(lockPath, "utf8").split(/\r?\n/)
+const pins = readFileSync(requirementsPath, "utf8").split(/\r?\n/)
   .map((line) => line.trim()).filter((line) => line && !line.startsWith("#"));
 const python = studioPythonPath(repoRoot);
 const script = [

@@ -1,16 +1,17 @@
 {
   "id": "workspace-folders",
   "title": "Workspace Folders",
-  "subtitle": "games, templates, and features",
+  "subtitle": "games, templates, features, and extensions",
   "kind": "group",
   "color": "#64748b",
-  "description": "Repository workspace roots for reusable templates, copyable feature packs, and independent game folders. The map shows ownership boundaries here, not implementation files inside games, templates, or features.",
-  "role": "game, template, and feature workspace roots",
+  "description": "Repository workspace roots for reusable templates, copyable feature packs, independent game folders, and explicitly quarantined experimental extensions.",
+  "role": "game, template, feature, and extension workspace roots",
   "tags": [
     "workspace",
     "templates",
     "features",
-    "games"
+    "games",
+    "extensions"
   ],
   "children": [
     {
@@ -224,6 +225,65 @@
             "platform-sdk",
             "web",
             "L1"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "workspace:extensions",
+      "kind": "group",
+      "path": "extensions",
+      "coverage": "self",
+      "title": "extensions/",
+      "description": "Container for optional code outside default templates and reusable feature packs, with unsupported proofs kept under an explicit experimental quarantine.",
+      "role": "optional extension quarantine root",
+      "tags": [
+        "extensions",
+        "workspace",
+        "experimental"
+      ],
+      "children": [
+        {
+          "id": "workspace:extensions-readme",
+          "kind": "doc",
+          "path": "extensions/README.md",
+          "title": "README.md",
+          "description": "Extensions workspace entrypoint defining opt-in, support, build, and promotion boundaries for experimental code.",
+          "role": "extensions quarantine contract",
+          "tags": [
+            "extensions",
+            "experimental",
+            "docs"
+          ]
+        },
+        {
+          "id": "workspace:extensions:experimental",
+          "kind": "group",
+          "path": "extensions/experimental",
+          "coverage": "self",
+          "title": "experimental/",
+          "description": "Quarantine for unsupported opt-in proofs that are excluded from default discovery, packaging, builds, tests, and support.",
+          "role": "experimental extension quarantine",
+          "tags": [
+            "extensions",
+            "experimental",
+            "quarantine"
+          ],
+          "children": [
+            {
+              "id": "workspace:extensions:experimental:skeletal-animation",
+              "kind": "folder",
+              "path": "extensions/experimental/skeletal_animation",
+              "title": "skeletal_animation/",
+              "description": "Incomplete opt-in skeletal animation proof retained with its own capability, defect, and verification contracts outside production feature ownership.",
+              "role": "quarantined skeletal animation proof",
+              "tags": [
+                "extensions",
+                "experimental",
+                "skeletal-animation",
+                "quarantine"
+              ]
+            }
           ]
         }
       ]

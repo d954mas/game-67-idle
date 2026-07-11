@@ -76,3 +76,6 @@ None.
   experimental CTest, strict repository validation, and two clean independent
   reviews.
 - 2026-07-11: Closed after two review cycles: 0 HIGH, 0 actionable; experimental quarantine and validation proofs pass.
+- 2026-07-11: Wave 1 integration correction: the new top-level experimental
+  quarantine is explicitly represented in Architecture Map ownership and
+  tracked shallow coverage; 22/22 map tests and strict 352/784 validation pass.

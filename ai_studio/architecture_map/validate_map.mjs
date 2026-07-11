@@ -20,6 +20,7 @@ const defaultScanRoots = [
   { path: "templates", mode: "root-files-and-child-directories" },
   { path: "features", mode: "root-files-and-child-directories" },
   { path: "games", mode: "root-files-and-child-directories" },
+  { path: "extensions", mode: "root-files-and-child-directories" },
 ];
 
 function toPosix(value) {

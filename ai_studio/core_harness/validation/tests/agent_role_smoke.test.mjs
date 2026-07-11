@@ -14,13 +14,14 @@ const parentThreadId = "019f4d71-3c4e-7fd2-ad11-257dcc9361b4";
 
 function transcript(role = "fast-worker", model = "gpt-5.6-luna") {
   const records = [
-    { type: "session_meta", payload: { id: rolloutId, session_id: parentThreadId, thread_source: "subagent", source: { subagent: { thread_spawn: { parent_thread_id: parentThreadId, depth: 1, agent_path: "/root/smoke", agent_role: role } } } } },
+    { type: "session_meta", payload: { id: rolloutId, thread_source: "subagent", source: { subagent: { thread_spawn: { parent_thread_id: parentThreadId, depth: 1, agent_path: "/root/smoke", agent_nickname: "Smoke", agent_role: role } } } } },
+    { type: "session_meta", payload: { id: parentThreadId, thread_source: "user" } },
     { type: "turn_context", payload: { model } },
   ];
   return `${records.map((record) => JSON.stringify(record)).join("\n")}\n`;
 }
 
-test("role smoke accepts matching requested role and actual model", () => {
+test("role smoke accepts the canonical rollout schema and matching role/model", () => {
   const evidence = readCodexRoleEvidence(transcript());
   assert.deepEqual(verifyCodexRoleEvidence(evidence, "fast-worker", "gpt-5.6-luna"), []);
 });
@@ -31,7 +32,7 @@ test("role smoke rejects model and role mismatch", () => {
   assert.match(errors.join("\n"), /model mismatch/);
 });
 
-test("role smoke rejects generic fallback and missing model", () => {
+test("role smoke rejects generic or missing agent role and missing model", () => {
   const errors = verifyCodexRoleEvidence(readCodexRoleEvidence(transcript(null, "")), "fast-worker", "gpt-5.6-luna");
   assert.match(errors.join("\n"), /generic fallback or missing agent_role/);
   assert.match(errors.join("\n"), /actual selected model is missing/);
@@ -44,7 +45,6 @@ test("role smoke rejects a top-level role without native spawn evidence", () => 
   ];
   const evidence = readCodexRoleEvidence(`${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
   const errors = verifyCodexRoleEvidence(evidence, "fast-worker", "gpt-5.6-luna");
-  assert.match(errors.join("\n"), /generic fallback or missing agent_role/);
   assert.match(errors.join("\n"), /native rollout id/);
 });
 
@@ -60,15 +60,20 @@ test("role smoke rejects malformed or conflicting native evidence", () => {
   assert.match(errors.join("\n"), /conflicting model/);
 });
 
-test("role smoke rejects conflicting thread sources", () => {
-  const userSession = JSON.stringify({
-    type: "session_meta",
-    payload: { thread_source: "user", source: { subagent: { thread_spawn: { agent_role: "fast-worker" } } } },
-  });
-  const evidence = readCodexRoleEvidence(`${userSession}\n${transcript()}`);
+test("role smoke rejects conflicting explicitly reported agent roles", () => {
+  const evidence = readCodexRoleEvidence(`${transcript("fast-worker")}${transcript("researcher")}`);
   const errors = verifyCodexRoleEvidence(evidence, "fast-worker", "gpt-5.6-luna");
-  assert.match(errors.join("\n"), /conflicting thread_source/);
-  assert.match(errors.join("\n"), /not a native subagent transcript/);
+  assert.match(errors.join("\n"), /conflicting agent_role/);
+});
+
+test("role smoke rejects conflicting native rollout ids", () => {
+  const conflictingNative = JSON.stringify({
+    type: "session_meta",
+    payload: { id: "019f5001-1509-77f2-8624-c41e352d22e3", thread_source: "subagent", source: { subagent: { thread_spawn: { parent_thread_id: parentThreadId, depth: 1, agent_path: "/root/smoke", agent_role: null } } } },
+  });
+  const evidence = readCodexRoleEvidence(`${transcript()}${conflictingNative}\n`);
+  const errors = verifyCodexRoleEvidence(evidence, "fast-worker", "gpt-5.6-luna");
+  assert.match(errors.join("\n"), /native rollout id is missing or conflicting/);
 });
 
 test("role smoke CLI reports native evidence fields as JSON", (t) => {
@@ -87,6 +92,11 @@ test("role smoke CLI reports native evidence fields as JSON", (t) => {
   const output = JSON.parse(result.stdout);
   assert.equal(output.observed_agent_role, "fast-worker");
   assert.equal(output.actual_model, "gpt-5.6-luna");
+  assert.deepEqual(output.rollout_ids, [rolloutId]);
+  assert.deepEqual(output.parent_thread_ids, [parentThreadId]);
+  assert.deepEqual(output.depths, [1]);
+  assert.deepEqual(output.agent_paths, ["/root/smoke"]);
+  assert.equal(Object.hasOwn(output, "session_ids"), false);
   assert.equal(output.pass, true);
 });
 

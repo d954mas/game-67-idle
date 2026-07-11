@@ -45,3 +45,7 @@ chat window before the operation executes.
 - 2026-07-11: Independent review converged in three cycles. Cycle 1 fixed the allow/cancel race, mutable request snapshot, terminal retention, and project/store/turn binding. Cycles 2-3 reported 0 HIGH and 0 actionable MEDIUM/LOW across architecture, correctness, ownership, tests, process, performance, and context cost.
 - 2026-07-11: Quality: QTECH_001=pass; QCLR_001=pass; QCLR_002=pass; evidence: focused permission/security tests plus live desktop and tall-phone approval-state inspection with measured bounds.
 - 2026-07-11: Closed after permission boundary, security, UI, regression, browser, and independent review evidence passed.
+- 2026-07-11: Wave 1 integration correction: already-open Canvas tabs now
+  invalidate a stale launch token after Studio Shell restart, bootstrap once,
+  and retry each protected POST at most once. Chat regression suite passes
+  75/75, including bounded stale-token recovery.

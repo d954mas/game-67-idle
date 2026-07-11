@@ -96,13 +96,36 @@ async function chatHeaders(protectedRequest, storeId = state.storeId) {
   return canvasStoreHeaders(storeId, headers);
 }
 
-async function chatApi(method, path, body, storeId = state.storeId) {
+async function fetchProtectedChat(url, body, storeId = state.storeId) {
+  const request = async () => {
+    const headers = await chatHeaders(true, storeId);
+    return {
+      response: await fetch(url, { method: "POST", headers, body }),
+      token: headers["x-ai-studio-chat-token"],
+    };
+  };
+  let result = await request();
+  if (result.response.status !== 403) return result.response;
+
+  // A Studio Shell restart on the same port invalidates the token cached by an
+  // already-open Canvas tab. Only clear the token that actually failed: another
+  // concurrent request may already have refreshed it. Retry exactly once so a
+  // genuine permission denial cannot loop.
+  if (chatToken === result.token) chatToken = null;
+  result = await request();
+  if (result.response.status === 403 && chatToken === result.token) chatToken = null;
+  return result.response;
+}
+
+export async function chatApi(method, path, body, storeId = state.storeId) {
   const protectedRequest = method === "POST";
-  const res = await fetch(`${CHAT_BASE}${path}`, {
-    method,
-    headers: await chatHeaders(protectedRequest, storeId),
-    body: protectedRequest ? JSON.stringify(body || {}) : undefined,
-  });
+  const encodedBody = protectedRequest ? JSON.stringify(body || {}) : undefined;
+  const res = protectedRequest
+    ? await fetchProtectedChat(`${CHAT_BASE}${path}`, encodedBody, storeId)
+    : await fetch(`${CHAT_BASE}${path}`, {
+      method,
+      headers: await chatHeaders(false, storeId),
+    });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
@@ -133,11 +156,10 @@ function dispatchSseBlock(raw, handlers) {
 // fetch Response body as a stream and splits it on the SSE blank-line block separator by
 // hand. `handlers` keys are event names (progress / op-committed / final / error).
 async function streamChatMessage(projectId, body, handlers) {
-  const res = await fetch(`${CHAT_BASE}/projects/${encodeURIComponent(projectId)}/message`, {
-    method: "POST",
-    headers: await chatHeaders(true),
-    body: JSON.stringify(body),
-  });
+  const res = await fetchProtectedChat(
+    `${CHAT_BASE}/projects/${encodeURIComponent(projectId)}/message`,
+    JSON.stringify(body),
+  );
   if (!res.ok) {
     const data = await res.json().catch(() => ({}));
     throw new Error(data.error || res.statusText);

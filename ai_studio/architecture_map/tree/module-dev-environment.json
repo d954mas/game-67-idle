@@ -26,12 +26,12 @@
       ]
     },
     {
-      "id": "dev-environment:python-lock",
+      "id": "dev-environment:python-requirements",
       "kind": "config",
-      "path": "ai_studio/python/requirements.lock.txt",
-      "title": "requirements.lock.txt",
-      "description": "Pins the shared root environment dependencies used by ordinary Studio Python tooling.",
-      "role": "ordinary Studio Python dependency lock",
+      "path": "ai_studio/python/requirements.direct.txt",
+      "title": "requirements.direct.txt",
+      "description": "Exact top-level requirements for ordinary Studio Python tooling; transitive packages remain pip-resolved rather than fully locked.",
+      "role": "ordinary Studio direct Python requirements",
       "tags": ["python", "dependencies", "config"]
     },
     {
@@ -48,7 +48,7 @@
       "kind": "validation",
       "path": "ai_studio/dev_environment/python_check.mjs",
       "title": "python_check.mjs",
-      "description": "Validates the root environment ownership, interpreter version, and pinned dependencies.",
+      "description": "Validates root environment ownership, interpreter version, and exact top-level requirement versions.",
       "role": "Studio Python environment validator",
       "tags": ["dev-environment", "python", "validation"]
     },

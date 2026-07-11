@@ -1,0 +1,8 @@
+# Exact top-level requirements for ordinary Studio tooling.
+# pip resolves transitive dependencies; this file is not a reproducible full lock.
+numpy==2.4.6
+scipy==1.17.1
+Pillow==12.2.0
+rembg==2.0.76
+onnxruntime==1.27.0
+truststore==0.10.4

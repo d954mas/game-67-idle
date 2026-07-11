@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const venvPython = join(repoRoot, ".venv", process.platform === "win32" ? "Scripts/python.exe" : "bin/python");
-const lockPath = join(repoRoot, "ai_studio", "python", "requirements.lock.txt");
+const requirementsPath = join(repoRoot, "ai_studio", "python", "requirements.direct.txt");
 
 function valueAfter(argv, flag) {
   const index = argv.indexOf(flag);
@@ -26,5 +26,5 @@ if (!existsSync(venvPython)) {
   run(resolve(basePython), ["-c", "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)"]);
   run(resolve(basePython), ["-m", "venv", ".venv"]);
 }
-run(venvPython, ["-m", "pip", "install", "-r", lockPath]);
+run(venvPython, ["-m", "pip", "install", "-r", requirementsPath]);
 run(process.execPath, ["ai_studio/dev_environment/python_check.mjs"]);
