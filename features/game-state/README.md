@@ -69,7 +69,7 @@ Default template integration uses:
 For a game-specific variant, pass explicit paths:
 
 ```powershell
-py -3.12 features/game-state/scripts/generate_state.py --schema games/<game-id>/state/game_state.schema.json --out-dir games/<game-id>/src/generated
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema games/<game-id>/state/game_state.schema.json --out-dir games/<game-id>/src/generated
 ```
 
 Runtime state cannot be disabled (no build flag). To remove DevAPI commands
@@ -80,7 +80,7 @@ from the build, configure `GAME_DEVAPI_ENABLED=OFF`.
 Generate from the default schema:
 
 ```powershell
-py -3.12 features/game-state/scripts/generate_state.py
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py
 ```
 
 Without `--out-dir`, the command writes to `build/generated/game-state` under
@@ -89,7 +89,7 @@ the template or game that owns the selected schema.
 Run generator tests:
 
 ```powershell
-py -3.12 features/game-state/scripts/generate_state_test.py
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state_test.py
 ```
 
 ## Boundaries

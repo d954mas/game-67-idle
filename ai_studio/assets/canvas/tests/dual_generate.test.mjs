@@ -127,8 +127,9 @@ test("buildGeneratePlateCommand: builds the exact argv, never spawns anything (g
     inputPngPath: "C:/tmp/input.png",
     prompt: "test prompt",
     outPath: "C:/tmp/out.png",
+    pythonPath: "test-python",
   });
-  assert.equal(command, "python");
+  assert.equal(command, "test-python");
   assert.match(args[0], /generate_image\.py$/, "argv[0] is the codex image-generation skill script");
   assert.deepEqual(args.slice(1), [
     "--input-image", "C:/tmp/input.png",

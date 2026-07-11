@@ -6,7 +6,7 @@ same write_if_changed/SystemExit discipline) -- this one bakes each track's
 `curve` PRESET into a compile-time `int64_t cost[]` table so the runtime
 never runs float/formula math for level-ups (build_spec_t0327_i3 §5.2/§2.3).
 
-    py -3.12 features/progression-core/scripts/generate_progression_tracks.py \
+    node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py \
         --catalog content/progression.json \
         --items content/items.json \
         --out-dir <dir>

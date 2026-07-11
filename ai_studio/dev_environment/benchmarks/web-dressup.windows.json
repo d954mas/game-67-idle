@@ -1,0 +1,77 @@
+{
+  "schema": "ai_studio.toolchain_benchmark.v2",
+  "measuredAt": "2026-07-11T04:37:17.885Z",
+  "game": "web-dressup",
+  "source": "games/web-dressup",
+  "sampleCount": 3,
+  "workspaceNote": "",
+  "machine": {
+    "platform": "win32",
+    "release": "10.0.26200",
+    "cpu": "Intel(R) Core(TM) i9-14900HX",
+    "cores": 32,
+    "node": "v24.15.0"
+  },
+  "toolchain": {
+    "python": "Python 3.12.4",
+    "cmake": "cmake version 3.29.6",
+    "ninja": "1.12.1",
+    "clang": "clang version 19.1.7"
+  },
+  "revision": {
+    "commit": "562fb03840abcadcceb2bf7a0954377faee282da",
+    "dirtyEntries": 88
+  },
+  "metrics": {
+    "pythonStartup": {
+      "samplesMs": [
+        131.2,
+        67.1,
+        44.3
+      ],
+      "minMs": 44.3,
+      "medianMs": 67.1,
+      "maxMs": 131.2
+    },
+    "coldConfigure": {
+      "samplesMs": [
+        12432.1,
+        17113.7,
+        6409.6
+      ],
+      "minMs": 6409.6,
+      "medianMs": 12432.1,
+      "maxMs": 17113.7
+    },
+    "coldBuild": {
+      "samplesMs": [
+        59490.4,
+        49646.5,
+        29015.6
+      ],
+      "minMs": 29015.6,
+      "medianMs": 49646.5,
+      "maxMs": 59490.4
+    },
+    "warmBuild": {
+      "samplesMs": [
+        887.1,
+        709,
+        639.6
+      ],
+      "minMs": 639.6,
+      "medianMs": 709,
+      "maxMs": 887.1
+    },
+    "noopBuild": {
+      "samplesMs": [
+        1112.3,
+        349,
+        345.1
+      ],
+      "minMs": 345.1,
+      "medianMs": 349,
+      "maxMs": 1112.3
+    }
+  }
+}

@@ -16,7 +16,7 @@ Runs as a ctest via CMakeLists.txt's `items_ops_test` target (Python3_EXECUTABLE
 + "${ITEMS_CORE_SCRIPTS}/items_ops_test.py", WORKING_DIRECTORY = the game's
 template root), or directly via pytest from the repo root:
 
-    py -3.12 -m pytest features/items-core/scripts/items_ops_test.py
+    node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops_test.py
 """
 
 from __future__ import annotations

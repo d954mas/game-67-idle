@@ -20,8 +20,8 @@
     "devapi_condition": "GAME_DEVAPI_ENABLED"
   },
   "commands": {
-    "generate": "py -3.12 features/game-state/scripts/generate_state.py",
-    "test": "py -3.12 features/game-state/scripts/generate_state_test.py"
+    "generate": "node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py",
+    "test": "node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state_test.py"
   },
   "manuals": {
     "install": "features/game-state/INSTALL.md",

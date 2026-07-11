@@ -24,9 +24,8 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
-  STUDIO_CONFIG_SCHEMA,
   corridorKeyRoot,
-  loadStudioConfig,
+  studioPythonPath,
   videoGenRoot,
 } from "../../../core_harness/tool_lib/studio_config.mjs";
 
@@ -54,21 +53,7 @@ export function looksAbsolute(value) {
 // A missing config value or a configured interpreter absent on disk is a hard
 // error naming the one-shot setup command.
 export function resolveRepoPython(root = REPO_ROOT) {
-  const raw = String(loadStudioConfig(root).pythonPath || "").trim();
-  if (!raw) {
-    throw new Error(
-      `studio config is missing pythonPath (schema ${STUDIO_CONFIG_SCHEMA}); ` +
-        `create the studio venv: node ai_studio/assets/tools/image/_bridge/setup_python.mjs`,
-    );
-  }
-  const abs = looksAbsolute(raw) ? resolve(raw) : resolve(root, raw);
-  if (!existsSync(abs)) {
-    throw new Error(
-      `repo Python interpreter not found at ${abs}; ` +
-        `create the studio venv: node ai_studio/assets/tools/image/_bridge/setup_python.mjs`,
-    );
-  }
-  return abs;
+  return studioPythonPath(root);
 }
 
 // --- Isolated-experiment paths (all under videoGenRoot; machine-local) --------

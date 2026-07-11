@@ -44,7 +44,7 @@ node ai_studio/core_harness/profiling/status.mjs --agents
 Install optional full-gate Python dependencies only when a module asks for them:
 
 ```powershell
-py -3.12 -m pip install -r ai_studio/core_harness/profiling/requirements-full.txt
+node ai_studio/dev_environment/python_run.mjs -m pip install -r ai_studio/core_harness/profiling/requirements-full.txt
 ```
 
 ## Files

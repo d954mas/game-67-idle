@@ -208,7 +208,7 @@ relocation).
 1. Edit `content/progression.json` (`namespace` + `tracks[]`; form mirrors
    `items.json`). `id` is a bare slug (`"hero"`, not `"tmpl.hero"`) — track
    ids are progression-internal, not items-namespaced.
-2. Build codegen: `py -3.12 features/progression-core/scripts/generate_progression_tracks.py
+2. Build codegen: `node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py
    --catalog content/progression.json --items content/items.json --out-dir <dir>` —
    emits `progression_tracks.gen.{h,c}`. `--items` is the cross-check:
    `currency_def` (manual/auto tracks) must name an existing items def with

@@ -109,7 +109,7 @@ add_test(NAME items_ops_test COMMAND "${Python3_EXECUTABLE}"
 ## Verify
 
 ```powershell
-py -3.12 features/items-core/scripts/items_ops_test.py
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops_test.py
 ctest --test-dir templates/template/build/native-debug --output-on-failure
 ```
 

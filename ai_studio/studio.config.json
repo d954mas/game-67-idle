@@ -3,7 +3,7 @@
   "canvasProjectsRoot": "C:/Users/ROG/YandexDisk/gamedev/ai_studio/canvas_projects",
   "canvasLocalCacheRoot": "C:/Users/ROG/AppData/Local/ai_studio/canvas_cache",
   "canvasHistoryDepth": 200,
-  "pythonPath": ".venv/Scripts/python.exe",
+  "pythonPath": ".venv",
   "videoGenRoot": "C:/projects/video_gen_experiment",
   "corridorKeyRoot": "C:/projects/ai_studio_tools/CorridorKey"
 }

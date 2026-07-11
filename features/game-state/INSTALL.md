@@ -148,7 +148,7 @@ templates/template/build/<config>/generated/game-state/
 For a game-local manual generation run:
 
 ```powershell
-py -3.12 features/game-state/scripts/generate_state.py --schema games/<game-id>/state/game_state.schema.json
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema games/<game-id>/state/game_state.schema.json
 ```
 
 Pass `--out-dir` only when the project has an explicit generated-file policy.
@@ -182,7 +182,7 @@ adds them.
 Run generator tests:
 
 ```powershell
-py -3.12 features/game-state/scripts/generate_state_test.py
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state_test.py
 ```
 
 Verify the template default build:
@@ -202,7 +202,7 @@ cmake --build templates/template/build/feature-review-release --target game
 Run the template bot unit tests:
 
 ```powershell
-py -3.12 templates/template/devapi/smoke_bot_test.py
+node ai_studio/dev_environment/python_run.mjs templates/template/devapi/smoke_bot_test.py
 ```
 
 With the template's two fragments registered (`settings` before `game`),
@@ -230,7 +230,7 @@ Web persistence check (A2.4 item 2, CI-optional/advisory -- headless-localStorag
 automation is capricious, so a failure here does not fail A2 acceptance):
 
 ```powershell
-python templates/template/tests/web_persistence_check.py
+node ai_studio/dev_environment/python_run.mjs templates/template/tests/web_persistence_check.py
 ```
 
 Builds the template for wasm with `GAME_DEVAPI_ENABLED=ON`, serves it, drives a
@@ -257,7 +257,7 @@ the template's EMSCRIPTEN link block, gated on `GAME_DEVAPI_ENABLED`. The
 Debug wasm executable links and boots under ASan. T0333 then delivered the
 template web packaging path (relative pack over HTTP, tracked `index.html`
 shell, `tools/build_web.sh` + `tools/serve_web.mjs`, preset `wasm-devapi-debug`):
-`python templates/template/tests/web_devapi_check.py` now proves the shim
+`node ai_studio/dev_environment/python_run.mjs templates/template/tests/web_devapi_check.py` now proves the shim
 round-trip in a headless browser (`endpoints` + `command.describe` over
 `window.__devapi.submit`) with one command. A full web BOT driver (browser
 site+agent parity) is still future.

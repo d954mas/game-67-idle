@@ -6,7 +6,7 @@ features/game-state/scripts/generate_state.py, design doc §9 "не смешив
 this one is compile-time content embed (const tables), not a save-state
 fragment generator. Pattern mirrors games/rb-dark-rpg/tools/generate_dialogue_content.py.
 
-    py -3.12 features/items-core/scripts/generate_items_catalog.py \
+    node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_catalog.py \
         --catalog content/items.json --schema content/item_fields.schema.json \
         --out-dir <dir>
 

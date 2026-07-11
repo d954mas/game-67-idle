@@ -99,7 +99,7 @@ evaluator or production blob builder. It consumes the normalized fixtures in
 `docs/items_lua_schema_api_contract_2026-07-10.md` for the exact boundary.
 
 ```powershell
-py -3.12 features/items-core/scripts/generate_items_api_proof_test.py
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof_test.py
 cmake --build templates/template/build/native-debug --target test_items_api_core_only test_items_api
 ```
 

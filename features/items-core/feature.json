@@ -17,13 +17,13 @@
     "the consuming game's own src/features/items/reason_tags.h (closed reason-verb list, resolved via the game's include-path, §2.3 of build_spec_t0337_2026-07-07.md)"
   ],
   "commands": {
-    "generate": "py -3.12 features/items-core/scripts/generate_items_catalog.py",
-    "list": "py -3.12 features/items-core/scripts/items_ops.py list",
-    "validate": "py -3.12 features/items-core/scripts/items_ops.py validate",
-    "schema": "py -3.12 features/items-core/scripts/items_ops.py schema",
-    "test": "py -3.12 features/items-core/scripts/items_ops_test.py",
-    "api_proof": "py -3.12 features/items-core/scripts/generate_items_api_proof.py --snapshot features/items-core/tests/fixtures/items_api_weapon_proof.json --out-dir <build-dir>",
-    "api_proof_test": "py -3.12 features/items-core/scripts/generate_items_api_proof_test.py"
+    "generate": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_catalog.py",
+    "list": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py list",
+    "validate": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py validate",
+    "schema": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py schema",
+    "test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops_test.py",
+    "api_proof": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof.py --snapshot features/items-core/tests/fixtures/items_api_weapon_proof.json --out-dir <build-dir>",
+    "api_proof_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof_test.py"
   },
   "manuals": {
     "install": "features/items-core/INSTALL.md",

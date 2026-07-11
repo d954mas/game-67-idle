@@ -17,7 +17,7 @@
     "features/progression-core"
   ],
   "commands": {
-    "generate": "py -3.12 features/progression-core/scripts/generate_progression_tracks.py"
+    "generate": "node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py"
   },
   "manuals": {
     "install": "features/progression-core/INSTALL.md"

@@ -8,7 +8,7 @@ Replaces re-deriving 3-4 manual invocations every session. Game-agnostic (uses
 only the universal framebuffer + ui_readability). Pass --reuse to attach to an
 already-running game and pay the ~1.7s launch only once per session.
 
-Usage: py -3.12 ai_studio/runtime_automation/iterate.py [port] [--reuse]
+Usage: node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/iterate.py [port] [--reuse]
 """
 from __future__ import annotations
 

@@ -914,9 +914,9 @@ handed-over `render_spec.json`, and a small `render_report.json`. It records a
 geometry change so it is **not** journaled. Compositing is done by our own Python
 tool `tools/render_group.py` (PIL): `ops.renderGroup` writes a render spec
 (absolute file paths, group bounds, scale, background, output/report paths) and
-spawns the script directly with the same robust Python discovery the image tools
-bridge uses (`AI_STUDIO_PYTHON`/`PYTHON` env, bundled runtime, `py -3.12`, then
-`python`). A direct child-process call is fine here because this tool is ours.
+spawns the script with the strict root-`.venv` interpreter resolved from
+`studio.config.json`, the same contract used by the image-tools bridge. A
+direct child-process call is fine here because this tool is ours.
 Each element is drawn at its display box (`element.w`/`h`) scaled by `scale`,
 offset relative to the top group origin, and alpha-composited so overlap and
 transparency stay correct; anything outside the top group box is clipped. The spec

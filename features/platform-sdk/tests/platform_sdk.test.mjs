@@ -151,7 +151,7 @@ test("build tooling maps publish targets to exactly one platform SDK adapter", (
 });
 
 test("template CMake isolates web presets by publish target", () => {
-  const cmake = readFileSync(join(HERE, "../../../templates/template/CMakeLists.txt"), "utf8");
+  const cmake = readFileSync(join(HERE, "../../../templates/template/cmake/GameOptions.cmake"), "utf8");
 
   assert.match(cmake, /set\(GAME_PUBLISH_TARGET "local" CACHE STRING/);
   assert.match(cmake, /if\(EMSCRIPTEN AND NOT GAME_PUBLISH_TARGET STREQUAL "local"\)/);
@@ -160,7 +160,7 @@ test("template CMake isolates web presets by publish target", () => {
 });
 
 test("web builds use a checkout-local Emscripten cache by default", () => {
-  const cmake = readFileSync(join(HERE, "../../../templates/template/CMakeLists.txt"), "utf8");
+  const cmake = readFileSync(join(HERE, "../../../templates/template/cmake/GameOptions.cmake"), "utf8");
   const buildWeb = readFileSync(join(HERE, "../../../templates/template/tools/build_web.sh"), "utf8");
 
   assert.match(cmake, /set\(GAME_EMSCRIPTEN_CACHE_DIR "\$\{_game_default_em_cache\}" CACHE PATH/);

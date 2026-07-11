@@ -2,6 +2,32 @@
 
 Local developer-environment helpers for this AI Studio workspace.
 
+## Studio Python
+
+Every ordinary Studio Python command resolves the root `.venv` named by
+`studio.config.json.pythonPath` through `studioPythonPath()`. The resolver picks
+`Scripts/python.exe` on Windows and `bin/python` on Linux/macOS. There is no
+PATH, `py`, system-Python, or specialist environment fallback.
+
+```powershell
+node ai_studio/dev_environment/python_check.mjs
+node ai_studio/dev_environment/python_run.mjs -m unittest discover -s ai_studio/runtime_automation -p "*_test.py"
+```
+
+Dependencies are pinned in `ai_studio/python/requirements.lock.txt`. To create
+or repair the environment, first install/repair Python 3.12 for the current
+Windows user, then pass that known executable once:
+
+```powershell
+winget install --id Python.Python.3.12 --scope user
+# Disable stale Microsoft Store python aliases in Windows "App execution aliases" if needed.
+node ai_studio/dev_environment/python_setup.mjs --base-python "C:\Path\To\Python312\python.exe"
+```
+
+Normal commands use only `.venv` after bootstrap. ComfyUI embedded Python,
+CorridorKey, VitMatte, MatAnyone, Blender, and SDK-owned interpreters are
+explicit specialist environments, never fallback candidates.
+
 This module owns generated local IDE wiring, not game/template creation and not
 runtime automation. Its current public command regenerates VS Code tasks and
 launch configs from explicit public template and game registries:

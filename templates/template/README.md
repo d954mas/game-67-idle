@@ -113,8 +113,8 @@ Two advisory headless probes (not part of `ctest`; one command, real signal —
 they SKIP with exit 2 when EMSDK/Chrome is missing or a slow ASan boot times out):
 
 ```bash
-python tests/web_devapi_check.py        # window.__devapi shim round-trip: endpoints + command.describe
-python tests/web_persistence_check.py   # localStorage save survives a full Chrome quit+restart
+node ai_studio/dev_environment/python_run.mjs templates/template/tests/web_devapi_check.py        # window.__devapi shim round-trip: endpoints + command.describe
+node ai_studio/dev_environment/python_run.mjs templates/template/tests/web_persistence_check.py   # localStorage save survives a full Chrome quit+restart
 ```
 
 `web_devapi_check.py` builds `wasm-devapi-debug`, loads it headless, and proves
@@ -131,7 +131,7 @@ cmake --build build/devapi-debug --target devapi_smoke
 or from the repository root:
 
 ```powershell
-py -3.12 templates/template/devapi/smoke_bot.py --exe templates/template/build/devapi-debug/bin/game.exe
+node ai_studio/dev_environment/python_run.mjs templates/template/devapi/smoke_bot.py --exe templates/template/build/devapi-debug/bin/game.exe
 ```
 
 For QCLR_002 responsive-viewport screenshots:

@@ -12,9 +12,9 @@ every path below must be passed explicitly (never rely on the defaults).
 Canonical invocation runs from the game/template root, e.g. templates/template/
 (see src/features/items/README.md "Content workflow"):
 
-    py -3.12 ../../features/items-core/scripts/items_ops.py list     --catalog content/items.json [--json]
-    py -3.12 ../../features/items-core/scripts/items_ops.py validate --catalog content/items.json --schema content/item_fields.schema.json --baseline content/items.lock.json --state-schema state/items.schema.json --src-dir src/features/items [--json]
-    py -3.12 ../../features/items-core/scripts/items_ops.py schema   --schema content/item_fields.schema.json [--json]
+    node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py list     --catalog <game-root>/content/items.json [--json]
+    node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py validate --catalog <game-root>/content/items.json --schema <game-root>/content/item_fields.schema.json --baseline <game-root>/content/items.lock.json --state-schema <game-root>/state/items.schema.json --src-dir <game-root>/src/features/items [--json]
+    node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py schema   --schema <game-root>/content/item_fields.schema.json [--json]
 
 Shares its data model with features/items-core/scripts/generate_items_catalog.py by IMPORTING it
 (never re-parsing the catalog with a second, forkable set of rules): `list`
