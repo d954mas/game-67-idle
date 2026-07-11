@@ -67,7 +67,7 @@ def validate_field_names(scope: str, fields: list[dict[str, Any]], reserved_name
         seen_idents[ident] = path
 
 def load_events(events_raw: Any) -> dict[str, dict[str, Any]]:
-    """Parse+validate the v2 `events` section (event_system_design §5, E2 §2/§8).
+    """Parse+validate the v2 `events` section (the event schema contract).
     Returns an ordered dict evt_name -> {"fields": [{"name","type","doc"}, ...]}.
     Hard lint = charset + c_ident collisions + reserved (type/seq/tick + synthesized
     <bytes>_len) + type dictionary. Past-tense naming is skill advice, not a hard fail."""
@@ -229,9 +229,9 @@ def load_schema(schema_path: Path) -> dict[str, Any]:
 
     fields = _normalize_fields(raw.get("fields"), "fields")
 
-    # Events are a SEPARATE family (event_system_design §14 p.13): parsed+validated
+    # Events are a separate family: parsed and validated
     # here, but NOT consumed by the state renderers or the embedded normalized schema,
-    # so the state/schema output stays byte-identical (E2 §0/§15 dev.7).
+    # so the state/schema output stays byte-identical.
     events = load_events(raw.get("events", {}))
 
     schema: dict[str, Any] = {

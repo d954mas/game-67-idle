@@ -5,8 +5,7 @@ In-place L1 module (see `features/README.md` — decisive rule: same-`.c`-across
 `features/game-state` — one copy of the source lives here, each consuming
 game/template compiles it in-place against ITS OWN generated headers and content
 (`../../features/items-core/` from any `templates/<x>` or `games/<id>`, depth-2
-invariant). Extracted 2026-07-07 (`templates/design/build_spec_t0337_2026-07-07.md`,
-increment M1) out of `templates/template/src/features/items/`.
+invariant). Extracted in T0337 out of `templates/template/src/features/items/`.
 
 ## What it is
 
@@ -68,6 +67,19 @@ sequence counter above the highest `<def_id>#<seq>` key already present in a
 loaded save, so a freshly created unique after a process restart can never
 collide with one already on disk.
 
+## Stack authoring contract
+
+The game-owned `content/items.json` uses one required integer `stack` value:
+
+- `0`: unlimited stack;
+- `1`: unique/non-stackable instance;
+- `N > 1`: capped stack of `N` items.
+
+The generator validates `stack >= 0` and derives the compiled
+`stackable`/`max_stack`/`unlimited` fields without changing their C ABI. An
+item with an `equip` block must use `stack == 1`. `items_ops.py list --json`
+returns the authored integer, never a derived object.
+
 ## Tools (`scripts/`)
 
 - `generate_items_catalog.py --catalog <items.json> --schema <field_schema.json> --out-dir <dir>` —
@@ -118,17 +130,15 @@ even though it physically lives under `features/items-core/include/`. The
 consuming game adds `features/items-core/include` to its include path
 (`ITEMS_CORE_INC`, ahead of its own `src`) so `#include "features/items/items.h"`
 resolves to the module; the game's OWN `src/features/items/reason_tags.h`
-resolves from the game's `src` on the same logical prefix. See INSTALL.md and
-`templates/design/build_spec_t0337_2026-07-07.md` §2.2 for the full rationale
-(a spelling rename would have touched ~12 files across every consumer and
-broken byte-identical relocation).
+resolves from the game's `src` on the same logical prefix. See INSTALL.md. A
+spelling rename would touch every consumer and break byte-identical relocation.
 
 ## Reason verbs
 
 The verb half of `reason` (`verb:subject`) comes from a closed, append-only
 list that is **owned by the consuming game**, not this module —
 `src/features/items/reason_tags.h` in the game's own tree, included via the
-game's include-path (§2.3 of the build spec). `items_add`/`items_remove`/etc.
+game's include path as documented in `INSTALL.md`. `items_add`/`items_remove`/etc.
 in this module call `items_reason_check(reason)`, which resolves to the
 game's header at compile time. This keeps the ownership core byte-identical
 across every consumer while letting each game define its own verb vocabulary;

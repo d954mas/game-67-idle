@@ -14,8 +14,8 @@ agents can inspect and update safely.
 The feature provides:
 
 - schema-first `GameState` generation;
-- stable persisted field ids and `reserved` tombstones;
-- generated C storage, JSON serialization, and DevAPI adapters;
+- stable persisted field paths and `reserved` tombstones;
+- generated C storage/serialization and hand-written registry DevAPI dispatch;
 - save/load envelope and migration guidance;
 - review rules for state changes, fixtures, and runtime proof.
 
@@ -50,7 +50,8 @@ There is no general feature installer yet. This feature's correct use is:
 2. Keep an installed copy in each template or game that wants state:
    `state/`, `state/migrations/`, `src/game_storage.*`, and CMake/runtime
    wiring.
-3. Generate `game_state.*` from that local schema into the build directory, or
+3. Generate each fragment's `<id>_state*` files from its local schema into the
+   build directory, or
    into a checked-in generated folder if that project explicitly chooses to
    version generated C.
 4. Let that template or game own its local schema and migrations.
@@ -63,7 +64,7 @@ For exact install, enable/disable, verification, and uninstall steps, read
 
 Default template integration uses:
 
-- schema source: `templates/template/state/game_state.schema.json`;
+- schema sources: `templates/template/state/{settings,items,progression,game_state}.schema.json`;
 - generated output: `templates/template/build/<config>/generated/game-state/`;
 - migrations: `templates/template/state/migrations/`;
 - always compiled (the `FEATURE_GAME_STATE` on/off flag was removed

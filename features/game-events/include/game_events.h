@@ -7,7 +7,7 @@
 
 #include "hash/nt_hash.h" /* nt_hash64_t */
 
-/* Кадровый лог событий фич (event_system_design §2, вариант D + РЕШЕНИЕ ЛИДА
+/* Кадровый лог событий фич: фиксированный arena-backed журнал
    2026-07-06: арена ФИКСИРОВАННАЯ, растяжимость вырезана — паттерн движка
    nt_mem_scratch = fixed bump + assert на переполнении; класс UAF-багов от
    переезда исключён навсегда; каскады ограничены капом поколений). События живут
@@ -26,13 +26,13 @@
 #define GAME_EVENTS_LOG_CAP 8192
 #endif
 
-/* Кап поколений react-фикспойнта за кадр (граница петель, event §2 страж 1/Q1).
+/* Per-frame react fixpoint generation cap.
    Достижение = dev-warn + остановка. */
 #ifndef GAME_EVENTS_MAX_GENERATIONS
 #define GAME_EVENTS_MAX_GENERATIONS 16
 #endif
 
-/* Конверт события (event_system_design §2). payload позиционно-независим:
+/* Конверт события. payload позиционно-независим:
    str-поля внутри него — байт-оффсеты, не указатели (это забота emit-хелперов
    E2); сам конверт хранит АБСОЛЮТНЫЙ указатель в живую арену кадра. */
 typedef struct {
@@ -70,7 +70,7 @@ const void *game_event_emit(nt_hash64_t type, const void *payload,
    указатель и любой game_event_t* / payload валидны до game_event_frame_reset();
    удержание через game_event_emit ЗАКОННО (переезда нет). Единственное правило —
    не держать указатель ПОСЛЕ frame_reset (арена отравляется 0xDD в debug). Смену
-   кадра детектить через game_events_tick(), НЕ через падение *count (§E1.4). */
+   кадра детектить через game_events_tick(), НЕ через падение *count. */
 const game_event_t *game_event_log(int *count);
 
 /* Кадровый счётчик текущего кадра (== game_event_t.tick событий, эмитнутых
@@ -99,7 +99,7 @@ void game_events_react_begin(void);
 
 /* Драйвер react-фикспойнта. Возвращает true, пока за прошлый проход родились
    новые события И не превышен кап поколений; false = фикспойнт достигнут ИЛИ кап
-   исчерпан (тогда dev-warn один раз; см. §E1.3). Использование в шелле:
+   исчерпан (тогда dev-warn один раз). Использование в шелле:
        game_features_update(w, dt);        // phase=EMIT (дефолт после frame_reset)
        game_events_react_begin();          // базлайн = count после update
        do { game_features_react(w); } while (game_events_react_progressed()); */
@@ -110,10 +110,10 @@ bool game_events_react_progressed(void);
    frame падает громко). */
 void game_event_frame_reset(void);
 
-/* ---- Шов имён типов (event §8; ПОТРЕБИТЕЛЬ — генератор в E2) ----
+/* ---- Type-name registration seam used by generated event code ----
    Тонкая обёртка над nt_hash_register_label64: в debug-сборках с NT_HASH_LABELS
    DevAPI/лог показывают "items.txn" вместо хекса. No-op, если nt_hash собран без
-   NT_HASH_LABELS (движковый дефолт) — см. §E1.9. E1 предоставляет только шов;
+   NT_HASH_LABELS (движковый дефолт). Модуль предоставляет только шов;
    пер-типовую регистрацию из схем делает генератор E2. */
 void game_event_register_type_name(nt_hash64_t type, const char *name);
 

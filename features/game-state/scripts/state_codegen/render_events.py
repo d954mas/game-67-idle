@@ -102,7 +102,7 @@ class EventRenderer:
         emit_fn = self.event_emit_fn(evt)
         lines: list[str] = []
         if not self.event_has_inline(fields):
-            # scalar-only: a direct local struct, no staging (E2 §6).
+            # Scalar-only events use a direct local struct with no staging.
             lines.append(f"    {struct} ev;")
             lines.append("    memset(&ev, 0, sizeof(ev));")
             for f in fields:
@@ -235,7 +235,7 @@ class EventRenderer:
         ]
         if not events:
             # Empty fragment (no events): a zero-length array is invalid in C, so emit a
-            # 1-element NULL stub; consumers gate on count==0 and never deref (E2 §6).
+            # 1-element NULL stub; consumers gate on count==0 and never dereference it.
             parts.append(f"const game_event_desc_t *const {self.ns.id}_ev_descs[1] = {{ NULL }};")
             parts.append(f"const int {self.ns.id}_ev_desc_count = 0;")
             parts.append(f"void {self.ns.id}_ev_register(void) {{ }}")

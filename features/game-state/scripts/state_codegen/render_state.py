@@ -905,7 +905,7 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
 
 
     def normalized_schema_for_embed(self, schema: dict[str, Any]) -> dict[str, Any]:
-        """Canonical form the runtime embeds and the editor/smoke bot reads (§A4.4):
+        """Canonical form the runtime embeds and the editor/smoke bot reads:
     fields (and each type's fields) are LISTS of {path, ...spec}; document is a
     compat duplicate of fragment so the transitional smoke bot stays green."""
         embed: dict[str, Any] = {}

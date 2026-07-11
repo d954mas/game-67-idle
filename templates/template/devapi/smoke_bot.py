@@ -112,7 +112,7 @@ def validate_game_state_schema(schema: Any) -> dict[str, Any]:
         raise DevApiError("game.state.schema missing 'game' fragment")
     if frag.get("schema") != "game_seed.state":
         raise DevApiError(f"unexpected game.state.schema id: {frag.get('schema')!r}")
-    # The normalized schema carries both `fragment` and `document` (§A4.4) — accept either.
+    # The normalized schema carries both `fragment` and `document` — accept either.
     if frag.get("fragment") != "game" and frag.get("document") != "game":
         raise DevApiError(f"unexpected game.state.schema fragment: {frag.get('fragment')!r}")
     if not isinstance(frag.get("fields"), list):

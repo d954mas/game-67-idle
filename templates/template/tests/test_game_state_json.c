@@ -298,7 +298,7 @@ void test_parse_enum_value(void) {
     cJSON_Delete(out_of_range);
 }
 
-/* ---- gsj_read_i64 / gsj_parse_i64_value: the risky corner (§14 p.8) ---- */
+/* ---- gsj_read_i64 / gsj_parse_i64_value: the risky corner ---- */
 
 void test_read_i64_absent_key(void) {
     cJSON *root = cJSON_CreateObject();

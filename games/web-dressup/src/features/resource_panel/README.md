@@ -4,8 +4,7 @@
 line: `// feature-layer: L2`). Depends ONLY on the L0 shell (`game_format.h`
 for the abbrev formatter) and engine public APIs (`atlas/nt_atlas.h`,
 `ui/nt_ui.h`, `clay.h`, ...) — it includes **ZERO** other `src/features/*`
-headers (grep-gate G12; `templates/design/build_spec_t0327_i3_2026-07-07.md`
-§6.2/§8). It has no idea items or progression exist.
+headers (grep-gated). It has no idea items or progression exist.
 
 ## What it is
 

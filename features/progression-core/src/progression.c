@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* reason-контракт (лёгкий, дизайн §10; НЕ items-verb-список -- прогрессия не
+/* reason contract (lightweight; not the items verb list -- progression does not
    тянет чужой internal-хедер reason_tags.h). Формат "verb:subject"; debug-only,
    no-op в release. Спенды в purse передают reason В items_remove/add, где
    срабатывает ПОЛНЫЙ items-verb-чек -- verb-список валют не дублируется здесь. */
@@ -30,8 +30,7 @@ static inline void progression_reason_check(const char *reason) {
 /* Скан состояния напрямую (как items_containers.c -- генераторные find/alloc
    внутри progression_state.c статичны, недостижимы отсюда). find_track для
    ЧТЕНИЯ (никогда не аллоцирует); find_or_alloc_track вызывается ТОЛЬКО перед
-   первым фактическим инкрементом (§2.1/§5.6 -- ленивая аллокация, orphan-record
-   от простого чтения/пустого тика не создаётся). */
+   lazy allocation: reads and empty ticks do not create orphan records. */
 static const char *mode_name(progression_mode_t mode) {
     switch (mode) {
     case PROGRESSION_MODE_MANUAL:
@@ -85,7 +84,7 @@ static ProgressionTrackState *find_track(const char *id) {
    truncate against PROGRESSION_STATE_STRING_MAX must be REJECTED, never
    silently written half-formed: a truncated key means find_track(full_id)
    can never match it again, so every subsequent mutation call would burn a
-   FRESH slot instead of finding the existing one (§2.1 invariant broken).
+   FRESH slot instead of finding the existing one.
    In practice generate_progression_tracks.py now rejects an over-length
    track id at codegen time (loud reject), so this only ever fires for a
    hand-authored id (e.g. a test catalog) -- kept as defense-in-depth,
@@ -118,7 +117,7 @@ static ProgressionTrackState *find_or_alloc_track(const char *id) {
 #define PROGRESSION_MAX_CASCADE_DEPTH 8       /* T5: xp-to-track cascade recursion depth cap */
 
 /* Forward declaration: progression_level_up() (manual mutation, below) and
-   resolve_track() (tick, §5.6) both need to run the same on_level_up-emission
+   resolve_track() and tick updates both run the same on_level_up-emission
    path -- defined once, near progression_update() at the bottom of this file. */
 static void apply_on_level_up(const progression_track_def_t *def, int depth);
 
@@ -135,7 +134,7 @@ const progression_track_def_t *progression_track_def(const char *track) {
 }
 
 /* L-fix (deep-review #5): index through cost_count, not just max_level.
-   cost_count is documented as "== max_level" (progression.h, §5.4) but that
+   cost_count is documented as "== max_level" in progression.h, but that
    invariant was never actually CHECKED at runtime -- a malformed catalog
    (codegen bug, or a hand-authored test catalog whose cost[] array is
    shorter than its declared max_level) would silently read past the array.
@@ -165,7 +164,7 @@ int64_t progression_xp_current(const char *track) {
         return 0;
     }
     if (def->mode == PROGRESSION_MODE_MANUAL || def->mode == PROGRESSION_MODE_AUTO) {
-        return items_purse(def->currency_def); /* L2->L1 include point (слоёвость, §2.2) */
+        return items_purse(def->currency_def); /* L2 -> L1 dependency. */
     }
     const ProgressionTrackState *st = find_track(track);
     return st ? st->xp : 0;
@@ -194,7 +193,7 @@ bool progression_can_level_up(const char *track) {
     return progression_xp_current(track) >= progression_xp_needed(track);
 }
 
-/* ---- Мутации (reason обязателен, §10) ---- */
+/* ---- Mutations (reason required) ---- */
 
 bool progression_level_up(const char *track, const char *reason) {
     progression_reason_check(reason);
@@ -272,7 +271,7 @@ void progression_set_level(const char *track, int level, const char *reason) {
         return; /* PROGRESSION_STATE_MAX_TRACKS budget exhausted (defensive) */
     }
     int old_level = st->level;
-    st->level = clamped; /* xp untouched -- set_level (prologue) != reset (prestige), §5/R5 */
+    st->level = clamped; /* xp untouched: set_level differs from prestige reset. */
     progression_emit_level_set(def->id, reason, level, old_level, st->level);
     game_save_mark_dirty();
 }
@@ -289,7 +288,7 @@ void progression_reset(const char *track, const char *reason) {
        zero level/xp in place -- precedent items remove_raw at count<=0
        (items_containers.c:156-158). A record parked at level=0/xp=0 is
        indistinguishable in EFFECT from no record (lazy-default reads both as
-       0, §2.1) but needlessly holds a tracks-map slot forever after a
+       0) but needlessly holds a tracks-map slot forever after a
        prestige reset. */
     memset(st, 0, sizeof(*st)); /* used=false -> slot freed; reset does NOT touch purse (#15) */
     progression_emit_reset(track, reason, old_level, old_xp);
@@ -310,8 +309,8 @@ static void resolve_track(const progression_track_def_t *def, int depth) {
         return; /* T5: A->B->A xp-cascade depth cap */
     }
     /* #6: ЛЕНИВО. Не аллоцируем запись на входе (иначе кадр 1 создаёт нулевые
-       записи всех auto/threshold-треков -> противоречит §2.1/OQ3 "свежая игра =
-       пустые треки"). Читаем уровень через find_track (NULL -> 0); alloc ТОЛЬКО
+       записи всех auto/threshold-треков -> нарушит инвариант "свежая игра =
+       пустые треки". Читаем уровень через find_track (NULL -> 0); alloc ТОЛЬКО
        перед реальным лвлапом. */
     ProgressionTrackState *st = find_track(def->id);
     int level = st ? st->level : 0;
@@ -371,7 +370,7 @@ static void resolve_track(const progression_track_def_t *def, int depth) {
 
 /* Cut A: shipped/demo on_level_up is ALWAYS empty (codegen emits NULL,0) -> this
    loop is a no-op in the template. The runtime path stays alive, covered ONLY by
-   the hand-written test catalog (tests/test_progression_catalog.c, §5.7). */
+   the hand-written test catalog (tests/test_progression_catalog.c). */
 static void apply_on_level_up(const progression_track_def_t *def, int depth) {
     for (int i = 0; i < def->on_level_up_count; ++i) {
         const progression_emit_t *e = &def->on_level_up[i];

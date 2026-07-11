@@ -48,7 +48,7 @@ bool gsj_parse_int_value(const cJSON *item, int min_value, int max_value,
 bool gsj_parse_enum_value(const cJSON *item, const char *const *names,
                           int count, int *out, char *error, int error_cap);
 
-/* i64-провод (§14 п.8). Большие счётчики едут JSON-СТРОКОЙ (double рвётся >2^53).
+/* i64-провод. Большие счётчики едут JSON-СТРОКОЙ (double рвётся >2^53).
    read: принимает строку ВСЕГДА; число — ТОЛЬКО если точно представимо в int64
    (целое и |v| <= 2^53). Absent = true, *out не трогается. */
 bool gsj_read_i64(const cJSON *obj, const char *name,

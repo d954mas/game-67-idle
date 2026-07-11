@@ -5,8 +5,7 @@ In-place L2 module (see `features/README.md` — decisive rule: same-`.c`-across
 `features/game-state`, `features/items-core` — one copy of the source lives
 here, each consuming game/template compiles it in-place against ITS OWN
 generated headers and content (`../../features/progression-core/` from any
-`templates/<x>` or `games/<id>`, depth-2 invariant). Extracted 2026-07-08
-(`templates/design/build_spec_t0337_2026-07-07.md`, increment M2) out of
+`templates/<x>` or `games/<id>`, depth-2 invariant). Extracted in T0337 out of
 `templates/template/src/features/progression/` (the ENTIRE folder — items
 kept a game-side corner, progression did not, see "No game-owned C hooks"
 below).
@@ -173,7 +172,7 @@ Unlike items, progression has **no game-side C corner** — items keeps
 `src/features/items/`; progression has neither a closed-verb header nor a
 seed function, so `src/features/progression/` (which used to hold
 `progression.h` + `.c` + this README) has been **deleted entirely** from
-every consuming game by this extraction (§3.4 of the build spec) — nothing
+every consuming game by this extraction — nothing
 is left for a game to own for progression. `reset()` alone is the correct
 "fresh game" state (empty tracks = level 0 everywhere via the lazy-allocation
 default above); a game that wants a strong starting hero calls
@@ -190,9 +189,8 @@ game-owned corner sharing the same logical prefix), progression's game-side
 corner was deleted entirely (see above) — the WHOLE `features/progression/`
 logical prefix now resolves from this one physical root
 (`PROGRESSION_CORE_INC`), with nothing left in a game's own `src/` that
-could shadow it. See INSTALL.md and
-`templates/design/build_spec_t0337_2026-07-07.md` §2.2 for the
-include-spelling rationale shared with items-core (a spelling rename would
+could shadow it. See INSTALL.md for the include-spelling contract shared with
+items-core (a spelling rename would
 have touched every consumer's include lines and broken byte-identical
 relocation).
 

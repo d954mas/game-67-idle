@@ -274,7 +274,7 @@ class CreatedFieldTests(unittest.TestCase):
 
 
 class StackFieldTests(unittest.TestCase):
-    """Locks the collapsed single-int stack model (build_spec_stack_int_2026-07-08):
+    """Locks the items-core README's single-int stack authoring contract:
     schema requires `stack` to be a plain int >= 0, `equip` implies `stack == 1`,
     and `list --json` emits the raw int (never the old derived object)."""
 

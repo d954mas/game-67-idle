@@ -19,7 +19,7 @@
    through the engine headers above on this toolchain. The preprocessor then
    mangles every `entry->max(...)` call below (it matches the bare token `max`
    before `(`, blind to the preceding `->`). entry->max is a struct field name
-   mandated by the public header (§6.2) -- undef defensively rather than rename. */
+   mandated by the public header -- undef defensively rather than rename. */
 #undef max
 #undef min
 
@@ -46,15 +46,15 @@ static int64_t rp_i64_abs(int64_t v) { return v < 0 ? (int64_t)(0ULL - (uint64_t
 #define RP_PANEL_X 12.0F
 #define RP_PANEL_Y 12.0F
 
-#define RP_EASE_TAU 0.12F     /* count-up ease-out time constant, §6.3 п.1 */
-#define RP_ACCENT_SECS 0.35F  /* accent decay window, §6.3 п.2 */
+#define RP_EASE_TAU 0.12F     /* count-up ease-out time constant */
+#define RP_ACCENT_SECS 0.35F  /* accent decay window */
 #define RP_SNAP_ABS 1000LL    /* counter snap-ref floor when max is absent, #10 */
 
 static const Clay_Color RP_COLOR_ICON_FALLBACK = {70.0F, 70.0F, 78.0F, 220.0F};
 static const Clay_Color RP_COLOR_TRACK_BG = {18.0F, 13.0F, 9.0F, 218.0F};
 static const Clay_Color RP_COLOR_TRACK_BORDER = {105.0F, 76.0F, 43.0F, 182.0F};
 static const Clay_Color RP_COLOR_FILL = {120.0F, 170.0F, 230.0F, 255.0F};
-static const Clay_Color RP_COLOR_GAIN = {120.0F, 220.0F, 120.0F, 255.0F};  /* акцент gain (§6.3 п.2) */
+static const Clay_Color RP_COLOR_GAIN = {120.0F, 220.0F, 120.0F, 255.0F};  /* gain accent */
 static const Clay_Color RP_COLOR_SPEND = {225.0F, 95.0F, 95.0F, 255.0F};   /* акцент spend */
 
 /* ---- Транзиентное состояние (static, keyed by entry.id -- НЕ в сейве, не в World) ---- */
@@ -64,7 +64,7 @@ typedef struct {
     bool seen;
     double displayed;
     int64_t last_logical;
-    float accent;     /* 0..1 таймер акцента, §6.3 п.2 */
+    float accent;     /* 0..1 accent timer */
     bool accent_gain;  /* true=gain(green) false=spend(red); valid while accent>0 */
     float anchor_x, anchor_y;
     bool drawn;
@@ -158,7 +158,7 @@ static void rp_shadowed_label(nt_ui_context_t *ctx, int slot, const char *text, 
     }
 }
 
-/* graceful no-art (§6.3 п.7): icon==NULL -> flat rect placeholder, never
+/* Graceful no-art: icon==NULL -> flat rect placeholder, never
    requires an atlas. icon!=NULL -> nt_ui_image with a MUTABLE copy (resolve
    mutates the ref; entry->icon is game-owned and const from here). */
 static void rp_draw_icon_or_fallback(nt_ui_context_t *ctx, const resource_panel_entry_t *entry) {
@@ -175,14 +175,14 @@ static void rp_draw_icon_or_fallback(nt_ui_context_t *ctx, const resource_panel_
     }
 }
 
-/* poll+diff+count-up+accent (§6.3 п.1-3). Reads entry->value ONCE (poll), never
+/* Poll+diff+count-up+accent. Reads entry->value once (poll), never
    touches entry->max/level without a NULL-гард. `out_max_val` (nullable)
    hands the ALREADY-POLLED max reading back to the caller so rp_draw_bar does
-   not call entry->max() a second time this frame -- poll-once (§6.3 п.3) means
+   not call entry->max() a second time this frame -- poll-once means
    once per getter per frame, not once per call site (L-fix, deep-review). */
 static void rp_step_slot(rp_slot_t *slot, const resource_panel_entry_t *entry, float dt, int64_t *out_max_val) {
     bool first_frame = !slot->seen;
-    int64_t logical = entry->value(entry->ud); /* ОБЯЗАТЕЛЕН, §6.2 */
+    int64_t logical = entry->value(entry->ud); /* required callback */
     bool has_max = (entry->kind == RESOURCE_PANEL_BAR) && (entry->max != NULL);
     int64_t max_val = has_max ? entry->max(entry->ud) : 0;
     if (out_max_val != NULL) {
@@ -273,7 +273,7 @@ static void rp_draw_bar(nt_ui_context_t *ctx, const resource_panel_entry_t *entr
         rp_draw_icon_or_fallback(ctx, entry);
 
         if (!has_max) {
-            /* §6.3 п.1 NULL-контракт: bar без знаменателя -> счётчик-с-меткой,
+            /* NULL contract: bar без знаменателя -> счётчик-с-меткой,
                без заливки. */
             nt_ui_label_style_t style = g_theme.label;
             style.color = rp_lerp_color(g_theme.label.color, accent_tint, slot->accent);
@@ -331,7 +331,7 @@ void resource_panel_ui(nt_ui_context_t *ctx, const resource_panel_entry_t *entri
     float dt = g_nt_app.dt;
 
     for (int i = 0; i < RESOURCE_PANEL_MAX_SLOTS; ++i) {
-        s_slots[i].drawn = false; /* transient, recomputed every frame (§6.3 п.8) */
+        s_slots[i].drawn = false; /* transient, recomputed every frame */
     }
 
     CLAY({.id = CLAY_ID("resource_panel/root"),
@@ -351,7 +351,7 @@ void resource_panel_ui(nt_ui_context_t *ctx, const resource_panel_entry_t *entri
         for (int i = 0; i < count; ++i) {
             const resource_panel_entry_t *entry = &entries[i];
             if (entry->id == NULL || entry->value == NULL) {
-                continue; /* value обязателен (контракт §6.2); malformed entry -- defensive skip */
+                continue; /* value is required; malformed entry -- defensive skip */
             }
             rp_slot_t *slot = slot_for(entry->id);
             if (slot == NULL) {

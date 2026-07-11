@@ -14,7 +14,7 @@
     "Python 3.12",
     "templates/template/content/items.json + content/item_fields.schema.json (or a game-local items catalog)",
     "template or game C runtime using the generated items_catalog.gen.{h,c} + the generated items save fragment (features/game-state)",
-    "the consuming game's own src/features/items/reason_tags.h (closed reason-verb list, resolved via the game's include-path, §2.3 of build_spec_t0337_2026-07-07.md)"
+    "the consuming game's own src/features/items/reason_tags.h (closed reason-verb list, resolved via the game's include path)"
   ],
   "commands": {
     "generate": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_catalog.py",

@@ -40,18 +40,6 @@
           ]
         },
         {
-          "id": "workspace:templates-design",
-          "kind": "dir",
-          "path": "templates/design",
-          "title": "design/",
-          "description": "Groups reusable design scaffolding owned by the template workspace.",
-          "role": "template design scaffold ownership",
-          "tags": [
-            "templates",
-            "design"
-          ]
-        },
-        {
           "id": "workspace:template:template:identity",
           "kind": "config",
           "path": "templates/template/template.json",

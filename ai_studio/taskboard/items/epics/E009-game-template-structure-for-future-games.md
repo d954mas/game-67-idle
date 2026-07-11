@@ -31,4 +31,4 @@ features/README + feature.json, обучающие фичи-образцы в ш
 - 2026-07-01: moved from the closed shared Game Projects bucket to AI Studio;
   this is reusable template/workflow planning, not a concrete game project.
 - 2026-07-06: активирован; принята фичевая архитектура
-  (tmp/feature_architecture_2026-07-06.md), заведена T0327.
+  позже закреплённая в T0327.

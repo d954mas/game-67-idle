@@ -3,7 +3,7 @@
 
 The pack builder writes a `review_label.text` per atlas entry; the auditor
 recomputes the expected text and rejects the pack on mismatch. The two MUST
-agree on the format or the audit silently passes/fails the wrong thing вЂ” so the
+agree on the format or the audit silently passes/fails the wrong thing -- so the
 one format lives here, alongside the font + measurement helpers and the
 label-box constants both sides shared verbatim.
 """
@@ -42,7 +42,7 @@ def measure_label(label: str, font_size: int = DEFAULT_LABEL_FONT_SIZE) -> tuple
 
 def review_label_text(entry_id: str, alias_ids) -> str:
     """The atlas review-label string: ``<id>``, or ``<id> (+<sorted,aliases>)``
-    when the entry has aliases. SINGLE SOURCE вЂ” the pack builder and the auditor
+    when the entry has aliases. SINGLE SOURCE -- the pack builder and the auditor
     both call this so their label text cannot drift. ``alias_ids`` is any
     iterable (list or set); it is sorted here.
     """

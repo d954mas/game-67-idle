@@ -22,8 +22,8 @@ convention), and each module/feature's own `README.md`/`INSTALL.md`/
    layers L0/L1/L2, `game_features.c` phase wiring, state/asset rules).
 3. Precedent to imitate for a NEW module: `features/game-state/` (toolkit)
    and `features/items-core/` + `features/progression-core/` (T0337
-   relocation, `templates/design/build_spec_t0337_2026-07-07.md`) — read one
-   module's `README.md` + `INSTALL.md` before scaffolding a new one.
+   relocations) — read one module's `README.md` + `INSTALL.md` before
+   scaffolding a new one.
 
 ## Create or improve a feature or module
 
@@ -55,8 +55,7 @@ convention), and each module/feature's own `README.md`/`INSTALL.md`/
      repo root from BOTH `templates/template` and any `games/<id>` (both sit
      exactly two levels below root) — this is what lets a `games/new_game.mjs`
      copy build against the module with ZERO wiring changes; verify it with a
-     throwaway `new_game.mjs` probe before calling a module extraction done
-     (G-newgame in `templates/design/build_spec_t0337_2026-07-07.md` §10).
+     throwaway `new_game.mjs` probe before calling a module extraction done.
    - Include path: `<ID>_CORE_INC` goes AHEAD of the consumer's own `src` on
      `target_include_directories`, so a stray same-named copy in the
      consumer's tree can never shadow the module.

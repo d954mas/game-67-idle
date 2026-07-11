@@ -49,7 +49,7 @@ int64_t progression_xp_current(const char *track); /* manual/auto: items_purse(c
 int64_t progression_xp_needed(const char *track);  /* cost(level); 0 если на max */
 bool progression_can_level_up(const char *track);  /* xp_current >= xp_needed && level<max */
 
-/* ---- Мутации (reason обязателен, дизайн §10; формат verb:subject) ---- */
+/* ---- Mutations (reason required; format verb:subject) ---- */
 bool progression_level_up(const char *track, const char *reason); /* MANUAL: тратит purse; true если поднял */
 void progression_add_xp(const char *track, int64_t n, const char *reason);        /* THRESHOLD: копит внутр. xp (резолв в update) */
 void progression_set_level(const char *track, int level, const char *reason);     /* Р6: пролог (сильный герой) */

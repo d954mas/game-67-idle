@@ -14,7 +14,7 @@ updated: 2026-07-10
 
 Хирургия features/game-state по итогам жёсткого ревью 2026-07-06
 (NEEDS-SURGERY: ядро генератора хорошее, половина фичи мертва).
-Синтез ревью: templates/design/reviews_synthesis_2026-07-06.md (§1, §2, §6, §8).
+Принятые правила ревью сохранены в `features/game-state/references/review.md`.
 
 Ключевой вердикт: «фича game-state» растворяется — бэкенд + конверт +
 оркестрация + JSON-хелперы + codegen-инструмент = L0 shell persistence
@@ -90,7 +90,7 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
   NEWER = только версии (format/save_version/v знакомого фрагмента);
   незнакомый ключ ≠ новизна (сирота → warn + грузимся); незнакомые
   ключи features{} сохраняются verbatim при save (round-trip, данные
-  не теряются). Retired-списков нет. Внесено: state doc §14 п.16 +
+  не теряются). Retired-списков нет. Внесено: orphan-retention contract +
   аннотация Р7/Р13.
 - Судьба int-полей: генератору нужен int64-тип (сейчас int32, cap
   999999 в шаблоне) — добавить тип в схему при S5.
@@ -164,7 +164,7 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
   кадры не живут), offset-курсор since_seq/limit (амендмент спеки:
   спека-буквальный `seq > since` молча терял seq=0 — вопрос лиду),
   eviction наблюдаема. Чистый рендерер game_event_render.{c,h} по
-  E2-дескрипторам (все 7 типов, i64=СТРОКА по §14 п.8, bounds на
+  E2-дескрипторам (все 7 типов, i64=СТРОКА по текущему wire contract, bounds на
   каждое чтение) + юнит-ctest в ОБОИХ пресетах (native=hex-ветка,
   devapi=label-ветка, label-agnostic ассерты). NT_HASH_LABELS=1 на
   nt_hash только в devapi (consuming-флаг, движок нетронут). Все E3
@@ -180,7 +180,7 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
   → генерённый settings_state_* + рукописная логика по Р9
   (src/features/settings.{c,h}: clamp+mark_dirty; образец hooks-free
   фрагмента — step/hook-провод тренируется в T0327). Вынос settings из
-  game-схемы = template-clean-break (§14 п.12), снятые пути в reserved;
+  game-схемы = pre-ship template clean break, снятые пути в reserved;
   громкости dev-сейва сбрасываются к дефолтам (шипнутых сейвов нет).
   Живьём: get ""={settings,game}, кросс-фрагментный patch fail-isolation
   (побитый фрагмент откачен, второй применён), round-trip оба, старый
@@ -225,9 +225,9 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
   A5 (DevAPI-диспатч над реестром, снятие compat-обёрток), A6
   (мультифрагмент: items/progression), E2-E4.
 - 2026-07-07: E1 ГОТОВ: game_events (ФИКСИРОВАННАЯ арена — решение лида,
-  поправка в event-доке §2; engine-issue neotolis-engine#266 на generic
+  поправка в историческом event-контракте; engine-issue neotolis-engine#266 на generic
   nt_arena_t заведён) + game_features 7 фаз + двухфазный кадр в main.c
-  (якорь автосейва закрыт). Спека build_spec_e1 прошла 2 ревью + deep-
+  (якорь автосейва закрыт). Спека первого event-инкремента прошла 2 ревью + deep-
   ревью реализации (ACCEPT-WITH-ADDITIONS: тест округления align +
   гейт death-тестов — внесены). 5/5 ctest, 3 конфига, смоук ок.
   Открытие: _Alignof(max_align_t)==8 на MSVC ABI (тесты производные).
@@ -251,12 +251,12 @@ S5. Генератор: один generic-путь; режим --fragment <id> э
   затенённых строк оказалось ~493, не ~700 — часть хелперов реально
   общая. generate_state.py: 2179 → 1686 строк.
 - 2026-07-06 (ночь): СТАРТ реализации (лид дал добро). Параллельно
-  запущены: doc-sync четырёх дизайн-доков (Opus, чек-листы synthesis §7 +
-  event_system §8) и A0/S1 ампутация генератора (Sonnet, критерий =
-  байт-идентичный выхлоп). Дальше: build-spec инкремента 1 → A1-A6.
-- 2026-07-06 (веч.): полный план v2 готов и прошёл вторую волну ревью:
-  features/game-state/references/state_system_design_2026-07-06.md — инкременты A0-A6 там СУПЕРСИДЯТ
-  S1-S5 этой карточки; §14 плана = обязательные поправки ревью (ротация
+  запущены: doc-sync четырёх дизайн-доков (Opus, исторические чек-листы) и
+  A0/S1 ампутация генератора (Sonnet, критерий =
+  байт-идентичный выхлоп). Дальше: implementation spec инкремента 1 → A1-A6.
+- 2026-07-06 (веч.): полный план v2 готов и прошёл вторую волну ревью;
+  текущие `features/game-state/{README.md,INSTALL.md}` и `references/{contract.md,workflow.md,review.md}` СУПЕРСИДЯТ
+  S1-S5 этой карточки; обязательные поправки ревью включали ротацию
   одним rename + bak-при-загрузке, on_new_game() хук, web save-fail
   статус + probe, экспорт/импорт строкой в первый web-инкремент,
   синхронный visibility-flush, dirty_at=первая пометка, i64-провод,

@@ -12,7 +12,7 @@ set(Python3_EXECUTABLE "${STUDIO_PYTHON}" CACHE FILEPATH "Studio root venv Pytho
 find_package(Python3 3.12 EXACT COMPONENTS Interpreter REQUIRED)
 
 # И2a: items CONTENT codegen (SECOND codegen, deliberately separate from the
-# game-state generator below -- design doc §9 "не смешивать"). Compile-time const
+# game-state generator below). Compile-time const
 # tables from content/items.json, referenced by the unconditional add_executable
 # above (items_catalog.c / items_catalog.gen.c) -- must run after find_package(Python3)
 # (code-review H1/#10); textual order vs. that add_executable use does not matter to
@@ -96,8 +96,8 @@ add_custom_command(
     COMMENT "Generating installed game-state feature sources"
     VERBATIM
 )
-# A6: SECOND fragment. The registry/dispatch/shell/generator are all universal
-# over GameSaveFragment, so a second live fragment `settings` needs only its
+# The registry/dispatch/shell/generator are universal over GameSaveFragment,
+# so the `settings` fragment needs only its
 # own schema generated + wired -- no dispatch or generator edit. Same generated
 # dir (already on the include path); make_directory is idempotent and the two
 # commands depend on files (not the dir), so parallel ninja is fine.
@@ -120,8 +120,8 @@ add_custom_command(
     COMMENT "Generating installed settings-state fragment sources"
     VERBATIM
 )
-# И2a: THIRD fragment `items` -- owned-map (plain ownership table, §2.2) + txn
-# event (NOT empty, unlike settings -- R2) + hooks (on_new_game/reconcile, Р9).
+# `items` fragment: owned-map plus a non-empty txn event and
+# on_new_game/reconcile hooks.
 set(ITEMS_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/items.schema.json")
 set(ITEMS_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/items_state.c")
 set(ITEMS_STATE_GENERATED_EVENTS_SOURCE "${GAME_STATE_GENERATED_DIR}/items_state_events.gen.c")
@@ -142,9 +142,8 @@ add_custom_command(
     COMMENT "Generating installed items-state fragment sources"
     VERBATIM
 )
-# И3a: FOURTH fragment `progression` -- tracks-map (level+xp, same flat-map
-# shape as items' owned, §2.1) + levelup event (NOT empty) + NO hooks (§5.3
-# OQ3: fresh game = empty tracks = level 0 via lazy allocation; no bootstrap.c).
+# `progression` fragment: tracks-map (level+xp), non-empty levelup event, and
+# no hooks; an empty tracks map means level 0 via lazy allocation.
 set(PROGRESSION_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/progression.schema.json")
 set(PROGRESSION_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/progression_state.c")
 set(PROGRESSION_STATE_GENERATED_EVENTS_SOURCE "${GAME_STATE_GENERATED_DIR}/progression_state_events.gen.c")
@@ -166,21 +165,21 @@ add_custom_command(
     VERBATIM
 )
 target_sources(${GAME_TARGET} PRIVATE
-    "${GAME_STATE_GENERATED_SOURCE}"   # A4: also carries the generated game_state_fragment descriptor
-    "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # E2: typed event structs/emit/descriptors
-    "${SETTINGS_STATE_GENERATED_SOURCE}"   # A6: generated settings fragment state layer
-    src/features/settings/settings.c       # A6: hand-written settings logic (Р9)
-    "${ITEMS_STATE_GENERATED_SOURCE}"        # И2a: generated items fragment state layer
-    "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}" # И2a: items.txn event (R2: not empty, must link)
-    src/features/items/items_bootstrap.c     # И2a stubs -> И2b real bodies (Р9 §7.3: on_new_game only, T0337 M1 split)
+    "${GAME_STATE_GENERATED_SOURCE}"          # includes game_state_fragment descriptor
+    "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # typed event structs/emit/descriptors
+    "${SETTINGS_STATE_GENERATED_SOURCE}"      # generated settings fragment state
+    src/features/settings/settings.c          # hand-written settings logic
+    "${ITEMS_STATE_GENERATED_SOURCE}"         # generated items fragment state
+    "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"  # non-empty items.txn event
+    src/features/items/items_bootstrap.c       # game-owned on_new_game hook
     "${ITEMS_CORE_SRC}/items_reconcile.c"    # T0337 M1: reconcile/seq-reseed split out of items_bootstrap.c (in-place module)
     "${ITEMS_CORE_SRC}/items_containers.c"   # И2b: ownership/containers/purse (add/remove/move/count/can_afford; T0337 M1: in-place module)
-    "${PROGRESSION_STATE_GENERATED_SOURCE}"        # И3a: generated progression fragment state layer
-    "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}" # И3a: progression.levelup event (not empty, must link)
-    "${PROGRESSION_CORE_SRC}/progression.c"   # И3a: queries/mutations/update (uses progression_state + items + tracks; T0337 M2: in-place module)
+    "${PROGRESSION_STATE_GENERATED_SOURCE}"        # generated progression fragment state
+    "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}" # non-empty progression.levelup event
+    "${PROGRESSION_CORE_SRC}/progression.c"   # queries/mutations/update over state, items, and tracks
     src/game_state_json.c
     src/game_storage.c
-    src/game_save.c              # A3
+    src/game_save.c
 )
 target_link_libraries(${GAME_TARGET} PRIVATE cjson)
 target_compile_definitions(${GAME_TARGET} PRIVATE
@@ -191,10 +190,10 @@ target_compile_definitions(${GAME_TARGET} PRIVATE
 )
 target_include_directories(${GAME_TARGET} PRIVATE "${GAME_STATE_GENERATED_DIR}")
 if(GAME_DEVAPI_ENABLED)
-    # A5: the DevAPI dispatch is a hand-written shell TU (universal over the
+    # The DevAPI dispatch is a hand-written shell TU (universal over the
     # fragment registry), no longer a generated per-fragment source.
     target_sources(${GAME_TARGET} PRIVATE
         src/game_save_devapi.c
-        "${GAME_EVENTS_SRC}/game_events_devapi.c" # E3: event-log tail ring + game.events.tail
-        "${GAME_EVENTS_SRC}/game_event_render.c") # E3: descriptor-driven JSON renderer
+        "${GAME_EVENTS_SRC}/game_events_devapi.c" # event-log tail ring + game.events.tail
+        "${GAME_EVENTS_SRC}/game_event_render.c") # descriptor-driven JSON renderer
 endif()

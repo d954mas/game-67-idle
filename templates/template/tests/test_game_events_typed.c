@@ -1,4 +1,4 @@
-/* Unity ctest for the E2 typed event layer (§E2.10 case 5). Compiles the COMMITTED
+/* Unity ctest for the typed event layer. Compiles the committed
    golden mini events (rich fixture: i64/f64/hash/bool/string/bytes + scalar-only) on
    top of the frozen E1 transport -- no build-time generation. Exercises emit -> typed
    read -> string/bytes accessors, retain out of the arena through an ALIGNED union

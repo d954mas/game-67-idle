@@ -4,9 +4,9 @@
 /* Единственный публичный хедер фичи items — вся публичная поверхность; остальное
    в папке static. L1 foundation: зависит только от L0-шелла (game_save-toolkit +
    gsj_ + движок), НЕ от других фич. Владение ведётся в int64 ВЕЗДЕ (валюты тоже
-   int64, НЕ double; большие счётчики в JSON — строкой, §14 п.8). Дробное
+   int64, НЕ double; большие счётчики в JSON — строкой). Дробное
    производство копит аккумулятор в game glue, НЕ в count (Р1; паттерн задокументирован
-   в build_spec_t0327_i2 §OQ5 и приземлится в скилл nt-game-items, И2c). */
+   в game glue и описана в скилле nt-game-items). */
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -84,7 +84,7 @@ typedef struct item_currency_block_t {
 
 typedef struct game_item_def_t {
     const char *id;            /* <namespace>.<slug>; НИКОГДА не ключуемся по display_name */
-    const char *display_name;  /* витрина; НЕ ключ (греп-гейт §10) */
+    const char *display_name;  /* Display only; never a behavior key. */
     const char *icon_asset_id; /* логический id; хендл арта даёт игра (И3) */
     const char *kind;          /* витрина-категория (item_kinds) */
     const char *const *tags;
@@ -115,7 +115,7 @@ const game_container_def_t *item_container_def(const char *container_id);
 
 /* ---- Владение (поверх генерируемого фрагмента items_state) ----
    Единый глагол add/remove: потратить золото / съесть зелье / израсходовать
-   3 дерева / потратить опыт — ОДИН код. reason обязателен с рождения (§10):
+   3 дерева / потратить опыт — ОДИН код. reason обязателен:
    формат verb:subject, verb из закрытого списка reason_tags.h (debug-assert,
    И2b). L1-нота: для СТАКОВ per-copy поля level/durability — игнорируемые
    дефолты (плоская форма под генератор); смысловы только для УНИКОВ

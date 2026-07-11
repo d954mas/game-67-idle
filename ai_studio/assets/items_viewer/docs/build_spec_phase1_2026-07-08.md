@@ -4,15 +4,15 @@ Task T0316 phase 1 of 3. Author: deep-reasoner, 2026-07-08. Status: spec, review
 Module owns its own docs (precedent: `ai_studio/assets/canvas/docs/`).
 
 Sources this spec sits on: taskboard `ai_studio/taskboard/items/active/T0316-ai-studio-content-editor.md`;
-design frame `templates/design/item_system_design_2026-07-06.md` §7; op-layer
+current items contract `features/items-core/README.md`; op-layer
 `features/items-core/scripts/items_ops.py`; tool-parity precedent `ai_studio/assets/canvas/{ops.mjs,api.mjs,cli.mjs,site/}`;
 host `ai_studio/studio_shell/server.mjs` + `ai_studio/studio_shell/README.md` ("Surface Rule").
 
 ## 1. Goal / scope / non-scope
 
 Goal: a read-only web surface that shows the item catalog of any registered game or template —
-"see the items" — the cheapest, most valuable slice of the future editor (§7 of the design frame:
-value first, universality by schema, never a second data model).
+"see the items" — the cheapest, most valuable slice of the future editor:
+value first, universality by schema, never a second data model.
 
 In scope (phase 1):
 - Pick a catalog (dropdown over merged game + template registries).
@@ -155,8 +155,8 @@ Card anatomy — split explicitly to kill the "designer order vs schema order" c
 - **Per-item issues:** `validate.errors`/`warnings` whose `id` is this item -> red / yellow on the card.
 - Currencies render inline in the same grid (lead decision), tagged as currency.
 
-Labels: `item_fields.schema.json` fields carry ONLY `{type, required}` — the schema has NO labels, and the
-`ui:{}` namespace (design §7) is deferred and absent from the data today. Phase-1 label = humanize the key
+Labels: `item_fields.schema.json` fields carry ONLY `{type, required}` — the schema has NO labels. The
+optional `ui:{}` namespace is deferred and absent from the data today. Phase-1 label = humanize the key
 (`display_name` -> "Display name", `base_value` -> "Base value"). Real labels arrive with `ui:{}`; the
 humanizer is the single seam to swap then.
 

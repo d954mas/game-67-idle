@@ -17,9 +17,9 @@
 #include "items_state.h"
 #include "items_state_events.gen.h"
 
-/* И2a skeleton -> И2b full (§6.6c/§6.8/§7.4). Links items_state.c + items_state_
+/* Items fragment round-trip. Links items_state.c + items_state_
    events.gen.c (R2: not empty, unlike settings) + items_bootstrap.c (real Р9
-   bodies, §7.3) + items_containers.c (И2b ownership) + items_catalog.c/
+   bodies) + items_containers.c (ownership) + items_catalog.c/
    items_catalog.gen.c (item_core, reconcile/containers need it) + game_events.c;
    game_save.c is NOT linked -- items_containers.c/items_bootstrap.c only need
    game_save_mark_dirty(), stubbed below (precedent: test_game_state_roundtrip,
@@ -76,7 +76,7 @@ void test_schema_json_contains_owned(void) {
     cJSON_Delete(schema);
 }
 
-/* fixtures/items_v1.json (§6.8/§9): v1-payload migration anchor -- tolerant
+/* fixtures/items_v1.json: v1-payload migration anchor -- tolerant
    from_json loads it. WORKING_DIRECTORY for this test is tests/ (CMakeLists.txt),
    so the relative path below resolves regardless of ctest's own cwd. */
 void test_fixture_v1_loads(void) {
@@ -101,7 +101,7 @@ void test_fixture_v1_loads(void) {
     cJSON_Delete(json);
 }
 
-/* ---- И2b: ownership / containers / purse (§7.1/§7.4) ---- */
+/* ---- Ownership / containers / purse ---- */
 
 /* Стаки/count: add 3x -> sums; remove beyond remainder -> false, remainder
    intact; remove to 0 -> slot freed. */
@@ -253,7 +253,7 @@ void test_move_capped_currency_conserves_total_sum(void) {
     TEST_ASSERT_EQUAL_INT64(before_sum, after_sum);
 }
 
-/* T1: unique route re-parents via the FIELD, never the key (§2.3) -- use a
+/* T1: unique route re-parents via the field, never the key -- use a
    currency def so both backpack (any) and purse (currency_only) accept it, to
    isolate the field-authority behavior from accept-policy. Then M4: filling the
    destination to its capacity REJECTs a unique move in exactly the same way it
@@ -483,7 +483,7 @@ void test_byte_stable_after_on_new_game(void) {
     cJSON_Delete(jb);
 }
 
-/* items.txn/items.move (§10): raw event lines must explain the exact mutation
+/* items.txn/items.move: raw event lines must explain the exact mutation
    without requiring a state snapshot or source-code inference. */
 void test_items_txn_event_emitted_on_add(void) {
     items_state_fragment.reset();
@@ -583,7 +583,7 @@ static bool any_txn_event_exists(void) {
     return false;
 }
 
-/* T3: txn.delta must equal the CLAMPED amount actually applied (spec §7.4), not
+/* T3: txn.delta must equal the clamped amount actually applied, not
    the requested amount -- add 150 into a cap=100 stack must emit delta==100. */
 void test_txn_delta_equals_clamped_amount(void) {
     items_state_fragment.reset();

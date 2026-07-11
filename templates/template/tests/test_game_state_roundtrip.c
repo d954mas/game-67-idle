@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 
-/* A4 round-trip gate for the generated fragment state layer (§A4.8 (5)).
+/* A4 round-trip gate for the generated fragment state layer.
    Links the generated game_state.c + the gsj_* toolkit; game_save is NOT linked
    (the descriptor is data + static wrappers, no game_save_* calls). Unity is
    built with UNITY_EXCLUDE_FLOAT/DOUBLE, so no float/double asserts here. */

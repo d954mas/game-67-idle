@@ -8,7 +8,7 @@
 /* Register a fragment's generated descriptor table (<frag>_ev_descs / _count) into the
    tail's hash->desc lookup. Call once after nt_hash_init (type hashes computed from
    desc->name). Conductor wiring (main.c) -- the generator stays frozen. Duplicate
-   type-hash across descriptors => debug assert (event §1 collision guard). */
+   type hash across descriptors triggers a debug assert. */
 void game_events_devapi_register_descs(const game_event_desc_t *const *descs, int count);
 
 /* RECORD-phase recorder (render-at-copy). Walks game_event_log(), renders each event by

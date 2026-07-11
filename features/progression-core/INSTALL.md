@@ -10,8 +10,8 @@ to the same repo-root module whether the caller is `templates/template` or
 
 ## Dependency: items-core (L2 -> L1)
 
-`progression.h` includes `features/items/items.h` (the L2->L1 edge, §2.4 of
-the build spec) and `progression.c` reads/spends purse through
+`progression.h` includes `features/items/items.h` (the L2->L1 edge) and
+`progression.c` reads/spends purse through
 `items_purse`/`items_add`/`items_remove`. **Every consumer that installs
 `progression-core` must also install `items-core`** and add
 `ITEMS_CORE_INC` to its include path (see `features/items-core/INSTALL.md`).
@@ -56,7 +56,7 @@ Include path — `PROGRESSION_CORE_INC` (and `ITEMS_CORE_INC`, the L2->L1
 dependency above) **ahead of** the game's own `src` (same M5a rule as
 items-core: a stray copy of `progression.h` under the game's
 `src/features/progression/` can never shadow the module — and that path no
-longer exists after this module extraction, §3.4 of the build spec):
+longer exists after this module extraction):
 
 ```cmake
 target_include_directories(${GAME_TARGET} PRIVATE
@@ -68,7 +68,7 @@ target_include_directories(${GAME_TARGET} PRIVATE
 
 Unlike items, progression has **no game-side C corner** — no
 `src/features/progression/` directory exists in a consuming game
-(`src/features/progression/` was deleted entirely by this extraction, §3.4:
+(`src/features/progression/` was deleted entirely by this extraction:
 no `reason_tags.h`-equivalent, no `bootstrap.c`-equivalent seed function).
 Every consumer still supplies its own:
 

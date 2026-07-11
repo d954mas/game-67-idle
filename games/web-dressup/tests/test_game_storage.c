@@ -237,7 +237,7 @@ void test_write_rejects_path_traversal(void) {
     }
 }
 
-/* ---- crash scenario 1 (§A2.4): a stale/garbage <slot>.json.tmp left behind by
+/* ---- crash scenario 1: a stale/garbage <slot>.json.tmp left behind by
    a crash between "write tmp" and "replace" must stay invisible to read(). ---- */
 
 void test_atomicity_stale_tmp_is_invisible_to_read(void) {
@@ -330,7 +330,7 @@ void test_replace_failure_preserves_primary(void) {
     TEST_ASSERT_NULL(tmp_file);
 }
 
-/* ---- crash scenario 2 (§A2.4): primary corrupted after a known-good backup;
+/* ---- crash scenario 2: primary corrupted after a known-good backup;
    read() still returns the (garbage) primary bytes -- storage does not validate
    JSON, that is game_save's job -- but read_backup() returns last-known-good. ---- */
 
@@ -388,9 +388,9 @@ void test_write_backup_overwrites_existing_bak(void) {
     free(bak_out);
 }
 
-/* ---- crash scenario 3 (§A2.4): quarantine removes the corrupt primary and
+/* ---- crash scenario 3: quarantine removes the corrupt primary and
    leaves exactly one <slot>.corrupt-<unix_ms> file behind, holding the
-   ORIGINAL primary bytes (forensics, P10/§14 p.14). ---- */
+   ORIGINAL primary bytes (forensics, the forensics contract). ---- */
 
 void test_quarantine_moves_primary_and_leaves_exactly_one_corrupt_file(void) {
     char err[128] = {0};

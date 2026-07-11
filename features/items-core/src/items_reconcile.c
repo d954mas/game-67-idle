@@ -10,8 +10,8 @@
    because reconcile is the one call site that needs it. */
 void items_internal_seq_bump(int64_t candidate);
 
-/* Post-load fixup (§0 п.2, order: version-steps -> reconcile -> quarantine). Scans
-   owned[] directly (items_state.c's find/alloc helpers are static, §7.1/M3): a
+/* Post-load fixup; order is version steps -> reconcile -> quarantine. Scans
+   owned[] directly because items_state.c's find/alloc helpers are static: a
    def_id no longer present in the catalog gets quarantined (NEVER deleted -- R5,
    save corruption otherwise); a def_id that reappears (catalog restored) is
    un-quarantined. The record keeps its .container home across the whole cycle.

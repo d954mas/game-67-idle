@@ -1,5 +1,5 @@
 /* game_save_devapi.c — hand-written universal DevAPI dispatch over the fragment
-   registry (§A5). Replaces the transitional generated <id>_state_devapi.c: the 7
+   registry. Replaces the transitional generated <id>_state_devapi.c: the 7
    game.state.* commands route by the HEAD of the path to the owning fragment's
    vtable (get_path_json/set_path_json/to_json/schema_json) and to the shell
    (save/load/reset). No per-field metadata, no game_state.h — universal over the
@@ -53,7 +53,7 @@ static const GameSaveFragment *route_path(const char *path, char *head_buf, size
 }
 
 /* { <frag.id>: frag->to_json(), ... [, "orphans": {<id>: subtree, ...}] } over registered
-   fragments; NO "v" (read view, not a save — §8). Retained orphan blobs (§14 п.16) ride in
+   fragments; NO "v" (read view, not a save — ). Retained orphan blobs ride in
    a SEPARATE "orphans" section, appended after the live fragments and omitted entirely when
    there are none (Q1, lead 2026-07-07) — a healthy response stays byte-identical to before.
    Key-collision note: a registered fragment whose id were literally "orphans" would shadow
@@ -111,7 +111,7 @@ static const char *load_status_string(game_save_load_status_t status) {
     return "unknown";
 }
 
-/* ---- 7 handlers. error.code is FROZEN to "bad_params"/"internal" (§MED-3);
+/* ---- 7 handlers. error.code is FROZEN to "bad_params"/"internal";
    descriptive strings live only in err->message. ---- */
 
 static bool ep_state_schema(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {
@@ -194,7 +194,7 @@ static bool ep_state_set(const cJSON *params, cJSON *result_obj, nt_devapi_error
     game_save_mark_dirty();
     /* Echo the stored value. The fresh get_path_json result is already owned, so
        it goes straight into result_obj; only the params-owned input `value` needs
-       cJSON_Duplicate — handing `value` itself to result_obj double-frees (§MED-4). */
+       cJSON_Duplicate — handing `value` itself to result_obj double-frees. */
     cJSON *echo = f->get_path_json ? f->get_path_json(sub, s_state_err, (int)sizeof s_state_err) : NULL;
     if (!echo) {
         echo = cJSON_Duplicate(value, true);
@@ -204,7 +204,7 @@ static bool ep_state_set(const cJSON *params, cJSON *result_obj, nt_devapi_error
     return true;
 }
 
-/* Per-fragment atomic patch (§14 п.7 / §MED-2): group values by owning fragment,
+/* Per-fragment atomic patch: group values by owning fragment,
    snapshot the fragment BEFORE applying its group, restore the whole group via
    from_json(snapshot) on any key failure. No cross-fragment rollback. */
 static bool ep_state_patch(const cJSON *params, cJSON *result_obj, nt_devapi_error *err, void *user) {

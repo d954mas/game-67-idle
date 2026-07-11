@@ -15,12 +15,9 @@ scripts in those folders, not in this skill folder.
 
 ## Start
 
-1. Read the design doc: `templates/design/item_system_design_2026-07-06.md`
-   (§1 core+blocks+currencies, §3 containers, §6 save/migrations, §9
-   ship-with-fixes, §10 mutations/reason/txn). This doc has not yet moved to a
-   permanent home (out of T0327 И2 scope) -- this skill points at its current
-   path.
-2. Read `templates/template/src/features/items/README.md` first for
+1. Read `features/items-core/README.md` and `features/items-core/INSTALL.md`
+   for the invariant ownership module, stack contract, API, and wiring.
+2. Read `templates/template/src/features/items/README.md` for
    everything feature-specific: public API summary, state-fragment shape,
    quarantine semantics + its `owned.max_count` budget cost, art_needs,
    content workflow, and the lock workflow (`content/items.lock.json`). This
@@ -31,7 +28,7 @@ scripts in those folders, not in this skill folder.
    content changes; inspect `templates/template/state/items.schema.json`
    before ownership/save-shape changes.
 
-## Two halves (design §7)
+## Two halves
 
 **Working with the CATALOG (data, offline/tooling)** -- go through the
 op-layer, never hand-parse `items.json`:
@@ -47,9 +44,9 @@ pass every path explicitly when running from a directory other than the
 module itself — the script's own argparse defaults are relative to
 `features/items-core/`, not the game, so a missing `--catalog`/`--schema`/
 `--baseline`/`--state-schema` resolves inside the module and either hard-
-fails or silently skips a check, §5.6/R7 of `templates/design/build_spec_t0337_2026-07-07.md`.)
+fails or silently skips a check.)
 
-- `list`/`schema`/`validate` are the ONLY ops in И2 (read-v1, LEAN §3);
+- `list`/`schema`/`validate` are the only current read-only operations;
   upsert/deprecate are editor-era (T0316 web editor), not built yet.
 - **New item def: set `created` (ISO date `"YYYY-MM-DD"`), required**
   (`validate` rules `created-missing`/`created-invalid`; lead-ratified
@@ -88,8 +85,7 @@ fails or silently skips a check, §5.6/R7 of `templates/design/build_spec_t0337_
 
 **Working IN THE GAME (runtime, via the feature API)** -- use
 `features/items-core/include/features/items/items.h` (spelling
-`features/items/items.h` preserved through the game's include-path, §2.2 of
-`templates/design/build_spec_t0337_2026-07-07.md`), never raw
+`features/items/items.h` preserved through the game's include path), never raw
 `items_state`/`owned[]` access from game code:
 
 - `items_add`/`items_remove`/`items_move`/`items_count`/`items_can_afford` —
@@ -107,13 +103,12 @@ fails or silently skips a check, §5.6/R7 of `templates/design/build_spec_t0337_
   the closed list in `templates/template/src/features/items/reason_tags.h`
   (debug-assert in non-release builds).
 - **Fractional/idle production is NOT built into `count` (int64 everywhere,
-  including currencies).** The pattern (not implemented in И2, documented
-  here per design §OQ5): accumulate a `float`/`double` accumulator in game
+  including currencies).** Accumulate a `float`/`double` remainder in game
   glue code, and only call `items_add`/`items_remove` once the accumulator
   crosses `>= 1`, flushing the integer part back into `count`. Never store
   fractional amounts in the save.
 
-## Migration skeleton (§9, not built in И2 — no migrations exist yet)
+## Migration skeleton (not built in the initial items slice)
 
 `state/items.schema.json` is `version: 1`, no `migrations` yet. Full v2
 recipe (schema bump, `items_migrate_1_to_2`, `items_migrations.c`, CMake
@@ -123,8 +118,8 @@ do not re-derive the steps here, follow that section.
 ## Rules
 
 - `items.h` is the ONLY public header (feature-layer L1), now living in the
-  root module `features/items-core/include/features/items/items.h`
-  (spelling preserved, §2.2 of `templates/design/build_spec_t0337_2026-07-07.md`):
+  root module `features/items-core/include/features/items/items.h` with its
+  logical spelling preserved:
   it depends only on the L0 shell (game_save toolkit + `gsj_` json helpers +
   engine), never on another feature.
 - Never key game logic off `display_name` — it is display-only; key off `id`.

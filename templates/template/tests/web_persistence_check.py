@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Advisory, CI-optional check for build_spec_a1_a3_2026-07-06.md A2.4 item 2:
+"""Advisory, CI-optional check for the game-state INSTALL verify contract:
 "does a real localStorage save survive a browser restart, with the APP_ID-scoped
 key the new game_storage.c web backend builds?"
 

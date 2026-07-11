@@ -1,4 +1,4 @@
-/* game_save.c — hand-written L0 save orchestrator (§A3).
+/* game_save.c — hand-written L0 save orchestrator.
    Fragment registry + single atomic envelope document + load state machine
    (FRESH/LOADED/RECOVERED_BAK/CORRUPT_RESET/NEWER, per-fragment, never
    all-or-nothing) + on_new_game + dirty/debounce/MAX_INTERVAL + synchronous web
@@ -29,7 +29,7 @@
 #endif
 
 /* CMake supplies these for the game/test targets; guarded defaults keep the file
-   self-contained (§A3.2). */
+   self-contained. */
 #ifndef GAME_SAVE_AUTOSAVE_SLOT
 #define GAME_SAVE_AUTOSAVE_SLOT "autosave"
 #endif
@@ -46,7 +46,7 @@
 #define GAME_STORAGE_APP_ID "template"
 #endif
 
-/* Internal constants (§A3.2). */
+/* Internal constants. */
 #define GAME_SAVE_FORMAT 1
 #ifndef GAME_SAVE_BUILD
 #define GAME_SAVE_BUILD "0"
@@ -75,7 +75,7 @@ static bool    s_new_game_pending;         /* Р11: deferred to the shell's next
 static char    s_new_game_skip_id[32];     /* fragment id to leave untouched, or "" for none */
 static bool    s_dirty;
 static bool    s_unpersisted;
-static int64_t s_dirty_at;        /* mono ms of the first mark after clean (§14 п.6) */
+static int64_t s_dirty_at;        /* mono ms of the first mark after clean */
 static int64_t s_last_save_mono;  /* mono ms of the last successful save */
 static int64_t s_last_saved_at;   /* wall ms stamped into the last save/load */
 static int64_t s_save_seq;        /* monotonic counter, restored from the loaded envelope */
@@ -135,10 +135,10 @@ static int read_frag_version(const cJSON *frag) {
     if (cJSON_IsNumber(vj)) {
         return (int)vj->valuedouble;
     }
-    return 1; /* absent -> v1 (§A3.4 п.6) */
+    return 1; /* absent -> v1 */
 }
 
-/* ---- orphan retention (§14 п.16 / §A3.3) ---- */
+/* ---- orphan retention ---- */
 
 static void free_orphans(void) {
     for (int i = 0; i < s_orphan_count; i++) {
@@ -178,7 +178,7 @@ static void capture_orphans(const cJSON *features) {
     }
 }
 
-/* ---- transform seam (§14 п.15 / §A3.9). Default chain empty -> flat '{' JSON. ---- */
+/* ---- transform seam. Default chain empty -> flat '{' JSON. ---- */
 
 static char *transform_encode(const char *flat, char *error, int error_cap) {
     if (s_transform_count <= 0) {
@@ -236,7 +236,7 @@ static char *transform_decode(const char *raw, char *error, int error_cap) {
         return NULL;
     }
     if (strncmp(raw, GAME_SAVE_TRANSFORM_PREFIX, GAME_SAVE_TRANSFORM_PREFIX_LEN) != 0) {
-        return dup_string(raw); /* plain hand-edited JSON always loads (§A3.9) */
+        return dup_string(raw); /* plain hand-edited JSON always loads */
     }
     const char *colon = strchr(raw + GAME_SAVE_TRANSFORM_PREFIX_LEN, ':');
     if (!colon) {
@@ -298,7 +298,7 @@ static void reconcile_all(void) {
     }
 }
 
-/* ---- envelope build + save (§A3.5) ---- */
+/* ---- envelope build + save ---- */
 
 static cJSON *build_root(bool bump_seq, int64_t *out_wall) {
     cJSON *root = cJSON_CreateObject();
@@ -330,7 +330,7 @@ static cJSON *build_root(bool bump_seq, int64_t *out_wall) {
         cJSON_AddNumberToObject(payload, "v", (double)frag->version); /* shell stamps "v" */
         cJSON_AddItemToObject(features, frag->id, payload);
     }
-    /* retained orphans, verbatim, AFTER registered fragments (§A3.3) */
+    /* retained orphans, verbatim, AFTER registered fragments */
     for (int i = 0; i < s_orphan_count; i++) {
         cJSON *dup = cJSON_Duplicate(s_orphans[i].subtree, true);
         if (dup) {
@@ -370,14 +370,14 @@ static bool save_internal(char *error, int error_cap) {
         s_unpersisted = false;
     } else {
 #if defined(__EMSCRIPTEN__)
-        s_unpersisted = true; /* quota / Safari-private -> SAVE_UNPERSISTED (§14 п.3) */
+        s_unpersisted = true; /* quota / Safari-private -> SAVE_UNPERSISTED */
 #endif
-        /* dirty stays set: retry on the next tick (§A3.5). */
+        /* dirty stays set: retry on the next tick. */
     }
     return ok;
 }
 
-/* ---- load state machine (§A3.4) ---- */
+/* ---- load state machine ---- */
 
 static bool doc_is_newer(const cJSON *doc) {
     const cJSON *fj = gsj_object_item(doc, "format");
@@ -400,7 +400,7 @@ static bool doc_is_newer(const cJSON *doc) {
             return true;
         }
     }
-    return false; /* unknown feature keys are orphans, NOT NEWER (§A3.4 п.3) */
+    return false; /* unknown feature keys are orphans, NOT NEWER */
 }
 
 static bool run_migration_steps(const GameSaveFragment *frag, int from_v, cJSON *copy, char *err, int cap) {
@@ -428,7 +428,7 @@ static void record_reset(game_save_load_result_t *r, const char *id) {
 static void load_from_doc(const cJSON *doc, game_save_load_result_t *result) {
     int64_t seq = 0;
     (void)gsj_read_i64(doc, "save_seq", 0, INT64_MAX, &seq, NULL, 0);
-    s_save_seq = seq; /* next save > loaded (monotonic across sessions, §A3.4 п.4) */
+    s_save_seq = seq; /* next save > loaded (monotonic across sessions) */
 
     int64_t saved_at = 0;
     (void)gsj_read_i64(doc, "saved_at", 0, INT64_MAX, &saved_at, NULL, 0);
@@ -456,7 +456,7 @@ static void load_from_doc(const cJSON *doc, game_save_load_result_t *result) {
                  (frag->from_json != NULL) && frag->from_json(copy, ferr, (int)sizeof ferr);
             cJSON_Delete(copy);
         } else {
-            /* v == frag->version; v > frag->version is unreachable — NEWER preempts (§A3.4 п.6). */
+            /* v == frag->version; v > frag->version is unreachable — NEWER preempts. */
             ok = (frag->from_json != NULL) && frag->from_json(f, ferr, (int)sizeof ferr);
         }
         if (!ok) {
@@ -476,7 +476,7 @@ static void load_from_doc(const cJSON *doc, game_save_load_result_t *result) {
 /* Shared .bak recovery (RECOVERED_BAK): read + decode + parse + validate the backup;
    on success load it, rewrite the primary, THEN refresh the .bak (order matters: the
    primary is currently bad — backing it up first would clobber the live .bak with
-   garbage, §A3.4 п.8), set RECOVERED_BAK + `reason`, return true. Returns false with
+   garbage), set RECOVERED_BAK + `reason`, return true. Returns false with
    `result` untouched when there is no usable backup. Reused by BOTH the classic
    unparseable-primary path AND the native read-ERROR path (лид 2026-07-07). Web
    read_backup is always false, so web just falls through (no .bak there). */
@@ -529,7 +529,7 @@ void game_save_load(game_save_load_result_t *result) {
                false). Only if there is no usable backup fall through to the classic
                corrupt-reset body (reset + autosave paused, NO on_new_game/save, primary
                untouched — the shell's single new_game overwrites it). Never silently
-               reborn as FRESH (the malloc-load-failure data-loss bug). §A3.4 п.1-2, лид 2026-07-07. */
+               reborn as FRESH (the malloc-load-failure data-loss bug). лид 2026-07-07. */
             if (try_recover_from_backup(result, "primary unreadable; recovered from backup", err, (int)sizeof err)) {
                 return;
             }
@@ -541,7 +541,7 @@ void game_save_load(game_save_load_result_t *result) {
             s_last_save_mono = mono_now();
             return;
         }
-        /* No save -> FRESH: reset + on_new_game + save (§A3.4 п.1). */
+        /* No save -> FRESH: reset + on_new_game + save. */
         reset_all();
         on_new_game_all();
         s_autosave_paused = false;
@@ -558,7 +558,7 @@ void game_save_load(game_save_load_result_t *result) {
 
     if (doc && cJSON_IsObject(doc)) {
         if (doc_is_newer(doc)) {
-            /* NEWER: zero writes, autosave paused, read/export still available (§A3.4 п.3). */
+            /* NEWER: zero writes, autosave paused, read/export still available. */
             cJSON_Delete(doc);
             s_autosave_paused = true;
             result->status = GAME_SAVE_LOAD_NEWER;
@@ -566,7 +566,7 @@ void game_save_load(game_save_load_result_t *result) {
             s_last_save_mono = mono_now();
             return;
         }
-        /* LOADED (§A3.4 п.6-8). */
+        /* LOADED. */
         load_from_doc(doc, result);
         cJSON_Delete(doc);
         s_autosave_paused = false;
@@ -580,7 +580,7 @@ void game_save_load(game_save_load_result_t *result) {
         cJSON_Delete(doc);
     }
 
-    /* Primary unparseable -> try backup (§A3.4 п.2). */
+    /* Primary unparseable -> try backup. */
     if (try_recover_from_backup(result, "primary corrupt; recovered from backup", err, (int)sizeof err)) {
         return;
     }
@@ -604,7 +604,7 @@ void game_save_register_fragment(const GameSaveFragment *fragment) {
     s_fragments[s_fragment_count++] = fragment;
 }
 
-/* ---- registry read-access for the DevAPI dispatch (§A5.3). Additive, read-only,
+/* ---- registry read-access for the DevAPI dispatch. Additive, read-only,
    behaviourally inert view of the static registry. ---- */
 
 int game_save_fragment_count(void) { return s_fragment_count; }
@@ -625,7 +625,7 @@ const GameSaveFragment *game_save_find_fragment(const char *id) {
     return NULL;
 }
 
-/* ---- Orphan read-access (retained unknown feature keys, §14 п.16 / §A3.3). Additive,
+/* ---- Orphan read-access (retained unknown feature keys). Additive,
    read-only view of s_orphans, symmetric to the fragment read-access above. Subtree stays
    OWNED by game_save (the DevAPI aggregate duplicates before handing out). ---- */
 
@@ -661,7 +661,7 @@ void game_save_init(void) {
     char err[128];
     err[0] = '\0';
     if (!game_storage_probe(err, (int)sizeof err)) {
-        s_unpersisted = true; /* web quota / private mode caught at startup (§14 п.3) */
+        s_unpersisted = true; /* web quota / private mode caught at startup */
     }
 }
 
@@ -741,7 +741,7 @@ void game_save_tick(void) {
 void game_save_mark_dirty(void) {
     if (!s_dirty) {
         s_dirty = true;
-        s_dirty_at = mono_now(); /* first mark after clean (§14 п.6) */
+        s_dirty_at = mono_now(); /* first mark after clean */
     }
 }
 
@@ -808,7 +808,7 @@ void game_save_set_transforms(const game_save_transform_t *chain, int count) {
     s_transform_count = (count > 0) ? count : 0;
 }
 
-/* ---- web visibility flush (§14 п.5 / §A3.8). rAF freezes on a hidden tab, so
+/* ---- web visibility flush. rAF freezes on a hidden tab, so
    the flush must be a synchronous force-save fired straight from the event. ---- */
 #if defined(__EMSCRIPTEN__)
 EMSCRIPTEN_KEEPALIVE void game_save_web_flush(void) {

@@ -130,8 +130,7 @@ possibility, not a feature.
   `list`/`validate`/`schema`) + `items_ops_test.py`. In-place module, same
   shape as `game-state/` (`../../features/items-core/` from any
   `templates/<x>` or `games/<id>`). Extracted 2026-07-07 out of
-  `templates/template/src/features/items/` (T0337,
-  `templates/design/build_spec_t0337_2026-07-07.md`, increment M1) once its
+  `templates/template/src/features/items/` in T0337 once its
   `.c` was proven byte-identical across the decisive rule above. The
   consuming template/game still owns its content (`content/items.json` +
   `item_fields.schema.json` + `items.lock.json`), its state schema

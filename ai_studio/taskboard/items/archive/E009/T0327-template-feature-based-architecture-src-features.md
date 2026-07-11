@@ -13,8 +13,7 @@ updated: 2026-07-10
 ## What
 
 Перевести templates/template на фичевую архитектуру, принятую лидом
-2026-07-06. Дизайн: templates/design/feature_architecture_2026-07-06.md (при закрытии
-задачи перенести в ai_studio/game_design/knowledge_base или templates/).
+2026-07-06. Текущий контракт категорий и ownership: `features/README.md`.
 
 Ключевые решения (лид, 2026-07-06):
 - Игра = набор фич; фича = папка src/features/<id>/ (код + ассеты + стейт +
@@ -39,8 +38,8 @@ updated: 2026-07-10
 3. Per-feature стейт в сейв-документе (под-объект на фичу; save/load хуки
    руками через game_storage; генератор — только по факту боли).
 4. bottom_nav как фича-виджет + ассет-шов в build_packs.c.
-5. Item-система как обучающий набор (дизайн:
-   templates/design/item_system_design_2026-07-06.md, прошёл адверсариальное ревью):
+5. Item-система как обучающий набор (текущий контракт:
+   `features/items-core/README.md`, прошёл адверсариальное ревью):
    ОДНА фича items = каталог (ядро+блоки equip/use/currency) + стаки int64
    + пул инстансов + контейнеры (слияние по ревью, лид подтвердил;
    инвариант «инстанс ровно в одном контейнере» в одном месте; purse =
@@ -87,15 +86,15 @@ updated: 2026-07-10
 
 ## Open questions
 
-- Ревью 4× завершены (синтез: templates/design/reviews_synthesis_2026-07-06.md).
-  Перед реализацией: (а) doc-sync по чек-листу §7 синтеза (доки
-  противоречат — агенту не отдавать), (б) build-spec инкремента 1,
+- Ревью 4× завершены; принятые решения сохранены в текущих owner-contracts.
+  Перед реализацией: (а) doc-sync по принятому чек-листу (доки
+  противоречат — агенту не отдавать), (б) implementation spec инкремента 1,
   (в) T0328 (state toolkit) — S2/S4 предшествуют стейт-части items.
   LEAN-порезы инкремента 1: события, level_down→set_level/reset, хвост,
-  bake, Diablo-статы, сетка, широкий op-слой, shop-стаб (§3 синтеза).
+  bake, Diablo-статы, сетка, широкий op-слой, shop-стаб.
 
 РЕШЕНО лидом 2026-07-07 (старт арки):
-- Предпосылки сняты: doc-sync §7 сделан (4238ab89), T0328 закрыт целиком
+- Предпосылки сняты: doc-sync сделан (4238ab89), T0328 закрыт целиком
   (A0-A6, E1-E4). Карта разрыва: инкр.1 частично / инкр.3 полностью
   поглощены T0328 (game_features 7 фаз, settings-фрагмент, реестр
   фрагментов с on_new_game); инкр.2/4/5 были открыты.
@@ -160,7 +159,7 @@ updated: 2026-07-10
 
 ## Log
 
-- 2026-07-11: T0375 reconciliation: the remaining doc criterion was already satisfied by tracked `templates/design/feature_architecture_2026-07-06.md`; prior implementation and verification evidence remains authoritative.
+- 2026-07-11: T0375 reconciliation: the remaining doc criterion is satisfied by tracked `features/README.md`; prior implementation and verification evidence remains authoritative.
 - 2026-07-11: Quality: QTECH_001=pass; evidence: recorded native/web builds, ctest, smoke, layering checks, and permanent design document.
 
 - 2026-07-06: создана по решению лида после двух-угольного Opus-дизайна
@@ -233,8 +232,8 @@ updated: 2026-07-10
   settings), UB-негация в rp_i64_abs, poll-once max(); визуальная
   находка оркестратора: наезд панели на демо-титул — титул уехал вниз
   (src/ui/hud.c). ctest 16/16, wasm, грепы чисты, 2 скрина одобрены.
-  Дизайн-доки уже в постоянном месте (templates/design/) — перенос
-  из tmp/ не требуется. Осталось лиду: приёмка глазами (count-up в
+  Принятые решения теперь принадлежат текущим feature owner-contracts.
+  Осталось лиду: приёмка глазами (count-up в
   движении не headless-гейтится) + закрытие карточки.
 - 2026-07-07: И3 спека 962f771de (2 Opus-ревью ACCEPT-WITH-FIXES →
   19 фиксов + LEAN: on_level_up codegen-ветка вырезана, кривые
@@ -291,4 +290,4 @@ updated: 2026-07-10
     §4 называет pytest-базу 44 (фактическая 41 — док-нит истории);
     финальный прогон после коммитов 17/17. Карточку закрывает лид
     (приёмка count-up глазами уже сделана).
-- 2026-07-11: T0375 status reconciliation: done; the last doc criterion exists at templates/design/feature_architecture_2026-07-06.md and prior native/web/ctest evidence proves implementation.
+- 2026-07-11: T0375 status reconciliation: done; the last doc criterion exists in `features/README.md` and prior native/web/ctest evidence proves implementation.

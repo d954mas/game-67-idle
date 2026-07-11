@@ -439,7 +439,7 @@ void test_newer_is_read_only(void) {
     free(exp);
 }
 
-/* 7. Orphan round trip (§14 п.16): unknown feature key retained through save. */
+/* 7. Orphan round trip: unknown feature key retained through save. */
 void test_orphan_round_trip(void) {
     const char *withghost =
         "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":3,\"app\":\"template_test\","
@@ -821,7 +821,7 @@ void test_pending_new_game_skips_one_fragment(void) {
 
 int main(void) {
     game_save_register_fragment(&s_extra_fragment);
-    game_save_register_fragment(&s_fake_fragment); /* `game` registered last (§14 п.2) */
+    game_save_register_fragment(&s_fake_fragment); /* `game` registered last */
 
     UNITY_BEGIN();
     RUN_TEST(test_envelope_round_trip);

@@ -7,7 +7,7 @@
 #include "game_event_desc.h" /* game_event_desc_t */
 #include "hash/nt_hash.h"    /* nt_hash64_t */
 
-/* Built-in generic "log" event type (event_system_design §3/§6). A fragment-less,
+/* Built-in generic "log" event type. A fragment-less,
    hand-written leaf: an ad-hoc debug message for game glue that needs no schema. Type =
    nt_hash64_str("log") (NOT "game.log" -- expressing it in a fragment schema would need a
    generator edit, and the generator is frozen). One inline STRING field `msg`. The E3 tail

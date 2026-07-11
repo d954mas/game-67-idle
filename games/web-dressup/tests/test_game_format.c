@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 
-/* L0 int64-abbrev formatter (build_spec_t0327_i3 §6.1/G8). Границы: <1000
+/* L0 int64-abbrev formatter. Границы: <1000
    точно, K/M/B/T/Qa/Qi tiers, INT64_MAX/INT64_MIN (без UB, #13), отрицательные. */
 
 void setUp(void) {}

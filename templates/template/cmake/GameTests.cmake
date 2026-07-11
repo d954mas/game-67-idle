@@ -171,7 +171,7 @@ if(NOT EMSCRIPTEN)
     target_link_libraries(check_mini_state_events PRIVATE nt_hash nt_log nt_core)  # headers only (OBJECT does not link)
     nt_set_warning_flags(check_mini_state_events)  # same -W set + -Werror toggle as the game target
 
-    # И2a: catalog-lookup over the generated const tables (content codegen, §6.3/§6.8).
+    # Catalog lookup over the generated const tables.
     add_executable(test_items_catalog
         tests/test_items_catalog.c
         "${ITEMS_CORE_SRC}/items_catalog.c"
@@ -235,13 +235,9 @@ if(NOT EMSCRIPTEN)
     add_test(NAME generate_items_api_proof_test
         COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof_test.py")
 
-    # И2a skeleton -> И2b full (§6.6c/§6.8): round-trip over the generated items
-    # fragment state layer. Links items_state.c + the (non-empty, R2) events source +
-    # the real on_new_game/reconcile bodies (Р9 §7.3) + gsj_* toolkit + game_events.c
-    # (event descriptor plumbing) + И2b ownership (items_containers.c) + the catalog
-    # (item_core, reconcile/containers need it, code-review #11). game_save.c is
-    # NOT linked (engine-independent) -- the test TU stubs game_save_mark_dirty()
-    # itself instead (precedent: test_game_state_roundtrip, code-review #11).
+    # Items fragment round-trip links generated state/events, game-owned hooks,
+    # JSON/event plumbing, ownership core, and the generated catalog.
+    # game_save.c is not linked; the test TU stubs game_save_mark_dirty.
     add_executable(test_items_fragment
         tests/test_items_fragment.c
         "${ITEMS_STATE_GENERATED_SOURCE}"
@@ -266,8 +262,8 @@ if(NOT EMSCRIPTEN)
     # when a human remembered to invoke it by hand. Wiring it into ctest
     # means deleting a shipped def_id without a lock.removed reaction now
     # turns the BUILD's test suite red automatically; the forcing chain
-    # (§ README "Lock workflow") finally starts at an automated gate, not a
-    # manual step. Reads only committed source (content/items.json,
+    # The README Lock workflow starts at an automated gate, not a manual step.
+    # Reads only committed source (content/items.json,
     # content/items.lock.json, state/items.schema.json) -- no generated-file
     # dependency, so no add_dependencies needed. WORKING_DIRECTORY is the
     # template root so the CWD-relative --catalog/--schema/--baseline/
@@ -298,14 +294,14 @@ if(NOT EMSCRIPTEN)
     add_test(NAME items_ops_test COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_ops_test.py"
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
-    # И3a (§5.9d, H2/R11): test_progression compiles progression.c, which
+    # test_progression compiles progression.c against the real generated state.
     # #includes progression_tracks.gen.h -- but does NOT link
     # progression_tracks.gen.c (it links its OWN hand-written k_tracks catalog,
     # tests/test_progression_catalog.c, to avoid a duplicate-symbol link error,
     # R10). Without a linked OUTPUT of the codegen custom_command, ninja has no
     # dependency edge forcing the .gen.h to exist before progression.c compiles
     # on a clean/parallel build -- a phony target + add_dependencies closes that
-    # gap (items avoids this because it LINKS its generated .gen.c, §5.9d).
+    # gap; items already links its generated source and has the dependency edge.
     add_custom_target(progression_tracks_gen DEPENDS
         "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.h"
         "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c")
@@ -329,28 +325,22 @@ if(NOT EMSCRIPTEN)
     set_target_properties(test_progression PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_progression COMMAND test_progression WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 
-    # GOLDEN (§5.8b): links the DEMO progression_tracks.gen.c (generation
-    # auto-triggers via the custom_command OUTPUT, precedent items :593) -- the
+    # GOLDEN: links the demo progression_tracks.gen.c.
+    # The custom-command output provides the dependency edge; this is the
     # ONLY target in this file that links the real generated catalog; no
     # duplicate-k_tracks conflict with test_progression (which never links it).
     add_executable(test_progression_curve
         tests/test_progression_curve.c
         "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c")
     target_link_libraries(test_progression_curve PRIVATE unity)
-    # T0337 M1 added ITEMS_CORE_INC here ahead of schedule (spec §5.6 labels it
-    # [M2] alongside PROGRESSION_CORE_INC) because items.h had already moved out
-    # of src/ in M1 while progression.h had not: progression_tracks.gen.h
-    # includes features/progression/progression.h (then still src/) which
-    # includes features/items/items.h (H1 chain, §13) -- without ITEMS_CORE_INC
-    # this target would have failed to compile mid-M1, breaking the
-    # per-increment-green invariant (§9/R8). M2 now moves progression.h itself
-    # out of src/ (§3.3), so PROGRESSION_CORE_INC completes the include path.
+    # Both module include roots are required because progression.h includes
+    # features/items/items.h; keep both on this target.
     target_include_directories(test_progression_curve PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" src "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_progression_curve PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_progression_curve PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_progression_curve COMMAND test_progression_curve)
 
-    # И3b (§6.1/G8): L0 int64-abbrev formatter -- pure, no generated-file/state
+    # L0 int64-abbreviation formatter: pure, no generated-file/state
     # dependency, so a plain two-file test target (precedent test_game_state_json).
     add_executable(test_game_format tests/test_game_format.c src/game_format.c)
     target_link_libraries(test_game_format PRIVATE unity)

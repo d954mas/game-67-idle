@@ -143,7 +143,7 @@ void test_hold_to_reset_preserves_settings(void) {
 int main(void) {
     /* registration ONCE (no unregister API; registering per-setUp would
        duplicate/overflow), in the documented order (settings -> items ->
-       progression -> game; `game` last, §14 п.2). */
+       progression -> game; `game` last). */
     game_events_init();
     game_save_register_fragment(&settings_state_fragment);
     game_save_register_fragment(&items_state_fragment);

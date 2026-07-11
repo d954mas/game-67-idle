@@ -275,7 +275,7 @@ static void frame(void) {
     // render pass this frame (see game_save_apply_pending_new_game's doc comment).
     (void)game_save_apply_pending_new_game();
 
-    // ---- feature two-phase event frame (event_system_design §2/§7) ----
+    // ---- feature two-phase event frame: react to quiescence, then record ----
     game_features_update(&s_world, g_nt_app.dt);   // emit phase (sys_move moved in); phase=EMIT default
     game_events_react_begin();                     // fixpoint baseline = count after update
     do {
@@ -303,7 +303,7 @@ static void frame(void) {
 
     // render systems read the world
     nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.75F, 0.96F, 1.0F}, .clear_depth = 1.0F});
-    // draw_world остаётся прямым вызовом шелла, пока render-системы не станут фичами (§E1.5).
+    // draw_world stays a direct shell call until render systems become features.
     render_mesh_draw(&s_world, s_frame_ubo);
     hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
     // UI-слой фич: агрегатор владеет ui_runtime-кадром и рисует settings (z-order).
@@ -432,9 +432,9 @@ int main(int argc, char **argv) {
     nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});
     nt_text_renderer_init();
-    game_save_register_fragment(&settings_state_fragment); /* settings before game (§14 п.2) */
-    game_save_register_fragment(&items_state_fragment);    /* И2a: L1, no deps -> between settings and game (OQ2) */
-    game_save_register_fragment(&progression_state_fragment); /* И3a: L2, depends on items (L1) -> after items (OQ2) */
+    game_save_register_fragment(&settings_state_fragment); /* settings first */
+    game_save_register_fragment(&items_state_fragment);    /* L1, no deps: between settings and game */
+    game_save_register_fragment(&progression_state_fragment); /* L2 depends on items: register after items */
     game_save_register_fragment(&game_state_fragment);     /* `game` last (most dependent) */
     game_save_init();
     if (!s_fresh_state) {

@@ -148,7 +148,7 @@ test("getCatalogView happy path: live template renders 6 items, schema, containe
   assert.equal(view.validate.ok, true);
   assert.deepEqual(view.validate.errors, []);
 
-  // build_spec_stack_int_2026-07-08 §9: regression guard on both the schema shape
+  // Items-core stack contract: regression guard on both the schema shape
   // and the `list --json` output shape -- `stack` must be a raw int (0/1/N), NOT
   // the old derived {stackable,max_stack,unlimited} object (which would render as
   // "[object Object]" on every card under schema v2's i64 type).

@@ -4,7 +4,7 @@
 Content-codegen sibling of features/items-core/scripts/generate_items_catalog.py (same helpers,
 same write_if_changed/SystemExit discipline) -- this one bakes each track's
 `curve` PRESET into a compile-time `int64_t cost[]` table so the runtime
-never runs float/formula math for level-ups (build_spec_t0327_i3 §5.2/§2.3).
+never runs float/formula math for level-ups.
 
     node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py \
         --catalog content/progression.json \
@@ -14,7 +14,7 @@ never runs float/formula math for level-ups (build_spec_t0327_i3 §5.2/§2.3).
 Emits <out-dir>/progression_tracks.gen.h + progression_tracks.gen.c. Idempotent
 (write_if_changed); table order == document order (round-trip determinism).
 
-LEAN-порезы (build_spec §5.2, ратифицировано лидом):
+Deliberate LEAN constraints ratified by the lead:
 - порез B: curve.type поддержан РОВНО один -- "exp". Любой другой тип -- SystemExit
   громко (linear/table/poly отвергаются, а не тихо игнорятся).
 - порез A: `on_level_up` в JSON -- SystemExit громко (codegen его НЕ печёт; наличие
@@ -36,7 +36,7 @@ INT64_MAX = 2**63 - 1
 
 # state/progression.schema.json: string_max=64 -> char key[64] (NUL-terminated).
 # Kept as a documented constant here (this codegen deliberately never reads the
-# state schema, §9 "не смешивать") -- deep-review #2.
+# state schema; content and state codegen stay separate.
 MAX_TRACK_ID_LEN = 63
 
 MODE_ENUM = {
@@ -111,7 +111,7 @@ def validate_catalog(doc: dict[str, Any], currency_items: dict[str, bool]) -> No
         # NUL-terminated char[64] -- MAX_TRACK_ID_LEN mirrors that -1 for the
         # terminator, same convention as items' ITEMS_STATE_STRING_MAX). This
         # codegen tool does not read the state schema (deliberately separate
-        # codegen, §9 "не смешивать"), so the bound is a documented constant
+        # codegen), so the bound is a documented constant
         # here, not derived. A truncated key would desync from progression.c's
         # find_track lookup by full id -- reject loudly at authoring time
         # instead of relying only on the runtime defense-in-depth guard.
@@ -152,7 +152,7 @@ def validate_catalog(doc: dict[str, Any], currency_items: dict[str, bool]) -> No
                 currency_items[currency_def],
                 f"track {track_id!r} currency_def {currency_def!r} is not a currency item",
             )
-        # threshold: currency_def is absent/ignored -- no existence check (§5.1).
+        # threshold: currency_def is absent/ignored, so no existence check.
 
         max_level = track.get("max_level")
         require(
@@ -184,7 +184,7 @@ def validate_catalog(doc: dict[str, Any], currency_items: dict[str, bool]) -> No
 
 
 # ---------------------------------------------------------------------------
-# Curve baking (§2.3/§5.2: FLOOR, pure-int arithmetic, int64 overflow -> SystemExit)
+# Curve baking: floor, pure-int arithmetic, int64 overflow -> SystemExit.
 # ---------------------------------------------------------------------------
 
 

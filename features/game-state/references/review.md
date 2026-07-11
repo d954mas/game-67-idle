@@ -1,32 +1,49 @@
 # State Review
 
-Load this when reviewing game-state changes, migrations, generated files, DevAPI
-state behavior, fixtures, inventory/equipment refs, or save/load behavior.
+Load this when reviewing schemas, generated files, migrations, DevAPI state,
+fixtures, references, or save/load behavior.
 
 ## Checklist
 
-- Reject gameplay/UI direct writes to raw `GameState`; require domain actions.
-- Reject domain-action calls from migrations.
-- Check integer and enum parsing rejects fractional JSON numbers.
-- Check save envelopes validate `schema`, `document`, and integer `version`.
-- Check every persisted schema field has a stable `id`; removed fields are
-  `reserved`.
+- Check schemas use `schema_version: 2`, a fragment id/version, path-keyed
+  fields, and `reserved` tombstone paths; reject numeric field ids.
 - Check every string has `max_length`, and every list/map has `max_count`.
-- Check saves use safe paths: parent dirs, temp file, replace.
-- Check normal save/load uses logical `key`; `unsafe_path` is only for fixtures
-  and explicit debug.
-- Check autosave load/save behavior with a restart scenario.
-- Check ordinary tests are isolated from persisted state.
+- Check generated files follow the schema and were not hand-edited; DevAPI must
+  remain the hand-written universal registry dispatch.
+- Check all fragments register before save initialization in deterministic
+  order: template `settings`, `items`, `progression`, then `game` last.
+- Check the envelope validates `format`, `save_version`, metadata, and the
+  `features` object; the shell owns each fragment's `v`.
+- Check unknown feature blobs round-trip as orphans.
+- Check native temp/replace, backup, and quarantine behavior; check web
+  namespacing, persistence status, and lifecycle flush.
+- Check ABSENT produces `FRESH`, while an existing unreadable save is
+  quarantined and produces `CORRUPT_RESET`; check `RECOVERED_BAK` and `NEWER`
+  behavior, including zero writes/autosave pause for newer saves.
+- Check fragment migration/parse failures reset only the affected fragment.
+- Check dirty is set only after validated mutation, retained after save failure,
+  and cleared only after durable save.
+- Check DevAPI exposes the seven registry commands, paths begin with a fragment
+  id, and save/load accept no `key` or `doc` parameters.
+- Check normalized schemas expose ordered `fields`, keep `document == fragment`
+  for compatibility, and use only `bad_params`/`internal` error codes.
+- Check patches validate and commit atomically per fragment group; do not assume
+  cross-fragment rollback.
+- Reject gameplay/UI direct writes to generated state; require domain actions.
+- Reject domain-action calls or mutable runtime dependencies from migrations.
+- Check shipped cross-fragment moves bump `GAME_SAVE_DOC_VERSION` and migrate
+  raw `features`; otherwise require an explicit pre-ship data-loss decision.
+- Check integer and enum parsing rejects fractional JSON numbers.
+- Check ordinary tests are isolated from persisted state and exercise restart.
 - Check inventory/equipment references point to existing owned objects.
-- Check schema edits are reflected in generated headers, runtime C adapters,
-  DevAPI paths, actions, fixtures, and scenarios.
-- When variants exist, check each variant generates into a separate directory.
 
 ## Failure Signals
 
-- Generated `game_state.*` changed without schema/generator/template changes.
-- A migration contains current runtime constants with no versioned copy.
+- Generated `<id>_state*` changed without schema/generator changes.
+- Fragment registration order is nondeterministic or occurs after save init.
+- A load error is treated as absence and defaults overwrite a live save.
+- A migration uses current runtime constants without a versioned copy.
 - A test writes raw state where a semantic action should exist.
-- A DevAPI state path can modify a field that should not be writeable.
+- A DevAPI path can modify a field that should not be writable.
 - A fixture or bot assumes list index identity for important owned objects.
 - A clean template schema contains fields from a closed prototype.
