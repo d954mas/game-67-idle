@@ -128,8 +128,8 @@ function staticPath(pathname) {
   return null;
 }
 
-function serveStatic(req, res, url) {
-  const full = staticPath(decodeURIComponent(url.pathname));
+function serveStatic(req, res, decodedPathname) {
+  const full = staticPath(decodedPathname);
   if (!full || !existsSync(full) || !statSync(full).isFile()) {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     res.end("not found");
@@ -145,7 +145,19 @@ function serveJson(res, value) {
 }
 
 const server = createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  let url;
+  let decodedPathname;
+  try {
+    url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    decodedPathname = decodeURIComponent(url.pathname);
+  } catch {
+    res.writeHead(400, {
+      "content-length": "11",
+      "content-type": "text/plain; charset=utf-8",
+    });
+    res.end("bad request");
+    return;
+  }
   const canvasRedirect = canvasRedirectLocation(url.pathname, url.search);
   if (canvasRedirect) {
     res.writeHead(302, { location: canvasRedirect });
@@ -184,7 +196,7 @@ const server = createServer((req, res) => {
       if (!assetHandled) handleTaskboardApi(req, res, url);
     });
   } else {
-    serveStatic(req, res, url);
+    serveStatic(req, res, decodedPathname);
   }
 });
 
