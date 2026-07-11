@@ -1,7 +1,7 @@
 // Chat HTTP/SSE adapter (T0242 increment 3). Studio Shell mounts this handler on the
 // /api/chat/ prefix, beside /api/canvas/ (server.mjs) — bind stays 127.0.0.1, the SAME
 // local-only trust boundary as the rest of studio_shell. T0350 additionally authenticates
-// every POST and refuses the legacy codex transport because it cannot await approvals.
+// every POST and requires an approval-aware transport.
 //
 // Routes:
 //   POST /api/chat/projects/<id>/message    {text, selection?}   -> SSE stream
@@ -22,6 +22,7 @@
 // Exactly one of `final`/`error` ends every stream; the HTTP response itself always ends 200.
 import { readTranscript, appendTurn, buildChatContext, clearConversation, readChatState, writeChatState } from "./context.mjs";
 import { runChatTurn } from "./agent.mjs";
+import { runAppServerTransport } from "./app_server.mjs";
 import { createPermissionBroker } from "./permission_broker.mjs";
 import { listHistory } from "../../assets/canvas/ops.mjs";
 import { selectCanvasStore, withCanvasStore } from "../../assets/canvas/stores.mjs";
@@ -163,7 +164,7 @@ async function handleMessage(root, activeStore, projectId, body, res, transport,
       throw new Error(`a turn is already running for project ${projectId} — cancel it or wait for it to finish`);
     }
     if (!transport || transport.approvalAware !== true) {
-      throw new Error("chat transport is not approval-aware; legacy codex-exec is disabled until T0351");
+      throw new Error("chat transport is not approval-aware");
     }
     runningTurns.set(runKey, turn);
     const context = buildChatContext(root, { projectId, selection: body.selection || [], store: activeStore });
@@ -189,7 +190,13 @@ async function handleMessage(root, activeStore, projectId, body, res, transport,
     let result;
     try {
       result = await runChatTurn({
-        context, message: text, sessionId: state.sessionId, transport, onChild, requestPermission,
+        context,
+        message: text,
+        sessionId: state.sessionId,
+        transport,
+        onChild,
+        onProgress: (delta) => sseEvent(res, "progress", { message: delta }),
+        requestPermission,
       });
     } catch (turnError) {
       // A cancelled-but-already-started turn may still have captured a session id
@@ -226,9 +233,9 @@ async function handleMessage(root, activeStore, projectId, body, res, transport,
 
 // `transport`, when given, is forwarded into every runChatTurn call — the ONE seam tests
 // use to keep codex out of the suite (mirrors createCanvasApi(root)'s own factory shape;
-// Production deliberately leaves the legacy transport unset, so it fails closed until T0351.
+// Production defaults to the app-server transport; tests inject approval-aware fakes.
 export function createChatApi(root, {
-  transport,
+  transport = runAppServerTransport,
   launchToken = randomBytes(32).toString("base64url"),
   allowedHosts = [],
   permissionTtlMs,
@@ -240,7 +247,7 @@ export function createChatApi(root, {
   const permissions = createPermissionBroker(permissionTtlMs === undefined ? {} : { ttlMs: permissionTtlMs });
   const security = { launchToken, allowedHosts: new Set(allowedHosts) };
 
-  return async function handleChatApi(req, res, url) {
+  const handleChatApi = async function handleChatApi(req, res, url) {
     const parts = url.pathname.split("/").filter(Boolean); // ["api","chat","projects", id, sub]
     if (parts[0] !== "api" || parts[1] !== "chat") {
       sendJson(res, 404, { error: "not found" });
@@ -351,6 +358,11 @@ export function createChatApi(root, {
         return true;
       }
       if (!authorizeMutation(req, res, security)) return true;
+      const runKey = chatRunKey(activeStore, projectId);
+      if (runningTurns.has(runKey)) {
+        sendJson(res, 409, { error: `cannot clear project ${projectId} while a turn is running` });
+        return true;
+      }
       try {
         const result = withCanvasStore(activeStore, () => clearConversation(root, { projectId }));
         sendJson(res, 200, { ok: true, ...result });
@@ -363,4 +375,9 @@ export function createChatApi(root, {
     sendJson(res, 404, { error: "not found" });
     return true;
   };
+  handleChatApi.shutdown = () => {
+    if (typeof transport.shutdown === "function") return transport.shutdown();
+    return Promise.resolve();
+  };
+  return handleChatApi;
 }

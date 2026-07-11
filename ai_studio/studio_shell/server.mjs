@@ -30,7 +30,7 @@ const handleArchitectureMapApi = createArchitectureMapApi(root);
 const handleCanvasApi = createCanvasApi(root);
 const handleItemsViewerApi = createItemsViewerApi(root);
 // Chat owns its per-launch token internally. The server only supplies the exact loopback
-// hosts for this launch; the legacy production transport remains fail-closed until T0351.
+// hosts for this launch; chat owns the subscription-authenticated app-server transport.
 const handleChatApi = createChatApi(root, {
   allowedHosts: [`127.0.0.1:${port}`, `localhost:${port}`],
 });
@@ -205,3 +205,35 @@ server.listen(port, "127.0.0.1", () => {
   writeFileSync(pidFile, `${process.pid}\n`, "utf8");
   console.log(`ai_studio: http://127.0.0.1:${port}/  (repo: ${root})`);
 });
+
+let shutdownStarted = false;
+const shutdownTimeoutMs = 5_000;
+
+async function shutdown(signal) {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  const closeServer = new Promise((resolveClose, rejectClose) => {
+    server.close((error) => error ? rejectClose(error) : resolveClose());
+  });
+  let timer;
+  const timeout = new Promise((_, rejectTimeout) => {
+    timer = setTimeout(() => rejectTimeout(new Error(`shutdown timed out after ${shutdownTimeoutMs}ms`)), shutdownTimeoutMs);
+  });
+  let exitCode = 0;
+  try {
+    await Promise.race([
+      Promise.all([Promise.resolve(handleChatApi.shutdown()), closeServer]),
+      timeout,
+    ]);
+  } catch (error) {
+    exitCode = 1;
+    console.error(`ai_studio: ${signal} shutdown failed: ${error?.message || error}`);
+  } finally {
+    clearTimeout(timer);
+    process.exit(exitCode);
+  }
+}
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => { void shutdown(signal); });
+}

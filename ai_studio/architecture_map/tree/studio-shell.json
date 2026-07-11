@@ -96,8 +96,8 @@
       "title": "Canvas Chat",
       "kind": "api",
       "path": "ai_studio/studio_shell/chat",
-      "description": "Hosts Canvas conversation state, approval boundaries, and the transport adapter consumed by the Canvas surface.",
-      "role": "Canvas Chat host adapter",
+      "description": "HTTP and lifecycle host for the Canvas-owned chat semantics and app-server adapter; physical co-location remains until T0352.",
+      "role": "Canvas Chat HTTP/lifecycle host",
       "tags": [
         "chat",
         "canvas",

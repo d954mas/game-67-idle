@@ -403,15 +403,6 @@ test("permission decisions are same-store/project bound and stale decisions are 
   assert.equal(stale.status, 409);
 });
 
-test("default legacy codex-exec transport fails closed before spawning", async (t) => {
-  tempProjects(t);
-  const projectId = seedProject();
-  const handler = createChatApiImpl(ROOT, { launchToken: TEST_TOKEN, allowedHosts: ["localhost"] });
-  const result = await invokeSSE(handler, "POST", `/api/chat/projects/${projectId}/message`, { text: "mutate" });
-  assert.deepEqual(result.events.map((event) => event.event), ["progress", "error"]);
-  assert.match(result.events[1].data.message, /not approval-aware/);
-});
-
 test("POST .../message: emits op-committed with the seq range BEFORE final when the transport's turn advances the head", async (t) => {
   tempProjects(t);
   const projectId = seedProject();
@@ -437,7 +428,7 @@ test("POST .../message: transport error surfaces as an SSE error event, never th
   tempProjects(t);
   const projectId = seedProject();
   const fakeTransport = async () => {
-    throw new Error("codex exec exited 1: boom");
+    throw new Error("chat transport exited 1: boom");
   };
   const handler = createChatApi(ROOT, { transport: fakeTransport });
   const result = await invokeSSE(handler, "POST", `/api/chat/projects/${projectId}/message`, { text: "hi" });
@@ -598,6 +589,26 @@ test("POST .../cancel: no turn running -> ok:true, cancelled:false", async (t) =
   assert.deepEqual(result.json, { ok: true, cancelled: false });
 });
 
+test("POST .../clear: active turns are rejected without resetting continuity", async (t) => {
+  tempProjects(t);
+  const projectId = seedProject();
+  let releaseTurn;
+  const turnGate = new Promise((resolve) => { releaseTurn = resolve; });
+  const handler = createChatApi(ROOT, {
+    transport: async () => {
+      await turnGate;
+      return { text: "done", sessionId: "thread-live" };
+    },
+  });
+  const message = invokeSSE(handler, "POST", `/api/chat/projects/${projectId}/message`, { text: "long op" });
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  const clear = await invokeJson(handler, "POST", `/api/chat/projects/${projectId}/clear`, {});
+  assert.equal(clear.status, 409);
+  assert.match(clear.json.error, /while a turn is running/);
+  releaseTurn();
+  await message;
+});
+
 // ---- GET .../transcript --------------------------------------------------------------------
 
 test("GET .../transcript: 200 with an empty array for a project with no chat yet (never 404)", async (t) => {
@@ -659,4 +670,21 @@ test("unmatched route -> 404; wrong method on a matched route -> 405", async (t)
   assert.equal(notFound.status, 404);
   const wrongMethod = await invokeJson(handler, "GET", `/api/chat/projects/${projectId}/message`, undefined);
   assert.equal(wrongMethod.status, 405);
+});
+
+test("chat API shutdown forwards and returns the transport cleanup promise", async () => {
+  let releaseCleanup;
+  const cleanup = new Promise((resolve) => { releaseCleanup = resolve; });
+  const transport = Object.assign(async () => ({ text: "unused", sessionId: "unused" }), {
+    approvalAware: true,
+    shutdown: () => cleanup,
+  });
+  const handler = createChatApiImpl(ROOT, {
+    transport,
+    launchToken: TEST_TOKEN,
+    allowedHosts: ["localhost"],
+  });
+  assert.equal(handler.shutdown(), cleanup);
+  releaseCleanup();
+  await cleanup;
 });

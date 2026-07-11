@@ -1,131 +1,79 @@
-# Chat (T0242)
+# Canvas Chat
 
-The AI chat panel on the canvas page: type a request (Russian or English), an
-agent performs it on the live project, the reply names the journal entries it
-created. See `tmp/design_T0242_chat_panel_2026-07-03.md` (+ REVISIONS R1/R2/R3)
-for the full design; this file is the module map + the two rules that must
-survive every future change to it.
+Canvas owns the chat semantics and app-server adapter. Studio Shell only mounts
+the HTTP surface and forwards its process-lifecycle shutdown hook. Chat never
+receives a privileged path into `project.json`.
 
-## Owner and boundary
+## Boundary
 
-This module is a **Studio Shell concern that consumes canvas ops** — like the
-canvas page itself, it never gets a privileged shortcut into `project.json`.
+Mutations happen only through an agent driving
+`ai_studio/assets/canvas/cli.mjs`. The prompt requires the agent to inspect the
+CLI's current help, use the selected private store when applicable, and read a
+fresh history head before navigation. `context.mjs` imports Canvas operations
+only for read-only context and sequence-range calculations.
 
-- **Parity law: mutations happen ONLY through a spawned agent driving the
-  canvas CLI (`ai_studio/assets/canvas/cli.mjs`), never a parallel path.**
-  `chat/agent.mjs` prints the CLI's own bare-invocation help + the driving
-  contract into the prompt and tells the agent to run
-  `node ai_studio/assets/canvas/cli.mjs <verb> <projectId> [flags]` for
-  everything; for private Canvas stores the context digest also requires
-  `--store game:<id>` on every CLI command. This is the same command a
-  terminal-driven agent runs today, so the "one ops layer" invariant holds by
-  construction. This module's own code
-  (`context.mjs`) imports `ops.getProject` / `ops.listHistory` **read-only**,
-  for the context digest and the seq-range math — it never imports or calls
-  any mutating op.
-- If a future change makes chat call a canvas op directly (bypassing the CLI
-  subprocess) for "efficiency," that breaks the parity law — don't. The whole
-  point of routing through the CLI is that the page, a terminal agent, and the
-  chat agent are provably driving the exact same surface.
+## Session and transport
 
-## The session model
+One chat conversation is one Codex app-server thread. The Canvas chat adapter
+owns a persistent local `codex app-server --listen stdio://` process and speaks
+its newline-delimited JSON protocol. It authenticates through the installed
+Codex client's managed ChatGPT subscription; API-key accounts are rejected.
+`CODEX_BIN` may select an executable, while `CODEX_APP_SERVER_JS` may select a
+CLI JavaScript entry point. An incompatible CLI/model pair fails loudly; the
+adapter never auto-upgrades Codex or falls back to an API key.
 
-One chat **conversation** = one **codex session** (design R3, verified live
-2026-07-03: `codex exec resume <SESSION_ID>` gives real continuity — see
-`agent.mjs`'s own header comment for the exact invocation shapes and the
-verification transcript).
+- The first message performs `initialize`, `account/read`, `thread/start`, and
+  `turn/start`. The turn input contains the full driving contract, bounded
+  context digest, and user message.
+- Later messages perform `thread/resume {threadId}` and `turn/start` with the
+  compact current-head/selection message.
+- `chat/state.json` persists exactly `thread.id` as `sessionId`; it never uses
+  a similarly named thread field. A stale or mismatched thread fails loudly
+  instead of silently starting a new conversation.
+- Text streams from `item/agentMessage/delta` as bounded delta batches;
+  `turn/completed` closes a turn.
+  Cancel sends `turn/interrupt` before terminating an unresponsive process.
+- Different Canvas projects may own concurrent turns on the same process;
+  events, approvals, and cancel handles remain keyed to exact thread/turn ids.
+- EOF, startup failure, malformed JSONL, RPC/turn timeouts, and crashes reject pending
+  work. A later message lazily starts a clean app-server process. Studio Shell
+  shutdown terminates the full process tree, so restarts leave no orphan.
+- Clear archives the display transcript, resets `sessionId` to null, and is
+  rejected while a turn is active.
 
-- **First message of a conversation**: `codex exec --json --output-last-message
-  <file> "<prompt>"` (no session yet) — the prompt carries the full driving
-  contract + context digest + the user's message (`buildFirstTurnPrompt`).
-  codex's `--json` stream's first line is `{"type":"thread.started",
-  "thread_id":"<uuid>"}`; that `thread_id` **is** the session id.
-- **Every later message**: `codex exec resume <sessionId> --json
-  --output-last-message <file> "<message>"` — a short-lived process per
-  message either way, so **Cancel kills that one message's subprocess only**;
-  the session lives in codex's own on-disk session store and survives a
-  cancel (`api.mjs` persists a captured session id even off the error path).
-- **Clear context** (`POST .../clear`) mints a brand-new conversation: the
-  current `chat/transcript.jsonl` is **archived by rename** (never deleted)
-  and `chat/state.json`'s `sessionId` resets to `null`, so the next message
-  spawns a fresh `codex exec` with no memory of the old session.
-- `chat/transcript.jsonl` is **PANEL DISPLAY ONLY** — an append-only log under
-  the selected Canvas project's own store directory, including private
-  `games/<id>/.ai_studio/canvas/projects/<project>/chat/`, of
-  `{role, text, seqRange?, at}` the page reads back on open/reload so the chat
-  stream survives a page refresh. It is never replayed into the prompt and it
-  is not the model's memory; the codex session is. The two are bridged
-  factually by `seqRange`: each assistant turn records the journal
-  `[head_before, head_after]` its own turn produced, so a later turn (or a
-  human re-reading the panel) can point at exactly what ops happened, instead
-  of trusting the model's recollection.
+`chat/transcript.jsonl` is an append-only panel display log, not model memory.
+Assistant entries record the Canvas journal `[head_before, head_after]` when a
+turn commits operations.
 
-## Trust boundary
+## Permission gate
 
-This API is mounted next to `/api/canvas/` on the **same 127.0.0.1-only**
-Studio Shell server (`server.mjs`). T0350 adds a second boundary: every chat
-POST requires the per-launch token obtained from the same-origin bootstrap,
-an exact allowlisted `Host`/`Origin`, and `application/json`. The token never
-appears in a URL. The legacy `codex exec` transport is not approval-aware and
-therefore fails closed before spawn; T0351 owns replacing that transport.
+Every mutating HTTP request requires the per-launch token, exact loopback
+Host/Origin, and JSON content type. The production app-server transport is
+approval-aware. For `item/commandExecution/requestApproval` and
+`item/fileChange/requestApproval`, it passes the exact opaque `{method, params}`
+request through `permission_broker.mjs` and does not answer the app-server's
+request id until the decision settles. Allowed maps to `accept`, denied to
+`decline`, and cancelled or expired to `cancel`; `acceptForSession` is never
+used. Unknown server requests fail closed.
 
-Permission line (design R2, stated in `agent.mjs`'s `buildDrivingContract`):
-the agent may perform **any journaled, undoable** canvas operation the lead
-asks for. It must refuse project deletion (`cli.mjs delete` — a `.trash` move
-that happens *outside* the journal, not undoable) and refuse touching any file
-outside the project's own store directory. The prompt rule and
-`checkDeniedVerbs` remain defense-in-depth only. The hard mutation gate is
-`permission_broker.mjs`: a transport must submit the exact opaque request and
-await its one-shot `allowed`, `denied`, `cancelled`, or `expired` result.
+The prompt's denied-operation rule and `checkDeniedVerbs` are defense in depth.
+The permission broker is the hard mutation gate.
 
 ## File map
 
-- `context.mjs` — `buildChatContext()` (pure, read-only digest over
-  `ops.getProject`/`ops.listHistory`: selection refs + counts + head, bounded
-  by selection size, never full project JSON; private refs use
-  `canvas://game/<gameId>/<projectId>/...` without project/object name tails)
-  + the per-project `chat/` store
-  (`transcript.jsonl` append/read, `state.json` session id read/write,
-  `clearConversation()`'s archive-and-reset).
-- `agent.mjs` — the codex spawn seam. Pure prompt/argv builders
-  (`buildDrivingContract`, `buildContextDigestText`, `buildFirstTurnPrompt`,
-  `buildResumeMessage`, `buildFirstTurnCommand`, `buildResumeCommand`,
-  `extractSessionId`, `checkDeniedVerbs`) plus the injectable `transport` seam
-  `runChatTurn({ context, message, sessionId, transport, onChild,
-  requestPermission })` defaults
-  to `runCodexTransport` — the one un-unit-tested edge (codex never runs in
-  the suite; tests inject a fake transport, mirroring
-  `tools/dual_plate_generate.mjs`'s `generatePlate`).
-- `permission_broker.mjs` — store/project/turn-bound pending permission
-  lifecycle with one-shot decisions, cancellation, expiry, and stale refusal.
-- `api.mjs` — `createChatApi(root, { transport, allowedHosts })`, the HTTP/SSE adapter
-  mounted on `/api/chat/` by `server.mjs`. It accepts
-  `x-ai-studio-store: game:<id>` for private Canvas stores; `?store=`/`?game=`
-  remain manual legacy fallbacks, while the browser keeps store out of visible
-  paths:
-  - `POST /api/chat/projects/<id>/message {text, selection?}` → SSE
-    `progress` → optional `permission-request {id, exactRequest}` →
-    `permission-decision {id, state}` → optional `op-committed {seqRange}` → `final {text,
-    sessionId, seqRange, flags}` | `error {message}`. Exactly one of
-    `final`/`error` ends every stream; the HTTP response itself is always 200
-    (errors travel *inside* the stream, per the SSE contract comment at the
-    top of the file).
-  - `POST /api/chat/projects/<id>/cancel` — SIGTERMs the tracked child of the
-    project's current in-flight turn, if any, after cancelling pending approval.
-  - `POST /api/chat/projects/<id>/permissions/<permissionId>/decision` —
-    same-store/project-bound `allow` or `deny` decision.
-  - `GET /api/chat/projects/<id>/transcript` — the parsed `transcript.jsonl`;
-    always 200 (a project with no chat yet is `{transcript: []}`, not a 404).
-  - `POST /api/chat/projects/<id>/clear` — `clearConversation()`.
-- `../../assets/canvas/site/chat_panel.js` — the page panel (owned by the
-  canvas module's `site/`, not this dir, but it is this API's only consumer):
-  a collapsible right-side column mirroring the history palette's
-  toggle/localStorage/hidden-by-default state, streaming SSE via `fetch` +
-  `ReadableStream` (no `EventSource`, since that is GET-only), auto-attaching
-  the current canvas selection as `selection` refs, sending private store scope
-  through `x-ai-studio-store` headers, and calling the page's
-  existing `reloadProject()` on every `op-committed`/`final` with a
-  `seqRange` — it never applies a mutation itself, only re-reads.
-- `tests/` — `node:test` suites for `context.mjs`, `agent.mjs`, and
-  `api.mjs` (fake transport throughout — codex never spawns in CI/local test
-  runs).
+- `context.mjs`: bounded read-only context, append-only transcript, persisted
+  thread id, archive-and-clear lifecycle.
+- `agent.mjs`: prompt builders, reply tripwire, and injectable turn seam. Its
+  production default is the app-server adapter.
+- `app_server.mjs`: subscription authentication, JSONL request routing,
+  thread/turn continuity, streamed replies, approvals, interrupt, and process
+  lifecycle.
+- `permission_broker.mjs`: store/project/turn-bound one-shot decisions,
+  cancellation, expiry, and stale refusal.
+- `api.mjs`: authenticated HTTP/SSE routes mounted by Studio Shell. Tests may
+  inject a fake approval-aware transport without starting Codex.
+
+The API emits `progress`, optional permission events, optional `op-committed`,
+and exactly one `final` or `error` event. Transcript reads return an empty array
+for a fresh project. The browser sends private store scope in a header and
+reloads Canvas after committed operations; it never mutates the project itself.
