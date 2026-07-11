@@ -1,6 +1,8 @@
 #ifndef NT_SKELETAL_MESH_H
 #define NT_SKELETAL_MESH_H
 
+/* EXPERIMENTAL: CPU mesh proof only; no renderer or lifecycle guarantee. */
+
 #include <stddef.h>
 #include <stdint.h>
 
@@ -82,9 +84,6 @@ int nt_skeletal_mesh_instance_copy_skinned_positions(const nt_skeletal_mesh_inst
                                                      uint32_t max_positions,
                                                      char *error,
                                                      size_t error_cap);
-
-void nt_skeletal_mesh_instance_draw(const nt_skeletal_mesh_instance_t *instance,
-                                    const float *mvp_column_major_16);
 
 #ifdef __cplusplus
 }

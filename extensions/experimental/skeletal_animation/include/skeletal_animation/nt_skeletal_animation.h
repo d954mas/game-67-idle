@@ -1,6 +1,8 @@
 #ifndef NT_SKELETAL_ANIMATION_H
 #define NT_SKELETAL_ANIMATION_H
 
+/* EXPERIMENTAL: incomplete proof API. Not a production or game-ready contract. */
+
 #include <stddef.h>
 
 #ifdef __cplusplus

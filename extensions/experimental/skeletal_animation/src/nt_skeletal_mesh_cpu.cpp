@@ -413,9 +413,3 @@ int nt_skeletal_mesh_instance_copy_skinned_positions(const nt_skeletal_mesh_inst
     std::memcpy(out_xyz, instance->skinned_positions.data(), sizeof(float) * static_cast<size_t>(count) * 3U);
     return static_cast<int>(count);
 }
-
-void nt_skeletal_mesh_instance_draw(const nt_skeletal_mesh_instance_t *instance,
-                                    const float *mvp_column_major_16) {
-    (void)instance;
-    (void)mvp_column_major_16;
-}

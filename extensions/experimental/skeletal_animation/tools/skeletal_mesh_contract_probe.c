@@ -47,6 +47,18 @@ static int expect_int_fail(int value, const char *label) {
     return 1;
 }
 
+static int expect_known_defect_create_success(const nt_skeletal_mesh_desc_t *desc, const char *label) {
+    char error[256];
+    nt_skeletal_mesh_t *mesh = NULL;
+    if (!nt_skeletal_mesh_create(desc, &mesh, error, sizeof(error))) {
+        fprintf(stderr, "known defect no longer reproduced for %s: %s\n", label, error);
+        return 0;
+    }
+    printf("KNOWN_DEFECT reproduced: create accepts %s\n", label);
+    nt_skeletal_mesh_destroy(mesh);
+    return 1;
+}
+
 static void build_base_desc(nt_skeletal_mesh_desc_t *desc,
                             const nt_skeletal_mesh_vertex_t *vertices,
                             const uint32_t *indices,
@@ -65,7 +77,7 @@ static void build_base_desc(nt_skeletal_mesh_desc_t *desc,
     desc->socket_count = 1;
 }
 
-int main(void) {
+int main(int argc, char **argv) {
     char error[256];
     const char *joint_names[] = {"root", "handslot.l"};
     float inverse_bind[32];
@@ -140,6 +152,24 @@ int main(void) {
         return 1;
     }
 
+    nt_skeletal_mesh_vertex_t nan_weight_vertices[3];
+    memcpy(nan_weight_vertices, vertices, sizeof(vertices));
+    nan_weight_vertices[0].weights[0] = NAN;
+    nt_skeletal_mesh_desc_t nan_weight_desc = desc;
+    nan_weight_desc.vertices = nan_weight_vertices;
+    if (!expect_known_defect_create_success(&nan_weight_desc, "NaN weight")) {
+        return 1;
+    }
+
+    float inf_inverse_bind[32];
+    memcpy(inf_inverse_bind, inverse_bind, sizeof(inverse_bind));
+    inf_inverse_bind[0] = INFINITY;
+    nt_skeletal_mesh_desc_t inf_bind_desc = desc;
+    inf_bind_desc.inverse_bind_matrices = inf_inverse_bind;
+    if (!expect_known_defect_create_success(&inf_bind_desc, "infinite inverse-bind matrix")) {
+        return 1;
+    }
+
     nt_skeletal_mesh_t *mesh = NULL;
     if (!nt_skeletal_mesh_create(&desc, &mesh, error, sizeof(error))) {
         fprintf(stderr, "create failed: %s\n", error);
@@ -150,6 +180,13 @@ int main(void) {
         fprintf(stderr, "instance failed: %s\n", error);
         nt_skeletal_mesh_destroy(mesh);
         return 1;
+    }
+    if (argc == 2 && strcmp(argv[1], "--known-uaf") == 0) {
+        nt_skeletal_mesh_destroy(mesh);
+        printf("KNOWN_DEFECT trigger: instance dereferences destroyed mesh, count=%u\n",
+               nt_skeletal_mesh_instance_skinned_position_count(instance));
+        nt_skeletal_mesh_instance_destroy(instance);
+        return 0;
     }
     nt_skeletal_mesh_instance_t *bad_instance = (nt_skeletal_mesh_instance_t *)0x1;
     if (!expect_int_fail(nt_skeletal_mesh_instance_create(NULL, &bad_instance, error, sizeof(error)), "null mesh instance") || bad_instance != NULL) {
@@ -232,7 +269,39 @@ int main(void) {
         return 1;
     }
 
-    printf("skeletal mesh contract probe passed: positions=%u socket=[%.2f %.2f %.2f] failure_paths=11\n",
+    const char *reversed_joint_names[] = {"handslot.l", "root"};
+    nt_skeletal_mesh_desc_t reversed_desc = desc;
+    reversed_desc.joint_names = reversed_joint_names;
+    nt_skeletal_mesh_t *reversed_mesh = NULL;
+    nt_skeletal_mesh_instance_t *reversed_instance = NULL;
+    if (!nt_skeletal_mesh_create(&reversed_desc, &reversed_mesh, error, sizeof(error)) ||
+        !nt_skeletal_mesh_instance_create(reversed_mesh, &reversed_instance, error, sizeof(error)) ||
+        !nt_skeletal_mesh_instance_update_pose(reversed_instance, model_matrices, 2, error, sizeof(error)) ||
+        nt_skeletal_mesh_instance_copy_skinned_positions(reversed_instance, positions, 3, error, sizeof(error)) != 3 ||
+        !nearly(positions[3], 1.5F)) {
+        fprintf(stderr, "positional joint-order defect was not reproduced: %s\n", error);
+        nt_skeletal_mesh_instance_destroy(reversed_instance);
+        nt_skeletal_mesh_destroy(reversed_mesh);
+        nt_skeletal_mesh_instance_destroy(instance);
+        nt_skeletal_mesh_destroy(mesh);
+        return 1;
+    }
+    puts("KNOWN_DEFECT reproduced: joint names do not remap positional matrices");
+    nt_skeletal_mesh_instance_destroy(reversed_instance);
+    nt_skeletal_mesh_destroy(reversed_mesh);
+
+    model_matrices[16] = NAN;
+    if (!nt_skeletal_mesh_instance_update_pose(instance, model_matrices, 2, error, sizeof(error)) ||
+        nt_skeletal_mesh_instance_copy_skinned_positions(instance, positions, 3, error, sizeof(error)) != 3 ||
+        isfinite(positions[3])) {
+        fprintf(stderr, "non-finite model-matrix defect was not reproduced: %s\n", error);
+        nt_skeletal_mesh_instance_destroy(instance);
+        nt_skeletal_mesh_destroy(mesh);
+        return 1;
+    }
+    puts("KNOWN_DEFECT reproduced: non-finite model matrix reaches skinned output");
+
+    printf("skeletal mesh contract probe passed: positions=%u socket=[%.2f %.2f %.2f] failure_paths=11 known_defects=4\n",
            nt_skeletal_mesh_instance_skinned_position_count(instance),
            (double)socket_matrix[12],
            (double)socket_matrix[13],
