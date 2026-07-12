@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
     // Audio stays an opaque game-owned blob. The runtime chooses the decoder;
     // the resource ID intentionally contains no codec or file extension.
     if (!add_blob_file(ctx, "assets/audio/sfx/ui_click.wav", "audio/sfx/ui_click") ||
-        !add_blob_file(ctx, "assets/audio/music/demo_jingle.wav", "audio/music/demo_jingle")) {
+        !add_blob_file(ctx, "assets/audio/music/demo_jingle.mp3", "audio/music/demo_jingle")) {
         nt_builder_free_pack(ctx);
         return 1;
     }

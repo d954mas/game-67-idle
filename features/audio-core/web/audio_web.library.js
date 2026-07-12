@@ -491,7 +491,7 @@ mergeInto(LibraryManager.library, {
   audio_web_user_gesture: function() { return AudioWebRuntime.userGesture() ? 1 : 0; },
   audio_web_is_unlocked__deps: ["$AudioWebRuntime"],
   audio_web_is_unlocked: function() {
-    return AudioWebRuntime.context && AudioWebRuntime.context.state !== "closed" &&
+    return AudioWebRuntime.context && AudioWebRuntime.context.state === "running" &&
       AudioWebRuntime.everUnlocked && AudioWebRuntime.gestureAccepted ? 1 : 0;
   }
 });

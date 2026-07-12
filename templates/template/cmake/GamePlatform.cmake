@@ -1,3 +1,29 @@
+set(AUDIO_CORE_DIR    "${CMAKE_CURRENT_SOURCE_DIR}/../../features/audio-core")
+set(AUDIO_CORE_INC    "${AUDIO_CORE_DIR}/include")
+set(AUDIO_CORE_SRC    "${AUDIO_CORE_DIR}/src")
+set(AUDIO_CORE_WEB    "${AUDIO_CORE_DIR}/web")
+set(AUDIO_CORE_VENDOR "${AUDIO_CORE_DIR}/vendor/miniaudio")
+
+target_sources(${GAME_TARGET} PRIVATE
+    src/game_audio.c
+    "${AUDIO_CORE_SRC}/audio.c"
+    "${AUDIO_CORE_SRC}/audio_resource.c")
+if(EMSCRIPTEN)
+    target_sources(${GAME_TARGET} PRIVATE "${AUDIO_CORE_SRC}/audio_backend_web.c")
+else()
+    find_package(Threads REQUIRED)
+    function(audio_core_link_native_systems target)
+        target_link_libraries(${target} PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+        if(UNIX AND NOT APPLE)
+            target_link_libraries(${target} PRIVATE m)
+        endif()
+    endfunction()
+    target_sources(${GAME_TARGET} PRIVATE
+        "${AUDIO_CORE_SRC}/audio_backend_miniaudio.c"
+        "${AUDIO_CORE_SRC}/audio_miniaudio_impl.c")
+    audio_core_link_native_systems(${GAME_TARGET})
+endif()
+
 # E4: the E3 renderer is ALSO the analytics writer's dependency. When devapi is OFF but
 # analytics is ON, pull it in here -- guarded against the devapi block's copy above so it
 # is never listed twice (E3 lines untouched; the renderer compiles if EITHER wants it).
@@ -11,7 +37,7 @@ if(GAME_EVENTS_LOG_MIRROR)
     target_sources(${GAME_TARGET} PRIVATE "${GAME_EVENTS_SRC}/game_events_log_mirror.c")
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE
-    "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${PLATFORM_SDK_INC}" "${GAME_EVENTS_INC}"
+    "${AUDIO_CORE_INC}" "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${PLATFORM_SDK_INC}" "${GAME_EVENTS_INC}"
     src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/deps/glfw/deps")
 target_compile_definitions(${GAME_TARGET} PRIVATE GAME_WINDOW_TITLE="${GAME_WINDOW_TITLE}")
 target_link_libraries(${GAME_TARGET} PRIVATE
@@ -27,10 +53,15 @@ if(EMSCRIPTEN)
     # transport entry points; the exports are also what pulls the EM_JS object
     # out of libnt_devapi_web.a so nt_devapi_web_install_shim resolves at link.
     set(GAME_WEB_EXPORTS "_main,_malloc,_free,_platform_sdk_web_complete_init,_platform_sdk_web_complete_interstitial,_platform_sdk_web_complete_rewarded")
+    if(GAME_AUDIO_BROWSER_SMOKE)
+        # Narrow opt-in browser-smoke seam; ordinary release artifacts export no audio controls.
+        set(GAME_WEB_EXPORTS "${GAME_WEB_EXPORTS},_game_audio_play_cue,_game_audio_play_music,_game_audio_stop_music,_game_audio_set_enabled,_game_audio_set_paused")
+    endif()
     if(GAME_DEVAPI_ENABLED)
         set(GAME_WEB_EXPORTS "${GAME_WEB_EXPORTS},_nt_devapi_web_submit,_nt_devapi_web_poll")
     endif()
     target_link_options(${GAME_TARGET} PRIVATE
+        "SHELL:--js-library ${AUDIO_CORE_WEB}/audio_web.library.js"
         "SHELL:-sFORCE_FILESYSTEM=1"
         "SHELL:-sEXPORTED_FUNCTIONS=${GAME_WEB_EXPORTS}"
         "SHELL:-sMIN_WEBGL_VERSION=2"

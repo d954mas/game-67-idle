@@ -5,7 +5,6 @@
 
 #include <math.h>
 #include <stddef.h>
-#include <string.h>
 
 #define AUDIO_HANDLE_INDEX_BITS 8u
 #define AUDIO_HANDLE_INDEX_MASK UINT32_C(0xFF)
@@ -92,10 +91,14 @@ static void release_voice(uint32_t index) {
 
 bool audio_init(void) {
     if (s_initialized) audio_shutdown();
-    memset(s_clips, 0, sizeof(s_clips));
-    memset(s_voices, 0, sizeof(s_voices));
-    for (uint32_t i = 0; i < AUDIO_MAX_CLIPS; ++i) s_clips[i].generation = 1;
-    for (uint32_t i = 0; i < AUDIO_MAX_VOICES; ++i) s_voices[i].generation = 1;
+    for (uint32_t i = 0; i < AUDIO_MAX_CLIPS; ++i) {
+        const uint32_t generation = s_clips[i].generation;
+        s_clips[i] = (audio_clip_slot_t){.generation = generation == 0 ? 1u : generation};
+    }
+    for (uint32_t i = 0; i < AUDIO_MAX_VOICES; ++i) {
+        const uint32_t generation = s_voices[i].generation;
+        s_voices[i] = (audio_voice_slot_t){.generation = generation == 0 ? 1u : generation};
+    }
     s_master = 1.0f;
     s_music = 1.0f;
     s_sfx = 1.0f;

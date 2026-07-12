@@ -1,0 +1,153 @@
+{
+    "schema_version":  1,
+    "measured_at_utc":  "2026-07-12T14:37:29.5966398Z",
+    "measurement_scope":  "Windows native plus paired Emscripten Release build",
+    "platform":  {
+                     "os":  "Microsoft Windows NT 10.0.26200.0",
+                     "architecture":  "X64",
+                     "processor":  "Intel64 Family 6 Model 183 Stepping 1, GenuineIntel",
+                     "compiler":  "clang version 19.1.7",
+                     "cmake":  "cmake version 3.29.6",
+                     "ninja":  "1.12.1"
+                 },
+    "source":  {
+                   "current_commit":  "19b15dcc94a6b6e0d364383fc41b1bf67e93c2bb",
+                   "working_tree_dirty":  true,
+                   "working_tree_change_count":  58,
+                   "baseline_commit":  "0fb94303f",
+                   "engine_commit":  "cf6a60fd36285c7948a3d1fac218e5b5a5f807a8"
+               },
+    "compile":  {
+                    "mode":  "clean object output per run; Release -O3; production warning policy with -Werror; warm OS filesystem cache allowed",
+                    "runs_per_tu":  3,
+                    "minimum_sum_ms":  3653.8206,
+                    "median_sum_ms":  3714.9065,
+                    "miniaudio_implementation_minimum_share_percent":  94.26,
+                    "translation_units":  [
+                                              {
+                                                  "name":  "audio",
+                                                  "source":  "features/audio-core/src/audio.c",
+                                                  "runs_ms":  [
+                                                                  81.8372,
+                                                                  79.3136,
+                                                                  76.8352
+                                                              ],
+                                                  "minimum_ms":  76.8352,
+                                                  "median_ms":  79.3136,
+                                                  "object":  {
+                                                                 "text_bytes":  5911,
+                                                                 "data_bytes":  212,
+                                                                 "bss_bytes":  2092
+                                                             }
+                                              },
+                                              {
+                                                  "name":  "audio_resource",
+                                                  "source":  "features/audio-core/src/audio_resource.c",
+                                                  "runs_ms":  [
+                                                                  45.2269,
+                                                                  47.2103,
+                                                                  46.9455
+                                                              ],
+                                                  "minimum_ms":  45.2269,
+                                                  "median_ms":  46.9455,
+                                                  "object":  {
+                                                                 "text_bytes":  224,
+                                                                 "data_bytes":  52,
+                                                                 "bss_bytes":  0
+                                                             }
+                                              },
+                                              {
+                                                  "name":  "audio_backend_miniaudio",
+                                                  "source":  "features/audio-core/src/audio_backend_miniaudio.c",
+                                                  "runs_ms":  [
+                                                                  87.5574,
+                                                                  89.0427,
+                                                                  92.4459
+                                                              ],
+                                                  "minimum_ms":  87.5574,
+                                                  "median_ms":  89.0427,
+                                                  "object":  {
+                                                                 "text_bytes":  4076,
+                                                                 "data_bytes":  300,
+                                                                 "bss_bytes":  42841
+                                                             }
+                                              },
+                                              {
+                                                  "name":  "audio_miniaudio_impl",
+                                                  "source":  "features/audio-core/src/audio_miniaudio_impl.c",
+                                                  "runs_ms":  [
+                                                                  3578.0136,
+                                                                  3444.2011,
+                                                                  3499.6047
+                                                              ],
+                                                  "minimum_ms":  3444.2011,
+                                                  "median_ms":  3499.6047,
+                                                  "object":  {
+                                                                 "text_bytes":  379743,
+                                                                 "data_bytes":  50705,
+                                                                 "bss_bytes":  52
+                                                             }
+                                              }
+                                          ]
+                },
+    "game_binary":  {
+                        "baseline_build_ms":  17503.329,
+                        "current_build_ms":  19451.7419,
+                        "build_delta_ms":  1948.4129,
+                        "build_delta_percent":  11.1317,
+                        "baseline_bytes":  1901568,
+                        "current_bytes":  2347008,
+                        "delta_bytes":  445440,
+                        "delta_percent":  23.4249
+                    },
+    "pack":  {
+                 "baseline_bytes":  1330756,
+                 "current_bytes":  1368056,
+                 "delta_bytes":  37300,
+                 "delta_percent":  2.8029,
+                 "source_audio_bytes":  36981
+             },
+    "web_build":  {
+                      "measured_at_utc":  "2026-07-12",
+                      "mode":  "clean Ninja game target after configure; Release; shared warmed checkout-local EM_CACHE; identical compiler and engine checkout",
+                      "baseline_commit":  "0fb94303f",
+                      "baseline_build_ms":  25815.2084,
+                      "current_build_ms":  25196.1988,
+                      "delta_ms":  -619.0096,
+                      "delta_percent":  -2.3978,
+                      "baseline_js_bytes":  106623,
+                      "current_js_bytes":  121663,
+                      "js_delta_bytes":  15040,
+                      "baseline_wasm_bytes":  1071462,
+                      "current_wasm_bytes":  1081435,
+                      "wasm_delta_bytes":  9973
+                  },
+    "runtime_latency":  {
+                            "status":  "measured",
+                            "reason":  "Windows real-device run; one 75 ms, gain=0.05 UI-click submission. first_play_submit_ms measures API submission, not acoustic onset.",
+                            "device_available":  true,
+                            "played":  true,
+                            "init_ms":  134.637000,
+                            "load_ms":  0.086700,
+                            "unlock_ms":  0.321400,
+                            "first_play_submit_ms":  0.001900
+                        },
+    "caps":  {
+                 "public_clip_slots":  64,
+                 "public_voice_slots":  32,
+                 "native_clip_slots":  64,
+                 "native_voice_slots":  32,
+                 "web_clip_slots_source_inspection_only":  64,
+                 "web_voice_slots_source_inspection_only":  32,
+                 "native_audio_object_static_bss_bytes":  44985,
+                 "decoded_pcm_per_clip_byte_cap":  134217728,
+                 "decoded_pcm_total_byte_cap":  268435456,
+                 "decoded_pcm_note":  "Native and WebAudio backends enforce identical 128 MiB per-clip and 256 MiB aggregate decoded-PCM caps; backend/device heap outside decoded PCM remains dynamic."
+             },
+    "unmeasured":  [
+                       "Linux compile/build/runtime",
+                       "Web runtime latency",
+                       "Acoustic output onset",
+                       "Peak backend/device heap bytes outside capped decoded PCM"
+                   ]
+}

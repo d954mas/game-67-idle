@@ -24,9 +24,24 @@ Run the focused native, resource, web-library, and template-catalog checks in
 targets. Source presence or the version string alone is not compatibility
 evidence.
 
+The real-browser proof uses an opt-in Release artifact so ordinary release
+exports stay unchanged:
+
+```powershell
+cmake ... -DCMAKE_BUILD_TYPE=Release -DGAME_AUDIO_BROWSER_SMOKE=ON
+$env:AUDIO_SMOKE_HEADED = "1"
+$env:AUDIO_SMOKE_BROWSER_CHANNEL = "chrome"
+node features/audio-core/tests/browser_smoke.mjs <artifact-bin>
+```
+
+Set `PLAYWRIGHT_MODULE` when Playwright is supplied by an agent runtime rather
+than installed in the workspace. The smoke fails on decode errors, missing
+gesture unlock, missing SFX/music source transitions, lifecycle failures, or
+any console, page, or request error.
+
 ## Compatibility
 
-Version `1.0.0` identifies the existing public contract above; it is not a
+Version `1.0.1` identifies the existing public contract above; it is not a
 claim that T0393 or every platform integration is complete. A consumer records
 the exact version it validated. `feature.json.version` is mandatory SemVer:
 

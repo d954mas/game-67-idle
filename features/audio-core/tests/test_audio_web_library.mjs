@@ -341,12 +341,15 @@ test("ending ad pause resumes previously unlocked audio without another gesture"
   library.audio_web_set_paused(1);
   assert.equal(audioContext.suspendCalls, 1);
   assert.equal(library.audio_web_user_gesture(), 0);
+  assert.equal(library.audio_web_is_unlocked(), 0);
   assert.equal(audioContext.resumeCalls, 1);
   library.audio_web_set_paused(0);
   assert.equal(audioContext.resumeCalls, 2);
   assert.equal(library.audio_web_user_gesture(), 1);
+  assert.equal(library.audio_web_is_unlocked(), 0);
   await flushPromises();
   assert.equal(audioContext.state, "running");
+  assert.equal(library.audio_web_is_unlocked(), 1);
 
   document.hidden = true;
   document.dispatch("visibilitychange");

@@ -1,5 +1,7 @@
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "unity.h"
 
@@ -14,6 +16,32 @@ static const uint8_t k_wav[] = {
 };
 static const uint8_t k_invalid[] = {0x00, 0x01, 0x02, 0x03};
 
+#ifndef AUDIO_TEST_MP3_PATH
+#error "AUDIO_TEST_MP3_PATH must name the committed MP3 fixture"
+#endif
+
+static uint8_t *read_fixture(const char *path, uint32_t *size) {
+    FILE *file = fopen(path, "rb");
+    if (file == NULL || fseek(file, 0, SEEK_END) != 0) {
+        if (file != NULL) fclose(file);
+        return NULL;
+    }
+    const long length = ftell(file);
+    if (length <= 0 || (uint64_t)length > UINT32_MAX || fseek(file, 0, SEEK_SET) != 0) {
+        fclose(file);
+        return NULL;
+    }
+    uint8_t *bytes = (uint8_t *)malloc((size_t)length);
+    if (bytes == NULL || fread(bytes, 1, (size_t)length, file) != (size_t)length) {
+        free(bytes);
+        fclose(file);
+        return NULL;
+    }
+    fclose(file);
+    *size = (uint32_t)length;
+    return bytes;
+}
+
 void setUp(void) { TEST_ASSERT_TRUE(audio_core_backend_init()); }
 void tearDown(void) { audio_core_backend_shutdown(); }
 
@@ -23,6 +51,17 @@ void test_wav_decode_is_synchronous_and_reports_ready(void) {
     TEST_ASSERT_EQUAL_UINT32(1, audio_core_backend_decode_state(clip));
     audio_core_backend_clip_destroy(clip);
     TEST_ASSERT_EQUAL_UINT32(2, audio_core_backend_decode_state(clip));
+}
+
+void test_committed_mp3_decodes_with_the_native_backend(void) {
+    uint32_t size = 0;
+    uint8_t *bytes = read_fixture(AUDIO_TEST_MP3_PATH, &size);
+    TEST_ASSERT_NOT_NULL(bytes);
+    uint32_t clip = audio_core_backend_decode_begin(bytes, size);
+    free(bytes);
+    TEST_ASSERT_NOT_EQUAL_UINT32(0, clip);
+    TEST_ASSERT_EQUAL_UINT32(1, audio_core_backend_decode_state(clip));
+    audio_core_backend_clip_destroy(clip);
 }
 
 void test_bad_decode_owns_a_failed_slot_until_destroyed(void) {
@@ -144,6 +183,7 @@ void test_pcm_size_calculation_rejects_uint64_overflow(void) {
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_wav_decode_is_synchronous_and_reports_ready);
+    RUN_TEST(test_committed_mp3_decodes_with_the_native_backend);
     RUN_TEST(test_bad_decode_owns_a_failed_slot_until_destroyed);
     RUN_TEST(test_fixed_clip_pool_refuses_the_sixty_fifth_decode);
     RUN_TEST(test_no_device_engine_unlocks_and_plays_through_both_groups);

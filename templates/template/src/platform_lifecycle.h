@@ -4,7 +4,8 @@
 #include <stdbool.h>
 
 void platform_lifecycle_init(void);
-void platform_lifecycle_after_input_poll(void);
+/* Returns true only for a fresh keyboard/pointer gesture this frame. */
+bool platform_lifecycle_after_input_poll(void);
 void platform_lifecycle_mark_gameplay_input(void);
 void platform_lifecycle_update(bool playable_shell_ready, bool gameplay_allowed);
 void platform_lifecycle_after_frame_present(bool playable_shell_ready);

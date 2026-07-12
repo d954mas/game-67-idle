@@ -237,6 +237,26 @@ void test_shutdown_stops_voices_and_destroys_all_backend_clips(void) {
     TEST_ASSERT_FALSE(audio_voice_is_playing(voice));
 }
 
+void test_handles_from_a_previous_runtime_lifecycle_never_alias(void) {
+    audio_clip_t stale_clip = make_ready_clip(ASSET_READY);
+    unlock_audio();
+    audio_voice_t stale_voice = audio_play(stale_clip, AUDIO_BUS_SFX, 1.0f, false);
+    TEST_ASSERT_TRUE(audio_voice_is_playing(stale_voice));
+
+    audio_shutdown();
+    TEST_ASSERT_TRUE(audio_init());
+    audio_clip_t replacement_clip = make_ready_clip(UINT64_C(0x1002));
+    unlock_audio();
+    audio_voice_t replacement_voice = audio_play(replacement_clip, AUDIO_BUS_SFX, 1.0f, false);
+
+    TEST_ASSERT_FALSE(clip_equal(stale_clip, replacement_clip));
+    TEST_ASSERT_FALSE(voice_equal(stale_voice, replacement_voice));
+    TEST_ASSERT_EQUAL(AUDIO_CLIP_STATE_INVALID, audio_clip_state(stale_clip));
+    TEST_ASSERT_FALSE(audio_voice_is_playing(stale_voice));
+    TEST_ASSERT_EQUAL(AUDIO_CLIP_STATE_READY, audio_clip_state(replacement_clip));
+    TEST_ASSERT_TRUE(audio_voice_is_playing(replacement_voice));
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_clip_load_requires_an_immediately_viewable_ready_blob);
@@ -252,5 +272,6 @@ int main(void) {
     RUN_TEST(test_full_voice_pool_evicts_oldest_voice_without_growing);
     RUN_TEST(test_loading_failed_and_stale_clips_refuse_play);
     RUN_TEST(test_shutdown_stops_voices_and_destroys_all_backend_clips);
+    RUN_TEST(test_handles_from_a_previous_runtime_lifecycle_never_alias);
     return UNITY_END();
 }

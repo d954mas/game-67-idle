@@ -8,6 +8,7 @@
 #include "ui/demo_hud.h" /* И3b: demo composition (resource_panel over items/progression) */
 #include "ui/platform_sdk_debug.h"
 #include "ui/ui_runtime.h"
+#include "game_audio.h"
 #include "app/nt_app.h" /* g_nt_app.dt */
 #if GAME_EVENTS_LOG_MIRROR
 #include "game_events_log_mirror.h"
@@ -24,15 +25,29 @@
    системы (render_mesh_draw/hud_draw) ПОКА прямые вызовы шелла в main.c,
    поэтому draw_world остаётся заглушкой. */
 
+static bool s_settings_was_open;
+
 void game_features_init(World *w) {
 #if defined(__EMSCRIPTEN__)
     platform_sdk_install_web_backend();
 #endif
     platform_sdk_debug_init();
+    (void)game_audio_init();
+    s_settings_was_open = settings_is_open();
     (void)w; /* TODO(feature-migration): per-feature <id>_init(w) здесь */
 }
 
 void game_features_update(World *w, float dt) {
+    game_audio_update();
+    const bool settings_open_now = settings_is_open();
+    if (settings_open_now && !s_settings_was_open) {
+        /* Keep retrying until the asynchronous clip is ready. */
+        if (game_audio_play_cue(GAME_AUDIO_CUE_UI_CLICK)) {
+            s_settings_was_open = true;
+        }
+    } else {
+        s_settings_was_open = settings_open_now;
+    }
     sys_move(w, dt); /* мировая симуляция шаблона; здесь же фичи эмитят события */
     demo_hud_update(dt); /* И3b: demo idle-доход ПЕРЕД авто-покупкой того же кадра */
     progression_update(); /* И3a: auto/threshold tick (T5 HARD-капы внутри) */
@@ -70,6 +85,7 @@ void game_features_draw_ui(World *w) {
     }
 }
 void game_features_shutdown(World *w) {
+    game_audio_shutdown();
     (void)w; /* TODO: per-feature shutdown */
     platform_sdk_debug_shutdown();
 }

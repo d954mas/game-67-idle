@@ -1,6 +1,65 @@
 # --- native C unit tests (Unity + CTest); introduced in A1, extended in A2/A3 ---
 if(NOT EMSCRIPTEN)
     enable_testing()
+    set(AUDIO_CORE_TESTS "${AUDIO_CORE_DIR}/tests")
+    add_library(audio_unity STATIC "${ENGINE_DIR}/deps/unity/src/unity.c")
+    target_include_directories(audio_unity PUBLIC "${ENGINE_DIR}/deps/unity/src")
+    target_compile_definitions(audio_unity PRIVATE _CRT_SECURE_NO_WARNINGS)
+
+    add_executable(test_audio_core
+        "${AUDIO_CORE_TESTS}/test_audio.c"
+        "${AUDIO_CORE_TESTS}/fake_audio_environment.c"
+        "${AUDIO_CORE_SRC}/audio.c")
+    target_link_libraries(test_audio_core PRIVATE audio_unity nt_core)
+    target_include_directories(test_audio_core PRIVATE
+        "${AUDIO_CORE_INC}" "${AUDIO_CORE_SRC}" "${AUDIO_CORE_TESTS}")
+    target_compile_definitions(test_audio_core PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(test_audio_core PRIVATE -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
+    nt_set_warning_flags(test_audio_core)
+    set_target_properties(test_audio_core PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_audio_core COMMAND test_audio_core)
+
+    add_executable(test_audio_resource
+        "${AUDIO_CORE_TESTS}/test_audio_resource.c"
+        "${AUDIO_CORE_SRC}/audio_resource.c")
+    target_link_libraries(test_audio_resource PRIVATE unity nt_shared)
+    target_include_directories(test_audio_resource PRIVATE "${AUDIO_CORE_SRC}" "${ENGINE_DIR}/engine")
+    target_compile_definitions(test_audio_resource PRIVATE NT_INTROSPECT_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_audio_resource)
+    set_target_properties(test_audio_resource PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_audio_resource COMMAND test_audio_resource)
+
+    add_executable(test_audio_backend_native
+        "${AUDIO_CORE_TESTS}/test_audio_backend_native.c"
+        "${AUDIO_CORE_SRC}/audio_backend_miniaudio.c"
+        "${AUDIO_CORE_SRC}/audio_miniaudio_impl.c")
+    target_link_libraries(test_audio_backend_native PRIVATE unity)
+    target_include_directories(test_audio_backend_native PRIVATE "${AUDIO_CORE_SRC}" "${AUDIO_CORE_VENDOR}")
+    target_compile_definitions(test_audio_backend_native PRIVATE
+        AUDIO_MINIAUDIO_TEST_NO_DEVICE=1
+        AUDIO_TEST_MP3_PATH="${CMAKE_CURRENT_SOURCE_DIR}/assets/audio/music/demo_jingle.mp3"
+        _CRT_SECURE_NO_WARNINGS)
+    audio_core_link_native_systems(test_audio_backend_native)
+    nt_set_warning_flags(test_audio_backend_native)
+    set_target_properties(test_audio_backend_native PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_audio_backend_native COMMAND test_audio_backend_native)
+
+    add_executable(test_game_audio tests/test_game_audio.c src/game_audio.c)
+    target_link_libraries(test_game_audio PRIVATE audio_unity nt_ui_interface nt_shared nt_log)
+    target_include_directories(test_game_audio PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/audio"
+        "${AUDIO_CORE_INC}" "${PLATFORM_SDK_INC}" src "${ENGINE_DIR}/engine")
+    target_compile_definitions(test_game_audio PRIVATE NT_INTROSPECT_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(test_game_audio PRIVATE -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
+    nt_set_warning_flags(test_game_audio)
+    set_target_properties(test_game_audio PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_audio COMMAND test_game_audio)
+
+    find_program(AUDIO_NODE_EXECUTABLE node REQUIRED)
+    add_test(NAME test_audio_web_library
+        COMMAND "${AUDIO_NODE_EXECUTABLE}" --test "${AUDIO_CORE_TESTS}/test_audio_web_library.mjs"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
+
     add_executable(test_game_state_json tests/test_game_state_json.c src/game_state_json.c)
     target_link_libraries(test_game_state_json PRIVATE cjson unity)
     target_include_directories(test_game_state_json PRIVATE src)

@@ -30,14 +30,15 @@ void platform_lifecycle_init(void) {
     (void)platform_sdk_init();
 }
 
-void platform_lifecycle_after_input_poll(void) {
+bool platform_lifecycle_after_input_poll(void) {
     if (!s_platform_lifecycle_initialized) {
-        return;
+        return false;
     }
     const bool input_seen = nt_input_any_key_pressed() || has_pointer_input_edge();
     if (input_seen) {
         platform_lifecycle_mark_gameplay_input();
     }
+    return input_seen;
 }
 
 void platform_lifecycle_mark_gameplay_input(void) {

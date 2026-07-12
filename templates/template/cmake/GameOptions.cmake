@@ -9,6 +9,7 @@ if(NOT DEFINED GAME_DEVAPI_ENABLED)
 endif()
 
 set(GAME_PUBLISH_TARGET "local" CACHE STRING "Publish target: local, itch, poki, yandex, or playgama.")
+option(GAME_AUDIO_BROWSER_SMOKE "Export narrow game_audio controls for a local browser smoke artifact." OFF)
 set_property(CACHE GAME_PUBLISH_TARGET PROPERTY STRINGS local itch poki yandex playgama)
 if(NOT GAME_PUBLISH_TARGET MATCHES "^(local|itch|poki|yandex|playgama)$")
     message(FATAL_ERROR "GAME_PUBLISH_TARGET must be one of: local, itch, poki, yandex, playgama")

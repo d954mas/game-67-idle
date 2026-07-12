@@ -581,7 +581,7 @@
       "metadata_scope": "game:web-dressup:ui"
     },
     {
-      "path": "templates/template/assets/audio/music/demo_jingle.wav",
+      "path": "templates/template/assets/audio/music/demo_jingle.mp3",
       "classification": "product-asset",
       "metadata_scope": "template:audio"
     },

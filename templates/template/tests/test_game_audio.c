@@ -4,6 +4,7 @@
 #include "unity.h"
 
 #include "features/audio/audio.h"
+#include "features/platform_sdk/platform_sdk.h"
 #include "game_audio.h"
 #include "generated/game_assets.h"
 #include "nt_pack_format.h"
@@ -37,6 +38,11 @@ static unsigned s_mix_count;
 static bool s_enabled;
 static bool s_paused;
 static unsigned s_gesture_count;
+static platform_sdk_lifecycle_callback_t s_pause_callback;
+static platform_sdk_lifecycle_callback_t s_resume_callback;
+static void *s_pause_userdata;
+static void *s_resume_userdata;
+static unsigned s_removed_listener_count;
 
 static bool same_hash(nt_hash64_t lhs, nt_hash64_t rhs) {
     return lhs.value == rhs.value;
@@ -69,6 +75,11 @@ void setUp(void) {
     s_enabled = true;
     s_paused = false;
     s_gesture_count = 0;
+    s_pause_callback = NULL;
+    s_resume_callback = NULL;
+    s_pause_userdata = NULL;
+    s_resume_userdata = NULL;
+    s_removed_listener_count = 0;
 }
 
 void tearDown(void) {
@@ -86,6 +97,10 @@ nt_resource_t nt_resource_request(nt_hash64_t resource_id, uint8_t asset_type) {
 
 bool nt_resource_is_ready(nt_resource_t handle) {
     return handle.id >= 1 && handle.id <= 2 && s_resource_ready[handle.id - 1];
+}
+
+uint8_t nt_resource_get_state(nt_resource_t handle) {
+    return nt_resource_is_ready(handle) ? 3U : 0U;
 }
 
 bool audio_init(void) {
@@ -158,6 +173,23 @@ audio_status_t audio_status(void) {
         .enabled = s_enabled,
         .paused = s_paused,
     };
+}
+
+platform_sdk_listener_id_t platform_sdk_on_pause(platform_sdk_lifecycle_callback_t callback, void *userdata) {
+    s_pause_callback = callback;
+    s_pause_userdata = userdata;
+    return 11U;
+}
+
+platform_sdk_listener_id_t platform_sdk_on_resume(platform_sdk_lifecycle_callback_t callback, void *userdata) {
+    s_resume_callback = callback;
+    s_resume_userdata = userdata;
+    return 12U;
+}
+
+void platform_sdk_remove_listener(platform_sdk_listener_id_t listener_id) {
+    TEST_ASSERT_TRUE(listener_id == 11U || listener_id == 12U);
+    ++s_removed_listener_count;
 }
 
 float settings_master(void) { return s_master; }
@@ -277,6 +309,20 @@ void test_controls_are_forwarded_and_unavailable_backend_is_reported(void) {
     TEST_ASSERT_TRUE(game_audio_status().paused);
 }
 
+void test_platform_pause_and_resume_are_bound_and_removed_with_the_catalog(void) {
+    TEST_ASSERT_TRUE(game_audio_init());
+    TEST_ASSERT_NOT_NULL(s_pause_callback);
+    TEST_ASSERT_NOT_NULL(s_resume_callback);
+
+    s_pause_callback(s_pause_userdata);
+    TEST_ASSERT_TRUE(s_paused);
+    s_resume_callback(s_resume_userdata);
+    TEST_ASSERT_FALSE(s_paused);
+
+    game_audio_shutdown();
+    TEST_ASSERT_EQUAL_UINT32(2, s_removed_listener_count);
+}
+
 int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_init_requests_both_blob_resources_and_waits_for_pack_readiness);
@@ -284,5 +330,6 @@ int main(void) {
     RUN_TEST(test_play_cue_uses_the_catalog_sfx_bus_and_gain);
     RUN_TEST(test_music_play_replaces_the_previous_voice_and_stop_is_idempotent);
     RUN_TEST(test_controls_are_forwarded_and_unavailable_backend_is_reported);
+    RUN_TEST(test_platform_pause_and_resume_are_bound_and_removed_with_the_catalog);
     return UNITY_END();
 }

@@ -15,18 +15,8 @@
   "modification_allowed": "true",
   "source_page": "https://kenney.nl/assets/",
   "author_vendor": "Kenney",
-  "tags": [
-    "template",
-    "starter",
-    "audio",
-    "sfx",
-    "music"
-  ],
-  "genre": [
-    "template"
-  ],
-  "style": [
-    "clean"
-  ],
-  "description": "Two CC0 Kenney reference clips converted from source OGG members to guaranteed PCM WAV fixtures."
+  "tags": ["template", "starter", "audio", "sfx", "music"],
+  "genre": ["template"],
+  "style": ["clean"],
+  "description": "Two CC0 Kenney reference clips: a PCM WAV UI cue and a cross-browser/native MP3 music fixture converted from source OGG members."
 }

@@ -44,6 +44,7 @@
 #include "features/platform_sdk/platform_sdk.h"
 #include "features/platform_sdk/platform_sdk_events.h"
 #include "features/settings/settings.h"
+#include "game_audio.h"
 #include "game_events.h"
 #if GAME_EVENTS_LOG_MIRROR
 #include "game_events_log_mirror.h"
@@ -257,7 +258,9 @@ static void frame(void) {
     nt_window_poll();
     devapi_update_frame();
     nt_input_poll();
-    platform_lifecycle_after_input_poll();
+    if (platform_lifecycle_after_input_poll()) {
+        game_audio_on_user_gesture();
+    }
 #ifndef NT_PLATFORM_WEB
     if (nt_window_should_close() || nt_input_key_is_pressed(NT_KEY_ESCAPE)) {
         nt_app_quit();
@@ -523,9 +526,9 @@ int main(int argc, char **argv) {
 
 #ifndef NT_PLATFORM_WEB
     devapi_shutdown_runtime();
+    game_features_shutdown(&s_world);
     platform_lifecycle_shutdown();
     ui_runtime_shutdown();
-    game_features_shutdown(&s_world);
 #if FEATURE_GAME_ANALYTICS
     game_analytics_shutdown(); // E4: final flush + close (before event infra teardown)
 #endif
