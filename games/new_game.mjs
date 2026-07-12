@@ -174,11 +174,20 @@ function pidIsAlive(pid) {
 
 function cleanupAbandonedClaimCandidates(gamesDir, lockDir) {
   const exact = /^\.new-game\.claim-(\d+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.candidate$/i;
+  const released = /^\.new-game\.claim\.release-(\d+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
   const now = Date.now();
   for (const name of readdirSync(gamesDir)) {
+    const path = join(gamesDir, name);
+    if (released.test(name)) {
+      try {
+        if (now - statSync(path).mtimeMs >= 5 * 60 * 1000) {
+          rmSync(path, { recursive: true, force: true, maxRetries: 6, retryDelay: 20 });
+        }
+      } catch { /* Quarantined release cleanup is best-effort. */ }
+      continue;
+    }
     const match = exact.exec(name);
     if (!match) continue;
-    const path = join(gamesDir, name);
     if (!statSync(path).isDirectory()) continue;
     let provenDead = false;
     let provenLive = false;
@@ -214,13 +223,21 @@ function acquireNewGameClaim(gamesDir) {
         released = true;
         try {
           const owner = readJsonStrict(ownerPath, "new-game claim owner");
-          if (owner.token === token && owner.pid === process.pid) rmSync(lockDir, { recursive: true, force: true });
+          if (owner.token !== token || owner.pid !== process.pid) return;
+          const releaseDir = join(gamesDir, `.new-game.claim.release-${token}`);
+          renameSync(lockDir, releaseDir);
+          try { rmSync(releaseDir, { recursive: true, force: true, maxRetries: 6, retryDelay: 20 }); }
+          catch { /* The live claim is free; token-unique cleanup is best-effort. */ }
         } catch { /* Never remove a lock whose ownership cannot be proven. */ }
       };
       process.once("exit", release);
       return release;
     } catch (error) {
       if (!existsSync(lockDir)) {
+        if (["EEXIST", "EPERM", "ENOTEMPTY"].includes(error.code)) {
+          sleepSync(25);
+          continue;
+        }
         rmSync(candidateDir, { recursive: true, force: true });
         throw error;
       }
@@ -317,9 +334,8 @@ function transformIdentityOwnedFiles(gameDir, template, identity) {
 function ensureNestedGit(gameDir, gameId) {
   const init = runGit(gameDir, ["init"]);
   if (init.status !== 0) throw new Error(`failed to initialize private game git repository: ${init.stderr}`);
-  const top = runGit(gameDir, ["rev-parse", "--show-toplevel"]);
-  const actual = top.status === 0 ? resolve(top.stdout.trim()).toLowerCase() : "";
-  if (actual !== resolve(gameDir).toLowerCase()) throw new Error(`games/${gameId} does not contain a valid nested git repository`);
+  const proof = runGit(gameDir, ["rev-parse", "--is-inside-work-tree", "--show-prefix"]);
+  if (proof.status !== 0 || proof.stdout.trim() !== "true") throw new Error(`games/${gameId} does not contain a valid nested git repository`);
 }
 
 function resetItemsLock(gameDir) {

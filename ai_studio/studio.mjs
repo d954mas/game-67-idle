@@ -84,7 +84,7 @@ const ROUTES = Object.freeze({
 });
 
 const NATIVE_COMMANDS = [
-  ["cmake", "-S", "templates/template", "-B", "templates/template/build/native-debug", "-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_BUILD_TYPE=Debug"],
+  ["cmake", "-S", "templates/template", "-B", "templates/template/build/native-debug", "-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Debug"],
   ["cmake", "--build", "templates/template/build/native-debug"],
   ["ctest", "--test-dir", "templates/template/build/native-debug", "--output-on-failure"],
 ];

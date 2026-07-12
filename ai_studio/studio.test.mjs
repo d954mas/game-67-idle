@@ -95,6 +95,8 @@ test("full plan pins native before asset and exposes runnable audio platform com
   ]);
   assert.deepEqual(audio.commandPlan.linux, [["bash", "features/audio-core/tests/run_linux.sh"]]);
   const ids = result.verification.suites.map((suite) => suite.id);
+  const native = result.verification.suites.find((suite) => suite.id === "reference-template.native");
+  assert.ok(native.commandPlan[0].includes("-DCMAKE_CXX_COMPILER=clang++"));
   assert.ok(ids.indexOf("reference-template.native") < ids.indexOf("studio.assets"));
   assert.ok(ids.indexOf("reference-template.native") < ids.indexOf("studio.assets.canvas"));
   assert.equal(ids.indexOf("reference-template.web"), ids.indexOf("reference-template.native") + 1);

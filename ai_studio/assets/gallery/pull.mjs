@@ -25,6 +25,9 @@ function relPosix(root, abs) {
 
 function resolvePullTarget(root, target) {
   const resolvedRoot = resolve(root);
+  if (/^[A-Za-z]:[/\\]/.test(target) && !/^[A-Za-z]:[/\\]/.test(resolvedRoot)) {
+    throw new Error("--to must stay inside the repository");
+  }
   const full = resolve(resolvedRoot, target);
   if (full === resolvedRoot) {
     throw new Error("--to must be a game/template assets directory, not the repository root");

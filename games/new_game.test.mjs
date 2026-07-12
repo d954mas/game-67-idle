@@ -703,13 +703,18 @@ test("new-game removes only exact abandoned dead-owner claim candidates", (t) =>
   const lookalike = join(root, "games", `.new-game.claim-${token}.candidate-keep`);
   const liveToken = `${process.pid}-123e4567-e89b-42d3-a456-426614174001`;
   const live = join(root, "games", `.new-game.claim-${liveToken}.candidate`);
+  const released = join(root, "games", `.new-game.claim.release-${dead.pid}-123e4567-e89b-42d3-a456-426614174002`);
+  const freshReleased = join(root, "games", `.new-game.claim.release-${dead.pid}-123e4567-e89b-42d3-a456-426614174003`);
   mkdirSync(abandoned, { recursive: true });
   mkdirSync(lookalike, { recursive: true });
   mkdirSync(live, { recursive: true });
+  mkdirSync(released, { recursive: true });
+  mkdirSync(freshReleased, { recursive: true });
   writeFileSync(join(abandoned, "owner.json"), `${JSON.stringify({ token, pid: dead.pid })}\n`, "utf8");
   writeFileSync(join(live, "owner.json"), `${JSON.stringify({ token: liveToken, pid: process.pid })}\n`, "utf8");
   const old = new Date(Date.now() - 10 * 60 * 1000);
   utimesSync(live, old, old);
+  utimesSync(released, old, old);
 
   const result = spawnSync(process.execPath, [script, "--root", root, "--id", "cleanup-game"], { encoding: "utf8" });
 
@@ -717,6 +722,8 @@ test("new-game removes only exact abandoned dead-owner claim candidates", (t) =>
   assert.equal(existsSync(abandoned), false);
   assert.equal(existsSync(lookalike), true);
   assert.equal(existsSync(live), true);
+  assert.equal(existsSync(released), false);
+  assert.equal(existsSync(freshReleased), true);
 });
 
 test("identity transform fails closed on a drifted required token", (t) => {

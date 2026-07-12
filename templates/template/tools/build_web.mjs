@@ -54,7 +54,7 @@ export function createBuildPlan(options) {
   const env = { ...inputEnv, EM_CACHE: inputEnv.EM_CACHE || join(gameDir, "build", "emscripten-cache") };
   const steps = [{ kind: "mkdir", path: env.EM_CACHE }];
   if (!options.nativeConfigured) {
-    steps.push({ kind: "run", command: "cmake", args: ["-S", gameDir, "-B", nativeDir, "-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_BUILD_TYPE=Debug"] });
+    steps.push({ kind: "run", command: "cmake", args: ["-S", gameDir, "-B", nativeDir, "-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Debug"] });
   }
   steps.push({ kind: "run", command: "cmake", args: ["--build", nativeDir, "--target", "game_asset_packs"] });
   const configureArgs = ["-S", gameDir, "-B", webDir, "-G", "Ninja"];
