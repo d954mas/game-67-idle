@@ -62,18 +62,6 @@
       ]
     },
     {
-      "id": "architecture-map:validation-report",
-      "kind": "validation",
-      "path": "ai_studio/architecture_map/validation-report.json",
-      "title": "validation-report.json",
-      "description": "Generated report displayed by the map page so newly created or unmapped paths are visible during refactoring.",
-      "role": "generated validation report",
-      "tags": [
-        "generated",
-        "report"
-      ]
-    },
-    {
       "id": "architecture-map:validator-tests",
       "kind": "test",
       "path": "ai_studio/architecture_map/tests/validate_map.test.mjs",

@@ -15,6 +15,21 @@ test("Studio CI is a Windows Ubuntu matrix with pinned current setup contracts",
   assert.match(workflow, /python-version: ['"]3\.12['"]/);
   assert.match(workflow, /python_setup\.mjs --base-python "\$pythonLocation\/bin\/python"/);
   assert.match(workflow, /python_setup\.mjs --base-python "\$env:pythonLocation\\python\.exe"/);
+  assert.match(workflow, /name: Install native Linux dependencies/);
+  assert.match(workflow, /apt-get install -y --no-install-recommends/);
+  for (const packageName of [
+    "libwayland-bin",
+    "libwayland-dev",
+    "wayland-protocols",
+    "libxkbcommon-dev",
+    "libxrandr-dev",
+    "libxinerama-dev",
+    "libxcursor-dev",
+    "libxi-dev",
+    "libgl1-mesa-dev",
+  ]) {
+    assert.match(workflow, new RegExp(`\\b${packageName}\\b`));
+  }
   assert.match(workflow, /EMSDK_VERSION: ['"]4\.0\.10['"]/);
   assert.match(workflow, /github\.com\/emscripten-core\/emsdk\.git/);
   assert.match(workflow, /emsdk install "\$EMSDK_VERSION"/);
