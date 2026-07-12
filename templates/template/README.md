@@ -86,11 +86,11 @@ on the DevAPI preset, `Module.arguments=['--devapi','17890']`). All three files
 Build one preset, then serve it:
 
 ```bash
-bash tools/build_web.sh --preset wasm-release        # or wasm-debug / wasm-devapi-debug
+node tools/build_web.mjs --preset wasm-release        # or wasm-debug / wasm-devapi-debug
 node tools/serve_web.mjs --preset wasm-release        # http://127.0.0.1:8080/
 ```
 
-`build_web.sh` builds the wasm `game` target and copies the native asset pack
+`build_web.mjs` builds the wasm `game` target and copies the native asset pack
 flat to `bin/assets/game.ntpack` (the engine streams packs over HTTP relative to
 the page URL; the pack builder is native-only, so the pack is taken from the
 native build). `serve_web.mjs` is a self-contained static server that serves

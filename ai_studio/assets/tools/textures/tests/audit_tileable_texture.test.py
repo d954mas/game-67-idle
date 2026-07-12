@@ -9,7 +9,7 @@ from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[5]
-SCRIPT = ROOT / "ai_studio" / "assets" / "prep" / "textures" / "audit_tileable_texture.py"
+SCRIPT = ROOT / "ai_studio" / "assets" / "tools" / "textures" / "audit_tileable_texture.py"
 
 
 class AuditTileableTextureTest(unittest.TestCase):

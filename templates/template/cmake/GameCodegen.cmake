@@ -1,4 +1,6 @@
-if(WIN32)
+# Python executes on the build host; Emscripten makes target WIN32 false even
+# when CMake itself runs on Windows.
+if(CMAKE_HOST_WIN32)
     set(STUDIO_PYTHON "${CMAKE_CURRENT_SOURCE_DIR}/../../.venv/Scripts/python.exe")
 else()
     set(STUDIO_PYTHON "${CMAKE_CURRENT_SOURCE_DIR}/../../.venv/bin/python")

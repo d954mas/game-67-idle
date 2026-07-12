@@ -271,7 +271,7 @@ object out of the archive so `nt_devapi_web_install_shim` resolves) plus
 the template's EMSCRIPTEN link block, gated on `GAME_DEVAPI_ENABLED`. The
 Debug wasm executable links and boots under ASan. T0333 then delivered the
 template web packaging path (relative pack over HTTP, tracked `index.html`
-shell, `tools/build_web.sh` + `tools/serve_web.mjs`, preset `wasm-devapi-debug`):
+shell, `tools/build_web.mjs` + `tools/serve_web.mjs`, preset `wasm-devapi-debug`):
 `node ai_studio/dev_environment/python_run.mjs templates/template/tests/web_devapi_check.py` now proves the shim
 round-trip in a headless browser (`endpoints` + `command.describe` over
 `window.__devapi.submit`) with one command. A full web BOT driver (browser

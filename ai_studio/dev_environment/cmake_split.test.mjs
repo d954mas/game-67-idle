@@ -6,10 +6,13 @@ import test from "node:test";
 const root = resolve(import.meta.dirname, "../..");
 const expected = ["GameAssets.cmake", "GameCodegen.cmake", "GameOptions.cmake", "GamePlatform.cmake", "GameTests.cmake"];
 const expectedTests = {
-  "games/web-dressup": ["test_game_state_json", "test_game_storage", "test_game_save", "test_game_events", "test_game_events_overflow", "test_game_state_roundtrip", "test_game_events_typed", "test_game_event_render", "test_game_analytics", "test_game_events_log_mirror", "test_items_catalog", "test_items_fragment", "items_ops_validate", "items_ops_test", "test_progression", "test_progression_curve", "test_game_format", "test_dress_room", "test_platform_sdk", "test_platform_lifecycle", "test_platform_sdk_events", "platform_sdk_node_test", "test_template_composition"],
-  "templates/template": ["test_game_state_json", "test_game_storage", "test_game_save", "test_game_events", "test_game_events_overflow", "test_game_state_roundtrip", "test_game_events_typed", "test_game_event_render", "test_game_analytics", "test_game_events_log_mirror", "test_items_catalog", "test_items_api_core_only", "test_items_api", "generate_items_api_proof_test", "test_items_fragment", "items_ops_validate", "items_ops_test", "test_progression", "test_progression_curve", "test_game_format", "test_platform_sdk", "test_platform_lifecycle", "test_platform_sdk_events", "platform_sdk_node_test", "test_template_composition"],
+  "games/web-dressup": ["test_game_state_json", "test_game_storage", "test_game_save", "test_game_events", "test_game_events_overflow", "test_game_state_roundtrip", "test_game_events_typed", "test_game_event_render", "test_game_analytics", "test_game_events_log_mirror", "test_items_catalog", "test_items_fragment", "items_ops_validate", "items_ops_test", "test_progression", "test_progression_curve", "test_game_format", "test_dress_room", "test_runway_measure_bridge", "test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio", "test_audio_web_library", "test_platform_sdk", "test_platform_lifecycle", "test_platform_sdk_events", "platform_sdk_node_test", "test_template_composition"],
+  "templates/template": ["test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio", "test_audio_web_library", "test_game_state_json", "test_game_storage", "test_game_save", "test_game_events", "test_game_events_overflow", "test_game_state_roundtrip", "test_game_events_typed", "test_game_event_render", "test_game_analytics", "test_game_events_log_mirror", "test_items_catalog", "test_items_api_core_only", "test_items_api", "generate_items_api_proof_test", "test_items_fragment", "items_ops_validate", "items_ops_test", "test_progression", "test_progression_curve", "test_game_format", "test_platform_sdk", "test_platform_lifecycle", "test_platform_sdk_events", "platform_sdk_node_test", "test_template_composition"],
 };
-const expectedCustomTargets = ["game_asset_packs", "platform_sdk_web_assets", "platform_sdk_playgama_config_asset", "devapi_smoke", "quality_responsive", "progression_tracks_gen"];
+const expectedCustomTargets = {
+  "games/web-dressup": ["game_asset_packs", "platform_sdk_web_assets", "platform_sdk_playgama_config_asset", "release_size_gate", "devapi_smoke", "quality_responsive", "progression_tracks_gen"],
+  "templates/template": ["game_asset_packs", "platform_sdk_web_assets", "platform_sdk_playgama_config_asset", "devapi_smoke", "quality_responsive", "progression_tracks_gen"],
+};
 
 function declarations(text, expression) {
   return [...text.matchAll(expression)].map((match) => match[1]);
@@ -36,13 +39,36 @@ for (const source of ["games/web-dressup", "templates/template"]) {
     const includes = expected.map((file) => readFileSync(join(root, source, "cmake", file), "utf8")).join("\n");
     const expanded = `${conductor}\n${includes}`;
     assert.deepEqual(declarations(expanded, /add_test\(NAME\s+([^\s\)]+)/g), expectedTests[source]);
-    assert.deepEqual(declarations(expanded, /add_custom_target\(([^\s\)]+)/g), expectedCustomTargets);
+    assert.deepEqual(declarations(expanded, /add_custom_target\(([^\s\)]+)/g), expectedCustomTargets[source]);
     assert.ok(declarations(expanded, /add_executable\(([^\s\)]+)/g).includes("${GAME_TARGET}"));
   });
 }
 
-test("template T0357 include files contain no T0393 audio overlay", () => {
+test("codegen selects Studio Python by host platform for Emscripten builds", () => {
+  for (const source of ["games/web-dressup", "templates/template"]) {
+    const text = readFileSync(join(root, source, "cmake", "GameCodegen.cmake"), "utf8");
+    assert.match(text, /if\(CMAKE_HOST_WIN32\)/, source);
+    assert.doesNotMatch(text, /if\(WIN32\)/, source);
+  }
+});
+
+test("template audio ownership stays in the exact CMake concern files", () => {
   const dir = join(root, "templates", "template", "cmake");
-  const text = expected.map((file) => readFileSync(join(dir, file), "utf8")).join("\n");
-  assert.doesNotMatch(text, /AUDIO_CORE|game_audio|audio_web|demo_jingle|ui_click/);
+  const conductor = readFileSync(join(root, "templates", "template", "CMakeLists.txt"), "utf8");
+  const assets = readFileSync(join(dir, "GameAssets.cmake"), "utf8");
+  const platform = readFileSync(join(dir, "GamePlatform.cmake"), "utf8");
+  const tests = readFileSync(join(dir, "GameTests.cmake"), "utf8");
+  assert.doesNotMatch(conductor, /AUDIO_CORE|game_audio|audio_web|demo_jingle|ui_click/);
+  assert.match(assets, /ui_click\.wav[\s\S]*demo_jingle\.mp3/);
+  assert.doesNotMatch(assets, /audio_backend|test_audio/);
+  assert.match(platform, /AUDIO_CORE_DIR[\s\S]*src\/game_audio\.c[\s\S]*audio_backend_web\.c/);
+  assert.doesNotMatch(platform, /add_test\(|demo_jingle|ui_click/);
+  for (const name of ["test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio", "test_audio_web_library"]) {
+    assert.match(tests, new RegExp(`add_test\\(NAME\\s+${name}\\b`));
+  }
+  for (const name of ["test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio"]) {
+    assert.match(tests, new RegExp(`nt_set_sanitizer_flags\\(${name}\\)`));
+  }
+  assert.match(tests, /AUDIO_TEST_MP3_PATH=.*demo_jingle\.mp3/);
+  assert.doesNotMatch(tests, /ui_click\.wav/);
 });

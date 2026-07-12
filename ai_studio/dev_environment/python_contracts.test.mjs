@@ -1,10 +1,12 @@
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { delimiter, join, resolve } from "node:path";
 import test from "node:test";
 
 const root = resolve(import.meta.dirname, "../..");
 const runner = "node ai_studio/dev_environment/python_run.mjs";
+const runnerPath = join(root, "ai_studio", "dev_environment", "python_run.mjs");
 const activeContracts = [
   "features/game-state/README.md",
   "features/game-state/INSTALL.md",
@@ -49,4 +51,18 @@ test("ordinary Python requirements state their direct-only reproducibility bound
   assert.match(requirements, /not a reproducible full lock/i);
   assert.match(readme, /pip resolves transitive dependencies/i);
   assert.doesNotMatch(readme, /requirements\.lock\.txt/);
+});
+
+test("canonical Python runner prepends repo imports and preserves ambient PYTHONPATH", () => {
+  const ambient = join(root, "tmp", "ambient-python-modules");
+  const output = execFileSync(process.execPath, [
+    runnerPath,
+    "-c",
+    "import os; print(os.environ['PYTHONPATH'])",
+  ], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, PYTHONPATH: ambient },
+  }).trim();
+  assert.equal(output, `${root}${delimiter}${ambient}`);
 });

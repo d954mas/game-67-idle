@@ -7,11 +7,11 @@
     "compatibility": "validated by the game build and test suite in this checkout"
   },
   "features": [
-    { "id": "audio-core", "version": "1.0.0", "source": "features/audio-core", "revision": "fbb3ecafa4db4b782bcdd17836b3f5889ffedccb", "compatibility": "validated by the game build and test suite in this checkout" },
+    { "id": "audio-core", "version": "1.0.0", "source": "features/audio-core", "revision": "4697cd4459d15796517c41d18e750e902b8a426c", "compatibility": "validated by the game build and test suite in this checkout" },
     { "id": "game-events", "version": "1.0.0", "source": "features/game-events", "revision": "6e71b659c3a2555725e9de12d932aae556db7208", "compatibility": "validated by the game build and test suite in this checkout" },
     { "id": "game-state", "version": "1.0.0", "source": "features/game-state", "revision": "6e71b659c3a2555725e9de12d932aae556db7208", "compatibility": "validated by the game build and test suite in this checkout" },
     { "id": "items-core", "version": "1.0.0", "source": "features/items-core", "revision": "6e71b659c3a2555725e9de12d932aae556db7208", "compatibility": "validated by the game build and test suite in this checkout" },
-    { "id": "platform-sdk", "version": "1.1.0", "source": "features/platform-sdk", "revision": "6e71b659c3a2555725e9de12d932aae556db7208", "compatibility": "validated by the game build and test suite in this checkout" },
+    { "id": "platform-sdk", "version": "1.1.0", "source": "features/platform-sdk", "revision": "4697cd4459d15796517c41d18e750e902b8a426c", "compatibility": "validated by the game build and test suite in this checkout" },
     { "id": "progression-core", "version": "2.0.0", "source": "features/progression-core", "revision": "f86c58d483c9d8636b4d922e2982cb7335f70c52", "compatibility": "validated by the game build and test suite in this checkout" }
   ],
   "compatibility": "records the exact engine and shared feature revisions tested with this game checkout"

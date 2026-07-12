@@ -275,7 +275,7 @@ def ensure_web_pack(wasm_bin_dir):
     """Copy the native-built pack flat next to index.html. The pack builder is
     native-only, so the wasm build never produces game.ntpack; the engine streams
     it over HTTP relative to the page URL (GAME_ASSET_PACK_PATH="assets/game.ntpack"
-    on web). Mirrors tools/build_web.sh step 3."""
+    on web). Mirrors tools/build_web.mjs pack-copy step."""
     native_dir = os.path.join(TEMPLATE_DIR, "build", "native-debug")
     if not os.path.isfile(os.path.join(native_dir, "CMakeCache.txt")):
         configure = [

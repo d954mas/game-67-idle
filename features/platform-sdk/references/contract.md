@@ -136,11 +136,11 @@ The target manifest computes the SDK adapter from the target. The game build
 must not import or link every adapter and decide at runtime, because that ships
 unused SDK URLs, policy code, and portal branches.
 
-The template CMake entry is `GAME_PUBLISH_TARGET`; `tools/build_web.sh` passes
+The template CMake entry is `GAME_PUBLISH_TARGET`; `tools/build_web.mjs` passes
 it through and writes target-specific build directories:
 
 ```powershell
-bash tools/build_web.sh --preset wasm-release --target poki
+node tools/build_web.mjs --preset wasm-release --target poki
 ```
 
 `local` uses `build/wasm-release/bin`; portal targets use

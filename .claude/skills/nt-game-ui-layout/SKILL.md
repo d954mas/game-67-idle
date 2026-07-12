@@ -8,7 +8,3 @@ description: "Use for layout-affecting in-game UI work in this repository: new o
 
 Codex-discoverable instructions live in `.codex/skills/nt-game-ui-layout/SKILL.md`.
 Read that file and follow it.
-
-Reference playbooks (load only when the Codex entrypoint says to):
-
-- `.codex/skills/nt-game-ui-layout/references/friction-review-2026-07-05.md`

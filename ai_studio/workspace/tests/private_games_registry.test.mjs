@@ -294,9 +294,6 @@ test("parent git guard blocks broad add and hook-clean commands with private mou
   for (const command of [
     "git add -f .\\games\\secret-game",
     "git clean -fdx .\\games\\secret-game",
-    "git add -f GAMES/SECRET-GAME",
-    "git add -f .\\GAMES\\SECRET-GAME",
-    "git add -f :/GAMES/SECRET-GAME",
     "git add :/",
     "git add :/games/secret-game",
     "git clean -fdx :/games/secret-game",
@@ -330,6 +327,18 @@ test("parent git guard blocks broad add and hook-clean commands with private mou
     assert.equal(result.ok, false, command);
   }
 
+  for (const command of [
+    "git add -f GAMES/SECRET-GAME",
+    "git add -f .\\GAMES\\SECRET-GAME",
+    "git add -f :/GAMES/SECRET-GAME",
+  ]) {
+    const result = auditParentGitCommand(root, command);
+    assert.equal(result.ok, process.platform !== "win32", command);
+    if (process.platform === "win32") {
+      assert.match(result.violations[0].reason, /private game roots/);
+    }
+  }
+
   const localRegistry = auditParentGitCommand(root, "git add .\\ai_studio\\workspace\\catalog.local.json");
   assert.equal(localRegistry.ok, false);
   assert.match(localRegistry.violations[0].reason, /local private registry/);
@@ -337,7 +346,6 @@ test("parent git guard blocks broad add and hook-clean commands with private mou
   for (const command of [
     `git add -f "${join(root, "games", "secret-game")}"`,
     `git add "${join(root, "ai_studio", "workspace", "catalog.local.json")}"`,
-    "git add AI_STUDIO/WORKSPACE/CATALOG.LOCAL.JSON",
     "git add :/ai_studio/workspace/catalog.local.json",
     "git add :(top)ai_studio/workspace/catalog.local.json",
     "git add ai_studio/workspace/*.json",
@@ -345,6 +353,13 @@ test("parent git guard blocks broad add and hook-clean commands with private mou
   ]) {
     const result = auditParentGitCommand(root, command);
     assert.equal(result.ok, false, command);
+  }
+
+
+  const upperRegistry = auditParentGitCommand(root, "git add AI_STUDIO/WORKSPACE/CATALOG.LOCAL.JSON");
+  assert.equal(upperRegistry.ok, process.platform !== "win32");
+  if (process.platform === "win32") {
+    assert.match(upperRegistry.violations[0].reason, /local private registry/);
   }
 
   for (const command of [

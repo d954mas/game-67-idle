@@ -16,6 +16,7 @@ import {
   stagePlatformSdkWebAssets,
 } from "../scripts/artifact_tools.mjs";
 import { scorecardFromNdjson } from "../scripts/scorecard.mjs";
+import { createBuildPlan } from "../../../templates/template/tools/build_web.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TargetPlatform = Object.freeze({
@@ -161,12 +162,20 @@ test("template CMake isolates web presets by publish target", () => {
 
 test("web builds use a checkout-local Emscripten cache by default", () => {
   const cmake = readFileSync(join(HERE, "../../../templates/template/cmake/GameOptions.cmake"), "utf8");
-  const buildWeb = readFileSync(join(HERE, "../../../templates/template/tools/build_web.sh"), "utf8");
+  const gameDir = join(HERE, "../../../templates/template");
+  const plan = createBuildPlan({
+    gameDir,
+    args: { preset: "wasm-release", target: "local", debugUi: "default" },
+    env: {},
+    platform: "linux",
+    nativeConfigured: true,
+    toolchainExists: false,
+  });
 
   assert.match(cmake, /set\(GAME_EMSCRIPTEN_CACHE_DIR "\$\{_game_default_em_cache\}" CACHE PATH/);
   assert.match(cmake, /RULE_LAUNCH_COMPILE "\$\{_game_emcache_launcher\}"/);
   assert.match(cmake, /RULE_LAUNCH_LINK "\$\{_game_emcache_launcher\}"/);
-  assert.match(buildWeb, /export EM_CACHE="\$GAME_DIR\/build\/emscripten-cache"/);
+  assert.equal(plan.env.EM_CACHE, join(gameDir, "build", "emscripten-cache"));
 });
 
 test("web backend exposes only thin adapter methods and lifecycle calls stay direct", async () => {
