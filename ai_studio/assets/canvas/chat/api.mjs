@@ -24,8 +24,8 @@ import { readTranscript, appendTurn, buildChatContext, clearConversation, readCh
 import { runChatTurn } from "./agent.mjs";
 import { runAppServerTransport } from "./app_server.mjs";
 import { createPermissionBroker } from "./permission_broker.mjs";
-import { listHistory } from "../../assets/canvas/ops.mjs";
-import { selectCanvasStore, withCanvasStore } from "../../assets/canvas/stores.mjs";
+import { listHistory } from "../ops.mjs";
+import { selectCanvasStore, withCanvasStore } from "../stores.mjs";
 import { randomBytes, randomUUID, timingSafeEqual } from "node:crypto";
 
 // Chat message bodies are small (text + a handful of selection refs) — nowhere near

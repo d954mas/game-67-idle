@@ -1,14 +1,14 @@
 // Chat context digest + transcript/state store tests (T0242 increment 1). Pure/read-only
 // over ops.mjs (digest) + node:fs (chat/ store) — no codex, no spawn.
-// Run: node --test ai_studio/studio_shell/chat/tests/context.test.mjs
+// Run: node --test ai_studio/assets/canvas/chat/tests/context.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { addImage, addText, createGroup, createProject, patchElement } from "../../../assets/canvas/ops.mjs";
-import { solidPng } from "../../../assets/canvas/tests/png_fixture.mjs";
+import { addImage, addText, createGroup, createProject, patchElement } from "../../ops.mjs";
+import { solidPng } from "../../tests/png_fixture.mjs";
 import {
   appendTurn,
   buildChatContext,
@@ -24,7 +24,7 @@ import {
 // PROJECTS dir via CANVAS_PROJECTS_ROOT (same split as groups.test.mjs/text.test.mjs: the
 // outer ROOT constant is passed to every ops/context call; tempProjects()'s own return
 // value is only used for raw on-disk assertions).
-const ROOT = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
+const ROOT = resolve(fileURLToPath(new URL("../../../../..", import.meta.url)));
 
 function tempProjects(t) {
   const dir = mkdtempSync(join(tmpdir(), "chat-context-"));

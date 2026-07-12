@@ -14,7 +14,7 @@ import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/g
 import { createArchitectureMapApi } from "../architecture_map/api.mjs";
 import { createCanvasApi } from "../assets/canvas/api.mjs";
 import { createItemsViewerApi } from "../assets/items_viewer/api.mjs";
-import { createChatApi } from "./chat/api.mjs";
+import { createChatApi } from "../assets/canvas/chat/api.mjs";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
 
 const repoGuess = resolve(fileURLToPath(new URL("../..", import.meta.url)));

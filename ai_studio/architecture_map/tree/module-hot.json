@@ -696,7 +696,7 @@
           "kind": "config",
           "path": "ai_studio/studio.config.json",
           "title": "studio.config.json",
-          "description": "Committed studio-wide configuration (schema ai_studio.studio_config.v1). Currently sets canvasProjectsRoot, the on-disk home for canvas projects. A per-machine studio.config.local.json (gitignored) overrides fields.",
+          "description": "Portable committed Studio defaults (schema ai_studio.studio_config.v1). Machine-specific Canvas and tool roots belong in the gitignored studio.config.local.json override.",
           "role": "studio configuration data",
           "tags": [
             "core-harness",

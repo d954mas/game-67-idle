@@ -974,13 +974,23 @@
           "kind": "doc",
           "path": "ai_studio/assets/canvas/README.md",
           "title": "README.md",
-          "description": "Canvas module contract: owner/boundary, layout, projects-root resolution, the one operation layer, CLI usage, and validation commands.",
-          "role": "canvas module entrypoint",
+          "description": "Short Canvas router to the operation, browser UI, storage, Chat, and validation contracts.",
+          "role": "canvas contract router",
           "tags": [
             "assets",
             "canvas",
             "source"
           ]
+        },
+        {
+          "id": "assets:canvas-contracts",
+          "kind": "group",
+          "path": "ai_studio/assets/canvas/contracts",
+          "title": "Canvas contracts",
+          "description": "Scoped operation, browser UI, storage, Chat, and validation contracts.",
+          "role": "canvas domain contracts",
+          "coverage": "recursive",
+          "tags": ["assets", "canvas", "documentation"]
         },
         {
           "id": "assets:canvas-docs",
@@ -1103,7 +1113,7 @@
           "kind": "tool",
           "path": "ai_studio/assets/canvas/ops.mjs",
           "title": "ops.mjs",
-          "description": "Defines the single journaled mutation boundary shared by Canvas agents and browser clients.",
+          "description": "Stable operation facade over real core, element, group, generation/card, history, and image-pipeline domain modules shared by agents and browser clients.",
           "role": "canvas operation layer",
           "tags": [
             "assets",
@@ -1111,6 +1121,26 @@
             "tool-parity",
             "image"
           ]
+        },
+        {
+          "id": "assets:canvas-ops-domains",
+          "kind": "group",
+          "path": "ai_studio/assets/canvas/ops",
+          "title": "Operation domains",
+          "description": "Owns physical Canvas implementations for mutation core, elements/projects, groups, generation/cards, history/clipboard, and image/export pipelines behind ops.mjs.",
+          "role": "canvas operation internals",
+          "coverage": "recursive",
+          "tags": ["assets", "canvas", "tool-parity"]
+        },
+        {
+          "id": "assets:canvas-chat",
+          "kind": "api",
+          "path": "ai_studio/assets/canvas/chat",
+          "title": "Canvas Chat",
+          "description": "Owns Canvas Chat context, permissions, app-server transport, documentation, and tests; Studio Shell only hosts its HTTP lifecycle.",
+          "role": "canvas chat runtime",
+          "coverage": "recursive",
+          "tags": ["assets", "canvas", "chat", "permissions"]
         },
         {
           "id": "assets:canvas-api",
@@ -1330,7 +1360,7 @@
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/workspace.js",
               "title": "workspace.js",
-              "description": "Presents canvas workspace and rendering.",
+              "description": "Stable workspace facade over viewport, rendering/culling, gesture overlays, preview lifecycles, and interaction modules.",
               "role": "canvas workspace and rendering",
               "tags": [
                 "assets",
@@ -1358,7 +1388,7 @@
               "kind": "ui-component",
               "path": "ai_studio/assets/canvas/site/inspector.js",
               "title": "inspector.js",
-              "description": "Presents canvas inspector panel.",
+              "description": "Stable inspector facade over element/group, recipe-pack, generation-card, control, and primitive rendering modules.",
               "role": "canvas inspector panel",
               "tags": [
                 "assets",

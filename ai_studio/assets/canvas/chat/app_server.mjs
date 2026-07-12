@@ -3,7 +3,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
 
-export const REPO_ROOT = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
+export const REPO_ROOT = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
 const DEFAULT_TIMEOUT_MS = 900_000;
 const MAX_EARLY_MESSAGES = 128;
 const APPROVAL_METHODS = new Set([

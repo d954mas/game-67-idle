@@ -8,10 +8,10 @@ import {
   chatApi,
   permissionDecisionTarget,
   renderPermission,
-} from "../../../assets/canvas/site/chat_panel.js";
+} from "../../site/chat_panel.js";
 
-const panel = readFileSync(resolve(import.meta.dirname, "../../../assets/canvas/site/chat_panel.js"), "utf8");
-const css = readFileSync(resolve(import.meta.dirname, "../../../assets/canvas/site/canvas.css"), "utf8");
+const panel = readFileSync(resolve(import.meta.dirname, "../../site/chat_panel.js"), "utf8");
+const css = readFileSync(resolve(import.meta.dirname, "../../site/canvas.css"), "utf8");
 
 test("chat UI bootstraps a launch token and sends it on protected requests", () => {
   assert.match(panel, /\/api\/chat\/bootstrap/);
