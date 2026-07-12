@@ -781,6 +781,29 @@ test("late public failure preserves concurrent catalog, IDE, Taskboard, and coun
   assert.deepEqual(JSON.parse(readFileSync(join(taskboardItems(root), ".counters.json"), "utf8")), { project: 777, epic: 55, task: 9999 });
 });
 
+test("late public failure preserves external writes made before post-write capture", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "rollback-game"], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      AI_STUDIO_NEW_GAME_TEST_CONCURRENT_SENTINEL_AT: "before-post-capture",
+      AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "public-registration",
+    },
+  });
+
+  assert.equal(result.status, 1);
+  assert.equal(existsSync(join(root, "games", "rollback-game")), false);
+  const catalog = JSON.parse(readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8"));
+  assert.equal(catalog.mounts.some((mount) => mount.root === "games/rollback-game"), false);
+  assert.equal(catalog.mounts.some((mount) => mount.root === "games/concurrent-sentinel"), true);
+  assert.match(readFileSync(join(root, ".vscode", "tasks.json"), "utf8"), /concurrent-sentinel/);
+  assert.match(readFileSync(join(root, ".git", "info", "exclude"), "utf8"), /\/concurrent-sentinel\//);
+});
+
 test("failure after existing Taskboard title update CAS-restores only the owned mutation", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -907,6 +930,28 @@ test("late private preflight failure restores exclude/catalog and leaves no game
   assert.equal(existsSync(join(root, "games", "secret-game")), false);
   assert.equal(existsSync(join(root, "ai_studio", "workspace", "catalog.local.json")), false);
   assert.equal(existsSync(excludePath) ? readFileSync(excludePath, "utf8") : null, beforeExclude);
+});
+
+test("private rollback preserves unrelated exclude bytes written before post-write capture", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const excludePath = join(root, ".git", "info", "exclude");
+  const beforeExclude = "# local excludes\r\n\r\n/custom-cache/\r\n";
+  writeFileSync(excludePath, beforeExclude, "utf8");
+
+  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "secret-game", "--private"], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      AI_STUDIO_NEW_GAME_TEST_CONCURRENT_SENTINEL_AT: "before-post-capture",
+      AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "private-preflight",
+    },
+  });
+
+  assert.equal(result.status, 1);
+  assert.equal(existsSync(join(root, "games", "secret-game")), false);
+  assert.equal(readFileSync(excludePath, "utf8"), `${beforeExclude}/concurrent-sentinel/\n`);
 });
 
 test("successful and failed runs leave no staging or backup siblings", (t) => {

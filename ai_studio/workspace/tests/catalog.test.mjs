@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 import {
@@ -216,4 +217,22 @@ test("dependency records require an exact engine SemVer", (t) => {
     features: [],
     compatibility: "tested",
   }), /engine\.version.*exact SemVer/i);
+});
+
+test("indexed public game feature pins resolve matching version metadata", () => {
+  const root = resolve(import.meta.dirname, "../../..");
+  const showIndexJson = (rel) => JSON.parse(execFileSync("git", ["show", `:${rel}`], {
+    cwd: root, encoding: "utf8",
+  }));
+  const catalog = showIndexJson("ai_studio/workspace/catalog.json");
+  for (const mount of catalog.mounts.filter((entry) => entry.kind === "game" && entry.visibility === "public")) {
+    const dependencies = showIndexJson(`${mount.root}/dependencies.json`);
+    for (const feature of dependencies.features) {
+      const manifest = JSON.parse(execFileSync("git", ["show", `${feature.revision}:${feature.source}/feature.json`], {
+        cwd: root, encoding: "utf8",
+      }));
+      assert.equal(manifest.id, feature.id, `${mount.root}: ${feature.id} id at ${feature.revision}`);
+      assert.equal(manifest.version, feature.version, `${mount.root}: ${feature.id} version at ${feature.revision}`);
+    }
+  }
 });

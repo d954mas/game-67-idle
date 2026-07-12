@@ -428,25 +428,40 @@ function restoreUnchangedWrites(writes) {
 
 function restoreOwnedCatalogMount(write, ownedRoot) {
   const current = snapshotFile(write.after.path);
-  if (sameSnapshot(current, write.after)) return restoreFile(write.before);
-  if (!current.existed) return;
+  if (!current.existed) return !sameSnapshot(current, write.before);
   const catalog = readJsonStrict(current.path, `workspace catalog ${current.path}`);
   const beforeCatalog = write.before.existed
     ? JSON.parse(write.before.bytes.toString("utf8").replace(/^\uFEFF/, "")) : { mounts: [] };
   const previous = (beforeCatalog.mounts || []).find((mount) => mount.root === ownedRoot);
   catalog.mounts = (catalog.mounts || []).filter((mount) => mount.root !== ownedRoot);
   if (previous) catalog.mounts.push(previous);
+  const onlyOwnedCreatedCatalog = !write.before.existed
+    && (catalog.mounts || []).length === 0
+    && Object.keys(catalog).every((key) => key === "schema" || key === "mounts");
+  if (onlyOwnedCreatedCatalog || JSON.stringify(catalog) === JSON.stringify(beforeCatalog)) {
+    restoreFile(write.before);
+    return false;
+  }
   writeJson(current.path, catalog);
+  return true;
 }
 
 function restoreOwnedExclude(write, ownedLines) {
   const current = snapshotFile(write.after.path);
-  if (sameSnapshot(current, write.after)) return restoreFile(write.before);
-  if (!current.existed) return;
+  if (!current.existed) return !sameSnapshot(current, write.before);
   const beforeLines = new Set(write.before.existed ? write.before.bytes.toString("utf8").split(/\r?\n/) : []);
-  const lines = current.bytes.toString("utf8").split(/\r?\n/)
-    .filter((line) => !ownedLines.includes(line) || beforeLines.has(line));
-  writeFileSync(current.path, `${lines.filter(Boolean).join("\n")}\n`, "utf8");
+  const segments = current.bytes.toString("utf8").match(/[^\r\n]*(?:\r\n|\n|\r|$)/g) || [];
+  const restored = segments.filter((segment) => {
+    const line = segment.replace(/(?:\r\n|\n|\r)$/, "");
+    return !ownedLines.includes(line) || beforeLines.has(line);
+  }).join("");
+  const before = write.before.existed ? write.before.bytes.toString("utf8") : "";
+  if (restored === before) {
+    restoreFile(write.before);
+    return false;
+  }
+  writeFileSync(current.path, restored, "utf8");
+  return true;
 }
 
 function rollbackExternalWrites(writes, { repoRoot, identity, isPrivate, excludePath }) {
@@ -454,12 +469,13 @@ function rollbackExternalWrites(writes, { repoRoot, identity, isPrivate, exclude
   const publicCatalog = byPath.get(resolve(join(repoRoot, catalogRelPath(false))));
   const localCatalog = byPath.get(resolve(join(repoRoot, localWorkspaceCatalogRelPath())));
   const exclude = byPath.get(resolve(excludePath));
-  if (publicCatalog) restoreOwnedCatalogMount(publicCatalog, `games/${identity.id}`);
-  if (localCatalog) restoreOwnedCatalogMount(localCatalog, `games/${identity.id}`);
+  const concurrentCatalogWrite = [publicCatalog, localCatalog]
+    .filter(Boolean)
+    .map((write) => restoreOwnedCatalogMount(write, `games/${identity.id}`))
+    .some(Boolean);
   if (exclude && isPrivate) restoreOwnedExclude(exclude, [localWorkspaceCatalogRelPath(), `games/${identity.id}/`]);
-  else if (exclude) restoreUnchangedWrites([exclude]);
   const vscodeWrites = writes.filter((write) => /[\\/]\.vscode[\\/](tasks|launch)\.json$/.test(write.after.path));
-  if (vscodeWrites.some((write) => !sameSnapshot(snapshotFile(write.after.path), write.after))) {
+  if (concurrentCatalogWrite || vscodeWrites.some((write) => !sameSnapshot(snapshotFile(write.after.path), write.after))) {
     writeVscodeProjectFiles(repoRoot);
   } else restoreUnchangedWrites(vscodeWrites);
 }
@@ -479,8 +495,10 @@ function rollbackTaskboardMutation(mutation) {
   }
 }
 
-function injectConcurrentSentinel(repoRoot, sourceGameId) {
-  if (process.env.AI_STUDIO_NEW_GAME_TEST_CONCURRENT_SENTINEL !== "1") return;
+function injectConcurrentSentinel(repoRoot, sourceGameId, point = "after-post-capture") {
+  const requestedPoint = process.env.AI_STUDIO_NEW_GAME_TEST_CONCURRENT_SENTINEL_AT
+    || (process.env.AI_STUDIO_NEW_GAME_TEST_CONCURRENT_SENTINEL === "1" ? "after-post-capture" : "");
+  if (requestedPoint !== point) return;
   if (process.env.NODE_ENV !== "test") throw new Error("new_game concurrency injection is test-only (NODE_ENV=test required)");
   const sentinelDir = join(repoRoot, "games", "concurrent-sentinel");
   mkdirSync(join(sentinelDir, "assets"), { recursive: true });
@@ -494,6 +512,7 @@ function injectConcurrentSentinel(repoRoot, sourceGameId) {
     commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [],
   }, { local: false });
   writeVscodeProjectFiles(repoRoot);
+  appendFileSync(requireParentGitExcludePath(repoRoot), "/concurrent-sentinel/\n", "utf8");
   const projectDir = join(repoRoot, "ai_studio", "taskboard", "items", "projects");
   mkdirSync(projectDir, { recursive: true });
   writeFileSync(join(projectDir, "P777-concurrent-sentinel.md"), "concurrent sentinel\n", "utf8");
@@ -663,6 +682,7 @@ try {
     });
     const preflight = runPrivateGamePreflight(repoRoot, { mounts: [mount] });
     if (!preflight.ok) throw new Error(`private game preflight failed:\n${preflight.violations.map((item) => `- ${item.path}: ${item.reason}`).join("\n")}`);
+    injectConcurrentSentinel(repoRoot, identity.id, "before-post-capture");
     externalWrites = capturePostWrites(external);
     maybeFail("private-preflight");
   } else {
@@ -672,6 +692,7 @@ try {
     }, { local: false });
     const registered = { assets: mount.assetRoot };
     const vscode = writeVscodeProjectFiles(repoRoot);
+    injectConcurrentSentinel(repoRoot, identity.id, "before-post-capture");
     externalWrites = capturePostWrites(external);
     injectConcurrentSentinel(repoRoot, identity.id);
     maybeFail("public-registration");
@@ -704,15 +725,15 @@ try {
     catch (rollbackError) { residuals.push(`${label}: ${rollbackError.message}`); }
   };
   rollbackPhase("taskboard", () => rollbackTaskboardMutation(taskboardMutation));
-  rollbackPhase("external", () => {
-    if (!externalWrites.length) externalWrites = capturePostWrites(external);
-    rollbackExternalWrites(externalWrites, { repoRoot, identity, isPrivate, excludePath });
-  });
   rollbackPhase("published destination", () => {
     if (published && existsSync(finalDir)) rmSync(finalDir, { recursive: true, force: true });
   });
   rollbackPhase("backup restore", () => {
     if (backupMade && existsSync(backupDir)) renameSync(backupDir, finalDir);
+  });
+  rollbackPhase("external", () => {
+    if (!externalWrites.length) externalWrites = capturePostWrites(external);
+    rollbackExternalWrites(externalWrites, { repoRoot, identity, isPrivate, excludePath });
   });
   rollbackPhase("staging", () => {
     if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true });
