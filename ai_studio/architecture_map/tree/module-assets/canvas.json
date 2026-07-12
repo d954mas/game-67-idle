@@ -1,0 +1,631 @@
+{
+  "id": "assets:canvas",
+  "title": "Canvas",
+  "subtitle": "multi-image projects, agent + browser parity",
+  "kind": "module",
+  "path": "ai_studio/assets/canvas",
+  "color": "#7c3aed",
+  "coverage": "self",
+  "description": "Owns Canvas project persistence, journaled operations, agent APIs, and browser-surface parity.",
+  "role": "canvas projects module",
+  "tags": [
+    "assets",
+    "canvas",
+    "tool-parity",
+    "image"
+  ],
+  "children": [
+    {
+      "id": "assets:canvas-readme",
+      "kind": "doc",
+      "path": "ai_studio/assets/canvas/README.md",
+      "title": "README.md",
+      "description": "Short Canvas router to the operation, browser UI, storage, Chat, and validation contracts.",
+      "role": "canvas contract router",
+      "tags": [
+        "assets",
+        "canvas",
+        "source"
+      ]
+    },
+    {
+      "id": "assets:canvas-contracts",
+      "kind": "group",
+      "path": "ai_studio/assets/canvas/contracts",
+      "title": "Canvas contracts",
+      "description": "Scoped operation, browser UI, storage, Chat, and validation contracts.",
+      "role": "canvas domain contracts",
+      "coverage": "recursive",
+      "tags": [
+        "assets",
+        "canvas",
+        "documentation"
+      ]
+    },
+    {
+      "id": "assets:canvas-docs",
+      "kind": "dir",
+      "path": "ai_studio/assets/canvas/docs",
+      "title": "docs/",
+      "description": "Groups Canvas design records, research, reviews, and frozen workflow references.",
+      "role": "Canvas design and review records",
+      "tags": [
+        "canvas",
+        "docs",
+        "history"
+      ]
+    },
+    {
+      "id": "assets:canvas-animation",
+      "kind": "library",
+      "path": "ai_studio/assets/canvas/animation.mjs",
+      "title": "animation.mjs",
+      "description": "Provides Canvas animation-card data and transformation helpers.",
+      "role": "Canvas animation model helpers",
+      "tags": [
+        "canvas",
+        "animation"
+      ]
+    },
+    {
+      "id": "assets:canvas-slice9",
+      "kind": "library",
+      "path": "ai_studio/assets/canvas/slice9.mjs",
+      "title": "slice9.mjs",
+      "description": "Provides Canvas nine-slice geometry and validation helpers.",
+      "role": "Canvas nine-slice model helpers",
+      "tags": [
+        "canvas",
+        "slice9"
+      ]
+    },
+    {
+      "id": "assets:canvas-plan",
+      "kind": "doc",
+      "path": "ai_studio/assets/canvas/PLAN.md",
+      "title": "PLAN.md",
+      "description": "Lead-owned working plan for the canvas module: the non-negotiable laws (tool parity, thin page, non-destructive art), the increment order, design decisions, and the narrative state that the taskboard epic E010 tasks are scoped against.",
+      "role": "canvas module plan",
+      "tags": [
+        "assets",
+        "canvas",
+        "doc"
+      ]
+    },
+    {
+      "id": "assets:canvas-store",
+      "kind": "tool",
+      "path": "ai_studio/assets/canvas/store.mjs",
+      "title": "store.mjs",
+      "description": "Provides canvas project store.",
+      "role": "canvas project store",
+      "tags": [
+        "assets",
+        "canvas",
+        "storage"
+      ]
+    },
+    {
+      "id": "assets:canvas-stores",
+      "kind": "tool",
+      "path": "ai_studio/assets/canvas/stores.mjs",
+      "title": "stores.mjs",
+      "description": "Provides canvas store selector and export guard.",
+      "role": "canvas store selector and export guard",
+      "tags": [
+        "assets",
+        "canvas",
+        "storage",
+        "privacy"
+      ]
+    },
+    {
+      "id": "assets:canvas-tree",
+      "kind": "tool",
+      "path": "ai_studio/assets/canvas/tree.mjs",
+      "title": "tree.mjs",
+      "description": "Provides canvas scene-tree math.",
+      "role": "canvas scene-tree math",
+      "tags": [
+        "assets",
+        "canvas",
+        "tool-parity"
+      ]
+    },
+    {
+      "id": "assets:canvas-fonts",
+      "kind": "tool",
+      "path": "ai_studio/assets/canvas/fonts.mjs",
+      "title": "fonts.mjs",
+      "description": "Provides canvas text/font contract.",
+      "role": "canvas text/font contract",
+      "tags": [
+        "assets",
+        "canvas",
+        "tool-parity"
+      ]
+    },
+    {
+      "id": "assets:canvas-zip",
+      "kind": "tool",
+      "path": "ai_studio/assets/canvas/zip.mjs",
+      "title": "zip.mjs",
+      "description": "Provides canvas store-mode zip writer.",
+      "role": "canvas store-mode zip writer",
+      "tags": [
+        "assets",
+        "canvas",
+        "tool-parity"
+      ]
+    },
+    {
+      "id": "assets:canvas-ops",
+      "kind": "tool",
+      "path": "ai_studio/assets/canvas/ops.mjs",
+      "title": "ops.mjs",
+      "description": "Stable operation facade over real core, element, group, generation/card, history, and image-pipeline domain modules shared by agents and browser clients.",
+      "role": "canvas operation layer",
+      "tags": [
+        "assets",
+        "canvas",
+        "tool-parity",
+        "image"
+      ]
+    },
+    {
+      "id": "assets:canvas-ops-domains",
+      "kind": "group",
+      "path": "ai_studio/assets/canvas/ops",
+      "title": "Operation domains",
+      "description": "Owns physical Canvas implementations for mutation core, elements/projects, groups, generation/cards, history/clipboard, and image/export pipelines behind ops.mjs.",
+      "role": "canvas operation internals",
+      "coverage": "recursive",
+      "tags": [
+        "assets",
+        "canvas",
+        "tool-parity"
+      ]
+    },
+    {
+      "id": "assets:canvas-chat",
+      "kind": "api",
+      "path": "ai_studio/assets/canvas/chat",
+      "title": "Canvas Chat",
+      "description": "Owns Canvas Chat context, permissions, app-server transport, documentation, and tests; Studio Shell only hosts its HTTP lifecycle.",
+      "role": "canvas chat runtime",
+      "coverage": "recursive",
+      "tags": [
+        "assets",
+        "canvas",
+        "chat",
+        "permissions"
+      ]
+    },
+    {
+      "id": "assets:canvas-api",
+      "kind": "tool",
+      "path": "ai_studio/assets/canvas/api.mjs",
+      "title": "api.mjs",
+      "description": "Provides canvas HTTP API adapter.",
+      "role": "canvas HTTP API adapter",
+      "tags": [
+        "assets",
+        "canvas",
+        "surface-adapter"
+      ]
+    },
+    {
+      "id": "assets:canvas-cli",
+      "kind": "tool",
+      "path": "ai_studio/assets/canvas/cli.mjs",
+      "title": "cli.mjs",
+      "description": "Provides canvas agent CLI.",
+      "role": "canvas agent CLI",
+      "tags": [
+        "assets",
+        "canvas",
+        "cli"
+      ]
+    },
+    {
+      "id": "assets:canvas-skill",
+      "kind": "skill",
+      "path": ".codex/skills/nt-canvas-operations",
+      "title": "nt-canvas-operations",
+      "description": "Guides canvas agent skill entrypoint.",
+      "role": "canvas agent skill entrypoint",
+      "tags": [
+        "skill",
+        "router",
+        "agent-facing"
+      ]
+    },
+    {
+      "id": "assets:canvas-tools",
+      "title": "Canvas Tools",
+      "subtitle": "screen compositor",
+      "kind": "group",
+      "path": "ai_studio/assets/canvas/tools",
+      "color": "#7c3aed",
+      "description": "Groups canvas python tools.",
+      "role": "canvas python tools",
+      "tags": [
+        "assets",
+        "canvas",
+        "tool"
+      ],
+      "children": [
+        {
+          "id": "assets:canvas-tools-render-group",
+          "kind": "tool",
+          "path": "ai_studio/assets/canvas/tools/render_group.py",
+          "title": "render_group.py",
+          "description": "Provides canvas screen compositor.",
+          "role": "canvas screen compositor",
+          "tags": [
+            "assets",
+            "canvas",
+            "tool",
+            "render"
+          ]
+        },
+        {
+          "id": "assets:canvas-tools-export-images",
+          "kind": "tool",
+          "path": "ai_studio/assets/canvas/tools/export_images.py",
+          "title": "export_images.py",
+          "description": "Provides canvas export encoder.",
+          "role": "canvas export encoder",
+          "tags": [
+            "assets",
+            "canvas",
+            "tool",
+            "export"
+          ]
+        },
+        {
+          "id": "assets:canvas-tools-alpha-cutout",
+          "kind": "tool",
+          "path": "ai_studio/assets/canvas/tools/alpha_cutout.py",
+          "title": "alpha_cutout.py",
+          "description": "Provides canvas alpha cutout.",
+          "role": "canvas alpha cutout",
+          "tags": [
+            "assets",
+            "canvas",
+            "tool",
+            "alpha"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "assets:canvas-site",
+      "title": "Canvas Page",
+      "subtitle": "thin local interface",
+      "kind": "surface",
+      "path": "ai_studio/assets/canvas/site",
+      "color": "#7c3aed",
+      "description": "Presents canvas browser page.",
+      "role": "canvas browser page",
+      "tags": [
+        "assets",
+        "canvas",
+        "surface",
+        "ui"
+      ],
+      "children": [
+        {
+          "id": "assets:canvas-site-html",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/canvas.html",
+          "title": "canvas.html",
+          "description": "Presents canvas page document.",
+          "role": "canvas page document",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-css",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/canvas.css",
+          "title": "canvas.css",
+          "description": "Presents canvas page styling.",
+          "role": "canvas page styling",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "style"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-controller",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/canvas.js",
+          "title": "canvas.js",
+          "description": "Presents canvas page controller.",
+          "role": "canvas page controller",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-app",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/app.js",
+          "title": "app.js",
+          "description": "Presents canvas page shared state.",
+          "role": "canvas page shared state",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-store-scope",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/store_scope.js",
+          "title": "store_scope.js",
+          "description": "Presents canvas browser store-scope helper.",
+          "role": "canvas browser store-scope helper",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js",
+            "privacy",
+            "testable-logic"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-actions",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/actions.js",
+          "title": "actions.js",
+          "description": "Presents canvas page action layer.",
+          "role": "canvas page action layer",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-home",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/home.js",
+          "title": "home.js",
+          "description": "Presents canvas home screen.",
+          "role": "canvas home screen",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-workspace",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/workspace.js",
+          "title": "workspace.js",
+          "description": "Stable workspace facade over viewport, rendering/culling, gesture overlays, preview lifecycles, and interaction modules.",
+          "role": "canvas workspace and rendering",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-layers",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/layers_panel.js",
+          "title": "layers_panel.js",
+          "description": "Presents canvas layers panel.",
+          "role": "canvas layers panel",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-inspector",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/inspector.js",
+          "title": "inspector.js",
+          "description": "Stable inspector facade over element/group, recipe-pack, generation-card, control, and primitive rendering modules.",
+          "role": "canvas inspector panel",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-history",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/history_panel.js",
+          "title": "history_panel.js",
+          "description": "Presents canvas history panel.",
+          "role": "canvas history panel",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-context-menu",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/context_menu.js",
+          "title": "context_menu.js",
+          "description": "Presents canvas context menu.",
+          "role": "canvas context menu",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-dnd",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/dnd.js",
+          "title": "dnd.js",
+          "description": "OS drag & drop (drop images at the drop point with a drop highlight, offsetting multiples) and Ctrl/Cmd+V clipboard paste at the viewport center, over the shared actions.",
+          "role": "canvas drag-drop and paste",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-inline",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/inline.js",
+          "title": "inline.js",
+          "description": "Inline text-editing helper: swaps a label for a text input that commits on Enter/blur and cancels on Escape, used to rename projects, elements, and groups without a browser prompt().",
+          "role": "canvas inline edit helper",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-export-dest",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/export_dest.mjs",
+          "title": "export_dest.mjs",
+          "description": "Presents canvas export destination.",
+          "role": "canvas export destination",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-toasts",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/toasts.js",
+          "title": "toasts.js",
+          "description": "Presents canvas feedback layer.",
+          "role": "canvas feedback layer",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-long-op-queue",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/long_op_queue.mjs",
+          "title": "long_op_queue.mjs",
+          "description": "Presents canvas long-op limiter.",
+          "role": "canvas long-op limiter",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js",
+            "testable-logic"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-regions",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/regions.js",
+          "title": "regions.js",
+          "description": "Presents canvas region geometry.",
+          "role": "canvas region geometry",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-viewport",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/viewport.mjs",
+          "title": "viewport.mjs",
+          "description": "Presents canvas viewport geometry.",
+          "role": "canvas viewport geometry",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js",
+            "testable-logic"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-fonts",
+          "kind": "ui-component",
+          "path": "ai_studio/assets/canvas/site/fonts.js",
+          "title": "fonts.js",
+          "description": "Presents canvas font loading + measurement.",
+          "role": "canvas font loading + measurement",
+          "tags": [
+            "assets",
+            "canvas",
+            "ui",
+            "browser-js"
+          ]
+        },
+        {
+          "id": "assets:canvas-site-fonts-bundle",
+          "kind": "asset",
+          "path": "ai_studio/assets/canvas/site/fonts",
+          "title": "fonts/",
+          "description": "Represents canvas text font bundle.",
+          "role": "canvas text font bundle",
+          "tags": [
+            "assets",
+            "canvas",
+            "font",
+            "license"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "assets:canvas-tests",
+      "kind": "test",
+      "path": "ai_studio/assets/canvas/tests",
+      "title": "tests",
+      "description": "Verifies canvas module contracts.",
+      "role": "canvas module tests",
+      "tags": [
+        "assets",
+        "canvas",
+        "test"
+      ]
+    }
+  ]
+}

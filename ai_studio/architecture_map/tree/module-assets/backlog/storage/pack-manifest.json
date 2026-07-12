@@ -1,0 +1,56 @@
+{
+  "id": "assets:backlog-pack-manifest",
+  "title": "Pack Manifest",
+  "subtitle": "pack.json + assets.jsonl",
+  "kind": "group",
+  "color": "#0e7490",
+  "description": "Preferred editable canonical format for reviewed asset packs. Stores pack metadata in pack.json and one asset record per line in assets.jsonl; generated SQLite indexes consume it for fast search.",
+  "role": "editable asset pack manifest format",
+  "tags": [
+    "assets",
+    "storage",
+    "manifest",
+    "manifest"
+  ],
+  "children": [
+    {
+      "id": "assets:backlog-pack-manifest-readme",
+      "kind": "doc",
+      "path": "ai_studio/assets/backlog/storage/manifests/README.md",
+      "title": "README.md",
+      "description": "Pack Manifest contract: layout, pack.json fields, assets.jsonl rows, path boundary, and current Asset Index integration.",
+      "role": "pack manifest module entrypoint",
+      "tags": [
+        "assets",
+        "manifest",
+        "manifest"
+      ]
+    },
+    {
+      "id": "assets:backlog-pack-manifest-tool",
+      "kind": "tool",
+      "path": "ai_studio/assets/backlog/storage/manifests/manifest.mjs",
+      "title": "manifest.mjs",
+      "description": "Reads packs/<pack-id>/pack.json and assets.jsonl into normalized asset records and pack summaries for Asset Index.",
+      "role": "pack manifest reader",
+      "tags": [
+        "assets",
+        "manifest",
+        "reader"
+      ]
+    },
+    {
+      "id": "assets:backlog-pack-manifest-test",
+      "kind": "test",
+      "path": "ai_studio/assets/backlog/storage/manifests/tests/manifest.test.mjs",
+      "title": "manifest.test.mjs",
+      "description": "Verifies pack manifest reader contracts.",
+      "role": "pack manifest reader tests",
+      "tags": [
+        "assets",
+        "manifest",
+        "test"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,95 @@
+{
+  "id": "assets:backlog-license-guard",
+  "title": "License Guard",
+  "subtitle": "public repo safety",
+  "kind": "group",
+  "color": "#991b1b",
+  "description": "Public-repository guard for paid, private, unknown-license, non-redistributable, and attribution-bearing asset binaries. Unknown licenses fail closed; described restricted assets remain local under assets/restricted/.",
+  "role": "asset license and publishability guard",
+  "tags": [
+    "assets",
+    "storage",
+    "license",
+    "validation"
+  ],
+  "children": [
+    {
+      "id": "assets:backlog-license-guard-readme",
+      "kind": "doc",
+      "path": "ai_studio/assets/backlog/storage/license/README.md",
+      "title": "README.md",
+      "description": "License Guard contract: publishable vs restricted binaries, CC-BY attribution metadata, public-repo scope, and validation commands.",
+      "role": "license guard module entrypoint",
+      "tags": [
+        "assets",
+        "license",
+        "source"
+      ]
+    },
+    {
+      "id": "assets:backlog-license-guard-policy",
+      "kind": "tool",
+      "path": "ai_studio/assets/backlog/storage/license/restricted.mjs",
+      "title": "restricted.mjs",
+      "description": "Shared restricted-asset helper surface used by pull and guard: publishability, restricted root, attribution/notice checks, and binary extension classification.",
+      "role": "restricted asset policy",
+      "tags": [
+        "assets",
+        "license",
+        "policy"
+      ]
+    },
+    {
+      "id": "assets:backlog-license-registry",
+      "kind": "tool",
+      "path": "ai_studio/assets/backlog/storage/license/registry.mjs",
+      "title": "registry.mjs",
+      "description": "Canonical license decision registry for asset publishing: known licenses, custom-license defaults, attribution/notice requirements, and validation of publish decisions.",
+      "role": "license decision registry",
+      "tags": [
+        "assets",
+        "license",
+        "policy"
+      ]
+    },
+    {
+      "id": "assets:backlog-license-guard-cli",
+      "kind": "validation",
+      "path": "ai_studio/assets/backlog/storage/license/restricted_assets_guard.mjs",
+      "title": "restricted_assets_guard.mjs",
+      "description": "Validates git-tracked game/template asset binaries against manifest publishability and attribution metadata.",
+      "role": "asset license validation command",
+      "tags": [
+        "assets",
+        "license",
+        "validation"
+      ]
+    },
+    {
+      "id": "assets:backlog-license-guard-exceptions",
+      "kind": "config",
+      "path": "ai_studio/assets/backlog/storage/license/restricted_assets_exceptions.json",
+      "title": "restricted_assets_exceptions.json",
+      "description": "Empty-by-default exception list for already reviewed public binaries that cannot yet be manifested. New assets should be recorded in manifests instead of added here.",
+      "role": "asset guard exceptions",
+      "tags": [
+        "assets",
+        "license",
+        "config"
+      ]
+    },
+    {
+      "id": "assets:backlog-license-guard-test",
+      "kind": "test",
+      "path": "ai_studio/assets/backlog/storage/license/restricted_assets_guard.test.mjs",
+      "title": "restricted_assets_guard.test.mjs",
+      "description": "Verifies license guard contracts.",
+      "role": "license guard tests",
+      "tags": [
+        "assets",
+        "license",
+        "test"
+      ]
+    }
+  ]
+}

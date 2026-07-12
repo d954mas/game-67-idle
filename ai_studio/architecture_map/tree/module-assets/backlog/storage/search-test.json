@@ -1,0 +1,14 @@
+{
+  "id": "assets:backlog-storage-search-test",
+  "kind": "test",
+  "path": "ai_studio/assets/backlog/storage/tests/search.test.mjs",
+  "title": "search.test.mjs",
+  "description": "Verifies asset storage search contracts.",
+  "role": "asset storage search tests",
+  "tags": [
+    "assets",
+    "storage",
+    "search",
+    "test"
+  ]
+}

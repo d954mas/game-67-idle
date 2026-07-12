@@ -1,0 +1,185 @@
+{
+  "id": "core-harness:profiling",
+  "title": "Profiling",
+  "subtitle": "passive session telemetry",
+  "kind": "group",
+  "color": "#0369a1",
+  "description": "Core Harness profiling group: passive hook telemetry, Codex session recovery, status reports, subagent diagnostics, and NT chat-session reflection ownership.",
+  "role": "agent execution observability inside the harness",
+  "tags": [
+    "core",
+    "profiling",
+    "telemetry"
+  ],
+  "children": [
+    {
+      "id": "core-harness:profiling-readme",
+      "kind": "doc",
+      "path": "ai_studio/core_harness/profiling/README.md",
+      "title": "README.md",
+      "description": "Profiling module contract: Agent Surfaces owns hook config; Profiling owns recorder commands, status reports, Codex recovery, and reflection skill instructions.",
+      "role": "profiling module entrypoint",
+      "tags": [
+        "contract",
+        "entrypoint",
+        "profiling"
+      ]
+    },
+    {
+      "id": "core-harness:profiling-taskboard-reads",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/profiling/taskboard_reads.mjs",
+      "title": "taskboard_reads.mjs",
+      "description": "Measures privacy-safe Taskboard summary, context, and explicit document reads across registered stores.",
+      "role": "Taskboard scoped-read profiler",
+      "tags": [
+        "profiling",
+        "taskboard",
+        "performance"
+      ]
+    },
+    {
+      "id": "core-harness:profiling-taskboard-evidence",
+      "kind": "doc",
+      "path": "ai_studio/core_harness/profiling/taskboard_reads_evidence.md",
+      "title": "taskboard_reads_evidence.md",
+      "description": "Reproducible before-and-after evidence for scoped Taskboard read size and latency.",
+      "role": "Taskboard scoped-read performance evidence",
+      "tags": [
+        "profiling",
+        "taskboard",
+        "evidence"
+      ]
+    },
+    {
+      "id": "core-harness:profiling-status",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/profiling/status.mjs",
+      "title": "status.mjs",
+      "description": "Reads per-session profile JSONL and reports command durations, slow work, repeated commands, failures, coverage gaps, and optional subagent diagnostics.",
+      "role": "profiling status report command",
+      "tags": [
+        "public-api",
+        "report",
+        "profiling"
+      ]
+    },
+    {
+      "id": "core-harness:profiling-hook-record",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/profiling/hook_record.mjs",
+      "title": "hook_record.mjs",
+      "description": "Provides profiling hook recorder fallback.",
+      "role": "profiling hook recorder fallback",
+      "tags": [
+        "internal-helper",
+        "hooks",
+        "telemetry"
+      ]
+    },
+    {
+      "id": "core-harness:profiling-hook-fast-source",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/profiling/hook_record_fast.c",
+      "title": "hook_record_fast.c",
+      "description": "Native fast hook recorder source for low-overhead SessionStart, PreToolUse, and PostToolUse command telemetry.",
+      "role": "fast hook recorder source",
+      "tags": [
+        "internal-helper",
+        "hooks",
+        "native"
+      ]
+    },
+    {
+      "id": "core-harness:profiling-hook-fast-exe",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/profiling/hook_record_fast.exe",
+      "title": "hook_record_fast.exe",
+      "description": "Built Windows fast hook recorder used by generated Codex and Claude hook configs.",
+      "role": "fast hook recorder binary",
+      "tags": [
+        "generated",
+        "hooks",
+        "windows"
+      ]
+    },
+    {
+      "id": "core-harness:profiling-build-fast",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/profiling/build_hook_record_fast.mjs",
+      "title": "build_hook_record_fast.mjs",
+      "description": "Build helper for the native fast hook recorder.",
+      "role": "fast hook recorder build helper",
+      "tags": [
+        "internal-helper",
+        "build",
+        "native"
+      ]
+    },
+    {
+      "id": "core-harness:profiling-lib",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/profiling/profile_lib.mjs",
+      "title": "profile_lib.mjs",
+      "description": "Shared profile path, JSONL, parsing, timestamp, command, and record helpers used by profiling commands.",
+      "role": "profiling shared library",
+      "tags": [
+        "internal-helper",
+        "library"
+      ]
+    },
+    {
+      "id": "core-harness:profiling-agent-rollup",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/profiling/agent_rollup.mjs",
+      "title": "agent_rollup.mjs",
+      "description": "Best-effort subagent transcript diagnostics for Claude and Codex sessions. Diagnostic only, not an acceptance gate.",
+      "role": "subagent transcript diagnostic helper",
+      "tags": [
+        "internal-helper",
+        "subagents",
+        "diagnostic"
+      ]
+    },
+    {
+      "id": "core-harness:profiling-requirements-full",
+      "kind": "config",
+      "path": "ai_studio/core_harness/profiling/requirements-full.txt",
+      "title": "requirements-full.txt",
+      "description": "Pinned optional Python dependencies for profiling-related full gates that need Pillow, NumPy, or SciPy.",
+      "role": "profiling optional Python dependency pins",
+      "tags": [
+        "profiling",
+        "python",
+        "dependencies"
+      ]
+    },
+    {
+      "id": "core-harness:profiling-reflection-skill",
+      "title": "NT Chat Session Reflection Skill",
+      "subtitle": "session retrospective instructions",
+      "kind": "skill",
+      "color": "#0e7490",
+      "path": ".codex/skills/nt-chat-session-reflection",
+      "description": "Skill instructions for full retrospective analysis of long AI-assisted sessions using durable evidence, profiling telemetry, and chat/session context.",
+      "role": "full session reflection skill",
+      "tags": [
+        "skill",
+        "reflection",
+        "profiling"
+      ]
+    },
+    {
+      "id": "core-harness:profiling-tests",
+      "kind": "test",
+      "path": "ai_studio/core_harness/profiling/tests/profiling.test.mjs",
+      "title": "profiling.test.mjs",
+      "description": "Verifies profiling contracts.",
+      "role": "profiling regression tests",
+      "tags": [
+        "test",
+        "profiling"
+      ]
+    }
+  ]
+}

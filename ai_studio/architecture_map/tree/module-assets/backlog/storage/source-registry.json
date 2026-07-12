@@ -1,0 +1,114 @@
+{
+  "id": "assets:backlog-source-registry",
+  "title": "Source Registry Helpers",
+  "subtitle": "explicit asset roots",
+  "kind": "group",
+  "color": "#0e7490",
+  "description": "Groups asset source registry helpers.",
+  "role": "asset source registry helpers",
+  "tags": [
+    "assets",
+    "storage",
+    "registry"
+  ],
+  "children": [
+    {
+      "id": "assets:backlog-source-registry-readme",
+      "kind": "doc",
+      "path": "ai_studio/assets/backlog/storage/sources/README.md",
+      "title": "README.md",
+      "description": "Source Registry contract: why asset source roots are explicit and how global libraries, templates, and games are registered.",
+      "role": "source registry module entrypoint",
+      "tags": [
+        "assets",
+        "registry",
+        "source"
+      ]
+    },
+    {
+      "id": "assets:backlog-libraries-registry-data",
+      "kind": "config",
+      "path": "ai_studio/assets/backlog/storage/sources/libraries.json",
+      "title": "libraries.json",
+      "description": "Explicit registry of global reusable asset libraries shown by Asset Viewer and used by asset CLI defaults.",
+      "role": "registered library asset source data",
+      "tags": [
+        "assets",
+        "registry",
+        "source"
+      ]
+    },
+    {
+      "id": "assets:backlog-libraries-registry-helper",
+      "kind": "tool",
+      "path": "ai_studio/assets/backlog/storage/sources/libraries.mjs",
+      "title": "libraries.mjs",
+      "description": "Small helper for reading, listing, resolving, and upserting global library asset source records.",
+      "role": "library asset registry helper",
+      "tags": [
+        "assets",
+        "registry"
+      ]
+    },
+    {
+      "id": "assets:backlog-libraries-registry-test",
+      "kind": "test",
+      "path": "ai_studio/assets/backlog/storage/sources/tests/libraries.test.mjs",
+      "title": "libraries.test.mjs",
+      "description": "Verifies library asset registry contracts.",
+      "role": "library asset registry tests",
+      "tags": [
+        "assets",
+        "test"
+      ]
+    },
+    {
+      "id": "assets:backlog-templates-registry-helper",
+      "kind": "tool",
+      "path": "ai_studio/assets/backlog/storage/sources/templates.mjs",
+      "title": "templates.mjs",
+      "description": "Small helper for reading, listing, and upserting template asset source records.",
+      "role": "template asset registry helper",
+      "tags": [
+        "assets",
+        "registry"
+      ]
+    },
+    {
+      "id": "assets:backlog-templates-registry-test",
+      "kind": "test",
+      "path": "ai_studio/assets/backlog/storage/sources/tests/templates.test.mjs",
+      "title": "templates.test.mjs",
+      "description": "Verifies template asset registry contracts.",
+      "role": "template asset registry tests",
+      "tags": [
+        "assets",
+        "test"
+      ]
+    },
+    {
+      "id": "assets:backlog-games-registry-helper",
+      "kind": "tool",
+      "path": "ai_studio/assets/backlog/storage/sources/games.mjs",
+      "title": "games.mjs",
+      "description": "Small helper for reading, listing, and upserting game asset source records.",
+      "role": "game asset registry helper",
+      "tags": [
+        "assets",
+        "registry"
+      ]
+    },
+    {
+      "id": "assets:backlog-games-registry-test",
+      "kind": "test",
+      "path": "ai_studio/assets/backlog/storage/sources/tests/games.test.mjs",
+      "title": "games.test.mjs",
+      "description": "Verifies game asset registry contracts.",
+      "role": "game asset registry tests",
+      "tags": [
+        "assets",
+        "test"
+      ]
+    }
+  ]
+}

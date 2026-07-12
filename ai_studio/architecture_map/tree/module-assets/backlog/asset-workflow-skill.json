@@ -1,0 +1,81 @@
+{
+  "id": "assets:nt-asset-workflow-skill",
+  "kind": "skill",
+  "path": ".codex/skills/nt-asset-workflow",
+  "title": "nt-asset-workflow",
+  "description": "Broad asset workflow skill kept in backlog while the asset architecture is split into viewer, tools, the image-generation skill, and storage/backlog responsibilities.",
+  "role": "backlog broad asset workflow skill",
+  "tags": [
+    "assets",
+    "backlog",
+    "skill"
+  ],
+  "children": [
+    {
+      "id": "assets:nt-asset-workflow-source-license",
+      "kind": "doc",
+      "path": ".codex/skills/nt-asset-workflow/references/source-library-and-license.md",
+      "title": "source-library-and-license.md",
+      "description": "Reference for searching the asset library, pulling assets into games, promoting assets into the global library, and applying the license gate.",
+      "role": "asset library and license reference",
+      "tags": [
+        "assets",
+        "skill-reference",
+        "license"
+      ]
+    },
+    {
+      "id": "assets:nt-asset-workflow-restricted",
+      "kind": "doc",
+      "path": ".codex/skills/nt-asset-workflow/references/restricted-assets.md",
+      "title": "restricted-assets.md",
+      "description": "Reference for paid, account-gated, unknown-license, and non-redistributable assets that must not commit binaries.",
+      "role": "restricted asset reference",
+      "tags": [
+        "assets",
+        "skill-reference",
+        "restricted"
+      ]
+    },
+    {
+      "id": "assets:nt-asset-workflow-generated",
+      "kind": "doc",
+      "path": ".codex/skills/nt-asset-workflow/references/generated-assets-and-cutouts.md",
+      "title": "generated-assets-and-cutouts.md",
+      "description": "Reference for generated source art, cutout/chroma cleanup, crop plans, slice9 metadata, and final-art boundaries.",
+      "role": "generated asset reference",
+      "tags": [
+        "assets",
+        "skill-reference",
+        "generated-art"
+      ]
+    },
+    {
+      "id": "assets:nt-asset-workflow-3d-models",
+      "kind": "doc",
+      "path": ".codex/skills/nt-asset-workflow/references/3d-models.md",
+      "title": "3d-models.md",
+      "description": "Reference for model sourcing, conversion, texture deduplication, and game-local engine pack/load integration.",
+      "role": "3D model asset workflow reference",
+      "tags": [
+        "assets",
+        "skill-reference",
+        "models"
+      ]
+    },
+    {
+      "id": "assets:nt-asset-workflow-textures-materials",
+      "kind": "doc",
+      "path": ".codex/skills/nt-asset-workflow/references/textures-and-materials.md",
+      "title": "textures-and-materials.md",
+      "description": "Reference for standalone texture/material sourcing, tiling decisions, material maps, downloaded texture provenance, and seam checks.",
+      "role": "texture and material asset workflow reference",
+      "tags": [
+        "assets",
+        "skill-reference",
+        "textures",
+        "materials"
+      ]
+    }
+  ]
+}
