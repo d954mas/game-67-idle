@@ -31,7 +31,9 @@ set(PROGRESSION_CORE_SCRIPTS "${PROGRESSION_CORE_DIR}/scripts")
 ```
 
 Content codegen (writes into the game's OWN generated dir, not the module;
-`--items` cross-checks `currency_def` against the items catalog):
+`--items` cross-checks `currency_def` against the items catalog;
+`--state-schema` validates the game-owned progression fragment and supplies
+the track-id storage bound):
 
 ```cmake
 add_custom_command(
@@ -39,8 +41,10 @@ add_custom_command(
     COMMAND "${Python3_EXECUTABLE}" "${PROGRESSION_CORE_SCRIPTS}/generate_progression_tracks.py"
         --catalog "<game>/content/progression.json"
         --items "<game>/content/items.json"
+        --state-schema "<game>/state/progression.schema.json"
         --out-dir "${GAME_SOURCE_GENERATED_DIR}"
     DEPENDS "<game>/content/progression.json" "<game>/content/items.json"
+        "<game>/state/progression.schema.json"
         "${PROGRESSION_CORE_SCRIPTS}/generate_progression_tracks.py")
 ```
 

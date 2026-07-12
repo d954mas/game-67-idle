@@ -9,6 +9,7 @@ never runs float/formula math for level-ups.
     node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py \
         --catalog content/progression.json \
         --items content/items.json \
+        --state-schema state/progression.schema.json \
         --out-dir <dir>
 
 Emits <out-dir>/progression_tracks.gen.h + progression_tracks.gen.c. Idempotent
@@ -33,11 +34,6 @@ from pathlib import Path
 from typing import Any
 
 INT64_MAX = 2**63 - 1
-
-# state/progression.schema.json: string_max=64 -> char key[64] (NUL-terminated).
-# Kept as a documented constant here (this codegen deliberately never reads the
-# state schema; content and state codegen stay separate.
-MAX_TRACK_ID_LEN = 63
 
 MODE_ENUM = {
     "manual": "PROGRESSION_MODE_MANUAL",
@@ -67,6 +63,24 @@ def c_str(value: Any) -> str:
     return f'"{escaped}"'
 
 
+def c_comment_text(value: str) -> str:
+    """Keep generated provenance on one safe C-comment line."""
+    escaped: list[str] = []
+    for char in value:
+        if char == "\n":
+            escaped.append("\\n")
+        elif char == "\r":
+            escaped.append("\\r")
+        elif char == "\t":
+            escaped.append("\\t")
+        elif char.isprintable():
+            escaped.append(char)
+        else:
+            codepoint = ord(char)
+            escaped.append(f"\\u{codepoint:04x}" if codepoint <= 0xFFFF else f"\\U{codepoint:08x}")
+    return "".join(escaped).replace("*/", "* /")
+
+
 def load_json(path: Path) -> Any:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
@@ -75,6 +89,32 @@ def load_json(path: Path) -> Any:
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise SystemExit(f"progression tracks validation: {message}")
+
+
+def validate_state_schema(doc: Any) -> int:
+    """Return the largest track id length accepted by the owning save schema."""
+    prefix = "progression state schema validation"
+
+    def schema_require(condition: bool, message: str) -> None:
+        if not condition:
+            raise SystemExit(f"{prefix}: {message}")
+
+    schema_require(isinstance(doc, dict), "document must be an object")
+    schema_require(doc.get("schema") == "game_seed.progression", "schema must be 'game_seed.progression'")
+    schema_require(doc.get("fragment") == "progression", "fragment must be 'progression'")
+    string_max = doc.get("string_max")
+    schema_require(
+        isinstance(string_max, int) and not isinstance(string_max, bool) and string_max >= 2,
+        "string_max must be an integer >= 2",
+    )
+    track_state = doc.get("types", {}).get("TrackState") if isinstance(doc.get("types"), dict) else None
+    schema_require(isinstance(track_state, dict) and track_state.get("kind") == "object", "TrackState must be an object type")
+    tracks = doc.get("fields", {}).get("tracks") if isinstance(doc.get("fields"), dict) else None
+    schema_require(
+        isinstance(tracks, dict) and tracks.get("type") == "map<string,TrackState>",
+        "fields.tracks must have type 'map<string,TrackState>'",
+    )
+    return string_max - 1
 
 
 # ---------------------------------------------------------------------------
@@ -92,7 +132,7 @@ def index_currency_items(items_doc: dict[str, Any]) -> dict[str, bool]:
     return index
 
 
-def validate_catalog(doc: dict[str, Any], currency_items: dict[str, bool]) -> None:
+def validate_catalog(doc: dict[str, Any], currency_items: dict[str, bool], max_track_id_len: int) -> None:
     require(isinstance(doc.get("namespace"), str) and doc["namespace"], "missing top-level 'namespace'")
     tracks = doc.get("tracks")
     require(isinstance(tracks, list), "'tracks' must be an array")
@@ -106,19 +146,16 @@ def validate_catalog(doc: dict[str, Any], currency_items: dict[str, bool]) -> No
         require(track_id not in seen_ids, f"duplicate track id {track_id!r}")
         seen_ids.add(track_id)
 
-        # M-fix (deep-review #2): a track_id must fit the progression state
-        # fragment's save key (state/progression.schema.json string_max=64,
-        # NUL-terminated char[64] -- MAX_TRACK_ID_LEN mirrors that -1 for the
-        # terminator, same convention as items' ITEMS_STATE_STRING_MAX). This
-        # codegen tool does not read the state schema (deliberately separate
-        # codegen), so the bound is a documented constant
-        # here, not derived. A truncated key would desync from progression.c's
-        # find_track lookup by full id -- reject loudly at authoring time
-        # instead of relying only on the runtime defense-in-depth guard.
+        # The generated state key is a NUL-terminated char[string_max]. Read the
+        # authoritative game-owned schema instead of duplicating that bound.
+        try:
+            track_id_bytes = len(track_id.encode("utf-8"))
+        except UnicodeEncodeError as exc:
+            raise SystemExit(f"progression tracks validation: track id {track_id!r} is not valid UTF-8") from exc
         require(
-            len(track_id) <= MAX_TRACK_ID_LEN,
-            f"track id {track_id!r} is {len(track_id)} chars, exceeds MAX_TRACK_ID_LEN={MAX_TRACK_ID_LEN} "
-            "(must fit the progression state fragment's string_max=64 save key)",
+            track_id_bytes <= max_track_id_len,
+            f"track id {track_id!r} is {track_id_bytes} UTF-8 bytes, exceeds the maximum {max_track_id_len} "
+            f"derived from state schema string_max={max_track_id_len + 1}",
         )
 
         # L-fix (deep-review #7): two distinct ids that sanitize to the SAME C
@@ -209,14 +246,15 @@ def bake_exp_cost(track_id: str, base: int, growth_num: int, growth_den: int, ma
 # ---------------------------------------------------------------------------
 
 
-def render_header(track_count: int) -> str:
+def render_header(track_count: int, catalog_provenance: str) -> str:
+    safe_provenance = c_comment_text(catalog_provenance)
     return "\n".join(
         [
             "#ifndef PROGRESSION_TRACKS_GEN_H",
             "#define PROGRESSION_TRACKS_GEN_H",
             "",
             "/* Generated by features/progression-core/scripts/generate_progression_tracks.py",
-            "   from templates/template/content/progression.json. Do not edit by hand. */",
+            f"   from {safe_provenance}. Do not edit by hand. */",
             "",
             '#include "features/progression/progression.h"',
             "",
@@ -231,15 +269,16 @@ def render_header(track_count: int) -> str:
     )
 
 
-def render_source(doc: dict[str, Any]) -> str:
+def render_source(doc: dict[str, Any], catalog_provenance: str) -> str:
     tracks = doc.get("tracks", [])
+    safe_provenance = c_comment_text(catalog_provenance)
     lines: list[str] = [
         '#include "progression_tracks.gen.h"',
         "",
         "#include <stddef.h> /* NULL */",
         "",
         "/* Generated by features/progression-core/scripts/generate_progression_tracks.py",
-        "   from templates/template/content/progression.json. Do not edit by hand. */",
+        f"   from {safe_provenance}. Do not edit by hand. */",
         "",
     ]
 
@@ -295,24 +334,34 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--catalog", required=True, help="Path to content/progression.json.")
     parser.add_argument("--items", required=True, help="Path to content/items.json (currency_def cross-check).")
+    parser.add_argument(
+        "--state-schema",
+        required=True,
+        help="Path to the authoritative game-owned state/progression.schema.json.",
+    )
     parser.add_argument("--out-dir", required=True, help="Directory for generated progression_tracks.gen.{h,c}.")
     args = parser.parse_args(argv)
 
     catalog_path = Path(args.catalog).resolve()
     items_path = Path(args.items).resolve()
+    state_schema_path = Path(args.state_schema).resolve()
     out_dir = Path(args.out_dir).resolve()
 
     try:
         doc = load_json(catalog_path)
         items_doc = load_json(items_path)
+        state_schema_doc = load_json(state_schema_path)
+        max_track_id_len = validate_state_schema(state_schema_doc)
         currency_items = index_currency_items(items_doc)
-        validate_catalog(doc, currency_items)
+        validate_catalog(doc, currency_items, max_track_id_len)
 
         header_path = out_dir / "progression_tracks.gen.h"
         source_path = out_dir / "progression_tracks.gen.c"
 
-        header_text = render_header(len(doc.get("tracks", [])))
-        source_text = render_source(doc)
+        game_root = state_schema_path.parent.parent
+        catalog_provenance = catalog_path.relative_to(game_root).as_posix()
+        header_text = render_header(len(doc.get("tracks", [])), catalog_provenance)
+        source_text = render_source(doc, catalog_provenance)
     except SystemExit:
         raise
     except (TypeError, KeyError, ValueError, AttributeError) as exc:

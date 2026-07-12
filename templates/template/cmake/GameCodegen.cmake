@@ -44,6 +44,7 @@ add_custom_command(
 # into compile-time const int64 cost tables; --items cross-checks currency_def
 # against the items catalog (ITEMS_CATALOG_JSON, defined just above).
 set(PROG_TRACKS_JSON "${CMAKE_CURRENT_SOURCE_DIR}/content/progression.json")
+set(PROG_TRACKS_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/progression.schema.json")
 set(PROG_TRACKS_GENERATOR "${PROGRESSION_CORE_SCRIPTS}/generate_progression_tracks.py")
 add_custom_command(
     OUTPUT
@@ -52,8 +53,9 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_SOURCE_GENERATED_DIR}"
     COMMAND "${Python3_EXECUTABLE}" "${PROG_TRACKS_GENERATOR}"
         --catalog "${PROG_TRACKS_JSON}" --items "${ITEMS_CATALOG_JSON}"
+        --state-schema "${PROG_TRACKS_STATE_SCHEMA}"
         --out-dir "${GAME_SOURCE_GENERATED_DIR}"
-    DEPENDS "${PROG_TRACKS_JSON}" "${ITEMS_CATALOG_JSON}" "${PROG_TRACKS_GENERATOR}"
+    DEPENDS "${PROG_TRACKS_JSON}" "${ITEMS_CATALOG_JSON}" "${PROG_TRACKS_STATE_SCHEMA}" "${PROG_TRACKS_GENERATOR}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "Generating progression tracks catalog (const int64 curve tables)"
     VERBATIM)
