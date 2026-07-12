@@ -7,7 +7,7 @@ This is NOT part of `ctest` -- headless-localStorage automation is genuinely
 capricious across Chrome/driver versions (per the spec and the repo's own
 `web-wasm-headless-verify` recipe), so a failure here does not fail A2's
 acceptance. It exists so a human (or CI) can run one command and get a real
-signal instead of "trust me, the EM_JS mirrors rb-dark-rpg".
+signal instead of trusting an unverified EM_JS/localStorage implementation.
 
 What this actually checks (deep-review correction: an earlier draft "saved"
 whatever the default state already was and never set a distinguishing value,
@@ -79,9 +79,8 @@ STORAGE_KEY = "template/save/autosave"
 # (GAME_STATE_FRAGMENT_ID="game"); the rest is the field within it. test_ui_clicks is
 # an int field, schema default 0, range [0, 1000000] (see
 # templates/template/state/game_state.schema.json) -- 424242 is unambiguous proof
-# the SAVED value (not the default) survived the restart. (T0327 hygiene: the old
-# probe field -- the rb-dark RPG hero's gold stat -- was dead state and got gutted
-# from the schema.)
+# the SAVED value (not the default) survived the restart. The previous probe
+# field was dead state and was removed from the schema.
 STATE_PATH = "game.test_ui_clicks"
 STATE_VALUE = 424242
 

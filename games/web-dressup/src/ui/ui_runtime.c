@@ -22,8 +22,8 @@
 
 #include <string.h>
 
-// Dual-layout refs (rb-dark-rpg pattern): portrait phone-first so touch targets
-// stay readable under EXPAND; landscape uses a wider game canvas.
+// Portrait stays phone-first so touch targets remain readable under EXPAND;
+// landscape uses a wider game canvas.
 #define UI_LANDSCAPE_REF_W 960.0F
 #define UI_LANDSCAPE_REF_H 540.0F
 #define UI_PORTRAIT_REF_W 390.0F
