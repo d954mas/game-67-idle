@@ -412,6 +412,32 @@
           ]
         },
         {
+          "id": "core-harness:profiling-taskboard-reads",
+          "kind": "tool",
+          "path": "ai_studio/core_harness/profiling/taskboard_reads.mjs",
+          "title": "taskboard_reads.mjs",
+          "description": "Measures privacy-safe Taskboard summary, context, and explicit document reads across registered stores.",
+          "role": "Taskboard scoped-read profiler",
+          "tags": [
+            "profiling",
+            "taskboard",
+            "performance"
+          ]
+        },
+        {
+          "id": "core-harness:profiling-taskboard-evidence",
+          "kind": "doc",
+          "path": "ai_studio/core_harness/profiling/taskboard_reads_evidence.md",
+          "title": "taskboard_reads_evidence.md",
+          "description": "Reproducible before-and-after evidence for scoped Taskboard read size and latency.",
+          "role": "Taskboard scoped-read performance evidence",
+          "tags": [
+            "profiling",
+            "taskboard",
+            "evidence"
+          ]
+        },
+        {
           "id": "core-harness:profiling-status",
           "kind": "tool",
           "path": "ai_studio/core_harness/profiling/status.mjs",
