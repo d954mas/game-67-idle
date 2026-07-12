@@ -1,7 +1,7 @@
 // Chat HTTP/SSE API tests (T0242 increment 3), an in-process invoke harness (no port
 // binding) mirroring assets/canvas/tests/api.test.mjs's own approach. EVERY test injects a
 // fake transport via createChatApi(root, {transport}) — codex NEVER spawns in this suite.
-// Run: node --test ai_studio/studio_shell/chat/tests/api.test.mjs
+// Run: node --test ai_studio/assets/canvas/chat/tests/api.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
@@ -11,9 +11,9 @@ import { tmpdir } from "node:os";
 import { EventEmitter } from "node:events";
 import { fileURLToPath, URL } from "node:url";
 import { createChatApi as createChatApiImpl, ensurePermissionAllowed } from "../api.mjs";
-import { addImage, createProject } from "../../../assets/canvas/ops.mjs";
-import { solidPng } from "../../../assets/canvas/tests/png_fixture.mjs";
-import { selectCanvasStore, withCanvasStore } from "../../../assets/canvas/stores.mjs";
+import { addImage, createProject } from "../../ops.mjs";
+import { solidPng } from "../../tests/png_fixture.mjs";
+import { selectCanvasStore, withCanvasStore } from "../../stores.mjs";
 
 // Metadata-only ops (createProject, no text/font reads), so any placeholder root works —
 // same convention as the canvas suite's own metadata-only tests.

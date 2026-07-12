@@ -92,19 +92,6 @@
       ]
     },
     {
-      "id": "studio-shell:canvas-chat",
-      "title": "Canvas Chat",
-      "kind": "api",
-      "path": "ai_studio/studio_shell/chat",
-      "description": "HTTP and lifecycle host for the Canvas-owned chat semantics and app-server adapter; physical co-location remains until T0352.",
-      "role": "Canvas Chat HTTP/lifecycle host",
-      "tags": [
-        "chat",
-        "canvas",
-        "permissions"
-      ]
-    },
-    {
       "id": "studio-shell:tests",
       "title": "Studio Shell Tests",
       "kind": "test",

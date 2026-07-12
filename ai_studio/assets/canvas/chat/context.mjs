@@ -30,7 +30,7 @@
 // override reaches this module exactly the way it reaches every other canvas op/test.
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { appendFileSync } from "node:fs";
-import { getProject, listHistory, resolveProjectPath } from "../../assets/canvas/ops.mjs";
+import { getProject, listHistory, resolveProjectPath } from "../ops.mjs";
 
 const CHAT_DIGEST_SCHEMA = "ai_studio.studio_shell.chat_context.v1";
 const STUDIO_STORE_ID = "studio";
