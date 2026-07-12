@@ -83,8 +83,16 @@ const ROUTES = Object.freeze({
   },
 });
 
+export function nativeConfigureCommand(platform = process.platform) {
+  return [
+    "cmake", "-S", "templates/template", "-B", "templates/template/build/native-debug", "-G", "Ninja",
+    "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Debug",
+    ...(platform === "linux" ? ["-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined"] : []),
+  ];
+}
+
 const NATIVE_COMMANDS = [
-  ["cmake", "-S", "templates/template", "-B", "templates/template/build/native-debug", "-G", "Ninja", "-DCMAKE_C_COMPILER=clang", "-DCMAKE_CXX_COMPILER=clang++", "-DCMAKE_BUILD_TYPE=Debug"],
+  nativeConfigureCommand(),
   ["cmake", "--build", "templates/template/build/native-debug"],
   ["ctest", "--test-dir", "templates/template/build/native-debug", "--output-on-failure"],
 ];

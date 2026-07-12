@@ -116,10 +116,12 @@ test("Linux resolves absolute emcmake from EMSDK while EMCMAKE remains injectabl
     env: { EMSDK: "/opt/emsdk" },
     platform: "linux",
     emcmakePath: resolveEmcmakePath({ EMSDK: "/opt/emsdk" }, "linux"),
-    nativeConfigured: true,
+    nativeConfigured: false,
     toolchainExists: true,
   });
   const configure = plan.steps.find((step) => step.kind === "run" && step.args[0] === "cmake");
+  const nativeConfigure = plan.steps.find((step) => step.kind === "run" && step.args.includes("-DCMAKE_C_COMPILER=clang"));
+  assert.ok(nativeConfigure.args.includes("-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined"));
   assert.equal(configure.command, "/opt/emsdk/emcmake");
   assert.equal(configure.args.some((arg) => arg.startsWith("-DCMAKE_TOOLCHAIN_FILE=")), false);
 });

@@ -123,6 +123,9 @@ function isInside(root, file) {
 
 function resolveScanRoot(repo, scanPath = "") {
   const repoRoot = resolve(repo);
+  if (/^[A-Za-z]:[/\\]/.test(scanPath) && !/^[A-Za-z]:[/\\]/.test(repoRoot)) {
+    throw new Error("--path for scan mode must stay inside --repo");
+  }
   const root = scanPath ? resolve(repoRoot, scanPath) : join(repoRoot, "assets");
   if (!isInside(repoRoot, root)) throw new Error("--path for scan mode must stay inside --repo");
   return root;
