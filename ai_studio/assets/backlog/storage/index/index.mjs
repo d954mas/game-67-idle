@@ -617,7 +617,7 @@ function mergeRegisteredWithDiscoveredFiles(root, source, registeredRecords) {
 function ftsQuery(value) {
   const terms = String(value || "")
     .toLowerCase()
-    .match(/[\p{L}\p{N}_-]+/gu);
+    .match(/[\p{L}\p{N}_]+/gu);
   if (!terms || !terms.length) return "";
   return terms.map((term) => `"${term.replace(/"/g, '""')}"*`).join(" AND ");
 }

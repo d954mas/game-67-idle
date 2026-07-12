@@ -23,6 +23,7 @@ function safeSlug(value) {
 
 export function safeResolve(base, relativePath) {
   const resolvedBase = resolve(base);
+  if (/^[A-Za-z]:[/\\]/.test(relativePath) && !/^[A-Za-z]:[/\\]/.test(resolvedBase)) return null;
   const full = resolve(resolvedBase, normalize(relativePath));
   if (full !== resolvedBase && !full.startsWith(resolvedBase + sep)) return null;
   return full;

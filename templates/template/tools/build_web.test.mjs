@@ -20,6 +20,7 @@ test("plan preserves build dirs local cache native pack web targets and final me
     gameDir: "/repo/templates/template",
     args: { preset: "wasm-devapi-debug", target: "yandex", debugUi: "on" },
     env: { EMSDK: "/opt/emsdk" },
+    platform: "win32",
     nativeConfigured: false,
     toolchainExists: true,
   });
@@ -106,7 +107,7 @@ test("EMSDK and platform fallback rules fail loudly and remain injectable", () =
 });
 
 test("Linux resolves absolute emcmake from EMSDK while EMCMAKE remains injectable", () => {
-  assert.equal(resolveEmcmakePath({ EMSDK: "/opt/emsdk" }, "linux"), "/opt/emsdk/emcmake");
+  assert.equal(resolveEmcmakePath({ EMSDK: "/opt/emsdk" }, "linux"), "/opt/emsdk/upstream/emscripten/emcmake");
   assert.equal(resolveEmcmakePath({ EMSDK: "/opt/emsdk", EMCMAKE: "/custom/emcmake" }, "linux"), "/custom/emcmake");
   assert.equal(resolveEmcmakePath({}, "linux"), "emcmake");
   assert.equal(resolveEmcmakePath({ EMSDK: "C:\\emsdk" }, "win32"), "");
@@ -122,6 +123,6 @@ test("Linux resolves absolute emcmake from EMSDK while EMCMAKE remains injectabl
   const configure = plan.steps.find((step) => step.kind === "run" && step.args[0] === "cmake");
   const nativeConfigure = plan.steps.find((step) => step.kind === "run" && step.args.includes("-DCMAKE_C_COMPILER=clang"));
   assert.ok(nativeConfigure.args.includes("-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined"));
-  assert.equal(configure.command, "/opt/emsdk/emcmake");
+  assert.equal(configure.command, "/opt/emsdk/upstream/emscripten/emcmake");
   assert.equal(configure.args.some((arg) => arg.startsWith("-DCMAKE_TOOLCHAIN_FILE=")), false);
 });

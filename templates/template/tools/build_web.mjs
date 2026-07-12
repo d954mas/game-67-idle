@@ -28,7 +28,7 @@ export function parseBuildArgs(argv) {
 
 export function resolveEmcmakePath(environment = {}, platform = process.platform) {
   if (environment.EMCMAKE) return environment.EMCMAKE;
-  if (platform === "linux" && environment.EMSDK) return posix.join(environment.EMSDK, "emcmake");
+  if (platform === "linux" && environment.EMSDK) return posix.join(environment.EMSDK, "upstream/emscripten/emcmake");
   return platform === "win32" ? "" : "emcmake";
 }
 
