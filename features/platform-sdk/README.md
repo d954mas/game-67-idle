@@ -91,7 +91,7 @@ JavaScript artifact.
 
 ## What It Does Not Own
 
-- The zip builder itself. Use the template's `tools/build_web.sh`; target
+- The zip builder itself. Use the template's `tools/build_web.mjs`; target
   manifests define acceptance above that output.
 - Portal account setup.
 - Per-game monetization balance and reward design.

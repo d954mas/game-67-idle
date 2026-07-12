@@ -91,7 +91,7 @@ A consuming template or game should wire this as an L1 feature:
 The current template command is:
 
 ```powershell
-bash tools/build_web.sh --preset wasm-release --target poki
+node tools/build_web.mjs --preset wasm-release --target poki
 ```
 
 Web builds default to a checkout-local Emscripten cache:

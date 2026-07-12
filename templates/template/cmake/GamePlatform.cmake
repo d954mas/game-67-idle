@@ -166,7 +166,7 @@ if(WIN32 AND NOT EMSCRIPTEN)
 endif()
 # On web the engine streams packs over HTTP relative to the page URL, so the
 # path must be RELATIVE and the pack ships as a plain file next to index.html
-# (tools/build_web.sh copies it from the native build). Native keeps the
+# (tools/build_web.mjs copies it from the native build). Native keeps the
 # absolute bin/assets path.
 if(EMSCRIPTEN)
     set(GAME_PACK_RUNTIME_PATH "assets/game.ntpack")

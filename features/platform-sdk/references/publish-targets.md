@@ -33,10 +33,10 @@ Each manifest declares:
 Use the template web builder and target-specific output directory:
 
 ```powershell
-bash tools/build_web.sh --preset wasm-release --target itch
-bash tools/build_web.sh --preset wasm-release --target poki
-bash tools/build_web.sh --preset wasm-release --target yandex
-bash tools/build_web.sh --preset wasm-release --target playgama
+node tools/build_web.mjs --preset wasm-release --target itch
+node tools/build_web.mjs --preset wasm-release --target poki
+node tools/build_web.mjs --preset wasm-release --target yandex
+node tools/build_web.mjs --preset wasm-release --target playgama
 ```
 
 The script passes `-DGAME_PUBLISH_TARGET=<target>` to CMake. CMake computes the

@@ -1,5 +1,21 @@
 # AI Studio
 
+The root command is a routing-only verification facade; domain behavior stays
+in the owning Canvas, Taskboard, asset, workspace, feature, and template tools:
+
+```powershell
+node ai_studio/studio.mjs describe --json
+node ai_studio/studio.mjs verify --changed
+node ai_studio/studio.mjs verify --full
+```
+
+`verify --changed` reads NUL-delimited Git porcelain and selects only shared
+Studio/feature/reference-template owner suites. It never discovers or executes
+`games/<id>`; the root `games/new_game.mjs` workflow is the exact exception.
+`verify --full` is the sequential Windows/Linux CI contract. Native audio is
+reported as a required blocked gate owned by T0393 until its template integration
+is committed; blocked/setup exits `2`, executed failures exit `1`, and passes exit `0`.
+
 `ai_studio/` is the target home for reviewed AI game-studio pipeline modules.
 Do not use it as a dump: move a module here only after it has an owner, contract,
 public surface, internals, and validation path.

@@ -69,7 +69,7 @@ function main() {
   const port = a.port || DEFAULT_PORT[a.preset] || 8080;
 
   if (!existsSync(join(root, "assets", "game.ntpack"))) {
-    console.warn(`WARN: ${join(root, "assets", "game.ntpack")} missing -- run tools/build_web.sh --preset ${a.preset} first`);
+    console.warn(`WARN: ${join(root, "assets", "game.ntpack")} missing -- run node tools/build_web.mjs --preset ${a.preset} first`);
   }
 
   const server = createServer((req, res) => {
