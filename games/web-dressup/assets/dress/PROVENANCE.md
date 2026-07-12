@@ -275,10 +275,10 @@ plates, prompts, references and immutable originals live in Canvas project
 | Shipping file | Label | Canvas slice / matte / shipping | Registration `(x,y,w,h)` | v3 support | SHA-256 |
 | --- | --- | --- | --- | --- | --- |
 | `bot_jeans.png` | Celestial Tide Trousers | `el_4ee98a1d` / `el_8a98c9da` / `el_bbbab471` | `73,370,328,540` | `1.0` | `ad34d1a424e487a584490bd3b99fc90957d7618872a7a3cfe2a575dbc9644659` |
-| `bot_skirt.png` | Verdant Petal Skirt | `el_a649e057` / `el_59031fe8` / `el_dd7c6318` | `90,360,374,360` | `1.0` | `5292ee1dc315f14d786fd5849fe2b192b2599e7cd289a2ef79c6ef39d1c114a4` |
+| `bot_skirt.png` | Verdant Petal Skirt | `el_a649e057` / `el_59031fe8` / `el_dd7c6318` | `90,360,374,360` | `1.0` | `51c6cb00006083798c5b1d5c3b4a42eec2cf632f991152786bc95d3831fff269` |
 | `bot_shorts.png` | Astral Comet Shorts | `el_c673a09c` / `el_b70132b4` / `el_08ff955e` | `104,370,285,360` | `1.0` | `67db6ad8ff65569f012403fd04017e32a1113ae49bceff677f389a3728ed56da` |
 | `bot_cargo.png` | Solar Fang Cargo | `el_a022c9d8` / `el_a9362740` / `el_1d26737a` | `98,370,400,525` | `1.0` | `e80a8b5fb948e591bef42da28de8f1efb25c4e6862d66e4e3ec4e3540bd6ec54` |
-| `bot_moonveil.png` | Moonveil Skirt | `el_b59e0f55` / `el_20b1a6a9` / `el_638b8d72` | `91,360,328,444` | `1.0` | `076a0ce2ff353bee8a1f9678861ce344563b5df7ff669f1508ecbafd78e70ff4` |
+| `bot_moonveil.png` | Moonveil Skirt | `el_b59e0f55` / `el_20b1a6a9` / `el_638b8d72` | `91,360,328,444` | `1.0` | `d8cf8fa4321b4d4f28b40231443bcd5a9640b9936a27c392d85286df0318a2fb` |
 | `bot_phoenix.png` | Phoenix Regalia Skirt | `el_a0cb7779` / `el_b97da1a0` / `el_2eb57ebd` | `99,365,360,358` | `1.0` | `22814c0f26f98c05382048875a56994666fdcd0d40d44a5cb8942f5e7f72ff65` |
 
 ### Registered magical shoe capsule
@@ -316,12 +316,12 @@ plates, prompts, references and immutable originals live in Canvas project
 
 | Shipping file | Label | Canvas slice / matte / shipping | Registration left; right `(x,y,w,h)` | v3 support | SHA-256 |
 | --- | --- | --- | --- | --- | --- |
-| `shoe_sneak.png` | Lunar High-Tops | `el_97193aa7` / `el_9c1b0e7b` / `el_9bb5e6a8` | `202,806,60,86`; `250,804,60,88` | `1.0` | `24e648709a13c6efae18e785689234e695ac359303f5a74914bfb7f88111db18` |
-| `shoe_boot.png` | Verdant Vine Boots | `el_316ed146` / `el_21905d3d` / `el_cf41ae5d` | `205,756,54,136`; `253,755,54,137` | `1.0` | `cd8f24ef4c5d8987f570ad16e9b8e87396d37e714da61cad200e8b74c6dc7fbf` |
-| `shoe_heel.png` | Solar Spike Heels | `el_27ae73d8` / `el_fa2673fc` / `el_eed1dc24` | `206,805,52,87`; `254,807,52,85` | `1.0` | `e4c99db9fff2752cea1c2956fd0d12b7b1b7c65c8797f73b8dbc54ba276afa53` |
-| `shoe_sandal.png` | Crystal Orbit Sandals | `el_f7f74e4c` / `el_96cdf5ee` / `el_9af9d19e` | `207,797,50,95`; `255,797,50,95` | `1.0` | `deb1be514cf42f772b823b6eb00a15a2b174a6ba6e2baa7f28bae257aff28be3` |
-| `shoe_eclipse.png` | Eclipse Platforms | `el_d7f73cfa` / `el_c06b7c61` / `el_496e6993` | `203,782,58,110`; `251,780,58,112` | `1.0` | `3046d4750296febeeb70e7542938e0504f8a99b6309cb8f1a663e7301dbdc798` |
-| `shoe_phoenix.png` | Phoenix Wing Boots | `el_80f86d00` / `el_aa74f9e7` / `el_e463af55` | `205,801,54,91`; `253,797,54,95` | `1.0` | `59d9e3cc28ff4cc42171b2f1f3c1bcab606fa5e03a192e5992031f1f4601ba47` |
+| `shoe_sneak.png` | Lunar High-Tops | `el_97193aa7` / `el_9c1b0e7b` / `el_9bb5e6a8` | `202,806,60,86`; `250,804,60,88` | `1.0` | `6d94a876704b265aadc06942ee4d97b26dd2ef4688d202c33b22e0f1cd478d59` |
+| `shoe_boot.png` | Verdant Vine Boots | `el_316ed146` / `el_21905d3d` / `el_cf41ae5d` | `205,756,54,136`; `253,755,54,137` | `1.0` | `0b634e247ec6d3db7fbbb5b1dadb938daa58c6e0384330762e3817bfa686ff79` |
+| `shoe_heel.png` | Solar Spike Heels | `el_27ae73d8` / `el_fa2673fc` / `el_eed1dc24` | `206,805,52,87`; `254,807,52,85` | `1.0` | `e2786fac716f1fca82b10c02534727ae6dc753a5ef149bb3f6b66c8725b5f7a3` |
+| `shoe_sandal.png` | Crystal Orbit Sandals | `el_f7f74e4c` / `el_96cdf5ee` / `el_9af9d19e` | `207,797,50,95`; `255,797,50,95` | `1.0` | `e46b21035542065eb78693e7c44d6038625099b83aa4ff9ffdae48e252e27cc8` |
+| `shoe_eclipse.png` | Eclipse Platforms | `el_d7f73cfa` / `el_c06b7c61` / `el_496e6993` | `203,782,58,110`; `251,780,58,112` | `1.0` | `e6220b0ba367ea47790a688ef8c918800d388880d3586fe5d8075006bcb9a954` |
+| `shoe_phoenix.png` | Phoenix Wing Boots | `el_80f86d00` / `el_aa74f9e7` / `el_e463af55` | `205,801,54,91`; `253,797,54,95` | `1.0` | `701024f6f554513a128b31368217669fa32feed930ce645169aec3f5fe556fe9` |
 
 ## Runtime contract
 

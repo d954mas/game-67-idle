@@ -65,6 +65,7 @@ function normalizePack(sourceRoot, packDir, pack) {
     kind: pack.kind || "",
     license: pack.license || "",
     license_url: pack.license_url || "",
+    license_file: pack.license_file || pack.licenseFile || "",
     license_kind: pack.license_kind || "",
     attribution_required: pack.attribution_required || "",
     notice_required: pack.notice_required || "",
@@ -113,11 +114,14 @@ function normalizeAsset(sourceRoot, packDir, pack, asset) {
     status: asset.status || "accepted",
     license: asset.license || pack.license || "",
     license_url: asset.license_url || pack.license_url || "",
+    license_file: asset.license_file || asset.licenseFile || pack.license_file || "",
     license_kind: asset.license_kind || pack.license_kind || "",
     attribution_required: asset.attribution_required || pack.attribution_required || "",
     notice_required: asset.notice_required || pack.notice_required || "",
     credit_text: asset.credit_text || pack.credit_text || "",
     origin: asset.origin || pack.origin || "unknown",
+    provenance: asset.provenance || pack.provenance || "",
+    classification: asset.classification || pack.classification || "",
     publish: asset.publish || pack.publish || "",
     commercial_use: asset.commercial_use || pack.commercial_use || "",
     modification_allowed: asset.modification_allowed || pack.modification_allowed || "",
@@ -142,10 +146,12 @@ function normalizeAsset(sourceRoot, packDir, pack, asset) {
   };
 }
 
-export async function scanPackManifestSource(sourceRoot) {
+export async function scanPackManifestSource(sourceRoot, { packIds = [] } = {}) {
   const records = [];
   const packs = [];
+  const selected = new Set(packIds.map(String));
   for (const packDir of await listPackDirs(sourceRoot)) {
+    if (selected.size && !selected.has(basename(packDir))) continue;
     const packPath = join(packDir, "pack.json");
     const assetsPath = join(packDir, "assets.jsonl");
     if (!existsSync(packPath) || !existsSync(assetsPath)) continue;

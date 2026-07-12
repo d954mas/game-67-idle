@@ -1,0 +1,42 @@
+{
+  "schema": "ai_studio.asset_records.v1",
+  "scope": "ai-studio:items-viewer-fixtures",
+  "assets": [
+    {
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "license_kind": "cc",
+      "publish": "true",
+      "redistribution_allowed": "true",
+      "commercial_use": "true",
+      "modification_allowed": "true",
+      "author_vendor": "Kenney",
+      "origin": "sourced",
+      "asset_id": "items-viewer-icons-page0",
+      "path": "ai_studio/assets/items_viewer/tests/fixtures/icon_pack/icons_page0.png",
+      "classification": "test-fixture",
+      "provenance": "native-debug atlas captured from templates/template after the Kenney CC0 icon replacement in commit cc8c56841; source rows are templates/template/assets/packs/kenney-icons/assets.jsonl and kenney-ui-pack/assets.jsonl",
+      "source_page": "templates/template/assets/icons/README.md",
+      "sha256": "1f8a72848856032fd0473f896d059171639332e5dd2ed7101fa4b69aeb162b90",
+      "bytes": 26043
+    },
+    {
+      "license": "CC0-1.0",
+      "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "license_kind": "cc",
+      "publish": "true",
+      "redistribution_allowed": "true",
+      "commercial_use": "true",
+      "modification_allowed": "true",
+      "author_vendor": "Kenney",
+      "origin": "sourced",
+      "asset_id": "items-viewer-game-ntpack",
+      "path": "ai_studio/assets/items_viewer/tests/fixtures/icon_pack/game.ntpack",
+      "classification": "test-fixture",
+      "provenance": "native-debug game pack captured from templates/template after the Kenney CC0 icon replacement in commits e6a42e482 and cc8c56841; fixture use is proved by ai_studio/assets/items_viewer/tests/icon_preview.test.mjs",
+      "source_page": "templates/template/assets/icons/README.md",
+      "sha256": "acf24b9515b376e69e89601eeb1f0d465406a3507a8e226a2ec5e4d9502ac483",
+      "bytes": 1331008
+    }
+  ]
+}

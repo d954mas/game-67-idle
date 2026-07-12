@@ -139,12 +139,9 @@ export function findKnownLicense(record = {}) {
 }
 
 export function hasLicenseEvidence(record = {}) {
-  return [
-    record.license_url,
-    record.licenseUrl,
-    record.license_file,
-    record.licenseFile,
-  ].some((value) => String(value || "").trim());
+  const url = String(record.license_url || record.licenseUrl || "").trim();
+  const file = String(record.license_file || record.licenseFile || "").trim();
+  return (/^https?:\/\/[^\s]+$/i.test(url) || Boolean(file));
 }
 
 export function hasAttributionInfo(record = {}) {
@@ -245,7 +242,11 @@ export function validateLicenseRecord(record = {}, { forPublicBinary = false, fo
   const decision = decideLicense(record);
   const explicitPublish = asBool(record.publish);
   const license = String(record.license || "").trim();
+  const licenseUrl = String(record.license_url || record.licenseUrl || "").trim();
   if (!license) issues.push("missing license");
+  if (licenseUrl && !/^https?:\/\/[^\s]+$/i.test(licenseUrl)) {
+    issues.push("license_url must be an absolute http(s) URL; use license_file for repository-relative evidence");
+  }
   if (explicitPublish === true && !decision.publishable) {
     issues.push("publish=true requires redistribution_allowed=true, commercial_use=true, modification_allowed=true, license evidence, and a non-restricted license");
   }

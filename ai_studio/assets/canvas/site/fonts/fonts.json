@@ -8,10 +8,37 @@
       "license": "OFL-1.1",
       "licenseFile": "Inter/OFL.txt",
       "fonts": [
-        { "weight": 400, "style": "normal", "file": "Inter/Inter-Regular.ttf",  "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter[opsz,wght].ttf", "instance": "wght=400 opsz=14" },
-        { "weight": 600, "style": "normal", "file": "Inter/Inter-SemiBold.ttf", "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter[opsz,wght].ttf", "instance": "wght=600 opsz=14" },
-        { "weight": 700, "style": "normal", "file": "Inter/Inter-Bold.ttf",     "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter[opsz,wght].ttf", "instance": "wght=700 opsz=14" }
-      ]
+        {
+          "weight": 400,
+          "style": "normal",
+          "file": "Inter/Inter-Regular.ttf",
+          "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter[opsz,wght].ttf",
+          "instance": "wght=400 opsz=14",
+          "sha256": "49aa2857e3062b7a6c9ac0606e907c08936afda00f5271b6ceda8bdbd7b12ce9",
+          "bytes": 341396
+        },
+        {
+          "weight": 600,
+          "style": "normal",
+          "file": "Inter/Inter-SemiBold.ttf",
+          "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter[opsz,wght].ttf",
+          "instance": "wght=600 opsz=14",
+          "sha256": "71ccba9535edc38b36b316e3330e8cd4ac5692ef9a71ade2769a326271897b71",
+          "bytes": 342660
+        },
+        {
+          "weight": 700,
+          "style": "normal",
+          "file": "Inter/Inter-Bold.ttf",
+          "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter[opsz,wght].ttf",
+          "instance": "wght=700 opsz=14",
+          "sha256": "2d949e95e735e91d5edc0b73f5cc9d2279b7f46cd51fdb7e3b0134bc2e6e794f",
+          "bytes": 343104
+        }
+      ],
+      "author_vendor": "The Inter Project Authors",
+      "source_page": "https://raw.githubusercontent.com/google/fonts/main/ofl/inter/Inter[opsz,wght].ttf",
+      "provenance": "static instances derived from the named Google Fonts variable source using fontTools 4.63.0; OFL notice in Inter/OFL.txt"
     },
     {
       "family": "Rubik",
@@ -19,9 +46,28 @@
       "license": "OFL-1.1",
       "licenseFile": "Rubik/OFL.txt",
       "fonts": [
-        { "weight": 500, "style": "normal", "file": "Rubik/Rubik-Medium.ttf", "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/rubik/Rubik[wght].ttf", "instance": "wght=500" },
-        { "weight": 700, "style": "normal", "file": "Rubik/Rubik-Bold.ttf",   "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/rubik/Rubik[wght].ttf", "instance": "wght=700" }
-      ]
+        {
+          "weight": 500,
+          "style": "normal",
+          "file": "Rubik/Rubik-Medium.ttf",
+          "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/rubik/Rubik[wght].ttf",
+          "instance": "wght=500",
+          "sha256": "7dd417694bf268315f77d21ad2b2c697d7d6a2252698466d4cb58d94dc834cdc",
+          "bytes": 212124
+        },
+        {
+          "weight": 700,
+          "style": "normal",
+          "file": "Rubik/Rubik-Bold.ttf",
+          "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/rubik/Rubik[wght].ttf",
+          "instance": "wght=700",
+          "sha256": "43694f2f5191656a4c05366cbfdfe26ab95deeb8dbe6aa449acb0d6cfcfdad09",
+          "bytes": 212300
+        }
+      ],
+      "author_vendor": "The Rubik Project Authors",
+      "source_page": "https://raw.githubusercontent.com/google/fonts/main/ofl/rubik/Rubik[wght].ttf",
+      "provenance": "static instances derived from the named Google Fonts variable source using fontTools 4.63.0; OFL notice in Rubik/OFL.txt"
     },
     {
       "family": "Bitter",
@@ -29,9 +75,28 @@
       "license": "OFL-1.1",
       "licenseFile": "Bitter/OFL.txt",
       "fonts": [
-        { "weight": 400, "style": "normal", "file": "Bitter/Bitter-Regular.ttf", "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/bitter/Bitter[wght].ttf", "instance": "wght=400" },
-        { "weight": 700, "style": "normal", "file": "Bitter/Bitter-Bold.ttf",    "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/bitter/Bitter[wght].ttf", "instance": "wght=700" }
-      ]
+        {
+          "weight": 400,
+          "style": "normal",
+          "file": "Bitter/Bitter-Regular.ttf",
+          "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/bitter/Bitter[wght].ttf",
+          "instance": "wght=400",
+          "sha256": "71b5d47aa0ba44ddf9bce2b0d189b8f1b09ac692f46355494ed840b07e576427",
+          "bytes": 201980
+        },
+        {
+          "weight": 700,
+          "style": "normal",
+          "file": "Bitter/Bitter-Bold.ttf",
+          "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/bitter/Bitter[wght].ttf",
+          "instance": "wght=700",
+          "sha256": "62523ff54f3803ac69e6c8b8cdc2f0faaaa20fb4464cc84c73a25412572b47ce",
+          "bytes": 202264
+        }
+      ],
+      "author_vendor": "The Bitter Project Authors",
+      "source_page": "https://raw.githubusercontent.com/google/fonts/main/ofl/bitter/Bitter[wght].ttf",
+      "provenance": "static instances derived from the named Google Fonts variable source using fontTools 4.63.0; OFL notice in Bitter/OFL.txt"
     },
     {
       "family": "JetBrains Mono",
@@ -39,9 +104,28 @@
       "license": "OFL-1.1",
       "licenseFile": "JetBrainsMono/OFL.txt",
       "fonts": [
-        { "weight": 400, "style": "normal", "file": "JetBrainsMono/JetBrainsMono-Regular.ttf", "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono[wght].ttf", "instance": "wght=400" },
-        { "weight": 700, "style": "normal", "file": "JetBrainsMono/JetBrainsMono-Bold.ttf",    "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono[wght].ttf", "instance": "wght=700" }
-      ]
+        {
+          "weight": 400,
+          "style": "normal",
+          "file": "JetBrainsMono/JetBrainsMono-Regular.ttf",
+          "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono[wght].ttf",
+          "instance": "wght=400",
+          "sha256": "7109f0d8aeb172bdf487ed2055b1735663867e66048217d3cdccf49ca1dc9e59",
+          "bytes": 115152
+        },
+        {
+          "weight": 700,
+          "style": "normal",
+          "file": "JetBrainsMono/JetBrainsMono-Bold.ttf",
+          "origin": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono[wght].ttf",
+          "instance": "wght=700",
+          "sha256": "7d14a6b590ac3c94f374b1c5e7a6431983157988eb1349fce5dc7a90f777302e",
+          "bytes": 115108
+        }
+      ],
+      "author_vendor": "The JetBrains Mono Project Authors",
+      "source_page": "https://raw.githubusercontent.com/google/fonts/main/ofl/jetbrainsmono/JetBrainsMono[wght].ttf",
+      "provenance": "static instances derived from the named Google Fonts variable source using fontTools 4.63.0; OFL notice in JetBrainsMono/OFL.txt"
     }
   ]
 }

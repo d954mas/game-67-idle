@@ -19,6 +19,10 @@ publishable only with an explicit `publish: true`, `redistribution_allowed:
 true`, `commercial_use: true`, `modification_allowed: true`, and license
 evidence (`license_url` or `license_file`). Paid/private/non-redistributable
 licenses stay restricted even if a caller accidentally asks for publish.
+`license_url` is only for absolute HTTP(S) URLs. Repository-local evidence uses
+`license_file`; the integrity core confines that path to the repository and
+requires an existing tracked file or an explicit same-change `evidence_files`
+declaration in the tracked binary inventory.
 
 Publishable licenses can still require attribution or notices. Missing
 attribution/notice metadata is release debt, not a development blocker:
@@ -39,9 +43,11 @@ Every manifested asset should preserve:
 
 ## Scope
 
-The guard checks git-tracked files under registered game/template asset roots. It
-does not scan private libraries for compliance; it prevents restricted files
-from entering this public repo.
+The guard checks every git-tracked binary blob in the repository, including
+game/template product assets, AI Studio fonts, generated outputs, and test
+fixtures. It also classifies gitlink boundaries without descending into them.
+It does not scan private libraries for compliance; it prevents restricted or
+unaccounted binaries from entering this public repo.
 
 This folder owns the policy and command surface.
 
@@ -50,19 +56,23 @@ This folder owns the policy and command surface.
 - `registry.mjs`: canonical license decision and validation registry.
 - `restricted.mjs`: shared helper surface for publishability, restricted-root
   routing, attribution/notice checks, and binary asset classification.
-- `restricted_assets_guard.mjs`: git-tracked public-repo leak guard.
-- `restricted_assets_exceptions.json`: empty-by-default, repo-relative exception
-  prefixes for already reviewed public binaries that cannot yet be manifested.
+- `restricted_assets_guard.mjs`: the single compatible CLI adapter over the
+  Pack Manifest integrity core.
 
 ## Commands
 
 ```powershell
 node ai_studio/assets/backlog/storage/license/restricted_assets_guard.mjs
-node ai_studio/assets/backlog/storage/license/restricted_assets_guard.mjs --release
+node ai_studio/assets/backlog/storage/license/restricted_assets_guard.mjs --scope templates/template/assets
+node ai_studio/assets/backlog/storage/license/restricted_assets_guard.mjs --json
 node --test ai_studio/assets/backlog/storage/license/restricted_assets_guard.test.mjs
 ```
 
-The normal guard fails closed only for actual public-repo risks: restricted
-tracked files, missing manifest records, or non-publishable binaries.
-`--release` also blocks missing CC-BY attribution and notice-bearing license
-metadata so credits or third-party notices cannot be forgotten before shipping.
+The guard is release-strict by default. It fails closed on git setup errors
+(exit 2), missing or unexpected inventory entries, malformed or conflicting
+metadata, unsafe/case-colliding paths, unverified hashes, unknown provenance or
+origin, and non-publishable licenses. Text output is capped; use `--scope` for a
+small owner-specific report or `--json` for stable machine output. Scope is a
+validated repository-relative inventory/source path; escaping or unmatched
+scopes are setup errors with exit 2. Unknown or malformed CLI arguments also
+fail with exit 2 instead of being ignored.

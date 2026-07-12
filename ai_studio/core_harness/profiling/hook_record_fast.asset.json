@@ -1,0 +1,26 @@
+{
+  "schema": "ai_studio.asset_records.v1",
+  "scope": "ai-studio:profiling-hook",
+  "assets": [
+    {
+      "asset_id": "hook-record-fast-windows",
+      "path": "ai_studio/core_harness/profiling/hook_record_fast.exe",
+      "classification": "generated-procedural-output",
+      "origin": "mine",
+      "provenance": "Windows binary compiled from ai_studio/core_harness/profiling/hook_record_fast.c; lead disposition 2026-07-12",
+      "source_page": "ai_studio/core_harness/profiling/hook_record_fast.c",
+      "license": "Studio-Owned-Public-1.0",
+      "license_kind": "custom",
+      "publish": "true",
+      "redistribution_allowed": "true",
+      "sha256": "a909fdcdc6278c2fb0215125d4f4a95dd5c4233e4f529fdbeb488ed0f9d38850",
+      "bytes": 171008,
+      "commercial_use": "true",
+      "modification_allowed": "true",
+      "attribution_required": "false",
+      "notice_required": "false",
+      "author_vendor": "Neotolis Studio",
+      "license_file": "ai_studio/assets/backlog/storage/manifests/PROJECT_OUTPUT_LICENSE.md"
+    }
+  ]
+}

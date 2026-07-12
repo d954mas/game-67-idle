@@ -104,6 +104,19 @@
       ]
     },
     {
+      "id": "core-harness:profiling-hook-fast-exe-metadata",
+      "kind": "config",
+      "path": "ai_studio/core_harness/profiling/hook_record_fast.asset.json",
+      "title": "hook_record_fast.asset.json",
+      "description": "Records integrity, provenance, and project-owned license evidence for the built Windows fast hook recorder.",
+      "role": "fast hook recorder binary metadata",
+      "tags": [
+        "generated",
+        "hooks",
+        "provenance"
+      ]
+    },
+    {
       "id": "core-harness:profiling-build-fast",
       "kind": "tool",
       "path": "ai_studio/core_harness/profiling/build_hook_record_fast.mjs",

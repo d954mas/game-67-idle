@@ -18,18 +18,18 @@
     "awakening_results": 6
   },
   "assets": [
-    {"id": "body_master", "role": "character_base", "count": 1, "status": "gate", "description": "Locked fixed-pose doll accepted by target-player beauty test"},
-    {"id": "hair", "role": "catalog_layer", "slot": "hair", "count": 6, "status": "needed"},
-    {"id": "main_focus", "role": "catalog_layer", "slot": "main", "count": 6, "status": "needed", "description": "One dress and one top per Essence; sets primary recipe input"},
-    {"id": "bottom", "role": "catalog_layer", "slot": "bottom", "count": 6, "status": "needed"},
-    {"id": "shoes", "role": "catalog_layer", "slot": "shoes", "count": 6, "status": "needed"},
-    {"id": "accent_focus", "role": "catalog_layer", "slot": "accent", "count": 6, "status": "needed", "description": "Two accents per Essence; sets secondary recipe input"},
+    {"id": "body_master", "role": "character_base", "count": 1, "status": "present", "committed_count": 1, "committed_files": ["assets/dress/body_base.png"], "metadata_status": "verified", "description": "A committed locked fixed-pose doll exists with verified project-owned metadata."},
+    {"id": "hair", "role": "catalog_layer", "slot": "hair", "count": 6, "status": "partial", "committed_count": 4, "committed_files": ["assets/dress/hair_bob.png", "assets/dress/hair_gold.png", "assets/dress/hair_long.png", "assets/dress/hair_pink.png"], "metadata_status": "verified"},
+    {"id": "main_focus", "role": "catalog_layer", "slot": "main", "count": 6, "status": "partial", "committed_count": 4, "committed_files": ["assets/dress/top_blazer.png", "assets/dress/top_crop.png", "assets/dress/top_hoodie.png", "assets/dress/top_tee.png"], "metadata_status": "verified", "description": "Four committed top candidates have verified metadata; two planned main-slot assets remain."},
+    {"id": "bottom", "role": "catalog_layer", "slot": "bottom", "count": 6, "status": "present", "committed_count": 6, "committed_files": ["assets/dress/bot_cargo.png", "assets/dress/bot_jeans.png", "assets/dress/bot_moonveil.png", "assets/dress/bot_phoenix.png", "assets/dress/bot_shorts.png", "assets/dress/bot_skirt.png"], "metadata_status": "verified"},
+    {"id": "shoes", "role": "catalog_layer", "slot": "shoes", "count": 6, "status": "present", "committed_count": 6, "committed_files": ["assets/dress/shoe_boot.png", "assets/dress/shoe_eclipse.png", "assets/dress/shoe_heel.png", "assets/dress/shoe_phoenix.png", "assets/dress/shoe_sandal.png", "assets/dress/shoe_sneak.png"], "metadata_status": "verified"},
+    {"id": "accent_focus", "role": "catalog_layer", "slot": "accent", "count": 6, "status": "present", "committed_count": 6, "committed_files": ["assets/dress/acc_bag.png", "assets/dress/acc_bloom.png", "assets/dress/acc_glasses.png", "assets/dress/acc_hat.png", "assets/dress/acc_moon.png", "assets/dress/acc_scarf.png"], "metadata_status": "verified", "description": "Six committed accent candidates have verified project-owned metadata."},
     {"id": "awakening_rigs", "role": "awakening_layers", "count": 18, "status": "needed", "description": "Three composable static layers per recipe: back silhouette, upper accent and foreground flourish"},
     {"id": "vfx_shared", "role": "vfx", "count": 20, "status": "needed", "description": "Reusable glyphs, auras, burst masks and tiny particles"},
-    {"id": "backgrounds", "role": "background", "count": 2, "status": "needed", "description": "Backstage dress room and bright magical runway"},
+    {"id": "backgrounds", "role": "background", "count": 2, "status": "partial", "committed_count": 1, "committed_files": ["assets/dress/stage_bg.png"], "metadata_status": "verified", "description": "One committed stage background has verified metadata; a second background remains planned."},
     {"id": "npc_and_crowd", "role": "runway_support", "count": 3, "status": "needed", "description": "Two opponent silhouette/card compositions and one reusable crowd silhouette layer"},
     {"id": "personalization", "role": "character_variants", "count": 6, "status": "needed", "description": "Minimal skin/face or makeup variants proven compatible with the locked doll contract"},
-    {"id": "ui_raster", "role": "ui", "status": "needed", "description": "Minimal 9-slice panels, button states, category icons and recipe silhouettes"},
-    {"id": "audio", "role": "audio", "count": 12, "status": "needed", "description": "One runway loop plus eleven layered UI/reveal/victory cues"}
+    {"id": "ui_raster", "role": "ui", "status": "partial", "committed_count": 13, "committed_files": ["assets/ui/button.png", "assets/ui/button_danger.png", "assets/ui/button_primary.png", "assets/ui/button_selected.png", "assets/ui/button_success.png", "assets/ui/checkmark.png", "assets/ui/panel.png", "assets/ui/panel_beige.png", "assets/ui/panel_blue.png", "assets/ui/panel_brown.png", "assets/ui/slider_fill.png", "assets/ui/slider_thumb.png", "assets/ui/slider_track.png"], "metadata_status": "verified", "description": "Committed panels, button states, checkmark and slider parts have verified project-owned procedural metadata."},
+    {"id": "audio", "role": "audio", "count": 12, "status": "partial", "committed_count": 2, "committed_files": ["assets/audio/sfx/awakening_jingle.mp3", "assets/audio/sfx/ui_click.wav"], "metadata_status": "verified", "description": "Two CC0 Kenney cues are committed and verified; the remaining planned loop/cues are still needed."}
   ]
 }

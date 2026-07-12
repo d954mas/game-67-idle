@@ -51,6 +51,42 @@
         "manifest",
         "test"
       ]
+    },
+    {
+      "id": "assets:backlog-integrity-core",
+      "kind": "validation",
+      "path": "ai_studio/assets/backlog/storage/manifests/integrity.mjs",
+      "title": "integrity.mjs",
+      "description": "Repository-wide tracked-binary integrity core for inventory coverage, owner-local metadata, license/provenance/origin, SHA, path and duplicate validation.",
+      "role": "tracked binary integrity core",
+      "tags": ["assets", "manifest", "integrity", "validation"]
+    },
+    {
+      "id": "assets:backlog-integrity-inventory",
+      "kind": "config",
+      "path": "ai_studio/assets/backlog/storage/manifests/tracked_binary_inventory.json",
+      "title": "tracked_binary_inventory.json",
+      "description": "Machine inventory classifying every tracked binary blob and external gitlink boundary and routing owner-local metadata sources.",
+      "role": "tracked binary inventory",
+      "tags": ["assets", "manifest", "inventory"]
+    },
+    {
+      "id": "assets:backlog-project-output-license",
+      "kind": "doc",
+      "path": "ai_studio/assets/backlog/storage/manifests/PROJECT_OUTPUT_LICENSE.md",
+      "title": "PROJECT_OUTPUT_LICENSE.md",
+      "description": "Owner-local public-use license evidence for the canonical generated HDR and fast hook recorder outputs identified by their manifest SHA-256 values.",
+      "role": "AI Studio generated output license evidence",
+      "tags": ["assets", "license", "evidence"]
+    },
+    {
+      "id": "assets:backlog-integrity-test",
+      "kind": "test",
+      "path": "ai_studio/assets/backlog/storage/manifests/tests/integrity.test.mjs",
+      "title": "integrity.test.mjs",
+      "description": "Verifies issue codes, Windows paths, scoped IDs, fail-closed git setup, compact scope output, and complete real-repository inventory coverage.",
+      "role": "tracked binary integrity tests",
+      "tags": ["assets", "integrity", "test"]
     }
   ]
 }

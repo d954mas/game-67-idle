@@ -91,6 +91,19 @@
       ]
     },
     {
+      "id": "assets:backlog-preview-pipeline-hdr-metadata",
+      "kind": "config",
+      "path": "ai_studio/assets/backlog/storage/previews/studio_env.asset.json",
+      "title": "studio_env.asset.json",
+      "description": "Records integrity, provenance, and project-owned license evidence for the shared studio environment.",
+      "role": "shared preview lighting metadata",
+      "tags": [
+        "assets",
+        "preview",
+        "provenance"
+      ]
+    },
+    {
       "id": "assets:backlog-preview-pipeline-cache-test",
       "kind": "test",
       "path": "ai_studio/assets/backlog/storage/previews/tests/cache.test.mjs",

@@ -1,0 +1,661 @@
+{
+  "schema": "ai_studio.asset_integrity_inventory.v1",
+  "generated_by": "restricted_assets_guard.mjs compatible inventory contract",
+  "evidence_files": [
+    "games/web-dressup/assets/PROJECT_ASSET_LICENSE.md",
+    "ai_studio/assets/backlog/storage/manifests/PROJECT_OUTPUT_LICENSE.md"
+  ],
+  "metadata_sources": [
+    {
+      "type": "pack-manifest",
+      "root": "templates/template/assets",
+      "packs": [
+        "kenney-audio"
+      ],
+      "scope": "template:audio"
+    },
+    {
+      "type": "pack-manifest",
+      "root": "templates/template/assets",
+      "packs": [
+        "kenney-icons"
+      ],
+      "scope": "template:icons"
+    },
+    {
+      "type": "pack-manifest",
+      "root": "templates/template/assets",
+      "packs": [
+        "template-starter-meshes"
+      ],
+      "scope": "template:mesh"
+    },
+    {
+      "type": "pack-manifest",
+      "root": "templates/template/assets",
+      "packs": [
+        "kenney-ui-pack"
+      ],
+      "scope": "template:ui"
+    },
+    {
+      "type": "pack-manifest",
+      "root": "games/web-dressup/assets",
+      "packs": [
+        "kenney-runway-audio"
+      ],
+      "scope": "game:web-dressup:audio"
+    },
+    {
+      "type": "pack-manifest",
+      "root": "games/web-dressup/assets",
+      "packs": [
+        "kenney-icons"
+      ],
+      "scope": "game:web-dressup:icons"
+    },
+    {
+      "type": "pack-manifest",
+      "root": "games/web-dressup/assets",
+      "packs": [
+        "template-starter-meshes"
+      ],
+      "scope": "game:web-dressup:mesh"
+    },
+    {
+      "type": "pack-manifest",
+      "root": "games/web-dressup/assets",
+      "packs": [
+        "web-dressup-ui"
+      ],
+      "scope": "game:web-dressup:ui"
+    },
+    {
+      "type": "pack-manifest",
+      "root": "games/web-dressup/assets",
+      "packs": [
+        "web-dressup-dress"
+      ],
+      "scope": "game:web-dressup:dress"
+    },
+    {
+      "type": "fonts-json",
+      "path": "ai_studio/assets/canvas/site/fonts/fonts.json",
+      "scope": "ai-studio:canvas-fonts"
+    },
+    {
+      "type": "records-json",
+      "path": "ai_studio/assets/backlog/storage/previews/studio_env.asset.json",
+      "scope": "ai-studio:preview-hdr"
+    },
+    {
+      "type": "records-json",
+      "path": "ai_studio/assets/items_viewer/tests/fixtures/icon_pack/assets.json",
+      "scope": "ai-studio:items-viewer-fixtures"
+    },
+    {
+      "type": "records-json",
+      "path": "ai_studio/core_harness/profiling/hook_record_fast.asset.json",
+      "scope": "ai-studio:profiling-hook"
+    }
+  ],
+  "entries": [
+    {
+      "path": "ai_studio/assets/backlog/storage/previews/studio_env.hdr",
+      "classification": "generated-procedural-output",
+      "metadata_scope": "ai-studio:preview-hdr"
+    },
+    {
+      "path": "ai_studio/assets/canvas/site/fonts/Bitter/Bitter-Bold.ttf",
+      "classification": "font",
+      "metadata_scope": "ai-studio:canvas-fonts"
+    },
+    {
+      "path": "ai_studio/assets/canvas/site/fonts/Bitter/Bitter-Regular.ttf",
+      "classification": "font",
+      "metadata_scope": "ai-studio:canvas-fonts"
+    },
+    {
+      "path": "ai_studio/assets/canvas/site/fonts/Inter/Inter-Bold.ttf",
+      "classification": "font",
+      "metadata_scope": "ai-studio:canvas-fonts"
+    },
+    {
+      "path": "ai_studio/assets/canvas/site/fonts/Inter/Inter-Regular.ttf",
+      "classification": "font",
+      "metadata_scope": "ai-studio:canvas-fonts"
+    },
+    {
+      "path": "ai_studio/assets/canvas/site/fonts/Inter/Inter-SemiBold.ttf",
+      "classification": "font",
+      "metadata_scope": "ai-studio:canvas-fonts"
+    },
+    {
+      "path": "ai_studio/assets/canvas/site/fonts/JetBrainsMono/JetBrainsMono-Bold.ttf",
+      "classification": "font",
+      "metadata_scope": "ai-studio:canvas-fonts"
+    },
+    {
+      "path": "ai_studio/assets/canvas/site/fonts/JetBrainsMono/JetBrainsMono-Regular.ttf",
+      "classification": "font",
+      "metadata_scope": "ai-studio:canvas-fonts"
+    },
+    {
+      "path": "ai_studio/assets/canvas/site/fonts/Rubik/Rubik-Bold.ttf",
+      "classification": "font",
+      "metadata_scope": "ai-studio:canvas-fonts"
+    },
+    {
+      "path": "ai_studio/assets/canvas/site/fonts/Rubik/Rubik-Medium.ttf",
+      "classification": "font",
+      "metadata_scope": "ai-studio:canvas-fonts"
+    },
+    {
+      "path": "ai_studio/assets/items_viewer/tests/fixtures/icon_pack/game.ntpack",
+      "classification": "test-fixture",
+      "metadata_scope": "ai-studio:items-viewer-fixtures"
+    },
+    {
+      "path": "ai_studio/assets/items_viewer/tests/fixtures/icon_pack/icons_page0.png",
+      "classification": "test-fixture",
+      "metadata_scope": "ai-studio:items-viewer-fixtures"
+    },
+    {
+      "path": "ai_studio/core_harness/profiling/hook_record_fast.exe",
+      "classification": "generated-procedural-output",
+      "metadata_scope": "ai-studio:profiling-hook"
+    },
+    {
+      "path": "games/web-dressup/assets/audio/sfx/awakening_jingle.mp3",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:audio"
+    },
+    {
+      "path": "games/web-dressup/assets/audio/sfx/ui_click.wav",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:audio"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/acc_bag.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/acc_bag_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/acc_bloom.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/acc_glasses.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/acc_glasses_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/acc_hat.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/acc_hat_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/acc_moon.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/acc_scarf.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/acc_scarf_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/body_base.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/body_hands_front.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/bot_cargo.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/bot_cargo_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/bot_jeans.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/bot_jeans_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/bot_moonveil.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/bot_phoenix.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/bot_shorts.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/bot_shorts_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/bot_skirt.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/bot_skirt_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/hair_bob.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/hair_bob_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/hair_gold.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/hair_gold_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/hair_long.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/hair_long_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/hair_pink.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/hair_pink_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/look_elegant.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/look_elegant_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/look_glam.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/look_glam_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/look_street.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/look_street_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/shoe_boot.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/shoe_boot_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/shoe_eclipse.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/shoe_heel.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/shoe_heel_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/shoe_phoenix.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/shoe_sandal.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/shoe_sandal_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/shoe_sneak.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/shoe_sneak_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/stage_bg.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/thumb_shoe_boot.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/thumb_shoe_eclipse.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/thumb_shoe_heel.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/thumb_shoe_phoenix.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/thumb_shoe_sandal.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/thumb_shoe_sneak.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/top_blazer.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/top_blazer_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/top_crop.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/top_crop_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/top_hoodie.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/top_hoodie_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/top_tee.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/dress/top_tee_full.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:dress"
+    },
+    {
+      "path": "games/web-dressup/assets/icons/energy.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:icons"
+    },
+    {
+      "path": "games/web-dressup/assets/icons/gold.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:icons"
+    },
+    {
+      "path": "games/web-dressup/assets/icons/potion.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:icons"
+    },
+    {
+      "path": "games/web-dressup/assets/icons/sword.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:icons"
+    },
+    {
+      "path": "games/web-dressup/assets/icons/wood.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:icons"
+    },
+    {
+      "path": "games/web-dressup/assets/icons/xp.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:icons"
+    },
+    {
+      "path": "games/web-dressup/assets/meshes/cube.glb",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:mesh"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/button.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/button_danger.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/button_primary.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/button_selected.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/button_success.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/checkmark.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/panel.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/panel_beige.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/panel_blue.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/panel_brown.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/slider_fill.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/slider_thumb.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "games/web-dressup/assets/ui/slider_track.png",
+      "classification": "product-asset",
+      "metadata_scope": "game:web-dressup:ui"
+    },
+    {
+      "path": "templates/template/assets/audio/music/demo_jingle.wav",
+      "classification": "product-asset",
+      "metadata_scope": "template:audio"
+    },
+    {
+      "path": "templates/template/assets/audio/sfx/ui_click.wav",
+      "classification": "product-asset",
+      "metadata_scope": "template:audio"
+    },
+    {
+      "path": "templates/template/assets/icons/energy.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:icons"
+    },
+    {
+      "path": "templates/template/assets/icons/gold.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:icons"
+    },
+    {
+      "path": "templates/template/assets/icons/potion.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:icons"
+    },
+    {
+      "path": "templates/template/assets/icons/sword.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:icons"
+    },
+    {
+      "path": "templates/template/assets/icons/wood.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:icons"
+    },
+    {
+      "path": "templates/template/assets/icons/xp.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:icons"
+    },
+    {
+      "path": "templates/template/assets/meshes/cube.glb",
+      "classification": "product-asset",
+      "metadata_scope": "template:mesh"
+    },
+    {
+      "path": "templates/template/assets/ui/button.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:ui"
+    },
+    {
+      "path": "templates/template/assets/ui/panel.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:ui"
+    },
+    {
+      "path": "templates/template/assets/ui/slider_fill.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:ui"
+    },
+    {
+      "path": "templates/template/assets/ui/slider_thumb.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:ui"
+    },
+    {
+      "path": "templates/template/assets/ui/slider_track.png",
+      "classification": "product-asset",
+      "metadata_scope": "template:ui"
+    }
+  ],
+  "boundaries": [
+    {
+      "path": "external/neotolis-engine",
+      "classification": "external-boundary",
+      "kind": "gitlink"
+    }
+  ]
+}
