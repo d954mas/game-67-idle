@@ -427,7 +427,10 @@ function printText(result) {
     console.log(Object.entries(result.routes).map(([id, route]) => `${id}\t${route.owner}`).join("\n"));
     return;
   }
-  for (const suite of result.suites) console.log(`${suite.status}\t${suite.id}${suite.tail ? `\t${suite.tail.split(/\r?\n/).at(-1)}` : ""}`);
+  for (const suite of result.suites) {
+    console.log(`${suite.status}\t${suite.id}`);
+    if (suite.tail) console.log(suite.tail.split(/\r?\n/).map((line) => `  ${line}`).join("\n"));
+  }
   console.log(`${result.status}\t${result.mode}\t${result.suites.length} suites`);
 }
 

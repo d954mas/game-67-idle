@@ -188,6 +188,13 @@ test("CLI contract returns stable JSON usage and setup envelopes", async () => {
     lines.length = 0;
     assert.equal(await main(["verify", "--full"], { runSuite: async () => ({ status: 0 }) }), 0);
     assert.match(lines.at(-1), /^pass\tfull\t/);
+    lines.length = 0;
+    assert.equal(await main(["verify", "--changed"], {
+      changedPaths: () => ["ai_studio/taskboard/store.mjs"],
+      runSuite: async () => ({ status: 1, stderr: "assertion context\nexact failure" }),
+    }), 1);
+    assert.ok(lines.some((line) => line === "fail\tstudio.taskboard"));
+    assert.ok(lines.some((line) => line === "  assertion context\n  exact failure"));
   } finally {
     console.log = log;
     console.error = error;
