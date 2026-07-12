@@ -32,7 +32,9 @@ Open `/taskboard/`.
 Prefer JSON when an agent needs task state:
 
 - Orient: `node ai_studio/taskboard/cli.mjs summary --json`.
-- Current work: `node ai_studio/taskboard/cli.mjs context --json`.
+- Current work: `node ai_studio/taskboard/cli.mjs context --json` (at most five
+  body-free task summaries by default). Use an explicit `--tasks-limit <n>`
+  only for a scoped routing decision.
 - List rows: `node ai_studio/taskboard/cli.mjs list --json`.
 - Read one file: `node ai_studio/taskboard/cli.mjs show T0001 --json`.
 - Help: `node ai_studio/taskboard/cli.mjs help`.
@@ -43,6 +45,11 @@ Prefer JSON when an agent needs task state:
 - Close with structured evidence:
   `node ai_studio/taskboard/cli.mjs set T0001 --status done --quality "QTECH_001=pass" --quality-evidence "tests passed" --json`.
 - Validate store shape: `node ai_studio/taskboard/cli.mjs validate --json`.
+- Profile routing reads: `node ai_studio/taskboard/cli.mjs profile --json`.
+  The profiler-owned adapter measures summary/context/explicit-show reads for
+  every registered Taskboard-enabled public/private mount. Its serialized
+  records contain store metadata, operation, path/query, UTF-8 bytes, median
+  duration, truncation, and result count, never task titles or bodies.
 
 Taskboard is store-qualified:
 
@@ -103,9 +110,11 @@ the canonical store without that pressure.
 
 ## Minimal Context
 
-For substantial work: `node ai_studio/taskboard/cli.mjs context --json` ->
-needed task/evidence files -> `games/<game-id>/` only for game-specific work ->
-one matching skill.
+For substantial work: `node ai_studio/taskboard/cli.mjs summary --json` -> an
+explicitly scoped `list` query or `show <id>` -> needed evidence files ->
+`games/<game-id>/` only for game-specific work -> one matching skill. The
+default summary/context payload is capped at five body-free task rows; only
+`show` returns a task body.
 
 Search current scope only. Avoid archives, P3 ideas, broad design, and build
 artifacts unless linked.

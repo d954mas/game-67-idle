@@ -947,7 +947,7 @@ export function agentTaskRow(root, doc, options = {}) {
   return addStoreFields(row, doc.fields.id, options);
 }
 
-export function currentWorkRows(root, limit = 25, options = {}) {
+export function currentWorkRows(root, limit = 5, options = {}) {
   const epics = epicsById(root, options);
   const tasks = options.tasks || listTasks(root, options);
   return tasks
@@ -958,7 +958,7 @@ export function currentWorkRows(root, limit = 25, options = {}) {
 }
 
 export function agentContextPayload(root, options = {}) {
-  const limit = Number.isFinite(Number(options.limit)) ? Number(options.limit) : 25;
+  const limit = Number.isFinite(Number(options.limit)) ? Number(options.limit) : 5;
   const tasks = listTasks(root, options);
   const epics = listEpics(root, options);
   const projects = listProjects(root, options);

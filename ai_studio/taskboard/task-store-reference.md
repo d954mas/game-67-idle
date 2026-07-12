@@ -115,6 +115,16 @@ Repeated quality failures should be visible in task logs and summarized with:
 node ai_studio/quality/profile.mjs
 ```
 
+Task-routing read cost is a separate profiler-owned concern. Reproduce its
+privacy-safe all-store measurements at the Taskboard CLI boundary with:
+
+```powershell
+node ai_studio/taskboard/cli.mjs profile --json --runs 7
+```
+
+The report is metadata-only. It must not be used as a substitute for `show`
+when task details are explicitly needed.
+
 If validation is too slow, unavailable, or fails for an unrelated environment
 reason, record that explicitly. Do not silently mark the task done.
 

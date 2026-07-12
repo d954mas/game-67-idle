@@ -414,6 +414,131 @@ ${"LARGE_TASK_BODY_SHOULD_NOT_APPEAR\n".repeat(300)}
   assert.match(result.stdout, /inspect only the linked task files/);
 });
 
+test("cli context defaults to five summaries and expands only through an explicit limit", (t) => {
+  const root = tempRoot(t);
+  for (let index = 1; index <= 8; index++) {
+    createTask(root, {
+      title: `Active task ${index}`,
+      status: "doing",
+      priority: "P1",
+      body: `## What\n\nCONTEXT_BODY_${index}_MUST_STAY_SCOPED\n\n## Done when\n\n- [ ] done\n\n## Log\n`,
+    });
+  }
+
+  const defaultResult = spawnSync(process.execPath, [cliPath, "context", "--json"], { cwd: root, encoding: "utf8" });
+  assert.equal(defaultResult.status, 0, defaultResult.stderr);
+  const defaultPayload = JSON.parse(defaultResult.stdout);
+  assert.equal(defaultPayload.currentWork.length, 5);
+  assert.equal(defaultPayload.counts.currentWork, 8);
+  assert.doesNotMatch(defaultResult.stdout, /CONTEXT_BODY_/);
+
+  const textResult = spawnSync(process.execPath, [cliPath, "context"], { cwd: root, encoding: "utf8" });
+  assert.equal(textResult.status, 0, textResult.stderr);
+  assert.equal((textResult.stdout.match(/^- T\d{4}/gm) || []).length, 5);
+
+  const summaryText = spawnSync(process.execPath, [cliPath, "summary"], { cwd: root, encoding: "utf8" });
+  assert.equal(summaryText.status, 0, summaryText.stderr);
+  assert.equal((summaryText.stdout.match(/^- T\d{4}/gm) || []).length, 5);
+
+  const scopedResult = spawnSync(process.execPath, [cliPath, "context", "--json", "--tasks-limit", "8"], { cwd: root, encoding: "utf8" });
+  assert.equal(scopedResult.status, 0, scopedResult.stderr);
+  assert.equal(JSON.parse(scopedResult.stdout).currentWork.length, 8);
+  assert.doesNotMatch(scopedResult.stdout, /CONTEXT_BODY_/);
+});
+
+test("Taskboard agent API context defaults to five body-free summaries", async (t) => {
+  const root = tempRoot(t);
+  for (let index = 1; index <= 7; index++) {
+    createTask(root, {
+      title: `API active ${index}`,
+      status: "doing",
+      body: `## What\n\nAPI_CONTEXT_BODY_${index}_MUST_STAY_SCOPED\n\n## Done when\n\n- [ ] done\n\n## Log\n`,
+    });
+  }
+  const response = await invokeApi(createTaskboardApi(root), "GET", "/api/agent/context");
+  assert.equal(response.status, 200);
+  assert.equal(response.data.currentWork.length, 5);
+  assert.equal(response.data.counts.currentWork, 7);
+  assert.doesNotMatch(JSON.stringify(response.data), /API_CONTEXT_BODY_/);
+});
+
+test("cli read profiler covers every mounted store without emitting task contents", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "PUBLIC_TITLE_CANARY",
+    status: "doing",
+    body: "## What\n\nPUBLIC_BODY_CANARY\n\n## Done when\n\n- [ ] done\n\n## Log\n",
+  });
+  for (let index = 2; index <= 7; index++) {
+    createTask(root, {
+      title: index === 2 ? "ЮНИКОД_TITLE_CANARY" : `Public task ${index}`,
+      status: "doing",
+    });
+  }
+  const privateStore = ensurePrivateGameMount(root);
+  writeTaskDoc(privateStore.itemsRoot, "T0001", "PRIVATE_TITLE_CANARY", "doing");
+  for (const gameId of ["public-game", "disabled-game"]) {
+    const gameRoot = join(root, "games", gameId);
+    mkdirSync(gameRoot, { recursive: true });
+    writeFileSync(join(gameRoot, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace: gameId }), "utf8");
+    writeFileSync(join(gameRoot, "dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }), "utf8");
+  }
+  writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify({
+    schema: "ai_studio.workspace.catalog.v1",
+    mounts: [
+      { kind: "game", root: "games/public-game", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["taskboard"], aliases: [] },
+      { kind: "game", root: "games/disabled-game", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
+    ],
+  }, null, 2) + "\n", "utf8");
+  writeTaskDoc(join(root, "games", "public-game", ".ai_studio", "taskboard", "items"), "T0001", "PUBLIC_GAME_TITLE_CANARY", "doing");
+
+  const result = spawnSync(process.execPath, [cliPath, "profile", "--json", "--runs", "2"], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.schema, "ai_studio.taskboard.read_profile.v1");
+  assert.equal(payload.runs, 2);
+  assert.deepEqual(payload.stores.map((store) => store.storeId), ["studio", "game:public-game", "game:secret-game"]);
+  assert.deepEqual(new Set(payload.records.map((record) => record.operation)), new Set(["summary", "context", "show"]));
+  assert.equal(payload.records.length, 9);
+  const studioContext = spawnSync(process.execPath, [cliPath, "context", "--json", "--store", "studio"], { cwd: root, encoding: "utf8" });
+  assert.equal(studioContext.status, 0, studioContext.stderr);
+  const expectedStudioBytes = Buffer.byteLength(studioContext.stdout, "utf8");
+  for (const operation of ["summary", "context"]) {
+    const record = payload.records.find((entry) => entry.storeId === "studio" && entry.operation === operation);
+    assert.equal(record.bytes, expectedStudioBytes);
+    assert.equal(record.truncated, true);
+    assert.equal(record.resultCount, 5);
+  }
+  for (const record of payload.records) {
+    assert.equal(typeof record.path, "string");
+    assert.equal(typeof record.query, "string");
+    assert.equal(Number.isInteger(record.bytes), true);
+    assert.equal(record.bytes >= 0, true);
+    assert.equal(typeof record.durationMs, "number");
+    assert.equal(record.durationMs >= 0, true);
+    assert.equal(typeof record.truncated, "boolean");
+    assert.equal(Number.isInteger(record.resultCount), true);
+    assert.equal("title" in record, false);
+    assert.equal("body" in record, false);
+  }
+  assert.doesNotMatch(result.stdout, /PUBLIC_TITLE_CANARY|PUBLIC_BODY_CANARY|PUBLIC_GAME_TITLE_CANARY|PRIVATE_TITLE_CANARY|ЮНИКОД_TITLE_CANARY|disabled-game|argv|payload/);
+});
+
+test("aggregate context reports unsliced totals and globally ranks work across stores", (t) => {
+  const root = tempRoot(t);
+  createTask(root, { title: "Studio backlog", status: "backlog", priority: "P2" });
+  const privateStore = ensurePrivateGameMount(root);
+  writeTaskDoc(privateStore.itemsRoot, "T0001", "Private doing", "doing", { priority: "P0" });
+
+  const result = spawnSync(process.execPath, [cliPath, "context", "--json", "--include-private", "--tasks-limit", "1"], { cwd: root, encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.currentWork.length, 1);
+  assert.equal(payload.counts.currentWork, 2);
+  assert.equal(payload.currentWork[0].storeId, "game:secret-game");
+  assert.equal(payload.currentWork[0].priority, "P0");
+});
+
 test("cli summary is task-derived and shows review as current work", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "Doing task", status: "doing", priority: "P1" });
@@ -642,7 +767,7 @@ test("taskboard cli help exits successfully and documents commands", () => {
     const result = spawnSync(process.execPath, [cliPath, ...args], { encoding: "utf8" });
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|new\|set\|validate\|help>/);
+    assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|profile\|new\|set\|validate\|help>/);
     assert.match(result.stdout, /new project --title/);
     assert.match(result.stdout, /summary \[--json\]/);
     assert.match(result.stdout, /validate \[--json\]/);
@@ -653,7 +778,7 @@ test("taskboard cli rejects unrelated core commands", () => {
   const result = spawnSync(process.execPath, [cliPath, "workflow-run"], { encoding: "utf8" });
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|new\|set\|validate\|help>/);
+  assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|profile\|new\|set\|validate\|help>/);
   assert.doesNotMatch(result.stdout, /workflow-run/);
 });
 

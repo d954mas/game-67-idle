@@ -3,18 +3,21 @@ import { join } from "node:path";
 
 import { listGameMounts } from "../workspace/games.mjs";
 import {
+  ACTIVE_TASK_STATUSES,
   agentContextPayload,
+  agentTaskRow,
   boardPayload,
   countsByStatus,
-  currentWorkRows,
   EPIC_STATUSES,
   findDoc,
+  idNumber,
   listEpics,
   listProjects,
   listTasks,
   PROJECT_STATUSES,
   publicDoc,
   TASK_STATUSES,
+  taskRank,
   validateStoreDetailed,
 } from "./store.mjs";
 
@@ -186,13 +189,25 @@ export function agentContextPayloadForStores(root, stores, options = {}) {
   if (stores.length === 1 && stores[0].storeId === STUDIO_STORE_ID) {
     return agentContextPayload(root, options);
   }
-  const limit = Number.isFinite(Number(options.limit)) ? Number(options.limit) : 25;
+  const limit = Number.isFinite(Number(options.limit)) ? Number(options.limit) : 5;
   const projects = stores.flatMap((store) => listProjects(root, storeOptions(store)).map((doc) => ({ doc, store })));
   const epics = stores.flatMap((store) => listEpics(root, storeOptions(store)).map((doc) => ({ doc, store })));
   const tasks = stores.flatMap((store) => listTasks(root, storeOptions(store)).map((doc) => ({ doc, store })));
-  const currentWork = tasks
-    .flatMap(({ doc, store }) => currentWorkRows(root, limit, storeOptions(store, { tasks: [doc] })))
-    .slice(0, limit);
+  const epicsByStore = new Map(stores.map((store) => [
+    store.storeId,
+    new Map(epics.filter((entry) => entry.store.storeId === store.storeId).map(({ doc }) => [doc.fields.id, doc])),
+  ]));
+  const currentEntries = tasks
+    .filter(({ doc }) => ACTIVE_TASK_STATUSES.includes(doc.fields.status))
+    .sort((a, b) =>
+      taskRank(a.doc) - taskRank(b.doc) ||
+      idNumber(b.doc) - idNumber(a.doc) ||
+      a.store.storeId.localeCompare(b.store.storeId) ||
+      String(a.doc.fields.id).localeCompare(String(b.doc.fields.id))
+    );
+  const currentWork = currentEntries.slice(0, limit).map(({ doc, store }) =>
+    agentTaskRow(root, doc, { store, epicsById: epicsByStore.get(store.storeId) })
+  );
   return {
     schema: "ai_studio.taskboard.agent_context.v1",
     root,
@@ -201,7 +216,7 @@ export function agentContextPayloadForStores(root, stores, options = {}) {
       projects: countsByStatus(projects.map(({ doc }) => doc), PROJECT_STATUSES),
       epics: countsByStatus(epics.map(({ doc }) => doc), EPIC_STATUSES),
       tasks: countsByStatus(tasks.map(({ doc }) => doc), TASK_STATUSES),
-      currentWork: currentWork.length,
+      currentWork: currentEntries.length,
       review: tasks.filter(({ doc }) => doc.fields.status === "review").length,
     },
     currentWork,

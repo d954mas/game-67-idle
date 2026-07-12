@@ -8,7 +8,8 @@
 //   node ai_studio/taskboard/cli.mjs new epic --title "..." [--project P001] [--status active]
 //   node ai_studio/taskboard/cli.mjs new task --title "..." [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
 //   node ai_studio/taskboard/cli.mjs set T0001 --status doing [--project P001] [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
-//   node ai_studio/taskboard/cli.mjs context [--json] [--tasks-limit 25]
+//   node ai_studio/taskboard/cli.mjs context [--json] [--tasks-limit 5]
+//   node ai_studio/taskboard/cli.mjs profile [--json] [--runs 5]
 //   node ai_studio/taskboard/cli.mjs validate [--json]
 //   node ai_studio/taskboard/cli.mjs help
 //
@@ -31,17 +32,19 @@ import {
 } from "./stores.mjs";
 import { relative } from "node:path";
 import { fail } from "../core_harness/tool_lib/cli.mjs";
+import { profileTaskboardReads } from "../core_harness/profiling/taskboard_reads.mjs";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
 
-const USAGE = `usage: cli.mjs <list|summary|context|show|new|set|validate|help> ...
+const USAGE = `usage: cli.mjs <list|summary|context|show|profile|new|set|validate|help> ...
 
 Commands:
   list [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
   summary [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 5]
-  context [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 25]
+  context [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 5]
   show <P###|E###|T####|store:id> [--json] [--store studio|game:<id>] [--game <id>] [--include-private]
+  profile [--json] [--runs 5]
   new project --title "..." [--store studio|game:<id>] [--game <id>] [--kind ai-studio|game|template|tooling|research|other] [--target path] [--tags a,b]
   new epic --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--status active] [--tags a,b]
   new task --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
@@ -144,19 +147,6 @@ function currentWorkTaskEntries(entries) {
   return out;
 }
 
-function appendCurrentWorkEntries(lines, entries, limit, overflowCommand) {
-  if (entries.length === 0) return;
-  lines.push("");
-  lines.push("## Current Work");
-  lines.push("");
-  for (const { task, store } of entries.slice(0, limit)) {
-    lines.push(`- ${shortRow(task, store)}`);
-  }
-  if (entries.length > limit) {
-    lines.push(`- ... ${entries.length - limit} more; run \`${overflowCommand}\` only when needed.`);
-  }
-}
-
 function renderSummary(root, options) {
   const tasksLimit = numberArg(options["tasks-limit"], 5);
   const taskEntries = taskEntriesForOptions(root, options);
@@ -169,8 +159,6 @@ function renderSummary(root, options) {
   lines.push(`active_task_counts: ${statusCounts(allTasks)}`);
   lines.push(`open_work_items: ${openEntries.length}`);
   lines.push(`review_tasks: ${reviewCount}`);
-  appendCurrentWorkEntries(lines, openEntries, tasksLimit, "node ai_studio/taskboard/cli.mjs context --json");
-  lines.push("");
   lines.push("## Top Open Tasks");
   lines.push("");
   for (const { task, store } of openEntries.slice(0, tasksLimit)) {
@@ -186,7 +174,7 @@ function renderSummary(root, options) {
 }
 
 function renderContext(root, options) {
-  const tasksLimit = numberArg(options["tasks-limit"], 25);
+  const tasksLimit = numberArg(options["tasks-limit"], 5);
   const taskEntries = taskEntriesForOptions(root, options);
   const allTasks = taskEntries.map(({ task }) => task);
   const entries = currentWorkTaskEntries(taskEntries);
@@ -195,9 +183,6 @@ function renderContext(root, options) {
   lines.push("# Current Context Digest");
   lines.push("");
   lines.push(`active_task_counts: ${statusCounts(allTasks)}`);
-  appendCurrentWorkEntries(lines, entries, tasksLimit, "node ai_studio/taskboard/cli.mjs list --json");
-  lines.push("");
-
   lines.push("## Actionable Tasks");
   lines.push("");
   for (const { task, store } of entries.slice(0, tasksLimit)) {
@@ -305,10 +290,22 @@ switch (cmd) {
   case "context": {
     if (args.json) {
       const stores = taskboardStoresForQuery(root, storeQueryArgs(args));
-      writeJson(agentContextPayloadForStores(root, stores, { limit: numberArg(args["tasks-limit"], 25) }));
+      writeJson(agentContextPayloadForStores(root, stores, { limit: numberArg(args["tasks-limit"], 5) }));
       break;
     }
     process.stdout.write(renderContext(root, args));
+    break;
+  }
+  case "profile": {
+    const payload = profileTaskboardReads(root, { runs: numberArg(args.runs, 5) });
+    if (args.json) {
+      writeJson(payload);
+      break;
+    }
+    console.log(`# Taskboard Read Profile (${payload.runs} runs)`);
+    for (const record of payload.records) {
+      console.log(`${record.storeId} ${record.operation}: ${record.bytes} bytes, ${record.durationMs} ms, results=${record.resultCount}, truncated=${record.truncated}`);
+    }
     break;
   }
   case "show": {
