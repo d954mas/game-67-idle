@@ -337,14 +337,12 @@ function validNestedGitRoots(root, mounts) {
   const out = [];
   for (const mount of mounts) {
     if (!existsSync(join(root, mount.gitRoot, ".git"))) continue;
-    const result = spawnSync("git", ["-C", join(root, mount.gitRoot), "rev-parse", "--show-toplevel"], {
+    const result = spawnSync("git", ["-C", join(root, mount.gitRoot), "rev-parse", "--is-inside-work-tree", "--show-prefix"], {
       cwd: root,
       encoding: "utf8",
       shell: false,
     });
-    const actual = slash(result.stdout || "").trim().toLowerCase();
-    const expected = slash(resolve(root, mount.gitRoot)).toLowerCase();
-    if (!result.error && result.status === 0 && actual === expected) out.push(mount.gitRoot);
+    if (!result.error && result.status === 0 && String(result.stdout || "").trim() === "true") out.push(mount.gitRoot);
   }
   return out;
 }

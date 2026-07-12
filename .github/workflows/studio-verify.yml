@@ -23,6 +23,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           submodules: recursive
+          fetch-depth: 0
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
@@ -46,6 +47,15 @@ jobs:
             libxcursor-dev \
             libxi-dev \
             libgl1-mesa-dev
+      - name: Prepare space-free CMake path (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $cmakeBin = Split-Path -Parent (Get-Command cmake).Source
+          $cmakeRoot = Split-Path -Parent $cmakeBin
+          New-Item -ItemType Directory -Force .toolchains | Out-Null
+          Copy-Item -Recurse -LiteralPath $cmakeRoot -Destination .toolchains/cmake
+          "$(Resolve-Path .toolchains/cmake/bin)" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
       - name: Bootstrap root Python environment (Ubuntu)
         if: runner.os == 'Linux'
         run: node ai_studio/dev_environment/python_setup.mjs --base-python "$pythonLocation/bin/python"

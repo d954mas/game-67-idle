@@ -3,7 +3,7 @@ import test from "node:test";
 
 import { createBuildPlan, executeBuildPlan, parseBuildArgs, resolveEmcmakePath } from "./build_web.mjs";
 
-const slash = (value) => value.replaceAll("\\", "/").replace(/^C:/i, "");
+const slash = (value) => value.replaceAll("\\", "/").replace(/^[A-Za-z]:/, "");
 
 test("build web arguments preserve preset target and release debug validation", () => {
   assert.deepEqual(parseBuildArgs([]), { preset: "wasm-release", target: "local", debugUi: "default" });

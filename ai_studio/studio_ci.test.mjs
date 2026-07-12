@@ -8,6 +8,7 @@ test("Studio CI is a Windows Ubuntu matrix with pinned current setup contracts",
   assert.match(workflow, /matrix:\s*[\s\S]*os:\s*\[ubuntu-latest, windows-latest\]/);
   assert.match(workflow, /uses: actions\/checkout@v7/);
   assert.match(workflow, /submodules: recursive/);
+  assert.match(workflow, /fetch-depth: 0/);
   assert.match(workflow, /uses: actions\/setup-node@v6/);
   assert.match(workflow, /node-version: ['"]24['"]/);
   assert.match(workflow, /package-manager-cache: false/);
@@ -30,6 +31,9 @@ test("Studio CI is a Windows Ubuntu matrix with pinned current setup contracts",
   ]) {
     assert.match(workflow, new RegExp(`\\b${packageName}\\b`));
   }
+  assert.match(workflow, /name: Prepare space-free CMake path \(Windows\)/);
+  assert.match(workflow, /Copy-Item -Recurse -LiteralPath \$cmakeRoot -Destination \.toolchains\/cmake/);
+  assert.match(workflow, /GITHUB_PATH/);
   assert.match(workflow, /EMSDK_VERSION: ['"]4\.0\.10['"]/);
   assert.match(workflow, /github\.com\/emscripten-core\/emsdk\.git/);
   assert.match(workflow, /emsdk install "\$EMSDK_VERSION"/);

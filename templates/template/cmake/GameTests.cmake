@@ -16,7 +16,6 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(test_audio_core PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(test_audio_core PRIVATE -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
     nt_set_warning_flags(test_audio_core)
-    nt_set_sanitizer_flags(test_audio_core)
     set_target_properties(test_audio_core PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_audio_core COMMAND test_audio_core)
 
@@ -27,7 +26,6 @@ if(NOT EMSCRIPTEN)
     target_include_directories(test_audio_resource PRIVATE "${AUDIO_CORE_SRC}" "${ENGINE_DIR}/engine")
     target_compile_definitions(test_audio_resource PRIVATE NT_INTROSPECT_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
     nt_set_warning_flags(test_audio_resource)
-    nt_set_sanitizer_flags(test_audio_resource)
     set_target_properties(test_audio_resource PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_audio_resource COMMAND test_audio_resource)
 
@@ -43,7 +41,6 @@ if(NOT EMSCRIPTEN)
         _CRT_SECURE_NO_WARNINGS)
     audio_core_link_native_systems(test_audio_backend_native)
     nt_set_warning_flags(test_audio_backend_native)
-    nt_set_sanitizer_flags(test_audio_backend_native)
     set_target_properties(test_audio_backend_native PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_audio_backend_native COMMAND test_audio_backend_native)
 
@@ -55,7 +52,6 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(test_game_audio PRIVATE NT_INTROSPECT_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
     target_compile_options(test_game_audio PRIVATE -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
     nt_set_warning_flags(test_game_audio)
-    nt_set_sanitizer_flags(test_game_audio)
     set_target_properties(test_game_audio PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_audio COMMAND test_game_audio)
 
@@ -505,4 +501,19 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_template_composition COMMAND test_template_composition
         WORKING_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+
+    # Engine static libraries are sanitizer-instrumented in Debug. Every test
+    # executable that can link them must carry the matching runtime at link time.
+    set(GAME_NATIVE_TEST_TARGETS
+        test_audio_core test_audio_resource test_audio_backend_native test_game_audio
+        test_game_state_json test_game_storage test_game_save
+        test_game_events test_game_events_overflow test_game_state_roundtrip
+        test_game_events_typed test_game_event_render test_game_analytics
+        test_game_events_log_mirror test_items_catalog test_items_api_core_only
+        test_items_api test_items_fragment test_progression test_progression_curve
+        test_game_format test_platform_sdk test_platform_lifecycle
+        test_platform_sdk_events test_template_composition)
+    foreach(_test_target IN LISTS GAME_NATIVE_TEST_TARGETS)
+        nt_set_sanitizer_flags(${_test_target})
+    endforeach()
 endif()

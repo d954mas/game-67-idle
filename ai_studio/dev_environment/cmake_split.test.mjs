@@ -66,9 +66,11 @@ test("template audio ownership stays in the exact CMake concern files", () => {
   for (const name of ["test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio", "test_audio_web_library"]) {
     assert.match(tests, new RegExp(`add_test\\(NAME\\s+${name}\\b`));
   }
-  for (const name of ["test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio"]) {
-    assert.match(tests, new RegExp(`nt_set_sanitizer_flags\\(${name}\\)`));
-  }
+  const executableTargets = [...tests.matchAll(/^\s*add_executable\(([^\s\)]+)/gm)].map((match) => match[1]).sort();
+  const sanitizerTargets = tests.match(/set\(GAME_NATIVE_TEST_TARGETS([\s\S]*?)\)\s*foreach/)?.[1]
+    .trim().split(/\s+/).sort();
+  assert.deepEqual(sanitizerTargets, executableTargets, "every native test executable must link the sanitizer runtime");
+  assert.match(tests, /foreach\(_test_target IN LISTS GAME_NATIVE_TEST_TARGETS\)[\s\S]*nt_set_sanitizer_flags\(\$\{_test_target\}\)/);
   assert.match(tests, /AUDIO_TEST_MP3_PATH=.*demo_jingle\.mp3/);
   assert.doesNotMatch(tests, /ui_click\.wav/);
 });

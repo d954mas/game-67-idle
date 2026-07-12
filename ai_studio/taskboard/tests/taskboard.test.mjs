@@ -1,7 +1,7 @@
 // Taskboard core tests. Run: node --test ai_studio/taskboard/tests/taskboard.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, rmSync, writeFileSync, readFileSync, mkdirSync, renameSync, utimesSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync, mkdirSync, renameSync, utimesSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn, spawnSync } from "node:child_process";
@@ -1201,6 +1201,10 @@ test("concurrent processes preserve unique ids and all shared counter keys", asy
   assert.equal(listProjects(root).length, workerCount / kinds.length);
   const counters = JSON.parse(readFileSync(join(root, "ai_studio", "taskboard", "items", ".counters.json"), "utf8"));
   assert.deepEqual(counters, { T: 8, E: 8, P: 8 });
+  assert.deepEqual(
+    readdirSync(join(root, "ai_studio", "taskboard", "items")).filter((name) => name.startsWith(".allocation.lock")),
+    [],
+  );
 });
 
 test("allocation failure after counter commit preserves valid monotonic state", (t) => {
@@ -1238,6 +1242,19 @@ test("allocation reclaims a stale lock without blocking reads", (t) => {
 
   assert.equal(task.fields.id, "T0001");
   assert.equal(existsSync(lockDir), false);
+});
+
+test("allocation reaps a quarantined release directory", (t) => {
+  const root = tempRoot(t);
+  const itemsDir = join(root, "ai_studio", "taskboard", "items");
+  const orphan = join(itemsDir, ".allocation.lock.release-orphan");
+  mkdirSync(orphan, { recursive: true });
+  writeFileSync(join(orphan, "owner.json"), "{}\n");
+  const old = new Date(Date.now() - 60_000);
+  utimesSync(orphan, old, old);
+
+  assert.equal(createTask(root, { title: "Reaper" }, { allocationLockStaleMs: 100 }).fields.id, "T0001");
+  assert.equal(existsSync(orphan), false);
 });
 
 test("allocation release does not delete a successor lock with a different token", (t) => {

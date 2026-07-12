@@ -269,6 +269,17 @@ test("runPrivateGamePreflight rejects invalid nested git metadata", (t) => {
   assert.match(result.violations.map((item) => item.reason).join("\n"), /missing nested git metadata/);
 });
 
+test("runPrivateGamePreflight rejects a bare repository as nested game metadata", (t) => {
+  const root = privateGitFixture(t, "ai-studio-workspace-games-bare-nested-");
+  rmSync(join(root, "games", "secret-game", ".git"), { recursive: true, force: true });
+  execFileSync("git", ["init", "--bare", join(root, "games", "secret-game", ".git")], { stdio: "ignore" });
+
+  const result = runPrivateGamePreflight(root);
+
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /missing nested git metadata/);
+});
+
 test("parent git guard blocks broad add and hook-clean commands with private mounts", (t) => {
   const root = privateGitFixture(t, "ai-studio-workspace-games-guard-");
 

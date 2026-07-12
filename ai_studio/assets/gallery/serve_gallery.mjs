@@ -35,7 +35,9 @@ function requestPath(urlPath) {
 }
 
 function safeRequestRel(rawPath) {
-  const rel = normalize(String(rawPath || "").replace(/^[/\\]+/, ""));
+  const stripped = String(rawPath || "").replace(/^[/\\]+/, "");
+  if (/^[A-Za-z]:[/\\]/.test(stripped)) return null;
+  const rel = normalize(stripped);
   if (!rel || rel === ".") return "";
   if (rel.startsWith("..") || isAbsolute(rel)) return null;
   return rel;

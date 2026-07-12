@@ -389,7 +389,47 @@ function readAllocationOwner(lockPath) {
 function releaseAllocationLock(lockPath, token) {
   const owner = readAllocationOwner(lockPath);
   if (!owner || owner.token !== token) return;
-  rmSync(lockPath, { recursive: true, force: true });
+  const releasePath = `${lockPath}.release-${process.pid}-${token}`;
+  try {
+    renameSync(lockPath, releasePath);
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  const displacedOwner = readAllocationOwner(releasePath);
+  if (!displacedOwner || displacedOwner.token !== token) {
+    if (!existsSync(releasePath) || existsSync(lockPath)) return;
+    try {
+      renameSync(releasePath, lockPath);
+    } catch (error) {
+      if (!["ENOENT", "EEXIST", "EPERM", "ENOTEMPTY"].includes(error.code)) throw error;
+    }
+    return;
+  }
+  try {
+    rmSync(releasePath, { recursive: true, force: true, maxRetries: 6, retryDelay: 20 });
+  } catch {
+    // Allocation already committed and the live lock name is free. A later
+    // acquisition reaps this token-unique quarantine without risking duplicates.
+  }
+}
+
+function reapReleasedAllocationLocks(items, lockPath, staleMs) {
+  const prefix = `${basename(lockPath)}.release-`;
+  for (const name of readdirSync(items)) {
+    if (!name.startsWith(prefix)) continue;
+    const path = join(items, name);
+    try {
+      if (Date.now() - statSync(path).mtimeMs <= staleMs) continue;
+    } catch {
+      continue;
+    }
+    try {
+      rmSync(path, { recursive: true, force: true, maxRetries: 6, retryDelay: 20 });
+    } catch {
+      // Best-effort hygiene only; a quarantined path is never the live lock.
+    }
+  }
 }
 
 function withAllocationLock(root, options, allocate) {
@@ -400,6 +440,7 @@ function withAllocationLock(root, options, allocate) {
   const staleMs = Math.max(retryMs, Number(options.allocationLockStaleMs) || 30000);
   const deadline = Date.now() + timeoutMs;
   mkdirSync(items, { recursive: true });
+  reapReleasedAllocationLocks(items, lockPath, staleMs);
 
   for (let attempt = 0; attempt === 0 || Date.now() < deadline; attempt += 1) {
     const token = randomUUID();
