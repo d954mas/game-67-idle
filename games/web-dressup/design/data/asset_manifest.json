@@ -1,73 +1,35 @@
 {
   "schema": "ai_studio.game_design.asset_manifest.v1",
   "game_id": "web-dressup",
-  "status": "draft",
-  "notes": "First playable needs layered 2D pieces. Source-first, then generate only if library/CC0 has no fit.",
+  "status": "accepted",
+  "notes": "Poki MVP art budget. Shipping garments use only locked worn-on-body generation plus body_peel and visual QA; legacy placed art is excluded.",
+  "budgets": {
+    "initial_total_bytes_max": 6500000,
+    "category_byte_reserves_max": {
+      "body_and_garments": 2500000,
+      "awakening_and_vfx": 700000,
+      "backgrounds": 600000,
+      "ui_thumbs_personalization": 400000,
+      "npc_and_crowd": 200000,
+      "audio": 600000,
+      "wasm_js_html_platform": 1300000
+    },
+    "wearables_total": 30,
+    "awakening_results": 6
+  },
   "assets": [
-    {
-      "id": "char_base_body",
-      "role": "character_base",
-      "slot": "body",
-      "status": "needed",
-      "description": "Neutral standing body/mannequin, Y-up game space, transparent background"
-    },
-    {
-      "id": "slot_hair_set",
-      "role": "catalog_layer",
-      "slot": "hair",
-      "count_min": 4,
-      "status": "needed",
-      "description": "Hair styles aligned to the same head anchor"
-    },
-    {
-      "id": "slot_top_set",
-      "role": "catalog_layer",
-      "slot": "top",
-      "count_min": 4,
-      "status": "needed",
-      "description": "Tops / upper outfits aligned to torso"
-    },
-    {
-      "id": "slot_bottom_set",
-      "role": "catalog_layer",
-      "slot": "bottom",
-      "count_min": 4,
-      "status": "needed",
-      "description": "Bottoms aligned to hips/legs"
-    },
-    {
-      "id": "slot_shoes_set",
-      "role": "catalog_layer",
-      "slot": "shoes",
-      "count_min": 4,
-      "status": "needed",
-      "description": "Shoes aligned to feet"
-    },
-    {
-      "id": "slot_acc_set",
-      "role": "catalog_layer",
-      "slot": "acc",
-      "count_min": 4,
-      "status": "needed",
-      "description": "Accessories (hat/glasses/bag) with clear silhouette"
-    },
-    {
-      "id": "ui_category_chip",
-      "role": "ui",
-      "status": "optional_reuse",
-      "description": "Prefer Kenney UI pack / template panel+button until custom UI art is needed"
-    },
-    {
-      "id": "ui_item_thumb_frame",
-      "role": "ui",
-      "status": "optional_reuse",
-      "description": "Thumbnail frame for catalog cells"
-    },
-    {
-      "id": "bg_dress_room",
-      "role": "background",
-      "status": "needed",
-      "description": "Simple room or soft gradient stage background; must not hide avatar"
-    }
+    {"id": "body_master", "role": "character_base", "count": 1, "status": "gate", "description": "Locked fixed-pose doll accepted by target-player beauty test"},
+    {"id": "hair", "role": "catalog_layer", "slot": "hair", "count": 6, "status": "needed"},
+    {"id": "main_focus", "role": "catalog_layer", "slot": "main", "count": 6, "status": "needed", "description": "One dress and one top per Essence; sets primary recipe input"},
+    {"id": "bottom", "role": "catalog_layer", "slot": "bottom", "count": 6, "status": "needed"},
+    {"id": "shoes", "role": "catalog_layer", "slot": "shoes", "count": 6, "status": "needed"},
+    {"id": "accent_focus", "role": "catalog_layer", "slot": "accent", "count": 6, "status": "needed", "description": "Two accents per Essence; sets secondary recipe input"},
+    {"id": "awakening_rigs", "role": "awakening_layers", "count": 18, "status": "needed", "description": "Three composable static layers per recipe: back silhouette, upper accent and foreground flourish"},
+    {"id": "vfx_shared", "role": "vfx", "count": 20, "status": "needed", "description": "Reusable glyphs, auras, burst masks and tiny particles"},
+    {"id": "backgrounds", "role": "background", "count": 2, "status": "needed", "description": "Backstage dress room and bright magical runway"},
+    {"id": "npc_and_crowd", "role": "runway_support", "count": 3, "status": "needed", "description": "Two opponent silhouette/card compositions and one reusable crowd silhouette layer"},
+    {"id": "personalization", "role": "character_variants", "count": 6, "status": "needed", "description": "Minimal skin/face or makeup variants proven compatible with the locked doll contract"},
+    {"id": "ui_raster", "role": "ui", "status": "needed", "description": "Minimal 9-slice panels, button states, category icons and recipe silhouettes"},
+    {"id": "audio", "role": "audio", "count": 12, "status": "needed", "description": "One runway loop plus eleven layered UI/reveal/victory cues"}
   ]
 }

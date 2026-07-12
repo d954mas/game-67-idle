@@ -45,22 +45,36 @@ static void volume_row(nt_ui_context_t *ctx, const char *name, const char *id, f
 }
 
 void settings_draw_ui(nt_ui_context_t *ctx, World *w) {
+    float layout_w = 0.0F;
+    float layout_h = 0.0F;
+    nt_ui_context_layout_size(ctx, &layout_w, &layout_h);
+    const bool compact_landscape = layout_w > layout_h && layout_h < 500.0F;
     /* Floating Menu — always reachable above dress UI. */
     /* Inset from screen edge so Menu never clips (P1 → closed). */
     CLAY({.id = CLAY_ID("settings/gear_float"),
-          .layout = {.sizing = {CLAY_SIZING_FIXED(96), CLAY_SIZING_FIXED(42)}},
+          .layout = {.sizing = {CLAY_SIZING_FIXED(68), CLAY_SIZING_FIXED(48)}},
           .floating = {.attachTo = CLAY_ATTACH_TO_ROOT,
-                       .attachPoints = {.element = CLAY_ATTACH_POINT_RIGHT_TOP,
-                                        .parent = CLAY_ATTACH_POINT_RIGHT_TOP},
-                       .offset = {-20.0F, 12.0F},
+                       .attachPoints = {.element = compact_landscape ? CLAY_ATTACH_POINT_LEFT_TOP
+                                                                    : CLAY_ATTACH_POINT_RIGHT_TOP,
+                                        .parent = compact_landscape ? CLAY_ATTACH_POINT_LEFT_TOP
+                                                                   : CLAY_ATTACH_POINT_RIGHT_TOP},
+                       .offset = {compact_landscape ? 16.0F : -16.0F, 16.0F},
                        .zIndex = 90},
           .userData = NT_UI_CLAY_DATA(LAYER_IMG)}) {
         const uint32_t gear_id = nt_ui_id("settings/gear/button");
-        nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), gear_id, &g_theme.button,
+        nt_ui_button_style_t gear_style = g_theme.button;
+        gear_style.idle.bg = (nt_atlas_region_ref_t){0};
+        gear_style.hover.bg = (nt_atlas_region_ref_t){0};
+        gear_style.pressed.bg = (nt_atlas_region_ref_t){0};
+        gear_style.idle.bg_tint = 0xFF461821U;
+        gear_style.hover.bg_tint = 0xFF702B39U;
+        gear_style.pressed.bg_tint = 0xFF8A3248U;
+        nt_ui_button_begin(ctx, NT_UI_DATA_LAYER(LAYER_IMG), gear_id, &gear_style,
                            &(Clay_ElementDeclaration){.layout = {.sizing = {CLAY_SIZING_GROW(0), CLAY_SIZING_GROW(0)},
                                                                   .childAlignment = {CLAY_ALIGN_X_CENTER, CLAY_ALIGN_Y_CENTER}}},
                            true, NULL);
-        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), s_open ? "Close" : "Menu", &g_theme.button_label);
+        nt_ui_label_style_t menu_label = g_theme.button_label_light;
+        nt_ui_label(ctx, NT_UI_DATA_LAYER(LAYER_TEXT), s_open ? "Close" : "Menu", &menu_label);
         if (nt_ui_button_end(ctx)) {
             s_open = !s_open;
         }

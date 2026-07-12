@@ -1,6 +1,7 @@
 #include <string.h>
 
 #include "features/platform_sdk/platform_sdk.h"
+#include "features/platform_sdk/platform_sdk_measure.h"
 #include "unity.h"
 
 typedef struct fake_backend_state_t {
@@ -12,6 +13,10 @@ typedef struct fake_backend_state_t {
     int gameplay_stop_calls;
     int interstitial_calls;
     int rewarded_calls;
+    int measure_calls;
+    char measure_category[33];
+    char measure_what[33];
+    char measure_action[33];
     float last_loading_progress;
     platform_sdk_ad_result_t next_interstitial;
     platform_sdk_rewarded_result_t next_rewarded;
@@ -57,6 +62,15 @@ static void fake_backend_gameplay_stop(void *userdata) {
     state->gameplay_stop_calls++;
 }
 
+static void fake_backend_measure(const char *category, const char *what,
+                                 const char *action, void *userdata) {
+    fake_backend_state_t *state = (fake_backend_state_t *)userdata;
+    state->measure_calls++;
+    strcpy(state->measure_category, category);
+    strcpy(state->measure_what, what);
+    strcpy(state->measure_action, action);
+}
+
 static platform_sdk_result_t fake_backend_show_interstitial(const char *placement, void *userdata) {
     fake_backend_state_t *state = (fake_backend_state_t *)userdata;
     (void)placement;
@@ -81,6 +95,7 @@ static platform_sdk_backend_t fake_backend(void) {
         .game_ready = fake_backend_game_ready,
         .gameplay_start = fake_backend_gameplay_start,
         .gameplay_stop = fake_backend_gameplay_stop,
+        .measure = fake_backend_measure,
         .show_interstitial = fake_backend_show_interstitial,
         .show_rewarded = fake_backend_show_rewarded,
     };
@@ -318,6 +333,29 @@ static void test_template_gameplay_requires_first_input_and_tracks_state(void) {
     TEST_ASSERT_EQUAL_INT(1, g_backend_state.gameplay_stop_calls);
 }
 
+static void test_measure_is_internal_bounded_and_forwards_exact_stable_triple(void) {
+    platform_sdk_backend_t backend = fake_backend();
+    platform_sdk_set_backend(&backend, &g_backend_state);
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_NOT_READY,
+                          platform_sdk_measure("recipe", "moon-bloom", "discovered"));
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK, platform_sdk_init());
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_OK,
+                          platform_sdk_measure("recipe", "moon-bloom", "discovered"));
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.measure_calls);
+    TEST_ASSERT_EQUAL_STRING("recipe", g_backend_state.measure_category);
+    TEST_ASSERT_EQUAL_STRING("moon-bloom", g_backend_state.measure_what);
+    TEST_ASSERT_EQUAL_STRING("discovered", g_backend_state.measure_action);
+
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_FAILED,
+                          platform_sdk_measure("recipe", "Moon Bloom", "discovered"));
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_FAILED,
+                          platform_sdk_measure("", "main", "open"));
+    TEST_ASSERT_EQUAL_INT(PLATFORM_SDK_RESULT_FAILED,
+                          platform_sdk_measure("lookbook", "main", "open/again"));
+    TEST_ASSERT_EQUAL_INT(1, g_backend_state.measure_calls);
+}
+
 typedef struct ad_callback_state_t {
     int pauses;
     int resumes;
@@ -484,6 +522,7 @@ int main(void) {
     RUN_TEST(test_template_async_init_failure_is_terminal);
     RUN_TEST(test_template_loading_progress_is_clamped_and_monotonic);
     RUN_TEST(test_template_gameplay_requires_first_input_and_tracks_state);
+    RUN_TEST(test_measure_is_internal_bounded_and_forwards_exact_stable_triple);
     RUN_TEST(test_template_ad_flow_pauses_resumes_once_and_preserves_userdata);
     RUN_TEST(test_template_rewarded_decline_does_not_grant_reward);
     RUN_TEST(test_template_ad_flow_rejects_second_call_while_pending);

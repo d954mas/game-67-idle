@@ -37,6 +37,21 @@ set(PLATFORM_SDK_WEB         "${PLATFORM_SDK_DIR}/web")
 set(GAME_EVENTS_DIR          "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-events")
 set(GAME_EVENTS_INC          "${GAME_EVENTS_DIR}/include")
 set(GAME_EVENTS_SRC          "${GAME_EVENTS_DIR}/src")
+set(AUDIO_CORE_DIR           "${CMAKE_CURRENT_SOURCE_DIR}/../../features/audio-core")
+set(AUDIO_CORE_INC           "${AUDIO_CORE_DIR}/include")
+set(AUDIO_CORE_SRC           "${AUDIO_CORE_DIR}/src")
+set(AUDIO_CORE_WEB           "${AUDIO_CORE_DIR}/web")
+set(AUDIO_CORE_VENDOR        "${AUDIO_CORE_DIR}/vendor/miniaudio")
+
+if(NOT EMSCRIPTEN)
+    find_package(Threads REQUIRED)
+    function(audio_core_link_native_systems target)
+        target_link_libraries(${target} PRIVATE Threads::Threads ${CMAKE_DL_LIBS})
+        if(UNIX AND NOT APPLE)
+            target_link_libraries(${target} PRIVATE m)
+        endif()
+    endfunction()
+endif()
 
 set(GAME_TARGET game)
 set(GAME_OUTPUT_DIR "${CMAKE_BINARY_DIR}/bin")
@@ -50,9 +65,14 @@ include(cmake/GameAssets.cmake)
 add_executable(${GAME_TARGET}
     src/main.c
     src/platform_lifecycle.c
+    src/game_audio.c
+    "${AUDIO_CORE_SRC}/audio.c"
+    "${AUDIO_CORE_SRC}/audio_resource.c"
     "${GAME_EVENTS_SRC}/game_events.c" # E1
     src/game_log.c               # E4.B: built-in "log" event type (unconditional leaf)
     src/features/game_features.c # E1
+    src/features/dress_room/dress_room_events.c # game-owned Runway telemetry contract
+    src/features/dress_room/runway_measure_bridge.c # typed events -> selected portal measure sink
     src/features/dress_room/dress_room_state.c # M0: outfit catalog + equip state
     src/features/dress_room/dress_room_ui.c    # M0: Dress Room dual-layout UI
     src/ui/hud.c
@@ -71,6 +91,22 @@ add_executable(${GAME_TARGET}
     src/features/resource_panel/resource_panel.c     # И3b: generic counter/bar widget (zero feature headers)
     src/ui/demo_hud.c                                # kept for template tests; not drawn in M0
 )
+if(EMSCRIPTEN)
+    target_sources(${GAME_TARGET} PRIVATE "${AUDIO_CORE_SRC}/audio_backend_web.c")
+else()
+    target_sources(${GAME_TARGET} PRIVATE
+        "${AUDIO_CORE_SRC}/audio_backend_miniaudio.c"
+        "${AUDIO_CORE_SRC}/audio_miniaudio_impl.c")
+    # Automation builds launch many short-lived game processes. A real WASAPI
+    # device can block startup or contend across those processes, which makes
+    # frame/UI evidence nondeterministic. Keep release/native play on the real
+    # backend; DevAPI uses miniaudio's no-device engine with identical decode,
+    # voice and mix contracts.
+    if(GAME_DEVAPI_ENABLED)
+        target_compile_definitions(${GAME_TARGET} PRIVATE AUDIO_MINIAUDIO_TEST_NO_DEVICE=1)
+    endif()
+    audio_core_link_native_systems(${GAME_TARGET})
+endif()
 if(NOT EMSCRIPTEN)
     add_dependencies(${GAME_TARGET} game_asset_packs)
 endif()

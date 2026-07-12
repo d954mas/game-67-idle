@@ -28,6 +28,11 @@ bool audio_core_backend_is_unlocked(void);
 
 #if defined(AUDIO_MINIAUDIO_TEST_NO_DEVICE)
 uint64_t audio_miniaudio_test_allocation_count(void);
+uint64_t audio_miniaudio_test_per_clip_limit(void);
+uint64_t audio_miniaudio_test_total_limit(void);
+void audio_miniaudio_test_set_decoded_limits(uint64_t per_clip_bytes, uint64_t total_bytes);
+uint64_t audio_miniaudio_test_decoded_bytes(void);
+bool audio_miniaudio_test_pcm_size(uint64_t frames, uint64_t *bytes);
 #endif
 
 #endif

@@ -93,6 +93,7 @@ typedef struct platform_sdk_backend_t {
     void (*game_ready)(void *userdata);
     void (*gameplay_start)(void *userdata);
     void (*gameplay_stop)(void *userdata);
+    void (*measure)(const char *category, const char *what, const char *action, void *userdata);
     platform_sdk_result_t (*show_interstitial)(const char *placement, void *userdata);
     platform_sdk_result_t (*show_rewarded)(const char *placement, void *userdata);
     void (*destroy)(void *userdata);

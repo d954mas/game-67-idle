@@ -72,6 +72,10 @@ A consuming template or game should wire this as an L1 feature:
    `features/game-events`. Do not emit events from the JavaScript backend or
    create a second event bus.
 
+   A game that forwards selected typed events to portal analytics may include
+   the internal `features/platform_sdk/platform_sdk_measure.h` sink header from
+   one recorder/subscriber. Do not call it from gameplay verbs or UI code.
+
 10. For web builds, keep the loading screen as template-owned HTML over the
     canvas. Import `platform-sdk.js` before appending `game.js`, expose only the
     internal progress/hide hooks used by `platform_sdk_web.c`, and let the C

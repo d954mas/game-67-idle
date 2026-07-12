@@ -91,6 +91,12 @@ export function createPokiPlatformAdapter({ host }) {
     await withSdk((sdk) => sdk.gameplayStop && sdk.gameplayStop());
   }
 
+  async function measure(category, what, action) {
+    await withSdk((sdk) => {
+      if (typeof sdk.measure === "function") sdk.measure(category, what, action);
+    });
+  }
+
   async function showInterstitial() {
     try {
       const shown = await withSdk((sdk) => {
@@ -130,6 +136,7 @@ export function createPokiPlatformAdapter({ host }) {
     loadData() {
       return Promise.resolve(null);
     },
+    measure,
     ready,
     saveData() {
       return Promise.resolve();

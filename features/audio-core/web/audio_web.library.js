@@ -2,6 +2,8 @@ mergeInto(LibraryManager.library, {
   $AudioWebRuntime: {
     CLIP_CAPACITY: 64,
     VOICE_CAPACITY: 32,
+    MAX_CLIP_PCM_BYTES: 134217728,
+    MAX_TOTAL_PCM_BYTES: 268435456,
     HANDLE_INDEX_BITS: 8,
     HANDLE_INDEX_MASK: 255,
     HANDLE_GENERATION_MASK: 0x00ffffff,
@@ -20,7 +22,11 @@ mergeInto(LibraryManager.library, {
     hidden: false,
     gestureAccepted: false,
     gestureSerial: 0,
+    everUnlocked: false,
+    resumePending: false,
+    gestureListener: null,
     visibilityListener: null,
+    decodedPcmBytes: 0,
 
     _makeSlots: function(capacity) {
       var slots = new Array(capacity);
@@ -81,12 +87,96 @@ mergeInto(LibraryManager.library, {
       }
     },
 
+    _releaseVoicesForResume: function(resumeSerial) {
+      for (var i = 0; i < AudioWebRuntime.voices.length; ++i) {
+        var slot = AudioWebRuntime.voices[i];
+        if (slot.occupied && slot.resumeSerial === resumeSerial) {
+          AudioWebRuntime._releaseVoice(i, true);
+        }
+      }
+    },
+
+    _cancelPendingResume: function() {
+      if (!AudioWebRuntime.resumePending) return;
+      var resumeSerial = AudioWebRuntime.gestureSerial;
+      AudioWebRuntime.resumePending = false;
+      AudioWebRuntime.gestureSerial += 1;
+      AudioWebRuntime._releaseVoicesForResume(resumeSerial);
+    },
+
+    _requestResume: function(allowFirstUnlock) {
+      var context = AudioWebRuntime.context;
+      if (!context || !AudioWebRuntime.enabled || AudioWebRuntime.paused ||
+          AudioWebRuntime.hidden || context.state === "closed") return false;
+      if (context.state === "running") {
+        AudioWebRuntime.gestureAccepted = true;
+        AudioWebRuntime.everUnlocked = true;
+        AudioWebRuntime.resumePending = false;
+        return true;
+      }
+      if (AudioWebRuntime.resumePending) return true;
+      if (!allowFirstUnlock && !AudioWebRuntime.everUnlocked) return false;
+
+      AudioWebRuntime.gestureAccepted = true;
+      AudioWebRuntime.resumePending = true;
+      var resumeSerial = ++AudioWebRuntime.gestureSerial;
+      try {
+        var result = context.resume();
+        if (result && typeof result.then === "function") {
+          result.then(function() {
+            if (AudioWebRuntime.context !== context ||
+                AudioWebRuntime.gestureSerial !== resumeSerial) return;
+            AudioWebRuntime.resumePending = false;
+            if (context.state === "running") {
+              AudioWebRuntime.gestureAccepted = true;
+              AudioWebRuntime.everUnlocked = true;
+            } else {
+              AudioWebRuntime.gestureAccepted = false;
+              AudioWebRuntime._releaseVoicesForResume(resumeSerial);
+            }
+          }, function() {
+            if (AudioWebRuntime.context !== context ||
+                AudioWebRuntime.gestureSerial !== resumeSerial) return;
+            AudioWebRuntime.resumePending = false;
+            AudioWebRuntime.gestureAccepted = false;
+            AudioWebRuntime._releaseVoicesForResume(resumeSerial);
+          });
+        } else {
+          AudioWebRuntime.resumePending = false;
+          AudioWebRuntime.gestureAccepted = context.state === "running";
+          if (AudioWebRuntime.gestureAccepted) AudioWebRuntime.everUnlocked = true;
+        }
+        return true;
+      } catch (error) {
+        AudioWebRuntime.resumePending = false;
+        AudioWebRuntime.gestureAccepted = false;
+        AudioWebRuntime._releaseVoicesForResume(resumeSerial);
+        return false;
+      }
+    },
+
+    _decodedPcmSize: function(buffer) {
+      if (!buffer) return -1;
+      var frames = Number(buffer.length);
+      var channels = Number(buffer.numberOfChannels);
+      if (!Number.isSafeInteger(frames) || frames <= 0 ||
+          !Number.isSafeInteger(channels) || channels <= 0) return -1;
+      if (channels > Math.floor(AudioWebRuntime.MAX_CLIP_PCM_BYTES / 4)) return -1;
+      var bytesPerFrame = channels * 4;
+      if (frames > Math.floor(AudioWebRuntime.MAX_CLIP_PCM_BYTES / bytesPerFrame)) return -1;
+      return frames * bytesPerFrame;
+    },
+
     _releaseClip: function(index) {
       var slot = AudioWebRuntime.clips[index];
       if (!slot || !slot.occupied) return;
+      var pcmBytes = slot.pcmBytes || 0;
+      AudioWebRuntime.decodedPcmBytes = pcmBytes <= AudioWebRuntime.decodedPcmBytes ?
+        AudioWebRuntime.decodedPcmBytes - pcmBytes : 0;
       slot.occupied = false;
       slot.state = 2;
       slot.buffer = null;
+      slot.pcmBytes = 0;
       slot.generation = AudioWebRuntime._nextGeneration(slot.generation);
     },
 
@@ -153,18 +243,28 @@ mergeInto(LibraryManager.library, {
       AudioWebRuntime.enabled = true;
       AudioWebRuntime.paused = false;
       AudioWebRuntime.gestureAccepted = false;
+      AudioWebRuntime.everUnlocked = false;
+      AudioWebRuntime.resumePending = false;
+      AudioWebRuntime.decodedPcmBytes = 0;
       AudioWebRuntime.hidden = typeof document !== "undefined" && !!document.hidden;
+      AudioWebRuntime.gestureListener = function() {
+        AudioWebRuntime._applyMix();
+        AudioWebRuntime._requestResume(true);
+      };
       AudioWebRuntime.visibilityListener = function() {
         AudioWebRuntime.hidden = !!document.hidden;
         if (AudioWebRuntime.hidden) {
+          AudioWebRuntime._cancelPendingResume();
           AudioWebRuntime.gestureAccepted = false;
-          AudioWebRuntime.gestureSerial += 1;
         }
         AudioWebRuntime._applyMix();
         AudioWebRuntime._suspendForPolicy();
+        if (!AudioWebRuntime.hidden) AudioWebRuntime._requestResume(false);
       };
       if (typeof document !== "undefined" && document.addEventListener) {
         document.addEventListener("visibilitychange", AudioWebRuntime.visibilityListener);
+        document.addEventListener("pointerdown", AudioWebRuntime.gestureListener, true);
+        document.addEventListener("keydown", AudioWebRuntime.gestureListener, true);
       }
       AudioWebRuntime._applyMix();
       AudioWebRuntime._suspendForPolicy();
@@ -176,13 +276,21 @@ mergeInto(LibraryManager.library, {
           AudioWebRuntime.visibilityListener) {
         document.removeEventListener("visibilitychange", AudioWebRuntime.visibilityListener);
       }
+      if (typeof document !== "undefined" && document.removeEventListener &&
+          AudioWebRuntime.gestureListener) {
+        document.removeEventListener("pointerdown", AudioWebRuntime.gestureListener, true);
+        document.removeEventListener("keydown", AudioWebRuntime.gestureListener, true);
+      }
       AudioWebRuntime.visibilityListener = null;
+      AudioWebRuntime.gestureListener = null;
+      AudioWebRuntime._cancelPendingResume();
       for (var voiceIndex = 0; voiceIndex < AudioWebRuntime.voices.length; ++voiceIndex) {
         AudioWebRuntime._releaseVoice(voiceIndex, true);
       }
       for (var clipIndex = 0; clipIndex < AudioWebRuntime.clips.length; ++clipIndex) {
         AudioWebRuntime._releaseClip(clipIndex);
       }
+      AudioWebRuntime.decodedPcmBytes = 0;
       var nodes = [AudioWebRuntime.musicNode, AudioWebRuntime.sfxNode, AudioWebRuntime.masterNode];
       for (var i = 0; i < nodes.length; ++i) {
         if (nodes[i]) {
@@ -220,17 +328,29 @@ mergeInto(LibraryManager.library, {
       slot.occupied = true;
       slot.state = 0;
       slot.buffer = null;
+      slot.pcmBytes = 0;
       var handle = AudioWebRuntime._packHandle(index, slot.generation);
       try {
         AudioWebRuntime.context.decodeAudioData(ownedBytes.buffer).then(function(buffer) {
           var current = AudioWebRuntime._clip(handle);
           if (!current) return;
+          var pcmBytes = AudioWebRuntime._decodedPcmSize(buffer);
+          if (pcmBytes < 0 || pcmBytes > AudioWebRuntime.MAX_TOTAL_PCM_BYTES -
+              AudioWebRuntime.decodedPcmBytes) {
+            current.slot.buffer = null;
+            current.slot.pcmBytes = 0;
+            current.slot.state = 2;
+            return;
+          }
           current.slot.buffer = buffer;
+          current.slot.pcmBytes = pcmBytes;
+          AudioWebRuntime.decodedPcmBytes += pcmBytes;
           current.slot.state = 1;
         }, function() {
           var current = AudioWebRuntime._clip(handle);
           if (!current) return;
           current.slot.buffer = null;
+          current.slot.pcmBytes = 0;
           current.slot.state = 2;
         });
       } catch (error) {
@@ -281,6 +401,7 @@ mergeInto(LibraryManager.library, {
       slot.active = true;
       slot.source = source;
       slot.gainNode = voiceGain;
+      slot.resumeSerial = AudioWebRuntime.resumePending ? AudioWebRuntime.gestureSerial : 0;
       var handle = AudioWebRuntime._packHandle(index, slot.generation);
       source.onended = function() {
         var current = AudioWebRuntime._voice(handle);
@@ -315,45 +436,28 @@ mergeInto(LibraryManager.library, {
     setEnabled: function(enabled) {
       AudioWebRuntime.enabled = !!enabled;
       if (!AudioWebRuntime.enabled) {
+        AudioWebRuntime._cancelPendingResume();
         AudioWebRuntime.gestureAccepted = false;
-        AudioWebRuntime.gestureSerial += 1;
       }
       AudioWebRuntime._applyMix();
       AudioWebRuntime._suspendForPolicy();
+      if (AudioWebRuntime.enabled) AudioWebRuntime._requestResume(false);
     },
 
     setPaused: function(paused) {
       AudioWebRuntime.paused = !!paused;
       if (AudioWebRuntime.paused) {
+        AudioWebRuntime._cancelPendingResume();
         AudioWebRuntime.gestureAccepted = false;
-        AudioWebRuntime.gestureSerial += 1;
       }
       AudioWebRuntime._applyMix();
       AudioWebRuntime._suspendForPolicy();
+      if (!AudioWebRuntime.paused) AudioWebRuntime._requestResume(false);
     },
 
     userGesture: function() {
-      var context = AudioWebRuntime.context;
-      if (!context || !AudioWebRuntime.enabled || AudioWebRuntime.paused ||
-          AudioWebRuntime.hidden || context.state === "closed") return false;
       AudioWebRuntime._applyMix();
-      AudioWebRuntime.gestureAccepted = true;
-      var gestureSerial = ++AudioWebRuntime.gestureSerial;
-      if (context.state === "running") return true;
-      try {
-        var result = context.resume();
-        if (result && typeof result.catch === "function") result.catch(function() {
-          if (AudioWebRuntime.context !== context || AudioWebRuntime.gestureSerial !== gestureSerial) return;
-          AudioWebRuntime.gestureAccepted = false;
-          for (var i = 0; i < AudioWebRuntime.voices.length; ++i) {
-            AudioWebRuntime._releaseVoice(i, true);
-          }
-        });
-        return true;
-      } catch (error) {
-        AudioWebRuntime.gestureAccepted = false;
-        return false;
-      }
+      return AudioWebRuntime._requestResume(true);
     }
   },
 
@@ -388,6 +492,6 @@ mergeInto(LibraryManager.library, {
   audio_web_is_unlocked__deps: ["$AudioWebRuntime"],
   audio_web_is_unlocked: function() {
     return AudioWebRuntime.context && AudioWebRuntime.context.state !== "closed" &&
-      AudioWebRuntime.gestureAccepted ? 1 : 0;
+      AudioWebRuntime.everUnlocked && AudioWebRuntime.gestureAccepted ? 1 : 0;
   }
 });

@@ -76,12 +76,11 @@ TEMPLATE_DIR = os.path.dirname(TESTS_DIR)
 # EM_JS bug looked exactly like a browser-persistence problem until split this way.
 STORAGE_KEY = "template/save/autosave"
 # game.state.set routes the FIRST path segment to the save-fragment id
-# (GAME_STATE_FRAGMENT_ID="game"); the rest is the field within it. test_ui_clicks is
-# an int field, schema default 0, range [0, 1000000] (see
-# templates/template/state/game_state.schema.json) -- 424242 is unambiguous proof
+# (GAME_STATE_FRAGMENT_ID="game"); the rest is the field within it. rounds_completed
+# is a bounded Runway Awakening field -- 424242 is unambiguous proof
 # the SAVED value (not the default) survived the restart. The previous probe
 # field was dead state and was removed from the schema.
-STATE_PATH = "game.test_ui_clicks"
+STATE_PATH = "game.rounds_completed"
 STATE_VALUE = 424242
 
 

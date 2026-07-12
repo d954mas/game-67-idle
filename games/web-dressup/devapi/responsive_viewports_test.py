@@ -43,6 +43,36 @@ class FakeGame:
         return output
 
 
+class FakeManualGame(FakeGame):
+    def __init__(self, viewport):
+        super().__init__(viewport)
+        self.time_mode = "run"
+        self.steps = []
+        self.capture_wait_frames = None
+
+    def endpoint_methods(self):
+        return {"time.step", "time.set_mode", "ui.tree", "capture.frame"}
+
+    def result(self, method, params=None):
+        params = params or {}
+        if method == "time.set_mode":
+            self.time_mode = params["mode"]
+            return {"mode": self.time_mode}
+        if method == "time.step":
+            if self.time_mode != "manual":
+                raise AssertionError("manual mode required")
+            self.steps.append(params["count"])
+            return {"frames": params["count"]}
+        return super().result(method, params)
+
+    def wait_frames(self, frames=1):
+        raise TimeoutError("frame.wait is intentionally unavailable")
+
+    def capture_screenshot(self, output, wait_frames=1, audit=True):
+        self.capture_wait_frames = wait_frames
+        return super().capture_screenshot(output, wait_frames=wait_frames, audit=audit)
+
+
 class ResponsiveViewportsTest(unittest.TestCase):
     def test_parse_viewport_accepts_named_size(self):
         viewport = rv.parse_viewport("phone=390x844")
@@ -87,6 +117,15 @@ class ResponsiveViewportsTest(unittest.TestCase):
             summary = rv.run_matrix(lambda viewport: FakeGame(viewport), viewports, Path(tmp), audit=False, warmup_frames=2, prepare=prepare)
             self.assertEqual(calls, [("wide", [2])])
             self.assertEqual(summary["viewports"][0]["scenario_result"], {"prepared": "640x360"})
+
+    def test_capture_uses_manual_time_when_native_frame_wait_is_unavailable(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            viewport = rv.ViewportCase("manual", 480, 640)
+            game = FakeManualGame(viewport)
+            rv.capture_viewport(game, viewport, Path(tmp), audit=False, warmup_frames=5)
+            self.assertEqual(game.steps, [5, 2])
+            self.assertEqual(game.capture_wait_frames, 0)
+            self.assertEqual(game.time_mode, "run")
 
 
 if __name__ == "__main__":

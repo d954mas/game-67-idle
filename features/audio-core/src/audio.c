@@ -252,7 +252,11 @@ void audio_set_paused(bool paused) {
 }
 
 void audio_on_user_gesture(void) {
-    if (s_initialized && s_status.available && audio_core_backend_user_gesture()) s_status.unlocked = true;
+    if (!s_initialized || !s_status.available) return;
+    (void)audio_core_backend_user_gesture();
+    /* Web resume is asynchronous: expose the backend's confirmed state, not
+       merely that a resume request was accepted. */
+    s_status.unlocked = audio_core_backend_is_unlocked();
 }
 
 audio_status_t audio_status(void) { return s_status; }

@@ -1,0 +1,9 @@
+#ifndef TEST_GAME_ASSETS_H_GENERATED
+#define TEST_GAME_ASSETS_H_GENERATED
+
+#include "hash/nt_hash.h"
+
+#define ASSET_BLOB_AUDIO_SFX_UI_CLICK ((nt_hash64_t){UINT64_C(0xA001)})
+#define ASSET_BLOB_AUDIO_SFX_AWAKENING_JINGLE ((nt_hash64_t){UINT64_C(0xA002)})
+
+#endif

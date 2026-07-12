@@ -84,6 +84,9 @@ JavaScript artifact.
   JavaScript backends only call portal SDK methods and report outcomes.
 - The compact SDK lifecycle/ad-flow event contract, owned by the C facade and
   bridged into `features/game-events`, plus a fixture-driven scorecard CLI.
+- A separate bounded `platform_sdk_measure` sink seam for typed-event
+  subscribers. It is not a second game event API; selected bridges translate
+  finite game-owned events into portal analytics triples.
 - Publish target manifest contracts for itch, Poki, Yandex Games, and Playgama.
 
 ## What It Does Not Own

@@ -245,6 +245,52 @@ test("web backend forwards loading progress without analytics events", async () 
   assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);
 });
 
+test("web backend forwards one stable measure triple without creating an event bus", async () => {
+  const host = createHost(TargetPlatform.POKI);
+  const measures = [];
+  const backend = createPlatformSdkWebBackend({
+    adapterFactory: () => ({
+      measure(category, what, action) {
+        measures.push([category, what, action]);
+      },
+    }),
+    config: { target: TargetPlatform.POKI, platformSdk: "poki" },
+    host,
+  });
+
+  await backend.measure("recipe", "moon-bloom", "discovered");
+
+  assert.deepEqual(measures, [["recipe", "moon-bloom", "discovered"]]);
+  assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);
+});
+
+test("mock adapter records deterministic measure trace", async () => {
+  const host = createHost(TargetPlatform.LOCAL);
+  const adapter = createMockPlatformAdapter({ host, target: TargetPlatform.LOCAL });
+
+  await adapter.measure("round", "1", "start");
+  await adapter.measure("round", "1", "complete");
+
+  assert.deepEqual(adapter.measureTrace(), [
+    ["round", "1", "start"],
+    ["round", "1", "complete"],
+  ]);
+});
+
+test("poki adapter calls the official measure category what action contract", async () => {
+  const host = createHost(TargetPlatform.POKI);
+  const measures = [];
+  host.PokiSDK = {
+    init() { return Promise.resolve(); },
+    measure(category, what, action) { measures.push([category, what, action]); },
+  };
+  const adapter = createPokiPlatformAdapter({ host });
+
+  await adapter.measure("collection", "3", "complete");
+
+  assert.deepEqual(measures, [["collection", "3", "complete"]]);
+});
+
 test("poki adapter coalesces loading progress queued before SDK init completes", async () => {
   const host = createHost(TargetPlatform.POKI);
   const progress = [];

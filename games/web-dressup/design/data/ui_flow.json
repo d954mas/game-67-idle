@@ -1,72 +1,57 @@
 {
   "schema": "ai_studio.game_design.ui_flow.v1",
   "game_id": "web-dressup",
-  "status": "draft",
-  "distribution": "poki",
-  "multiplayer": false,
+  "status": "accepted",
   "orientations": ["portrait", "landscape"],
   "screens": [
     {
       "id": "dress_room",
-      "label": "Dress Room",
       "role": "primary",
-      "entry": "boot",
+      "entry": "boot_or_restyle",
       "regions": [
-        { "id": "top_bar", "content": "Theme chip, optional settings; minimal text" },
-        { "id": "stage", "content": "2D character base + equipped layers" },
-        { "id": "categories", "content": "Slot chips: hair, top, bottom, shoes, acc" },
-        { "id": "catalog", "content": "Scroll/grid of items for active category" },
-        { "id": "actions", "content": "Random, Reset, Show (enter Fake Show)" }
+        {"id": "avatar_stage", "content": "Large fixed doll with equipped layers and short Essence hints"},
+        {"id": "categories", "content": "Hair, main, bottom, shoes and accent icons"},
+        {"id": "closet", "content": "Large cropped garment thumbnails with strong selected state"},
+        {"id": "awaken", "content": "Single saturated primary CTA after both focus slots are filled"},
+        {"id": "secondary_actions", "content": "Album, mute and reset kept visually subordinate"}
       ],
-      "exits": ["theme_picker", "fake_show", "settings"]
+      "exits": ["runway", "album"]
     },
     {
-      "id": "theme_picker",
-      "label": "Theme Picker",
-      "role": "sheet_or_modal",
-      "entry": "from dress_room theme chip",
+      "id": "runway",
+      "role": "noninteractive_sequence",
       "regions": [
-        { "id": "theme_list", "content": "Icon + short label themes (Y2K, formal, beach, goth, etc.)" },
-        { "id": "confirm", "content": "Apply theme banner; close sheet" }
+        {"id": "npc_intro", "content": "Two short opponent silhouettes/cards"},
+        {"id": "player_charge", "content": "Equipped outfit charges in place"},
+        {"id": "awakening_reveal", "content": "Flash, signature silhouette, VFX and audience crown"}
       ],
-      "exits": ["dress_room"]
+      "exits": ["recipe_card"]
     },
     {
-      "id": "fake_show",
-      "label": "Fake Show",
-      "role": "sequence",
-      "entry": "from dress_room Show",
+      "id": "recipe_card",
+      "role": "result",
       "regions": [
-        { "id": "runway_stage", "content": "Player outfit walk + pose" },
-        { "id": "rival_lane", "content": "2-5 fake NPC outfits (no real players)" },
-        { "id": "score_fx", "content": "Stars / crowd juice / fake nameplates" },
-        { "id": "podium", "content": "Rank result + Play again / Restyle CTAs" }
+        {"id": "authored_look", "content": "Player outfit plus awakening composition"},
+        {"id": "recipe_explanation", "content": "Two focus pieces and discovered pair"},
+        {"id": "reward", "content": "New cosmetic or milestone reward"},
+        {"id": "actions", "content": "Restyle primary, Album secondary"}
       ],
-      "exits": ["dress_room"]
+      "exits": ["dress_room", "album"]
     },
     {
-      "id": "settings",
-      "label": "Settings",
-      "role": "modal",
-      "entry": "from dress_room gear",
+      "id": "album",
+      "role": "collection",
       "regions": [
-        { "id": "audio", "content": "Optional volume" },
-        { "id": "close", "content": "Close to dress room" }
+        {"id": "recipe_matrix", "content": "Six discovered cards or unknown silhouettes"},
+        {"id": "saved_variants", "content": "Best player-authored look for each recipe"}
       ],
       "exits": ["dress_room"]
     }
   ],
-  "first_path": [
-    "boot",
-    "dress_room",
-    "pick_category",
-    "pick_item",
-    "fake_show",
-    "restyle"
-  ],
+  "first_path": ["boot", "dress_room", "runway", "recipe_card", "dress_room"],
   "layout_notes": {
-    "portrait": "Stage top 45-55%; categories, catalog, actions stacked below; min 44px taps",
-    "landscape": "Stage left/center 50-60% width; categories+catalog right or bottom strip; Show/Random reachable without covering face",
-    "orientation_change": "Reflow chrome; keep equipped outfit and selected category"
+    "portrait": "Avatar occupies the upper 55-65%; categories and a scrollable closet stay below; AWAKEN remains thumb-reachable.",
+    "landscape": "Avatar and runway occupy the left/center 55-65%; closet is a right rail; AWAKEN is visually isolated.",
+    "orientation_change": "Preserve outfit, focus selection, recipe, reveal state and progress across reflow."
   }
 }

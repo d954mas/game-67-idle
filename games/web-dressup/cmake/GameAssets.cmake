@@ -1,5 +1,9 @@
 # --- asset pack builder (runs at build time -> game.ntpack + asset-id header) ---
 if(NOT EMSCRIPTEN)
+    file(GLOB DRESS_ASSET_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/dress/*.png")
+    file(GLOB UI_ASSET_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/ui/*.png")
     add_executable(build_game_packs src/build_packs.c)
     target_link_libraries(build_game_packs PRIVATE nt_builder nt_log)
     target_compile_definitions(build_game_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -19,6 +23,8 @@ if(NOT EMSCRIPTEN)
             assets/ui/slider_track.png assets/ui/slider_fill.png assets/ui/slider_thumb.png
             assets/icons/gold.png assets/icons/xp.png assets/icons/energy.png
             assets/icons/potion.png assets/icons/sword.png assets/icons/wood.png
+            assets/audio/sfx/ui_click.wav assets/audio/sfx/awakening_jingle.mp3
+            ${DRESS_ASSET_SOURCES} ${UI_ASSET_SOURCES}
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
         COMMENT "Building game asset pack"
         VERBATIM

@@ -75,7 +75,7 @@ if(NOT EMSCRIPTEN)
     # prerequisite. GAME_STATE_GENERATED_* is always defined (state is always on).
     add_executable(test_game_state_roundtrip
         tests/test_game_state_roundtrip.c
-        "${GAME_STATE_GENERATED_SOURCE}" src/game_state_json.c)
+        "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_MIGRATION_SOURCE}" src/game_state_json.c)
     target_link_libraries(test_game_state_roundtrip PRIVATE cjson unity)
     target_include_directories(test_game_state_roundtrip PRIVATE src "${GAME_STATE_GENERATED_DIR}")
     target_compile_definitions(test_game_state_roundtrip PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -299,12 +299,94 @@ if(NOT EMSCRIPTEN)
 
     add_executable(test_dress_room
         tests/test_dress_room.c
-        src/features/dress_room/dress_room_state.c)
-    target_link_libraries(test_dress_room PRIVATE unity)
-    target_include_directories(test_dress_room PRIVATE src)
+        src/features/dress_room/dress_room_events.c
+        src/features/dress_room/dress_room_state.c
+        "${GAME_EVENTS_SRC}/game_events.c"
+        "${GAME_STATE_GENERATED_SOURCE}"
+        "${GAME_STATE_MIGRATION_SOURCE}"
+        src/game_state_json.c)
+    target_link_libraries(test_dress_room PRIVATE unity cjson nt_hash nt_log nt_core)
+    target_include_directories(test_dress_room PRIVATE src "${GAME_STATE_GENERATED_DIR}" "${GAME_EVENTS_INC}")
     target_compile_definitions(test_dress_room PRIVATE _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_dress_room PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_dress_room COMMAND test_dress_room)
+
+    add_executable(test_runway_measure_bridge
+        tests/test_runway_measure_bridge.c
+        src/features/dress_room/dress_room_events.c
+        src/features/dress_room/runway_measure_bridge.c
+        "${PLATFORM_SDK_SRC}/platform_sdk.c"
+        "${GAME_EVENTS_SRC}/game_events.c")
+    target_link_libraries(test_runway_measure_bridge PRIVATE unity nt_hash nt_log nt_core)
+    target_include_directories(test_runway_measure_bridge PRIVATE
+        src "${PLATFORM_SDK_INC}" "${GAME_EVENTS_INC}")
+    target_compile_definitions(test_runway_measure_bridge PRIVATE
+        PLATFORM_SDK_TARGET_ID=${GAME_PLATFORM_TARGET_ID}
+        PLATFORM_SDK_CURRENT_ID=${GAME_PLATFORM_SDK_ID}
+        PLATFORM_SDK_EXTERNAL_LINKS_ALLOWED=${GAME_PLATFORM_EXTERNAL_LINKS_ALLOWED}
+        PLATFORM_SDK_ADS_SUPPORTED=${GAME_PLATFORM_ADS_SUPPORTED}
+        PLATFORM_SDK_REWARDED_SUPPORTED=${GAME_PLATFORM_REWARDED_SUPPORTED}
+        PLATFORM_SDK_STORAGE_SUPPORTED=${GAME_PLATFORM_STORAGE_SUPPORTED}
+        PLATFORM_SDK_TESTING=1 FEATURE_GAME_EVENTS=1 _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_runway_measure_bridge PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_runway_measure_bridge COMMAND test_runway_measure_bridge)
+
+    set(AUDIO_CORE_TESTS "${AUDIO_CORE_DIR}/tests")
+    add_library(audio_unity STATIC "${ENGINE_DIR}/deps/unity/src/unity.c")
+    target_include_directories(audio_unity PUBLIC "${ENGINE_DIR}/deps/unity/src")
+    target_compile_definitions(audio_unity PRIVATE _CRT_SECURE_NO_WARNINGS)
+
+    add_executable(test_audio_core
+        "${AUDIO_CORE_TESTS}/test_audio.c"
+        "${AUDIO_CORE_TESTS}/fake_audio_environment.c"
+        "${AUDIO_CORE_SRC}/audio.c")
+    target_link_libraries(test_audio_core PRIVATE audio_unity nt_core)
+    target_include_directories(test_audio_core PRIVATE
+        "${AUDIO_CORE_INC}" "${AUDIO_CORE_SRC}" "${AUDIO_CORE_TESTS}")
+    target_compile_definitions(test_audio_core PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(test_audio_core PRIVATE -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
+    nt_set_warning_flags(test_audio_core)
+    set_target_properties(test_audio_core PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_audio_core COMMAND test_audio_core)
+
+    add_executable(test_audio_resource
+        "${AUDIO_CORE_TESTS}/test_audio_resource.c"
+        "${AUDIO_CORE_SRC}/audio_resource.c")
+    target_link_libraries(test_audio_resource PRIVATE unity nt_shared)
+    target_include_directories(test_audio_resource PRIVATE "${AUDIO_CORE_SRC}" "${ENGINE_DIR}/engine")
+    target_compile_definitions(test_audio_resource PRIVATE NT_INTROSPECT_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_audio_resource)
+    set_target_properties(test_audio_resource PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_audio_resource COMMAND test_audio_resource)
+
+    add_executable(test_audio_backend_native
+        "${AUDIO_CORE_TESTS}/test_audio_backend_native.c"
+        "${AUDIO_CORE_SRC}/audio_backend_miniaudio.c"
+        "${AUDIO_CORE_SRC}/audio_miniaudio_impl.c")
+    target_link_libraries(test_audio_backend_native PRIVATE unity)
+    target_include_directories(test_audio_backend_native PRIVATE "${AUDIO_CORE_SRC}" "${AUDIO_CORE_VENDOR}")
+    target_compile_definitions(test_audio_backend_native PRIVATE AUDIO_MINIAUDIO_TEST_NO_DEVICE=1 _CRT_SECURE_NO_WARNINGS)
+    audio_core_link_native_systems(test_audio_backend_native)
+    nt_set_warning_flags(test_audio_backend_native)
+    set_target_properties(test_audio_backend_native PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_audio_backend_native COMMAND test_audio_backend_native)
+
+    add_executable(test_game_audio tests/test_game_audio.c src/game_audio.c)
+    target_link_libraries(test_game_audio PRIVATE audio_unity nt_ui_interface nt_shared nt_log)
+    target_include_directories(test_game_audio PRIVATE
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/fixtures/audio"
+        "${AUDIO_CORE_INC}" "${PLATFORM_SDK_INC}" src "${ENGINE_DIR}/engine")
+    target_compile_definitions(test_game_audio PRIVATE NT_INTROSPECT_ENABLED=0 _CRT_SECURE_NO_WARNINGS)
+    target_compile_options(test_game_audio PRIVATE -UUNITY_EXCLUDE_FLOAT -UUNITY_EXCLUDE_DOUBLE)
+    nt_set_warning_flags(test_game_audio)
+    set_target_properties(test_game_audio PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_audio COMMAND test_game_audio)
+
+    find_program(AUDIO_NODE_EXECUTABLE node REQUIRED)
+    add_test(NAME test_audio_web_library
+        COMMAND "${AUDIO_NODE_EXECUTABLE}" --test "${AUDIO_CORE_TESTS}/test_audio_web_library.mjs"
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../..")
 
     add_executable(test_platform_sdk
         tests/test_platform_sdk.c
@@ -373,7 +455,7 @@ if(NOT EMSCRIPTEN)
     add_executable(test_template_composition
         tests/test_template_composition.c
         src/game_save.c src/game_storage.c src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c"
-        "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
+        "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_MIGRATION_SOURCE}" "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
         "${SETTINGS_STATE_GENERATED_SOURCE}" src/features/settings/settings.c
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
         src/features/items/items_bootstrap.c

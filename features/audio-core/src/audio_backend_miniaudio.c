@@ -11,10 +11,13 @@
 #define AUDIO_NATIVE_VOICES 32u
 #define AUDIO_NATIVE_CHANNELS 2u
 #define AUDIO_NATIVE_SAMPLE_RATE 48000u
+#define AUDIO_NATIVE_MAX_DECODED_BYTES_PER_CLIP (UINT64_C(128) * UINT64_C(1024) * UINT64_C(1024))
+#define AUDIO_NATIVE_MAX_DECODED_BYTES_TOTAL (UINT64_C(256) * UINT64_C(1024) * UINT64_C(1024))
 
 typedef struct audio_native_clip_t {
     void *pcm;
     ma_uint64 frames;
+    uint64_t pcm_bytes;
     ma_uint32 state;
     ma_bool32 used;
 } audio_native_clip_t;
@@ -43,6 +46,9 @@ static ma_bool32 s_enabled;
 static ma_bool32 s_paused;
 static ma_bool32 s_started;
 static uint64_t s_allocation_count;
+static uint64_t s_decoded_pcm_bytes;
+static uint64_t s_decoded_pcm_per_clip_limit;
+static uint64_t s_decoded_pcm_total_limit;
 
 static void *audio_malloc(size_t size, void *user_data) {
     (void)user_data;
@@ -76,8 +82,32 @@ static void voice_stop(audio_native_voice_t *voice) {
 }
 
 static void clip_destroy(audio_native_clip_t *clip) {
-    if (clip->pcm != NULL) ma_free(clip->pcm, NULL);
+    if (clip->pcm != NULL) {
+        if (s_decoded_pcm_bytes < clip->pcm_bytes) abort();
+        s_decoded_pcm_bytes -= clip->pcm_bytes;
+        audio_free(clip->pcm, NULL);
+    }
     memset(clip, 0, sizeof(*clip));
+}
+
+static bool decoded_pcm_size(uint64_t frames, uint64_t *bytes) {
+    const uint64_t bytes_per_frame =
+        (uint64_t)AUDIO_NATIVE_CHANNELS * (uint64_t)sizeof(float);
+    if (bytes == NULL) return false;
+    *bytes = 0;
+    if (frames == 0 || frames > UINT64_MAX / bytes_per_frame) return false;
+    uint64_t decoded_bytes = frames * bytes_per_frame;
+    if (decoded_bytes > SIZE_MAX) return false;
+    *bytes = decoded_bytes;
+    return true;
+}
+
+static bool decoded_pcm_budget_allows(uint64_t decoded_bytes) {
+    if (decoded_bytes > s_decoded_pcm_per_clip_limit ||
+            decoded_bytes > s_decoded_pcm_total_limit) {
+        return false;
+    }
+    return s_decoded_pcm_bytes <= s_decoded_pcm_total_limit - decoded_bytes;
 }
 
 static void apply_run_state(void) {
@@ -107,6 +137,9 @@ static void backend_reset(void) {
     s_paused = MA_FALSE;
     s_started = MA_FALSE;
     s_allocation_count = 0;
+    s_decoded_pcm_bytes = 0;
+    s_decoded_pcm_per_clip_limit = AUDIO_NATIVE_MAX_DECODED_BYTES_PER_CLIP;
+    s_decoded_pcm_total_limit = AUDIO_NATIVE_MAX_DECODED_BYTES_TOTAL;
 }
 
 static void backend_cleanup(void) {
@@ -208,9 +241,29 @@ uint32_t audio_core_backend_decode_begin(const void *bytes, uint32_t size) {
     clip->used = MA_TRUE;
     clip->state = 2;
     ma_decoder_config config = ma_decoder_config_init(ma_format_f32, AUDIO_NATIVE_CHANNELS, AUDIO_NATIVE_SAMPLE_RATE);
-    if (ma_decode_memory(bytes, size, &config, &clip->frames, &clip->pcm) == MA_SUCCESS &&
-            clip->pcm != NULL && clip->frames > 0) {
-        clip->state = 1;
+    ma_decoder decoder;
+    if (ma_decoder_init_memory(bytes, size, &config, &decoder) == MA_SUCCESS) {
+        ma_uint64 frames = 0;
+        uint64_t pcm_bytes = 0;
+        if (ma_decoder_get_length_in_pcm_frames(&decoder, &frames) == MA_SUCCESS &&
+                decoded_pcm_size(frames, &pcm_bytes) &&
+                decoded_pcm_budget_allows(pcm_bytes)) {
+            void *pcm = audio_malloc((size_t)pcm_bytes, NULL);
+            if (pcm != NULL) {
+                ma_uint64 frames_read = 0;
+                ma_result read_result = ma_decoder_read_pcm_frames(&decoder, pcm, frames, &frames_read);
+                if (read_result == MA_SUCCESS && frames_read == frames) {
+                    clip->pcm = pcm;
+                    clip->frames = frames;
+                    clip->pcm_bytes = pcm_bytes;
+                    clip->state = 1;
+                    s_decoded_pcm_bytes += pcm_bytes;
+                } else {
+                    audio_free(pcm, NULL);
+                }
+            }
+        }
+        (void)ma_decoder_uninit(&decoder);
     }
     return index + 1u;
 }
@@ -287,4 +340,15 @@ bool audio_core_backend_is_unlocked(void) {
 
 #if defined(AUDIO_MINIAUDIO_TEST_NO_DEVICE)
 uint64_t audio_miniaudio_test_allocation_count(void) { return s_allocation_count; }
+uint64_t audio_miniaudio_test_per_clip_limit(void) { return s_decoded_pcm_per_clip_limit; }
+uint64_t audio_miniaudio_test_total_limit(void) { return s_decoded_pcm_total_limit; }
+void audio_miniaudio_test_set_decoded_limits(uint64_t per_clip_bytes, uint64_t total_bytes) {
+    if (s_decoded_pcm_bytes != 0) abort();
+    s_decoded_pcm_per_clip_limit = per_clip_bytes;
+    s_decoded_pcm_total_limit = total_bytes;
+}
+uint64_t audio_miniaudio_test_decoded_bytes(void) { return s_decoded_pcm_bytes; }
+bool audio_miniaudio_test_pcm_size(uint64_t frames, uint64_t *bytes) {
+    return decoded_pcm_size(frames, bytes);
+}
 #endif

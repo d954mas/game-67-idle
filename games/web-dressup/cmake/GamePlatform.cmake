@@ -11,6 +11,7 @@ if(GAME_EVENTS_LOG_MIRROR)
     target_sources(${GAME_TARGET} PRIVATE "${GAME_EVENTS_SRC}/game_events_log_mirror.c")
 endif()
 target_include_directories(${GAME_TARGET} PRIVATE
+    "${AUDIO_CORE_INC}"
     "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${PLATFORM_SDK_INC}" "${GAME_EVENTS_INC}"
     src "${GAME_SOURCE_GENERATED_DIR}" "${ENGINE_DIR}/deps/glfw/deps")
 target_compile_definitions(${GAME_TARGET} PRIVATE GAME_WINDOW_TITLE="${GAME_WINDOW_TITLE}")
@@ -27,10 +28,15 @@ if(EMSCRIPTEN)
     # transport entry points; the exports are also what pulls the EM_JS object
     # out of libnt_devapi_web.a so nt_devapi_web_install_shim resolves at link.
     set(GAME_WEB_EXPORTS "_main,_malloc,_free,_platform_sdk_web_complete_init,_platform_sdk_web_complete_interstitial,_platform_sdk_web_complete_rewarded")
+    if(CMAKE_BUILD_TYPE STREQUAL "Debug")
+        # Narrow browser-smoke seam: absent from release builds.
+        set(GAME_WEB_EXPORTS "${GAME_WEB_EXPORTS},_game_audio_play_cue")
+    endif()
     if(GAME_DEVAPI_ENABLED)
         set(GAME_WEB_EXPORTS "${GAME_WEB_EXPORTS},_nt_devapi_web_submit,_nt_devapi_web_poll")
     endif()
     target_link_options(${GAME_TARGET} PRIVATE
+        "SHELL:--js-library ${AUDIO_CORE_WEB}/audio_web.library.js"
         "SHELL:-sFORCE_FILESYSTEM=1"
         "SHELL:-sEXPORTED_FUNCTIONS=${GAME_WEB_EXPORTS}"
         "SHELL:-sMIN_WEBGL_VERSION=2"
@@ -130,9 +136,6 @@ if(GAME_DEVAPI_ENABLED)
         nt_log_ring
     )
 endif()
-if(WIN32 AND NOT EMSCRIPTEN)
-    target_link_libraries(${GAME_TARGET} PRIVATE winmm)
-endif()
 # On web the engine streams packs over HTTP relative to the page URL, so the
 # path must be RELATIVE and the pack ships as a plain file next to index.html
 # (tools/build_web.sh copies it from the native build). Native keeps the
@@ -175,6 +178,17 @@ nt_set_warning_flags(${GAME_TARGET})
 # wasm link dies on undefined __asan_*/__ubsan_* (lead decision 2026-07-07).
 nt_set_sanitizer_flags(${GAME_TARGET})
 set_target_properties(${GAME_TARGET} PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}")
+
+if(EMSCRIPTEN)
+    add_custom_target(release_size_gate
+        COMMAND "${Python3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tools/check_release_size.py"
+            "--bin" "${GAME_OUTPUT_DIR}"
+            "--manifest" "${CMAKE_BINARY_DIR}/release-size-manifest.json"
+        COMMENT "Enforcing the 6.5 MiB Poki release payload limit"
+        VERBATIM
+    )
+endif()
 
 if(GAME_DEVAPI_ENABLED AND NOT EMSCRIPTEN)
     find_package(Python3 COMPONENTS Interpreter QUIET)

@@ -16,6 +16,7 @@ void fake_audio_finish_oldest_voice(void);
 void fake_audio_set_backend_available(bool available);
 void fake_audio_set_backend_unlocked(bool unlocked);
 void fake_audio_set_gesture_result(bool result);
+void fake_audio_set_gesture_unlocks_immediately(bool unlocks);
 
 uint32_t fake_audio_backend_decode_begin_count(void);
 uint32_t fake_audio_backend_clip_destroy_count(void);

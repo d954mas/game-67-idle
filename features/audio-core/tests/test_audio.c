@@ -159,7 +159,11 @@ void test_user_gesture_is_forwarded_and_status_records_success_only(void) {
     fake_audio_set_gesture_result(true);
     audio_on_user_gesture();
     TEST_ASSERT_TRUE(audio_status().unlocked);
-    TEST_ASSERT_EQUAL_UINT32(2, fake_audio_backend_gesture_count());
+    fake_audio_set_backend_unlocked(false);
+    fake_audio_set_gesture_unlocks_immediately(false);
+    audio_on_user_gesture();
+    TEST_ASSERT_FALSE(audio_status().unlocked);
+    TEST_ASSERT_EQUAL_UINT32(3, fake_audio_backend_gesture_count());
 }
 
 void test_update_reconciles_an_async_backend_unlock_rejection(void) {

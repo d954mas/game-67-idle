@@ -6,8 +6,10 @@
 #define NT_BUILD_MAX_ASSETS 4096
 #include "nt_builder.h"
 
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifdef _WIN32
 #include <direct.h>
@@ -28,6 +30,41 @@ static char s_path_buf[512];
 static const char *pack_path(const char *dir, const char *name) {
     (void)snprintf(s_path_buf, sizeof(s_path_buf), "%s/%s", dir, name);
     return s_path_buf;
+}
+
+static bool add_blob_file(NtBuilderContext *ctx, const char *path, const char *resource_id) {
+    FILE *file = NULL;
+#ifdef _WIN32
+    (void)fopen_s(&file, path, "rb");
+#else
+    file = fopen(path, "rb");
+#endif
+    if (file == NULL || fseek(file, 0, SEEK_END) != 0) {
+        (void)fprintf(stderr, "Failed to open audio blob: %s\n", path);
+        if (file != NULL) (void)fclose(file);
+        return false;
+    }
+    const long end = ftell(file);
+    if (end <= 0 || (uint64_t)end > UINT32_MAX || fseek(file, 0, SEEK_SET) != 0) {
+        (void)fprintf(stderr, "Invalid audio blob size: %s\n", path);
+        (void)fclose(file);
+        return false;
+    }
+    const uint32_t size = (uint32_t)end;
+    uint8_t *bytes = (uint8_t *)malloc(size);
+    if (bytes == NULL || fread(bytes, 1, size, file) != size) {
+        (void)fprintf(stderr, "Failed to read audio blob: %s\n", path);
+        free(bytes);
+        (void)fclose(file);
+        return false;
+    }
+    if (fclose(file) != 0) {
+        free(bytes);
+        return false;
+    }
+    nt_builder_add_blob(ctx, bytes, size, resource_id);
+    free(bytes);
+    return true;
 }
 
 int main(int argc, char *argv[]) {
@@ -55,6 +92,14 @@ int main(int argc, char *argv[]) {
     nt_builder_add_shader(ctx, "assets/shaders/slug_text.frag", NT_BUILD_SHADER_FRAGMENT);
     nt_builder_add_font(ctx, "../../external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf",
                         &(nt_font_opts_t){.charset = NT_CHARSET_ASCII, .resource_name = "game/font"});
+
+    /* Audio is game-owned opaque data. Codec-neutral IDs keep the catalog
+       stable when the delivery formats are repainted after the MVP. */
+    if (!add_blob_file(ctx, "assets/audio/sfx/ui_click.wav", "audio/sfx/ui_click") ||
+        !add_blob_file(ctx, "assets/audio/sfx/awakening_jingle.mp3", "audio/sfx/awakening_jingle")) {
+        nt_builder_free_pack(ctx);
+        return 1;
+    }
 
     // instanced-mesh shell: TWO mesh paths a game learns from. The COLOURED path
     // (mesh_inst = position + per-instance world matrix + colour, no texture) and the
@@ -101,6 +146,15 @@ int main(int argc, char *argv[]) {
     nt_builder_add_shader(ctx, "assets/shaders/sprite.vert", NT_BUILD_SHADER_VERTEX);
     nt_builder_add_shader(ctx, "assets/shaders/sprite.frag", NT_BUILD_SHADER_FRAGMENT);
 
+    /* Browser-first art must never ship as raw RGBA atlas pages.  ETC1S keeps
+       the initial Poki download inside the product budget while preserving
+       alpha and allowing the runtime to transcode for the active GPU. */
+    static const nt_tex_compress_opts_t web_atlas_compress = {
+        .mode = NT_TEX_COMPRESS_ETC1S,
+        .quality = 200,
+        .endpoint_rdo_quality = 1.5F,
+        .selector_rdo_quality = 1.25F,
+    };
     nt_atlas_opts_t atlas_opts = nt_atlas_opts_defaults();
     atlas_opts.shape = NT_ATLAS_SHAPE_RECT;
     atlas_opts.allow_transform = false;
@@ -109,7 +163,7 @@ int main(int argc, char *argv[]) {
     atlas_opts.margin = 2;
     atlas_opts.extrude = 1;
     atlas_opts.premultiplied = true;
-    atlas_opts.compress = NULL;
+    atlas_opts.compress = &web_atlas_compress;
     atlas_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     atlas_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     atlas_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
@@ -179,7 +233,7 @@ int main(int argc, char *argv[]) {
     icons_opts.extrude = 1;               // outline lands in the extrude gutter
     icons_opts.premultiplied = true;      // affects ONLY the packed texture (ui parity);
                                           // debug-PNG is copied BEFORE premultiply -> straight alpha
-    icons_opts.compress = NULL;           // parity with ui atlas (raw RGBA page)
+    icons_opts.compress = &web_atlas_compress;
     icons_opts.debug_png = true;          // -> <CMAKE_BINARY_DIR>/pack/icons_page0.png
     icons_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     icons_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
@@ -206,7 +260,7 @@ int main(int argc, char *argv[]) {
     dress_opts.margin = 2;
     dress_opts.extrude = 1;
     dress_opts.premultiplied = true;
-    dress_opts.compress = NULL;
+    dress_opts.compress = &web_atlas_compress;
     dress_opts.filter_min = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     dress_opts.filter_mag = NT_TEXTURE_DEFAULT_FILTER_LINEAR;
     dress_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
@@ -214,20 +268,13 @@ int main(int argc, char *argv[]) {
     dress_opts.gen_mipmaps = false;
     nt_builder_begin_atlas(ctx, "dress", &dress_opts);
     static const char *dress_sprites[] = {
-        "body_base", "stage_bg",
+        "body_base",
         "hair_bob", "hair_long", "hair_pink", "hair_gold",
         "top_tee", "top_hoodie", "top_blazer", "top_crop",
-        "bot_jeans", "bot_skirt", "bot_shorts", "bot_cargo",
-        "shoe_sneak", "shoe_boot", "shoe_heel", "shoe_sandal",
-        "acc_glasses", "acc_hat", "acc_bag", "acc_scarf",
+        "bot_jeans", "bot_skirt", "bot_shorts", "bot_cargo", "bot_moonveil", "bot_phoenix",
+        "shoe_sneak", "shoe_boot", "shoe_heel", "shoe_sandal", "shoe_eclipse", "shoe_phoenix",
+        "acc_glasses", "acc_hat", "acc_bag", "acc_scarf", "acc_moon", "acc_bloom",
         "look_street", "look_elegant", "look_glam",
-        /* catalog thumbs = full cutouts */
-        "hair_bob_full", "hair_long_full", "hair_pink_full", "hair_gold_full",
-        "top_tee_full", "top_hoodie_full", "top_blazer_full", "top_crop_full",
-        "bot_jeans_full", "bot_skirt_full", "bot_shorts_full", "bot_cargo_full",
-        "shoe_sneak_full", "shoe_boot_full", "shoe_heel_full", "shoe_sandal_full",
-        "acc_glasses_full", "acc_hat_full", "acc_bag_full", "acc_scarf_full",
-        "look_street_full", "look_elegant_full", "look_glam_full",
     };
     for (int i = 0; i < (int)(sizeof dress_sprites / sizeof dress_sprites[0]); ++i) {
         nt_atlas_sprite_opts_t o = nt_atlas_sprite_opts_defaults();

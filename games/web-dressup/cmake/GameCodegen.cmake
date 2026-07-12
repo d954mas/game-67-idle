@@ -1,6 +1,8 @@
 # Game-state provisioning is always on (lead decision 2026-07-07: "a game without
 # state is impossible"); the former on/off CMake axis is gone (И2-0).
-if(WIN32)
+# Cross-compiling to Emscripten makes WIN32 false even when CMake is hosted on
+# Windows. Python is a host tool, so select it by the host platform.
+if(CMAKE_HOST_WIN32)
     set(STUDIO_PYTHON "${CMAKE_CURRENT_SOURCE_DIR}/../../.venv/Scripts/python.exe")
 else()
     set(STUDIO_PYTHON "${CMAKE_CURRENT_SOURCE_DIR}/../../.venv/bin/python")
@@ -79,6 +81,7 @@ set(GAME_STATE_GENERATED_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state.c")
 set(GAME_STATE_GENERATED_SCHEMA "${GAME_STATE_GENERATED_DIR}/game_state_schema.gen.h")
 set(GAME_STATE_GENERATED_EVENTS_HEADER "${GAME_STATE_GENERATED_DIR}/game_state_events.gen.h")
 set(GAME_STATE_GENERATED_EVENTS_SOURCE "${GAME_STATE_GENERATED_DIR}/game_state_events.gen.c")
+set(GAME_STATE_MIGRATION_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/src/game_state_migrations.c")
 add_custom_command(
     OUTPUT
         "${GAME_STATE_GENERATED_HEADER}"
@@ -168,6 +171,7 @@ add_custom_command(
 )
 target_sources(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_SOURCE}"          # includes game_state_fragment descriptor
+    "${GAME_STATE_MIGRATION_SOURCE}"          # game fragment v1 -> v2
     "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # typed event structs/emit/descriptors
     "${SETTINGS_STATE_GENERATED_SOURCE}"      # generated settings fragment state
     src/features/settings/settings.c          # hand-written settings logic

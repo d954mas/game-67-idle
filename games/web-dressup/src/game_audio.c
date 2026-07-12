@@ -1,303 +1,186 @@
 #include "game_audio.h"
 
-#include <math.h>
+#include <generated/game_assets.h>
+
+#include "features/audio/audio.h"
+#include "features/platform_sdk/platform_sdk.h"
+#include "features/settings/settings.h"
+#include "log/nt_log.h"
+#include "nt_pack_format.h"
+#include "resource/nt_resource.h"
+
 #include <stdint.h>
-#include <string.h>
 
-#if defined(_WIN32) && !defined(NT_PLATFORM_WEB)
-#define WIN32_LEAN_AND_MEAN
-#include <windows.h>
-#include <mmsystem.h>
-#endif
+typedef struct game_audio_asset_t {
+    nt_hash64_t id;
+    nt_resource_t resource;
+    audio_clip_t clip;
+    GameAudioLoadState state;
+    bool load_attempted;
+    uint8_t resource_state;
+    const char *name;
+} game_audio_asset_t;
 
-#define GAME_AUDIO_SAMPLE_RATE 22050
-#define GAME_AUDIO_MAX_SAMPLES 6615
-#define GAME_AUDIO_VOICE_COUNT 8
+typedef struct game_audio_cue_desc_t {
+    unsigned asset_index;
+    float gain;
+} game_audio_cue_desc_t;
 
-typedef struct AudioVoice {
-#if defined(_WIN32) && !defined(NT_PLATFORM_WEB)
-    HWAVEOUT wave;
-    WAVEHDR header;
-#endif
-    int16_t samples[GAME_AUDIO_MAX_SAMPLES];
-    bool active;
-} AudioVoice;
+enum { GAME_AUDIO_ASSET_UI_CLICK = 0, GAME_AUDIO_ASSET_AWAKENING_JINGLE, GAME_AUDIO_ASSET_COUNT };
 
-static AudioVoice s_voices[GAME_AUDIO_VOICE_COUNT];
-static float s_master_volume = 0.75F;
-static float s_sfx_volume = 0.80F;
+static game_audio_asset_t s_assets[GAME_AUDIO_ASSET_COUNT];
 static bool s_initialized;
-static bool s_device_enabled = true;
-static int s_total_play_count;
-static int s_cue_play_count[GAME_AUDIO_CUE_COUNT];
+static bool s_mix_applied;
+static float s_master;
+static float s_music;
+static float s_sfx;
+static platform_sdk_listener_id_t s_pause_listener;
+static platform_sdk_listener_id_t s_resume_listener;
 
-static float clamp01(float value) {
-    if (value < 0.0F) {
-        return 0.0F;
-    }
-    if (value > 1.0F) {
-        return 1.0F;
-    }
-    return value;
-}
+static const game_audio_cue_desc_t s_cues[GAME_AUDIO_CUE_COUNT] = {
+    [GAME_AUDIO_CUE_UI_CLICK] = {GAME_AUDIO_ASSET_UI_CLICK, 0.75f},
+    [GAME_AUDIO_CUE_AWAKENING_CHARGE] = {GAME_AUDIO_ASSET_AWAKENING_JINGLE, 0.42f},
+    [GAME_AUDIO_CUE_AWAKENING_FLASH] = {GAME_AUDIO_ASSET_UI_CLICK, 1.00f},
+    [GAME_AUDIO_CUE_AWAKENING_REVEAL] = {GAME_AUDIO_ASSET_AWAKENING_JINGLE, 0.85f},
+};
+
+static bool clip_is_valid(audio_clip_t clip) { return clip.value != AUDIO_CLIP_INVALID.value; }
+static bool voice_is_valid(audio_voice_t voice) { return voice.value != AUDIO_VOICE_INVALID.value; }
 
 const char *game_audio_cue_name(GameAudioCue cue) {
     switch (cue) {
-    case GAME_AUDIO_CUE_FLASHLIGHT:
-        return "flashlight";
-    case GAME_AUDIO_CUE_FUSE_HUM:
-        return "fuse_hum";
-    case GAME_AUDIO_CUE_FUSE_PICKUP:
-        return "fuse_pickup";
-    case GAME_AUDIO_CUE_STALKER:
-        return "stalker";
-    case GAME_AUDIO_CUE_CAUGHT:
-        return "caught";
-    case GAME_AUDIO_CUE_ESCAPE:
-        return "escape";
-    case GAME_AUDIO_CUE_FOOTSTEP:
-        return "footstep";
-    case GAME_AUDIO_CUE_SPRINT_STEP:
-        return "sprint_step";
-    case GAME_AUDIO_CUE_HEARTBEAT:
-        return "heartbeat";
+    case GAME_AUDIO_CUE_UI_CLICK: return "ui_click";
+    case GAME_AUDIO_CUE_AWAKENING_CHARGE: return "awakening_charge";
+    case GAME_AUDIO_CUE_AWAKENING_FLASH: return "awakening_flash";
+    case GAME_AUDIO_CUE_AWAKENING_REVEAL: return "awakening_reveal";
     case GAME_AUDIO_CUE_COUNT:
-    default:
-        return "unknown";
+    default: return "unknown";
     }
 }
 
-void game_audio_init(void) {
-    memset(s_voices, 0, sizeof(s_voices));
+static void on_platform_pause(void *userdata) {
+    (void)userdata;
+    game_audio_set_paused(true);
+}
+
+static void on_platform_resume(void *userdata) {
+    (void)userdata;
+    game_audio_set_paused(false);
+}
+
+static void asset_init(game_audio_asset_t *asset, nt_hash64_t id, const char *name) {
+    *asset = (game_audio_asset_t){
+        .id = id,
+        .resource = nt_resource_request(id, NT_ASSET_BLOB),
+        .clip = AUDIO_CLIP_INVALID,
+        .state = GAME_AUDIO_LOAD_WAITING,
+        .resource_state = UINT8_MAX,
+        .name = name,
+    };
+}
+
+static void asset_update(game_audio_asset_t *asset, bool backend_available) {
+    const uint8_t resource_state = nt_resource_get_state(asset->resource);
+    if (resource_state != asset->resource_state) {
+        asset->resource_state = resource_state;
+        nt_log_info("[audio] resource %s state=%u", asset->name, (unsigned)resource_state);
+    }
+    if (!asset->load_attempted && backend_available && nt_resource_is_ready(asset->resource)) {
+        asset->load_attempted = true;
+        asset->clip = audio_clip_load(asset->id);
+        asset->state = clip_is_valid(asset->clip) ? GAME_AUDIO_LOAD_LOADING : GAME_AUDIO_LOAD_FAILED;
+    }
+    if (!clip_is_valid(asset->clip)) return;
+    switch (audio_clip_state(asset->clip)) {
+    case AUDIO_CLIP_STATE_LOADING: asset->state = GAME_AUDIO_LOAD_LOADING; break;
+    case AUDIO_CLIP_STATE_READY: asset->state = GAME_AUDIO_LOAD_READY; break;
+    case AUDIO_CLIP_STATE_FAILED:
+    case AUDIO_CLIP_STATE_INVALID:
+    default: asset->state = GAME_AUDIO_LOAD_FAILED; break;
+    }
+}
+
+static void update_mix(void) {
+    const float master = settings_master();
+    const float music = settings_music();
+    const float sfx = settings_sfx();
+    if (s_mix_applied && master == s_master && music == s_music && sfx == s_sfx) return;
+    s_master = master;
+    s_music = music;
+    s_sfx = sfx;
+    s_mix_applied = true;
+    audio_set_mix(master, music, sfx);
+}
+
+bool game_audio_init(void) {
+    if (s_initialized) game_audio_shutdown();
+    asset_init(&s_assets[GAME_AUDIO_ASSET_UI_CLICK], ASSET_BLOB_AUDIO_SFX_UI_CLICK, "audio/sfx/ui_click");
+    asset_init(&s_assets[GAME_AUDIO_ASSET_AWAKENING_JINGLE], ASSET_BLOB_AUDIO_SFX_AWAKENING_JINGLE,
+               "audio/sfx/awakening_jingle");
+    const bool available = audio_init();
+    s_pause_listener = platform_sdk_on_pause(on_platform_pause, NULL);
+    s_resume_listener = platform_sdk_on_resume(on_platform_resume, NULL);
+    s_mix_applied = false;
     s_initialized = true;
+    return available;
 }
-
-#if defined(_WIN32) && !defined(NT_PLATFORM_WEB)
-static void cleanup_voice(AudioVoice *voice) {
-    if (!voice->active) {
-        return;
-    }
-    if ((voice->header.dwFlags & WHDR_PREPARED) != 0U) {
-        waveOutUnprepareHeader(voice->wave, &voice->header, sizeof(voice->header));
-    }
-    if (voice->wave) {
-        waveOutClose(voice->wave);
-    }
-    memset(&voice->header, 0, sizeof(voice->header));
-    voice->wave = NULL;
-    voice->active = false;
-}
-#else
-static void cleanup_voice(AudioVoice *voice) {
-    voice->active = false;
-}
-#endif
 
 void game_audio_shutdown(void) {
-    for (int i = 0; i < GAME_AUDIO_VOICE_COUNT; ++i) {
-        cleanup_voice(&s_voices[i]);
+    if (!s_initialized) return;
+    if (s_pause_listener != 0U) platform_sdk_remove_listener(s_pause_listener);
+    if (s_resume_listener != 0U) platform_sdk_remove_listener(s_resume_listener);
+    s_pause_listener = 0U;
+    s_resume_listener = 0U;
+    /* audio-core owns active voices and their referenced clips. Its shutdown
+       stops every voice before destroying clips; unloading game handles first
+       violates that ownership contract whenever a reveal cue is still live. */
+    audio_shutdown();
+    for (unsigned i = 0U; i < GAME_AUDIO_ASSET_COUNT; ++i) {
+        s_assets[i] = (game_audio_asset_t){0};
     }
     s_initialized = false;
+    s_mix_applied = false;
 }
 
 void game_audio_update(void) {
-#if defined(_WIN32) && !defined(NT_PLATFORM_WEB)
-    for (int i = 0; i < GAME_AUDIO_VOICE_COUNT; ++i) {
-        if (s_voices[i].active && (s_voices[i].header.dwFlags & WHDR_DONE) != 0U) {
-            cleanup_voice(&s_voices[i]);
-        }
-    }
-#endif
+    if (!s_initialized) return;
+    audio_update();
+    update_mix();
+    const bool available = audio_status().available;
+    for (unsigned i = 0U; i < GAME_AUDIO_ASSET_COUNT; ++i) asset_update(&s_assets[i], available);
 }
 
-void game_audio_set_volume(float master_volume, float sfx_volume) {
-    s_master_volume = clamp01(master_volume);
-    s_sfx_volume = clamp01(sfx_volume);
+void game_audio_on_user_gesture(void) {
+    if (s_initialized) audio_on_user_gesture();
 }
 
-void game_audio_set_device_enabled(bool enabled) {
-    s_device_enabled = enabled;
+bool game_audio_play_cue(GameAudioCue cue) {
+    if (!s_initialized || cue < 0 || cue >= GAME_AUDIO_CUE_COUNT) return false;
+    const game_audio_cue_desc_t desc = s_cues[cue];
+    game_audio_asset_t *asset = &s_assets[desc.asset_index];
+    if (asset->state != GAME_AUDIO_LOAD_READY) return false;
+    return voice_is_valid(audio_play(asset->clip, AUDIO_BUS_SFX, desc.gain, false));
 }
 
-#if defined(_WIN32) && !defined(NT_PLATFORM_WEB)
-static int cue_sample_count(GameAudioCue cue) {
-    switch (cue) {
-    case GAME_AUDIO_CUE_FLASHLIGHT:
-        return (int)(0.08F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_FUSE_HUM:
-        return (int)(0.28F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_FUSE_PICKUP:
-        return (int)(0.26F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_STALKER:
-        return (int)(0.24F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_CAUGHT:
-        return (int)(0.30F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_ESCAPE:
-        return (int)(0.28F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_FOOTSTEP:
-        return (int)(0.09F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_SPRINT_STEP:
-        return (int)(0.075F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_HEARTBEAT:
-        return (int)(0.18F * (float)GAME_AUDIO_SAMPLE_RATE);
-    case GAME_AUDIO_CUE_COUNT:
-    default:
-        return (int)(0.10F * (float)GAME_AUDIO_SAMPLE_RATE);
-    }
+void game_audio_set_enabled(bool enabled) {
+    if (s_initialized) audio_set_enabled(enabled);
 }
 
-static float sine(float phase) {
-    return sinf(phase * 6.28318530718F);
-}
-
-static void fill_cue_samples(GameAudioCue cue, int16_t *out, int sample_count, float volume) {
-    for (int i = 0; i < sample_count; ++i) {
-        const float t = (float)i / (float)GAME_AUDIO_SAMPLE_RATE;
-        const float u = (float)i / (float)(sample_count > 1 ? sample_count - 1 : 1);
-        const float attack = fminf(1.0F, u * 18.0F);
-        const float release = fminf(1.0F, (1.0F - u) * 5.0F);
-        const float env = attack * release;
-        float sample = 0.0F;
-        switch (cue) {
-        case GAME_AUDIO_CUE_FLASHLIGHT: {
-            const float f = (u < 0.45F) ? 1500.0F : 420.0F;
-            sample = 0.62F * sine(f * t) + 0.28F * sine((f * 0.5F) * t);
-            break;
-        }
-        case GAME_AUDIO_CUE_FUSE_HUM: {
-            const float wobble = 1.0F + 0.09F * sine(7.0F * t);
-            const float buzz = (sine(180.0F * wobble * t) > 0.0F) ? 1.0F : -1.0F;
-            sample = 0.42F * sine(92.0F * wobble * t) + 0.18F * buzz;
-            break;
-        }
-        case GAME_AUDIO_CUE_FUSE_PICKUP: {
-            const float f = 260.0F + 680.0F * u;
-            sample = 0.66F * sine(f * t) + 0.32F * sine((f * 1.51F) * t);
-            break;
-        }
-        case GAME_AUDIO_CUE_STALKER: {
-            const float tremolo = 0.35F + 0.65F * fabsf(sine(11.0F * t));
-            sample = tremolo * (0.58F * sine(58.0F * t) + 0.24F * sine(116.0F * t));
-            break;
-        }
-        case GAME_AUDIO_CUE_CAUGHT: {
-            const float f = 92.0F - 34.0F * u;
-            const float grit = (sine(410.0F * t) > 0.0F) ? 0.18F : -0.18F;
-            sample = 0.72F * sine(f * t) + grit;
-            break;
-        }
-        case GAME_AUDIO_CUE_ESCAPE: {
-            const float f = (u < 0.45F) ? 392.0F : 784.0F;
-            sample = 0.54F * sine(f * t) + 0.24F * sine((f + 220.0F * u) * t);
-            break;
-        }
-        case GAME_AUDIO_CUE_FOOTSTEP: {
-            const float strike = expf(-u * 11.5F);
-            const float grit = (sine(920.0F * t + 3.0F * sine(37.0F * t)) > 0.0F) ? 0.10F : -0.10F;
-            sample = strike * (0.82F * sine(66.0F * t) + 0.24F * sine(132.0F * t) + grit);
-            break;
-        }
-        case GAME_AUDIO_CUE_SPRINT_STEP: {
-            const float strike = expf(-u * 14.0F);
-            const float slap = expf(-u * 28.0F) * ((sine(1500.0F * t) > 0.0F) ? 0.20F : -0.20F);
-            sample = strike * (0.94F * sine(88.0F * t) + 0.30F * sine(176.0F * t)) + slap;
-            break;
-        }
-        case GAME_AUDIO_CUE_HEARTBEAT: {
-            const float pulse_a = expf(-fabsf(u - 0.14F) * 34.0F);
-            const float pulse_b = expf(-fabsf(u - 0.42F) * 42.0F) * 0.68F;
-            const float pulse = pulse_a + pulse_b;
-            sample = pulse * (0.78F * sine(54.0F * t) + 0.20F * sine(108.0F * t));
-            break;
-        }
-        case GAME_AUDIO_CUE_COUNT:
-        default:
-            sample = 0.0F;
-            break;
-        }
-        const float scaled = sample * env * volume * 0.42F;
-        out[i] = (int16_t)(scaled * 32767.0F);
-    }
-}
-#endif
-
-void game_audio_play(GameAudioCue cue) {
-    if (cue < 0 || cue >= GAME_AUDIO_CUE_COUNT) {
-        return;
-    }
-    s_total_play_count++;
-    s_cue_play_count[cue]++;
-
-#if defined(_WIN32) && !defined(NT_PLATFORM_WEB)
-    if (!s_initialized) {
-        return;
-    }
-    if (!s_device_enabled) {
-        return;
-    }
-    const float volume = clamp01(s_master_volume * s_sfx_volume);
-    if (volume <= 0.001F) {
-        return;
-    }
-    game_audio_update();
-    AudioVoice *voice = NULL;
-    for (int i = 0; i < GAME_AUDIO_VOICE_COUNT; ++i) {
-        if (!s_voices[i].active) {
-            voice = &s_voices[i];
-            break;
-        }
-    }
-    if (!voice) {
-        voice = &s_voices[0];
-        cleanup_voice(voice);
-    }
-
-    WAVEFORMATEX format;
-    memset(&format, 0, sizeof(format));
-    format.wFormatTag = WAVE_FORMAT_PCM;
-    format.nChannels = 1;
-    format.nSamplesPerSec = GAME_AUDIO_SAMPLE_RATE;
-    format.wBitsPerSample = 16;
-    format.nBlockAlign = (WORD)(format.nChannels * format.wBitsPerSample / 8);
-    format.nAvgBytesPerSec = format.nSamplesPerSec * format.nBlockAlign;
-
-    if (waveOutOpen(&voice->wave, WAVE_MAPPER, &format, 0, 0, CALLBACK_NULL) != MMSYSERR_NOERROR) {
-        voice->wave = NULL;
-        return;
-    }
-
-    const int sample_count = cue_sample_count(cue);
-    fill_cue_samples(cue, voice->samples, sample_count, volume);
-    memset(&voice->header, 0, sizeof(voice->header));
-    voice->header.lpData = (LPSTR)voice->samples;
-    voice->header.dwBufferLength = (DWORD)(sample_count * (int)sizeof(int16_t));
-    if (waveOutPrepareHeader(voice->wave, &voice->header, sizeof(voice->header)) != MMSYSERR_NOERROR) {
-        waveOutClose(voice->wave);
-        voice->wave = NULL;
-        return;
-    }
-    voice->active = true;
-    if (waveOutWrite(voice->wave, &voice->header, sizeof(voice->header)) != MMSYSERR_NOERROR) {
-        cleanup_voice(voice);
-    }
-#endif
+void game_audio_set_paused(bool paused) {
+    if (s_initialized) audio_set_paused(paused);
 }
 
 GameAudioStatus game_audio_status(void) {
-    GameAudioStatus status;
-    memset(&status, 0, sizeof(status));
-#if defined(_WIN32) && !defined(NT_PLATFORM_WEB)
-    status.implemented = true;
-    status.backend = "winmm-waveout-generated-pcm";
-#else
-    status.implemented = false;
-    status.backend = "noop";
-#endif
-    status.initialized = s_initialized;
-    status.device_enabled = s_device_enabled;
-    status.total_play_count = s_total_play_count;
-    for (int i = 0; i < GAME_AUDIO_CUE_COUNT; ++i) {
-        status.cue_play_count[i] = s_cue_play_count[i];
+    const audio_status_t core = audio_status();
+    GameAudioStatus status = {
+        .initialized = s_initialized,
+        .available = core.available,
+        .unlocked = core.unlocked,
+        .enabled = core.enabled,
+        .paused = core.paused,
+    };
+    for (int cue = 0; cue < GAME_AUDIO_CUE_COUNT; ++cue) {
+        status.cue_state[cue] = s_assets[s_cues[cue].asset_index].state;
     }
     return status;
 }

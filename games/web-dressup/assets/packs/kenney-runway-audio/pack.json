@@ -1,0 +1,22 @@
+{
+  "pack": "kenney-runway-audio",
+  "title": "Kenney Runway Audio",
+  "source": "kenney",
+  "kind": "audio",
+  "origin": "sourced",
+  "license": "CC0-1.0",
+  "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
+  "license_kind": "cc",
+  "attribution_required": "false",
+  "notice_required": "false",
+  "publish": "true",
+  "redistribution_allowed": "true",
+  "commercial_use": "true",
+  "modification_allowed": "true",
+  "source_page": "https://kenney.nl/assets/",
+  "author_vendor": "Kenney",
+  "tags": ["web-dressup", "runway-awakening", "audio", "sfx"],
+  "genre": ["fashion", "magic"],
+  "style": ["bright", "arcade"],
+  "description": "Two CC0 Kenney clips backing four logical Runway Awakening MVP cues."
+}
