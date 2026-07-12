@@ -25,8 +25,8 @@ function tempRepo() {
     schema: "ai_studio.template.v1", id: "template", title: "Template", storageNamespace: "template",
   }), "utf8");
   writeFileSync(join(root, "templates", "template", "game-dependencies.json"), JSON.stringify({
-    schema: "ai_studio.game.dependencies.seed.v1",
-    engine: { source: "external/neotolis-engine", compatibility: "tested" },
+    schema: "ai_studio.game.dependencies.seed.v2",
+    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
     features: [],
     compatibility: "tested",
   }), "utf8");
@@ -55,6 +55,9 @@ test("new_template copies template, registers it, and refreshes VS Code files", 
   assert.deepEqual(registry.mounts.map((mount) => mount.root), ["templates/mobile-template", "templates/template"]);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "template.json")), true);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "game-dependencies.json")), true);
+  const dependencySeed = JSON.parse(readFileSync(join(root, "templates", "mobile-template", "game-dependencies.json"), "utf8"));
+  assert.equal(dependencySeed.schema, "ai_studio.game.dependencies.seed.v2");
+  assert.equal(dependencySeed.engine.version, "0.1.0");
 
   const tasks = JSON.parse(readFileSync(join(root, ".vscode", "tasks.json"), "utf8"));
   const launch = JSON.parse(readFileSync(join(root, ".vscode", "launch.json"), "utf8"));

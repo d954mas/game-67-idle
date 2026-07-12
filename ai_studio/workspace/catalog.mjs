@@ -12,7 +12,7 @@ import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 export const CATALOG_SCHEMA = "ai_studio.workspace.catalog.v1";
 export const GAME_IDENTITY_SCHEMA = "ai_studio.game.v1";
 export const TEMPLATE_IDENTITY_SCHEMA = "ai_studio.template.v1";
-export const GAME_DEPENDENCIES_SCHEMA = "ai_studio.game.dependencies.v1";
+export const GAME_DEPENDENCIES_SCHEMA = "ai_studio.game.dependencies.v2";
 
 const CATALOG_KEYS = new Set(["schema", "mounts"]);
 const MOUNT_KEYS = new Set([
@@ -20,9 +20,10 @@ const MOUNT_KEYS = new Set([
 ]);
 const IDENTITY_KEYS = new Set(["schema", "id", "title", "storageNamespace"]);
 const DEPENDENCY_KEYS = new Set(["schema", "engine", "features", "compatibility"]);
-const ENGINE_KEYS = new Set(["source", "revision", "compatibility"]);
-const FEATURE_KEYS = new Set(["id", "source", "revision", "compatibility"]);
+const ENGINE_KEYS = new Set(["source", "version", "revision", "compatibility"]);
+const FEATURE_KEYS = new Set(["id", "source", "version", "revision", "compatibility"]);
 const ALLOWED_STORES = new Set(["assets", "taskboard", "canvas", "evidence"]);
+const EXACT_SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 function slash(value) {
   return String(value || "").replace(/\\/g, "/");
@@ -185,9 +186,10 @@ function validateGameDependenciesValue(value, rel) {
   if (value.schema !== GAME_DEPENDENCIES_SCHEMA) throw new Error(`${rel}: expected schema ${GAME_DEPENDENCIES_SCHEMA}`);
   assertObject(value.engine, `${rel}.engine`);
   assertKnownKeys(value.engine, ENGINE_KEYS, `${rel}.engine`);
-  for (const key of ["source", "revision", "compatibility"]) {
+  for (const key of ["source", "version", "revision", "compatibility"]) {
     if (!String(value.engine[key] || "").trim()) throw new Error(`${rel}.engine.${key} must not be empty`);
   }
+  if (!EXACT_SEMVER.test(value.engine.version)) throw new Error(`${rel}.engine.version must be exact SemVer x.y.z`);
   if (!/^[0-9a-f]{40,64}$/i.test(value.engine.revision)) throw new Error(`${rel}.engine.revision must be an exact Git revision`);
   if (!Array.isArray(value.features)) throw new Error(`${rel}.features must be an array`);
   const featureIds = new Set();
@@ -200,6 +202,7 @@ function validateGameDependenciesValue(value, rel) {
     for (const key of ["source", "revision", "compatibility"]) {
       if (!String(feature[key] || "").trim()) throw new Error(`${rel}.features[${index}].${key} must not be empty`);
     }
+    if (!EXACT_SEMVER.test(String(feature.version || ""))) throw new Error(`${rel}.features[${index}].version must be exact SemVer x.y.z`);
     if (!/^[0-9a-f]{40,64}$/i.test(feature.revision)) throw new Error(`${rel}.features[${index}].revision must be an exact Git revision`);
   }
   if (!String(value.compatibility || "").trim()) throw new Error(`${rel}.compatibility must not be empty`);

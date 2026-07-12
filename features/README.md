@@ -155,6 +155,12 @@ possibility, not a feature.
   (`game.events.tail`), and the local `game_analytics` NDJSON writer. Higher
   features emit through this pack; analytics subscribes to it. Reference:
   `game-events/README.md` + `game-events/INSTALL.md`.
+- `audio-core/` (`L1`, `1.0.0`): versioned fixed-pool playback contract with
+  generation-safe clip/voice handles, native miniaudio and browser WebAudio
+  backends. Games own cue/music catalogs, source assets, codec-neutral BLOB IDs,
+  settings and lifecycle composition. Its contract version records the existing
+  public API, not T0393 completion; compatibility requires the owning validation
+  commands. Reference: `audio-core/README.md` + `audio-core/INSTALL.md`.
 
 ## Features (reference implementations live in the template)
 

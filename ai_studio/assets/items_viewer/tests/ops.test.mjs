@@ -51,7 +51,7 @@ function writePrivateGameMount(root, gameId = "secret-game") {
 
 function writeGameIdentity(root, gameId) {
   writeJson(join(root, "games", gameId, "game.json"), { schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace: gameId });
-  writeJson(join(root, "games", gameId, "dependencies.json"), { schema: "ai_studio.game.dependencies.v1", engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" });
+  writeJson(join(root, "games", gameId, "dependencies.json"), { schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" });
 }
 
 function writeNeutralPublicWorkspace(root, gameId = "fixture-game") {

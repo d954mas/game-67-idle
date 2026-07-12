@@ -1,16 +1,17 @@
 {
-  "schema": "ai_studio.game.dependencies.v1",
+  "schema": "ai_studio.game.dependencies.v2",
   "engine": {
+    "version": "0.1.0",
     "source": "external/neotolis-engine",
     "revision": "cf6a60fd36285c7948a3d1fac218e5b5a5f807a8",
     "compatibility": "validated by the game build and test suite in this checkout"
   },
   "features": [
-    { "id": "game-events", "source": "features/game-events", "revision": "fbb3ecafa4db4b782bcdd17836b3f5889ffedccb", "compatibility": "validated by the game build and test suite in this checkout" },
-    { "id": "game-state", "source": "features/game-state", "revision": "fbb3ecafa4db4b782bcdd17836b3f5889ffedccb", "compatibility": "validated by the game build and test suite in this checkout" },
-    { "id": "items-core", "source": "features/items-core", "revision": "fbb3ecafa4db4b782bcdd17836b3f5889ffedccb", "compatibility": "validated by the game build and test suite in this checkout" },
-    { "id": "platform-sdk", "source": "features/platform-sdk", "revision": "fbb3ecafa4db4b782bcdd17836b3f5889ffedccb", "compatibility": "validated by the game build and test suite in this checkout" },
-    { "id": "progression-core", "source": "features/progression-core", "revision": "fbb3ecafa4db4b782bcdd17836b3f5889ffedccb", "compatibility": "validated by the game build and test suite in this checkout" }
+    { "id": "game-events", "version": "1.0.0", "source": "features/game-events", "revision": "fbb3ecafa4db4b782bcdd17836b3f5889ffedccb", "compatibility": "validated by the game build and test suite in this checkout" },
+    { "id": "game-state", "version": "1.0.0", "source": "features/game-state", "revision": "fbb3ecafa4db4b782bcdd17836b3f5889ffedccb", "compatibility": "validated by the game build and test suite in this checkout" },
+    { "id": "items-core", "version": "1.0.0", "source": "features/items-core", "revision": "fbb3ecafa4db4b782bcdd17836b3f5889ffedccb", "compatibility": "validated by the game build and test suite in this checkout" },
+    { "id": "platform-sdk", "version": "1.0.0", "source": "features/platform-sdk", "revision": "fbb3ecafa4db4b782bcdd17836b3f5889ffedccb", "compatibility": "validated by the game build and test suite in this checkout" },
+    { "id": "progression-core", "version": "1.0.0", "source": "features/progression-core", "revision": "fbb3ecafa4db4b782bcdd17836b3f5889ffedccb", "compatibility": "validated by the game build and test suite in this checkout" }
   ],
   "compatibility": "records the exact engine and shared feature revisions tested with this game checkout"
 }

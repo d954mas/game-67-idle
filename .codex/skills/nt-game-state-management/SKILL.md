@@ -1,55 +1,45 @@
 ---
 name: nt-game-state-management
-description: "Use when adding, changing, testing, reviewing, or migrating game state: schema-first state files, generated C GameState APIs, JSON save/load, versioned migrations, DevAPI state commands, fixtures, inventory/equipment references, or bots/tests that read or write progression data."
+description: "Use when adding, changing, testing, reviewing, or migrating schema-first game state, generated APIs, saves, migrations, DevAPI state commands, or state fixtures."
 ---
 
 # NT Game State Management
 
-Use this skill as the agent-facing router for the reusable Game State feature
-pack in `features/game-state/`. Keep canonical scripts and references in the
-feature pack, not in this skill folder.
+Workflow router for the reusable Game State module. Its canonical contract
+lives in `features/game-state/`, not in this skill.
 
 ## Start
 
-1. Read `features/game-state/README.md`.
-2. For install, copy, enable/disable, or template wiring work, read
-   `features/game-state/INSTALL.md`.
-3. Inspect the relevant schema before call sites:
-   `state/*.schema.json` in a game project, or `template/state/*.schema.json`
-   in this AI Studio repository.
-4. Inspect `features/game-state/scripts/generate_state.py` before
-   editing generated state APIs.
-5. Change schema/generator/template, then regenerate. Do not hand-edit generated
-   `game_state.*` files.
+1. Read `features/game-state/README.md` for the public surface, validation,
+   compatibility, and extension boundaries.
+2. Read `features/game-state/INSTALL.md` for wiring, generation, verification,
+   and removal.
+3. Read `features/game-state/feature.json` for the versioned machine contract.
+4. Inspect the owning `state/*.schema.json` before changing call sites, then
+   inspect `features/game-state/scripts/generate_state.py` before changing
+   generated APIs.
 
-## Commands
+## Change workflow
+
+1. Change the schema or generator first.
+2. Add migration and fixture coverage when persisted shape changes.
+3. Regenerate outputs; do not hand-edit generated `game_state.*` files.
+4. Update callers through domain actions rather than raw state mutations.
+5. Run generator tests and the consumer's relevant save/runtime tests.
 
 ```powershell
 py -3.12 features/game-state/scripts/generate_state.py
 py -3.12 features/game-state/scripts/generate_state_test.py
 ```
 
-Use `--schema` and `--out-dir` for game variants or build-local outputs.
+Use explicit `--schema` and `--out-dir` for game variants or build-local
+outputs.
 
 ## Routing
 
-- For state contracts, documents, save envelopes, DevAPI shape, and domain
-  actions, read `features/game-state/references/contract.md`.
-- For schema-first change workflow, migrations, generated code, and runtime
-  access rules, read `features/game-state/references/workflow.md`.
-- For review, read `features/game-state/references/review.md`.
-- For runtime DevAPI proof, use `nt-runtime-automation`.
-- For playable feature changes that consume state, keep schema/state work here;
-  use `nt-runtime-automation` for live proof and `nt-quality-checks` for
-  acceptance evidence.
-
-## Rules
-
-- Every persisted schema field needs a stable integer `id`; removed fields are
-  `reserved`.
-- Migrations transform old JSON before parsing into current runtime structs.
-- Migrations must not call domain actions.
-- Gameplay/UI should use domain actions, not raw `GameState` mutations.
-- Expose DevAPI writes only for fields intended to be dev-editable.
-- Use logical save keys for normal saves; reserve unsafe paths for explicit
-  debug fixtures and migration tests.
+- Contract, save envelope, DevAPI, and domain actions:
+  `features/game-state/references/contract.md`.
+- Schema workflow and migrations: `features/game-state/references/workflow.md`.
+- Review checklist: `features/game-state/references/review.md`.
+- Runtime proof: `nt-runtime-automation`.
+- Acceptance evidence: `nt-quality-checks`.

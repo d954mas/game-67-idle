@@ -323,9 +323,9 @@ test("validation report excludes local private game mounts from game scans", () 
     }),
   );
   write(root, "games/public-game/game.json", JSON.stringify({ schema: "ai_studio.game.v1", id: "public-game", title: "Public Game", storageNamespace: "public-game" }));
-  write(root, "games/public-game/dependencies.json", JSON.stringify({ schema: "ai_studio.game.dependencies.v1", engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }));
+  write(root, "games/public-game/dependencies.json", JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }));
   write(root, "games/secret-game/game.json", JSON.stringify({ schema: "ai_studio.game.v1", id: "secret-game", title: "Secret Game", storageNamespace: "secret-game" }));
-  write(root, "games/secret-game/dependencies.json", JSON.stringify({ schema: "ai_studio.game.dependencies.v1", engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }));
+  write(root, "games/secret-game/dependencies.json", JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }));
   write(
     root,
     "ai_studio/workspace/catalog.local.json",

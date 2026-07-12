@@ -162,3 +162,29 @@ consumer. Instead it copies `src/`+`include/` out of this module into its own
 `src/features/items/` tree and owns that copy going forward (copy-then-own,
 same escape hatch `settings`/`resource_panel` already use). No code in this
 module supports that fork; it is a documented possibility, not a feature.
+
+## Purpose
+
+Provide reusable item catalog, ownership operations, state-fragment generation,
+and read-only authoring tools.
+
+## Public surface
+
+`include/features/items/items.h`, generated outputs, and commands declared in
+`feature.json` are public. Game reason tags, seed content, and migrations are not.
+
+## Validation
+
+Run the `test` and `api_proof_test` commands from `feature.json`, then
+`node features/validate_contracts.mjs`.
+
+## Compatibility
+
+`feature.json.version` is exact SemVer. Patch preserves the public contract,
+minor adds backward-compatible surface, and major permits breaking changes.
+Consumers pin both this version and an exact repository revision.
+
+## Extension points
+
+Extend through game-owned fields, reason tags, catalogs, save fragments, and
+the documented fork escape hatch; game policy stays outside the core.

@@ -15,7 +15,7 @@ function writeJson(path, value) {
 function writeGameCatalog(root, id, local = false) {
   writeJson(join(root, "games", id, "game.json"), { schema: "ai_studio.game.v1", id, title: id, storageNamespace: id });
   writeJson(join(root, "games", id, "dependencies.json"), {
-    schema: "ai_studio.game.dependencies.v1", engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test",
+    schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test",
   });
   writeJson(join(root, "ai_studio", "workspace", "catalog.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: local ? [] : [{ kind: "game", root: `games/${id}`, visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] }] });
   if (local) writeJson(join(root, "ai_studio", "workspace", "catalog.local.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [{ kind: "game", root: `games/${id}`, visibility: "private", gitRoot: `games/${id}`, commitPolicy: "nested-private", enabledStores: ["assets"], aliases: [] }] });

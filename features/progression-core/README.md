@@ -247,3 +247,29 @@ out of this module into its own tree and owns that copy going forward
 (copy-then-own, same escape hatch `features/items-core`/`settings`/
 `resource_panel` already use). No code in this module supports that fork;
 it is a documented possibility, not a feature.
+
+## Purpose
+
+Provide reusable progression tracks, bounded tick behavior, and deterministic
+integer curve generation over the items-core purse boundary.
+
+## Public surface
+
+`include/features/progression/progression.h`, generated outputs, and the
+generator command in `feature.json` are public. Game content and UI are not.
+
+## Validation
+
+Run the progression tests named in `feature.json.registers.ctest_targets`,
+then `node features/validate_contracts.mjs`.
+
+## Compatibility
+
+`feature.json.version` is exact SemVer. Patch preserves the public contract,
+minor adds backward-compatible surface, and major permits breaking changes.
+Consumers pin both this version and an exact repository revision.
+
+## Extension points
+
+Extend through game-owned catalogs, generated curves, state fragments, and
+composition; fork explicitly for different core semantics.

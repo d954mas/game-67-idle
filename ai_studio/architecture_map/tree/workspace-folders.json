@@ -127,12 +127,38 @@
           "kind": "doc",
           "path": "features/README.md",
           "title": "README.md",
-          "description": "Features workspace entrypoint: explains copyable feature-pack shape, rules, and future manifest/install possibilities.",
+          "description": "Features workspace entrypoint for reusable ownership categories and mandatory versioned manifest and install contracts.",
           "role": "features workspace entrypoint",
           "tags": [
             "features",
             "workspace",
             "docs"
+          ]
+        },
+        {
+          "id": "workspace:feature-contract-validator",
+          "kind": "validation",
+          "path": "features/validate_contracts.mjs",
+          "title": "validate_contracts.mjs",
+          "description": "Validates versioned reusable feature, dependency, documentation, and skill-router contracts.",
+          "role": "feature contract validator",
+          "tags": [
+            "features",
+            "validation",
+            "contracts"
+          ]
+        },
+        {
+          "id": "workspace:feature-contract-validator-tests",
+          "kind": "test",
+          "path": "features/validate_contracts.test.mjs",
+          "title": "validate_contracts.test.mjs",
+          "description": "Verifies feature contract inventory and synchronization gates.",
+          "role": "feature contract validation tests",
+          "tags": [
+            "features",
+            "test",
+            "contracts"
           ]
         },
         {

@@ -63,7 +63,7 @@ function ensurePrivateGameMount(root, gameId = "secret-game") {
   );
   mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
   writeFileSync(join(gameRoot, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace: gameId }), "utf8");
-  writeFileSync(join(gameRoot, "dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.v1", engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }), "utf8");
+  writeFileSync(join(gameRoot, "dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }), "utf8");
   writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify({ schema: "ai_studio.workspace.catalog.v1", mounts: [] }), "utf8");
   writeFileSync(join(root, "ai_studio", "workspace", "catalog.local.json"), JSON.stringify({
     schema: "ai_studio.workspace.catalog.v1",

@@ -25,8 +25,8 @@ function identity(root, kind, id, title = id, storageNamespace = id) {
   });
   if (kind === "game") {
     writeJson(root, `${folder}/${id}/dependencies.json`, {
-      schema: "ai_studio.game.dependencies.v1",
-      engine: { source: "external/neotolis-engine", revision: "0000000000000000000000000000000000000000", compatibility: "exact" },
+      schema: "ai_studio.game.dependencies.v2",
+      engine: { source: "external/neotolis-engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "exact" },
       features: [],
       compatibility: "Tested with the listed revisions.",
     });
@@ -172,7 +172,7 @@ test("upsert validates cross-catalog collisions before writing", (t) => {
 test("dependency writer validates before replacing an existing record", (t) => {
   const root = fixture(t);
   const valid = {
-    engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "tested" },
+    engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "tested" },
     features: [],
     compatibility: "tested",
   };
@@ -185,4 +185,35 @@ test("dependency writer validates before replacing an existing record", (t) => {
     engine: { ...valid.engine, revision: "placeholder" },
   }), /exact Git revision/);
   assert.equal(readFileSync(path, "utf8"), before);
+});
+
+test("dependency records require an exact feature SemVer", (t) => {
+  const root = fixture(t);
+  const base = {
+    engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "tested" },
+    compatibility: "tested",
+  };
+  assert.throws(() => writeGameDependencies(root, "stable-game", {
+    ...base,
+    features: [{
+      id: "game-state", source: "features/game-state",
+      revision: "0000000000000000000000000000000000000000", compatibility: "tested",
+    }],
+  }), /version.*exact SemVer/i);
+  assert.doesNotThrow(() => writeGameDependencies(root, "stable-game", {
+    ...base,
+    features: [{
+      id: "game-state", source: "features/game-state", version: "1.0.0",
+      revision: "0000000000000000000000000000000000000000", compatibility: "tested",
+    }],
+  }));
+});
+
+test("dependency records require an exact engine SemVer", (t) => {
+  const root = fixture(t);
+  assert.throws(() => writeGameDependencies(root, "stable-game", {
+    engine: { source: "engine", version: "0.1", revision: "0000000000000000000000000000000000000000", compatibility: "tested" },
+    features: [],
+    compatibility: "tested",
+  }), /engine\.version.*exact SemVer/i);
 });

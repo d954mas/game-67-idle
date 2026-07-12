@@ -1,0 +1,22 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "settings",
+  "version": "1.0.0",
+  "title": "Settings",
+  "summary": "Template-owned settings screen and persisted audio preference surface.",
+  "status": "template-local",
+  "kind": "ui-screen",
+  "layer": "L2",
+  "provides": [
+    "settings_draw_ui",
+    "settings_open",
+    "settings_close",
+    "settings_is_open",
+    "settings_master",
+    "settings_music",
+    "settings_sfx"
+  ],
+  "manuals": {
+    "install": "templates/template/src/features/settings/INSTALL.md"
+  }
+}

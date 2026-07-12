@@ -141,3 +141,24 @@ Use this folder as the minimum bar for future feature packs:
 - keep reusable scripts close to the feature;
 - keep references specific to the feature;
 - expose an agent-facing skill only as a thin router when discoverability helps.
+
+## Public surface
+
+Generated `GameState` files, fragment descriptors, and commands declared in
+`feature.json` are public. Generator internals are not.
+
+## Validation
+
+Run the `test` command from `feature.json`, then
+`node features/validate_contracts.mjs`.
+
+## Compatibility
+
+`feature.json.version` is exact SemVer. Patch preserves the public contract,
+minor adds backward-compatible surface, and major permits breaking changes.
+Consumers pin both this version and an exact repository revision.
+
+## Extension points
+
+Extend through game-owned schemas, migrations, hooks, and DevAPI adapters;
+game-specific state policy stays outside the generator.

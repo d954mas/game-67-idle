@@ -54,8 +54,8 @@ function writeGameManifests(root, id, title) {
     schema: "ai_studio.game.v1", id, title, storageNamespace: id,
   });
   writeJson(join(root, "games", id, "dependencies.json"), {
-    schema: "ai_studio.game.dependencies.v1",
-    engine: { source: "external/neotolis-engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" },
+    schema: "ai_studio.game.dependencies.v2",
+    engine: { source: "external/neotolis-engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" },
     features: [], compatibility: "test fixture",
   });
 }

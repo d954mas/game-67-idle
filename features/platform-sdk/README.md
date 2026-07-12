@@ -115,3 +115,29 @@ node features/platform-sdk/scripts/artifact_tools.mjs inspect --target itch --ar
 A game with fundamentally different platform semantics may copy the feature
 implementation into its own tree and own that fork. Do not add speculative
 switches to the shared feature for one-off portal behavior.
+
+## Purpose
+
+Provide publish-target mapping, the game-facing SDK facade, selected web
+adapters, capabilities, artifact inspection, and scorecard tooling.
+
+## Public surface
+
+The C facade, selected web outputs, target manifest, and commands declared in
+`feature.json` are public. Portal credentials and game policy are not.
+
+## Validation
+
+Run the `test` command from `feature.json`, inspect the intended artifact, then
+run `node features/validate_contracts.mjs`.
+
+## Compatibility
+
+`feature.json.version` is exact SemVer. Patch preserves the public contract,
+minor adds backward-compatible surface, and major permits breaking changes.
+Consumers pin both this version and an exact repository revision.
+
+## Extension points
+
+Add target mappings, adapters, and explicit capabilities at the documented
+facade boundary; portal claims require portal evidence.

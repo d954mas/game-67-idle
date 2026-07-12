@@ -6,6 +6,31 @@ for the abbrev formatter) and engine public APIs (`atlas/nt_atlas.h`,
 `ui/nt_ui.h`, `clay.h`, ...) — it includes **ZERO** other `src/features/*`
 headers (grep-gated). It has no idea items or progression exist.
 
+## Purpose
+
+Provide this template-owned, copy-then-own counter/bar HUD widget without
+coupling it to items or progression.
+
+## Public surface
+
+`resource_panel.h` is public. The game supplies entries, getters, optional
+icon handles, and composition calls.
+
+## Validation
+
+Build the template UI tests and run `node features/validate_contracts.mjs`.
+
+## Compatibility
+
+`feature.json.version` is exact SemVer. Patch preserves the public contract,
+minor adds backward-compatible surface, and major permits breaking changes.
+A copied game owns its revision after creation.
+
+## Extension points
+
+Customize entries and visual constants in the game-owned copy. Promote only a
+proven reusable improvement back to this template reference.
+
 ## What it is
 
 A generic counter/bar HUD widget. The GAME supplies a list of

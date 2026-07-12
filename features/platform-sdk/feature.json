@@ -1,6 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "platform-sdk",
+  "version": "1.0.0",
   "title": "Platform SDK",
   "status": "reusable",
   "kind": "gameplay-infrastructure",

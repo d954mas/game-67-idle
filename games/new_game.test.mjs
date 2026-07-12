@@ -55,9 +55,9 @@ function tempRepo() {
     schema: "ai_studio.template.v1", id: "template", title: "Template", storageNamespace: "template",
   }), "utf8");
   writeFileSync(join(root, "templates", "template", "game-dependencies.json"), JSON.stringify({
-    schema: "ai_studio.game.dependencies.seed.v1",
-    engine: { source: "external/neotolis-engine", compatibility: "tested" },
-    features: [{ id: "game-state", source: "features/game-state", compatibility: "tested" }],
+    schema: "ai_studio.game.dependencies.seed.v2",
+    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
+    features: [{ id: "game-state", source: "features/game-state", version: "1.0.0", compatibility: "tested" }],
     compatibility: "tested template seed",
   }), "utf8");
   writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify({
@@ -66,8 +66,15 @@ function tempRepo() {
   }), "utf8");
   mkdirSync(join(root, "features", "game-state"), { recursive: true });
   writeFileSync(join(root, "features", "game-state", "README.md"), "# game-state\n", "utf8");
+  writeFileSync(join(root, "features", "game-state", "feature.json"), JSON.stringify({
+    schema: "ai_studio.feature.v1", id: "game-state", version: "1.0.0",
+  }), "utf8");
   const engineRoot = join(root, "external", "neotolis-engine");
   mkdirSync(engineRoot, { recursive: true });
+  mkdirSync(join(engineRoot, "engine", "core"), { recursive: true });
+  writeFileSync(join(engineRoot, "engine", "core", "nt_core.h"), [
+    "#define NT_VERSION_MAJOR 0", "#define NT_VERSION_MINOR 1", "#define NT_VERSION_PATCH 0", "",
+  ].join("\n"), "utf8");
   execFileSync("git", ["init"], { cwd: engineRoot, stdio: "ignore" });
   execFileSync("git", ["config", "user.email", "tests@example.invalid"], { cwd: engineRoot, stdio: "ignore" });
   execFileSync("git", ["config", "user.name", "Tests"], { cwd: engineRoot, stdio: "ignore" });
@@ -113,7 +120,9 @@ test("new_game copies template and registers game assets in AI Studio", (t) => {
   assert.equal(existsSync(join(root, "games", "test-game", "game-dependencies.json")), false);
   const dependencies = JSON.parse(readFileSync(join(root, "games", "test-game", "dependencies.json"), "utf8"));
   assert.match(dependencies.engine.revision, /^[0-9a-f]{40}$/);
+  assert.equal(dependencies.engine.version, "0.1.0");
   assert.deepEqual(dependencies.features.map((feature) => feature.id), ["game-state"]);
+  assert.equal(dependencies.features[0].version, "1.0.0");
   assert.match(dependencies.features[0].revision, /^[0-9a-f]{40}$/);
 
   const tasks = JSON.parse(readFileSync(join(root, ".vscode", "tasks.json"), "utf8"));
@@ -124,6 +133,23 @@ test("new_game copies template and registers game assets in AI Studio", (t) => {
   const taskboardProject = readFileSync(join(taskboardItems(root), "projects", "P001-test-game.md"), "utf8");
   assert.match(taskboardProject, /kind: game/);
   assert.match(taskboardProject, /target: games\/test-game/);
+});
+
+test("new_game rejects a dependency seed version that drifts from feature metadata", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const seedPath = join(root, "templates", "template", "game-dependencies.json");
+  const seed = JSON.parse(readFileSync(seedPath, "utf8"));
+  seed.features[0].version = "1.1.0";
+  writeFileSync(seedPath, JSON.stringify(seed), "utf8");
+  execFileSync("git", ["add", "templates/template/game-dependencies.json"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "drift dependency seed"], { cwd: root, stdio: "ignore" });
+
+  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "test-game"], { encoding: "utf8" });
+
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /dependency seed version 1\.1\.0 does not match feature\.json 1\.0\.0/i);
+  assert.equal(existsSync(join(root, "games", "test-game")), false);
 });
 
 test("new_game --private creates a nested private game without public Studio writes", (t) => {
@@ -326,7 +352,7 @@ test("new_game --private rejects public game id collisions", (t) => {
   execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
   mkdirSync(join(root, "games", "secret-game"), { recursive: true });
   writeFileSync(join(root, "games", "secret-game", "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: "secret-game", title: "Public", storageNamespace: "secret-game" }), "utf8");
-  writeFileSync(join(root, "games", "secret-game", "dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.v1", engine: { source: "engine", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }), "utf8");
+  writeFileSync(join(root, "games", "secret-game", "dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }), "utf8");
   const publicCatalog = JSON.parse(readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8"));
   publicCatalog.mounts.push({ kind: "game", root: "games/secret-game", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] });
   writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify(publicCatalog), "utf8");
@@ -456,7 +482,7 @@ test("new_game --template copies a registered template id", (t) => {
   }
   writeFileSync(join(templateDir, "assets", "cozy.txt"), "asset\n", "utf8");
   writeFileSync(join(templateDir, "template.json"), JSON.stringify({ schema: "ai_studio.template.v1", id: "cozy-template", title: "Cozy Template", storageNamespace: "cozy-template" }), "utf8");
-  writeFileSync(join(templateDir, "game-dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.seed.v1", engine: { source: "external/neotolis-engine", compatibility: "tested" }, features: [], compatibility: "tested" }), "utf8");
+  writeFileSync(join(templateDir, "game-dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.seed.v2", engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" }, features: [], compatibility: "tested" }), "utf8");
   const catalog = JSON.parse(readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8"));
   catalog.mounts.push({ kind: "template", root: "templates/cozy-template", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] });
   writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify(catalog), "utf8");
@@ -491,7 +517,7 @@ test("new_game refuses dependency placeholders outside an exact Git checkout", (
     schema: "ai_studio.template.v1", id: "template", title: "Template", storageNamespace: "template",
   }), "utf8");
   writeFileSync(join(root, "templates", "template", "game-dependencies.json"), JSON.stringify({
-    schema: "ai_studio.game.dependencies.seed.v1", engine: { source: "external/neotolis-engine", compatibility: "tested" }, features: [], compatibility: "tested",
+    schema: "ai_studio.game.dependencies.seed.v2", engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" }, features: [], compatibility: "tested",
   }), "utf8");
 
   const result = spawnSync(process.execPath, [script, "--root", root, "--id", "test-game"], { encoding: "utf8" });
