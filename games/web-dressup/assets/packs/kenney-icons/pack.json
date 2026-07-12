@@ -1,6 +1,6 @@
 {
-  "pack": "kenney-ui-pack",
-  "title": "Kenney UI Pack",
+  "pack": "kenney-icons",
+  "title": "Kenney Game Icons",
   "source": "kenney",
   "kind": "ui",
   "origin": "sourced",
@@ -13,10 +13,7 @@
   "redistribution_allowed": "true",
   "commercial_use": "true",
   "modification_allowed": "true",
-  "source_page": "https://kenney.nl/assets/ui-pack",
+  "source_page": "https://kenney.nl/assets/",
   "author_vendor": "Kenney",
-  "tags": ["template", "starter", "ui", "slice9"],
-  "genre": ["template"],
-  "style": ["clean"],
-  "description": "CC0 starter UI sprites used by the template settings panel and controls."
+  "description": "Six recolored CC0 Kenney game icons documented in assets/icons/README.md."
 }

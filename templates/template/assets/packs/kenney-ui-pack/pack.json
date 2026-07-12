@@ -15,8 +15,17 @@
   "modification_allowed": "true",
   "source_page": "https://kenney.nl/assets/ui-pack",
   "author_vendor": "Kenney",
-  "tags": ["template", "starter", "ui", "slice9"],
-  "genre": ["template"],
-  "style": ["clean"],
+  "tags": [
+    "template",
+    "starter",
+    "ui",
+    "slice9"
+  ],
+  "genre": [
+    "template"
+  ],
+  "style": [
+    "clean"
+  ],
   "description": "CC0 starter UI sprites used by the template settings panel and controls."
 }

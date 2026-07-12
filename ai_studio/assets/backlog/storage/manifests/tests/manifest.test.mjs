@@ -114,3 +114,18 @@ test("scanPackManifestSource accepts UTF-8 BOM in pack manifests", async (t) => 
   assert.equal(packs[0].pack, "starter-props");
   assert.equal(records[0].asset_id, "starter__crate__cc0");
 });
+
+test("pack license_file is inherited by normalized asset records", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "manifest-license-file-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const packDir = join(root, "packs", "owned");
+  mkdirSync(packDir, { recursive: true });
+  writeFileSync(join(packDir, "pack.json"), JSON.stringify({
+    pack: "owned", license: "Studio-Owned-Public-1.0", license_kind: "custom",
+    license_file: "LICENSE.md", publish: "true", redistribution_allowed: "true",
+    commercial_use: "true", modification_allowed: "true",
+  }));
+  writeFileSync(join(packDir, "assets.jsonl"), `${JSON.stringify({ asset_id: "owned-a", resource: "a.png" })}\n`);
+  const { records } = await scanPackManifestSource(root);
+  assert.equal(records[0].license_file, "LICENSE.md");
+});

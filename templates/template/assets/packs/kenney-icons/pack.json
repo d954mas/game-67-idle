@@ -1,8 +1,8 @@
 {
-  "pack": "kenney-audio",
-  "title": "Kenney Starter Audio",
+  "pack": "kenney-icons",
+  "title": "Kenney Game Icons",
   "source": "kenney",
-  "kind": "audio",
+  "kind": "ui",
   "origin": "sourced",
   "license": "CC0-1.0",
   "license_url": "https://creativecommons.org/publicdomain/zero/1.0/",
@@ -15,18 +15,5 @@
   "modification_allowed": "true",
   "source_page": "https://kenney.nl/assets/",
   "author_vendor": "Kenney",
-  "tags": [
-    "template",
-    "starter",
-    "audio",
-    "sfx",
-    "music"
-  ],
-  "genre": [
-    "template"
-  ],
-  "style": [
-    "clean"
-  ],
-  "description": "Two CC0 Kenney reference clips converted from source OGG members to guaranteed PCM WAV fixtures."
+  "description": "Six recolored CC0 Kenney game icons documented in assets/icons/README.md."
 }

@@ -57,25 +57,12 @@
       "kind": "validation",
       "path": "ai_studio/assets/backlog/storage/license/restricted_assets_guard.mjs",
       "title": "restricted_assets_guard.mjs",
-      "description": "Validates git-tracked game/template asset binaries against manifest publishability and attribution metadata.",
+      "description": "Single CLI adapter for repository-wide tracked-binary inventory, owner metadata, publishability, provenance/origin, SHA, and path integrity validation.",
       "role": "asset license validation command",
       "tags": [
         "assets",
         "license",
         "validation"
-      ]
-    },
-    {
-      "id": "assets:backlog-license-guard-exceptions",
-      "kind": "config",
-      "path": "ai_studio/assets/backlog/storage/license/restricted_assets_exceptions.json",
-      "title": "restricted_assets_exceptions.json",
-      "description": "Empty-by-default exception list for already reviewed public binaries that cannot yet be manifested. New assets should be recorded in manifests instead of added here.",
-      "role": "asset guard exceptions",
-      "tags": [
-        "assets",
-        "license",
-        "config"
       ]
     },
     {
