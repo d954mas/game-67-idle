@@ -473,7 +473,7 @@ function isLifecycleAuditDir(path) {
 function listSourceAssetFiles(root, source, shouldSkipDir = null) {
   const scanRoots = [source.path];
   return scanRoots.flatMap((scanRoot) => walkSync(scanRoot, shouldSkipDir))
-    .filter((path) => !/[\\/](_accepted|_rejected|catalog|previews|licenses|\.git|node_modules|tmp)[\\/]/i.test(path))
+    .filter((path) => !/[\\/](_accepted|_rejected|catalog|previews|licenses|\.git|node_modules|tmp)[\\/]/i.test(`/${relPosix(source.path, path)}`))
     .map((path) => {
       const ext = extname(path).toLowerCase();
       const repoRel = relPosix(root, path);

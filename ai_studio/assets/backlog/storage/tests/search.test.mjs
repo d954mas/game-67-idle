@@ -64,11 +64,11 @@ test("searchAssets queries generated index for a pack manifest source", async (t
   assert.equal(result.assets[0].thumb, "lib/packs/starter-props/previews/crate.webp");
 });
 
-test("searchAssets derives a local source id when sourcePath is provided without sourceId", async (t) => {
+test("searchAssets derives a local source id when an ancestor is named tmp", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "asset-search-local-id-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const assets = join(root, "template", "assets");
+  const assets = join(root, "tmp", "template", "assets");
   mkdirSync(join(assets, "ui"), { recursive: true });
   writeFileSync(join(assets, "ui", "button.png"), "png", "utf8");
 
