@@ -1,0 +1,163 @@
+{
+  "id": "core-harness:tool-lib",
+  "title": "Tool Lib",
+  "subtitle": "shared command helpers",
+  "kind": "library",
+  "path": "ai_studio/core_harness/tool_lib",
+  "description": "Core Harness helper library for low-level AI Studio command-line tools: CLI failure paths, JSON IO, hashing, MIME lookup, and tmp scratch cleanup. It is intentionally policy-free.",
+  "role": "shared AI Studio tool helper library",
+  "tags": [
+    "core-harness",
+    "tooling",
+    "helpers"
+  ],
+  "children": [
+    {
+      "id": "core-harness:tool-lib-readme",
+      "kind": "doc",
+      "path": "ai_studio/core_harness/tool_lib/README.md",
+      "title": "README.md",
+      "description": "Tool Lib contract: low-level helper ownership, boundaries, and what must not live in this shared layer.",
+      "role": "tool helper library contract",
+      "tags": [
+        "source",
+        "contract"
+      ]
+    },
+    {
+      "id": "core-harness:tool-lib-studio-config",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/tool_lib/studio_config.mjs",
+      "title": "studio_config.mjs",
+      "description": "Provides studio config reader.",
+      "role": "studio config reader",
+      "tags": [
+        "core-harness",
+        "helper",
+        "config"
+      ]
+    },
+    {
+      "id": "core-harness:studio-config-data",
+      "kind": "config",
+      "path": "ai_studio/studio.config.json",
+      "title": "studio.config.json",
+      "description": "Portable committed Studio defaults (schema ai_studio.studio_config.v1). Machine-specific Canvas and tool roots belong in the gitignored studio.config.local.json override.",
+      "role": "studio configuration data",
+      "tags": [
+        "core-harness",
+        "config"
+      ]
+    },
+    {
+      "id": "core-harness:tool-lib-cli",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/tool_lib/cli.mjs",
+      "title": "cli.mjs",
+      "description": "Shared low-level cli helper used by AI Studio command-line modules.",
+      "role": "shared cli helper",
+      "tags": [
+        "core-harness",
+        "helper"
+      ]
+    },
+    {
+      "id": "core-harness:tool-lib-cli-test",
+      "kind": "test",
+      "path": "ai_studio/core_harness/tool_lib/cli.test.mjs",
+      "title": "cli.test.mjs",
+      "description": "Verifies shared cli helper contracts.",
+      "role": "shared cli helper tests",
+      "tags": [
+        "core-harness",
+        "test"
+      ]
+    },
+    {
+      "id": "core-harness:tool-lib-hash",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/tool_lib/hash.mjs",
+      "title": "hash.mjs",
+      "description": "Shared low-level hash helper used by AI Studio command-line modules.",
+      "role": "shared hash helper",
+      "tags": [
+        "core-harness",
+        "helper"
+      ]
+    },
+    {
+      "id": "core-harness:tool-lib-json",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/tool_lib/json.mjs",
+      "title": "json.mjs",
+      "description": "Shared low-level json helper used by AI Studio command-line modules.",
+      "role": "shared json helper",
+      "tags": [
+        "core-harness",
+        "helper"
+      ]
+    },
+    {
+      "id": "core-harness:tool-lib-json-test",
+      "kind": "test",
+      "path": "ai_studio/core_harness/tool_lib/json.test.mjs",
+      "title": "json.test.mjs",
+      "description": "Verifies shared json helper contracts.",
+      "role": "shared json helper tests",
+      "tags": [
+        "core-harness",
+        "test"
+      ]
+    },
+    {
+      "id": "core-harness:tool-lib-mime",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/tool_lib/mime.mjs",
+      "title": "mime.mjs",
+      "description": "Shared low-level mime helper used by AI Studio command-line modules.",
+      "role": "shared mime helper",
+      "tags": [
+        "core-harness",
+        "helper"
+      ]
+    },
+    {
+      "id": "core-harness:tool-lib-mime-test",
+      "kind": "test",
+      "path": "ai_studio/core_harness/tool_lib/mime.test.mjs",
+      "title": "mime.test.mjs",
+      "description": "Verifies shared mime helper contracts.",
+      "role": "shared mime helper tests",
+      "tags": [
+        "core-harness",
+        "test"
+      ]
+    },
+    {
+      "id": "core-harness:tool-lib-tmp-sweep",
+      "kind": "tool",
+      "path": "ai_studio/core_harness/tool_lib/tmp_sweep.mjs",
+      "title": "tmp_sweep.mjs",
+      "description": "Opt-in housekeeping command for reporting or deleting ignored `tmp/` scratch data while keeping the newest pipeline validation exports.",
+      "role": "tmp scratch cleanup command",
+      "tags": [
+        "core-harness",
+        "helper",
+        "tmp"
+      ]
+    },
+    {
+      "id": "core-harness:tool-lib-tmp-sweep-test",
+      "kind": "test",
+      "path": "ai_studio/core_harness/tool_lib/tmp_sweep.test.mjs",
+      "title": "tmp_sweep.test.mjs",
+      "description": "Verifies tmp scratch cleanup command contracts.",
+      "role": "tmp scratch cleanup command tests",
+      "tags": [
+        "core-harness",
+        "test",
+        "tmp"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,133 @@
+{
+  "id": "assets:nt-asset-image-generation-skill",
+  "kind": "skill",
+  "path": ".codex/skills/nt-asset-image-generation",
+  "title": "nt-asset-image-generation",
+  "description": "Raster generation skill used only after source-first search fails. It is the generation entrypoint; asset tools handle file preparation and games own any game-specific prompt/provenance records.",
+  "role": "asset image generation skill",
+  "tags": [
+    "assets",
+    "generation",
+    "skill"
+  ],
+  "children": [
+    {
+      "id": "assets:nt-asset-image-generation-paths",
+      "kind": "doc",
+      "path": ".codex/skills/nt-asset-image-generation/references/generation-paths.md",
+      "title": "generation-paths.md",
+      "description": "Exact image generation command routes for Codex imagegen, fallback comparison mode, and REST/backend alternatives.",
+      "role": "image generation command reference",
+      "tags": [
+        "assets",
+        "skill-reference",
+        "generation"
+      ]
+    },
+    {
+      "id": "assets:nt-asset-image-generation-verification",
+      "kind": "doc",
+      "path": ".codex/skills/nt-asset-image-generation/references/verification-and-prompts.md",
+      "title": "verification-and-prompts.md",
+      "description": "Prompt and verification guidance for real raster generation, fake-output detection, composable asset prompts, and known dead ends.",
+      "role": "image generation verification reference",
+      "tags": [
+        "assets",
+        "skill-reference",
+        "generation"
+      ]
+    },
+    {
+      "id": "assets:nt-asset-image-generation-throughput",
+      "kind": "doc",
+      "path": ".codex/skills/nt-asset-image-generation/references/throughput-and-handoff.md",
+      "title": "throughput-and-handoff.md",
+      "description": "Batch generation, source-sheet-first guidance, skip sidecars, and handoff back to asset workflow and quality checks.",
+      "role": "image generation throughput reference",
+      "tags": [
+        "assets",
+        "skill-reference",
+        "batch"
+      ]
+    },
+    {
+      "id": "assets:nt-asset-image-generation-scripts",
+      "title": "Generation Scripts",
+      "kind": "group",
+      "description": "Executable wrappers for image generation, compare mode, batch generation, and dual-plate soft-alpha generation.",
+      "role": "image generation script group",
+      "tags": [
+        "assets",
+        "tool",
+        "generation"
+      ],
+      "children": [
+        {
+          "id": "assets:nt-asset-image-generation-codex-wrapper",
+          "kind": "tool",
+          "path": ".codex/skills/nt-asset-image-generation/scripts/codex_imagegen.sh",
+          "title": "codex_imagegen.sh",
+          "description": "Shell wrapper that forces Codex CLI imagegen to create and write a real raster PNG, with fake-output size checks.",
+          "role": "Codex imagegen wrapper",
+          "tags": [
+            "assets",
+            "tool",
+            "generation"
+          ]
+        },
+        {
+          "id": "assets:nt-asset-image-generation-python",
+          "kind": "tool",
+          "path": ".codex/skills/nt-asset-image-generation/scripts/generate_image.py",
+          "title": "generate_image.py",
+          "description": "Python image generation/edit helper using official REST with API key or Codex backend credentials, plus skip-if-unchanged sidecars.",
+          "role": "image generation helper",
+          "tags": [
+            "assets",
+            "tool",
+            "generation"
+          ]
+        },
+        {
+          "id": "assets:nt-asset-image-generation-batch",
+          "kind": "tool",
+          "path": ".codex/skills/nt-asset-image-generation/scripts/gen_batch.py",
+          "title": "gen_batch.py",
+          "description": "Concurrent batch runner for multiple image generation jobs with dry-run, bounded concurrency, and unchanged-job skipping.",
+          "role": "image generation batch runner",
+          "tags": [
+            "assets",
+            "tool",
+            "batch"
+          ]
+        },
+        {
+          "id": "assets:nt-asset-image-generation-compare",
+          "kind": "tool",
+          "path": ".codex/skills/nt-asset-image-generation/scripts/gen_both.sh",
+          "title": "gen_both.sh",
+          "description": "Compare-mode runner that generates the same prompt through Codex imagegen and Antigravity fallback for visual selection.",
+          "role": "image generation compare-mode runner",
+          "tags": [
+            "assets",
+            "tool",
+            "generation"
+          ]
+        },
+        {
+          "id": "assets:nt-asset-image-generation-dual-plate",
+          "kind": "tool",
+          "path": ".codex/skills/nt-asset-image-generation/scripts/gen_dual_plate.sh",
+          "title": "gen_dual_plate.sh",
+          "description": "Soft-alpha dual-plate generation helper used by cutout prep when one flat-key source cannot recover fractional alpha.",
+          "role": "dual-plate generation helper",
+          "tags": [
+            "assets",
+            "tool",
+            "cutout"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -9,14 +9,17 @@ The map is data-driven:
   it keeps the root-node metadata plus a `root.parts` list of per-child files
   under `tree/`. Each top-level workspace child (one module or workspace group)
   is one JSON file in `tree/`, so edits localize to a single part.
-- `tree/` holds the split parts. Edit the matching part file, not one giant
-  tree; add or reorder a top-level child by editing the `parts` list in
-  `../tree.json`.
-- `tree_loader.mjs` merges the index and its parts back into one tree. A legacy
-  single-file tree (`root.children` with no `root.parts`) is returned unchanged.
+- `tree/` holds recursively split owner parts. Any node may replace `children`
+  with an ordered `parts` list; each nested path is relative to the JSON file
+  that contains that list. Edit the smallest owning part. Add/reorder root
+  owners in `../tree.json`; add/reorder nested owners in their parent part.
+- `tree_loader.mjs` recursively materializes every `parts` list back to
+  `children`, preserving field order and removing all ref markers. Missing,
+  malformed, conflicting, or cyclic nested refs identify their path and
+  referrer. A legacy single-file tree remains compatible.
 - `index.html` renders the hierarchy in the browser. It loads the merged tree from
   `GET /api/architecture-tree` (falling back to reading `../tree.json` and
-  merging `tree/` parts client-side). The surface provides drill-down cards,
+  recursively materializing `tree/` parts client-side). The surface provides drill-down cards,
   breadcrumbs, type filters, and local layout positions; it has no second
   relationship model.
 - `validate_map.mjs` merges the tree, derives coverage from `git ls-files`,

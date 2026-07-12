@@ -1,0 +1,13 @@
+{
+  "id": "assets:items-viewer",
+  "title": "Items Viewer",
+  "kind": "surface",
+  "path": "ai_studio/assets/items_viewer",
+  "description": "Presents item catalogs, icons, and container data for inspection without owning game item state.",
+  "role": "item catalog inspection surface",
+  "tags": [
+    "assets",
+    "items",
+    "surface"
+  ]
+}

@@ -643,6 +643,56 @@
         return null;
       }
     }
+    async function materializeTreeRefs(value, referrerUrl, activeRefs = [], storageRootUrl = null, isIndexDocument = true) {
+      if (Array.isArray(value)) {
+        return await Promise.all(value.map((item) => materializeTreeRefs(item, referrerUrl, activeRefs, storageRootUrl, false)));
+      }
+      if (!value || typeof value !== "object") return value;
+      const storageRoot = storageRootUrl || new URL("architecture_map/tree/", referrerUrl);
+      const stripIndex = isIndexDocument && value.root && Object.hasOwn(value.root, "parts");
+      if (Object.hasOwn(value, "parts") && !Array.isArray(value.parts)) {
+        throw new Error(`Architecture tree parts from "${referrerUrl}" must be an array.`);
+      }
+      if (Object.hasOwn(value, "parts") && Object.hasOwn(value, "children")) {
+        throw new Error(`Architecture tree node from "${referrerUrl}" cannot contain both parts and children.`);
+      }
+      const entries = [];
+      for (const [key, item] of Object.entries(value)) {
+        if (key !== "parts") {
+          entries.push([key, await materializeTreeRefs(item, referrerUrl, activeRefs, storageRoot, false)]);
+          continue;
+        }
+        const resolvedParts = await Promise.all(item.map(async (partPath) => {
+          if (typeof partPath !== "string" || !partPath.trim()) {
+            throw new Error(`Invalid architecture tree ref "${partPath}" from "${referrerUrl}".`);
+          }
+          if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(partPath) || partPath.startsWith("//") || partPath.startsWith("/")) {
+            throw new Error(`Architecture tree ref "${partPath}" from "${referrerUrl}" must be relative.`);
+          }
+          let partUrl;
+          try {
+            partUrl = new URL(partPath, referrerUrl);
+          } catch (error) {
+            throw new Error(`Invalid architecture tree ref "${partPath}" from "${referrerUrl}".`);
+          }
+          if (!partUrl.href.startsWith(storageRoot.href)) {
+            throw new Error(`Architecture tree ref "${partPath}" from "${referrerUrl}" escapes tree storage "${storageRoot.href}".`);
+          }
+          if (activeRefs.includes(partUrl.href)) {
+            throw new Error(`Architecture tree ref cycle: ${[...activeRefs, partUrl.href].join(" -> ")}`);
+          }
+          const part = await fetchJson(partUrl.href);
+          if (!part) {
+            throw new Error(`Architecture tree ref "${partPath}" from "${referrerUrl}" could not be loaded.`);
+          }
+          return await materializeTreeRefs(part, partUrl, [...activeRefs, partUrl.href], storageRoot, false);
+        }));
+        entries.push(["children", resolvedParts]);
+      }
+      const result = Object.fromEntries(entries);
+      if (stripIndex) delete result.index;
+      return result;
+    }
     function repoHref(path) {
       return path ? "../../" + String(path).replace(/^\/+/, "") : "";
     }
@@ -727,16 +777,16 @@
       // Primary: merged tree served live by Studio Shell.
       const merged = await fetchJson("/api/architecture-tree");
       if (merged && merged.root) return merged;
-      // Fallback: read the on-disk index and merge its parts client-side.
-      const index = await fetchJson("../tree.json");
+      // Fallback: recursively materialize the on-disk index client-side.
+      const indexUrl = new URL("../tree.json", window.location.href);
+      const index = await fetchJson(indexUrl.href);
       if (!index || !index.root) return null;
-      if (Array.isArray(index.root.parts)) {
-        const parts = await Promise.all(index.root.parts.map((part) => fetchJson("../" + part)));
-        if (parts.some((part) => !part)) return null;
-        const { parts: _parts, ...rootMeta } = index.root;
-        return { ...index, root: { ...rootMeta, children: parts } };
+      try {
+        return await materializeTreeRefs(index, indexUrl);
+      } catch (error) {
+        console.error("Architecture tree fallback failed:", error);
+        return null;
       }
-      return index;
     }
     async function loadValidationReport() {
       // Primary: live report from Studio Shell; fallback: local generated file.

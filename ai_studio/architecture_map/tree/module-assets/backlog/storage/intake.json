@@ -1,0 +1,81 @@
+{
+  "id": "assets:backlog-intake",
+  "title": "Asset Intake",
+  "subtitle": "stage, accept, reject",
+  "kind": "group",
+  "color": "#0e7490",
+  "description": "Manifest-first intake for new asset candidates. Stages files with provenance, accepts selected files into packs or restricted packs, and rejects staged candidates without writing alternate metadata records.",
+  "role": "asset intake workflow",
+  "tags": [
+    "assets",
+    "storage",
+    "intake"
+  ],
+  "children": [
+    {
+      "id": "assets:backlog-intake-readme",
+      "kind": "doc",
+      "path": "ai_studio/assets/backlog/storage/intake/README.md",
+      "title": "README.md",
+      "description": "Asset Intake contract: stage, review, accept or reject, Pack Manifest output, restricted-pack routing, and command examples.",
+      "role": "asset intake module entrypoint",
+      "tags": [
+        "assets",
+        "intake",
+        "source"
+      ]
+    },
+    {
+      "id": "assets:backlog-intake-stage",
+      "kind": "tool",
+      "path": "ai_studio/assets/backlog/storage/intake/stage.mjs",
+      "title": "stage.mjs",
+      "description": "Stages a file, folder, zip, or URL into _incoming with hashes, source page, license hint, and provenance log.",
+      "role": "asset intake staging command",
+      "tags": [
+        "assets",
+        "intake",
+        "provenance"
+      ]
+    },
+    {
+      "id": "assets:backlog-intake-accept",
+      "kind": "tool",
+      "path": "ai_studio/assets/backlog/storage/intake/accept.mjs",
+      "title": "accept.mjs",
+      "description": "Accepts one staged file into Pack Manifest layout, routing publishable assets to packs and non-publishable assets to restricted/packs.",
+      "role": "asset intake accept command",
+      "tags": [
+        "assets",
+        "intake",
+        "manifest",
+        "license"
+      ]
+    },
+    {
+      "id": "assets:backlog-intake-reject",
+      "kind": "tool",
+      "path": "ai_studio/assets/backlog/storage/intake/reject.mjs",
+      "title": "reject.mjs",
+      "description": "Rejects a staged candidate by moving it into _rejected or deleting it explicitly.",
+      "role": "asset intake rejection command",
+      "tags": [
+        "assets",
+        "intake"
+      ]
+    },
+    {
+      "id": "assets:backlog-intake-test",
+      "kind": "test",
+      "path": "ai_studio/assets/backlog/storage/intake/tests/intake.test.mjs",
+      "title": "intake.test.mjs",
+      "description": "Verifies asset intake contracts.",
+      "role": "asset intake tests",
+      "tags": [
+        "assets",
+        "intake",
+        "test"
+      ]
+    }
+  ]
+}

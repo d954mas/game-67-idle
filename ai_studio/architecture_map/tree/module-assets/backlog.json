@@ -1,0 +1,20 @@
+{
+  "id": "assets:backlog",
+  "title": "Asset Backlog",
+  "subtitle": "needs decomposition",
+  "kind": "group",
+  "path": "ai_studio/assets/backlog",
+  "coverage": "self",
+  "color": "#64748b",
+  "description": "Temporary holding area for asset modules that are functional but not yet cleanly decomposed into viewer or tools.",
+  "role": "asset architecture backlog",
+  "tags": [
+    "assets",
+    "backlog"
+  ],
+  "parts": [
+    "backlog/readme.json",
+    "backlog/storage.json",
+    "backlog/asset-workflow-skill.json"
+  ]
+}

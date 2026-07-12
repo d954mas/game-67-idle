@@ -1,0 +1,99 @@
+{
+  "id": "core-harness:validation",
+  "title": "Validation",
+  "subtitle": "fast route checks",
+  "kind": "validation",
+  "color": "#7f1d1d",
+  "description": "Fast Core Harness validation for agent-facing docs and stale file references. Module test suites stay with their owning modules.",
+  "role": "core harness route and reference guard",
+  "tags": [
+    "core",
+    "validation",
+    "fast-check"
+  ],
+  "children": [
+    {
+      "id": "core-harness:validation-readme",
+      "kind": "validation",
+      "path": "ai_studio/core_harness/validation/README.md",
+      "description": "Core validation contract: fast mechanical checks only; no global pipeline validation.",
+      "role": "core validation entrypoint",
+      "tags": [
+        "validation",
+        "contract",
+        "entrypoint"
+      ]
+    },
+    {
+      "id": "core-harness:doc-reference-check",
+      "kind": "validation",
+      "path": "ai_studio/core_harness/validation/doc_reference_check.mjs",
+      "description": "Mechanical guard for stale local references and missing files in agent-facing Markdown.",
+      "role": "stale reference guard",
+      "tags": [
+        "validator",
+        "docs",
+        "public-api"
+      ]
+    },
+    {
+      "id": "core-harness:doc-reference-check-test",
+      "kind": "test",
+      "path": "ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs",
+      "description": "Verifies stale reference guard contracts.",
+      "role": "stale reference guard tests",
+      "tags": [
+        "test",
+        "docs"
+      ]
+    },
+    {
+      "id": "core-harness:enforcement-check",
+      "kind": "validation",
+      "path": "ai_studio/core_harness/validation/enforcement_check.mjs",
+      "description": "Validates enforcement labels and repository-confined evidence links.",
+      "role": "enforcement contract validator",
+      "tags": [
+        "validator",
+        "agents",
+        "contracts"
+      ]
+    },
+    {
+      "id": "core-harness:agent-role-smoke",
+      "kind": "validation",
+      "path": "ai_studio/core_harness/validation/agent_role_smoke.mjs",
+      "description": "Checks native Codex evidence for the requested stock role and actual selected model.",
+      "role": "post-restart Codex role and model smoke",
+      "tags": [
+        "validator",
+        "agents",
+        "codex"
+      ]
+    },
+    {
+      "id": "core-harness:enforcement-check-test",
+      "kind": "test",
+      "path": "ai_studio/core_harness/validation/tests/enforcement_check.test.mjs",
+      "description": "Verifies enforcement classification and evidence-link validation.",
+      "role": "enforcement contract validator tests",
+      "tags": [
+        "test",
+        "agents",
+        "contracts"
+      ]
+    },
+    {
+      "id": "core-harness:agent-role-smoke-test",
+      "kind": "test",
+      "path": "ai_studio/core_harness/validation/tests/agent_role_smoke.test.mjs",
+      "description": "Verifies role and model smoke success, fallback, mismatch, and malformed evidence handling.",
+      "role": "Codex role and model smoke tests",
+      "tags": [
+        "test",
+        "agents",
+        "codex"
+      ]
+    }
+  ]
+}

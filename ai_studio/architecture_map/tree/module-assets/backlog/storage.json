@@ -1,0 +1,29 @@
+{
+  "id": "assets:backlog-storage",
+  "title": "Backlog Storage",
+  "subtitle": "temporary storage backlog",
+  "kind": "module",
+  "path": "ai_studio/assets/backlog/storage",
+  "color": "#0e7490",
+  "description": "Owns temporary asset manifests, registries, previews, and license metadata pending decomposition.",
+  "role": "backlog asset storage",
+  "tags": [
+    "assets",
+    "backlog",
+    "storage"
+  ],
+  "parts": [
+    "storage/readme.json",
+    "storage/search.json",
+    "storage/kinds.json",
+    "storage/search-test.json",
+    "storage/intake.json",
+    "storage/source-registry.json",
+    "storage/pack-manifest.json",
+    "storage/source-snapshots.json",
+    "storage/asset-index.json",
+    "storage/license-guard.json",
+    "storage/preview-pipeline.json"
+  ],
+  "coverage": "self"
+}
