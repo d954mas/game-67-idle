@@ -31,7 +31,9 @@ one fast local verification contract plus one complete Studio CI contract.
       normalized result never becomes a second domain implementation.
 - [x] The reference template's web build uses Node orchestration with output
       parity before the Bash wrapper is removed.
-- [x] CI separates blocking deterministic gates from advisory timing reports.
+- [x] CI runs only blocking deterministic gates; local timing tools remain
+      available on demand but decision-free advisory benchmarks are not
+      repeated on every PR run.
 
 ## Open questions
 
@@ -45,3 +47,11 @@ one fast local verification contract plus one complete Studio CI contract.
 - 2026-07-12: Focused evidence: Studio facade tests 14/14; asset owner suite 144/144; Linux `/tmp` regression 6/6 in normal and forced-temp modes; CI/timing contract 4/4; opt-in Canvas timing 2/2; every review/fix cycle ended with two independent read-only reviews reporting 0 HIGH and 0 actionable findings.
 - 2026-07-12: Full clean-runner evidence: GitHub Actions run 29203676405 on faf39009f passed Ubuntu (7m25s) and Windows (10m53s), each executing blocking `node ai_studio/studio.mjs verify --full`; https://github.com/d954mas/game-67-idle/actions/runs/29203676405.
 - 2026-07-12: Quality: QTECH_001=pass; evidence: facade and owner-suite tests; two independent review cycles; GitHub Actions 29203676405 passed Ubuntu and Windows on faf39009f
+- 2026-07-13: Lead removed the decision-free PR timing steps after the green
+  run showed they added 64s on Ubuntu and 61s on Windows while producing no
+  persisted baseline, threshold, or release decision. Blocking Windows/Linux
+  `studio verify --full` remains unchanged; local benchmark tools remain.
+- 2026-07-13: Two independent read-only cleanup reviews reported 0 HIGH and 0
+  actionable findings; CI/Architecture tests passed 12/12, strict Architecture
+  Map reported zero issues, Taskboard validation passed, and scoped diff check
+  was clean.

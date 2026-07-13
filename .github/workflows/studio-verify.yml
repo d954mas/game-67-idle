@@ -74,13 +74,3 @@ jobs:
           echo "EMSDK=$EMSDK_PATH" >> "$GITHUB_ENV"
       - name: Blocking Studio verification
         run: node ai_studio/studio.mjs verify --full
-      - name: Advisory toolchain timing
-        if: always()
-        continue-on-error: true
-        run: node ai_studio/dev_environment/toolchain_benchmark.mjs --game template --samples 1
-      - name: Advisory Canvas worker timing
-        if: always()
-        continue-on-error: true
-        env:
-          AI_STUDIO_ASSERT_TIMING: '1'
-        run: node --test ai_studio/assets/canvas/tests/worker_warm.test.mjs

@@ -34,7 +34,7 @@
       "kind": "test",
       "path": "ai_studio/studio_ci.test.mjs",
       "title": "studio_ci.test.mjs",
-      "description": "Verifies the cross-platform GitHub workflow contract, pinned setup actions, recursive submodules, root Python bootstrap, blocking verification, and advisory timing separation.",
+      "description": "Verifies the cross-platform GitHub workflow contract, pinned setup actions, recursive submodules, root Python bootstrap, and blocking verification without decision-free PR benchmarks.",
       "role": "Studio CI workflow contract tests",
       "tags": ["test", "ci", "windows", "linux"]
     },
@@ -43,7 +43,7 @@
       "kind": "workflow",
       "path": ".github/workflows/studio-verify.yml",
       "title": "studio-verify.yml",
-      "description": "Runs the blocking full Studio verification matrix on Windows and Ubuntu with recursive submodules, Node 24, Python 3.12, and a separate advisory timing step.",
+      "description": "Runs the blocking full Studio verification matrix on Windows and Ubuntu with recursive submodules, Node 24, Python 3.12, and no repeated advisory benchmark.",
       "role": "cross-platform Studio verification workflow",
       "tags": ["ci", "windows", "linux", "verification"]
     }

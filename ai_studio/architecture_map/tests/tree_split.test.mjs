@@ -181,7 +181,7 @@ test("repo owner storage remains recursively split and context-bounded", () => {
 test("repo merged model keeps the accepted pre-split hash", () => {
   const merged = loadArchitectureTree(repoRoot, "ai_studio/tree.json");
   const hash = createHash("sha256").update(JSON.stringify(merged)).digest("hex");
-  assert.equal(hash, "dc1728c25ff7c9c5245152b26390add841f986323106035e37d6994633d8ecac");
+  assert.equal(hash, "338a294b6cab2cc66c2de6853714136bae10e247851e16d3438bb0f2144e1e8b");
 });
 
 const requiredTopLevelIds = [
