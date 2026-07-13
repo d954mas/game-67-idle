@@ -96,6 +96,20 @@ the page URL; the pack builder is native-only, so the pack is taken from the
 native build). `serve_web.mjs` is a self-contained static server that serves
 `game.wasm` as `application/wasm` (required for emscripten's streaming compile).
 
+The copied game also owns one Node lifecycle entrypoint. `build_web.mjs` only
+produces an artifact directory; final portal packaging and verification belong
+to `game.mjs`:
+
+```bash
+node tools/game.mjs doctor
+node tools/game.mjs test
+node tools/game.mjs playable --target itch
+node tools/game.mjs package --target itch
+node tools/game.mjs verify --target itch
+```
+
+See `release/README.md` for final ZIP, sidecar, and copied CI contracts.
+
 | preset | configure flags | port | DevAPI | notes |
 |---|---|---|---|---|
 | `wasm-release` | `-DCMAKE_BUILD_TYPE=Release` | 8080 | no | human default |

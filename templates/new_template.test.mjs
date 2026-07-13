@@ -18,6 +18,17 @@ function tempRepo() {
   mkdirSync(join(root, "templates", "template", "build"), { recursive: true });
   writeFileSync(join(root, "templates", "template", "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.25)\n", "utf8");
   writeFileSync(join(root, "templates", "template", "assets", "readme.txt"), "asset\n", "utf8");
+  for (const [rel, body] of [
+    ["tools/game.mjs", "// game-owned CLI\n"],
+    ["tools/package_web.mjs", "// package owner\n"],
+    ["tools/lib/zip_store.mjs", "// ZIP owner\n"],
+    ["release/README.md", "# Release owner\n"],
+    [".github/workflows/game-verify.yml", "name: game verify\n"],
+    [".gitignore", "release/artifacts/\n"],
+  ]) {
+    mkdirSync(dirname(join(root, "templates", "template", rel)), { recursive: true });
+    writeFileSync(join(root, "templates", "template", rel), body, "utf8");
+  }
   writeFileSync(join(root, "templates", "template", "src", "generated", "game.h"), "#pragma once\n", "utf8");
   writeFileSync(join(root, "templates", "template", "build", "stale.obj"), "generated\n", "utf8");
   mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
@@ -49,6 +60,9 @@ test("new_template copies template, registers it, and refreshes VS Code files", 
   assert.equal(existsSync(join(root, "templates", "mobile-template", "CMakeLists.txt")), true);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "assets", "readme.txt")), true);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "src", "generated", "game.h")), true);
+  for (const rel of ["tools/game.mjs", "tools/package_web.mjs", "tools/lib/zip_store.mjs", "release/README.md", ".github/workflows/game-verify.yml", ".gitignore"]) {
+    assert.equal(readFileSync(join(root, "templates", "mobile-template", rel), "utf8"), readFileSync(join(root, "templates", "template", rel), "utf8"), rel);
+  }
   assert.equal(existsSync(join(root, "templates", "mobile-template", "build", "stale.obj")), false);
 
   const registry = JSON.parse(readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8"));

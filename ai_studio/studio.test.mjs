@@ -20,17 +20,17 @@ test("describe exposes stable owner routes without a Studio game proxy", () => {
   const result = describeStudio();
   assert.equal(result.schema, "ai_studio.studio.describe.v1");
   assert.deepEqual(result.routes.game.commands.map((entry) => entry.id), [
-    "create", "doctor", "build", "run", "test", "package",
+    "create", "doctor", "build", "run", "test", "playable", "package", "verify",
   ]);
   assert.equal(result.routes.game.commands[0].owner, "games/new_game.mjs");
   assert.equal(result.routes.game.commands.some((entry) => entry.owner === "ai_studio/studio.mjs"), false);
-  assert.equal(result.routes.game.commands.find((entry) => entry.id === "package").route, null);
+  assert.deepEqual(result.routes.game.commands.find((entry) => entry.id === "package").route, ["node", "<game-root>/tools/game.mjs", "package"]);
   assert.match(result.routes.game.commands.find((entry) => entry.id === "package").note, /build_web\.mjs only builds/);
   assert.equal(result.routes.canvas.surface, "/canvas/");
   assert.deepEqual(result.routes.canvas.cli, ["node", "ai_studio/assets/canvas/cli.mjs"]);
   assert.equal(result.routes.taskboard.surface, "/taskboard/");
   assert.equal(result.routes.assets.surface, "/asset_viewer/");
-  assert.equal(result.routes.game.commands.find((entry) => entry.id === "doctor").route, null);
+  assert.deepEqual(result.routes.game.commands.find((entry) => entry.id === "doctor").route, ["node", "<game-root>/tools/game.mjs", "doctor"]);
   assert.deepEqual(result.exitSemantics, { pass: 0, failed: 1, blockedOrSetup: 2 });
 });
 
@@ -56,6 +56,7 @@ test("changed selection hard-excludes games while preserving the new_game root e
 test("changed selection is narrow and unknown shared paths fall back to full", () => {
   assert.deepEqual(selectChangedSuites(["features/platform-sdk/web/platform-sdk.js"]), ["reference-template.web", "features.contracts", "features.platform-sdk", "studio.validation"]);
   assert.deepEqual(selectChangedSuites(["templates/template/tools/build_web.mjs"]), ["reference-template.web", "reference-template", "studio.validation"]);
+  assert.deepEqual(selectChangedSuites(["templates/template/tools/package_web.mjs"]), ["reference-template.web", "reference-template", "studio.validation"]);
   assert.deepEqual(selectChangedSuites(["mystery/shared.txt"]), ["full"]);
   assert.deepEqual(selectChangedSuites(["features/audio-core/src/audio.c"]), [
     "reference-template.native", "features.contracts", "features.audio.web", "studio.validation", "audio.native",
@@ -104,8 +105,9 @@ test("full plan pins native before asset and exposes runnable audio platform com
   assert.ok(ids.indexOf("reference-template.native") < ids.indexOf("studio.assets.canvas"));
   assert.equal(ids.indexOf("reference-template.web"), ids.indexOf("reference-template.native") + 1);
   const web = result.verification.suites.find((suite) => suite.id === "reference-template.web");
-  assert.deepEqual(web.commandPlan[0], ["node", "templates/template/tools/build_web.mjs", "--preset", "wasm-release", "--target", "local", "--no-debug-ui"]);
+  assert.deepEqual(web.commandPlan[0], ["node", "templates/template/tools/build_web.mjs", "--preset", "wasm-release", "--target", "itch", "--no-debug-ui"]);
   assert.match(web.commandPlan[1].at(-1), /game\.js.*game\.wasm.*game\.ntpack/);
+  assert.deepEqual(web.commandPlan[2], ["node", "templates/template/tools/game.mjs", "verify", "--target", "itch", "--no-build", "--template-proof", "--skip-tests", "--out", "build/package-proof"]);
 });
 
 test("runtime automation runs the functional iterate contract only on Linux", () => {

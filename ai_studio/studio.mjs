@@ -69,11 +69,13 @@ const ROUTES = Object.freeze({
     availability: "game-owned",
     commands: [
       { id: "create", availability: "shared", owner: "games/new_game.mjs", route: ["node", "games/new_game.mjs"] },
-      { id: "doctor", availability: "game-owned", owner: "<game-root>", route: null, note: "Each game owns its doctor command; Studio does not synthesize one from CMake." },
-      { id: "build", availability: "game-owned", owner: "<game-root>/CMakeLists.txt", route: ["cmake", "--build", "<game-build>"] },
-      { id: "run", availability: "game-owned", owner: "<game-root>", route: ["<game-build>/bin/game"] },
-      { id: "test", availability: "game-owned", owner: "<game-root>/CMakeLists.txt", route: ["ctest", "--test-dir", "<game-build>"] },
-      { id: "package", availability: "game-owned", owner: "<game-root>", route: null, note: "Each game owns its packaging command; build_web.mjs only builds a web artifact directory." },
+      { id: "doctor", availability: "game-owned", owner: "<game-root>/tools/game.mjs", route: ["node", "<game-root>/tools/game.mjs", "doctor"] },
+      { id: "build", availability: "game-owned", owner: "<game-root>/tools/game.mjs", route: ["node", "<game-root>/tools/game.mjs", "build"] },
+      { id: "run", availability: "game-owned", owner: "<game-root>/tools/game.mjs", route: ["node", "<game-root>/tools/game.mjs", "run"] },
+      { id: "test", availability: "game-owned", owner: "<game-root>/tools/game.mjs", route: ["node", "<game-root>/tools/game.mjs", "test"] },
+      { id: "playable", availability: "game-owned", owner: "<game-root>/tools/game.mjs", route: ["node", "<game-root>/tools/game.mjs", "playable"] },
+      { id: "package", availability: "game-owned", owner: "<game-root>/tools/game.mjs", route: ["node", "<game-root>/tools/game.mjs", "package"], note: "build_web.mjs only builds; game.mjs owns final ZIP verification." },
+      { id: "verify", availability: "game-owned", owner: "<game-root>/tools/game.mjs", route: ["node", "<game-root>/tools/game.mjs", "verify"] },
     ],
   },
   canvas: { owner: "ai_studio/assets/canvas", surface: "/canvas/", cli: ["node", "ai_studio/assets/canvas/cli.mjs"] },
@@ -103,8 +105,9 @@ const NATIVE_COMMANDS = [
   ["ctest", "--test-dir", "templates/template/build/native-debug", "--output-on-failure"],
 ];
 const WEB_COMMANDS = [
-  ["node", "templates/template/tools/build_web.mjs", "--preset", "wasm-release", "--target", "local", "--no-debug-ui"],
-  ["node", "-e", "const fs=require('node:fs'); for (const p of ['templates/template/build/wasm-release/bin/game.js','templates/template/build/wasm-release/bin/game.wasm','templates/template/build/wasm-release/bin/assets/game.ntpack']) if (!fs.existsSync(p)) throw new Error('missing artifact '+p)"],
+  ["node", "templates/template/tools/build_web.mjs", "--preset", "wasm-release", "--target", "itch", "--no-debug-ui"],
+  ["node", "-e", "const fs=require('node:fs'); for (const p of ['templates/template/build/wasm-release-itch/bin/game.js','templates/template/build/wasm-release-itch/bin/game.wasm','templates/template/build/wasm-release-itch/bin/assets/game.ntpack']) if (!fs.existsSync(p)) throw new Error('missing artifact '+p)"],
+  ["node", "templates/template/tools/game.mjs", "verify", "--target", "itch", "--no-build", "--template-proof", "--skip-tests", "--out", "build/package-proof"],
 ];
 
 const NATIVE_TEST_FILES = Object.freeze([
@@ -183,7 +186,12 @@ const SUITES = Object.freeze([
   { id: "features.game-state", pythonFiles: GAME_STATE_PYTHON_TESTS, commands: pythonCommands(GAME_STATE_PYTHON_TESTS) },
   { id: "features.items-core", pythonFiles: ITEMS_PYTHON_TESTS, commands: pythonCommands(ITEMS_PYTHON_TESTS) },
   { id: "features.progression-core", pythonFiles: PROGRESSION_PYTHON_TESTS, commands: pythonCommands(PROGRESSION_PYTHON_TESTS) },
-  { id: "reference-template", testFiles: ["templates/new_template.test.mjs", "templates/template/tools/build_web.test.mjs"] },
+  { id: "reference-template", testFiles: [
+    "templates/new_template.test.mjs",
+    "templates/template/tools/build_web.test.mjs",
+    "templates/template/tools/game.test.mjs",
+    "templates/template/tools/package_web.test.mjs",
+  ] },
   { id: "reference-template.python", pythonFiles: TEMPLATE_PYTHON_TESTS, commands: pythonCommands(TEMPLATE_PYTHON_TESTS) },
   { id: "studio.validation", commands: [
     ["node", "ai_studio/taskboard/cli.mjs", "validate", "--json"],
@@ -311,7 +319,7 @@ function suitesForPath(path) {
     if (path === "templates/template/game-dependencies.json") add("features.contracts");
     if (!isDocumentationPath(path)) {
       if (/^templates\/template\/(?:CMakeLists\.txt|cmake\/|src\/|assets\/|state\/|content\/|tests\/test_.*\.c$)/.test(path)) add("reference-template.native");
-      if (/^templates\/template\/(?:CMakeLists\.txt|cmake\/|web\/|src\/|assets\/|state\/|content\/|tools\/build_web)/.test(path)) add("reference-template.web");
+      if (/^templates\/template\/(?:CMakeLists\.txt|cmake\/|web\/|src\/|assets\/|state\/|content\/|tools\/(?:build_web|game|package_web|lib\/zip_store))/.test(path)) add("reference-template.web");
       if (path.startsWith("templates/template/devapi/") || TEMPLATE_PYTHON_TESTS.includes(path)) add("reference-template.python");
     }
   } else if (path.startsWith("templates/")) add("reference-template");
