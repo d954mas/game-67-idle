@@ -4,7 +4,7 @@ title: Runway Awakening Design
 description: Design source-of-truth map for the web-dressup Poki MVP.
 tags: [game-design, mvp]
 game_id: web-dressup
-status: accepted
+status: closed
 ---
 
 # Runway Awakening Design
@@ -20,12 +20,9 @@ status: accepted
 - `data/asset_manifest.json` - 30-item art and web-size budget.
 - `knowledge/` - private game knowledge and competitor evidence.
 
-## Current gate
+## Closure
 
-Build only the bright three-Essence vertical MVP needed for a Poki 500-player
-test. The previous theme picker, hidden theme scoring and Fake Show are rejected
-as product sources of truth.
-
-Implementation begins with polished Moon+Bloom and Moon+Flame runtime reveals
-plus a compressed-size proof. Mass content production is blocked until the
-contrasting reveals, comprehension test and byte gate all pass.
+The lead closed this unfinished prototype on 2026-07-13. The snapshot is
+preserved by the repository closure tag. Visual readiness, final review, Poki
+Inspector proof, release acceptance, and the 500-player test were not completed
+and must not be inferred from the retained implementation or design files.

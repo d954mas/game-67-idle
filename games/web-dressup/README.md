@@ -1,5 +1,8 @@
 # web-dressup (Переодевалка)
 
+> Closed on 2026-07-13 as an unfinished prototype. The tagged snapshot is
+> historical evidence, not a release-ready or player-tested game.
+
 Web-first dress-up / try-on game. Created from the Studio template; owns its
 copy under `games/web-dressup/`.
 
