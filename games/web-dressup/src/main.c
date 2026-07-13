@@ -41,6 +41,7 @@
 #endif
 
 #include "features/dress_room/dress_room.h"
+#include "features/dress_room/dress_room_events.h"
 #include "features/game_features.h"
 #include "features/platform_sdk/platform_sdk.h"
 #include "features/platform_sdk/platform_sdk_events.h"
@@ -277,7 +278,7 @@ static void frame(void) {
     // render pass this frame (see game_save_apply_pending_new_game's doc comment).
     (void)game_save_apply_pending_new_game();
 
-    // ---- feature two-phase event frame (event_system_design §2/§7) ----
+    // ---- feature two-phase event frame: react to quiescence, then record ----
     game_features_update(&s_world, g_nt_app.dt);   // emit phase (sys_move moved in); phase=EMIT default
     game_events_react_begin();                     // fixpoint baseline = count after update
     do {
@@ -398,10 +399,12 @@ int main(int argc, char **argv) {
     game_ev_register(); // register typed-event debug labels (effect under NT_HASH_LABELS, E3)
     items_ev_register(); // И2a: register items.txn debug label (mirrors game_ev_register)
     progression_ev_register(); // И3a: register progression.levelup debug label (mirrors items_ev_register)
+    dress_room_events_register(); // Runway MVP: bounded game-owned outcome telemetry
 #if NT_DEVAPI_ENABLED
     game_events_devapi_register_descs(game_ev_descs, game_ev_desc_count); // E3: tail descriptors
     game_events_devapi_register_descs(items_ev_descs, items_ev_desc_count); // И2a: items.txn tail descriptor
     game_events_devapi_register_descs(progression_ev_descs, progression_ev_desc_count); // И3a: progression.levelup tail descriptor
+    game_events_devapi_register_descs(dress_room_ev_descs, dress_room_ev_desc_count);
 #endif
 #if FEATURE_GAME_EVENTS
     platform_sdk_events_register(); // T0339: platform SDK lifecycle/ad-flow labels
@@ -417,6 +420,7 @@ int main(int argc, char **argv) {
     game_analytics_register_descs(game_ev_descs, game_ev_desc_count);   // E4: fragment descs (append)
     game_analytics_register_descs(items_ev_descs, items_ev_desc_count); // И2a: items.txn (append)
     game_analytics_register_descs(progression_ev_descs, progression_ev_desc_count); // И3a: progression.levelup (append)
+    game_analytics_register_descs(dress_room_ev_descs, dress_room_ev_desc_count); // Runway funnel/outcomes
 #if FEATURE_GAME_EVENTS
     game_analytics_register_descs(platform_sdk_ev_descs, platform_sdk_ev_desc_count); // T0339: SDK events
 #endif
@@ -427,6 +431,7 @@ int main(int argc, char **argv) {
     game_events_log_mirror_register_descs(game_ev_descs, game_ev_desc_count);
     game_events_log_mirror_register_descs(items_ev_descs, items_ev_desc_count);
     game_events_log_mirror_register_descs(progression_ev_descs, progression_ev_desc_count);
+    game_events_log_mirror_register_descs(dress_room_ev_descs, dress_room_ev_desc_count);
 #if FEATURE_GAME_EVENTS
     game_events_log_mirror_register_descs(platform_sdk_ev_descs, platform_sdk_ev_desc_count);
 #endif
@@ -441,9 +446,9 @@ int main(int argc, char **argv) {
     nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});
     nt_text_renderer_init();
-    game_save_register_fragment(&settings_state_fragment); /* settings before game (§14 п.2) */
-    game_save_register_fragment(&items_state_fragment);    /* И2a: L1, no deps -> between settings and game (OQ2) */
-    game_save_register_fragment(&progression_state_fragment); /* И3a: L2, depends on items (L1) -> after items (OQ2) */
+    game_save_register_fragment(&settings_state_fragment); /* settings first */
+    game_save_register_fragment(&items_state_fragment);    /* L1, no deps: between settings and game */
+    game_save_register_fragment(&progression_state_fragment); /* L2 depends on items: register after items */
     game_save_register_fragment(&game_state_fragment);     /* `game` last (most dependent) */
     game_save_init();
     if (!s_fresh_state) {
@@ -529,9 +534,9 @@ int main(int argc, char **argv) {
 
 #ifndef NT_PLATFORM_WEB
     devapi_shutdown_runtime();
+    game_features_shutdown(&s_world);
     platform_lifecycle_shutdown();
     ui_runtime_shutdown();
-    game_features_shutdown(&s_world);
 #if FEATURE_GAME_ANALYTICS
     game_analytics_shutdown(); // E4: final flush + close (before event infra teardown)
 #endif

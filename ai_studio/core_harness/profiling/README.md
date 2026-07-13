@@ -8,6 +8,10 @@ subagent spawn diagnostics.
 Profiling is passive. Hooks write JSONL records under `tmp/session_profiles/`.
 The raw telemetry is local evidence and should not be committed.
 
+Reports distinguish observed hook/session records from advisory diagnosis.
+They do not prove process conventions, select models, or replace the explicit
+post-restart role/model smoke in `../validation/agent_role_smoke.mjs`.
+
 Stay local-first for AI observability. Do not add external tracing, eval, or
 dashboard services unless a concrete repeated need exists, such as shared human
 review, comparable datasets/evals, production telemetry, OTLP integration, or a
@@ -18,7 +22,9 @@ local JSONL workflow that cannot answer an important repeated question.
 - `agent_surfaces/` owns generated hook config for Codex and Claude.
 - `profiling/` owns the recorder commands that those hooks run.
 - `workflow/` may route retrospectives to profiling output.
-- Taskboard does not know about profiling.
+- Taskboard store/domain code does not know about session profiling.
+- `taskboard_reads.mjs` is a profiler-owned adapter invoked only at the existing
+  Taskboard CLI boundary; it never runs from model/tool-event hooks.
 
 ## Commands
 
@@ -41,10 +47,17 @@ Show subagent transcript diagnostics:
 node ai_studio/core_harness/profiling/status.mjs --agents
 ```
 
+Measure summary-first Taskboard reads across every registered public/private
+Taskboard store without serializing task content:
+
+```powershell
+node ai_studio/taskboard/cli.mjs profile --json --runs 7
+```
+
 Install optional full-gate Python dependencies only when a module asks for them:
 
 ```powershell
-py -3.12 -m pip install -r ai_studio/core_harness/profiling/requirements-full.txt
+node ai_studio/dev_environment/python_run.mjs -m pip install -r ai_studio/core_harness/profiling/requirements-full.txt
 ```
 
 ## Files
@@ -56,6 +69,8 @@ py -3.12 -m pip install -r ai_studio/core_harness/profiling/requirements-full.tx
 - `status.mjs`: session report renderer.
 - `agent_rollup.mjs`: optional subagent transcript rollup.
 - `profile_lib.mjs`: shared JSONL/profile helpers.
+- `taskboard_reads.mjs`: on-demand metadata-only Taskboard read benchmark used
+  by the Taskboard CLI; it uses monotonic timing and UTF-8 byte counts.
 - `requirements-full.txt`: pinned optional Python dependencies for full profiling
   or visual/numeric gates that need Pillow, NumPy, or SciPy.
 - `tests/profiling.test.mjs`: focused profiling tests.

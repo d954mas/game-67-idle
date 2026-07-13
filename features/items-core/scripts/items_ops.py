@@ -2,8 +2,8 @@
 """Read-only op-layer CLI for the items content catalog (T0327 И2c).
 
 Single op-layer that the future T0316 web editor will sit on top of (tool
-parity, design §7): subprocess + `--json` gives the Node editor the exact same
-answers this CLI gives a human. read-v1 only (LEAN §3 -- upsert/deprecate are
+parity): subprocess + `--json` gives the Node editor the exact same
+answers this CLI gives a human. Read-only operations only; upsert/deprecate are
 editor-era, out of scope here).
 
 Moved to features/items-core/scripts/ in T0337; its own argparse defaults are
@@ -12,9 +12,9 @@ every path below must be passed explicitly (never rely on the defaults).
 Canonical invocation runs from the game/template root, e.g. templates/template/
 (see src/features/items/README.md "Content workflow"):
 
-    py -3.12 ../../features/items-core/scripts/items_ops.py list     --catalog content/items.json [--json]
-    py -3.12 ../../features/items-core/scripts/items_ops.py validate --catalog content/items.json --schema content/item_fields.schema.json --baseline content/items.lock.json --state-schema state/items.schema.json --src-dir src/features/items [--json]
-    py -3.12 ../../features/items-core/scripts/items_ops.py schema   --schema content/item_fields.schema.json [--json]
+    node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py list     --catalog <game-root>/content/items.json [--json]
+    node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py validate --catalog <game-root>/content/items.json --schema <game-root>/content/item_fields.schema.json --baseline <game-root>/content/items.lock.json --state-schema <game-root>/state/items.schema.json --src-dir <game-root>/src/features/items [--json]
+    node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py schema   --schema <game-root>/content/item_fields.schema.json [--json]
 
 Shares its data model with features/items-core/scripts/generate_items_catalog.py by IMPORTING it
 (never re-parsing the catalog with a second, forkable set of rules): `list`
@@ -24,8 +24,7 @@ prefix, duplicate ids, required fields, container accept_policy, i64
 integer-ness) always runs first, and this CLI only ADDS strictly stronger
 checks on top (lock-file removal workflow, full namespace-pattern regex,
 composite-key length, equip/stack sanity, display_name-keying lint) --
-see §8.3 of templates/design/build_spec_t0327_i2_2026-07-07.md and
-src/features/items/README.md ("Lock workflow" -- deleting/renaming a
+see src/features/items/README.md ("Lock workflow" -- deleting/renaming a
 SHIPPED def_id is a destructive action that must FORCE an explicit developer
 reaction, lead-ratified 2026-07-07). Never contradicts the generator; only
 tightens it.
@@ -65,8 +64,8 @@ from pathlib import Path
 from typing import Any
 
 # Same directory as generate_items_catalog.py -- import it directly instead of
-# re-implementing catalog parsing/validation (spec §8.1: "shares the catalog
-# schema/source of truth ... WITHOUT duplicating a second data model").
+# re-implementing catalog parsing/validation: both surfaces share one catalog
+# schema/source of truth without duplicating a second data model.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import generate_items_catalog as gen  # noqa: E402
 
@@ -84,7 +83,7 @@ MIN_REMOVED_FRAGMENT_VERSION = 2
 
 # state/items.schema.json string_max=64 -> ITEMS_STATE_STRING_MAX=64 -> a
 # NUL-terminated C string holds at most 63 payload chars (deep-review L2/L1;
-# §2.3/§8.3.4). Composite stack key is "<container>/<def_id>".
+# Composite stack key is "<container>/<def_id>".
 OWNED_KEY_MAX_LEN = 63
 
 # Lead reversal 2026-07-07: git history was rejected as an unreliable source
@@ -236,7 +235,7 @@ def cmd_schema(args: argparse.Namespace) -> int:
 
 
 def check_namespace_pattern(doc: dict[str, Any], field_schema: dict[str, Any]) -> list[Issue]:
-    """§8.3.1: id matches `<namespace>.<slug>`, namespace == items.json.namespace.
+    """Require `<namespace>.<slug>` ids matching items.json.namespace.
 
     Strictly stronger than the generator's own startswith(f"{namespace}.")
     check (run_generator_checks already catches missing/wrong namespace):
@@ -267,7 +266,7 @@ def check_namespace_pattern(doc: dict[str, Any], field_schema: dict[str, Any]) -
 def check_lock_workflow(
     doc: dict[str, Any], baseline: dict[str, Any] | None, current_version: int
 ) -> tuple[list[Issue], list[Issue]]:
-    """Lead-ratified 2026-07-07 (build on top of §8.2/§8.3.2 + README "Lock
+    """Lead-ratified 2026-07-07 (see the game-side README "Lock
     workflow"): deleting/renaming a SHIPPED def_id is a destructive action
     and must FORCE an explicit developer reaction, not just a warning.
 
@@ -403,7 +402,9 @@ def check_lock_workflow(
 
 
 def check_composite_key_length(doc: dict[str, Any]) -> list[Issue]:
-    """§8.3.4 (deep-review L2, HARD FAIL, И2c-only lint -- the runtime
+    """Hard-fail equip/stack consistency before runtime mutation checks.
+
+    The runtime
     (items_containers.c) only rejects this at mutation time via NT_ASSERT/
     truncation-check, never at content-authoring time). For every (container,
     stackable item) pair whose accept_policy would actually let that item land
@@ -424,7 +425,7 @@ def check_composite_key_length(doc: dict[str, Any]) -> list[Issue]:
                 continue
             stackable, _max_stack, _unlimited = gen.stack_fields(item)
             if not stackable:
-                continue  # uniques key by instance_id, not "<container>/<def_id>" (§2.3)
+                continue  # uniques key by instance_id, not "<container>/<def_id>"
             is_currency = item.get("currency") is not None
             # L6 (И2b items_containers.c): currency_only rejects non-currency;
             # any/slot_filter/capacity_1 are all treated as `any` in И2 (inert).
@@ -447,7 +448,7 @@ def check_composite_key_length(doc: dict[str, Any]) -> list[Issue]:
 
 def check_equip_stack(doc: dict[str, Any]) -> list[Issue]:
     """L1 (adapted for the single-int stack model): an item with an `equip` block IS
-    a unique instance (per-copy record, instance_id-keyed, count=1, §2.3), which under
+    a unique instance (per-copy record, instance_id-keyed, count=1), which under
     the collapsed model means stack == 1 exactly. 0 (unlimited) or N>1 (capped stack)
     contradicts per-copy ownership."""
     errors: list[Issue] = []
@@ -527,7 +528,7 @@ DISPLAY_NAME_KEY_RE = re.compile(r"strcmp\s*\([^;]*display_name")
 
 
 def lint_display_name_keying(src_dir: Path) -> list[Issue]:
-    """§8.3.3: advisory duplicate of the greп-gate G11 -- code must never key
+    """Advisory duplicate of grep gate G11: code must never key
     behavior off display_name (only ever read/emit it). Formally G11 is a
     manual grep-gate reviewed at PR time; this is the op-layer's own advisory
     scan so `validate` surfaces the same smell without gating exit code on it

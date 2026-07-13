@@ -12,8 +12,9 @@ JSON/image helpers) lives once in `_bridge/`.
 
 ## Python environment
 
-The tools run against a repo-local, gitignored `.venv/` created from `py -3.12`.
-Create or repair it with the one-shot setup script (from the repo root):
+The tools run against the repo-local, gitignored root `.venv/` resolved from
+`studio.config.json`. Create or repair it with the one-shot setup script (from
+the repo root):
 
 ```
 node ai_studio/assets/tools/image/_bridge/setup_python.mjs

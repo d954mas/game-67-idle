@@ -1,0 +1,23 @@
+{
+  "schema": "ai_studio.workspace.catalog.v1",
+  "mounts": [
+    {
+      "kind": "game",
+      "root": "games/web-dressup",
+      "visibility": "public",
+      "gitRoot": "",
+      "commitPolicy": "parent-public",
+      "enabledStores": ["assets"],
+      "aliases": []
+    },
+    {
+      "kind": "template",
+      "root": "templates/template",
+      "visibility": "public",
+      "gitRoot": "",
+      "commitPolicy": "parent-public",
+      "enabledStores": ["assets"],
+      "aliases": []
+    }
+  ]
+}

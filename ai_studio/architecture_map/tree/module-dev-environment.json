@@ -5,7 +5,7 @@
   "kind": "module",
   "moduleId": "dev-environment",
   "color": "#475569",
-  "description": "Local developer-environment helpers for generated IDE wiring. It owns VS Code task/launch generation from explicit template and game registries, but not game or template creation.",
+  "description": "Local developer environment for canonical Python tooling, mechanical CMake ownership, measured build baselines, and generated IDE wiring.",
   "tags": [
     "dev-environment",
     "vscode",
@@ -17,13 +17,85 @@
       "kind": "doc",
       "path": "ai_studio/dev_environment/README.md",
       "title": "README.md",
-      "description": "Dev Environment module contract: local IDE wiring owner, generated outputs, boundaries, and commands.",
+      "description": "Defines canonical local toolchains, build ownership, benchmark evidence, IDE wiring, and module boundaries.",
       "role": "Dev Environment contract",
       "tags": [
         "dev-environment",
         "contract",
         "source"
       ]
+    },
+    {
+      "id": "dev-environment:python-requirements",
+      "kind": "config",
+      "path": "ai_studio/python/requirements.direct.txt",
+      "title": "requirements.direct.txt",
+      "description": "Exact top-level requirements for ordinary Studio Python tooling; transitive packages remain pip-resolved rather than fully locked.",
+      "role": "ordinary Studio direct Python requirements",
+      "tags": ["python", "dependencies", "config"]
+    },
+    {
+      "id": "dev-environment:python-run",
+      "kind": "tool",
+      "path": "ai_studio/dev_environment/python_run.mjs",
+      "title": "python_run.mjs",
+      "description": "Runs ordinary Studio Python commands through the configured root environment.",
+      "role": "canonical Studio Python runner",
+      "tags": ["dev-environment", "python", "tool"]
+    },
+    {
+      "id": "dev-environment:python-check",
+      "kind": "validation",
+      "path": "ai_studio/dev_environment/python_check.mjs",
+      "title": "python_check.mjs",
+      "description": "Validates root environment ownership, interpreter version, and exact top-level requirement versions.",
+      "role": "Studio Python environment validator",
+      "tags": ["dev-environment", "python", "validation"]
+    },
+    {
+      "id": "dev-environment:python-setup",
+      "kind": "tool",
+      "path": "ai_studio/dev_environment/python_setup.mjs",
+      "title": "python_setup.mjs",
+      "description": "Bootstraps the root environment from an explicit repaired base interpreter.",
+      "role": "Studio Python environment bootstrap",
+      "tags": ["dev-environment", "python", "setup"]
+    },
+    {
+      "id": "dev-environment:toolchain-benchmark",
+      "kind": "tool",
+      "path": "ai_studio/dev_environment/toolchain_benchmark.mjs",
+      "title": "toolchain_benchmark.mjs",
+      "description": "Measures interpreter startup and cold, warm, and no-op game build costs.",
+      "role": "local toolchain benchmark collector",
+      "tags": ["dev-environment", "performance", "benchmark"]
+    },
+    {
+      "id": "dev-environment:benchmarks",
+      "kind": "evidence",
+      "path": "ai_studio/dev_environment/benchmarks",
+      "title": "benchmarks",
+      "description": "Stores measured local toolchain baselines with revision, machine, and dirty-state context.",
+      "role": "toolchain benchmark evidence",
+      "tags": ["dev-environment", "performance", "evidence"]
+    },
+    {
+      "id": "dev-environment:cmake-split-test",
+      "kind": "test",
+      "path": "ai_studio/dev_environment/cmake_split.test.mjs",
+      "title": "cmake_split.test.mjs",
+      "description": "Verifies game-owned CMake concern boundaries and target declaration parity.",
+      "role": "game CMake ownership contract tests",
+      "tags": ["dev-environment", "cmake", "test"]
+    },
+    {
+      "id": "dev-environment:python-contracts-test",
+      "kind": "test",
+      "path": "ai_studio/dev_environment/python_contracts.test.mjs",
+      "title": "python_contracts.test.mjs",
+      "description": "Verifies active ordinary Python contracts use the canonical Studio runner.",
+      "role": "Studio Python command contract tests",
+      "tags": ["dev-environment", "python", "test"]
     },
     {
       "id": "dev-environment:vscode-projects",
@@ -44,7 +116,7 @@
       "kind": "test",
       "path": "ai_studio/dev_environment/vscode_projects.test.mjs",
       "title": "vscode_projects.test.mjs",
-      "description": "Regression tests for generated VS Code tasks and launch configurations from template/game registries.",
+      "description": "Verifies VS Code project entry generator contracts.",
       "role": "VS Code project entry generator tests",
       "tags": [
         "dev-environment",

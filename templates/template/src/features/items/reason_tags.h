@@ -1,6 +1,6 @@
 #ifndef FEATURES_ITEMS_REASON_TAGS_H
 #define FEATURES_ITEMS_REASON_TAGS_H
-/* Closed, append-only reason-verb contract (design §10, build-spec §7.2). Every
+/* Closed, append-only reason-verb contract. Every
    items_* mutation calls items_reason_check(reason) FIRST. Format "verb:subject"
    (verb from the closed list below, subject non-empty). Debug-only assert;
    release build = no-op (zero runtime cost in shipped builds). */

@@ -57,7 +57,7 @@
       "kind": "tool",
       "path": "ai_studio/studio_shell/start_site.mjs",
       "title": "start_site.mjs",
-      "description": "Stable launcher for the AI Studio local site. Starts the server in the background, writes PID and logs, verifies the page, supports --open, --restart, and --port.",
+      "description": "Provides AI Studio site launch helper.",
       "role": "AI Studio site launch helper",
       "tags": [
         "tool",
@@ -83,12 +83,25 @@
       "kind": "tool",
       "path": "ai_studio/studio_shell/start_site_windows.ps1",
       "title": "start_site_windows.ps1",
-      "description": "Windows-safe detached launcher for Codex and local browser use. It avoids managed-shell child-process cleanup, writes PID/log files, waits for HTTP readiness, and supports -Restart, -Open, and -Port.",
+      "description": "Provides Windows-safe AI Studio site launch helper.",
       "role": "Windows-safe AI Studio site launch helper",
       "tags": [
         "tool",
         "server",
         "windows"
+      ]
+    },
+    {
+      "id": "studio-shell:tests",
+      "title": "Studio Shell Tests",
+      "kind": "test",
+      "path": "ai_studio/studio_shell/tests",
+      "description": "Verifies Studio Shell boundary contracts.",
+      "role": "Studio Shell integration coverage",
+      "tags": [
+        "test",
+        "server",
+        "http"
       ]
     },
     {
@@ -135,7 +148,7 @@
           "kind": "ui-component",
           "path": "ai_studio/studio_shell/studio_shell.js",
           "title": "studio_shell.js",
-          "description": "Shared browser behavior for the AI Studio left sidebar: collapse and expand toggle with localStorage persistence.",
+          "description": "Presents shared AI Studio shell behavior.",
           "role": "shared AI Studio shell behavior",
           "tags": [
             "ui",

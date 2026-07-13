@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
-import { findRoot, listTasks } from "../taskboard/lib.mjs";
+import { canonicalTaskLogPayloads, findRoot, listTasks } from "../taskboard/lib.mjs";
 
 const OUTCOMES = ["pass", "block", "review", "skip", "unverified"];
 const GROUPS = {
@@ -40,8 +40,7 @@ function parseArgs(argv) {
 }
 
 function qualityLines(body) {
-  return String(body || "")
-    .split(/\r?\n/)
+  return canonicalTaskLogPayloads(body)
     .filter((line) => /\bQuality:\s*/i.test(line));
 }
 
@@ -94,6 +93,7 @@ function buildProfile(root, options = {}) {
   const rules = [...byRule.values()].sort((a, b) => a.rule.localeCompare(b.rule));
   return {
     schema: "ai_studio.quality_profile",
+    report_kind: "advisory-task-log-summary",
     root,
     include_archive: Boolean(options.includeArchive),
     tasks_scanned: tasks.length,
@@ -107,6 +107,7 @@ function renderText(profile) {
   const lines = [
     "# Quality Rule Profile",
     "",
+    "Report kind: advisory task-log summary; not enforcement.",
     `Tasks scanned: ${profile.tasks_scanned}`,
     `Quality lines: ${profile.quality_lines}`,
     `Rule entries: ${profile.entries}`,

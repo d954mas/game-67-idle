@@ -16,6 +16,7 @@ import {
   stagePlatformSdkWebAssets,
 } from "../scripts/artifact_tools.mjs";
 import { scorecardFromNdjson } from "../scripts/scorecard.mjs";
+import { createBuildPlan } from "../../../templates/template/tools/build_web.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const TargetPlatform = Object.freeze({
@@ -151,7 +152,7 @@ test("build tooling maps publish targets to exactly one platform SDK adapter", (
 });
 
 test("template CMake isolates web presets by publish target", () => {
-  const cmake = readFileSync(join(HERE, "../../../templates/template/CMakeLists.txt"), "utf8");
+  const cmake = readFileSync(join(HERE, "../../../templates/template/cmake/GameOptions.cmake"), "utf8");
 
   assert.match(cmake, /set\(GAME_PUBLISH_TARGET "local" CACHE STRING/);
   assert.match(cmake, /if\(EMSCRIPTEN AND NOT GAME_PUBLISH_TARGET STREQUAL "local"\)/);
@@ -160,13 +161,21 @@ test("template CMake isolates web presets by publish target", () => {
 });
 
 test("web builds use a checkout-local Emscripten cache by default", () => {
-  const cmake = readFileSync(join(HERE, "../../../templates/template/CMakeLists.txt"), "utf8");
-  const buildWeb = readFileSync(join(HERE, "../../../templates/template/tools/build_web.sh"), "utf8");
+  const cmake = readFileSync(join(HERE, "../../../templates/template/cmake/GameOptions.cmake"), "utf8");
+  const gameDir = join(HERE, "../../../templates/template");
+  const plan = createBuildPlan({
+    gameDir,
+    args: { preset: "wasm-release", target: "local", debugUi: "default" },
+    env: {},
+    platform: "linux",
+    nativeConfigured: true,
+    toolchainExists: false,
+  });
 
   assert.match(cmake, /set\(GAME_EMSCRIPTEN_CACHE_DIR "\$\{_game_default_em_cache\}" CACHE PATH/);
   assert.match(cmake, /RULE_LAUNCH_COMPILE "\$\{_game_emcache_launcher\}"/);
   assert.match(cmake, /RULE_LAUNCH_LINK "\$\{_game_emcache_launcher\}"/);
-  assert.match(buildWeb, /export EM_CACHE="\$GAME_DIR\/build\/emscripten-cache"/);
+  assert.equal(plan.env.EM_CACHE, join(gameDir, "build", "emscripten-cache"));
 });
 
 test("web backend exposes only thin adapter methods and lifecycle calls stay direct", async () => {
@@ -243,6 +252,52 @@ test("web backend forwards loading progress without analytics events", async () 
 
   assert.deepEqual(progress, [0.35]);
   assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);
+});
+
+test("web backend forwards one stable measure triple without creating an event bus", async () => {
+  const host = createHost(TargetPlatform.POKI);
+  const measures = [];
+  const backend = createPlatformSdkWebBackend({
+    adapterFactory: () => ({
+      measure(category, what, action) {
+        measures.push([category, what, action]);
+      },
+    }),
+    config: { target: TargetPlatform.POKI, platformSdk: "poki" },
+    host,
+  });
+
+  await backend.measure("recipe", "moon-bloom", "discovered");
+
+  assert.deepEqual(measures, [["recipe", "moon-bloom", "discovered"]]);
+  assert.equal(Object.hasOwn(host, "__platformSdkEvents"), false);
+});
+
+test("mock adapter records deterministic measure trace", async () => {
+  const host = createHost(TargetPlatform.LOCAL);
+  const adapter = createMockPlatformAdapter({ host, target: TargetPlatform.LOCAL });
+
+  await adapter.measure("round", "1", "start");
+  await adapter.measure("round", "1", "complete");
+
+  assert.deepEqual(adapter.measureTrace(), [
+    ["round", "1", "start"],
+    ["round", "1", "complete"],
+  ]);
+});
+
+test("poki adapter calls the official measure category what action contract", async () => {
+  const host = createHost(TargetPlatform.POKI);
+  const measures = [];
+  host.PokiSDK = {
+    init() { return Promise.resolve(); },
+    measure(category, what, action) { measures.push([category, what, action]); },
+  };
+  const adapter = createPokiPlatformAdapter({ host });
+
+  await adapter.measure("collection", "3", "complete");
+
+  assert.deepEqual(measures, [["collection", "3", "complete"]]);
 });
 
 test("poki adapter coalesces loading progress queued before SDK init completes", async () => {

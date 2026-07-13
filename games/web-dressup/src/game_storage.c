@@ -47,10 +47,9 @@ static bool is_safe_segment(const char *value) {
     return true;
 }
 
-/* ---- web backend (localStorage). Ported from games/rb-dark-rpg/src/game_storage.c
-   (EM_JS shape + try/catch), but the "rb-dark-rpg:" hardcoded prefix is gone: the
-   caller resolves the FULL "<APP_ID>/save/<slot>" key on the C side (resolve_web_key
-   below) and these EM_JS shims just use whatever key string they are handed. ---- */
+/* ---- web backend (localStorage). The caller resolves the full
+   "<APP_ID>/save/<slot>" key on the C side (resolve_web_key below); these EM_JS
+   shims only store the exact key string they are handed. ---- */
 #if defined(__EMSCRIPTEN__)
 /* clang-format off */
 EM_JS_DEPS(game_storage_web, "$UTF8ToString,$lengthBytesUTF8,$stringToUTF8,malloc")
@@ -123,7 +122,7 @@ EM_JS(int, game_storage_web_delete, (const char *key_ptr), {
     }
 })
 
-/* New for A2 (§14 p.3): round-trips a throwaway key so a full browser/private-mode
+/* New for A2: round-trips a throwaway key so a full browser/private-mode
    quota rejection is caught at startup instead of on the first real save. */
 EM_JS(int, game_storage_web_probe, (const char *key_ptr), {
     try {
@@ -193,7 +192,7 @@ static bool ensure_parent_dirs(const char *path, char *error, int error_cap) {
 }
 
 /* MoveFileEx(REPLACE_EXISTING|WRITE_THROUGH) never leaves primary absent or torn
-   (design §14 p.1); plain rename() on POSIX is already atomic-replace by contract. */
+   (the storage contract); plain rename() on POSIX is already atomic-replace by contract. */
 static bool replace_file(const char *tmp_path, const char *path) {
 #ifdef _WIN32
     return MoveFileExA(tmp_path, path, MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) != 0;
@@ -316,7 +315,7 @@ static int64_t storage_unix_ms_now(void) {
    "<slot>.corrupt-<unix_ms>" name is not enough -- two quarantines of the same
    slot inside one clock tick (POSIX-second granularity, or even the same
    Windows millisecond under test) target the SAME path: POSIX rename()
-   silently clobbers the first .corrupt (forensics lost, §14 p.14 defeated),
+   silently clobbers the first .corrupt (forensics lost, the forensics guarantee defeated),
    Windows MoveFileEx/rename fails outright (EEXIST-equivalent). Resolve a
    name that does not yet exist, trying "-1", "-2", ... suffixes so both
    platforms behave identically (every quarantine keeps its own file). */
@@ -514,7 +513,7 @@ bool game_storage_write_backup(const char *slot, char *error, int error_cap) {
     (void)slot;
     (void)error;
     (void)error_cap;
-    return true; /* web .bak is cut, design §14 p.3 */
+    return true; /* web .bak is cut, the storage contract */
 #else
     game_storage_native_paths_t paths;
     if (!resolve_native_paths(slot, &paths, error, error_cap)) {

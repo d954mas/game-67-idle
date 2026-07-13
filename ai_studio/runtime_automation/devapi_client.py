@@ -617,6 +617,7 @@ def connect_existing(
     port: int = DEFAULT_DEVAPI_PORT,
     timeout: float = 8.0,
     *,
+    request_timeout: float = 5.0,
     process: subprocess.Popen | None = None,
     launch_log_path: str | None = None,
 ) -> DevApiClient | None:
@@ -627,7 +628,13 @@ def connect_existing(
             if exit_code is not None:
                 raise _dead_child_error(port, exit_code, launch_log_path)
         try:
-            return DevApiClient(port=port, timeout=1.0)
+            client = DevApiClient(port=port, timeout=1.0)
+            try:
+                client.sock.settimeout(request_timeout)
+            except (OSError, TypeError, ValueError):
+                client.close()
+                raise
+            return client
         except OSError:
             time.sleep(0.2)
     return None

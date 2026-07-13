@@ -1,0 +1,6 @@
+build/
+release/artifacts/
+.toolchains/
+.ai_studio/evidence/*
+!.ai_studio/evidence/.gitignore
+!.ai_studio/evidence/README.md

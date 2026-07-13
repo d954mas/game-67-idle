@@ -1,145 +1,204 @@
 ---
 type: Game Design Document
-title: Web Dressup GDD
-description: Implementation-facing design for Poki 2D single-player dress-up with fake shows.
-tags: [gdd]
+title: Runway Awakening Poki MVP GDD
+description: Implementation contract for the bright three-Essence 500-player MVP.
+tags: [gdd, mvp, poki, runway-awakening]
 game_id: web-dressup
-status: draft
+status: accepted
+date: 2026-07-11
 ---
 
-# Web Dressup GDD
+# Runway Awakening - Poki MVP
 
-Status: draft — **Poki / 2D / dual orientation / no multiplayer locked**
+## Definition of Done
 
-## Product locks
+The MVP is ready for the 500-player test when:
 
-| Lock | Decision |
-|------|----------|
-| Target | **Poki** web hit |
-| Presentation | **2D** layered dress-up |
-| Layout | **Portrait + landscape** both supported |
-| Multiplayer | **No** |
-| Spectacle | **Fake shows** (runway, NPC rivals, fake scores, fake crowd) OK |
-| Core fantasy | Style → optional showtime → back to closet |
+- first equip is available without instruction in <=5 seconds;
+- first awakening is reachable in <=60 seconds;
+- one round lasts 55-90 seconds;
+- six discoveries plus two remixes provide 8-12 minutes of content;
+- all six awakenings are identifiable by silhouette without their labels;
+- portrait and landscape are fully playable with touch and mouse;
+- initial network payload is <=6,500,000 bytes;
+- web audio, Poki lifecycle and approved Game Events work in release;
+- release contains no DevAPI/debug surface, unlicensed asset, or legacy art.
 
-## Definition Of Done (design package)
+## Player verbs
 
-1. Locks above are durable in concept + GDD + knowledge.
-2. First playable = **Dress Room freeplay** on 2D layers.
-3. Second loop designed = **Theme + Fake Show** (single-player).
-4. UI contracts exist for portrait and landscape.
-5. Implementation can start without chat history.
+1. Select a category and equip an item.
+2. Choose a main outfit and a magic accent.
+3. Press `AWAKEN` and watch the runway reveal.
+4. Save the result card or restyle for another recipe.
 
-Out of scope for first code slice: full catalog polish, real multiplayer, gacha,
-UGC, account systems.
+## Deterministic recipe contract
 
-## Player Fantasy
+- `main_focus` (dress or top) sets the primary Essence.
+- `accent_focus` sets the secondary Essence.
+- The recipe key is unordered: Moon+Bloom equals Bloom+Moon.
+- Hair, bottom and shoes affect palette, trail, framing and mood only.
+- A dress suppresses an incompatible bottom visually and logically.
+- Missing focus pieces keep `AWAKEN` blocked with a visual slot hint.
+- There is no score, RNG rank or failure result.
 
-"I dress up in the browser, hit Show, and feel like I won a fashion round —
-even though the rivals are fake."
+## MVP recipes
 
-## First 30 Seconds (Poki)
+| Pair | Working title | Signature silhouette and hero moment |
+|---|---|---|
+| Moon + Moon | Lunar Oracle | Asymmetric crescent halo and descending moonbeam |
+| Bloom + Bloom | Garden Empress | Six-petal floor rosette opening into a cape |
+| Flame + Flame | Solar Guardian | Sharp sun crown and vertical flame train |
+| Moon + Bloom | Dreamgarden Fae | Crescent-butterfly wings opening from a lunar ring |
+| Moon + Flame | Eclipse Guardian | Eclipse disk and two diagonal comet blades |
+| Bloom + Flame | Phoenix Rose | Phoenix feather fan ignited by a rose-vine spiral |
 
-1. Boot straight into **Dress Room** (no story modal).
-2. Avatar + categories + catalog visible; first equip in **&lt;3s**.
-3. Random / Reset available.
-4. Visible **Theme** chip or **Show** button (may soft-lock until first equip).
-5. No login, no multiplayer matchmaking UI.
+## First session
 
-## Core Loop
+### First 30 seconds
 
-See `data/core_loop.json`.
+1. Boot directly into the Dress Room.
+2. The doll occupies the majority of the stage; no modal appears.
+3. The first tap equips a garment and produces a short Essence hint.
+4. Category and selected-state changes are obvious on touch and mouse.
+5. `AWAKEN` becomes dominant after both focus slots are filled.
 
-Short form:
+### Guided discovery without text walls
 
-```
-Dress Room freeplay
-  → pick theme (optional)
-  → style outfit
-  → Fake Show (runway + NPC rivals + score/stars)
-  → podium / reward juiciness (cosmetic unlock later)
-  → back to Dress Room
-```
+- Round 1 guarantees a new recipe and a strong reward.
+- The result card reveals which two focus pieces produced the awakening.
+- Round 2 offers a newly unlocked focus piece that creates a different pair.
+- Round 3 leaves the next experiment to the player.
+- The recipe album uses silhouettes and discovered cards instead of prose.
 
-## Player Verbs
+### Ten-minute content path
 
-- **Select category / equip item** (core).
-- **Randomize / Reset**.
-- **Pick theme** (prompt for the next show).
-- **Enter Fake Show** — timed or untimed styling handoff, then auto-runway.
-- **Pose** (optional) before show.
-- **Screenshot / share** (Poki-friendly; no hard dependency on native share).
-- **(Later)** Save favorite looks locally.
+- Six first-discovery rounds.
+- Two remix rounds using an already discovered pair with different support pieces.
+- Unlocks after rounds 1, 3 and 6.
+- Lookbook stores the best player-authored card for each recipe.
+- No timer, ad gate, grind or artificial waiting counts as content.
 
-## Fake Show rules (single-player)
+## Content budget
 
-- Player never waits on a real human.
-- 2–5 **NPC rivals** with prebuilt or seeded random outfits (themed loosely).
-- Runway sequence: player walk → rival flashes → **star rating** (algorithm +
-  juice, not true ML).
-- Scoring can weight: theme tags on items, variety, completeness of slots,
-  optional “risk” accessories — keep formula simple and tunable.
-- Always allow a **fun failure** and a **clear win**; avoid pure RNG frustration.
-- Fake names, fake chat one-liners, fake crowd SFX = allowed spectacle.
-- **Honest framing optional**: soft fantasy (“Fashion Night”) is fine; do not
-  need to label “bots” to the player.
+Thirty shipping wearables:
 
-## Rules And Feedback
+- 6 hair choices;
+- 6 main focus pieces: one dress and one top per Essence;
+- 6 bottoms: two per Essence;
+- 6 shoes: two per Essence;
+- 6 magic accents: two per Essence.
 
-- One item per slot (or empty); fixed 2D draw order.
-- All interaction works with touch and mouse.
-- Portrait and landscape rearrange chrome; **stage never becomes unusably small**.
-- Starter catalog free/unlocked for freeplay.
-- No real currency gate on Show in v1 freeplay (or only soft tutorial gate).
+All focus recipes are available from the first session. Cosmetic support items
+may unlock during the discovery path.
 
-## UI Flow
+## Runway sequence
 
-See `data/ui_flow.json`.
+`RUNWAY_INTRO -> CHARGE -> FLASH -> REVEAL -> VICTORY -> RECIPE_CARD`
 
-### Dual layout (required)
+- Two short NPC silhouettes/cards establish visible competition.
+- The player's already equipped outfit charges in place.
+- A silhouette flash hides the overlay swap.
+- Static awakening layers use scale, rotation, alpha, camera, particles and sound.
+- The player exits last, receives the strongest audience response and wins.
 
-| Orientation | Stage | Chrome |
-|-------------|-------|--------|
-| **Portrait** | Top ~45–55% height | Categories + catalog + actions stacked below; big thumbs |
-| **Landscape** | Left/center ~50–60% width | Categories + catalog on right or bottom strip; actions docked |
+## Visual direction
 
-Resize/orientation change must reflow without resetting the outfit mid-session
-unless the engine forces a full reload (avoid if possible).
+- Electric magical editorial anime.
+- Dark navy/plum runway used as contrast, with electric cyan, rose and gold light.
+- Clean ink contour, cel shading and one controlled highlight.
+- Large readable silhouette; no soft pastel boudoir or generic AI-fantasy noise.
+- UI uses compact jewel/glass shapes and one saturated primary CTA.
 
-### Screens
+## Analytics contract
 
-1. **Dress Room** — primary freeplay.
-2. **Theme Picker** — modal or sheet (short labels, icons; minimal text).
-3. **Fake Show** — runway stage, scores, podium; skip allowed after first play.
-4. **Settings** — audio only if needed; never blocks first session.
+Exact release schema:
 
-## Content model (first slice)
+| Category | What | Action |
+|---|---|---|
+| `ftue` | `first-equip` | `start`, then `complete` |
+| `button` | `awaken-first` | `visible`, then `interact` |
+| `round` | `1`, `2`, `3`, `6`, `8` | `start`, then `complete` |
+| `awakening` | `moon-moon`, `bloom-bloom`, `flame-flame`, `moon-bloom`, `moon-flame`, `bloom-flame` | `discovered` |
+| `recipes` | `2`, `3`, `6` | `reached` |
+| `lookbook` | `main` | `visible`, `interact` |
+| `lookbook` | `save-look` | `interact` |
+| `session` | `60s`, `180s`, `300s`, `600s` | `reached` |
+| `cohort` | `touch-portrait`, `touch-landscape`, `mouse-landscape` | `entered` |
+| `player` | `fresh`, `returning` | `entered` |
 
-Slots: `hair`, `top`, `bottom`, `shoes`, `acc` (+ base body).  
-Minimum: **4 items/slot** + theme tags on items for Fake Show scoring.  
-2D art: aligned anchors, transparent PNG layers, provenance per asset rules.
+The Poki adapter must route the approved low-cardinality milestones through
+`PokiSDK.measure`; local game events remain the DevAPI/test evidence. No PII or
+random user identifiers are emitted.
 
-## Validation (Poki-facing)
+Expected first-session trace begins with cohort/player entry; first styling
+input starts Poki gameplay, `ftue/first-equip/start` and `round/1/start`; first
+equip completes FTUE; AWAKEN becomes visible/interacted; runway stops gameplay;
+one awakening discovery and `round/1/complete` occur while stopped; Recipe Card
+remains stopped; Restyle returns to Dress Room, resumes gameplay and emits
+`round/2/start`. Automated tests assert this ordering and once-only milestones.
 
-- Portrait phone + landscape desktop both playable.
-- Time-to-first-equip &lt; 3s on warm load.
-- Full freeplay → Fake Show → return path without softlock.
-- No multiplayer/network dependency for Show.
-- Session goal: freeplay holds interest; Show adds a reason to restyle and replay.
+Pressing `AWAKEN` calls gameplay stop before the noninteractive runway. Active
+time milestones pause through Intro/Charge/Flash/Reveal/Victory and the Recipe
+Card result/menu. Gameplay and active time resume only after Restyle returns to
+the interactive Dress Room.
 
-## Implementation sequence
+## Discovery navigation contract
 
-1. Dual-layout Dress Room shell (strip template demo fantasy).
-2. 2D layer compositor + starter catalog.
-3. Random / Reset.
-4. Theme tags + Fake Show sequence + score juice.
-5. Screenshot / pose polish.
-6. Poki build package + orientation QA matrix.
+- After first use, focus-item cards permanently show their discovered Essence.
+- The recipe album is a 3x3 pair matrix with six canonical cells.
+- Unknown cells show distinct silhouettes; tapping one filters/highlights an
+  owned main-focus and accent-focus combination capable of reaching that cell.
+- The exact awakening art/title remains hidden until reveal.
+- Repeating a known pair records a remix instead of blocking progress, then
+  returns to the nearest reachable unknown cell.
+- All six focus pairs are reachable from the wardrobe at first launch; rewards
+  add cosmetic freedom rather than access gates.
 
-## Success metrics (Poki)
+## Go / iterate / kill
 
-- Time to first equip
-- Avg session length (climb via freeplay depth + Show replays)
-- Shows started / session
-- Outfit changes after a Show (restyle loop)
-- Orientation switch without rage-quit (manual QA)
+Official Poki Player Fit gate:
+
+- average playtime >3 minutes;
+- at least 25% of 500 players (>=125) play longer than 3 minutes.
+
+Internal healthy targets:
+
+- first equip >=85% of gameplay starts;
+- first round complete >=70%;
+- second round start >=55%;
+- third round complete >=30%;
+- active 5 minutes >=20%;
+- six recipes reached >=12%;
+- saved look >=15%;
+- critical runtime failure <1%.
+
+Decision table:
+
+- `go`: official gate passes, average >=4 minutes, >=35% play >3 minutes and
+  round-2 start >=55%;
+- `iterate once`: official pass but below internal go, or round-2 start 40-55%;
+- `kill/redesign`: official gate fails after one focused iteration, round-2
+  start remains <40%, causality remains unclear, or players call the results
+  the same fairy in different colors.
+
+Critical failure means fatal/uncaught error, softlock, missing reveal asset,
+save corruption or broken ad/lifecycle recovery. The denominator is gameplay
+starts; <=4 affected sessions out of 500 may satisfy `<1%` only when no root
+cause repeats. Any reproducible softlock blocks submission.
+
+## Runtime and accessibility gates
+
+- median 60 FPS and p95 frame <=33 ms during the representative mobile reveal;
+- no input/reveal hitch >100 ms; mobile memory high-water <=180 MB;
+- first visible loader response <=500 ms, desktop interactive <=4 seconds and
+  Fast 4G interactive <=10 seconds;
+- touch targets >=44x44 CSS px; normal text contrast >=4.5:1 and large/UI
+  contrast >=3:1;
+- color is not the sole selected-state signal; no flash rate above 3 Hz;
+- mute and reduced-effects mode are available without breaking causality.
+
+## Scope exclusions
+
+No story chapters, full gallery/social sharing, multiplayer, generated video,
+character rig, additional Essence, currency, shop, ads inside the first session,
+or generalized reusable engine work belongs in this MVP.

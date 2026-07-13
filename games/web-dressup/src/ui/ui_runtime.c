@@ -22,12 +22,14 @@
 
 #include <string.h>
 
-// Dual-layout refs (rb-dark-rpg pattern): portrait phone-first so touch targets
-// stay readable under EXPAND; landscape uses a wider game canvas.
-#define UI_LANDSCAPE_REF_W 960.0F
-#define UI_LANDSCAPE_REF_H 540.0F
+// Portrait stays phone-first so touch targets remain readable under EXPAND;
+// landscape uses a wider game canvas.
+#define UI_LANDSCAPE_REF_W 640.0F
+#define UI_LANDSCAPE_REF_H 360.0F
 #define UI_PORTRAIT_REF_W 390.0F
 #define UI_PORTRAIT_REF_H 844.0F
+#define UI_COMPACT_PORTRAIT_REF_W 360.0F
+#define UI_COMPACT_PORTRAIT_REF_H 640.0F
 // Headroom for the default 1024-element UI (Clay arena dominates); a game that
 // builds a denser UI can raise this. Static storage — cost is negligible.
 #define UI_ARENA_SIZE ((size_t)8U * 1024U * 1024U) // 8MB: fits max_elements=4096 + state_slots=1024 (jam-proven scale)
@@ -133,9 +135,12 @@ bool ui_runtime_begin(float dt) {
     const float fb_w = (float)(g_nt_window.fb_width > 0 ? g_nt_window.fb_width : 1280);
     const float fb_h = (float)(g_nt_window.fb_height > 0 ? g_nt_window.fb_height : 720);
     const bool portrait = fb_h > fb_w;
+    const bool compact_portrait = portrait && fb_h < 760.0F;
     nt_ui_scale_desc_t sd = {
-        .ref_w = portrait ? UI_PORTRAIT_REF_W : UI_LANDSCAPE_REF_W,
-        .ref_h = portrait ? UI_PORTRAIT_REF_H : UI_LANDSCAPE_REF_H,
+        .ref_w = portrait ? (compact_portrait ? UI_COMPACT_PORTRAIT_REF_W : UI_PORTRAIT_REF_W)
+                          : UI_LANDSCAPE_REF_W,
+        .ref_h = portrait ? (compact_portrait ? UI_COMPACT_PORTRAIT_REF_H : UI_PORTRAIT_REF_H)
+                          : UI_LANDSCAPE_REF_H,
         .mode = NT_UI_SCALE_EXPAND,
     };
     s_scale = nt_ui_compute_scale(&sd, fb_w, fb_h);
@@ -156,13 +161,12 @@ bool ui_runtime_begin(float dt) {
 
     nt_font_step();
     nt_mem_scratch_reset();
-    // Feed ALL pointer slots: a DevAPI-injected click lands in the first FREE
-    // slot, which is not 0 when a real mouse already holds slot 0.
-    nt_pointer_t pointers[NT_INPUT_MAX_POINTERS];
-    for (uint32_t i = 0; i < NT_INPUT_MAX_POINTERS; ++i) {
-        pointers[i] = nt_ui_scale_apply_pointer(&s_scale, g_nt_input.pointers[i]);
-    }
-    nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, pointers, NT_INPUT_MAX_POINTERS);
+    /* Feed RAW device pointers.  The context owns device->layout conversion;
+       pre-scaling here and also exposing a scaled DevAPI viewport moves every
+       synthetic click twice (most visibly on bottom CTAs in tall windows). */
+    nt_ui_begin(s_ctx, s_scale.logical_w, s_scale.logical_h, dt, g_nt_input.pointers,
+                NT_INPUT_MAX_POINTERS);
+    nt_ui_set_viewport(s_ctx, nt_ui_viewport_from_scale(&s_scale));
     return true;
 }
 

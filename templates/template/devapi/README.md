@@ -25,7 +25,7 @@ commands in this folder.
 Run after building a native Debug template:
 
 ```powershell
-py -3.12 templates/template/devapi/smoke_bot.py --exe templates/template/build/devapi-debug/bin/game.exe
+node ai_studio/dev_environment/python_run.mjs templates/template/devapi/smoke_bot.py --exe templates/template/build/devapi-debug/bin/game.exe
 ```
 
 Or through CMake when the build directory was configured with
@@ -45,7 +45,9 @@ The bot:
 6. toggles the engine render gate with `render.set_enabled`;
 7. captures a PNG proof image;
 8. reads `game.state.schema` and `game.state.get` from the installed
-   `game-state` feature.
+   `game-state` feature;
+9. reads the DevAPI-only `game.iteration.proof` leaf-C/generated-schema fixture
+   pair used by the shared trustworthy iteration helper.
 
 Use it as the pattern for real game bots:
 
@@ -74,7 +76,7 @@ That default target captures the first screen in:
 For a specific game state, call the helper from a bot or pass a scenario hook:
 
 ```powershell
-py -3.12 templates/template/devapi/responsive_viewports.py `
+node ai_studio/dev_environment/python_run.mjs templates/template/devapi/responsive_viewports.py `
   --exe templates/template/build/devapi-debug/bin/game.exe `
   --scenario games/my-game/devapi/scenarios.py:prepare_upgrade_menu
 ```
@@ -112,5 +114,5 @@ generic contrast/variance threshold.
 ## Tests
 
 ```powershell
-py -3.12 -m pytest templates/template/devapi
+node ai_studio/dev_environment/python_run.mjs -m unittest discover -s templates/template/devapi -p "*_test.py"
 ```

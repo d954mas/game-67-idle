@@ -5,8 +5,7 @@ In-place L2 module (see `features/README.md` — decisive rule: same-`.c`-across
 `features/game-state`, `features/items-core` — one copy of the source lives
 here, each consuming game/template compiles it in-place against ITS OWN
 generated headers and content (`../../features/progression-core/` from any
-`templates/<x>` or `games/<id>`, depth-2 invariant). Extracted 2026-07-08
-(`templates/design/build_spec_t0337_2026-07-07.md`, increment M2) out of
+`templates/<x>` or `games/<id>`, depth-2 invariant). Extracted in T0337 out of
 `templates/template/src/features/progression/` (the ENTIRE folder — items
 kept a game-side corner, progression did not, see "No game-owned C hooks"
 below).
@@ -19,7 +18,10 @@ Named "tracks" (level + xp progress meters) declared as DATA in a game's
 mirroring items' content-catalog codegen. Runtime state (level, internal xp)
 is one flat save fragment (`state/progression.schema.json`, `--fragment
 progression`, game-owned) — a `tracks: map<string, TrackState>` keyed by
-`track_id`, exactly like items' `owned` map. No UI, no DevAPI commands of its
+`track_id`, exactly like items' `owned` map. The content generator requires
+the game-owned schema through `--state-schema`, validates its progression
+identity/shape, and derives the maximum track-id length from `string_max - 1`
+for the generated NUL-terminated state key. No UI or DevAPI commands of its
 own — the fragment is reachable through the universal `game.state.*` surface
 the instant it is registered.
 
@@ -173,7 +175,7 @@ Unlike items, progression has **no game-side C corner** — items keeps
 `src/features/items/`; progression has neither a closed-verb header nor a
 seed function, so `src/features/progression/` (which used to hold
 `progression.h` + `.c` + this README) has been **deleted entirely** from
-every consuming game by this extraction (§3.4 of the build spec) — nothing
+every consuming game by this extraction — nothing
 is left for a game to own for progression. `reset()` alone is the correct
 "fresh game" state (empty tracks = level 0 everywhere via the lazy-allocation
 default above); a game that wants a strong starting hero calls
@@ -190,26 +192,28 @@ game-owned corner sharing the same logical prefix), progression's game-side
 corner was deleted entirely (see above) — the WHOLE `features/progression/`
 logical prefix now resolves from this one physical root
 (`PROGRESSION_CORE_INC`), with nothing left in a game's own `src/` that
-could shadow it. See INSTALL.md and
-`templates/design/build_spec_t0337_2026-07-07.md` §2.2 for the
-include-spelling rationale shared with items-core (a spelling rename would
+could shadow it. See INSTALL.md for the include-spelling contract shared with
+items-core (a spelling rename would
 have touched every consumer's include lines and broken byte-identical
 relocation).
 
 ## Tools (`scripts/`)
 
-- `generate_progression_tracks.py --catalog <progression.json> --items <items.json> --out-dir <dir>` —
+- `generate_progression_tracks.py --catalog <progression.json> --items <items.json> --state-schema <progression.schema.json> --out-dir <dir>` —
   emits `progression_tracks.gen.{h,c}` (compile-time const curve tables).
   `--items` is the cross-check: every `manual`/`auto` track's `currency_def`
-  must name an existing items def with a `currency` block.
+  must name an existing items def with a `currency` block. `--state-schema`
+  validates the authoritative game-owned `game_seed.progression` fragment,
+  including its `tracks: map<string,TrackState>` and integer `string_max >= 2`.
 
 ## Consumer authoring (content workflow)
 
 1. Edit `content/progression.json` (`namespace` + `tracks[]`; form mirrors
    `items.json`). `id` is a bare slug (`"hero"`, not `"tmpl.hero"`) — track
    ids are progression-internal, not items-namespaced.
-2. Build codegen: `py -3.12 features/progression-core/scripts/generate_progression_tracks.py
-   --catalog content/progression.json --items content/items.json --out-dir <dir>` —
+2. Build codegen: `node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py
+   --catalog content/progression.json --items content/items.json
+   --state-schema state/progression.schema.json --out-dir <dir>` —
    emits `progression_tracks.gen.{h,c}`. `--items` is the cross-check:
    `currency_def` (manual/auto tracks) must name an existing items def with
    a `currency` block.
@@ -249,3 +253,31 @@ out of this module into its own tree and owns that copy going forward
 (copy-then-own, same escape hatch `features/items-core`/`settings`/
 `resource_panel` already use). No code in this module supports that fork;
 it is a documented possibility, not a feature.
+
+## Purpose
+
+Provide reusable progression tracks, bounded tick behavior, and deterministic
+integer curve generation over the items-core purse boundary.
+
+## Public surface
+
+`include/features/progression/progression.h`, generated outputs, and the
+generator command in `feature.json` are public. Game content and UI are not.
+
+## Validation
+
+Run the progression tests named in `feature.json.registers.ctest_targets`,
+then `node features/validate_contracts.mjs`.
+
+## Compatibility
+
+`feature.json.version` is exact SemVer. Patch preserves the public contract,
+minor adds backward-compatible surface, and major permits breaking changes.
+Consumers pin both this version and an exact repository revision.
+Version `2.0.0` makes `--state-schema` mandatory; `1.x` generator invocations
+must add the owning game schema explicitly.
+
+## Extension points
+
+Extend through game-owned catalogs, generated curves, state fragments, and
+composition; fork explicitly for different core semantics.

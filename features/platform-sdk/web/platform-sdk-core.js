@@ -78,6 +78,7 @@ export function createPlatformSdkWebBackend({
     getLocale: bindMethod(adapter, "getLocale", () => null),
     hideBanner: bindMethod(adapter, "hideBanner", noopAsync),
     loadData: bindMethod(adapter, "loadData", () => Promise.resolve(null)),
+    measure: bindMethod(adapter, "measure", noopAsync),
     ready() {
       if (!readyPromise) {
         readyPromise = Promise.resolve(adapterReady())

@@ -1,70 +1,49 @@
 {
   "schema": "ai_studio.game_design.core_loop.v1",
   "game_id": "web-dressup",
-  "status": "draft",
-  "title": "Poki 2D freeplay + fake show loop",
+  "status": "accepted",
+  "title": "Runway Awakening Poki MVP",
   "distribution": "poki",
   "multiplayer": false,
   "presentation": "2d",
   "orientations": ["portrait", "landscape"],
+  "target_session_minutes": [8, 12],
   "loop": [
     {
-      "id": "enter_room",
-      "label": "Enter dress room",
-      "player_action": "Open game on Poki (no login)",
-      "system_response": "Show 2D base character and freeplay chrome in current orientation",
-      "feedback": "Avatar + categories visible; no text wall modal"
-    },
-    {
-      "id": "pick_category",
-      "label": "Pick category",
-      "player_action": "Tap a slot chip",
-      "system_response": "Filter catalog to that slot",
-      "feedback": "Chip selected; thumbnails swap"
-    },
-    {
-      "id": "pick_item",
-      "label": "Pick item",
-      "player_action": "Tap item thumbnail",
-      "system_response": "Equip 2D layer on slot (or clear if toggled)",
-      "feedback": "Avatar updates immediately"
+      "id": "enter_dress_room",
+      "player_action": "Open the game and touch or click the closet",
+      "system_response": "Show the fixed doll, categories and immediately interactive wardrobe",
+      "feedback": "First equip is possible without a modal or tutorial"
     },
     {
       "id": "compose_look",
-      "label": "Compose look",
-      "player_action": "Repeat category + item; optional Random/Reset",
-      "system_response": "Maintain one item per slot with fixed draw order",
-      "feedback": "Coherent 2D outfit on stage"
+      "player_action": "Equip hair, main outfit, support pieces, shoes and a magic accent",
+      "system_response": "Update the doll immediately and emit short visual Essence hints",
+      "feedback": "The look remains beautiful and fully visible; selected states are explicit"
     },
     {
-      "id": "pick_theme",
-      "label": "Pick theme",
-      "player_action": "Open theme picker and choose a prompt",
-      "system_response": "Set active theme tags for Fake Show scoring and UI banner",
-      "feedback": "Short theme label on stage (icon + few words)"
+      "id": "resolve_recipe",
+      "player_action": "Fill the main-focus and accent-focus slots",
+      "system_response": "Resolve one deterministic unordered pair from Moon, Bloom and Flame",
+      "feedback": "AWAKEN becomes the single dominant action"
     },
     {
-      "id": "fake_show",
-      "label": "Fake fashion show",
-      "player_action": "Tap Show / Runway",
-      "system_response": "Play single-player runway with NPC rivals, fake crowd, computed stars",
-      "feedback": "Runway walk, rival cards, star tally, podium; no network wait",
-      "notes": "Rivals are seeded/fake; scores are local algorithms + juice"
+      "id": "runway_awaken",
+      "player_action": "Press AWAKEN",
+      "system_response": "Play intro, charge, flash, unique pair reveal, audience response and victory",
+      "feedback": "The original outfit survives beneath distinct magical overlays and signature VFX"
+    },
+    {
+      "id": "discover",
+      "player_action": "View the result card",
+      "system_response": "Reveal the two focus-piece Essences, record the recipe and grant a cosmetic reward",
+      "feedback": "New recipe silhouette becomes a player-authored card in the album"
     },
     {
       "id": "restyle",
-      "label": "Restyle after show",
-      "player_action": "Return to dress room and change outfit",
-      "system_response": "Preserve catalog progress; suggest same or new theme",
-      "feedback": "Quick path back to freeplay; reason to equip more items"
-    },
-    {
-      "id": "optional_share",
-      "label": "Screenshot share",
-      "player_action": "Capture look or podium moment",
-      "system_response": "Save or present shareable image when platform allows",
-      "feedback": "Clear success toast; never block core loop if share fails",
-      "scope": "polish_after_m0"
+      "player_action": "Return to the closet",
+      "system_response": "Preserve progress and offer a fast route to an unknown pair or a remix",
+      "feedback": "The next experiment begins without loading, waiting or punishment"
     }
   ]
 }

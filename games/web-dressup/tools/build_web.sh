@@ -91,4 +91,10 @@ cmake --build "$WEB_DIR" --target platform_sdk_web_assets
 mkdir -p "$WEB_DIR/bin/assets"
 cp "$NATIVE_DIR/bin/assets/game.ntpack" "$WEB_DIR/bin/assets/game.ntpack"
 
+# The Poki upload limit is a release blocker, not an advisory report. Inspect
+# every file in the actual upload directory only after the final pack copy.
+if [ "$PRESET" = "wasm-release" ] && [ "$PUBLISH_TARGET" = "poki" ]; then
+    cmake --build "$WEB_DIR" --target release_size_gate
+fi
+
 echo "built $BUILD_NAME ($PUBLISH_TARGET -> platform-sdk); serve with: node tools/serve_web.mjs --preset $PRESET --target $PUBLISH_TARGET"

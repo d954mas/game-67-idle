@@ -1,280 +1,78 @@
 ---
 id: T0316
-title: "AI Studio: универсальный редактор предметов (schema-driven, поверх items.json)"
-status: doing
+title: "AI Studio: Items Workbench поверх Lua Snapshot"
+status: backlog
 project: P001
 epic: E009
 priority: P2
-tags: [editor, items, tooling]
+tags: [viewer, items, tooling]
 created: 2026-07-05
-updated: 2026-07-08
+updated: 2026-07-10
 ---
 
 ## What
 
-Schema-driven редактор каталога предметов. Дизайн: templates/design/item_system_design_2026-07-06.md §7 (после закрытия — постоянное место).
+Maintain the accepted Studio Items Viewer and migrate its backend from the
+current JSON op-layer to the focused single-source Items Lua Snapshot after E016
+proves the evaluator/C boundary.
 
-Ключевые решения (лид, 2026-07-06):
-- Универсальность через СХЕМУ, не через широту скоупа: форма рендерится из
-  item_fields.schema.json конкретной игры + фиксированное ядро каталога.
-  Урок прошлого провального редактора («быстро и для всего»): не повторять.
-- Студийный веб-инструмент рядом с canvas/gallery; НЕ внутриигровой
-  (в игре const-таблица из codegen).
-- Tool parity: op-слой validate/write + два равных клиента (CLI для
-  агентов, веб для лида).
-- Источник истины: design/data/items.json + item_fields.schema.json.
-  Редактор — view, никогда вторая модель данных.
-- В каталоге видны И валюты/опыт (currency-предметы) — с иконками.
+Current phase 1 is a read-only browser surface with registered game/template
+selection, icons, schema-driven rows, filters, inspector, diagnostics, and lock
+status. It does not own a second Items model.
 
-Решения лида 2026-07-07 (после T0327 И2c, обновляют вводные):
-- items.json живёт в content/ (шаблон и игры), не в design/data/.
-- Op-слой read-v1 ГОТОВ: features/items-core/scripts/items_ops.py
-  (переехал из templates/template/tools/ в T0337)
-  (list/validate/schema, --json со структурными ошибками
-  {rule,id,field,msg}) — редактор садится на него (фаза 2 = write-часть).
-- Редактор показывает состояние lock (content/items.lock.json v2):
-  статус предмета отгружен/черновик/удалён-с-квитанцией; красноту
-  validate (напр. removed-without-reaction) подсвечивать на карточке
-  предмета. При необходимости — команда items_ops lock --json.
-- Дата добавления предмета — ПЕРЕ-РЕШЕНО лидом 2026-07-07 (git-лог
-  ненадёжен: copy-then-own обнуляет историю, сквоши ломают blame):
-  поле `created` (ISO-дата) ХРАНИТСЯ в items.json у каждого предмета,
-  требуется validate, в C-таблицы не эмитится (авторская мета).
-  Редактор проставляет created сам при создании предмета.
+The first Lua/Snapshot migration slice remains read-only. The target Workbench
+then adds restricted semantic editing shared with AI:
 
-Решения лида 2026-07-08 (разговор об иконках, конвенция ПРИНЯТА,
-финализирована тем же днём — лид ПЕРЕ-РЕШИЛ пункт о манифесте):
-- icon_asset_id = строка «имя_атласа/имя_региона» — ОБЕ части
-  авторские (лид сам назначает при упаковке), сплит по первому слэшу.
-  Путь к исходному файлу — приватность пак-рецепта, в контракт НЕ
-  входит; id из путей НЕ выводится.
-- ПАК-РЕЦЕПТ ОСТАЁТСЯ КОДОМ (build_packs.c) — решение лида: «пак это
-  код», атлас-манифест-как-авторские-данные ОТВЕРГНУТ. Сверка и
-  редактор ходят в СОБРАННЫЙ пак: сверка = хеши строк из items.json
-  против таблиц паков игры (string→hash→«есть?»; альтернатива —
-  статически по C-файлу пака / game_assets.h); превью редактора =
-  атлас+регион ИЗ СОБРАННОГО ПАКА (пиксели = ровно те, что увидит
-  игра). Практика для разведки: ntpack бинарный, текстуры
-  Basis-кодированные — либо студийный декодер, либо пак-шаг ИГРЫ
-  эмитит generated превью-сайдкар (atlas PNG + регионы JSON, выход
-  как game_assets.h — «рецепт=код» не нарушен); nt_builder =
-  движок = read-only (сайдкар эмитит build_packs.c игры или issue).
-- Атлас/регион руками НЕ хранятся: атлас-раскладка = generated
-  (пакер эмитит id→(атлас,регион)); items.json — слой контента,
-  упаковка — слой сборки, шов = строка-id.
-- Рантайм: кодоген разворачивает строку в ДВА предвычисленных хеша
-  (atlas_hash, region_hash) в const-таблице; лукап двухступенчатый
-  (хеш→ассет пака, хеш→регион); путей в рантайме не существует.
-  Кодоген-разворот нужен когда первая игра начнёт РИСОВАТЬ иконки —
-  редакторскому мини-раунду не нужен.
-- Несколько атласов (items/currency/vip) — нормально: группировка =
-  семантика загрузки, принадлежит фиче которая грузит пак, не
-  предмету; перенос иконки между атласами не трогает контент.
-- МИНИ-РАУНД «иконки» после приёмки фазы 1: атлас-манифест как
-  данные + 6 CC0-иконок шаблона source-first (Kenney/game-icons,
-  полная provenance) + resolveIcon() вьюера через манифест +
-  демо-id сменят форму (icon.gold → атлас/регион) с перегенерацией
-  таблиц. icon-link ops-команда — с write-слоем фазы 2.
+- complete item/core/typed-block projection;
+- level grid and selected-series charts;
+- generated values, overrides, source span/snippet, dependencies, diagnostics,
+  release state, and checked source navigation;
+- semantic snapshot diff and visibly ephemeral what-if;
+- literal/table/curve/override editing through T0366 operations;
+- `Edit with agent` or source for arbitrary Lua, never guessed rewriting.
 
-Решения лида 2026-07-08 (после приёмки фазы 1; UX-разбор двумя
-независимыми Opus, evidence: tmp/items_viewer_ux_review_2026-07-08.md;
-ратифицировано «делай»):
-- Инструмент = просмотр И редактирование. Направление: table-first
-  master-detail — плотная сортируемая таблица (индекс: иконка, id, имя,
-  kind, base_value, stack-глиф ∞/×N/—, статус-чип, точка ошибки) +
-  инспектор справа (schema-driven форма). Карточки — во вторичную
-  «галерею». Поиск/фильтры (kind/status/issues-only) client-side,
-  один дизайн на 6 и 300 предметов.
-- Стиль = идиом канваса (директива лида: «ближе к канвасу, у него уже
-  есть стиль ui и ux»): #top-bar, #ws-body, #inspector, .insp-group,
-  тосты, history-панель под диф; карта реюза классов — в evidence.
-- Контейнеры: остаются на поверхности (тот же items.json), но как
-  СВОЯ вкладка [Items][Containers][Kinds], не «статистика» в Summary;
-  Summary ужимается в полосу здоровья. (Вопрос лида «контейнеры же
-  игровая штука?» закрыт: определения-в-данных = пер-геймная
-  топология при побайтно общем .c модуля; рантайм-владение в сейве.)
-- Модель стака: stack{stackable,max_stack,unlimited} → ОДИН int
-  (0=бесконечно, 1=не стакается, N=кап; прецедент currency.cap:0).
-  Вопрос лида «либо число, либо бесконечность?» — да; «нужен ли
-  stackable?» — нет. В UI рисовать сегмент-контролом, не голым числом.
-  «Unlimited false» на карточках был шумом рендера «печатать всё» —
-  чинится правилом «прятать отсутствующие опциональные».
-- Редактирование (когда дойдёт): буфер правок (dirty) → Review changes
-  (диф до→после) → Save через НОВЫЙ write-op в items_ops.py (страница
-  и агент = два равных клиента, паритет как на чтении); CLI владеет
-  сериализацией с минимальным git-diff; validate = гейт; mtime-проверка;
-  git commit остаётся снаружи; снос shipped = receipt + 2-шаг confirm;
-  валидацию в JS не форкать.
-
-Фазы (порядок ратифицирован 2026-07-08):
-1. Read-only вьюер каталога. ИСПОЛНЕНО 2026-07-08 (карточки; иконки
-   из собранного пака после мини-раунда иконок). ПРИНЯТО лидом.
-1.4. Раунд stack→int (модель данных до того, как UI начнёт её
-   рисовать): schema + items.json + items-core codegen/C + validator
-   + тесты. Вьюер schema-driven — без правок кода.
-1.5. Slice 1 UI: read-only таблица+инспектор+фильтры+вкладки в
-   идиоме канваса (чинит S1-S4,S6 разбора; ноль write-риска).
-2. Slice 2: редактируемый инспектор + dirty + Review-changes диф
-   (ещё БЕЗ записи на диск). Затем Slice 3: write-op в items_ops.py
-   (parity-critical) + Save-гейт. Редактирование ядра + kinds.
-3. Slice 4 + блочные формы: правка containers/kinds, receipt-снос;
-   equip (слот + статы из схемы игры), use (параметры эффекта),
-   currency (HUD-хинт).
+The full contract is E016 plus
+`features/items-core/docs/items_lua_single_source_concept_2026-07-10.md`.
 
 ## Done when
 
-- [ ] Вьюер показывает каталог любой зарегистрированной игры с иконками
-      без пер-геймного кода в редакторе.
-- [ ] Редактирование пишет items.json через общий validate/write op-слой;
-      CLI-клиент работает для агентов.
-- [ ] Блочные формы рендерятся из схемы игры (проверено на двух играх с
-      разными стат-схемами).
+- [ ] Viewer shows the catalog of every registered game/template with icons and
+      no per-game JavaScript data model.
+- [ ] After T0386 it reads bounded focused Snapshot queries from Items Lua; no
+      consumer parses `items.json` or recalculates game math.
+- [ ] Typed blocks, levels, overrides, cost lists, diagnostics, release state,
+      source links, grid/chart, semantic diff, and what-if render from generated
+      schema/snapshot metadata.
+- [ ] What-if data is never a build input and can only become a reviewed Lua
+      patch or `Edit with agent` request.
+- [ ] Developer UI and AI share semantic literal/table/curve/override edits with
+      expected hash, diff, undo, conflict refusal, and full validation.
+- [ ] Items-only empty/error/loading behavior, path boundaries, icon resolution,
+      and Windows browser tests remain green through cutover.
 
 ## Open questions
 
-- Старт после того, как items-фича (T0327) даст схему как файл-артефакт и
-  её потрогает реальная игра; вьюер можно раньше (после инкремента items).
-- Op-слой + CLI НЕ здесь: они рождаются вместе с фичей в T0327 (решение
-  лида 2026-07-06, tool parity); этот таск — только веб-клиент поверх
-  готового op-слоя. Скилл nt-game-items — тоже T0327.
+- T0364 must prove the stable-core/generated-typed-block contract before the UI
+  fixes a representation for arbitrary game fields.
+- T0367 specifies exact chart/grid/diff/what-if interaction and payload budgets.
+- T0386 owns the one-shot JSON/schema/parser deletion and backend switch.
+- T0366/T0367 own restricted semantic editing; arbitrary Lua write-back stays
+  out of scope.
 
 ## Log
 
-- 2026-07-05: создан как стаб.
-- 2026-07-06: скоуп наполнен по итогам двух-угольного items-разбора
-  (templates/design/items_feature_study_2026-07-06.md) и дизайна item-системы; привязан
-  к E009; ждёт items-фичу из T0327.
-- 2026-07-08: СТАРТ ФАЗЫ 1 (read-only вьюер) по «дальше» лида после
-  закрытия арок T0327/T0337 — стартовое условие карточки выполнено
-  (op-слой read-v1 готов, схема = файл-артефакт). Скоуп раунда =
-  ТОЛЬКО фаза 1; фазы 2-3 ждут write-op-слоя и реальной игры.
-  Карта инфры снята (Explore): Studio Shell = хаб (surface-паттерн,
-  порт 8765), реестров ДВА (games.json + templates.json — объединять,
-  живой content/items.json только у шаблона), icon_asset_id
-  обязателен в схеме, но ассетов под tmpl.* нет нигде и резолва
-  id→файл не существует (иконки фазы 1 = честный плейсхолдер,
-  best-effort позже). Спека у deep-reasoner (место: ai_studio/assets/
-  items_viewer/docs/) → 2 Opus-ревью → исполнитель → deep-ревью.
-- 2026-07-08: ФАЗА 1 ИСПОЛНЕНА, 4 коммита: спека 3789e24bc (2
-  Opus-ревью → 11 фиксов: реальная модель отказов items_ops, условный
-  --baseline, некарточная секция Removed — у удалённых-с-квитанцией
-  карточек нет по определению, chrome+генерик-ряды из schema.core,
-  лейблы = хуманизация до ui:{}); слайсы 065199aaf (ops+15 node:test,
-  ветки отказов на реальных temp-фикстурах живым py) + 4aea8c680
-  (api+монтирование, существующие поверхности побайтно нетронуты,
-  traversal через id → 404) + 458af3a33 (страница+README; исполнитель
-  headless-скрином сам поймал баг [object Object] на use.params).
-  Deep-ревью ACCEPT-W-F: 1 REQUIRED (строка Surface Rule README хаба
-  — внесена), опциональные ноты: routeIssues в ops экспортирован но
-  страница дублирует роутинг инлайн (задокументировано); битый lock
-  → null не тестирован (звучит здраво).
-- 2026-07-08 (консервация, лид сворачивается по токенам): МИНИ-РАУНД
-  ИКОНОК ИСПОЛНЕН И ЗАКОММИЧЕН 5 коммитами: спека ec0527727 (2
-  Opus-ревью → 11 фиксов: два атласа в паке, прямая альфа без
-  un-premultiply, 2px инсет, gitignored generated, BigInt,
-  version-assert) + слайсы 84a14c55e (6 PNG + provenance README) /
-  42aba6e3a (атлас icons в build_packs.c + CMake DEPENDS + items.json
-  icons/*) / 02be508ee (icon_preview.mjs парсер пака + canvas-кроп +
-  25 тестов) / e6a42e482 (форс-добавлена ntpack-фикстура — *.ntpack
-  ignore резал её, мой контроль поймал). Гейты исполнителя: ctest
-  17/17 ×2, wasm-release, node 25/25, смоук-скрин чистый
-  (tmp/t0316_icons/, не в git). DEEP-РЕВЬЮ УСПЕЛО ВЕРНУТЬСЯ: ВЕРДИКТ
-  ACCEPT, ноль блокеров (независимо перепроверено: скоуп 21 файл
-  чист, парсер verbatim против форматов, геометрия 2px-инсета
-  доказана против nt_builder_atlas.c:1524-1537, скрины чистые,
-  ctest 17/17 сам, 25/25 тестов сам, sha256 сверены, node-quirk
-  воспроизведён как пре-существующий). Повторное ревью НЕ нужно.
-  Полишинг-лист (опционально, любой следующий раунд): (1)
-  icon_preview.mjs:207-213 клампнуть w/h к >=1 при патологически
-  мелком регионе; (2) коммент про extrude в build_packs.c неточен
-  (обводка на внешних 2px спрайта, не в гаттере — снимает её инсет);
-  (3) items_bad.json фикстура всё ещё в точечной форме (косметика).
-  Затем приёмка лида по чек-листу (п.1-9) + ратификация CC BY
-  (блок ниже; SVG-часть уже ратифицирована). Очередь после: T0329 ретро 5-10, Codex auto_review
-  шаг 2, свап арены game_events на nt_arena_t после engine#266.
-  ЧЕК-ЛИСТ ПРИЁМКИ ЛИДА (отложена — лид не у ПК 2026-07-08):
-  1. node ai_studio/studio_shell/server.mjs → открыть
-     http://127.0.0.1:8765/items (302 на страницу вьюера).
-  2. Дропдаун: Template (живой каталог) + RB Dark RPG (честный
-     статус «items не подключены», не ошибка).
-  3. Шаблон: 6 карточек (gold/xp/energy/potion/sword/wood) —
-     плейсхолдер-иконка, имя, id, kind-чип; валюты И предметы в
-     одном гриде (решение лида); поля карточки в порядке схемы.
-  4. Сводка validate зелёная (ok), lock-статусы 6/6 shipped,
-     секция Removed пуста.
-  5. Существующие поверхности живы: / (home), /taskboard/,
-     /asset_viewer/.
-  6. Feels right по духу: «видеть предметы» достигнуто?
-  Дописано мини-раундом иконок 2026-07-08 (сначала собрать шаблон
-  native-debug — пак и превью берутся из build-дерева):
-  7. 6 карточек показывают НАСТОЯЩИЕ иконки (не «?»), различимые,
-     соответствуют исходникам из assets/icons/README.md.
-  8. Края чистые: без маджента-ободков и выжженных/тёмных ореолов.
-  9. Честная деградация: без собранного пака — плейсхолдер с
-     различимой причиной («pack not built» ≠ «page PNG missing»),
-     никогда не молчаливый пустой квадрат.
-  РАТИФИКАЦИЯ ЛИДА (вопрос открыт, работа закоммичена, вето =
-  дешёвая замена PNG+README, id не меняются): все 6 иконок =
-  game-icons.net CC BY 3.0 (Kenney не подошёл — 4 пака проверены);
-  (а) CC BY — РЕШЕНО лидом 2026-07-08 («в шаблоне же все cc0?»):
-  стандарт = шаблон ТОЛЬКО CC0/OFL, CC BY не берём даже с
-  атрибуцией. ИСПОЛНЕНО cc8c56841: все 6 иконок = Kenney CC0 1.0
-  (Game Icons / Expansion / Board Game Icons, лицензии по
-  License.txt паков), фикстура перегенерирована — CC BY вычищен из
-  репо ЦЕЛИКОМ; id/items.json/build_packs.c не тронуты; ctest 17/17
-  ×2, node 25/25, смоук чистый. Нюанс на приёмку: energy =
-  power-глиф (lightning-bolt в CC0-сетах не нашлось). Вопросов
-  лиду по лицензиям НЕ ОСТАЛОСЬ; (б) SVG-источник — РАТИФИЦИРОВАНО лидом 2026-07-08 («я в
-  игре не использую, там растр»): инвариант читается по формату
-  ассета В ИГРЕ (растр через пак), не по апстрим-формату исходника
-  вендора; целит агентские векторные мокапы.
-  Дальше: мини-раунд иконок (What, решения 2026-07-08; конвенция
-  финализирована: рецепт=код, id=«атлас/регион», сверка по собранным
-  пакам, превью редактора из собранного пака), фаза 2 — с
-  write-слоем и реальной игрой.
-- 2026-07-08 (лид вернулся к ПК): ПРИЁМКА ФАЗЫ 1 + ИКОНОК ПРОЙДЕНА.
-  Программную часть чек-листа (п.1-5,7-9) прогнал оркестратор сам:
-  на 8765 висел старый инстанс сервера ДО монтирования items_viewer
-  (отдавал 404 на /items) — убит, поднят свежий; /items 302, каталоги
-  Template+RB Dark RPG (честная деградация hasItems:false), 6
-  предметов, validate ok, lock 6/6 shipped, Removed пуст, превью из
-  пака (512x256, 6 регионов), кропы по API-прямоугольникам чистые —
-  0 пикселей мадженты во всех шести, / + /taskboard/ + /asset_viewer/
-  живы. Лид посмотрел глазами и повёл UX-разговор (= приёмка духа
-  «видеть предметы» состоялась, направление признано «хорошим первым
-  шагом»).
-- 2026-07-08: UX/UI-РАЗБОР по запросу лида («инструмент и для
-  просмотра и для редактирования», реф CastleDB, «стиль ближе к
-  канвасу»): два независимых Opus-разбора (рефы: CastleDB/Charon/
-  LDtk/Tiled/Airtable/Directus/Retool + антипример RPG Maker;
-  критика текущей страницы S1-S7 + эскиз + карта реюза канвас-классов
-  + слайсы). Полные отчёты: tmp/items_viewer_ux_review_2026-07-08.md.
-  Конвергентный вердикт и решения лида — внесены в What. Лид: «делай»
-  → запущен конвейер раунда 1.4 (stack→int): спека у deep-reasoner,
-  далее 2 независимых Opus-ревью → фиксы → исполнитель Sonnet →
-  deep-ревью → контроль → коммит. Следом тем же конвейером — 1.5
-  (Slice 1 UI: таблица+инспектор).
-- 2026-07-08: РАУНД 1.4 (stack→int) ИСПОЛНЕН, 2 коммита: спека
-  37529a100 (2 Opus-ревью, оба ACCEPT-W-F; ключевой улов ревью 2:
-  «вьюер не рендерит stack» в спеке было ложно — schema-driven рендер
-  дал бы [object Object] на каждой карточке; лечение: list --json
-  отдаёт авторский int, производная тройка остаётся только в
-  компилируемом C; улов ревью 1: цитата rb-dark как потребителя
-  тройки ложна — там свой game_item_definition_t, потребителей ноль,
-  честное обоснование D3 = минимальный дифф) + реализация af8c75f3f
-  (схема v2; 6 предметов 0/0/0/99/1/999; деривация stackable=s!=1,
-  unlimited=s==0; правило equip-stack: equip ⇒ stack==1 — закрыта
-  старая дыра «стакаемая экипировка»; единственный компилируемый
-  сдвиг: sword .max_stack 0→1, ненаблюдаемый). Гейты: ctest 17/17 ×2,
-  pytest 17/17 (7 новых StackFieldTests), node 15/15+10/10;
-  deep-ревью ACCEPT с нулём обязательных находок (адверсарные края:
-  bool-is-int ловится тремя слоями; equip-stack роутится id+field;
-  live-API отдаёт int'ы; скрин: STACK 0/99/1/999 одной строкой, шум
-  Stackable/Unlimited исчез). Evidence: tmp/t0316_stack_int/.
-  Отклонение исполнителя (принято): gen.c gitignored, не
-  «закоммичен» как думала спека — дифф доказан реконструкцией
-  старого генератора из git show. OPTIONAL-заметка deep-ревью
-  (не делалось, pre-existing): у stack нет верхней границы i64 —
-  значение ≥2^63 пройдёт validate и даст невалидный C-литерал.
-  ДАЛЬШЕ: раунд 1.5 (Slice 1 UI: таблица+инспектор+фильтры,
-  read-only, идиом канваса).
+- 2026-07-08: Phase 1 accepted. Build spec:
+  `ai_studio/assets/items_viewer/docs/build_spec_phase1_2026-07-08.md`.
+  Implementation commits: `3789e24bc` spec/review fixes, `065199aaf` ops/tests,
+  `4aea8c680` API/mounting, `458af3a33` page/README. Follow-up icon work linked
+  compiled pack previews and retained read-only failure/path boundaries.
+- 2026-07-08: UX direction accepted as table-first master/detail in Canvas
+  visual idiom; containers and kinds stay visible domain concepts.
+- 2026-07-10: Old generic `items.json` write phases were superseded. T0369
+  ratified complete single-source Items Lua after architecture, adversarial, and
+  competitor review. The accepted read-only surface stays; its next slice moves
+  to T0367 and backend cutover to T0386.
+- 2026-07-10: Lead clarified the product serves both developers and AI. The
+  read-only surface remains the migration slice, not the final product; safe
+  literal/table/curve/override editing must use the same semantic ops as AI.
+- 2026-07-11: T0375 status reconciliation: moved stale doing to backlog. Phase 1 is accepted, but all six current cutover/Workbench criteria remain pending on E016 T0366/T0367/T0386; E016 is outside E015 execution scope.

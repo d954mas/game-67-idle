@@ -17,6 +17,9 @@ typedef struct lifecycle_backend_state_t {
 } lifecycle_backend_state_t;
 
 static lifecycle_backend_state_t g_backend_state;
+static int g_audio_gesture_calls;
+
+void game_audio_on_user_gesture(void) { g_audio_gesture_calls++; }
 
 static bool backend_init(void *userdata) {
     lifecycle_backend_state_t *state = (lifecycle_backend_state_t *)userdata;
@@ -71,6 +74,7 @@ static bool float_close(float actual, float expected) {
 
 void setUp(void) {
     memset(&g_backend_state, 0, sizeof(g_backend_state));
+    g_audio_gesture_calls = 0;
     nt_input_init();
     platform_sdk_reset_for_tests();
     platform_sdk_backend_t sdk_backend = backend();
@@ -127,6 +131,7 @@ static void test_any_keyboard_input_starts_gameplay(void) {
     TEST_ASSERT_TRUE(platform_sdk_has_gameplay_started());
     TEST_ASSERT_TRUE(platform_sdk_gameplay_active());
     TEST_ASSERT_EQUAL_INT(1, g_backend_state.gameplay_start_calls);
+    TEST_ASSERT_EQUAL_INT(1, g_audio_gesture_calls);
 }
 
 static void test_touch_input_starts_gameplay(void) {

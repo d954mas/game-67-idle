@@ -4,11 +4,62 @@
 /* Единственный публичный хедер фичи items — вся публичная поверхность; остальное
    в папке static. L1 foundation: зависит только от L0-шелла (game_save-toolkit +
    gsj_ + движок), НЕ от других фич. Владение ведётся в int64 ВЕЗДЕ (валюты тоже
-   int64, НЕ double; большие счётчики в JSON — строкой, §14 п.8). Дробное
+   int64, НЕ double; большие счётчики в JSON — строкой). Дробное
    производство копит аккумулятор в game glue, НЕ в count (Р1; паттерн задокументирован
-   в build_spec_t0327_i2 §OQ5 и приземлится в скилл nt-game-items, И2c). */
+   в game glue и описана в скилле nt-game-items). */
 #include <stdbool.h>
 #include <stdint.h>
+
+/* ---- Typed game catalog API (proof opt-in until the T0386 cutover) ---- */
+#if defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED
+typedef struct item_id_t {
+    uint64_t value;
+} item_id_t;
+
+typedef struct item_def_ref_t {
+    uint32_t _index;
+} item_def_ref_t;
+
+/* Opaque index into generated immutable cost spans. */
+typedef struct item_cost_ref_t {
+    uint32_t _opaque;
+} item_cost_ref_t;
+
+typedef enum item_transition_kind_t {
+    ITEM_TRANSITION_UNAVAILABLE = 0,
+    ITEM_TRANSITION_FREE,
+    ITEM_TRANSITION_COST,
+} item_transition_kind_t;
+
+typedef struct item_transition_t {
+    item_transition_kind_t kind;
+    item_cost_ref_t cost;
+} item_transition_t;
+
+typedef struct item_cost_entry_t {
+    item_id_t item;
+    int64_t count;
+} item_cost_entry_t;
+
+typedef struct item_core_t {
+    item_id_t id;
+    int64_t stack;
+} item_core_t;
+
+item_def_ref_t items_get(item_id_t id); /* required: asserts when absent */
+bool items_exists(item_id_t id);
+bool items_try_get(item_id_t id, item_def_ref_t *out);
+bool items_try_get_string(const char *def_id, item_def_ref_t *out);
+item_core_t items_core(item_def_ref_t ref); /* copy; asserts on invalid ref */
+item_transition_t items_acquire_transition(item_def_ref_t ref);
+uint32_t items_cost_count(item_cost_ref_t cost);
+item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index); /* copy; asserts on invalid range */
+void items_register_debug_labels(void);
+
+/* The build selects exactly one game-generated capability header. Consumers
+   continue to include only features/items/items.h. */
+#include "items_game.gen.h"
+#endif
 
 /* ---- Каталог (const-таблица из content/items.json; компилируется ВСЕГДА) ---- */
 typedef enum item_accept_policy_t {
@@ -33,7 +84,7 @@ typedef struct item_currency_block_t {
 
 typedef struct game_item_def_t {
     const char *id;            /* <namespace>.<slug>; НИКОГДА не ключуемся по display_name */
-    const char *display_name;  /* витрина; НЕ ключ (греп-гейт §10) */
+    const char *display_name;  /* Display only; never a behavior key. */
     const char *icon_asset_id; /* логический id; хендл арта даёт игра (И3) */
     const char *kind;          /* витрина-категория (item_kinds) */
     const char *const *tags;
@@ -64,7 +115,7 @@ const game_container_def_t *item_container_def(const char *container_id);
 
 /* ---- Владение (поверх генерируемого фрагмента items_state) ----
    Единый глагол add/remove: потратить золото / съесть зелье / израсходовать
-   3 дерева / потратить опыт — ОДИН код. reason обязателен с рождения (§10):
+   3 дерева / потратить опыт — ОДИН код. reason обязателен:
    формат verb:subject, verb из закрытого списка reason_tags.h (debug-assert,
    И2b). L1-нота: для СТАКОВ per-copy поля level/durability — игнорируемые
    дефолты (плоская форма под генератор); смысловы только для УНИКОВ

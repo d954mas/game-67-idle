@@ -29,24 +29,16 @@ function ensurePrivateGameMount(root, gameId = "secret-game", enabledStores = ["
   mkdirSync(join(root, ".git", "info"), { recursive: true });
   writeFileSync(
     join(root, ".git", "info", "exclude"),
-    `ai_studio/workspace/games.local.json\ngames/${gameId}/\n`,
+    `ai_studio/workspace/catalog.local.json\ngames/${gameId}/\n`,
     "utf8",
   );
   mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
-  writeFileSync(join(root, "ai_studio", "workspace", "games.local.json"), JSON.stringify({
-    schema: "ai_studio.workspace.games.local.v1",
-    games: [{
-      schemaVersion: 1,
-      storeId: `game:${gameId}`,
-      kind: "game",
-      gameId,
-      root: `games/${gameId}`,
-      visibility: "private",
-      gitRoot: `games/${gameId}`,
-      commitPolicy: "nested-private",
-      enabledStores,
-      assetRoot: `games/${gameId}/assets`,
-    }],
+  writeFileSync(join(gameRoot, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace: gameId }), "utf8");
+  writeFileSync(join(gameRoot, "dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }), "utf8");
+  writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify({ schema: "ai_studio.workspace.catalog.v1", mounts: [] }), "utf8");
+  writeFileSync(join(root, "ai_studio", "workspace", "catalog.local.json"), JSON.stringify({
+    schema: "ai_studio.workspace.catalog.v1",
+    mounts: [{ kind: "game", root: `games/${gameId}`, visibility: "private", gitRoot: `games/${gameId}`, commitPolicy: "nested-private", enabledStores, aliases: [] }],
   }, null, 2) + "\n", "utf8");
   return {
     gameId,
@@ -106,10 +98,10 @@ test("cli stores Canvas project ownership and filters by owner game", (t) => {
   const env = { CANVAS_PROJECTS_ROOT: dir };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const owned = run(env, "create", "--title", "Owned Canvas", "--owner-game", "rb-dark-rpg").project;
-  assert.deepEqual(owned.ownership, { kind: "game", gameId: "rb-dark-rpg" });
+  const owned = run(env, "create", "--title", "Owned Canvas", "--owner-game", "fixture-game").project;
+  assert.deepEqual(owned.ownership, { kind: "game", gameId: "fixture-game" });
   assert.match(runFail(env, "create", "--owner-game").stderr, /requires a game id/);
-  assert.equal(run(env, "list", "--owner-game", "rb-dark-rpg").projects[0].id, owned.id);
+  assert.equal(run(env, "list", "--owner-game", "fixture-game").projects[0].id, owned.id);
   assert.equal(run(env, "list", "--owner-game", "web-dressup").projects.length, 0);
 
   const changed = run(env, "project-set", owned.id, "--owner-game", "web-dressup").project;
@@ -117,6 +109,28 @@ test("cli stores Canvas project ownership and filters by owner game", (t) => {
 
   const cleared = run(env, "project-set", owned.id, "--owner-game", "none").project;
   assert.equal(Object.hasOwn(cleared, "ownership"), false);
+});
+
+test("cli list hides archived projects unless requested while show remains available", (t) => {
+  const dir = mkdtempSync(join(tmpdir(), "canvas-cli-archive-"));
+  const env = { CANVAS_PROJECTS_ROOT: dir };
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+
+  const active = run(env, "create", "--title", "Active").project;
+  const archived = run(env, "create", "--title", "Archived", "--owner-game", "fixture-game").project;
+  const changed = run(env, "project-set", archived.id, "--archived", "true").project;
+  assert.equal(changed.archived, true);
+  assert.deepEqual(changed.ownership, archived.ownership);
+
+  assert.deepEqual(run(env, "list").projects.map((project) => project.id), [active.id]);
+  const included = run(env, "list", "--include-archived").projects;
+  assert.deepEqual(new Set(included.map((project) => project.id)), new Set([active.id, archived.id]));
+  assert.equal(included.find((project) => project.id === archived.id).archived, true);
+  assert.equal(run(env, "show", archived.id).project.archived, true);
+
+  const restored = run(env, "project-set", archived.id, "--archived", "false").project;
+  assert.equal(restored.archived, false);
+  assert.deepEqual(restored.ownership, archived.ownership);
 });
 
 test("cli routes selected private game canvas store and keeps default list public-only", (t) => {

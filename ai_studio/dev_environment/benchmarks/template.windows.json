@@ -1,0 +1,77 @@
+{
+  "schema": "ai_studio.toolchain_benchmark.v2",
+  "measuredAt": "2026-07-11T04:39:42.921Z",
+  "game": "template",
+  "source": "templates/template",
+  "sampleCount": 3,
+  "workspaceNote": "includes preserved T0393 working-tree audio overlay; not a clean T0357-only baseline",
+  "machine": {
+    "platform": "win32",
+    "release": "10.0.26200",
+    "cpu": "Intel(R) Core(TM) i9-14900HX",
+    "cores": 32,
+    "node": "v24.15.0"
+  },
+  "toolchain": {
+    "python": "Python 3.12.4",
+    "cmake": "cmake version 3.29.6",
+    "ninja": "1.12.1",
+    "clang": "clang version 19.1.7"
+  },
+  "revision": {
+    "commit": "562fb03840abcadcceb2bf7a0954377faee282da",
+    "dirtyEntries": 88
+  },
+  "metrics": {
+    "pythonStartup": {
+      "samplesMs": [
+        37,
+        42.1,
+        41.5
+      ],
+      "minMs": 37,
+      "medianMs": 41.5,
+      "maxMs": 42.1
+    },
+    "coldConfigure": {
+      "samplesMs": [
+        6453.1,
+        6640.5,
+        6508.6
+      ],
+      "minMs": 6453.1,
+      "medianMs": 6508.6,
+      "maxMs": 6640.5
+    },
+    "coldBuild": {
+      "samplesMs": [
+        28166.7,
+        33724.5,
+        27435.4
+      ],
+      "minMs": 27435.4,
+      "medianMs": 28166.7,
+      "maxMs": 33724.5
+    },
+    "warmBuild": {
+      "samplesMs": [
+        640.8,
+        711.8,
+        595.5
+      ],
+      "minMs": 595.5,
+      "medianMs": 640.8,
+      "maxMs": 711.8
+    },
+    "noopBuild": {
+      "samplesMs": [
+        350.8,
+        374.1,
+        320.5
+      ],
+      "minMs": 320.5,
+      "medianMs": 350.8,
+      "maxMs": 374.1
+    }
+  }
+}

@@ -14,7 +14,7 @@ import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/g
 import { createArchitectureMapApi } from "../architecture_map/api.mjs";
 import { createCanvasApi } from "../assets/canvas/api.mjs";
 import { createItemsViewerApi } from "../assets/items_viewer/api.mjs";
-import { createChatApi } from "./chat/api.mjs";
+import { createChatApi } from "../assets/canvas/chat/api.mjs";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
 
 const repoGuess = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -29,10 +29,11 @@ const handleAssetViewerApi = createAssetViewerApi(root);
 const handleArchitectureMapApi = createArchitectureMapApi(root);
 const handleCanvasApi = createCanvasApi(root);
 const handleItemsViewerApi = createItemsViewerApi(root);
-// T0242: the chat panel's backend — spawns an UNSANDBOXED codex process per message
-// (agent.mjs), so this mount leans on the SAME 127.0.0.1-only trust boundary as the rest
-// of this server (see server.listen below); never widen the bind without revisiting that.
-const handleChatApi = createChatApi(root);
+// Chat owns its per-launch token internally. The server only supplies the exact loopback
+// hosts for this launch; chat owns the subscription-authenticated app-server transport.
+const handleChatApi = createChatApi(root, {
+  allowedHosts: [`127.0.0.1:${port}`, `localhost:${port}`],
+});
 const stateDir = join(root, "tmp", "ai_studio");
 const pidFile = join(stateDir, `studio_shell_${port}.pid`);
 
@@ -127,8 +128,8 @@ function staticPath(pathname) {
   return null;
 }
 
-function serveStatic(req, res, url) {
-  const full = staticPath(decodeURIComponent(url.pathname));
+function serveStatic(req, res, decodedPathname) {
+  const full = staticPath(decodedPathname);
   if (!full || !existsSync(full) || !statSync(full).isFile()) {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     res.end("not found");
@@ -144,7 +145,19 @@ function serveJson(res, value) {
 }
 
 const server = createServer((req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+  let url;
+  let decodedPathname;
+  try {
+    url = new URL(req.url, `http://${req.headers.host || "localhost"}`);
+    decodedPathname = decodeURIComponent(url.pathname);
+  } catch {
+    res.writeHead(400, {
+      "content-length": "11",
+      "content-type": "text/plain; charset=utf-8",
+    });
+    res.end("bad request");
+    return;
+  }
   const canvasRedirect = canvasRedirectLocation(url.pathname, url.search);
   if (canvasRedirect) {
     res.writeHead(302, { location: canvasRedirect });
@@ -183,7 +196,7 @@ const server = createServer((req, res) => {
       if (!assetHandled) handleTaskboardApi(req, res, url);
     });
   } else {
-    serveStatic(req, res, url);
+    serveStatic(req, res, decodedPathname);
   }
 });
 
@@ -192,3 +205,35 @@ server.listen(port, "127.0.0.1", () => {
   writeFileSync(pidFile, `${process.pid}\n`, "utf8");
   console.log(`ai_studio: http://127.0.0.1:${port}/  (repo: ${root})`);
 });
+
+let shutdownStarted = false;
+const shutdownTimeoutMs = 5_000;
+
+async function shutdown(signal) {
+  if (shutdownStarted) return;
+  shutdownStarted = true;
+  const closeServer = new Promise((resolveClose, rejectClose) => {
+    server.close((error) => error ? rejectClose(error) : resolveClose());
+  });
+  let timer;
+  const timeout = new Promise((_, rejectTimeout) => {
+    timer = setTimeout(() => rejectTimeout(new Error(`shutdown timed out after ${shutdownTimeoutMs}ms`)), shutdownTimeoutMs);
+  });
+  let exitCode = 0;
+  try {
+    await Promise.race([
+      Promise.all([Promise.resolve(handleChatApi.shutdown()), closeServer]),
+      timeout,
+    ]);
+  } catch (error) {
+    exitCode = 1;
+    console.error(`ai_studio: ${signal} shutdown failed: ${error?.message || error}`);
+  } finally {
+    clearTimeout(timer);
+    process.exit(exitCode);
+  }
+}
+
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => { void shutdown(signal); });
+}

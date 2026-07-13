@@ -1,0 +1,20 @@
+{
+  "pack": "web-dressup-dress",
+  "title": "Web Dress-up Dress Assets",
+  "source": "project-owned-generation",
+  "kind": "ui",
+  "origin": "ai",
+  "license": "Studio-Owned-Public-1.0",
+  "license_kind": "custom",
+  "publish": "true",
+  "redistribution_allowed": "true",
+  "description": "Web Dress-up Dress Assets. Lead disposition approved the current canonical bytes on 2026-07-12.",
+  "commercial_use": "true",
+  "modification_allowed": "true",
+  "attribution_required": "false",
+  "notice_required": "false",
+  "author_vendor": "Neotolis Studio",
+  "provenance": "games/web-dressup/assets/dress/PROVENANCE.md; lead disposition 2026-07-12",
+  "license_file": "games/web-dressup/assets/PROJECT_ASSET_LICENSE.md",
+  "status": "accepted"
+}

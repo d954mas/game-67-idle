@@ -86,15 +86,29 @@ on the DevAPI preset, `Module.arguments=['--devapi','17890']`). All three files
 Build one preset, then serve it:
 
 ```bash
-bash tools/build_web.sh --preset wasm-release        # or wasm-debug / wasm-devapi-debug
+node tools/build_web.mjs --preset wasm-release        # or wasm-debug / wasm-devapi-debug
 node tools/serve_web.mjs --preset wasm-release        # http://127.0.0.1:8080/
 ```
 
-`build_web.sh` builds the wasm `game` target and copies the native asset pack
+`build_web.mjs` builds the wasm `game` target and copies the native asset pack
 flat to `bin/assets/game.ntpack` (the engine streams packs over HTTP relative to
 the page URL; the pack builder is native-only, so the pack is taken from the
 native build). `serve_web.mjs` is a self-contained static server that serves
 `game.wasm` as `application/wasm` (required for emscripten's streaming compile).
+
+The copied game also owns one Node lifecycle entrypoint. `build_web.mjs` only
+produces an artifact directory; final portal packaging and verification belong
+to `game.mjs`:
+
+```bash
+node tools/game.mjs doctor
+node tools/game.mjs test
+node tools/game.mjs playable --target itch
+node tools/game.mjs package --target itch
+node tools/game.mjs verify --target itch
+```
+
+See `release/README.md` for final ZIP, sidecar, and copied CI contracts.
 
 | preset | configure flags | port | DevAPI | notes |
 |---|---|---|---|---|
@@ -113,8 +127,8 @@ Two advisory headless probes (not part of `ctest`; one command, real signal —
 they SKIP with exit 2 when EMSDK/Chrome is missing or a slow ASan boot times out):
 
 ```bash
-python tests/web_devapi_check.py        # window.__devapi shim round-trip: endpoints + command.describe
-python tests/web_persistence_check.py   # localStorage save survives a full Chrome quit+restart
+node ai_studio/dev_environment/python_run.mjs templates/template/tests/web_devapi_check.py        # window.__devapi shim round-trip: endpoints + command.describe
+node ai_studio/dev_environment/python_run.mjs templates/template/tests/web_persistence_check.py   # localStorage save survives a full Chrome quit+restart
 ```
 
 `web_devapi_check.py` builds `wasm-devapi-debug`, loads it headless, and proves
@@ -131,7 +145,7 @@ cmake --build build/devapi-debug --target devapi_smoke
 or from the repository root:
 
 ```powershell
-py -3.12 templates/template/devapi/smoke_bot.py --exe templates/template/build/devapi-debug/bin/game.exe
+node ai_studio/dev_environment/python_run.mjs templates/template/devapi/smoke_bot.py --exe templates/template/build/devapi-debug/bin/game.exe
 ```
 
 For QCLR_002 responsive-viewport screenshots:

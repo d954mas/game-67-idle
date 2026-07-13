@@ -29,7 +29,7 @@
       "kind": "surface",
       "path": "ai_studio/quality/index.html",
       "title": "Quality Checks Surface",
-      "description": "Browser surface hosted at /quality/ for browsing quality rule groups, numbered checks, matching use cases, and evidence requirements.",
+      "description": "Presents quality checks browser surface.",
       "role": "quality checks browser surface",
       "tags": [
         "quality",
@@ -81,7 +81,7 @@
     {
       "id": "quality:skill-nt-quality-checks",
       "kind": "skill",
-      "path": ".codex/skills/nt-quality-checks/SKILL.md",
+      "path": ".codex/skills/nt-quality-checks",
       "title": "nt-quality-checks",
       "description": "Codex-discoverable quality-check skill that routes agents through AI Studio quality groups, matching rule files, outcome logging, and usage profiling.",
       "role": "quality check routing skill",
@@ -416,7 +416,7 @@
       "kind": "test",
       "path": "ai_studio/quality/tests/profile.test.mjs",
       "title": "profile.test.mjs",
-      "description": "Regression tests for quality rule usage profiling from task logs.",
+      "description": "Verifies quality profiler contracts.",
       "role": "quality profiler tests",
       "tags": [
         "quality",
@@ -429,7 +429,7 @@
       "kind": "test",
       "path": "ai_studio/quality/tests/catalog.test.mjs",
       "title": "catalog.test.mjs",
-      "description": "Regression test for the quality rule catalog used by the /quality/ surface and /api/quality-checks route.",
+      "description": "Verifies quality catalog contracts.",
       "role": "quality catalog tests",
       "tags": [
         "quality",

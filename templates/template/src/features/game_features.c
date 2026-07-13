@@ -8,6 +8,7 @@
 #include "ui/demo_hud.h" /* И3b: demo composition (resource_panel over items/progression) */
 #include "ui/platform_sdk_debug.h"
 #include "ui/ui_runtime.h"
+#include "game_audio.h"
 #include "app/nt_app.h" /* g_nt_app.dt */
 #if GAME_EVENTS_LOG_MIRROR
 #include "game_events_log_mirror.h"
@@ -24,44 +25,39 @@
    системы (render_mesh_draw/hud_draw) ПОКА прямые вызовы шелла в main.c,
    поэтому draw_world остаётся заглушкой. */
 
+static bool s_settings_was_open;
+
 void game_features_init(World *w) {
 #if defined(__EMSCRIPTEN__)
     platform_sdk_install_web_backend();
 #endif
     platform_sdk_debug_init();
+    (void)game_audio_init();
+    s_settings_was_open = settings_is_open();
     (void)w; /* TODO(feature-migration): per-feature <id>_init(w) здесь */
 }
 
 void game_features_update(World *w, float dt) {
+    game_audio_update();
+    const bool settings_open_now = settings_is_open();
+    if (settings_open_now && !s_settings_was_open) {
+        /* Keep retrying until the asynchronous clip is ready. */
+        if (game_audio_play_cue(GAME_AUDIO_CUE_UI_CLICK)) {
+            s_settings_was_open = true;
+        }
+    } else {
+        s_settings_was_open = settings_open_now;
+    }
     sys_move(w, dt); /* мировая симуляция шаблона; здесь же фичи эмитят события */
     demo_hud_update(dt); /* И3b: demo idle-доход ПЕРЕД авто-покупкой того же кадра */
     progression_update(); /* И3a: auto/threshold tick (T5 HARD-капы внутри) */
     /* TODO(feature-migration): <id>_update(w, dt) по строке на фичу */
 }
 
-/* КАНОН-ИДИОМ потребителя (образец для будущих реакторов, E2+; §E1.4). Один
-   обязательный инвариант: сброс курсора по СМЕНЕ tick, НЕ по числу событий
-   (HIGH-2). Указатели стабильны весь кадр (фиксированная арена) -> `log`
-   фетчится ОДИН раз, удержание e/payload через emit ЗАКОННО:
-
-   static int      s_pos;            // курсор потребителя
-   static uint32_t s_last_tick;      // для детекта нового кадра
-
-   uint32_t tick = game_events_tick();
-   if (tick != s_last_tick) { s_last_tick = tick; s_pos = 0; }  // новый кадр -> сброс
-
-   int n; const game_event_t *log = game_event_log(&n);   // стабилен весь кадр
-   for (; s_pos < n; ++s_pos) {
-       const game_event_t *e = &log[s_pos];
-       if (e->type.value != WANTED.value) continue;
-       ... react ...   // может эмитить каскад: следующее react-поколение увидит его
-   }
-
-   Почему сброс по tick, а НЕ по числу событий: старый способ (if (s_pos > n)
-   s_pos = 0) не срабатывает, когда новый кадр имеет >= событий, чем осталось
-   курсору (тихая потеря, event §7). Сброс по смене tick надёжен всегда. */
+/* Event consumers reset cursors when game_events_tick changes. The fixed
+   frame arena keeps event and payload pointers stable until reset. */
 void game_features_react(World *w) {
-    (void)w; /* TODO(E2+): реакторы читают game_event_log(&n), канон-идиом выше (§E1.4) */
+    (void)w; /* TODO: add event reactors using game_event_log(). */
 }
 
 void game_features_record(World *w) {
@@ -77,7 +73,7 @@ void game_features_record(World *w) {
 #endif
 }
 
-void game_features_draw_world(World *w) { (void)w; /* TODO: см. §E1.5 */ }
+void game_features_draw_world(World *w) { (void)w; /* TODO: add feature render systems. */ }
 void game_features_draw_ui(World *w) {
     /* UI-слой фич: агрегатор владеет ui_runtime-кадром; каждая фича получает
        ctx и рисует свой слой ОДНОЙ строкой, порядок вызовов = z-order. */
@@ -89,6 +85,7 @@ void game_features_draw_ui(World *w) {
     }
 }
 void game_features_shutdown(World *w) {
+    game_audio_shutdown();
     (void)w; /* TODO: per-feature shutdown */
     platform_sdk_debug_shutdown();
 }

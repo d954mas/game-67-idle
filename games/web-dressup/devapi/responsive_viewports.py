@@ -150,12 +150,28 @@ def capture_viewport(
     warmup_frames: int,
     prepare: PrepareFn | None = None,
 ) -> dict[str, Any]:
+    manual_time = False
+    methods = game.endpoint_methods() if hasattr(game, "endpoint_methods") else set()
+    if "time.step" in methods and "time.set_mode" in methods:
+        game.result("time.set_mode", {"mode": "manual"})
+        manual_time = True
     if warmup_frames > 0:
-        game.wait_frames(warmup_frames)
+        if manual_time:
+            smoke_bot.advance_safely(game, warmup_frames, methods)
+        else:
+            game.wait_frames(warmup_frames)
     scenario_result = prepare(game, viewport) if prepare else None
     tree = wait_for_ui_tree(game)
     view = safe_result(game, "view")
-    screenshot = game.capture_screenshot(str(out_dir / f"{viewport.name}.png"), wait_frames=2, audit=audit)
+    if manual_time:
+        smoke_bot.advance_safely(game, 2, methods)
+        # capture.frame is deferred to the next rendered frame. Return the game
+        # loop to autonomous mode before arming capture, while still avoiding
+        # the unreliable native frame.wait transport path.
+        game.result("time.set_mode", {"mode": "run"})
+    screenshot = game.capture_screenshot(
+        str(out_dir / f"{viewport.name}.png"), wait_frames=0 if manual_time else 2, audit=audit
+    )
     nodes = ui_nodes(tree)
     return {
         "name": viewport.name,

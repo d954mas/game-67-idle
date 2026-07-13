@@ -48,6 +48,7 @@ REQUIRED_METHODS = {
     "game.state.schema",
     "game.state.get",
     "game.events.tail",
+    "game.iteration.proof",
 }
 
 
@@ -112,7 +113,7 @@ def validate_game_state_schema(schema: Any) -> dict[str, Any]:
         raise DevApiError("game.state.schema missing 'game' fragment")
     if frag.get("schema") != "game_seed.state":
         raise DevApiError(f"unexpected game.state.schema id: {frag.get('schema')!r}")
-    # The normalized schema carries both `fragment` and `document` (§A4.4) — accept either.
+    # The normalized schema carries both `fragment` and `document` — accept either.
     if frag.get("fragment") != "game" and frag.get("document") != "game":
         raise DevApiError(f"unexpected game.state.schema fragment: {frag.get('fragment')!r}")
     if not isinstance(frag.get("fields"), list):
@@ -138,7 +139,7 @@ def validate_game_state(state: Any) -> dict[str, Any]:
     if not isinstance(game, dict):
         raise DevApiError("game.state.get missing value.game fragment")
     for key in ("tutorial",):  # settings removed from the game set; T0327 hygiene
-        # gutted the dead rb-dark inventory.item_ids field (owned by items now)
+        # gutted the dead prototype inventory.item_ids field (owned by items now)
         if not isinstance(game.get(key), dict):
             raise DevApiError(f"game.state.get missing value.game.{key} object")
     settings = value.get("settings")  # new fragment beside game
@@ -164,6 +165,15 @@ def validate_events_tail(tail: Any) -> dict[str, Any]:
                 or not isinstance(ev.get("type"), str):
             raise DevApiError("game.events.tail event missing seq/type")
     return tail
+
+
+def validate_iteration_proof(proof: Any) -> dict[str, Any]:
+    if not isinstance(proof, dict):
+        raise DevApiError("game.iteration.proof returned a non-object")
+    for key in ("cFixture", "schemaFixture"):
+        if not isinstance(proof.get(key), str) or not proof[key]:
+            raise DevApiError(f"game.iteration.proof missing non-empty {key}")
+    return proof
 
 
 def wait_for_ui_id(game: Any, element_id: str, *, max_frames: int = 90, stride: int = 3) -> dict[str, Any]:
@@ -192,13 +202,14 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
 
     described = {
         method: game.result("command.describe", {"method": method})
-        for method in ("render.set_enabled", "ui.click", "capture.frame", "game.state.schema", "game.state.get", "game.events.tail")
+        for method in ("render.set_enabled", "ui.click", "capture.frame", "game.state.schema", "game.state.get", "game.events.tail", "game.iteration.proof")
     }
 
     closed_tree = wait_for_ui_id(game, "settings/gear")
     state_schema = validate_game_state_schema(game.result("game.state.schema"))
     state_before = validate_game_state(game.result("game.state.get", {"path": ""}))
     events_tail = validate_events_tail(game.result("game.events.tail", {}))
+    iteration_proof = validate_iteration_proof(game.result("game.iteration.proof", {}))
     render_before = game.result("render.info")
     game.result("render.set_enabled", {"enabled": False})
     game.wait_frames(2)
@@ -222,6 +233,7 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
         "game_state_schema": state_schema,
         "game_state": state_before,
         "events_tail": events_tail,
+        "iteration_proof": iteration_proof,
         "render_before": render_before,
         "render_disabled": render_disabled,
         "render_enabled": render_enabled,

@@ -164,7 +164,7 @@ bool gsj_parse_enum_value(const cJSON *item, const char *const *names, int count
     return true;
 }
 
-/* ---- i64 wire (§14 p.8): large counters ride as a JSON string; a bare
+/* ---- i64 wire: large counters ride as a JSON string; a bare
    number is accepted only when it round-trips exactly through double (no
    silent precision loss above 2^53). ---- */
 

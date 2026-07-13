@@ -31,6 +31,8 @@ Studio work, one project per active game, one project per active template, and
 lightweight tooling/research projects when they own durable cross-cutting work.
 
 Task statuses: `idea -> backlog -> todo -> doing -> review -> done`.
+Tasks cannot be created directly as `done`; create an active record, then close
+it through the guarded update path so closure evidence is evaluated.
 
 Epic statuses: `idea -> active -> done`.
 
@@ -70,8 +72,39 @@ references and task project/epic mismatches.
 
 ## Done And Evidence
 
-A task is done only when `## Done when` boxes are checked and `## Log` explains
-the evidence that proves them.
+A transition of a task from any non-`done` status to `done` must satisfy both
+presence checks below through the final markdown body passed to `updateDoc`:
+
+1. `## Done when` contains at least one nonblank canonical `- [x] criterion`,
+   every checkbox there is canonical and checked, or `## Log` contains:
+   `Closure: waived; reason: <non-empty>; evidence: <non-empty>`.
+2. `## Log` contains either
+   `Quality: Q...=<outcome>[; Q...=<outcome>]; evidence: <non-empty>` or
+   `Quality: not-applicable; reason: <non-empty>`.
+
+Log decisions count only as canonical dated bullets such as
+`- YYYY-MM-DD: Quality: ...` or `- YYYY-MM-DD: Closure: ...`, outside fenced
+code blocks. Bare lines and documentation examples do not satisfy the gate.
+
+Quality outcomes are `pass`, `block`, `review`, `skip`, or `unverified`. This
+guard checks explicit shape only; it does not select rules, run checks, or infer
+whether an outcome is sufficient for release. Projects, epics, non-`done`
+transitions, and edits to already-`done` tasks are unaffected. Existing direct
+markdown history is grandfathered and needs no migration.
+
+The CLI can append canonical dated lines before calling the same `updateDoc`
+path:
+
+```powershell
+node ai_studio/taskboard/cli.mjs set T0001 --status done --waiver-reason "superseded" --closure-evidence "E001 decision" --quality-not-applicable "planning-only" --json
+node ai_studio/taskboard/cli.mjs set T0001 --status done --quality "QCLR_001=pass; QTECH_001=review" --quality-evidence "tests and review" --json
+```
+
+`--waiver-reason` pairs with `--closure-evidence`; `--quality` pairs with
+`--quality-evidence`; `--quality-not-applicable` is mutually exclusive with
+those quality options. Raw `--log` remains supported. Missing, malformed, or
+conflicting input fails before write/archive with a concise message and a
+machine-readable `problem` code/details in JSON CLI and HTTP API responses.
 
 Smallest reliable validation by change type starts from the Quality rules:
 `ai_studio/quality/README.md`.
@@ -81,6 +114,16 @@ Repeated quality failures should be visible in task logs and summarized with:
 ```powershell
 node ai_studio/quality/profile.mjs
 ```
+
+Task-routing read cost is a separate profiler-owned concern. Reproduce its
+privacy-safe all-store measurements at the Taskboard CLI boundary with:
+
+```powershell
+node ai_studio/taskboard/cli.mjs profile --json --runs 7
+```
+
+The report is metadata-only. It must not be used as a substitute for `show`
+when task details are explicitly needed.
 
 If validation is too slow, unavailable, or fails for an unrelated environment
 reason, record that explicitly. Do not silently mark the task done.
@@ -185,7 +228,19 @@ collide. Run `node ai_studio/taskboard/cli.mjs validate` after bulk edits.
 Each Taskboard store has its own local `P###`, `E###`, and `T####` counters.
 The Studio store uses `storeId: studio`; game stores use `storeId: game:<id>`.
 Rows exposed through CLI/API include `qualifiedId` such as
-`game:rb-dark-rpg:T0001`.
+`game:fixture-game:T0001`.
+
+Creation serializes only ID allocation and the initial markdown write through
+`items/.allocation.lock`; reads and edits do not take this lock. The allocator
+updates `.counters.json` by atomic replacement and creates the target markdown
+with exclusive-create semantics. A failed create may consume an ID, but never
+rewinds or corrupts the counter.
+
+The allocator automatically reclaims a lock older than 30 seconds when its
+recorded PID is no longer alive. If a create times out on a stale lock, inspect
+`items/.allocation.lock/owner.json`; remove the lock directory manually only
+after confirming that PID is gone and no Taskboard create command is running.
+The next create scans existing documents before advancing the counter.
 
 Use bare IDs only inside one selected store. When a reference intentionally
 crosses stores, write it as a qualified ID so aggregate validation can resolve

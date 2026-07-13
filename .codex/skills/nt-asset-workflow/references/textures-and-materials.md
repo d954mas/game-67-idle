@@ -9,15 +9,15 @@ source-sheet crop/cutout work, or slice9 UI art.
 
 ## Source First
 
-Search Backlog Asset Storage before generating:
+Search the asset catalog before generating:
 
 ```powershell
-node ai_studio/assets/backlog/storage/search.mjs --kind texture --query "<need>" --json
-node ai_studio/assets/backlog/storage/search.mjs --kind material --query "<need>" --json
+node ai_studio/assets/catalog/search.mjs --kind texture --query "<need>" --json
+node ai_studio/assets/catalog/search.mjs --kind material --query "<need>" --json
 ```
 
 If no library asset fits, use practical free sources such as CC0/OFL texture
-libraries or generate a new source, then record the route through Backlog Asset Storage.
+libraries or generate a new source, then record the route through the asset intake/catalog owners.
 
 ## Usage Class
 

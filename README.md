@@ -16,6 +16,13 @@ knowledge. Templates live under `templates/`; reusable feature packs live under
   live under `games/<game-id>/`.
 - Closed prototypes are preserved as git tags.
 
+Bootstrap and verify the one ordinary Studio Python environment:
+
+```powershell
+node ai_studio/dev_environment/python_setup.mjs --base-python "C:\Path\To\Python312\python.exe"
+node ai_studio/dev_environment/python_check.mjs
+```
+
 ## Start a new game
 
 ```powershell
@@ -33,7 +40,7 @@ textured mesh paths, a movement system, screenshot capture).
 
 VS Code users can use Run and Debug entries such as
 `Debug Template: template (native debug)`. Build, pack, and run tasks are
-generated from `templates/templates.json` and `games/games.json` by
+generated from `ai_studio/workspace/catalog.json` by
 `node ai_studio/dev_environment/vscode_projects.mjs`; `games/new_game.mjs` and
 `templates/new_template.mjs` refresh them after creating a project.
 

@@ -60,7 +60,7 @@ void test_item_container_def_purse(void) {
 }
 
 void test_item_core_stack_semantics(void) {
-    /* build_spec_stack_int_2026-07-08 §3: pins the derivation from the single
+    /* items-core stack authoring contract: pins derivation from the single
        authoring `stack` int, including the one changed compiled value
        (sword max_stack 0 -> 1). */
     const game_item_def_t *potion = item_core("tmpl.potion");

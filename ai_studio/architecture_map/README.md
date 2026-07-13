@@ -1,6 +1,7 @@
 # Architecture Map
 
-This module owns the visual AI Studio architecture map.
+This module owns the visual AI Studio ownership hierarchy. It renders only the
+explicit tree; it does not infer relationships between nodes.
 
 The map is data-driven:
 
@@ -8,18 +9,23 @@ The map is data-driven:
   it keeps the root-node metadata plus a `root.parts` list of per-child files
   under `tree/`. Each top-level workspace child (one module or workspace group)
   is one JSON file in `tree/`, so edits localize to a single part.
-- `tree/` holds the split parts. Edit the matching part file, not one giant
-  tree; add or reorder a top-level child by editing the `parts` list in
-  `../tree.json`.
-- `tree_loader.mjs` merges the index and its parts back into one tree. A legacy
-  single-file tree (`root.children` with no `root.parts`) is returned unchanged.
-- `index.html` renders the map in the browser. It loads the merged tree from
+- `tree/` holds recursively split owner parts. Any node may replace `children`
+  with an ordered `parts` list; each nested path is relative to the JSON file
+  that contains that list. Edit the smallest owning part. Add/reorder root
+  owners in `../tree.json`; add/reorder nested owners in their parent part.
+- `tree_loader.mjs` recursively materializes every `parts` list back to
+  `children`, preserving field order and removing all ref markers. Missing,
+  malformed, conflicting, or cyclic nested refs identify their path and
+  referrer. A legacy single-file tree remains compatible.
+- `index.html` renders the hierarchy in the browser. It loads the merged tree from
   `GET /api/architecture-tree` (falling back to reading `../tree.json` and
-  merging `tree/` parts client-side).
-- `validate_map.mjs` merges the tree, scans AI Studio source locations and
-  shallow workspace folder roots, and writes a local `validation-report.json`
+  recursively materializing `tree/` parts client-side). The surface provides drill-down cards,
+  breadcrumbs, type filters, and local layout positions; it has no second
+  relationship model.
+- `validate_map.mjs` merges the tree, derives coverage from `git ls-files`,
+  scans AI Studio ownership locations and shallow workspace roots, and writes a local `validation-report.json`
   for offline inspection. That file is **git-ignored, not committed**. Local
-  private game mounts from `ai_studio/workspace/games.local.json` are excluded
+  private game mounts from `ai_studio/workspace/catalog.local.json` are excluded
   from parent architecture scans so their ids and paths do not appear in the
   generated report.
 - `api.mjs` is the Studio Shell adapter. `GET /api/architecture-validation`
@@ -28,21 +34,26 @@ The map is data-driven:
 - `../studio_shell/server.mjs` hosts the map surface and mounts `api.mjs` so
   browser `fetch()` can read the merged tree and the live report.
 
-The page must not infer architecture from the repository. New files are not
-silently added to the map. They appear in validation until a human decides
+The page must not infer architecture from the repository. New tracked files are
+not silently added to the map. They appear in validation until a human decides
 whether to map, ignore, open a task, or delete them.
 
+Untracked or generated local files are not architecture coverage truth. Pass
+`--hygiene` to include them in a separate non-gating `hygiene.untrackedPaths`
+report when local cleanup is relevant.
+
 `ai_studio/game_design/knowledge_base/` is owned by the Game Design module and is
-mapped there as one covered folder. `templates/` and `games/` are shown as
-workspace containers; `features/` is shown as a feature group. They use
+mapped there as one covered folder. `templates/`, `games/`, and `extensions/`
+are shown as workspace containers; `features/` is shown as a feature group. They use
 `coverage: "self"` so the container path is checked without automatically
 covering every child folder. Validation scans tracked files directly under
 those roots and their immediate child directories. Root-level commands and docs
 such as `games/new_game.mjs` or `templates/new_template.mjs` therefore appear
 in validation if they are not mapped, while new `templates/<id>`,
-`features/<id>`, or `games/<id>` folders appear as unmapped outside-AI-Studio
-paths until they are intentionally added to `tree.json`. Files inside each game,
-template, or feature folder are not listed in the architecture map.
+`features/<id>`, `games/<id>`, or top-level extension folders appear as unmapped
+outside-AI-Studio paths until they are intentionally added to `tree.json`. Files
+inside each game, template, feature, or mapped extension folder are not listed
+individually in the architecture map.
 
 Taskboard data is not architecture map module data. The markdown store lives in
 `ai_studio/taskboard/items/{projects,epics,active,archive}/` and is owned by the
@@ -64,6 +75,7 @@ stable color in the page legend.
 
 ```powershell
 node ai_studio/architecture_map/validate_map.mjs
+node ai_studio/architecture_map/validate_map.mjs --hygiene
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
 ```
 
@@ -81,10 +93,13 @@ http://127.0.0.1:8765/architecture_map/
 - `unmappedInAiStudio`: a file exists under `ai_studio/`, but is not listed or
   covered by a mapped directory in `tree.json`.
 - `unmappedOutsideAiStudio`: a scanned path exists outside `ai_studio/` and is
-  not explicitly mapped. For `templates/`, `features/`, and `games/`, scanned
+  not explicitly mapped. For `templates/`, `features/`, `games/`, and `extensions/`, scanned
   paths are root-level tracked files plus immediate child directories, not files
   inside those child directories.
 - `missingDescriptions`: a visible node lacks a useful description.
+- `invalidDescriptions`: a description exceeds 240 characters or contains
+  command syntax, routes, test-case detail, or UI micro-behavior instead of an
+  architectural responsibility.
 
 Scanning is validation only. It does not edit `tree.json`.
 

@@ -2,11 +2,11 @@
 """Generate const C item/container tables from the items content catalog.
 
 Second codegen of the template (deliberately separate from
-features/game-state/scripts/generate_state.py, design doc §9 "не смешивать"):
+features/game-state/scripts/generate_state.py; content and state codegen stay separate):
 this one is compile-time content embed (const tables), not a save-state
-fragment generator. Pattern mirrors games/rb-dark-rpg/tools/generate_dialogue_content.py.
+fragment generator. It is intentionally repository-neutral and fixture-driven.
 
-    py -3.12 features/items-core/scripts/generate_items_catalog.py \
+    node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_catalog.py \
         --catalog content/items.json --schema content/item_fields.schema.json \
         --out-dir <dir>
 
@@ -201,7 +201,7 @@ def render_source(doc: dict[str, Any]) -> str:
     ]
 
     # Per-item static sub-tables (tags array + equip/use/currency blocks), only
-    # when present -- mirrors the rb-dark game_content generator's NULL-when-absent style.
+    # when present -- preserves the established NULL-when-absent generator style.
     block_refs: dict[str, dict[str, str]] = {}
     for item in items:
         sym = c_ident(item["id"])
@@ -223,7 +223,7 @@ def render_source(doc: dict[str, Any]) -> str:
             refs["equip"] = equip_sym
         use = item.get("use")
         if use is not None:
-            # L2-нота (§6.3): use.params лежит в JSON как документация будущего
+            # use.params remains JSON authoring metadata for a future effects layer.
             # (эпоха эффектов); C-структ несёт только effect_id.
             use_sym = f"USE_{sym}"
             lines.append(f"static const item_use_block_t {use_sym} = {{ .effect_id = {c_str(use.get('effect_id'))} }};")

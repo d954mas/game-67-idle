@@ -15,13 +15,15 @@ items_viewer показывает превью КАЖДОЙ иконки из С
 В скоупе: 6 иконок-ассетов (source-first, provenance); атлас `icons` в шаблонном
 `build_packs.c`; смена 6 `icon_asset_id` на форму «атлас/регион» + перегенерация
 `items_catalog.gen.*`; `resolveIcon()` вьюера + честная деградация; расширение
-node-тестов вьюера. Только `template:template` (у rb-dark `content/` нет).
+node-тестов вьюера. На момент этой спеки — только `template:template`: закрытый
+прототип rb-dark не имел `content/` и позднее был удалён из рабочего дерева.
 
 НЕ в скоупе (осознанно, LEAN):
 - Кодоген-разворот строки в 2 хеша (`atlas_hash`,`region_hash`) в C-таблицах —
   нужен, когда игра начнёт РИСОВАТЬ иконки; сейчас не рисует.
-- Рендер иконок в самой игре (HUD/инвентарь) — прецедент rb-dark
-  (`equipment_screen.c` + `nt_ui_image`) остаётся референсом на будущее.
+- Рендер иконок в самой игре (HUD/инвентарь) — исторический прецедент закрытого
+  прототипа rb-dark (`equipment_screen.c` + `nt_ui_image`) доступен в Git-истории
+  на коммите `86fab0254`; live-пути к этому прототипу больше нет.
 - `icon-link` ops-команда (write-слой) — фаза 2.
 - Любые правки движка (`external/neotolis-engine` READ-ONLY). Где упирается в
   движок — фиксирую как «нужен issue», см. §3/§8.
@@ -38,9 +40,10 @@ node-тестов вьюера. Только `template:template` (у rb-dark `co
 
 Порядок источников (исполнитель, НЕ в этой спеке):
 1. Shared-библиотека:
-   `node ai_studio/assets/backlog/storage/search.mjs --query "item icons gold sword potion" --json`.
-   Разведка: подходящего 6-сета в галерее/бэклоге НЕТ (только canvas-эксперименты
-   `rb-dark-rpg-hud-gold-coin-*`, game-specific). Ожидаем miss.
+   `node ai_studio/assets/catalog/search.mjs --query "item icons gold sword potion" --json`.
+   Историческая разведка: подходящего 6-сета в галерее/бэклоге не было;
+   найденные тогда canvas-эксперименты относились к закрытому rb-dark и не были
+   общей live-фикстурой. Ожидаем miss.
 2. Свободные CC0: **Kenney «Game Icons» (kenney.nl/assets/game-icons, CC0)** —
    канонический no-attribution источник, прецедент шаблона = Kenney UI Pack
    (`assets/ui/README.md`). В движке (`examples/*/raw/`) — только `icon_bunny.png`,
@@ -152,7 +155,8 @@ CMake: добавить 6 путей `assets/icons/*.png` в `DEPENDS` custom-co
 `NtAtlasVertex` с `atlas_u/atlas_v` (нормировка 0-65535 по размеру страницы,
 `nt_atlas_format.h:98-100`); (2) через ПУБЛИЧНЫЙ рантайм-ридер движка
 `nt_atlas_find_region`/`nt_atlas_get_region` (`engine/atlas/nt_atlas.h`) — тот же
-путь, которым игра рисует (rb-dark `equipment_screen.c`). То есть формулировка
+путь, которым рисовал закрытый прототип rb-dark (исторический `equipment_screen.c`
+на коммите `86fab0254`). То есть формулировка
 «единственный источник» — НЕВЕРНА; выбор — это trade-off, не безысходность.
 
 Почему НЕ рантайм-ридер В ЭТОМ раунде: он требует standup `nt_resource` + НОВОГО

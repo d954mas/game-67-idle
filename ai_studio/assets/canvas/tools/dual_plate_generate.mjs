@@ -20,8 +20,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { promisify } from "node:util";
+import { studioPythonPath } from "../../../core_harness/tool_lib/studio_config.mjs";
 
 const execFileAsync = promisify(execFile);
+const REPO_ROOT = fileURLToPath(new URL("../../../..", import.meta.url));
 
 // Repo-relative: ai_studio/assets/canvas/tools/ -> repo root -> .codex/skills/....
 export const GENERATE_IMAGE_SCRIPT = fileURLToPath(
@@ -85,12 +87,12 @@ export function buildBlackPlatePrompt(extra) {
 // --prompt "$WHITE_PROMPT" --out "$WHITE" ...`) and its black-plate step (same shape,
 // `--input-image "$WHITE" --prompt "$BLACK_PROMPT"`) — so tests can assert the argv without
 // ever touching codex.
-export function buildGeneratePlateCommand({ inputPngPath, prompt, outPath, size = DEFAULT_SIZE, quality = DEFAULT_QUALITY } = {}) {
+export function buildGeneratePlateCommand({ inputPngPath, prompt, outPath, size = DEFAULT_SIZE, quality = DEFAULT_QUALITY, pythonPath } = {}) {
   if (!inputPngPath) throw new Error("buildGeneratePlateCommand requires inputPngPath");
   if (!prompt) throw new Error("buildGeneratePlateCommand requires prompt");
   if (!outPath) throw new Error("buildGeneratePlateCommand requires outPath");
   return {
-    command: "python",
+    command: pythonPath || studioPythonPath(REPO_ROOT),
     args: [GENERATE_IMAGE_SCRIPT, "--input-image", inputPngPath, "--prompt", prompt, "--out", outPath, "--size", size, "--quality", quality],
   };
 }

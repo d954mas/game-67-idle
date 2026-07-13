@@ -6,7 +6,7 @@
   "moduleId": "game_design",
   "color": "#7c3aed",
   "path": "ai_studio/game_design",
-  "description": "Reviewed AI Studio game-design workflow module. Owns primary GDD workflow, source routing, and knowledge workflow docs; shared reusable knowledge remains in ai_studio/game_design/knowledge_base/ while each game owns private design knowledge under games/<game-id>/design/knowledge/.",
+  "description": "Owns GDD production, design-source routing, and shared design-knowledge boundaries.",
   "role": "game-design workflow module",
   "tags": [
     "game-design",
@@ -256,7 +256,7 @@
     {
       "id": "game-design:nt-primary-gdd-skill",
       "kind": "skill",
-      "path": ".codex/skills/nt-primary-gdd/SKILL.md",
+      "path": ".codex/skills/nt-primary-gdd",
       "title": "nt-primary-gdd",
       "description": "Skill surface for turning game concepts into scoped first playable GDDs through AI Studio Game Design workflow docs.",
       "role": "primary GDD skill",
@@ -269,7 +269,7 @@
     {
       "id": "game-design:nt-design-knowledge-skill",
       "kind": "skill",
-      "path": ".codex/skills/nt-design-knowledge/SKILL.md",
+      "path": ".codex/skills/nt-design-knowledge",
       "title": "nt-design-knowledge",
       "description": "Skill surface for routing design sources and reusable game-design knowledge through the AI Studio Game Design workflow.",
       "role": "design knowledge skill",

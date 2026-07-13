@@ -35,14 +35,15 @@ Explicitly **not** built here — do not scaffold these without a new spec:
   the agent client — parity with the web client holds by construction because
   both read the exact same subprocess. There is no `cli.mjs` in this module
   (decision (б); confirmed out in spec §8).
-- **Caching.** Every `/catalog` request re-spawns `py -3.12 items_ops.py`
+- **Caching.** Every `/catalog` request re-spawns the configured root-`.venv`
+  interpreter for `items_ops.py`
   (list/schema/validate — up to 3 short spawns). Catalogs are tiny (a handful
   of items); add an mtime cache only if this ever measurably feels slow.
 
 ## Layout
 
 - `ops.mjs` — pure logic, no HTTP. Merges `listRegisteredTemplates`
-  (`assets/backlog/storage/sources/`) and workspace game mounts
+  (`assets/sources/ops.mjs`) and workspace game mounts
   (`ai_studio/workspace/games.mjs`) into the dropdown list. Public games are
   visible by default; private game catalogs require explicit `include-private`
   or direct `game:<id>` selection and pass the private game preflight before

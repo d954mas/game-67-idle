@@ -5,8 +5,7 @@ In-place L1 module (see `features/README.md` — decisive rule: same-`.c`-across
 `features/game-state` — one copy of the source lives here, each consuming
 game/template compiles it in-place against ITS OWN generated headers and content
 (`../../features/items-core/` from any `templates/<x>` or `games/<id>`, depth-2
-invariant). Extracted 2026-07-07 (`templates/design/build_spec_t0337_2026-07-07.md`,
-increment M1) out of `templates/template/src/features/items/`.
+invariant). Extracted in T0337 out of `templates/template/src/features/items/`.
 
 ## What it is
 
@@ -24,11 +23,14 @@ and `items.move` for container transfers.
 features/items-core/
   include/features/items/items.h   public API, spelling preserved (see "Include spelling" below)
   src/
+    items_api.c                    T0364 typed catalog API proof core (opt-in until cutover)
     items_catalog.c                catalog lookup over the codegen tables
     items_containers.c             ownership (add/remove/move/count/purse/instances/seq)
     items_reconcile.c              post-load quarantine + unique-seq reseed
   scripts/
     generate_items_catalog.py      content codegen (content/items.json -> const C tables)
+    generate_items_api_proof.py    normalized proof Snapshot -> typed C API/reference data/LuaLS
+    generate_items_api_proof_test.py  schema/API proof regression suite
     items_ops.py                   read-only op-layer CLI (list/validate/schema)
     items_ops_test.py              self-contained unittest for items_ops.py's rules
   feature.json
@@ -65,6 +67,19 @@ sequence counter above the highest `<def_id>#<seq>` key already present in a
 loaded save, so a freshly created unique after a process restart can never
 collide with one already on disk.
 
+## Stack authoring contract
+
+The game-owned `content/items.json` uses one required integer `stack` value:
+
+- `0`: unlimited stack;
+- `1`: unique/non-stackable instance;
+- `N > 1`: capped stack of `N` items.
+
+The generator validates `stack >= 0` and derives the compiled
+`stackable`/`max_stack`/`unlimited` fields without changing their C ABI. An
+item with an `equip` block must use `stack == 1`. `items_ops.py list --json`
+returns the authored integer, never a derived object.
+
 ## Tools (`scripts/`)
 
 - `generate_items_catalog.py --catalog <items.json> --schema <field_schema.json> --out-dir <dir>` —
@@ -85,6 +100,21 @@ collide with one already on disk.
   except the reused `content/item_fields.schema.json`, treated as the generic
   stable field-shape contract).
 
+### T0364 typed API proof
+
+`generate_items_api_proof.py` is a bounded reference exporter, not the Lua
+evaluator or production blob builder. It consumes the normalized fixtures in
+`tests/fixtures/items_api_*_proof.json` and atomically emits build-local
+`items_game.gen.h`, `items_game.internal.gen.h`, `items_game.gen.c`, and
+`items_game.luau`. The core-only and weapon CTest targets compile the same
+`src/items_api.c` against different generated capability schemas. See
+`docs/items_lua_schema_api_contract_2026-07-10.md` for the exact boundary.
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof_test.py
+cmake --build templates/template/build/native-debug --target test_items_api_core_only test_items_api
+```
+
 ## Layer
 
 L1 foundation — depends only on the L0 shell (game-state's `gsj_*` JSON toolkit
@@ -100,17 +130,15 @@ even though it physically lives under `features/items-core/include/`. The
 consuming game adds `features/items-core/include` to its include path
 (`ITEMS_CORE_INC`, ahead of its own `src`) so `#include "features/items/items.h"`
 resolves to the module; the game's OWN `src/features/items/reason_tags.h`
-resolves from the game's `src` on the same logical prefix. See INSTALL.md and
-`templates/design/build_spec_t0337_2026-07-07.md` §2.2 for the full rationale
-(a spelling rename would have touched ~12 files across every consumer and
-broken byte-identical relocation).
+resolves from the game's `src` on the same logical prefix. See INSTALL.md. A
+spelling rename would touch every consumer and break byte-identical relocation.
 
 ## Reason verbs
 
 The verb half of `reason` (`verb:subject`) comes from a closed, append-only
 list that is **owned by the consuming game**, not this module —
 `src/features/items/reason_tags.h` in the game's own tree, included via the
-game's include-path (§2.3 of the build spec). `items_add`/`items_remove`/etc.
+game's include path as documented in `INSTALL.md`. `items_add`/`items_remove`/etc.
 in this module call `items_reason_check(reason)`, which resolves to the
 game's header at compile time. This keeps the ownership core byte-identical
 across every consumer while letting each game define its own verb vocabulary;
@@ -134,3 +162,29 @@ consumer. Instead it copies `src/`+`include/` out of this module into its own
 `src/features/items/` tree and owns that copy going forward (copy-then-own,
 same escape hatch `settings`/`resource_panel` already use). No code in this
 module supports that fork; it is a documented possibility, not a feature.
+
+## Purpose
+
+Provide reusable item catalog, ownership operations, state-fragment generation,
+and read-only authoring tools.
+
+## Public surface
+
+`include/features/items/items.h`, generated outputs, and commands declared in
+`feature.json` are public. Game reason tags, seed content, and migrations are not.
+
+## Validation
+
+Run the `test` and `api_proof_test` commands from `feature.json`, then
+`node features/validate_contracts.mjs`.
+
+## Compatibility
+
+`feature.json.version` is exact SemVer. Patch preserves the public contract,
+minor adds backward-compatible surface, and major permits breaking changes.
+Consumers pin both this version and an exact repository revision.
+
+## Extension points
+
+Extend through game-owned fields, reason tags, catalogs, save fragments, and
+the documented fork escape hatch; game policy stays outside the core.

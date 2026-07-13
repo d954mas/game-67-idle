@@ -5,6 +5,9 @@ land and research arrives. Work items live in the taskboard (epic `E010`,
 tasks referenced below); this document is the narrative: state, facts, order,
 and design decisions.
 
+Current operational contracts are routed from [README.md](README.md); load only
+the owning contract for the task at hand.
+
 ## Laws (non-negotiable)
 
 - **Tool parity**: every capability is ONE op in `ops.mjs` with two equal

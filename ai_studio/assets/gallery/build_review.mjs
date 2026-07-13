@@ -17,8 +17,8 @@ import { readFile, readdir, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, dirname, basename, extname, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scanPackManifestSource } from "../backlog/storage/manifests/manifest.mjs";
-import { defaultLibrarySourceRoot } from "../backlog/storage/sources/libraries.mjs";
+import { scanPackManifestSource } from "../manifests/ops.mjs";
+import { defaultLibrarySourceRoot } from "../sources/ops.mjs";
 import { isMain } from "../../core_harness/tool_lib/cli.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -123,6 +123,9 @@ function isInside(root, file) {
 
 function resolveScanRoot(repo, scanPath = "") {
   const repoRoot = resolve(repo);
+  if (/^[A-Za-z]:[/\\]/.test(scanPath) && !/^[A-Za-z]:[/\\]/.test(repoRoot)) {
+    throw new Error("--path for scan mode must stay inside --repo");
+  }
   const root = scanPath ? resolve(repoRoot, scanPath) : join(repoRoot, "assets");
   if (!isInside(repoRoot, root)) throw new Error("--path for scan mode must stay inside --repo");
   return root;

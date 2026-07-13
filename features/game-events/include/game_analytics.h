@@ -8,14 +8,14 @@
 
 #include "game_event_desc.h" /* game_event_desc_t */
 
-/* Local analytics writer over the event bus (event_system_design §4). RECORD-phase
+/* Local analytics writer over the event bus. RECORD-phase
    recorder: renders EVERY frame event via game_event_render (E3, reused) into an NDJSON
    stream. native -> build/analytics/session-<wall>-<pid>.ndjson (append); web -> in-memory
    ring; test -> injected sink. Buffered (never a blocking write per frame). Not a save slot. */
 
 /* Register a fragment's generated descriptor table (<frag>_ev_descs / _count) into the
    writer's hash->desc lookup (typed rendering). Call once after nt_hash_init, same site as
-   the E3 tail registration. Duplicate type-hash => debug assert (event §1 collision guard). */
+   the DevAPI tail registration. Duplicate type hashes trigger a debug assert. */
 void game_analytics_register_descs(const game_event_desc_t *const *descs, int count);
 
 /* Open the stream: write the session header line. Call once after descriptors registered

@@ -38,8 +38,8 @@ test("createProject without a title generates a random default", (t) => {
 
 test("project game ownership is stored on the canvas project and undoable", (t) => {
   tempProjects(t);
-  const project = createProject(REPO_ROOT, { title: "Owned", ownership: { kind: "game", gameId: "rb-dark-rpg" } });
-  assert.deepEqual(project.ownership, { kind: "game", gameId: "rb-dark-rpg" });
+  const project = createProject(REPO_ROOT, { title: "Owned", ownership: { kind: "game", gameId: "fixture-game" } });
+  assert.deepEqual(project.ownership, { kind: "game", gameId: "fixture-game" });
 
   const reassigned = patchProject(REPO_ROOT, { projectId: project.id, gameId: "web-dressup" }).project;
   assert.deepEqual(reassigned.ownership, { kind: "game", gameId: "web-dressup" });
@@ -57,7 +57,7 @@ test("project game ownership is stored on the canvas project and undoable", (t) 
   assert.deepEqual(jumpedToOwned.ownership, { kind: "game", gameId: "web-dressup" });
 
   const jumpedToBase = jumpHistory(REPO_ROOT, { projectId: project.id, seq: 0 }).project;
-  assert.deepEqual(jumpedToBase.ownership, { kind: "game", gameId: "rb-dark-rpg" });
+  assert.deepEqual(jumpedToBase.ownership, { kind: "game", gameId: "fixture-game" });
 
   assert.throws(
     () => patchProject(REPO_ROOT, { projectId: project.id, gameId: "Bad Name" }),
@@ -67,6 +67,26 @@ test("project game ownership is stored on the canvas project and undoable", (t) 
     () => createProject(REPO_ROOT, { title: "Broken Owner", ownership: { kind: "game" } }),
     /ownership\.gameId must be lowercase kebab-case/,
   );
+});
+
+test("patchProject archives and restores a project without changing its ownership", (t) => {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, {
+    title: "Owned archive",
+    ownership: { kind: "game", gameId: "fixture-game" },
+  });
+
+  const archived = patchProject(REPO_ROOT, { projectId: project.id, archived: true }).project;
+  assert.equal(archived.archived, true);
+  assert.deepEqual(archived.ownership, project.ownership);
+
+  const restored = patchProject(REPO_ROOT, { projectId: project.id, archived: false }).project;
+  assert.equal(restored.archived, false);
+  assert.deepEqual(restored.ownership, project.ownership);
+
+  assert.equal(undoOp(REPO_ROOT, { projectId: project.id }).project.archived, true);
+  assert.equal(redoOp(REPO_ROOT, { projectId: project.id }).project.archived, false);
+  assert.throws(() => patchProject(REPO_ROOT, { projectId: project.id, archived: "yes" }), /archived must be boolean/);
 });
 
 test("detectRegions bridges raster2d and stores regions + a tool_run", async (t) => {

@@ -132,6 +132,24 @@ class LaunchPortResolutionTest(unittest.TestCase):
 
 
 class LaunchPreflightDeadChildTest(unittest.TestCase):
+    def test_connect_existing_keeps_fast_connect_and_normal_request_timeout(self):
+        client = mock.Mock()
+        with mock.patch("devapi_client.DevApiClient", return_value=client) as client_type:
+            connected = connect_existing(port=19001, timeout=0.1)
+
+        self.assertIs(connected, client)
+        client_type.assert_called_once_with(port=19001, timeout=1.0)
+        client.sock.settimeout.assert_called_once_with(5.0)
+
+    def test_connect_existing_closes_client_when_request_timeout_is_invalid(self):
+        client = mock.Mock()
+        client.sock.settimeout.side_effect = ValueError("Timeout value out of range")
+        with mock.patch("devapi_client.DevApiClient", return_value=client):
+            with self.assertRaises(ValueError):
+                connect_existing(port=19001, timeout=0.1, request_timeout=-1.0)
+
+        client.close.assert_called_once_with()
+
     def test_connect_existing_raises_informative_error_when_child_exits_immediately(self):
         port = pick_free_port()
         proc = subprocess.Popen([sys.executable, "-c", "import sys; sys.exit(7)"])

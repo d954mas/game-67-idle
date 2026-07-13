@@ -1,0 +1,26 @@
+{
+  "schema": "items.normalized_api_proof",
+  "schema_version": 1,
+  "source": "items_api_core_proof.lua",
+  "reserved_field_ids": [],
+  "fields": [],
+  "views": [],
+  "items": [
+    {
+      "def_id": "game.gold", "kind": "currency", "tags": ["economy"],
+      "stack": 0, "authoring_mode": "none", "levels": [],
+      "source": { "file": "items_api_core_proof.lua", "line": 3, "column": 1 }
+    },
+    {
+      "def_id": "game.metal", "kind": "material", "tags": ["crafting"],
+      "stack": 999, "authoring_mode": "none", "levels": [],
+      "source": { "file": "items_api_core_proof.lua", "line": 4, "column": 1 }
+    },
+    {
+      "def_id": "game.extraordinarily_long_balance_resource_identifier",
+      "kind": "material", "tags": ["crafting", "rare"],
+      "stack": 999, "authoring_mode": "none", "levels": [],
+      "source": { "file": "items_api_core_proof.lua", "line": 5, "column": 1 }
+    }
+  ]
+}

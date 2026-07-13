@@ -1,8 +1,8 @@
 // Items Viewer — read-only catalog ops (T0316 phase 1).
 //
 // Pure logic, no HTTP. Merges the template/game registries, spawns items_ops.py
-// (list/schema/validate) for the selected catalog's content via `execFile("py",
-// ["-3.12", ...])` (cwd = repo root, every path ABSOLUTE — never items_ops.py's own
+// (list/schema/validate) through the strict studio.config root-venv resolver,
+// with an absolute script path (cwd = repo root, every path ABSOLUTE — never items_ops.py's own
 // script-relative argparse defaults, which point into features/items-core/content/,
 // nonexistent after T0337), reads items.lock.json directly (a separate artifact, never
 // a second parser of items.json — decision (а), docs/build_spec_phase1_2026-07-08.md
@@ -11,18 +11,17 @@
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { listRegisteredTemplates } from "../backlog/storage/sources/templates.mjs";
+import { listRegisteredTemplates } from "../sources/ops.mjs";
 import { listGameMounts } from "../../workspace/games.mjs";
+import { studioPythonPath } from "../../core_harness/tool_lib/studio_config.mjs";
 import { buildIconPreview } from "./icon_preview.mjs";
 
-// items_ops.py's own documented invocation (its docstring, lines 15-17): `py -3.12`.
+// The ordinary Studio interpreter is resolved once; no system launcher is used.
 // NOT the mechanism the rest of the pipeline uses (node asset tools spawn an absolute
 // venv python from studio config; ctest uses ${Python3_EXECUTABLE}) — acceptable for a
 // local single-user studio tool (spec §8's honest caveat). `bin` is an override seam
 // (below) so a test can force a real spawn failure without touching the real
 // interpreter; production callers never pass it.
-const PYTHON_BIN = "py";
-const PYTHON_VERSION_FLAG = "-3.12";
 const MAX_BUFFER = 1024 * 1024; // 1MB — items_ops --json payloads are tiny (spec §8 reassurance)
 
 function itemsOpsScriptPath(root) {
@@ -33,12 +32,13 @@ function itemsOpsScriptPath(root) {
 // stderr} for ANY controlled process exit (0/1/2/...); rejects only on a genuine spawn
 // failure (interpreter missing — ENOENT), which callers turn into a loud 500
 // (spec §3 "TOOL-FAILURE — the ONLY 500").
-export function runItemsOpsRaw(root, args, { bin = PYTHON_BIN } = {}) {
+export function runItemsOpsRaw(root, args, { bin } = {}) {
   const scriptPath = itemsOpsScriptPath(root);
+  const python = bin || studioPythonPath(root);
   return new Promise((resolveRun, rejectRun) => {
-    execFile(bin, [PYTHON_VERSION_FLAG, scriptPath, ...args], { cwd: root, maxBuffer: MAX_BUFFER }, (error, stdout, stderr) => {
+    execFile(python, [scriptPath, ...args], { cwd: root, maxBuffer: MAX_BUFFER }, (error, stdout, stderr) => {
       if (error && typeof error.code !== "number") {
-        rejectRun(new Error(`items_ops.py could not be spawned (${bin} ${PYTHON_VERSION_FLAG}): ${error.message}`));
+        rejectRun(new Error(`items_ops.py could not be spawned (${python}): ${error.message}`));
         return;
       }
       resolveRun({ code: error ? error.code : 0, stdout: stdout ?? "", stderr: stderr ?? "" });
@@ -165,7 +165,7 @@ export function routeIssues(itemIds, issues) {
 
 // Build the full view for one catalog from an ABSOLUTE folder path (a registered
 // game/template folder). Decoupled from the registry lookup so tests can point it at a
-// throwaway temp folder without touching templates.json/games.json.
+// throwaway temp folder without touching workspace catalog state.
 export async function loadCatalogView(root, folderAbs, meta) {
   const catalogPath = join(folderAbs, "content", "items.json");
   const hasItems = existsSync(catalogPath);

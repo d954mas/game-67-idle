@@ -1,5 +1,8 @@
 @AGENTS.md
 
+Enforcement labels and proof routes are defined in
+`ai_studio/core_harness/workflow/enforcement_contract.json`.
+
 ## Orchestration workflow
 
 Fable (the main loop) is the orchestrator: plan, decompose, synthesize, keep

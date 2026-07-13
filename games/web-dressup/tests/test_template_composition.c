@@ -99,6 +99,12 @@ void test_cross_fragment_save_load_roundtrip(void) {
     progression_update(); /* auto-mode consumes xp -> level 1 */
     TEST_ASSERT_EQUAL_INT(1, progression_level("hero"));
     settings_set_master(0.30f);
+    (void)snprintf(game_state.outfit_hair_id, sizeof game_state.outfit_hair_id, "%s", "hair_pink");
+    (void)snprintf(game_state.outfit_main_id, sizeof game_state.outfit_main_id, "%s", "top_blazer");
+    game_state.recipe_mask = 0x11;
+    game_state.essence_mask = 0x05;
+    game_state.rounds_completed = 4;
+    game_state.first_equip_done = true;
 
     char *snap = game_save_export_string(err, (int)sizeof err); /* in-memory envelope */
     TEST_ASSERT_NOT_NULL(snap);
@@ -112,6 +118,8 @@ void test_cross_fragment_save_load_roundtrip(void) {
     TEST_ASSERT_EQUAL_INT64(0, items_count("purse", "tmpl.gold"));
     TEST_ASSERT_EQUAL_INT(0, progression_level("hero"));
     TEST_ASSERT_TRUE(fabsf(settings_master() - 0.8f) < COMPOSITION_TEST_FLOAT_EPS); /* reset default */
+    TEST_ASSERT_EQUAL_STRING("none", game_state.outfit_hair_id);
+    TEST_ASSERT_EQUAL_INT(0, game_state.recipe_mask);
 
     TEST_ASSERT_TRUE(game_save_import_string(snap, err, (int)sizeof err));
     free(snap);
@@ -119,6 +127,12 @@ void test_cross_fragment_save_load_roundtrip(void) {
     TEST_ASSERT_EQUAL_INT64(75, items_count("purse", "tmpl.gold"));
     TEST_ASSERT_EQUAL_INT(1, progression_level("hero"));
     TEST_ASSERT_TRUE(fabsf(settings_master() - 0.30f) < COMPOSITION_TEST_FLOAT_EPS);
+    TEST_ASSERT_EQUAL_STRING("hair_pink", game_state.outfit_hair_id);
+    TEST_ASSERT_EQUAL_STRING("top_blazer", game_state.outfit_main_id);
+    TEST_ASSERT_EQUAL_INT(0x11, game_state.recipe_mask);
+    TEST_ASSERT_EQUAL_INT(0x05, game_state.essence_mask);
+    TEST_ASSERT_EQUAL_INT(4, game_state.rounds_completed);
+    TEST_ASSERT_TRUE(game_state.first_equip_done);
 }
 
 /* 4. The live T0327 hygiene mechanic: "Hold to reset progress" wipes
@@ -143,7 +157,7 @@ void test_hold_to_reset_preserves_settings(void) {
 int main(void) {
     /* registration ONCE (no unregister API; registering per-setUp would
        duplicate/overflow), in the documented order (settings -> items ->
-       progression -> game; `game` last, §14 п.2). */
+       progression -> game; `game` last). */
     game_events_init();
     game_save_register_fragment(&settings_state_fragment);
     game_save_register_fragment(&items_state_fragment);

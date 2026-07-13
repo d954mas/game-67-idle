@@ -136,11 +136,11 @@ The target manifest computes the SDK adapter from the target. The game build
 must not import or link every adapter and decide at runtime, because that ships
 unused SDK URLs, policy code, and portal branches.
 
-The template CMake entry is `GAME_PUBLISH_TARGET`; `tools/build_web.sh` passes
+The template CMake entry is `GAME_PUBLISH_TARGET`; `tools/build_web.mjs` passes
 it through and writes target-specific build directories:
 
 ```powershell
-bash tools/build_web.sh --preset wasm-release --target poki
+node tools/build_web.mjs --preset wasm-release --target poki
 ```
 
 `local` uses `build/wasm-release/bin`; portal targets use
@@ -207,7 +207,9 @@ Implementation rules:
   that analytics forwarding happened. If an adapter forwards selected game
   events to a portal API such as Poki `measure`, that forwarding is an adapter
   sink detail, not a new `track`/`measure` event. `track()`/`measure()` are not
-  public game-facing event APIs.
+  public game-facing event APIs. The separate internal
+  `platform_sdk_measure.h` header exists only for a typed-event bridge; it
+  accepts three non-empty lowercase stable tokens of at most 32 characters.
 - `local` and `itch` targets must work without network access through the
   `mock` SDK adapter.
 - Platform adapter code may dynamically load SDK scripts, but script loading is
@@ -317,6 +319,8 @@ Used by `local` and `itch`.
   render is not a gameplay start.
 - Uses `commercialBreak()` for natural interstitial opportunities.
 - Uses `rewardedBreak()` only after clear user opt-in.
+- Forwards selected finite typed game events through the official
+  `PokiSDK.measure(category, what, action)` call. Other adapters safely no-op.
 - Use the Poki Inspector for SDK event checks before submission.
 
 ### `yandex`

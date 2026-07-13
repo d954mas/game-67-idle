@@ -36,8 +36,10 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { promisify } from "node:util";
+import { studioPythonPath } from "../../../core_harness/tool_lib/studio_config.mjs";
 
 const execFileAsync = promisify(execFile);
+const REPO_ROOT = fileURLToPath(new URL("../../../..", import.meta.url));
 
 // ---- codex engine (Path C: generate_image.py, same script dual_plate_generate.mjs uses) --
 
@@ -70,13 +72,13 @@ export const ENGINE_PARAMS_USED = Object.freeze({
   gemini: Object.freeze(["size"]),
 });
 
-export function buildGenerateCommand({ prompt, refPaths = [], size = DEFAULT_SIZE, quality = DEFAULT_QUALITY, model = DEFAULT_MODEL, outPath } = {}) {
+export function buildGenerateCommand({ prompt, refPaths = [], size = DEFAULT_SIZE, quality = DEFAULT_QUALITY, model = DEFAULT_MODEL, outPath, pythonPath } = {}) {
   if (!prompt) throw new Error("buildGenerateCommand requires prompt");
   if (!outPath) throw new Error("buildGenerateCommand requires outPath");
   const args = [GENERATE_IMAGE_SCRIPT, "--prompt", prompt];
   for (const ref of refPaths || []) args.push("--input-image", ref);
   args.push("--size", size, "--quality", quality, "--model", model, "--out", outPath);
-  return { command: "python", args };
+  return { command: pythonPath || studioPythonPath(REPO_ROOT), args };
 }
 
 // The DEFAULT codex generator ops.generateFromRecipe falls back to for engine="codex" (and

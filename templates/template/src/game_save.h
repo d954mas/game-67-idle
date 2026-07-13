@@ -10,14 +10,14 @@
 #define GAME_SAVE_MAX_FRAGMENTS 32
 #endif
 
-/* ---- Контракт фрагмента: весь ABI между шеллом и фичей (§3 + §14 п.2) ---- */
+/* ---- Контракт фрагмента: весь ABI между шеллом и фичей ---- */
 typedef bool (*GameSaveMigrateFn)(cJSON *frag, char *err, int cap); /* v(i)->v(i+1) */
 
 typedef struct GameSaveFragment {
     const char *id;                  /* ключ в features{} и C-префикс; [a-z_][a-z0-9_]* */
     int version;                     /* = steps_count + 1 */
     const GameSaveMigrateFn *steps;  /* NULL пока миграций нет (90% случаев) */
-    void  (*reset)(void);            /* нейтральные ПУСТЫЕ дефолты (§14 п.2) */
+    void  (*reset)(void);            /* нейтральные ПУСТЫЕ дефолты */
     void  (*on_new_game)(void);      /* NULLABLE: стартовый контент, только свежий сейв */
     cJSON*(*to_json)(void);          /* только данные, без "v" (штампует шелл) */
     bool  (*from_json)(const cJSON *frag, char *err, int cap); /* толерантный */
@@ -28,16 +28,16 @@ typedef struct GameSaveFragment {
 } GameSaveFragment;
 
 /* Регистрация ДО первого load; порядок = порядок reconcile/on_new_game.
-   Фрагмент game регистрируется ПОСЛЕДНИМ (§14 п.2). Указатель должен пережить рантайм. */
+   Фрагмент game регистрируется ПОСЛЕДНИМ. Указатель должен пережить рантайм. */
 void game_save_register_fragment(const GameSaveFragment *fragment);
 
-/* ---- Registry read-access for the DevAPI dispatch (§8 «диспатч по реестру»).
+/* ---- Registry read-access for the DevAPI dispatch (registry dispatch contract).
    Read-only view of the registry filled by game_save_register_fragment. ---- */
 int  game_save_fragment_count(void);                             /* число зарегистрированных */
 const GameSaveFragment *game_save_fragment_at(int index);        /* NULL если вне диапазона */
 const GameSaveFragment *game_save_find_fragment(const char *id); /* NULL если ключ неизвестен */
 
-/* ---- Orphan read-access (retained unknown feature keys, §14 п.16). Read-only view of the
+/* ---- Orphan read-access (retained unknown feature keys). Read-only view of the
    retained-orphan set, symmetric to game_save_fragment_count/at, for the DevAPI aggregate's
    "orphans" section. The returned subtree is OWNED by game_save — callers must not free or
    mutate it (the aggregate hands out cJSON_Duplicate copies only). ---- */
@@ -55,7 +55,7 @@ const cJSON *game_save_orphan_at(int index, const char **id);    /* субтри
 void game_save_register_devapi(void);
 #endif
 
-/* ---- Статус и результат загрузки (§4, §14 п.10, Р7, Р10) ---- */
+/* ---- Статус и результат загрузки (Р7, Р10) ---- */
 typedef enum {
     GAME_SAVE_LOAD_FRESH = 0,      /* файла нет -> reset+on_new_game+save */
     GAME_SAVE_LOAD_LOADED,         /* primary распарсен */
@@ -74,7 +74,7 @@ typedef struct {
 /* Инициализация оркестратора (после регистрации ВСЕХ фрагментов). */
 void game_save_init(void);
 
-/* Грузит автослот (GAME_SAVE_AUTOSAVE_SLOT). Оркестрация §6/§14; никогда не
+/* Грузит автослот (GAME_SAVE_AUTOSAVE_SLOT); никогда не
    all-or-nothing (плохой фрагмент не роняет остальные). Заполняет *result. */
 void game_save_load(game_save_load_result_t *result);
 
@@ -94,7 +94,7 @@ void game_save_request_new_game(const char *skip_fragment_id);
    раз в начале frame(), до game_features_update (EMIT-фаза). */
 bool game_save_apply_pending_new_game(void);
 
-/* Синхронный форс-сейв в обход дебаунса (visibility-flush, §14 п.5). */
+/* Синхронный форс-сейв в обход дебаунса (visibility-flush). */
 bool game_save_flush(char *error, int error_cap);
 
 /* Кадровый тик: сейв при (now-dirty_at >= DEBOUNCE) || (now-last_save >= MAX_INTERVAL).
@@ -102,25 +102,25 @@ bool game_save_flush(char *error, int error_cap);
 void game_save_tick(void);
 
 /* Пометка «есть несохранённое». dirty_at = момент ПЕРВОЙ пометки после чистого
-   (§14 п.6). Зовут мутаторы фич/UI. */
+  . Зовут мутаторы фич/UI. */
 void game_save_mark_dirty(void);
 
 /* Wall-clock ms сохранённого saved_at (оффлайн-Δt для идла; кламп отрицательных —
    задача игры). 0 если ещё не грузили/сохраняли. */
 int64_t game_save_last_saved_at(void);
 
-/* Персистентность недоступна (web квота/private, §14 п.3): игра может показать тост. */
+/* Персистентность недоступна (web квота/private): игра может показать тост. */
 bool game_save_is_unpersisted(void);
 
-/* Экспорт/импорт строкой (Р12, §14 п.4) — тем же transform-путём; валидация конверта. */
+/* Экспорт/импорт строкой (Р12) — тем же transform-путём; валидация конверта. */
 char *game_save_export_string(char *error, int error_cap);   /* malloc, free вызывающим */
 bool  game_save_import_string(const char *text, char *error, int error_cap);
 
 /* Web: ставит visibilitychange(->hidden) + pagehide -> game_save_flush (НЕ
-   beforeunload, §4). No-op на native. */
+   beforeunload). No-op на native. */
 void game_save_install_web_flush(void);
 
-/* ---- Transform-шов (§14 п.15). Дефолт пуст -> сейв = читаемый JSON ('{'). ---- */
+/* ---- Transform-шов. Дефолт пуст -> сейв = читаемый JSON ('{'). ---- */
 typedef struct {
     const char *id;
     char *(*encode)(const char *in, char *error, int error_cap);  /* malloc out; save-порядок */
@@ -132,7 +132,7 @@ typedef struct {
 void game_save_set_transforms(const game_save_transform_t *chain, int count);
 
 #ifdef GAME_SAVE_TESTING
-/* Тест-шов (§A3.6): инжектит ОБА часа — монотонные (debounce/MAX_INTERVAL) и
+/* Тест-шов: инжектит ОБА часа — монотонные (debounce/MAX_INTERVAL) и
    wall-clock (saved_at). Объявлено только под GAME_SAVE_TESTING. */
 void game_save__set_clocks_for_test(int64_t (*mono)(void), int64_t (*wall)(void));
 #endif

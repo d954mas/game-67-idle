@@ -62,23 +62,11 @@
       ]
     },
     {
-      "id": "architecture-map:validation-report",
-      "kind": "validation",
-      "path": "ai_studio/architecture_map/validation-report.json",
-      "title": "validation-report.json",
-      "description": "Generated report displayed by the map page so newly created or unmapped paths are visible during refactoring.",
-      "role": "generated validation report",
-      "tags": [
-        "generated",
-        "report"
-      ]
-    },
-    {
       "id": "architecture-map:validator-tests",
       "kind": "test",
       "path": "ai_studio/architecture_map/tests/validate_map.test.mjs",
       "title": "validate_map.test.mjs",
-      "description": "Regression tests for missing, duplicate, unmapped, mapped-directory, and shallow workspace-folder validation behavior.",
+      "description": "Verifies architecture map validator contracts.",
       "role": "architecture map validator tests",
       "tags": [
         "test"
@@ -114,7 +102,7 @@
       "kind": "api",
       "path": "ai_studio/architecture_map/api.mjs",
       "title": "api.mjs",
-      "description": "Studio Shell API adapter for Architecture Map: serves the merged tree at /api/architecture-tree and a live report at /api/architecture-validation so no report file is committed.",
+      "description": "Provides architecture map HTTP API adapter.",
       "role": "architecture map HTTP API adapter",
       "tags": [
         "api",
@@ -126,8 +114,19 @@
       "kind": "test",
       "path": "ai_studio/architecture_map/tests/tree_split.test.mjs",
       "title": "tree_split.test.mjs",
-      "description": "Round-trip tests for splitting and merging the architecture tree index, plus sanity checks for the /api/architecture-tree and /api/architecture-validation routes.",
+      "description": "Verifies architecture tree split and API contracts.",
       "role": "architecture tree split and API tests",
+      "tags": [
+        "test"
+      ]
+    },
+    {
+      "id": "architecture-map:surface-legacy-removal-tests",
+      "kind": "test",
+      "path": "ai_studio/architecture_map/tests/surface_legacy_removal.test.mjs",
+      "title": "surface_legacy_removal.test.mjs",
+      "description": "Verifies that the map surface keeps the ownership hierarchy contract without legacy relationship-model code or controls.",
+      "role": "architecture map hierarchy-only surface contract test",
       "tags": [
         "test"
       ]

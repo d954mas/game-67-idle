@@ -1,4 +1,4 @@
-/* Unity ctest for game_events.c (§E1.7). Two ctest binaries compile THIS file:
+/* Unity ctest for game_events.c. Two ctest binaries compile THIS file:
    - test_game_events           (default): positive cases 1-7 + death-tests 8/9/11
      (overflow/phase = NT_ASSERT, via NT_TEST_EXPECT_ASSERT).
    - test_game_events_overflow  (GAME_EVENTS_SOFT_OVERFLOW=1): only case #10, the
@@ -88,7 +88,7 @@ static void test_frame_reset_clears_log(void) {
 }
 
 /* 4. cascade in the same frame: fixed arena never moves -> holding a pointer
-   across a later emit (simulating a reactor cascade) stays legal (§E1.2/§E1.3). */
+   across a later emit (simulating a reactor cascade) stays legal. */
 static void test_cascade_same_frame_pointer_stability(void) {
     const int32_t va = 42;
     const void *pa = game_event_emit(T("test.a"), &va, (uint32_t)sizeof va, _Alignof(int32_t));
@@ -115,7 +115,7 @@ static void test_cascade_same_frame_pointer_stability(void) {
 
 /* 5. alignment contract: several powers of 2 up to the ceiling all yield a
    correctly aligned pointer (base is malloc-aligned to max_align_t -> offset-
-   by-align stays aligned). §E1.3/§E1.7 name {1,8,16} assuming a >=16-byte
+   by-align stays aligned). The original cases use {1,8,16} assuming a >=16-byte
    max_align_t (common on glibc/gcc); THIS toolchain (clang targeting the MSVC
    ABI on Windows) has _Alignof(max_align_t)==8 -- 16 would exceed the very
    ceiling the contract defines and correctly NT_ASSERT. Deriving the top value
@@ -238,7 +238,7 @@ static void test_log_cap_overflow_asserts(void) {
     NT_TEST_EXPECT_ASSERT(game_event_emit(T("test.tiny"), &one, 1U, 1U));
 }
 
-/* 11. emit during RECORD phase -> NT_ASSERT (symmetry guard, event §7). */
+/* 11. emit during RECORD phase -> NT_ASSERT (symmetry guard). */
 static void test_phase_assert_on_record(void) {
     const int32_t v = 1;
     game_events_set_phase(GAME_EVENT_PHASE_RECORD);
@@ -246,7 +246,7 @@ static void test_phase_assert_on_record(void) {
 }
 #endif /* NT_ASSERT_MODE == NT_ASSERT_FULL */
 
-#else /* GAME_EVENTS_SOFT_OVERFLOW: release drop-path (§E1.3 test seam) */
+#else /* GAME_EVENTS_SOFT_OVERFLOW: release drop-path test seam */
 
 /* 10. release-semantics drop: with the debug-assert compiled out (test seam),
    overflow drops the event (NULL + dropped++) and leaves earlier entries intact. */

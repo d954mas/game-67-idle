@@ -17,7 +17,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 
-import { STUDIO_CONFIG_SCHEMA, loadStudioConfig } from "../../../../core_harness/tool_lib/studio_config.mjs";
+import { studioPythonPath } from "../../../../core_harness/tool_lib/studio_config.mjs";
 import { runPythonScript, shutdownImageWorkers } from "./worker.mjs";
 
 export { shutdownImageWorkers };
@@ -128,21 +128,7 @@ function looksAbsolute(value) {
 // or a configured interpreter that does not exist on disk, is a hard error whose
 // message tells the operator exactly how to create the venv.
 export function resolvePythonPath(root) {
-  const raw = String(loadStudioConfig(root).pythonPath || "").trim();
-  if (!raw) {
-    throw new Error(
-      `studio config is missing pythonPath (schema ${STUDIO_CONFIG_SCHEMA}); ` +
-        `create the studio Python venv: ${IMAGE_PYTHON_SETUP_COMMAND}`,
-    );
-  }
-  const abs = looksAbsolute(raw) ? resolve(raw) : resolve(root, raw);
-  if (!existsSync(abs)) {
-    throw new Error(
-      `image tools Python interpreter not found at ${abs}; ` +
-        `create the studio Python venv: ${IMAGE_PYTHON_SETUP_COMMAND}`,
-    );
-  }
-  return abs;
+  return studioPythonPath(root);
 }
 
 // Run a Python tool script (args[0] = script path, rest = its argv) through the warm

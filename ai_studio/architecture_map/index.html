@@ -51,20 +51,6 @@
       font-size: 12px;
       white-space: nowrap;
     }
-    .toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 10px;
-      box-shadow: var(--shadow);
-      position: sticky;
-      top: 8px;
-      z-index: 20;
-    }
     input, select, button {
       height: 34px;
       border: 1px solid var(--line);
@@ -74,68 +60,17 @@
       padding: 0 10px;
       font: inherit;
     }
-    input { flex: 1 1 300px; min-width: 240px; }
     button { cursor: pointer; background: #1f2937; color: #fff; border-color: #1f2937; }
     button.secondary { background: #fff; color: var(--ink); border-color: var(--line); }
-    .toggle-control {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      min-height: 34px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #fff;
-      color: #334155;
-      padding: 0 10px;
-      font-size: 12px;
-      white-space: nowrap;
-    }
-    .toggle-control input {
-      width: 15px;
-      min-width: 15px;
-      height: 15px;
-      flex: 0 0 auto;
-      padding: 0;
-      margin: 0;
-    }
     .layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: start; }
     .graph-only-layout { min-height: calc(100vh - 24px); }
-    .graph-card, .panel, .section, .tree-card, .drill-card, .explorer-card, .relation-drawer {
+    .graph-card {
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 8px;
       box-shadow: var(--shadow);
     }
-    .tree-card, .drill-card, .explorer-card {
-      padding: 16px;
-      margin-bottom: 14px;
-    }
     .graph-card { overflow: hidden; }
-    .relation-drawer {
-      margin: 14px 0;
-      overflow: hidden;
-    }
-    .relation-drawer > summary {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 13px 16px;
-      cursor: pointer;
-      list-style: none;
-      border-bottom: 1px solid transparent;
-    }
-    .relation-drawer[open] > summary { border-bottom-color: var(--line); }
-    .relation-drawer > summary::-webkit-details-marker { display: none; }
-    .relation-title { display: grid; gap: 3px; }
-    .graph-controls {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      width: 100%;
-    }
     .graph-titlebar {
       display: grid;
       grid-template-columns: minmax(260px, 1fr) auto;
@@ -157,19 +92,6 @@
       font-size: 20px;
       line-height: 1.12;
     }
-    .studio-home-link {
-      display: inline-flex;
-      align-items: center;
-      min-height: 30px;
-      padding: 0 10px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #fff;
-      color: var(--ink);
-      font-weight: 700;
-      text-decoration: none;
-    }
-    .studio-home-link:hover { border-color: #2563eb; text-decoration: none; }
     .metrics, .legend, .actions { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
     .metric {
       display: inline-flex;
@@ -184,6 +106,21 @@
     }
     .metric b { color: var(--ink); font-size: 14px; }
     .swatch { width: 11px; height: 11px; border-radius: 3px; background: var(--c); flex: 0 0 auto; }
+    .icon {
+      width: 20px;
+      height: 20px;
+      border-radius: 6px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--c);
+      background: color-mix(in srgb, var(--c) 10%, #fff);
+      border: 1px solid color-mix(in srgb, var(--c) 34%, #dbe4f0);
+      flex: 0 0 auto;
+    }
+    .icon svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .block { display: grid; gap: 7px; }
+    .muted { color: var(--muted); font-size: 12px; }
     .type-legend {
       display: flex;
       flex-wrap: wrap;
@@ -226,51 +163,6 @@
     .type-chip.is-muted .swatch {
       opacity: .36;
     }
-    .advanced-controls {
-      position: relative;
-      display: inline-block;
-    }
-    .advanced-controls > summary {
-      display: inline-flex;
-      align-items: center;
-      min-height: 34px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: #fff;
-      color: #334155;
-      padding: 0 10px;
-      cursor: pointer;
-      font-size: 12px;
-      list-style: none;
-    }
-    .advanced-controls > summary::-webkit-details-marker { display: none; }
-    .advanced-controls[open] > summary {
-      border-color: #94a3b8;
-      background: #f8fafc;
-    }
-    .advanced-controls-body {
-      position: absolute;
-      right: 0;
-      top: calc(100% + 6px);
-      z-index: 30;
-      width: min(640px, calc(100vw - 32px));
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      align-items: center;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
-      box-shadow: 0 18px 44px rgba(15, 23, 42, .16);
-      padding: 10px;
-    }
-    .type-filter-body {
-      width: min(520px, calc(100vw - 32px));
-    }
-    .type-filter-body .toggle-control {
-      min-width: 118px;
-      justify-content: flex-start;
-    }
     .chip.ok { color: var(--ok); background: #edf9f0; border-color: #b8e4c2; }
     .chip.warn { color: var(--warn); background: #fff7e9; border-color: #efd1a0; }
     .chip.bad { color: var(--danger); background: #fff0f0; border-color: #efbdbd; }
@@ -290,32 +182,16 @@
       position: relative;
       height: calc(100vh - 186px);
       min-height: 620px;
-      overflow: hidden;
-      cursor: grab;
-      touch-action: none;
-      user-select: none;
+      overflow: auto;
+      cursor: default;
+      touch-action: auto;
+      user-select: text;
       background:
         radial-gradient(circle at 1px 1px, rgba(100, 116, 139, .16) 1px, transparent 0) 0 0 / 24px 24px,
         linear-gradient(180deg, #fbfdff 0%, #eef5fb 100%);
     }
-    .viewport.panning { cursor: grabbing; }
-    .viewport.drilling {
-      cursor: default;
-      overflow: auto;
-      touch-action: auto;
-      user-select: text;
-    }
-    .viewport.drilling .graph-layer { display: none; }
-    .graph-layer {
-      position: absolute;
-      left: 0;
-      top: 0;
-      width: 1360px;
-      height: 760px;
-      transform-origin: 0 0;
-    }
     .drill-layer {
-      display: none;
+      display: block;
       position: absolute;
       inset: 0;
       min-height: 100%;
@@ -325,422 +201,12 @@
         radial-gradient(circle at 1px 1px, rgba(100, 116, 139, .14) 1px, transparent 0) 0 0 / 22px 22px,
         linear-gradient(180deg, #ffffff 0%, #f4f8fc 100%);
     }
-    .viewport.drilling .drill-layer { display: block; }
-    .edge-layer {
-      position: absolute;
-      inset: 0;
-      width: 1360px;
-      height: 760px;
-      pointer-events: none;
-      overflow: visible;
-    }
-    .edge {
-      fill: none;
-      stroke: #9aa9bd;
-      stroke-width: 2.1;
-      opacity: .42;
-      marker-end: url(#drillArrow);
-    }
-    .expand-line {
-      fill: none;
-      stroke: var(--c);
-      stroke-width: 1.7;
-      stroke-dasharray: 5 5;
-      opacity: .50;
-    }
-    .edge.active { opacity: .95; stroke: #111827; stroke-width: 3; }
-    .edge.dimmed { opacity: .10; }
-    .edge-label {
-      fill: #475569;
-      font-size: 11px;
-      paint-order: stroke;
-      stroke: #fff;
-      stroke-width: 4px;
-      stroke-linejoin: round;
-      pointer-events: none;
-    }
-    .edge-label.dimmed { opacity: .12; }
-    .node-layer { position: absolute; inset: 0; }
-    .module-node {
-      position: absolute;
-      width: 214px;
-      min-height: 116px;
-      transform: translate3d(-50%, -50%, 0);
-      border: 2px solid color-mix(in srgb, var(--c) 45%, #cbd5e1);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, .96);
-      box-shadow: 0 10px 25px rgba(15, 23, 42, .11);
-      padding: 11px;
-      cursor: grab;
-      user-select: none;
-      touch-action: none;
-      display: grid;
-      gap: 7px;
-    }
-    .module-node:active { cursor: grabbing; }
-    .module-node.selected {
-      border-color: #111827;
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 20%, transparent), 0 16px 38px rgba(15, 23, 42, .22);
-      z-index: 4;
-    }
-    .module-node.expanded {
-      background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--c) 6%, #fff));
-      width: 560px;
-      min-height: 360px;
-      max-height: 520px;
-      overflow: auto;
-      z-index: 8;
-    }
-    .module-node.neighbor { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 16%, transparent), 0 12px 30px rgba(15, 23, 42, .16); }
-    .module-node.dimmed { opacity: .22; }
-    .module-node.hidden { display: none; }
-    .module-node .top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-    .module-node .kind { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
-    .module-node .title {
-      display: -webkit-box;
-      font-weight: 750;
-      font-size: 15px;
-      line-height: 1.15;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-      overflow-wrap: anywhere;
-      white-space: normal;
-    }
-    .module-node .desc { color: #465569; font-size: 12px; }
-    .module-node .counts { display: flex; flex-wrap: wrap; gap: 5px; }
-    .node-sections {
-      display: grid;
-      gap: 8px;
-      border-top: 1px solid var(--line);
-      padding-top: 8px;
-    }
-    .node-section {
-      border: 1px solid color-mix(in srgb, var(--section-color) 28%, #dce5f3);
-      border-left: 4px solid var(--section-color);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, .80);
-      padding: 7px;
-      display: grid;
-      gap: 6px;
-    }
-    .node-section-head {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .node-section-title {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      font-weight: 750;
-      font-size: 12px;
-    }
-    .node-file-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 5px;
-    }
-    .node-file {
-      display: grid;
-      gap: 3px;
-      border: 1px solid #e1e8f2;
-      border-radius: 6px;
-      background: #f8fafc;
-      padding: 6px;
-      min-width: 0;
-    }
-    .node-file-top {
-      display: flex;
-      align-items: center;
-      gap: 5px;
-      min-width: 0;
-    }
-    .node-file-name {
-      font-weight: 650;
-      font-size: 11px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .node-file-path {
-      color: #64748b;
-      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-      font-size: 10px;
-      line-height: 1.2;
-      overflow-wrap: anywhere;
-    }
-    .node-file .tag { font-size: 9px; min-height: 17px; padding: 1px 5px; }
-    .expand-toggle {
-      width: fit-content;
-      height: 28px;
-      padding: 0 8px;
-      border-radius: 6px;
-      background: #fff;
-      color: var(--ink);
-      border-color: color-mix(in srgb, var(--c) 40%, var(--line));
-      font-size: 12px;
-    }
-    .child-node {
-      position: absolute;
-      width: 178px;
-      min-height: 86px;
-      transform: translate3d(-50%, -50%, 0);
-      border: 1px solid color-mix(in srgb, var(--c) 48%, #cbd5e1);
-      border-top: 4px solid var(--c);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, .96);
-      box-shadow: 0 9px 20px rgba(15, 23, 42, .10);
-      padding: 9px;
-      display: grid;
-      gap: 5px;
-      cursor: pointer;
-      z-index: 3;
-    }
-    .child-node.selected {
-      border-color: #111827;
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 18%, transparent), 0 12px 26px rgba(15, 23, 42, .18);
-    }
-    .child-node.dimmed { opacity: .24; }
-    .child-node .top { display: flex; align-items: center; gap: 7px; }
-    .child-node .title { font-weight: 700; font-size: 13px; line-height: 1.15; }
-    .child-node .desc { color: #526070; font-size: 11px; }
-    .child-node.file-node {
-      width: 154px;
-      min-height: 62px;
-      border-top-width: 3px;
-      padding: 7px;
-      z-index: 2;
-    }
-    .child-node.file-node .title { font-size: 11px; }
-    .path-mini {
-      color: #64748b;
-      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-      font-size: 10px;
-      line-height: 1.2;
-      overflow-wrap: anywhere;
-    }
-    .icon {
-      width: 20px;
-      height: 20px;
-      border-radius: 6px;
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      color: var(--c);
-      background: color-mix(in srgb, var(--c) 10%, #fff);
-      border: 1px solid color-mix(in srgb, var(--c) 34%, #dbe4f0);
-      flex: 0 0 auto;
-    }
-    .icon svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-    .tags { display: flex; flex-wrap: wrap; gap: 4px; }
-    .tag {
-      display: inline-flex;
-      min-height: 19px;
-      align-items: center;
-      border-radius: 999px;
-      border: 1px solid color-mix(in srgb, var(--c) 30%, #dbe4f0);
-      background: color-mix(in srgb, var(--c) 8%, #fff);
-      color: #405066;
-      padding: 2px 6px;
-      font-size: 10px;
-      white-space: nowrap;
-    }
-    .panel {
-      position: sticky;
-      top: 82px;
-      padding: 14px;
-      display: grid;
-      gap: 13px;
-      max-height: calc(100vh - 100px);
-      overflow: auto;
-    }
-    .block { display: grid; gap: 7px; }
-    .muted { color: var(--muted); font-size: 12px; }
-    .file {
-      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
-      overflow-wrap: anywhere;
-    }
-    .list { display: grid; gap: 7px; }
-    .mini-card {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--soft);
-      padding: 9px;
-      display: grid;
-      gap: 5px;
-    }
-    .section { padding: 16px; margin-top: 14px; }
-    .section-head {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: space-between;
-      gap: 10px;
-      align-items: flex-start;
-      margin-bottom: 12px;
-    }
-    .tree-shell { display: grid; gap: 8px; }
-    .tree-root, .tree-branch {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #fff;
-      overflow: hidden;
-    }
-    .tree-root { border-color: #cbd5e1; }
-    .tree-branch {
-      margin: 8px 0 0 28px;
-      border-left: 4px solid var(--c);
-    }
-    .tree-summary {
-      list-style: none;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      padding: 10px 12px;
-      background: color-mix(in srgb, var(--c, #172033) 5%, #fff);
-    }
-    .tree-summary::-webkit-details-marker { display: none; }
-    .tree-summary-main {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-    }
-    .tree-summary-title { display: grid; gap: 2px; min-width: 0; }
-    .tree-summary-title strong { line-height: 1.15; }
-    .tree-children {
-      border-left: 1px solid #d9e2ef;
-      margin-left: 20px;
-      padding: 0 0 10px 10px;
-    }
-    .tree-items {
-      display: grid;
-      gap: 6px;
-      padding: 8px 10px 10px;
-    }
-    .tree-file {
-      display: grid;
-      grid-template-columns: 22px minmax(0, 1fr) minmax(170px, .55fr);
-      gap: 8px;
-      align-items: start;
-      border: 1px solid #e1e8f2;
-      border-radius: 7px;
-      background: #f8fafc;
-      padding: 8px;
-      cursor: pointer;
-    }
-    .tree-file:hover, .tree-file.active {
-      border-color: color-mix(in srgb, var(--c) 44%, #cbd5e1);
-      background: color-mix(in srgb, var(--c) 7%, #fff);
-    }
-    .tree-file-main { display: grid; gap: 4px; min-width: 0; }
-    .tree-file-title {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      align-items: center;
-      min-width: 0;
-    }
-    .tree-file-title strong { font-size: 13px; line-height: 1.2; }
-    .tree-path {
-      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-      font-size: 11px;
-      color: #475569;
-      overflow-wrap: anywhere;
-    }
-    .tree-role {
-      display: grid;
-      gap: 4px;
-      color: #465569;
-      font-size: 12px;
-      min-width: 0;
-    }
-    .tree-empty {
-      color: var(--muted);
-      font-size: 12px;
-      padding: 8px;
-    }
-    .drill-shell { display: grid; gap: 12px; }
-    .drill-nav {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: #f8fafc;
-      padding: 10px;
-    }
-    .crumbs { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; color: var(--muted); font-size: 12px; }
-    .crumb {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      border: 1px solid #dce5f3;
-      border-radius: 999px;
-      background: #fff;
-      padding: 3px 8px;
-      color: #334155;
-    }
-    .drill-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-      gap: 10px;
-    }
-    .drill-node, .drill-file {
-      min-width: 0;
-      text-align: left;
-      border: 1px solid color-mix(in srgb, var(--c) 30%, #dce5f3);
-      border-left: 5px solid var(--c);
-      border-radius: 8px;
-      background: linear-gradient(180deg, #fff, color-mix(in srgb, var(--c) 5%, #fff));
-      color: var(--ink);
-      padding: 11px;
-      display: grid;
-      gap: 8px;
-      box-shadow: 0 8px 18px rgba(15, 23, 42, .07);
-    }
-    .drill-node {
-      cursor: pointer;
-      min-height: 142px;
-    }
-    .drill-node:hover, .drill-node:focus-visible {
-      outline: 0;
-      border-color: color-mix(in srgb, var(--c) 58%, #94a3b8);
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 14%, transparent), 0 13px 26px rgba(15, 23, 42, .12);
-      transform: translateY(-1px);
-    }
-    .drill-top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
-    .drill-title { display: flex; gap: 8px; align-items: center; min-width: 0; }
-    .drill-title strong { font-size: 14px; line-height: 1.2; overflow-wrap: anywhere; }
-    .drill-desc { color: #465569; font-size: 12px; }
-    .drill-file {
-      grid-template-columns: 24px minmax(0, 1fr);
-      min-height: 0;
-    }
-    .drill-file-body { display: grid; gap: 5px; min-width: 0; }
-    .drill-path {
-      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
-      font-size: 12px;
-      overflow-wrap: anywhere;
-    }
     .drill-empty {
       border: 1px dashed var(--line);
       border-radius: 8px;
       background: #f8fafc;
       color: var(--muted);
       padding: 12px;
-    }
-    .explorer-layout { display: block; }
-    .explorer-sub {
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 500;
     }
     .graph-tree-board {
       min-height: 100%;
@@ -759,148 +225,6 @@
       padding: 14px;
       overflow: hidden;
     }
-    .tree-level { display: grid; gap: 12px; }
-    .tree-map-stage {
-      display: grid;
-      grid-template-columns: minmax(280px, 380px) minmax(360px, 1fr);
-      gap: 36px;
-      align-items: start;
-    }
-    .tree-current-column { position: relative; min-width: 0; }
-    .tree-current-column.has-children:after {
-      content: "";
-      position: absolute;
-      top: 50%;
-      right: -36px;
-      width: 36px;
-      border-top: 2px solid #d9e2ef;
-    }
-    .tree-level-head {
-      display: grid;
-      gap: 10px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, .90);
-      padding: 10px;
-    }
-    .tree-toolbar {
-      display: flex;
-      justify-content: space-between;
-      gap: 10px;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-    .tree-breadcrumb {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 6px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-    .tree-breadcrumb span {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .tree-breadcrumb span + span:before {
-      content: "/";
-      color: #94a3b8;
-    }
-    .tree-current-card {
-      display: grid;
-      gap: 9px;
-      border-left: 5px solid var(--c);
-      border-radius: 8px;
-      background: #fff;
-      padding: 11px;
-      box-shadow: 0 6px 16px rgba(15, 23, 42, .08);
-    }
-    .tree-current-top {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-      align-items: flex-start;
-    }
-    .tree-current-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      min-width: 0;
-    }
-    .tree-current-title h3 {
-      margin: 0;
-      overflow-wrap: anywhere;
-    }
-    .tree-current-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 7px;
-      align-items: center;
-    }
-    .tree-children-stack {
-      display: grid;
-      gap: 10px;
-      position: relative;
-      min-width: 0;
-    }
-    .tree-children-stack.has-children:before {
-      content: "";
-      position: absolute;
-      left: -18px;
-      top: 30px;
-      bottom: 30px;
-      border-left: 2px solid #d9e2ef;
-    }
-    .graph-tree-node {
-      position: relative;
-      border: 1px solid color-mix(in srgb, var(--c) 34%, #dce5f3);
-      border-left: 5px solid var(--c);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, .96);
-      box-shadow: 0 5px 14px rgba(15, 23, 42, .08);
-      color: var(--ink);
-      cursor: pointer;
-      display: grid;
-      gap: 8px;
-      min-height: 118px;
-      padding: 11px;
-      text-align: left;
-    }
-    .graph-tree-node:before {
-      content: "";
-      position: absolute;
-      left: -23px;
-      top: 50%;
-      width: 18px;
-      border-top: 2px solid #d9e2ef;
-    }
-    .graph-tree-node:hover, .graph-tree-node:focus-visible {
-      outline: 0;
-      border-color: color-mix(in srgb, var(--c) 58%, #94a3b8);
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 12%, transparent), 0 10px 24px rgba(15, 23, 42, .12);
-      transform: translateY(-1px);
-    }
-    .graph-tree-node.selected {
-      border-color: #111827;
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 16%, transparent), 0 14px 30px rgba(15, 23, 42, .18);
-    }
-    .tree-node-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 8px;
-    }
-    .tree-node-title {
-      display: flex;
-      align-items: center;
-      gap: 7px;
-      min-width: 0;
-      font-weight: 750;
-    }
-    .tree-node-title span:last-child { overflow-wrap: anywhere; }
-    .tree-node-desc { color: #465569; font-size: 12px; }
     .drill-graph-shell {
       display: grid;
       gap: 10px;
@@ -1028,21 +352,6 @@
         radial-gradient(circle at 1px 1px, rgba(100, 116, 139, .16) 1px, transparent 0) 0 0 / 24px 24px,
         linear-gradient(180deg, #fbfdff 0%, #eef5fb 100%);
     }
-    .drill-edge-layer {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      overflow: visible;
-    }
-    .drill-edge {
-      fill: none;
-      stroke: #94a3b8;
-      stroke-width: 2;
-      opacity: .55;
-      marker-end: url(#drillArrow);
-    }
     .drill-graph-node {
       position: absolute;
       width: 260px;
@@ -1062,21 +371,10 @@
       text-align: left;
       z-index: 2;
     }
-    .drill-graph-node.center {
-      width: 320px;
-      min-height: 146px;
-      border-color: #111827;
-      box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 18%, transparent), 0 16px 38px rgba(15, 23, 42, .18);
-      z-index: 3;
-    }
     .drill-graph-node.leaf {
       border-top-style: solid;
       background: rgba(248, 250, 252, .96);
       cursor: default;
-    }
-    .drill-graph-node.desc-open {
-      width: 340px;
-      z-index: 20;
     }
     .drill-graph-node:hover, .drill-graph-node:focus-visible {
       outline: 0;
@@ -1102,7 +400,6 @@
       line-height: 1.18;
     }
     .drill-node-title .icon { flex: 0 0 auto; }
-    .drill-graph-node.center .drill-node-title { font-size: 15px; }
     .drill-graph-node.title-fit-sm .drill-node-title { font-size: 13px; }
     .drill-graph-node.title-fit-xs .drill-node-title { font-size: 12px; }
     .drill-graph-node.title-fit-xxs .drill-node-title { font-size: 11px; }
@@ -1122,33 +419,6 @@
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
       overflow: hidden;
-    }
-    .drill-graph-node.desc-open .drill-node-desc {
-      display: block;
-      max-height: 180px;
-      overflow: auto;
-      -webkit-line-clamp: initial;
-      -webkit-box-orient: initial;
-    }
-    .drill-node-more {
-      align-items: center;
-      background: transparent;
-      border: 1px solid #cbd5e1;
-      border-radius: 6px;
-      color: #334155;
-      cursor: pointer;
-      display: inline-flex;
-      font-size: 11px;
-      font-weight: 700;
-      justify-content: center;
-      min-height: 26px;
-      padding: 4px 7px;
-      width: fit-content;
-    }
-    .drill-node-more:hover, .drill-node-more:focus-visible {
-      outline: 0;
-      border-color: color-mix(in srgb, var(--c) 55%, #111827);
-      box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 16%, transparent);
     }
     .drill-node-subtitle {
       color: #64748b;
@@ -1200,40 +470,6 @@
       border-color: color-mix(in srgb, var(--c) 55%, #111827);
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 16%, transparent);
     }
-    .explorer-detail-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
-      gap: 8px;
-    }
-    .explorer-child-list {
-      display: grid;
-      gap: 7px;
-    }
-    .explorer-child {
-      display: grid;
-      gap: 4px;
-      border: 1px solid var(--line);
-      border-left: 4px solid var(--c);
-      border-radius: 7px;
-      background: #f8fafc;
-      padding: 8px;
-      cursor: pointer;
-    }
-    .explorer-child:hover {
-      background: color-mix(in srgb, var(--c) 7%, #fff);
-      border-color: color-mix(in srgb, var(--c) 34%, #dce5f3);
-    }
-    .queue-grid, .protocol-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
-    .queue-card {
-      border: 1px solid var(--line);
-      border-top: 4px solid var(--c);
-      border-radius: 8px;
-      background: #fff;
-      padding: 11px;
-      display: grid;
-      gap: 8px;
-    }
-    .queue-card.hidden { display: none; }
     table { width: 100%; border-collapse: collapse; }
     th, td { border-top: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
     th { background: #f2f5fb; color: var(--muted); font-size: 12px; font-weight: 600; }
@@ -1244,16 +480,10 @@
       .drill-graph-layout { grid-template-columns: 1fr; }
       .drill-graph-viewport { order: -1; }
       .drill-hierarchy-panel { position: static; max-height: none; }
-      .tree-map-stage { grid-template-columns: 1fr; gap: 12px; }
-      .tree-current-column:after, .tree-children-stack.has-children:before, .graph-tree-node:before { display: none; }
-      .panel { position: static; max-height: none; }
       .viewport { height: 68vh; }
-      .tree-file { grid-template-columns: 22px minmax(0, 1fr); }
-      .tree-role { grid-column: 2; }
     }
     @media (max-width: 720px) {
       .shell { width: min(100% - 18px, 1620px); }
-      .toolbar { position: static; }
       input, select, button { width: 100%; }
       .viewport { min-height: 560px; }
       table, tbody, tr, td { display: block; width: 100%; }
@@ -1311,18 +541,6 @@
         min-height: 30px;
         width: auto;
       }
-      .graph-controls {
-        gap: 6px;
-      }
-      .graph-controls input {
-        flex-basis: 100%;
-        min-width: 0;
-        height: 32px;
-      }
-      .graph-controls > button,
-      .graph-controls > .toggle-control,
-      .graph-controls > .chip,
-      .advanced-controls > summary,
       .drill-toolbar-actions button {
         width: auto;
         height: 32px;
@@ -1402,43 +620,9 @@
             </div>
             <div class="type-legend" id="typeLegend" aria-label="Node type color legend"></div>
           </div>
-          <div class="graph-controls">
-            <div hidden aria-hidden="true">
-              <div id="kindFilterSummary">Types</div>
-              <div id="kindFilterControls" aria-label="Node type filters"></div>
-              <input id="search" type="search" value="">
-              <button id="resetBtn" type="button">Reset layout</button>
-              <button id="fitBtn" type="button" class="secondary">Fit start</button>
-              <select id="moduleFilter" aria-label="Module filter"></select>
-              <select id="focusMode" aria-label="Focus mode">
-                <option value="local">Local graph</option>
-                <option value="all">All contracts</option>
-                <option value="inventory">Inventory pressure</option>
-              </select>
-              <button id="zoomInBtn" type="button" class="secondary">Zoom +</button>
-              <button id="zoomOutBtn" type="button" class="secondary">Zoom -</button>
-              <button id="clearSavedLayoutBtn" type="button" class="secondary">Clear saved layout</button>
-              <span class="chip info" id="zoomLabel">100%</span>
-              <span class="metric"><b id="moduleCount">0</b> modules</span>
-              <span class="metric"><b id="docCount">0</b> md sources</span>
-              <span class="metric"><b id="toolCount">0</b> tools</span>
-              <span class="metric"><b id="contractCount">0</b> contracts</span>
-              <div class="legend" id="legend" hidden></div>
-            </div>
-          </div>
         </div>
         <div class="boot-error" id="bootError"></div>
         <div class="viewport" id="viewport">
-          <div class="graph-layer" id="graphLayer">
-            <svg class="edge-layer" id="edgeLayer" viewBox="0 0 1360 760" aria-hidden="true">
-              <defs>
-                <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth">
-                  <path d="M0,0 L0,6 L8,3 z" fill="#9aa9bd"></path>
-                </marker>
-              </defs>
-            </svg>
-            <div class="node-layer" id="nodeLayer"></div>
-          </div>
           <div id="studioExplorerTree" class="drill-layer graph-tree-board" aria-label="Nested module tree"></div>
         </div>
         </section>
@@ -1449,7 +633,7 @@
   
   <script>
   (async () => {
-    const data = { studioTree: null, validationReport: null, refactorGroups: {} };
+    const data = { studioTree: null, validationReport: null };
     async function fetchJson(path) {
       try {
         const response = await fetch(path, { cache: "no-store" });
@@ -1458,6 +642,56 @@
       } catch (error) {
         return null;
       }
+    }
+    async function materializeTreeRefs(value, referrerUrl, activeRefs = [], storageRootUrl = null, isIndexDocument = true) {
+      if (Array.isArray(value)) {
+        return await Promise.all(value.map((item) => materializeTreeRefs(item, referrerUrl, activeRefs, storageRootUrl, false)));
+      }
+      if (!value || typeof value !== "object") return value;
+      const storageRoot = storageRootUrl || new URL("architecture_map/tree/", referrerUrl);
+      const stripIndex = isIndexDocument && value.root && Object.hasOwn(value.root, "parts");
+      if (Object.hasOwn(value, "parts") && !Array.isArray(value.parts)) {
+        throw new Error(`Architecture tree parts from "${referrerUrl}" must be an array.`);
+      }
+      if (Object.hasOwn(value, "parts") && Object.hasOwn(value, "children")) {
+        throw new Error(`Architecture tree node from "${referrerUrl}" cannot contain both parts and children.`);
+      }
+      const entries = [];
+      for (const [key, item] of Object.entries(value)) {
+        if (key !== "parts") {
+          entries.push([key, await materializeTreeRefs(item, referrerUrl, activeRefs, storageRoot, false)]);
+          continue;
+        }
+        const resolvedParts = await Promise.all(item.map(async (partPath) => {
+          if (typeof partPath !== "string" || !partPath.trim()) {
+            throw new Error(`Invalid architecture tree ref "${partPath}" from "${referrerUrl}".`);
+          }
+          if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(partPath) || partPath.startsWith("//") || partPath.startsWith("/")) {
+            throw new Error(`Architecture tree ref "${partPath}" from "${referrerUrl}" must be relative.`);
+          }
+          let partUrl;
+          try {
+            partUrl = new URL(partPath, referrerUrl);
+          } catch (error) {
+            throw new Error(`Invalid architecture tree ref "${partPath}" from "${referrerUrl}".`);
+          }
+          if (!partUrl.href.startsWith(storageRoot.href)) {
+            throw new Error(`Architecture tree ref "${partPath}" from "${referrerUrl}" escapes tree storage "${storageRoot.href}".`);
+          }
+          if (activeRefs.includes(partUrl.href)) {
+            throw new Error(`Architecture tree ref cycle: ${[...activeRefs, partUrl.href].join(" -> ")}`);
+          }
+          const part = await fetchJson(partUrl.href);
+          if (!part) {
+            throw new Error(`Architecture tree ref "${partPath}" from "${referrerUrl}" could not be loaded.`);
+          }
+          return await materializeTreeRefs(part, partUrl, [...activeRefs, partUrl.href], storageRoot, false);
+        }));
+        entries.push(["children", resolvedParts]);
+      }
+      const result = Object.fromEntries(entries);
+      if (stripIndex) delete result.index;
+      return result;
     }
     function repoHref(path) {
       return path ? "../../" + String(path).replace(/^\/+/, "") : "";
@@ -1543,16 +777,16 @@
       // Primary: merged tree served live by Studio Shell.
       const merged = await fetchJson("/api/architecture-tree");
       if (merged && merged.root) return merged;
-      // Fallback: read the on-disk index and merge its parts client-side.
-      const index = await fetchJson("../tree.json");
+      // Fallback: recursively materialize the on-disk index client-side.
+      const indexUrl = new URL("../tree.json", window.location.href);
+      const index = await fetchJson(indexUrl.href);
       if (!index || !index.root) return null;
-      if (Array.isArray(index.root.parts)) {
-        const parts = await Promise.all(index.root.parts.map((part) => fetchJson("../" + part)));
-        if (parts.some((part) => !part)) return null;
-        const { parts: _parts, ...rootMeta } = index.root;
-        return { ...index, root: { ...rootMeta, children: parts } };
+      try {
+        return await materializeTreeRefs(index, indexUrl);
+      } catch (error) {
+        console.error("Architecture tree fallback failed:", error);
+        return null;
       }
-      return index;
     }
     async function loadValidationReport() {
       // Primary: live report from Studio Shell; fallback: local generated file.
@@ -1578,191 +812,10 @@
       tags: ["missing-source"],
       children: []
     };
-    function moduleIdFor(node) {
-      if (node.moduleId) return node.moduleId;
-      if (String(node.id || "").startsWith("module:")) return String(node.id).slice("module:".length);
-      return String(node.id || defaultTitle(node)).replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase();
-    }
-    function isTopGraphNode(node) {
-      const kind = normalizedKind(node.kind);
-      return kind === "module" || node.kind === "backlog" || node.kind === "shell" || (node.children || []).length > 0;
-    }
-    function modulePoint(index, count) {
-      const cx = 700;
-      const cy = 385;
-      const rx = 480;
-      const ry = 245;
-      const angle = -Math.PI / 2 + (index / Math.max(1, count)) * Math.PI * 2;
-      return [Math.round(cx + Math.cos(angle) * rx), Math.round(cy + Math.sin(angle) * ry)];
-    }
-    function itemFromNode(node, moduleId) {
-      const kind = normalizedKind(node.kind);
-      return {
-        kind,
-        path: node.path || "",
-        title: defaultTitle(node),
-        href: node.href || (node.path ? repoHref(node.path) : ""),
-        description: node.description || "",
-        role: node.role || "",
-        tags: node.tags || [],
-        module: moduleId,
-        group: moduleId,
-        surface: (node.tags || []).includes("public-api") || kind === "surface" || kind === "api" ? "public" : "internal"
-      };
-    }
-    function groupTitleFor(kind) {
-      if (kind === "doc") return "Docs";
-      if (kind === "config") return "Config";
-      if (kind === "skill") return "Skills";
-      if (kind === "tool") return "Tools";
-      if (kind === "surface") return "Surfaces";
-      if (kind === "api") return "APIs";
-      if (kind === "cli") return "CLI";
-      if (kind === "workflow") return "Workflows";
-      if (kind === "validation") return "Validators";
-      if (kind === "test") return "Tests";
-      if (kind === "workspace") return "Workspace";
-      return "Items";
-    }
-    function collectModuleItems(node, moduleId, includeSelf = false, out = []) {
-      if (includeSelf && node.path) out.push(itemFromNode(node, moduleId));
-      for (const child of node.children || []) {
-        if (child.path) out.push(itemFromNode(child, moduleId));
-        collectModuleItems(child, moduleId, false, out);
-      }
-      return out;
-    }
-    function buildRefactorGroupsFromTree(modules) {
-      const result = {};
-      modules.forEach((moduleNode) => {
-        const moduleId = moduleIdFor(moduleNode);
-        const byKind = new Map();
-        for (const item of collectModuleItems(moduleNode, moduleId)) {
-          const key = item.kind;
-          if (!byKind.has(key)) byKind.set(key, []);
-          byKind.get(key).push(item);
-        }
-        result[moduleId] = Array.from(byKind.entries()).map(([kind, items]) => ({
-          id: kind,
-          title: groupTitleFor(kind),
-          description: "Mapped " + groupTitleFor(kind).toLowerCase() + " owned by " + defaultTitle(moduleNode) + ".",
-          color: kindColor(kind),
-          icon: kind === "tool" || kind === "api" || kind === "cli" ? "tool" : kind === "skill" ? "skill" : kind === "surface" ? "window" : kind === "validation" ? "shield" : kind === "test" ? "sync" : "doc",
-          tags: [kind],
-          items
-        }));
-      });
-      return result;
-    }
-    function buildLegacyPayloadFromTree(root) {
-      const topNodes = (root.children || []).filter(isTopGraphNode);
-      const modules = topNodes.map((node, index) => {
-        const [x, y] = modulePoint(index, topNodes.length);
-        const id = moduleIdFor(node);
-        return {
-          id,
-          label: defaultTitle(node),
-          title: defaultTitle(node),
-          description: node.description || "",
-          group: id,
-          kind: normalizedKind(node.kind),
-          path: node.path || "",
-          href: node.href || (node.path ? repoHref(node.path) : ""),
-          x,
-          y,
-          color: kindColor(node.kind),
-          module: id,
-          weight: 2.8
-        };
-      });
-      const refactorGroups = buildRefactorGroupsFromTree(topNodes);
-      const allItems = Object.values(refactorGroups).flatMap((groups) => groups.flatMap((group) => group.items));
-      const markdownDocs = allItems.filter((item) => item.kind === "doc" || item.kind === "skill" || /\.md$/i.test(item.path));
-      const tools = allItems.filter((item) => ["tool", "server", "surface", "validation"].includes(item.kind) || (item.kind !== "test" && /\.(mjs|js|py|ps1)$/i.test(item.path)));
-      const moduleEdges = [];
-      if (modules.some((m) => m.id === "studio-shell")) {
-        for (const m of modules) {
-          if (m.id !== "studio-shell" && ["taskboard", "architecture-map", "assets", "quality"].includes(m.id)) {
-            moduleEdges.push(["studio-shell", m.id, "hosts", "Studio Shell hosts this browser surface or route."]);
-          }
-        }
-      }
-      if (modules.some((m) => m.id === "hot") && modules.some((m) => m.id === "taskboard")) {
-        moduleEdges.push(["hot", "taskboard", "routes", "Core Harness routes durable work state to Taskboard."]);
-      }
-      return { modules, moduleEdges, refactorGroups, markdownDocs, tools };
-    }
-    Object.assign(data, buildLegacyPayloadFromTree(studioTreeSource));
-    const refactorGroupData = data.refactorGroups || {};
-    const refactorMeta = {
-      hot: {
-        title: "Core Harness",
-        kind: "core",
-        description: "Harness, agent-facing contract, AGENTS.md, short routing docs, and the smallest public entry points needed to start work."
-      },
-      skills: {
-        description: "Reusable procedures that must stay outside Core unless they are only routing pointers."
-      },
-      tasks: {
-        description: "Durable work state and orchestration contracts; adjacent to Core, but not the Core itself."
-      },
-      facade: {
-        description: "Agent-facing CLI facades; Core should point here, not embed command procedure."
-      },
-      validation: {
-        description: "Mechanical gates and validators; Core references required gates, but enforcement belongs here."
-      }
-    };
-    const modules = data.modules.map((m) => Object.assign({}, m, refactorMeta[m.id] || {}, {
-      x: Math.max(110, Math.min(1250, m.x - 40)),
-      y: Math.max(80, Math.min(690, m.y - 20)),
-      homeX: Math.max(110, Math.min(1250, m.x - 40)),
-      homeY: Math.max(80, Math.min(690, m.y - 20)),
-      pinned: false
-    }));
-    const refactorPositions = {
-      hot: [430, 350],
-      skills: [720, 110],
-      tasks: [735, 285],
-      facade: [735, 470],
-      validation: [1040, 430],
-      profile: [1030, 175],
-      export: [1040, 300],
-      design: [170, 590],
-      assets: [390, 635],
-      art: [620, 650],
-      runtime: [935, 640],
-      engine: [1190, 640]
-    };
-    modules.forEach((m) => {
-      const pos = refactorPositions[m.id];
-      if (!pos) return;
-      m.x = pos[0];
-      m.y = pos[1];
-      m.homeX = pos[0];
-      m.homeY = pos[1];
-    });
-    const moduleById = new Map(modules.map((m) => [m.id, m]));
-    const edgeData = data.moduleEdges.map((e, index) => ({ id: "e" + index, from: e[0], to: e[1], label: e[2], description: e[3] }));
-    const search = document.getElementById("search");
-    const kindFilterControls = document.getElementById("kindFilterControls");
-    const kindFilterSummary = document.getElementById("kindFilterSummary");
-    const moduleFilter = document.getElementById("moduleFilter");
-    const focusMode = document.getElementById("focusMode");
-    const graphLayer = document.getElementById("graphLayer");
-    const nodeLayer = document.getElementById("nodeLayer");
-    const edgeLayer = document.getElementById("edgeLayer");
-    const viewport = document.getElementById("viewport");
-    const detail = document.getElementById("detail");
     const studioExplorerTree = document.getElementById("studioExplorerTree");
-    const zoomLabel = document.getElementById("zoomLabel");
-    let selected = "hot";
-    let selectedGroup = "agent-contract";
-    const expanded = new Set();
     let explorerSelected = "studio";
     let explorerView = "studio";
     const explorerHistory = [];
-    let drillOpen = true;
     let drillDragging = null;
     let drillPanning = null;
     let drillZoom = 1;
@@ -1771,15 +824,6 @@
     let drillFitKey = "";
     let suppressExplorerClick = false;
     const drillPositions = new Map();
-    let dragging = null;
-    let panning = null;
-    let suppressGraphClick = false;
-    let zoom = 0.88;
-    let panX = 36;
-    let panY = 22;
-    const nodeEls = new Map();
-    const edgeEls = new Map();
-    const labelEls = new Map();
     const layoutStorageKey = "ai_studio.architecture_map.layout.v1";
     let hiddenKinds = new Set(defaultHiddenKinds);
 
@@ -1794,41 +838,20 @@
     function writeSavedLayout() {
       try {
         if (!window.localStorage) return;
-        const graph = {};
-        modules.forEach((m) => {
-          if (Number.isFinite(m.x) && Number.isFinite(m.y)) {
-            graph[m.id] = { x: Math.round(m.x), y: Math.round(m.y) };
-          }
-        });
         const drill = {};
         drillPositions.forEach((pos, key) => {
           if (pos && Number.isFinite(pos.x) && Number.isFinite(pos.y)) {
             drill[key] = { x: Math.round(pos.x), y: Math.round(pos.y) };
           }
         });
-        window.localStorage.setItem(layoutStorageKey, JSON.stringify({ schema: 1, graph, drill }));
+        window.localStorage.setItem(layoutStorageKey, JSON.stringify({ schema: 1, drill }));
       } catch (error) {
         // Local storage can be disabled; layout saving is optional.
-      }
-    }
-    function clearSavedLayout() {
-      try {
-        if (window.localStorage) window.localStorage.removeItem(layoutStorageKey);
-      } catch (error) {
-        // Ignore storage errors; the in-memory reset still applies.
       }
     }
     function restoreSavedLayout() {
       const saved = readSavedLayout();
       if (!saved || saved.schema !== 1) return;
-      const graph = saved.graph || {};
-      modules.forEach((m) => {
-        const pos = graph[m.id];
-        if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return;
-        m.x = pos.x;
-        m.y = pos.y;
-        m.pinned = true;
-      });
       const drill = saved.drill || {};
       Object.entries(drill).forEach(([key, pos]) => {
         if (!pos || !Number.isFinite(pos.x) || !Number.isFinite(pos.y)) return;
@@ -1848,46 +871,8 @@
         shield: '<path d="M12 3l8 4v5c0 5-3.4 8.4-8 9-4.6-.6-8-4-8-9V7z"></path>',
         sync: '<path d="M20 6v5h-5"></path><path d="M4 18v-5h5"></path><path d="M19 11a7 7 0 0 0-12-4"></path><path d="M5 13a7 7 0 0 0 12 4"></path>',
         group: '<path d="M4 4h7v7H4z"></path><path d="M13 4h7v7h-7z"></path><path d="M4 13h7v7H4z"></path><path d="M13 13h7v7h-7z"></path>',
-        remove: '<path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M7 6l1 15h8l1-15"></path>'
       };
       return '<span class="icon"><svg viewBox="0 0 24 24" aria-hidden="true">' + (paths[name] || paths.group) + '</svg></span>';
-    }
-    function tags(values) {
-      return '<div class="tags">' + values.map((v) => '<span class="tag">' + esc(v) + '</span>').join("") + '</div>';
-    }
-    function inventory(id) {
-      const docs = data.markdownDocs.filter((d) => d.group === id);
-      const skills = docs.filter((d) => d.kind === "skill");
-      const tools = data.tools.filter((t) => t.group === id);
-      const publicTools = tools.filter((t) => t.surface === "public");
-      const internalTools = tools.filter((t) => t.surface !== "public");
-      const contracts = edgeData.filter((e) => e.from === id || e.to === id);
-      return { docs, skills, tools, publicTools, internalTools, contracts };
-    }
-    function refactorGroups(id) {
-      return refactorGroupData[id] || [];
-    }
-    function firstGroupId(id) {
-      const groups = refactorGroups(id);
-      return groups.length ? groups[0].id : null;
-    }
-    function risks(id) {
-      const inv = inventory(id);
-      const out = [];
-      if (!inv.docs.length) out.push(["bad", "missing source doc"]);
-      if (inv.tools.length && !inv.publicTools.length) out.push(["bad", "no public facade"]);
-      if (inv.publicTools.length > 10) out.push(["warn", "wide public surface"]);
-      if (inv.internalTools.length > Math.max(6, inv.publicTools.length * 3)) out.push(["warn", "heavy internals"]);
-      if (!inv.skills.length && ["skills", "tasks", "design", "assets", "art", "runtime", "validation"].includes(id)) out.push(["warn", "no dedicated skill"]);
-      if (!out.length) out.push(["ok", "mapped"]);
-      return out;
-    }
-    function migrationStatus(id) {
-      if (id === "hot") return ["info", "CORE: keep small"];
-      if (["skills", "tasks", "facade"].includes(id)) return ["warn", "core-adjacent: define boundary"];
-      if (["validation", "profile", "export"].includes(id)) return ["warn", "platform domain: route from Core"];
-      if (id === "engine") return ["info", "external boundary"];
-      return ["bad", "move out of Core"];
     }
     function clamp(value, min, max) {
       return Math.max(min, Math.min(max, value));
@@ -1895,24 +880,10 @@
     function clampZoom(value) {
       return clamp(value, 0.35, 2.2);
     }
-    function applyTransform() {
-      graphLayer.style.transform = "translate(" + panX + "px, " + panY + "px) scale(" + zoom + ")";
-      if (zoomLabel) zoomLabel.textContent = Math.round(zoom * 100) + "%";
-    }
     function applyDrillTransform() {
       const pan = studioExplorerTree ? studioExplorerTree.querySelector(".drill-graph-pan") : null;
       if (!pan) return;
       pan.style.transform = "translate(" + drillPanX + "px, " + drillPanY + "px) scale(" + drillZoom + ")";
-      if (zoomLabel) zoomLabel.textContent = Math.round(drillZoom * 100) + "%";
-    }
-    function setZoomAt(clientX, clientY, nextZoom) {
-      const rect = viewport.getBoundingClientRect();
-      const graphX = (clientX - rect.left - panX) / zoom;
-      const graphY = (clientY - rect.top - panY) / zoom;
-      zoom = clampZoom(nextZoom);
-      panX = clientX - rect.left - graphX * zoom;
-      panY = clientY - rect.top - graphY * zoom;
-      applyTransform();
     }
     function setDrillZoomAt(clientX, clientY, nextZoom) {
       const board = studioExplorerTree ? studioExplorerTree.querySelector(".drill-graph-viewport") : null;
@@ -1935,7 +906,7 @@
       const boardWidth = board.clientWidth || board.getBoundingClientRect().width;
       const boardHeight = board.clientHeight || board.getBoundingClientRect().height;
       if (!boardWidth || !boardHeight) return;
-      const fitKey = explorerView + "::" + Math.round(boardWidth) + "x" + Math.round(boardHeight) + "::" + search.value + "::" + [...hiddenKinds].sort().join(",");
+      const fitKey = explorerView + "::" + Math.round(boardWidth) + "x" + Math.round(boardHeight) + "::" + [...hiddenKinds].sort().join(",");
       if (!force && fitKey === drillFitKey) {
         applyDrillTransform();
         return;
@@ -1979,93 +950,16 @@
         y: (event.clientY - rect.top) / drillZoom
       };
     }
-    function fitStart() {
-      zoom = 0.88;
-      panX = 36;
-      panY = 22;
-      applyTransform();
-    }
-    function chip(cls, text) {
-      return '<span class="chip ' + cls + '">' + esc(text) + '</span>';
-    }
-    function neighborIds(id) {
-      const ids = new Set([id]);
-      edgeData.forEach((e) => {
-        if (e.from === id) ids.add(e.to);
-        if (e.to === id) ids.add(e.from);
-      });
-      return ids;
-    }
-    function matches(m) {
-      const q = search.value.trim().toLowerCase();
-      if (!q) return true;
-      const inv = inventory(m.id);
-      return [
-        m.title,
-        m.kind,
-        m.description,
-        inv.docs.map((d) => d.path + " " + d.title).join(" "),
-        inv.tools.map((t) => t.path + " " + t.description).join(" "),
-        risks(m.id).map((r) => r[1]).join(" ")
-      ].join(" ").toLowerCase().includes(q);
-    }
-    function isVisible(m) {
-      return !moduleFilter.value || m.id === moduleFilter.value || neighborIds(moduleFilter.value).has(m.id);
-    }
-    function isDimmed(m) {
-      if (!matches(m)) return true;
-      if (focusMode.value === "all") return false;
-      if (focusMode.value === "inventory") {
-        return risks(m.id).some((r) => r[0] !== "ok") ? false : m.id !== selected;
-      }
-      return !neighborIds(selected).has(m.id);
-    }
-    function point(event) {
-      const rect = viewport.getBoundingClientRect();
-      return { x: (event.clientX - rect.left - panX) / zoom, y: (event.clientY - rect.top - panY) / zoom };
-    }
     function renderLegend() {
       const typeLegend = document.getElementById("typeLegend");
-      if (typeLegend) {
-        typeLegend.innerHTML = typeLegendItems.map((kind) => {
-          const meta = kindMeta(kind);
-          const pressed = hiddenKinds.has(kind) ? "false" : "true";
-          const muted = hiddenKinds.has(kind) ? " is-muted" : "";
-          const title = hiddenKinds.has(kind) ? "Show " + meta.label : "Hide " + meta.label;
-          return '<button type="button" class="type-chip' + muted + '" data-kind-toggle="' + esc(kind) + '" aria-pressed="' + pressed + '" title="' + esc(title) + '" style="--c:' + esc(meta.color) + '"><span class="swatch"></span>' + esc(meta.label) + '</button>';
-        }).join("");
-      }
-      renderKindFilterControls();
-      const moduleLegend = document.getElementById("legend");
-      if (moduleLegend) {
-        moduleLegend.innerHTML = modules.map((m) => '<span class="chip"><span class="swatch" style="--c:' + esc(m.color) + '"></span>' + esc(m.title) + '</span>').join("");
-      }
-      moduleFilter.innerHTML = '<option value="">Все модули</option>' + modules.map((m) => '<option value="' + esc(m.id) + '">' + esc(m.title) + '</option>').join("");
-    }
-    function renderKindFilterControls() {
-      if (!kindFilterControls) return;
-      kindFilterControls.innerHTML = typeLegendItems.map((kind) => {
+      if (!typeLegend) return;
+      typeLegend.innerHTML = typeLegendItems.map((kind) => {
         const meta = kindMeta(kind);
-        const checked = hiddenKinds.has(kind) ? "" : " checked";
-        return '<label class="toggle-control" style="--c:' + esc(meta.color) + '">' +
-          '<input type="checkbox" data-kind-filter="' + esc(kind) + '"' + checked + '>' +
-          '<span class="swatch" style="--c:' + esc(meta.color) + '"></span>' +
-          esc(meta.label) +
-        '</label>';
+        const pressed = hiddenKinds.has(kind) ? "false" : "true";
+        const muted = hiddenKinds.has(kind) ? " is-muted" : "";
+        const title = hiddenKinds.has(kind) ? "Show " + meta.label : "Hide " + meta.label;
+        return '<button type="button" class="type-chip' + muted + '" data-kind-toggle="' + esc(kind) + '" aria-pressed="' + pressed + '" title="' + esc(title) + '" style="--c:' + esc(meta.color) + '"><span class="swatch"></span>' + esc(meta.label) + '</button>';
       }).join("");
-      updateKindFilterSummary();
-    }
-    function countFilteredKindNodes(node) {
-      if (!node) return 0;
-      const own = node.id !== "studio" && hiddenKinds.has(normalizedKind(node.kind)) ? 1 : 0;
-      return own + (node.children || []).reduce((sum, child) => sum + countFilteredKindNodes(child), 0);
-    }
-    function updateKindFilterSummary() {
-      if (!kindFilterSummary) return;
-      const hiddenLabels = [...hiddenKinds].map((kind) => kindMeta(kind).label);
-      const count = countFilteredKindNodes(studioTreeSource);
-      kindFilterSummary.textContent = hiddenKinds.size ? "Types: " + hiddenLabels.join(", ") + " off" : "Types: all";
-      kindFilterSummary.title = count ? count + " nodes hidden by type filter" : "All node types visible";
     }
     function applyKindVisibility(kind, visible) {
       if (visible) hiddenKinds.delete(kind);
@@ -2074,174 +968,18 @@
       if (!findExplorerNode(root, explorerSelected)) explorerSelected = "studio";
       if (!findExplorerNode(root, explorerView)) explorerView = "studio";
       renderLegend();
-      updateAll();
-    }
-    function moduleNodeHtml(m) {
-      const inv = inventory(m.id);
-      return '<div class="top"><span class="kind">' + esc(kindLabel(m.kind)) + '</span><span class="swatch" style="--c:' + esc(m.color) + '"></span></div>' +
-        '<div class="title">' + esc(m.title) + '</div>' +
-        '<div class="desc">' + esc(m.description) + '</div>' +
-        '<div class="counts">' +
-          '<span class="chip">' + refactorGroups(m.id).length + ' sections</span>' +
-          '<span class="chip">' + inv.docs.length + ' md</span>' +
-          '<span class="chip">' + inv.publicTools.length + '/' + inv.tools.length + ' tools</span>' +
-        '</div>';
-    }
-    function renderNodes() {
-      nodeLayer.innerHTML = "";
-      modules.forEach((m) => {
-        const el = document.createElement("div");
-        el.className = "module-node";
-        el.style.setProperty("--c", m.color);
-        el.dataset.id = m.id;
-        el.dataset.expanded = expanded.has(m.id) ? "1" : "0";
-        el.innerHTML = moduleNodeHtml(m);
-        el.addEventListener("pointerdown", (event) => {
-          if (event.target.closest("button")) return;
-          if (event.button !== 0) return;
-          const p = point(event);
-          dragging = { module: m, dx: p.x - m.x, dy: p.y - m.y, clientX: event.clientX, clientY: event.clientY, moved: false };
-          m.pinned = true;
-          el.setPointerCapture(event.pointerId);
-        });
-        el.addEventListener("click", (event) => {
-          if (event.target.closest("button")) return;
-          if (suppressGraphClick) {
-            event.stopPropagation();
-            suppressGraphClick = false;
-            return;
-          }
-          event.stopPropagation();
-          openModuleDrill(m.id);
-        });
-        nodeLayer.appendChild(el);
-        nodeEls.set(m.id, el);
-      });
-    }
-    function renderEdges() {
-      edgeData.forEach((e) => {
-        const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-        path.setAttribute("class", "edge");
-        edgeLayer.appendChild(path);
-        edgeEls.set(e.id, path);
-        const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
-        label.setAttribute("class", "edge-label");
-        label.setAttribute("text-anchor", "middle");
-        label.textContent = e.label;
-        edgeLayer.appendChild(label);
-        labelEls.set(e.id, label);
-      });
-    }
-    function groupMatches(group) {
-      const q = search.value.trim().toLowerCase();
-      if (!q) return true;
-      return [
-        group.title,
-        group.description,
-        group.tags.join(" "),
-        group.items.map((item) => [item.title, item.path, item.role, item.description, item.tags.join(" ")].join(" ")).join(" ")
-      ].join(" ").toLowerCase().includes(q);
-    }
-    function childOffset(index, count) {
-      const coreOffsets = [
-        [-280, -150], [0, -190], [280, -150],
-        [-280, 150], [0, 200], [280, 150]
-      ];
-      if (count <= coreOffsets.length) return coreOffsets[index];
-      const angle = -Math.PI / 2 + (index / count) * Math.PI * 2;
-      const radius = 260;
-      return [Math.cos(angle) * radius, Math.sin(angle) * radius];
-    }
-    function itemOffset(parent, groupX, groupY, index, count) {
-      let dx = groupX - parent.x;
-      let dy = groupY - parent.y;
-      let len = Math.sqrt(dx * dx + dy * dy) || 1;
-      let ux = dx / len;
-      let uy = dy / len;
-      let px = -uy;
-      let py = ux;
-      const row = Math.floor(index / 2);
-      const side = index % 2 === 0 ? -1 : 1;
-      const spread = count === 1 ? 0 : side * 76;
-      return [
-        groupX + ux * (88 + row * 58) + px * spread,
-        groupY + uy * (70 + row * 46) + py * side * 30
-      ];
-    }
-    function itemTitle(item) {
-      const raw = item.path || item.title || "";
-      const parts = raw.split("/");
-      return parts[parts.length - 1] || item.title || raw;
-    }
-    function visibleGroupsForNode(id) {
-      const groups = refactorGroups(id);
-      if (id === "hot") return groups;
-      return groups.filter((g) => ["source-docs", "skills", "public-tools", "contracts"].includes(g.id)).slice(0, 4);
-    }
-    function renderInlineItem(item) {
-      return '<div class="node-file">' +
-        '<div class="node-file-top">' + itemIcon(item.kind) + '<span class="node-file-name">' + esc(itemTitle(item)) + '</span></div>' +
-        '<div class="node-file-path">' + esc(item.path || item.title) + '</div>' +
-        tags((item.tags || []).slice(0, 3)) +
-      '</div>';
-    }
-    function renderInlineSections(id) {
-      const groups = visibleGroupsForNode(id);
-      if (!groups.length) return "";
-      return '<div class="node-sections">' + groups.map((group) => {
-        const items = group.items.slice(0, id === "hot" ? 6 : 4);
-        const more = group.items.length > items.length ? '<span class="chip">+' + (group.items.length - items.length) + ' hidden</span>' : "";
-        return '<section class="node-section" style="--section-color:' + esc(group.color) + '">' +
-          '<div class="node-section-head">' +
-            '<div class="node-section-title">' + icon(group.icon) + '<span>' + esc(group.title) + '</span></div>' +
-            '<div class="legend"><span class="chip">' + group.items.length + ' items</span>' + more + '</div>' +
-          '</div>' +
-          tags(group.tags.slice(0, 4)) +
-          '<div class="node-file-grid">' + items.map(renderInlineItem).join("") + '</div>' +
-        '</section>';
-      }).join("") + '</div>';
-    }
-    function selectExplorerModule(moduleId, groupId) {
-      const root = buildExplorerRoot();
-      const wanted = groupId ? "group:" + moduleId + ":" + groupId : "module:" + moduleId;
-      const fallback = "module:" + moduleId;
-      explorerSelected = findExplorerNode(root, wanted) ? wanted : fallback;
-      explorerView = explorerSelected;
-      explorerHistory.length = 0;
-    }
-    function syncDrillToSelected(groupId) {
-      selectExplorerModule(selected, groupId || "");
-    }
-    function setDrillOpen(value) {
-      drillOpen = Boolean(value);
-      viewport.classList.toggle("drilling", drillOpen);
-      if (!drillOpen) {
-        explorerHistory.length = 0;
-        explorerSelected = "studio";
-        explorerView = "studio";
-      }
+      renderExplorer();
     }
     function openExplorerNode(id, pushHistory) {
       const root = buildExplorerRoot();
       const node = findExplorerNode(root, id);
       if (!node) return;
-      if (!drillOpen) {
-        explorerHistory.length = 0;
-      } else if (pushHistory && explorerView !== id) {
-        explorerHistory.push(explorerView);
-      }
+      if (pushHistory && explorerView !== id) explorerHistory.push(explorerView);
       explorerSelected = id;
       explorerView = id;
-      syncSelectionFromExplorer(node);
-      setDrillOpen(true);
-      updateAll();
+      renderExplorer();
     }
-    function openModuleDrill(moduleId) {
-      selected = moduleId;
-      selectedGroup = firstGroupId(moduleId);
-      moduleFilter.value = "";
-      openExplorerNode("module:" + moduleId, false);
-    }
+
     function cloneStudioTree() {
       const root = JSON.parse(JSON.stringify(studioTreeSource));
       return filterTreeByKind(root) || root;
@@ -2270,15 +1008,6 @@
       }
       return null;
     }
-    function findExplorerParent(node, id, parent) {
-      if (!node) return null;
-      if (node.id === id) return parent || null;
-      for (const child of node.children || []) {
-        const found = findExplorerParent(child, id, node);
-        if (found) return found;
-      }
-      return null;
-    }
     function explorerNodeIcon(node) {
       if (node.kind === "module") return icon("group");
       if (node.kind === "section") return icon("route");
@@ -2290,14 +1019,6 @@
       if (node.kind === "test") return icon("sync");
       if (node.kind === "doc" || node.kind === "config" || node.kind === "target" || node.kind === "current") return icon("doc");
       return icon("group");
-    }
-    function syncSelectionFromExplorer(node) {
-      if (!node) return;
-      if (node.moduleId) {
-        selected = node.moduleId;
-        selectedGroup = node.groupId || firstGroupId(selected);
-        moduleFilter.value = "";
-      }
     }
     function findExplorerPath(node, id, path) {
       if (!node) return [];
@@ -2342,16 +1063,8 @@
       input.remove();
     }
     function explorerBack() {
-      const root = buildExplorerRoot();
-      if (explorerHistory.length) {
-        explorerView = explorerHistory.pop();
-      } else {
-        setDrillOpen(false);
-        updateAll();
-        return;
-      }
+      explorerView = explorerHistory.pop();
       explorerSelected = explorerView;
-      syncSelectionFromExplorer(findExplorerNode(root, explorerSelected));
       updateAll();
     }
     function hierarchyDepthClass(index) {
@@ -2384,32 +1097,14 @@
         '<div class="hierarchy-children"><h3>Внутри уровня</h3>' + (childRows || '<p class="muted">Внутренних узлов нет.</p>') + more + '</div>' +
       '</aside>';
     }
-    function explorerNodeMatches(node, query) {
-      if (!query) return true;
-      const own = [
-        node.title,
-        node.subtitle,
-        node.kind,
-        node.description,
-        (node.tags || []).join(" "),
-        node.href || ""
-      ].join(" ").toLowerCase();
-      if (own.includes(query)) return true;
-      return (node.children || []).some((child) => explorerNodeMatches(child, query));
-    }
     function renderExplorer() {
       if (!studioExplorerTree) return;
-      if (!drillOpen) {
-        studioExplorerTree.innerHTML = "";
-        return;
-      }
       const root = buildExplorerRoot();
       if (!findExplorerNode(root, explorerSelected)) explorerSelected = "studio";
       if (!findExplorerNode(root, explorerView)) explorerView = "studio";
       const current = findExplorerNode(root, explorerView) || root;
       const children = current.children || [];
-      const query = search.value.trim().toLowerCase();
-      const visibleChildren = children.filter((child) => explorerNodeMatches(child, query));
+      const visibleChildren = children;
       const path = findExplorerPath(root, current.id, []);
       const displayPath = path.length ? path : [root];
       const pathText = displayPath.map(breadcrumbTitle).join(" / ");
@@ -2460,9 +1155,6 @@
       return (path ? '<div class="drill-node-path" title="' + esc(path) + '">' + esc(path) + '</div>' : '') +
         '<div class="drill-node-actions">' + open + copy + '</div>';
     }
-    function renderDescriptionToggle(node, role, hasChildren) {
-      return "";
-    }
     function drillTitleFitClass(title) {
       const text = String(title || "");
       const longestPart = text.split(/[s._/\:-]+/).reduce((max, part) => Math.max(max, part.length), 0);
@@ -2471,21 +1163,19 @@
       if (text.length > 34 || longestPart > 20) return " title-fit-sm";
       return "";
     }
-    function renderDrillGraphNode(node, x, y, role) {
+    function renderDrillGraphNode(node, x, y) {
       const hasChildren = node.children && node.children.length;
-      const className = "drill-graph-node" + (role === "center" ? " center" : "") + (!hasChildren && role !== "center" ? " leaf" : "") + drillTitleFitClass(node.title);
-      const canOpen = role !== "center" && hasChildren;
+      const className = "drill-graph-node" + (!hasChildren ? " leaf" : "") + drillTitleFitClass(node.title);
+      const canOpen = hasChildren;
       const tag = "div";
       const cardAttr = canOpen ? ' role="button" tabindex="0" data-explorer-card="' + esc(node.id) + '"' : "";
-      const leafActions = !hasChildren && role !== "center" ? renderLeafActions(node) : "";
-      const descToggle = renderDescriptionToggle(node, role, hasChildren);
+      const leafActions = !hasChildren ? renderLeafActions(node) : "";
       return '<' + tag + ' class="' + className + '" style="--c:' + esc(node.color) + '; left:' + Math.round(x) + 'px; top:' + Math.round(y) + 'px" data-drill-id="' + esc(node.id) + '"' + cardAttr + '>' +
         '<div class="drill-node-top">' +
           '<div class="drill-node-title">' + explorerNodeIcon(node) + '<span>' + esc(node.title) + '</span></div>' +
         '</div>' +
         (node.subtitle ? '<div class="drill-node-subtitle">' + esc(node.subtitle) + '</div>' : '') +
         '<p class="drill-node-desc">' + esc(node.description || "No description yet.") + '</p>' +
-        descToggle +
         leafActions +
         '<div class="metrics"><span class="metric"><b>' + (node.children ? node.children.length : 0) + '</b> children</span><span class="metric"><b>' + esc(kindLabel(node.kind)) + '</b></span></div>' +
       '</' + tag + '>';
@@ -2554,13 +1244,12 @@
       const layout = topLevelGraphLayout(visibleChildren);
       const nodes = layout.placements.map((p) => {
         const pos = resolvedDrillPosition(explorerView, p.node, p.x, p.y);
-        return renderDrillGraphNode(p.node, pos.x, pos.y, "child");
+        return renderDrillGraphNode(p.node, pos.x, pos.y);
       }).join("");
       const empty = !visibleChildren.length
         ? '<div class="drill-empty" style="position:absolute;left:32px;top:32px">' + (totalChildren ? 'Поиск не нашел верхних узлов.' : 'Верхний уровень пуст.') + '</div>'
         : "";
       return renderDrillViewport(layout, '<div class="drill-graph-canvas" style="width:' + layout.width + 'px; min-height:' + layout.height + 'px">' +
-        '<svg class="drill-edge-layer" viewBox="0 0 ' + layout.width + ' ' + layout.height + '" aria-hidden="true"><defs><marker id="drillArrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"></path></marker></defs></svg>' +
         nodes +
         empty +
       '</div>');
@@ -2569,147 +1258,15 @@
       const layout = drillGraphLayout(visibleChildren);
       const childNodes = layout.placements.map((p) => {
         const pos = resolvedDrillPosition(explorerView, p.node, p.x, p.y);
-        return renderDrillGraphNode(p.node, pos.x, pos.y, "child");
+        return renderDrillGraphNode(p.node, pos.x, pos.y);
       }).join("");
       const empty = !visibleChildren.length
         ? '<div class="drill-empty" style="position:absolute;left:' + Math.round(layout.cx + 155) + 'px;top:' + Math.round(layout.cy - 18) + 'px">' + (totalChildren ? 'Поиск не нашел внутренних узлов на этом уровне.' : 'У этой ноды нет внутренних узлов.') + '</div>'
         : "";
       return renderDrillViewport(layout, '<div class="drill-graph-canvas" style="width:' + layout.width + 'px; min-height:' + layout.height + 'px">' +
-        '<svg class="drill-edge-layer" viewBox="0 0 ' + layout.width + ' ' + layout.height + '" aria-hidden="true"></svg>' +
         childNodes +
         empty +
       '</div>');
-    }
-    function updateDrillEdges() {
-      const canvas = studioExplorerTree.querySelector(".drill-graph-canvas");
-      if (!canvas) return;
-      const center = canvas.querySelector(".drill-graph-node.center");
-      if (!center) return;
-      const centerX = parseFloat(center.style.left) || 0;
-      const centerY = parseFloat(center.style.top) || 0;
-      canvas.querySelectorAll(".drill-edge[data-drill-edge-to]").forEach((edge) => {
-        const id = edge.getAttribute("data-drill-edge-to");
-        const node = Array.from(canvas.querySelectorAll(".drill-graph-node[data-drill-id]")).find((el) => el.dataset.drillId === id);
-        if (!node) return;
-        const x = parseFloat(node.style.left) || 0;
-        const y = parseFloat(node.style.top) || 0;
-        edge.setAttribute("d", "M " + centerX + " " + centerY + " L " + x + " " + y);
-      });
-    }
-    function renderExpandedChildren() {
-      nodeLayer.querySelectorAll(".child-node").forEach((el) => el.remove());
-      edgeLayer.querySelectorAll(".expand-line").forEach((el) => el.remove());
-      return;
-      expanded.forEach((id) => {
-        const parent = moduleById.get(id);
-        if (!parent || !isVisible(parent)) return;
-        const groups = refactorGroups(id);
-        groups.forEach((group, index) => {
-          const offset = childOffset(index, groups.length);
-          const x = Math.max(80, Math.min(1280, parent.x + offset[0]));
-          const y = Math.max(60, Math.min(715, parent.y + offset[1]));
-          const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-          line.setAttribute("class", "expand-line");
-          line.setAttribute("style", "--c:" + group.color);
-          line.setAttribute("d", "M " + parent.x + " " + parent.y + " L " + x + " " + y);
-          edgeLayer.appendChild(line);
-
-          const el = document.createElement("div");
-          el.className = "child-node";
-          el.style.setProperty("--c", group.color);
-          el.style.left = x + "px";
-          el.style.top = y + "px";
-          el.dataset.module = id;
-          el.dataset.group = group.id;
-          el.innerHTML =
-            '<div class="top">' + icon(group.icon) + '<span class="title">' + esc(group.title) + '</span></div>' +
-            '<div class="desc">' + esc(group.description) + '</div>' +
-            tags(group.tags.slice(0, 4)) +
-            '<div class="counts"><span class="chip">' + group.items.length + ' items</span></div>';
-          el.classList.toggle("selected", id === selected && group.id === selectedGroup);
-          el.classList.toggle("dimmed", isDimmed(parent) || !groupMatches(group));
-          el.addEventListener("click", (event) => {
-            event.stopPropagation();
-            selected = id;
-            selectedGroup = group.id;
-            moduleFilter.value = "";
-            updateAll();
-          });
-          nodeLayer.appendChild(el);
-
-          group.items.forEach((item, itemIndex) => {
-            const itemPos = itemOffset(parent, x, y, itemIndex, group.items.length);
-            const itemX = clamp(itemPos[0], 70, 1290);
-            const itemY = clamp(itemPos[1], 50, 720);
-            const itemLine = document.createElementNS("http://www.w3.org/2000/svg", "path");
-            itemLine.setAttribute("class", "expand-line");
-            itemLine.setAttribute("style", "--c:" + group.color);
-            itemLine.setAttribute("d", "M " + x + " " + y + " L " + itemX + " " + itemY);
-            edgeLayer.appendChild(itemLine);
-
-            const itemEl = document.createElement("div");
-            itemEl.className = "child-node file-node";
-            itemEl.style.setProperty("--c", group.color);
-            itemEl.style.left = itemX + "px";
-            itemEl.style.top = itemY + "px";
-            itemEl.dataset.module = id;
-            itemEl.dataset.group = group.id;
-            itemEl.dataset.path = item.path || "";
-            itemEl.innerHTML =
-              '<div class="top">' + itemIcon(item.kind) + '<span class="title">' + esc(itemTitle(item)) + '</span></div>' +
-              '<div class="path-mini">' + esc(item.path || item.title) + '</div>' +
-              tags((item.tags || []).slice(0, 3));
-            itemEl.classList.toggle("dimmed", isDimmed(parent) || !groupMatches(group));
-            itemEl.addEventListener("click", (event) => {
-              event.stopPropagation();
-              selected = id;
-              selectedGroup = group.id;
-              moduleFilter.value = "";
-              updateAll();
-            });
-            nodeLayer.appendChild(itemEl);
-          });
-        });
-      });
-    }
-    function updatePositions() {
-      const local = neighborIds(selected);
-      modules.forEach((m) => {
-        const el = nodeEls.get(m.id);
-        const nextExpanded = expanded.has(m.id) ? "1" : "0";
-        if (el.dataset.expanded !== nextExpanded) {
-          el.dataset.expanded = nextExpanded;
-          el.innerHTML = moduleNodeHtml(m);
-        }
-        el.style.left = m.x + "px";
-        el.style.top = m.y + "px";
-        el.classList.toggle("selected", m.id === selected);
-        el.classList.toggle("expanded", expanded.has(m.id));
-        el.classList.toggle("neighbor", local.has(m.id) && m.id !== selected);
-        el.classList.toggle("dimmed", isDimmed(m));
-        el.classList.toggle("hidden", !isVisible(m));
-        const button = el.querySelector("[data-expand]");
-        if (button) button.textContent = expanded.has(m.id) ? "Collapse" : "Open inside";
-      });
-      edgeData.forEach((e) => {
-        const a = moduleById.get(e.from);
-        const b = moduleById.get(e.to);
-        const path = edgeEls.get(e.id);
-        const label = labelEls.get(e.id);
-        const dx = b.x - a.x;
-        const dy = b.y - a.y;
-        const curve = Math.max(-70, Math.min(70, dy * .20));
-        path.setAttribute("d", "M " + a.x + " " + a.y + " C " + (a.x + dx * .45) + " " + (a.y + curve) + ", " + (a.x + dx * .55) + " " + (b.y - curve) + ", " + b.x + " " + b.y);
-        const active = e.from === selected || e.to === selected;
-        const hidden = !isVisible(a) || !isVisible(b);
-        path.classList.toggle("active", active);
-        path.classList.toggle("dimmed", hidden || (focusMode.value === "local" && !active));
-        label.setAttribute("x", String((a.x + b.x) / 2));
-        label.setAttribute("y", String((a.y + b.y) / 2 - 8));
-        label.classList.toggle("dimmed", hidden || (focusMode.value === "local" && !active));
-        label.style.display = active || focusMode.value === "all" ? "block" : "none";
-      });
-      renderExpandedChildren();
     }
     window.addEventListener("pointermove", (event) => {
       if (drillDragging) {
@@ -2717,38 +1274,17 @@
         const pointer = drillCanvasPoint(event, canvas);
         const x = pointer.x - drillDragging.dx;
         const y = pointer.y - drillDragging.dy;
-        if (Math.abs(event.clientX - drillDragging.clientX) > 4 || Math.abs(event.clientY - drillDragging.clientY) > 4) {
-          drillDragging.moved = true;
-        }
+        if (Math.abs(event.clientX - drillDragging.clientX) > 4 || Math.abs(event.clientY - drillDragging.clientY) > 4) drillDragging.moved = true;
         drillDragging.el.style.left = x + "px";
         drillDragging.el.style.top = y + "px";
         drillPositions.set(drillPositionKey(drillDragging.viewId, drillDragging.id), { x, y });
-        updateDrillEdges();
         return;
       }
-      if (drillPanning) {
-        if (Math.abs(event.clientX - drillPanning.clientX) > 4 || Math.abs(event.clientY - drillPanning.clientY) > 4) {
-          drillPanning.moved = true;
-        }
-        drillPanX = drillPanning.panX + event.clientX - drillPanning.clientX;
-        drillPanY = drillPanning.panY + event.clientY - drillPanning.clientY;
-        applyDrillTransform();
-        return;
-      }
-      if (panning) {
-        panX = panning.panX + event.clientX - panning.clientX;
-        panY = panning.panY + event.clientY - panning.clientY;
-        applyTransform();
-        return;
-      }
-      if (!dragging) return;
-      const p = point(event);
-      if (Math.abs(event.clientX - dragging.clientX) > 4 || Math.abs(event.clientY - dragging.clientY) > 4) {
-        dragging.moved = true;
-      }
-      dragging.module.x = p.x - dragging.dx;
-      dragging.module.y = p.y - dragging.dy;
-      updatePositions();
+      if (!drillPanning) return;
+      if (Math.abs(event.clientX - drillPanning.clientX) > 4 || Math.abs(event.clientY - drillPanning.clientY) > 4) drillPanning.moved = true;
+      drillPanX = drillPanning.panX + event.clientX - drillPanning.clientX;
+      drillPanY = drillPanning.panY + event.clientY - drillPanning.clientY;
+      applyDrillTransform();
     });
     window.addEventListener("pointerup", () => {
       if (drillDragging && drillDragging.moved) {
@@ -2758,19 +1294,12 @@
       }
       drillDragging = null;
       if (drillPanning) {
-        const board = studioExplorerTree ? studioExplorerTree.querySelector(".drill-graph-viewport.panning") : null;
+        const board = studioExplorerTree.querySelector(".drill-graph-viewport.panning");
         if (board) board.classList.remove("panning");
       }
       drillPanning = null;
-      if (dragging && dragging.moved) {
-        suppressGraphClick = true;
-        window.setTimeout(() => { suppressGraphClick = false; }, 250);
-        writeSavedLayout();
-      }
-      dragging = null;
-      panning = null;
-      viewport.classList.remove("panning");
     });
+
     if (studioExplorerTree) {
       studioExplorerTree.addEventListener("pointerdown", (event) => {
         const node = event.target.closest(".drill-graph-node");
@@ -2815,7 +1344,6 @@
         board.setPointerCapture(event.pointerId);
       });
       studioExplorerTree.addEventListener("wheel", (event) => {
-        if (!drillOpen) return;
         const board = event.target.closest(".drill-graph-viewport");
         if (!board) return;
         if (event.target.closest(".drill-node-desc")) return;
@@ -2824,42 +1352,12 @@
         setDrillZoomAt(event.clientX, event.clientY, drillZoom * factor);
       }, { passive: false });
     }
-    viewport.addEventListener("pointerdown", (event) => {
-      if (drillOpen) return;
-      if (event.button !== 0) return;
-      if (event.target.closest && event.target.closest(".module-node,.child-node,button,a,input,select")) return;
-      panning = { clientX: event.clientX, clientY: event.clientY, panX, panY };
-      viewport.classList.add("panning");
-      viewport.setPointerCapture(event.pointerId);
-    });
-    viewport.addEventListener("wheel", (event) => {
-      if (drillOpen) return;
-      event.preventDefault();
-      const factor = Math.exp(-event.deltaY * 0.0012);
-      setZoomAt(event.clientX, event.clientY, zoom * factor);
-    }, { passive: false });
-    if (detail) {
-      detail.addEventListener("click", (event) => {
-        const groupButton = event.target.closest("[data-group]");
-        if (groupButton) {
-          event.preventDefault();
-          selectedGroup = groupButton.dataset.group;
-          selectExplorerModule(selected, selectedGroup);
-          updateAll();
-          return;
-        }
-        const expandButton = event.target.closest("[data-detail-expand]");
-        if (!expandButton) return;
-        event.preventDefault();
-        openModuleDrill(expandButton.dataset.detailExpand);
-      });
-    }
     if (studioExplorerTree) {
       studioExplorerTree.addEventListener("keydown", (event) => {
         if (event.key !== "Enter" && event.key !== " ") return;
         const card = event.target.closest("[data-explorer-card]");
         if (!card || !studioExplorerTree.contains(card)) return;
-        if (event.target.closest("[data-toggle-description],[data-copy-path],a,button")) return;
+        if (event.target.closest("[data-copy-path],a,button")) return;
         event.preventDefault();
         activateExplorerNode(card.dataset.explorerCard);
       });
@@ -2868,14 +1366,6 @@
           event.preventDefault();
           event.stopPropagation();
           suppressExplorerClick = false;
-          return;
-        }
-        const close = event.target.closest("[data-explorer-close]");
-        if (close) {
-          event.preventDefault();
-          event.stopPropagation();
-          setDrillOpen(false);
-          updateAll();
           return;
         }
         const back = event.target.closest("[data-explorer-back]");
@@ -2892,119 +1382,11 @@
           copyText(copy.dataset.copyPath, copy);
           return;
         }
-        const toggleDescription = event.target.closest("[data-toggle-description]");
-        if (toggleDescription) {
-          event.preventDefault();
-          event.stopPropagation();
-          const node = toggleDescription.closest(".drill-graph-node");
-          const expanded = !node.classList.contains("desc-open");
-          node.classList.toggle("desc-open", expanded);
-          toggleDescription.setAttribute("aria-expanded", expanded ? "true" : "false");
-          toggleDescription.textContent = expanded ? "Close" : "Details";
-          return;
-        }
         const card = event.target.closest("[data-explorer-card]");
         if (!card) return;
         event.preventDefault();
         activateExplorerNode(card.dataset.explorerCard);
       });
-    }
-    function listItems(items, mapper, empty) {
-      if (!items.length) return '<p class="muted">' + esc(empty) + '</p>';
-      return items.map(mapper).join("");
-    }
-    function itemIcon(kind) {
-      if (kind === "tool") return icon("tool");
-      if (kind === "server") return icon("tool");
-      if (kind === "skill") return icon("agent");
-      if (kind === "contract" || kind === "validation") return icon("shield");
-      if (kind === "test") return icon("sync");
-      return icon("doc");
-    }
-    function renderRefactorItem(item) {
-      const title = item.href
-        ? '<a class="file" href="' + esc(item.href) + '">' + esc(item.path) + '</a>'
-        : '<span class="file">' + esc(item.path) + '</span>';
-      return '<div class="mini-card">' +
-        '<div class="legend">' + itemIcon(item.kind) + '<strong>' + esc(item.title) + '</strong></div>' +
-        title +
-        '<p class="muted">' + esc(item.role) + '</p>' +
-        '<p class="muted">' + esc(item.description) + '</p>' +
-        tags(item.tags || []) +
-      '</div>';
-    }
-    function renderGroupDetail(moduleId) {
-      const groups = refactorGroups(moduleId);
-      const active = groups.find((g) => g.id === selectedGroup) || groups[0];
-      if (!active) return "";
-      selectedGroup = active.id;
-      return '<div class="block">' +
-        '<div class="legend">' + groups.map((g) => '<button type="button" class="' + (g.id === active.id ? '' : 'secondary') + '" data-group="' + esc(g.id) + '">' + esc(g.title) + '</button>').join("") + '</div>' +
-        '<div class="mini-card" style="border-top:4px solid ' + esc(active.color) + '">' +
-          '<div class="legend">' + icon(active.icon) + '<h3>' + esc(active.title) + '</h3>' + tags(active.tags) + '</div>' +
-          '<p class="muted">' + esc(active.description) + '</p>' +
-        '</div>' +
-        '<div class="list">' + listItems(active.items, renderRefactorItem, 'No items in this group.') + '</div>' +
-      '</div>';
-    }
-    function renderDetail() {
-      if (!detail) return;
-      const m = moduleById.get(selected) || modules[0];
-      const inv = inventory(m.id);
-      detail.innerHTML =
-        '<div class="block"><div class="legend"><span class="swatch" style="--c:' + esc(m.color) + '"></span><span class="chip">' + esc(kindLabel(m.kind)) + '</span>' + chip(migrationStatus(m.id)[0], migrationStatus(m.id)[1]) + risks(m.id).map((r) => chip(r[0], r[1])).join("") + '</div><h2>' + esc(m.title) + '</h2><p class="muted">' + esc(m.description) + '</p></div>' +
-        '<div class="block"><div class="actions"><button type="button" data-detail-expand="' + esc(m.id) + '">' + (expanded.has(m.id) ? "Collapse on graph" : "Expand on graph") + '</button></div></div>' +
-        '<div class="block"><h3>Текущий инвентарь</h3><div class="legend"><span class="chip">' + inv.docs.length + ' markdown</span><span class="chip">' + inv.skills.length + ' skills</span><span class="chip">' + inv.publicTools.length + ' public tools</span><span class="chip">' + inv.internalTools.length + ' internal tools</span><span class="chip">' + inv.contracts.length + ' contracts</span></div></div>' +
-        renderGroupDetail(m.id) +
-        '<div class="block"><h3>Source docs</h3><div class="list">' + listItems(inv.docs.slice(0, 8), (d) => '<div class="mini-card"><a class="file" href="' + esc(d.href) + '">' + esc(d.path) + '</a><p class="muted">' + esc(d.description) + '</p></div>', 'No markdown source classified here.') + '</div></div>' +
-        '<div class="block"><h3>Public tools</h3><div class="list">' + listItems(inv.publicTools.slice(0, 10), (t) => '<div class="mini-card"><a class="file" href="' + esc(t.href) + '">' + esc(t.path) + '</a><p class="muted">' + esc(t.description) + '</p></div>', 'No public tools classified here.') + '</div></div>' +
-        '<div class="block"><h3>Contracts</h3><div class="list">' + listItems(inv.contracts, (e) => '<div class="mini-card"><div class="legend"><span class="chip">' + esc(e.from) + ' -> ' + esc(e.to) + '</span><span class="chip">' + esc(e.label) + '</span></div><p class="muted">' + esc(e.description) + '</p></div>', 'No direct module contracts.') + '</div></div>' +
-        '<div class="block"><h3>Next architecture actions</h3><div class="list">' + refactorActions(m.id).map((x) => '<div class="mini-card">' + esc(x) + '</div>').join("") + '</div></div>';
-    }
-    function refactorActions(id) {
-      const inv = inventory(id);
-      const actions = id === "hot" ? [
-        "Define exact Core contract: harness, agent role, AGENTS.md, short routing, minimal public commands.",
-        "Remove domain-specific procedure from Core docs; replace with links to owned modules.",
-        "Keep Core docs small enough to load every session.",
-        "Make every outgoing Core edge explicit: route to skill, task state, facade, validation, or export.",
-        "After each move, rebuild maps and check that Core did not absorb new domain logic."
-      ] : [
-        "Decide whether this module is a separate domain, core-adjacent support, or deletion candidate.",
-        "Confirm module owner and source-of-truth Markdown.",
-        "Define the minimal public facade agents should call.",
-        "Move support helpers behind that facade or mark them internal.",
-        "Add or route a validator for mandatory rules.",
-        "Run generator and validate docs/taskboard after changes."
-      ];
-      if (inv.tools.length && !inv.publicTools.length) actions.unshift("Create or choose a public CLI facade before moving files.");
-      if (inv.publicTools.length > 10) actions.unshift("Reduce public surface: merge overlapping commands or document clear routes.");
-      if (inv.docs.length > 12) actions.unshift("Split docs into index + owned references; remove duplicated procedure from hot docs.");
-      return actions;
-    }
-    function renderQueue() {
-      const root = document.getElementById("queueGrid");
-      const visibleQueue = document.getElementById("visibleQueue");
-      if (!root || !visibleQueue) return;
-      const q = search.value.trim().toLowerCase();
-      let visible = 0;
-      root.innerHTML = modules.map((m) => {
-        const inv = inventory(m.id);
-        const riskText = risks(m.id).map((r) => r[1]).join(" ");
-        const hay = [m.title, m.description, riskText, inv.docs.map((d) => d.path).join(" "), inv.tools.map((t) => t.path).join(" ")].join(" ").toLowerCase();
-        const hidden = q && !hay.includes(q);
-        if (!hidden) visible++;
-        const firstDoc = inv.docs[0];
-        return '<article class="queue-card ' + (hidden ? 'hidden' : '') + '" style="--c:' + esc(m.color) + '">' +
-          '<div class="legend"><span class="swatch" style="--c:' + esc(m.color) + '"></span>' + chip(migrationStatus(m.id)[0], migrationStatus(m.id)[1]) + risks(m.id).map((r) => chip(r[0], r[1])).join("") + '</div>' +
-          '<h3>' + esc(m.title) + '</h3>' +
-          '<p class="muted">' + esc(m.description) + '</p>' +
-          '<div class="legend"><span class="chip">' + inv.docs.length + ' md</span><span class="chip">' + inv.skills.length + ' skills</span><span class="chip">' + inv.publicTools.length + '/' + inv.tools.length + ' public/tools</span><span class="chip">' + inv.contracts.length + ' contracts</span></div>' +
-          (firstDoc ? '<a class="file" href="' + esc(firstDoc.href) + '">' + esc(firstDoc.path) + '</a>' : '<span class="muted">No source doc</span>') +
-          '<div class="actions"><button type="button" class="secondary" data-select="' + esc(m.id) + '">Open module</button></div>' +
-        '</article>';
-      }).join("");
-      visibleQueue.textContent = visible + " visible";
     }
     function renderValidationPanel() {
       const report = data.validationReport;
@@ -3157,115 +1539,18 @@
         '</div>';
       if (!host.parentNode) document.body.appendChild(host);
     }
-    const queueGrid = document.getElementById("queueGrid");
-    if (queueGrid) {
-      queueGrid.addEventListener("click", (event) => {
-        const btn = event.target.closest("[data-select]");
-        if (!btn) return;
-        selected = btn.dataset.select;
-        selectedGroup = firstGroupId(selected);
-        syncDrillToSelected("");
-        expanded.add(selected);
-        moduleFilter.value = "";
-        updateAll();
-        viewport.scrollIntoView({ behavior: "smooth", block: "start" });
-      });
-    }
     function updateAll() {
-      updatePositions();
-      renderDetail();
-      renderQueue();
       renderExplorer();
-      updateKindFilterSummary();
     }
-    document.getElementById("resetBtn").addEventListener("click", () => {
-      clearSavedLayout();
-      drillPositions.clear();
-      modules.forEach((m) => { m.x = m.homeX; m.y = m.homeY; m.pinned = false; });
-      selected = "hot";
-      selectedGroup = "agent-contract";
-      syncDrillToSelected("");
-      moduleFilter.value = "";
-      search.value = "";
-      hiddenKinds = new Set(defaultHiddenKinds);
-      renderLegend();
-      focusMode.value = "local";
-      expanded.clear();
-      explorerHistory.length = 0;
-      explorerSelected = "studio";
-      explorerView = "studio";
-      setDrillOpen(true);
-      fitStart();
-      updateAll();
-    });
-    document.getElementById("clearSavedLayoutBtn").addEventListener("click", () => {
-      clearSavedLayout();
-      drillPositions.clear();
-      modules.forEach((m) => { m.x = m.homeX; m.y = m.homeY; m.pinned = false; });
-      updateAll();
-    });
-    document.getElementById("fitBtn").addEventListener("click", () => {
-      if (drillOpen) fitDrillView(true);
-      else fitStart();
-    });
-    document.getElementById("zoomInBtn").addEventListener("click", () => {
-      const target = drillOpen && studioExplorerTree ? studioExplorerTree.querySelector(".drill-graph-viewport") : viewport;
-      const rect = target.getBoundingClientRect();
-      if (drillOpen) setDrillZoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, drillZoom * 1.18);
-      else setZoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, zoom * 1.18);
-    });
-    document.getElementById("zoomOutBtn").addEventListener("click", () => {
-      const target = drillOpen && studioExplorerTree ? studioExplorerTree.querySelector(".drill-graph-viewport") : viewport;
-      const rect = target.getBoundingClientRect();
-      if (drillOpen) setDrillZoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, drillZoom / 1.18);
-      else setZoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, zoom / 1.18);
-    });
-    window.addEventListener("keydown", (event) => {
-      const tag = event.target && event.target.tagName ? event.target.tagName.toLowerCase() : "";
-      if (tag === "input" || tag === "select" || tag === "textarea") return;
-      const rect = viewport.getBoundingClientRect();
-      if (event.key === "+" || event.key === "=") {
-        setZoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, zoom * 1.16);
-      } else if (event.key === "-") {
-        setZoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, zoom / 1.16);
-      } else if (event.key === "0") {
-        fitStart();
-      }
-    });
-    search.addEventListener("input", updateAll);
     document.getElementById("typeLegend").addEventListener("click", (event) => {
       const button = event.target.closest("[data-kind-toggle]");
       if (!button) return;
       event.preventDefault();
       applyKindVisibility(button.dataset.kindToggle, hiddenKinds.has(button.dataset.kindToggle));
     });
-    if (kindFilterControls) {
-      kindFilterControls.addEventListener("change", (event) => {
-        const input = event.target.closest("[data-kind-filter]");
-        if (!input) return;
-        applyKindVisibility(input.dataset.kindFilter, input.checked);
-      });
-    }
-    focusMode.addEventListener("change", updateAll);
-    moduleFilter.addEventListener("change", () => {
-      if (moduleFilter.value) {
-        selected = moduleFilter.value;
-        selectedGroup = firstGroupId(selected);
-        syncDrillToSelected("");
-      }
-      updateAll();
-    });
     try {
       restoreSavedLayout();
       renderLegend();
-      renderNodes();
-      renderEdges();
-      applyTransform();
-      setDrillOpen(true);
-      document.getElementById("moduleCount").textContent = modules.length;
-      document.getElementById("docCount").textContent = data.markdownDocs.length;
-      document.getElementById("toolCount").textContent = data.tools.length;
-      document.getElementById("contractCount").textContent = edgeData.length;
       renderValidationPanel();
       updateAll();
     } catch (error) {

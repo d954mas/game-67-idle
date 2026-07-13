@@ -1251,6 +1251,41 @@ body.layers-resizing {
   color: var(--muted);
 }
 
+.chat-permission {
+  width: 92%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-soft);
+  padding: 8px;
+  display: grid;
+  gap: 7px;
+  font-size: 11px;
+}
+
+.chat-permission-pending {
+  border-color: var(--blue, #77a7ff);
+}
+
+.chat-permission-request {
+  max-height: 180px;
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 10.5px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace;
+  color: var(--text);
+}
+
+.chat-permission-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.chat-permission-error {
+  color: var(--red);
+}
+
 .chat-ops-chip {
   font-size: 10px;
   color: var(--muted);

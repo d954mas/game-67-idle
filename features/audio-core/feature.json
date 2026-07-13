@@ -1,0 +1,58 @@
+{
+  "schema": "ai_studio.feature.v1",
+  "id": "audio-core",
+  "version": "1.0.1",
+  "title": "Audio Core",
+  "status": "reusable",
+  "kind": "gameplay-infrastructure",
+  "summary": "In-place L1 fixed-pool audio runtime with generation-safe handles, native miniaudio and browser WebAudio backends, while games own cues and packed assets.",
+  "copy_model": "in-place",
+  "layer": "L1",
+  "owners": [
+    "features/audio-core"
+  ],
+  "dependencies": [
+    "Neotolis resource BLOB API",
+    "miniaudio 0.11.25 for Windows/Linux",
+    "browser WebAudio API for Emscripten"
+  ],
+  "commands": {
+    "test_web": "node --test features/audio-core/tests/test_audio_web_library.mjs",
+    "test_native": "cmake --build templates/template/build/native-debug --target test_audio_core test_audio_resource test_audio_backend_native test_game_audio",
+    "test_browser": "powershell -NoProfile -Command \"$env:AUDIO_SMOKE_HEADED='1'; $env:AUDIO_SMOKE_BROWSER_CHANNEL='chrome'; node features/audio-core/tests/browser_smoke.mjs templates/template/build/wasm-audio-smoke/bin\""
+  },
+  "provides": [
+    "generation-safe clip and voice handles",
+    "fixed 64-clip and 32-voice pools",
+    "master, music, and SFX mix buses",
+    "pause, enable, and browser unlock policy",
+    "replaceable private native and web backend boundary"
+  ],
+  "manuals": {
+    "contract": "features/audio-core/README.md",
+    "install": "features/audio-core/INSTALL.md"
+  },
+  "registers": {
+    "target_sources": [
+      "${AUDIO_CORE_SRC}/audio.c",
+      "${AUDIO_CORE_SRC}/audio_resource.c",
+      "${AUDIO_CORE_SRC}/audio_backend_miniaudio.c (native)",
+      "${AUDIO_CORE_SRC}/audio_miniaudio_impl.c (native)",
+      "${AUDIO_CORE_SRC}/audio_backend_web.c (Emscripten)"
+    ],
+    "include_dirs": [
+      "${AUDIO_CORE_INC}"
+    ],
+    "ctest_targets": [
+      "test_audio_core",
+      "test_audio_resource",
+      "test_audio_backend_native",
+      "test_game_audio",
+      "test_audio_web_library"
+    ]
+  },
+  "default_template": {
+    "game_catalog": "templates/template/src/game_audio.c",
+    "asset_pack": "templates/template/src/build_packs.c"
+  }
+}

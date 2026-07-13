@@ -120,7 +120,7 @@ static void test_any_keyboard_input_starts_gameplay(void) {
     platform_lifecycle_init();
 
     nt_input_set_key(NT_KEY_SPACE, true);
-    platform_lifecycle_after_input_poll();
+    TEST_ASSERT_TRUE(platform_lifecycle_after_input_poll());
     platform_lifecycle_update(true, true);
 
     TEST_ASSERT_TRUE(platform_sdk_has_input());
@@ -129,11 +129,17 @@ static void test_any_keyboard_input_starts_gameplay(void) {
     TEST_ASSERT_EQUAL_INT(1, g_backend_state.gameplay_start_calls);
 }
 
+static void test_input_poll_reports_no_gesture_without_an_edge(void) {
+    TEST_ASSERT_FALSE(platform_lifecycle_after_input_poll());
+    platform_lifecycle_init();
+    TEST_ASSERT_FALSE(platform_lifecycle_after_input_poll());
+}
+
 static void test_touch_input_starts_gameplay(void) {
     platform_lifecycle_init();
 
     nt_input_pointer_down(7u, 320.0f, 240.0f, 1.0f, NT_POINTER_TOUCH, 1u);
-    platform_lifecycle_after_input_poll();
+    TEST_ASSERT_TRUE(platform_lifecycle_after_input_poll());
     platform_lifecycle_update(true, true);
 
     TEST_ASSERT_TRUE(platform_sdk_has_input());
@@ -146,7 +152,7 @@ static void test_input_does_not_start_gameplay_while_gameplay_is_disallowed(void
     platform_lifecycle_init();
 
     nt_input_set_key(NT_KEY_SPACE, true);
-    platform_lifecycle_after_input_poll();
+    TEST_ASSERT_TRUE(platform_lifecycle_after_input_poll());
     platform_lifecycle_update(true, false);
 
     TEST_ASSERT_TRUE(platform_sdk_has_input());
@@ -190,6 +196,7 @@ int main(void) {
     RUN_TEST(test_lifecycle_init_and_playable_ready_are_one_shot);
     RUN_TEST(test_menu_input_does_not_start_gameplay);
     RUN_TEST(test_any_keyboard_input_starts_gameplay);
+    RUN_TEST(test_input_poll_reports_no_gesture_without_an_edge);
     RUN_TEST(test_touch_input_starts_gameplay);
     RUN_TEST(test_input_does_not_start_gameplay_while_gameplay_is_disallowed);
     RUN_TEST(test_gameplay_intent_starts_and_menu_stops_gameplay);

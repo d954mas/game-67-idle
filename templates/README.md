@@ -2,9 +2,11 @@
 
 Reusable game starting points live here as `templates/<template-id>/`.
 
-There can be multiple templates. Register each usable template in
-`templates/templates.json` so AI Studio surfaces and
+There can be multiple templates. Mount each usable template in
+`ai_studio/workspace/catalog.json` and give it a `template.json` so AI Studio surfaces and
 `games/new_game.mjs --template <template-id>` can find it.
+Each template also owns `game-dependencies.json`, the explicit engine/feature
+seed used to create exact game-owned dependency records.
 Use `node templates/new_template.mjs --id <template-id>` when creating
 a new reusable template; it registers the template and refreshes VS Code
 build/run entries.
@@ -21,7 +23,7 @@ node games/new_game.mjs --id <game-id> --template <template-id> --visibility pri
 ```
 
 Use `--visibility public` when the game may be registered in tracked Studio
-files such as `games/games.json`, parent Taskboard projects, and generated
+files such as the tracked workspace catalog, parent Taskboard projects, and generated
 VS Code entries. Use `--visibility private` for a nested private repository
 under `games/<game-id>/`; that path keeps game-local taskboard, canvas, evidence,
 and workspace state inside the game and only writes local ignored Studio mount
@@ -40,6 +42,5 @@ when only that game needs the feature.
 
 Current registered template list:
 
-- `templates/templates.json`
-- `.vscode/tasks.json` and `.vscode/launch.json` are generated from this list
-  and `games/games.json`.
+- `ai_studio/workspace/catalog.json`
+- `.vscode/tasks.json` and `.vscode/launch.json` are generated from this catalog.

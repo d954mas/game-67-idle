@@ -84,6 +84,17 @@ test("listProjects tolerates broken project folders", (t) => {
   assert.deepEqual(ids, [good.id]);
 });
 
+test("listProjects hides archived projects by default and can include them explicitly", (t) => {
+  tempProjects(t);
+  const active = createProject(ROOT, { title: "Active" });
+  const archived = createProject(ROOT, { title: "Archived" });
+  updateProject(ROOT, archived.id, { archived: true });
+
+  assert.deepEqual(listProjects(ROOT).map((project) => project.id), [active.id]);
+  assert.deepEqual(new Set(listProjects(ROOT, { includeArchived: true }).map((project) => project.id)), new Set([active.id, archived.id]));
+  assert.equal(getProject(ROOT, archived.id).archived, true, "direct reads remain available");
+});
+
 test("addImage stores an immutable content-addressed file with real dimensions", (t) => {
   const projectsRoot = tempProjects(t);
   const project = createProject(ROOT, { title: "Images" });

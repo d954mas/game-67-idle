@@ -427,8 +427,9 @@ test("buildGenerateCommand: prompt, one --input-image per ref, size/quality/mode
     quality: "medium",
     model: "gpt-image-2",
     outPath: "C:/tmp/out.png",
+    pythonPath: "test-python",
   });
-  assert.equal(command, "python");
+  assert.equal(command, "test-python");
   assert.equal(args[0], GENERATE_IMAGE_SCRIPT);
   assert.match(args[0], /generate_image\.py$/);
   assert.deepEqual(args.slice(1), [
@@ -443,7 +444,7 @@ test("buildGenerateCommand: prompt, one --input-image per ref, size/quality/mode
 });
 
 test("buildGenerateCommand: no refs -> no --input-image flags; defaults fill size/quality/model", () => {
-  const { args } = buildGenerateCommand({ prompt: "p", outPath: "o.png" });
+  const { args } = buildGenerateCommand({ prompt: "p", outPath: "o.png", pythonPath: "test-python" });
   assert.deepEqual(args.slice(1), ["--prompt", "p", "--size", "1024x1024", "--quality", "high", "--model", "gpt-image-2", "--out", "o.png"]);
 });
 

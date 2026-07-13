@@ -5,7 +5,8 @@
 // frontmatter parsing, paths, templates, mutation, and validation. Keep the
 // public facade in lib.mjs small; do not split this again without a real need.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { basename, dirname, join, relative, resolve } from "node:path";
 
 export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done"];
@@ -207,6 +208,9 @@ function listDocs(dir, kind, options = {}) {
       continue;
     }
     const file = join(dir, name);
+    if (!statSync(file).isFile()) {
+      continue;
+    }
     const { fields, body } = parseDoc(readFileSync(file, "utf8"));
     docs.push({
       kind,
@@ -321,6 +325,10 @@ function countersPath(root, options = {}) {
   return join(itemDir(root, options), ".counters.json");
 }
 
+function allocationLockPath(root, options = {}) {
+  return join(itemDir(root, options), ".allocation.lock");
+}
+
 function readCounters(root, options = {}) {
   const path = countersPath(root, options);
   if (!existsSync(path)) return {};
@@ -332,11 +340,155 @@ function readCounters(root, options = {}) {
   }
 }
 
+function sleepSync(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function reclaimStaleAllocationLock(lockPath, staleMs, attempt) {
+  let ageMs;
+  try {
+    ageMs = Date.now() - statSync(lockPath).mtimeMs;
+  } catch (error) {
+    if (error.code === "ENOENT") return true;
+    throw error;
+  }
+  if (ageMs <= staleMs) return false;
+  try {
+    const owner = JSON.parse(readFileSync(join(lockPath, "owner.json"), "utf8"));
+    if (Number.isInteger(owner.pid) && owner.pid > 0) {
+      try {
+        process.kill(owner.pid, 0);
+        return false;
+      } catch (error) {
+        if (error.code === "EPERM") return false;
+      }
+    }
+  } catch {
+    // Missing or malformed metadata cannot make an expired lock permanent.
+  }
+  const stalePath = `${lockPath}.stale-${process.pid}-${attempt}-${randomUUID()}`;
+  try {
+    renameSync(lockPath, stalePath);
+  } catch (error) {
+    if (error.code === "ENOENT") return true;
+    if (error.code === "EEXIST" || error.code === "EPERM" || error.code === "ENOTEMPTY") return false;
+    throw error;
+  }
+  rmSync(stalePath, { recursive: true, force: true });
+  return true;
+}
+
+function readAllocationOwner(lockPath) {
+  try {
+    return JSON.parse(readFileSync(join(lockPath, "owner.json"), "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function releaseAllocationLock(lockPath, token) {
+  const owner = readAllocationOwner(lockPath);
+  if (!owner || owner.token !== token) return;
+  const releasePath = `${lockPath}.release-${process.pid}-${token}`;
+  try {
+    renameSync(lockPath, releasePath);
+  } catch (error) {
+    if (error.code === "ENOENT") return;
+    throw error;
+  }
+  const displacedOwner = readAllocationOwner(releasePath);
+  if (!displacedOwner || displacedOwner.token !== token) {
+    if (!existsSync(releasePath) || existsSync(lockPath)) return;
+    try {
+      renameSync(releasePath, lockPath);
+    } catch (error) {
+      if (!["ENOENT", "EEXIST", "EPERM", "ENOTEMPTY"].includes(error.code)) throw error;
+    }
+    return;
+  }
+  try {
+    rmSync(releasePath, { recursive: true, force: true, maxRetries: 6, retryDelay: 20 });
+  } catch {
+    // Allocation already committed and the live lock name is free. A later
+    // acquisition reaps this token-unique quarantine without risking duplicates.
+  }
+}
+
+function reapReleasedAllocationLocks(items, lockPath, staleMs) {
+  const prefix = `${basename(lockPath)}.release-`;
+  for (const name of readdirSync(items)) {
+    if (!name.startsWith(prefix)) continue;
+    const path = join(items, name);
+    try {
+      if (Date.now() - statSync(path).mtimeMs <= staleMs) continue;
+    } catch {
+      continue;
+    }
+    try {
+      rmSync(path, { recursive: true, force: true, maxRetries: 6, retryDelay: 20 });
+    } catch {
+      // Best-effort hygiene only; a quarantined path is never the live lock.
+    }
+  }
+}
+
+function withAllocationLock(root, options, allocate) {
+  const items = itemDir(root, options);
+  const lockPath = allocationLockPath(root, options);
+  const retryMs = Math.max(1, Number(options.allocationLockRetryMs) || 10);
+  const timeoutMs = Math.max(retryMs, Number(options.allocationLockTimeoutMs) || 5000);
+  const staleMs = Math.max(retryMs, Number(options.allocationLockStaleMs) || 30000);
+  const deadline = Date.now() + timeoutMs;
+  mkdirSync(items, { recursive: true });
+  reapReleasedAllocationLocks(items, lockPath, staleMs);
+
+  for (let attempt = 0; attempt === 0 || Date.now() < deadline; attempt += 1) {
+    const token = randomUUID();
+    const candidatePath = `${lockPath}.candidate-${process.pid}-${token}`;
+    let acquired = false;
+    try {
+      mkdirSync(candidatePath);
+      writeFileSync(join(candidatePath, "owner.json"), JSON.stringify({
+        pid: process.pid,
+        token,
+        acquiredAt: new Date().toISOString(),
+      }) + "\n", { flag: "wx" });
+      renameSync(candidatePath, lockPath);
+      acquired = true;
+    } catch (error) {
+      if (error.code !== "EEXIST" && error.code !== "EPERM" && error.code !== "ENOTEMPTY") throw error;
+    } finally {
+      if (!acquired) rmSync(candidatePath, { recursive: true, force: true });
+    }
+    if (acquired) {
+      try {
+        return allocate();
+      } finally {
+        releaseAllocationLock(lockPath, token);
+      }
+    }
+    if (reclaimStaleAllocationLock(lockPath, staleMs, attempt)) continue;
+    const remainingMs = deadline - Date.now();
+    if (remainingMs > 0) sleepSync(Math.min(retryMs, remainingMs));
+  }
+  throw new Error(`Timed out waiting for Taskboard allocation lock ${lockPath}; recover it only if older than ${staleMs}ms`);
+}
+
+function writeCountersAtomic(root, counters, options = {}) {
+  const target = countersPath(root, options);
+  const temp = `${target}.tmp-${process.pid}-${Date.now()}`;
+  try {
+    writeFileSync(temp, JSON.stringify(counters, null, 2) + "\n", { flag: "wx" });
+    renameSync(temp, target);
+  } finally {
+    rmSync(temp, { force: true });
+  }
+}
+
 // Ids must stay monotonic even after archive pruning: scanning files alone
-// rewinds the sequence when history is deleted (T0001 would be reissued while
-// old docs still reference it), so the high-water mark persists in
-// items/.counters.json and the scan only ever raises it.
-function nextId(root, docs, prefix, pad, options = {}) {
+// rewinds the sequence when history is deleted, so the high-water mark persists
+// in items/.counters.json and the scan only ever raises it.
+function commitNextId(root, docs, prefix, pad, options = {}) {
   const counters = readCounters(root, options);
   let max = Number(counters[prefix]) || 0;
   for (const doc of docs) {
@@ -347,30 +499,47 @@ function nextId(root, docs, prefix, pad, options = {}) {
   }
   const next = max + 1;
   counters[prefix] = next;
-  mkdirSync(itemDir(root, options), { recursive: true });
-  writeFileSync(countersPath(root, options), JSON.stringify(counters, null, 2) + "\n");
+  writeCountersAtomic(root, counters, options);
   return prefix + String(next).padStart(pad, "0");
+}
+
+function createAllocatedDoc(root, options, config) {
+  mkdirSync(config.dir, { recursive: true });
+  return withAllocationLock(root, options, () => {
+    const maxAttempts = Math.max(1, Number(options.allocationMaxAttempts) || 100);
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const id = commitNextId(root, config.listDocs(), config.prefix, config.pad, options);
+      const fields = config.makeFields(id);
+      const file = join(config.dir, `${id}-${slugify(fields.title)}.md`);
+      try {
+        writeFileSync(file, serializeDoc(fields, config.body), { flag: "wx" });
+        return { kind: config.kind, file, fields, body: config.body };
+      } catch (error) {
+        if (error.code !== "EEXIST") throw error;
+      }
+    }
+    throw new Error(`Could not allocate a unique ${config.kind} id after ${maxAttempts} attempts`);
+  });
 }
 
 export function createProject(root, input = {}, options = {}) {
   const dir = projectDir(root, options);
-  mkdirSync(dir, { recursive: true });
-  const id = nextId(root, listProjects(root, options), "P", 3, options);
-  const fields = {
-    id,
-    title: input.title || "Untitled project",
-    status: PROJECT_STATUSES.includes(input.status) ? input.status : "idea",
-    kind: PROJECT_KINDS.includes(input.kind) ? input.kind : "other",
-    target: input.target || "",
-    priority: PRIORITIES.includes(input.priority) ? input.priority : "P2",
-    tags: Array.isArray(input.tags) ? input.tags : [],
-    created: todayStamp(),
-    updated: todayStamp(),
-  };
   const body = input.body || PROJECT_BODY_TEMPLATE;
-  const file = join(dir, `${id}-${slugify(fields.title)}.md`);
-  writeFileSync(file, serializeDoc(fields, body));
-  return { kind: "project", file, fields, body };
+  return createAllocatedDoc(root, options, {
+    dir, body, kind: "project", prefix: "P", pad: 3,
+    listDocs: () => listProjects(root, options),
+    makeFields: (id) => ({
+      id,
+      title: input.title || "Untitled project",
+      status: PROJECT_STATUSES.includes(input.status) ? input.status : "idea",
+      kind: PROJECT_KINDS.includes(input.kind) ? input.kind : "other",
+      target: input.target || "",
+      priority: PRIORITIES.includes(input.priority) ? input.priority : "P2",
+      tags: Array.isArray(input.tags) ? input.tags : [],
+      created: todayStamp(),
+      updated: todayStamp(),
+    }),
+  });
 }
 
 export function ensureProject(root, input = {}, options = {}) {
@@ -408,44 +577,49 @@ Track work for \`${input.target || input.title || "this project"}\`.
 
 export function createEpic(root, input = {}, options = {}) {
   const dir = epicDir(root, options);
-  mkdirSync(dir, { recursive: true });
-  const id = nextId(root, listEpics(root, options), "E", 3, options);
-  const fields = {
-    id,
-    title: input.title || "Untitled epic",
-    status: EPIC_STATUSES.includes(input.status) ? input.status : "idea",
-    project: input.project || "",
-    priority: PRIORITIES.includes(input.priority) ? input.priority : "P2",
-    tags: Array.isArray(input.tags) ? input.tags : [],
-    created: todayStamp(),
-    updated: todayStamp(),
-  };
   const body = input.body || EPIC_BODY_TEMPLATE;
-  const file = join(dir, `${id}-${slugify(fields.title)}.md`);
-  writeFileSync(file, serializeDoc(fields, body));
-  return { kind: "epic", file, fields, body };
+  return createAllocatedDoc(root, options, {
+    dir, body, kind: "epic", prefix: "E", pad: 3,
+    listDocs: () => listEpics(root, options),
+    makeFields: (id) => ({
+      id,
+      title: input.title || "Untitled epic",
+      status: EPIC_STATUSES.includes(input.status) ? input.status : "idea",
+      project: input.project || "",
+      priority: PRIORITIES.includes(input.priority) ? input.priority : "P2",
+      tags: Array.isArray(input.tags) ? input.tags : [],
+      created: todayStamp(),
+      updated: todayStamp(),
+    }),
+  });
 }
 
 export function createTask(root, input = {}, options = {}) {
+  if (input.status === "done") {
+    throw closeoutError(
+      "task_create_done_forbidden",
+      "Cannot create a task with status done; create it in an active status and close it through updateDoc",
+      { allowedInitialStatuses: TASK_STATUSES.filter((status) => status !== "done") },
+    );
+  }
   const dir = activeTaskDir(root, options);
-  mkdirSync(dir, { recursive: true });
-  const id = nextId(root, listTasks(root, { ...options, includeArchive: true }), "T", 4, options);
   const epic = input.epic ? findDoc(root, input.epic, options) : null;
-  const fields = {
-    id,
-    title: input.title || "Untitled task",
-    status: TASK_STATUSES.includes(input.status) ? input.status : "idea",
-    project: input.project || (epic && epic.kind === "epic" ? (epic.fields.project || "") : ""),
-    epic: input.epic || "",
-    priority: PRIORITIES.includes(input.priority) ? input.priority : "P2",
-    tags: Array.isArray(input.tags) ? input.tags : [],
-    created: todayStamp(),
-    updated: todayStamp(),
-  };
   const body = input.body || TASK_BODY_TEMPLATE;
-  const file = join(dir, `${id}-${slugify(fields.title)}.md`);
-  writeFileSync(file, serializeDoc(fields, body));
-  return { kind: "task", file, fields, body };
+  return createAllocatedDoc(root, options, {
+    dir, body, kind: "task", prefix: "T", pad: 4,
+    listDocs: () => listTasks(root, { ...options, includeArchive: true }),
+    makeFields: (id) => ({
+      id,
+      title: input.title || "Untitled task",
+      status: TASK_STATUSES.includes(input.status) ? input.status : "idea",
+      project: input.project || (epic && epic.kind === "epic" ? (epic.fields.project || "") : ""),
+      epic: input.epic || "",
+      priority: PRIORITIES.includes(input.priority) ? input.priority : "P2",
+      tags: Array.isArray(input.tags) ? input.tags : [],
+      created: todayStamp(),
+      updated: todayStamp(),
+    }),
+  });
 }
 
 export function updateDoc(root, id, patch = {}, options = {}) {
@@ -486,6 +660,9 @@ export function updateDoc(root, id, patch = {}, options = {}) {
   }
   fields.updated = todayStamp();
   const body = patch.body !== undefined ? patch.body : doc.body;
+  if (doc.kind === "task" && doc.fields.status !== "done" && fields.status === "done") {
+    assertTaskCloseout(id, body);
+  }
   let file = doc.file;
   let targetFile = doc.file;
   if (doc.kind === "task") {
@@ -501,6 +678,149 @@ export function updateDoc(root, id, patch = {}, options = {}) {
     file = targetFile;
   }
   return { ...doc, file, fields, body };
+}
+
+const QUALITY_OUTCOMES = ["pass", "block", "review", "skip", "unverified"];
+
+function stripHtmlCommentContent(line, state) {
+  let cursor = 0;
+  let visible = "";
+  while (cursor < line.length) {
+    if (state.inComment) {
+      const end = line.indexOf("-->", cursor);
+      if (end === -1) return visible;
+      state.inComment = false;
+      cursor = end + 3;
+      continue;
+    }
+    const start = line.indexOf("<!--", cursor);
+    if (start === -1) return visible + line.slice(cursor);
+    visible += line.slice(cursor, start);
+    state.inComment = true;
+    cursor = start + 4;
+  }
+  return visible;
+}
+
+function atxHeading(line) {
+  const match = line.match(/^ {0,3}(#{1,6})(?:[ \t]+(.*)|[ \t]*)$/);
+  if (!match) return null;
+  const text = String(match[2] || "").replace(/[ \t]+#+[ \t]*$/, "").trim();
+  return { level: match[1].length, text };
+}
+
+function markdownSectionLines(body, heading) {
+  const lines = String(body).split(/\r?\n/);
+  const sectionLines = [];
+  let inSection = false;
+  let fence = null;
+  const commentState = { inComment: false };
+  for (const rawLine of lines) {
+    if (fence) {
+      const closing = rawLine.match(/^ {0,3}(`+|~+)[ \t]*$/);
+      if (closing && closing[1][0] === fence.marker && closing[1].length >= fence.length) {
+        fence = null;
+      }
+      continue;
+    }
+    if (!commentState.inComment && /^(?: {4,}|\t)/.test(rawLine)) continue;
+    const line = stripHtmlCommentContent(rawLine, commentState);
+    const indentedCode = /^(?: {4,}|\t)/.test(line);
+    if (!indentedCode) {
+      const opening = line.match(/^ {0,3}(`{3,}|~{3,})(.*)$/);
+      if (opening) {
+        fence = { marker: opening[1][0], length: opening[1].length };
+        continue;
+      }
+      const sectionHeading = atxHeading(line);
+      if (sectionHeading) {
+        if (inSection && sectionHeading.level <= 2) return sectionLines;
+        if (!inSection && sectionHeading.level === 2) {
+          inSection = sectionHeading.text.toLowerCase() === heading.toLowerCase();
+        }
+        continue;
+      }
+    }
+    if (inSection && !indentedCode) sectionLines.push(line);
+  }
+  return sectionLines;
+}
+
+export function canonicalTaskLogPayloads(body) {
+  const payloads = [];
+  for (const line of markdownSectionLines(body, "Log")) {
+    const record = line.match(/^- \d{4}-\d{2}-\d{2}: (.+)$/);
+    if (record) payloads.push(record[1]);
+  }
+  return payloads;
+}
+
+function canonicalLogPayloads(body, label) {
+  return canonicalTaskLogPayloads(body).filter((payload) => payload.startsWith(`${label}:`));
+}
+
+export function canonicalQualityAssignments(value) {
+  const assignments = String(value || "").split(";").map((entry) => entry.trim()).filter(Boolean);
+  const parsed = assignments.map((entry) => entry.match(/^(Q[A-Z0-9_]+)=(pass|block|review|skip|unverified)$/));
+  if (!assignments.length || parsed.some((match) => !match)) {
+    return null;
+  }
+  const ruleIds = parsed.map((match) => match[1]);
+  if (new Set(ruleIds).size !== ruleIds.length) {
+    return null;
+  }
+  return assignments.join("; ");
+}
+
+function hasClosureWaiver(body) {
+  return canonicalLogPayloads(body, "Closure").some((line) => {
+    const match = line.match(/^Closure: waived; reason: (.+); evidence: (.+)$/);
+    return Boolean(match && match[1].trim() && match[2].trim());
+  });
+}
+
+function hasQualityDecision(body) {
+  return canonicalLogPayloads(body, "Quality").some((line) => {
+    const notApplicable = line.match(/^Quality: not-applicable; reason: (.+)$/);
+    if (notApplicable) return Boolean(notApplicable[1].trim());
+    const evidence = line.match(/^Quality: (.+); evidence: (.+)$/);
+    return Boolean(evidence && canonicalQualityAssignments(evidence[1]) && evidence[2].trim());
+  });
+}
+
+function closeoutError(code, message, details) {
+  const err = new Error(message);
+  err.problem = { code, message, details };
+  return err;
+}
+
+function assertTaskCloseout(id, body) {
+  const criteria = [];
+  const malformed = [];
+  for (const line of markdownSectionLines(body, "Done when")) {
+    const criterion = line.match(/^ {0,3}- \[([ x])\][ \t]+(\S.*)$/);
+    if (criterion) {
+      criteria.push({ checked: criterion[1] === "x", text: criterion[2].trim() });
+    } else if (/^ {0,3}(?:[-+*]|\d+[.)])[ \t]+\[/.test(line)) {
+      malformed.push(line.trim());
+    }
+  }
+  const unchecked = criteria.filter((criterion) => !criterion.checked).map((criterion) => criterion.text);
+  const closureComplete = criteria.length > 0 && unchecked.length === 0 && malformed.length === 0;
+  if (!closureComplete && !hasClosureWaiver(body)) {
+    throw closeoutError(
+      "task_closure_required",
+      `${id} cannot move to done: add and check canonical Done when items or log a canonical closure waiver`,
+      { unchecked, malformed, canonicalCriteria: criteria.length },
+    );
+  }
+  if (!hasQualityDecision(body)) {
+    throw closeoutError(
+      "task_quality_decision_required",
+      `${id} cannot move to done: log canonical quality evidence or a not-applicable reason`,
+      { allowedOutcomes: QUALITY_OUTCOMES },
+    );
+  }
 }
 
 function taskStorageDir(root, fields, options = {}) {
@@ -668,7 +988,7 @@ export function agentTaskRow(root, doc, options = {}) {
   return addStoreFields(row, doc.fields.id, options);
 }
 
-export function currentWorkRows(root, limit = 25, options = {}) {
+export function currentWorkRows(root, limit = 5, options = {}) {
   const epics = epicsById(root, options);
   const tasks = options.tasks || listTasks(root, options);
   return tasks
@@ -679,7 +999,7 @@ export function currentWorkRows(root, limit = 25, options = {}) {
 }
 
 export function agentContextPayload(root, options = {}) {
-  const limit = Number.isFinite(Number(options.limit)) ? Number(options.limit) : 25;
+  const limit = Number.isFinite(Number(options.limit)) ? Number(options.limit) : 5;
   const tasks = listTasks(root, options);
   const epics = listEpics(root, options);
   const projects = listProjects(root, options);

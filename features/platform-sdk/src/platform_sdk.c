@@ -1,4 +1,5 @@
 #include "features/platform_sdk/platform_sdk.h"
+#include "features/platform_sdk/platform_sdk_measure.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -649,6 +650,37 @@ platform_sdk_result_t platform_sdk_game_ready(void) {
     if (g_platform_sdk.has_backend && g_platform_sdk.backend.game_ready != NULL) {
         g_platform_sdk.backend.game_ready(g_platform_sdk.backend_userdata);
     }
+    return PLATFORM_SDK_RESULT_OK;
+}
+
+static bool platform_sdk_measure_token_valid(const char *token) {
+    if (token == NULL || token[0] == '\0') return false;
+    size_t length = 0u;
+    for (; token[length] != '\0'; ++length) {
+        const char c = token[length];
+        const bool allowed = (c >= 'a' && c <= 'z') ||
+                             (c >= '0' && c <= '9') || c == '-' || c == '_';
+        if (!allowed || length >= 32u) return false;
+    }
+    return length <= 32u;
+}
+
+platform_sdk_result_t platform_sdk_measure(const char *category,
+                                           const char *what,
+                                           const char *action) {
+    if (g_platform_sdk.status == PLATFORM_SDK_BOOT_DESTROYED) {
+        return PLATFORM_SDK_RESULT_DESTROYED;
+    }
+    if (!platform_sdk_measure_token_valid(category) ||
+        !platform_sdk_measure_token_valid(what) ||
+        !platform_sdk_measure_token_valid(action)) {
+        return PLATFORM_SDK_RESULT_FAILED;
+    }
+    if (!platform_sdk_is_ready()) return PLATFORM_SDK_RESULT_NOT_READY;
+    if (!g_platform_sdk.has_backend || g_platform_sdk.backend.measure == NULL) {
+        return PLATFORM_SDK_RESULT_UNSUPPORTED;
+    }
+    g_platform_sdk.backend.measure(category, what, action, g_platform_sdk.backend_userdata);
     return PLATFORM_SDK_RESULT_OK;
 }
 

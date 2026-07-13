@@ -33,10 +33,10 @@ Each manifest declares:
 Use the template web builder and target-specific output directory:
 
 ```powershell
-bash tools/build_web.sh --preset wasm-release --target itch
-bash tools/build_web.sh --preset wasm-release --target poki
-bash tools/build_web.sh --preset wasm-release --target yandex
-bash tools/build_web.sh --preset wasm-release --target playgama
+node tools/build_web.mjs --preset wasm-release --target itch
+node tools/build_web.mjs --preset wasm-release --target poki
+node tools/build_web.mjs --preset wasm-release --target yandex
+node tools/build_web.mjs --preset wasm-release --target playgama
 ```
 
 The script passes `-DGAME_PUBLISH_TARGET=<target>` to CMake. CMake computes the
@@ -53,3 +53,21 @@ node features/platform-sdk/scripts/artifact_tools.mjs inspect --target poki --ar
 
 The inspection fails if production artifacts contain debug button labels,
 `debug_test`, or SDK markers from adapters not selected by the target.
+
+## Release evidence levels
+
+Portal evidence is recorded per game release and never inferred from a lower
+level:
+
+| Level | What it proves |
+| --- | --- |
+| `local-mock` | A separately recorded run against the local mock simulator. |
+| `local-sdk-contract` | The exact final ZIP and sidecar pass the offline package and selected-adapter contract. |
+| `public-inspector` | A public portal inspector accepted that exact ZIP SHA-256. |
+| `credentialed-portal-smoke` | An authenticated portal smoke run exercised that exact ZIP SHA-256. |
+| `production-certification` | The portal issued its production certification for that exact ZIP SHA-256. |
+
+The offline game-owned reporter records only `local-sdk-contract` as `pass`.
+It does not read credentials or make network requests; missing portal access is
+therefore an explicit `unverified` result with the next required evidence, not
+a fabricated success.

@@ -12,9 +12,9 @@
 import { readFile, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import { scanPackManifestSource } from "../backlog/storage/manifests/manifest.mjs";
-import { decideLicense, isPublishable } from "../backlog/storage/license/restricted.mjs";
-import { defaultLibrarySourceRoot } from "../backlog/storage/sources/libraries.mjs";
+import { scanPackManifestSource } from "../manifests/ops.mjs";
+import { decideLicense, isPublishable } from "../licenses/ops.mjs";
+import { defaultLibrarySourceRoot } from "../sources/ops.mjs";
 import { isMain } from "../../core_harness/tool_lib/cli.mjs";
 
 const PULL_PACK = "library-pulls";
@@ -25,6 +25,9 @@ function relPosix(root, abs) {
 
 function resolvePullTarget(root, target) {
   const resolvedRoot = resolve(root);
+  if (/^[A-Za-z]:[/\\]/.test(target) && !/^[A-Za-z]:[/\\]/.test(resolvedRoot)) {
+    throw new Error("--to must stay inside the repository");
+  }
   const full = resolve(resolvedRoot, target);
   if (full === resolvedRoot) {
     throw new Error("--to must be a game/template assets directory, not the repository root");

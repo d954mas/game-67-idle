@@ -65,3 +65,29 @@ wall-clock timestamps.
 
 A game with a fundamentally different event spine can copy this pack into its own
 tree and own the fork. Do not add speculative switches for one-off consumers.
+
+## Purpose
+
+Provide the reusable L0 event, rendering, DevAPI-tail, and local analytics
+spine described above.
+
+## Public surface
+
+The headers and capabilities listed by `feature.json.provides` are public;
+template composition and private implementation files are not.
+
+## Validation
+
+Run the `ctest` command from `feature.json`, then
+`node features/validate_contracts.mjs`.
+
+## Compatibility
+
+`feature.json.version` is exact SemVer. Patch preserves the public contract,
+minor adds backward-compatible surface, and major permits breaking changes.
+Consumers pin both this version and an exact repository revision.
+
+## Extension points
+
+Add descriptors, optional sinks, and guarded adapters through documented
+registration seams; game-specific event policy stays game-owned.

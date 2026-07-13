@@ -54,7 +54,7 @@ target_include_directories(${GAME_TARGET} PRIVATE "${ITEMS_CORE_INC}" src ...)
 
 `items_containers.c` calls `items_reason_check()`, declared in the GAME's own
 `src/features/items/reason_tags.h` — resolved through the game's `src` on the
-include path (§2.3 of the build spec), not shipped by this module
+include path as part of the game-owned items corner, not shipped by this module
 (`G-noleak` grep-gate forbids `reason_tags.h` from existing inside
 `features/items-core`).
 
@@ -67,7 +67,7 @@ Every consumer must supply its own:
 <game>/content/item_fields.schema.json
 <game>/content/items.lock.json           # destructive-change guard baseline
 <game>/state/items.schema.json           # version + hooks: on_new_game/reconcile + migrations
-<game>/src/features/items/reason_tags.h  # closed reason-verb list (§2.3)
+<game>/src/features/items/reason_tags.h  # closed reason-verb list
 <game>/src/features/items/items_bootstrap.c  # items_on_new_game() only
 ```
 
@@ -109,7 +109,7 @@ add_test(NAME items_ops_test COMMAND "${Python3_EXECUTABLE}"
 ## Verify
 
 ```powershell
-py -3.12 features/items-core/scripts/items_ops_test.py
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops_test.py
 ctest --test-dir templates/template/build/native-debug --output-on-failure
 ```
 

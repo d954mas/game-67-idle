@@ -31,31 +31,28 @@ project:
   src/features/settings/settings.h
 ```
 
-The generated `game_state.c` now defines the `game_state_fragment` descriptor
-itself (the hand-written `game_fragment.c` adapter was removed in A4), so there
-is no separate fragment source to copy. The DevAPI dispatch is the hand-written
-`src/game_save_devapi.c` (A5): universal over the fragment registry, compiled
+Each generated `<id>_state.c` defines its fragment descriptor, so there is no
+separate fragment adapter to copy. The DevAPI dispatch is the hand-written
+`src/game_save_devapi.c`: universal over the fragment registry, compiled
 only under `GAME_DEVAPI_ENABLED`.
 
-`settings` (A6) is the second live fragment and the Р9 sample: its state layer
+`settings` is one live fragment in the multi-fragment sample: its state layer
 (`SettingsState`, defaults, (de)serialization, schema, descriptor) is GENERATED
 from `state/settings.schema.json`; only the feature LOGIC —
 `src/features/settings/settings.{c,h}` (getters/setters + clamp + `game_save_mark_dirty`)
 — is hand-written and copied. The registry, shell, dispatch, and generator are
-universal over `GameSaveFragment`, so a second fragment needs no edit to any of
+universal over `GameSaveFragment`, so a new fragment needs no edit to any of
 them. The settings UI (gear + panel) lives inside the feature as
 `src/features/settings/settings_screen.c`; it is template shell/UI wiring, not a
 game-state deliverable, and is NOT part of this copy-list.
 
 Then add CMake wiring equivalent to `templates/template/CMakeLists.txt`:
 
-- run `features/game-state/scripts/generate_state.py` with the project schema
-  (`--fragment game`);
-- run the generator a SECOND time with the settings schema
-  (`--fragment settings`) into the SAME generated dir — the two custom commands
-  write different filenames, so a parallel build is fine;
+- run `features/game-state/scripts/generate_state.py` once per fragment schema
+  into the SAME generated dir;
+  fragment-specific filenames make parallel custom commands safe;
 - write generated outputs to `<build>/generated/game-state`;
-- compile generated `game_state.c` and `settings_state.c`, the hand-written
+- compile every generated fragment source plus the hand-written
   `src/features/settings/settings.c`, `src/game_storage.c`, and migrations
   unconditionally (`settings_state_events.gen.c` is an empty-events
   stub and is NOT linked; do not call `settings_ev_register`);
@@ -68,11 +65,15 @@ inside code that is compiled only when DevAPI is enabled:
 
 ```c
 #include "game_state.h"
-#include "settings_state.h" /* A6: second fragment; NOT settings_state_events.gen.h */
+#include "settings_state.h"
+#include "items_state.h"
+#include "progression_state.h"
 
 /* after core/runtime init -- game-state provisioning is always on (unconditional) */
-game_save_register_fragment(&settings_state_fragment); /* settings before game */
-game_save_register_fragment(&game_state_fragment);     /* generated descriptor; `game` last */
+game_save_register_fragment(&settings_state_fragment);
+game_save_register_fragment(&items_state_fragment);
+game_save_register_fragment(&progression_state_fragment);
+game_save_register_fragment(&game_state_fragment);     /* most dependent; last */
 game_save_init();                            /* after all fragments are registered */
 if (!fresh_state) {
     game_save_load_result_t r;
@@ -82,20 +83,22 @@ if (!fresh_state) {
         (void)game_save_new_game(err, (int)sizeof err); /* only on_new_game on this path */
     }
 } else {
-    settings_state_fragment.reset();         /* --fresh-state skips load: seed both fragments */
+    settings_state_fragment.reset();         /* --fresh-state skips load */
+    items_state_fragment.reset();
+    progression_state_fragment.reset();
     game_state_fragment.reset();
 }
 #ifdef NT_PLATFORM_WEB
 game_save_install_web_flush();               /* synchronous visibility/pagehide flush */
 #endif
 
-/* per frame, after the game systems (and, with E1, after the record phase) */
+/* per frame, after the game systems and event record phase */
 if (!disable_autosave) {
     game_save_tick();                        /* debounced autosave */
 }
 
 /* inside the DevAPI startup path, after nt_devapi_register_default() */
-game_save_register_devapi();  /* A5: registry dispatch (src/game_save_devapi.c) */
+game_save_register_devapi();  /* registry dispatch (src/game_save_devapi.c) */
 ```
 
 Compile `src/game_save.c` with the generated `game_state.c` (both
@@ -121,14 +124,14 @@ cmake -S <project> -B <project>/build/release -DGAME_DEVAPI_ENABLED=OFF
 Do not hand-edit generated files. Per fragment, the generator writes
 `<id>_state.h`, `<id>_state.c`, `<id>_state_schema.gen.h`,
 `<id>_state_events.gen.h`, and `<id>_state_events.gen.c`. The default template
-generates TWO fragments — `game` and `settings` — into the same generated dir:
+generates `settings`, `items`, `progression`, and `game` into one directory.
 
 ```text
-game_state.h              settings_state.h
-game_state.c              settings_state.c
-game_state_schema.gen.h   settings_state_schema.gen.h
-game_state_events.gen.h   settings_state_events.gen.h
-game_state_events.gen.c   settings_state_events.gen.c
+<fragment>_state.h
+<fragment>_state.c
+<fragment>_state_schema.gen.h
+<fragment>_state_events.gen.h
+<fragment>_state_events.gen.c
 ```
 
 A fragment with an empty `events` section still emits the events pair as a stub
@@ -136,7 +139,7 @@ A fragment with an empty `events` section still emits the events pair as a stub
 linked into the target and its register function is never called.
 
 The DevAPI dispatch is no longer generated: it is the hand-written
-`src/game_save_devapi.c` (A5), a universal registry dispatch shared by every
+`src/game_save_devapi.c`, a universal registry dispatch shared by every
 fragment.
 
 The default template generates them into:
@@ -148,7 +151,7 @@ templates/template/build/<config>/generated/game-state/
 For a game-local manual generation run:
 
 ```powershell
-py -3.12 features/game-state/scripts/generate_state.py --schema games/<game-id>/state/game_state.schema.json
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema games/<game-id>/state/game_state.schema.json
 ```
 
 Pass `--out-dir` only when the project has an explicit generated-file policy.
@@ -173,6 +176,9 @@ game.state.load
 game.state.reset
 ```
 
+Paths start with the fragment id. `game.state.save` and `game.state.load` use
+the fixed autosave slot and accept no per-slot `key` or `doc` parameter.
+
 Use these raw commands for debug/editor overrides, fixtures, and targeted state
 tests. Gameplay bots should prefer semantic `game.action.*` commands when a game
 adds them.
@@ -182,7 +188,15 @@ adds them.
 Run generator tests:
 
 ```powershell
-py -3.12 features/game-state/scripts/generate_state_test.py
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/run_tests.py
+```
+
+Focused equivalents:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state_test.py
+node ai_studio/dev_environment/python_run.mjs -m unittest features/game-state/scripts/state_modules_test.py
+node ai_studio/dev_environment/python_run.mjs -m unittest features/game-state/benchmarks/benchmark_codegen_test.py
 ```
 
 Verify the template default build:
@@ -202,20 +216,21 @@ cmake --build templates/template/build/feature-review-release --target game
 Run the template bot unit tests:
 
 ```powershell
-py -3.12 templates/template/devapi/smoke_bot_test.py
+node ai_studio/dev_environment/python_run.mjs templates/template/devapi/smoke_bot_test.py
 ```
 
-With the template's two fragments registered (`settings` before `game`),
+With the template fragments registered `settings`, `items`, `progression`,
+then `game`,
 `game.state.get {path:""}` returns the multi-fragment aggregate
-`{ "settings": {...}, "game": {...} }` (registration order) and
-`game.state.schema` returns both fragment schemas. Retained orphan keys
-(unknown feature blobs round-tripped per §14 п.16) appear under a separate
+`{ "settings": {...}, "items": {...}, "progression": {...}, "game": {...} }`
+in registration order, and `game.state.schema` returns all fragment schemas. Retained orphan keys
+(unknown feature blobs round-tripped through load/save) appear under a separate
 `"orphans"` section in `get {path:""}`, omitted entirely when there are none. A cross-fragment
 `game.state.patch` applies each fragment atomically per key; a failure in one
 fragment (e.g. `settings.master_volume:5.0` out of range) rolls that fragment
 back without touching the other.
 
-Run the native `game_storage`/`game_state_json` Unity tests (A2):
+Run the native `game_storage`/`game_state_json` Unity tests:
 
 ```powershell
 ctest --test-dir templates/template/build/native-debug --output-on-failure
@@ -226,11 +241,11 @@ is quarantined and reported `CORRUPT_RESET` rather than silently reborn as
 `FRESH`, so a transient/hardware read error can never overwrite a live save with
 defaults (absent → `FRESH` is unchanged; lead 2026-07-07).
 
-Web persistence check (A2.4 item 2, CI-optional/advisory -- headless-localStorage
-automation is capricious, so a failure here does not fail A2 acceptance):
+Web persistence check (CI-optional/advisory -- headless-localStorage automation
+is capricious, so a missing local browser/toolchain is reported as a skip):
 
 ```powershell
-python templates/template/tests/web_persistence_check.py
+node ai_studio/dev_environment/python_run.mjs templates/template/tests/web_persistence_check.py
 ```
 
 Builds the template for wasm with `GAME_DEVAPI_ENABLED=ON`, serves it, drives a
@@ -256,8 +271,8 @@ object out of the archive so `nt_devapi_web_install_shim` resolves) plus
 the template's EMSCRIPTEN link block, gated on `GAME_DEVAPI_ENABLED`. The
 Debug wasm executable links and boots under ASan. T0333 then delivered the
 template web packaging path (relative pack over HTTP, tracked `index.html`
-shell, `tools/build_web.sh` + `tools/serve_web.mjs`, preset `wasm-devapi-debug`):
-`python templates/template/tests/web_devapi_check.py` now proves the shim
+shell, `tools/build_web.mjs` + `tools/serve_web.mjs`, preset `wasm-devapi-debug`):
+`node ai_studio/dev_environment/python_run.mjs templates/template/tests/web_devapi_check.py` now proves the shim
 round-trip in a headless browser (`endpoints` + `command.describe` over
 `window.__devapi.submit`) with one command. A full web BOT driver (browser
 site+agent parity) is still future.

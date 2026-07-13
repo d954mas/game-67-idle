@@ -14,8 +14,8 @@ agents can inspect and update safely.
 The feature provides:
 
 - schema-first `GameState` generation;
-- stable persisted field ids and `reserved` tombstones;
-- generated C storage, JSON serialization, and DevAPI adapters;
+- stable persisted field paths and `reserved` tombstones;
+- generated C storage/serialization and hand-written registry DevAPI dispatch;
 - save/load envelope and migration guidance;
 - review rules for state changes, fixtures, and runtime proof.
 
@@ -33,6 +33,13 @@ features/game-state/
   scripts/
     generate_state.py
     generate_state_test.py
+    run_tests.py
+    state_modules_test.py
+    state_codegen/
+  benchmarks/
+    benchmark_codegen.py
+    baseline.json
+    fixtures/multi_fragment.schema.json
 ```
 
 ## Integration Model
@@ -43,7 +50,8 @@ There is no general feature installer yet. This feature's correct use is:
 2. Keep an installed copy in each template or game that wants state:
    `state/`, `state/migrations/`, `src/game_storage.*`, and CMake/runtime
    wiring.
-3. Generate `game_state.*` from that local schema into the build directory, or
+3. Generate each fragment's `<id>_state*` files from its local schema into the
+   build directory, or
    into a checked-in generated folder if that project explicitly chooses to
    version generated C.
 4. Let that template or game own its local schema and migrations.
@@ -56,7 +64,7 @@ For exact install, enable/disable, verification, and uninstall steps, read
 
 Default template integration uses:
 
-- schema source: `templates/template/state/game_state.schema.json`;
+- schema sources: `templates/template/state/{settings,items,progression,game_state}.schema.json`;
 - generated output: `templates/template/build/<config>/generated/game-state/`;
 - migrations: `templates/template/state/migrations/`;
 - always compiled (the `FEATURE_GAME_STATE` on/off flag was removed
@@ -69,7 +77,7 @@ Default template integration uses:
 For a game-specific variant, pass explicit paths:
 
 ```powershell
-py -3.12 features/game-state/scripts/generate_state.py --schema games/<game-id>/state/game_state.schema.json --out-dir games/<game-id>/src/generated
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema games/<game-id>/state/game_state.schema.json --out-dir games/<game-id>/src/generated
 ```
 
 Runtime state cannot be disabled (no build flag). To remove DevAPI commands
@@ -77,19 +85,33 @@ from the build, configure `GAME_DEVAPI_ENABLED=OFF`.
 
 ## Commands
 
-Generate from the default schema:
+Generate from the template schema:
 
 ```powershell
-py -3.12 features/game-state/scripts/generate_state.py
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema templates/template/state/game_state.schema.json
 ```
 
 Without `--out-dir`, the command writes to `build/generated/game-state` under
-the template or game that owns the selected schema.
+the template or game that owns the required `--schema` path.
 
 Run generator tests:
 
 ```powershell
-py -3.12 features/game-state/scripts/generate_state_test.py
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/run_tests.py
+```
+
+The aggregate runner executes these focused suites:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state_test.py
+node ai_studio/dev_environment/python_run.mjs -m unittest features/game-state/scripts/state_modules_test.py
+node ai_studio/dev_environment/python_run.mjs -m unittest features/game-state/benchmarks/benchmark_codegen_test.py
+```
+
+Run the advisory local benchmark:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/game-state/benchmarks/benchmark_codegen.py
 ```
 
 ## Boundaries
@@ -119,3 +141,24 @@ Use this folder as the minimum bar for future feature packs:
 - keep reusable scripts close to the feature;
 - keep references specific to the feature;
 - expose an agent-facing skill only as a thin router when discoverability helps.
+
+## Public surface
+
+Generated `GameState` files, fragment descriptors, and commands declared in
+`feature.json` are public. Generator internals are not.
+
+## Validation
+
+Run the `test` command from `feature.json`, then
+`node features/validate_contracts.mjs`.
+
+## Compatibility
+
+`feature.json.version` is exact SemVer. Patch preserves the public contract,
+minor adds backward-compatible surface, and major permits breaking changes.
+Consumers pin both this version and an exact repository revision.
+
+## Extension points
+
+Extend through game-owned schemas, migrations, hooks, and DevAPI adapters;
+game-specific state policy stays outside the generator.

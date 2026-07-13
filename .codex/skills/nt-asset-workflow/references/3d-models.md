@@ -5,10 +5,10 @@ models, meshes, props, furniture, characters, or model packs.
 
 ## Source First
 
-Search Backlog Asset Storage before downloading or generating:
+Search the asset catalog before downloading or generating:
 
 ```powershell
-node ai_studio/assets/backlog/storage/search.mjs --kind model --query "<need>" --json
+node ai_studio/assets/catalog/search.mjs --kind model --query "<need>" --json
 ```
 
 If a library asset fits, pull it into the game-local asset root:
@@ -18,7 +18,7 @@ node ai_studio/assets/gallery/pull.mjs --ids <asset-id> --to <game>/assets --app
 ```
 
 Only source from free/public sources or generate when the library has no fit.
-Store newly accepted models back through Backlog Asset Storage so future games can reuse
+Store newly accepted models through the asset intake/catalog owners so future games can reuse
 them.
 
 ## Conversion

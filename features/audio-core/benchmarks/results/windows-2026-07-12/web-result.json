@@ -1,0 +1,12 @@
+{
+  "schema": "audio_core.web_build_benchmark.v1",
+  "measured_at_utc": "2026-07-12",
+  "mode": "clean Ninja game target after configure; Release; shared warmed checkout-local EM_CACHE; identical compiler and engine checkout",
+  "baseline_commit": "0fb94303f",
+  "baseline_build_ms": 25815.2084,
+  "current_build_ms": 25196.1988,
+  "baseline_js_bytes": 106623,
+  "current_js_bytes": 121663,
+  "baseline_wasm_bytes": 1071462,
+  "current_wasm_bytes": 1081435
+}

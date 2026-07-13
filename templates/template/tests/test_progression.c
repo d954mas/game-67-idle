@@ -372,7 +372,7 @@ void test_lazy_allocation_no_gratuitous_records(void) {
     cJSON_Delete(json_empty);
 
     /* Empty purse/xp -> a tick over auto/threshold tracks buys nothing and must
-       NOT allocate a record for any of them (§2.1/OQ3: fresh game = empty tracks). */
+       not allocate a record for any of them; fresh games keep tracks empty. */
     progression_update();
     cJSON *json_after = progression_state_to_json(&progression_state);
     const cJSON *tracks_after = cJSON_GetObjectItemCaseSensitive(json_after, "tracks");

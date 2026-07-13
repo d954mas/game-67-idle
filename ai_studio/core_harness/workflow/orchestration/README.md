@@ -70,3 +70,16 @@ packet instead of assuming they saw the lead conversation.
 
 This file defines delegation policy only. It does not own Taskboard state,
 validation gates, task lifecycle, or browser surfaces.
+
+Choosing the requested role is a process convention. The host loads and applies
+the provider-owned role/model settings declared by the repository. After a Codex
+harness restart, request a named stock role, locate its native rollout JSONL,
+and verify its recorded role and actual model:
+
+```powershell
+node ai_studio/core_harness/validation/agent_role_smoke.mjs --evidence <rollout.jsonl> --requested-role fast-worker
+```
+
+The verifier reads the expected model from the stock Codex catalog and fails on
+missing evidence, mismatch, or generic fallback. Profiling is advisory and is
+not a substitute for this smoke.

@@ -9,6 +9,7 @@ export {
   agentProjectRow,
   agentTaskRow,
   boardPayload,
+  canonicalTaskLogPayloads,
   createEpic,
   createProject,
   createTask,

@@ -9,7 +9,7 @@
 #include <stdlib.h> /* malloc/free -- once each, on init/shutdown; no growth */
 #include <string.h> /* memcpy/memset */
 
-/* ---- Файловые статики (владение -- модуль, §E1.3) ---- */
+/* ---- Module-owned file statics ---- */
 static uint8_t *s_arena;
 static size_t s_arena_used; /* cap = GAME_EVENTS_ARENA_BYTES (const) */
 static game_event_t *s_log;
@@ -50,7 +50,7 @@ void game_events_shutdown(void) {
 }
 
 const void *game_event_emit(nt_hash64_t type, const void *payload, uint32_t size, size_t align) {
-    /* 1. emit в RECORD = баг (страж симметрии, event §7). */
+    /* Emitting during RECORD violates phase symmetry. */
     NT_ASSERT(s_phase == GAME_EVENT_PHASE_EMIT);
 
     /* 2. Контракт выравнивания (MEDIUM-3): power-of-2 в [1, max_align_t] (зеркало
@@ -143,5 +143,5 @@ void game_event_frame_reset(void) {
 }
 
 void game_event_register_type_name(nt_hash64_t type, const char *name) {
-    nt_hash_register_label64(type, name); /* тонкий шов; no-op без NT_HASH_LABELS, §E1.9 */
+    nt_hash_register_label64(type, name); /* No-op without NT_HASH_LABELS. */
 }

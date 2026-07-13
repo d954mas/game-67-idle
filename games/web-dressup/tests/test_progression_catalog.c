@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 
-/* РУКОПИСНЫЙ тест-каталог (build_spec_t0327_i3 §5.7). test_progression links
+/* РУКОПИСНЫЙ тест-каталог. test_progression links
    THIS file, never progression_tracks.gen.c (anti-duplicate k_tracks symbol,
    R10) -- controlled tracks for exact assertions, plus two pathological
    tracks that exist ONLY to exercise the T5 HARD caps (§2.4/§5.6):

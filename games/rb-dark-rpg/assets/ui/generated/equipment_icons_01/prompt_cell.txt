@@ -1,5 +1,0 @@
-2D game UI source art for one rb-dark-rpg equipment slot CELL/SOCKET only, real raster image (not code-drawn), one centered square empty equipment cell on a flat pure #00ff00 chroma key background.
-
-Style: dark low-noise fantasy RPG interface, rugged border-garrison materials, charcoal black leather or dark iron inner well, warm aged bronze bevels on the outside, subtle worn metal corners, clean readable silhouette, matching the accepted rb-dark-rpg dark RPG HUD. This is only the reusable empty cell behind icons.
-
-Hard negatives: no item icon, no slot symbol, no letters, no numbers, no labels, no readable runes, no skulls, no character portrait, no full inventory screen, no UI mockup, no neon purple, no beige parchment, no noisy scratches, no green inside the cell.

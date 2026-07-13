@@ -1,6 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "game-state",
+  "version": "1.0.0",
   "title": "Game State",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -20,8 +21,8 @@
     "devapi_condition": "GAME_DEVAPI_ENABLED"
   },
   "commands": {
-    "generate": "py -3.12 features/game-state/scripts/generate_state.py",
-    "test": "py -3.12 features/game-state/scripts/generate_state_test.py"
+    "generate": "node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/generate_state.py --schema templates/template/state/game_state.schema.json",
+    "test": "node ai_studio/dev_environment/python_run.mjs features/game-state/scripts/run_tests.py"
   },
   "manuals": {
     "install": "features/game-state/INSTALL.md",

@@ -9,11 +9,9 @@ WHAT and the root `features/README.md` "Categories" for the module-vs-
 feature-pointer-vs-game-code decisive rule. This folder now holds only the
 game-owned corner: `reason_tags.h` (closed, per-game reason-verb list) +
 `items_bootstrap.c`'s `items_on_new_game` (starting seed). No
-`#if FEATURE_GAME_STATE` — state is always on (T0327 И2-0), items is one
-version. Ships with build_spec
-`templates/design/build_spec_t0327_i2_2026-07-07.md` §2/§6-§8 as the
-original design and `templates/design/build_spec_t0337_2026-07-07.md` for
-the extraction; this file is the game-side operational reference. For agent
+`#if FEATURE_GAME_STATE` — state is always on, items is one version. This file
+is the game-side operational reference; `features/items-core/README.md` and
+`INSTALL.md` own the reusable module contract. For agent
 workflow ("how do I..."), use the `nt-game-items` skill — this README is
 the WHAT of the game side, the skill is the HOW-TO; do not duplicate
 content between them.
@@ -30,8 +28,8 @@ effects layer to interpret, not something items itself runs.
 ## Public API (`items.h`)
 
 > **`items.h` now lives in `features/items-core/include/features/items/items.h`
-> and resolves through this game's include-path (`ITEMS_CORE_INC`, ahead of
-> `src`, §2.2 of `templates/design/build_spec_t0337_2026-07-07.md`). Do NOT
+> and resolves through this game's include path (`ITEMS_CORE_INC`, ahead of
+> `src`). Do NOT
 > recreate it here — a copy in this folder would shadow the module and the
 > `G-copies` grep-gate would catch it red.**
 
@@ -67,8 +65,7 @@ Ownership is ONE flat map `owned: map<string, ItemOwned>` — NOT one map per
 container. A "container" is a runtime VIEW (filter of `owned` by the
 `.container` field) over const container definitions in the catalog, not a
 schema construct; new containers are data (add a row to `items.json`), never
-a schema change. Key convention (the one piece of "magic", §2.3 of the build
-spec):
+a schema change. Key convention (the one piece of "magic"):
 - **stack** (stackable/currency def): key = `"<container>/<def_id>"` — the
   KEY is authoritative; `.container` must always match the key's prefix.
   Built by exactly ONE helper (`build_stack_key` in `items_containers.c`) —
@@ -144,7 +141,7 @@ convention and its grep-gate).
 3. Run the STRICT gate before shipping (run from `templates/template/`; the
    op-CLI moved to the `items-core` module too, and **every path must now be
    passed explicitly** — the script's own argparse defaults are relative to
-   `features/items-core/`, not this game, §5.6/R7 of the build spec):
+   `features/items-core/`, not this game; see the module `INSTALL.md`):
    `py -3.12 ../../features/items-core/scripts/items_ops.py validate --catalog
    content/items.json --schema content/item_fields.schema.json --baseline
    content/items.lock.json --state-schema state/items.schema.json --src-dir
@@ -161,7 +158,7 @@ convention and its grep-gate).
    `items_bootstrap.c`) — the ownership core (`items_containers.c`) lives in
    `features/items-core/src/` and is linted there instead (a standalone run
    would pass `--src-dir ../../features/items-core/src`); this is a
-   deliberate narrowing, not a coverage regression (§5.6 of the build spec).
+   deliberate narrowing, not a coverage regression.
    See the `nt-game-items` skill for the full CLI reference (`list`/
    `validate`/`schema`, `--json`). **This gate ALSO runs automatically in
    `ctest`** (target `items_ops_validate`) — a destructive change without a
@@ -226,8 +223,8 @@ game has shipped NOTHING to ITS OWN players yet.
    convert the orphaned records (e.g. convert a currency to something else
    by `base_value`), or an explicit no-op step recording the conscious
    decision that `reconcile()`'s quarantine is the intended handling. The
-   generator enforces `version == len(migrations)+1` (§0 п.3 of the build
-   spec), so the version bump ITSELF forces you to add the step — you cannot
+   generator enforces `version == len(migrations)+1`, so the version bump
+   ITSELF forces you to add the step — you cannot
    silently skip it.
 5. Run `validate` again — green once the fragment_version in `removed`
    matches (`<=`) the now-bumped `state/items.schema.json` version.

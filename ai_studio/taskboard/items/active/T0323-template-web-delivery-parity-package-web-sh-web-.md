@@ -13,7 +13,7 @@ updated: 2026-07-06
 ## What
 
 Lead directive 2026-07-06: every jam-proven delivery fix must live in the
-template so a new game gets it out of the box. Parity audit vs rb-dark-rpg:
+template so a new game gets it out of the box. Parity audit vs the retired prototype:
 template has NO tools/ dir at all (no package_web.sh, dev_rebuild.sh,
 run_tests.sh) and devapi/ lacks scenarios.py. Wasm link flags + glad/stb
 native-only guard were ported to template CMakeLists 2026-07-06 (unverified
@@ -26,13 +26,13 @@ load errors were visible in the browser console — catchable automatically.
 
 - [ ] templates/template/tools/: package_web.sh (build wasm-release, copy pack,
       zip) + dev_rebuild.sh + run_tests.sh ported and genericized from
-      rb-dark-rpg.
+      the retired prototype.
 - [ ] Web-load-smoke wired into package_web.sh: serve zip contents via
       http.server, headless Chrome (--headless=new, SwiftShader per
       web-wasm-headless-verify), FAIL on console errors; first-frame
       pixel-health check (not black).
 - [ ] templates/template/devapi/scenarios.py skeleton (scenario hooks pattern
-      from rb-dark-rpg) so arc-smoke gates have a place to live in new games.
+      from the retired prototype) so arc-smoke gates have a place to live in new games.
 - [ ] Template wasm-release configure+build passes with the ported CMake flags.
 
 ## Open questions

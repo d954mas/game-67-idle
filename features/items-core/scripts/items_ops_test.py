@@ -16,7 +16,7 @@ Runs as a ctest via CMakeLists.txt's `items_ops_test` target (Python3_EXECUTABLE
 + "${ITEMS_CORE_SCRIPTS}/items_ops_test.py", WORKING_DIRECTORY = the game's
 template root), or directly via pytest from the repo root:
 
-    py -3.12 -m pytest features/items-core/scripts/items_ops_test.py
+    node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops_test.py
 """
 
 from __future__ import annotations
@@ -274,7 +274,7 @@ class CreatedFieldTests(unittest.TestCase):
 
 
 class StackFieldTests(unittest.TestCase):
-    """Locks the collapsed single-int stack model (build_spec_stack_int_2026-07-08):
+    """Locks the items-core README's single-int stack authoring contract:
     schema requires `stack` to be a plain int >= 0, `equip` implies `stack == 1`,
     and `list --json` emits the raw int (never the old derived object)."""
 

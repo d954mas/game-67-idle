@@ -4,6 +4,7 @@
   "subtitle": "DevAPI proof helpers",
   "kind": "module",
   "moduleId": "runtime-automation",
+  "path": "ai_studio/runtime_automation",
   "color": "#7c3aed",
   "description": "AI Studio module for local runtime proof automation: DevAPI client/CLI, native iteration helper, screenshots, video capture, PNG codec, pixel health, UI readability, and live-state capture matrices.",
   "tags": [
@@ -28,7 +29,7 @@
     {
       "id": "runtime-automation:skill",
       "kind": "skill",
-      "path": ".codex/skills/nt-runtime-automation/SKILL.md",
+      "path": ".codex/skills/nt-runtime-automation",
       "title": "nt-runtime-automation",
       "description": "Runtime Automation skill router for DevAPI discovery, native iteration, screenshots, recordings, pixel health, UI readability, and live-state evidence collection.",
       "role": "runtime automation skill entrypoint",
@@ -92,7 +93,7 @@
       "kind": "test",
       "path": "ai_studio/runtime_automation/devapi_client_test.py",
       "title": "devapi_client_test.py",
-      "description": "Regression tests for engine default DevAPI port handling and engine-native PNG capture payload decoding.",
+      "description": "Verifies DevAPI client contracts.",
       "role": "DevAPI client tests",
       "tags": [
         "runtime-automation",
@@ -116,11 +117,23 @@
       "kind": "tool",
       "path": "ai_studio/runtime_automation/iterate.py",
       "title": "iterate.py",
-      "description": "One-command native visual iteration loop: build if stale, launch/reuse game, capture screenshot, and run UI readability audit.",
-      "role": "runtime visual iteration helper",
+      "description": "Trustworthy native iteration helper that builds the current DevAPI template, proves readiness and a semantic source fixture, and reports stable phase metrics.",
+      "role": "native source-to-runtime proof helper",
       "tags": [
         "runtime-automation",
         "tool"
+      ]
+    },
+    {
+      "id": "runtime-automation:iterate-test",
+      "kind": "test",
+      "path": "ai_studio/runtime_automation/iterate_test.py",
+      "title": "iterate_test.py",
+      "description": "Verifies native iteration build freshness, DevAPI readiness, semantic proof, attach-only reuse, and result contracts.",
+      "role": "native iteration contract tests",
+      "tags": [
+        "runtime-automation",
+        "test"
       ]
     },
     {
@@ -140,7 +153,7 @@
       "kind": "test",
       "path": "ai_studio/runtime_automation/state_capture_test.py",
       "title": "state_capture_test.py",
-      "description": "Tests for StateCapture coverage, debt, idempotent recapture, and review-tool shot arguments.",
+      "description": "Verifies live-state capture contracts.",
       "role": "live-state capture tests",
       "tags": [
         "runtime-automation",
@@ -188,7 +201,7 @@
       "kind": "test",
       "path": "ai_studio/runtime_automation/png_io_test.py",
       "title": "png_io_test.py",
-      "description": "Tests for the dependency-free PNG codec.",
+      "description": "Verifies PNG utility contracts.",
       "role": "PNG utility tests",
       "tags": [
         "runtime-automation",

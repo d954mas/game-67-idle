@@ -105,6 +105,18 @@ the page URL; the pack builder is native-only, so the pack is taken from the
 native build). `serve_web.mjs` is a self-contained static server that serves
 `game.wasm` as `application/wasm` (required for emscripten's streaming compile).
 
+The Poki release command is fail-closed at **6.5 MiB** for the complete uploaded
+`bin/` payload (HTML, JS, WASM, platform adapter, and asset pack):
+
+```bash
+bash tools/build_web.sh --preset wasm-release --target poki
+```
+
+It rejects non-release/DevAPI artifacts and writes the deterministic SHA-256
+inventory to `build/wasm-release-poki/release-size-manifest.json`. For an
+already packaged Poki tree, rerun only the gate with
+`cmake --build build/wasm-release-poki --target release_size_gate`.
+
 | preset | configure flags | port | DevAPI | notes |
 |---|---|---|---|---|
 | `wasm-release` | `-DCMAKE_BUILD_TYPE=Release` | 8080 | no | human default |
@@ -122,8 +134,8 @@ Two advisory headless probes (not part of `ctest`; one command, real signal —
 they SKIP with exit 2 when EMSDK/Chrome is missing or a slow ASan boot times out):
 
 ```bash
-python tests/web_devapi_check.py        # window.__devapi shim round-trip: endpoints + command.describe
-python tests/web_persistence_check.py   # localStorage save survives a full Chrome quit+restart
+node ai_studio/dev_environment/python_run.mjs games/web-dressup/tests/web_devapi_check.py        # window.__devapi shim round-trip: endpoints + command.describe
+node ai_studio/dev_environment/python_run.mjs games/web-dressup/tests/web_persistence_check.py   # localStorage save survives a full Chrome quit+restart
 ```
 
 `web_devapi_check.py` builds `wasm-devapi-debug`, loads it headless, and proves
@@ -140,7 +152,7 @@ cmake --build build/devapi-debug --target devapi_smoke
 or from the repository root:
 
 ```powershell
-py -3.12 templates/template/devapi/smoke_bot.py --exe templates/template/build/devapi-debug/bin/game.exe
+node ai_studio/dev_environment/python_run.mjs games/web-dressup/devapi/smoke_bot.py --exe games/web-dressup/build/devapi-debug/bin/game.exe
 ```
 
 For QCLR_002 responsive-viewport screenshots:

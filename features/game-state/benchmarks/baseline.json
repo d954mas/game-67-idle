@@ -1,0 +1,11 @@
+{
+  "fixture": "features/game-state/benchmarks/fixtures/multi_fragment.schema.json",
+  "fixture_sha256": "232a4f1b1e0aba347abae54203c819a87d84cac47c910de9daa59affd7632cc9",
+  "python": "3.12.4",
+  "platform": "Windows-11-10.0.26200-SP0",
+  "warmups": 3,
+  "warm_runs": 25,
+  "cold_runs": 3,
+  "warm_median_ms": 4.412,
+  "advisory_threshold_percent": 15
+}

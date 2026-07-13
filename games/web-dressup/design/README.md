@@ -1,31 +1,31 @@
 ---
 type: Game Design Guide
-title: Web Dressup Design
-description: Design source-of-truth map for web-dressup.
-tags: [game-design]
+title: Runway Awakening Design
+description: Design source-of-truth map for the web-dressup Poki MVP.
+tags: [game-design, mvp]
 game_id: web-dressup
-status: draft
+status: accepted
 ---
 
-# Web Dressup Design
+# Runway Awakening Design
 
-This folder is the game-owned design source of truth for **web-dressup**
-(player-facing working title: **Переодевалка**).
+## Source map
 
-## Map
-
-- `concept.md` — hook, audience, pillars, no-go list.
-- `gdd.md` — implementation-facing first playable (Dress Room).
-- `knowledge/` — private game knowledge base.
-- `knowledge/sources/` — reference packets and source notes.
-- `data/core_loop.json` — try-on loop.
-- `data/ui_flow.json` — screens and first path.
-- `data/asset_manifest.json` — starter art needs.
+- `concept.md` - accepted player fantasy, pillars, locks and no-go scope.
+- `gdd.md` - implementation-facing three-Essence MVP contract.
+- `mvp_poki_500_plan.md` - phased execution and verification plan.
+- `telemetry_contract.md` - privacy-safe MVP funnel events and portal evidence boundary.
+- `data/core_loop.json` - deterministic dress/awaken/discover loop.
+- `data/ui_flow.json` - Dress Room, runway, result and album flow.
+- `data/asset_manifest.json` - 30-item art and web-size budget.
+- `knowledge/` - private game knowledge and competitor evidence.
 
 ## Current gate
 
-**Concept accepted** (`concept.md`): Poki 2D freeplay lab + optional Fake Show;
-no map, no MP, no forced timer. Poki competitor research:
-`knowledge/sources/2026-07-09-poki-competitors.md`.
+Build only the bright three-Essence vertical MVP needed for a Poki 500-player
+test. The previous theme picker, hidden theme scoring and Fake Show are rejected
+as product sources of truth.
 
-Next: art style lock + implement dual-layout Dress Room (M0), then Fake Show.
+Implementation begins with polished Moon+Bloom and Moon+Flame runtime reveals
+plus a compressed-size proof. Mass content production is blocked until the
+contrasting reveals, comprehension test and byte gate all pass.

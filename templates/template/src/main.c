@@ -44,6 +44,7 @@
 #include "features/platform_sdk/platform_sdk.h"
 #include "features/platform_sdk/platform_sdk_events.h"
 #include "features/settings/settings.h"
+#include "game_audio.h"
 #include "game_events.h"
 #if GAME_EVENTS_LOG_MIRROR
 #include "game_events_log_mirror.h"
@@ -51,6 +52,7 @@
 #include "game_log.h" /* E4.B: built-in "log" event type (unconditional leaf) */
 #if NT_DEVAPI_ENABLED
 #include "game_events_devapi.h" /* E3: game.events.tail (tail ring + recorder) */
+#include "iteration_proof_devapi.h"
 #endif
 #if FEATURE_GAME_ANALYTICS
 #include "game_analytics.h" /* E4: local analytics NDJSON writer */
@@ -170,6 +172,7 @@ static bool devapi_start(void) {
     fprintf(stderr, "DevAPI listening on 127.0.0.1:%u\n", (unsigned)s_devapi_port);
 #endif
     nt_devapi_register_default();
+    game_iteration_proof_register_devapi();
     game_save_register_devapi();
     game_events_register_devapi(); // E3: game.events.tail (+ enables the recorder)
 #ifdef NT_DEVAPI_GROUP_UI
@@ -257,7 +260,9 @@ static void frame(void) {
     nt_window_poll();
     devapi_update_frame();
     nt_input_poll();
-    platform_lifecycle_after_input_poll();
+    if (platform_lifecycle_after_input_poll()) {
+        game_audio_on_user_gesture();
+    }
 #ifndef NT_PLATFORM_WEB
     if (nt_window_should_close() || nt_input_key_is_pressed(NT_KEY_ESCAPE)) {
         nt_app_quit();
@@ -275,7 +280,7 @@ static void frame(void) {
     // render pass this frame (see game_save_apply_pending_new_game's doc comment).
     (void)game_save_apply_pending_new_game();
 
-    // ---- feature two-phase event frame (event_system_design §2/§7) ----
+    // ---- feature two-phase event frame: react to quiescence, then record ----
     game_features_update(&s_world, g_nt_app.dt);   // emit phase (sys_move moved in); phase=EMIT default
     game_events_react_begin();                     // fixpoint baseline = count after update
     do {
@@ -303,7 +308,7 @@ static void frame(void) {
 
     // render systems read the world
     nt_gfx_begin_pass(&(nt_pass_desc_t){.clear_color = {0.50F, 0.75F, 0.96F, 1.0F}, .clear_depth = 1.0F});
-    // draw_world остаётся прямым вызовом шелла, пока render-системы не станут фичами (§E1.5).
+    // draw_world stays a direct shell call until render systems become features.
     render_mesh_draw(&s_world, s_frame_ubo);
     hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
     // UI-слой фич: агрегатор владеет ui_runtime-кадром и рисует settings (z-order).
@@ -432,9 +437,9 @@ int main(int argc, char **argv) {
     nt_font_init(&(nt_font_desc_t){.max_fonts = 2});
     nt_material_init(&(nt_material_desc_t){.max_materials = 8});
     nt_text_renderer_init();
-    game_save_register_fragment(&settings_state_fragment); /* settings before game (§14 п.2) */
-    game_save_register_fragment(&items_state_fragment);    /* И2a: L1, no deps -> between settings and game (OQ2) */
-    game_save_register_fragment(&progression_state_fragment); /* И3a: L2, depends on items (L1) -> after items (OQ2) */
+    game_save_register_fragment(&settings_state_fragment); /* settings first */
+    game_save_register_fragment(&items_state_fragment);    /* L1, no deps: between settings and game */
+    game_save_register_fragment(&progression_state_fragment); /* L2 depends on items: register after items */
     game_save_register_fragment(&game_state_fragment);     /* `game` last (most dependent) */
     game_save_init();
     if (!s_fresh_state) {
@@ -523,9 +528,9 @@ int main(int argc, char **argv) {
 
 #ifndef NT_PLATFORM_WEB
     devapi_shutdown_runtime();
+    game_features_shutdown(&s_world);
     platform_lifecycle_shutdown();
     ui_runtime_shutdown();
-    game_features_shutdown(&s_world);
 #if FEATURE_GAME_ANALYTICS
     game_analytics_shutdown(); // E4: final flush + close (before event infra teardown)
 #endif

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test from "node:test";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -76,10 +77,128 @@ test("split index + parts round-trips to the original single-file tree", () => {
   assert.deepEqual(merged, single);
 });
 
-test("the repo index merges into 11 ordered top-level children without root.parts", () => {
+test("nested parts recursively materialize with exact order and fields", () => {
+  const root = mkdtempSync(join(tmpdir(), "architecture-nested-split-"));
+  write(root, "ai_studio/tree.json", JSON.stringify({
+    schema: 1,
+    index: true,
+    root: { id: "studio", title: "Studio", parts: ["parts/owner.json"] },
+  }));
+  write(root, "ai_studio/parts/owner.json", JSON.stringify({
+    id: "owner",
+    title: "Owner",
+    kind: "module",
+    custom: { keep: [1, 2, 3] },
+    parts: ["owner/first.json", "owner/second.json"],
+  }));
+  write(root, "ai_studio/parts/owner/first.json", JSON.stringify({ id: "first", kind: "doc", path: "one" }));
+  write(root, "ai_studio/parts/owner/second.json", JSON.stringify({
+    id: "second",
+    kind: "group",
+    parts: ["second/leaf.json"],
+  }));
+  write(root, "ai_studio/parts/owner/second/leaf.json", JSON.stringify({ id: "leaf", kind: "doc", path: "two" }));
+
+  assert.deepEqual(loadArchitectureTree(root, "ai_studio/tree.json"), {
+    schema: 1,
+    root: {
+      id: "studio",
+      title: "Studio",
+      children: [{
+        id: "owner",
+        title: "Owner",
+        kind: "module",
+        custom: { keep: [1, 2, 3] },
+        children: [
+          { id: "first", kind: "doc", path: "one" },
+          { id: "second", kind: "group", children: [{ id: "leaf", kind: "doc", path: "two" }] },
+        ],
+      }],
+    },
+  });
+});
+
+test("nested ref failures name the referrer and requested path", () => {
+  const root = mkdtempSync(join(tmpdir(), "architecture-nested-errors-"));
+  write(root, "ai_studio/tree.json", JSON.stringify({ root: { id: "studio", parts: ["parts/owner.json"] } }));
+  write(root, "ai_studio/parts/owner.json", JSON.stringify({ id: "owner", parts: ["missing.json"] }));
+  assert.throws(
+    () => loadArchitectureTree(root, "ai_studio/tree.json"),
+    /architecture tree ref "missing\.json" from "ai_studio\/parts\/owner\.json".*not found/i,
+  );
+
+  write(root, "ai_studio/parts/owner.json", JSON.stringify({ id: "owner", parts: ["broken.json"] }));
+  write(root, "ai_studio/parts/broken.json", "{ nope");
+  assert.throws(
+    () => loadArchitectureTree(root, "ai_studio/tree.json"),
+    /architecture tree ref "broken\.json" from "ai_studio\/parts\/owner\.json".*malformed json/i,
+  );
+
+  write(root, "ai_studio/parts/owner.json", JSON.stringify({ id: "owner", parts: ["cycle.json"] }));
+  write(root, "ai_studio/parts/cycle.json", JSON.stringify({ id: "cycle", parts: ["owner.json"] }));
+  assert.throws(
+    () => loadArchitectureTree(root, "ai_studio/tree.json"),
+    /architecture tree ref cycle: ai_studio\/parts\/owner\.json -> ai_studio\/parts\/cycle\.json -> ai_studio\/parts\/owner\.json/i,
+  );
+
+  write(root, "ai_studio/parts/owner.json", JSON.stringify({ id: "owner", parts: [42] }));
+  assert.throws(
+    () => loadArchitectureTree(root, "ai_studio/tree.json"),
+    /architecture tree ref from "ai_studio\/parts\/owner\.json" must be a non-empty string/i,
+  );
+  write(root, "ai_studio/parts/owner.json", JSON.stringify({ id: "owner", parts: [], children: [] }));
+  assert.throws(
+    () => loadArchitectureTree(root, "ai_studio/tree.json"),
+    /cannot contain both parts and children/i,
+  );
+
+  write(root, "ai_studio/parts/owner.json", JSON.stringify({ id: "owner", parts: ["../../../../outside.json"] }));
+  assert.throws(
+    () => loadArchitectureTree(root, "ai_studio/tree.json"),
+    /architecture tree ref "\.\.\/\.\.\/\.\.\/\.\.\/outside\.json" from "ai_studio\/parts\/owner\.json".*escapes repository root/i,
+  );
+});
+
+test("repo owner storage remains recursively split and context-bounded", () => {
+  for (const name of ["module-assets", "module-hot"]) {
+    const owner = JSON.parse(readFileSync(join(repoRoot, `ai_studio/architecture_map/tree/${name}.json`), "utf8"));
+    assert.ok(Array.isArray(owner.parts) && owner.parts.length > 1, `${name} owner must route nested parts`);
+    assert.ok(!("children" in owner), `${name} owner must not remain a child monolith`);
+  }
+  const sizes = [];
+  const walk = (path) => {
+    for (const entry of readdirSync(path, { withFileTypes: true })) {
+      const child = join(path, entry.name);
+      if (entry.isDirectory()) walk(child);
+      else if (entry.name.endsWith(".json")) sizes.push(statSync(child).size);
+    }
+  };
+  walk(join(repoRoot, "ai_studio/architecture_map/tree/module-assets"));
+  walk(join(repoRoot, "ai_studio/architecture_map/tree/module-hot"));
+  assert.ok(Math.max(...sizes) <= 19_000, `largest recursive owner part exceeds 19 KB: ${Math.max(...sizes)}`);
+});
+
+test("repo merged model keeps the accepted pre-split hash", () => {
+  const merged = loadArchitectureTree(repoRoot, "ai_studio/tree.json");
+  const hash = createHash("sha256").update(JSON.stringify(merged)).digest("hex");
+  assert.equal(hash, "0d14b23c72218eccb8e139da17e5d0d553f51211028741ce047ba7188e9603c2");
+});
+
+const requiredTopLevelIds = [
+  "studio-readme",
+  "workspace-folders",
+  "studio-shell",
+  "module:hot",
+  "runtime-automation",
+  "architecture-map",
+];
+
+test("the repo index merges required ownership roots without exposing root.parts", () => {
   const merged = loadArchitectureTree(repoRoot, "ai_studio/tree.json");
   assert.ok(Array.isArray(merged.root.children));
-  assert.equal(merged.root.children.length, 11);
+  const ids = merged.root.children.map((child) => child.id);
+  assert.equal(new Set(ids).size, ids.length, "top-level ownership ids must be unique");
+  for (const id of requiredTopLevelIds) assert.ok(ids.includes(id), `missing required ownership root ${id}`);
   assert.ok(!("parts" in merged.root), "merged root must not expose the parts index");
   assert.equal(merged.root.id, "studio");
 });
@@ -91,7 +210,15 @@ test("GET /api/architecture-tree serves the merged tree", async () => {
   assert.equal(handled, true);
   assert.equal(res.statusCode, 200);
   const payload = JSON.parse(res.body);
-  assert.equal(payload.root.children.length, 11);
+  assert.deepEqual(payload, loadArchitectureTree(repoRoot, "ai_studio/tree.json"), "API and loader materialize the identical model");
+  const visit = (value) => {
+    if (!value || typeof value !== "object") return;
+    assert.ok(!Object.hasOwn(value, "parts"), "API payload must not expose ref markers");
+    for (const child of Array.isArray(value) ? value : Object.values(value)) visit(child);
+  };
+  visit(payload);
+  const ids = payload.root.children.map((child) => child.id);
+  for (const id of requiredTopLevelIds) assert.ok(ids.includes(id), `API omitted required ownership root ${id}`);
   assert.ok(!("parts" in payload.root));
 });
 

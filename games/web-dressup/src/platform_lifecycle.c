@@ -1,5 +1,6 @@
 #include "platform_lifecycle.h"
 
+#include "game_audio.h"
 #include "features/platform_sdk/platform_sdk.h"
 #include "input/nt_input.h"
 
@@ -36,6 +37,7 @@ void platform_lifecycle_after_input_poll(void) {
     }
     const bool input_seen = nt_input_any_key_pressed() || has_pointer_input_edge();
     if (input_seen) {
+        game_audio_on_user_gesture();
         platform_lifecycle_mark_gameplay_input();
     }
 }

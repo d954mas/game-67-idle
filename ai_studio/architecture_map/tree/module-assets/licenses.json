@@ -1,0 +1,32 @@
+{
+  "id": "assets:licenses",
+  "title": "Asset Licenses",
+  "subtitle": "publishability and repository guard",
+  "kind": "module",
+  "path": "ai_studio/assets/licenses",
+  "coverage": "recursive",
+  "color": "#be123c",
+  "description": "Owns license decisions, publishability policy, and the fail-closed tracked-asset repository guard consumed by integrity checks.",
+  "role": "asset license owner",
+  "tags": ["assets", "license", "guard"],
+  "children": [
+    {
+      "id": "assets:licenses-ops",
+      "kind": "tool",
+      "path": "ai_studio/assets/licenses/ops.mjs",
+      "title": "ops.mjs",
+      "description": "Compact public license-policy facade.",
+      "role": "asset license public API",
+      "tags": ["assets", "license", "operations"]
+    },
+    {
+      "id": "assets:licenses-guard",
+      "kind": "tool",
+      "path": "ai_studio/assets/licenses/restricted_assets_guard.mjs",
+      "title": "restricted_assets_guard.mjs",
+      "description": "Fail-closed CLI for tracked-binary metadata, license, provenance, origin, inventory, and SHA validation.",
+      "role": "asset repository guard",
+      "tags": ["assets", "license", "integrity", "cli"]
+    }
+  ]
+}

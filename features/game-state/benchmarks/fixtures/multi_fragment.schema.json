@@ -1,0 +1,124 @@
+{
+  "fixture_version": 1,
+  "fragments": [
+    {
+      "schema": "benchmark.game",
+      "schema_version": 2,
+      "fragment": "game",
+      "version": 1,
+      "string_max": 64,
+      "reserved": ["removed_field"],
+      "enums": {
+        "Shape": ["cube", "sphere", "capsule"],
+        "RenderMode": ["solid_wire", "solid", "wire"]
+      },
+      "fields": {
+        "shape_index": {"type": "enum", "enum": "Shape", "default": "cube"},
+        "render_mode_index": {"type": "enum", "enum": "RenderMode", "default": "solid_wire"},
+        "camera_distance": {"type": "float", "default": 6, "min": 2.5, "max": 10},
+        "clicks": {"type": "int", "default": 0, "min": 0, "max": 1000000},
+        "label": {"type": "string", "default": "Ready", "max_length": 63},
+        "tutorial.done": {"type": "bool", "default": false}
+      },
+      "events": {
+        "shape_changed": {
+          "fields": {
+            "from_index": {"type": "int"},
+            "to_index": {"type": "int"},
+            "note": {"type": "string"}
+          }
+        }
+      }
+    },
+    {
+      "schema": "benchmark.settings",
+      "schema_version": 2,
+      "fragment": "settings",
+      "version": 1,
+      "string_max": 32,
+      "fields": {
+        "master_volume": {"type": "float", "default": 0.8, "min": 0, "max": 1},
+        "music_volume": {"type": "float", "default": 0.7, "min": 0, "max": 1},
+        "sfx_volume": {"type": "float", "default": 0.9, "min": 0, "max": 1}
+      }
+    },
+    {
+      "schema": "benchmark.items",
+      "schema_version": 2,
+      "fragment": "items",
+      "version": 1,
+      "string_max": 64,
+      "hooks": {"on_new_game": true, "reconcile": true},
+      "types": {
+        "ItemOwned": {
+          "kind": "object",
+          "fields": {
+            "def_id": {"type": "string", "max_length": 63},
+            "container": {"type": "string", "max_length": 63},
+            "count": {"type": "i64", "default": 1, "min": 0, "max": 9000000000000000000},
+            "level": {"type": "int", "default": 1, "min": 1, "max": 9999},
+            "durability": {"type": "float", "default": 1, "min": 0, "max": 1},
+            "quarantined": {"type": "bool", "default": false}
+          }
+        }
+      },
+      "fields": {
+        "owned": {"type": "map<string,ItemOwned>", "max_count": 64}
+      },
+      "events": {
+        "txn": {
+          "fields": {
+            "op": {"type": "string"},
+            "def_id": {"type": "string"},
+            "entry_key": {"type": "string"},
+            "requested_delta": {"type": "i64"},
+            "applied_delta": {"type": "i64"},
+            "before_count": {"type": "i64"},
+            "after_count": {"type": "i64"},
+            "reason": {"type": "string"}
+          }
+        }
+      }
+    },
+    {
+      "schema": "benchmark.progression",
+      "schema_version": 2,
+      "fragment": "progression",
+      "version": 1,
+      "string_max": 64,
+      "types": {
+        "TrackState": {
+          "kind": "object",
+          "fields": {
+            "level": {"type": "int", "default": 0, "min": 0, "max": 9999},
+            "xp": {"type": "i64", "default": 0, "min": 0, "max": 9000000000000000000}
+          }
+        }
+      },
+      "fields": {
+        "tracks": {"type": "map<string,TrackState>", "max_count": 32}
+      },
+      "events": {
+        "levelup": {
+          "fields": {
+            "track": {"type": "string"},
+            "reason": {"type": "string"},
+            "old_level": {"type": "i64"},
+            "new_level": {"type": "i64"},
+            "resource_before": {"type": "i64"},
+            "resource_after": {"type": "i64"}
+          }
+        },
+        "xp_added": {
+          "fields": {
+            "track": {"type": "string"},
+            "reason": {"type": "string"},
+            "delta": {"type": "i64"},
+            "before_xp": {"type": "i64"},
+            "after_xp": {"type": "i64"}
+          }
+        }
+      }
+    }
+  ]
+}

@@ -6,8 +6,10 @@
 #define NT_BUILD_MAX_ASSETS 4096
 #include "nt_builder.h"
 
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #ifdef _WIN32
 #include <direct.h>
@@ -28,6 +30,48 @@ static char s_path_buf[512];
 static const char *pack_path(const char *dir, const char *name) {
     (void)snprintf(s_path_buf, sizeof(s_path_buf), "%s/%s", dir, name);
     return s_path_buf;
+}
+
+static bool add_blob_file(NtBuilderContext *ctx, const char *path, const char *resource_id) {
+    FILE *file = NULL;
+#ifdef _WIN32
+    (void)fopen_s(&file, path, "rb");
+#else
+    file = fopen(path, "rb");
+#endif
+    if (file == NULL) {
+        (void)fprintf(stderr, "Failed to open blob source: %s\n", path);
+        return false;
+    }
+    if (fseek(file, 0, SEEK_END) != 0) {
+        (void)fprintf(stderr, "Failed to seek blob source: %s\n", path);
+        (void)fclose(file);
+        return false;
+    }
+    const long end = ftell(file);
+    if (end <= 0 || (uint64_t)end > UINT32_MAX || fseek(file, 0, SEEK_SET) != 0) {
+        (void)fprintf(stderr, "Invalid blob source size: %s\n", path);
+        (void)fclose(file);
+        return false;
+    }
+
+    const uint32_t size = (uint32_t)end;
+    uint8_t *bytes = (uint8_t *)malloc(size);
+    if (bytes == NULL || fread(bytes, 1, size, file) != size) {
+        (void)fprintf(stderr, "Failed to read blob source: %s\n", path);
+        free(bytes);
+        (void)fclose(file);
+        return false;
+    }
+    if (fclose(file) != 0) {
+        (void)fprintf(stderr, "Failed to close blob source: %s\n", path);
+        free(bytes);
+        return false;
+    }
+
+    nt_builder_add_blob(ctx, bytes, size, resource_id);
+    free(bytes);
+    return true;
 }
 
 int main(int argc, char *argv[]) {
@@ -55,6 +99,14 @@ int main(int argc, char *argv[]) {
     nt_builder_add_shader(ctx, "assets/shaders/slug_text.frag", NT_BUILD_SHADER_FRAGMENT);
     nt_builder_add_font(ctx, "../../external/neotolis-engine/assets/fonts/LilitaOne-RussianChineseKo.ttf",
                         &(nt_font_opts_t){.charset = NT_CHARSET_ASCII, .resource_name = "game/font"});
+
+    // Audio stays an opaque game-owned blob. The runtime chooses the decoder;
+    // the resource ID intentionally contains no codec or file extension.
+    if (!add_blob_file(ctx, "assets/audio/sfx/ui_click.wav", "audio/sfx/ui_click") ||
+        !add_blob_file(ctx, "assets/audio/music/demo_jingle.mp3", "audio/music/demo_jingle")) {
+        nt_builder_free_pack(ctx);
+        return 1;
+    }
 
     // instanced-mesh shell: TWO mesh paths a game learns from. The COLOURED path
     // (mesh_inst = position + per-instance world matrix + colour, no texture) and the

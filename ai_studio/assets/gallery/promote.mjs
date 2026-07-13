@@ -11,10 +11,10 @@ import { readFile, writeFile, mkdir, cp, appendFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, basename, extname, sep } from "node:path";
 import { createHash } from "node:crypto";
-import { KIND_DIR } from "../backlog/storage/kinds.mjs";
+import { KIND_DIR } from "../catalog/ops.mjs";
 import { isMain } from "../../core_harness/tool_lib/cli.mjs";
-import { LICENSE_URLS, boolText, decideLicense, validateLicenseRecord } from "../backlog/storage/license/registry.mjs";
-import { defaultLibrarySourceRoot } from "../backlog/storage/sources/libraries.mjs";
+import { LICENSE_URLS, boolText, decideLicense, validateLicenseRecord } from "../licenses/ops.mjs";
+import { defaultLibrarySourceRoot } from "../sources/ops.mjs";
 
 // review-kind -> library-kind fallback for review manifests that do not yet
 // carry a storage kind.

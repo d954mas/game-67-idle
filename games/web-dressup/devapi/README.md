@@ -25,7 +25,7 @@ commands in this folder.
 Run after building a native Debug template:
 
 ```powershell
-py -3.12 templates/template/devapi/smoke_bot.py --exe templates/template/build/devapi-debug/bin/game.exe
+node ai_studio/dev_environment/python_run.mjs games/web-dressup/devapi/smoke_bot.py --exe games/web-dressup/build/devapi-debug/bin/game.exe
 ```
 
 Or through CMake when the build directory was configured with
@@ -74,7 +74,7 @@ That default target captures the first screen in:
 For a specific game state, call the helper from a bot or pass a scenario hook:
 
 ```powershell
-py -3.12 templates/template/devapi/responsive_viewports.py `
+node ai_studio/dev_environment/python_run.mjs games/web-dressup/devapi/responsive_viewports.py `
   --exe templates/template/build/devapi-debug/bin/game.exe `
   --scenario games/my-game/devapi/scenarios.py:prepare_upgrade_menu
 ```
@@ -112,5 +112,5 @@ generic contrast/variance threshold.
 ## Tests
 
 ```powershell
-py -3.12 -m pytest templates/template/devapi
+node ai_studio/dev_environment/python_run.mjs -m unittest discover -s games/web-dressup/devapi -p "*_test.py"
 ```

@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { localGameRegistryRelPath } from "../../../workspace/games.mjs";
+import { localWorkspaceCatalogRelPath } from "../../../workspace/games.mjs";
 import { listAssetViewerSources, resolveAssetViewerGalleryPath, safeResolve, selectSource } from "../api.mjs";
 
 function tempRoot() {
@@ -23,28 +23,22 @@ function writeJson(path, value) {
 }
 
 function writePrivateGameMount(root, gameId = "secret-game") {
-  writeJson(join(root, "ai_studio", "workspace", "games.local.json"), {
-    schema: "ai_studio.workspace.games.local.v1",
-    games: [
-      {
-        schemaVersion: 1,
-        storeId: `game:${gameId}`,
-        kind: "game",
-        gameId,
-        root: `games/${gameId}`,
-        visibility: "private",
-        gitRoot: `games/${gameId}`,
-        commitPolicy: "nested-private",
-        enabledStores: ["assets", "taskboard", "canvas", "evidence"],
-        assetRoot: `games/${gameId}/assets`,
-      },
-    ],
+  writeGameIdentity(root, gameId, gameId);
+  writeJson(join(root, "ai_studio", "workspace", "catalog.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [] });
+  writeJson(join(root, "ai_studio", "workspace", "catalog.local.json"), {
+    schema: "ai_studio.workspace.catalog.v1",
+    mounts: [{ kind: "game", root: `games/${gameId}`, visibility: "private", gitRoot: `games/${gameId}`, commitPolicy: "nested-private", enabledStores: ["assets", "taskboard", "canvas", "evidence"], aliases: [] }],
   });
+}
+
+function writeGameIdentity(root, gameId, title) {
+  writeJson(join(root, "games", gameId, "game.json"), { schema: "ai_studio.game.v1", id: gameId, title, storageNamespace: gameId });
+  writeJson(join(root, "games", gameId, "dependencies.json"), { schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" });
 }
 
 function privateGameFixture(root, gameId = "secret-game") {
   execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
-  writeFileSync(join(root, ".gitignore"), `${localGameRegistryRelPath()}\n`, "utf8");
+  writeFileSync(join(root, ".gitignore"), `${localWorkspaceCatalogRelPath()}\n`, "utf8");
   writeFileSync(join(root, ".git", "info", "exclude"), `games/${gameId}/\n`, "utf8");
   mkdirSync(join(root, "games", gameId, "assets"), { recursive: true });
   execFileSync("git", ["init"], { cwd: join(root, "games", gameId), stdio: "ignore" });
@@ -86,8 +80,8 @@ test("listAssetViewerSources keeps global library with workspace template and ga
     mkdirSync(join(root, "shared-library", "packs"), { recursive: true });
     mkdirSync(join(root, "templates", "template", "assets"), { recursive: true });
     mkdirSync(join(root, "games", "test-game", "assets"), { recursive: true });
-    mkdirSync(join(root, "ai_studio", "assets", "backlog", "storage", "sources"), { recursive: true });
-    writeFileSync(join(root, "ai_studio", "assets", "backlog", "storage", "sources", "libraries.json"), JSON.stringify({
+    mkdirSync(join(root, "ai_studio", "assets", "sources"), { recursive: true });
+    writeFileSync(join(root, "ai_studio", "assets", "sources", "libraries.json"), JSON.stringify({
       schema: "ai_studio.assets.libraries.v1",
       libraries: [{
         id: "global-library",
@@ -96,26 +90,12 @@ test("listAssetViewerSources keeps global library with workspace template and ga
         status: "active",
       }],
     }), "utf8");
-    writeFileSync(join(root, "templates", "templates.json"), JSON.stringify({
-      schema: "ai_studio.assets.templates.v1",
-      templates: [{
-        id: "template",
-        title: "Template",
-        folder: "templates/template",
-        assets: "templates/template/assets",
-        status: "active",
-      }],
-    }), "utf8");
-    writeFileSync(join(root, "games", "games.json"), JSON.stringify({
-      schema: "ai_studio.assets.games.v1",
-      games: [{
-        id: "test-game",
-        title: "Test Game",
-        folder: "games/test-game",
-        assets: "games/test-game/assets",
-        status: "active",
-      }],
-    }), "utf8");
+    writeJson(join(root, "templates", "template", "template.json"), { schema: "ai_studio.template.v1", id: "template", title: "Template", storageNamespace: "template" });
+    writeGameIdentity(root, "test-game", "Test Game");
+    writeJson(join(root, "ai_studio", "workspace", "catalog.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [
+      { kind: "template", root: "templates/template", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
+      { kind: "game", root: "games/test-game", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
+    ] });
 
     const { sources } = await listAssetViewerSources(root);
 
@@ -138,16 +118,10 @@ test("listAssetViewerSources hides private game mounts unless explicitly include
     mkdirSync(join(root, "shared-library", "packs"), { recursive: true });
     mkdirSync(join(root, "games", "public-game", "assets"), { recursive: true });
     privateGameFixture(root);
-    writeJson(join(root, "games", "games.json"), {
-      schema: "ai_studio.assets.games.v1",
-      games: [{
-        id: "public-game",
-        title: "Public Game",
-        folder: "games/public-game",
-        assets: "games/public-game/assets",
-        status: "active",
-      }],
-    });
+    writeGameIdentity(root, "public-game", "Public Game");
+    writeJson(join(root, "ai_studio", "workspace", "catalog.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [
+      { kind: "game", root: "games/public-game", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
+    ] });
 
     const visible = await listAssetViewerSources(root);
     assert.deepEqual(visible.sources.filter((source) => source.type === "game").map((source) => source.id), ["game:public-game"]);

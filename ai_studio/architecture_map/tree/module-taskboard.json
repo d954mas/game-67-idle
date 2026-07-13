@@ -36,7 +36,7 @@
     {
       "id": "taskboard:skill",
       "kind": "skill",
-      "path": ".codex/skills/nt-taskboard-manager/SKILL.md",
+      "path": ".codex/skills/nt-taskboard-manager",
       "title": "nt-taskboard-manager",
       "description": "Thin Codex skill router for Taskboard work. It activates task capture, planning, reporting, and status updates, then routes agents to the Taskboard product/API contract.",
       "role": "Taskboard agent skill entrypoint",
@@ -148,7 +148,7 @@
               "kind": "ui-component",
               "path": "ai_studio/taskboard/public/index.html",
               "title": "index.html",
-              "description": "Taskboard browser document hosted at /taskboard/ by Studio Shell.",
+              "description": "Presents taskboard page document.",
               "role": "taskboard page document",
               "tags": [
                 "ui",
@@ -200,7 +200,7 @@
       "id": "taskboard:test",
       "kind": "test",
       "path": "ai_studio/taskboard/tests/taskboard.test.mjs",
-      "description": "Taskboard regression tests for parsing, commands, context, project references, validation, API routes, and task lifecycle behavior.",
+      "description": "Verifies taskboard contracts.",
       "role": "taskboard tests",
       "tags": [
         "test"

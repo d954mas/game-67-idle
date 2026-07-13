@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Advisory, CI-optional check for build_spec_a1_a3_2026-07-06.md A2.4 item 2:
+"""Advisory, CI-optional check for the game-state INSTALL verify contract:
 "does a real localStorage save survive a browser restart, with the APP_ID-scoped
 key the new game_storage.c web backend builds?"
 
@@ -7,7 +7,7 @@ This is NOT part of `ctest` -- headless-localStorage automation is genuinely
 capricious across Chrome/driver versions (per the spec and the repo's own
 `web-wasm-headless-verify` recipe), so a failure here does not fail A2's
 acceptance. It exists so a human (or CI) can run one command and get a real
-signal instead of "trust me, the EM_JS mirrors rb-dark-rpg".
+signal instead of relying on similarity to a retired prototype.
 
 What this actually checks (deep-review correction: an earlier draft "saved"
 whatever the default state already was and never set a distinguishing value,
@@ -80,7 +80,7 @@ STORAGE_KEY = "template/save/autosave"
 # an int field, schema default 0, range [0, 1000000] (see
 # templates/template/state/game_state.schema.json) -- 424242 is unambiguous proof
 # the SAVED value (not the default) survived the restart. (T0327 hygiene: the old
-# probe field -- the rb-dark RPG hero's gold stat -- was dead state and got gutted
+# probe field from the retired prototype was dead state and got gutted
 # from the schema.)
 STATE_PATH = "game.test_ui_clicks"
 STATE_VALUE = 424242
@@ -275,7 +275,7 @@ def ensure_web_pack(wasm_bin_dir):
     """Copy the native-built pack flat next to index.html. The pack builder is
     native-only, so the wasm build never produces game.ntpack; the engine streams
     it over HTTP relative to the page URL (GAME_ASSET_PACK_PATH="assets/game.ntpack"
-    on web). Mirrors tools/build_web.sh step 3."""
+    on web). Mirrors tools/build_web.mjs pack-copy step."""
     native_dir = os.path.join(TEMPLATE_DIR, "build", "native-debug")
     if not os.path.isfile(os.path.join(native_dir, "CMakeCache.txt")):
         configure = [

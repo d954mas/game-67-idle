@@ -9,7 +9,7 @@
 //   GET    /api/canvas/projects
 //   POST   /api/canvas/projects                    {title}
 //   GET    /api/canvas/projects/<id>
-//   PATCH  /api/canvas/projects/<id>               {title}          (rename)
+//   PATCH  /api/canvas/projects/<id>               {title?,ownership?,gameId?,archived?}
 //   DELETE /api/canvas/projects/<id>                                (move to .trash)
 //   POST   /api/canvas/projects/<id>/images        {name, bytes_base64, x?, y?}
 //   POST   /api/canvas/projects/<id>/images-batch  {images:[{name, bytes_base64, x?, y?}]} (one entry)
@@ -317,8 +317,9 @@ export function createCanvasApi(root) {
         if (req.method === "GET") {
           const stores = canvasStoresForQuery(root, storeArgs);
           const ownerGame = url.searchParams.get("owner-game") || url.searchParams.get("ownerGame") || "";
+          const includeArchived = boolQueryParam(url.searchParams.get("include-archived"));
           let projects = stores.flatMap((store) =>
-            withCanvasStore(store, () => listProjects(root).map((project) => decorateCanvasProject(project, store)))
+            withCanvasStore(store, () => listProjects(root, { includeArchived }).map((project) => decorateCanvasProject(project, store)))
           );
           if (ownerGame) {
             projects = projects.filter((project) =>
@@ -351,6 +352,7 @@ export function createCanvasApi(root) {
           if (Object.hasOwn(body, "title")) patch.title = body.title;
           if (Object.hasOwn(body, "ownership")) patch.ownership = body.ownership;
           if (Object.hasOwn(body, "gameId")) patch.gameId = body.gameId;
+          if (Object.hasOwn(body, "archived")) patch.archived = body.archived;
           sendMutation(200, await locked(id, () => patchProject(root, patch)));
           return true;
         }

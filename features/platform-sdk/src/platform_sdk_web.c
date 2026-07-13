@@ -85,6 +85,18 @@ EM_JS(void, platform_sdk_web_backend_gameplay_stop, (void), {
     } catch (e) {}
 })
 
+EM_JS(void, platform_sdk_web_backend_measure,
+      (const char *category_ptr, const char *what_ptr, const char *action_ptr), {
+    var backend = globalThis.__platformSdkInternalBackend;
+    if (!backend || typeof backend.measure !== "function") return;
+    var category = category_ptr ? UTF8ToString(category_ptr) : "";
+    var what = what_ptr ? UTF8ToString(what_ptr) : "";
+    var action = action_ptr ? UTF8ToString(action_ptr) : "";
+    try {
+        Promise.resolve(backend.measure(category, what, action)).catch(function () {});
+    } catch (e) {}
+})
+
 EM_JS(int, platform_sdk_web_backend_show_interstitial, (const char *placement_ptr), {
     function reasonCode(reason, shown) {
         if (reason === "unsupported") return 1;
@@ -221,6 +233,12 @@ static void web_backend_gameplay_stop(void *userdata) {
     platform_sdk_web_backend_gameplay_stop();
 }
 
+static void web_backend_measure(const char *category, const char *what,
+                                const char *action, void *userdata) {
+    (void)userdata;
+    platform_sdk_web_backend_measure(category, what, action);
+}
+
 static platform_sdk_result_t web_backend_show_interstitial(const char *placement, void *userdata) {
     (void)userdata;
     return platform_sdk_web_backend_show_interstitial(placement) != 0
@@ -248,6 +266,7 @@ void platform_sdk_install_web_backend(void) {
         .game_ready = web_backend_game_ready,
         .gameplay_start = web_backend_gameplay_start,
         .gameplay_stop = web_backend_gameplay_stop,
+        .measure = web_backend_measure,
         .show_interstitial = web_backend_show_interstitial,
         .show_rewarded = web_backend_show_rewarded,
         .destroy = web_backend_destroy,

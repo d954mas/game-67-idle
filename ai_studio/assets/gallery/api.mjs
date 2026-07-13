@@ -2,10 +2,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import { listIndexedPacks, queryIndexedAssets, refreshAssetIndex, resolveIndexedModel } from "../backlog/storage/index/index.mjs";
-import { refreshPreviewCache } from "../backlog/storage/previews/cache.mjs";
-import { listRegisteredLibraries, resolveRegisteredSourcePath } from "../backlog/storage/sources/libraries.mjs";
-import { listRegisteredTemplates } from "../backlog/storage/sources/templates.mjs";
+import { listIndexedPacks, queryIndexedAssets, refreshAssetIndex, resolveIndexedModel } from "../catalog/ops.mjs";
+import { refreshPreviewCache } from "../previews/ops.mjs";
+import { listRegisteredLibraries, listRegisteredTemplates, resolveRegisteredSourcePath } from "../sources/ops.mjs";
 import { listGameMounts } from "../../workspace/games.mjs";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -23,6 +22,7 @@ function safeSlug(value) {
 
 export function safeResolve(base, relativePath) {
   const resolvedBase = resolve(base);
+  if (/^[A-Za-z]:[/\\]/.test(relativePath) && !/^[A-Za-z]:[/\\]/.test(resolvedBase)) return null;
   const full = resolve(resolvedBase, normalize(relativePath));
   if (full !== resolvedBase && !full.startsWith(resolvedBase + sep)) return null;
   return full;
@@ -37,7 +37,9 @@ function sourceAvailable(path) {
 }
 
 function registeredGameSources(root, options = {}) {
-  return listGameMounts(root, { includePrivate: options.includePrivate === true }).map((game) => {
+  return listGameMounts(root, { includePrivate: options.includePrivate === true })
+    .filter((game) => game.enabledStores.includes("assets"))
+    .map((game) => {
     const assetsPath = safeResolve(root, game.assetRoot);
     return {
       id: game.storeId,
@@ -48,7 +50,7 @@ function registeredGameSources(root, options = {}) {
       available: sourceAvailable(assetsPath),
       visibility: game.visibility,
     };
-  });
+    });
 }
 
 function registeredLibrarySources(root) {

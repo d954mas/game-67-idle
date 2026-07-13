@@ -20,6 +20,11 @@ from ai_studio.assets.tools.review_atlas.atlas_review_labels import (  # noqa: E
 
 
 class ReviewLabelText(unittest.TestCase):
+    def test_source_is_strict_utf8_without_known_mojibake(self) -> None:
+        source = Path(__file__).with_name("atlas_review_labels.py").read_bytes().decode("utf-8")
+        for marker in ("???", "\ufffd", "\u0432\u0402\u201d"):
+            self.assertNotIn(marker, source)
+
     def test_no_aliases_is_just_the_id(self) -> None:
         self.assertEqual(review_label_text("button", []), "button")
         self.assertEqual(review_label_text("button", set()), "button")

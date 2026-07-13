@@ -1,5 +1,5 @@
 /* game_analytics.c -- local analytics writer over the per-frame event bus
-   (event_system_design §4). A RECORD-phase recorder that renders EVERY frame event via the
+   A RECORD-phase recorder that renders EVERY frame event via the
    E3 renderer (game_event_render) into an NDJSON stream and buffers it: native appends to
    build/analytics/session-<wall>-<pid>.ndjson; web keeps an in-memory ring; the ctest
    injects a capture sink + clock. Append-only stream, NOT a game_storage save slot (native
@@ -98,7 +98,7 @@ static char s_ring[GAME_ANALYTICS_WEB_RING_BYTES];
 static size_t s_ring_len;
 #endif
 
-/* ---- wall clock (own tiny clock; game_save's is private + frozen; §0) ---- */
+/* ---- Own wall clock; game_save's clock is private. ---- */
 #if defined(GAME_ANALYTICS_TESTING)
 static int64_t (*s_wall)(void);
 static int64_t wall_now(void) { return s_wall ? s_wall() : 0; }
@@ -124,7 +124,7 @@ static void warn_once(const char *msg) {
 #if defined(__EMSCRIPTEN__)
 /* Append to the fixed-byte ring, evicting oldest WHOLE lines (invariant: the ring holds only
    complete '\n'-terminated lines -> export is always valid NDJSON). Routine eviction bumps
-   s_evicted, never s_dropped (keep-newest, design §4 "web = memory"). */
+   s_evicted, never s_dropped (keep-newest in-memory policy). */
 static void web_ring_append(const char *bytes, size_t len) {
     if (len > sizeof s_ring) {
         s_dropped++;

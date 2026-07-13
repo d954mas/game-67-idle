@@ -23,16 +23,68 @@ owns acceptance rules; `ai_studio/taskboard/` owns durable work state.
 ## Commands
 
 ```powershell
-py -3.12 -m pytest ai_studio/runtime_automation
-py -3.12 ai_studio/runtime_automation/devapi_cli.py 17890 endpoints
-py -3.12 ai_studio/runtime_automation/iterate.py 17890 --reuse
-py -3.12 ai_studio/runtime_automation/ui_readability.py tmp/captures/screenshot.png
-py -3.12 ai_studio/runtime_automation/pixel_health.py tmp/captures/screenshot.png
+node ai_studio/dev_environment/python_run.mjs -m unittest discover -s ai_studio/runtime_automation -p "*_test.py"
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/devapi_cli.py 17890 endpoints
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/iterate.py --json
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/iterate.py 17890 --reuse --json
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/ui_readability.py tmp/captures/screenshot.png
+node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/pixel_health.py tmp/captures/screenshot.png
 ```
 
-Set `AI_STUDIO_GAME_EXE` when driving a specific game build. Without it, the
-DevAPI launcher looks for the template executable at
-`templates/template/build/bin/game.exe`. `AI_STUDIO_DEVAPI_PORT` or
+## Native source-to-runtime proof
+
+Normal `iterate.py` mode owns the reference-template proof loop. It prepares
+`templates/template/build/devapi-debug` with `GAME_DEVAPI_ENABLED=ON` when the
+cached Ninja configuration is absent or incompatible, then invokes the
+canonical `cmake --build ... --target game` command on every run. An existing
+executable is never accepted as freshness evidence; CMake/Ninja decides whether
+the requested build is a true no-op.
+
+The helper launches a fresh process on an ephemeral port by default. A socket
+connection is not readiness: the launch phase ends only after `endpoints`
+succeeds and advertises the template-owned `game.iteration.proof` command. That
+DevAPI-only command returns a dedicated leaf-C token plus the generated
+`test_label_text` schema default. The helper reads both source fixtures before
+building and exact-compares both live values, proving that the launched binary
+contains current C and codegen/content inputs. The stable JSON result keeps
+validation, configure, metadata, codegen, compile, link, launch-to-ready,
+semantic-proof, capture-consistency, and total phase records plus process/DevAPI
+call and output-byte counts. Each phase carries an explicit status and nullable
+wall time. Tool-version discovery is the metadata phase. Codegen and link
+performed inside the one canonical build are honestly marked
+`included-in-build` with no invented standalone timing; the whole build wall
+time is reported under `compile`. The result also records the exact resolved
+port and positive PID, command paths actually executed (configure remains null
+when skipped), actual tool versions, start/end commit and scoped input identity,
+engine gitlink/cleanliness, executable/pack hashes, and rebuilt Ninja outputs
+when the log exposes them. The scoped identity comes from Git's binary diff plus
+sorted nonignored untracked paths and bytes under the template, features, and
+iteration-orchestrator surfaces. It excludes ignored build/tmp products. This
+identity is only a race guard; it never decides whether to build. Foreign or
+incompatible cache roots use CMake's supported `--fresh` configure instead of
+deleting build directories; a missing cache uses a normal configure.
+
+Before and after capture the helper rereads the two source fixtures and the
+run-consistency guard. A race blocks capture or marks an already-written capture
+`invalidated-race`. Every CLI failure is emitted as bounded structured JSON
+with partial phase state and `freshnessClaim:false`. The claim changes to true
+only after semantic proof and final capture-consistency checks pass.
+
+The Studio Runtime Automation suite runs the unit contract on Windows and Linux.
+Linux CI additionally runs the real functional `iterate.py --no-capture --json`
+command; Windows functional no-op/leaf-C/schema smoke evidence is recorded by
+T0395 without creating a second performance benchmark.
+
+`--reuse` is strict attach-only interaction with an already-running unchanged
+game. It never reads fingerprints or fixtures, configures, builds, launches,
+proves, or captures; only `endpoints` readiness is checked. It reports
+`freshnessClaim:false`. Use it for repeated interaction, not for a source-edit
+iteration claim.
+
+Set `AI_STUDIO_GAME_EXE` when driving a specific game through the low-level
+client helpers. `iterate.py` intentionally drives the canonical reference
+template executable under `templates/template/build/devapi-debug/bin/`.
+`AI_STUDIO_DEVAPI_PORT` or
 `NT_DEVAPI_PORT` still pin an explicit port when set.
 
 When `running_game()` launches a new game with no explicit port and no env

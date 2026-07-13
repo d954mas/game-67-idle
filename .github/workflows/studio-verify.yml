@@ -1,0 +1,76 @@
+name: Studio verification
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+env:
+  EMSDK_VERSION: '4.0.10'
+
+jobs:
+  verify:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          package-manager-cache: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Install native Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwayland-bin \
+            libwayland-dev \
+            wayland-protocols \
+            libxkbcommon-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libgl1-mesa-dev \
+            xvfb
+      - name: Prepare space-free CMake path (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $cmakeBin = Split-Path -Parent (Get-Command cmake).Source
+          $cmakeRoot = Split-Path -Parent $cmakeBin
+          New-Item -ItemType Directory -Force .toolchains | Out-Null
+          Copy-Item -Recurse -LiteralPath $cmakeRoot -Destination .toolchains/cmake
+          "$(Resolve-Path .toolchains/cmake/bin)" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+      - name: Bootstrap root Python environment (Ubuntu)
+        if: runner.os == 'Linux'
+        run: node ai_studio/dev_environment/python_setup.mjs --base-python "$pythonLocation/bin/python"
+      - name: Bootstrap root Python environment (Windows)
+        if: runner.os == 'Windows'
+        run: node ai_studio/dev_environment/python_setup.mjs --base-python "$env:pythonLocation\python.exe"
+      - name: Install deterministic Emscripten
+        shell: bash
+        run: |
+          git clone --depth 1 --branch "$EMSDK_VERSION" https://github.com/emscripten-core/emsdk.git .toolchains/emsdk
+          ./.toolchains/emsdk/emsdk install "$EMSDK_VERSION"
+          ./.toolchains/emsdk/emsdk activate "$EMSDK_VERSION"
+          EMSDK_PATH="$(pwd)/.toolchains/emsdk"
+          if [ "$RUNNER_OS" = "Windows" ]; then EMSDK_PATH="$(pwd -W)/.toolchains/emsdk"; fi
+          echo "EMSDK=$EMSDK_PATH" >> "$GITHUB_ENV"
+      - name: Blocking Studio verification
+        run: node ai_studio/studio.mjs verify --full

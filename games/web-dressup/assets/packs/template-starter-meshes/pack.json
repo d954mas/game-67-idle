@@ -1,4 +1,4 @@
-﻿{
+{
   "pack": "template-starter-meshes",
   "title": "Template Starter Meshes",
   "source": "project",
@@ -15,8 +15,16 @@
   "modification_allowed": "true",
   "source_page": "templates/template/assets/meshes/cube.glb",
   "author_vendor": "Neotolis template",
-  "tags": ["template", "starter", "mesh"],
-  "genre": ["template"],
-  "style": ["debug"],
+  "tags": [
+    "template",
+    "starter",
+    "mesh"
+  ],
+  "genre": [
+    "template"
+  ],
+  "style": [
+    "debug"
+  ],
   "description": "Project-owned starter mesh used by the game template to prove mesh loading."
 }

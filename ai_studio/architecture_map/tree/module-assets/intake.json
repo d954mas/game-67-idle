@@ -1,0 +1,23 @@
+{
+  "id": "assets:intake",
+  "title": "Asset Intake",
+  "subtitle": "stage, accept, reject",
+  "kind": "module",
+  "path": "ai_studio/assets/intake",
+  "coverage": "recursive",
+  "color": "#d97706",
+  "description": "Owns candidate staging and explicit accept/reject transitions into Pack Manifest storage.",
+  "role": "asset intake owner",
+  "tags": ["assets", "intake"],
+  "children": [
+    {
+      "id": "assets:intake-ops",
+      "kind": "tool",
+      "path": "ai_studio/assets/intake/ops.mjs",
+      "title": "ops.mjs",
+      "description": "Compact public intake operations facade.",
+      "role": "asset intake public API",
+      "tags": ["assets", "intake", "operations"]
+    }
+  ]
+}

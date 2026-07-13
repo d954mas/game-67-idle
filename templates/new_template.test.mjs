@@ -18,8 +18,34 @@ function tempRepo() {
   mkdirSync(join(root, "templates", "template", "build"), { recursive: true });
   writeFileSync(join(root, "templates", "template", "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.25)\n", "utf8");
   writeFileSync(join(root, "templates", "template", "assets", "readme.txt"), "asset\n", "utf8");
+  for (const [rel, body] of [
+    ["tools/game.mjs", "// game-owned CLI\n"],
+    ["tools/package_web.mjs", "// package owner\n"],
+    ["tools/portal_evidence.mjs", "// evidence owner\n"],
+    ["tools/lib/zip_store.mjs", "// ZIP owner\n"],
+    ["release/README.md", "# Release owner\n"],
+    [".github/workflows/game-verify.yml", "name: game verify\n"],
+    [".gitignore", "release/artifacts/\n"],
+  ]) {
+    mkdirSync(dirname(join(root, "templates", "template", rel)), { recursive: true });
+    writeFileSync(join(root, "templates", "template", rel), body, "utf8");
+  }
   writeFileSync(join(root, "templates", "template", "src", "generated", "game.h"), "#pragma once\n", "utf8");
   writeFileSync(join(root, "templates", "template", "build", "stale.obj"), "generated\n", "utf8");
+  mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
+  writeFileSync(join(root, "templates", "template", "template.json"), JSON.stringify({
+    schema: "ai_studio.template.v1", id: "template", title: "Template", storageNamespace: "template",
+  }), "utf8");
+  writeFileSync(join(root, "templates", "template", "game-dependencies.json"), JSON.stringify({
+    schema: "ai_studio.game.dependencies.seed.v2",
+    engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
+    features: [],
+    compatibility: "tested",
+  }), "utf8");
+  writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify({
+    schema: "ai_studio.workspace.catalog.v1",
+    mounts: [{ kind: "template", root: "templates/template", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] }],
+  }), "utf8");
   return root;
 }
 
@@ -35,25 +61,18 @@ test("new_template copies template, registers it, and refreshes VS Code files", 
   assert.equal(existsSync(join(root, "templates", "mobile-template", "CMakeLists.txt")), true);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "assets", "readme.txt")), true);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "src", "generated", "game.h")), true);
+  for (const rel of ["tools/game.mjs", "tools/package_web.mjs", "tools/portal_evidence.mjs", "tools/lib/zip_store.mjs", "release/README.md", ".github/workflows/game-verify.yml", ".gitignore"]) {
+    assert.equal(readFileSync(join(root, "templates", "mobile-template", rel), "utf8"), readFileSync(join(root, "templates", "template", rel), "utf8"), rel);
+  }
   assert.equal(existsSync(join(root, "templates", "mobile-template", "build", "stale.obj")), false);
 
-  const registry = JSON.parse(readFileSync(join(root, "templates", "templates.json"), "utf8"));
-  assert.deepEqual(registry.templates, [
-    {
-      id: "mobile-template",
-      title: "mobile-template",
-      folder: "templates/mobile-template",
-      assets: "templates/mobile-template/assets",
-      status: "active",
-    },
-    {
-      id: "template",
-      title: "Template",
-      folder: "templates/template",
-      assets: "templates/template/assets",
-      status: "active",
-    },
-  ]);
+  const registry = JSON.parse(readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8"));
+  assert.deepEqual(registry.mounts.map((mount) => mount.root), ["templates/mobile-template", "templates/template"]);
+  assert.equal(existsSync(join(root, "templates", "mobile-template", "template.json")), true);
+  assert.equal(existsSync(join(root, "templates", "mobile-template", "game-dependencies.json")), true);
+  const dependencySeed = JSON.parse(readFileSync(join(root, "templates", "mobile-template", "game-dependencies.json"), "utf8"));
+  assert.equal(dependencySeed.schema, "ai_studio.game.dependencies.seed.v2");
+  assert.equal(dependencySeed.engine.version, "0.1.0");
 
   const tasks = JSON.parse(readFileSync(join(root, ".vscode", "tasks.json"), "utf8"));
   const launch = JSON.parse(readFileSync(join(root, ".vscode", "launch.json"), "utf8"));
@@ -68,7 +87,7 @@ test("new_template copies template, registers it, and refreshes VS Code files", 
 test("new_template rejects existing template folders without --force", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(dirname(join(root, "templates", "templates.json")), { recursive: true });
+  mkdirSync(join(root, "templates"), { recursive: true });
 
   const result = spawnSync(process.execPath, [script, "--root", root, "--id", "template"], { encoding: "utf8" });
 

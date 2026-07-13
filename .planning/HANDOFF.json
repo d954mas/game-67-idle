@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-07-12T03:18:27.889Z",
+  "phase": "runway-awakening-mvp",
+  "phase_name": "Poki 500-player prototype",
+  "phase_dir": "games/web-dressup",
+  "plan": 1,
+  "task": 4,
+  "total_tasks": 7,
+  "status": "paused",
+  "completed_tasks": [
+    {"id": 1, "name": "Three-Essence always-win awakening core", "status": "done"},
+    {"id": 2, "name": "Lookbook, rewards, audio, telemetry and release-size foundations", "status": "done"},
+    {"id": 3, "name": "Exact SavedLook persistence and support-decision cutover", "status": "in_progress", "progress": "schema/domain and UI compile; long real smoke previously reached round 7 before audio shutdown assert, which is now fixed but not rerun"},
+    {"id": 4, "name": "Production wardrobe", "status": "in_progress", "progress": "26 catalog items landed, but brutal visual audit rejected multiple Bottom/Shoe/Accent/Hair/Main assets; remediation agents were interrupted for pause"}
+  ],
+  "remaining_tasks": [
+    {"id": 5, "name": "Finish 30 visually accepted wearables and six distinct awakening overlays", "status": "not_started"},
+    {"id": 6, "name": "Prove honest 8-12 minute cold-player path and portal Inspector", "status": "not_started"},
+    {"id": 7, "name": "Pass readiness gate, then run ten sequential final critique/fix/recheck cycles", "status": "not_started"}
+  ],
+  "blockers": [
+    {"description": "External Canvas/image generation requires new exact post-warning permission for Hair, Main, overlays and visual remediation inputs", "type": "human_action", "workaround": "none; do not bypass external-disclosure policy"},
+    {"description": "Current wardrobe fails visual readiness despite passing alpha gates", "type": "technical", "workaround": "regenerate/re-register rejected pieces and re-audit full outfits at 360p"},
+    {"description": "Six production awakening back/front overlays are not integrated", "type": "technical", "workaround": "resume after exact external permission"}
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {"action": "Provide exact external-recipient permission recorded in .continue-here.md if generation is resumed", "context": "The previous broad permission was rejected by the external-disclosure gate", "blocking": true},
+    {"action": "Decide whether to continue this concept after reviewing the brutal visual audit", "context": "User explicitly said the current result feels bad and requested a pause", "blocking": true}
+  ],
+  "decisions": [
+    {"decision": "Development iterations do not count toward final ten cycles", "rationale": "Final cycles start only after feature/content completeness and independent readiness agreement", "phase": "runway-awakening-mvp"},
+    {"decision": "Replace fake C/T/S modulo signatures with exact five-item SavedLooks", "rationale": "The old model aliased different outfits and did not prove player authorship", "phase": "runway-awakening-mvp"},
+    {"decision": "Main items must be bodice/top-only", "rationale": "Full dresses hide Bottom and make a required styling choice fake", "phase": "runway-awakening-mvp"},
+    {"decision": "Alpha/body-peel pass is necessary but not sufficient", "rationale": "Visual audit found anatomically and compositionally broken assets that numerical gates accepted", "phase": "runway-awakening-mvp"}
+  ],
+  "uncommitted_files": [
+    "games/web-dressup/**",
+    "features/audio-core/**",
+    "features/platform-sdk/**",
+    "selected template audio/platform dependency integration"
+  ],
+  "next_action": "Do not resume production immediately. First read .planning/.continue-here.md, review the visual-audit rejects with the user, and decide continue/pivot/rollback. If continuing, rerun the real eight-look smoke after the audio teardown fix before any new generation.",
+  "context_notes": "User requested a pause because the current result is not pleasing. All subagents were interrupted. Full native build and 29/29 CTest passed immediately before handoff. Final review cycle count remains 0/10."
+}

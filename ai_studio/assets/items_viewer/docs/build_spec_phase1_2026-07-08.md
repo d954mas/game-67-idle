@@ -4,15 +4,15 @@ Task T0316 phase 1 of 3. Author: deep-reasoner, 2026-07-08. Status: spec, review
 Module owns its own docs (precedent: `ai_studio/assets/canvas/docs/`).
 
 Sources this spec sits on: taskboard `ai_studio/taskboard/items/active/T0316-ai-studio-content-editor.md`;
-design frame `templates/design/item_system_design_2026-07-06.md` §7; op-layer
+current items contract `features/items-core/README.md`; op-layer
 `features/items-core/scripts/items_ops.py`; tool-parity precedent `ai_studio/assets/canvas/{ops.mjs,api.mjs,cli.mjs,site/}`;
 host `ai_studio/studio_shell/server.mjs` + `ai_studio/studio_shell/README.md` ("Surface Rule").
 
 ## 1. Goal / scope / non-scope
 
 Goal: a read-only web surface that shows the item catalog of any registered game or template —
-"see the items" — the cheapest, most valuable slice of the future editor (§7 of the design frame:
-value first, universality by schema, never a second data model).
+"see the items" — the cheapest, most valuable slice of the future editor:
+value first, universality by schema, never a second data model.
 
 In scope (phase 1):
 - Pick a catalog (dropdown over merged game + template registries).
@@ -62,12 +62,12 @@ Mounting in `ai_studio/studio_shell/server.mjs` (exact anchors):
 Two GET endpoints (read-only; no POST/PUT/PATCH in phase 1).
 
 `GET /api/items-viewer/catalogs` — the dropdown list. Merges `listRegisteredTemplates(root)` +
-`listRegisteredGames(root)` (`assets/backlog/storage/sources/{templates,games}.mjs`). Response:
+`listRegisteredGames(root)` (`assets/sources/ops.mjs`). Response:
 ```
 { catalogs: [ { id: "template:template", kind: "template", title: "Template",
                 folder: "templates/template", hasItems: true, status: "active" },
-              { id: "game:rb-dark-rpg", kind: "game", title: "RB Dark RPG",
-                folder: "games/rb-dark-rpg", hasItems: false, status: "active" } ] }
+              { id: "game:fixture-game", kind: "game", title: "Fixture Game",
+                folder: "games/fixture-game", hasItems: false, status: "active" } ] }
 ```
 `id` = `<kind>:<registryId>` (disambiguates a template and a game that share an id; mirrors gallery's
 `game:${id}` convention, `assets/gallery/api.mjs:48`). `hasItems` = `existsSync(<folder>/content/items.json)`.
@@ -126,7 +126,7 @@ Layout, top to bottom: shared studio sidebar (copy the `<aside class="studio-sid
 validate summary panel -> Removed/lock section -> card grid.
 
 - Dropdown: from `/catalogs`. A `hasItems:false` entry is selectable and renders an honest empty state
-  ("items not connected for this game") — the rb-dark-rpg case today. If the response carries `content_error`,
+  ("items not connected for this game") — the neutral fixture-game case. If the response carries `content_error`,
   show it prominently at the top ("catalog broken: <stderr>") — the game's own data is invalid and must be seen.
 - Summary panel: `validate.ok`/`available` badge, error/warning counts, `namespace`, container list
   (id / capacity / accept_policy / hidden). Catalog-level and homeless issues live here (routing rule below).
@@ -155,8 +155,8 @@ Card anatomy — split explicitly to kill the "designer order vs schema order" c
 - **Per-item issues:** `validate.errors`/`warnings` whose `id` is this item -> red / yellow on the card.
 - Currencies render inline in the same grid (lead decision), tagged as currency.
 
-Labels: `item_fields.schema.json` fields carry ONLY `{type, required}` — the schema has NO labels, and the
-`ui:{}` namespace (design §7) is deferred and absent from the data today. Phase-1 label = humanize the key
+Labels: `item_fields.schema.json` fields carry ONLY `{type, required}` — the schema has NO labels. The
+optional `ui:{}` namespace is deferred and absent from the data today. Phase-1 label = humanize the key
 (`display_name` -> "Display name", `base_value` -> "Base value"). Real labels arrive with `ui:{}`; the
 humanizer is the single seam to swap then.
 
@@ -175,7 +175,7 @@ gallery search in phase 1.
 Rationale (deviates from decision (в)'s "best-effort resolve + placeholder" toward its own LEAN escape hatch
 "maybe search is unnecessary in phase 1"): (1) miss rate is 100% today — no asset exists in the repo for any
 `icon_asset_id`, and no `icon_asset_id -> file` mechanism exists (fact #4). (2) Wiring `searchAssets`
-(`assets/backlog/storage/search.mjs`) means an SQLite-indexed async fan-out per card for a guaranteed-empty
+(`assets/catalog/search.mjs`) means an SQLite-indexed async fan-out per card for a guaranteed-empty
 result — cost with zero payoff. (3) The real binding is `icon-link`, a phase-2+ ops command — resolving by
 loose id/tag match now would invent an ad-hoc binding the design explicitly defers.
 

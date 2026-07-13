@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 
-/* И2b (§7.1): items_state.c's find_owned/alloc_owned helpers are STATIC inside
+/* items_state.c's find_owned/alloc_owned helpers are static inside
    that generated TU (render_collection_helpers) -- unreachable from here. This
    file scans items_state.owned[] directly; items_bootstrap.c's reconcile scan
    is the only other place that touches the array raw. */
@@ -29,7 +29,7 @@ void items_internal_seq_bump(int64_t candidate) {
 }
 
 /* R3: ONE key-builder for stacks -- divergence here is silent save corruption
-   (two stacks for the same def_id in one container). §2.3: key =
+   (two stacks for the same def_id in one container). The key is
    "<container>/<def_id>", authoritative for stacks (M2). L2: returns false on
    truncation (container/def_id combo does not fit ITEMS_STATE_STRING_MAX) --
    callers MUST treat that as invalid input, never proceed with a truncated key. */
@@ -59,7 +59,7 @@ static ItemsItemOwned *alloc_owned_slot(void) {
 
 /* container.capacity (M1) counts DISTINCT owned records (stacks + uniques) in a
    container -- NOT summed count. Quarantined records still occupy a slot (they
-   keep their .container home, §7.3), so they count here too. */
+   keep their .container home), so they count here too. */
 static int container_record_count(const char *container_id) {
     int n = 0;
     for (int i = 0; i < ITEMS_STATE_MAX_OWNED; ++i) {
@@ -71,7 +71,7 @@ static int container_record_count(const char *container_id) {
 }
 
 /* Core add, shared by the public items_add() and items_move()'s strict
-   remove+add re-key (§7.1) -- neither reason-checks nor emits txn here (the
+   remove+add re-key -- neither reason-checks nor emits txn here (the
    caller owns both: items_add emits txn; items_move emits move, not txn, since
    ownership of the def does not change, only its container).
    capacity (M1) REJECTs only when allocating a genuinely NEW record; growing an
@@ -106,7 +106,7 @@ static bool add_raw(const char *container_id, const char *def_id, int64_t count,
         }
         rec = alloc_owned_slot();
         if (rec == NULL) {
-            return false; /* ITEMS_STATE_MAX_OWNED exhausted (owned-map budget, §12 OQ6) */
+            return false; /* ITEMS_STATE_MAX_OWNED exhausted. */
         }
         rec->used = true;
         (void)snprintf(rec->key, sizeof rec->key, "%s", key);
@@ -166,7 +166,7 @@ bool items_add(const char *container_id, const char *def_id, int64_t count, cons
         return false;
     }
     const game_item_def_t *def = item_core(def_id);
-    /* дефолт-контейнер по accept-policy (design §3): currency -> purse, иначе backpack. */
+    /* Default by accept policy: currency -> purse, otherwise backpack. */
     const char *target =
         (container_id != NULL && container_id[0] != '\0') ? container_id : (item_is_currency(def) ? "purse" : "backpack");
 
@@ -210,7 +210,7 @@ int64_t items_count(const char *container_id, const char *def_id) {
     }
     const ItemsItemOwned *rec = find_owned_by_key(key);
     if (rec == NULL || rec->quarantined) {
-        return 0; /* карантинные записи исключены из живых запросов (§7.1) */
+        return 0; /* Quarantined records are excluded from live queries. */
     }
     return rec->count;
 }
@@ -231,7 +231,7 @@ bool items_move(const char *from, const char *to, const char *entry_key, int64_t
         return true; /* M2: same-container move is a no-op; no txn (nothing changed) */
     }
 
-    /* Stack route (§2.3/M2): entry_key is a def_id; the KEY is authoritative for
+    /* Stack route: entry_key is a def_id; the key is authoritative for
        stacks -> strict remove+add re-key, never just flip .container (the key
        would desync from the field). NOT emitted as txn: ownership of the def
        does not change, only its container. */
@@ -273,7 +273,7 @@ bool items_move(const char *from, const char *to, const char *entry_key, int64_t
         return true;
     }
 
-    /* Unique route (§2.3): entry_key IS the record key (instance_id); FIELD
+    /* Unique route: entry_key is the record key (instance_id); field
        .container is authoritative for uniques -> only the field changes. */
     ItemsItemOwned *unique = find_owned_by_key(entry_key);
     if (unique != NULL && strcmp(unique->container, from) == 0) {

@@ -31,8 +31,8 @@ duplicated:
   the idle timeout for tests with `AI_STUDIO_IMAGE_WORKER_IDLE_MS`.
 - `worker.py` — the long-lived worker process: line-delimited JSON over stdio,
   imports the heavy stack once, runs each requested tool script's `__main__`.
-- `setup_python.mjs` — one-shot: create `.venv/` from `py -3.12`, install
-  `../requirements.txt`, verify `import numpy, scipy, PIL`.
+- `setup_python.mjs` — compatibility entry point for the Dev Environment
+  root-`.venv` setup, pinned install, and version/import verification.
 
 ## Setup / repair the studio venv
 

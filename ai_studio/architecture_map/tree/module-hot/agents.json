@@ -1,0 +1,12 @@
+{
+  "id": "core-harness:agents",
+  "kind": "doc",
+  "path": "AGENTS.md",
+  "description": "Repo-level harness contract loaded by agents: repository role, AI Studio direction, current-game routing, hard invariants, and context routes.",
+  "role": "repo-specific agent contract",
+  "tags": [
+    "core",
+    "policy",
+    "source"
+  ]
+}

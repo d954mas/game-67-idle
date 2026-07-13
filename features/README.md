@@ -130,8 +130,7 @@ possibility, not a feature.
   `list`/`validate`/`schema`) + `items_ops_test.py`. In-place module, same
   shape as `game-state/` (`../../features/items-core/` from any
   `templates/<x>` or `games/<id>`). Extracted 2026-07-07 out of
-  `templates/template/src/features/items/` (T0337,
-  `templates/design/build_spec_t0337_2026-07-07.md`, increment M1) once its
+  `templates/template/src/features/items/` in T0337 once its
   `.c` was proven byte-identical across the decisive rule above. The
   consuming template/game still owns its content (`content/items.json` +
   `item_fields.schema.json` + `items.lock.json`), its state schema
@@ -156,6 +155,12 @@ possibility, not a feature.
   (`game.events.tail`), and the local `game_analytics` NDJSON writer. Higher
   features emit through this pack; analytics subscribes to it. Reference:
   `game-events/README.md` + `game-events/INSTALL.md`.
+- `audio-core/` (`L1`, `1.0.0`): versioned fixed-pool playback contract with
+  generation-safe clip/voice handles, native miniaudio and browser WebAudio
+  backends. Games own cue/music catalogs, source assets, codec-neutral BLOB IDs,
+  settings and lifecycle composition. Its contract version records the existing
+  public API, not T0393 completion; compatibility requires the owning validation
+  commands. Reference: `audio-core/README.md` + `audio-core/INSTALL.md`.
 
 ## Features (reference implementations live in the template)
 

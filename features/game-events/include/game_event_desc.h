@@ -3,7 +3,7 @@
 
 #include <stdint.h>
 
-/* Shared descriptor contract for generic event rendering (event_system_design §3).
+/* Shared descriptor contract for generic event rendering.
    The generator emits one descriptor per event; DevAPI/log/analytics (E3/E4) walk it to
    render ANY event with no per-feature code. Positional-independent: every offset is
    relative to the payload base. */
@@ -20,7 +20,7 @@ typedef enum {
     GAME_EVENT_FT_BOOL = 0,
     GAME_EVENT_FT_INT,     /* int32_t */
     GAME_EVENT_FT_I64,     /* int64_t */
-    GAME_EVENT_FT_FLOAT,   /* double (f64, event_system_design §7 Q3) */
+    GAME_EVENT_FT_FLOAT,   /* double (f64) */
     GAME_EVENT_FT_STRING,  /* uint32 byte-offset -> inline NUL-terminated string */
     GAME_EVENT_FT_HASH,    /* nt_hash64_t; render via nt_hash64_label */
     GAME_EVENT_FT_BYTES    /* uint32 byte-offset + uint32 length; recorders ignore, DevAPI size+hex */

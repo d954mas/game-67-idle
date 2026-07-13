@@ -1,0 +1,122 @@
+{
+  "schema": "items.normalized_api_proof",
+  "schema_version": 1,
+  "source": "items_api_weapon_proof.lua",
+  "reserved_field_ids": ["game.weapon.level.legacy_damage"],
+  "fields": [
+    {
+      "field_id": "game.weapon.level.attack",
+      "member": "attack",
+      "scope": "level_row",
+      "c_type": "int64_t",
+      "required_for": ["weapon"],
+      "min": 0,
+      "max": 1000000,
+      "unit": "damage",
+      "rounding": "exact",
+      "label_key": "item.attack",
+      "ui": { "format": "integer", "description_key": "item.attack.description" },
+      "evolution": { "since": 1, "deprecated": false },
+      "source": { "file": "items_api_weapon_proof.lua", "line": 6, "column": 3 }
+    }
+  ],
+  "views": [
+    {
+      "view_id": "game.weapon.balance",
+      "layout": "table",
+      "order": ["game.weapon.level.attack"],
+      "chart": { "field_ids": ["game.weapon.level.attack"] },
+      "source": { "file": "items_api_weapon_proof.lua", "line": 15, "column": 1 }
+    }
+  ],
+  "items": [
+    {
+      "def_id": "game.gold", "kind": "currency", "tags": ["economy"],
+      "stack": 0, "authoring_mode": "none", "levels": [],
+      "source": { "file": "items_api_weapon_proof.lua", "line": 25, "column": 1 }
+    },
+    {
+      "def_id": "game.metal", "kind": "material", "tags": ["crafting"],
+      "stack": 999, "authoring_mode": "none", "levels": [],
+      "source": { "file": "items_api_weapon_proof.lua", "line": 26, "column": 1 }
+    },
+    {
+      "def_id": "game.extraordinarily_long_balance_resource_identifier",
+      "kind": "material", "tags": ["crafting", "rare"],
+      "stack": 999, "authoring_mode": "none", "levels": [],
+      "source": { "file": "items_api_weapon_proof.lua", "line": 27, "column": 1 }
+    },
+    {
+      "def_id": "game.fixed_sword", "kind": "weapon", "tags": ["melee"],
+      "stack": 1, "authoring_mode": "single",
+      "acquire": { "kind": "cost", "cost": [{ "item_ref": "game.gold", "count": 100 }] },
+      "levels": [
+        {
+          "level": 1, "attack": 15, "provenance": { "attack": "single" },
+          "source": { "file": "items_api_weapon_proof.lua", "line": 34, "column": 3 }
+        }
+      ],
+      "source": { "file": "items_api_weapon_proof.lua", "line": 32, "column": 1 }
+    },
+    {
+      "def_id": "game.table_sword", "kind": "weapon", "tags": ["melee", "starter"],
+      "stack": 1, "authoring_mode": "table",
+      "levels": [
+        {
+          "level": 1, "attack": 12, "provenance": { "attack": "table" },
+          "source": { "file": "items_api_weapon_proof.lua", "line": 41, "column": 5 }
+        },
+        {
+          "level": 2, "attack": 18, "cost_to_reach": { "kind": "free" },
+          "provenance": { "attack": "table", "cost_to_reach": "table" },
+          "source": { "file": "items_api_weapon_proof.lua", "line": 42, "column": 5 }
+        }
+      ],
+      "source": { "file": "items_api_weapon_proof.lua", "line": 38, "column": 1 }
+    },
+    {
+      "def_id": "game.generated_sword", "kind": "weapon", "tags": ["melee"],
+      "stack": 1, "authoring_mode": "generate",
+      "levels": [
+        {
+          "level": 1, "attack": 8, "provenance": { "attack": "generate" },
+          "source": { "file": "items_api_weapon_proof.lua", "line": 50, "column": 5 }
+        },
+        {
+          "level": 2, "attack": 11,
+          "cost_to_reach": { "kind": "cost", "cost": [
+            { "item_ref": "game.extraordinarily_long_balance_resource_identifier", "count": 2 }
+          ] },
+          "provenance": { "attack": "generate", "cost_to_reach": "generate" },
+          "source": { "file": "items_api_weapon_proof.lua", "line": 52, "column": 7 }
+        }
+      ],
+      "source": { "file": "items_api_weapon_proof.lua", "line": 46, "column": 1 }
+    },
+    {
+      "def_id": "game.iron_sword", "kind": "weapon", "tags": ["melee"],
+      "stack": 1, "authoring_mode": "columns",
+      "levels": [
+        {
+          "level": 1, "attack": 10, "provenance": { "attack": "columns" },
+          "source": { "file": "items_api_weapon_proof.lua", "line": 61, "column": 5 }
+        },
+        {
+          "level": 2, "attack": 15,
+          "cost_to_reach": { "kind": "cost", "cost": [
+            { "item_ref": "game.gold", "count": 100 },
+            { "item_ref": "game.metal", "count": 5 }
+          ] },
+          "provenance": { "attack": "columns", "cost_to_reach": "columns" },
+          "source": { "file": "items_api_weapon_proof.lua", "line": 63, "column": 7 }
+        },
+        {
+          "level": 3, "attack": 21, "cost_to_reach": { "kind": "free" },
+          "provenance": { "attack": "override", "cost_to_reach": "columns" },
+          "source": { "file": "items_api_weapon_proof.lua", "line": 66, "column": 7 }
+        }
+      ],
+      "source": { "file": "items_api_weapon_proof.lua", "line": 57, "column": 1 }
+    }
+  ]
+}

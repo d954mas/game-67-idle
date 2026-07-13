@@ -1,0 +1,13 @@
+{
+  "id": "assets:backlog-readme",
+  "kind": "doc",
+  "path": "ai_studio/assets/backlog/README.md",
+  "title": "README.md",
+  "description": "Asset Backlog contract: temporary home for live asset modules that need a clearer ownership split.",
+  "role": "asset backlog module entrypoint",
+  "tags": [
+    "assets",
+    "backlog",
+    "source"
+  ]
+}

@@ -26,6 +26,9 @@ Reviewed AI pipeline modules live in `ai_studio/`. New AI-pipeline docs/tools
 belong in the owning `ai_studio/` module; do not add new root-level compatibility
 paths.
 
+Enforcement labels and proof routes are defined in
+`ai_studio/core_harness/workflow/enforcement_contract.json`.
+
 ## Agent Roles
 
 Reusable agent roles live in the active harness catalog. Codex custom agents

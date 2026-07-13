@@ -37,6 +37,9 @@ let loadedProjectKey = null; // which store-qualified project's transcript `turn
 let sending = false;
 let cancelledByUser = false; // distinguishes a Cancel-click error event from a genuine failure
 let clearConfirmOpen = false;
+let chatToken = null;
+let chatBootstrapPromise = null;
+let activeTurn = null;
 
 function panelEl() {
   return el("chat-panel");
@@ -70,12 +73,59 @@ function syncToggle() {
 
 // ---- transport: small JSON helper (transcript/cancel/clear) + raw SSE POST (message) -----
 
-async function chatApi(method, path, body) {
-  const res = await fetch(`${CHAT_BASE}${path}`, {
-    method,
-    headers: canvasStoreHeaders(state.storeId, body ? { "content-type": "application/json" } : {}),
-    body: body ? JSON.stringify(body) : undefined,
-  });
+async function ensureChatToken() {
+  if (chatToken) return chatToken;
+  if (!chatBootstrapPromise) {
+    chatBootstrapPromise = fetch("/api/chat/bootstrap", { headers: { accept: "application/json" } })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || typeof data.token !== "string" || !data.token) {
+          throw new Error(data.error || "chat security bootstrap failed");
+        }
+        chatToken = data.token;
+        return chatToken;
+      })
+      .finally(() => { chatBootstrapPromise = null; });
+  }
+  return chatBootstrapPromise;
+}
+
+async function chatHeaders(protectedRequest, storeId = state.storeId) {
+  const headers = protectedRequest ? { "content-type": "application/json" } : {};
+  if (protectedRequest) headers["x-ai-studio-chat-token"] = await ensureChatToken();
+  return canvasStoreHeaders(storeId, headers);
+}
+
+async function fetchProtectedChat(url, body, storeId = state.storeId) {
+  const request = async () => {
+    const headers = await chatHeaders(true, storeId);
+    return {
+      response: await fetch(url, { method: "POST", headers, body }),
+      token: headers["x-ai-studio-chat-token"],
+    };
+  };
+  let result = await request();
+  if (result.response.status !== 403) return result.response;
+
+  // A Studio Shell restart on the same port invalidates the token cached by an
+  // already-open Canvas tab. Only clear the token that actually failed: another
+  // concurrent request may already have refreshed it. Retry exactly once so a
+  // genuine permission denial cannot loop.
+  if (chatToken === result.token) chatToken = null;
+  result = await request();
+  if (result.response.status === 403 && chatToken === result.token) chatToken = null;
+  return result.response;
+}
+
+export async function chatApi(method, path, body, storeId = state.storeId) {
+  const protectedRequest = method === "POST";
+  const encodedBody = protectedRequest ? JSON.stringify(body || {}) : undefined;
+  const res = protectedRequest
+    ? await fetchProtectedChat(`${CHAT_BASE}${path}`, encodedBody, storeId)
+    : await fetch(`${CHAT_BASE}${path}`, {
+      method,
+      headers: await chatHeaders(false, storeId),
+    });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || res.statusText);
   return data;
@@ -106,11 +156,14 @@ function dispatchSseBlock(raw, handlers) {
 // fetch Response body as a stream and splits it on the SSE blank-line block separator by
 // hand. `handlers` keys are event names (progress / op-committed / final / error).
 async function streamChatMessage(projectId, body, handlers) {
-  const res = await fetch(`${CHAT_BASE}/projects/${encodeURIComponent(projectId)}/message`, {
-    method: "POST",
-    headers: canvasStoreHeaders(state.storeId, { "content-type": "application/json" }),
-    body: JSON.stringify(body),
-  });
+  const res = await fetchProtectedChat(
+    `${CHAT_BASE}/projects/${encodeURIComponent(projectId)}/message`,
+    JSON.stringify(body),
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || res.statusText);
+  }
   if (!res.body) throw new Error("chat: streaming is not supported by this browser/response");
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
@@ -171,6 +224,86 @@ function selectionRefs() {
   return [...[...state.selectedIds].map(elementRefFor), ...[...state.selectedGroupIds].map(groupRefFor)].filter(Boolean);
 }
 
+async function decidePermission(permission, decision) {
+  if (permission.state !== "pending") return;
+  const target = permissionDecisionTarget(permission, decision);
+  permission.deciding = true;
+  renderStream();
+  try {
+    const result = await chatApi(
+      "POST",
+      target.path,
+      target.body,
+      target.storeId,
+    );
+    permission.state = result.state;
+  } catch (error) {
+    permission.decisionError = error.message;
+    setStatus(error.message, true);
+  } finally {
+    permission.deciding = false;
+    renderStream();
+  }
+}
+
+export function permissionDecisionTarget(permission, decision) {
+  return {
+    path: `/projects/${encodeURIComponent(permission.projectId)}/permissions/${encodeURIComponent(permission.id)}/decision`,
+    body: { decision },
+    storeId: permission.storeId,
+  };
+}
+
+export function activeTurnsForProject(turn, key) {
+  return turn && turn.key === key ? turn.turns : null;
+}
+
+export function activeTurnRequestTarget(turn, fallbackProjectId, fallbackStoreId) {
+  return turn
+    ? { projectId: turn.projectId, storeId: turn.storeId }
+    : { projectId: fallbackProjectId, storeId: fallbackStoreId };
+}
+
+export function renderPermission(permission, onDecision = decidePermission) {
+  const request = document.createElement("section");
+  request.className = `chat-permission chat-permission-${permission.state}`;
+  request.setAttribute("aria-label", "Permission request");
+
+  const heading = document.createElement("strong");
+  heading.textContent = permission.state === "pending" ? "Approval required" : `Permission ${permission.state}`;
+  request.appendChild(heading);
+
+  const exact = document.createElement("pre");
+  exact.className = "chat-permission-request";
+  exact.textContent = JSON.stringify(permission.exactRequest, null, 2);
+  request.appendChild(exact);
+
+  if (permission.state === "pending") {
+    const actions = document.createElement("div");
+    actions.className = "chat-permission-actions";
+    const approve = document.createElement("button");
+    approve.type = "button";
+    approve.textContent = "Approve";
+    approve.disabled = Boolean(permission.deciding);
+    approve.addEventListener("click", () => void onDecision(permission, "allow"));
+    const deny = document.createElement("button");
+    deny.type = "button";
+    deny.className = "chat-danger";
+    deny.textContent = "Deny";
+    deny.disabled = Boolean(permission.deciding);
+    deny.addEventListener("click", () => void onDecision(permission, "deny"));
+    actions.append(approve, deny);
+    request.appendChild(actions);
+  }
+  if (permission.decisionError) {
+    const error = document.createElement("div");
+    error.className = "chat-permission-error";
+    error.textContent = permission.decisionError;
+    request.appendChild(error);
+  }
+  return request;
+}
+
 // ---- rendering ----------------------------------------------------------------------
 
 function renderTurn(turn) {
@@ -216,6 +349,10 @@ function renderTurn(turn) {
     bubble.appendChild(text);
   }
   row.appendChild(bubble);
+
+  for (const permission of turn.permissions || []) {
+    row.appendChild(renderPermission(permission));
+  }
 
   if (turn.cancelled) {
     const note = document.createElement("div");
@@ -332,8 +469,14 @@ async function sendMessage() {
 
   const refs = selectionRefs();
   const userTurn = { role: "user", text, at: new Date().toISOString(), refs };
-  const assistantTurn = { role: "assistant", text: "", pending: true, pendingMessage: "Working…" };
+  const assistantTurn = { role: "assistant", text: "", pending: true, pendingMessage: "Working…", permissions: [] };
   turns.push(userTurn, assistantTurn);
+  activeTurn = {
+    key: projectKey(project),
+    projectId: project.id,
+    storeId: state.storeId,
+    turns,
+  };
   sending = true;
   cancelledByUser = false;
   renderStream();
@@ -346,6 +489,24 @@ async function sendMessage() {
       },
       "op-committed": () => {
         void reloadProject();
+      },
+      "permission-request": (data) => {
+        assistantTurn.permissions.push({
+          id: data.id,
+          exactRequest: data.exactRequest,
+          state: data.state || "pending",
+          deciding: false,
+          projectId: activeTurn.projectId,
+          storeId: activeTurn.storeId,
+        });
+        assistantTurn.pendingMessage = "Waiting for approval";
+        renderStream();
+      },
+      "permission-decision": (data) => {
+        const permission = assistantTurn.permissions.find((entry) => entry.id === data.id);
+        if (permission) permission.state = data.state;
+        assistantTurn.pendingMessage = data.state === "allowed" ? "Continuing…" : `Permission ${data.state}`;
+        renderStream();
       },
       final: (data) => {
         assistantTurn.pending = false;
@@ -379,16 +540,19 @@ async function sendMessage() {
   } finally {
     sending = false;
     cancelledByUser = false;
+    activeTurn = null;
     syncComposer();
   }
 }
 
 async function cancelTurn() {
   const project = state.project;
-  if (!project || !sending) return;
+  if (!sending) return;
+  const target = activeTurnRequestTarget(activeTurn, project?.id, state.storeId);
+  if (!target.projectId) return;
   cancelledByUser = true; // the error SSE event this triggers renders as a cancel note, not a red error
   try {
-    await chatApi("POST", `/projects/${encodeURIComponent(project.id)}/cancel`);
+    await chatApi("POST", `/projects/${encodeURIComponent(target.projectId)}/cancel`, undefined, target.storeId);
   } catch (error) {
     setStatus(error.message, true);
   }
@@ -429,6 +593,13 @@ export function renderChat() {
     return;
   }
   if (!open) return; // load lazily on next open
+  const pendingTurns = activeTurnsForProject(activeTurn, projectKey(project));
+  if (pendingTurns) {
+    turns = pendingTurns;
+    loadedProjectKey = activeTurn.key;
+    renderStream();
+    return;
+  }
   if (loadedProjectKey !== projectKey(project)) {
     setClearConfirmOpen(false);
     void loadTranscript(project);
@@ -439,6 +610,7 @@ export function renderChat() {
 
 export function initChat() {
   loadOpen();
+  void ensureChatToken().catch((error) => setStatus(error.message, true));
   el("chat-toggle")?.addEventListener("click", () => setOpen(!open));
   el("chat-close")?.addEventListener("click", () => setOpen(false));
   el("chat-send")?.addEventListener("click", () => void sendMessage());
