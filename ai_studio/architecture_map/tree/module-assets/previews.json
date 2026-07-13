@@ -1,0 +1,32 @@
+{
+  "id": "assets:previews",
+  "title": "Asset Previews",
+  "subtitle": "cache preparation and preview resources",
+  "kind": "module",
+  "path": "ai_studio/assets/previews",
+  "coverage": "recursive",
+  "color": "#7c3aed",
+  "description": "Owns preview cache preparation, cache status, rendering helpers, and canonical project-owned preview resources.",
+  "role": "asset preview owner",
+  "tags": ["assets", "previews", "cache"],
+  "children": [
+    {
+      "id": "assets:previews-ops",
+      "kind": "tool",
+      "path": "ai_studio/assets/previews/ops.mjs",
+      "title": "ops.mjs",
+      "description": "Compact public preview-cache operations facade.",
+      "role": "asset preview public API",
+      "tags": ["assets", "previews", "operations"]
+    },
+    {
+      "id": "assets:studio-preview-environment",
+      "kind": "asset",
+      "path": "ai_studio/assets/previews/studio_env.hdr",
+      "title": "studio_env.hdr",
+      "description": "Canonical deterministic project-owned HDR preview environment; integrity and license evidence live in the manifest owner.",
+      "role": "asset preview environment",
+      "tags": ["assets", "previews", "hdr"]
+    }
+  ]
+}

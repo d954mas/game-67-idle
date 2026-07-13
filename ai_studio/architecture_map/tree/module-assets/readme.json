@@ -3,7 +3,7 @@
   "kind": "doc",
   "path": "ai_studio/assets/README.md",
   "title": "README.md",
-  "description": "Assets module contract: current ownership for viewer, tools, backlog storage, source registration, preview cache, license guard, and the image-generation skill boundary.",
+  "description": "Assets module contract: current ownership for viewer, tools, catalog, source registration, intake, manifests, preview cache, license guard, and generation guidance.",
   "role": "Assets module contract",
   "tags": [
     "source",

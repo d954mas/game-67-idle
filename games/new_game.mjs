@@ -8,8 +8,7 @@ import { randomUUID } from "node:crypto";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { listRegisteredGames } from "../ai_studio/assets/backlog/storage/sources/games.mjs";
-import { listRegisteredTemplates } from "../ai_studio/assets/backlog/storage/sources/templates.mjs";
+import { listRegisteredGames, listRegisteredTemplates } from "../ai_studio/assets/sources/ops.mjs";
 import { writeVscodeProjectFiles } from "../ai_studio/dev_environment/vscode_projects.mjs";
 import { ensureProject, updateDoc } from "../ai_studio/taskboard/lib.mjs";
 import {

@@ -1,0 +1,32 @@
+{
+  "id": "assets:catalog",
+  "title": "Asset Catalog",
+  "subtitle": "indexed search and query owner",
+  "kind": "module",
+  "path": "ai_studio/assets/catalog",
+  "coverage": "recursive",
+  "color": "#0e7490",
+  "description": "Owns generated SQLite catalog lifecycle, source-record discovery, queries, snapshots, kinds, and the agent-facing search command behind one compact public facade.",
+  "role": "asset catalog owner",
+  "tags": ["assets", "catalog", "sqlite", "search"],
+  "children": [
+    {
+      "id": "assets:catalog-ops",
+      "kind": "tool",
+      "path": "ai_studio/assets/catalog/ops.mjs",
+      "title": "ops.mjs",
+      "description": "Compact public catalog operations facade; implementation is split across store, source_records, index, query, snapshots, and preview status.",
+      "role": "asset catalog public API",
+      "tags": ["assets", "catalog", "operations"]
+    },
+    {
+      "id": "assets:catalog-search",
+      "kind": "tool",
+      "path": "ai_studio/assets/catalog/search.mjs",
+      "title": "search.mjs",
+      "description": "Agent-facing search CLI over the generated asset catalog.",
+      "role": "asset search command",
+      "tags": ["assets", "search", "cli"]
+    }
+  ]
+}

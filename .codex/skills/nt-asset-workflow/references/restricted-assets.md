@@ -13,10 +13,10 @@ Partition by publishability:
   metadata, license notes, and reconstruction instructions may be committed.
 
 The shared decision registry and guard live in
-`ai_studio/assets/backlog/storage/license/`.
+`ai_studio/assets/licenses/`.
 
 ```powershell
-node ai_studio/assets/backlog/storage/license/restricted_assets_guard.mjs
+node ai_studio/assets/licenses/restricted_assets_guard.mjs
 ```
 
 ## Manual Intake
@@ -25,7 +25,7 @@ Paid assets are usually account-gated. Record the product/source page and local
 file hash; do not store private download links.
 
 ```powershell
-node ai_studio/assets/backlog/storage/intake/stage.mjs --manual --input "<local-file>" --source <source> --slug <slug> --license "<license>" --source-page-url <page-url> --publish false --source-root <asset-source>
+node ai_studio/assets/intake/stage.mjs --manual --input "<local-file>" --source <source> --slug <slug> --license "<license>" --source-page-url <page-url> --publish false --source-root <asset-source>
 ```
 
 After preparation, accept with `--publish false` or the preserved intake flag.

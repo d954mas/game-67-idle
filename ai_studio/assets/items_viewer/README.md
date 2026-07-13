@@ -43,7 +43,7 @@ Explicitly **not** built here — do not scaffold these without a new spec:
 ## Layout
 
 - `ops.mjs` — pure logic, no HTTP. Merges `listRegisteredTemplates`
-  (`assets/backlog/storage/sources/`) and workspace game mounts
+  (`assets/sources/ops.mjs`) and workspace game mounts
   (`ai_studio/workspace/games.mjs`) into the dropdown list. Public games are
   visible by default; private game catalogs require explicit `include-private`
   or direct `game:<id>` selection and pass the private game preflight before

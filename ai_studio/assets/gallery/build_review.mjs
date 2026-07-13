@@ -17,8 +17,8 @@ import { readFile, readdir, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, resolve, dirname, basename, extname, relative, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
-import { scanPackManifestSource } from "../backlog/storage/manifests/manifest.mjs";
-import { defaultLibrarySourceRoot } from "../backlog/storage/sources/libraries.mjs";
+import { scanPackManifestSource } from "../manifests/ops.mjs";
+import { defaultLibrarySourceRoot } from "../sources/ops.mjs";
 import { isMain } from "../../core_harness/tool_lib/cli.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

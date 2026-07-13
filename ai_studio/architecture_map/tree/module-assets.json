@@ -1,16 +1,16 @@
 {
   "id": "module:assets",
   "title": "Assets",
-  "subtitle": "viewer, tools, backlog, generation skill",
+  "subtitle": "viewer, tools, owned asset domains",
   "kind": "module",
   "moduleId": "assets",
   "color": "#0891b2",
-  "description": "AI Studio asset modules decomposed into the viewer surface, concrete asset tools, the image-generation skill, and a temporary backlog for storage/source-registry pieces that still need a cleaner split.",
+  "description": "AI Studio asset modules decomposed into viewer surfaces, concrete tools, generation guidance, and explicit catalog, source, manifest, intake, license, and preview owners.",
   "tags": [
     "assets",
     "viewer",
     "tools",
-    "backlog",
+    "catalog",
     "generation"
   ],
   "parts": [
@@ -18,8 +18,16 @@
     "module-assets/asset-viewer.json",
     "module-assets/items-viewer.json",
     "module-assets/image-generation-skill.json",
+    "module-assets/asset-workflow-skill.json",
     "module-assets/tools.json",
     "module-assets/canvas.json",
+    "module-assets/catalog.json",
+    "module-assets/manifests.json",
+    "module-assets/sources.json",
+    "module-assets/intake.json",
+    "module-assets/licenses.json",
+    "module-assets/previews.json",
+    "module-assets/ownership-contract.json",
     "module-assets/backlog.json"
   ]
 }

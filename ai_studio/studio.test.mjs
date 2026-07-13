@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
@@ -158,6 +158,30 @@ test("verify emits compact stable results, bounds failure tails, and passes when
 test("every tracked deterministic shared test is assigned to an owner suite", () => {
   assert.equal(isDeterministicTestPath(".codex/skills/nt-asset-image-generation/scripts/test_expand_jobs.py"), true);
   assert.deepEqual(unassignedDeterministicTests(), []);
+});
+
+test("tracked graduated asset owner tests are assigned to the Studio assets suite", () => {
+  const root = mkdtempSync(join(tmpdir(), "studio-asset-owner-inventory-"));
+  const testPaths = [
+    "ai_studio/assets/catalog/tests/index.test.mjs",
+    "ai_studio/assets/intake/tests/intake.test.mjs",
+    "ai_studio/assets/licenses/restricted_assets_guard.test.mjs",
+    "ai_studio/assets/manifests/tests/manifest.test.mjs",
+    "ai_studio/assets/previews/tests/cache.test.mjs",
+    "ai_studio/assets/sources/tests/libraries.test.mjs",
+    "ai_studio/assets/tests/ownership.test.mjs",
+  ];
+  try {
+    for (const path of testPaths) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), "import test from 'node:test'; test('owner', () => {});\n");
+    }
+    assert.equal(spawnSync("git", ["init", "-q"], { cwd: root }).status, 0);
+    assert.equal(spawnSync("git", ["add", ...testPaths], { cwd: root }).status, 0);
+    assert.deepEqual(unassignedDeterministicTests(root), []);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("new tracked native tests fail closed until explicitly assigned", () => {

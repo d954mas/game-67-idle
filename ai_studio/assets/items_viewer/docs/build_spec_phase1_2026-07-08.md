@@ -62,7 +62,7 @@ Mounting in `ai_studio/studio_shell/server.mjs` (exact anchors):
 Two GET endpoints (read-only; no POST/PUT/PATCH in phase 1).
 
 `GET /api/items-viewer/catalogs` — the dropdown list. Merges `listRegisteredTemplates(root)` +
-`listRegisteredGames(root)` (`assets/backlog/storage/sources/{templates,games}.mjs`). Response:
+`listRegisteredGames(root)` (`assets/sources/ops.mjs`). Response:
 ```
 { catalogs: [ { id: "template:template", kind: "template", title: "Template",
                 folder: "templates/template", hasItems: true, status: "active" },
@@ -175,7 +175,7 @@ gallery search in phase 1.
 Rationale (deviates from decision (в)'s "best-effort resolve + placeholder" toward its own LEAN escape hatch
 "maybe search is unnecessary in phase 1"): (1) miss rate is 100% today — no asset exists in the repo for any
 `icon_asset_id`, and no `icon_asset_id -> file` mechanism exists (fact #4). (2) Wiring `searchAssets`
-(`assets/backlog/storage/search.mjs`) means an SQLite-indexed async fan-out per card for a guaranteed-empty
+(`assets/catalog/search.mjs`) means an SQLite-indexed async fan-out per card for a guaranteed-empty
 result — cost with zero payoff. (3) The real binding is `icon-link`, a phase-2+ ops command — resolving by
 loose id/tag match now would invent an ad-hoc binding the design explicitly defers.
 

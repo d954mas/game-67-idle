@@ -40,7 +40,7 @@ node-тестов вьюера. На момент этой спеки — тол
 
 Порядок источников (исполнитель, НЕ в этой спеке):
 1. Shared-библиотека:
-   `node ai_studio/assets/backlog/storage/search.mjs --query "item icons gold sword potion" --json`.
+   `node ai_studio/assets/catalog/search.mjs --query "item icons gold sword potion" --json`.
    Историческая разведка: подходящего 6-сета в галерее/бэклоге не было;
    найденные тогда canvas-эксперименты относились к закрытому rb-dark и не были
    общей live-фикстурой. Ожидаем miss.

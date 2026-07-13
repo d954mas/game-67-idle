@@ -108,7 +108,7 @@ pipeline still owns cleanup, metadata, and project/library acceptance:
 - the current game: game-specific prompts, contracts, rejected-candidate notes,
   and durable provenance when the game needs them.
 - `nt-asset-workflow`: source-first decision, intake, crop, prepared outputs,
-  license routing, backlog storage, and project/library handoff.
+  license routing, asset storage owners, and project/library handoff.
 - `ai_studio/quality/README.md`: select existing player-clarity/art rules for the
   assembled screen and record evidence.
 

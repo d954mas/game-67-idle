@@ -1,0 +1,32 @@
+{
+  "id": "assets:sources",
+  "title": "Asset Sources",
+  "subtitle": "explicit source registration",
+  "kind": "module",
+  "path": "ai_studio/assets/sources",
+  "coverage": "recursive",
+  "color": "#0284c7",
+  "description": "Owns explicit global-library, template, and game asset-source adapters over workspace identity.",
+  "role": "asset source registry owner",
+  "tags": ["assets", "sources", "registry"],
+  "children": [
+    {
+      "id": "assets:sources-ops",
+      "kind": "tool",
+      "path": "ai_studio/assets/sources/ops.mjs",
+      "title": "ops.mjs",
+      "description": "Compact public source registration facade.",
+      "role": "asset source public API",
+      "tags": ["assets", "sources", "operations"]
+    },
+    {
+      "id": "assets:sources-libraries",
+      "kind": "config",
+      "path": "ai_studio/assets/sources/libraries.json",
+      "title": "libraries.json",
+      "description": "Explicit registered reusable asset libraries.",
+      "role": "asset library registry",
+      "tags": ["assets", "sources", "library"]
+    }
+  ]
+}

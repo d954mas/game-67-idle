@@ -12,9 +12,9 @@
 import { readFile, writeFile, mkdir, cp } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
-import { scanPackManifestSource } from "../backlog/storage/manifests/manifest.mjs";
-import { decideLicense, isPublishable } from "../backlog/storage/license/restricted.mjs";
-import { defaultLibrarySourceRoot } from "../backlog/storage/sources/libraries.mjs";
+import { scanPackManifestSource } from "../manifests/ops.mjs";
+import { decideLicense, isPublishable } from "../licenses/ops.mjs";
+import { defaultLibrarySourceRoot } from "../sources/ops.mjs";
 import { isMain } from "../../core_harness/tool_lib/cli.mjs";
 
 const PULL_PACK = "library-pulls";

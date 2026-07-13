@@ -27,7 +27,7 @@ attribution requirement remains.
 ## Source-first search (AGENTS invariant)
 
 1. **Shared asset library** — re-checked
-   (`node ai_studio/assets/backlog/storage/search.mjs --query "item icons gold sword potion" --json`)
+   (`node ai_studio/assets/catalog/search.mjs --query "item icons gold sword potion" --json`)
    → same result as before, 0 fitting results.
 2. **Kenney CC0** — this round checked packs beyond the 4 from the original
    search (`game-icons`, `generic-items`, `ui-pack-rpg-expansion`,

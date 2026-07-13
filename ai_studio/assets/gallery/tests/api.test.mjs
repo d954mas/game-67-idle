@@ -80,8 +80,8 @@ test("listAssetViewerSources keeps global library with workspace template and ga
     mkdirSync(join(root, "shared-library", "packs"), { recursive: true });
     mkdirSync(join(root, "templates", "template", "assets"), { recursive: true });
     mkdirSync(join(root, "games", "test-game", "assets"), { recursive: true });
-    mkdirSync(join(root, "ai_studio", "assets", "backlog", "storage", "sources"), { recursive: true });
-    writeFileSync(join(root, "ai_studio", "assets", "backlog", "storage", "sources", "libraries.json"), JSON.stringify({
+    mkdirSync(join(root, "ai_studio", "assets", "sources"), { recursive: true });
+    writeFileSync(join(root, "ai_studio", "assets", "sources", "libraries.json"), JSON.stringify({
       schema: "ai_studio.assets.libraries.v1",
       libraries: [{
         id: "global-library",

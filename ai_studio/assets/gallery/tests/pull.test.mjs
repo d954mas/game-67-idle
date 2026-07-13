@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { localRecord, parseArgs, resolvePullTarget } from "../pull.mjs";
-import { isPublishable } from "../../backlog/storage/license/restricted.mjs";
+import { isPublishable } from "../../licenses/ops.mjs";
 
 const PULL_MJS = resolve(dirname(fileURLToPath(import.meta.url)), "..", "pull.mjs");
 

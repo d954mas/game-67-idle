@@ -17,9 +17,15 @@ Top-level groups:
   is one operation in a shared ops layer with two equal clients, the agent
   (CLI/import) and the thin browser page; `detect_regions` bridges to the image
   tools (`tools/image/{regions,sources}`) unmodified. See `canvas/README.md`.
-- `backlog/`: temporary holding area for asset modules that still need a better
-  decomposition. Storage, source registry, manifests, index, preview cache, and
-  license guard live there until they are split into clearer groups.
+- `catalog/`: compact search/index operations and generated SQLite catalog
+  lifecycle, split into store, source-record, query, and snapshot boundaries.
+- `sources/`: explicit global-library, template, and game source registration.
+- `manifests/`: Pack Manifest parsing plus the shared integrity inventory.
+- `intake/`: stage, accept, and reject operations for candidate assets.
+- `licenses/`: publishability policy and the fail-closed repository guard.
+- `previews/`: preview cache preparation and project-owned preview resources.
+- `backlog/`: temporary holding area only for asset modules that still lack an
+  accepted owner; live storage no longer resides there.
 
 Raster generation is handled by the `nt-asset-image-generation` skill after
 source-first search fails. This module does not own shared generation job
@@ -27,7 +33,7 @@ scaffolds, prompt contracts, or prompt records. If a game needs durable
 generation context, keep it with that game's design/assets metadata.
 
 Asset sources are explicit. Global libraries are registered in
-`backlog/storage/sources/libraries.json`; templates and games resolve through
+`sources/libraries.json`; templates and games resolve through
 the workspace catalog plus their identity manifests.
 Asset Viewer does not scan the repository to guess source folders.
 
@@ -35,7 +41,7 @@ Asset refresh is explicit. Do not add filesystem watch mode to this module.
 Local additions or edits should become visible through page reload, a manual
 refresh/reindex action, or a targeted asset operation.
 
-Large source reads go through `backlog/storage/index/`. Each source gets its own
+Large source reads go through `catalog/ops.mjs`. Each source gets its own
 generated SQLite database. The index is rebuilt explicitly from manifests, the
 folder scan, then serves pages, search, filters, packs, and model lookups
 without rescanning on every request.
@@ -46,5 +52,5 @@ and offer explicit refresh or regenerate actions that run local preparation jobs
 outside the page.
 
 This repository is public. Paid, private, unknown-license, or
-non-redistributable asset binaries must stay out of git. The current canonical
-guard lives in `backlog/storage/license/` while storage remains in backlog.
+non-redistributable asset binaries must stay out of git. The canonical guard is
+`licenses/restricted_assets_guard.mjs`.

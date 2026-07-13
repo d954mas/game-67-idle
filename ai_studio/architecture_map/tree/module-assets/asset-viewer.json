@@ -5,7 +5,7 @@
   "kind": "surface",
   "path": "ai_studio/assets/gallery",
   "color": "#0891b2",
-  "description": "Browser-facing asset viewer surface for library browsing, game-asset review, pick manifests, 3D model inspection, promotion, and reuse pulls. It consumes backlog storage but does not own storage or registry data.",
+  "description": "Browser-facing asset viewer for library browsing, game review, pick manifests, 3D inspection, promotion, and reuse pulls. It consumes the six owned asset domains without owning their data.",
   "role": "asset viewer surface",
   "tags": [
     "assets",
