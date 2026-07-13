@@ -1,26 +1,28 @@
 ---
 id: T0395
-title: Make native source-edit-to-DevAPI-proof loop trustworthy and benchmark it
+title: Make native source-edit-to-DevAPI-proof loop trustworthy
 status: doing
 project: P001
 epic: E015
 priority: P1
-tags: [runtime-automation, template, performance, devapi]
+tags: [runtime-automation, template, devapi, freshness]
 created: 2026-07-10
-updated: 2026-07-12
+updated: 2026-07-13
 ---
 
 ## What
 
-Make the reference template's native agent iteration loop trustworthy before
-optimizing it. A normal source-edit iteration must build from current inputs,
+Make the reference template's native agent iteration loop trustworthy. A normal
+source-edit iteration must build from current inputs,
 launch a fresh DevAPI-enabled binary, wait for semantic readiness, run one
 universal proof command, and emit compact phase timings.
 
 Runtime Automation owns universal build/launch/readiness/proof orchestration;
-the reference template owns deterministic benchmark fixtures. T0357 remains
-the owner of Python/CMake toolchain and build-phase optimization, while T0353
-owns the Studio facade and Windows/Linux CI duration.
+the reference template owns deterministic semantic proof fixtures. T0357 remains
+the owner of Python/CMake toolchain performance and its checked-in Windows
+baseline at `ai_studio/dev_environment/benchmarks/template.windows.json`, while
+T0353 owns the Studio facade and Windows/Linux CI duration. T0395 consumes those
+surfaces and adds no performance budget or statistical benchmark.
 
 ## Done when
 
@@ -38,20 +40,19 @@ owns the Studio facade and Windows/Linux CI duration.
 - [ ] `--reuse` is documented and reported as attach-only interaction with an
       already-running unchanged game; it makes no build-freshness or code-
       iteration claim.
-- [ ] Human output stays concise and a stable JSON result separates validation/
-      codegen, configure when invoked, compile, link, launch-to-DevAPI-ready,
-      semantic proof, and total wall time, plus tool-call count and output bytes.
-- [ ] Benchmarks keep cold, true no-op, one leaf-C edit, and one content/codegen/
-      pack edit as separate scenarios; warm results report median and p90 from
-      at least 20 measured runs, while 3-5 cold runs are reported separately.
+- [ ] Human output stays concise and a stable JSON result separates validation,
+      configure when invoked, metadata, codegen, compile, link,
+      launch-to-DevAPI-ready, semantic proof, capture consistency, and total
+      wall time, plus tool-call count and output bytes.
+- [ ] One real functional smoke each proves true no-op, one leaf-C edit, and one
+      content/codegen/pack edit as separate scenarios. T0395 does not repeat the
+      statistical cold/warm/no-op benchmark already checked in by T0357.
 - [ ] Results record commit/worktree state, OS, CPU, compiler, generator, CMake/
       build-tool versions, rebuilt targets/files, and the exact command path.
-- [ ] The generated VS Code build path and direct incremental build path are
-      compared only to locate phase overhead; any CMake/toolchain optimization
-      is routed to T0357 rather than implemented a second time here.
-- [ ] Windows has a reproducible checked-in local baseline; Linux CI proves the
-      functional contract. CI timing remains advisory and no blocking budget is
-      introduced until the lead accepts a stable baseline.
+- [ ] Existing T0357 Windows baseline evidence is linked rather than repeated;
+      any CMake/toolchain or VS Code-path optimization is routed to T0357.
+- [ ] Linux CI proves the functional contract. CI timing remains advisory and
+      no blocking performance budget is introduced by this task.
 - [ ] Focused Runtime Automation tests, reference-template build/proof smoke,
       and Taskboard validation pass.
 
@@ -68,4 +69,38 @@ None.
   was started by this decision.
 - 2026-07-10: Execution dependency fixed as T0357 -> T0353 -> T0395.
 - 2026-07-10: T0357 -> T0353 -> T0395 and web/game/engine ownership boundaries are fixed; no remaining planning question.
+- 2026-07-13: Lead removed the redundant 3-5 cold plus 20x no-op/leaf-C/content
+  statistical benchmark. T0357 already records that performance baseline;
+  T0395 now keeps one real functional smoke per incremental scenario and owns
+  freshness correctness only.
 - 2026-07-12: Execution checkpoint after T0353 dual-platform CI closeout a758b5860. Inspect current Runtime Automation and reference-template paths first; preserve E017/game WIP and keep external/neotolis-engine read-only.
+- 2026-07-13: Implemented the v2 trustworthy loop: unconditional canonical
+  incremental build, DevAPI-only template semantic proof for one leaf-C fixture
+  and one generated schema fixture, positive-PID plus endpoints readiness,
+  exact proof and artifact hashes, race-only Git worktree guards, truthful
+  configure/metadata/codegen/compile/link/capture phase reporting, and
+  `freshnessClaim:false` on every failure and attach-only result.
+- 2026-07-13: Windows functional evidence on the restored real worktree passed
+  once per required scenario. True no-op: compile 354.287 ms and zero rebuilt
+  files. Leaf-C edit: compile 594.762 ms, exact live value
+  `template-leaf-c-cycle2`, and only `iteration_proof_devapi.c.obj` plus
+  `game.exe` rebuilt. Schema edit: compile 769.342 ms, exact live value
+  `Template ready cycle2`, with generated game-state outputs, dependents, and
+  `game.exe` rebuilt. All three runs retained a positive PID, stable scoped
+  worktree/engine guards, matching artifact hashes, and
+  `freshnessClaim:true`; temporary fixture edits were restored and the baseline
+  binary rebuilt afterward.
+- 2026-07-13: Focused verification is green: Runtime Automation 58/58,
+  reference-template DevAPI 13/13, Studio 13/13, Architecture Map strict with
+  zero issues, and Taskboard validation with zero problems. T0357's checked-in
+  Windows benchmark remains the sole performance baseline. Task remains doing
+  pending independent re-review and the Linux functional CI command.
+- 2026-07-13: Two independent closure reviews converged with 0 HIGH, 0 MEDIUM,
+  and 0 actionable findings. Reviewers reran Runtime Automation 58/58,
+  Studio+CI 15/15, and template smoke 8/8; the stale-executable regression now
+  uses a real pre-existing executable and two iterations around real C/schema
+  fixture edits. Linux installs `xvfb` and runs the exact functional proof under
+  `xvfb-run -a`.
+- 2026-07-13: Quality: QTECH_001=review; evidence: focused behavior tests and
+  Windows no-op/leaf/schema runtime proofs pass; real Linux CI proof remains the
+  final evidence gate before task closure.

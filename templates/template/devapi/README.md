@@ -45,7 +45,9 @@ The bot:
 6. toggles the engine render gate with `render.set_enabled`;
 7. captures a PNG proof image;
 8. reads `game.state.schema` and `game.state.get` from the installed
-   `game-state` feature.
+   `game-state` feature;
+9. reads the DevAPI-only `game.iteration.proof` leaf-C/generated-schema fixture
+   pair used by the shared trustworthy iteration helper.
 
 Use it as the pattern for real game bots:
 

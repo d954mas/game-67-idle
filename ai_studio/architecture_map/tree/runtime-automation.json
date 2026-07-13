@@ -117,11 +117,23 @@
       "kind": "tool",
       "path": "ai_studio/runtime_automation/iterate.py",
       "title": "iterate.py",
-      "description": "One-command native visual iteration loop: build if stale, launch/reuse game, capture screenshot, and run UI readability audit.",
-      "role": "runtime visual iteration helper",
+      "description": "Trustworthy native iteration helper that builds the current DevAPI template, proves readiness and a semantic source fixture, and reports stable phase metrics.",
+      "role": "native source-to-runtime proof helper",
       "tags": [
         "runtime-automation",
         "tool"
+      ]
+    },
+    {
+      "id": "runtime-automation:iterate-test",
+      "kind": "test",
+      "path": "ai_studio/runtime_automation/iterate_test.py",
+      "title": "iterate_test.py",
+      "description": "Verifies native iteration build freshness, DevAPI readiness, semantic proof, attach-only reuse, and result contracts.",
+      "role": "native iteration contract tests",
+      "tags": [
+        "runtime-automation",
+        "test"
       ]
     },
     {

@@ -108,6 +108,18 @@ test("full plan pins native before asset and exposes runnable audio platform com
   assert.match(web.commandPlan[1].at(-1), /game\.js.*game\.wasm.*game\.ntpack/);
 });
 
+test("runtime automation runs the functional iterate contract only on Linux", () => {
+  const runtime = describeStudio().verification.suites.find((suite) => suite.id === "studio.runtime-automation");
+  const iterateCommand = [
+    "xvfb-run", "-a", "node", "ai_studio/dev_environment/python_run.mjs",
+    "ai_studio/runtime_automation/iterate.py", "--no-capture", "--json",
+  ];
+  assert.equal(runtime.commandPlan.windows.some((command) => command.join("\0") === iterateCommand.join("\0")), false);
+  assert.equal(runtime.commandPlan.linux.filter((command) => command.join("\0") === iterateCommand.join("\0")).length, 1);
+  assert.ok(runtime.commandPlan.windows.some((command) => command.includes("ai_studio/runtime_automation/iterate_test.py")));
+  assert.ok(runtime.commandPlan.linux.some((command) => command.includes("ai_studio/runtime_automation/iterate_test.py")));
+});
+
 test("missing EMSDK blocks the required web suite with setup exit 2", async () => {
   const result = await verifyStudio({ mode: "full" }, {
     runSuite: async (suite) => suite.id === "reference-template.web"

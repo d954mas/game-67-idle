@@ -46,7 +46,8 @@ jobs:
             libxinerama-dev \
             libxcursor-dev \
             libxi-dev \
-            libgl1-mesa-dev
+            libgl1-mesa-dev \
+            xvfb
       - name: Prepare space-free CMake path (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

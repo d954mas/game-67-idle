@@ -38,8 +38,14 @@ const ASSET_PYTHON_TESTS = [
 ];
 const RUNTIME_PYTHON_TESTS = [
   "ai_studio/runtime_automation/devapi_client_test.py",
+  "ai_studio/runtime_automation/iterate_test.py",
   "ai_studio/runtime_automation/png_io_test.py",
   "ai_studio/runtime_automation/state_capture_test.py",
+];
+const RUNTIME_PYTHON_COMMANDS = pythonCommands(RUNTIME_PYTHON_TESTS);
+const RUNTIME_LINUX_ITERATE = [
+  "xvfb-run", "-a", "node", "ai_studio/dev_environment/python_run.mjs",
+  "ai_studio/runtime_automation/iterate.py", "--no-capture", "--json",
 ];
 const GAME_STATE_PYTHON_TESTS = [
   "features/game-state/scripts/generate_state_test.py",
@@ -143,7 +149,15 @@ const SUITES = Object.freeze([
   { id: "studio.dev-environment", testRoots: ["ai_studio/dev_environment"] },
   { id: "studio.game-design", commands: [["node", "ai_studio/core_harness/validation/doc_reference_check.mjs"]] },
   { id: "studio.quality", testRoots: ["ai_studio/quality"] },
-  { id: "studio.runtime-automation", pythonFiles: RUNTIME_PYTHON_TESTS, commands: pythonCommands(RUNTIME_PYTHON_TESTS) },
+  {
+    id: "studio.runtime-automation",
+    pythonFiles: RUNTIME_PYTHON_TESTS,
+    commandsByPlatform: {
+      win32: RUNTIME_PYTHON_COMMANDS,
+      linux: [...RUNTIME_PYTHON_COMMANDS, RUNTIME_LINUX_ITERATE],
+      darwin: RUNTIME_PYTHON_COMMANDS,
+    },
+  },
   { id: "studio.shell", testRoots: ["ai_studio/studio_shell"] },
   { id: "studio.taskboard", testRoots: ["ai_studio/taskboard"] },
   { id: "studio.workspace", testRoots: ["ai_studio/workspace"] },

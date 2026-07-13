@@ -48,6 +48,7 @@ REQUIRED_METHODS = {
     "game.state.schema",
     "game.state.get",
     "game.events.tail",
+    "game.iteration.proof",
 }
 
 
@@ -166,6 +167,15 @@ def validate_events_tail(tail: Any) -> dict[str, Any]:
     return tail
 
 
+def validate_iteration_proof(proof: Any) -> dict[str, Any]:
+    if not isinstance(proof, dict):
+        raise DevApiError("game.iteration.proof returned a non-object")
+    for key in ("cFixture", "schemaFixture"):
+        if not isinstance(proof.get(key), str) or not proof[key]:
+            raise DevApiError(f"game.iteration.proof missing non-empty {key}")
+    return proof
+
+
 def wait_for_ui_id(game: Any, element_id: str, *, max_frames: int = 90, stride: int = 3) -> dict[str, Any]:
     last_error: Exception | None = None
     for _ in range(max(1, max_frames // max(1, stride))):
@@ -192,13 +202,14 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
 
     described = {
         method: game.result("command.describe", {"method": method})
-        for method in ("render.set_enabled", "ui.click", "capture.frame", "game.state.schema", "game.state.get", "game.events.tail")
+        for method in ("render.set_enabled", "ui.click", "capture.frame", "game.state.schema", "game.state.get", "game.events.tail", "game.iteration.proof")
     }
 
     closed_tree = wait_for_ui_id(game, "settings/gear")
     state_schema = validate_game_state_schema(game.result("game.state.schema"))
     state_before = validate_game_state(game.result("game.state.get", {"path": ""}))
     events_tail = validate_events_tail(game.result("game.events.tail", {}))
+    iteration_proof = validate_iteration_proof(game.result("game.iteration.proof", {}))
     render_before = game.result("render.info")
     game.result("render.set_enabled", {"enabled": False})
     game.wait_frames(2)
@@ -222,6 +233,7 @@ def run_smoke(game: Any, out_dir: Path, *, audit: bool = True) -> dict[str, Any]
         "game_state_schema": state_schema,
         "game_state": state_before,
         "events_tail": events_tail,
+        "iteration_proof": iteration_proof,
         "render_before": render_before,
         "render_disabled": render_disabled,
         "render_enabled": render_enabled,

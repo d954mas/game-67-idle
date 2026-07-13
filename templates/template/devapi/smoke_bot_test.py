@@ -43,6 +43,8 @@ class FakeGame:
             }
         if method == "game.events.tail":
             return {"events": [], "next_seq": 0, "dropped": 0, "evicted": 0}
+        if method == "game.iteration.proof":
+            return {"cFixture": "template-leaf-c-v1", "schemaFixture": "Template ready"}
         if method == "frame.current":
             return {"frame": 1}
         raise AssertionError(f"unexpected method: {method}")
@@ -119,6 +121,7 @@ class SmokeBotTest(unittest.TestCase):
             self.assertEqual(summary["game_state_schema"]["game"]["schema"], "game_seed.state")
             self.assertEqual(summary["game_state"]["path"], "")
             self.assertIn("events_tail", summary)
+            self.assertEqual(summary["iteration_proof"]["cFixture"], "template-leaf-c-v1")
             self.assertTrue(summary["render_enabled"]["enabled"])
             self.assertTrue(Path(summary["summary"]).exists())
             self.assertTrue(Path(summary["screenshot"]).exists())

@@ -52,6 +52,7 @@
 #include "game_log.h" /* E4.B: built-in "log" event type (unconditional leaf) */
 #if NT_DEVAPI_ENABLED
 #include "game_events_devapi.h" /* E3: game.events.tail (tail ring + recorder) */
+#include "iteration_proof_devapi.h"
 #endif
 #if FEATURE_GAME_ANALYTICS
 #include "game_analytics.h" /* E4: local analytics NDJSON writer */
@@ -171,6 +172,7 @@ static bool devapi_start(void) {
     fprintf(stderr, "DevAPI listening on 127.0.0.1:%u\n", (unsigned)s_devapi_port);
 #endif
     nt_devapi_register_default();
+    game_iteration_proof_register_devapi();
     game_save_register_devapi();
     game_events_register_devapi(); // E3: game.events.tail (+ enables the recorder)
 #ifdef NT_DEVAPI_GROUP_UI

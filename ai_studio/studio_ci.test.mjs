@@ -28,6 +28,7 @@ test("Studio CI is a Windows Ubuntu matrix with pinned current setup contracts",
     "libxcursor-dev",
     "libxi-dev",
     "libgl1-mesa-dev",
+    "xvfb",
   ]) {
     assert.match(workflow, new RegExp(`\\b${packageName}\\b`));
   }

@@ -195,6 +195,7 @@ if(GAME_DEVAPI_ENABLED)
     # The DevAPI dispatch is a hand-written shell TU (universal over the
     # fragment registry), no longer a generated per-fragment source.
     target_sources(${GAME_TARGET} PRIVATE
+        src/iteration_proof_devapi.c
         src/game_save_devapi.c
         "${GAME_EVENTS_SRC}/game_events_devapi.c" # event-log tail ring + game.events.tail
         "${GAME_EVENTS_SRC}/game_event_render.c") # descriptor-driven JSON renderer
