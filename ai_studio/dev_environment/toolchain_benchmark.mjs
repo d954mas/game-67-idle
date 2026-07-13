@@ -11,7 +11,7 @@ import { studioPythonPath } from "../core_harness/tool_lib/studio_config.mjs";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);
 const value = (flag, fallback = "") => argv.includes(flag) ? argv[argv.indexOf(flag) + 1] : fallback;
-const game = value("--game", "web-dressup");
+const game = value("--game", "template");
 const sampleCount = Number.parseInt(value("--samples", "3"), 10);
 if (!Number.isInteger(sampleCount) || sampleCount < 1) throw new Error("--samples must be a positive integer");
 const source = game === "template" ? "templates/template" : `games/${game}`;

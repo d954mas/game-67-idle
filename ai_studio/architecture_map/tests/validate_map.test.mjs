@@ -376,7 +376,7 @@ test("repo tree maps workspace and experimental extension ownership without list
 
   assert.deepEqual(paths.filter((path) => path.startsWith("templates/template/")), ["templates/template/template.json"]);
   assert.deepEqual(paths.filter((path) => path.startsWith("features/") && path !== "features/README.md" && path.split("/").length > 2), []);
-  assert.deepEqual(paths.filter((path) => path.startsWith("games/") && path.split("/").length > 2), ["games/web-dressup/game.json"]);
+  assert.deepEqual(paths.filter((path) => path.startsWith("games/") && path.split("/").length > 2), []);
 });
 
 test("coverage truth comes from git ls-files while untracked hygiene stays optional", () => {

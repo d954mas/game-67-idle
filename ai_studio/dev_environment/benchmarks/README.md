@@ -3,7 +3,6 @@
 Run the measured local baseline without an enforced threshold:
 
 ```powershell
-node ai_studio/dev_environment/toolchain_benchmark.mjs --game web-dressup --samples 3 --out ai_studio/dev_environment/benchmarks/web-dressup.windows.json
 node ai_studio/dev_environment/toolchain_benchmark.mjs --game template --samples 3 --out ai_studio/dev_environment/benchmarks/template.windows.json
 ```
 

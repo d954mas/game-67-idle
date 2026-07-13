@@ -19,8 +19,6 @@ const activeContracts = [
   "features/progression-core/scripts/generate_progression_tracks.py",
   "templates/template/README.md",
   "templates/template/devapi/README.md",
-  "games/web-dressup/README.md",
-  "games/web-dressup/devapi/README.md",
   "ai_studio/assets/items_viewer/README.md",
   "ai_studio/assets/canvas/README.md",
   "ai_studio/assets/tools/image/README.md",

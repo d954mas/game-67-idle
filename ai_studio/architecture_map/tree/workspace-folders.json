@@ -341,33 +341,6 @@
           ]
         },
         {
-          "id": "workspace:game:web-dressup",
-          "kind": "folder",
-          "path": "games/web-dressup",
-          "title": "web-dressup/",
-          "description": "Represents the tracked Web Dressup game workspace ownership boundary.",
-          "role": "Web Dressup game workspace",
-          "tags": [
-            "games",
-            "web-dressup",
-            "tracked"
-          ]
-        },
-        {
-          "id": "workspace:game:web-dressup:identity",
-          "kind": "config",
-          "path": "games/web-dressup/game.json",
-          "title": "game.json",
-          "description": "Canonical identity manifest for the tracked Web Dressup game workspace.",
-          "role": "game identity manifest",
-          "tags": [
-            "games",
-            "workspace",
-            "assets",
-            "registry"
-          ]
-        },
-        {
           "id": "workspace:games:new-game",
           "kind": "tool",
           "path": "games/new_game.mjs",

@@ -41,20 +41,20 @@ test("project game ownership is stored on the canvas project and undoable", (t) 
   const project = createProject(REPO_ROOT, { title: "Owned", ownership: { kind: "game", gameId: "fixture-game" } });
   assert.deepEqual(project.ownership, { kind: "game", gameId: "fixture-game" });
 
-  const reassigned = patchProject(REPO_ROOT, { projectId: project.id, gameId: "web-dressup" }).project;
-  assert.deepEqual(reassigned.ownership, { kind: "game", gameId: "web-dressup" });
+  const reassigned = patchProject(REPO_ROOT, { projectId: project.id, gameId: "another-game" }).project;
+  assert.deepEqual(reassigned.ownership, { kind: "game", gameId: "another-game" });
 
   const cleared = patchProject(REPO_ROOT, { projectId: project.id, ownership: null }).project;
   assert.equal(Object.hasOwn(cleared, "ownership"), false);
 
   const undone = undoOp(REPO_ROOT, { projectId: project.id }).project;
-  assert.deepEqual(undone.ownership, { kind: "game", gameId: "web-dressup" });
+  assert.deepEqual(undone.ownership, { kind: "game", gameId: "another-game" });
 
   const redone = redoOp(REPO_ROOT, { projectId: project.id }).project;
   assert.equal(Object.hasOwn(redone, "ownership"), false);
 
   const jumpedToOwned = jumpHistory(REPO_ROOT, { projectId: project.id, seq: 1 }).project;
-  assert.deepEqual(jumpedToOwned.ownership, { kind: "game", gameId: "web-dressup" });
+  assert.deepEqual(jumpedToOwned.ownership, { kind: "game", gameId: "another-game" });
 
   const jumpedToBase = jumpHistory(REPO_ROOT, { projectId: project.id, seq: 0 }).project;
   assert.deepEqual(jumpedToBase.ownership, { kind: "game", gameId: "fixture-game" });

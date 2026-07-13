@@ -45,9 +45,9 @@ test("porcelain -z parser preserves spaces and both rename paths", () => {
 });
 
 test("changed selection hard-excludes games while preserving the new_game root exception", () => {
-  assert.deepEqual(selectChangedSuites(["games/web-dressup/src/main.c"]), []);
+  assert.deepEqual(selectChangedSuites(["games/example-game/src/main.c"]), []);
   assert.deepEqual(selectChangedSuites([
-    "games/web-dressup/src/main.c",
+    "games/example-game/src/main.c",
     "ai_studio/taskboard/store.mjs",
   ]), ["studio.taskboard", "studio.validation"]);
   assert.deepEqual(selectChangedSuites(["games/new_game.mjs"]), ["workspace.game-create"]);
