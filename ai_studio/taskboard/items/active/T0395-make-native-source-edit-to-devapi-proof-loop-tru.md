@@ -104,3 +104,21 @@ None.
 - 2026-07-13: Quality: QTECH_001=review; evidence: focused behavior tests and
   Windows no-op/leaf/schema runtime proofs pass; real Linux CI proof remains the
   final evidence gate before task closure.
+- 2026-07-13: GitHub Actions 29227311178 passed the complete Windows job but
+  failed Ubuntu only at `semanticProof`: `endpoints` succeeded, then the next
+  immediate proof request hit a `TimeoutError`. The real log exposed that
+  `connect_existing` used its multi-second connect window but returned a client
+  with a hard-coded 1.0-second request timeout.
+- 2026-07-13: TDD repair: a new regression first failed with expected 5.0s vs
+  actual 1.0s; `connect_existing` now keeps the standard 5.0-second DevAPI
+  request timeout independently from its retry/connect window. Focused GREEN:
+  DevAPI client 17/17 and iterate 22/22. Linux CI rerun remains pending.
+- 2026-07-13: Independent timeout review found the first repair also applied
+  5.0s to TCP connect and could overrun 0.1/0.5s preflight callers. A refined
+  regression failed with expected constructor timeout 1.0s vs actual 5.0s;
+  established clients now connect with the bounded 1.0s attempt and then set
+  the socket request timeout to 5.0s. Full Runtime Automation GREEN: 59/59.
+- 2026-07-13: Final architecture review found one LOW cleanup edge for an
+  invalid negative request timeout. The regression failed because the newly
+  created client was not closed; timeout-configuration errors now close before
+  re-raising. DevAPI client 18/18 and full Runtime Automation 60/60 pass.
