@@ -1,7 +1,7 @@
 ---
 id: T0395
 title: Make native source-edit-to-DevAPI-proof loop trustworthy
-status: doing
+status: done
 project: P001
 epic: E015
 priority: P1
@@ -26,34 +26,34 @@ surfaces and adds no performance budget or statistical benchmark.
 
 ## Done when
 
-- [ ] A regression test proves that an existing executable cannot be treated as
+- [x] A regression test proves that an existing executable cannot be treated as
       current after a relevant source or generated input changes.
-- [ ] Normal iteration invokes the canonical incremental build contract every
+- [x] Normal iteration invokes the canonical incremental build contract every
       time and lets the build system decide whether the build is a true no-op;
       no custom timestamp or dependency scanner is introduced.
-- [ ] The prepared native configuration explicitly enables DevAPI, launches a
+- [x] The prepared native configuration explicitly enables DevAPI, launches a
       fresh process, and defines readiness as a successful universal DevAPI
       request rather than process creation or window appearance.
-- [ ] One deterministic semantic proof demonstrates that the launched binary
+- [x] One deterministic semantic proof demonstrates that the launched binary
       contains the current edit, so screenshots and runtime evidence cannot
       silently come from a stale binary.
-- [ ] `--reuse` is documented and reported as attach-only interaction with an
+- [x] `--reuse` is documented and reported as attach-only interaction with an
       already-running unchanged game; it makes no build-freshness or code-
       iteration claim.
-- [ ] Human output stays concise and a stable JSON result separates validation,
+- [x] Human output stays concise and a stable JSON result separates validation,
       configure when invoked, metadata, codegen, compile, link,
       launch-to-DevAPI-ready, semantic proof, capture consistency, and total
       wall time, plus tool-call count and output bytes.
-- [ ] One real functional smoke each proves true no-op, one leaf-C edit, and one
+- [x] One real functional smoke each proves true no-op, one leaf-C edit, and one
       content/codegen/pack edit as separate scenarios. T0395 does not repeat the
       statistical cold/warm/no-op benchmark already checked in by T0357.
-- [ ] Results record commit/worktree state, OS, CPU, compiler, generator, CMake/
+- [x] Results record commit/worktree state, OS, CPU, compiler, generator, CMake/
       build-tool versions, rebuilt targets/files, and the exact command path.
-- [ ] Existing T0357 Windows baseline evidence is linked rather than repeated;
+- [x] Existing T0357 Windows baseline evidence is linked rather than repeated;
       any CMake/toolchain or VS Code-path optimization is routed to T0357.
-- [ ] Linux CI proves the functional contract. CI timing remains advisory and
+- [x] Linux CI proves the functional contract. CI timing remains advisory and
       no blocking performance budget is introduced by this task.
-- [ ] Focused Runtime Automation tests, reference-template build/proof smoke,
+- [x] Focused Runtime Automation tests, reference-template build/proof smoke,
       and Taskboard validation pass.
 
 ## Open questions
@@ -122,3 +122,13 @@ None.
   invalid negative request timeout. The regression failed because the newly
   created client was not closed; timeout-configuration errors now close before
   re-raising. DevAPI client 18/18 and full Runtime Automation 60/60 pass.
+- 2026-07-13: GitHub Actions run 29230677691 passed the exact commit
+  `2dfb46aa6` on Ubuntu and Windows. Ubuntu completed in 7m39s with the blocking
+  full suite in 6m24s, including the real `xvfb-run` build/launch/readiness/
+  semantic-proof contract; Windows completed in 10m32s with its blocking full
+  suite in 8m34s. Evidence:
+  https://github.com/d954mas/game-67-idle/actions/runs/29230677691
+- 2026-07-13: Quality: QTECH_001=pass; evidence: Runtime Automation 60/60,
+  template and Studio focused suites green, two independent final reviews with
+  0 actionable findings, and GitHub Actions 29230677691 green on Ubuntu and
+  Windows with the Linux functional proof.
