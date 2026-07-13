@@ -1,7 +1,0 @@
-{
-  "schema": "game_seed.items_lock",
-  "schema_version": 2,
-  "comment": "Baseline of def_id shipped to THIS game's players -- starts empty (copy-then-own reset by games/new_game.mjs; see src/features/items/README.md 'Lock workflow' for the destructive-change guard).",
-  "def_ids": [],
-  "removed": {}
-}

@@ -102,10 +102,10 @@ test("cli stores Canvas project ownership and filters by owner game", (t) => {
   assert.deepEqual(owned.ownership, { kind: "game", gameId: "fixture-game" });
   assert.match(runFail(env, "create", "--owner-game").stderr, /requires a game id/);
   assert.equal(run(env, "list", "--owner-game", "fixture-game").projects[0].id, owned.id);
-  assert.equal(run(env, "list", "--owner-game", "web-dressup").projects.length, 0);
+  assert.equal(run(env, "list", "--owner-game", "another-game").projects.length, 0);
 
-  const changed = run(env, "project-set", owned.id, "--owner-game", "web-dressup").project;
-  assert.deepEqual(changed.ownership, { kind: "game", gameId: "web-dressup" });
+  const changed = run(env, "project-set", owned.id, "--owner-game", "another-game").project;
+  assert.deepEqual(changed.ownership, { kind: "game", gameId: "another-game" });
 
   const cleared = run(env, "project-set", owned.id, "--owner-game", "none").project;
   assert.equal(Object.hasOwn(cleared, "ownership"), false);

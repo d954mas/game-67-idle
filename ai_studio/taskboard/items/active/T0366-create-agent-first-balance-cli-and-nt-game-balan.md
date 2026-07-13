@@ -34,7 +34,8 @@ a short Balance router only for non-Items balance workflows.
 - [ ] V1 refuses a batch spanning multiple Lua files. A future multi-file writer
       requires an explicit journal/recovery protocol; one canonical owner does
       not imply one physical source file.
-- [ ] Every command accepts explicit game context and returns bounded stable
+- [ ] Every command accepts explicit `--project-root` or workspace-qualified
+      game context, never guesses a current game from cwd, and returns bounded stable
       JSON, source locations, fingerprints, and non-zero failure.
 - [ ] V1 `--affected` may run a full evaluation internally but returns only the
       requested error/dependency neighborhood.
@@ -59,3 +60,4 @@ a short Balance router only for non-Items balance workflows.
   literal/override/curve operations, atomic batch paste, and inverse patches.
 - 2026-07-10: Red-team review limited v1 atomicity to one source file; modular
   Lua makes multi-file rollback a separate durability feature.
+- 2026-07-10: Absorbed the durable explicit-context requirement from superseded E015 task T0360.

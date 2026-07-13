@@ -316,11 +316,11 @@ test("real repository inventory is globally clean after the approved owner dispo
   });
   assert.equal(collected.ok, true, JSON.stringify(collected.issue));
   const result = await auditAssetIntegrity({ root, tracked: collected.entries, inventory });
-  assert.equal(result.summary.trackedBinaryBlobs, 110);
+  assert.equal(result.summary.trackedBinaryBlobs, 27);
   assert.equal(result.summary.externalBoundaries, 1);
-  assert.equal(result.summary.inventoryEntries, 110);
-  assert.equal(result.summary.metadataRecords, 110);
-  assert.equal(result.summary.verified, 110);
+  assert.equal(result.summary.inventoryEntries, 27);
+  assert.equal(result.summary.metadataRecords, 27);
+  assert.equal(result.summary.verified, 27);
   assert.equal(result.ok, true, JSON.stringify(result.issues));
   assert.equal(result.exitCode, 0);
   assert.deepEqual(result.issues, []);
@@ -333,14 +333,8 @@ test("real repository inventory is globally clean after the approved owner dispo
   ]) assert.ok(inventoryPaths.has(required), required);
   assert.equal(inventoryPaths.has("ai_studio/assets/items_viewer/tests/fixtures/icon_pack/game_assets.h.slice"), false);
   const packNames = inventory.metadata_sources.flatMap((source) => source.packs || []);
-  assert.ok(packNames.includes("web-dressup-dress"));
-  assert.ok(packNames.includes("web-dressup-ui"));
   assert.equal(packNames.some((name) => name.includes("pending")), false);
   const studioOwnedFiles = [
-    "games/web-dressup/assets/packs/web-dressup-dress/pack.json",
-    "games/web-dressup/assets/packs/web-dressup-dress/assets.jsonl",
-    "games/web-dressup/assets/packs/web-dressup-ui/pack.json",
-    "games/web-dressup/assets/packs/web-dressup-ui/assets.jsonl",
     "ai_studio/assets/previews/studio_env.asset.json",
     "ai_studio/core_harness/profiling/hook_record_fast.asset.json",
   ];
@@ -349,33 +343,10 @@ test("real repository inventory is globally clean after the approved owner dispo
     assert.doesNotMatch(text, /"license_url"\s*:\s*"(?!https?:)/, path);
     assert.match(text, /"license_file"\s*:/, path);
   }
-  const designManifest = await import("node:fs/promises").then(({ readFile }) => readFile(join(root, "games/web-dressup/design/data/asset_manifest.json"), "utf8"));
-  assert.doesNotMatch(designManifest, /pending-disposition/);
-  assert.match(designManifest, /"metadata_status": "verified"/);
   const templateCube = (await import("node:fs/promises").then(({ readFile }) => readFile(join(root, "templates/template/assets/packs/template-starter-meshes/assets.jsonl"), "utf8"))).trim();
-  const gameCube = (await import("node:fs/promises").then(({ readFile }) => readFile(join(root, "games/web-dressup/assets/packs/template-starter-meshes/assets.jsonl"), "utf8"))).trim();
   assert.match(templateCube, /b21a81e96/);
   assert.match(templateCube, /68cfaabcf/);
   assert.match(templateCube, /f8be370c2/);
-  assert.match(gameCube, /75c916bf6/);
-  assert.equal((await import("node:fs/promises")).readFile ? Buffer.compare(await (await import("node:fs/promises")).readFile(join(root, "templates/template/assets/meshes/cube.glb")), await (await import("node:fs/promises")).readFile(join(root, "games/web-dressup/assets/meshes/cube.glb"))) : 1, 0);
-
-  const provenance = await import("node:fs/promises").then(({ readFile }) => readFile(join(root, "games/web-dressup/assets/dress/PROVENANCE.md"), "utf8"));
-  const corrected = {
-    "5292ee1dc315f14d786fd5849fe2b192b2599e7cd289a2ef79c6ef39d1c114a4": "51c6cb00006083798c5b1d5c3b4a42eec2cf632f991152786bc95d3831fff269",
-    "076a0ce2ff353bee8a1f9678861ce344563b5df7ff669f1508ecbafd78e70ff4": "d8cf8fa4321b4d4f28b40231443bcd5a9640b9936a27c392d85286df0318a2fb",
-    "24e648709a13c6efae18e785689234e695ac359303f5a74914bfb7f88111db18": "6d94a876704b265aadc06942ee4d97b26dd2ef4688d202c33b22e0f1cd478d59",
-    "cd8f24ef4c5d8987f570ad16e9b8e87396d37e714da61cad200e8b74c6dc7fbf": "0b634e247ec6d3db7fbbb5b1dadb938daa58c6e0384330762e3817bfa686ff79",
-    "e4c99db9fff2752cea1c2956fd0d12b7b1b7c65c8797f73b8dbc54ba276afa53": "e2786fac716f1fca82b10c02534727ae6dc753a5ef149bb3f6b66c8725b5f7a3",
-    "deb1be514cf42f772b823b6eb00a15a2b174a6ba6e2baa7f28bae257aff28be3": "e46b21035542065eb78693e7c44d6038625099b83aa4ff9ffdae48e252e27cc8",
-    "3046d4750296febeeb70e7542938e0504f8a99b6309cb8f1a663e7301dbdc798": "e6220b0ba367ea47790a688ef8c918800d388880d3586fe5d8075006bcb9a954",
-    "59d9e3cc28ff4cc42171b2f1f3c1bcab606fa5e03a192e5992031f1f4601ba47": "701024f6f554513a128b31368217669fa32feed930ce645169aec3f5fe556fe9",
-  };
-  for (const [stale, current] of Object.entries(corrected)) {
-    assert.doesNotMatch(provenance, new RegExp(stale));
-    assert.match(provenance, new RegExp(current));
-  }
-
   const template = await auditAssetIntegrity({ root, tracked: collected.entries, inventory, scope: "templates/template/assets" });
   assert.equal(template.ok, true, JSON.stringify(template.issues));
 });

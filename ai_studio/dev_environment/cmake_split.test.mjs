@@ -6,11 +6,9 @@ import test from "node:test";
 const root = resolve(import.meta.dirname, "../..");
 const expected = ["GameAssets.cmake", "GameCodegen.cmake", "GameOptions.cmake", "GamePlatform.cmake", "GameTests.cmake"];
 const expectedTests = {
-  "games/web-dressup": ["test_game_state_json", "test_game_storage", "test_game_save", "test_game_events", "test_game_events_overflow", "test_game_state_roundtrip", "test_game_events_typed", "test_game_event_render", "test_game_analytics", "test_game_events_log_mirror", "test_items_catalog", "test_items_fragment", "items_ops_validate", "items_ops_test", "test_progression", "test_progression_curve", "test_game_format", "test_dress_room", "test_runway_measure_bridge", "test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio", "test_audio_web_library", "test_platform_sdk", "test_platform_lifecycle", "test_platform_sdk_events", "platform_sdk_node_test", "test_template_composition"],
   "templates/template": ["test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio", "test_audio_web_library", "test_game_state_json", "test_game_storage", "test_game_save", "test_game_events", "test_game_events_overflow", "test_game_state_roundtrip", "test_game_events_typed", "test_game_event_render", "test_game_analytics", "test_game_events_log_mirror", "test_items_catalog", "test_items_api_core_only", "test_items_api", "generate_items_api_proof_test", "test_items_fragment", "items_ops_validate", "items_ops_test", "test_progression", "test_progression_curve", "test_game_format", "test_platform_sdk", "test_platform_lifecycle", "test_platform_sdk_events", "platform_sdk_node_test", "test_template_composition"],
 };
 const expectedCustomTargets = {
-  "games/web-dressup": ["game_asset_packs", "platform_sdk_web_assets", "platform_sdk_playgama_config_asset", "release_size_gate", "devapi_smoke", "quality_responsive", "progression_tracks_gen"],
   "templates/template": ["game_asset_packs", "platform_sdk_web_assets", "platform_sdk_playgama_config_asset", "devapi_smoke", "quality_responsive", "progression_tracks_gen"],
 };
 
@@ -18,7 +16,7 @@ function declarations(text, expression) {
   return [...text.matchAll(expression)].map((match) => match[1]);
 }
 
-for (const source of ["games/web-dressup", "templates/template"]) {
+for (const source of ["templates/template"]) {
   test(`${source} owns exactly five mechanical CMake concern files`, () => {
     const dir = join(root, source, "cmake");
     assert.deepEqual(readdirSync(dir).filter((file) => file.startsWith("Game") && file.endsWith(".cmake")).sort(), expected);
@@ -26,7 +24,7 @@ for (const source of ["games/web-dressup", "templates/template"]) {
   });
 }
 
-for (const source of ["games/web-dressup", "templates/template"]) {
+for (const source of ["templates/template"]) {
   test(`${source} root is a five-include conductor`, () => {
     const override = source === "templates/template" ? process.env.T0357_TEMPLATE_CONDUCTOR : "";
     const text = readFileSync(override || join(root, source, "CMakeLists.txt"), "utf8");
@@ -45,7 +43,7 @@ for (const source of ["games/web-dressup", "templates/template"]) {
 }
 
 test("codegen selects Studio Python by host platform for Emscripten builds", () => {
-  for (const source of ["games/web-dressup", "templates/template"]) {
+  for (const source of ["templates/template"]) {
     const text = readFileSync(join(root, source, "cmake", "GameCodegen.cmake"), "utf8");
     assert.match(text, /if\(CMAKE_HOST_WIN32\)/, source);
     assert.doesNotMatch(text, /if\(WIN32\)/, source);

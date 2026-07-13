@@ -61,6 +61,7 @@ games/*/src/generated/
 
 # Browser automation scratch/profile files can contain cookies, history, local
 # storage, and screenshots.
+.playwright-cli/
 chrome-cdp-profile/
 web_browser_console.txt
 web_browser_shot.png

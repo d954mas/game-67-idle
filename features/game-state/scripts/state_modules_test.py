@@ -63,7 +63,7 @@ class StateModuleTests(unittest.TestCase):
             "state/game_state.schema.json",
         )
         self.assertEqual(
-            provenance_label(ROOT / "games/web-dressup/state/game_state.schema.json", ROOT),
+            provenance_label(ROOT / "games/fixture-game/state/game_state.schema.json", ROOT),
             "state/game_state.schema.json",
         )
 
