@@ -1,7 +1,7 @@
 ---
 id: T0400
 title: Ship game-owned packaging and final ZIP verification
-status: doing
+status: done
 project: P001
 epic: E015
 priority: P1
@@ -28,7 +28,7 @@ intermediate directory.
       target/adapter mismatch, missing assets, and unexpected files fail early.
 - [x] The package emits a compact artifact manifest with hashes and the tested
       engine/feature versions from T0355/T0361.
-- [ ] The reference template includes a copied game-owned `game verify`
+- [x] The reference template includes a copied game-owned `game verify`
       scaffold; this task invokes the already-landed T0353 verification contract
       to prove that scaffold on Windows/Linux without discovering or running
       arbitrary workspace games.
@@ -59,3 +59,5 @@ None.
 - 2026-07-13: Final convergence fixed the remaining publication, dependency, bootstrap, and loader false greens. The manifest is an idempotent pre-commit object and the ZIP is the sole commit marker; canonical `platform-sdk` is re-proved from sources and after ZIP reopen; executable config/bootstrap parsing ignores string, comment, regex, inert-script, unattached, and explicit dead-branch decoys; the release loader proves one linked live Emscripten chain from `game.wasm` through its instantiate helper to a top-level `createWasm()` invocation before packaging and after reopen.
 - 2026-07-13: Final local evidence: focused package/game 26/26; combined Studio facade/CI, game/template copy, web-build, game, and package regressions 96/96 in 39 seconds; syntax checks green; the existing real minified Emscripten artifact passed `game verify --no-build --template-proof --skip-tests` as `template-itch-38d85723e8a4af4b.zip`. No CMake/WASM rebuild, arbitrary game discovery, benchmark loop, credential access, or E017/engine edit was used.
 - 2026-07-13: Two independent final read-only reviews (architecture/correctness/ownership and tests/process/performance/context cost) converged after targeted fixes at 0 HIGH, 0 MEDIUM, 0 LOW, and 0 actionable. Quality remains QTECH_001=review only until the committed Windows/Linux full CI proves the copied T0353 scaffold.
+- 2026-07-13: Committed Windows/Linux proof: GitHub Actions run 29242585709 passed commit 23d87d8e3 on ubuntu-latest and windows-latest; the full gate built native and itch WASM once per runner, reopened the final ZIP through game verify, and passed all 28 Studio suites.
+- 2026-07-13: Quality: QTECH_001=pass; evidence: Focused package/game 26/26; staged combined regressions 96/96; independent final reviews 0 actionable; GitHub Actions 29242585709 green on Ubuntu and Windows.
