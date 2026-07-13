@@ -9,6 +9,7 @@ node tools/game.mjs test
 node tools/game.mjs playable --target itch
 node tools/game.mjs package --target itch
 node tools/game.mjs verify --target itch
+node tools/portal_evidence.mjs --manifest release/artifacts/<artifact>.manifest.json
 ```
 
 `package` builds `wasm-release-<target>`, consumes the exact allowlist from the
@@ -18,6 +19,21 @@ hashes, entrypoint, target/adapter, release metadata, required assets, and the
 exact dependency record. The compact adjacent manifest is bound to the final
 ZIP hash and every reopened entry. Outputs live in ignored
 `release/artifacts/`.
+
+`portal_evidence.mjs` does not build, repackage, upload, use credentials, or
+contact a portal. It reopens the exact final ZIP through the same package
+verifier and writes a deterministic game-owned record to
+`.ai_studio/evidence/releases/<full-zip-sha256>/portal-evidence.json`. Only the
+local SDK contract is marked `pass`; local mock, public inspector,
+credentialed portal smoke, and production certification remain explicitly
+`unverified` until their separate evidence is attached for that exact ZIP
+SHA-256.
+
+Run evidence generation with exclusive ownership of the game directory and no
+concurrent filesystem mutation. The local tool rejects traversal,
+pre-existing symbolic links/junctions, and conflicting report publishers, but
+portable Node on Windows and Linux cannot promise protection from a hostile
+same-user process replacing owned directory ancestors during the call.
 
 Final packages require game-owned `game.json` and `dependencies.json` with
 exact engine/feature revisions. DevAPI/debug/source payloads, unexpected or

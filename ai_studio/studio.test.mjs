@@ -57,6 +57,7 @@ test("changed selection is narrow and unknown shared paths fall back to full", (
   assert.deepEqual(selectChangedSuites(["features/platform-sdk/web/platform-sdk.js"]), ["reference-template.web", "features.contracts", "features.platform-sdk", "studio.validation"]);
   assert.deepEqual(selectChangedSuites(["templates/template/tools/build_web.mjs"]), ["reference-template.web", "reference-template", "studio.validation"]);
   assert.deepEqual(selectChangedSuites(["templates/template/tools/package_web.mjs"]), ["reference-template.web", "reference-template", "studio.validation"]);
+  assert.deepEqual(selectChangedSuites(["templates/template/tools/portal_evidence.mjs"]), ["reference-template", "studio.validation"]);
   assert.deepEqual(selectChangedSuites(["mystery/shared.txt"]), ["full"]);
   assert.deepEqual(selectChangedSuites(["features/audio-core/src/audio.c"]), [
     "reference-template.native", "features.contracts", "features.audio.web", "studio.validation", "audio.native",
@@ -108,6 +109,40 @@ test("full plan pins native before asset and exposes runnable audio platform com
   assert.deepEqual(web.commandPlan[0], ["node", "templates/template/tools/build_web.mjs", "--preset", "wasm-release", "--target", "itch", "--no-debug-ui"]);
   assert.match(web.commandPlan[1].at(-1), /game\.js.*game\.wasm.*game\.ntpack/);
   assert.deepEqual(web.commandPlan[2], ["node", "templates/template/tools/game.mjs", "verify", "--target", "itch", "--no-build", "--template-proof", "--skip-tests", "--out", "build/package-proof"]);
+});
+
+test("portal evidence tests run in the fast reference suite and never route to web/CMake", async () => {
+  const t0401Paths = [
+    "templates/template/tools/portal_evidence.mjs",
+    "templates/template/tools/portal_evidence.test.mjs",
+    "games/new_game.test.mjs",
+    "templates/new_template.test.mjs",
+    "ai_studio/studio.mjs",
+    "ai_studio/studio.test.mjs",
+    "templates/template/release/README.md",
+    "features/platform-sdk/references/publish-targets.md",
+  ];
+  const selection = selectChangedSuites(t0401Paths);
+  assert.deepEqual(new Set(selection), new Set([
+    "reference-template",
+    "workspace.game-create",
+    "studio.facade",
+    "features.contracts",
+    "features.platform-sdk",
+    "studio.validation",
+  ]));
+  assert.equal(selection.includes("full"), false);
+  assert.equal(selection.some((id) => id === "reference-template.web" || id === "reference-template.native" || id === "audio.native"), false);
+
+  const seen = new Map();
+  await verifyStudio({ mode: "full" }, {
+    runSuite: async (suite) => {
+      seen.set(suite.id, suite);
+      return { status: 0 };
+    },
+  });
+  assert.ok(seen.get("reference-template").testFiles.includes("templates/template/tools/portal_evidence.test.mjs"));
+  assert.equal((seen.get("reference-template.web").testFiles || []).includes("templates/template/tools/portal_evidence.test.mjs"), false);
 });
 
 test("runtime automation runs the functional iterate contract only on Linux", () => {

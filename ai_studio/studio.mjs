@@ -191,6 +191,7 @@ const SUITES = Object.freeze([
     "templates/template/tools/build_web.test.mjs",
     "templates/template/tools/game.test.mjs",
     "templates/template/tools/package_web.test.mjs",
+    "templates/template/tools/portal_evidence.test.mjs",
   ] },
   { id: "reference-template.python", pythonFiles: TEMPLATE_PYTHON_TESTS, commands: pythonCommands(TEMPLATE_PYTHON_TESTS) },
   { id: "studio.validation", commands: [

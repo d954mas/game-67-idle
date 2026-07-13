@@ -21,6 +21,7 @@ function tempRepo() {
   for (const [rel, body] of [
     ["tools/game.mjs", "// game-owned CLI\n"],
     ["tools/package_web.mjs", "// package owner\n"],
+    ["tools/portal_evidence.mjs", "// evidence owner\n"],
     ["tools/lib/zip_store.mjs", "// ZIP owner\n"],
     ["release/README.md", "# Release owner\n"],
     [".github/workflows/game-verify.yml", "name: game verify\n"],
@@ -60,7 +61,7 @@ test("new_template copies template, registers it, and refreshes VS Code files", 
   assert.equal(existsSync(join(root, "templates", "mobile-template", "CMakeLists.txt")), true);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "assets", "readme.txt")), true);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "src", "generated", "game.h")), true);
-  for (const rel of ["tools/game.mjs", "tools/package_web.mjs", "tools/lib/zip_store.mjs", "release/README.md", ".github/workflows/game-verify.yml", ".gitignore"]) {
+  for (const rel of ["tools/game.mjs", "tools/package_web.mjs", "tools/portal_evidence.mjs", "tools/lib/zip_store.mjs", "release/README.md", ".github/workflows/game-verify.yml", ".gitignore"]) {
     assert.equal(readFileSync(join(root, "templates", "mobile-template", rel), "utf8"), readFileSync(join(root, "templates", "template", rel), "utf8"), rel);
   }
   assert.equal(existsSync(join(root, "templates", "mobile-template", "build", "stale.obj")), false);
