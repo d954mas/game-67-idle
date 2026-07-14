@@ -53,7 +53,7 @@ games/*/.ai_studio/evidence/*
 
 # Restricted paid/licensed asset binaries: never commit to an open repo.
 # Only catalog/license metadata is committed; binaries live locally and in the
-# private library. See ai_studio/assets/storage/license/.
+# private library. See ai_studio/assets/licenses/.
 # Per-game: matches <game>/assets/restricted/ in any game folder.
 **/assets/restricted/
 **/assets/_incoming/

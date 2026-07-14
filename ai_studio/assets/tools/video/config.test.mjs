@@ -4,6 +4,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
+import { STUDIO_CONFIG_SCHEMA } from "../../../config.mjs";
 import { corridorKeyDir, videoGenRoot } from "./_lib.mjs";
 
 function fixture(t) {
@@ -35,7 +36,7 @@ function isolateEnv(t) {
 test("Video tools own Studio config interpretation with env over local over committed values", (t) => {
   isolateEnv(t);
   const root = fixture(t);
-  writeConfig(root, "studio.config.json", { videoGenRoot: "tmp/video-main", corridorKeyRoot: "tmp/corridor-main" });
+  writeConfig(root, "studio.config.json", { schema: STUDIO_CONFIG_SCHEMA, videoGenRoot: "tmp/video-main", corridorKeyRoot: "tmp/corridor-main" });
   writeConfig(root, "studio.config.local.json", { videoGenRoot: "tmp/video-local", corridorKeyRoot: "tmp/corridor-local" });
 
   assert.equal(videoGenRoot(root), resolve(root, "tmp/video-local"));

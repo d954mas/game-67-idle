@@ -1,4 +1,4 @@
-# Track B video-animation pipeline (T0263, v1)
+# Track B video-animation pipeline
 
 Turns **(art image + motion text) -> a game-ready spritesheet** by running the
 image through a local video generator, extracting frames, keying alpha, and
@@ -6,11 +6,10 @@ packing a flipbook. This is the generative "Track B" complement to the
 procedural canvas track — it is for *animating* an existing sprite (flap, pulse,
 bob), not for authoring.
 
-**Experimental + removable by design** (lead's constraint): every stage lives in
+**Experimental + removable by design:** every stage lives in
 its own folder and is independently re-runnable; the whole tool is
-`ai_studio/assets/tools/video/**` plus one studio-config key. Delete the folder
-and remove the `videoGenRoot` key and the pipeline is gone. It touches **nothing**
-under `ai_studio/assets/canvas` (the canvas-seam integration is a later packet).
+`ai_studio/assets/tools/video/**` plus its studio-config keys. Generated runs
+stay outside the repository.
 
 ## Stages (each its own folder, each resumable)
 
@@ -28,7 +27,7 @@ one.
 ## Quick start
 
 ```
-# 0. Boot the ComfyUI server yourself (v1 does NOT autostart):
+# 0. Boot the ComfyUI server yourself (the tool does not autostart it):
 cd C:\projects\video_gen_experiment\ComfyUI_windows_portable
 python_embeded\python.exe -s ComfyUI\main.py --listen 127.0.0.1 --port 8188
 
@@ -63,32 +62,30 @@ matching environment variable wins):
 ```
 
 `videoGenRoot` (env `VIDEO_GEN_ROOT`) points at the **isolated,
-wholesale-deletable** video-gen experiment (T0257): the portable ComfyUI stack,
+wholesale-deletable** video-gen experiment: the portable ComfyUI stack,
 the `draft_workflow_api.json` / `final_workflow_api.json` profiles, and the
 MatAnyone reserve venv. `corridorKeyRoot` (env `CORRIDOR_KEY_ROOT`) points at
-the **permanent** CorridorKey install — split out in T0335 because CorridorKey
-is the canvas's first-priority glow/translucency alpha method and outlives the
-experiment folder. Both accessors throw LOUDLY when unset and a stage needs
-them — no silent fallback.
+the **permanent** CorridorKey install shared with Canvas glow/translucency
+alpha. Both accessors throw loudly when unset and a stage needs them.
 
-## Profiles (T0262 speed ladder)
+## Profiles
 
 - `draft` — 384x384 / 25 frames (~35 s warm, ~79 s cold on the 4080 Laptop).
   Iterate motion/seed here.
 - `final` — 480x480 / 33 frames (~54 s warm). Run with the **same seed** as an
   accepted draft to reproduce its motion at higher fidelity.
 
-Both bake the T0257 R1 prompt-hardening prefix
+Both bake the measured prompt-hardening prefix
 (`2d game art, flat colors, hand-drawn illustration, no photorealism`) — the
 generate stage rebuilds the positive prompt from this prefix + your motion text
 so it can never be dropped. The photoreal negative is left as the workflow ships.
 
-## Matte tools (T0257 R2 verdict)
+## Matte tools
 
 - `--tool corridorkey` (**default**) — neural unmixer for **glow / translucent /
   soft-edge identity-critical** assets. The ONLY tool that preserves the soft
-  gold glow AND despills (R2: 11.6% soft alpha, clean gold edges). Wraps the
-  exact R2 invocation. **Licence: CC-BY-NC-SA-4.0** — its README grants a
+  gold glow and despills (measured: 11.6% soft alpha, clean gold edges).
+  **Licence: CC-BY-NC-SA-4.0** — its README grants a
   carve-out to *process images for commercial projects* but forbids
   repackaging/reselling the tool or offering a paid inference API. Acceptable
   for internal asset production; flagged here for the record.
@@ -96,7 +93,7 @@ so it can never be dropped. The photoreal negative is left as the workflow ships
   sprites (`ai_studio.assets.tools.image.alpha_matte.key_matte`). No licence
   constraint, ~0.28 s/frame, but cannot recover soft fractional alpha.
 
-## v1 pragmatism / coupling notes
+## Coupling notes
 
 - **Frame extraction uses the ComfyUI portable *embedded* Python's PyAV**, not
   the repo `.venv`, via subprocess. The repo venv deliberately carries no heavy
@@ -104,16 +101,17 @@ so it can never be dropped. The photoreal negative is left as the workflow ships
 - **CorridorKey runs in EAGER mode** (`CORRIDORKEY_SKIP_COMPILE=1`). On this
   Windows CUDA box the default `max-autotune` path builds triton/cudagraph
   kernels that error at replay (not caught by the tool's compile-time fallback);
-  eager is exactly what T0257 R2 effectively ran in (~1.7-4 s/frame). The matte
+  eager is the measured working route (~1.7-4 s/frame). The matte
   stage also sets `PYTHONUTF8=1` so CorridorKey's rich logging (which prints
   `->` glyphs) doesn't crash the captured cp1251 stdout pipe.
-- **v1 does NOT autostart ComfyUI** and does NOT install anything — orchestration
+- The tool does not autostart ComfyUI or install anything — orchestration
   only. A down server / missing tool is a LOUD error naming the fix.
 - The `matte` stage stages frames into `corridorKeyRoot/
   ClipsForInference/<shot>/` (machine-local, not the repo); `--skip-existing`
   means other shots that already have Output are skipped.
-- `MatAnyone` is held in reserve (T0257 R2 PARTIAL — green-fringes glow); NOT
-  wired into v1.
+- `MatAnyone` is not wired in. It produced the most temporally stable alpha but
+  no color unmixing/despill, leaving green fringes on glow, and its S-Lab 1.0
+  license is non-commercial.
 
 ## Provenance
 
@@ -122,13 +120,14 @@ Every stage writes a JSON sidecar (`generate/params.json`, `frames/frames.json`,
 (`schema: ai_studio.video.spritesheet.v1`) embeds the full source chain back to
 the seed, prompt, workflow, models, and matte settings.
 
-## Live golden run (T0263 acceptance)
+## Measured reference
 
 Draft profile, wings-on-green fixture, motion "the wings flap slowly and gently,
 soft glow pulsing", seed 70263, CorridorKey matte — full chain green:
 generate 79.2 s (cold) -> frames 0.6 s (25f) -> matte 42.7 s (eager, ~1.7 s/f)
 -> sheet 0.3 s. Sheet: 1920x1920, 5x5, 25 frames, fps 16, 12.8% soft-alpha glow
-preserved. See the T0263 report for artifact paths.
+preserved. This is evidence for the current pipeline, not a performance
+guarantee on other hardware or inputs.
 
 ## Tests
 

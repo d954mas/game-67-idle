@@ -1,15 +1,15 @@
 # matte/ — stage 3: RGB frames -> RGBA (alpha)
 
-Two extractors, chosen by the asset (T0257 R2 verdict).
+Two extractors, chosen by the asset.
 
 - **Entry:** `matte.mjs` — `runMatte({runDir, tool, screenColor, key})` and a CLI:
   `node matte.mjs --run-dir <dir> [--tool corridorkey|key_matte] [--screen-color green|blue] [--key 0,255,0]`.
 
 ### `--tool corridorkey` (default) — glow / translucent / soft-edge
-Wraps the **exact invocation T0257 R2 used** against its venv under
+Wraps the measured working invocation against its venv under
 `corridorKeyRoot` (studio config / env `CORRIDOR_KEY_ROOT`; the permanent
-install at `C:\projects\ai_studio_tools\CorridorKey` since T0335 — no longer
-inside the deletable video-gen experiment; commit `97e55a4`):
+install at `C:\projects\ai_studio_tools\CorridorKey`, outside the deletable
+video-gen experiment; commit `97e55a4`):
 1. `corridorkey_prep.py` (repo `.venv`) builds `Input/` (raw frames) + a coarse
    green-dominance `AlphaHint/` per frame into a fresh `ClipsForInference/<shot>`.
 2. `corridorkey_cli.py run-inference --backend torch --srgb --despill 0
@@ -33,9 +33,11 @@ key colour. Fast, no licence constraint; cannot recover soft fractional alpha.
 
 - **Output:** `<runDir>/matte/frame_%03d.png` (RGBA) + `report.json` (tool,
   settings, commit/licence, per-frame + wall timing).
-- **Reserve:** `MatAnyone` (R2 PARTIAL — green-fringes glow) is NOT wired into v1.
+- **Reserve:** `MatAnyone` is not wired in. It has temporally stable alpha but
+  leaves green fringes on glow without a despill/unmixing pass; its S-Lab 1.0
+  license is non-commercial.
 
-### Reused by the canvas alpha op (T0261)
+### Reused by the Canvas alpha op
 `runCorridorKey()` is exported and imported cross-module by the canvas alpha op
 (`ai_studio/assets/canvas/ops.mjs`) as the **one source of truth** for the CorridorKey
 invocation: the canvas `"corridorkey"` alpha method stages a single element's pixels as a

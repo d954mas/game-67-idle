@@ -36,9 +36,10 @@ The template includes a `design/` scaffold with `concept.md`, `gdd.md`,
 knowledge base, local task/canvas/evidence roots, and asset workspace contract
 by copying this template.
 
-Optional reusable feature packs live in `features/`. Copy a feature into a
-template when every game from that template should inherit it, or into a game
-when only that game needs the feature.
+Feature ownership rules live in `features/README.md`. Reusable `*-core` modules
+compile in place from `features/`; template-owned feature implementations copy
+with the template and become game-owned. Follow each module's `INSTALL.md`
+rather than assuming every feature is copied.
 
 Current registered template list:
 

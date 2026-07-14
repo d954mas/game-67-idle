@@ -5,9 +5,8 @@
 // with an absolute script path (cwd = repo root, every path ABSOLUTE — never items_ops.py's own
 // script-relative argparse defaults, which point into features/items-core/content/,
 // nonexistent after T0337), reads items.lock.json directly (a separate artifact, never
-// a second parser of items.json — decision (а), docs/build_spec_phase1_2026-07-08.md
-// §3/§8), and folds everything into one view object api.mjs marshals over HTTP. See
-// the module README for the full contract and the spec for the design rationale.
+// a second parser of items.json), and folds everything into one view object api.mjs
+// marshals over HTTP. See the module README for the current contract.
 import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";

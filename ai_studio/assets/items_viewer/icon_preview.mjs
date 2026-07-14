@@ -1,12 +1,10 @@
 // Icon preview — parses a BUILT template/game asset pack (game.ntpack) + its
 // debug-PNG atlas page + the generated game_assets.h to produce pixel-rect crops
-// for the items-viewer's item cards (T0316 spec §3b,
-// docs/build_spec_icons_2026-07-08.md). Pure, no HTTP, no subprocess -- a small,
+// for the items-viewer's item cards. Pure, no HTTP, no subprocess -- a small,
 // version-guarded binary reader over the engine's ntpack/atlas formats
 // (nt_pack_format.h, nt_atlas_format.h). Deliberately NOT the engine's runtime
 // atlas reader (nt_atlas_find_region/nt_atlas_get_region) -- that would need a
-// native studio target (spec §3b/§8's recommended long-term replacement); this
-// mini-round keeps the new code in the JS tool layer instead.
+// native studio target; the current module keeps this code in the JS tool layer.
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 

@@ -67,11 +67,10 @@ The full contract is E016 plus
   owns grid/chart/diff/what-if and shared semantic editing instead of a separate
   specification task.
 
-- 2026-07-08: Phase 1 accepted. Build spec:
-  `ai_studio/assets/items_viewer/docs/build_spec_phase1_2026-07-08.md`.
-  Implementation commits: `3789e24bc` spec/review fixes, `065199aaf` ops/tests,
-  `4aea8c680` API/mounting, `458af3a33` page/README. Follow-up icon work linked
-  compiled pack previews and retained read-only failure/path boundaries.
+- 2026-07-08: Phase 1 accepted. Its current contract is maintained in
+  `ai_studio/assets/items_viewer/README.md`; implementation history remains in
+  git. Follow-up icon work linked compiled pack previews and retained read-only
+  failure/path boundaries.
 - 2026-07-08: UX direction accepted as table-first master/detail in Canvas
   visual idiom; containers and kinds stay visible domain concepts.
 - 2026-07-10: Old generic `items.json` write phases were superseded. T0369

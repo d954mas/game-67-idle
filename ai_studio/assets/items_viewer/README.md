@@ -1,28 +1,26 @@
 # Items Viewer
 
 Read-only web surface that shows the item catalog of any registered game or
-template — "see the items", the cheapest, most valuable slice of the future
-item editor (T0316 phase 1). Full contract and design rationale:
-`docs/build_spec_phase1_2026-07-08.md`. Icon previews (mini-round, real
-`icons/<name>` art for `templates/template`): `docs/build_spec_icons_2026-07-08.md`.
+template, including real built icon previews when available. This README is the
+current module contract.
 
 ## Owner and boundary
 
 This module owns the catalog VIEW: the merged-registry lookup, the HTTP
 contract that turns `items_ops.py` output into one view object, and the thin
 page. It does **not** own the item data model or the op-layer — that is
-`features/items-core/scripts/items_ops.py` (read: T0327; write: not built
-yet). No new parser of `items.json` lives here (decision (а) — see the spec
-§1/§8): every catalog field comes from `items_ops.py list/schema --json`,
-verbatim.
+`features/items-core/scripts/items_ops.py`; write operations are not built.
+No new parser of `items.json` lives here: every catalog field comes verbatim
+from `items_ops.py list/schema --json`.
 
-## Phase-1 boundary (read this before extending)
+## Current boundary
 
 In scope: pick a catalog, render its items/containers/item_kinds, show lock
 status (shipped/draft/removed) and `validate` issues per item + catalog
 summary, schema-driven field rendering (no hardcoded template fields).
 
-Explicitly **not** built here — do not scaffold these without a new spec:
+Explicitly **not** built here — do not scaffold these without a new owner
+contract:
 
 - **Writing.** No edit forms, no `upsert`/`deprecate`. The write op-layer does
   not exist in `items_ops.py` yet.
@@ -30,11 +28,10 @@ Explicitly **not** built here — do not scaffold these without a new spec:
   directly in `content/items.json` (slash form, `icons/<name>`) and resolved
   by reading the BUILT pack (see "Icon preview" below) — there is still no
   write op-layer command to author that binding from the viewer itself; that
-  remains a phase-2+ `items_ops` command (spec §5 of the phase-1 doc).
+  remains future `items_ops` work.
 - **A CLI client.** `items_ops.py` (`list` / `validate` / `schema --json`) IS
   the agent client — parity with the web client holds by construction because
-  both read the exact same subprocess. There is no `cli.mjs` in this module
-  (decision (б); confirmed out in spec §8).
+  both read the exact same subprocess. There is no `cli.mjs` in this module.
 - **Caching.** Every `/catalog` request re-spawns the configured root-`.venv`
   interpreter for `items_ops.py`
   (list/schema/validate — up to 3 short spawns). Catalogs are tiny (a handful
@@ -56,8 +53,8 @@ Explicitly **not** built here — do not scaffold these without a new spec:
 - `api.mjs` — `createItemsViewerApi(root)`, an `async (req,res,url) => bool`
   handler mounted by Studio Shell on `/api/items-viewer/` (mirrors
   `assets/canvas/api.mjs`'s shape — HTTP <-> ops marshalling only, no items
-  logic). Two read-only GET endpoints; see the spec §3 for the full response
-  shapes and exit-code -> HTTP-status mapping.
+  logic). It exposes two read-only GET endpoints; response degradation and
+  error status rules are documented below.
   - `GET /api/items-viewer/catalogs` — the dropdown list; add
     `?include-private=true` only when private mounted games should be listed.
   - `GET /api/items-viewer/catalog?id=<kind>:<id>` — the whole view for one
@@ -122,9 +119,8 @@ rendering any card) and every card's icon slot is a small `<canvas>` cropped
 from that single decoded image — `resolveIcon(view, assetId)` is the
 one-line seam that looks up `view.icons.regions[assetId]`.
 
-Recommended long-term replacement for `icon_preview.mjs` (not built this
-round — see `docs/build_spec_icons_2026-07-08.md` §3b/§8): a native studio
-tool over the engine's own public runtime atlas reader
+Recommended long-term replacement for `icon_preview.mjs`: a native studio tool
+over the engine's own public runtime atlas reader
 (`nt_atlas_find_region`/`nt_atlas_get_region`, `engine/atlas/nt_atlas.h`)
 instead of a hand-rolled binary format parser in JS.
 
@@ -132,14 +128,14 @@ instead of a hand-rolled binary format parser in JS.
 
 `ops.mjs` imports `node:child_process`/`node:fs` to spawn `items_ops.py` and
 read `items.lock.json` — it cannot load in a browser, and this module has no
-bundler (deliberately — "no build step, no bundler", spec §4). So the one
+bundler by design. So the one
 genuinely shared piece of logic, the **issue routing rule** ("an issue
-attaches to a card IFF its `id` is present in `items[]`", spec §4), is a
+attaches to a card IFF its `id` is present in `items[]`"), is a
 small pure function in *both* places: `ops.mjs` exports `routeIssues()` for
 `node:test` coverage of the contract; `site/items.js` re-implements the same
 ~10-line partition in vanilla JS to render cards/summary/Removed section. This
 is a deliberate, tiny duplication of a trivial array partition — not a second
-data model of `items.json` (decision (а) is about the catalog data, not this).
+data model of `items.json`.
 
 ## Lock status (shipped / draft / removed)
 
@@ -148,15 +144,14 @@ never through `items_ops.py` — and derives, per item currently in the
 catalog: `shipped` if the id is in `def_ids`, `removed` if the id is a key in
 `removed` (checked in that order — the same id in *both* is the legal-but-
 flagged `removed-def-restored` case), else `draft`. This three-state
-derivation is **viewer-only**: `items_ops.py` has no `lock --json` command
-today (the T0316 card names it as the parity-restoring follow-up). Until it
-ships, an agent driving `items_ops.py` directly has no equivalent of this
-status map — only the web page shows it.
+derivation is **viewer-only**: `items_ops.py` has no `lock --json` command.
+An agent driving `items_ops.py` directly therefore has no equivalent of this
+status map; only the web page shows it.
 
 ## Content errors vs. validate degradation
 
 Two different things can go wrong with a catalog, and the response tells them
-apart (spec §3):
+apart:
 
 - **`content_error`** (top-level, 200) — the game's OWN `items.json` or
   `item_fields.schema.json` is broken (malformed JSON, missing file). `list`
@@ -164,7 +159,7 @@ apart (spec §3):
   (they read different files, independently).
 - **`validate.available: false`** (200) — `validate` itself couldn't run
   (broken/missing `state/items.schema.json`, or an explicit `--baseline` miss
-  — narrower than `content_error`, spec §8). Items/schema can still be fully
+  — narrower than `content_error`). Items/schema can still be fully
   fine and rendering.
 - **`validate.ok: false`** (200) — `validate` ran fine and found real issues
   (exit 1). Not a degradation; this is the normal "catalog has problems" case,

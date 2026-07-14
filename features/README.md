@@ -1,11 +1,14 @@
 # Features
 
-Reusable feature packs live here as `features/<feature-id>/`.
+Reusable feature modules live here as `features/<feature-id>/`; this README
+also indexes template-owned feature implementations that deliberately have no
+second library copy.
 
-A feature is a copyable game capability, not just one source file. It can include
-code, assets, state schema, migrations, UI, DevAPI hooks, tests, examples, and
-notes. The current model is deliberately simple: copy the feature into a template
-or game, then customize that local copy for the project.
+A feature is a game capability, not just one source file. It can include code,
+assets, state schema, migrations, UI, DevAPI hooks, tests, examples, and notes.
+Its owner determines installation: reusable core modules compile in place;
+template-owned UI features copy with the template and are then game-owned;
+game-specific composition stays in the game.
 
 There is no plugin manager, install command, dependency solver, or automatic
 enable/disable system here yet. Keep feature packs small enough that a human or
@@ -13,11 +16,11 @@ agent can inspect and copy them safely.
 
 ## Install And Flags
 
-The shared folder is the upstream feature pack. A template or game uses a
-feature by carrying an installed copy of the needed schema/code/assets/build
-wiring in its own tree. Generated files should be reproducible from that local
-copy, either in the build directory or as explicitly checked-in generated
-outputs when a project chooses that policy.
+Follow the feature's `INSTALL.md`: an in-place module is compiled from this
+folder, while a feature-pointer is copied from its template owner. Generated
+files should be reproducible from the owning source, either in the build
+directory or as explicitly checked-in generated outputs when a project chooses
+that policy.
 
 Every feature must include an install manual. Use `INSTALL.md` for the concrete
 copy/build/enable/verify/uninstall steps. Keep high-level purpose and ownership
@@ -42,8 +45,7 @@ features/<feature-id>/
   example/         tiny runnable example when useful
 ```
 
-Only add the folders a feature actually needs. For example, a settings screen can
-be a feature with UI code, state keys, assets, and a short integration note.
+Only add the folders a feature actually needs.
 
 ## Categories: module vs feature-pointer vs game code
 
@@ -119,20 +121,16 @@ possibility, not a feature.
 ## Current Packs
 
 - `game-state/`: schema-first generated GameState, save/load contract,
-  migrations, and DevAPI state adapters. This is the first feature pack and the
-  reference shape for future reusable features. Unlike the pointer-only
-  features below, `game-state/` actually lives here and is consumed in-place
-  by templates/games (its scripts/tests are not a promoted copy of anything).
+  migrations, and DevAPI state adapters. It is consumed in place by
+  templates/games.
 - `items-core/` (`L1`): item/container/currency catalog lookup + ownership
   model (`items_add`/`items_remove`/`items_move`/`items_count`/
   `items_can_afford`/purse/unique instances) + content codegen
   (`generate_items_catalog.py`) + the read-only op-layer CLI (`items_ops.py`,
   `list`/`validate`/`schema`) + `items_ops_test.py`. In-place module, same
   shape as `game-state/` (`../../features/items-core/` from any
-  `templates/<x>` or `games/<id>`). Extracted 2026-07-07 out of
-  `templates/template/src/features/items/` in T0337 once its
-  `.c` was proven byte-identical across the decisive rule above. The
-  consuming template/game still owns its content (`content/items.json` +
+  `templates/<x>` or `games/<id>`). The consuming template/game owns its
+  content (`content/items.json` +
   `item_fields.schema.json` + `items.lock.json`), its state schema
   (`state/items.schema.json`), and a small game-owned "items corner"
   (`templates/template/src/features/items/`: `reason_tags.h` + the
@@ -141,11 +139,8 @@ possibility, not a feature.
 - `progression-core/` (`L2`, depends on `items-core`): level/xp tracks
   (manual/auto/threshold modes), T5 tick caps, lazy allocation, plus curve
   codegen (`generate_progression_tracks.py`). In-place module, consumed the
-  same way via `../../features/progression-core/`. Extracted 2026-07-08 out
-  of `templates/template/src/features/progression/` (T0337, increment M2) —
-  that folder is now deleted entirely from the template because, unlike
-  items, progression has no game-owned C corner (no seed, no closed verb
-  list of its own). The consuming template/game still owns its content
+  same way via `../../features/progression-core/`. Unlike items, progression
+  has no game-owned C corner. The consuming template/game owns its content
   (`content/progression.json`), its state schema
   (`state/progression.schema.json`), and its own composition (e.g. the
   template's `src/ui/demo_hud.c` idle-income binding). Reference:
@@ -158,9 +153,9 @@ possibility, not a feature.
 - `audio-core/` (`L1`, `1.0.0`): versioned fixed-pool playback contract with
   generation-safe clip/voice handles, native miniaudio and browser WebAudio
   backends. Games own cue/music catalogs, source assets, codec-neutral BLOB IDs,
-  settings and lifecycle composition. Its contract version records the existing
-  public API, not T0393 completion; compatibility requires the owning validation
-  commands. Reference: `audio-core/README.md` + `audio-core/INSTALL.md`.
+  settings and lifecycle composition. Its contract version records the public
+  API; compatibility still requires the owning validation commands. Reference:
+  `audio-core/README.md` + `audio-core/INSTALL.md`.
 
 ## Features (reference implementations live in the template)
 
@@ -177,10 +172,7 @@ consumer (the template itself). Entries are pointers, not copies:
   `templates/template/src/features/resource_panel/` (`resource_panel.c/.h`,
   `README.md`, `feature.json`).
 
-`items` and `progression` used to be pointer-only entries in this same
-section. Their invariant core is no longer single-consumer-or-copy-then-own
-code — see `items-core/` and `progression-core/` under Current Packs above.
-What is left pointing at the template for them is game-side only:
+The game-owned portions of items and progression remain in the template:
 
 - **items** — game corner `templates/template/src/features/items/`
   (`reason_tags.h` + `items_bootstrap.c`'s `items_on_new_game` seed, plus its
@@ -208,21 +200,16 @@ What is left pointing at the template for them is game-side only:
 
 - Single source of truth for `settings`/`resource_panel` = `templates/template`
   (live reference implementation with tests and a real consumer). There is
-  deliberately NO library copy of these TWO features — zero copies means
-  zero drift to keep in sync. (`items`/`progression` used to sit in this same
-  "no library copy" bucket; T0337 promoted their invariant core into
-  `items-core/`/`progression-core/` above once it was proven byte-identical
-  by the decisive rule — see "Categories" above. Their remaining game-side
-  slice still follows this pointer model.)
+  deliberately no library copy of these two features, so there is no duplicate
+  implementation to keep in sync.
 - A brand-new game gets all of them via a full template copy
   (`games/new_game.mjs`).
 - Moving `settings`/`resource_panel` into an existing game, or into a second
   template, is copy-then-own straight from the template pointer above — that
   copy then belongs to its new project (see Rules).
-- Promoting a feature-pointer into an actual `features/<id>/` (or
-  `features/<id>-core/`) library copy is what happened to items/progression:
-  it becomes due once the `.c` is proven byte-identical across a real second
-  consumer/divergence test (see the decisive rule above), not before.
+- Promote a feature-pointer into `features/<id>/` or `features/<id>-core/`
+  only once its `.c` is proven byte-identical across a real second
+  consumer/divergence test.
 
 ## Rules
 

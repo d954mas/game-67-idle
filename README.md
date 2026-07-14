@@ -2,16 +2,19 @@
 
 The repo root is the **shared pipeline**, not a game: the engine (submodule),
 build/asset/validation tools, AI skills, docs, the taskboard, and reusable design
-knowledge. Templates live under `templates/`; reusable feature packs live under
-`features/`; each **game is its own folder** under `games/`, copied from a template.
+knowledge. Templates live under `templates/`; reusable feature modules and
+template-owned feature references are documented under `features/`; each
+**game is its own folder** under `games/`, copied from a template.
 
 - Reusable AI workflow: `ai_studio/README.md`, `AGENTS.md`, `ai_studio/taskboard/`, `.codex/skills/`.
 - Shared reusable gamedev knowledge: `ai_studio/game_design/knowledge_base/knowledge/`; sources `ai_studio/game_design/knowledge_base/sources/`.
 - Engine: git submodule at `external/neotolis-engine` (public APIs only).
 - Shared asset library lives OUTSIDE the repo (private); games pull project-local
   copies. Paid/licensed binaries never enter git - see the restricted-asset rule
-  in `AGENTS.md` + `ai_studio/assets/storage/license/`.
-- Reusable feature packs: `features/` (copy into a template or game, then customize).
+  in `AGENTS.md` + `ai_studio/assets/licenses/`.
+- Reusable feature modules and ownership rules: `features/README.md`. Some
+  modules compile in place; template-owned feature implementations copy with
+  the template and then belong to the game.
 - Game-specific docs, GDDs, private knowledge, assets, runtime code, and state
   live under `games/<game-id>/`.
 - Closed prototypes are preserved as git tags.
