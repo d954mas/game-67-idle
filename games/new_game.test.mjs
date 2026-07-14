@@ -58,12 +58,14 @@ function buildFixtureRepo() {
     ["tools/lib/zip_store.mjs", "// ZIP owner\n"],
     ["release/README.md", "# Release owner\n"],
     [".github/workflows/game-verify.yml", "name: game verify\n"],
-    [".gitignore", "release/artifacts/\n"],
+    [".gitignore", "build/\nsrc/generated/\n.ai_studio/evidence/\nrelease/artifacts/\n"],
   ]) {
     mkdirSync(dirname(join(root, "templates", "template", rel)), { recursive: true });
     writeFileSync(join(root, "templates", "template", rel), body, "utf8");
   }
   writeFileSync(join(root, "templates", "template", "src", "generated", "game.h"), "#pragma once\n", "utf8");
+  mkdirSync(join(root, "templates", "template", ".ai_studio", "evidence"), { recursive: true });
+  writeFileSync(join(root, "templates", "template", ".ai_studio", "evidence", "private.txt"), "private\n", "utf8");
   writeFileSync(join(root, "templates", "template", "build", "stale.obj"), "generated\n", "utf8");
   mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
   writeFileSync(join(root, "templates", "template", "template.json"), JSON.stringify({
@@ -163,7 +165,8 @@ test("new_game --visibility public copies template and registers game assets in 
   assert.match(output, /updated VS Code tasks\/launch/);
   assert.equal(existsSync(join(root, "games", "test-game", "CMakeLists.txt")), true);
   assert.equal(existsSync(join(root, "games", "test-game", "assets", "readme.txt")), true);
-  assert.equal(existsSync(join(root, "games", "test-game", "src", "generated", "game.h")), true);
+  assert.equal(existsSync(join(root, "games", "test-game", "src", "generated", "game.h")), false);
+  assert.equal(existsSync(join(root, "games", "test-game", ".ai_studio", "evidence", "private.txt")), false);
   for (const rel of ["tools/game.mjs", "tools/package_web.mjs", "tools/portal_evidence.mjs", "tools/lib/zip_store.mjs", "release/README.md", ".github/workflows/game-verify.yml", ".gitignore"]) {
     assert.equal(readFileSync(join(root, "games", "test-game", rel), "utf8"), readFileSync(join(root, "templates", "template", rel), "utf8"), rel);
   }

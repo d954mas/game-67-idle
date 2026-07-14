@@ -15,9 +15,9 @@ import {
   localWorkspaceCatalogRelPath, runPrivateGamePreflight, upsertLocalWorkspaceGameMount,
 } from "../ai_studio/workspace/games.mjs";
 import { catalogRelPath, upsertWorkspaceMount } from "../ai_studio/workspace/catalog.mjs";
+import { copyGitSourceTree } from "../ai_studio/workspace/copy_source_tree.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const SKIP = new Set(["build", "_cache", "node_modules", ".git"]);
 const EXACT_SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 function takeValue(argv, index, flag) {
@@ -92,17 +92,6 @@ export function validateRequestedIdentity(args) {
     throw new Error("storage namespace must be lowercase kebab-case and at most 58 characters");
   }
   return { schema: "ai_studio.game.v1", id: args.id, title, storageNamespace };
-}
-
-function copyDir(src, dst) {
-  mkdirSync(dst, { recursive: true });
-  for (const name of readdirSync(src)) {
-    if (SKIP.has(name)) continue;
-    const source = join(src, name);
-    const target = join(dst, name);
-    if (statSync(source).isDirectory()) copyDir(source, target);
-    else copyFileSync(source, target);
-  }
 }
 
 function writeJson(path, value) {
@@ -673,7 +662,7 @@ const dependencies = {
 };
 let itemsLockReset = false;
 try {
-  copyDir(fromDir, stagingDir);
+  copyGitSourceTree(repoRoot, fromDir, stagingDir);
   rmSync(join(stagingDir, "template.json"), { force: true });
   rmSync(join(stagingDir, "game-dependencies.json"), { force: true });
   writeJson(join(stagingDir, "game.json"), requestedIdentity);

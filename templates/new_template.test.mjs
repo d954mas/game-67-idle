@@ -25,12 +25,14 @@ function tempRepo() {
     ["tools/lib/zip_store.mjs", "// ZIP owner\n"],
     ["release/README.md", "# Release owner\n"],
     [".github/workflows/game-verify.yml", "name: game verify\n"],
-    [".gitignore", "release/artifacts/\n"],
+    [".gitignore", "build/\nsrc/generated/\n.ai_studio/evidence/\nrelease/artifacts/\n"],
   ]) {
     mkdirSync(dirname(join(root, "templates", "template", rel)), { recursive: true });
     writeFileSync(join(root, "templates", "template", rel), body, "utf8");
   }
   writeFileSync(join(root, "templates", "template", "src", "generated", "game.h"), "#pragma once\n", "utf8");
+  mkdirSync(join(root, "templates", "template", ".ai_studio", "evidence"), { recursive: true });
+  writeFileSync(join(root, "templates", "template", ".ai_studio", "evidence", "private.txt"), "private\n", "utf8");
   writeFileSync(join(root, "templates", "template", "build", "stale.obj"), "generated\n", "utf8");
   mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
   writeFileSync(join(root, "templates", "template", "template.json"), JSON.stringify({
@@ -46,12 +48,18 @@ function tempRepo() {
     schema: "ai_studio.workspace.catalog.v1",
     mounts: [{ kind: "template", root: "templates/template", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] }],
   }), "utf8");
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "tests@example.invalid"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.name", "Tests"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["add", "."], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["commit", "-m", "fixture"], { cwd: root, stdio: "ignore" });
   return root;
 }
 
 test("new_template copies template, registers it, and refreshes VS Code files", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
+  writeFileSync(join(root, "templates", "template", "fresh-source.txt"), "fresh\n", "utf8");
 
   const output = execFileSync(process.execPath, [script, "--root", root, "--id", "mobile-template"], { encoding: "utf8" });
 
@@ -60,7 +68,9 @@ test("new_template copies template, registers it, and refreshes VS Code files", 
   assert.match(output, /updated VS Code tasks\/launch/);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "CMakeLists.txt")), true);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "assets", "readme.txt")), true);
-  assert.equal(existsSync(join(root, "templates", "mobile-template", "src", "generated", "game.h")), true);
+  assert.equal(readFileSync(join(root, "templates", "mobile-template", "fresh-source.txt"), "utf8"), "fresh\n");
+  assert.equal(existsSync(join(root, "templates", "mobile-template", "src", "generated", "game.h")), false);
+  assert.equal(existsSync(join(root, "templates", "mobile-template", ".ai_studio", "evidence", "private.txt")), false);
   for (const rel of ["tools/game.mjs", "tools/package_web.mjs", "tools/portal_evidence.mjs", "tools/lib/zip_store.mjs", "release/README.md", ".github/workflows/game-verify.yml", ".gitignore"]) {
     assert.equal(readFileSync(join(root, "templates", "mobile-template", rel), "utf8"), readFileSync(join(root, "templates", "template", rel), "utf8"), rel);
   }
@@ -96,7 +106,7 @@ test("new_template rejects existing template folders without --force", (t) => {
 
 });
 
-test("new_template --force overwrites source files without deleting target-only files or duplicating its registry row", (t) => {
+test("new_template --force fully replaces the target without duplicating its registry row", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
@@ -116,7 +126,7 @@ test("new_template --force overwrites source files without deleting target-only 
 
   execFileSync(process.execPath, [script, "--root", root, "--id", "mobile-template", "--force"], { encoding: "utf8" });
 
-  assert.equal(readFileSync(join(target, "target-only.txt"), "utf8"), "must stay\n");
+  assert.equal(existsSync(join(target, "target-only.txt")), false);
   assert.match(readFileSync(join(target, "CMakeLists.txt"), "utf8"), /3\.30/);
   const updated = JSON.parse(readFileSync(catalogPath, "utf8"));
   assert.equal(updated.mounts.filter((mount) => mount.root === "templates/mobile-template").length, 1);

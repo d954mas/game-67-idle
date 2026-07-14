@@ -5,16 +5,17 @@
 //   node templates/new_template.mjs --id mobile-template
 //   node templates/new_template.mjs --id mobile-template --from templates/template --force
 //   node templates/new_template.mjs --root <repo> --id mobile-template
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, renameSync, rmSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { registerTemplateAssetSource, templateRegistryPath } from "../ai_studio/assets/sources/ops.mjs";
 import { writeVscodeProjectFiles } from "../ai_studio/dev_environment/vscode_projects.mjs";
 import { ensureProject } from "../ai_studio/taskboard/lib.mjs";
+import { copyGitSourceTree } from "../ai_studio/workspace/copy_source_tree.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
-const SKIP = new Set(["build", "_cache", "node_modules", ".git"]);
 
 function parseArgs(argv) {
   const args = { id: "", from: "templates/template", root: "", force: false };
@@ -36,17 +37,6 @@ function usageText() {
 
 function printUsage() {
   console.log(usageText());
-}
-
-function copyDir(src, dst) {
-  mkdirSync(dst, { recursive: true });
-  for (const name of readdirSync(src)) {
-    if (SKIP.has(name)) continue;
-    const from = join(src, name);
-    const to = join(dst, name);
-    if (statSync(from).isDirectory()) copyDir(from, to);
-    else copyFileSync(from, to);
-  }
 }
 
 let args;
@@ -78,7 +68,24 @@ if (existsSync(toDir) && !args.force) {
   console.error(`error: ${toDir} already exists (use --force)`);
   process.exit(1);
 }
-copyDir(fromDir, toDir);
+const siblingRoot = dirname(toDir);
+const suffix = `${process.pid}-${randomUUID()}`;
+const stagingDir = join(siblingRoot, `.${args.id}.staging-${suffix}`);
+const backupDir = join(siblingRoot, `.${args.id}.backup-${suffix}`);
+let movedOld = false;
+try {
+  copyGitSourceTree(repoRoot, fromDir, stagingDir);
+  if (existsSync(toDir)) {
+    renameSync(toDir, backupDir);
+    movedOld = true;
+  }
+  renameSync(stagingDir, toDir);
+} catch (error) {
+  rmSync(stagingDir, { recursive: true, force: true });
+  if (movedOld && !existsSync(toDir)) renameSync(backupDir, toDir);
+  throw error;
+}
+rmSync(backupDir, { recursive: true, force: true });
 const registered = registerTemplateAssetSource(repoRoot, {
   id: args.id,
   title: args.id,
