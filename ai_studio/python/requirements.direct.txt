@@ -6,3 +6,4 @@ Pillow==12.2.0
 rembg==2.0.76
 onnxruntime==1.27.0
 truststore==0.10.4
+lupa==2.8
