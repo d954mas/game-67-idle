@@ -705,6 +705,7 @@ test("late public registration failure restores destination and all external byt
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const beforeCatalog = readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8");
+  const listenersBefore = process.listenerCount("exit");
 
   const result = invokeNewGame(["--root", root, "--id", "rollback-game"], {
     NODE_ENV: "test", AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "public-registration",
@@ -716,6 +717,8 @@ test("late public registration failure restores destination and all external byt
   assert.equal(existsSync(join(root, ".vscode", "tasks.json")), false);
   assert.equal(existsSync(join(taskboardItems(root), "projects", "P001-rollback-game.md")), false);
   assert.deepEqual(readdirSync(join(root, "games")), []);
+  assert.equal(process.listenerCount("exit"), listenersBefore);
+  assert.equal(existsSync(join(root, "games", ".new-game.claim")), false);
 });
 
 test("late public failure preserves concurrent catalog, IDE, Taskboard, and counter writes", (t) => {
