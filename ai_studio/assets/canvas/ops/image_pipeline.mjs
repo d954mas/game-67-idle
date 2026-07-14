@@ -2507,9 +2507,8 @@ export async function renderGroup(root, { projectId, groupId, scale, background 
 // special-case skip for `group.recipe`/`group.style`/`group.pack_run` any more — they are
 // simply never auto-flagged (createRecipeCard/createStyleCard/the pack-run mint never set
 // `screen`), so they stay unflagged BY CONSTRUCTION, same as any other group the lead never
-// ticked. An EXISTING project migrates via tools/migrate_screen_flags.mjs (one-shot,
-// preserves today's export set). Like the other export ops it makes no project mutation, so
-// it is NOT journaled; it records one export_project tool_runs entry.
+// ticked. Like the other export ops it makes no project mutation, so it is NOT
+// journaled; it records one export_project tool_runs entry.
 export async function exportProject(root, { projectId } = {}) {
   if (!projectId) throw new Error("exportProject requires projectId");
   const project = getProject(root, projectId);

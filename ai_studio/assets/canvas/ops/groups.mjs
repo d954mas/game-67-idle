@@ -298,48 +298,6 @@ export function patchGroups(root, { projectId, groupIds, visible, clip } = {}) {
   return { project, groups: (project.groups || []).filter((group) => idSet.has(group.id)), count: ids.length };
 }
 
-// ---- migrateScreenFlags (T0332 B1: export opt-in inversion, one-shot) ----------------
-
-// One-shot per-PROJECT migration for the export opt-in flip (build-spec "ЭКСПОРТ —
-// ИНВЕРСИЯ НА OPT-IN"): before this increment, exportProject exported every top-level
-// VISIBLE group except a recipe/style card; after it, exportProject exports ONLY a group
-// carrying the explicit `screen === true` flag. This restores an EXISTING project's exact
-// pre-flip export set by flagging every top-level VISIBLE group that carries none of
-// recipe/style/anim/pack_run (the same objects the old filter excluded — the anim card
-// is a workshop object exactly like recipe/style — plus a pack run group —
-// build-spec: pack_run is provenance-only post-flip, never auto-flagged as a screen, even
-// though the OLD filter would technically have exported one — see the caller's own doc for
-// why this is a deliberate, not an accidental, byte-exact gap).
-//
-// Idempotent: a group that ALREADY carries a `screen` key (true OR false — an explicit
-// prior choice, this migration or a hand-set patchGroup) is left untouched, so re-running
-// this on an already-migrated (or partially hand-edited) project changes nothing further.
-// ONE journal entry per project even when it flags zero groups — commitMutation's own
-// before-equals-after check no-ops that case silently (no empty journal noise).
-export function migrateScreenFlags(root, { projectId } = {}) {
-  if (!projectId) throw new Error("migrateScreenFlags requires projectId");
-  const startedAt = performance.now();
-  const before = getProject(root, projectId);
-  const flagged = [];
-  const nextGroups = groupsOf(before).map((group) => {
-    if (group.parentId != null) return group; // nested: never a top-level screen candidate
-    if (group.visible === false) return group; // hidden: the old filter excluded it too
-    if ("screen" in group) return group; // an explicit prior choice (migration or manual) stands
-    if (group.recipe || group.style || group.anim || group.pack_run) return group; // workshop/run object (recipe/style/anim card or pack run)
-    flagged.push(group.id);
-    return { ...group, screen: true };
-  });
-  const after = updateProject(root, projectId, { groups: nextGroups });
-  const project = commitMutation(root, projectId, {
-    op: "migrateScreenFlags",
-    args_summary: { flagged, count: flagged.length },
-    before,
-    after,
-    startedAt,
-  });
-  return { project, flagged };
-}
-
 // Resize a group's frame to fit its content (Figma "Resize to fit"). The new frame is
 // the union bounding box of the group's FULL descendant closure — every descendant
 // element AND every nested subgroup frame (both carry x/y/w/h; reuses the same

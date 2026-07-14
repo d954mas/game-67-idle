@@ -7,7 +7,7 @@ import { buildNodesSpec, descendantsOf, frontOrder } from "../tree.mjs";
 import { appendJournal, ensureThinJournal, getProject, projectExists, readErrors, readJournal, resolveProjectFile, updateProject } from "../store.mjs";
 import { commitMutation, finite, groupsOf, isMutation, ms, snapshotForEntry } from "./core.mjs";
 import { addImage, addImages, addText, alignNodes, distributeNodes, findNode, moveNodes, patchElement, patchElements, patchProject, removeElement, removeElements, reorderElement, reorderNode, reorderNodes, setExportSettings, setRegions } from "./elements.mjs";
-import { applyStyleAutoRef, assignToGroup, createGroup, deleteGroup, findGroup, fitGroup, migrateScreenFlags, patchGroup, patchGroups, reparentGroup, scaleGroup, ungroupGroup } from "./groups.mjs";
+import { applyStyleAutoRef, assignToGroup, createGroup, deleteGroup, findGroup, fitGroup, patchGroup, patchGroups, reparentGroup, scaleGroup, ungroupGroup } from "./groups.mjs";
 import { animateElementFromText, createAnimCard, createRecipeCard, createStyleCard, expandRecipePrompt, extractFromElement, generateAnimFromCard, generateFromRecipe, patchAnim, patchRecipe, patchStyle, promoteExtractedRecipe, promoteExtractedStyle } from "./generation.mjs";
 
 // Clipboard paste/duplicate/delete and history navigation are journal-domain
