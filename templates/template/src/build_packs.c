@@ -11,6 +11,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#if defined(__linux__)
+/* GLFW/GLX keeps an extension-query cache after glfwTerminate(). The engine's
+ * native builder/window tests suppress this same external allocation. Keep the
+ * suppression local to the pack-builder executable so every other LSan report
+ * remains actionable. */
+const char *__lsan_default_suppressions(void);                                           // NOLINT(bugprone-reserved-identifier)
+const char *__lsan_default_suppressions(void) { return "leak:extensionSupportedGLX\n"; } // NOLINT(bugprone-reserved-identifier)
+#endif
+
 #ifdef _WIN32
 #include <direct.h>
 #define MKDIR(p) _mkdir(p)

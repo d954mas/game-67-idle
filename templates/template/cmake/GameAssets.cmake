@@ -4,6 +4,7 @@ if(NOT EMSCRIPTEN)
     target_link_libraries(build_game_packs PRIVATE nt_builder nt_log)
     target_compile_definitions(build_game_packs PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_compile_options(build_game_packs PRIVATE -U_DLL)
+    nt_set_sanitizer_flags(build_game_packs)
     set_target_properties(build_game_packs PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${GAME_OUTPUT_DIR}")
 
     add_custom_command(

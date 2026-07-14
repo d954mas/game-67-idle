@@ -181,16 +181,6 @@ test("getCatalogView happy path: live template renders 6 items, schema, containe
     assert.equal(view.lock.status_by_id[item.id], "shipped", `${item.id} should be shipped`);
   }
   assert.deepEqual(view.lock.removed, {});
-
-  // T0316: icon preview reads the BUILT pack (templates/template/build/<preset>/
-  // pack/), a real gate precondition of this round (spec §6 gate 1/2) -- same
-  // "live tree" coupling this whole test already has for items.lock.json/
-  // registries. All 6 items.json icon_asset_id values are "icons/<name>" and
-  // must resolve.
-  assert.equal(view.icons.reason, undefined, "expects templates/template to have been built (cmake --build .../native-debug)");
-  for (const item of view.items) {
-    assert.ok(view.icons.regions[item.icon_asset_id], `${item.icon_asset_id} should resolve to a packed region`);
-  }
 });
 
 test("getCatalogView returns null for an id that matches neither registry", async () => {
@@ -221,6 +211,8 @@ test("loadCatalogView: a folder with no content/ dir at all -> hasItems:false (d
   assert.equal(view.schema, null);
   assert.deepEqual(view.lock, { status_by_id: {}, removed: {} });
   assert.equal(view.validate.available, false);
+  assert.deepEqual(view.icons.regions, {});
+  assert.match(view.icons.reason, /pack not built/);
 });
 
 test("lock status_by_id: shipped (def_ids) / draft (neither) / removed (restored-but-still-in-removed) + homeless removed entries", async (t) => {

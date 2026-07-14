@@ -160,7 +160,9 @@ class AnchorTest(unittest.TestCase):
     def test_relative_anchor_is_emitted_as_an_absolute_path(self) -> None:
         # CWD-independence proof: a relative anchor resolves against the repo root,
         # not the caller's CWD, and the emitted input_image is always absolute.
-        tmp_dir = Path(tempfile.mkdtemp(dir=str(REPO_ROOT / "tmp")))
+        repo_tmp = REPO_ROOT / "tmp"
+        repo_tmp.mkdir(parents=True, exist_ok=True)
+        tmp_dir = Path(tempfile.mkdtemp(dir=str(repo_tmp)))
         anchor_abs = tmp_dir / "anchor.png"
         anchor_abs.write_bytes(b"fake-png-bytes")
         original_cwd = os.getcwd()
