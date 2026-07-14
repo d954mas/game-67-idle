@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { main as promote } from "../promote.mjs";
 
 const exec = promisify(execFile);
 const TOOL = "ai_studio/assets/gallery/promote.mjs";
@@ -29,11 +30,20 @@ async function setup(extraAssets = []) {
   return { root, repo, library, manifestPath };
 }
 
-function run(args) {
+function runCli(args) {
   return exec(process.execPath, [TOOL, ...args]);
 }
+
+function run(args) {
+  return promote(args, { log() {}, warn() {} });
+}
+
 async function expectFail(args, re) {
-  await assert.rejects(run(args), (e) => re.test(e.stderr || e.message), `expected failure matching ${re}`);
+  await assert.rejects(run(args), re);
+}
+
+async function expectCliFail(args, re) {
+  await assert.rejects(runCli(args), (e) => re.test(e.stderr || e.message), `expected CLI failure matching ${re}`);
 }
 
 test("dry-run writes nothing to the library", async () => {
@@ -50,7 +60,7 @@ test("dry-run writes nothing to the library", async () => {
 test("--apply writes pack manifest + license + log with correct schema", async () => {
   const { root, repo, library, manifestPath } = await setup();
   try {
-    await run(["--manifest", manifestPath, "--ids", "m1", "--repo", repo, "--library", library, "--source", "kenney", "--license", "CC0-1.0", "--apply"]);
+    await runCli(["--manifest", manifestPath, "--ids", "m1", "--repo", repo, "--library", library, "--source", "kenney", "--license", "CC0-1.0", "--apply"]);
     const id = "kenney__desk__cc0-1-0";
     assert.equal(existsSync(join(library, "packs", "kenney", "files", id, "desk.obj")), true);
     const row = JSON.parse((await readFile(join(library, "packs", "kenney", "assets.jsonl"), "utf8")).trim());
@@ -232,7 +242,7 @@ test("validation: missing --license, bad --origin, unknown id, font under CC0", 
   const { root, repo, library, manifestPath } = await setup();
   const common = ["--manifest", manifestPath, "--repo", repo, "--library", library, "--source", "kenney"];
   try {
-    await expectFail([...common, "--ids", "m1"], /missing --license/);
+    await expectCliFail([...common, "--ids", "m1"], /missing --license/);
     await expectFail([...common, "--ids", "m1", "--license", "CC0-1.0", "--origin", "bogus"], /--origin must be/);
     await expectFail([...common, "--ids", "nope", "--license", "CC0-1.0"], /ids not in manifest/);
     await expectFail(["--manifest", manifestPath, "--repo", repo, "--library", library, "--source", "g", "--ids", "f1", "--license", "CC0-1.0"], /not a font license/);

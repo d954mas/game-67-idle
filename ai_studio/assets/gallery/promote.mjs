@@ -188,8 +188,8 @@ async function writeJsonl(path, rows) {
   await writeFile(path, rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length ? "\n" : ""), "utf8");
 }
 
-async function main() {
-  const a = parseArgs(process.argv.slice(2));
+export async function main(argv = process.argv.slice(2), io = console) {
+  const a = parseArgs(argv);
   const manifestPath = resolve(a.manifest);
   if (!existsSync(manifestPath)) throw new Error(`manifest not found: ${manifestPath}`);
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
@@ -219,7 +219,7 @@ async function main() {
     const source = a.source || (p.source && p.source !== "unknown" ? p.source : "");
     if (!source) throw new Error(`no source for ${p.id}; pass --source`);
     if (a.source && p.source && p.source !== "unknown" && kebab(a.source) !== kebab(p.source)) {
-      console.warn(`warn: --source ${a.source} overrides manifest source ${p.source} for ${p.id}`);
+      io.warn(`warn: --source ${a.source} overrides manifest source ${p.source} for ${p.id}`);
     }
     let kind = a.kind || (KIND_DIR[p.kind] ? p.kind : KIND_FROM_REVIEW[p.kind]);
     if (kind === "image" || !kind) throw new Error(`ambiguous kind for ${p.id}; pass --kind (ui|texture|model|font|audio)`);
@@ -250,7 +250,7 @@ async function main() {
     throw new Error(`already in library (pass --overwrite to replace): ${collisions.map((c) => c.assetId).join(", ")}`);
   }
 
-  console.log(`promote ${plan.length} asset(s) -> ${library} [pack ${packSlug}]  [${a.apply ? "APPLY" : "DRY-RUN"}]`);
+  io.log(`promote ${plan.length} asset(s) -> ${library} [pack ${packSlug}]  [${a.apply ? "APPLY" : "DRY-RUN"}]`);
   const written = [];
   const packRootName = a.publish === "true" ? "packs" : "restricted/packs";
   const packDir = join(library, packRootName, packSlug);
@@ -260,7 +260,7 @@ async function main() {
     const { pick, source, kind, assetId, filesDir, licenseDir } = it;
     const abs = resolveManifestPath(a.repo, pick.relpath, "asset relpath");
     if (!existsSync(abs)) throw new Error(`source file missing: ${abs}`);
-    console.log(`  ${assetId}  (${kind})${it.exists ? " [OVERWRITE]" : ""}  <- ${pick.relpath}`);
+    io.log(`  ${assetId}  (${kind})${it.exists ? " [OVERWRITE]" : ""}  <- ${pick.relpath}`);
     if (!a.apply) continue;
     const bytes = (await readFile(abs)).length;
     const sha = await sha256(abs);
@@ -339,7 +339,7 @@ async function main() {
     await appendFile(join(library, "intake-log.md"), `- ${ts} promoted ${assetId} (${originOrKind(rec)}) [pack ${packSlug}] from ${pick.relpath}\n`, "utf8");
     written.push({ assetId, pack: packDir, resource: rec.resource });
   }
-  console.log(a.apply ? `\nwrote ${written.length} manifest record(s).` : `\ndry-run only - pass --apply to write.`);
+  io.log(a.apply ? `\nwrote ${written.length} manifest record(s).` : `\ndry-run only - pass --apply to write.`);
 }
 
 function originOrKind(rec) {
