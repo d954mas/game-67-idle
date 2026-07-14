@@ -367,25 +367,25 @@ test("cli batched elements-set / elements-remove parity (one undo each)", async 
   assert.equal((await runInProcess(env, "show", projectId)).project.elements.length, 2);
 });
 
-test("cli group-reparent / group-create --parent nesting smoke (no python)", (t) => {
+test("cli group-reparent / group-create --parent nesting smoke (no python)", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-nest-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const projectId = run(env, "create", "--title", "CLI Nest").project.id;
-  const outer = run(env, "group-create", projectId, "--name", "Outer", "--x", "0", "--y", "0", "--w", "100", "--h", "100").group.id;
+  const projectId = (await runInProcess(env, "create", "--title", "CLI Nest")).project.id;
+  const outer = (await runInProcess(env, "group-create", projectId, "--name", "Outer", "--x", "0", "--y", "0", "--w", "100", "--h", "100")).group.id;
   // group-create --parent nests directly.
-  const child = run(env, "group-create", projectId, "--name", "Child", "--x", "5", "--y", "5", "--w", "20", "--h", "20", "--parent", outer);
+  const child = await runInProcess(env, "group-create", projectId, "--name", "Child", "--x", "5", "--y", "5", "--w", "20", "--h", "20", "--parent", outer);
   assert.equal(child.group.parentId, outer);
 
   // A separate top-level group, then group-reparent it under outer, then back to root.
-  const widget = run(env, "group-create", projectId, "--name", "Widget", "--x", "40", "--y", "0", "--w", "30", "--h", "30").group.id;
-  run(env, "group-reparent", projectId, "--group", widget, "--parent", outer);
-  let shown = run(env, "show", projectId).project;
+  const widget = (await runInProcess(env, "group-create", projectId, "--name", "Widget", "--x", "40", "--y", "0", "--w", "30", "--h", "30")).group.id;
+  await runInProcess(env, "group-reparent", projectId, "--group", widget, "--parent", outer);
+  let shown = (await runInProcess(env, "show", projectId)).project;
   assert.equal(shown.groups.find((g) => g.id === widget).parentId, outer);
 
-  run(env, "group-reparent", projectId, "--group", widget, "--parent", "none");
-  shown = run(env, "show", projectId).project;
+  await runInProcess(env, "group-reparent", projectId, "--group", widget, "--parent", "none");
+  shown = (await runInProcess(env, "show", projectId)).project;
   assert.equal(shown.groups.find((g) => g.id === widget).parentId, undefined, "reparent to none = top level");
 });
 
@@ -466,9 +466,9 @@ test("cli nodes-duplicate / nodes-delete / nodes-paste parity (one undo each)", 
   assert.ok(proj.elements.some((e) => e.name === "pasted"), "hand-authored spec pasted");
 });
 
-test("cli add-images batched multi-image add parity (one undo restores all)", (t) => {
+test("cli add-images batched multi-image add parity (one undo restores all)", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-addimgs-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   const a = join(dir, "a.png");
@@ -478,38 +478,38 @@ test("cli add-images batched multi-image add parity (one undo restores all)", (t
   writeFileSync(b, solidPng(4, 4, [0, 10, 0]));
   writeFileSync(c, solidPng(4, 4, [0, 0, 10]));
 
-  const projectId = run(env, "create", "--title", "CLI AddImages").project.id;
-  const added = run(env, "add-images", projectId, "--files", `${a},${b},${c}`);
+  const projectId = (await runInProcess(env, "create", "--title", "CLI AddImages")).project.id;
+  const added = await runInProcess(env, "add-images", projectId, "--files", `${a},${b},${c}`);
   assert.equal(added.count, 3);
-  assert.equal(run(env, "show", projectId).project.elements.length, 3);
+  assert.equal((await runInProcess(env, "show", projectId)).project.elements.length, 3);
   // One journal entry for the whole batch; one undo removes all three.
-  const h = run(env, "history", projectId);
+  const h = await runInProcess(env, "history", projectId);
   assert.equal(h.entries.filter((e) => e.op === "addImages").length, 1);
-  run(env, "undo", projectId, "--expect-head", String(added.project.history_seq));
-  assert.equal(run(env, "show", projectId).project.elements.length, 0);
+  await runInProcess(env, "undo", projectId, "--expect-head", String(added.project.history_seq));
+  assert.equal((await runInProcess(env, "show", projectId)).project.elements.length, 0);
 });
 
-test("cli groups-set batched shared toggles parity (one undo restores all)", (t) => {
+test("cli groups-set batched shared toggles parity (one undo restores all)", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-groupsset-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const projectId = run(env, "create", "--title", "CLI GroupsSet").project.id;
-  const g1 = run(env, "group-create", projectId, "--name", "A", "--x", "0", "--y", "0", "--w", "50", "--h", "50").group.id;
-  const g2 = run(env, "group-create", projectId, "--name", "B", "--x", "0", "--y", "0", "--w", "50", "--h", "50").group.id;
+  const projectId = (await runInProcess(env, "create", "--title", "CLI GroupsSet")).project.id;
+  const g1 = (await runInProcess(env, "group-create", projectId, "--name", "A", "--x", "0", "--y", "0", "--w", "50", "--h", "50")).group.id;
+  const g2 = (await runInProcess(env, "group-create", projectId, "--name", "B", "--x", "0", "--y", "0", "--w", "50", "--h", "50")).group.id;
 
-  const set = run(env, "groups-set", projectId, "--groups", `${g1},${g2}`, "--visible", "false", "--clip", "true");
+  const set = await runInProcess(env, "groups-set", projectId, "--groups", `${g1},${g2}`, "--visible", "false", "--clip", "true");
   assert.equal(set.count, 2);
-  const shown = run(env, "show", projectId).project;
+  const shown = (await runInProcess(env, "show", projectId)).project;
   for (const id of [g1, g2]) {
     const g = shown.groups.find((group) => group.id === id);
     assert.equal(g.visible, false);
     assert.equal(g.clip, true);
   }
-  const h = run(env, "history", projectId);
+  const h = await runInProcess(env, "history", projectId);
   assert.equal(h.entries.filter((e) => e.op === "patchGroups").length, 1);
-  run(env, "undo", projectId, "--expect-head", String(set.project.history_seq));
-  const undone = run(env, "show", projectId).project;
+  await runInProcess(env, "undo", projectId, "--expect-head", String(set.project.history_seq));
+  const undone = (await runInProcess(env, "show", projectId)).project;
   assert.equal(undone.groups.filter((g) => g.visible === false).length, 0, "one undo restores all");
 });
 
@@ -587,18 +587,18 @@ test("cli group-create/move/set/assign/delete smoke (no python)", async (t) => {
 
 // ---- T0254 Tier 1 #3: `list` summary by default, `--full` restores the full dump --
 
-test("cli list: summary by default (id/title/created/updated/counts/head); --full restores the full project dump", (t) => {
+test("cli list: summary by default (id/title/created/updated/counts/head); --full restores the full project dump", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-list-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   const pngPath = join(dir, "pic.png");
   writeFileSync(pngPath, solidPng(4, 4, [1, 2, 3]));
-  const projectId = run(env, "create", "--title", "List Summary").project.id;
-  run(env, "add-image", projectId, "--file", pngPath);
-  run(env, "group-create", projectId, "--name", "Frame", "--x", "0", "--y", "0", "--w", "10", "--h", "10");
+  const projectId = (await runInProcess(env, "create", "--title", "List Summary")).project.id;
+  await runInProcess(env, "add-image", projectId, "--file", pngPath);
+  await runInProcess(env, "group-create", projectId, "--name", "Frame", "--x", "0", "--y", "0", "--w", "10", "--h", "10");
 
-  const summary = run(env, "list").projects;
+  const summary = (await runInProcess(env, "list")).projects;
   assert.equal(summary.length, 1);
   const row = summary[0];
   assert.deepEqual(Object.keys(row).sort(), ["created", "elements", "groups", "head", "id", "ownerGame", "qualifiedId", "storeId", "title", "updated", "visibility"].sort());
@@ -613,7 +613,7 @@ test("cli list: summary by default (id/title/created/updated/counts/head); --ful
   // Additive contract: the summary carries NO element/group bodies at all.
   assert.equal(row.project, undefined);
 
-  const full = run(env, "list", "--full").projects;
+  const full = (await runInProcess(env, "list", "--full")).projects;
   assert.equal(full.length, 1);
   assert.equal(full[0].id, projectId);
   assert.equal(full[0].elements.length, 1, "--full restores today's exact full-project dump");
@@ -667,29 +667,29 @@ test("cli parseBool: junk boolean values are a loud, flag-naming error on every 
 
 // ---- T0254 Tier 1 #5: element-set --w/--h (+ --x/--y) single-element resize -------
 
-test("cli element-set --w/--h/--x/--y: single-element resize/reposition lands and journals (parity with the API PATCH route)", (t) => {
+test("cli element-set --w/--h/--x/--y: single-element resize/reposition lands and journals (parity with the API PATCH route)", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-resize-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   const pngPath = join(dir, "pic.png");
   writeFileSync(pngPath, solidPng(8, 6, [4, 5, 6]));
-  const projectId = run(env, "create", "--title", "Resize CLI").project.id;
-  const elementId = run(env, "add-image", projectId, "--file", pngPath).element.id;
+  const projectId = (await runInProcess(env, "create", "--title", "Resize CLI")).project.id;
+  const elementId = (await runInProcess(env, "add-image", projectId, "--file", pngPath)).element.id;
 
-  const resized = run(env, "element-set", projectId, "--element", elementId, "--w", "40", "--h", "30", "--x", "5", "--y", "7");
+  const resized = await runInProcess(env, "element-set", projectId, "--element", elementId, "--w", "40", "--h", "30", "--x", "5", "--y", "7");
   assert.equal(resized.element.w, 40);
   assert.equal(resized.element.h, 30);
   assert.equal(resized.element.x, 5);
   assert.equal(resized.element.y, 7);
 
-  const shown = run(env, "show", projectId).project.elements[0];
+  const shown = (await runInProcess(env, "show", projectId)).project.elements[0];
   assert.deepEqual({ w: shown.w, h: shown.h, x: shown.x, y: shown.y }, { w: 40, h: 30, x: 5, y: 7 });
 
   // One journal entry (patchElement, same op move/the API PATCH route use); undo restores.
-  const history = run(env, "history", projectId);
+  const history = await runInProcess(env, "history", projectId);
   assert.equal(history.entries.filter((e) => e.op === "patchElement").length, 1);
-  run(env, "undo", projectId, "--expect-head", String(resized.project.history_seq));
-  const undone = run(env, "show", projectId).project.elements[0];
+  await runInProcess(env, "undo", projectId, "--expect-head", String(resized.project.history_seq));
+  const undone = (await runInProcess(env, "show", projectId)).project.elements[0];
   assert.deepEqual({ w: undone.w, h: undone.h, x: undone.x, y: undone.y }, { w: 8, h: 6, x: 0, y: 0 });
 });
