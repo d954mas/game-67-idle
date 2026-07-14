@@ -648,13 +648,13 @@ test("cli new task and project write to explicit private game store without publ
   createTask(root, { title: "Public task", status: "backlog" });
   const privateStore = ensurePrivateGameMount(root);
 
-  const taskResult = spawnSync(process.execPath, [
-    cliPath, "new", "task",
+  const taskResult = runCliDirect(root,
+    "new", "task",
     "--game", privateStore.gameId,
     "--title", "Private created",
     "--status", "backlog",
     "--json",
-  ], { cwd: root, encoding: "utf8" });
+  );
 
   assert.equal(taskResult.status, 0, taskResult.stderr);
   const taskPayload = JSON.parse(taskResult.stdout);
@@ -730,13 +730,13 @@ test("aggregate validation rejects ambiguous bare cross-store links and accepts 
   const privateStore = ensurePrivateGameMount(root);
   writeTaskDoc(privateStore.itemsRoot, "T0001", "Ambiguous private task", "backlog", { project: "P001" });
 
-  const ambiguous = spawnSync(process.execPath, [cliPath, "validate", "--json", "--include-private"], { cwd: root, encoding: "utf8" });
+  const ambiguous = runCliDirect(root, "validate", "--json", "--include-private");
   assert.notEqual(ambiguous.status, 0);
   assert.match(ambiguous.stdout, /bare cross-store reference/);
 
   rmSync(join(privateStore.itemsRoot, "active"), { recursive: true, force: true });
   writeTaskDoc(privateStore.itemsRoot, "T0001", "Qualified private task", "backlog", { project: "studio:P001" });
-  const qualified = spawnSync(process.execPath, [cliPath, "validate", "--json", "--include-private"], { cwd: root, encoding: "utf8" });
+  const qualified = runCliDirect(root, "validate", "--json", "--include-private");
   assert.equal(qualified.status, 0, qualified.stderr || qualified.stdout);
 });
 
