@@ -29,7 +29,7 @@ function takeValue(argv, index, flag) {
   return value;
 }
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const out = {
     id: "", title: "", storageNamespace: "", template: "", from: "templates/template",
     root: "", replace: false, private: false, visibility: "", requireVisibility: false,
@@ -58,7 +58,7 @@ function parseArgs(argv) {
   return out;
 }
 
-function usageText() {
+export function usageText() {
   return [
     "usage: node games/new_game.mjs [--root <repo>] --id <game-id> [--title <title>] [--storage-namespace <id>] [--visibility public|private] [--template <template-id>|--from <path>] [--private] [--public-alias <safe-name>] [--require-visibility] [--replace]  (lowercase, kebab)",
     "",
@@ -69,7 +69,7 @@ function usageText() {
   ].join("\n");
 }
 
-function resolveVisibility(args) {
+export function resolveVisibility(args) {
   if (args.visibility && !["public", "private"].includes(args.visibility)) {
     throw new Error(`invalid --visibility '${args.visibility}' (use public or private)`);
   }
@@ -81,7 +81,7 @@ function resolveVisibility(args) {
   return "public";
 }
 
-function validateRequestedIdentity(args) {
+export function validateRequestedIdentity(args) {
   if (!/^[a-z][a-z0-9-]*$/.test(args.id)) throw new Error("game id must be lowercase kebab-case");
   const title = args.title || args.id;
   const storageNamespace = args.storageNamespace || args.id;
@@ -276,9 +276,22 @@ function requireGitRevision(root, args, label) {
   return revision;
 }
 
+function tryGitRevisions(root, revisions) {
+  const result = runGit(root, ["rev-parse", ...revisions]);
+  const values = result.status === 0 ? result.stdout.trim().split(/\r?\n/) : [];
+  return values.length === revisions.length && values.every((value) => /^[0-9a-f]{40,64}$/i.test(value))
+    ? values
+    : null;
+}
+
 function requireClean(root, path, label) {
   const result = runGit(root, ["status", "--porcelain", ...(path ? ["--", path] : [])]);
   if (result.status !== 0 || result.stdout.trim()) throw new Error(`${label} must be clean before recording exact dependency revisions`);
+}
+
+function pathsAreClean(root, paths) {
+  const result = runGit(root, ["status", "--porcelain", "--", ...paths]);
+  return result.status === 0 && !result.stdout.trim();
 }
 
 function readEngineSemVer(repoRoot) {
@@ -557,6 +570,10 @@ function fail(message, showUsage = false) {
   process.exit(1);
 }
 
+const isDirectInvocation = Boolean(process.argv[1])
+  && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectInvocation) {
 let args;
 try { args = parseArgs(process.argv.slice(2)); }
 catch (error) { fail(error.message, true); }
@@ -596,15 +613,19 @@ try {
   if (!existsSync(join(fromDir, "CMakeLists.txt"))) throw new Error(`template not found at ${fromDir}`);
   templateIdentity = readTemplateIdentity(fromDir);
   dependencySeed = readTemplateDependencySeed(fromDir);
-  repoRevision = requireGitRevision(repoRoot, ["rev-parse", "HEAD"], "game dependency record");
-  const engineGitlink = requireGitRevision(repoRoot, ["rev-parse", "HEAD:external/neotolis-engine"], "parent engine gitlink");
+  const rootRevisions = tryGitRevisions(repoRoot, ["HEAD", "HEAD:external/neotolis-engine"]);
+  repoRevision = rootRevisions?.[0]
+    || requireGitRevision(repoRoot, ["rev-parse", "HEAD"], "game dependency record");
+  const engineGitlink = rootRevisions?.[1]
+    || requireGitRevision(repoRoot, ["rev-parse", "HEAD:external/neotolis-engine"], "parent engine gitlink");
   engineRevision = requireGitRevision(join(repoRoot, "external", "neotolis-engine"), ["rev-parse", "HEAD"], "engine dependency record");
   if (engineRevision !== engineGitlink) throw new Error("engine checkout HEAD must match the parent engine gitlink");
   const engineVersion = readEngineSemVer(repoRoot);
   if (dependencySeed.engine.version !== engineVersion) {
     throw new Error(`template engine version ${dependencySeed.engine.version} does not match nt_core.h ${engineVersion}`);
   }
-  requireClean(repoRoot, fromRel, `template ${fromRel}`);
+  const rootPathsClean = pathsAreClean(repoRoot, [fromRel, ...dependencySeed.features.map((feature) => feature.source)]);
+  if (!rootPathsClean) requireClean(repoRoot, fromRel, `template ${fromRel}`);
   requireClean(join(repoRoot, "external", "neotolis-engine"), "", "external/neotolis-engine");
   for (const feature of dependencySeed.features) {
     if (!existsSync(join(repoRoot, feature.source))) throw new Error(`template references missing shared feature ${feature.source}`);
@@ -616,7 +637,7 @@ try {
     if (manifest.version !== feature.version) {
       throw new Error(`${feature.id} dependency seed version ${feature.version} does not match feature.json ${manifest.version}`);
     }
-    requireClean(repoRoot, feature.source, `feature ${feature.source}`);
+    if (!rootPathsClean) requireClean(repoRoot, feature.source, `feature ${feature.source}`);
   }
   if (existsSync(finalDir) && !args.replace) throw new Error(`${finalDir} already exists (use --replace)`);
   const identities = registeredGameIdentities(repoRoot);
@@ -776,3 +797,4 @@ if (isPrivate) {
 }
 if (itemsLockReset) console.log(`reset items lock baseline: games/${identity.id}/content/items.lock.json`);
 releaseClaim();
+}

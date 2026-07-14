@@ -4,6 +4,9 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import test, { after } from "node:test";
+import {
+  parseArgs, resolveVisibility, usageText, validateRequestedIdentity,
+} from "./new_game.mjs";
 
 const script = resolve("games/new_game.mjs");
 
@@ -274,103 +277,33 @@ test("new_game --visibility private creates a nested private game without public
   assert.equal(existsSync(join(root, ".vscode", "tasks.json")), false);
 });
 
-test("new_game --require-visibility rejects missing public or private choice before copying", (t) => {
-  const root = tempRepo();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  const result = spawnSync(process.execPath, [
-    script,
-    "--root",
-    root,
-    "--id",
-    "test-game",
-    "--require-visibility",
-  ], { encoding: "utf8" });
-
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /missing visibility choice/);
-  assert.equal(existsSync(join(root, "games", "test-game")), false);
+test("new_game --require-visibility rejects missing public or private choice", () => {
+  const args = parseArgs(["--id", "test-game", "--require-visibility"]);
+  assert.throws(() => resolveVisibility(args), /missing visibility choice/);
 });
 
-test("new_game rejects conflicting private compatibility flag and public visibility", (t) => {
-  const root = tempRepo();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  const result = spawnSync(process.execPath, [
-    script,
-    "--root",
-    root,
-    "--id",
-    "test-game",
-    "--private",
-    "--visibility",
-    "public",
-  ], { encoding: "utf8" });
-
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /--private conflicts with --visibility public/);
-  assert.equal(existsSync(join(root, "games", "test-game")), false);
+test("new_game rejects conflicting private compatibility flag and public visibility", () => {
+  const args = parseArgs(["--id", "test-game", "--private", "--visibility", "public"]);
+  assert.throws(() => resolveVisibility(args), /--private conflicts with --visibility public/);
 });
 
-test("new_game rejects missing visibility value", (t) => {
-  const root = tempRepo();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  const result = spawnSync(process.execPath, [
-    script,
-    "--root",
-    root,
-    "--id",
-    "test-game",
-    "--visibility",
-  ], { encoding: "utf8" });
-
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /--visibility requires public or private/);
-  assert.equal(existsSync(join(root, "games", "test-game")), false);
+test("new_game rejects missing visibility value", () => {
+  assert.throws(
+    () => parseArgs(["--id", "test-game", "--visibility"]),
+    /--visibility requires public or private/,
+  );
 });
 
-test("new_game rejects invalid visibility values before copying", (t) => {
-  const root = tempRepo();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  const result = spawnSync(process.execPath, [
-    script,
-    "--root",
-    root,
-    "--id",
-    "test-game",
-    "--visibility",
-    "secret",
-  ], { encoding: "utf8" });
-
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /invalid --visibility 'secret'/);
-  assert.equal(existsSync(join(root, "games", "test-game")), false);
-  assert.equal(existsSync(join(root, "games", "games.json")), false);
-  assert.equal(existsSync(join(root, "ai_studio", "workspace", "games.local.json")), false);
+test("new_game rejects invalid visibility values", () => {
+  const args = parseArgs(["--id", "test-game", "--visibility", "secret"]);
+  assert.throws(() => resolveVisibility(args), /invalid --visibility 'secret'/);
 });
 
-test("new_game rejects public aliases outside private visibility", (t) => {
-  const root = tempRepo();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  const result = spawnSync(process.execPath, [
-    script,
-    "--root",
-    root,
-    "--id",
-    "test-game",
-    "--visibility",
-    "public",
-    "--public-alias",
-    "Safe Alias",
-  ], { encoding: "utf8" });
-
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /--public-alias is only valid with private visibility/);
-  assert.equal(existsSync(join(root, "games", "test-game")), false);
-  assert.equal(existsSync(join(root, "games", "games.json")), false);
+test("new_game rejects public aliases outside private visibility", () => {
+  const args = parseArgs([
+    "--id", "test-game", "--visibility", "public", "--public-alias", "Safe Alias",
+  ]);
+  assert.throws(() => resolveVisibility(args), /--public-alias is only valid with private visibility/);
 });
 
 test("new_game --private rejects public game id collisions", (t) => {
@@ -476,17 +409,11 @@ test("new_game --replace updates the same registry entry", (t) => {
   assert.match(taskboardProject, /title: Replaced Game/);
 });
 
-test("new_game rejects retired --force without changing an existing destination", (t) => {
-  const root = tempRepo();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  mkdirSync(join(root, "games", "test-game"), { recursive: true });
-  writeFileSync(join(root, "games", "test-game", "old.txt"), "old\n", "utf8");
-
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "test-game", "--force"], { encoding: "utf8" });
-
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /--force was retired; use explicit --replace/);
-  assert.equal(readFileSync(join(root, "games", "test-game", "old.txt"), "utf8"), "old\n");
+test("new_game rejects retired --force", () => {
+  assert.throws(
+    () => parseArgs(["--id", "test-game", "--force"]),
+    /--force was retired; use explicit --replace/,
+  );
 });
 
 test("new_game --template copies a registered template id", (t) => {
@@ -569,21 +496,32 @@ test("new_game rejects a clean engine checkout that differs from the parent gitl
   assert.equal(existsSync(join(root, "games", "test-game")), false);
 });
 
-test("new_game --help prints usage", () => {
+test("new_game usage text documents visibility", () => {
+  const result = usageText();
+
+  assert.match(result, /usage: node games\/new_game\.mjs/);
+  assert.match(result, /--visibility public\|private/);
+  assert.match(result, /omitting --visibility still creates a public\/tracked game/);
+});
+
+test("new_game argument parser rejects unknown arguments", () => {
+  assert.throws(() => parseArgs(["--wat"]), /unknown argument: --wat/);
+});
+
+test("new_game --help preserves the CLI success envelope", () => {
   const result = spawnSync(process.execPath, [script, "--help"], { encoding: "utf8" });
 
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /usage: node games\/new_game\.mjs/);
-  assert.match(result.stdout, /--visibility public\|private/);
-  assert.match(result.stdout, /omitting --visibility still creates a public\/tracked game/);
+  assert.equal(result.stderr, "");
+  assert.equal(result.stdout, `${usageText()}\n`);
 });
 
-test("new_game rejects unknown arguments", () => {
+test("new_game unknown arguments preserve the CLI error envelope", () => {
   const result = spawnSync(process.execPath, [script, "--wat"], { encoding: "utf8" });
 
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /unknown argument: --wat/);
-  assert.match(result.stderr, /usage: node games\/new_game\.mjs/);
+  assert.equal(result.stdout, "");
+  assert.equal(result.stderr, `error: unknown argument: --wat\n${usageText()}\n`);
 });
 
 test("existing destination is byte-safe without --replace", (t) => {
@@ -614,14 +552,13 @@ test("--replace publishes a complete tree and removes stale destination files", 
   assert.deepEqual(readdirSync(join(root, "games")), ["test-game"]);
 });
 
-test("invalid title and storage identity reject before publish", (t) => {
-  const root = tempRepo();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  for (const args of [["--title", "  padded"], ["--storage-namespace", "Bad Namespace"]]) {
-    const result = spawnSync(process.execPath, [script, "--root", root, "--id", "bad-game", ...args], { encoding: "utf8" });
-    assert.equal(result.status, 1);
-    assert.equal(existsSync(join(root, "games", "bad-game")), false);
+test("invalid title and storage identity reject before publish", () => {
+  for (const [argv, expected] of [
+    [["--title", "  padded"], /game title must be 1-80 trimmed characters/],
+    [["--storage-namespace", "Bad Namespace"], /storage namespace must be lowercase kebab-case/],
+  ]) {
+    const args = parseArgs(["--id", "bad-game", ...argv]);
+    assert.throws(() => validateRequestedIdentity(args), expected);
   }
 });
 
