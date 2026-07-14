@@ -60,8 +60,8 @@ export function parseJsonOrThrow(text, what) {
 // list: exit 0 -> parsed record; exit 2 -> CONTENT-INVALID (a broken items.json), not a
 // crash — surfaced as content_error by the caller, never thrown. Any other exit is an
 // unexpected tool failure (500).
-async function runList(root, catalogPath, runRaw) {
-  const { code, stdout, stderr } = await runRaw(root, ["list", "--catalog", catalogPath, "--json"]);
+async function runList(root, catalogPath) {
+  const { code, stdout, stderr } = await runItemsOpsRaw(root, ["list", "--catalog", catalogPath, "--json"]);
   if (code === 0) return { ok: true, data: parseJsonOrThrow(stdout, "list") };
   if (code === 2) return { ok: false, source: "catalog", stderr: stderr.trim() };
   throw new Error(`items_ops.py list exited ${code} unexpectedly: ${stderr.trim()}`);
@@ -70,8 +70,8 @@ async function runList(root, catalogPath, runRaw) {
 // schema: same three-way shape as list, over item_fields.schema.json specifically.
 // `list` never reads the field schema (items_ops.py cmd_list), so a broken schema
 // file degrades the SCHEMA half only — items still render (spec §4 degradation).
-async function runSchema(root, schemaPath, runRaw) {
-  const { code, stdout, stderr } = await runRaw(root, ["schema", "--schema", schemaPath, "--json"]);
+async function runSchema(root, schemaPath) {
+  const { code, stdout, stderr } = await runItemsOpsRaw(root, ["schema", "--schema", schemaPath, "--json"]);
   if (code === 0) return { ok: true, data: parseJsonOrThrow(stdout, "schema") };
   if (code === 2) return { ok: false, source: "schema", stderr: stderr.trim() };
   throw new Error(`items_ops.py schema exited ${code} unexpectedly: ${stderr.trim()}`);
@@ -82,7 +82,7 @@ async function runSchema(root, schemaPath, runRaw) {
 // Exit 2 is narrower than list/schema's content_error: a missing/broken --state-schema,
 // or an explicit --baseline miss — degrades to {available:false, reason}, never
 // content_error (items/schema can still render). Any other exit is unexpected (500).
-async function runValidate(root, { catalogPath, schemaPath, stateSchemaPath, srcDirPath, baselinePath }, runRaw) {
+async function runValidate(root, { catalogPath, schemaPath, stateSchemaPath, srcDirPath, baselinePath }) {
   const args = ["validate", "--catalog", catalogPath, "--schema", schemaPath, "--state-schema", stateSchemaPath, "--src-dir", srcDirPath, "--json"];
   // --baseline is passed ONLY when the lock file actually exists; otherwise the flag is
   // OMITTED so validate still runs (its own default points at a path under
@@ -90,7 +90,7 @@ async function runValidate(root, { catalogPath, schemaPath, stateSchemaPath, src
   // rename-guard-skipped warning — never always-omit, a clean template DOES ship a
   // lock and always-omitting would fake that warning (spec §3).
   if (baselinePath) args.push("--baseline", baselinePath);
-  const { code, stdout, stderr } = await runRaw(root, args);
+  const { code, stdout, stderr } = await runItemsOpsRaw(root, args);
   if (code === 0 || code === 1) {
     const parsed = parseJsonOrThrow(stdout, "validate");
     return { available: true, ok: parsed.ok, errors: parsed.errors || [], warnings: parsed.warnings || [] };
@@ -166,7 +166,7 @@ export function routeIssues(itemIds, issues) {
 // Build the full view for one catalog from an ABSOLUTE folder path (a registered
 // game/template folder). Decoupled from the registry lookup so tests can point it at a
 // throwaway temp folder without touching workspace catalog state.
-export async function loadCatalogView(root, folderAbs, meta, { runItemsOpsRaw: runRaw = runItemsOpsRaw } = {}) {
+export async function loadCatalogView(root, folderAbs, meta) {
   const catalogPath = join(folderAbs, "content", "items.json");
   const hasItems = existsSync(catalogPath);
   const viewMeta = { ...meta, hasItems };
@@ -198,7 +198,7 @@ export async function loadCatalogView(root, folderAbs, meta, { runItemsOpsRaw: r
   // list/schema are independent subprocess calls (items_ops.py cmd_list never reads
   // the field schema) — run them concurrently; up to 3 short `py` spawns per load total
   // with validate below, well inside the "no caching needed" budget (spec §8).
-  const [listResult, schemaResult] = await Promise.all([runList(root, catalogPath, runRaw), runSchema(root, schemaPath, runRaw)]);
+  const [listResult, schemaResult] = await Promise.all([runList(root, catalogPath), runSchema(root, schemaPath)]);
 
   const lockExists = existsSync(lockPath);
   const validateResult = await runValidate(root, {
@@ -207,7 +207,7 @@ export async function loadCatalogView(root, folderAbs, meta, { runItemsOpsRaw: r
     stateSchemaPath,
     srcDirPath,
     baselinePath: lockExists ? lockPath : undefined,
-  }, runRaw);
+  });
 
   // First failure wins: a broken catalog is the more fundamental breakage: report it
   // over a (possibly also broken) schema. state_schema never lands here — only
