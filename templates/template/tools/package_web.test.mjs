@@ -23,7 +23,7 @@ import {
   verifyDependencySources,
   verifyWebPackage,
 } from "./package_web.mjs";
-import { createStoreZip, readStoreZip } from "./lib/zip_store.mjs";
+import { createStoreZip, readStoreZip } from "../../../ai_studio/core_harness/tool_lib/zip_store.mjs";
 
 const studioRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");

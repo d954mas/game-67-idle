@@ -146,18 +146,18 @@ export function findTaskboardDoc(root, rawId, options = {}) {
   }
   if (parsed.qualified) {
     const store = selectTaskboardStore(root, { activeStoreId: parsed.storeId });
-    const doc = findDoc(root, parsed.id, storeOptions(store));
+    const doc = findDoc(root, parsed.id, storeOptions(store, { includeArchive: options.includeArchive === true }));
     return doc ? { doc, store, id: parsed.id } : null;
   }
   if (options.store || options.game || options.activeStoreId || options.activeGameId) {
     const store = selectTaskboardStore(root, options);
-    const doc = findDoc(root, parsed.id, storeOptions(store));
+    const doc = findDoc(root, parsed.id, storeOptions(store, { includeArchive: options.includeArchive === true }));
     return doc ? { doc, store, id: parsed.id } : null;
   }
   const stores = taskboardStoresForQuery(root, { includePrivate: options.includePrivate === true });
   const matches = [];
   for (const store of stores) {
-    const doc = findDoc(root, parsed.id, storeOptions(store));
+    const doc = findDoc(root, parsed.id, storeOptions(store, { includeArchive: options.includeArchive === true }));
     if (doc) matches.push({ doc, store, id: parsed.id });
   }
   if (matches.length > 1) {

@@ -5,10 +5,11 @@
 // frontmatter parsing, paths, templates, mutation, and validation. Keep the
 // public facade in lib.mjs small; do not split this again without a real need.
 
-import { closeSync, existsSync, ftruncateSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, ftruncateSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
+import { findSealedTask, listSealedTasks, sealArchiveBatch } from "./archive.mjs";
 
 export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done"];
 export const EPIC_STATUSES = ["idea", "active", "done"];
@@ -80,8 +81,12 @@ function activeTaskDir(root, options = {}) {
   return join(itemDir(root, options), "active");
 }
 
-function archiveTaskDir(root, options = {}) {
+function archiveRootDir(root, options = {}) {
   return join(itemDir(root, options), "archive");
+}
+
+function archiveTaskDir(root, options = {}) {
+  return join(archiveRootDir(root, options), "pending");
 }
 
 function epicDir(root, options = {}) {
@@ -269,13 +274,42 @@ function findDocInDir(dir, kind, id, options = {}) {
   return null;
 }
 
-function findArchivedTask(root, id, options = {}) {
-  const archive = archiveTaskDir(root, options);
-  if (!existsSync(archive)) {
-    return null;
+function looseArchiveGroupDirs(root, options = {}) {
+  const archiveRoot = archiveRootDir(root, options);
+  const roots = [archiveTaskDir(root, options)];
+  if (existsSync(archiveRoot)) {
+    for (const name of readdirSync(archiveRoot)) {
+      const dir = join(archiveRoot, name);
+      if (name !== "pending" && statSync(dir).isDirectory()) roots.push(dir);
+    }
   }
-  for (const group of readdirSync(archive)) {
-    const dir = join(archive, group);
+  const groups = [];
+  for (const archive of roots) {
+    if (!existsSync(archive)) continue;
+    for (const group of readdirSync(archive)) {
+      const dir = join(archive, group);
+      if (statSync(dir).isDirectory()) groups.push(dir);
+    }
+  }
+  return groups;
+}
+
+function docFromArchiveEntry(entry) {
+  const { fields, body } = parseDoc(entry.bytes.toString("utf8"));
+  return {
+    kind: "task",
+    file: `${entry.archivePath}!/${entry.entryPath}`,
+    name: basename(entry.entryPath),
+    fields,
+    body,
+    archived: true,
+    sealed: true,
+    rev: `${statSync(entry.archivePath).mtimeMs}:${entry.entryPath}`,
+  };
+}
+
+function findArchivedTask(root, id, options = {}) {
+  for (const dir of looseArchiveGroupDirs(root, options)) {
     if (!statSync(dir).isDirectory()) {
       continue;
     }
@@ -284,21 +318,22 @@ function findArchivedTask(root, id, options = {}) {
       return doc;
     }
   }
-  return null;
+  const sealed = findSealedTask(archiveRootDir(root, options), id);
+  return sealed ? docFromArchiveEntry(sealed) : null;
+}
+
+function listLooseArchiveTasks(root, options = {}) {
+  const docs = [];
+  for (const dir of looseArchiveGroupDirs(root, options)) {
+    docs.push(...listDocs(dir, "task", { archived: true }));
+  }
+  docs.sort((a, b) => String(a.fields.id || a.name).localeCompare(String(b.fields.id || b.name)));
+  return docs;
 }
 
 function listArchiveTasks(root, options = {}) {
-  const archive = archiveTaskDir(root, options);
-  if (!existsSync(archive)) {
-    return [];
-  }
-  const docs = [];
-  for (const group of readdirSync(archive)) {
-    const dir = join(archive, group);
-    if (statSync(dir).isDirectory()) {
-      docs.push(...listDocs(dir, "task", { archived: true }));
-    }
-  }
+  const docs = [...listLooseArchiveTasks(root, options)];
+  docs.push(...listSealedTasks(archiveRootDir(root, options)).map(docFromArchiveEntry));
   docs.sort((a, b) => String(a.fields.id || a.name).localeCompare(String(b.fields.id || b.name)));
   return docs;
 }
@@ -325,10 +360,53 @@ export function findDoc(root, id, options = {}) {
     return findDocInDir(epicDir(root, options), "epic", docId);
   }
   if (docId.startsWith("T")) {
-    return findDocInDir(activeTaskDir(root, options), "task", docId) || findArchivedTask(root, docId, options);
+    return findDocInDir(activeTaskDir(root, options), "task", docId)
+      || (options.includeArchive === true ? findArchivedTask(root, docId, options) : null);
   }
-  const all = [...listProjects(root, options), ...listEpics(root, options), ...listTasks(root, { ...options, includeArchive: true })];
+  const all = [...listProjects(root, options), ...listEpics(root, options), ...listTasks(root, options)];
   return all.find((doc) => doc.fields.id === docId) || null;
+}
+
+export function sealTaskArchive(root, { name, ...options } = {}) {
+  const docs = listLooseArchiveTasks(root, options);
+  if (!docs.length) throw new Error("no pending Taskboard history to seal");
+  for (const doc of docs) {
+    if (doc.fields.status !== "done") throw new Error(`${doc.fields.id || doc.name} is not done and cannot be sealed`);
+    if (findSealedTask(archiveRootDir(root, options), doc.fields.id)) {
+      throw new Error(`${doc.fields.id} already exists in a sealed Taskboard archive`);
+    }
+  }
+  const ordered = docs.sort((left, right) => String(left.fields.id).localeCompare(String(right.fields.id)));
+  const entries = ordered.map((doc) => {
+    const epicId = String(doc.fields.epic || "").trim().split(":").at(-1);
+    const group = /^E\d+$/.test(epicId) ? epicId : "unassigned";
+    return { path: `${group}/${basename(doc.file)}`, bytes: readFileSync(doc.file) };
+  });
+  const manifest = [
+    "# Sealed Taskboard history",
+    "",
+    `Batch: ${name}`,
+    `Tasks: ${ordered.length}`,
+    "",
+    "## Tasks",
+    "",
+    ...ordered.map((doc) => `- ${doc.fields.id} | ${doc.fields.epic || "unassigned"} | ${String(doc.fields.title || "").replaceAll("|", "\\|")}`),
+    "",
+  ].join("\n");
+  entries.push({ path: "MANIFEST.md", bytes: Buffer.from(manifest, "utf8") });
+  const result = sealArchiveBatch({
+    archiveRoot: archiveRootDir(root, options),
+    name,
+    entries,
+    sourceFiles: ordered.map((doc) => doc.file),
+  });
+  const directories = [...new Set(ordered.map((doc) => dirname(doc.file)))].sort((a, b) => b.length - a.length);
+  for (const dir of directories) {
+    if (existsSync(dir) && readdirSync(dir).length === 0) rmdirSync(dir);
+  }
+  const pending = archiveTaskDir(root, options);
+  if (existsSync(pending) && readdirSync(pending).length === 0) rmdirSync(pending);
+  return result;
 }
 
 function countersPath(root, options = {}) {
@@ -617,7 +695,7 @@ export function createTask(root, input = {}, options = {}) {
   const body = input.body || TASK_BODY_TEMPLATE;
   return createAllocatedDoc(root, options, {
     dir, body, kind: "task", prefix: "T", pad: 4,
-    listDocs: () => listTasks(root, { ...options, includeArchive: true }),
+    listDocs: () => [...listTasks(root, options), ...listLooseArchiveTasks(root, options)],
     makeFields: (id) => ({
       id,
       title: input.title || "Untitled task",
@@ -924,7 +1002,7 @@ export function validateStoreDetailed(root, options = {}) {
   const problems = [];
   const projects = listProjects(root, options);
   const epics = listEpics(root, options);
-  const tasks = listTasks(root, { ...options, includeArchive: true });
+  const tasks = [...listTasks(root, options), ...listLooseArchiveTasks(root, options)];
   const seen = new Map();
   let knownQualityIds = null;
   for (const doc of [...projects, ...epics, ...tasks]) {

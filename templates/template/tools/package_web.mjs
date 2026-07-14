@@ -18,7 +18,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
 import { inspectPlatformSdkArtifact } from "../../../features/platform-sdk/scripts/artifact_tools.mjs";
-import { createStoreZip, readStoreZip } from "./lib/zip_store.mjs";
+import { createStoreZip, readStoreZip } from "../../../ai_studio/core_harness/tool_lib/zip_store.mjs";
 
 const TARGETS = new Set(["itch", "poki", "yandex", "playgama"]);
 const SOURCE_EXTENSIONS = /\.(?:c|cc|cpp|cxx|h|hh|hpp|cmake|py|ts|map|pdb|obj|o)$/i;

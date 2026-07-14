@@ -20,6 +20,7 @@ export {
   listProjects,
   listTasks,
   publicDoc,
+  sealTaskArchive,
   updateDoc,
   validateStore,
   validateStoreDetailed,

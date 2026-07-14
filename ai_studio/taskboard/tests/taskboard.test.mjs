@@ -10,8 +10,9 @@ import { URL } from "node:url";
 import vm from "node:vm";
 import {
   createTask, createEpic, createProject, listTasks,
-  listEpics, listProjects, updateDoc, findDoc, validateStore, validateStoreDetailed,
+  listEpics, listProjects, updateDoc, findDoc, sealTaskArchive, validateStore, validateStoreDetailed,
 } from "../lib.mjs";
+import { createStoreZip, readStoreZip } from "../../core_harness/tool_lib/zip_store.mjs";
 import { boardPayload, parseDoc, serializeDoc, slugify } from "../store.mjs";
 import { createTaskboardApi } from "../api.mjs";
 import {
@@ -399,7 +400,7 @@ test("Taskboard API exposes explicit project, epic, and task collections", async
   assert.match(task.data.body, /## What/);
 });
 
-test("done tasks move to archive and stay addressable by id", (t) => {
+test("done tasks stay pending until an immutable ZIP batch is sealed", (t) => {
   const root = tempRoot(t);
   createEpic(root, { title: "Epic" });
   createTask(root, {
@@ -409,11 +410,46 @@ test("done tasks move to archive and stay addressable by id", (t) => {
     body: "## Done when\n\n- [x] archived\n\n## Log\n\n- 2026-07-11: Quality: not-applicable; reason: storage behavior fixture\n",
   });
   const updated = updateDoc(root, "T0001", { fields: { status: "done", quality: { notApplicable: { reason: "storage behavior fixture" } } } });
-  assert.match(updated.file, /ai_studio[\\/]taskboard[\\/]items[\\/]archive[\\/]E001[\\/]T0001-/);
+  assert.match(updated.file, /ai_studio[\\/]taskboard[\\/]items[\\/]archive[\\/]pending[\\/]E001[\\/]T0001-/);
   assert.equal(existsSync(updated.file), true);
   assert.equal(listTasks(root).length, 0);
   assert.equal(listTasks(root, { includeArchive: true }).length, 1);
-  assert.equal(findDoc(root, "T0001").fields.status, "done");
+  assert.equal(findDoc(root, "T0001"), null, "normal reads exclude history");
+  assert.equal(findDoc(root, "T0001", { includeArchive: true }).fields.status, "done");
+
+  const sealed = sealTaskArchive(root, { name: "2026-07-14-test" });
+  assert.match(sealed.file, /2026-07-14-test\.zip$/);
+  assert.equal(existsSync(updated.file), false, "verified sources are removed after sealing");
+  const entries = readStoreZip(sealed.file);
+  assert.deepEqual([...entries.keys()], ["E001/T0001-archive-me.md", "MANIFEST.md"]);
+  assert.match(entries.get("E001/T0001-archive-me.md").toString("utf8"), /status: done/);
+  assert.match(entries.get("MANIFEST.md").toString("utf8"), /T0001.*Archive me/);
+  assert.equal(findDoc(root, "T0001"), null);
+  assert.equal(findDoc(root, "T0001", { includeArchive: true }).fields.status, "done");
+
+  const normalShow = runCliDirect(root, "show", "T0001", "--json");
+  assert.equal(normalShow.status, 1);
+  assert.match(normalShow.stderr, /no doc with id T0001/);
+  const archiveShow = runCliDirect(root, "show", "T0001", "--archive", "--json");
+  assert.equal(archiveShow.status, 0, archiveShow.stderr);
+  assert.equal(JSON.parse(archiveShow.stdout).doc.id, "T0001");
+});
+
+test("archive sealing refuses overwrite before deleting pending sources", (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Keep me safe",
+    status: "todo",
+    body: "## Done when\n\n- [x] safe\n\n## Log\n",
+  });
+  const updated = updateDoc(root, "T0001", { fields: { status: "done", quality: { notApplicable: { reason: "fixture" } } } });
+  const archiveRoot = join(root, "ai_studio", "taskboard", "items", "archive");
+  writeFileSync(join(archiveRoot, "occupied.zip"), createStoreZip([
+    { path: "MANIFEST.md", bytes: Buffer.from("# Existing archive\n") },
+  ]));
+
+  assert.throws(() => sealTaskArchive(root, { name: "occupied" }), /already exists/);
+  assert.equal(existsSync(updated.file), true, "refused sealing cannot lose pending history");
 });
 
 test("cli list hides ideas by default and shows them explicitly", (t) => {
@@ -797,7 +833,7 @@ test("taskboard cli help exits successfully and documents commands", () => {
   ]) {
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|profile\|new\|set\|validate\|help>/);
+    assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|archive\|profile\|new\|set\|validate\|help>/);
     assert.match(result.stdout, /new project --title/);
     assert.match(result.stdout, /summary \[--json\]/);
     assert.match(result.stdout, /validate \[--json\]/);
@@ -808,7 +844,7 @@ test("taskboard cli rejects unrelated core commands", () => {
   const result = runCliDirect(process.cwd(), "workflow-run");
 
   assert.notEqual(result.status, 0);
-  assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|profile\|new\|set\|validate\|help>/);
+  assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|archive\|profile\|new\|set\|validate\|help>/);
   assert.doesNotMatch(result.stdout, /workflow-run/);
 });
 
@@ -1141,7 +1177,7 @@ test("reopening a task clears its structured quality and requires a new decision
   const root = tempRoot(t, { qualityCatalog: true });
   createTask(root, { title: "Reopen", status: "review", body: "## Done when\n\n- [x] done\n\n## Log\n" });
   updateDoc(root, "T0001", { fields: { status: "done", quality: { checks: [{ id: "QTECH_001", outcome: "pass", evidence: "first cycle" }] } } });
-  const reopened = updateDoc(root, "T0001", { fields: { status: "review" } });
+  const reopened = updateDoc(root, "T0001", { fields: { status: "review" } }, { includeArchive: true });
   assert.equal(Object.hasOwn(reopened.fields, "quality"), false);
   assert.throws(
     () => updateDoc(root, "T0001", { fields: { status: "done" } }),
@@ -1162,7 +1198,7 @@ test("taskboard cli appends passing structured closeout log lines before updateD
     "--quality", "QCLR_001=pass; QTECH_001=pass", "--quality-evidence", "QCLR_001=scope review; QTECH_001=tests", "--json");
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  const closed = findDoc(root, "T0001");
+  const closed = findDoc(root, "T0001", { includeArchive: true });
   assert.match(closed.body, /Closure: waived; reason: criterion superseded; evidence: E001 decision/);
   assert.deepEqual(closed.fields.quality, { checks: [
     { id: "QCLR_001", outcome: "pass", evidence: "scope review" },
@@ -1208,8 +1244,8 @@ test("taskboard cli appends a structured quality not-applicable decision", (t) =
   const result = runCliDirect(root, "set", "T0001", "--status", "done", "--quality-not-applicable", "documentation-only", "--json");
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
-  assert.deepEqual(findDoc(root, "T0001").fields.quality, { notApplicable: { reason: "documentation-only" } });
-  assert.match(findDoc(root, "T0001").body, /Quality: not-applicable; reason: documentation-only/);
+  assert.deepEqual(findDoc(root, "T0001", { includeArchive: true }).fields.quality, { notApplicable: { reason: "documentation-only" } });
+  assert.match(findDoc(root, "T0001", { includeArchive: true }).body, /Quality: not-applicable; reason: documentation-only/);
 });
 
 test("Taskboard API guards raw final task body and returns the machine problem", async (t) => {
@@ -1242,7 +1278,7 @@ test("updateDoc checks archive move conflicts before rewriting source", (t) => {
     body: "## What\n\nKeep source stable.\n\n## Done when\n\n- [x] source unchanged on move conflict\n\n## Log\n\n- 2026-07-11: Quality: not-applicable; reason: storage conflict fixture\n",
   });
   const original = readFileSync(task.file, "utf8");
-  const archiveDir = join(root, "ai_studio", "taskboard", "items", "archive", "E001");
+  const archiveDir = join(root, "ai_studio", "taskboard", "items", "archive", "pending", "E001");
   mkdirSync(archiveDir, { recursive: true });
   writeFileSync(join(archiveDir, "T0001-conflict-move.md"), "existing archive task\n");
 
@@ -1266,7 +1302,7 @@ test("updateDoc archives an unsafe epic reference under unassigned", (t) => {
     fields: { status: "done", quality: { notApplicable: { reason: "path safety fixture" } } },
   });
 
-  const expected = join(root, "ai_studio", "taskboard", "items", "archive", "unassigned", basename(task.file));
+  const expected = join(root, "ai_studio", "taskboard", "items", "archive", "pending", "unassigned", basename(task.file));
   assert.equal(updated.file, expected);
   assert.equal(existsSync(expected), true);
 });
@@ -1284,7 +1320,7 @@ test("updateDoc maps a qualified epic reference to its canonical archive group",
     fields: { status: "done", quality: { notApplicable: { reason: "qualified path fixture" } } },
   });
 
-  const expected = join(root, "ai_studio", "taskboard", "items", "archive", "E007", basename(task.file));
+  const expected = join(root, "ai_studio", "taskboard", "items", "archive", "pending", "E007", basename(task.file));
   assert.equal(updated.file, expected);
   assert.equal(existsSync(expected), true);
 });
@@ -1300,7 +1336,8 @@ test("updateDoc prepares the archive destination before rewriting source", (t) =
   const original = readFileSync(task.file, "utf8");
   const archiveRoot = join(root, "ai_studio", "taskboard", "items", "archive");
   mkdirSync(archiveRoot, { recursive: true });
-  writeFileSync(join(archiveRoot, "E001"), "not a directory\n");
+  mkdirSync(join(archiveRoot, "pending"), { recursive: true });
+  writeFileSync(join(archiveRoot, "pending", "E001"), "not a directory\n");
 
   assert.throws(
     () => updateDoc(root, task.fields.id, {
@@ -1334,7 +1371,7 @@ test("concurrent close never resurrects an active task beside its archive", asyn
 
   assert.equal(results.some(({ ok }) => ok), true);
   const active = join(root, "ai_studio", "taskboard", "items", "active");
-  const archived = join(root, "ai_studio", "taskboard", "items", "archive", "E001");
+  const archived = join(root, "ai_studio", "taskboard", "items", "archive", "pending", "E001");
   assert.equal(readdirSync(active).filter((name) => name.endsWith(".md")).length, 0);
   assert.equal(readdirSync(archived).filter((name) => name.endsWith(".md")).length, 1);
   assert.equal(listTasks(root, { includeArchive: true }).filter((task) => task.fields.id === "T0001").length, 1);

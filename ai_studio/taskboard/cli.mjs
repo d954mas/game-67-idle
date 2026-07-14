@@ -3,7 +3,8 @@
 //
 //   node ai_studio/taskboard/cli.mjs list [--json] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
 //   node ai_studio/taskboard/cli.mjs summary [--json] [--tasks-limit 5]
-//   node ai_studio/taskboard/cli.mjs show T0001 [--json]
+//   node ai_studio/taskboard/cli.mjs show T0001 [--archive] [--json]
+//   node ai_studio/taskboard/cli.mjs archive seal --name 2026-07-closeout [--json]
 //   node ai_studio/taskboard/cli.mjs new project --title "..." [--kind ai-studio|game|template|tooling|research|other] [--target ai_studio]
 //   node ai_studio/taskboard/cli.mjs new epic --title "..." [--project P001] [--status active]
 //   node ai_studio/taskboard/cli.mjs new task --title "..." [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
@@ -18,7 +19,7 @@
 import {
   agentEpicRow, agentProjectRow, agentTaskRow,
   findRoot, listTasks, listEpics, listProjects, findDoc, createTask, createEpic, createProject,
-  updateDoc,
+  sealTaskArchive, updateDoc,
 } from "./lib.mjs";
 import { ACTIVE_TASK_STATUSES, canonicalQualityAssignments, idNumber, parseQualityAssignments, TASK_STATUSES, taskRank } from "./store.mjs";
 import {
@@ -34,13 +35,14 @@ import {
 import { relative } from "node:path";
 import { isMain } from "../core_harness/tool_lib/cli.mjs";
 
-const USAGE = `usage: cli.mjs <list|summary|context|show|profile|new|set|validate|help> ...
+const USAGE = `usage: cli.mjs <list|summary|context|show|archive|profile|new|set|validate|help> ...
 
 Commands:
   list [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
   summary [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 5]
   context [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 5]
-  show <P###|E###|T####|store:id> [--json] [--store studio|game:<id>] [--game <id>] [--include-private]
+  show <P###|E###|T####|store:id> [--archive] [--json] [--store studio|game:<id>] [--game <id>] [--include-private]
+  archive seal --name <immutable-batch-name> [--json] [--store studio|game:<id>] [--game <id>]
   profile [--json]
   new project --title "..." [--store studio|game:<id>] [--game <id>] [--kind ai-studio|game|template|tooling|research|other] [--target path] [--tags a,b]
   new epic --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--status active] [--tags a,b]
@@ -73,6 +75,7 @@ function storeQueryArgs(args) {
     store: typeof args.store === "string" ? args.store : "",
     game: typeof args.game === "string" ? args.game : "",
     includePrivate: args["include-private"] === true,
+    includeArchive: args.archive === true,
   };
 }
 
@@ -371,6 +374,35 @@ export function main(argv, {
       writeLine(`${k}: ${Array.isArray(v) ? v.join(", ") : v}`);
     }
     writeLine("\n" + doc.body);
+    break;
+  }
+  case "archive": {
+    const action = args._[0];
+    if (action !== "seal") failCommand("usage: archive seal --name <immutable-batch-name>");
+    const name = textOption(args.name);
+    if (!name) failCommand("--name is required");
+    let store;
+    try {
+      store = mutationStore(root, storeQueryArgs(args));
+    } catch (err) {
+      failCommand(err.message);
+    }
+    let result;
+    try {
+      result = sealTaskArchive(root, { ...storeOptions(store), name });
+    } catch (err) {
+      failCommand(err.message);
+    }
+    const payload = {
+      ok: true,
+      storeId: store.storeId,
+      file: relative(root, result.file).replaceAll("\\", "/"),
+      entries: result.entries,
+      bytes: result.bytes,
+      sha256: result.sha256,
+    };
+    if (args.json) writeJson(payload);
+    else writeLine(`sealed ${payload.entries} tasks: ${payload.file} (${payload.sha256})`);
     break;
   }
   case "new": {

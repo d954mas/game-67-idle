@@ -1,7 +1,7 @@
 ---
 id: E001
 title: Pipeline lean cleanup
-status: done
+status: active
 project: P001
 priority: P2
 tags: []
@@ -45,3 +45,4 @@ content. Green checks should mean a real artifact exists.
   (lead's live AGENTS.md concept edits + native-PC invariant now concept-variable).
   T0010 deferred (post-prototype style-lock). Net: 7/9 done, 2 closed-with-reason.
 - 2026-07-14: Closed after full AI Studio refactor follow-up, test optimization, architecture cleanup, and Taskboard grooming; no live child tasks remain.
+- 2026-07-14: Reopened for the approved sealed ZIP task-history change that removes archived Markdown from normal repository search.
