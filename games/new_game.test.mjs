@@ -116,11 +116,11 @@ function tempRepo() {
   return root;
 }
 
-test("new_game copies template and registers game assets in AI Studio", (t) => {
+test("new_game --visibility public copies template and registers game assets in AI Studio", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const output = execFileSync(process.execPath, [script, "--root", root, "--id", "test-game"], { encoding: "utf8" });
+  const output = execFileSync(process.execPath, [script, "--root", root, "--id", "test-game", "--visibility", "public"], { encoding: "utf8" });
 
   assert.match(output, /new game 'test-game' created/);
   assert.match(output, /registered assets: ai_studio\/workspace\/catalog\.json -> games\/test-game\/assets/);
@@ -182,10 +182,9 @@ test("new_game rejects a dependency seed version that drifts from feature metada
   assert.equal(existsSync(join(root, "games", "test-game")), false);
 });
 
-test("new_game --private creates a nested private game without public Studio writes", (t) => {
+test("new_game --visibility private creates a nested private game without public Studio writes", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
 
   const output = execFileSync(process.execPath, [
     script,
@@ -193,7 +192,8 @@ test("new_game --private creates a nested private game without public Studio wri
     root,
     "--id",
     "secret-game",
-    "--private",
+    "--visibility",
+    "private",
     "--public-alias",
     "Private Slot",
   ], { encoding: "utf8" });
@@ -228,53 +228,14 @@ test("new_game --private creates a nested private game without public Studio wri
   assert.match(readFileSync(join(root, ".git", "info", "exclude"), "utf8"), /games\/secret-game\//);
 });
 
-test("new_game --visibility public explicitly creates a tracked public game", (t) => {
-  const root = tempRepo();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-
-  const output = execFileSync(process.execPath, [
-    script,
-    "--root",
-    root,
-    "--id",
-    "test-game",
-    "--visibility",
-    "public",
-  ], { encoding: "utf8" });
-
-  assert.match(output, /new game 'test-game' created/);
-
-  const workspace = JSON.parse(readFileSync(join(root, "games", "test-game", ".ai_studio", "workspace.json"), "utf8"));
-  assert.equal(workspace.visibility, "public");
-
-  const registry = JSON.parse(readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8"));
-  assert.deepEqual(registry.mounts.map((mount) => mount.root), ["games/test-game", "templates/template"]);
-  assert.equal(existsSync(join(taskboardItems(root), "projects", "P001-test-game.md")), true);
-  assert.equal(existsSync(join(root, ".vscode", "tasks.json")), true);
+test("new_game defaults omitted visibility to public for backward compatibility", () => {
+  const args = parseArgs(["--id", "test-game"]);
+  assert.equal(resolveVisibility(args), "public");
 });
 
-test("new_game --visibility private creates a nested private game without public Studio writes", (t) => {
-  const root = tempRepo();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
-
-  const output = execFileSync(process.execPath, [
-    script,
-    "--root",
-    root,
-    "--id",
-    "secret-game",
-    "--visibility",
-    "private",
-  ], { encoding: "utf8" });
-
-  assert.match(output, /new private game 'secret-game' created/);
-
-  const workspace = JSON.parse(readFileSync(join(root, "games", "secret-game", ".ai_studio", "workspace.json"), "utf8"));
-  assert.equal(workspace.visibility, "private");
-  assert.equal(existsSync(join(root, "games", "games.json")), false);
-  assert.equal(existsSync(join(taskboardItems(root), "projects", "P001-secret-game.md")), false);
-  assert.equal(existsSync(join(root, ".vscode", "tasks.json")), false);
+test("new_game --private remains a compatibility alias for private visibility", () => {
+  const args = parseArgs(["--id", "secret-game", "--private"]);
+  assert.equal(resolveVisibility(args), "private");
 });
 
 test("new_game --require-visibility rejects missing public or private choice", () => {
@@ -309,7 +270,6 @@ test("new_game rejects public aliases outside private visibility", () => {
 test("new_game --private rejects public game id collisions", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
   mkdirSync(join(root, "games", "secret-game"), { recursive: true });
   writeFileSync(join(root, "games", "secret-game", "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: "secret-game", title: "Public", storageNamespace: "secret-game" }), "utf8");
   writeFileSync(join(root, "games", "secret-game", "dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }), "utf8");
@@ -327,7 +287,6 @@ test("new_game --private rejects public game id collisions", (t) => {
 test("new_game --private --replace refuses parent-tracked target roots before copying", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
   mkdirSync(join(root, "games", "secret-game"), { recursive: true });
   writeFileSync(join(root, "games", "secret-game", "CMakeLists.txt"), "tracked parent file\n", "utf8");
   execFileSync("git", ["add", "games/secret-game/CMakeLists.txt"], { cwd: root, stdio: "ignore" });
@@ -350,7 +309,6 @@ test("new_game --private --replace refuses parent-tracked target roots before co
 test("new_game --private replacement replaces an invalid old nested git directory transactionally", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
   mkdirSync(join(root, "games", "secret-game", ".git"), { recursive: true });
   writeFileSync(join(root, "games", "secret-game", "CMakeLists.txt"), "existing private file\n", "utf8");
 
