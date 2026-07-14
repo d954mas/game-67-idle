@@ -36,7 +36,8 @@ old JSON/schema/parser path without a compatibility fallback.
       semantic editing only after Lua source spans/write refusal are proven.
 - [ ] No code reads both Lua and JSON, and rollback is defined only before the
       cutover; after cutover version control is the rollback.
-- [ ] Windows/Linux full CI and agreed performance budgets pass before closing.
+- [ ] Windows/Linux full CI passes and focused timing shows no unexplained
+      regression; final performance-budget ratification belongs to T0380.
 
 ## Open questions
 

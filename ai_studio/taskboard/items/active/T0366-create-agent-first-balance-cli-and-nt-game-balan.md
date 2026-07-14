@@ -1,6 +1,6 @@
 ---
 id: T0366
-title: Create focused Items and Balance CLI plus agent skill routing
+title: Create focused Items CLI and agent skill routing
 status: backlog
 project: P001
 epic: E016
@@ -14,8 +14,8 @@ updated: 2026-07-14
 
 Expose the shared evaluator/snapshot through compact semantic operations so an
 agent and developer UI use one inspect/edit/validate/build contract without
-loading the whole package. Keep `nt-game-items` for the Items domain and create
-a short Balance router only for non-Items balance workflows.
+loading the whole package. Keep `nt-game-items` as the single router for this
+Items-owned scope.
 
 ## Done when
 
@@ -42,8 +42,9 @@ a short Balance router only for non-Items balance workflows.
 - [ ] Developer UI and AI invoke the same semantic ops. Formula/helper/control
       flow edits route to source or `Edit with agent`; no arbitrary Lua writer
       is introduced.
-- [ ] Skills remain short routers and do not duplicate Lua API, schema, numeric
-      policy, or game data.
+- [ ] `nt-game-items` remains a short router and does not duplicate Lua API,
+      schema, numeric policy, or game data; no speculative Balance router is
+      created by this task.
 - [ ] Benchmarks report command count, latency, file reads, stdout/context bytes,
       and diagnostic quality for representative item edits.
 
@@ -53,6 +54,9 @@ a short Balance router only for non-Items balance workflows.
   restricted semantic writing is required target behavior, not optional scope.
 
 ## Log
+
+- 2026-07-14: Removed the speculative separate Balance router; the current
+  vertical and CLI are Items-owned.
 
 - 2026-07-10: Re-scoped after Items became canonical Lua rather than an external
   JSON source joined by a separate Balance CLI.

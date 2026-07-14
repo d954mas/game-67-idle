@@ -1,53 +1,42 @@
 ---
 id: T0323
-title: "template web delivery parity: package_web.sh + web-load-smoke + scenarios skeleton"
+title: "Add packaged-web browser load smoke to the template release flow"
 status: backlog
 project: P001
 epic: E009
 priority: P1
-tags: [template, web, release, smoke, vibejam-retro]
+tags: [template, web, release, smoke]
 created: 2026-07-06
 updated: 2026-07-14
 ---
 
 ## What
 
-Lead directive 2026-07-06: every jam-proven delivery fix must live in the
-template so a new game gets it out of the box. Parity audit vs the retired prototype:
-template has NO tools/ dir at all (no package_web.sh, dev_rebuild.sh,
-run_tests.sh) and devapi/ lacks scenarios.py. Wasm link flags + glad/stb
-native-only guard were ported to template CMakeLists 2026-07-06 (unverified
-under emscripten — no wasm build dir for template yet).
-
-Web-load-smoke (lead: "нужен"): jam submission worked only on 2nd-3rd try;
-load errors were visible in the browser console — catchable automatically.
+The template now has cross-platform `tools/game.mjs`, deterministic web build,
+ZIP packaging/verification, serving, DevAPI smoke helpers, and scenario hooks.
+The remaining jam-proven gap is exercising the packaged artifact in a real
+browser before release; prior failures were visible in the console and first
+frame.
 
 ## Done when
 
-- [ ] templates/template/tools/: package_web.sh (build wasm-release, copy pack,
-      zip) + dev_rebuild.sh + run_tests.sh ported and genericized from
-      the retired prototype.
-- [ ] Web-load-smoke wired into package_web.sh: serve zip contents via
-      http.server, headless Chrome (--headless=new, SwiftShader per
-      web-wasm-headless-verify), FAIL on console errors; first-frame
-      pixel-health check (not black).
-- [ ] templates/template/devapi/scenarios.py skeleton (scenario hooks pattern
-      from the retired prototype) so arc-smoke gates have a place to live in new games.
-- [ ] Template wasm-release configure+build passes with the ported CMake flags.
+- [ ] One `tools/game.mjs` release command builds and packages, reopens the ZIP,
+      serves only its contents, and launches the supported headless browser.
+- [ ] Smoke fails on page/console/resource errors, missing runtime readiness, or
+      a blank/black first frame, and reports one compact diagnostic.
+- [ ] Tests cover success and each failure class without requiring WSL; Windows
+      is the canonical agent entry point and Linux uses the same Node command.
+- [ ] A real template wasm-release package passes the smoke in CI.
 
 ## Open questions
 
-- Smoke cadence: every package_web run (confirmed needed by lead); arc-smoke
-  gate placement (per-task done vs release-only) still undecided.
+- Smoke runs for release packaging, not for ordinary native/unit checks.
 
 ## Log
 
-- 2026-07-06: created from VibeJam retro walkthrough (plan item 1 + template
-  parity directive). CMake wasm flags + glad/stb guard already ported; native
-  template build verified, emscripten build NOT yet verified.
-
-- 2026-07-07: T0333 (613afce55) забрал себе общий фундамент: сборка+копия
-  пака = templates/template/tools/build_web.sh (package_web.sh здесь должен
-  его ВЫЗЫВАТЬ и добавлять только zip), сервер = tools/serve_web.mjs
-  (web-load-smoke строить поверх него), туда же передан debug.html
-  (диагностический шелл). Не пере-реализовывать build+copy в package_web.sh.
+- 2026-07-14: Removed already delivered shell/script/scenario scope. The card
+  now owns only the missing packaged-artifact browser proof.
+- 2026-07-07: T0333 delivered the shared build/copy/server foundation used by
+  the current Node tools; this task must extend it rather than reimplement it.
+- 2026-07-06: Captured after a jam artifact loaded only on later attempts while
+  browser console errors exposed the failure.

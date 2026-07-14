@@ -1,6 +1,6 @@
 ---
 id: E016
-title: Balance Workbench and single-source Items Lua
+title: Items Lua authoring and Workbench
 status: active
 project: P001
 priority: P2
@@ -12,9 +12,9 @@ updated: 2026-07-14
 ## Goal
 
 Create a local, agent-first design/build module that lets a game author item
-definitions, formulas, bounded level tables, scenarios, requirements, and graph
-views in modular Lua, then produces deterministic focused views and a compact
-typed runtime package.
+definitions, formulas, bounded level tables, requirements, and focused views in
+modular Lua, then produces a deterministic Workbench and compact typed runtime
+package.
 
 The complete reviewed Items concept with code examples is:
 `features/items-core/docs/items_lua_single_source_concept_2026-07-10.md`.
@@ -198,9 +198,9 @@ and speculative analytics are not current scope.
    isolated evaluator/module loader.
 2. `T0381`: add phased registration, typed refs, and release receipts.
 3. `T0383`: produce one normalized Snapshot with provenance and bounded queries.
-4. In parallel after Snapshot: `T0365` builds the compact runtime catalog,
-   `T0366` provides focused read/build operations, and `T0384` adds requirements
-   plus deterministic diagnostics.
+4. In parallel after Snapshot: `T0365` builds the compact runtime catalog and
+   `T0366` provides focused read/build operations. Requirements and their
+   structured diagnostics are part of `T0383`.
 5. `T0386`: switch Items consumers to Lua/Snapshot once and delete the JSON
    authoring path without compatibility fallback.
 6. `T0316`: move the accepted Viewer onto Snapshot, then add the bounded
@@ -268,6 +268,10 @@ are excluded from the proof.
 - Value-only remote overrides in v1.
 
 ## Log
+
+- 2026-07-14: Renamed to the actual Items-only boundary and folded the small
+  T0384 requirements/result layer into Snapshot instead of keeping a separate
+  pseudo-subsystem.
 
 - 2026-07-14: Taskboard grooming split runtime/state work into E019, merged
   duplicate backend/policy/migration/Workbench cards into their real owners,

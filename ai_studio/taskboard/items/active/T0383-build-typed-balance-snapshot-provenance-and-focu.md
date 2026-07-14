@@ -29,14 +29,22 @@ for C export, Viewer, requirements, and agents.
       snapshots without creating a new source of truth.
 - [ ] Source output promises location/span/snippet and computed rows, not a
       fabricated symbolic representation of arbitrary Lua closures.
-- [ ] Tests distinguish authoring rows, runtime-baked rows, chart points, 1000
-      default materialization, and 1M evaluator stress.
+- [ ] Pure named requirements produce stable severity and structured evidence,
+      run without manually duplicated dependency truth, and support an explicit
+      reviewed waiver record.
+- [ ] Normalization rejects non-finite/unsafe values and preserves stable source
+      locations/codes; deterministic math behavior is proven on Windows/Linux.
+- [ ] Tests distinguish authoring rows, runtime-baked rows, chart points, and
+      the 1000-row default. Larger stress sizes are selected by T0380 profiling.
 
 ## Open questions
 
 - Select shard/index format only after benchmark evidence.
 
 ## Log
+
+- 2026-07-14: Absorbed the bounded requirements/diagnostics outcome from T0384;
+  sandbox limits remain T0382 and runtime conversion remains T0365.
 
 - 2026-07-10: Re-scoped from joined JSON/Balance projection to the single-source
   Items Snapshot and honest formula/source capabilities.

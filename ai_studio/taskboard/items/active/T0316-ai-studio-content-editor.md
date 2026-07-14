@@ -36,7 +36,7 @@ The full contract is E016 plus
 
 ## Done when
 
-- [ ] Viewer shows the catalog of every registered game/template with icons and
+- [x] Viewer shows the catalog of every registered game/template with icons and
       no per-game JavaScript data model.
 - [ ] After T0386 it reads bounded focused Snapshot queries from Items Lua; no
       consumer parses `items.json` or recalculates game math.
@@ -52,14 +52,16 @@ The full contract is E016 plus
 
 ## Open questions
 
-- T0364 must prove the stable-core/generated-typed-block contract before the UI
-  fixes a representation for arbitrary game fields.
 - This task owns exact chart/grid/diff/what-if interaction and payload budgets.
 - T0386 owns the one-shot JSON/schema/parser deletion and backend switch.
 - T0366 and this task own restricted semantic editing; arbitrary Lua write-back stays
   out of scope.
 
 ## Log
+
+- 2026-07-14: Marked the already accepted phase-1 Viewer criterion complete and
+  removed the stale T0364 prerequisite; remaining criteria start at Snapshot
+  cutover and Workbench behavior.
 
 - 2026-07-14: Moved from E009 to E016 and absorbed T0367. One Workbench card now
   owns grid/chart/diff/what-if and shared semantic editing instead of a separate

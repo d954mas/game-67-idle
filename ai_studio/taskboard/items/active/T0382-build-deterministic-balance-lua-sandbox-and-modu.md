@@ -1,7 +1,7 @@
 ---
 id: T0382
 title: Build isolated deterministic Items and Balance Lua sandbox
-status: backlog
+status: todo
 project: P001
 epic: E016
 priority: P0
@@ -45,3 +45,4 @@ ratified Items declaration contract and representative backend benchmark.
 
 - 2026-07-10: Tightened after red-team findings on `pairs`, mutable closures,
   libm differences, LuaJIT hooks, and stale incremental results.
+- 2026-07-14: Selected as the next risk-first task after full active-card grooming; it is the first dependency of the E016 authoring vertical.

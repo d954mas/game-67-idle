@@ -47,3 +47,5 @@ content. Green checks should mean a real artifact exists.
 - 2026-07-14: Closed after full AI Studio refactor follow-up, test optimization, architecture cleanup, and Taskboard grooming; no live child tasks remain.
 - 2026-07-14: Reopened for the approved sealed ZIP task-history change that removes archived Markdown from normal repository search.
 - 2026-07-14: Closed after sealed ZIP history shipped, all loose archive Markdown migrated, and independent review plus full verification passed.
+- 2026-07-14: Reopened for the agreed final grooming of remaining active Taskboard cards after sealed-history rollout.
+- 2026-07-14: Remaining active-card grooming completed: zero review tasks, one selected todo, duplicates merged, completed work sealed.
