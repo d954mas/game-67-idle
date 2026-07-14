@@ -114,9 +114,10 @@ mutable globals, and formula upvalues are absent.
 
 The manifest allowlists module names and files; entries are sorted before
 evaluation, module exports are read-only, and `items.define` deep-copies its
-input. Instruction, recursion, memory, wall-time, output-row, and output-byte
-budgets fail as structured `items.lua.error.v1` diagnostics. Successful output
-is canonical `items.lua.evaluation.v1` JSON with the backend fingerprint.
+input. Source-byte, instruction, recursion, memory, wall-time, output-row, and
+output-byte budgets fail as structured `items.lua.error.v1` diagnostics.
+Successful output is canonical `items.lua.evaluation.v1` JSON with the backend
+fingerprint.
 
 Lua 5.4 was selected over bundled LuaJIT 2.1 on the representative
 currency/fixed-sword/levelled-sword workload: both exposed the required hooks,

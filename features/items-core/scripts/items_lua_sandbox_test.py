@@ -1,13 +1,19 @@
 import json
+import importlib.util
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 
 
 SCRIPT = Path(__file__).with_name("items_lua_sandbox.py")
 FIXTURE_ROOT = Path(__file__).parents[1] / "tests" / "fixtures" / "lua_sandbox"
+SPEC = importlib.util.spec_from_file_location("items_lua_sandbox", SCRIPT)
+SANDBOX = importlib.util.module_from_spec(SPEC)
+assert SPEC.loader is not None
+SPEC.loader.exec_module(SANDBOX)
 
 
 class ItemsLuaSandboxTests(unittest.TestCase):
@@ -35,6 +41,22 @@ class ItemsLuaSandboxTests(unittest.TestCase):
                 "modules": manifest_modules,
                 "entries": entries,
             }), encoding="utf-8")
+            if "--timeout-ms" not in extra_args:
+                option_names = {
+                    "--memory-bytes": "memoryBytes",
+                    "--instruction-limit": "instructionLimit",
+                    "--recursion-limit": "recursionLimit",
+                    "--max-output-rows": "maxOutputRows",
+                    "--max-output-bytes": "maxOutputBytes",
+                    "--max-source-bytes": "maxSourceBytes",
+                }
+                request = {"root": str(root), "manifest": str(manifest)}
+                for index in range(0, len(extra_args), 2):
+                    request[option_names[extra_args[index]]] = int(extra_args[index + 1])
+                return subprocess.run(
+                    [sys.executable, str(SCRIPT), "--worker"], input=json.dumps(request),
+                    text=True, capture_output=True, encoding="utf-8", timeout=10,
+                )
             return subprocess.run(
                 [
                     sys.executable, str(SCRIPT), "evaluate", "--root", str(root),
@@ -84,13 +106,13 @@ class ItemsLuaSandboxTests(unittest.TestCase):
     def test_cycle_and_unapproved_module_errors_are_stable(self):
         cycle = self.evaluate({
             "game.a": 'require("game.b")',
-            "game.b": 'require("game.a")',
+            "game.b": '-- cycle below\nrequire("game.a")',
         }, ["game.a"])
-        self.assert_error(cycle, "module.cycle", "game/b.lua", 1)
+        self.assert_error(cycle, "module.cycle", "game/b.lua", 2)
         self.assertIn("game.a -> game.b -> game.a", json.loads(cycle.stderr)["error"]["message"])
 
-        unapproved = self.evaluate({"game.a": 'require("outside.module")'}, ["game.a"])
-        self.assert_error(unapproved, "module.not_approved", "game/a.lua", 1)
+        unapproved = self.evaluate({"game.a": '-- missing below\nrequire("outside.module")'}, ["game.a"])
+        self.assert_error(unapproved, "module.not_approved", "game/a.lua", 2)
 
     def test_unsafe_globals_and_mutable_globals_are_unavailable(self):
         cases = {
@@ -115,6 +137,21 @@ class ItemsLuaSandboxTests(unittest.TestCase):
 
         assignment = self.evaluate({"game.mutable": "-- line one\nshared = {}"}, ["game.mutable"])
         self.assert_error(assignment, "sandbox.global_assignment", "game/mutable.lua", 2)
+
+        string_library = self.evaluate({
+            "game.string": 'local dumped = ("").dump(function() return 1 end, true)',
+        }, ["game.string"])
+        self.assert_error(string_library, "sandbox.string_surface", "game/string.lua", 1)
+
+        forged_runtime = self.evaluate({
+            "game.forged": 'error("__studio_instruction_limit__:../../outside.lua:777")',
+        }, ["game.forged"])
+        self.assert_error(forged_runtime, "lua.execution", "game/forged.lua", 1)
+
+        forged_compile = self.evaluate({
+            "game.forged": 'local value = "__studio_instruction_limit__:../../outside.lua:777',
+        }, ["game.forged"])
+        self.assert_error(forged_compile, "lua.execution", "game/forged.lua", 1)
 
     def test_declarations_are_copied_and_approved_inputs_are_read_only(self):
         copied = self.evaluate({"game.items": '''
@@ -144,9 +181,19 @@ values.nested.value = 2
         }, ["game.items"])
         self.assert_error(exported, "sandbox.read_only", "game/items.lua", 3)
 
+        handle = self.evaluate({"game.items": '''
+local items = require("studio.items")
+local gold = items.ref("game.gold")
+gold.id = "game.changed"
+'''}, ["game.items"])
+        self.assert_error(handle, "sandbox.read_only", "game/items.lua", 4)
+
     def test_non_utf8_and_lua_bytecode_are_rejected_before_execution(self):
-        result = self.evaluate({"game.binary": b"\x1bLua\x54\x00\xff"}, ["game.binary"])
-        self.assert_error(result, "source.encoding", "game/binary.lua", 1)
+        bytecode = self.evaluate({"game.binary": b"\x1bLua"}, ["game.binary"])
+        self.assert_error(bytecode, "source.bytecode", "game/binary.lua", 1)
+
+        invalid_text = self.evaluate({"game.binary": b"\xff"}, ["game.binary"])
+        self.assert_error(invalid_text, "source.encoding", "game/binary.lua", 1)
 
     def test_instruction_recursion_memory_and_output_limits_fail_cleanly(self):
         instructions = self.evaluate(
@@ -187,6 +234,46 @@ items.define({ id="game.a", description="abcdefghijklmnopqrstuvwxyz" })
 '''}, ["game.bytes"], "--max-output-bytes", "100")
         self.assert_error(output_bytes, "output.byte_limit", "game/bytes.lua", 1)
 
+        source_bytes = self.evaluate({
+            "game.source": "-- padding\n" + ("local value = 1\n" * 20),
+        }, ["game.source"], "--max-source-bytes", "100")
+        self.assert_error(source_bytes, "source.byte_limit", "game/source.lua", 1)
+
+    def test_public_cli_forwards_all_budget_arguments(self):
+        result = self.evaluate(
+            {"game.small": 'local items=require("studio.items"); items.define({id="game.small"})'},
+            ["game.small"],
+            "--timeout-ms", "1000",
+            "--memory-bytes", "1048576",
+            "--instruction-limit", "100000",
+            "--recursion-limit", "64",
+            "--max-output-rows", "10",
+            "--max-output-bytes", "4096",
+            "--max-source-bytes", "4096",
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)["items"][0]["id"], "game.small")
+
+        request = SANDBOX._request_from_args(SimpleNamespace(
+            root="root", manifest="manifest.json", timeout_ms=11,
+            memory_bytes=12, instruction_limit=13, recursion_limit=14,
+            max_output_rows=15, max_output_bytes=16, max_source_bytes=17,
+        ))
+        self.assertEqual({
+            key: request[key]
+            for key in (
+                "memoryBytes", "instructionLimit", "recursionLimit",
+                "maxOutputRows", "maxOutputBytes", "maxSourceBytes",
+            )
+        }, {
+            "memoryBytes": 12,
+            "instructionLimit": 13,
+            "recursionLimit": 14,
+            "maxOutputRows": 15,
+            "maxOutputBytes": 16,
+            "maxSourceBytes": 17,
+        })
+
     def test_generated_levels_use_only_the_deterministic_math_surface(self):
         generated = self.evaluate({"game.generated": '''
 local items = require("studio.items")
@@ -224,6 +311,23 @@ items.define({ id="game.sword", levels=levels.generate({
 
         exponent = self.evaluate({"game.exponent": "local value = 2 ^ 3"}, ["game.exponent"])
         self.assert_error(exponent, "source.raw_exponentiation", "game/exponent.lua", 1)
+
+        harmless = self.evaluate({"game.text": '''
+local items = require("studio.items")
+-- Documentation may say 2 ^ 3.
+items.define({ id="game.note", description="2 ^ 3" })
+'''}, ["game.text"])
+        self.assertEqual(harmless.returncode, 0, harmless.stderr)
+
+    def test_non_finite_output_and_non_string_errors_are_stable(self):
+        non_finite = self.evaluate({"game.number": '''
+local items = require("studio.items")
+items.define({ id="game.number", value=1/0 })
+'''}, ["game.number"])
+        self.assert_error(non_finite, "output.non_finite", "game/number.lua", 1)
+
+        bad_error = self.evaluate({"game.error": "error({ secret=1 })"}, ["game.error"])
+        self.assert_error(bad_error, "sandbox.error_contract", "game/error.lua", 1)
 
 
 if __name__ == "__main__":
