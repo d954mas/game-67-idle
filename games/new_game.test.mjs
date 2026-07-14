@@ -5,7 +5,7 @@ import { dirname, join, resolve } from "node:path";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
 import test, { after } from "node:test";
 import {
-  parseArgs, resolveVisibility, usageText, validateRequestedIdentity,
+  main, parseArgs, resolveVisibility, usageText, validateRequestedIdentity,
 } from "./new_game.mjs";
 
 const script = resolve("games/new_game.mjs");
@@ -115,6 +115,26 @@ function tempRepo() {
   cpSync(fixtureRepo, root, { recursive: true });
   return root;
 }
+
+function invokeNewGame(args) {
+  const stdout = [];
+  const stderr = [];
+  const status = main(args, { log: (line) => stdout.push(line), error: (line) => stderr.push(line) });
+  return { status, stdout: stdout.join("\n"), stderr: stderr.join("\n") };
+}
+
+test("new_game main supports in-process execution and releases its process-exit claim listener", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const listenersBefore = process.listenerCount("exit");
+
+  const result = invokeNewGame(["--root", root, "--id", "direct-game", "--visibility", "public"]);
+
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /new game 'direct-game' created/);
+  assert.equal(existsSync(join(root, "games", "direct-game", "game.json")), true);
+  assert.equal(process.listenerCount("exit"), listenersBefore);
+});
 
 test("new_game --visibility public copies template and registers game assets in AI Studio", (t) => {
   const root = tempRepo();

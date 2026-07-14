@@ -220,6 +220,7 @@ function acquireNewGameClaim(gamesDir) {
       const release = () => {
         if (released) return;
         released = true;
+        process.removeListener("exit", release);
         try {
           const owner = readJsonStrict(ownerPath, "new-game claim owner");
           if (owner.token !== token || owner.pid !== process.pid) return;
@@ -565,19 +566,18 @@ function maybeFail(point) {
 }
 
 function fail(message, showUsage = false) {
-  console.error(`error: ${message}`);
-  if (showUsage) console.error(usageText());
-  process.exit(1);
+  const error = new Error(message);
+  error.showUsage = showUsage;
+  throw error;
 }
 
-const isDirectInvocation = Boolean(process.argv[1])
-  && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
-
-if (isDirectInvocation) {
+function executeMain(argv, io) {
+let releaseClaim;
+try {
 let args;
-try { args = parseArgs(process.argv.slice(2)); }
+try { args = parseArgs(argv); }
 catch (error) { fail(error.message, true); }
-if (args.help) { console.log(usageText()); process.exit(0); }
+if (args.help) { io.log(usageText()); return 0; }
 
 let requestedIdentity;
 let visibility;
@@ -600,7 +600,6 @@ try {
 const fromDir = join(repoRoot, fromRel);
 const gamesDir = join(repoRoot, "games");
 const finalDir = join(gamesDir, args.id);
-let releaseClaim;
 try {
   releaseClaim = acquireNewGameClaim(gamesDir);
   waitAtClaimBarrier();
@@ -774,7 +773,7 @@ try {
   rollbackPhase("staging", () => {
     if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true });
   });
-  for (const residual of residuals) console.error(`error: rollback residual ${residual}`);
+  for (const residual of residuals) io.error(`error: rollback residual ${residual}`);
   fail(error.message);
 }
 
@@ -782,19 +781,36 @@ try {
 if (backupMade && existsSync(backupDir)) {
   try { cleanupCommittedBackup(backupDir); }
   catch (cleanupError) {
-    console.error(`warning: new game committed but backup cleanup pending at ${backupDir}: ${cleanupError.message}`);
+    io.error(`warning: new game committed but backup cleanup pending at ${backupDir}: ${cleanupError.message}`);
   }
 }
-for (const message of registrationMessages) console.log(message);
+for (const message of registrationMessages) io.log(message);
 
 if (isPrivate) {
-  console.log(`new private game '${identity.id}' created from ${fromRel}/ -> games/${identity.id}/`);
-  console.log(`nested git repository: created`);
-  console.log(`local workspace catalog: ${localWorkspaceCatalogRelPath()} -> games/${identity.id}`);
-  console.log("public Studio registries, Taskboard, Canvas, and VS Code files were not updated");
+  io.log(`new private game '${identity.id}' created from ${fromRel}/ -> games/${identity.id}/`);
+  io.log(`nested git repository: created`);
+  io.log(`local workspace catalog: ${localWorkspaceCatalogRelPath()} -> games/${identity.id}`);
+  io.log("public Studio registries, Taskboard, Canvas, and VS Code files were not updated");
 } else {
-  console.log(`new game '${identity.id}' created from ${fromRel}/ -> games/${identity.id}/`);
+  io.log(`new game '${identity.id}' created from ${fromRel}/ -> games/${identity.id}/`);
 }
-if (itemsLockReset) console.log(`reset items lock baseline: games/${identity.id}/content/items.lock.json`);
-releaseClaim();
+if (itemsLockReset) io.log(`reset items lock baseline: games/${identity.id}/content/items.lock.json`);
+return 0;
+} finally {
+  releaseClaim?.();
 }
+}
+
+export function main(argv, io = console) {
+  try { return executeMain(argv, io); }
+  catch (error) {
+    io.error(`error: ${error.message}`);
+    if (error.showUsage) io.error(usageText());
+    return 1;
+  }
+}
+
+const isDirectInvocation = Boolean(process.argv[1])
+  && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isDirectInvocation) process.exitCode = main(process.argv.slice(2));
