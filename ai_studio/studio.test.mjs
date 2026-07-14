@@ -434,6 +434,7 @@ test("CLI contract returns stable JSON usage and setup envelopes", async () => {
     assert.equal(JSON.parse(lines.at(-1)).error.code, "setup");
     lines.length = 0;
     assert.equal(await main(["verify", "--full"], { runDomain: async () => ({ status: 0 }) }), 0);
+    assert.ok(lines.some((line) => /^pass\tharness\t\d+\.\d{3}s$/.test(line)));
     assert.match(lines.at(-1), /^pass\tfull\t/);
     lines.length = 0;
     const domainCalls = [];
@@ -447,7 +448,7 @@ test("CLI contract returns stable JSON usage and setup envelopes", async () => {
       changedPaths: () => ["ai_studio/taskboard/store.mjs"],
       runDomain: async () => ({ status: 1, stderr: "assertion context\nexact failure" }),
     }), 1);
-    assert.ok(lines.some((line) => line === "fail\twork-management"));
+    assert.ok(lines.some((line) => /^fail\twork-management\t\d+\.\d{3}s$/.test(line)));
     assert.ok(lines.some((line) => line === "  assertion context\n  exact failure"));
   } finally {
     console.log = log;

@@ -487,7 +487,7 @@ function printText(result) {
     return;
   }
   for (const domain of result.domains) {
-    console.log(`${domain.status}\t${domain.id}`);
+    console.log(`${domain.status}\t${domain.id}\t${(domain.durationMs / 1000).toFixed(3)}s`);
     if (domain.tail) console.log(domain.tail.split(/\r?\n/).map((line) => `  ${line}`).join("\n"));
   }
   console.log(`${result.status}\t${result.mode}\t${result.domains.length} domains`);
