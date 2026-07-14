@@ -1,12 +1,11 @@
-// Journal restructure tests: sidecar snapshots, thin lines, O(1) seq, transparent
-// fat-journal migration (idempotent), history depth compaction with a clean horizon,
-// undo/redo across sidecars, and the capped tool_runs spill. No Python needed. Run:
+// Journal tests: sidecar snapshots, thin lines, O(1) seq, history depth compaction
+// with a clean horizon, undo/redo across sidecars, and the capped tool_runs spill.
+// No Python needed. Run:
 //   node --test ai_studio/assets/canvas/tests/sidecar.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
   existsSync,
-  mkdirSync,
   mkdtempSync,
   readFileSync,
   readdirSync,
@@ -129,70 +128,6 @@ test("seq stays monotonic + unique across undo and a new branch (tail-read alloc
   const seqs = readJournalRaw(project.id).map((l) => Number(l.seq));
   assert.deepEqual([...seqs].sort((a, b) => a - b), seqs, "seqs are strictly increasing in append order");
   assert.equal(new Set(seqs).size, seqs.length, "seqs are unique");
-});
-
-test("legacy fat journal migrates to thin + sidecar on first mutating open, idempotently, keeps .bak", (t) => {
-  const dir = tempProjects(t);
-  const id = "fixture-legacy-abc123";
-  const projectDir = join(dir, id);
-  const now = "2026-07-02T00:00:00.000Z";
-  const el = (x) => ({
-    id: "el_1", type: "image", src: "files/x.png", x, y: 0, w: 4, h: 3,
-    source_w: 4, source_h: 3, name: "a.png", meta: {},
-  });
-  const snap = (elements) => ({ title: "Fixture", elements, groups: [], tool_runs: [] });
-
-  rmSync(projectDir, { recursive: true, force: true });
-  mkdirSync(projectDir, { recursive: true });
-  writeFileSync(join(projectDir, "project.json"), JSON.stringify({
-    schema: "ai_studio.canvas.project.v1", id, title: "Fixture", created: now, updated: now,
-    history_seq: 2, groups: [], elements: [el(50)], tool_runs: [],
-  }, null, 2) + "\n");
-  // Hand-crafted OLD fat journal: two mutation lines with inline undo_patch/state.
-  const fatLines = [
-    { seq: 1, at: now, op: "addImage", args_summary: { elementId: "el_1" }, undo_patch: snap([]), state: snap([el(0)]), parent: 0 },
-    { seq: 2, at: now, op: "patchElement", args_summary: { elementId: "el_1" }, undo_patch: snap([el(0)]), state: snap([el(50)]), parent: 1 },
-  ];
-  const fatText = fatLines.map((l) => JSON.stringify(l)).join("\n") + "\n";
-  writeFileSync(join(projectDir, "journal.jsonl"), fatText);
-  assert.equal(existsSync(join(projectDir, "snapshots")), false, "no sidecar dir before migration");
-
-  // First mutating open triggers a transparent migration into the LOCAL cache (T0259:
-  // relocate legacy in-project history + fat->thin), then appends seq 3.
-  patchElement(ROOT, id, "el_1", { x: 77 });
-  const cache = projectCachePaths(ROOT, id);
-
-  // Relocation removed the legacy journal from the (synced) project dir.
-  assert.equal(existsSync(join(projectDir, "journal.jsonl")), false, "legacy journal moved out of the project dir");
-  // .bak preserves the ORIGINAL fat journal byte-for-byte (non-destructive), now in the cache.
-  assert.equal(readFileSync(cache.backup, "utf8"), fatText, "original fat journal kept as .bak");
-  // journal.jsonl is now thin (no inline snapshots) with 3 lines.
-  const thin = readJournalRaw(id);
-  assert.deepEqual(thin.map((l) => l.seq), [1, 2, 3]);
-  for (const line of thin) {
-    assert.equal(line.undo_patch, undefined);
-    assert.equal(line.state, undefined);
-    assert.equal(line.has_snapshot, true);
-  }
-  // Sidecar snapshots exist for every migrated + new entry.
-  for (const seq of [1, 2, 3]) {
-    const s = JSON.parse(readFileSync(join(cache.snapshots, `${seq}.json`), "utf8"));
-    assert.ok(s.undo_patch && s.state, `snapshots/${seq}.json migrated`);
-  }
-
-  // Undo chain works across the migrated sidecars: 77 -> 50 -> 0 -> empty -> stop.
-  assert.equal(undoOp(ROOT, { projectId: id }).project.elements[0].x, 50);
-  assert.equal(undoOp(ROOT, { projectId: id }).project.elements[0].x, 0);
-  assert.equal(undoOp(ROOT, { projectId: id }).project.elements.length, 0);
-  assert.throws(() => undoOp(ROOT, { projectId: id }), /nothing to undo/);
-
-  // Idempotence: another mutating op does NOT re-migrate or clobber the backup.
-  redoOp(ROOT, { projectId: id }); // back to a non-empty state
-  redoOp(ROOT, { projectId: id });
-  redoOp(ROOT, { projectId: id });
-  patchElement(ROOT, id, "el_1", { x: 88 });
-  assert.equal(readFileSync(cache.backup, "utf8"), fatText, ".bak unchanged after a second op");
-  assert.equal(readdirSync(cache.dir).filter((n) => n === "journal.jsonl.bak").length, 1, "exactly one backup");
 });
 
 test("history depth cap compacts past the horizon and undo stops cleanly there", (t) => {

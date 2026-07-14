@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { canvasHistoryDepth } from "../config.mjs";
 import { FONTS_DIR_REPO_PATH, FONTS_MANIFEST_REPO_PATH, defaultNoteStyle, defaultTextStyle, mergeNoteStyle, mergeTextStyle } from "../fonts.mjs";
-import { appendArchive, appendError, appendJournalLine, deleteSnapshot, ensureThinJournal, getProject, listProjects, nextJournalSeq, readJournal, readSnapshot, resolveProjectFile, resolveProjectPath, rewriteJournal, updateProject, withProjectLock, writeSnapshot } from "../store.mjs";
+import { appendArchive, appendError, appendJournalLine, deleteSnapshot, getProject, listProjects, nextJournalSeq, readJournal, readSnapshot, resolveProjectFile, resolveProjectPath, rewriteJournal, updateProject, withProjectLock, writeSnapshot } from "../store.mjs";
 
 export function ms(value) {
   return Math.round(value * 1000) / 1000;
@@ -282,19 +282,14 @@ export function snapshotOf(project) {
   };
 }
 
-// A mutation line (has a sidecar snapshot); tolerates a legacy inline fat line too,
-// so undo/redo/history stay correct even if migration has not run yet.
+// A mutation line always has a sidecar snapshot.
 export function isMutation(line) {
-  return !!line && (line.has_snapshot === true || line.undo_patch !== undefined || line.state !== undefined);
+  return !!line && line.has_snapshot === true;
 }
 
-// The {undo_patch, state} snapshot for one entry: inline (legacy fat line) or the
-// sidecar file (thin line). A thin journal cannot reconstruct missing state, so
-// refuse instead of publishing an empty project snapshot.
+// A journal cannot reconstruct missing sidecar state, so refuse instead of
+// publishing an empty project snapshot.
 export function snapshotForEntry(root, projectId, entry) {
-  if (entry && (entry.undo_patch !== undefined || entry.state !== undefined)) {
-    return { undo_patch: entry.undo_patch, state: entry.state };
-  }
   const snapshot = readSnapshot(root, projectId, entry.seq);
   if (!snapshot) {
     throw new Error(`Canvas history snapshot unavailable for project '${projectId}', seq ${entry.seq}`);
@@ -349,7 +344,6 @@ export function refuseIfHeadMoved(op, before, current) {
 }
 
 export function commitMutation(root, projectId, { op, args_summary, before, after, startedAt }) {
-  ensureThinJournal(root, projectId); // one-time migration of a legacy fat journal
   // Cheap insurance for every op (see refuseIfHeadMoved's doc above): for the common
   // wrapped-at-the-client-layer case this never trips, since nothing could have
   // advanced the head since `before` was read under the same lock.

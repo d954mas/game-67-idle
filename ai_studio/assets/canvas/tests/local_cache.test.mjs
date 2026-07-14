@@ -1,5 +1,5 @@
 // T0259 — the per-gesture history subsystem (journal.jsonl, sidecar snapshots/, the
-// compaction archive + fat-journal backup, and the cross-process .lock) lives in a LOCAL,
+// compaction archive and the cross-process .lock) lives in a LOCAL,
 // per-machine cache OFF the cloud-synced projects folder. project.json + files/ STAY synced
 // (current state + assets travel); undo history deliberately does not. These tests set BOTH
 // CANVAS_PROJECTS_ROOT and an explicit CANVAS_LOCAL_CACHE_ROOT to temp dirs so the relocated
@@ -95,41 +95,6 @@ test("fresh project: journal/snapshots/.lock live ONLY in the cache; the project
 
   // The synced project dir carries ONLY project.json + files/ — no journal, snapshots, or lock.
   assert.deepEqual(readdirSync(projectDir).sort(), ["files", "project.json"]);
-});
-
-test("migration: a pre-T0259 project (journal + snapshots in the project dir) relocates to the cache on first access, preserving undo", (t) => {
-  const { projectsDir } = tempEnv(t);
-  const id = "legacy-proj-xyz";
-  const projectDir = join(projectsDir, id);
-  // Fabricate a legacy project WITH in-project thin journal + sidecar snapshots (2 mutations:
-  // element added at x=0, then moved to x=40). head = 2.
-  writeProjectJson(projectsDir, id, { history_seq: 2, elements: [legacyEl(40)] });
-  mkdirSync(join(projectDir, "snapshots"), { recursive: true });
-  writeFileSync(
-    join(projectDir, "journal.jsonl"),
-    `${JSON.stringify({ seq: 1, at: "t", op: "addImage", args_summary: {}, parent: 0, has_snapshot: true })}\n` +
-      `${JSON.stringify({ seq: 2, at: "t", op: "patchElement", args_summary: {}, parent: 1, has_snapshot: true })}\n`,
-  );
-  writeFileSync(join(projectDir, "snapshots", "1.json"), JSON.stringify({ undo_patch: legacySnap([]), state: legacySnap([legacyEl(0)]) }));
-  writeFileSync(join(projectDir, "snapshots", "2.json"), JSON.stringify({ undo_patch: legacySnap([legacyEl(0)]), state: legacySnap([legacyEl(40)]) }));
-
-  const cache = projectCachePaths(ROOT, id);
-  // First access is a READ-ONLY history view — it must still see the relocated history.
-  const history = readHistory(ROOT, { projectId: id });
-  assert.deepEqual(history.entries.map((e) => e.op), ["addImage", "patchElement"]);
-  assert.equal(history.canUndo, true);
-
-  // Relocation moved the journal + snapshots into the cache and cleaned the (synced) project dir.
-  assert.equal(existsSync(cache.journal), true, "journal now in the cache");
-  assert.equal(existsSync(join(cache.snapshots, "2.json")), true, "snapshots now in the cache");
-  assert.equal(existsSync(join(projectDir, "journal.jsonl")), false, "legacy journal moved out of the project dir");
-  assert.equal(existsSync(join(projectDir, "snapshots")), false, "legacy snapshots moved out of the project dir");
-  assert.deepEqual(readdirSync(projectDir).sort(), ["files", "project.json"]);
-
-  // Undo history is intact across the relocation: 40 -> 0 -> empty -> stop.
-  assert.equal(undoOp(ROOT, { projectId: id }).project.elements[0].x, 0);
-  assert.equal(undoOp(ROOT, { projectId: id }).project.elements.length, 0);
-  assert.throws(() => undoOp(ROOT, { projectId: id }), /nothing to undo/);
 });
 
 test("cross-machine: a synced project.json with no local journal mutates from its head; undo/jump into the un-synced history refuse LOUDLY without corruption", (t) => {

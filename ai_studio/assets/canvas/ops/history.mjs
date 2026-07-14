@@ -4,7 +4,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import { buildNodesSpec, descendantsOf, frontOrder } from "../tree.mjs";
-import { appendJournal, ensureThinJournal, getProject, projectExists, readErrors, readJournal, resolveProjectFile, updateProject } from "../store.mjs";
+import { appendJournal, getProject, projectExists, readErrors, readJournal, resolveProjectFile, updateProject } from "../store.mjs";
 import { commitMutation, finite, groupsOf, isMutation, ms, snapshotForEntry } from "./core.mjs";
 import { addImage, addImages, addText, alignNodes, distributeNodes, findNode, moveNodes, patchElement, patchElements, patchProject, removeElement, removeElements, reorderElement, reorderNode, reorderNodes, setExportSettings, setRegions } from "./elements.mjs";
 import { applyStyleAutoRef, assignToGroup, createGroup, deleteGroup, findGroup, fitGroup, patchGroup, patchGroups, reparentGroup, scaleGroup, ungroupGroup } from "./groups.mjs";
@@ -261,7 +261,6 @@ export function checkExpectHead(expectHead, head) {
 export function undoOp(root, { projectId, expectHead } = {}) {
   if (!projectId) throw new Error("undoOp requires projectId");
   const startedAt = performance.now();
-  ensureThinJournal(root, projectId); // migrating open is a mutating open
   const project = getProject(root, projectId);
   const head = Number(project.history_seq) || 0;
   checkExpectHead(expectHead, head);
@@ -292,7 +291,6 @@ export function undoOp(root, { projectId, expectHead } = {}) {
 export function redoOp(root, { projectId, expectHead } = {}) {
   if (!projectId) throw new Error("redoOp requires projectId");
   const startedAt = performance.now();
-  ensureThinJournal(root, projectId);
   const project = getProject(root, projectId);
   const head = Number(project.history_seq) || 0;
   checkExpectHead(expectHead, head);
@@ -588,7 +586,6 @@ export function jumpHistory(root, { projectId, seq, expectHead } = {}) {
     throw new Error(`jumpHistory seq must be a non-negative integer, got ${JSON.stringify(seq)}`);
   }
   const startedAt = performance.now();
-  ensureThinJournal(root, projectId); // a migrating open is a mutating open
   const project = getProject(root, projectId);
   const head = Number(project.history_seq) || 0;
   checkExpectHead(expectHead, head);

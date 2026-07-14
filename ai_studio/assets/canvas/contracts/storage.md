@@ -4,9 +4,8 @@ Portable project folders contain `project.json` and immutable,
 content-addressed `files/`. Per-gesture `journal.jsonl`, snapshots, compaction
 archive, and the cross-process lock live in the machine-local Canvas cache,
 keyed by projects root and project id; undo history is deliberately not synced.
-The store path-confines ids, atomically replaces metadata, and relocates legacy
-in-project history on first access. Do not hand edit project files; use
-`ops.mjs` or the CLI.
+The store path-confines ids and atomically replaces metadata. Do not hand edit
+project files; use `ops.mjs` or the CLI.
 
 `ai_studio/studio.config.json` contains portable defaults. Machine-specific
 roots belong in ignored `ai_studio/studio.config.local.json`, whose fields
