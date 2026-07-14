@@ -110,6 +110,31 @@ function writeValidFixture(dir, { namespace = "fx", items, stateSchema = STATE_S
   writeJson(join(dir, "state", "items.schema.json"), stateSchema);
 }
 
+function raw(code, data = null, stderr = "") {
+  return { code, stdout: data === null ? "" : JSON.stringify(data), stderr };
+}
+
+function fakeItemsOps(results) {
+  const calls = [];
+  return {
+    calls,
+    run: async (_root, args) => {
+      calls.push(args);
+      const result = results[args[0]];
+      assert.ok(result, `unexpected items_ops command: ${args[0]}`);
+      return result;
+    },
+  };
+}
+
+function validResults(items, validate = raw(0, { ok: true, errors: [], warnings: [] })) {
+  return {
+    list: raw(0, { namespace: "fx", items, containers: [], item_kinds: [{ id: "material", label: "Material" }] }),
+    schema: raw(0, FIELD_SCHEMA),
+    validate,
+  };
+}
+
 test("listCatalogs merges neutral template and game fixtures with hasItems flags", (t) => {
   const root = tempFixtureDir(t);
   writeNeutralPublicWorkspace(root);
@@ -240,7 +265,15 @@ test("lock status_by_id: shipped (def_ids) / draft (neither) / removed (restored
     },
   });
 
-  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" });
+  const items = [makeItem("fx.a"), makeItem("fx.b"), makeItem("fx.c")];
+  const runner = fakeItemsOps(validResults(items));
+  const view = await loadCatalogView(
+    REPO_ROOT,
+    dir,
+    { id: "t:fx", kind: "template", title: "Fx", folder: "fx" },
+    { runItemsOpsRaw: runner.run },
+  );
+  assert.equal(runner.calls.length, 3);
   assert.deepEqual(view.lock.status_by_id, { "fx.a": "shipped", "fx.b": "draft", "fx.c": "removed" });
   assert.deepEqual(Object.keys(view.lock.removed).sort(), ["fx.c", "fx.zzz"]);
   // fx.zzz never appears in status_by_id -- it has no catalog item (spec §4: "each
@@ -272,7 +305,13 @@ test("validate exit 1 is parsed from stdout as validate.ok:false, not thrown", a
   delete broken.created;
   writeValidFixture(dir, { items: [broken, makeItem("fx.b")] });
 
-  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" });
+  const items = [broken, makeItem("fx.b")];
+  const runner = fakeItemsOps(validResults(items, raw(1, {
+    ok: false,
+    errors: [{ rule: "created-missing", id: "fx.a", field: "created", msg: "missing" }],
+    warnings: [],
+  })));
+  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" }, { runItemsOpsRaw: runner.run });
   assert.equal(view.content_error, undefined, "the catalog still parses fine for list/schema -- only validate fails");
   assert.equal(view.items.length, 2, "list --json still renders both items despite the validate FAIL");
   assert.equal(view.validate.available, true);
@@ -286,7 +325,9 @@ test("validate exit 2 (broken state/items.schema.json) -> validate.available:fal
   // Overwrite the state schema with invalid JSON after writeValidFixture wrote a good one.
   writeFileSync(join(dir, "state", "items.schema.json"), "{ not valid json", "utf8");
 
-  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" });
+  const items = [makeItem("fx.a"), makeItem("fx.b")];
+  const runner = fakeItemsOps(validResults(items, raw(2, null, "state schema is invalid")));
+  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" }, { runItemsOpsRaw: runner.run });
   assert.equal(view.content_error, undefined, "list/schema never read state/items.schema.json, so they still succeed");
   assert.equal(view.items.length, 2);
   assert.ok(view.schema, "schema --json still parsed");
@@ -301,7 +342,12 @@ test("list exit 2 (malformed items.json) -> content_error source:catalog, schema
   writeValidFixture(dir);
   writeFileSync(join(dir, "content", "items.json"), "{ not valid json", "utf8");
 
-  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" });
+  const runner = fakeItemsOps({
+    list: raw(2, null, "catalog is invalid"),
+    schema: raw(0, FIELD_SCHEMA),
+    validate: raw(2, null, "catalog is invalid"),
+  });
+  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" }, { runItemsOpsRaw: runner.run });
   assert.ok(view.content_error);
   assert.equal(view.content_error.source, "catalog");
   assert.ok(view.content_error.stderr.length > 0);
@@ -315,7 +361,13 @@ test("schema exit 2 (malformed item_fields.schema.json) -> content_error source:
   writeValidFixture(dir);
   writeFileSync(join(dir, "content", "item_fields.schema.json"), "{ not valid json", "utf8");
 
-  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" });
+  const items = [makeItem("fx.a"), makeItem("fx.b")];
+  const runner = fakeItemsOps({
+    list: validResults(items).list,
+    schema: raw(2, null, "field schema is invalid"),
+    validate: raw(2, null, "field schema is invalid"),
+  });
+  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" }, { runItemsOpsRaw: runner.run });
   assert.ok(view.content_error);
   assert.equal(view.content_error.source, "schema");
   assert.equal(view.items.length, 2, "list --json never reads the field schema, so items still render");
@@ -327,7 +379,14 @@ test("conditional --baseline: no items.lock.json -> flag omitted, rename-guard-s
   const dir = tempFixtureDir(t);
   writeValidFixture(dir); // no content/items.lock.json written
 
-  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" });
+  const items = [makeItem("fx.a"), makeItem("fx.b")];
+  const runner = fakeItemsOps(validResults(items, raw(0, {
+    ok: true,
+    errors: [],
+    warnings: [{ rule: "rename-guard-skipped", id: null, field: null, msg: "no baseline" }],
+  })));
+  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" }, { runItemsOpsRaw: runner.run });
+  assert.equal(runner.calls.find((args) => args[0] === "validate").includes("--baseline"), false);
   assert.equal(view.validate.available, true);
   assert.equal(view.validate.ok, true);
   assert.ok(
@@ -346,7 +405,10 @@ test("conditional --baseline: a present items.lock.json is passed explicitly -> 
     removed: {},
   });
 
-  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" });
+  const items = [makeItem("fx.a"), makeItem("fx.b")];
+  const runner = fakeItemsOps(validResults(items));
+  const view = await loadCatalogView(REPO_ROOT, dir, { id: "t:fx", kind: "template", title: "Fx", folder: "fx" }, { runItemsOpsRaw: runner.run });
+  assert.equal(runner.calls.find((args) => args[0] === "validate").includes("--baseline"), true);
   assert.equal(view.validate.available, true);
   assert.equal(view.validate.ok, true);
   assert.ok(
