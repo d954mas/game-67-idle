@@ -37,7 +37,7 @@ Notes:
 ## Path B: Agy Fallback
 
 ```bash
-AGY="/c/Users/ROG/AppData/Local/agy/bin/agy.exe"
+AGY="${AGY_COMMAND:-agy.exe}"
 START=$(date +%s)
 "$AGY" --dangerously-skip-permissions -p "Use your built-in image generation to create one real raster image (not code-drawn), <ASPECT>: <PROMPT>. Save the PNG to C:/abs/path/out.png . Do not write or run any drawing code." \
   < /dev/null > /dev/null 2>&1

@@ -47,7 +47,7 @@ test("CANVAS_PROJECTS_ROOT env overrides config and needs no config file", (t) =
   assert.equal(canvasProjectsRoot(root), resolve("C:/env/override"));
 });
 
-test("canvasHistoryDepth: env override > config value > default 200 (never throws)", (t) => {
+test("canvasHistoryDepth: env override > config value > default 200", (t) => {
   const previous = process.env.CANVAS_HISTORY_DEPTH;
   t.after(() => {
     if (previous === undefined) delete process.env.CANVAS_HISTORY_DEPTH;
@@ -68,6 +68,29 @@ test("canvasHistoryDepth: env override > config value > default 200 (never throw
   // The env override wins over config.
   process.env.CANVAS_HISTORY_DEPTH = "7";
   assert.equal(canvasHistoryDepth(root), 7);
+});
+
+test("Canvas optional config defaults do not hide malformed config", (t) => {
+  const saved = {
+    CANVAS_HISTORY_DEPTH: process.env.CANVAS_HISTORY_DEPTH,
+    CANVAS_PROJECTS_ROOT: process.env.CANVAS_PROJECTS_ROOT,
+    CANVAS_LOCAL_CACHE_ROOT: process.env.CANVAS_LOCAL_CACHE_ROOT,
+  };
+  t.after(() => {
+    for (const [key, value] of Object.entries(saved)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+  delete process.env.CANVAS_HISTORY_DEPTH;
+  delete process.env.CANVAS_PROJECTS_ROOT;
+  delete process.env.CANVAS_LOCAL_CACHE_ROOT;
+
+  const root = tempRoot(t);
+  writeFileSync(join(root, "ai_studio", "studio.config.json"), "{bad json\n", "utf8");
+
+  assert.throws(() => canvasHistoryDepth(root), /invalid studio config JSON/);
+  assert.throws(() => canvasLocalCacheRoot(root), /invalid studio config JSON/);
 });
 
 test("canvasLocalCacheRoot: env override > CANVAS_PROJECTS_ROOT redirect > config value > repo-local default (T0259)", (t) => {

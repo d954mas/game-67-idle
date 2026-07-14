@@ -108,10 +108,8 @@ export async function generateImageCodex({ prompt, refPaths = [], params = {} } 
 
 // ---- gemini engine (Path B: agy / Antigravity CLI, headless) -----------------------------
 
-// Windows-specific absolute path, verbatim from generation-paths.md / gen_both.sh — the
-// SAME hardcoded location the skill's own compare-mode script uses (this machine only; no
-// PATH lookup, matching the skill's own precedent).
-export const AGY_PATH = "C:/Users/ROG/AppData/Local/agy/bin/agy.exe";
+// The workstation tool is resolved through PATH; installation paths are machine-owned.
+export const AGY_COMMAND = "agy.exe";
 const AGY_TIMEOUT_MS = 300_000; // fallback/compare engine; generous but bounded
 
 // A size string ("WxH") -> a short aspect label for the agy prompt instruction. Square sizes
@@ -170,7 +168,7 @@ export function buildAgyCommand({ prompt, size, outPath, refPaths = [] } = {}) {
     args.push("--add-dir", dir);
   }
   args.push("--dangerously-skip-permissions", "-p", instruction);
-  return { command: AGY_PATH, args };
+  return { command: AGY_COMMAND, args };
 }
 
 // Silent-divergence guard (T0251): agy is an AGENT, not an image API — if a ref path is

@@ -26,7 +26,7 @@ mkdir -p "$OUTDIR"
 WINROOT="$(pwd -W 2>/dev/null || pwd)"        # C:/... form for the agy (Windows) binary
 CODEX_OUT="$OUTDIR/${NAME}_codex.png"
 AGY_OUT="$OUTDIR/${NAME}_agy.png"
-AGY="/c/Users/ROG/AppData/Local/agy/bin/agy.exe"
+AGY="${AGY_COMMAND:-agy.exe}"
 
 echo ">>> generating '${NAME}' via BOTH engines in parallel ..."
 

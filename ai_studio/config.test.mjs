@@ -43,6 +43,17 @@ test("loadStudioConfig accepts a local-only config and reports missing or malfor
   assert.throws(() => loadStudioConfig(malformed), /invalid studio config JSON/);
 });
 
+test("loadStudioConfig rejects a non-canonical schema from either config file", (t) => {
+  const wrongMain = fixture(t);
+  writeConfig(wrongMain, "studio.config.json", { schema: "ai_studio.studio_config.v2" });
+  assert.throws(() => loadStudioConfig(wrongMain), /unsupported studio config schema.*studio\.config\.json/);
+
+  const wrongLocal = fixture(t);
+  writeConfig(wrongLocal, "studio.config.json", { schema: STUDIO_CONFIG_SCHEMA, shared: "main" });
+  writeConfig(wrongLocal, "studio.config.local.json", { schema: "local.override.v1", shared: "local" });
+  assert.throws(() => loadStudioConfig(wrongLocal), /unsupported studio config schema.*studio\.config\.local\.json/);
+});
+
 test("committed Studio config remains portable", () => {
   const configText = readFileSync(new URL("./studio.config.json", import.meta.url), "utf8");
   assert.doesNotMatch(configText, /[A-Za-z]:[\\/]|\/Users\/|\/home\//);

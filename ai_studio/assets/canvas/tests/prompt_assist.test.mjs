@@ -11,7 +11,7 @@ import {
   buildExtractInstruction,
   buildTextCommand,
   buildVisionCommand,
-  CODEX_JS,
+  CODEX_COMMAND,
 } from "../tools/prompt_assist.mjs";
 
 // ---- buildExpandInstruction ----------------------------------------------------
@@ -101,12 +101,13 @@ test("buildExtractInstruction: output contract is ONLY the JSON object, no pream
 
 // ---- pure command builders (no spawn) --------------------------------------------
 
-test("buildTextCommand: node <codex.js> exec with --output-last-message and the instruction as a plain positional arg", () => {
+test("buildTextCommand: PATH-resolved codex exec reads the instruction from stdin", () => {
   const { command, args } = buildTextCommand({ instruction: "expand this", outputPath: "C:/tmp/last.txt" });
-  // process.execPath + the shim's own target script — node's execFile can neither resolve
-  // the extensionless "codex" npm shim nor spawn a .cmd without shell (see the module doc).
-  assert.equal(command, process.execPath);
-  assert.deepEqual(args, [CODEX_JS, "exec", "--skip-git-repo-check", "--output-last-message", "C:/tmp/last.txt", "expand this"]);
+  assert.equal(command, CODEX_COMMAND);
+  const prefix = process.platform === "win32" ? ["/d", "/s", "/c", "codex.cmd"] : [];
+  assert.equal(command, process.platform === "win32" ? "cmd.exe" : "codex");
+  assert.deepEqual(args, [...prefix, "exec", "--skip-git-repo-check", "--output-last-message", "C:/tmp/last.txt", "-"]);
+  assert.ok(!args.includes("expand this"), "instruction must not pass through cmd.exe argv");
 });
 
 test("buildTextCommand requires instruction/outputPath", () => {
@@ -116,8 +117,9 @@ test("buildTextCommand requires instruction/outputPath", () => {
 
 test("buildVisionCommand: codex exec -i <imagePath> with a bare '-' as the PROMPT positional (stdin), never the instruction text as an argv token", () => {
   const { command, args } = buildVisionCommand({ imagePath: "C:/tmp/ref.png", outputPath: "C:/tmp/last.txt" });
-  assert.equal(command, process.execPath);
-  assert.deepEqual(args, [CODEX_JS, "exec", "--skip-git-repo-check", "--output-last-message", "C:/tmp/last.txt", "-i", "C:/tmp/ref.png", "-"]);
+  assert.equal(command, CODEX_COMMAND);
+  const prefix = process.platform === "win32" ? ["/d", "/s", "/c", "codex.cmd"] : [];
+  assert.deepEqual(args, [...prefix, "exec", "--skip-git-repo-check", "--output-last-message", "C:/tmp/last.txt", "-i", "C:/tmp/ref.png", "-"]);
   // T0251 variadic-argument guard: no instruction text
   // token anywhere in argv — it must travel over stdin instead, never as a positional that
   // -i could greedily swallow.

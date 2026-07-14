@@ -22,13 +22,29 @@ function readJsonIfExists(path) {
   }
 }
 
+function validateSchema(config, path, { required = false } = {}) {
+  if (!config) return;
+  const schema = config.schema;
+  if (schema === undefined && !required) return;
+  if (schema !== STUDIO_CONFIG_SCHEMA) {
+    throw new Error(
+      `unsupported studio config schema at ${path}: expected ${STUDIO_CONFIG_SCHEMA}, got ${JSON.stringify(schema)}`,
+    );
+  }
+}
+
 export function loadStudioConfig(root) {
-  const main = readJsonIfExists(mainConfigPath(root));
-  const local = readJsonIfExists(localConfigPath(root));
+  const mainPath = mainConfigPath(root);
+  const localPath = localConfigPath(root);
+  const main = readJsonIfExists(mainPath);
+  const local = readJsonIfExists(localPath);
   if (!main && !local) {
     throw new Error(
       `missing studio config: create ai_studio/studio.config.json (schema ${STUDIO_CONFIG_SCHEMA})`,
     );
   }
-  return { schema: STUDIO_CONFIG_SCHEMA, ...(main || {}), ...(local || {}) };
+  validateSchema(main, mainPath, { required: true });
+  validateSchema(local, localPath);
+  const { schema: _localSchema, ...localValues } = local || {};
+  return { schema: STUDIO_CONFIG_SCHEMA, ...(main || {}), ...localValues };
 }

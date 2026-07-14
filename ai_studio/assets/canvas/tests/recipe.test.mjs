@@ -494,7 +494,7 @@ test("buildAgyInstruction: refs present prepend the open-and-view + .seen.txt pr
 
 test("buildAgyCommand: shells the agy binary with --dangerously-skip-permissions -p <instruction>", () => {
   const { command, args } = buildAgyCommand({ prompt: "a red fox", size: "1024x1024", outPath: "C:/tmp/a.png" });
-  assert.match(command, /agy(\.exe)?$/);
+  assert.equal(command, "agy.exe");
   assert.deepEqual(args.slice(0, 2), ["--dangerously-skip-permissions", "-p"]);
   assert.match(args[2], /a red fox/);
 });

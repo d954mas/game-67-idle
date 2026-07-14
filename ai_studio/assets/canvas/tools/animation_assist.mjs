@@ -110,9 +110,8 @@ export function buildAnimateInstruction({ element, currentSpec, text } = {}) {
   );
 }
 
-// The DEFAULT codex runner runAnimateFromText falls back to. TEXT-ONLY when imagePath is null
-// (buildTextCommand: instruction as a positional prompt), VISION when set (buildVisionCommand:
-// `-i <imagePath>` + instruction over stdin). Reads the --output-last-message FILE, never
+// The DEFAULT codex runner sends the instruction over stdin. Vision additionally passes
+// `-i <imagePath>`. Reads the --output-last-message FILE, never
 // stdout (see the module doc). Closes stdin immediately either way — codex stalls on an open
 // stdin pipe (verified in prompt_assist).
 async function runCodex({ instruction, imagePath }) {
@@ -124,7 +123,7 @@ async function runCodex({ instruction, imagePath }) {
       : buildTextCommand({ instruction, outputPath });
     const promise = execFileAsync(command, args, { timeout: CODEX_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 });
     if (promise.child && promise.child.stdin) {
-      if (imagePath) promise.child.stdin.write(instruction); // vision: the prompt travels over stdin
+      promise.child.stdin.write(instruction);
       promise.child.stdin.end();
     }
     await promise;

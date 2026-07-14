@@ -7,6 +7,15 @@ function looksAbsolute(value) {
   return isAbsolute(value) || /^[a-zA-Z]:[\\/]/.test(value);
 }
 
+function loadOptionalCanvasConfig(root) {
+  try {
+    return loadStudioConfig(root);
+  } catch (error) {
+    if (String(error?.message || "").startsWith("missing studio config:")) return {};
+    throw error;
+  }
+}
+
 export function canvasProjectsRoot(root) {
   const fromEnv = String(process.env.CANVAS_PROJECTS_ROOT || "").trim();
   if (fromEnv) return resolve(fromEnv);
@@ -25,12 +34,7 @@ export function canvasHistoryDepth(root) {
     const parsed = Number(fromEnv);
     return Number.isFinite(parsed) ? parsed : DEFAULT_CANVAS_HISTORY_DEPTH;
   }
-  let configured;
-  try {
-    configured = loadStudioConfig(root).canvasHistoryDepth;
-  } catch {
-    return DEFAULT_CANVAS_HISTORY_DEPTH;
-  }
+  const configured = loadOptionalCanvasConfig(root).canvasHistoryDepth;
   const parsed = Number(configured);
   return Number.isFinite(parsed) ? parsed : DEFAULT_CANVAS_HISTORY_DEPTH;
 }
@@ -41,12 +45,7 @@ export function canvasLocalCacheRoot(root) {
   if (String(process.env.CANVAS_PROJECTS_ROOT || "").trim()) {
     return join(tmpdir(), "ai_studio_canvas_cache");
   }
-  let configured;
-  try {
-    configured = loadStudioConfig(root).canvasLocalCacheRoot;
-  } catch {
-    configured = undefined;
-  }
+  const configured = loadOptionalCanvasConfig(root).canvasLocalCacheRoot;
   const raw = String(configured || "").trim();
   if (!raw) return resolve(root, "tmp", "canvas_cache");
   return looksAbsolute(raw) ? resolve(raw) : resolve(root, raw);

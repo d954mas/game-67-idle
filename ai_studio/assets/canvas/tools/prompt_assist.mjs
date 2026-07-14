@@ -55,14 +55,9 @@ const execFileAsync = promisify(execFile);
 // (recipe_generate.mjs's GENERATE_TIMEOUT_MS = 500s) but still real codex minutes.
 const CODEX_TIMEOUT_MS = 300_000;
 
-// `codex` on this box is an npm .cmd shim — node's execFile can NEITHER resolve the
-// extensionless "codex" (ENOENT, verified live 2026-07-03) NOR spawn a .cmd without
-// shell:true (Node's .bat/.cmd EINVAL hardening), and shell:true would put the multi-line
-// instruction text through cmd.exe quoting. So the builders spawn the shim's own target
-// directly: `node <codex.js> exec ...` (what codex.cmd itself execs — read from the shim;
-// spawn verified live: `codex-cli 0.140.0`). Absolute box path, same law as
-// recipe_generate.mjs's AGY_PATH.
-export const CODEX_JS = "C:/Users/ROG/AppData/Roaming/npm/node_modules/@openai/codex/bin/codex.js";
+// Resolve the CLI through PATH. Windows uses its npm command shim; prompt text stays on stdin.
+export const CODEX_COMMAND = process.platform === "win32" ? "cmd.exe" : "codex";
+const CODEX_ARG_PREFIX = process.platform === "win32" ? ["/d", "/s", "/c", "codex.cmd"] : [];
 
 // ---- Expand-prompt ---------------------------------------------------------------------
 
@@ -94,11 +89,14 @@ export function buildExpandInstruction({ prompt, styleBlock } = {}) {
 }
 
 // Pure command builder (no spawn) — TEXT ONLY, no attached image, so there is no `-i`
-// variadic-swallow risk: the instruction is a plain positional PROMPT argument.
+// variadic-swallow risk; the instruction travels over stdin on every platform.
 export function buildTextCommand({ instruction, outputPath } = {}) {
   if (!instruction) throw new Error("buildTextCommand requires instruction");
   if (!outputPath) throw new Error("buildTextCommand requires outputPath");
-  return { command: process.execPath, args: [CODEX_JS, "exec", "--skip-git-repo-check", "--output-last-message", outputPath, instruction] };
+  return {
+    command: CODEX_COMMAND,
+    args: [...CODEX_ARG_PREFIX, "exec", "--skip-git-repo-check", "--output-last-message", outputPath, "-"],
+  };
 }
 
 async function runCodexText(instruction) {
@@ -111,7 +109,10 @@ async function runCodexText(instruction) {
     // reads "additional input from stdin" whenever stdin is a pipe — left open, it stalls
     // waiting for EOF and the call dies (verified live 2026-07-03: same argv succeeds with
     // stdin closed, fails with it open). The vision path below closes it via write+end.
-    if (promise.child && promise.child.stdin) promise.child.stdin.end();
+    if (promise.child && promise.child.stdin) {
+      promise.child.stdin.write(instruction);
+      promise.child.stdin.end();
+    }
     await promise;
     try {
       return readFileSync(outputPath, "utf8").trim();
@@ -178,7 +179,10 @@ export function buildExtractInstruction() {
 export function buildVisionCommand({ imagePath, outputPath } = {}) {
   if (!imagePath) throw new Error("buildVisionCommand requires imagePath");
   if (!outputPath) throw new Error("buildVisionCommand requires outputPath");
-  return { command: process.execPath, args: [CODEX_JS, "exec", "--skip-git-repo-check", "--output-last-message", outputPath, "-i", imagePath, "-"] };
+  return {
+    command: CODEX_COMMAND,
+    args: [...CODEX_ARG_PREFIX, "exec", "--skip-git-repo-check", "--output-last-message", outputPath, "-i", imagePath, "-"],
+  };
 }
 
 // Strip a single leading/trailing ``` or ```json code fence, if present — codex sometimes
