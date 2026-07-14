@@ -580,8 +580,6 @@ test("repo tree maps product boundaries without authored implementation or test 
   assert.equal(byPath.get("features")?.coverage, "direct-files");
   assert.equal(byPath.get("games")?.coverage, "direct-files");
   assert.equal(byPath.get("extensions")?.coverage, "direct-files");
-  assert.equal(byPath.get("extensions/experimental")?.coverage, "direct-files");
-  assert.equal(byPath.get("extensions/experimental/skeletal_animation")?.coverage, "subtree");
   assert.equal(byPath.get("ai_studio/game_design/knowledge_base")?.id, "design-knowledge-base");
 
   for (const pack of ["audio-core", "game-events", "game-state", "items-core", "platform-sdk", "progression-core"]) {

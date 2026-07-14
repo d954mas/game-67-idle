@@ -155,33 +155,7 @@
             "description": "Optional Studio extensions with explicit child ownership.",
             "entry": "extensions/README.md",
             "verifyDomain": "features",
-            "coverage": "direct-files",
-            "children": [
-              {
-                "id": "extensions-experimental",
-                "title": "Experimental extensions",
-                "kind": "group",
-                "path": "extensions/experimental",
-                "owner": "Extension Lead",
-                "description": "Incubating extensions that are not part of the core harness.",
-                "entry": "extensions/README.md",
-                "verifyDomain": "features",
-                "coverage": "direct-files",
-                "children": [
-                  {
-                    "id": "extension-skeletal-animation",
-                    "title": "Skeletal animation",
-                    "kind": "module",
-                    "path": "extensions/experimental/skeletal_animation",
-                    "owner": "Animation Extension Owner",
-                    "description": "Experimental skeletal-animation capability and ownership boundary.",
-                    "entry": "extensions/experimental/skeletal_animation/README.md",
-                    "verifyDomain": "features",
-                    "coverage": "subtree"
-                  }
-                ]
-              }
-            ]
+            "coverage": "direct-files"
           }
         ]
       },
