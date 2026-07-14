@@ -116,11 +116,26 @@ function tempRepo() {
   return root;
 }
 
-function invokeNewGame(args) {
+function invokeNewGame(args, env = {}) {
   const stdout = [];
   const stderr = [];
-  const status = main(args, { log: (line) => stdout.push(line), error: (line) => stderr.push(line) });
-  return { status, stdout: stdout.join("\n"), stderr: stderr.join("\n") };
+  const previous = new Map(Object.keys(env).map((key) => [key, process.env[key]]));
+  for (const [key, value] of Object.entries(env)) process.env[key] = value;
+  try {
+    const status = main(args, { log: (line) => stdout.push(line), error: (line) => stderr.push(line) });
+    return { status, stdout: stdout.join("\n"), stderr: stderr.join("\n") };
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
+function execNewGame(args, env = {}) {
+  const result = invokeNewGame(args, env);
+  if (result.status !== 0) throw new Error(result.stderr || `new_game exited ${result.status}`);
+  return result.stdout;
 }
 
 test("new_game main supports in-process execution and releases its process-exit claim listener", (t) => {
@@ -195,7 +210,7 @@ test("new_game rejects a dependency seed version that drifts from feature metada
   execFileSync("git", ["add", "templates/template/game-dependencies.json"], { cwd: root, stdio: "ignore" });
   execFileSync("git", ["commit", "-m", "drift dependency seed"], { cwd: root, stdio: "ignore" });
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "test-game"], { encoding: "utf8" });
+  const result = invokeNewGame(["--root", root, "--id", "test-game"]);
 
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /dependency seed version 1\.1\.0 does not match feature\.json 1\.0\.0/i);
@@ -206,8 +221,7 @@ test("new_game --visibility private creates a nested private game without public
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const output = execFileSync(process.execPath, [
-    script,
+  const output = execNewGame([
     "--root",
     root,
     "--id",
@@ -216,7 +230,7 @@ test("new_game --visibility private creates a nested private game without public
     "private",
     "--public-alias",
     "Private Slot",
-  ], { encoding: "utf8" });
+  ]);
 
   assert.match(output, /new private game 'secret-game' created/);
   assert.equal(existsSync(join(root, "games", "secret-game", "CMakeLists.txt")), true);
@@ -297,7 +311,7 @@ test("new_game --private rejects public game id collisions", (t) => {
   publicCatalog.mounts.push({ kind: "game", root: "games/secret-game", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] });
   writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify(publicCatalog), "utf8");
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "secret-game", "--private", "--replace"], { encoding: "utf8" });
+  const result = invokeNewGame(["--root", root, "--id", "secret-game", "--private", "--replace"]);
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /already registered as a public game/);
@@ -311,15 +325,14 @@ test("new_game --private --replace refuses parent-tracked target roots before co
   writeFileSync(join(root, "games", "secret-game", "CMakeLists.txt"), "tracked parent file\n", "utf8");
   execFileSync("git", ["add", "games/secret-game/CMakeLists.txt"], { cwd: root, stdio: "ignore" });
 
-  const result = spawnSync(process.execPath, [
-    script,
+  const result = invokeNewGame([
     "--root",
     root,
     "--id",
     "secret-game",
     "--private",
     "--replace",
-  ], { encoding: "utf8" });
+  ]);
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /tracked by the parent repository/);
@@ -332,15 +345,14 @@ test("new_game --private replacement replaces an invalid old nested git director
   mkdirSync(join(root, "games", "secret-game", ".git"), { recursive: true });
   writeFileSync(join(root, "games", "secret-game", "CMakeLists.txt"), "existing private file\n", "utf8");
 
-  const result = spawnSync(process.execPath, [
-    script,
+  const result = invokeNewGame([
     "--root",
     root,
     "--id",
     "secret-game",
     "--private",
     "--replace",
-  ], { encoding: "utf8" });
+  ]);
 
   assert.equal(result.status, 0);
   assert.notEqual(readFileSync(join(root, "games", "secret-game", "CMakeLists.txt"), "utf8"), "existing private file\n");
@@ -350,7 +362,7 @@ test("new_game --private replacement replaces an invalid old nested git director
 test("new_game public --replace refuses an existing private owner without side effects", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  execFileSync(process.execPath, [script, "--root", root, "--id", "secret-game", "--private"], { encoding: "utf8" });
+  execNewGame(["--root", root, "--id", "secret-game", "--private"]);
   const destination = join(root, "games", "secret-game");
   writeFileSync(join(destination, "private-history.txt"), "private bytes\n", "utf8");
   execFileSync("git", ["add", "."], { cwd: destination, stdio: "ignore" });
@@ -362,7 +374,7 @@ test("new_game public --replace refuses an existing private owner without side e
   const beforeExclude = readFileSync(excludePath);
   const beforePrivate = readFileSync(join(destination, "private-history.txt"));
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "secret-game", "--visibility", "public", "--replace"], { encoding: "utf8" });
+  const result = invokeNewGame(["--root", root, "--id", "secret-game", "--visibility", "public", "--replace"]);
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /already owned by a private game/);
@@ -377,8 +389,8 @@ test("new_game public --replace refuses an existing private owner without side e
 test("new_game --replace updates the same registry entry", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  execFileSync(process.execPath, [script, "--root", root, "--id", "test-game"], { encoding: "utf8" });
-  execFileSync(process.execPath, [script, "--root", root, "--id", "test-game", "--title", "Replaced Game", "--replace"], { encoding: "utf8" });
+  execNewGame(["--root", root, "--id", "test-game"]);
+  execNewGame(["--root", root, "--id", "test-game", "--title", "Replaced Game", "--replace"]);
 
   const registry = JSON.parse(readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8"));
   assert.equal(registry.mounts.filter((mount) => mount.root === "games/test-game").length, 1);
@@ -421,7 +433,7 @@ test("new_game --template copies a registered template id", (t) => {
   execFileSync("git", ["add", "templates/cozy-template", "ai_studio/workspace/catalog.json"], { cwd: root, stdio: "ignore" });
   execFileSync("git", ["commit", "-m", "cozy template fixture"], { cwd: root, stdio: "ignore" });
 
-  const output = execFileSync(process.execPath, [script, "--root", root, "--id", "cozy-game", "--template", "cozy-template"], { encoding: "utf8" });
+  const output = execNewGame(["--root", root, "--id", "cozy-game", "--template", "cozy-template"]);
 
   assert.match(output, /new game 'cozy-game' created from templates\/cozy-template\/ -> games\/cozy-game\//);
   assert.equal(existsSync(join(root, "games", "cozy-game", "assets", "cozy.txt")), true);
@@ -433,7 +445,7 @@ test("new_game --template rejects unregistered template ids", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "test-game", "--template", "paused-template"], { encoding: "utf8" });
+  const result = invokeNewGame(["--root", root, "--id", "test-game", "--template", "paused-template"]);
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /template 'paused-template' is not registered or is disabled/);
@@ -452,7 +464,7 @@ test("new_game refuses dependency placeholders outside an exact Git checkout", (
     schema: "ai_studio.game.dependencies.seed.v2", engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" }, features: [], compatibility: "tested",
   }), "utf8");
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "test-game"], { encoding: "utf8" });
+  const result = invokeNewGame(["--root", root, "--id", "test-game"]);
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /requires an exact Git revision/);
@@ -467,7 +479,7 @@ test("new_game rejects a clean engine checkout that differs from the parent gitl
   execFileSync("git", ["add", "."], { cwd: engineRoot, stdio: "ignore" });
   execFileSync("git", ["commit", "-m", "advance engine"], { cwd: engineRoot, stdio: "ignore" });
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "test-game"], { encoding: "utf8" });
+  const result = invokeNewGame(["--root", root, "--id", "test-game"]);
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /engine checkout HEAD must match the parent engine gitlink/);
@@ -509,7 +521,7 @@ test("existing destination is byte-safe without --replace", (t) => {
   mkdirSync(destination, { recursive: true });
   writeFileSync(join(destination, "stale.txt"), "keep exactly\n", "utf8");
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "test-game"], { encoding: "utf8" });
+  const result = invokeNewGame(["--root", root, "--id", "test-game"]);
 
   assert.equal(result.status, 1);
   assert.equal(readFileSync(join(destination, "stale.txt"), "utf8"), "keep exactly\n");
@@ -523,7 +535,7 @@ test("--replace publishes a complete tree and removes stale destination files", 
   mkdirSync(destination, { recursive: true });
   writeFileSync(join(destination, "stale.txt"), "obsolete\n", "utf8");
 
-  execFileSync(process.execPath, [script, "--root", root, "--id", "test-game", "--replace"], { encoding: "utf8" });
+  execNewGame(["--root", root, "--id", "test-game", "--replace"]);
 
   assert.equal(existsSync(join(destination, "stale.txt")), false);
   assert.equal(existsSync(join(destination, "game.json")), true);
@@ -544,7 +556,7 @@ test("identity is reread from game.json and drives title, storage, tests, IDE, a
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  execFileSync(process.execPath, [script, "--root", root, "--id", "moon-game", "--title", "Moon Game", "--storage-namespace", "moon-save"], { encoding: "utf8" });
+  execNewGame(["--root", root, "--id", "moon-game", "--title", "Moon Game", "--storage-namespace", "moon-save"]);
 
   const gameDir = join(root, "games", "moon-game");
   assert.deepEqual(JSON.parse(readFileSync(join(gameDir, "game.json"), "utf8")), {
@@ -564,7 +576,7 @@ test("two generated games have unique runtime and test storage namespaces", (t) 
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
   for (const id of ["alpha-game", "beta-game"]) {
-    execFileSync(process.execPath, [script, "--root", root, "--id", id], { encoding: "utf8" });
+    execNewGame(["--root", root, "--id", id]);
     assert.match(readFileSync(join(root, "games", id, "CMakeLists.txt"), "utf8"), new RegExp(`GAME_STORAGE_APP_ID="${id}"`));
     assert.match(readFileSync(join(root, "games", id, "cmake", "GameTests.cmake"), "utf8"), new RegExp(`GAME_STORAGE_APP_ID="${id}-test"`));
   }
@@ -573,10 +585,10 @@ test("two generated games have unique runtime and test storage namespaces", (t) 
 test("different game ids cannot claim the same storage namespace", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  execFileSync(process.execPath, [script, "--root", root, "--id", "alpha-game", "--storage-namespace", "shared-save"], { encoding: "utf8" });
+  execNewGame(["--root", root, "--id", "alpha-game", "--storage-namespace", "shared-save"]);
   const beforeCatalog = readFileSync(join(root, "ai_studio", "workspace", "catalog.json"));
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "beta-game", "--storage-namespace", "shared-save"], { encoding: "utf8" });
+  const result = invokeNewGame(["--root", root, "--id", "beta-game", "--storage-namespace", "shared-save"]);
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /storage namespace 'shared-save' is already owned by game 'alpha-game'/);
@@ -630,7 +642,7 @@ test("an abandoned unpublished lock candidate cannot brick new-game creation", (
   mkdirSync(abandoned, { recursive: true });
   writeFileSync(join(abandoned, "partial-owner.json"), "partial\n", "utf8");
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "healthy-game"], { encoding: "utf8" });
+  const result = invokeNewGame(["--root", root, "--id", "healthy-game"]);
 
   assert.equal(result.status, 0);
   assert.equal(existsSync(join(root, "games", "healthy-game", "game.json")), true);
@@ -658,7 +670,7 @@ test("new-game removes only exact abandoned dead-owner claim candidates", (t) =>
   utimesSync(live, old, old);
   utimesSync(released, old, old);
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "cleanup-game"], { encoding: "utf8" });
+  const result = invokeNewGame(["--root", root, "--id", "cleanup-game"]);
 
   assert.equal(result.status, 0);
   assert.equal(existsSync(abandoned), false);
@@ -680,7 +692,7 @@ test("identity transform fails closed on a drifted required token", (t) => {
   execFileSync("git", ["commit", "-m", "drift identity token"], { cwd: root, stdio: "ignore" });
   const beforeCatalog = readFileSync(join(root, "ai_studio", "workspace", "catalog.json"));
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "drift-game", "--replace"], { encoding: "utf8" });
+  const result = invokeNewGame(["--root", root, "--id", "drift-game", "--replace"]);
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /identity-owned template token drifted in cmake[\\/]GameOptions\.cmake/);
@@ -694,8 +706,8 @@ test("late public registration failure restores destination and all external byt
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const beforeCatalog = readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8");
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "rollback-game"], {
-    encoding: "utf8", env: { ...process.env, NODE_ENV: "test", AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "public-registration" },
+  const result = invokeNewGame(["--root", root, "--id", "rollback-game"], {
+    NODE_ENV: "test", AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "public-registration",
   });
 
   assert.equal(result.status, 1);
@@ -710,14 +722,10 @@ test("late public failure preserves concurrent catalog, IDE, Taskboard, and coun
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "rollback-game"], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
+  const result = invokeNewGame(["--root", root, "--id", "rollback-game"], {
       NODE_ENV: "test",
       AI_STUDIO_NEW_GAME_TEST_CONCURRENT_SENTINEL: "1",
       AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "public-registration",
-    },
   });
 
   assert.equal(result.status, 1);
@@ -734,14 +742,10 @@ test("late public failure preserves external writes made before post-write captu
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "rollback-game"], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
+  const result = invokeNewGame(["--root", root, "--id", "rollback-game"], {
       NODE_ENV: "test",
       AI_STUDIO_NEW_GAME_TEST_CONCURRENT_SENTINEL_AT: "before-post-capture",
       AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "public-registration",
-    },
   });
 
   assert.equal(result.status, 1);
@@ -756,17 +760,14 @@ test("late public failure preserves external writes made before post-write captu
 test("failure after existing Taskboard title update CAS-restores only the owned mutation", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  execFileSync(process.execPath, [script, "--root", root, "--id", "rollback-game", "--title", "Original Title"], { encoding: "utf8" });
+  execNewGame(["--root", root, "--id", "rollback-game", "--title", "Original Title"]);
   const projectPath = join(taskboardItems(root), "projects", readdirSync(join(taskboardItems(root), "projects")).find((name) => name.startsWith("P001-")));
   const beforeProject = readFileSync(projectPath);
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "rollback-game", "--title", "Changed Title", "--replace"], {
-    encoding: "utf8",
-    env: {
-      ...process.env, NODE_ENV: "test",
+  const result = invokeNewGame(["--root", root, "--id", "rollback-game", "--title", "Changed Title", "--replace"], {
+      NODE_ENV: "test",
       AI_STUDIO_NEW_GAME_TEST_CONCURRENT_SENTINEL: "1",
       AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "after-taskboard",
-    },
   });
 
   assert.equal(result.status, 1);
@@ -783,13 +784,10 @@ test("failure after creating a Taskboard project CAS-removes only that new file"
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "created-rollback"], {
-    encoding: "utf8",
-    env: {
-      ...process.env, NODE_ENV: "test",
+  const result = invokeNewGame(["--root", root, "--id", "created-rollback"], {
+      NODE_ENV: "test",
       AI_STUDIO_NEW_GAME_TEST_CONCURRENT_SENTINEL: "1",
       AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "after-taskboard",
-    },
   });
 
   assert.equal(result.status, 1);
@@ -805,13 +803,10 @@ test("rollback phases continue after an injected Taskboard inverse failure", (t)
   t.after(() => rmSync(root, { recursive: true, force: true }));
   const beforeCatalog = readFileSync(join(root, "ai_studio", "workspace", "catalog.json"));
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "residual-game"], {
-    encoding: "utf8",
-    env: {
-      ...process.env, NODE_ENV: "test",
+  const result = invokeNewGame(["--root", root, "--id", "residual-game"], {
+      NODE_ENV: "test",
       AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "after-taskboard",
       AI_STUDIO_NEW_GAME_TEST_FAIL_ROLLBACK_AT: "taskboard",
-    },
   });
 
   assert.equal(result.status, 1);
@@ -831,9 +826,8 @@ test("partial backup cleanup failure is post-commit and retains the published re
   writeFileSync(join(destination, "old-a.txt"), "old a\n", "utf8");
   writeFileSync(join(destination, "old-b.txt"), "old b\n", "utf8");
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "cleanup-pending-game", "--replace"], {
-    encoding: "utf8",
-    env: { ...process.env, NODE_ENV: "test", AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "backup-cleanup-partial" },
+  const result = invokeNewGame(["--root", root, "--id", "cleanup-pending-game", "--replace"], {
+    NODE_ENV: "test", AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "backup-cleanup-partial",
   });
 
   assert.equal(result.status, 0);
@@ -856,8 +850,8 @@ test("replacement rollback restores the exact old destination", (t) => {
   mkdirSync(destination, { recursive: true });
   writeFileSync(join(destination, "old.txt"), "old bytes\n", "utf8");
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "rollback-game", "--replace"], {
-    encoding: "utf8", env: { ...process.env, NODE_ENV: "test", AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "public-registration" },
+  const result = invokeNewGame(["--root", root, "--id", "rollback-game", "--replace"], {
+    NODE_ENV: "test", AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "public-registration",
   });
 
   assert.equal(result.status, 1);
@@ -871,8 +865,8 @@ test("late private preflight failure restores exclude/catalog and leaves no game
   const excludePath = join(root, ".git", "info", "exclude");
   const beforeExclude = existsSync(excludePath) ? readFileSync(excludePath, "utf8") : null;
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "secret-game", "--private"], {
-    encoding: "utf8", env: { ...process.env, NODE_ENV: "test", AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "private-preflight" },
+  const result = invokeNewGame(["--root", root, "--id", "secret-game", "--private"], {
+    NODE_ENV: "test", AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "private-preflight",
   });
 
   assert.equal(result.status, 1);
@@ -888,14 +882,10 @@ test("private rollback preserves unrelated exclude bytes written before post-wri
   const beforeExclude = "# local excludes\r\n\r\n/custom-cache/\r\n";
   writeFileSync(excludePath, beforeExclude, "utf8");
 
-  const result = spawnSync(process.execPath, [script, "--root", root, "--id", "secret-game", "--private"], {
-    encoding: "utf8",
-    env: {
-      ...process.env,
+  const result = invokeNewGame(["--root", root, "--id", "secret-game", "--private"], {
       NODE_ENV: "test",
       AI_STUDIO_NEW_GAME_TEST_CONCURRENT_SENTINEL_AT: "before-post-capture",
       AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "private-preflight",
-    },
   });
 
   assert.equal(result.status, 1);
@@ -906,9 +896,9 @@ test("private rollback preserves unrelated exclude bytes written before post-wri
 test("successful and failed runs leave no staging or backup siblings", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  execFileSync(process.execPath, [script, "--root", root, "--id", "good-game"], { encoding: "utf8" });
-  spawnSync(process.execPath, [script, "--root", root, "--id", "bad-game"], {
-    encoding: "utf8", env: { ...process.env, NODE_ENV: "test", AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "public-registration" },
+  execNewGame(["--root", root, "--id", "good-game"]);
+  invokeNewGame(["--root", root, "--id", "bad-game"], {
+    NODE_ENV: "test", AI_STUDIO_NEW_GAME_TEST_FAIL_AT: "public-registration",
   });
   const names = readdirSync(join(root, "games"));
   assert.deepEqual(names.filter((name) => name.includes(".new-") || name.includes(".backup-")), []);
