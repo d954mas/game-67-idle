@@ -185,6 +185,78 @@ test("asset Python unittests share one interpreter while dot-named files stay ex
   assert.equal(calls.slice(1).every((command) => command.at(-1).endsWith(".test.py")), true);
 });
 
+test("owner Node and Python test lanes overlap before explicit validation commands", async () => {
+  const root = mkdtempSync(join(tmpdir(), "studio-domain-lanes-"));
+  const files = [
+    "ai_studio/assets/canvas/example.test.mjs",
+    "ai_studio/assets/canvas/tools/example_test.py",
+    "ai_studio/architecture_map/example.test.mjs",
+  ];
+  try {
+    for (const path of files) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), "");
+    }
+    const events = [];
+    const result = await runOwnedDomain({
+      id: "mixed-owner",
+      checks: ["studio.assets.canvas", "studio.assets.canvas-python", "studio.architecture-map"],
+    }, {
+      root,
+      runCommand: async (_command, args) => {
+        const isNodeTests = args[0] === "--test";
+        const isPython = args.includes("ai_studio/dev_environment/python_run.mjs");
+        const lane = isNodeTests ? "node" : isPython ? "python" : "validate";
+        events.push(`${lane}:start`);
+        if (isNodeTests) await new Promise((resolveWait) => setTimeout(resolveWait, 30));
+        events.push(`${lane}:finish`);
+        return { status: 0, tail: "" };
+      },
+    });
+    assert.equal(result.status, 0);
+    assert.ok(events.indexOf("python:start") < events.indexOf("node:finish"), events.join(", "));
+    assert.ok(events.indexOf("validate:start") > events.indexOf("node:finish"), events.join(", "));
+    assert.ok(events.indexOf("validate:start") > events.indexOf("python:finish"), events.join(", "));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("parallel owner test lanes report Node failure first and skip validation", async () => {
+  const root = mkdtempSync(join(tmpdir(), "studio-domain-lane-failure-"));
+  const files = [
+    "ai_studio/assets/canvas/example.test.mjs",
+    "ai_studio/assets/canvas/tools/example_test.py",
+    "ai_studio/architecture_map/example.test.mjs",
+  ];
+  try {
+    for (const path of files) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), "");
+    }
+    const calls = [];
+    const result = await runOwnedDomain({
+      id: "mixed-owner",
+      checks: ["studio.assets.canvas", "studio.assets.canvas-python", "studio.architecture-map"],
+    }, {
+      root,
+      runCommand: async (_command, args) => {
+        const isNodeTests = args[0] === "--test";
+        const isPython = args.includes("ai_studio/dev_environment/python_run.mjs");
+        calls.push(isNodeTests ? "node" : isPython ? "python" : "validate");
+        if (isNodeTests) return { status: 1, tail: "node failed" };
+        if (isPython) return { status: 1, tail: "python failed" };
+        return { status: 0, tail: "" };
+      },
+    });
+    assert.deepEqual(calls.sort(), ["node", "python"]);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /^\[mixed-owner\]\nnode failed$/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("new Python tests under an owned root need no registry edit", async () => {
   const root = mkdtempSync(join(tmpdir(), "studio-python-discovery-"));
   const path = "ai_studio/assets/tools/example/new_tool_test.py";

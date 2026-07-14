@@ -371,34 +371,46 @@ export async function runOwnedDomain(domain, options = {}) {
   }
 
   const nodeTests = [...new Set(checks.flatMap((check) => nodeTestsForCheck(root, check)))];
-  const steps = [];
+  const nodeSteps = [];
+  const pythonSteps = [];
+  const commandSteps = [];
   if (nodeTests.length) {
-    steps.push({ owner: domain.id, command: process.execPath, args: ["--test", `--test-concurrency=${NODE_TEST_CONCURRENCY}`, ...nodeTests] });
+    nodeSteps.push({ owner: domain.id, command: process.execPath, args: ["--test", `--test-concurrency=${NODE_TEST_CONCURRENCY}`, ...nodeTests] });
   }
   for (const check of checks) {
     const pythonTests = pythonTestsForCheck(root, check);
     for (const [command, ...args] of pythonCommands(pythonTests, { batchUnittest: check.batchPythonUnittest })) {
-      steps.push({ owner: check.id, command, args });
+      pythonSteps.push({ owner: check.id, command, args });
     }
     for (const [command, ...args] of check.commandsByPlatform?.[platform] || check.commands || []) {
-      steps.push({ owner: check.id, command, args });
+      commandSteps.push({ owner: check.id, command, args });
     }
   }
 
-  if (steps.length === 0) {
+  if (nodeSteps.length + pythonSteps.length + commandSteps.length === 0) {
     return { status: 0, classification: "not-applicable", reason: "no deterministic technical checks" };
   }
 
   const runCommand = options.runCommand || ((command, args) => runCommandBounded(command, args, { root }));
-  for (const step of steps) {
-    const result = await runCommand(step.command, step.args, { root });
-    if (result.status !== 0) {
-      return {
-        status: result.status,
-        ...(result.setupError ? { setupError: true } : {}),
-        stderr: `[${step.owner}]\n${result.tail || result.stderr || result.stdout || "check failed"}`,
-      };
+  const runSteps = async (steps) => {
+    for (const step of steps) {
+      const result = await runCommand(step.command, step.args, { root });
+      if (result.status !== 0) return { step, result };
     }
+    return null;
+  };
+  const [nodeFailure, pythonFailure] = await Promise.all([
+    runSteps(nodeSteps),
+    runSteps(pythonSteps),
+  ]);
+  const failure = nodeFailure || pythonFailure || await runSteps(commandSteps);
+  if (failure) {
+    const { step, result } = failure;
+    return {
+      status: result.status,
+      ...(result.setupError ? { setupError: true } : {}),
+      stderr: `[${step.owner}]\n${result.tail || result.stderr || result.stdout || "check failed"}`,
+    };
   }
   return { status: 0, stdout: "", stderr: "" };
 }
