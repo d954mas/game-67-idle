@@ -53,6 +53,17 @@ async function runInProcess(env, ...args) {
   }
 }
 
+async function runInProcessFail(env, ...args) {
+  let failure;
+  try {
+    await runInProcess(env, ...args);
+  } catch (error) {
+    failure = error;
+  }
+  assert.ok(failure, `expected "${args.join(" ")}" to fail`);
+  return failure;
+}
+
 function ensurePrivateGameMount(root, gameId = "secret-game", enabledStores = ["canvas"]) {
   const gameRoot = join(root, "games", gameId);
   mkdirSync(gameRoot, { recursive: true });
@@ -125,21 +136,21 @@ test("cli create/add-image/undo/redo/history/export smoke", async (t) => {
   assert.equal(stats.errors.count, 0);
 });
 
-test("cli stores Canvas project ownership and filters by owner game", (t) => {
+test("cli stores Canvas project ownership and filters by owner game", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-owner-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const owned = run(env, "create", "--title", "Owned Canvas", "--owner-game", "fixture-game").project;
+  const owned = (await runInProcess(env, "create", "--title", "Owned Canvas", "--owner-game", "fixture-game")).project;
   assert.deepEqual(owned.ownership, { kind: "game", gameId: "fixture-game" });
   assert.match(runFail(env, "create", "--owner-game").stderr, /requires a game id/);
-  assert.equal(run(env, "list", "--owner-game", "fixture-game").projects[0].id, owned.id);
-  assert.equal(run(env, "list", "--owner-game", "another-game").projects.length, 0);
+  assert.equal((await runInProcess(env, "list", "--owner-game", "fixture-game")).projects[0].id, owned.id);
+  assert.equal((await runInProcess(env, "list", "--owner-game", "another-game")).projects.length, 0);
 
-  const changed = run(env, "project-set", owned.id, "--owner-game", "another-game").project;
+  const changed = (await runInProcess(env, "project-set", owned.id, "--owner-game", "another-game")).project;
   assert.deepEqual(changed.ownership, { kind: "game", gameId: "another-game" });
 
-  const cleared = run(env, "project-set", owned.id, "--owner-game", "none").project;
+  const cleared = (await runInProcess(env, "project-set", owned.id, "--owner-game", "none")).project;
   assert.equal(Object.hasOwn(cleared, "ownership"), false);
 });
 
@@ -165,40 +176,38 @@ test("cli list hides archived projects unless requested while show remains avail
   assert.deepEqual(restored.ownership, archived.ownership);
 });
 
-test("cli routes selected private game canvas store and keeps default list public-only", (t) => {
+test("cli routes selected private game canvas store and keeps default list public-only", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "canvas-cli-private-root-"));
   const publicRoot = join(root, "public-canvas");
   const privateStore = ensurePrivateGameMount(root);
   const env = { AI_STUDIO_ROOT: root, CANVAS_PROJECTS_ROOT: publicRoot };
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const publicProject = run(env, "create", "--title", "Public Canvas").project;
-  const privateProject = run(env, "create", "--game", privateStore.gameId, "--title", "Private Canvas", "--owner-game", privateStore.gameId).project;
+  const publicProject = (await runInProcess(env, "create", "--title", "Public Canvas")).project;
+  const privateProject = (await runInProcess(env, "create", "--game", privateStore.gameId, "--title", "Private Canvas", "--owner-game", privateStore.gameId)).project;
   assert.deepEqual(privateProject.ownership, { kind: "game", gameId: privateStore.gameId });
 
   assert.equal(existsSync(join(publicRoot, publicProject.id, "project.json")), true);
   assert.equal(existsSync(join(privateStore.canvasRoot, privateProject.id, "project.json")), true);
   assert.equal(existsSync(join(publicRoot, privateProject.id)), false);
 
-  const normal = run(env, "list");
+  const normal = await runInProcess(env, "list");
   assert.deepEqual(normal.projects.map((project) => project.title), ["Public Canvas"]);
   assert.deepEqual(normal.projects.map((project) => project.storeId), ["studio"]);
 
-  const included = run(env, "list", "--include-private");
+  const included = await runInProcess(env, "list", "--include-private");
   const privateRow = included.projects.find((project) => project.storeId === "game:secret-game");
   assert.equal(privateRow.title, "Private Canvas");
   assert.equal(privateRow.visibility, "private");
   assert.equal(privateRow.qualifiedId, `game:secret-game:${privateProject.id}`);
 
-  const blockedExport = runFail(env, "export", privateProject.id, "--game", privateStore.gameId, "--all", "--to", join(root, "public-export-leak"));
-  assert.equal(blockedExport.status, 1);
-  assert.match(blockedExport.stderr, /private Canvas export/);
+  const blockedExport = await runInProcessFail(env, "export", privateProject.id, "--game", privateStore.gameId, "--all", "--to", join(root, "public-export-leak"));
+  assert.match(blockedExport.message, /private Canvas export/);
   assert.equal(existsSync(join(root, "public-export-leak")), false);
 
-  const barePrivateShow = runFail(env, "show", privateProject.id);
-  assert.equal(barePrivateShow.status, 1);
-  assert.match(barePrivateShow.stderr, /non-studio store/);
-  assert.match(barePrivateShow.stderr, /pass --store or --game/);
+  const barePrivateShow = await runInProcessFail(env, "show", privateProject.id);
+  assert.match(barePrivateShow.message, /non-studio store/);
+  assert.match(barePrivateShow.message, /pass --store or --game/);
 
   const privateDuplicateDir = join(privateStore.canvasRoot, publicProject.id);
   mkdirSync(privateDuplicateDir, { recursive: true });
@@ -213,21 +222,19 @@ test("cli routes selected private game canvas store and keeps default list publi
     tool_runs: [],
   }, null, 2) + "\n", "utf8");
 
-  const ambiguousShow = runFail(env, "show", publicProject.id);
-  assert.equal(ambiguousShow.status, 1);
-  assert.match(ambiguousShow.stderr, /ambiguous across mounted stores/);
-  assert.match(ambiguousShow.stderr, /pass --store or --game/);
+  const ambiguousShow = await runInProcessFail(env, "show", publicProject.id);
+  assert.match(ambiguousShow.message, /ambiguous across mounted stores/);
+  assert.match(ambiguousShow.message, /pass --store or --game/);
 
   if (process.platform === "win32") {
     const caseVariantLeak = join(root.toUpperCase(), "public-export-case-leak");
-    const blockedCaseExport = runFail(env, "export", privateProject.id, "--game", privateStore.gameId, "--all", "--to", caseVariantLeak);
-    assert.equal(blockedCaseExport.status, 1);
-    assert.match(blockedCaseExport.stderr, /private Canvas export/);
+    const blockedCaseExport = await runInProcessFail(env, "export", privateProject.id, "--game", privateStore.gameId, "--all", "--to", caseVariantLeak);
+    assert.match(blockedCaseExport.message, /private Canvas export/);
     assert.equal(existsSync(join(root, "public-export-case-leak")), false);
   }
 });
 
-test("cli ignores accidental game-local Canvas folders unless the mount explicitly enables Canvas", (t) => {
+test("cli ignores accidental game-local Canvas folders unless the mount explicitly enables Canvas", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "canvas-cli-no-auto-mount-"));
   const publicRoot = join(root, "public-canvas");
   const privateStore = ensurePrivateGameMount(root, "no-canvas", ["assets"]);
@@ -235,9 +242,9 @@ test("cli ignores accidental game-local Canvas folders unless the mount explicit
   const env = { CANVAS_PROJECTS_ROOT: publicRoot, AI_STUDIO_ROOT: root };
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
-  const listed = run(env, "list", "--include-private");
+  const listed = await runInProcess(env, "list", "--include-private");
   assert.deepEqual(listed.stores.map((store) => store.storeId), ["studio"]);
-  assert.match(runFail(env, "create", "--game", privateStore.gameId, "--title", "Should Fail").stderr, /No Canvas store/);
+  assert.match((await runInProcessFail(env, "create", "--game", privateStore.gameId, "--title", "Should Fail")).message, /No Canvas store/);
 });
 
 test("cli history-list + history-jump parity (Base spine + jump reaches panel states)", (t) => {
@@ -404,23 +411,23 @@ test("cli group-set --clip toggles the frame clip flag (no python)", async (t) =
   assert.equal("clip" in (await runInProcess(env, "show", projectId)).project.groups[0], false, "clip false removes the field");
 });
 
-test("cli group-set --screen toggles the export opt-in flag (T0332 B1, no python); absent by default", (t) => {
+test("cli group-set --screen toggles the export opt-in flag (T0332 B1, no python); absent by default", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-screen-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const projectId = run(env, "create", "--title", "CLI Screen").project.id;
-  const groupId = run(env, "group-create", projectId, "--name", "Frame", "--x", "0", "--y", "0", "--w", "80", "--h", "60").group.id;
-  assert.equal("screen" in run(env, "show", projectId).project.groups[0], false, "absent by default on a freshly created group");
+  const projectId = (await runInProcess(env, "create", "--title", "CLI Screen")).project.id;
+  const groupId = (await runInProcess(env, "group-create", projectId, "--name", "Frame", "--x", "0", "--y", "0", "--w", "80", "--h", "60")).group.id;
+  assert.equal("screen" in (await runInProcess(env, "show", projectId)).project.groups[0], false, "absent by default on a freshly created group");
 
-  run(env, "group-set", projectId, "--group", groupId, "--screen", "true");
-  assert.equal(run(env, "show", projectId).project.groups[0].screen, true, "screen true set");
+  await runInProcess(env, "group-set", projectId, "--group", groupId, "--screen", "true");
+  assert.equal((await runInProcess(env, "show", projectId)).project.groups[0].screen, true, "screen true set");
 
-  run(env, "group-set", projectId, "--group", groupId, "--screen", "false");
-  assert.equal("screen" in run(env, "show", projectId).project.groups[0], false, "screen false removes the field");
+  await runInProcess(env, "group-set", projectId, "--group", groupId, "--screen", "false");
+  assert.equal("screen" in (await runInProcess(env, "show", projectId)).project.groups[0], false, "screen false removes the field");
 
   const badScreen = runFail(env, "group-set", projectId, "--group", groupId, "--screen", "maybe");
-  assert.match(String(badScreen.stderr || badScreen.message), /--screen must be true, false, 1, or 0/);
+  assert.match(badScreen.stderr, /--screen must be true, false, 1, or 0/);
 });
 
 test("cli nodes-duplicate / nodes-delete / nodes-paste parity (one undo each)", async (t) => {
@@ -623,46 +630,46 @@ test("cli list: summary by default (id/title/created/updated/counts/head); --ful
 
 // ---- T0254 Tier 1 #4: strict boolean parser on every boolean flag site ------------
 
-test("cli parseBool: junk boolean values are a loud, flag-naming error on every boolean flag site (no silent coercion either direction)", (t) => {
+test("cli parseBool: junk boolean values are a loud, flag-naming error on every boolean flag site (no silent coercion either direction)", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-bool-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   const pngPath = join(dir, "pic.png");
   writeFileSync(pngPath, solidPng(4, 4, [1, 2, 3]));
-  const projectId = run(env, "create", "--title", "Bool Parity").project.id;
-  const elementId = run(env, "add-image", projectId, "--file", pngPath).element.id;
-  const groupId = run(env, "group-create", projectId, "--name", "G", "--x", "0", "--y", "0", "--w", "10", "--h", "10").group.id;
+  const projectId = (await runInProcess(env, "create", "--title", "Bool Parity")).project.id;
+  const elementId = (await runInProcess(env, "add-image", projectId, "--file", pngPath)).element.id;
+  const groupId = (await runInProcess(env, "group-create", projectId, "--name", "G", "--x", "0", "--y", "0", "--w", "10", "--h", "10")).group.id;
 
   // Junk on EVERY boolean flag site is a loud, flag-naming refusal — not a silent
   // guess (the bug this replaces: junk resolved to *false* in element-set but *true*
   // in group-set for the exact same --visible flag).
   const elementSetFail = runFail(env, "element-set", projectId, "--element", elementId, "--visible", "maybe");
-  assert.match(String(elementSetFail.stderr || elementSetFail.message), /--visible must be true, false, 1, or 0/);
+  assert.match(elementSetFail.stderr, /--visible must be true, false, 1, or 0/);
 
   const flipFail = runFail(env, "element-set", projectId, "--element", elementId, "--flip-h", "maybe");
-  assert.match(String(flipFail.stderr || flipFail.message), /--flip-h must be true, false, 1, or 0/);
+  assert.match(flipFail.stderr, /--flip-h must be true, false, 1, or 0/);
 
   const groupSetFail = runFail(env, "group-set", projectId, "--group", groupId, "--visible", "maybe");
-  assert.match(String(groupSetFail.stderr || groupSetFail.message), /--visible must be true, false, 1, or 0/);
+  assert.match(groupSetFail.stderr, /--visible must be true, false, 1, or 0/);
 
   const groupClipFail = runFail(env, "group-set", projectId, "--group", groupId, "--clip", "maybe");
-  assert.match(String(groupClipFail.stderr || groupClipFail.message), /--clip must be true, false, 1, or 0/);
+  assert.match(groupClipFail.stderr, /--clip must be true, false, 1, or 0/);
 
   const groupsSetFail = runFail(env, "groups-set", projectId, "--groups", groupId, "--visible", "maybe");
-  assert.match(String(groupsSetFail.stderr || groupsSetFail.message), /--visible must be true, false, 1, or 0/);
+  assert.match(groupsSetFail.stderr, /--visible must be true, false, 1, or 0/);
 
   // Both directions resolve CONSISTENTLY once the value is valid: element-set and
   // group-set --visible agree with each other, and 1/0 behave like true/false.
-  run(env, "element-set", projectId, "--element", elementId, "--visible", "false");
-  assert.equal(run(env, "show", projectId).project.elements[0].visible, false);
-  run(env, "element-set", projectId, "--element", elementId, "--visible", "1");
-  assert.equal(run(env, "show", projectId).project.elements[0].visible, true, "1 behaves like true");
+  await runInProcess(env, "element-set", projectId, "--element", elementId, "--visible", "false");
+  assert.equal((await runInProcess(env, "show", projectId)).project.elements[0].visible, false);
+  await runInProcess(env, "element-set", projectId, "--element", elementId, "--visible", "1");
+  assert.equal((await runInProcess(env, "show", projectId)).project.elements[0].visible, true, "1 behaves like true");
 
-  run(env, "group-set", projectId, "--group", groupId, "--visible", "false");
-  assert.equal(run(env, "show", projectId).project.groups[0].visible, false);
-  run(env, "group-set", projectId, "--group", groupId, "--visible", "0");
-  assert.equal(run(env, "show", projectId).project.groups[0].visible, false, "0 behaves like false");
+  await runInProcess(env, "group-set", projectId, "--group", groupId, "--visible", "false");
+  assert.equal((await runInProcess(env, "show", projectId)).project.groups[0].visible, false);
+  await runInProcess(env, "group-set", projectId, "--group", groupId, "--visible", "0");
+  assert.equal((await runInProcess(env, "show", projectId)).project.groups[0].visible, false, "0 behaves like false");
 });
 
 // ---- T0254 Tier 1 #5: element-set --w/--h (+ --x/--y) single-element resize -------
