@@ -3,6 +3,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import subprocess
 import sys
@@ -41,14 +43,19 @@ def progression_schema(*, string_max: object = 64) -> dict:
     }
 
 
+def run_direct(args: list[str]) -> int:
+    with contextlib.redirect_stderr(io.StringIO()):
+        return generator.main(args)
+
+
 class ProgressionTrackGeneratorTest(unittest.TestCase):
-    def run_generator(
+    def generator_args(
         self,
         *,
         track_id: str = "hero",
         schema: dict | None = None,
         include_state_schema: bool = True,
-    ) -> tuple[subprocess.CompletedProcess[str], Path, tempfile.TemporaryDirectory[str]]:
+    ) -> tuple[list[str], Path, tempfile.TemporaryDirectory[str], Path]:
         temp = tempfile.TemporaryDirectory()
         game = Path(temp.name) / "games" / "fixture"
         content = game / "content"
@@ -63,9 +70,7 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         (state / "progression.schema.json").write_text(
             json.dumps(schema if schema is not None else progression_schema()), encoding="utf-8"
         )
-        command = [
-            sys.executable,
-            str(SCRIPT),
+        args = [
             "--catalog",
             str(content / "progression.json"),
             "--items",
@@ -74,13 +79,13 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
             str(out),
         ]
         if include_state_schema:
-            command.extend(["--state-schema", str(state / "progression.schema.json")])
-        result = subprocess.run(command, cwd=game, capture_output=True, text=True, check=False)
-        return result, out, temp
+            args.extend(["--state-schema", str(state / "progression.schema.json")])
+        return args, out, temp, game
 
     def test_state_schema_argument_is_required(self) -> None:
-        result, _out, temp = self.run_generator(include_state_schema=False)
+        args, _out, temp, game = self.generator_args(include_state_schema=False)
         self.addCleanup(temp.cleanup)
+        result = subprocess.run([sys.executable, str(SCRIPT), *args], cwd=game, capture_output=True, text=True, check=False)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("--state-schema", result.stderr)
 
@@ -95,38 +100,38 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         ]
         for document in invalid_documents:
             with self.subTest(document=document):
-                result, _out, temp = self.run_generator(schema=document)
+                args, _out, temp, _game = self.generator_args(schema=document)
                 self.addCleanup(temp.cleanup)
-                self.assertNotEqual(result.returncode, 0)
-                self.assertIn("progression state schema validation", result.stderr)
+                with self.assertRaisesRegex(SystemExit, "progression state schema validation"):
+                    generator.main(args)
 
     def test_track_id_boundary_comes_from_state_schema(self) -> None:
-        accepted, _out, accepted_temp = self.run_generator(track_id="abc", schema=progression_schema(string_max=4))
+        accepted, _out, accepted_temp, _game = self.generator_args(track_id="abc", schema=progression_schema(string_max=4))
         self.addCleanup(accepted_temp.cleanup)
-        self.assertEqual(accepted.returncode, 0, accepted.stderr)
+        self.assertEqual(run_direct(accepted), 0)
 
-        rejected, _out, rejected_temp = self.run_generator(track_id="abcd", schema=progression_schema(string_max=4))
+        rejected, _out, rejected_temp, _game = self.generator_args(track_id="abcd", schema=progression_schema(string_max=4))
         self.addCleanup(rejected_temp.cleanup)
-        self.assertNotEqual(rejected.returncode, 0)
-        self.assertIn("state schema string_max=4", rejected.stderr)
+        with self.assertRaisesRegex(SystemExit, "state schema string_max=4"):
+            generator.main(rejected)
 
-        multibyte_ok, _out, multibyte_ok_temp = self.run_generator(
+        multibyte_ok, _out, multibyte_ok_temp, _game = self.generator_args(
             track_id="éé", schema=progression_schema(string_max=5)
         )
         self.addCleanup(multibyte_ok_temp.cleanup)
-        self.assertEqual(multibyte_ok.returncode, 0, multibyte_ok.stderr)
+        self.assertEqual(run_direct(multibyte_ok), 0)
 
-        multibyte_bad, _out, multibyte_bad_temp = self.run_generator(
+        multibyte_bad, _out, multibyte_bad_temp, _game = self.generator_args(
             track_id="ééé", schema=progression_schema(string_max=5)
         )
         self.addCleanup(multibyte_bad_temp.cleanup)
-        self.assertNotEqual(multibyte_bad.returncode, 0)
-        self.assertIn("6 UTF-8 bytes", multibyte_bad.stderr)
+        with self.assertRaisesRegex(SystemExit, "6 UTF-8 bytes"):
+            generator.main(multibyte_bad)
 
     def test_generated_provenance_uses_game_relative_content_path(self) -> None:
-        result, out, temp = self.run_generator()
+        args, out, temp, _game = self.generator_args()
         self.addCleanup(temp.cleanup)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(run_direct(args), 0)
         for name in ("progression_tracks.gen.h", "progression_tracks.gen.c"):
             generated = (out / name).read_text(encoding="utf-8")
             self.assertIn("from content/progression.json", generated)
