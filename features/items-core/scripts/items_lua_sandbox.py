@@ -17,10 +17,15 @@ SCHEMA = "items.lua.sandbox.v1"
 BACKEND_MODULE = "lupa.lua54"
 DEFAULT_TIMEOUT_MS = 2_000
 DEFAULT_MEMORY_BYTES = 16 * 1024 * 1024
+DEFAULT_INSTRUCTION_LIMIT = 1_000_000
+DEFAULT_RECURSION_LIMIT = 128
+DEFAULT_MAX_OUTPUT_ROWS = 10_000
+DEFAULT_MAX_OUTPUT_BYTES = 8 * 1024 * 1024
 
 
 PRELUDE = r'''
 return function()
+  local raw_debug, raw_math = debug, math
   local raw_pairs, raw_type = pairs, type
   local declarations = {}
 
@@ -56,6 +61,52 @@ return function()
   function levels.table(rows)
     return tagged("levels", { mode = "table", rows = rows })
   end
+  function levels.generate(options)
+    if raw_type(options) ~= "table" or raw_type(options.row) ~= "function" then
+      error("__studio_formula_contract__:levels.generate requires max_level and row", 2)
+    end
+    local index = 1
+    while true do
+      local name = raw_debug.getupvalue(options.row, index)
+      if name == nil then break end
+      error("__studio_mutable_upvalue__:" .. name, 2)
+      index = index + 1
+    end
+    return tagged("levels", {
+      mode = "generate", max_level = options.max_level, row = options.row,
+    })
+  end
+
+  local MAX_EXACT = 9007199254740991
+  local function checked(value)
+    if raw_math.type(value) ~= "integer" or value < -MAX_EXACT or value > MAX_EXACT then
+      error("__studio_math__:expected exact integer", 2)
+    end
+    return value
+  end
+  local studio_math = {}
+  function studio_math.add(a, b)
+    a, b = checked(a), checked(b)
+    if (b > 0 and a > MAX_EXACT - b) or (b < 0 and a < -MAX_EXACT - b) then
+      error("__studio_math__:addition overflow", 2)
+    end
+    return a + b
+  end
+  function studio_math.sub(a, b) return studio_math.add(a, -checked(b)) end
+  function studio_math.mul(a, b)
+    a, b = checked(a), checked(b)
+    if a ~= 0 and b ~= 0 and raw_math.abs(a) > MAX_EXACT // raw_math.abs(b) then
+      error("__studio_math__:multiplication overflow", 2)
+    end
+    return a * b
+  end
+  function studio_math.idiv(a, b)
+    a, b = checked(a), checked(b)
+    if b == 0 then error("__studio_math__:division by zero", 2) end
+    return a // b
+  end
+  function studio_math.min(a, b) a, b = checked(a), checked(b); if a < b then return a else return b end end
+  function studio_math.max(a, b) a, b = checked(a), checked(b); if a > b then return a else return b end end
 
   local function freeze(value, seen)
     if raw_type(value) ~= "table" then return value end
@@ -75,16 +126,50 @@ return function()
     return proxy
   end
 
+  local math_view = freeze(studio_math)
+
+  local function setup_limits(instruction_limit, recursion_limit)
+    local instructions, depth = 0, 0
+    local interval = 100
+    local function fail(marker)
+      local info = raw_debug.getinfo(3, "Sl")
+      local source = info and info.source or "items.lua.json"
+      if string.sub(source, 1, 1) == "@" then source = string.sub(source, 2) end
+      error(marker .. ":" .. source .. ":" .. tostring(info and info.currentline or 1), 0)
+    end
+    raw_debug.sethook(function(event)
+      if event == "count" then
+        instructions = instructions + interval
+        if instructions > instruction_limit then
+          fail("__studio_instruction_limit__")
+        end
+      elseif event == "call" then
+        depth = depth + 1
+        if depth > recursion_limit then
+          fail("__studio_recursion_limit__")
+        end
+      elseif event == "return" then
+        if depth > 0 then depth = depth - 1 end
+      end
+    end, "cr", interval)
+  end
+
   local function finalize()
     table.sort(declarations, function(a, b) return a.id < b.id end)
     for _, definition in ipairs(declarations) do
       local spec = definition.levels
       if spec ~= nil and spec.__studio_kind == "levels" then
         local rows = {}
-        local index = 1
-        while spec.rows[index] ~= nil do
-          rows[index] = spec.rows[index]
-          index = index + 1
+        if spec.mode == "generate" then
+          local max_level = checked(spec.max_level)
+          if max_level < 1 then error("__studio_formula_contract__:max_level must be positive", 0) end
+          for index = 1, max_level do rows[index] = copy(spec.row(index, math_view)) end
+        else
+          local index = 1
+          while spec.rows[index] ~= nil do
+            rows[index] = spec.rows[index]
+            index = index + 1
+          end
         end
         definition.levels = { mode = spec.mode, rows = rows }
       end
@@ -92,7 +177,7 @@ return function()
     return declarations
   end
 
-  return items, levels, finalize, freeze
+  return items, levels, math_view, finalize, freeze, setup_limits
 end
 '''
 
@@ -178,6 +263,53 @@ def _convert(lua_type, value: Any, seen: set[int] | None = None) -> Any:
     return result
 
 
+def _normalize_lua_failure(error: Exception, fallback_file: str, path: str) -> SandboxFailure:
+    if isinstance(error, SandboxFailure):
+        return error
+    message = str(error)
+    match = re.search(r'(?:^|\n)(?:\[string "@)?@?([^"\n:]+\.lua)"?]?:([0-9]+):', message)
+    file = match.group(1).strip() if match else fallback_file
+    line = int(match.group(2)) if match else 1
+    markers = (
+        ("__studio_forbidden_global__:", "sandbox.forbidden_global", "global is unavailable"),
+        ("__studio_global_assignment__:", "sandbox.global_assignment", "global assignment is forbidden"),
+        ("__studio_read_only__:", "sandbox.read_only", "approved input is read-only"),
+        ("__studio_mutable_upvalue__:", "formula.mutable_upvalue", "formula captures mutable upvalue"),
+        ("__studio_math__:", "formula.math", "deterministic math rejected value"),
+        ("__studio_formula_contract__:", "formula.contract", "invalid formula contract"),
+    )
+    for marker, code, summary in markers:
+        if marker in message:
+            detail = message.split(marker, 1)[1].splitlines()[0]
+            return _failure(code, f"{summary}: {detail}", file=file, line=line, path=path)
+    if "__studio_instruction_limit__" in message:
+        marker = re.search(r"__studio_instruction_limit__:([^:\n]+):([0-9]+)", message)
+        return _failure(
+            "sandbox.instruction_limit", "instruction limit exceeded",
+            file=marker.group(1) if marker else fallback_file,
+            line=int(marker.group(2)) if marker else 1, path=path,
+        )
+    if "__studio_recursion_limit__" in message:
+        marker = re.search(r"__studio_recursion_limit__:([^:\n]+):([0-9]+)", message)
+        return _failure(
+            "sandbox.recursion_limit", "recursion limit exceeded",
+            file=marker.group(1) if marker else fallback_file,
+            line=int(marker.group(2)) if marker else 1, path=path,
+        )
+    if type(error).__name__ == "LuaMemoryError" or "not enough memory" in message.lower():
+        return _failure("sandbox.memory_limit", "Lua memory limit exceeded", file=file, line=line, path=path)
+    return _failure("lua.execution", message.splitlines()[0], file=file, line=line, path=path)
+
+
+def _output_rows(items: list[dict[str, Any]]) -> int:
+    rows = len(items)
+    for item in items:
+        levels = item.get("levels")
+        if isinstance(levels, dict) and isinstance(levels.get("rows"), list):
+            rows += len(levels["rows"])
+    return rows
+
+
 def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
     import lupa.lua54 as lupa
 
@@ -191,8 +323,18 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         max_memory=int(request.get("memoryBytes", DEFAULT_MEMORY_BYTES)),
         attribute_filter=lambda _obj, _name, _setting: (_ for _ in ()).throw(AttributeError("access denied")),
     )
-    items, levels, finalize, freeze = runtime.execute(PRELUDE, name="@studio/sandbox.lua", mode="t")()
-    builtins = {"studio.items": freeze(items), "studio.levels": freeze(levels)}
+    items, levels, studio_math, finalize, freeze, setup_limits = runtime.execute(
+        PRELUDE, name="@studio/sandbox.lua", mode="t",
+    )()
+    builtins = {
+        "studio.items": freeze(items),
+        "studio.levels": freeze(levels),
+        "studio.math": studio_math,
+    }
+    setup_limits(
+        int(request.get("instructionLimit", DEFAULT_INSTRUCTION_LIMIT)),
+        int(request.get("recursionLimit", DEFAULT_RECURSION_LIMIT)),
+    )
     cache: dict[str, Any] = {}
     loading: list[str] = []
     make_env = runtime.eval('''function(allowed)
@@ -215,6 +357,12 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
     end''')
 
     def require_module(name: str):
+        if not isinstance(name, str):
+            current = modules[loading[-1]][1] if loading else "items.lua.json"
+            raise _failure(
+                "module.invalid_name", "module name must be a string", file=current,
+                path=f"$.modules.{loading[-1]}.require" if loading else "$.entries",
+            )
         if name in builtins:
             return builtins[name]
         if name in cache:
@@ -247,45 +395,26 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
                     "source.read", f"cannot read Lua source: {error}",
                     file=rel, path=f"$.modules.{name}",
                 ) from error
+            if "^" in source:
+                line = source[:source.index("^")].count("\n") + 1
+                raise _failure(
+                    "source.raw_exponentiation",
+                    "raw exponentiation is unavailable; use the approved Studio math surface",
+                    file=rel, line=line, path=f"$.modules.{name}",
+                )
             allowed = runtime.table_from({
                 "assert": runtime.globals()["assert"],
                 "error": runtime.globals()["error"],
                 "ipairs": runtime.globals()["ipairs"],
-                "pcall": runtime.globals()["pcall"],
                 "select": runtime.globals()["select"],
-                "tonumber": runtime.globals()["tonumber"],
-                "tostring": runtime.globals()["tostring"],
                 "type": runtime.globals()["type"],
                 "require": require_module,
             })
             env = make_env(allowed)
             try:
                 result = compile_chunk(source, f"@{rel}", env)()
-            except SandboxFailure:
-                raise
             except Exception as error:
-                message = str(error)
-                match = re.search(r"(?:^|\n)(?:\[string \"@)?@?([^\"\n:]+\.lua)\"?]?:([0-9]+):", message)
-                line = int(match.group(2)) if match else 1
-                if "__studio_forbidden_global__:" in message:
-                    global_name = message.split("__studio_forbidden_global__:", 1)[1].splitlines()[0]
-                    code = "sandbox.forbidden_global"
-                    clean = f"global is unavailable: {global_name}"
-                elif "__studio_global_assignment__:" in message:
-                    global_name = message.split("__studio_global_assignment__:", 1)[1].splitlines()[0]
-                    code = "sandbox.global_assignment"
-                    clean = f"global assignment is forbidden: {global_name}"
-                elif "__studio_read_only__:" in message:
-                    field_name = message.split("__studio_read_only__:", 1)[1].splitlines()[0]
-                    code = "sandbox.read_only"
-                    clean = f"approved input is read-only: {field_name}"
-                else:
-                    code = "lua.execution"
-                    clean = message.splitlines()[0]
-                raise _failure(
-                    code, clean, file=rel, line=line,
-                    path=f"$.modules.{name}",
-                ) from error
+                raise _normalize_lua_failure(error, rel, f"$.modules.{name}") from error
             cache[name] = True if result is None else freeze(result)
             return cache[name]
         finally:
@@ -293,7 +422,20 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
 
     for name in entries:
         require_module(name)
-    return {
+    fallback = modules[entries[0]][1] if entries else "items.lua.json"
+    try:
+        normalized_items = _convert(lupa.lua_type, finalize())
+    except Exception as error:
+        raise _normalize_lua_failure(error, fallback, "$.items") from error
+    if not isinstance(normalized_items, list):
+        normalized_items = [] if normalized_items == {} else normalized_items
+    max_rows = int(request.get("maxOutputRows", DEFAULT_MAX_OUTPUT_ROWS))
+    if _output_rows(normalized_items) > max_rows:
+        raise _failure(
+            "output.row_limit", f"output exceeds {max_rows} rows",
+            file=fallback, path="$.items",
+        )
+    payload = {
         "schema": "items.lua.evaluation.v1",
         "backend": {
             "package": f"lupa@{importlib.metadata.version('lupa')}",
@@ -301,8 +443,16 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
             "implementation": runtime.lua_implementation,
             "version": ".".join(map(str, runtime.lua_version)),
         },
-        "items": _convert(lupa.lua_type, finalize()),
+        "items": normalized_items,
     }
+    max_bytes = int(request.get("maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES))
+    encoded_size = len(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))
+    if encoded_size > max_bytes:
+        raise _failure(
+            "output.byte_limit", f"output exceeds {max_bytes} bytes",
+            file=fallback, path="$.items",
+        )
+    return payload
 
 
 def _worker() -> int:
@@ -324,6 +474,10 @@ def _parent(args: argparse.Namespace) -> int:
         "root": str(Path(args.root).resolve()),
         "manifest": str(Path(args.manifest).resolve()),
         "memoryBytes": args.memory_bytes,
+        "instructionLimit": args.instruction_limit,
+        "recursionLimit": args.recursion_limit,
+        "maxOutputRows": args.max_output_rows,
+        "maxOutputBytes": args.max_output_bytes,
     }
     try:
         result = subprocess.run(
@@ -332,13 +486,25 @@ def _parent(args: argparse.Namespace) -> int:
             timeout=args.timeout_ms / 1000,
         )
     except subprocess.TimeoutExpired:
-        failure = _failure("sandbox.timeout", "evaluation timed out")
+        try:
+            modules, entries = _load_manifest(Path(request["root"]), Path(request["manifest"]))
+            file = modules[entries[0]][1] if entries else Path(args.manifest).name
+            path = f"$.modules.{entries[0]}" if entries else "$.entries"
+        except Exception:
+            file, path = Path(args.manifest).name, "$"
+        failure = _failure("sandbox.timeout", "evaluation timed out", file=file, path=path)
         print(json.dumps({"schema": "items.lua.error.v1", "error": failure.error}, sort_keys=True), file=sys.stderr)
         return 1
     if result.stdout:
         sys.stdout.write(result.stdout)
     if result.stderr:
         sys.stderr.write(result.stderr)
+    if result.returncode and not result.stderr:
+        failure = _failure(
+            "sandbox.worker_exit", f"isolated worker exited with code {result.returncode}",
+            file=Path(args.manifest).name,
+        )
+        print(json.dumps({"schema": "items.lua.error.v1", "error": failure.error}, sort_keys=True), file=sys.stderr)
     return result.returncode
 
 
@@ -349,6 +515,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--manifest", required=True)
     parser.add_argument("--timeout-ms", type=int, default=DEFAULT_TIMEOUT_MS)
     parser.add_argument("--memory-bytes", type=int, default=DEFAULT_MEMORY_BYTES)
+    parser.add_argument("--instruction-limit", type=int, default=DEFAULT_INSTRUCTION_LIMIT)
+    parser.add_argument("--recursion-limit", type=int, default=DEFAULT_RECURSION_LIMIT)
+    parser.add_argument("--max-output-rows", type=int, default=DEFAULT_MAX_OUTPUT_ROWS)
+    parser.add_argument("--max-output-bytes", type=int, default=DEFAULT_MAX_OUTPUT_BYTES)
     args = parser.parse_args(argv)
     return _parent(args)
 
