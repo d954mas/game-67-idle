@@ -280,7 +280,7 @@ function findDocInDir(dir, kind, id, options = {}) {
   return null;
 }
 
-function looseArchiveGroupDirs(root, options = {}) {
+function pendingArchiveGroupDirs(root, options = {}) {
   const archiveRoot = archiveRootDir(root, options);
   const groups = [];
   if (existsSync(archiveRoot) && lstatSync(archiveRoot).isSymbolicLink()) {
@@ -293,15 +293,6 @@ function looseArchiveGroupDirs(root, options = {}) {
       const dir = join(pending, group);
       const dirStat = lstatSync(dir);
       if (dirStat.isSymbolicLink()) throw new Error(`Taskboard archive group must not be a link: ${dir}`);
-      if (dirStat.isDirectory()) groups.push(dir);
-    }
-  }
-  if (existsSync(archiveRoot)) {
-    for (const name of readdirSync(archiveRoot)) {
-      const dir = join(archiveRoot, name);
-      if (name === "pending") continue;
-      const dirStat = lstatSync(dir);
-      if (dirStat.isSymbolicLink()) throw new Error(`Taskboard legacy archive group must not be a link: ${dir}`);
       if (dirStat.isDirectory()) groups.push(dir);
     }
   }
@@ -323,7 +314,7 @@ function docFromArchiveEntry(entry) {
 }
 
 function findArchivedTask(root, id, options = {}) {
-  for (const dir of looseArchiveGroupDirs(root, options)) {
+  for (const dir of pendingArchiveGroupDirs(root, options)) {
     if (!statSync(dir).isDirectory()) {
       continue;
     }
@@ -336,9 +327,9 @@ function findArchivedTask(root, id, options = {}) {
   return sealed ? docFromArchiveEntry(sealed) : null;
 }
 
-function listLooseArchiveTasks(root, options = {}) {
+function listPendingArchiveTasks(root, options = {}) {
   const docs = [];
-  for (const dir of looseArchiveGroupDirs(root, options)) {
+  for (const dir of pendingArchiveGroupDirs(root, options)) {
     docs.push(...listDocs(dir, "task", { archived: true, rejectLinks: true }));
   }
   docs.sort((a, b) => String(a.fields.id || a.name).localeCompare(String(b.fields.id || b.name)));
@@ -346,7 +337,7 @@ function listLooseArchiveTasks(root, options = {}) {
 }
 
 function listArchiveTasks(root, options = {}) {
-  const docs = [...listLooseArchiveTasks(root, options)];
+  const docs = [...listPendingArchiveTasks(root, options)];
   docs.push(...listSealedTasks(archiveRootDir(root, options)).map(docFromArchiveEntry));
   docs.sort((a, b) => String(a.fields.id || a.name).localeCompare(String(b.fields.id || b.name)));
   return docs;
@@ -382,7 +373,7 @@ export function findDoc(root, id, options = {}) {
 }
 
 export function sealTaskArchive(root, { name, ...options } = {}) {
-  const docs = listLooseArchiveTasks(root, options);
+  const docs = listPendingArchiveTasks(root, options);
   if (!docs.length) throw new Error("no pending Taskboard history to seal");
   const sealedIds = new Set();
   for (const entry of listSealedTasks(archiveRootDir(root, options))) {
@@ -715,7 +706,7 @@ export function createTask(root, input = {}, options = {}) {
   const body = input.body || TASK_BODY_TEMPLATE;
   return createAllocatedDoc(root, options, {
     dir, body, kind: "task", prefix: "T", pad: 4,
-    listDocs: () => [...listTasks(root, options), ...listLooseArchiveTasks(root, options)],
+    listDocs: () => [...listTasks(root, options), ...listPendingArchiveTasks(root, options)],
     makeFields: (id) => ({
       id,
       title: input.title || "Untitled task",
@@ -1022,7 +1013,7 @@ export function validateStoreDetailed(root, options = {}) {
   const problems = [];
   const projects = listProjects(root, options);
   const epics = listEpics(root, options);
-  const tasks = [...listTasks(root, options), ...listLooseArchiveTasks(root, options)];
+  const tasks = [...listTasks(root, options), ...listPendingArchiveTasks(root, options)];
   const seen = new Map();
   let knownQualityIds = null;
   for (const doc of [...projects, ...epics, ...tasks]) {

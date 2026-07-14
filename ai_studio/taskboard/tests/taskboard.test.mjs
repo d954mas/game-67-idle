@@ -532,17 +532,16 @@ test("archive sealing rejects a linked pending group without reading or deleting
   assert.equal(existsSync(outsideFile), true);
 });
 
-test("archive sealing migrates the legacy archive epic directories", (t) => {
+test("archive ignores unsupported loose directories outside pending", (t) => {
   const root = tempRoot(t);
   const legacyDir = join(root, "ai_studio", "taskboard", "items", "archive", "E009");
   const legacyFile = join(legacyDir, "T0099-legacy-history.md");
   mkdirSync(legacyDir, { recursive: true });
   writeFileSync(legacyFile, "---\nid: T0099\ntitle: Legacy history\nstatus: done\nproject: P001\nepic: E009\npriority: P2\ntags: []\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\n## Log\n");
 
-  const sealed = sealTaskArchive(root, { name: "legacy-migration" });
-  assert.equal(existsSync(legacyFile), false);
-  assert.equal(readStoreZip(sealed.file).has("E009/T0099-legacy-history.md"), true);
-  assert.equal(findDoc(root, "T0099", { includeArchive: true }).fields.title, "Legacy history");
+  assert.equal(findDoc(root, "T0099", { includeArchive: true }), null);
+  assert.equal(listTasks(root, { includeArchive: true }).some((doc) => doc.fields.id === "T0099"), false);
+  assert.equal(existsSync(legacyFile), true, "unsupported loose history is never read or deleted");
 });
 
 test("cli list hides ideas by default and shows them explicitly", (t) => {
