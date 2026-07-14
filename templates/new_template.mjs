@@ -5,7 +5,7 @@
 //   node templates/new_template.mjs --id mobile-template
 //   node templates/new_template.mjs --id mobile-template --from templates/template --force
 //   node templates/new_template.mjs --root <repo> --id mobile-template
-import { copyFileSync, existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -77,6 +77,13 @@ if (!existsSync(join(fromDir, "CMakeLists.txt"))) {
 if (existsSync(toDir) && !args.force) {
   console.error(`error: ${toDir} already exists (use --force)`);
   process.exit(1);
+}
+if (existsSync(toDir) && args.force) {
+  if (resolve(fromDir) === resolve(toDir)) {
+    console.error("error: --force source and target must be different templates");
+    process.exit(1);
+  }
+  rmSync(toDir, { recursive: true, force: true });
 }
 
 copyDir(fromDir, toDir);

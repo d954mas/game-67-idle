@@ -93,6 +93,38 @@ test("new_template rejects existing template folders without --force", (t) => {
 
   assert.equal(result.status, 1);
   assert.match(result.stderr, /already exists/);
+
+  const sameSource = spawnSync(process.execPath, [script, "--root", root, "--id", "template", "--force"], { encoding: "utf8" });
+  assert.equal(sameSource.status, 1);
+  assert.match(sameSource.stderr, /source and target must be different/);
+  assert.equal(existsSync(join(root, "templates", "template", "CMakeLists.txt")), true);
+});
+
+test("new_template --force replaces the target without duplicating its registry row", (t) => {
+  const root = tempRepo();
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+
+  execFileSync(process.execPath, [script, "--root", root, "--id", "mobile-template"], { encoding: "utf8" });
+  const target = join(root, "templates", "mobile-template");
+  writeFileSync(join(target, "stale-only.txt"), "must disappear\n", "utf8");
+  writeFileSync(join(root, "templates", "template", "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.30)\n", "utf8");
+
+  const catalogPath = join(root, "ai_studio", "workspace", "catalog.json");
+  const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
+  mkdirSync(join(root, "templates", "other", "assets"), { recursive: true });
+  writeFileSync(join(root, "templates", "other", "template.json"), JSON.stringify({
+    schema: "ai_studio.template.v1", id: "other", title: "Other", storageNamespace: "other",
+  }), "utf8");
+  catalog.mounts.push({ kind: "template", root: "templates/other", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] });
+  writeFileSync(catalogPath, `${JSON.stringify(catalog)}\n`, "utf8");
+
+  execFileSync(process.execPath, [script, "--root", root, "--id", "mobile-template", "--force"], { encoding: "utf8" });
+
+  assert.equal(existsSync(join(target, "stale-only.txt")), false);
+  assert.match(readFileSync(join(target, "CMakeLists.txt"), "utf8"), /3\.30/);
+  const updated = JSON.parse(readFileSync(catalogPath, "utf8"));
+  assert.equal(updated.mounts.filter((mount) => mount.root === "templates/mobile-template").length, 1);
+  assert.equal(updated.mounts.some((mount) => mount.root === "templates/other"), true);
 });
 
 test("new_template --help prints usage", () => {
