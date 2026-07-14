@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -16,6 +16,12 @@ function write(root, rel, text) {
   writeFileSync(abs, text, "utf8");
 }
 
+function tempRoot(t, prefix) {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  return root;
+}
+
 function mockRes() {
   const res = { statusCode: null, headers: null, body: "" };
   res.writeHead = (status, headers) => {
@@ -28,8 +34,8 @@ function mockRes() {
   return res;
 }
 
-test("single-file loader returns the authored tree without ref materialization", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-tree-"));
+test("single-file loader returns the authored tree without ref materialization", (t) => {
+  const root = tempRoot(t, "architecture-tree-");
   const tree = {
     schema: 2,
     root: {
@@ -56,8 +62,8 @@ test("single-file loader returns the authored tree without ref materialization",
   assert.deepEqual(loadArchitectureTree(root, "ai_studio/tree.json"), tree);
 });
 
-test("single-file loader rejects missing, malformed, escaping, absolute, and ref-based maps", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-tree-errors-"));
+test("single-file loader rejects missing, malformed, escaping, absolute, and ref-based maps", (t) => {
+  const root = tempRoot(t, "architecture-tree-errors-");
   assert.throws(() => loadArchitectureTree(root, "ai_studio/tree.json"), /tree .*not found/i);
 
   write(root, "ai_studio/tree.json", "{ nope");
@@ -96,8 +102,8 @@ test("GET architecture validation remains live and unrelated routes remain unhan
   assert.equal(unrelated.statusCode, null);
 });
 
-test("API contains loader errors instead of exposing filesystem data", async () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-api-errors-"));
+test("API contains loader errors instead of exposing filesystem data", async (t) => {
+  const root = tempRoot(t, "architecture-api-errors-");
   write(root, "ai_studio/tree.json", "{ malformed");
   const handle = createArchitectureMapApi(root);
   const res = mockRes();

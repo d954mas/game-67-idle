@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtempSync, mkdirSync, writeFileSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { execFileSync, spawnSync } from "node:child_process";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
@@ -25,6 +25,15 @@ function write(root, rel, text = "") {
   writeFileSync(abs, text, "utf8");
   if (!fixtureFiles.has(root)) fixtureFiles.set(root, new Set());
   fixtureFiles.get(root).add(rel.replaceAll("\\", "/"));
+}
+
+function tempRoot(t, prefix) {
+  const root = mkdtempSync(join(tmpdir(), prefix));
+  t.after(() => {
+    fixtureFiles.delete(root);
+    rmSync(root, { recursive: true, force: true });
+  });
+  return root;
 }
 
 function report(options) {
@@ -57,8 +66,8 @@ function loadRepoTreeRoot() {
   return loadArchitectureTree(repoRoot, "ai_studio/tree.json").root;
 }
 
-test("map validation reports missing, duplicate, and unmapped files", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+test("map validation reports missing, duplicate, and unmapped files", (t) => {
+  const root = tempRoot(t, "architecture-map-");
   mkdirSync(join(root, "ai_studio"), { recursive: true });
   write(
     root,
@@ -94,8 +103,8 @@ test("map validation reports missing, duplicate, and unmapped files", () => {
   assert.equal(hasStrictFailures(validation), true);
 });
 
-test("map validation reports unmapped scanned files outside ai_studio", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+test("map validation reports unmapped scanned files outside ai_studio", (t) => {
+  const root = tempRoot(t, "architecture-map-");
   mkdirSync(join(root, "ai_studio"), { recursive: true });
   write(
     root,
@@ -123,8 +132,8 @@ test("map validation reports unmapped scanned files outside ai_studio", () => {
   assert.equal(hasStrictFailures(validation), true);
 });
 
-test("mapped directories cover their child files", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+test("mapped directories cover their child files", (t) => {
+  const root = tempRoot(t, "architecture-map-");
   mkdirSync(join(root, "ai_studio"), { recursive: true });
   write(
     root,
@@ -151,8 +160,8 @@ test("mapped directories cover their child files", () => {
   assert.ok(!validation.issues.unmappedInAiStudio.some((item) => item.path.endsWith("public/app.js")));
 });
 
-test("a module subtree covers implementation, tests, and validators without authored leaves", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+test("a module subtree covers implementation, tests, and validators without authored leaves", (t) => {
+  const root = tempRoot(t, "architecture-map-");
   mkdirSync(join(root, "ai_studio"), { recursive: true });
   write(
     root,
@@ -190,8 +199,8 @@ test("a module subtree covers implementation, tests, and validators without auth
   assert.equal(nodes.some((node) => node.kind === "test" || node.kind === "validation"), false);
 });
 
-test("direct-files covers root files but leaves new child directories unmapped", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-direct-"));
+test("direct-files covers root files but leaves new child directories unmapped", (t) => {
+  const root = tempRoot(t, "architecture-map-direct-");
   write(root, "features/README.md", "# features");
   write(root, "features/verify.mjs", "export {};");
   write(root, "features/known/README.md", "# known");
@@ -237,8 +246,8 @@ test("direct-files covers root files but leaves new child directories unmapped",
   assert.deepEqual(validation.issues.unmappedOutsideAiStudio, [{ path: "features/new-pack" }]);
 });
 
-test("a new top-level Studio module remains unmapped", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-studio-root-"));
+test("a new top-level Studio module remains unmapped", (t) => {
+  const root = tempRoot(t, "architecture-map-studio-root-");
   write(root, "ai_studio/README.md", "# Studio");
   write(root, "ai_studio/known/README.md", "# known");
   write(root, "ai_studio/new-module/README.md", "# new");
@@ -273,8 +282,8 @@ test("a new top-level Studio module remains unmapped", () => {
   ]);
 });
 
-test("unknown coverage and escaping locator fields fail strict validation", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-schema-"));
+test("unknown coverage and escaping locator fields fail strict validation", (t) => {
+  const root = tempRoot(t, "architecture-map-schema-");
   write(root, "ai_studio/module/README.md", "# module");
   write(root, "ai_studio/tree.json", JSON.stringify({
     schema: 2,
@@ -316,8 +325,8 @@ test("unknown coverage and escaping locator fields fail strict validation", () =
   assert.equal(hasStrictFailures(validation), true);
 });
 
-test("missing authored entry, contract, and store locators fail strict validation", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-locators-"));
+test("missing authored entry, contract, and store locators fail strict validation", (t) => {
+  const root = tempRoot(t, "architecture-map-locators-");
   write(root, "ai_studio/tree.json", JSON.stringify({
     schema: 1,
     root: {
@@ -355,8 +364,8 @@ test("missing authored entry, contract, and store locators fail strict validatio
   assert.equal(hasStrictFailures(validation), true);
 });
 
-test("child-directory scan roots report new folders without scanning their files", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+test("child-directory scan roots report new folders without scanning their files", (t) => {
+  const root = tempRoot(t, "architecture-map-");
   mkdirSync(join(root, "ai_studio"), { recursive: true });
   write(
     root,
@@ -399,8 +408,8 @@ test("child-directory scan roots report new folders without scanning their files
   assert.deepEqual(validation.issues.unmappedOutsideAiStudio, [{ path: "templates/new-template" }]);
 });
 
-test("root-file and child-directory scan roots report workspace root commands", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+test("root-file and child-directory scan roots report workspace root commands", (t) => {
+  const root = tempRoot(t, "architecture-map-");
   mkdirSync(join(root, "ai_studio"), { recursive: true });
   write(
     root,
@@ -452,8 +461,8 @@ test("root-file and child-directory scan roots report workspace root commands", 
   ]);
 });
 
-test("scan roots skip explicit excluded prefixes", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+test("scan roots skip explicit excluded prefixes", (t) => {
+  const root = tempRoot(t, "architecture-map-");
   write(root, "games/public-game/README.md", "# public game");
   write(root, "games/secret-game/README.md", "# private game");
 
@@ -466,8 +475,8 @@ test("scan roots skip explicit excluded prefixes", () => {
   );
 });
 
-test("validation report excludes local private game mounts from game scans", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
+test("validation report excludes local private game mounts from game scans", (t) => {
+  const root = tempRoot(t, "architecture-map-");
   write(
     root,
     "ai_studio/tree.json",
@@ -524,8 +533,8 @@ test("validation report excludes local private game mounts from game scans", () 
   ]);
 });
 
-test("malformed private mount configuration blocks validation without exposing mount names", async () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-private-error-"));
+test("malformed private mount configuration blocks validation without exposing mount names", async (t) => {
+  const root = tempRoot(t, "architecture-map-private-error-");
   write(root, "ai_studio/tree.json", JSON.stringify({
     schema: 1,
     root: {
@@ -584,8 +593,8 @@ test("repo tree maps product boundaries without authored implementation or test 
   assert.equal(byId.has("resource-panel"), false);
 });
 
-test("coverage truth comes from git ls-files while untracked hygiene stays optional", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-git-"));
+test("coverage truth comes from git ls-files while untracked hygiene stays optional", (t) => {
+  const root = tempRoot(t, "architecture-map-git-");
   write(root, "ai_studio/tree.json", JSON.stringify({
     schema: 1,
     root: {
@@ -622,8 +631,8 @@ test("description policy rejects long and operational text", () => {
   assert.ok(descriptionPolicyViolations("Persists a sidebar toggle in localStorage.").includes("ui-micro-behavior"));
 });
 
-test("invalid architectural descriptions are reported and fail strict validation", () => {
-  const root = mkdtempSync(join(tmpdir(), "architecture-map-description-"));
+test("invalid architectural descriptions are reported and fail strict validation", (t) => {
+  const root = tempRoot(t, "architecture-map-description-");
   write(root, "ai_studio/tree.json", JSON.stringify({
     schema: 1,
     root: {
