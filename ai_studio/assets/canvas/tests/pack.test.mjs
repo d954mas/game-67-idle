@@ -43,6 +43,7 @@ import {
   undoOp,
   updateProject,
 } from "../ops.mjs";
+import { main as runCanvasCli } from "../cli.mjs";
 import { decodePng, magentaSheetPng, solidPng } from "./png_fixture.mjs";
 
 // Metadata ops resolve store paths only, so any placeholder root works (no Python) for the
@@ -64,13 +65,8 @@ function tempProjects(t) {
   return dir;
 }
 
-function run(env, ...args) {
-  const stdout = execFileSync(process.execPath, [CLI, ...args], {
-    env: { ...process.env, ...env },
-    encoding: "utf8",
-  });
-  const line = stdout.trim().split("\n").filter(Boolean).at(-1);
-  return JSON.parse(line);
+function runInProcess(...args) {
+  return runCanvasCli(args, { repoRoot: REPO_ROOT, print: (value) => value });
 }
 
 function runFail(env, ...args) {
@@ -288,34 +284,33 @@ test("patchRecipe: params.model is immutable (loud even at its current value); u
 // CLI: recipe-set pack/params flags, recipe-pack-preview validation parity.
 // ================================================================================
 
-test("CLI recipe-set: pack flags assemble a FULL object (merging the CURRENT pack in the CLI, since the op itself replaces wholesale); --pack none clears; --grid validation", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "canvas-pack-cli-"));
+test("CLI recipe-set: pack flags assemble a FULL object (merging the CURRENT pack in the CLI, since the op itself replaces wholesale); --pack none clears; --grid validation", async (t) => {
+  const dir = tempProjects(t);
   const env = { CANVAS_PROJECTS_ROOT: dir };
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const projectId = run(env, "create", "--title", "CLI Pack").project.id;
-  const created = run(env, "recipe-create", projectId, "--name", "CLI recipe");
+  const projectId = (await runInProcess("create", "--title", "CLI Pack")).project.id;
+  const created = await runInProcess("recipe-create", projectId, "--name", "CLI recipe");
   const groupId = created.group.id;
   assert.equal(created.group.recipe.pack, null);
 
   const axesPath = join(dir, "axes.json");
-  execFileSync(process.execPath, ["-e", `require("fs").writeFileSync(${JSON.stringify(axesPath)}, JSON.stringify({grade:["rusty","plain"],material:["stone"]}))`]);
-  const patched = run(env, "recipe-set", projectId, "--group", groupId, "--axes-json", axesPath, "--vary", "grade", "--grid", "2x2", "--max-jobs", "24");
+  writeFileSync(axesPath, JSON.stringify({ grade: ["rusty", "plain"], material: ["stone"] }));
+  const patched = await runInProcess("recipe-set", projectId, "--group", groupId, "--axes-json", axesPath, "--vary", "grade", "--grid", "2x2", "--max-jobs", "24");
   assert.deepEqual(patched.group.recipe.pack, { v: 1, axes: { grade: ["rusty", "plain"], material: ["stone"] }, vary: "grade", grid: [2, 2], max_jobs: 24 });
 
   // A SECOND call touching only --vary must NOT lose the axes/grid/max_jobs set above — the
   // CLI reads the CURRENT recipe.pack and merges this one flag on top before sending the FULL
   // object (the op itself never merges).
-  const revaried = run(env, "recipe-set", projectId, "--group", groupId, "--vary", "material");
+  const revaried = await runInProcess("recipe-set", projectId, "--group", groupId, "--vary", "material");
   assert.deepEqual(revaried.group.recipe.pack.axes, { grade: ["rusty", "plain"], material: ["stone"] }, "axes carried forward by the CLI merge");
   assert.equal(revaried.group.recipe.pack.grid[0], 2, "grid carried forward too");
   assert.equal(revaried.group.recipe.pack.vary, "material");
 
-  const cleared = run(env, "recipe-set", projectId, "--group", groupId, "--pack", "none");
+  const cleared = await runInProcess("recipe-set", projectId, "--group", groupId, "--pack", "none");
   assert.equal(cleared.group.recipe.pack, null);
 
   // --pack none takes priority even when other pack flags are given in the SAME call.
-  const clearedAgain = run(env, "recipe-set", projectId, "--group", groupId, "--vary", "grade", "--pack", "none");
+  const clearedAgain = await runInProcess("recipe-set", projectId, "--group", groupId, "--vary", "grade", "--pack", "none");
   assert.equal(clearedAgain.group.recipe.pack, null);
 
   const badGrid = runFail(env, "recipe-set", projectId, "--group", groupId, "--vary", "grade", "--grid", "bogus");
@@ -325,56 +320,48 @@ test("CLI recipe-set: pack flags assemble a FULL object (merging the CURRENT pac
   assert.match(String(badPack.stderr || badPack.message), /--pack only accepts "none"/);
 });
 
-test("CLI recipe-set: params flags (--bg-key/--n-candidates/--size/--quality) patch recipe.params; parity with the ops layer", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "canvas-pack-params-cli-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+test("CLI recipe-set: params flags (--bg-key/--n-candidates/--size/--quality) patch recipe.params; parity with the ops layer", async (t) => {
+  tempProjects(t);
 
-  const projectId = run(env, "create", "--title", "CLI Params").project.id;
-  const created = run(env, "recipe-create", projectId, "--name", "CLI recipe");
+  const projectId = (await runInProcess("create", "--title", "CLI Params")).project.id;
+  const created = await runInProcess("recipe-create", projectId, "--name", "CLI recipe");
   const groupId = created.group.id;
 
-  const patched = run(env, "recipe-set", projectId, "--group", groupId, "--bg-key", "#00ff00", "--n-candidates", "3", "--size", "1536x1024", "--quality", "medium");
+  const patched = await runInProcess("recipe-set", projectId, "--group", groupId, "--bg-key", "#00ff00", "--n-candidates", "3", "--size", "1536x1024", "--quality", "medium");
   assert.equal(patched.group.recipe.params.bg_key, "#00ff00");
   assert.equal(patched.group.recipe.params.n_candidates, 3);
   assert.equal(patched.group.recipe.params.size, "1536x1024");
   assert.equal(patched.group.recipe.params.quality, "medium");
   assert.equal(patched.group.recipe.params.model, "gpt-image-2", "model untouched by an unrelated params patch");
 
-  const shown = run(env, "show", projectId).project;
+  const shown = (await runInProcess("show", projectId)).project;
   assert.equal(shown.groups.find((g) => g.id === groupId).recipe.params.bg_key, "#00ff00");
 });
 
-test("CLI recipe-pack-preview: validation parity (no python spawn) — pack:null and a non-recipe group are loud the same way the op is", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "canvas-pack-preview-cli-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+test("CLI recipe-pack-preview: validation parity (no python spawn) — pack:null and a non-recipe group are loud the same way the op is", async (t) => {
+  tempProjects(t);
 
-  const projectId = run(env, "create", "--title", "Preview CLI parity").project.id;
-  const plain = run(env, "group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10").group;
-  const recipeFail = runFail(env, "recipe-pack-preview", projectId, "--group", plain.id);
-  assert.match(String(recipeFail.stderr || recipeFail.message), /not a recipe card/);
+  const projectId = (await runInProcess("create", "--title", "Preview CLI parity")).project.id;
+  const plain = (await runInProcess("group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10")).group;
+  await assert.rejects(runInProcess("recipe-pack-preview", projectId, "--group", plain.id), /not a recipe card/);
 
-  const recipe = run(env, "recipe-create", projectId, "--name", "No pack yet").group;
-  const packOffFail = runFail(env, "recipe-pack-preview", projectId, "--group", recipe.id);
-  assert.match(String(packOffFail.stderr || packOffFail.message), /pack mode is off/);
+  const recipe = (await runInProcess("recipe-create", projectId, "--name", "No pack yet")).group;
+  await assert.rejects(runInProcess("recipe-pack-preview", projectId, "--group", recipe.id), /pack mode is off/);
 });
 
-test("CLI recipe-pack-generate: validation parity (no python/codex spawn) — missing --group and a non-recipe group are loud the same way the op is", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "canvas-pack-generate-cli-"));
+test("CLI recipe-pack-generate: validation parity (no python/codex spawn) — missing --group and a non-recipe group are loud the same way the op is", async (t) => {
+  const dir = tempProjects(t);
   const env = { CANVAS_PROJECTS_ROOT: dir };
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const projectId = run(env, "create", "--title", "Generate CLI parity").project.id;
-  const plain = run(env, "group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10").group;
+  const projectId = (await runInProcess("create", "--title", "Generate CLI parity")).project.id;
+  const plain = (await runInProcess("group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10")).group;
 
   // no --group -> the CLI's own local guard.
   const noGroup = runFail(env, "recipe-pack-generate", projectId);
   assert.match(String(noGroup.stderr || noGroup.message), /recipe-pack-generate requires --group/);
 
   // --group <plain group> -> the OP's own "not a recipe card" (before either branch dispatches).
-  const notCard = runFail(env, "recipe-pack-generate", projectId, "--group", plain.id);
-  assert.match(String(notCard.stderr || notCard.message), /not a recipe card/);
+  await assert.rejects(runInProcess("recipe-pack-generate", projectId, "--group", plain.id), /not a recipe card/);
 });
 
 // ================================================================================

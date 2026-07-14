@@ -5,12 +5,11 @@
 // engines); only the pure argv/instruction builders exercise the DEFAULT generators' shape,
 // never spawned. Metadata-only ops (no Python for validation/refs-resolution), so the
 // placeholder ROOT works for every direct-ops test, including ones that add real ref image
-// bytes (addImage's imageSize parsing is pure JS); CLI/API parity tests drive the real
-// cli.mjs / api.mjs exactly like tests/cli.test.mjs / tests/api.test.mjs do (duplicated here
-// rather than imported, matching every other *.test.mjs file's own tiny helpers) but stay
-// VALIDATION-level only (T0238's dual_generate.test.mjs precedent) — a real generate call
-// through the CLI/API always spawns the DEFAULT (real) generators, which this suite never
-// triggers.
+// bytes (addImage's imageSize parsing is pure JS). CLI parity uses cli.mjs's production
+// dispatcher in-process for domain results, while local fail()/exit guards remain real child
+// processes; API parity uses api.mjs directly. All stay VALIDATION-level only (T0238's
+// dual_generate.test.mjs precedent) — a real generate call through the CLI/API always spawns
+// the DEFAULT generators, which this suite never triggers.
 // Run: node --test ai_studio/assets/canvas/tests/recipe.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
@@ -47,6 +46,7 @@ import {
 } from "../ops.mjs";
 import { buildNodesSpec } from "../tree.mjs";
 import { createCanvasApi } from "../api.mjs";
+import { main as runCanvasCli } from "../cli.mjs";
 import { resolveProjectFile } from "../store.mjs";
 import { buildAgyCommand, buildAgyInstruction, buildGenerateCommand, GENERATE_IMAGE_SCRIPT, verifyAgyRefProof } from "../tools/recipe_generate.mjs";
 import { solidPng } from "./png_fixture.mjs";
@@ -71,22 +71,8 @@ function tempProjects(t) {
   return dir;
 }
 
-function run(env, ...args) {
-  const stdout = execFileSync(process.execPath, [CLI, ...args], {
-    env: { ...process.env, ...env },
-    encoding: "utf8",
-  });
-  const line = stdout.trim().split("\n").filter(Boolean).at(-1);
-  return JSON.parse(line);
-}
-
-function runFail(env, ...args) {
-  try {
-    execFileSync(process.execPath, [CLI, ...args], { env: { ...process.env, ...env }, encoding: "utf8" });
-    assert.fail(`expected "${args.join(" ")}" to fail`);
-  } catch (error) {
-    return error;
-  }
+function runInProcess(...args) {
+  return runCanvasCli(args, { repoRoot: REPO_ROOT, print: (value) => value });
 }
 
 // Minimal req/res doubles (mirrors tests/api.test.mjs's own invokeApi).
@@ -323,35 +309,35 @@ test("historyEntryLabel maps createRecipeCard/patchRecipe to readable labels", (
   assert.deepEqual(historyEntryLabel("patchRecipe", {}), { label: "Edit recipe", summary: "" });
 });
 
-test("CLI recipe-create / recipe-set parity with the ops layer", (t) => {
-  const dir = mkdtempSync(join(tmpdir(), "canvas-recipe-cli-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
-  t.after(() => rmSync(dir, { recursive: true, force: true }));
+test("CLI recipe-create / recipe-set parity with the ops layer", async (t) => {
+  tempProjects(t);
 
-  const projectId = run(env, "create", "--title", "CLI Recipe").project.id;
-  const created = run(env, "recipe-create", projectId, "--name", "CLI card", "--x", "5", "--y", "6", "--w", "300", "--h", "200");
+  const projectId = (await runInProcess("create", "--title", "CLI Recipe")).project.id;
+  const created = await runInProcess("recipe-create", projectId, "--name", "CLI card", "--x", "5", "--y", "6", "--w", "300", "--h", "200");
   assert.equal(created.group.name, "CLI card");
   assert.deepEqual(created.group.recipe, DEFAULT_RECIPE);
   assert.deepEqual({ x: created.group.x, y: created.group.y, w: created.group.w, h: created.group.h }, { x: 5, y: 6, w: 300, h: 200 });
 
   const groupId = created.group.id;
-  const patched = run(env, "recipe-set", projectId, "--group", groupId, "--prompt", "a red fox", "--engine", "both");
+  const patched = await runInProcess("recipe-set", projectId, "--group", groupId, "--prompt", "a red fox", "--engine", "both");
   assert.equal(patched.group.recipe.prompt, "a red fox");
   assert.equal(patched.group.recipe.engine, "both");
 
   // T0239 increment 3: --style must now resolve to a REAL style-card group id (a style-create
   // smoke here; dedicated style-create/style-set CLI parity lives in style.test.mjs).
-  const styleCard = run(env, "style-create", projectId, "--name", "CLI style");
+  const styleCard = await runInProcess("style-create", projectId, "--name", "CLI style");
   assert.equal(styleCard.group.name, "CLI style");
-  const withStyle = run(env, "recipe-set", projectId, "--group", groupId, "--style", styleCard.group.id);
+  const withStyle = await runInProcess("recipe-set", projectId, "--group", groupId, "--style", styleCard.group.id);
   assert.equal(withStyle.group.recipe.style_ref, styleCard.group.id);
-  const clearedStyle = run(env, "recipe-set", projectId, "--group", groupId, "--style", "none");
+  const clearedStyle = await runInProcess("recipe-set", projectId, "--group", groupId, "--style", "none");
   assert.equal(clearedStyle.group.recipe.style_ref, null);
 
-  const failure = runFail(env, "recipe-set", projectId, "--group", groupId, "--engine", "dalle");
-  assert.match(String(failure.stderr || failure.message), /engine must be one of/);
+  await assert.rejects(
+    runInProcess("recipe-set", projectId, "--group", groupId, "--engine", "dalle"),
+    /engine must be one of/,
+  );
 
-  const shown = run(env, "show", projectId).project;
+  const shown = (await runInProcess("show", projectId)).project;
   assert.equal(shown.groups.length, 2);
   assert.equal(shown.groups.find((g) => g.id === groupId).recipe.prompt, "a red fox");
 });
@@ -900,15 +886,14 @@ test("recipe-generate: CLI and API reject a non-card group the same way (validat
   const dir = tempProjects(t);
   const env = { CANVAS_PROJECTS_ROOT: dir };
 
-  const projectId = run(env, "create", "--title", "Generate CLI parity").project.id;
-  const plain = run(env, "group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10").group;
+  const projectId = (await runInProcess("create", "--title", "Generate CLI parity")).project.id;
+  const plain = (await runInProcess("group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10")).group;
 
   // CLI: recipe-generate <id> with no --group -> the CLI's own local guard.
   assert.throws(() => execFileSync("node", [CLI, "recipe-generate", projectId], { env: { ...process.env, ...env }, encoding: "utf8" }));
 
   // CLI: recipe-generate <id> --group <plain group> -> the OP's own "not a recipe card".
-  const failure = runFail(env, "recipe-generate", projectId, "--group", plain.id);
-  assert.match(String(failure.stderr || failure.message), /not a recipe card/);
+  await assert.rejects(runInProcess("recipe-generate", projectId, "--group", plain.id), /not a recipe card/);
 
   // API: POST .../recipe-cards/<plain group>/generate -> 400 with the SAME op error.
   const handler = createCanvasApi(ROOT);
@@ -1335,18 +1320,15 @@ test("recipe-expand: CLI and API reject a missing --group / non-card group / emp
   const dir = tempProjects(t);
   const env = { CANVAS_PROJECTS_ROOT: dir };
 
-  const projectId = run(env, "create", "--title", "Expand CLI parity").project.id;
-  const plain = run(env, "group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10").group;
-  const card = run(env, "recipe-create", projectId, "--name", "Blank card").group;
+  const projectId = (await runInProcess("create", "--title", "Expand CLI parity")).project.id;
+  const plain = (await runInProcess("group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10")).group;
+  const card = (await runInProcess("recipe-create", projectId, "--name", "Blank card")).group;
 
   // CLI: recipe-expand <id> with no --group -> the CLI's own local guard.
   assert.throws(() => execFileSync("node", [CLI, "recipe-expand", projectId], { env: { ...process.env, ...env }, encoding: "utf8" }));
 
-  const cliPlain = runFail(env, "recipe-expand", projectId, "--group", plain.id);
-  assert.match(String(cliPlain.stderr || cliPlain.message), /not a recipe card/);
-
-  const cliEmpty = runFail(env, "recipe-expand", projectId, "--group", card.id);
-  assert.match(String(cliEmpty.stderr || cliEmpty.message), /has an empty prompt/);
+  await assert.rejects(runInProcess("recipe-expand", projectId, "--group", plain.id), /not a recipe card/);
+  await assert.rejects(runInProcess("recipe-expand", projectId, "--group", card.id), /has an empty prompt/);
 
   const handler = createCanvasApi(ROOT);
   const rejectedPlain = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/recipe-cards/${plain.id}/expand`, {});
@@ -1363,15 +1345,14 @@ test("extract: CLI and API reject a missing --element / not-found element the sa
   const dir = tempProjects(t);
   const env = { CANVAS_PROJECTS_ROOT: dir };
 
-  const projectId = run(env, "create", "--title", "Extract CLI parity").project.id;
-  const plain = run(env, "group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10").group;
+  const projectId = (await runInProcess("create", "--title", "Extract CLI parity")).project.id;
+  const plain = (await runInProcess("group-create", projectId, "--name", "Plain", "--x", "0", "--y", "0", "--w", "10", "--h", "10")).group;
 
   // CLI: extract <id> with no --element -> the CLI's own local guard.
   assert.throws(() => execFileSync("node", [CLI, "extract", projectId], { env: { ...process.env, ...env }, encoding: "utf8" }));
 
   // A GROUP id is never an element id -> the op's own "element not found".
-  const cliFailure = runFail(env, "extract", projectId, "--element", plain.id);
-  assert.match(String(cliFailure.stderr || cliFailure.message), /element not found/);
+  await assert.rejects(runInProcess("extract", projectId, "--element", plain.id), /element not found/);
 
   // T0254 Tier 1 #2: statusForError maps "not found" to 404, not the old catch-all 400.
   const handler = createCanvasApi(ROOT);
@@ -1384,18 +1365,16 @@ test("promote-recipe / promote-style: CLI and API reject an element with no meta
   const dir = tempProjects(t);
   const env = { CANVAS_PROJECTS_ROOT: dir };
 
-  const projectId = run(env, "create", "--title", "Promote CLI parity").project.id;
+  const projectId = (await runInProcess("create", "--title", "Promote CLI parity")).project.id;
   const filePath = join(dir, "art.png");
   writeFileSync(filePath, solidPng());
-  const image = run(env, "add-image", projectId, "--file", filePath).element;
+  const image = (await runInProcess("add-image", projectId, "--file", filePath)).element;
 
   assert.throws(() => execFileSync("node", [CLI, "promote-recipe", projectId], { env: { ...process.env, ...env }, encoding: "utf8" }));
   assert.throws(() => execFileSync("node", [CLI, "promote-style", projectId], { env: { ...process.env, ...env }, encoding: "utf8" }));
 
-  const cliRecipeFailure = runFail(env, "promote-recipe", projectId, "--element", image.id);
-  assert.match(String(cliRecipeFailure.stderr || cliRecipeFailure.message), /run Extract first/);
-  const cliStyleFailure = runFail(env, "promote-style", projectId, "--element", image.id);
-  assert.match(String(cliStyleFailure.stderr || cliStyleFailure.message), /run Extract first/);
+  await assert.rejects(runInProcess("promote-recipe", projectId, "--element", image.id), /run Extract first/);
+  await assert.rejects(runInProcess("promote-style", projectId, "--element", image.id), /run Extract first/);
 
   const handler = createCanvasApi(ROOT);
   const rejectedRecipe = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/elements/${image.id}/promote-recipe`, {});
