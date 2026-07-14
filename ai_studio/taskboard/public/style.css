@@ -52,24 +52,6 @@ body {
   background: #12161b;
 }
 
-.studio-home-link {
-  display: inline-flex;
-  align-items: center;
-  min-height: 30px;
-  padding: 0 9px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: #0d1116;
-  color: var(--text);
-  font-weight: 700;
-  text-decoration: none;
-}
-
-.studio-home-link:hover {
-  border-color: var(--accent);
-  text-decoration: none;
-}
-
 .title-block {
   display: flex;
   flex-direction: column;

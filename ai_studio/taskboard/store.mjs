@@ -5,7 +5,7 @@
 // frontmatter parsing, paths, templates, mutation, and validation. Keep the
 // public facade in lib.mjs small; do not split this again without a real need.
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, ftruncateSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
@@ -684,19 +684,42 @@ export function updateDoc(root, id, patch = {}, options = {}) {
   }
   let file = doc.file;
   let targetFile = doc.file;
+  const serialized = serializeDoc(fields, body);
   if (doc.kind === "task") {
     targetFile = join(taskStorageDir(root, fields, options), basename(doc.file));
     if (resolve(targetFile) !== resolve(doc.file) && existsSync(targetFile)) {
       throw new Error(`Cannot move ${id}; target already exists: ${targetFile}`);
     }
   }
-  writeFileSync(doc.file, serializeDoc(fields, body));
   if (doc.kind === "task" && resolve(targetFile) !== resolve(doc.file)) {
     mkdirSync(dirname(targetFile), { recursive: true });
-    renameSync(doc.file, targetFile);
+    const original = readFileSync(doc.file, "utf8");
+    try {
+      overwriteExistingFile(doc.file, serialized);
+      renameSync(doc.file, targetFile);
+    } catch (error) {
+      try {
+        overwriteExistingFile(doc.file, original);
+      } catch (rollbackError) {
+        if (rollbackError.code !== "ENOENT") error.rollbackError = rollbackError;
+      }
+      throw error;
+    }
     file = targetFile;
+  } else {
+    writeFileSync(doc.file, serialized);
   }
   return { ...doc, file, fields, body };
+}
+
+function overwriteExistingFile(file, contents) {
+  const handle = openSync(file, "r+");
+  try {
+    ftruncateSync(handle, 0);
+    writeFileSync(handle, contents);
+  } finally {
+    closeSync(handle);
+  }
 }
 
 const QUALITY_OUTCOMES = ["pass", "block", "review", "unverified"];
@@ -886,7 +909,9 @@ function assertTaskCloseout(id, fields, body) {
 
 function taskStorageDir(root, fields, options = {}) {
   if (fields.status === "done") {
-    return join(archiveTaskDir(root, options), fields.epic || "unassigned");
+    const epicId = String(fields.epic || "").trim().split(":").at(-1);
+    const archiveGroup = /^E\d+$/.test(epicId) ? epicId : "unassigned";
+    return join(archiveTaskDir(root, options), archiveGroup);
   }
   return activeTaskDir(root, options);
 }
@@ -1090,8 +1115,8 @@ export function agentContextPayload(root, options = {}) {
   };
 }
 
-export function boardPayload(root) {
-  const store = DEFAULT_TASKBOARD_STORE;
+export function boardPayload(root, options = {}) {
+  const store = storeMeta(options);
   return {
     root,
     projectStatuses: PROJECT_STATUSES,
@@ -1100,9 +1125,9 @@ export function boardPayload(root) {
     taskStatuses: TASK_STATUSES,
     priorities: PRIORITIES,
     stores: [store],
-    projects: listProjects(root).map((doc) => publicDoc(doc, { store })),
-    epics: listEpics(root).map((doc) => publicDoc(doc, { store })),
-    tasks: listTasks(root).map((doc) => publicDoc(doc, { store })),
+    projects: listProjects(root, options).map((doc) => publicDoc(doc, { store })),
+    epics: listEpics(root, options).map((doc) => publicDoc(doc, { store })),
+    tasks: listTasks(root, options).map((doc) => publicDoc(doc, { store })),
   };
 }
 

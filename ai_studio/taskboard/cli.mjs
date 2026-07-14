@@ -16,15 +16,16 @@
 // Agents: prefer `new` over hand-writing files so IDs never collide.
 
 import {
-  agentContextPayload, agentEpicRow, agentProjectRow, agentTaskRow,
+  agentEpicRow, agentProjectRow, agentTaskRow,
   findRoot, listTasks, listEpics, listProjects, findDoc, createTask, createEpic, createProject,
-  updateDoc, validateStoreDetailed,
+  updateDoc,
 } from "./lib.mjs";
-import { ACTIVE_TASK_STATUSES, canonicalQualityAssignments, idNumber, parseQualityAssignments, priorityRank, TASK_STATUSES, taskRank } from "./store.mjs";
+import { ACTIVE_TASK_STATUSES, canonicalQualityAssignments, idNumber, parseQualityAssignments, TASK_STATUSES, taskRank } from "./store.mjs";
 import {
   agentContextPayloadForStores,
   findTaskboardDoc,
   mutationStore,
+  profileTaskboardReads,
   storeOptions,
   taskboardStoresForQuery,
   taskboardStoreSummary,
@@ -32,7 +33,6 @@ import {
 } from "./stores.mjs";
 import { relative } from "node:path";
 import { isMain } from "../core_harness/tool_lib/cli.mjs";
-import { profileTaskboardReads } from "./profile.mjs";
 
 const USAGE = `usage: cli.mjs <list|summary|context|show|profile|new|set|validate|help> ...
 
@@ -135,12 +135,6 @@ function statusCounts(tasks) {
   return TASK_STATUSES.map((status) => `${status}:${counts.get(status) || 0}`).join(" ");
 }
 
-function reviewTasks(tasks) {
-  tasks = tasks.filter((task) => task.fields.status === "review");
-  tasks.sort((a, b) => priorityRank(a.fields.priority) - priorityRank(b.fields.priority) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)));
-  return tasks;
-}
-
 function taskEntriesForOptions(root, options) {
   return taskboardStoresForQuery(root, storeQueryArgs(options)).flatMap((store) =>
     listTasks(root, storeOptions(store)).map((task) => ({ task, store }))
@@ -163,7 +157,7 @@ function renderSummary(root, options) {
   const taskEntries = taskEntriesForOptions(root, options);
   const allTasks = taskEntries.map(({ task }) => task);
   const openEntries = currentWorkTaskEntries(taskEntries);
-  const reviewCount = reviewTasks(allTasks).length;
+  const reviewCount = allTasks.filter((task) => task.fields.status === "review").length;
   const lines = [];
   lines.push("# Taskboard Summary");
   lines.push("");

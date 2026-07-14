@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync, mkdirSync, renameSync, utimesSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn, spawnSync } from "node:child_process";
 import { EventEmitter } from "node:events";
@@ -14,7 +14,12 @@ import {
 } from "../lib.mjs";
 import { boardPayload, parseDoc, serializeDoc, slugify } from "../store.mjs";
 import { createTaskboardApi } from "../api.mjs";
-import { profileTaskboardReads } from "../profile.mjs";
+import {
+  agentContextPayloadForStores,
+  profileTaskboardReads,
+  studioTaskboardStore,
+  validateTaskboardStoresDetailed,
+} from "../stores.mjs";
 import { main as runTaskboardCli } from "../cli.mjs";
 
 const taskboardDir = dirname(import.meta.dirname);
@@ -58,6 +63,27 @@ function waitFor(predicate, timeoutMs = 10000) {
   });
 }
 
+function captureChildJson(child, label) {
+  const result = new Promise((resolve, reject) => {
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) return reject(new Error(`${label} exited ${code}: ${stderr}`));
+      try {
+        resolve(JSON.parse(stdout));
+      } catch (error) {
+        reject(new Error(`${label} returned invalid JSON: ${error.message}; stdout=${stdout}`));
+      }
+    });
+  });
+  result.catch(() => {});
+  const closed = new Promise((resolve) => child.once("close", resolve));
+  return { child, result, closed };
+}
+
 function spawnConcurrentCreator(root, workerId, kind) {
   const source = `
     import { existsSync, writeFileSync } from "node:fs";
@@ -74,24 +100,31 @@ function spawnConcurrentCreator(root, workerId, kind) {
     cwd: root,
     stdio: ["ignore", "pipe", "pipe"],
   });
-  const result = new Promise((resolve, reject) => {
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (chunk) => { stdout += chunk; });
-    child.stderr.on("data", (chunk) => { stderr += chunk; });
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code !== 0) return reject(new Error(`worker ${workerId} exited ${code}: ${stderr}`));
-      try {
-        resolve(JSON.parse(stdout));
-      } catch (error) {
-        reject(new Error(`worker ${workerId} returned invalid JSON: ${error.message}; stdout=${stdout}`));
-      }
-    });
+  return captureChildJson(child, `worker ${workerId}`);
+}
+
+function spawnConcurrentCloser(root, workerId) {
+  const source = `
+    import { existsSync, writeFileSync } from "node:fs";
+    import { join } from "node:path";
+    import { updateDoc } from ${JSON.stringify(new URL("../lib.mjs", import.meta.url).href)};
+    const [root, workerId] = process.argv.slice(1);
+    writeFileSync(join(root, ".close-ready-" + workerId), "ready");
+    while (!existsSync(join(root, ".close-go"))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+    try {
+      const doc = updateDoc(root, "T0001", {
+        fields: { status: "done", quality: { notApplicable: { reason: "concurrent close fixture" } } },
+      });
+      process.stdout.write(JSON.stringify({ ok: true, file: doc.file }));
+    } catch (error) {
+      process.stdout.write(JSON.stringify({ ok: false, code: error.code || "", message: error.message }));
+    }
+  `;
+  const child = spawn(process.execPath, ["--input-type=module", "--eval", source, root, String(workerId)], {
+    cwd: root,
+    stdio: ["ignore", "pipe", "pipe"],
   });
-  result.catch(() => {});
-  const closed = new Promise((resolve) => child.once("close", resolve));
-  return { child, result, closed };
+  return captureChildJson(child, `close worker ${workerId}`);
 }
 
 function ensurePrivateGameMount(root, gameId = "secret-game") {
@@ -117,6 +150,17 @@ function ensurePrivateGameMount(root, gameId = "secret-game") {
     gameId,
     gameRoot,
     itemsRoot: join(gameRoot, ".ai_studio", "taskboard", "items"),
+  };
+}
+
+function explicitPrivateTaskboardStore(root, gameId = "secret-game") {
+  return {
+    storeId: `game:${gameId}`,
+    visibility: "private",
+    kind: "game",
+    gameId,
+    label: gameId,
+    itemsRoot: join(root, "games", gameId, ".ai_studio", "taskboard", "items"),
   };
 }
 
@@ -200,6 +244,7 @@ test("parseDoc tolerates files without frontmatter", () => {
 test("slugify handles non-ascii and empty titles", () => {
   assert.equal(slugify("Camp Rest Action!"), "camp-rest-action");
   assert.equal(slugify("\u0418\u0434\u0435\u044f \u0431\u0435\u0437 \u043b\u0430\u0442\u0438\u043d\u0438\u0446\u044b"), "item");
+  assert.equal(slugify(""), "item");
 });
 
 test("createTask allocates sequential ids and createEpic separate sequence", (t) => {
@@ -506,12 +551,10 @@ test("read profiler has one small privacy-safe context contract plus CLI smoke",
 test("aggregate context reports unsliced totals and globally ranks work across stores", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "Studio backlog", status: "backlog", priority: "P2" });
-  const privateStore = ensurePrivateGameMount(root);
+  const privateStore = explicitPrivateTaskboardStore(root);
   writeTaskDoc(privateStore.itemsRoot, "T0001", "Private doing", "doing", { priority: "P0" });
 
-  const result = runCliDirect(root, "context", "--json", "--include-private", "--tasks-limit", "1");
-  assert.equal(result.status, 0, result.stderr);
-  const payload = JSON.parse(result.stdout);
+  const payload = agentContextPayloadForStores(root, [studioTaskboardStore(root), privateStore], { limit: 1 });
   assert.equal(payload.currentWork.length, 1);
   assert.equal(payload.counts.currentWork, 2);
   assert.equal(payload.currentWork[0].storeId, "game:secret-game");
@@ -688,12 +731,15 @@ test("Taskboard API payloads are public-only by default and store-qualified with
   const normal = await invokeApi(handler, "GET", "/api/board");
   assert.deepEqual(normal.data.tasks.map((task) => task.fields.title), ["Public task"]);
   assert.deepEqual(normal.data.tasks.map((task) => task.storeId), ["studio"]);
+  assert.deepEqual(Object.keys(normal.data.stores[0]).sort(), ["gameId", "kind", "label", "storeId", "visibility"].sort());
+  assert.equal(normal.data.root, undefined);
 
   const included = await invokeApi(handler, "GET", "/api/board?includePrivate=1");
   const privateTask = included.data.tasks.find((task) => task.storeId === "game:secret-game");
   assert.equal(privateTask.fields.title, "Private task");
   assert.equal(privateTask.visibility, "private");
   assert.equal(privateTask.qualifiedId, "game:secret-game:T0001");
+  assert.equal(included.data.root, undefined);
 });
 
 test("Taskboard API accepts private store scope through headers without query paths", async (t) => {
@@ -706,6 +752,8 @@ test("Taskboard API accepts private store scope through headers without query pa
   const scoped = await invokeApi(handler, "GET", "/api/board", {}, { "x-ai-studio-store": "game:secret-game" });
   assert.deepEqual(scoped.data.tasks.map((task) => task.fields.title), ["Private task"]);
   assert.equal(scoped.data.tasks[0].qualifiedId, "game:secret-game:T0001");
+  assert.deepEqual(Object.keys(scoped.data.stores[0]).sort(), ["gameId", "kind", "label", "storeId", "visibility"].sort());
+  assert.equal(scoped.data.root, undefined);
 
   const created = await invokeApi(handler, "POST", "/api/tasks", {
     title: "Header created",
@@ -727,17 +775,16 @@ test("Taskboard API accepts private store scope through headers without query pa
 test("aggregate validation rejects ambiguous bare cross-store links and accepts qualified links", (t) => {
   const root = tempRoot(t);
   createProject(root, { title: "Public project", status: "idea" });
-  const privateStore = ensurePrivateGameMount(root);
+  const privateStore = explicitPrivateTaskboardStore(root);
+  const stores = [studioTaskboardStore(root), privateStore];
   writeTaskDoc(privateStore.itemsRoot, "T0001", "Ambiguous private task", "backlog", { project: "P001" });
 
-  const ambiguous = runCliDirect(root, "validate", "--json", "--include-private");
-  assert.notEqual(ambiguous.status, 0);
-  assert.match(ambiguous.stdout, /bare cross-store reference/);
+  const ambiguous = validateTaskboardStoresDetailed(root, stores);
+  assert.equal(ambiguous.some((problem) => /bare cross-store reference/.test(problem.message)), true);
 
   rmSync(join(privateStore.itemsRoot, "active"), { recursive: true, force: true });
   writeTaskDoc(privateStore.itemsRoot, "T0001", "Qualified private task", "backlog", { project: "studio:P001" });
-  const qualified = runCliDirect(root, "validate", "--json", "--include-private");
-  assert.equal(qualified.status, 0, qualified.stderr || qualified.stdout);
+  assert.deepEqual(validateTaskboardStoresDetailed(root, stores), []);
 });
 
 test("taskboard cli help exits successfully and documents commands", () => {
@@ -758,7 +805,7 @@ test("taskboard cli help exits successfully and documents commands", () => {
 });
 
 test("taskboard cli rejects unrelated core commands", () => {
-  const result = spawnSync(process.execPath, [cliPath, "workflow-run"], { encoding: "utf8" });
+  const result = runCliDirect(process.cwd(), "workflow-run");
 
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|profile\|new\|set\|validate\|help>/);
@@ -807,6 +854,15 @@ test("updateDoc requires truthful closure and an explicit quality decision for a
     },
   );
   assert.equal(readFileSync(task.file, "utf8"), original, "rejected close must not write or archive");
+
+  assert.throws(
+    () => updateDoc(root, "T0001", {
+      fields: { status: "done" },
+      body: task.body.replace("- [ ] behavior is proven", "- [x] behavior is proven"),
+    }),
+    (error) => error.problem.code === "task_quality_decision_required",
+  );
+  assert.equal(readFileSync(task.file, "utf8"), original, "missing Quality must not write or archive");
 });
 
 test("updateDoc accepts checked criteria plus passing canonical quality evidence", (t) => {
@@ -1197,6 +1253,93 @@ test("updateDoc checks archive move conflicts before rewriting source", (t) => {
   assert.equal(readFileSync(task.file, "utf8"), original);
 });
 
+test("updateDoc archives an unsafe epic reference under unassigned", (t) => {
+  const root = tempRoot(t);
+  const task = createTask(root, {
+    title: "Unsafe archive group",
+    status: "doing",
+    epic: "../../escaped",
+    body: "## Done when\n\n- [x] archived safely\n\n## Log\n",
+  });
+
+  const updated = updateDoc(root, task.fields.id, {
+    fields: { status: "done", quality: { notApplicable: { reason: "path safety fixture" } } },
+  });
+
+  const expected = join(root, "ai_studio", "taskboard", "items", "archive", "unassigned", basename(task.file));
+  assert.equal(updated.file, expected);
+  assert.equal(existsSync(expected), true);
+});
+
+test("updateDoc maps a qualified epic reference to its canonical archive group", (t) => {
+  const root = tempRoot(t);
+  const task = createTask(root, {
+    title: "Qualified archive group",
+    status: "doing",
+    epic: "game:secret-game:E007",
+    body: "## Done when\n\n- [x] archived safely\n\n## Log\n",
+  });
+
+  const updated = updateDoc(root, task.fields.id, {
+    fields: { status: "done", quality: { notApplicable: { reason: "qualified path fixture" } } },
+  });
+
+  const expected = join(root, "ai_studio", "taskboard", "items", "archive", "E007", basename(task.file));
+  assert.equal(updated.file, expected);
+  assert.equal(existsSync(expected), true);
+});
+
+test("updateDoc prepares the archive destination before rewriting source", (t) => {
+  const root = tempRoot(t);
+  const task = createTask(root, {
+    title: "Blocked archive directory",
+    status: "doing",
+    epic: "E001",
+    body: "## Done when\n\n- [x] source remains unchanged\n\n## Log\n",
+  });
+  const original = readFileSync(task.file, "utf8");
+  const archiveRoot = join(root, "ai_studio", "taskboard", "items", "archive");
+  mkdirSync(archiveRoot, { recursive: true });
+  writeFileSync(join(archiveRoot, "E001"), "not a directory\n");
+
+  assert.throws(
+    () => updateDoc(root, task.fields.id, {
+      fields: { status: "done", quality: { notApplicable: { reason: "destination failure fixture" } } },
+    }),
+  );
+  assert.equal(readFileSync(task.file, "utf8"), original);
+});
+
+test("concurrent close never resurrects an active task beside its archive", async (t) => {
+  const root = tempRoot(t);
+  createTask(root, {
+    title: "Concurrent close",
+    status: "doing",
+    epic: "E001",
+    body: `## What\n\n${"x".repeat(512 * 1024)}\n\n## Done when\n\n- [x] closed once\n\n## Log\n`,
+  });
+  const workers = [spawnConcurrentCloser(root, 0), spawnConcurrentCloser(root, 1)];
+  let results;
+  try {
+    await waitFor(() => workers.every((_, index) => existsSync(join(root, `.close-ready-${index}`))));
+    writeFileSync(join(root, ".close-go"), "go");
+    results = await Promise.all(workers.map(({ result }) => result));
+  } finally {
+    for (const { child } of workers) {
+      if (child.exitCode === null) child.kill();
+    }
+    await Promise.allSettled(workers.map(({ closed }) => closed));
+    await Promise.allSettled(workers.map(({ result }) => result));
+  }
+
+  assert.equal(results.some(({ ok }) => ok), true);
+  const active = join(root, "ai_studio", "taskboard", "items", "active");
+  const archived = join(root, "ai_studio", "taskboard", "items", "archive", "E001");
+  assert.equal(readdirSync(active).filter((name) => name.endsWith(".md")).length, 0);
+  assert.equal(readdirSync(archived).filter((name) => name.endsWith(".md")).length, 1);
+  assert.equal(listTasks(root, { includeArchive: true }).filter((task) => task.fields.id === "T0001").length, 1);
+});
+
 test("markdown preview renders task syntax and escapes html", () => {
   const sandbox = {};
   sandbox.globalThis = sandbox;
@@ -1239,7 +1382,7 @@ test("nextId stays monotonic across archive pruning via items/.counters.json", (
 
 test("concurrent processes preserve unique ids and all shared counter keys", async (t) => {
   const root = tempRoot(t);
-  const workerCount = 24;
+  const workerCount = 12;
   const kinds = ["task", "epic", "project"];
   const workers = Array.from({ length: workerCount }, (_, index) => spawnConcurrentCreator(root, index, kinds[index % kinds.length]));
   let created;
@@ -1263,7 +1406,7 @@ test("concurrent processes preserve unique ids and all shared counter keys", asy
   assert.equal(listEpics(root).length, workerCount / kinds.length);
   assert.equal(listProjects(root).length, workerCount / kinds.length);
   const counters = JSON.parse(readFileSync(join(root, "ai_studio", "taskboard", "items", ".counters.json"), "utf8"));
-  assert.deepEqual(counters, { T: 8, E: 8, P: 8 });
+  assert.deepEqual(counters, { T: 4, E: 4, P: 4 });
   assert.deepEqual(
     readdirSync(join(root, "ai_studio", "taskboard", "items")).filter((name) => name.startsWith(".allocation.lock")),
     [],

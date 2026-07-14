@@ -15,13 +15,13 @@ import {
   listProjects,
   listTasks,
   PROJECT_STATUSES,
-  publicDoc,
   TASK_STATUSES,
   taskRank,
   validateStoreDetailed,
 } from "./store.mjs";
 
 export const STUDIO_STORE_ID = "studio";
+const DEFAULT_CONTEXT_LIMIT = 5;
 
 export function studioTaskboardStore(root) {
   return {
@@ -167,21 +167,18 @@ export function findTaskboardDoc(root, rawId, options = {}) {
 }
 
 export function boardPayloadForStores(root, stores) {
-  if (stores.length === 1 && stores[0].storeId === STUDIO_STORE_ID) {
-    return boardPayload(root);
+  const payloads = stores.map((store) => boardPayload(root, storeOptions(store)));
+  const firstPayload = { ...payloads[0] };
+  delete firstPayload.root;
+  if (payloads.length === 1) {
+    return { ...firstPayload, stores: [taskboardStoreSummary(stores[0])] };
   }
   return {
-    ...boardPayload(root),
+    ...firstPayload,
     stores: stores.map(taskboardStoreSummary),
-    projects: stores.flatMap((store) =>
-      listProjects(root, storeOptions(store)).map((doc) => publicDoc(doc, { store }))
-    ),
-    epics: stores.flatMap((store) =>
-      listEpics(root, storeOptions(store)).map((doc) => publicDoc(doc, { store }))
-    ),
-    tasks: stores.flatMap((store) =>
-      listTasks(root, storeOptions(store)).map((doc) => publicDoc(doc, { store }))
-    ),
+    projects: payloads.flatMap((payload) => payload.projects),
+    epics: payloads.flatMap((payload) => payload.epics),
+    tasks: payloads.flatMap((payload) => payload.tasks),
   };
 }
 
@@ -222,6 +219,22 @@ export function agentContextPayloadForStores(root, stores, options = {}) {
     currentWork,
     agentNextStep: "Open only the task file(s) needed for the current decision; do not scan archives unless linked.",
   };
+}
+
+export function profileTaskboardReads(root) {
+  const records = listTaskboardStores(root, { includePrivate: true }).map((store) => {
+    const payload = agentContextPayloadForStores(root, [store], { limit: DEFAULT_CONTEXT_LIMIT });
+    const returnedCount = payload.currentWork.length;
+    const totalCount = payload.counts.currentWork;
+    return {
+      storeId: store.storeId,
+      contextBytes: Buffer.byteLength(`${JSON.stringify(payload, null, 2)}\n`, "utf8"),
+      returnedCount,
+      totalCount,
+      truncated: returnedCount < totalCount,
+    };
+  });
+  return { schema: "ai_studio.taskboard.context_profile.v1", records };
 }
 
 export function validateTaskboardStoresDetailed(root, stores) {
