@@ -289,12 +289,17 @@ export function isMutation(line) {
 }
 
 // The {undo_patch, state} snapshot for one entry: inline (legacy fat line) or the
-// sidecar file (thin line). Returns {} if neither is present.
+// sidecar file (thin line). A thin journal cannot reconstruct missing state, so
+// refuse instead of publishing an empty project snapshot.
 export function snapshotForEntry(root, projectId, entry) {
   if (entry && (entry.undo_patch !== undefined || entry.state !== undefined)) {
     return { undo_patch: entry.undo_patch, state: entry.state };
   }
-  return readSnapshot(root, projectId, entry.seq) || {};
+  const snapshot = readSnapshot(root, projectId, entry.seq);
+  if (!snapshot) {
+    throw new Error(`Canvas history snapshot unavailable for project '${projectId}', seq ${entry.seq}`);
+  }
+  return snapshot;
 }
 
 // Append one mutation entry and advance the project's history head. Returns the

@@ -80,6 +80,44 @@ test("mutation journal lines are thin metadata; snapshots live in sidecar files"
   assert.equal(redoOp(ROOT, { projectId: project.id }).project.elements[0].x, 50);
 });
 
+test("undo refuses a missing sidecar without changing project state or history", (t) => {
+  const dir = tempProjects(t);
+  const project = createProject(ROOT, { title: "Missing sidecar" });
+  addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() });
+  const cache = projectCachePaths(ROOT, project.id);
+  const projectPath = join(dir, project.id, "project.json");
+  const projectBefore = readFileSync(projectPath, "utf8");
+  const journalBefore = readFileSync(cache.journal, "utf8");
+
+  rmSync(join(cache.snapshots, "1.json"));
+
+  assert.throws(
+    () => undoOp(ROOT, { projectId: project.id }),
+    /Canvas history snapshot unavailable.*seq 1/,
+  );
+  assert.equal(readFileSync(projectPath, "utf8"), projectBefore);
+  assert.equal(readFileSync(cache.journal, "utf8"), journalBefore);
+});
+
+test("undo refuses a corrupt sidecar without changing project state or history", (t) => {
+  const dir = tempProjects(t);
+  const project = createProject(ROOT, { title: "Corrupt sidecar" });
+  addImage(ROOT, project.id, { name: "a.png", bytes: solidPng() });
+  const cache = projectCachePaths(ROOT, project.id);
+  const projectPath = join(dir, project.id, "project.json");
+  const projectBefore = readFileSync(projectPath, "utf8");
+  const journalBefore = readFileSync(cache.journal, "utf8");
+
+  writeFileSync(join(cache.snapshots, "1.json"), "{ broken json", "utf8");
+
+  assert.throws(
+    () => undoOp(ROOT, { projectId: project.id }),
+    /Canvas history snapshot unavailable.*seq 1/,
+  );
+  assert.equal(readFileSync(projectPath, "utf8"), projectBefore);
+  assert.equal(readFileSync(cache.journal, "utf8"), journalBefore);
+});
+
 test("seq stays monotonic + unique across undo and a new branch (tail-read allocation)", (t) => {
   const dir = tempProjects(t);
   const project = createProject(ROOT, { title: "Seq" });

@@ -31,6 +31,11 @@ ai_studio/studio.config.local.json
 # private commercial game ids, remotes, aliases, and roots must stay local.
 ai_studio/workspace/catalog.local.json
 
+# Closed Taskboard bodies are cold history. Pending Markdown stays local until
+# an explicit ZIP seal; sealed ZIP batches remain trackable.
+ai_studio/taskboard/items/archive/pending/
+games/*/.ai_studio/taskboard/items/archive/pending/
+
 # Local Canvas project working copies. The committed studio config keeps the
 # canonical projects root outside the repo.
 ai_studio/assets/canvas/projects/
