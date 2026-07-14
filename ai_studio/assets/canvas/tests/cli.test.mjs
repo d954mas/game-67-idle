@@ -143,24 +143,24 @@ test("cli stores Canvas project ownership and filters by owner game", (t) => {
   assert.equal(Object.hasOwn(cleared, "ownership"), false);
 });
 
-test("cli list hides archived projects unless requested while show remains available", (t) => {
+test("cli list hides archived projects unless requested while show remains available", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-archive-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const active = run(env, "create", "--title", "Active").project;
-  const archived = run(env, "create", "--title", "Archived", "--owner-game", "fixture-game").project;
-  const changed = run(env, "project-set", archived.id, "--archived", "true").project;
+  const active = (await runInProcess(env, "create", "--title", "Active")).project;
+  const archived = (await runInProcess(env, "create", "--title", "Archived", "--owner-game", "fixture-game")).project;
+  const changed = (await runInProcess(env, "project-set", archived.id, "--archived", "true")).project;
   assert.equal(changed.archived, true);
   assert.deepEqual(changed.ownership, archived.ownership);
 
-  assert.deepEqual(run(env, "list").projects.map((project) => project.id), [active.id]);
-  const included = run(env, "list", "--include-archived").projects;
+  assert.deepEqual((await runInProcess(env, "list")).projects.map((project) => project.id), [active.id]);
+  const included = (await runInProcess(env, "list", "--include-archived")).projects;
   assert.deepEqual(new Set(included.map((project) => project.id)), new Set([active.id, archived.id]));
   assert.equal(included.find((project) => project.id === archived.id).archived, true);
-  assert.equal(run(env, "show", archived.id).project.archived, true);
+  assert.equal((await runInProcess(env, "show", archived.id)).project.archived, true);
 
-  const restored = run(env, "project-set", archived.id, "--archived", "false").project;
+  const restored = (await runInProcess(env, "project-set", archived.id, "--archived", "false")).project;
   assert.equal(restored.archived, false);
   assert.deepEqual(restored.ownership, archived.ownership);
 });
@@ -389,19 +389,19 @@ test("cli group-reparent / group-create --parent nesting smoke (no python)", (t)
   assert.equal(shown.groups.find((g) => g.id === widget).parentId, undefined, "reparent to none = top level");
 });
 
-test("cli group-set --clip toggles the frame clip flag (no python)", (t) => {
+test("cli group-set --clip toggles the frame clip flag (no python)", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-clip-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const projectId = run(env, "create", "--title", "CLI Clip").project.id;
-  const groupId = run(env, "group-create", projectId, "--name", "Frame", "--x", "0", "--y", "0", "--w", "80", "--h", "60").group.id;
+  const projectId = (await runInProcess(env, "create", "--title", "CLI Clip")).project.id;
+  const groupId = (await runInProcess(env, "group-create", projectId, "--name", "Frame", "--x", "0", "--y", "0", "--w", "80", "--h", "60")).group.id;
 
-  run(env, "group-set", projectId, "--group", groupId, "--clip", "true");
-  assert.equal(run(env, "show", projectId).project.groups[0].clip, true, "clip true set");
+  await runInProcess(env, "group-set", projectId, "--group", groupId, "--clip", "true");
+  assert.equal((await runInProcess(env, "show", projectId)).project.groups[0].clip, true, "clip true set");
 
-  run(env, "group-set", projectId, "--group", groupId, "--clip", "false");
-  assert.equal("clip" in run(env, "show", projectId).project.groups[0], false, "clip false removes the field");
+  await runInProcess(env, "group-set", projectId, "--group", groupId, "--clip", "false");
+  assert.equal("clip" in (await runInProcess(env, "show", projectId)).project.groups[0], false, "clip false removes the field");
 });
 
 test("cli group-set --screen toggles the export opt-in flag (T0332 B1, no python); absent by default", (t) => {
@@ -423,34 +423,34 @@ test("cli group-set --screen toggles the export opt-in flag (T0332 B1, no python
   assert.match(String(badScreen.stderr || badScreen.message), /--screen must be true, false, 1, or 0/);
 });
 
-test("cli nodes-duplicate / nodes-delete / nodes-paste parity (one undo each)", (t) => {
+test("cli nodes-duplicate / nodes-delete / nodes-paste parity (one undo each)", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-nodes-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   const a = join(dir, "a.png");
   writeFileSync(a, solidPng(4, 4, [10, 20, 30]));
-  const projectId = run(env, "create", "--title", "CLI Nodes").project.id;
-  const elA = run(env, "add-image", projectId, "--file", a).element.id;
+  const projectId = (await runInProcess(env, "create", "--title", "CLI Nodes")).project.id;
+  const elA = (await runInProcess(env, "add-image", projectId, "--file", a)).element.id;
 
   // nodes-duplicate: one new element in place (+16); one undo restores.
-  const dup = run(env, "nodes-duplicate", projectId, "--nodes", elA, "--dx", "16", "--dy", "16");
+  const dup = await runInProcess(env, "nodes-duplicate", projectId, "--nodes", elA, "--dx", "16", "--dy", "16");
   assert.equal(dup.count, 1);
   const dupId = dup.elementIds[0];
   assert.notEqual(dupId, elA);
-  assert.equal(run(env, "show", projectId).project.elements.length, 2);
-  const h1 = run(env, "history", projectId);
+  assert.equal((await runInProcess(env, "show", projectId)).project.elements.length, 2);
+  const h1 = await runInProcess(env, "history", projectId);
   assert.equal(h1.entries.filter((e) => e.op === "pasteNodes").length, 1, "duplicate journals one pasteNodes entry");
 
   // nodes-delete: batched delete; one undo restores.
-  const del = run(env, "nodes-delete", projectId, "--nodes", dupId);
+  const del = await runInProcess(env, "nodes-delete", projectId, "--nodes", dupId);
   assert.deepEqual(del.removedElements, [dupId]);
-  assert.equal(run(env, "show", projectId).project.elements.length, 1);
-  run(env, "undo", projectId, "--expect-head", String(del.project.history_seq));
-  assert.equal(run(env, "show", projectId).project.elements.length, 2);
+  assert.equal((await runInProcess(env, "show", projectId)).project.elements.length, 1);
+  await runInProcess(env, "undo", projectId, "--expect-head", String(del.project.history_seq));
+  assert.equal((await runInProcess(env, "show", projectId)).project.elements.length, 2);
 
   // nodes-paste via a hand-authored spec referencing the immutable file.
-  const src = run(env, "show", projectId).project.elements[0].src;
+  const src = (await runInProcess(env, "show", projectId)).project.elements[0].src;
   const specPath = join(dir, "spec.json");
   writeFileSync(
     specPath,
@@ -459,9 +459,9 @@ test("cli nodes-duplicate / nodes-delete / nodes-paste parity (one undo each)", 
       nodes: [{ kind: "element", element: { type: "image", x: 0, y: 0, w: 4, h: 4, src, name: "pasted" } }],
     }),
   );
-  const pasted = run(env, "nodes-paste", projectId, "--spec", specPath, "--dx", "5", "--dy", "5");
+  const pasted = await runInProcess(env, "nodes-paste", projectId, "--spec", specPath, "--dx", "5", "--dy", "5");
   assert.equal(pasted.count, 1);
-  const proj = run(env, "show", projectId).project;
+  const proj = (await runInProcess(env, "show", projectId)).project;
   assert.equal(proj.elements.length, 3);
   assert.ok(proj.elements.some((e) => e.name === "pasted"), "hand-authored spec pasted");
 });
@@ -513,9 +513,9 @@ test("cli groups-set batched shared toggles parity (one undo restores all)", (t)
   assert.equal(undone.groups.filter((g) => g.visible === false).length, 0, "one undo restores all");
 });
 
-test("cli group-fit resizes the frame to content (no python)", (t) => {
+test("cli group-fit resizes the frame to content (no python)", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-fit-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   const a = join(dir, "a.png");
@@ -523,20 +523,20 @@ test("cli group-fit resizes the frame to content (no python)", (t) => {
   writeFileSync(a, solidPng(8, 8, [10, 20, 30]));
   writeFileSync(b, solidPng(6, 6, [30, 40, 50]));
 
-  const projectId = run(env, "create", "--title", "CLI Fit").project.id;
-  const elA = run(env, "add-image", projectId, "--file", a).element.id;
-  const elB = run(env, "add-image", projectId, "--file", b).element.id;
-  run(env, "move", projectId, "--element", elA, "--x", "10", "--y", "10");
-  run(env, "move", projectId, "--element", elB, "--x", "30", "--y", "20");
+  const projectId = (await runInProcess(env, "create", "--title", "CLI Fit")).project.id;
+  const elA = (await runInProcess(env, "add-image", projectId, "--file", a)).element.id;
+  const elB = (await runInProcess(env, "add-image", projectId, "--file", b)).element.id;
+  await runInProcess(env, "move", projectId, "--element", elA, "--x", "10", "--y", "10");
+  await runInProcess(env, "move", projectId, "--element", elB, "--x", "30", "--y", "20");
 
   // An oversized explicit group, assign both, then fit it down to content + 24px pad.
-  const groupId = run(env, "group-create", projectId, "--name", "Loose", "--x", "0", "--y", "0", "--w", "500", "--h", "500").group.id;
-  run(env, "group-assign", projectId, "--elements", `${elA},${elB}`, "--group", groupId);
+  const groupId = (await runInProcess(env, "group-create", projectId, "--name", "Loose", "--x", "0", "--y", "0", "--w", "500", "--h", "500")).group.id;
+  await runInProcess(env, "group-assign", projectId, "--elements", `${elA},${elB}`, "--group", groupId);
 
-  const fitted = run(env, "group-fit", projectId, "--group", groupId).group;
+  const fitted = (await runInProcess(env, "group-fit", projectId, "--group", groupId)).group;
   assert.deepEqual({ x: fitted.x, y: fitted.y, w: fitted.w, h: fitted.h }, { x: -14, y: -14, w: 74, h: 64 });
 
-  const tight = run(env, "group-fit", projectId, "--group", groupId, "--padding", "0").group;
+  const tight = (await runInProcess(env, "group-fit", projectId, "--group", groupId, "--padding", "0")).group;
   assert.deepEqual({ x: tight.x, y: tight.y, w: tight.w, h: tight.h }, { x: 10, y: 10, w: 26, h: 16 });
 });
 
