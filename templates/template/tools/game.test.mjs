@@ -151,14 +151,12 @@ test("copied game CLI executes doctor and final package from a real games/<id> d
   ].join("\n"));
   for (const cwd of [engineRoot, root]) {
     git(cwd, ["init", "-q"]);
-    git(cwd, ["config", "user.email", "tests@example.invalid"]);
-    git(cwd, ["config", "user.name", "Tests"]);
   }
   git(engineRoot, ["add", "."]);
-  git(engineRoot, ["commit", "-qm", "engine fixture"]);
+  git(engineRoot, ["-c", "user.email=tests@example.invalid", "-c", "user.name=Tests", "commit", "-qm", "engine fixture"]);
   const engineRevision = git(engineRoot, ["rev-parse", "HEAD"]);
   git(root, ["add", "features/platform-sdk", "external/neotolis-engine"]);
-  git(root, ["commit", "-qm", "dependency fixture"]);
+  git(root, ["-c", "user.email=tests@example.invalid", "-c", "user.name=Tests", "commit", "-qm", "dependency fixture"]);
   const revision = git(root, ["rev-parse", "HEAD"]);
 
   write(join(gameDir, "game.json"), `${JSON.stringify({ schema: "ai_studio.game.v1", id: "copied-game", title: "Copied Game", storageNamespace: "copied-game" }, null, 2)}\n`);

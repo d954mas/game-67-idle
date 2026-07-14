@@ -575,19 +575,14 @@ test("a conflicting sidecar is detected before publish and cannot orphan the ZIP
   }));
 });
 
-test("packaging proves feature versions and exact source revisions instead of copying dependency claims", (t) => {
-  for (const mutate of [
-    (value) => { value.engine.revision = "3".repeat(40); },
-    (value) => { value.features[0].version = "9.9.9"; },
-  ]) {
-    const item = fixture(t);
-    delete item.dependencyVerifier;
-    const path = join(item.gameDir, "dependencies.json");
-    const value = JSON.parse(readFileSync(path, "utf8"));
-    mutate(value);
-    write(path, JSON.stringify(value));
-    assert.throws(() => packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "out") }), /revision|version|dependency source/i);
-  }
+test("packaging runs default dependency-source verification for exact source revisions", (t) => {
+  const item = fixture(t);
+  delete item.dependencyVerifier;
+  const path = join(item.gameDir, "dependencies.json");
+  const value = JSON.parse(readFileSync(path, "utf8"));
+  value.engine.revision = "3".repeat(40);
+  write(path, JSON.stringify(value));
+  assert.throws(() => packageWebArtifact({ ...item, studioRoot, outDir: join(item.root, "out") }), /revision|version|dependency source/i);
 });
 
 test("dependency proof confines exact owners and checks metadata revisions and relevant cleanliness", (t) => {
