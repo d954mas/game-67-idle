@@ -7,7 +7,7 @@ epic: E016
 priority: P1
 tags: [items, lua, migration]
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-14
 ---
 
 ## What
@@ -22,9 +22,8 @@ old JSON/schema/parser path without a compatibility fallback.
       CMake, public header, runtime, tests, Viewer, docs, lock, new-game, and
       progression-reference consumers before cutover.
 - [ ] Lua fixtures reproduce all six item definitions, kinds, core blocks,
-      diagnostics, lock/removal behavior, and Viewer output. After T0390 builds
-      the target runtime, T0392 migrates concrete legacy containers into state;
-      they are never copied into Lua.
+      diagnostics, lock/removal behavior, and Viewer output. Runtime containers
+      remain independent E019 work and are never copied into Lua.
 - [ ] New strict storage-mode enforcement and saved-level bounds/migration
       behavior have explicit fixtures; deliberate behavior changes are not
       mislabeled byte parity.
@@ -33,7 +32,7 @@ old JSON/schema/parser path without a compatibility fallback.
       stale instructions are removed.
 - [ ] `items.lock.json` remains the sole extended release receipt across the
       cutover and proves parity for shipped/removed IDs and migration reactions.
-- [ ] Migration preserves the read-only Viewer first, then enables T0366/T0367
+- [ ] Migration preserves the read-only Viewer first, then enables T0366/T0316
       semantic editing only after Lua source spans/write refusal are proven.
 - [ ] No code reads both Lua and JSON, and rollback is defined only before the
       cutover; after cutover version control is the rollback.
@@ -41,11 +40,13 @@ old JSON/schema/parser path without a compatibility fallback.
 
 ## Open questions
 
-- Migration starts only after T0364/T0381/T0382/T0383/T0365 and the ordered
-  T0391 -> T0390 -> T0392 state/runtime/migration chain prove the complete seam
-  and the lead accepts intentional runtime changes.
+- Migration starts after T0364/T0381/T0382/T0383/T0365 prove the authoring seam;
+  E019 runtime/state work does not block catalog cutover.
 
 ## Log
+
+- 2026-07-14: Absorbed item-specific GDD/docs/skill cleanup from T0378 and
+  removed the false dependency on the independent E019 runtime rewrite.
 
 - 2026-07-10: Replaced partial migration of selected numeric fields. The lead
   selected complete single-source Items Lua, so the correct migration is one

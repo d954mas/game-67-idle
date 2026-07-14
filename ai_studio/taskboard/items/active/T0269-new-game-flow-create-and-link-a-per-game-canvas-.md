@@ -7,7 +7,7 @@ epic: E009
 priority: P2
 tags: [games, canvas, template]
 created: 2026-07-04
-updated: 2026-07-04
+updated: 2026-07-14
 ---
 
 ## What
@@ -27,6 +27,8 @@ game workspace so agents and the lead can open it later without manual setup.
 - [ ] The workflow output prints the canvas ref and browser URL alongside the
       game path.
 - [ ] Validation covers at least one dry-run or fixture path for a new game.
+- [ ] Canvas Home can filter by owner game and surface that game's active and
+      archived projects without a second lifecycle card.
 
 ## Open questions
 
@@ -34,6 +36,10 @@ game workspace so agents and the lead can open it later without manual setup.
   an empty named project at this stage?
 
 ## Log
+
+- 2026-07-14: Absorbed T0215 and T0334. Owner-game/archive backend support is
+  already shipped; this task owns the remaining new-game link and compact Home
+  discovery UI.
 
 - 2026-07-04: captured from a prototype setup where its game canvas was created
   manually after the game, so future game creation should do this by default.

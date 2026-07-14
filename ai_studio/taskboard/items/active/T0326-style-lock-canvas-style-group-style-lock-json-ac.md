@@ -3,11 +3,11 @@ id: T0326
 title: "style lock: canvas style group + style_lock.json + acceptance gate in asset pipeline"
 status: backlog
 project: P001
-epic: ""
+epic: E010
 priority: P1
 tags: [style-lock, assets, canvas, art-gate, vibejam-retro]
 created: 2026-07-06
-updated: 2026-07-06
+updated: 2026-07-14
 ---
 
 ## What
@@ -72,6 +72,9 @@ starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
 - (parked) LoRA/per-game style model — idea for long projects only.
 
 ## Log
+
+- 2026-07-14: Absorbed T0208. Per-style model routing remains only the parked
+  long-project option already described here; no separate task is needed.
 
 - 2026-07-06: created from retro walkthrough item 3 discussion; full cited
   research saved at tmp/style_lock_research_2026-07-06.md.

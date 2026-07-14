@@ -7,7 +7,7 @@ epic: E016
 priority: P0
 tags: [items, balance, lua, sandbox]
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-14
 ---
 
 ## What
@@ -16,6 +16,10 @@ Implement the deterministic module loader and fresh-process sandbox against the
 ratified Items declaration contract and representative backend benchmark.
 
 ## Done when
+
+- [ ] A small representative declaration workload selects and pins the simplest
+      Lua backend/version that satisfies the sandbox hooks; no separate backend
+      benchmark project is required.
 
 - [ ] Approved modules resolve in deterministic order with cycle diagnostics;
       author code cannot use filesystem, network, shell, environment, time,
@@ -28,13 +32,16 @@ ratified Items declaration contract and representative backend benchmark.
       exponentiation is excluded from the first proof.
 - [ ] Errors carry stable code, game-relative file, line/column, and field path.
 - [ ] Currency/fixed-sword/levelled-sword fixtures match on Windows/Linux and
-      across repeated runs with the T0363 provisional backend/version fingerprint.
+      across repeated runs with the selected backend/version fingerprint.
 
 ## Open questions
 
 - Admit incremental evaluation only through a later purity/full-parity proof.
 
 ## Log
+
+- 2026-07-14: Absorbed the decision-relevant part of T0363. Large/full-pipeline
+  measurement remains the final T0380 gate.
 
 - 2026-07-10: Tightened after red-team findings on `pairs`, mutable closures,
   libm differences, LuaJIT hooks, and stale incremental results.

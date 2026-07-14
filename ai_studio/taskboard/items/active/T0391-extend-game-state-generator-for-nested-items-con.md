@@ -3,11 +3,11 @@ id: T0391
 title: Extend Game State generator for nested Items container state
 status: backlog
 project: P001
-epic: E016
-priority: P0
-tags: [game-state, generator, items, serialization, p0]
+epic: E019
+priority: P1
+tags: [game-state, generator, items, serialization]
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-14
 ---
 
 ## What
@@ -45,6 +45,9 @@ collections, flat bounded C pools, and nested JSON/DevAPI projection.
   do not introduce arbitrary recursive schemas or heap-backed collections.
 
 ## Log
+
+- 2026-07-14: Moved to E019 as the first runtime-v2 prerequisite. It no longer
+  blocks Items Lua authoring or JSON cutover.
 
 - 2026-07-10: Created after review proved the current generator supports neither
   `u32` nor nested object collections. This is a prerequisite for T0390, not an

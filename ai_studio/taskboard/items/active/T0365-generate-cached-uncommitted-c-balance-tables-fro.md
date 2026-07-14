@@ -4,10 +4,10 @@ title: Benchmark and build the compact typed Items runtime package
 status: backlog
 project: P001
 epic: E016
-priority: P0
+priority: P1
 tags: [items, codegen, c, cache]
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-14
 ---
 
 ## What

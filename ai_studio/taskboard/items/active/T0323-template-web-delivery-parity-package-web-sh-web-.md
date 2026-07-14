@@ -3,11 +3,11 @@ id: T0323
 title: "template web delivery parity: package_web.sh + web-load-smoke + scenarios skeleton"
 status: backlog
 project: P001
-epic: ""
+epic: E009
 priority: P1
 tags: [template, web, release, smoke, vibejam-retro]
 created: 2026-07-06
-updated: 2026-07-06
+updated: 2026-07-14
 ---
 
 ## What

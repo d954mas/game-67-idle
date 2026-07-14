@@ -3,11 +3,11 @@ id: T0316
 title: "AI Studio: Items Workbench поверх Lua Snapshot"
 status: backlog
 project: P001
-epic: E009
-priority: P2
+epic: E016
+priority: P1
 tags: [viewer, items, tooling]
 created: 2026-07-05
-updated: 2026-07-10
+updated: 2026-07-14
 ---
 
 ## What
@@ -54,12 +54,16 @@ The full contract is E016 plus
 
 - T0364 must prove the stable-core/generated-typed-block contract before the UI
   fixes a representation for arbitrary game fields.
-- T0367 specifies exact chart/grid/diff/what-if interaction and payload budgets.
+- This task owns exact chart/grid/diff/what-if interaction and payload budgets.
 - T0386 owns the one-shot JSON/schema/parser deletion and backend switch.
-- T0366/T0367 own restricted semantic editing; arbitrary Lua write-back stays
+- T0366 and this task own restricted semantic editing; arbitrary Lua write-back stays
   out of scope.
 
 ## Log
+
+- 2026-07-14: Moved from E009 to E016 and absorbed T0367. One Workbench card now
+  owns grid/chart/diff/what-if and shared semantic editing instead of a separate
+  specification task.
 
 - 2026-07-08: Phase 1 accepted. Build spec:
   `ai_studio/assets/items_viewer/docs/build_spec_phase1_2026-07-08.md`.

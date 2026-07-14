@@ -1,12 +1,12 @@
 ---
 id: E014
 title: Commercial web game factory
-status: active
+status: done
 project: P001
 priority: P2
 tags: [commercial, web, release, analytics]
 created: 2026-07-08
-updated: 2026-07-08
+updated: 2026-07-14
 ---
 
 ## Goal
@@ -29,3 +29,4 @@ Make AI Studio able to ship repeated small commercial web games through a measur
 ## Log
 
 - 2026-07-08: Created from lead directive after market/project review; first slice is publish-target adapters + analytics scorecard.
+- 2026-07-14: Closed during full grooming; all nine factory/privacy/publish child tasks are archived done and no executable child remains.

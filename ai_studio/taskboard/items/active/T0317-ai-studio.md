@@ -3,11 +3,11 @@ id: T0317
 title: "AI Studio: арт-гейт против битых вырезок - авто-проверка альфы/фона/обрезки до попадания ассета в игру"
 status: backlog
 project: P001
-epic: ""
+epic: E010
 priority: P1
 tags: [assets, quality, art-gate, vibejam-retro]
 created: 2026-07-05
-updated: 2026-07-06
+updated: 2026-07-14
 ---
 
 ## What

@@ -3,11 +3,11 @@ id: T0392
 title: Migrate legacy Items state references and event consumers
 status: backlog
 project: P001
-epic: E016
-priority: P0
+epic: E019
+priority: P2
 tags: [items, migration, state, events, cutover]
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-14
 ---
 
 ## What
@@ -56,6 +56,9 @@ and transient event consumers to the new identity model.
   such recovery is explicit versioned migration code with its own fixtures.
 
 ## Log
+
+- 2026-07-14: Moved to E019 after T0390. Migration remains real but does not
+  block the E016 authoring vertical.
 
 - 2026-07-10: Split from T0390 after red-team review separated new runtime
   implementation from old-save migration and transient event API cutover.

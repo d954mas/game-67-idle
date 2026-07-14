@@ -1,12 +1,12 @@
 ---
 id: E002
 title: Engine DevAPI migration (sidecar -> native)
-status: active
+status: done
 project: P001
 priority: P2
 tags: []
 created: 2026-06-19
-updated: 2026-07-01
+updated: 2026-07-14
 ---
 
 ## Goal
@@ -51,3 +51,4 @@ sidecar until the engine path builds green and smoke.py passes).
 - 2026-07-01: Re-added the template-owned `game.state` endpoint on the engine
   DevAPI bus under `templates/template/src/devapi/`, and made the copied smoke
   bot assert it as the default game snapshot surface.
+- 2026-07-14: Closed during full grooming; native engine DevAPI migration, template smoke, game.state endpoint, and automation docs are delivered, with no live child tasks.

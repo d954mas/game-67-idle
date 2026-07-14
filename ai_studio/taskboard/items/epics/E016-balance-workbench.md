@@ -6,7 +6,7 @@ project: P001
 priority: P2
 tags: [balance, items, lua, game-design, tooling]
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-14
 ---
 
 ## Goal
@@ -25,10 +25,9 @@ The complete reviewed Items concept with code examples is:
 - Deterministic isolated evaluator, normalized snapshot, focused agent queries,
   Viewer/grid/charts/diff/what-if plus restricted semantic editing, and a typed
   compact runtime package.
-- Items JSON/schema parity migration, release/save compatibility, Windows/Linux
+- Items JSON/schema parity migration, release-receipt compatibility, Windows/Linux
   verification, and performance/context benchmarks.
-- Generated item hash constants plus runtime persistent/ephemeral containers,
-  ordered nested entries, numeric IDs, and atomic payment scopes.
+- Generated item hash constants and the runtime catalog/package seam.
 
 ## Ratified product model
 
@@ -105,8 +104,7 @@ These are different facts, not duplicate item definitions.
   value or an implied persistent unlock. A cost is a typed list of stackable
   resource definitions/counts: `items.cost` is single-resource, `items.costs`
   is composite, and `items.free` is explicit. Duplicate items normalize with
-  checked sums. Runtime supplies an explicit ordered actor payment scope; T0388
-  owns atomic payment/acquisition/upgrade with no hidden global search.
+  checked sums. E019 owns runtime payment scopes and transaction behavior.
 - Default materialization is 1000 rows per series plus project row/byte budgets
   and an explicit override. Millions/infinite levels require a deliberate game
   runtime formula or large-number architecture.
@@ -153,36 +151,12 @@ raw/pack/transport/transient/steady bytes, lookup strategy, and access latency.
 It must settle generated-header/include, startup-order, and pack-loading seams
 with `features/items-core` before final format ratification.
 
-## Runtime container and entry contract
+## Runtime state boundary
 
-- The game creates persistent/ephemeral containers for player inventories,
-  wallets, merchants, chests, equipment, or temporary loot. Reusable core has no
-  global `purse`, `backpack`, or concrete container catalog.
-- Persistent container and entry IDs are opaque non-zero `uint32_t`, unique and
-  monotonic within one save. Zero and `UINT32_MAX` are reserved; state stores
-  separate `last_container_id`/`last_entry_id`, and allocation refuses before
-  wrap. Runtime refs are dense index+generation handles and are never serialized.
-- State nests `entries[]` inside `containers[]`. Every entry has globally unique
-  `entry_id` and explicit `slot`; entries do not repeat `container_id`, and JSON
-  key order is never inventory order.
-- T0391 first extends schema-v2 for exact u32 and bounded nested objects while
-  preserving stable paths/reserved names and keeping runtime memory in separate
-  global container/entry pools.
-- One stack has one entry ID regardless of count. Split creates a new ID; merge
-  keeps destination ID; moving a whole stack or unique instance preserves ID.
-  Two unique swords share `def_id` but have distinct IDs/state.
-- Runtime derives global lookup caches after load. Save truth remains the nested
-  container aggregate.
-- Capacity is mutable. Shrink below occupied slots refuses atomically. V1
-  capacity means addressable slots, so every slot is `< capacity`, automatic
-  placement is first-free, and shrink requires the highest occupied slot below
-  the new bound. V1 policy is built-in/serializable and immutable after
-  creation; non-empty destroy requires explicit transfer/drain.
-- Persistent entries cannot move into ephemeral containers; acquisition from an
-  ephemeral source creates a new persistent ID. Ephemeral objects have no
-  persistent ID. Owner fragments store only `container_id`; domain operations
-  update both fragments before one envelope save, and post-load reconciliation
-  applies explicit game policy after independent fragment load/reset.
+E016 emits stable resource definitions, hashes, typed cost lists, and a compact
+catalog API. E019 exclusively owns containers, entries, exact persistent IDs,
+nested Game State, migrations, reconciliation, and atomic transactions. Those
+runtime/state contracts are deliberately not E016 acceptance criteria.
 
 ## Agent and Viewer contract
 
@@ -209,53 +183,40 @@ are atomic within one Lua file; multi-file write requires a later journal.
 Ephemeral what-if values never become build inputs unless converted into a
 reviewed Lua patch.
 
+## Current scope after grooming
+
+E016 now owns one authoring vertical only: Items Lua declaration -> isolated
+evaluation -> registration/receipt -> Snapshot/provenance -> focused CLI and
+Workbench -> compact runtime catalog -> JSON cutover -> final profiling.
+Container/state identity and atomic transaction work moved to E019 so it cannot
+block this vertical. Generic Balance CMS, progression Lua, remote overrides,
+and speculative analytics are not current scope.
+
 ## Risk-first plan
 
-1. `T0369`: close the single-source decision and remaining state/history
-   boundaries; amend T0316 and old design wording.
-2. `T0364`: specify the explicit Items Lua schema and prototype stable core plus
-   generated typed capability blocks/include seam.
-3. `T0363`: benchmark pinned PUC Lua/LuaJIT candidates with the representative
-   declaration/normalization workload; choose only provisionally.
-4. `T0382`: build the deterministic isolated sandbox/module loader for the
-   ratified declaration fixture.
-5. `T0381`: build phased item registration, typed refs, stable schema/release
-   receipt checks, and storage/level compatibility validation.
-6. `T0383`: normalize one logical snapshot with source provenance and bounded
-   focused queries.
-7. `T0365`: compare C arrays with the compact typed blob, then generate the
-   selected Items runtime package with flat spans, checked accessors, budgets,
-   wire format, logical pack asset, generated hashes, startup gate, and separate
-   fingerprints.
-8. `T0391`: extend Game State codegen for exact u32 and bounded nested container
-   aggregates with flat bounded runtime pools.
-9. `T0390`: build dynamic runtime containers, ordered nested numeric entries,
-   derived indices, lifetime rules, and cross-fragment reconciliation.
-10. `T0392`: migrate fixed containers/flat `owned` and persistent references,
-   then cut transient event producers/consumers to numeric entry identities.
-11. `T0388`: add explicit payment-scope atomic payment, acquisition, and unique-instance
-   upgrade verbs before game code can consume composite costs.
-12. `T0366`: provide compact agent-first inspect/validate/build/source operations
-   and update the Items/Balance skills without duplicating contracts.
-13. `T0384`: add deterministic math, checked numeric conversion, requirements,
-   process limits, and Windows/Linux proof.
-14. `T0367`: retain the read-only migration slice, then specify shared semantic
-   literal/table/curve/override edits for developer UI and AI alongside grid,
-   charts, source navigation, diff, and ephemeral what-if.
-15. `T0386`: reproduce all six template items, kinds, lock behavior,
-   and C output in Lua; switch CLI/Viewer/build once, then delete JSON/schema
-   and the old parser without compatibility fallback.
-16. `T0379`/`T0380`: run hands-on competitor workflow comparison and full cold,
-    warm, no-op, 1K/100K/1M production/agent benchmarks before budgets/backend
-    become final.
+1. `T0382`: select the smallest adequate backend and build the deterministic
+   isolated evaluator/module loader.
+2. `T0381`: add phased registration, typed refs, and release receipts.
+3. `T0383`: produce one normalized Snapshot with provenance and bounded queries.
+4. In parallel after Snapshot: `T0365` builds the compact runtime catalog,
+   `T0366` provides focused read/build operations, and `T0384` adds requirements
+   plus deterministic diagnostics.
+5. `T0386`: switch Items consumers to Lua/Snapshot once and delete the JSON
+   authoring path without compatibility fallback.
+6. `T0316`: move the accepted Viewer onto Snapshot, then add the bounded
+   Workbench grid/chart/what-if and safe semantic edits.
+7. `T0380`: profile the finished production and agent loops and ratify budgets
+   or backend changes from measured bottlenecks.
+
+The independent runtime/state sequence is tracked by E019 and does not block
+this authoring plan.
 
 `T0385` is intentionally closed: the former Items JSON + Balance Lua
 cross-owner transaction disappears under one canonical Lua source.
 
 ## Minimal vertical proof
 
-- one Items schema extension with stable `field_id` plus Game State schema-v2
-  stable paths/reserved-name evolution;
+- one Items schema extension with stable `field_id`;
 - one currency, one fixed sword, and one levelled sword;
 - one typed item reference and one cost list;
 - one deterministic three-level integer table with one explicit override;
@@ -266,13 +227,7 @@ cross-owner transaction disappears under one canonical Lua source.
   C-array-versus-blob benchmark;
 - generated strong item hashes, collision rejection, required assert API, and
   explicit exists/try/string boundary;
-- one persistent inventory plus merchant/chest container, two ordered wood
-  stacks and two unique swords with distinct durability/entry IDs;
-- split/merge/move/reorder/resize/save/load plus a separately frozen old-state
-  migration and event-consumer cutover proof;
-- exact-u32/nested-state generator proof with bounded flat runtime pools;
-- one two-source payment-scope atomic upgrade failure/success fixture;
-- one saved-level bounds/migration fixture;
+- one release-receipt proof that rejects an incompatible shipped level bound;
 - read-only Viewer source/grid/chart proof plus one shared literal and one table
   cell semantic edit with expected hash/diff/undo and formula refusal;
 - Windows/Linux repeat and timing evidence.
@@ -310,9 +265,14 @@ are excluded from the proof.
 - A generic runtime property bag.
 - Silent fallback to old JSON after cutover.
 - Treating the provisional Lua backend choice as final before full measurements.
-- Value-only remote overrides in v1; T0389 keeps the post-v1 idea.
+- Value-only remote overrides in v1.
 
 ## Log
+
+- 2026-07-14: Taskboard grooming split runtime/state work into E019, merged
+  duplicate backend/policy/migration/Workbench cards into their real owners,
+  and retired non-current ideas from the active plan while preserving decisions
+  in the archive.
 
 - 2026-07-10: Initial E016 proposed Items JSON plus Balance Lua attachments and
   separate domain C tables after three reviews.

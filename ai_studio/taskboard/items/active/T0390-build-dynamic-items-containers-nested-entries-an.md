@@ -3,11 +3,11 @@ id: T0390
 title: Build dynamic Items containers and nested runtime entries
 status: backlog
 project: P001
-epic: E016
-priority: P0
+epic: E019
+priority: P1
 tags: [items, containers, state, runtime]
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-14
 ---
 
 ## What
@@ -77,6 +77,9 @@ T0392.
   strict template default is whole-operation/load refusal, not silent repair.
 
 ## Log
+
+- 2026-07-14: Moved to E019 after T0391. Runtime container identity is a
+  separate breaking state project, not an authoring prerequisite.
 
 - 2026-07-10: Created after lead rejected fixed Lua/catalog containers. Runtime
   containers are game entities managed by Items invariants; nested state is the

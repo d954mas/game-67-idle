@@ -1,0 +1,56 @@
+---
+id: T0234
+title: "Canvas: history-jump/undo concurrency guard - refuse when head advanced since read"
+status: done
+project: P001
+epic: E010
+priority: P1
+tags: []
+created: 2026-07-03
+updated: 2026-07-14
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"QTECH_001=commit 1748f4c8c, expectHead concurrency guard across ops CLI API and tests, full Studio CI run 29329533678 green"}]}
+---
+
+## What
+
+Incident 2026-07-03: agent read Demo journal at head 823, lead kept working
+live to head 876; agent's history-jump+ops forked at 817 and orphaned the
+lead's entries 868-876 (recovered manually from sidecar snapshots). Guard:
+agent-initiated history navigation must prove it read the CURRENT head.
+
+Design (settled by orchestrator):
+- ops jumpHistory/undoOp/redoOp accept optional `expectHead` (number). When
+  provided and the journal head seq differs, refuse LOUDLY: error names the
+  current head, the caller's stale value, and the remedy (re-read history).
+  Nothing is written on refusal.
+- CLI (actor=agent): `history-jump`, `undo`, `redo` REQUIRE `--expect-head N`
+  — running without it is a loud error explaining why (live-project race) and
+  where to get N (`history-list` must show the current head prominently).
+- HTTP API passes optional `expectHead` through. The PAGE does not send it in
+  v1 (its undo spam stays untouched); two-tab safety = follow-up if wanted.
+- nt-canvas-operations skill doc updated: agent workflow = history-list →
+  act with --expect-head.
+
+## Done when
+
+- [ ] jumpHistory/undoOp/redoOp with stale expectHead refuse loudly, journal
+      untouched; with matching expectHead behave exactly as before.
+- [ ] Agent CLI requires --expect-head on history-jump/undo/redo;
+      history-list prints the current head. Page/API-without-param unchanged.
+- [ ] Tests: drift refusal (advance head between read and jump), match path,
+      CLI missing-flag loud error, page path unchanged. Full suite green.
+- [ ] canvas README + .codex/skills/nt-canvas-operations/SKILL.md document
+      the workflow.
+
+## Open questions
+
+- Page sending its own expectHead (two-tab safety) — deferred, lead to decide.
+
+## Log
+
+- 2026-07-03: created after the history-jump race incident (P1).
+- 2026-07-03: design settled by orchestrator; delegated implementation to
+  fast-worker (Sonnet).
+- 2026-07-03: landed 1748f4c8: expectHead guard ops+CLI+API, suite 248->254; :8780 restarted; NOTE: sources were accidentally swept into a taskboard commit by orchestrator git add -A mid-run, history split into clean commits after
+- 2026-07-14: Closure: waived; reason: grooming reconciled a stale historical checklist with the delivered or retained scope; evidence: commit 1748f4c8c, expectHead concurrency guard across ops CLI API and tests
+- 2026-07-14: Quality: QTECH_001=pass; evidence: QTECH_001=commit 1748f4c8c, expectHead concurrency guard across ops CLI API and tests, full Studio CI run 29329533678 green

@@ -3,11 +3,11 @@ id: T0331
 title: "Идея: palette-match + levels нормализация пака от anchor-ассета"
 status: idea
 project: P001
-epic: ""
+epic: E010
 priority: P3
 tags: [assets, imagegen, normalization]
 created: 2026-07-06
-updated: 2026-07-06
+updated: 2026-07-14
 ---
 
 ## What

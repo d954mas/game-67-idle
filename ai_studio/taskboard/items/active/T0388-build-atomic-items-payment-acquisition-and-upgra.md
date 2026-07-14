@@ -3,11 +3,11 @@ id: T0388
 title: Build atomic Items payment acquisition and upgrade verbs
 status: backlog
 project: P001
-epic: E016
-priority: P0
+epic: E019
+priority: P1
 tags: [items, runtime, state, transaction]
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-14
 ---
 
 ## What
@@ -60,6 +60,9 @@ atomicity.
   payment plus transfer; it is not catalog acquisition.
 
 ## Log
+
+- 2026-07-14: Moved to E019. Atomic payment/acquisition is valuable runtime work
+  after catalog costs and containers exist, not a Workbench blocker.
 
 - 2026-07-10: Created from independent red-team/runtime reviews after composite
   costs exposed that sequential `can_afford`/`remove` calls cannot guarantee an

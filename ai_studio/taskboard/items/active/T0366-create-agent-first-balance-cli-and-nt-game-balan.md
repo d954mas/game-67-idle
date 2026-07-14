@@ -4,10 +4,10 @@ title: Create focused Items and Balance CLI plus agent skill routing
 status: backlog
 project: P001
 epic: E016
-priority: P0
+priority: P1
 tags: [items, balance, cli, skill, agent]
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-14
 ---
 
 ## What
