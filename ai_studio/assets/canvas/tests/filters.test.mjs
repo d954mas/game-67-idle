@@ -6,7 +6,7 @@
 //
 // The render-parity tests drive the REAL render_group.py through the warm worker
 // (renderGroup) and skip cleanly when the studio venv / Pillow is unavailable (mirrors
-// transform.test.mjs / worker_warm.test.mjs). Every other test here is pure/store-level
+// transform.test.mjs). Every other test here is pure/store-level
 // and never touches Python — validation/normalization/undo all fire before any disk
 // read/spawn, so those tests are deterministic and always run.
 import test from "node:test";

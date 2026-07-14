@@ -5,7 +5,7 @@
 //
 // The render-parity test drives the REAL render_group.py through the warm worker
 // (renderGroup) and skips cleanly when the studio venv / Pillow is unavailable
-// (mirrors worker_warm.test.mjs). Every other test here is pure/store-level and never
+// (mirrors the other render smoke tests). Every other test here is pure/store-level and never
 // touches Python: the R7 guards all fire BEFORE any disk read/spawn (fail-fast), so the
 // refusal tests are deterministic and always run.
 import test from "node:test";
@@ -41,7 +41,7 @@ const CLI = fileURLToPath(new URL("../cli.mjs", import.meta.url));
 // Returns REPO_ROOT (not the temp dir) — every ops call below needs the REAL repo root
 // for relative lookups (the fonts manifest addText validates against, the python tool
 // scripts renderGroup spawns); actual project.json/files/ storage is redirected to the
-// temp dir via CANVAS_PROJECTS_ROOT, exactly like ops.test.mjs / worker_warm.test.mjs.
+// temp dir via CANVAS_PROJECTS_ROOT, exactly like ops.test.mjs.
 function tempProjects(t) {
   const dir = mkdtempSync(join(tmpdir(), "canvas-transform-"));
   const previous = process.env.CANVAS_PROJECTS_ROOT;

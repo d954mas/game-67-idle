@@ -13,15 +13,6 @@ import { solidPng } from "./png_fixture.mjs";
 
 const CLI = fileURLToPath(new URL("../cli.mjs", import.meta.url));
 
-function run(env, ...args) {
-  const stdout = execFileSync(process.execPath, [CLI, ...args], {
-    env: { ...process.env, ...env },
-    encoding: "utf8",
-  });
-  const line = stdout.trim().split("\n").filter(Boolean).at(-1);
-  return JSON.parse(line);
-}
-
 async function runInProcess(env, ...args) {
   const repoRoot = resolve(env.AI_STUDIO_ROOT);
   const configDir = join(repoRoot, "ai_studio");
@@ -247,22 +238,21 @@ test("cli ignores accidental game-local Canvas folders unless the mount explicit
   assert.match((await runInProcessFail(env, "create", "--game", privateStore.gameId, "--title", "Should Fail")).message, /No Canvas store/);
 });
 
-test("cli history-list + history-jump parity (Base spine + jump reaches panel states)", (t) => {
+test("cli history-list + history-jump parity (Base spine + jump reaches panel states)", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-history-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   const pngPath = join(dir, "pic.png");
   writeFileSync(pngPath, solidPng(9, 6, [12, 34, 56]));
-  const projectId = run(env, "create", "--title", "CLI History").project.id;
-  const elementId = run(env, "add-image", projectId, "--file", pngPath).element.id; // seq1
-  run(env, "move", projectId, "--element", elementId, "--x", "25", "--y", "10"); // seq2, head2
+  const projectId = (await runInProcess(env, "create", "--title", "CLI History")).project.id;
+  const elementId = (await runInProcess(env, "add-image", projectId, "--file", pngPath)).element.id; // seq1
+  await runInProcess(env, "move", projectId, "--element", elementId, "--x", "25", "--y", "10"); // seq2, head2
 
-  // history-list: the same labeled linear spine the page panel renders. CLI-made
-  // entries are agent-attributed (T0228), so their labels carry the robot marker.
-  const list = run(env, "history-list", projectId);
-  assert.deepEqual(list.entries.map((e) => e.label), ["Base", "🤖 Add image", "🤖 Move"]);
-  assert.deepEqual(list.entries.map((e) => e.actor), ["user", "agent", "agent"]);
+  // history-list: the same labeled linear spine the page panel renders. The
+  // subprocess smoke below separately pins the CLI-only agent attribution.
+  const list = await runInProcess(env, "history-list", projectId);
+  assert.deepEqual(list.entries.map((e) => e.label), ["Base", "Add image", "Move"]);
   assert.equal(list.entries.at(-1).current, true);
   // T0234: head is prominent in the JSON too (additive; history_seq is unchanged).
   assert.equal(list.head, 2);
@@ -270,29 +260,36 @@ test("cli history-list + history-jump parity (Base spine + jump reaches panel st
 
   // history-jump back to seq1 (== undo): the CLI reaches the same state as the panel.
   // --expect-head proves the caller read the CURRENT head (T0234).
-  const back = run(env, "history-jump", projectId, "--seq", "1", "--expect-head", String(list.head));
+  const back = await runInProcess(env, "history-jump", projectId, "--seq", "1", "--expect-head", String(list.head));
   assert.equal(back.project.elements[0].x, 0);
   assert.equal(back.jumped_to, 1);
 
   // history-jump forward into the dimmed redo tail (seq2, == redo).
-  const forward = run(env, "history-jump", projectId, "--seq", "2", "--expect-head", String(back.project.history_seq));
+  const forward = await runInProcess(env, "history-jump", projectId, "--seq", "2", "--expect-head", String(back.project.history_seq));
   assert.equal(forward.project.elements[0].x, 25);
 
   // history-jump to base (0): empty project.
-  const base = run(env, "history-jump", projectId, "--seq", "0", "--expect-head", String(forward.project.history_seq));
+  const base = await runInProcess(env, "history-jump", projectId, "--seq", "0", "--expect-head", String(forward.project.history_seq));
   assert.equal(base.project.elements.length, 0);
   assert.equal(base.project.history_seq, 0);
 });
 
-test("cli history-list prints the head prominently (\"head: N\" line before the JSON)", (t) => {
+test("cli subprocess prints the head prominently and attributes mutations to the agent", (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-head-line-"));
   const env = { CANVAS_PROJECTS_ROOT: dir };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   const pngPath = join(dir, "pic.png");
   writeFileSync(pngPath, solidPng(4, 4, [1, 2, 3]));
-  const projectId = run(env, "create", "--title", "CLI Head Line").project.id;
-  run(env, "add-image", projectId, "--file", pngPath); // seq1, head1
+  const createStdout = execFileSync(process.execPath, [CLI, "create", "--title", "CLI Head Line"], {
+    env: { ...process.env, ...env },
+    encoding: "utf8",
+  });
+  const projectId = JSON.parse(createStdout.trim().split("\n").filter(Boolean).at(-1)).project.id;
+  execFileSync(process.execPath, [CLI, "add-image", projectId, "--file", pngPath], {
+    env: { ...process.env, ...env },
+    encoding: "utf8",
+  }); // seq1, head1
 
   const stdout = execFileSync(process.execPath, [CLI, "history-list", projectId], {
     env: { ...process.env, ...env },
@@ -302,22 +299,24 @@ test("cli history-list prints the head prominently (\"head: N\" line before the 
   assert.equal(lines[0], "head: 1", "the head line comes before the JSON row");
   const parsed = JSON.parse(lines.at(-1));
   assert.equal(parsed.head, 1);
+  assert.equal(parsed.entries.at(-1).actor, "agent");
+  assert.equal(parsed.entries.at(-1).label, "🤖 Add image");
 });
 
-test("cli undo/redo/history-jump REQUIRE --expect-head (T0234); missing flag fails loudly and writes nothing", (t) => {
+test("cli undo/redo/history-jump REQUIRE --expect-head (T0234); missing flag fails loudly and writes nothing", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-cli-expecthead-"));
-  const env = { CANVAS_PROJECTS_ROOT: dir };
+  const env = { AI_STUDIO_ROOT: dir, CANVAS_PROJECTS_ROOT: join(dir, "canvas-projects") };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
   const pngPath = join(dir, "pic.png");
   writeFileSync(pngPath, solidPng(4, 4, [1, 2, 3]));
-  const projectId = run(env, "create", "--title", "CLI Expect Head").project.id;
-  run(env, "add-image", projectId, "--file", pngPath); // seq1, head1
+  const projectId = (await runInProcess(env, "create", "--title", "CLI Expect Head")).project.id;
+  await runInProcess(env, "add-image", projectId, "--file", pngPath); // seq1, head1
 
   // T0259: the journal now lives in the local cache (a path the subprocess resolves from its
   // own env), so assert "wrote nothing" via the CLI's own history view rather than a hardcoded
   // <project>/journal.jsonl path.
-  const historyBefore = run(env, "history", projectId);
+  const historyBefore = await runInProcess(env, "history", projectId);
 
   const undoFail = runFail(env, "undo", projectId);
   assert.equal(undoFail.status, 1);
@@ -336,7 +335,7 @@ test("cli undo/redo/history-jump REQUIRE --expect-head (T0234); missing flag fai
   assert.match(seqFail.stderr, /history-jump requires --seq/);
 
   // None of the above wrote anything.
-  assert.deepEqual(run(env, "history", projectId).entries, historyBefore.entries);
+  assert.deepEqual((await runInProcess(env, "history", projectId)).entries, historyBefore.entries);
 });
 
 test("cli batched elements-set / elements-remove parity (one undo each)", async (t) => {

@@ -11,6 +11,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { main as runCanvasCli } from "../cli.mjs";
 import {
   addImage,
   addText,
@@ -236,31 +237,42 @@ test("stroke + hard offset shadow render distinct colored pixels (smoke)", async
 
 // ---- CLI parity --------------------------------------------------------------
 
-function runCli(env, ...args) {
+function runCliProcess(env, ...args) {
   const stdout = execFileSync(process.execPath, [CLI, ...args], { env: { ...process.env, ...env }, encoding: "utf8" });
   return JSON.parse(stdout.trim().split("\n").filter(Boolean).at(-1));
 }
 
-test("cli add-text + element-set --content/--style-json parity", (t) => {
+async function runCli(env, ...args) {
+  const previous = process.env.CANVAS_PROJECTS_ROOT;
+  process.env.CANVAS_PROJECTS_ROOT = env.CANVAS_PROJECTS_ROOT;
+  try {
+    return await runCanvasCli(args, { repoRoot: REPO_ROOT, print: (value) => value });
+  } finally {
+    if (previous === undefined) delete process.env.CANVAS_PROJECTS_ROOT;
+    else process.env.CANVAS_PROJECTS_ROOT = previous;
+  }
+}
+
+test("cli add-text + element-set --content/--style-json parity", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-text-cli-"));
   const env = { CANVAS_PROJECTS_ROOT: dir };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const projectId = runCli(env, "create", "--title", "CLI Text").project.id;
-  const added = runCli(env, "add-text", projectId, "--x", "12", "--y", "8", "--content", "Hi there");
+  const projectId = (await runCli(env, "create", "--title", "CLI Text")).project.id;
+  const added = await runCli(env, "add-text", projectId, "--x", "12", "--y", "8", "--content", "Hi there");
   assert.equal(added.element.type, "text");
   assert.equal(added.element.x, 12);
   assert.equal(added.element.name, "Hi there");
   const elementId = added.element.id;
 
   // element-set --content updates the string.
-  const recontent = runCli(env, "element-set", projectId, "--element", elementId, "--content", "Changed");
+  const recontent = await runCli(env, "element-set", projectId, "--element", elementId, "--content", "Changed");
   assert.equal(recontent.element.content, "Changed");
 
   // element-set --style-json shallow-merges + validates a partial style.
   const stylePath = join(dir, "style.json");
   writeFileSync(stylePath, JSON.stringify({ fontFamily: "JetBrains Mono", fontWeight: 700, fontSize: 30 }));
-  const restyled = runCli(env, "element-set", projectId, "--element", elementId, "--style-json", stylePath);
+  const restyled = await runCli(env, "element-set", projectId, "--element", elementId, "--style-json", stylePath);
   assert.equal(restyled.element.style.fontFamily, "JetBrains Mono");
   assert.equal(restyled.element.style.fontWeight, 700);
   assert.equal(restyled.element.style.fontSize, 30);
@@ -268,5 +280,5 @@ test("cli add-text + element-set --content/--style-json parity", (t) => {
   // A bad family from the CLI surfaces the loud op error (non-zero exit).
   const badPath = join(dir, "bad.json");
   writeFileSync(badPath, JSON.stringify({ fontFamily: "Nope" }));
-  assert.throws(() => runCli(env, "element-set", projectId, "--element", elementId, "--style-json", badPath));
+  assert.throws(() => runCliProcess(env, "element-set", projectId, "--element", elementId, "--style-json", badPath));
 });

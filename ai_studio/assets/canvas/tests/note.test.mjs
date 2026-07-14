@@ -14,6 +14,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { main as runCanvasCli } from "../cli.mjs";
 import {
   addImage,
   addNote,
@@ -249,18 +250,29 @@ test("renderGroup excludes notes: a group WITH a note renders pixel-equal to WIT
 
 // ---- CLI parity --------------------------------------------------------------
 
-function runCli(env, ...args) {
+function runCliProcess(env, ...args) {
   const stdout = execFileSync(process.execPath, [CLI, ...args], { env: { ...process.env, ...env }, encoding: "utf8" });
   return JSON.parse(stdout.trim().split("\n").filter(Boolean).at(-1));
 }
 
-test("cli add-note + element-set --content/--style-json/--background parity", (t) => {
+async function runCli(env, ...args) {
+  const previous = process.env.CANVAS_PROJECTS_ROOT;
+  process.env.CANVAS_PROJECTS_ROOT = env.CANVAS_PROJECTS_ROOT;
+  try {
+    return await runCanvasCli(args, { repoRoot: REPO_ROOT, print: (value) => value });
+  } finally {
+    if (previous === undefined) delete process.env.CANVAS_PROJECTS_ROOT;
+    else process.env.CANVAS_PROJECTS_ROOT = previous;
+  }
+}
+
+test("cli add-note + element-set --content/--style-json/--background parity", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "canvas-note-cli-"));
   const env = { CANVAS_PROJECTS_ROOT: dir };
   t.after(() => rmSync(dir, { recursive: true, force: true }));
 
-  const projectId = runCli(env, "create", "--title", "CLI Note").project.id;
-  const added = runCli(env, "add-note", projectId, "--x", "5", "--y", "6", "--w", "300", "--h", "120", "--content", "Note here", "--background", "#d5f6b1");
+  const projectId = (await runCli(env, "create", "--title", "CLI Note")).project.id;
+  const added = await runCli(env, "add-note", projectId, "--x", "5", "--y", "6", "--w", "300", "--h", "120", "--content", "Note here", "--background", "#d5f6b1");
   assert.equal(added.element.type, "note");
   assert.equal(added.element.x, 5);
   assert.equal(added.element.w, 300);
@@ -270,22 +282,22 @@ test("cli add-note + element-set --content/--style-json/--background parity", (t
   const elementId = added.element.id;
 
   // element-set --content updates the string.
-  const recontent = runCli(env, "element-set", projectId, "--element", elementId, "--content", "Changed");
+  const recontent = await runCli(env, "element-set", projectId, "--element", elementId, "--content", "Changed");
   assert.equal(recontent.element.content, "Changed");
 
   // element-set --style-json shallow-merges + validates a partial note style.
   const stylePath = join(dir, "style.json");
   writeFileSync(stylePath, JSON.stringify({ fontFamily: "JetBrains Mono", fontWeight: 700, fontSize: 16 }));
-  const restyled = runCli(env, "element-set", projectId, "--element", elementId, "--style-json", stylePath);
+  const restyled = await runCli(env, "element-set", projectId, "--element", elementId, "--style-json", stylePath);
   assert.equal(restyled.element.style.fontFamily, "JetBrains Mono");
   assert.equal(restyled.element.style.fontSize, 16);
 
   // element-set --background changes the fill; 'none' clears it.
-  const rebg = runCli(env, "element-set", projectId, "--element", elementId, "--background", "#cfe6ff");
+  const rebg = await runCli(env, "element-set", projectId, "--element", elementId, "--background", "#cfe6ff");
   assert.deepEqual(rebg.element.background, { type: "color", color: "#cfe6ff" });
-  const cleared = runCli(env, "element-set", projectId, "--element", elementId, "--background", "none");
+  const cleared = await runCli(env, "element-set", projectId, "--element", elementId, "--background", "none");
   assert.equal(cleared.element.background, undefined);
 
   // A bad background from the CLI surfaces the loud op error (non-zero exit).
-  assert.throws(() => runCli(env, "element-set", projectId, "--element", elementId, "--background", "notacolor"));
+  assert.throws(() => runCliProcess(env, "element-set", projectId, "--element", elementId, "--background", "notacolor"));
 });
