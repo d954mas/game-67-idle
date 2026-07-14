@@ -7,6 +7,7 @@ import unittest
 
 
 SCRIPT = Path(__file__).with_name("items_lua_sandbox.py")
+FIXTURE_ROOT = Path(__file__).parents[1] / "tests" / "fixtures" / "lua_sandbox"
 
 
 class ItemsLuaSandboxTests(unittest.TestCase):
@@ -52,37 +53,28 @@ class ItemsLuaSandboxTests(unittest.TestCase):
         self.assertEqual(payload["error"]["column"], 1)
         self.assertTrue(payload["error"]["path"].startswith("$"))
 
+    def evaluate_fixture(self):
+        return subprocess.run(
+            [
+                sys.executable, str(SCRIPT), "evaluate", "--root", str(FIXTURE_ROOT),
+                "--manifest", str(FIXTURE_ROOT / "items.lua.json"),
+            ],
+            text=True, capture_output=True, encoding="utf-8", timeout=10,
+        )
+
     def test_representative_declarations_are_canonical_and_repeatable(self):
         modules = {
-            "game.items.currencies": '''
-local items = require("studio.items")
-items.define({ id="game.gold", kind="currency", stack=0 })
-''',
-            "game.items.weapons": '''
-local items = require("studio.items")
-local levels = require("studio.levels")
-items.define({
-  id="game.iron_sword", kind="weapon", stack=1,
-  levels=levels.single({ attack=15 }),
-  acquire={ cost=items.cost(items.ref("game.gold"), 100) },
-})
-items.define({
-  id="game.levelled_sword", kind="weapon", stack=1,
-  levels=levels.table({
-    [1]={ attack=10 },
-    [2]={ attack=15, cost_to_reach=items.cost(items.ref("game.gold"), 100) },
-    [3]={ attack=20, cost_to_reach=items.free() },
-  }),
-})
-''',
+            entry["name"]: (FIXTURE_ROOT / entry["file"]).read_text(encoding="utf-8")
+            for entry in json.loads((FIXTURE_ROOT / "items.lua.json").read_text(encoding="utf-8"))["modules"]
         }
-        first = self.evaluate(modules, ["game.items.weapons", "game.items.currencies"])
+        first = self.evaluate_fixture()
         second = self.evaluate(dict(reversed(list(modules.items()))), ["game.items.currencies", "game.items.weapons"])
 
         self.assertEqual(first.returncode, 0, first.stderr)
         self.assertEqual(second.returncode, 0, second.stderr)
         self.assertEqual(first.stdout, second.stdout)
         payload = json.loads(first.stdout)
+        self.assertEqual(payload, json.loads((FIXTURE_ROOT / "expected.json").read_text(encoding="utf-8")))
         self.assertEqual(payload["backend"]["module"], "lupa.lua54")
         self.assertEqual([item["id"] for item in payload["items"]], [
             "game.gold", "game.iron_sword", "game.levelled_sword",

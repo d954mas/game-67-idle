@@ -1,11 +1,11 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "items-core",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "title": "Items Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
-  "summary": "In-place L1 module: item/container/currency catalog codegen, ownership model (add/remove/move/count/can_afford/purse/unique instances), and a read-only op-layer CLI (list/validate/schema).",
+  "summary": "In-place L1 module: deterministic Lua item declarations, catalog codegen, ownership operations, and read-only tooling.",
   "copy_model": "in-place",
   "layer": "L1",
   "owners": [
@@ -13,6 +13,7 @@
   ],
   "dependencies": [
     "Python 3.12",
+    "Lupa 2.8 using its bundled lupa.lua54 backend (installed by the AI Studio Python environment)",
     "templates/template/content/items.json + content/item_fields.schema.json (or a game-local items catalog)",
     "template or game C runtime using the generated items_catalog.gen.{h,c} + the generated items save fragment (features/game-state)",
     "the consuming game's own src/features/items/reason_tags.h (closed reason-verb list, resolved via the game's include path)"
@@ -24,11 +25,14 @@
     "schema": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py schema",
     "test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops_test.py",
     "api_proof": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof.py --snapshot features/items-core/tests/fixtures/items_api_weapon_proof.json --out-dir <build-dir>",
-    "api_proof_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof_test.py"
+    "api_proof_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof_test.py",
+    "lua_evaluate": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox.py evaluate --root <game-root> --manifest <game-root>/items.lua.json",
+    "lua_sandbox_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox_test.py"
   },
   "manuals": {
     "install": "features/items-core/INSTALL.md",
-    "typed_api_proof": "features/items-core/docs/items_lua_schema_api_contract_2026-07-10.md"
+    "typed_api_proof": "features/items-core/docs/items_lua_schema_api_contract_2026-07-10.md",
+    "lua_authoring_contract": "features/items-core/docs/items_lua_single_source_concept_2026-07-10.md"
   },
   "outputs": [
     "items_catalog.gen.h",
@@ -36,7 +40,8 @@
     "items_game.gen.h",
     "items_game.internal.gen.h",
     "items_game.gen.c",
-    "items_game.luau"
+    "items_game.luau",
+    "items.lua.evaluation.v1 JSON"
   ],
   "registers": {
     "note": "Describes the EXISTING wiring in templates/template/CMakeLists.txt (target_sources/ctest) -- items-core is an in-place module (precedent features/game-state), not an install-script target. This section documents the consuming game's provisioning, it does not perform it.",

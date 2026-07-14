@@ -1,0 +1,49 @@
+{
+  "backend": {
+    "implementation": "Lua 5.4",
+    "module": "lupa.lua54",
+    "package": "lupa@2.8",
+    "version": "5.4"
+  },
+  "items": [
+    {
+      "id": "game.gold",
+      "kind": "currency",
+      "stack": 0
+    },
+    {
+      "acquire": {
+        "cost": {
+          "__studio_kind": "cost",
+          "count": 100,
+          "item": { "__studio_kind": "item_ref", "id": "game.gold" }
+        }
+      },
+      "id": "game.iron_sword",
+      "kind": "weapon",
+      "levels": { "mode": "single", "rows": [{ "attack": 15 }] },
+      "stack": 1
+    },
+    {
+      "id": "game.levelled_sword",
+      "kind": "weapon",
+      "levels": {
+        "mode": "table",
+        "rows": [
+          { "attack": 10 },
+          {
+            "attack": 15,
+            "cost_to_reach": {
+              "__studio_kind": "cost",
+              "count": 100,
+              "item": { "__studio_kind": "item_ref", "id": "game.gold" }
+            }
+          },
+          { "attack": 20, "cost_to_reach": { "__studio_kind": "free" } }
+        ]
+      },
+      "stack": 1
+    }
+  ],
+  "schema": "items.lua.evaluation.v1"
+}

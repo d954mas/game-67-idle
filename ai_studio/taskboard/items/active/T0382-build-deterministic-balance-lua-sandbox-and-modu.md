@@ -47,3 +47,8 @@ ratified Items declaration contract and representative backend benchmark.
   libm differences, LuaJIT hooks, and stale incremental results.
 - 2026-07-14: Selected as the next risk-first task after full active-card grooming; it is the first dependency of the E016 authoring vertical.
 - 2026-07-14: Started backend selection and deterministic sandbox implementation. Scope: fresh-process evaluator/module loader plus representative Items fixtures; Snapshot/runtime export remain T0383/T0365.
+- 2026-07-15: Pinned `lupa==2.8` and `lupa.lua54`. A 5 x 100 fresh-runtime
+  representative comparison measured median 0.053 ms for Lua 5.4 and 0.060 ms
+  for LuaJIT 2.1 with JIT disabled. Both supplied memory limits, instruction
+  hooks, and text-only loading; Lua 5.4 avoids a JIT policy and Lua 5.1 integer
+  compatibility layer. The temporary benchmark script was not retained.

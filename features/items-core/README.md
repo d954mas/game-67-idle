@@ -33,6 +33,8 @@ features/items-core/
     generate_items_api_proof_test.py  schema/API proof regression suite
     items_ops.py                   read-only op-layer CLI (list/validate/schema)
     items_ops_test.py              self-contained unittest for items_ops.py's rules
+    items_lua_sandbox.py           isolated deterministic Lua declaration evaluator
+    items_lua_sandbox_test.py      sandbox, limits, diagnostics, and fixture proof
   feature.json
   README.md   (this file)
   INSTALL.md
@@ -99,6 +101,33 @@ returns the authored integer, never a derived object.
   rules themselves fire correctly (does not touch a game's real `content/*`,
   except the reused `content/item_fields.schema.json`, treated as the generic
   stable field-shape contract).
+
+### Deterministic Lua evaluator
+
+`items_lua_sandbox.py evaluate` is the build-time boundary for Lua Items and
+Balance declarations. Every call starts a new Python worker containing a
+memory-bounded `lupa==2.8` `lupa.lua54` runtime. Author code receives only
+deterministic primitives, `require`, `studio.items`, `studio.levels`, and the
+checked integer `studio.math` surface. Filesystem, process/environment, clock,
+random, network, dynamic loading, bytecode, debug/FFI/JIT, unordered iteration,
+mutable globals, and formula upvalues are absent.
+
+The manifest allowlists module names and files; entries are sorted before
+evaluation, module exports are read-only, and `items.define` deep-copies its
+input. Instruction, recursion, memory, wall-time, output-row, and output-byte
+budgets fail as structured `items.lua.error.v1` diagnostics. Successful output
+is canonical `items.lua.evaluation.v1` JSON with the backend fingerprint.
+
+Lua 5.4 was selected over bundled LuaJIT 2.1 on the representative
+currency/fixed-sword/levelled-sword workload: both exposed the required hooks,
+while Lua 5.4 needed no JIT policy or Lua 5.1 integer compatibility layer. The
+committed fixture under `tests/fixtures/lua_sandbox/` is the Windows/Linux
+parity receipt.
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox.py evaluate --root <game-root> --manifest <game-root>/items.lua.json
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox_test.py
+```
 
 ### T0364 typed API proof
 
@@ -175,8 +204,8 @@ and read-only authoring tools.
 
 ## Validation
 
-Run the `test` and `api_proof_test` commands from `feature.json`, then
-`node features/validate_contracts.mjs`.
+Run the `test`, `api_proof_test`, and `lua_sandbox_test` commands from
+`feature.json`, then `node features/validate_contracts.mjs`.
 
 ## Compatibility
 
