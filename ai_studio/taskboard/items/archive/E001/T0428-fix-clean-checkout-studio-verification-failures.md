@@ -1,13 +1,14 @@
 ---
 id: T0428
 title: Fix clean-checkout Studio verification failures
-status: doing
+status: done
 project: P001
 epic: E001
 priority: P0
 tags: [ci, verification, windows, linux, tests]
 created: 2026-07-14
 updated: 2026-07-14
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"Focused suites, native CTest 30/30, Windows full 23.215s, independent review, and GitHub Actions run 29316401973 passed on Windows and Ubuntu"}]}
 ---
 
 ## What
@@ -24,8 +25,8 @@ the runtime code they are intended to validate.
 - [x] Linux game/runtime ASan, UBSan, and LSan coverage remains active; only
       the known external GLFW/GLX extension cache is suppressed for the pack builder.
 - [x] Focused suites and native Windows full verification pass.
-- [ ] Independent review finds no quality regression.
-- [ ] Commit is pushed and Windows/Ubuntu Studio verification is green.
+- [x] Independent review finds no quality regression.
+- [x] Commit is pushed and Windows/Ubuntu Studio verification is green.
 
 ## Open questions
 
@@ -67,4 +68,13 @@ the runtime code they are intended to validate.
 - 2026-07-14: Reviewer recheck found both P2s resolved and no residual P1/P2.
   Repeat native Windows full verification passed all applicable domains in
   `23.215 s` on the final pre-push diff.
+- 2026-07-14: Commit `6843fe7f7` pushed to `origin/master`. GitHub Actions run
+  `29316401973` passed: Ubuntu blocking verification `2m50s` and job `4m16s`;
+  Windows blocking verification `3m34s` and job `5m41s`.
+- 2026-07-14: Quality: QTECH_001=pass; evidence: clean-checkout prerequisites
+  removed, exact external GLX suppression retained all other sanitizer checks,
+  focused suites and Windows full passed, independent review clean, Windows and
+  Ubuntu GitHub Actions green.
 - 2026-07-14: Started from GitHub Actions run 29315017750 failure evidence.
+- 2026-07-14: CI fix shipped in 6843fe7f7; run 29316401973 green on both platforms.
+- 2026-07-14: Quality: QTECH_001=pass; evidence: Focused suites, native CTest 30/30, Windows full 23.215s, independent review, and GitHub Actions run 29316401973 passed on Windows and Ubuntu
