@@ -8,7 +8,7 @@ import { spawn, spawnSync } from "node:child_process";
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const slash = (value) => String(value || "").replaceAll("\\", "/");
 const NODE_TEST_CONCURRENCY = 4;
-const DOMAIN_CONCURRENCY = 2;
+const DOMAIN_CONCURRENCY = 3;
 const PYTHON_RUN = ["node", "ai_studio/dev_environment/python_run.mjs"];
 const pythonCommands = (files, options = {}) => {
   if (!options.batchUnittest) return files.map((file) => [...PYTHON_RUN, file]);

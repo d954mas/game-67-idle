@@ -334,7 +334,7 @@ test("verify emits compact stable results, bounds failure tails, and passes when
   assert.equal(full.domains.length, 10);
 });
 
-test("full verification runs at most two independent owner domains concurrently", async () => {
+test("full verification runs at most three independent owner domains concurrently", async () => {
   let active = 0;
   let maxActive = 0;
   const result = await verifyStudio({ mode: "full" }, {
@@ -347,7 +347,7 @@ test("full verification runs at most two independent owner domains concurrently"
     },
   });
   assert.equal(result.ok, true);
-  assert.equal(maxActive, 2);
+  assert.equal(maxActive, 3);
   assert.deepEqual(result.domains.map((domain) => domain.id), describeStudio().verification.domains.map((domain) => domain.id));
 });
 
