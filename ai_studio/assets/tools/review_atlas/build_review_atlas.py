@@ -14,9 +14,9 @@ from PIL import ImageDraw
 
 import sys
 
-ROOT = Path(__file__).resolve().parents[4]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from ai_studio.assets.tools.lib.atomic_io import save_image_atomic, write_json_atomic, write_text_atomic
 from ai_studio.assets.tools.review_atlas.atlas_review_labels import (
@@ -31,7 +31,6 @@ from ai_studio.assets.tools.review_atlas.atlas_review_labels import (
 )
 
 
-ROOT = Path.cwd()
 RESAMPLE_NEAREST = getattr(getattr(Image, "Resampling", Image), "NEAREST", Image.NEAREST)
 # Label-box constants + font/measure helpers + the review-label text format are
 # shared with audit_review_atlas via prep/review_atlas/atlas_review_labels.py.
@@ -46,18 +45,18 @@ def fail(message: str) -> None:
     raise SystemExit(f"error: {message}")
 
 
-def norm_path(path: Path) -> str:
+def norm_path(path: Path, base_dir: Path) -> str:
     try:
-        return path.resolve().relative_to(ROOT.resolve()).as_posix()
+        return path.resolve().relative_to(base_dir.resolve()).as_posix()
     except ValueError:
         return path.as_posix()
 
 
-def project_path(value: str) -> Path:
+def project_path(value: str, base_dir: Path) -> Path:
     path = Path(value)
     if path.is_absolute():
         return path
-    return ROOT / path
+    return base_dir / path
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -266,7 +265,7 @@ def choose_label_placement(
     return str(selected["placement"]), int(selected["tile_width"]), int(selected["tile_height"])
 
 
-def load_assets(manifest: dict[str, Any]) -> list[dict[str, Any]]:
+def load_assets(manifest: dict[str, Any], base_dir: Path) -> list[dict[str, Any]]:
     if manifest.get("schema") != "game.asset_manifest":
         fail("asset manifest schema must be game.asset_manifest")
     assets = manifest.get("assets")
@@ -288,7 +287,7 @@ def load_assets(manifest: dict[str, Any]) -> list[dict[str, Any]]:
         policy = asset.get("atlas_policy")
         if not isinstance(policy, dict):
             fail(f"asset {asset_id} needs atlas_policy")
-        source_path = project_path(path_value)
+        source_path = project_path(path_value, base_dir)
         if not source_path.exists():
             fail(f"asset image missing: {path_value}")
         image = Image.open(source_path).convert("RGBA")
@@ -461,6 +460,7 @@ def pack_group(
     max_size: int,
     label_review: bool,
     label_font_size: int,
+    base_dir: Path,
     profile: bool = False,
 ) -> dict[str, Any]:
     started = perf_counter()
@@ -548,7 +548,7 @@ def pack_group(
         draw_review_labels(preview, sorted_entries)
         preview_path = output_dir / f"{clean_name(group)}-labeled.png"
         save_image_atomic(preview, preview_path)
-        labeled_preview_path = norm_path(preview_path)
+        labeled_preview_path = norm_path(preview_path, base_dir)
         if profile:
             timings["save_labeled_preview"] = round((perf_counter() - label_started) * 1000, 3)
     atlas_area = width * height
@@ -558,7 +558,7 @@ def pack_group(
         "pack_group": group,
         "purpose": "review_validation_atlas",
         "label_overlay": label_review,
-        "path": norm_path(path),
+        "path": norm_path(path, base_dir),
         "size": [width, height],
         "entry_count": len(entries),
         "physical_entry_count": len(placements),
@@ -594,12 +594,14 @@ def build_review_atlas(
     profile: bool = False,
     profile_output: Path | None = None,
     profile_inline: bool = True,
+    base_dir: Path | None = None,
 ) -> dict[str, Any]:
+    base_dir = Path.cwd() if base_dir is None else base_dir
     started = perf_counter()
     read_started = started
     manifest = read_json(asset_manifest)
     load_started = perf_counter()
-    loaded = load_assets(manifest)
+    loaded = load_assets(manifest, base_dir)
     timings: dict[str, float] = {}
     if profile:
         timings["read_manifest"] = round((load_started - read_started) * 1000, 3)
@@ -608,7 +610,7 @@ def build_review_atlas(
     for item in loaded:
         groups.setdefault(item["pack_group"], []).append(item)
     pack_started = perf_counter()
-    atlases = [pack_group(group, items, output_dir, max_size, label_review, label_font_size, profile) for group, items in sorted(groups.items())]
+    atlases = [pack_group(group, items, output_dir, max_size, label_review, label_font_size, base_dir, profile) for group, items in sorted(groups.items())]
     if profile:
         timings["pack_groups"] = round((perf_counter() - pack_started) * 1000, 3)
     review_atlas_manifest = {
@@ -616,8 +618,8 @@ def build_review_atlas(
         "version": 1,
         "purpose": "review_validation_atlas",
         "label_overlay": label_review,
-        "asset_manifest": norm_path(asset_manifest),
-        "output_dir": norm_path(output_dir),
+        "asset_manifest": norm_path(asset_manifest, base_dir),
+        "output_dir": norm_path(output_dir, base_dir),
         "max_size": max_size,
         "atlases": atlases,
     }
@@ -734,7 +736,7 @@ def build_review_atlas(
     return review_atlas_manifest
 
 
-def main() -> None:
+def main(argv: list[str] | None = None, *, project_root: Path | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build review UI atlas PNGs from a prepared asset manifest.")
     parser.add_argument("--asset-manifest", required=True)
     parser.add_argument("--output-dir", required=True)
@@ -746,13 +748,14 @@ def main() -> None:
     parser.add_argument("--profile", action="store_true", help="Record atlas build timing and efficiency metrics in JSON/Markdown and print the slowest atlas group.")
     parser.add_argument("--profile-output", help="Write timing/efficiency telemetry to a sidecar JSON file. When set, profile fields are not embedded in the atlas JSON/Markdown unless --profile-inline is also set.")
     parser.add_argument("--profile-inline", action="store_true", help="Embed profile timing fields in the atlas JSON/Markdown even when --profile-output is used.")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    base_dir = Path.cwd() if project_root is None else project_root
 
-    asset_manifest = project_path(args.asset_manifest)
-    output_dir = project_path(args.output_dir)
-    json_output = project_path(args.json_output) if args.json_output else output_dir / "review-atlas.json"
-    report_path = project_path(args.report) if args.report else None
-    profile_output = project_path(args.profile_output) if args.profile_output else None
+    asset_manifest = project_path(args.asset_manifest, base_dir)
+    output_dir = project_path(args.output_dir, base_dir)
+    json_output = project_path(args.json_output, base_dir) if args.json_output else output_dir / "review-atlas.json"
+    report_path = project_path(args.report, base_dir) if args.report else None
+    profile_output = project_path(args.profile_output, base_dir) if args.profile_output else None
     profile_enabled = args.profile or profile_output is not None
     profile_inline = args.profile_inline or profile_output is None
     if args.max_size < 64:
@@ -770,16 +773,18 @@ def main() -> None:
         profile_enabled,
         profile_output,
         profile_inline,
+        base_dir,
     )
     total_entries = sum(atlas["entry_count"] for atlas in review_atlas["atlases"])
     print(f"pass: wrote {total_entries} UI asset id(s) into {len(review_atlas['atlases'])} review atlas image(s)")
-    print(f"wrote review atlas manifest: {norm_path(json_output)}")
+    print(f"wrote review atlas manifest: {norm_path(json_output, base_dir)}")
     if profile_output:
-        print(f"wrote profile telemetry: {norm_path(profile_output)}")
+        print(f"wrote profile telemetry: {norm_path(profile_output, base_dir)}")
     if profile_enabled and review_atlas["atlases"]:
         slowest = max(review_atlas["atlases"], key=lambda atlas: atlas.get("timing_ms", {}).get("total", 0))
         print(f"profile: slowest atlas group `{slowest['pack_group']}` {slowest.get('timing_ms', {}).get('total', 0)} ms occupancy={slowest.get('occupancy_ratio')}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -796,7 +796,7 @@ def write_report(path: Path, result: dict[str, object]) -> None:
     write_text_atomic(path, "\n".join(lines) + "\n")
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Audit generated source sheet gross cut-readiness before slicing.")
     parser.add_argument("--source", type=Path, required=True)
     parser.add_argument("--key-color", type=parse_color, default=parse_color("#ff00ff"))
@@ -815,7 +815,7 @@ def main() -> int:
     parser.add_argument("--profile", action="store_true", help="Record per-stage timing in JSON/Markdown and print the slowest stage.")
     parser.add_argument("--profile-output", type=Path, help="Write per-stage timing telemetry to a sidecar JSON file. When set, profile fields are not embedded in JSON/Markdown unless --profile-inline is also set.")
     parser.add_argument("--profile-inline", action="store_true", help="Embed profile timing fields in JSON/Markdown even when --profile-output is used.")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     profile_enabled = args.profile or args.profile_output is not None
     profile_inline = args.profile_inline or args.profile_output is None

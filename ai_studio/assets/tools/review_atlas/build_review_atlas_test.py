@@ -1,9 +1,11 @@
 ﻿import json
 import importlib.util
+import io
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -20,6 +22,9 @@ def load_builder_module():
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+BUILDER_MODULE = load_builder_module()
 
 
 def write_png(path: Path, size=(8, 6), color=(220, 40, 30, 255)) -> None:
@@ -55,7 +60,7 @@ def asset(asset_id: str, path: str, **overrides):
     return data
 
 
-def run_pack(cwd: Path, *args: str):
+def run_pack_cli(cwd: Path, *args: str):
     return subprocess.run(
         [sys.executable, str(SCRIPT), *args],
         cwd=cwd,
@@ -66,7 +71,29 @@ def run_pack(cwd: Path, *args: str):
     )
 
 
+def run_pack(cwd: Path, *args: str):
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        try:
+            returncode = BUILDER_MODULE.main(list(args), project_root=cwd)
+        except SystemExit as error:
+            if isinstance(error.code, int):
+                returncode = error.code
+            else:
+                returncode = 1
+                if error.code:
+                    print(error.code, file=sys.stderr)
+    return subprocess.CompletedProcess(args, returncode, stdout.getvalue(), stderr.getvalue())
+
+
 class BuildReviewAtlasTest(unittest.TestCase):
+    def test_main_accepts_explicit_argv_and_project_root(self):
+        module = load_builder_module()
+        with redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as exit_context:
+            module.main(["--help"], project_root=ROOT)
+        self.assertEqual(exit_context.exception.code, 0)
+
     def test_packs_assets_with_extruded_padding_and_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -86,7 +113,7 @@ class BuildReviewAtlasTest(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            result = run_pack(
+            result = run_pack_cli(
                 root,
                 "--asset-manifest",
                 "manifest.json",

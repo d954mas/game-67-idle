@@ -1,10 +1,12 @@
 ﻿import json
 import importlib.util
+import io
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
-from subprocess import run
+import subprocess
 
 from PIL import Image, ImageDraw
 
@@ -21,7 +23,33 @@ def load_intake_module():
     return module
 
 
+INTAKE_MODULE = load_intake_module()
+
+
+def run(command, *, cwd, text, capture_output):
+    del cwd, text, capture_output
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        try:
+            returncode = INTAKE_MODULE.main(command[2:])
+        except SystemExit as error:
+            if isinstance(error.code, int):
+                returncode = error.code
+            else:
+                returncode = 1
+                if error.code:
+                    print(error.code, file=sys.stderr)
+    return subprocess.CompletedProcess(command, returncode, stdout.getvalue(), stderr.getvalue())
+
+
 class SourceSheetIntakeAuditTests(unittest.TestCase):
+    def test_main_accepts_explicit_argv(self):
+        module = load_intake_module()
+        with redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as exit_context:
+            module.main(["--help"])
+        self.assertEqual(exit_context.exception.code, 0)
+
     def test_passes_separated_components(self):
         with tempfile.TemporaryDirectory() as tmp:
             source = Path(tmp) / "sheet.png"
@@ -58,7 +86,7 @@ class SourceSheetIntakeAuditTests(unittest.TestCase):
             draw.rectangle((0, 20, 40, 60), fill=(80, 60, 40, 255))
             draw.rectangle((48, 20, 88, 60), fill=(80, 60, 40, 255))
             image.save(source)
-            result = run(
+            result = subprocess.run(
                 [
                     sys.executable,
                     str(SCRIPT),

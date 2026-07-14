@@ -1,9 +1,11 @@
 ﻿import json
 import importlib.util
+import io
 import subprocess
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
 
@@ -21,6 +23,18 @@ def load_audit_module():
     assert spec.loader is not None
     spec.loader.exec_module(module)
     return module
+
+
+def load_builder_module():
+    spec = importlib.util.spec_from_file_location("build_review_atlas_module_for_audit", PACKER)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
+
+
+AUDIT_MODULE = load_audit_module()
+BUILDER_MODULE = load_builder_module()
 
 
 def write_png(path: Path, size=(8, 6), color=(220, 40, 30, 255)) -> None:
@@ -55,7 +69,7 @@ def asset(asset_id: str, path: str, **overrides):
     return data
 
 
-def run(script: Path, cwd: Path, *args: str):
+def run_cli(script: Path, cwd: Path, *args: str):
     return subprocess.run(
         [sys.executable, str(script), *args],
         cwd=cwd,
@@ -64,6 +78,23 @@ def run(script: Path, cwd: Path, *args: str):
         stderr=subprocess.PIPE,
         check=False,
     )
+
+
+def run(script: Path, cwd: Path, *args: str):
+    module = BUILDER_MODULE if script == PACKER else AUDIT_MODULE
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    with redirect_stdout(stdout), redirect_stderr(stderr):
+        try:
+            returncode = module.main(list(args), project_root=cwd)
+        except SystemExit as error:
+            if isinstance(error.code, int):
+                returncode = error.code
+            else:
+                returncode = 1
+                if error.code:
+                    print(error.code, file=sys.stderr)
+    return subprocess.CompletedProcess(args, returncode, stdout.getvalue(), stderr.getvalue())
 
 
 def build_review_atlas(root: Path, assets, label_review: bool = False):
@@ -86,6 +117,12 @@ def build_review_atlas(root: Path, assets, label_review: bool = False):
 
 
 class AuditReviewAtlasTest(unittest.TestCase):
+    def test_main_accepts_explicit_argv_and_project_root(self):
+        module = load_audit_module()
+        with redirect_stdout(io.StringIO()), self.assertRaises(SystemExit) as exit_context:
+            module.main(["--help"], project_root=ROOT)
+        self.assertEqual(exit_context.exception.code, 0)
+
     def test_passes_valid_pack(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -98,7 +135,7 @@ class AuditReviewAtlasTest(unittest.TestCase):
                     asset("button", "assets/prepared/button.png"),
                 ],
             )
-            result = run(
+            result = run_cli(
                 AUDIT,
                 root,
                 "--review-atlas",
@@ -134,7 +171,7 @@ class AuditReviewAtlasTest(unittest.TestCase):
             atlas.putpixel((x, y - 1), (0, 0, 255, 255))
             atlas.save(atlas_path)
 
-            result = run(AUDIT, root, "--review-atlas", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
+            result = run_cli(AUDIT, root, "--review-atlas", str(pack.relative_to(root)), "--asset-manifest", str(manifest.relative_to(root)))
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("extrusion pixel mismatch", result.stdout + result.stderr)
 

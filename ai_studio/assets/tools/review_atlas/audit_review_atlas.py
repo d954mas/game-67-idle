@@ -12,9 +12,9 @@ from PIL import Image
 
 import sys
 
-ROOT = Path(__file__).resolve().parents[4]
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
+REPO_ROOT = Path(__file__).resolve().parents[4]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from ai_studio.assets.tools.lib.atomic_io import write_json_atomic, write_text_atomic
 from ai_studio.assets.tools.review_atlas.atlas_review_labels import (
@@ -28,7 +28,6 @@ from ai_studio.assets.tools.review_atlas.atlas_review_labels import (
 )
 
 
-ROOT = Path.cwd()
 # Label constants + font/measure helpers + the review-label text format are
 # shared with build_review_atlas via prep/review_atlas/atlas_review_labels.py.
 
@@ -41,16 +40,16 @@ def fail(message: str) -> None:
     raise SystemExit(f"error: {message}")
 
 
-def project_path(value: str) -> Path:
+def project_path(value: str, base_dir: Path) -> Path:
     path = Path(value)
     if path.is_absolute():
         return path
-    return ROOT / path
+    return base_dir / path
 
 
-def norm_path(path: Path) -> str:
+def norm_path(path: Path, base_dir: Path) -> str:
     try:
-        return path.resolve().relative_to(ROOT.resolve()).as_posix()
+        return path.resolve().relative_to(base_dir.resolve()).as_posix()
     except ValueError:
         return path.as_posix()
 
@@ -261,7 +260,13 @@ def check_extrusion(atlas: Image.Image, entry: dict[str, Any]) -> list[str]:
     return problems
 
 
-def audit_review_atlas(review_atlas_path: Path, asset_manifest_path: Path | None = None, profile: bool = False) -> dict[str, Any]:
+def audit_review_atlas(
+    review_atlas_path: Path,
+    asset_manifest_path: Path | None = None,
+    profile: bool = False,
+    base_dir: Path | None = None,
+) -> dict[str, Any]:
+    base_dir = Path.cwd() if base_dir is None else base_dir
     started = perf_counter()
     review_atlas = read_json(review_atlas_path)
     timings: dict[str, float] = {}
@@ -271,11 +276,11 @@ def audit_review_atlas(review_atlas_path: Path, asset_manifest_path: Path | None
 
     manifest_path = asset_manifest_path
     if manifest_path is None and isinstance(review_atlas.get("asset_manifest"), str):
-        manifest_path = project_path(review_atlas["asset_manifest"])
+        manifest_path = project_path(review_atlas["asset_manifest"], base_dir)
     expected_assets: dict[str, dict[str, Any]] = {}
     if manifest_path:
         if not manifest_path.exists():
-            problems.append(f"asset manifest missing: {norm_path(manifest_path)}")
+            problems.append(f"asset manifest missing: {norm_path(manifest_path, base_dir)}")
         else:
             manifest = read_json(manifest_path)
             if manifest.get("schema") != "game.asset_manifest":
@@ -283,7 +288,7 @@ def audit_review_atlas(review_atlas_path: Path, asset_manifest_path: Path | None
             for asset in manifest.get("assets", []):
                 if isinstance(asset, dict) and isinstance(asset.get("id"), str):
                     expected_assets[asset["id"]] = asset
-            if isinstance(review_atlas.get("asset_manifest"), str) and norm_path(manifest_path) != review_atlas["asset_manifest"]:
+            if isinstance(review_atlas.get("asset_manifest"), str) and norm_path(manifest_path, base_dir) != review_atlas["asset_manifest"]:
                 problems.append("review atlas asset_manifest must match provided asset manifest")
 
     reported_ids: set[str] = set()
@@ -302,7 +307,7 @@ def audit_review_atlas(review_atlas_path: Path, asset_manifest_path: Path | None
         atlas_problems: list[str] = []
         atlas_asset_ids: set[str] = set()
         atlas_path_value = atlas_info.get("path") if isinstance(atlas_info, dict) else None
-        atlas_path = project_path(atlas_path_value) if isinstance(atlas_path_value, str) else None
+        atlas_path = project_path(atlas_path_value, base_dir) if isinstance(atlas_path_value, str) else None
         atlas = None
         if atlas_path is None:
             atlas_problems.append("atlas needs path")
@@ -318,7 +323,7 @@ def audit_review_atlas(review_atlas_path: Path, asset_manifest_path: Path | None
             if not isinstance(labeled_preview_path_value, str) or not labeled_preview_path_value:
                 atlas_problems.append("labeled review atlas needs labeled_preview_path")
             else:
-                labeled_preview_path = project_path(labeled_preview_path_value)
+                labeled_preview_path = project_path(labeled_preview_path_value, base_dir)
                 if not labeled_preview_path.exists():
                     atlas_problems.append(f"labeled preview image missing: {labeled_preview_path_value}")
                 else:
@@ -489,8 +494,8 @@ def audit_review_atlas(review_atlas_path: Path, asset_manifest_path: Path | None
     result = {
         "schema": "game.review_atlas_audit",
         "version": 1,
-        "review_atlas": norm_path(review_atlas_path),
-        "asset_manifest": norm_path(manifest_path) if manifest_path else review_atlas.get("asset_manifest"),
+        "review_atlas": norm_path(review_atlas_path, base_dir),
+        "asset_manifest": norm_path(manifest_path, base_dir) if manifest_path else review_atlas.get("asset_manifest"),
         "verdict": "pass" if not problems else "fail",
         "problems": problems,
         "expected_asset_ids": sorted(expected_assets),
@@ -507,7 +512,7 @@ def audit_review_atlas(review_atlas_path: Path, asset_manifest_path: Path | None
     return result
 
 
-def main() -> None:
+def main(argv: list[str] | None = None, *, project_root: Path | None = None) -> int:
     parser = argparse.ArgumentParser(description="Audit review atlas geometry, labels, and extrusion.")
     parser.add_argument("--review-atlas", required=True)
     parser.add_argument("--asset-manifest")
@@ -516,22 +521,23 @@ def main() -> None:
     parser.add_argument("--profile", action="store_true", help="Record atlas audit timing in JSON/Markdown and print the slowest atlas group.")
     parser.add_argument("--profile-output", help="Write atlas audit timing telemetry to a sidecar JSON file. When set, profile fields are not embedded in the audit JSON/Markdown unless --profile-inline is also set.")
     parser.add_argument("--profile-inline", action="store_true", help="Embed profile timing fields in the audit JSON/Markdown even when --profile-output is used.")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
+    base_dir = Path.cwd() if project_root is None else project_root
 
-    review_atlas_path = project_path(args.review_atlas)
+    review_atlas_path = project_path(args.review_atlas, base_dir)
     if not review_atlas_path.exists():
         fail(f"review atlas not found: {args.review_atlas}")
-    manifest_path = project_path(args.asset_manifest) if args.asset_manifest else None
-    profile_output = project_path(args.profile_output) if args.profile_output else None
+    manifest_path = project_path(args.asset_manifest, base_dir) if args.asset_manifest else None
+    profile_output = project_path(args.profile_output, base_dir) if args.profile_output else None
     profile_enabled = args.profile or profile_output is not None
     profile_inline = args.profile_inline or profile_output is None
-    audit = audit_review_atlas(review_atlas_path, manifest_path, profile_enabled)
+    audit = audit_review_atlas(review_atlas_path, manifest_path, profile_enabled, base_dir)
     profile_report = profile_report_from_audit(audit) if profile_enabled else None
     if profile_output and profile_report:
         write_json(profile_output, profile_report)
     output_audit = audit if profile_inline else without_profile_fields(audit)
     if args.json_output:
-        write_json(project_path(args.json_output), output_audit)
+        write_json(project_path(args.json_output, base_dir), output_audit)
     lines = [
         "# Review Atlas Audit",
         "",
@@ -598,18 +604,19 @@ def main() -> None:
         lines.append(f"- {atlas['status'].upper()} `{atlas.get('pack_group')}` {detail}{suffix}")
     lines.append("")
     if args.report:
-        write_text(project_path(args.report), "\n".join(lines))
+        write_text(project_path(args.report, base_dir), "\n".join(lines))
     else:
         print(json.dumps(output_audit, indent=2))
     if audit["problems"]:
-        raise SystemExit(1)
+        return 1
     print(f"pass: audited {sum(atlas['entry_count'] for atlas in audit['atlases'])} packed UI asset(s)")
     if profile_output:
-        print(f"wrote profile telemetry: {norm_path(profile_output)}")
+        print(f"wrote profile telemetry: {norm_path(profile_output, base_dir)}")
     if profile_enabled and audit["atlases"]:
         slowest = max(audit["atlases"], key=lambda atlas: atlas.get("timing_ms", {}).get("total", 0))
         print(f"profile: slowest atlas audit `{slowest.get('pack_group')}` {slowest.get('timing_ms', {}).get('total', 0)} ms")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
