@@ -3,7 +3,8 @@ import io
 import sys
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from tempfile import TemporaryDirectory
+from unittest.mock import MagicMock, patch
 
 
 WEB_TESTS = Path(__file__).resolve().parents[1] / "tests"
@@ -37,6 +38,39 @@ class WebCheckFailureTest(unittest.TestCase):
                 code, output = self.exit_from(module, persistence.Skip("missing host tool"))
                 self.assertEqual(code, 2)
                 self.assertIn("SKIP", output)
+
+    def test_failed_wasm_configure_is_a_product_failure(self):
+        completed = MagicMock(returncode=7)
+        with patch.object(persistence, "find_emscripten_toolchain_file", return_value="toolchain.cmake"), \
+                patch.object(persistence.subprocess, "run", return_value=completed), \
+                self.assertRaisesRegex(persistence.CheckFailure, "cmake configure failed"):
+            persistence.build_wasm_devapi()
+
+    def test_missing_devapi_html_is_a_product_failure(self):
+        with TemporaryDirectory() as build_dir, \
+                patch.object(devapi, "build_wasm_devapi", return_value=build_dir), \
+                self.assertRaisesRegex(persistence.CheckFailure, "no index.html shell"):
+            devapi.run(None, 8935, 9334)
+
+    def test_set_and_save_rejections_are_product_failures(self):
+        for rejected_method in ("game.state.set", "game.state.save"):
+            with self.subTest(method=rejected_method), TemporaryDirectory() as build_dir:
+                (Path(build_dir) / "index.html").write_text("", encoding="utf8")
+                cdp = MagicMock()
+                responses = {
+                    "game.state.set": {"ok": rejected_method != "game.state.set"},
+                    "game.state.save": {"ok": rejected_method != "game.state.save"},
+                }
+                cdp.devapi_submit.side_effect = lambda method, _params: responses[method]
+                server = MagicMock()
+                with patch.object(persistence, "build_wasm_devapi", return_value=build_dir), \
+                        patch.object(persistence, "find_chrome", return_value="chrome"), \
+                        patch.object(persistence, "serve_dir", return_value=server), \
+                        patch.object(persistence, "launch_chrome", return_value=MagicMock()), \
+                        patch.object(persistence, "cdp_page_ws_url", return_value="ws://fake"), \
+                        patch.object(persistence, "Cdp", return_value=cdp), \
+                        self.assertRaisesRegex(persistence.CheckFailure, rejected_method.replace(".", r"\.")):
+                    persistence.run("build", None, 8934, 9333, False)
 
 
 if __name__ == "__main__":

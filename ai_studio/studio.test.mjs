@@ -365,7 +365,7 @@ test("tracked graduated asset owner tests are assigned to the Studio assets suit
     "ai_studio/assets/manifests/tests/manifest.test.mjs",
     "ai_studio/assets/previews/tests/cache.test.mjs",
     "ai_studio/assets/sources/tests/libraries.test.mjs",
-    "ai_studio/assets/tests/ownership.test.mjs",
+    "ai_studio/assets/manifests/tests/integrity.test.mjs",
   ];
   try {
     for (const path of testPaths) {
