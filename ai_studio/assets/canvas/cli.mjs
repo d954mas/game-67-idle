@@ -162,7 +162,7 @@ import {
   withCanvasStore,
 } from "./stores.mjs";
 
-const repoRoot = resolve(process.env.AI_STUDIO_ROOT || fileURLToPath(new URL("../../..", import.meta.url)));
+const DEFAULT_REPO_ROOT = resolve(process.env.AI_STUDIO_ROOT || fileURLToPath(new URL("../../..", import.meta.url)));
 
 function parseFlags(args) {
   const positional = [];
@@ -180,16 +180,17 @@ function parseFlags(args) {
   return { positional, flags };
 }
 
-function print(value) {
+function defaultPrint(value) {
   process.stdout.write(`${JSON.stringify(value)}\n`);
+  return value;
 }
 
-function selectedCanvasStore(flags) {
+function selectedCanvasStore(repoRoot, flags) {
   return selectCanvasStore(repoRoot, canvasStoreArgs(flags));
 }
 
-function withSelectedCanvasStore(flags, fn) {
-  return withCanvasStore(selectedCanvasStore(flags), fn);
+function withSelectedCanvasStore(repoRoot, flags, fn) {
+  return withCanvasStore(selectedCanvasStore(repoRoot, flags), fn);
 }
 
 // Strict boolean flag parser (T0254 Tier 1 #4). Accepts true/false (case-insensitive)
@@ -319,7 +320,7 @@ function usage() {
   value refuses loudly and writes nothing)`);
 }
 
-async function runCommand(command, id, positional, flags) {
+async function runCommand(command, id, positional, flags, { repoRoot, print }) {
   switch (command) {
     case "list": {
       // T0254 Tier 1 #3: a summary by default — id/title/created/updated/counts/head,
@@ -363,14 +364,14 @@ async function runCommand(command, id, positional, flags) {
       // --title is optional: a missing/empty title gets a random default
       // ("Amber Fox"-style) from the op layer, matching the page's instant-create.
       if (flags["owner-game"] === "true") fail("create --owner-game requires a game id");
-      return withSelectedCanvasStore(flags, () => {
-        const store = selectedCanvasStore(flags);
+      return withSelectedCanvasStore(repoRoot, flags, () => {
+        const store = selectedCanvasStore(repoRoot, flags);
         return print({ project: decorateCanvasProject(createProject(repoRoot, { title: flags.title, gameId: flags["owner-game"] }), store) });
       });
     case "show":
       if (!id) fail("show requires <id>");
-      return withSelectedCanvasStore(flags, () => {
-        const store = selectedCanvasStore(flags);
+      return withSelectedCanvasStore(repoRoot, flags, () => {
+        const store = selectedCanvasStore(repoRoot, flags);
         return print({ project: decorateCanvasProject(getProject(repoRoot, id), store) });
       });
     case "rename":
@@ -829,7 +830,7 @@ async function runCommand(command, id, positional, flags) {
     case "export": {
       if (!id) fail("export requires <id>");
       const rows = exportRowFromFlags(flags); // undefined => honor each element's stored rows
-      const store = selectedCanvasStore(flags);
+      const store = selectedCanvasStore(repoRoot, flags);
       if (flags.to && flags.to !== "true") {
         assertCanvasExportDestination(repoRoot, store, resolve(flags.to));
       }
@@ -1336,7 +1337,7 @@ async function runCommand(command, id, positional, flags) {
 // lock ONCE internally (short commit), so wrapping it here would deadlock the same way.
 const SELF_LOCKING_COMMANDS = new Set(["recipe-generate", "recipe-pack-generate", "recipe-expand", "extract", "animate", "alpha-dual-generate", "anim-generate"]);
 
-async function main(argv) {
+export async function main(argv, { repoRoot = DEFAULT_REPO_ROOT, print = defaultPrint } = {}) {
   const [command, ...rest] = argv;
   const { positional, flags } = parseFlags(rest);
   const id = positional[0];
@@ -1355,9 +1356,9 @@ async function main(argv) {
     // withProjectLock is a no-op pass-through in that case (see its doc in
     // store.mjs), so this is safe to apply unconditionally to everything else.
     if (id && !SELF_LOCKING_COMMANDS.has(command)) {
-      return await runInSelectedStore(() => withProjectLock(repoRoot, id, () => runCommand(command, id, positional, flags)));
+      return await runInSelectedStore(() => withProjectLock(repoRoot, id, () => runCommand(command, id, positional, flags, { repoRoot, print })));
     }
-    return await runInSelectedStore(() => runCommand(command, id, positional, flags));
+    return await runInSelectedStore(() => runCommand(command, id, positional, flags, { repoRoot, print }));
   } catch (error) {
     // Mirror the API: a project-resolvable failure leaves a trail in
     // <project>/errors.jsonl (recordOpFailure no-ops when id can't resolve).
