@@ -498,6 +498,34 @@ test("status reads a session log and reports records, slowest, and rollup", () =
   }
 });
 
+test("status reports unavailable timing and tokens when the host records results only", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "result-only.jsonl");
+    const statusJson = join(dir, "status.json");
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", commands: ["rg TODO src"], session_id: "s1" },
+    ]);
+
+    const result = run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson]);
+    const status = readJson(statusJson);
+    assert.deepEqual(status.duration_telemetry, {
+      available: false,
+      start_records: 0,
+      result_records: 1,
+      measured_records: 0,
+    });
+    assert.deepEqual(status.token_telemetry, { available: false, measured_records: 0 });
+    assert.match(status.next_action, /durations unavailable/i);
+    assert.match(result.stdout, /Command timing: unavailable/);
+    assert.match(result.stdout, /Token usage: unavailable/);
+    assert.match(result.stdout, /Observed activity estimate:/);
+    assert.match(result.stdout, /Slowest Recorded Work\n- unavailable:/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status surfaces noisy-output commands from recorded size metrics", () => {
   const dir = tempDir();
   try {

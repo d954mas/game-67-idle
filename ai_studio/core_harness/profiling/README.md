@@ -5,6 +5,9 @@ Harness because it observes the agent loop itself: session starts, shell command
 starts/results, failures, repeated commands, slow commands, coverage gaps, and
 subagent spawn diagnostics.
 
+Command durations require matching start events or an explicit `duration_ms`;
+some hosts record results only. Token usage is not part of this profile format.
+
 Profiling is passive. Hooks write JSONL records under `tmp/session_profiles/`.
 The raw telemetry is local evidence and should not be committed.
 

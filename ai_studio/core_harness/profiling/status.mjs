@@ -16,9 +16,10 @@ function usage() {
   node ai_studio/core_harness/profiling/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--agents] [--since <Nm|Nh|Nd|ISO>] [--json-output <status.json>] [--verbose]
 
 Profiling is fully passive: the PostToolUse hook records every tool call to a
-per-session log automatically. This command READS that log and reports the
-session's commands, durations, slowest work, repeats (friction), failures, and
-wall-clock coverage. It never appends records.
+per-session log automatically. This command READS that log and reports commands,
+repeats, failures, and an activity estimate. Command durations are available
+only when the host also records starts or explicit duration_ms; token usage is
+not recorded by this profile format. It never appends records.
 
 Default reads the ACTIVE session log (the current session, self-identified from
 the harness env; newest tmp/session_profiles/sessions/*.jsonl as a fallback).
@@ -86,7 +87,25 @@ function parseProfiles(files) {
     for (const error of parsed.errors) errors.push(error);
   }
   records.sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
-  return { records: attachDurations(records), errors, exists };
+  const startRecords = records.filter((record) => record.event_type === "tool_call_start").length;
+  const resultRecords = records.filter((record) => record.event_type === "tool_call_result").length;
+  const attached = attachDurations(records);
+  const measuredRecords = attached.filter(
+    (record) => record.event_type === "tool_call_result"
+      && record.duration_ms !== undefined
+      && Number.isFinite(Number(record.duration_ms)),
+  ).length;
+  return {
+    records: attached,
+    errors,
+    exists,
+    durationTelemetry: {
+      available: measuredRecords > 0,
+      start_records: startRecords,
+      result_records: resultRecords,
+      measured_records: measuredRecords,
+    },
+  };
 }
 
 /* Resolve which log file(s) `status` reads:
@@ -393,6 +412,8 @@ function buildStatus(profilePaths, values = {}) {
     nextAction = "Inspect the unresolved failed commands before drawing conclusions.";
   } else if (failedClassification.environmentBlocked > 0) {
     nextAction = "Environment blockers remain; prepare the required local dependencies before repeating those gates.";
+  } else if (parsed.durationTelemetry.result_records > 0 && !parsed.durationTelemetry.available) {
+    nextAction = "Command durations unavailable: this host recorded results without matching starts; use command counts only.";
   } else if (lowCoverage) {
     nextAction = "Wall-clock coverage is low; long manual/research stretches are uncaptured, so treat time-spend claims as partial.";
   } else {
@@ -423,6 +444,8 @@ function buildStatus(profilePaths, values = {}) {
     unresolved_failed_records: failedClassification.unresolved,
     wall_clock_coverage: coverage,
     low_profile_coverage: lowCoverage,
+    duration_telemetry: parsed.durationTelemetry,
+    token_telemetry: { available: false, measured_records: 0 },
     command_rollup: commandRollup(records),
     output_rollup: outputRollup(records),
     subagent_rollup: subagentRollup(records),
@@ -447,6 +470,13 @@ function renderStatus(status, { verbose }) {
   lines.push(`Profile: ${status.profile}`);
   if (status.profile_files.length > 1) lines.push(`Profile files: ${status.profile_files.join(", ")}`);
   lines.push(`Records: ${status.records}`);
+  const durationTelemetry = status.duration_telemetry;
+  if (durationTelemetry.available) {
+    lines.push(`Command timing: measured for ${durationTelemetry.measured_records}/${durationTelemetry.result_records} tool result(s)`);
+  } else {
+    lines.push(`Command timing: unavailable (${durationTelemetry.measured_records}/${durationTelemetry.result_records} tool result(s) measured)`);
+  }
+  lines.push("Token usage: unavailable (not recorded by this profile format)");
   lines.push(`Unresolved failures: ${status.unresolved_failed_records}`);
   lines.push(`Resolved later failures: ${status.resolved_later_failed_records}`);
   lines.push(`Environment-blocked failures: ${status.environment_blocked_failed_records}`);
@@ -455,7 +485,7 @@ function renderStatus(status, { verbose }) {
     lines.push(`Subagents delegated: ${status.subagent_rollup.count}${types ? ` (${types})` : ""}`);
   }
   const coverage = status.wall_clock_coverage;
-  lines.push(`Active work: ${formatMs(coverage.active_ms)} of ${formatMs(coverage.effective_span_ms)} effective (${formatPercent(coverage.coverage_ratio)})${coverage.idle_ms > 0 ? `; ${formatMs(coverage.idle_ms)} idle excluded` : ""}`);
+  lines.push(`Observed activity estimate: ${formatMs(coverage.active_ms)} of ${formatMs(coverage.effective_span_ms)} effective (${formatPercent(coverage.coverage_ratio)})${coverage.idle_ms > 0 ? `; ${formatMs(coverage.idle_ms)} idle excluded` : ""}`);
   if (status.latest_record) {
     lines.push(`Latest: line ${status.latest_record.line} ${status.latest_record.ts} [${status.latest_record.phase}/${status.latest_record.category}] ${status.latest_record.intent}`);
   }
@@ -467,7 +497,9 @@ function renderStatus(status, { verbose }) {
     lines.push(`- line ${slowest.line}: ${formatMs(slowest.duration_ms)} [${slowest.phase}/${slowest.category}] ${slowest.intent}`);
     if (slowest.commands.length > 0) lines.push(`- command: ${slowest.commands[0]}`);
   } else {
-    lines.push("- none recorded");
+    lines.push(durationTelemetry.available
+      ? "- none recorded"
+      : "- unavailable: no measured command durations");
   }
 
   const rollup = status.command_rollup;
