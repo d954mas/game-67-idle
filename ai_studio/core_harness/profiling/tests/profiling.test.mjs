@@ -194,7 +194,7 @@ test("hook_record marks full Python dependency failures as environment blocked",
       tool_input: { command: "node --test ai_studio/dev_environment/vscode_projects.test.mjs" },
       tool_response: {
         exit_code: 1,
-        output: "error: no working Python runner found with required modules: PIL, numpy, scipy\nhint: install full-gate modules into the selected runner: py -3.12 -m pip install -r ai_studio/core_harness/profiling/requirements-full.txt",
+        output: "error: no working Python runner found with required modules: PIL, numpy, scipy\nhint: repair the root Studio .venv with ai_studio/dev_environment/python_setup.mjs",
       },
     }, profile);
 
@@ -203,7 +203,7 @@ test("hook_record marks full Python dependency failures as environment blocked",
     assert.equal(records[0].result, "fail");
     assert.equal(records[0].value, "necessary_overhead");
     assert.equal(records[0].failure_kind, "environment_blocked");
-    assert.match(records[0].blocked_by, /missing full-gate Python modules/);
+    assert.match(records[0].blocked_by, /missing Studio Python modules/);
   } finally {
     cleanup(dir);
   }
@@ -563,7 +563,7 @@ test("status command rollup strips shell assignment wrappers", () => {
         result: "pass",
         value: "unknown",
         event_type: "tool_call_result",
-        commands: ["$env:AI_PIPELINE_PYTHON='C:\\Users\\ROG\\.cache\\codex-runtimes\\python\\python.exe'; node --test ai_studio/dev_environment/vscode_projects.test.mjs"],
+        commands: ["$env:TEST_PYTHON='C:\\tools\\python.exe'; node --test ai_studio/dev_environment/vscode_projects.test.mjs"],
         session_id: "s1",
       },
       {
@@ -574,7 +574,7 @@ test("status command rollup strips shell assignment wrappers", () => {
         result: "pass",
         value: "unknown",
         event_type: "tool_call_result",
-        commands: ["AI_PIPELINE_PYTHON=/tmp/python node ai_studio/core_harness/validation/doc_reference_check.mjs"],
+        commands: ["TEST_PYTHON=/tmp/python node ai_studio/core_harness/validation/doc_reference_check.mjs"],
         session_id: "s1",
       },
       {
@@ -655,7 +655,7 @@ test("status separates environment-blocked failures from unresolved failures", (
         commands: ["node --test ai_studio/dev_environment/vscode_projects.test.mjs"],
         session_id: "s1",
         failure_kind: "environment_blocked",
-        blocked_by: "missing full-gate Python modules; install ai_studio/core_harness/profiling/requirements-full.txt or set AI_PIPELINE_PYTHON",
+        blocked_by: "missing Studio Python modules; repair the root .venv with ai_studio/dev_environment/python_setup.mjs and verify it with python_check.mjs",
       },
     ]);
 

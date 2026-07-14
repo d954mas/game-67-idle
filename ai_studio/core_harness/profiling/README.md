@@ -48,11 +48,14 @@ Show subagent transcript diagnostics:
 node ai_studio/core_harness/profiling/status.mjs --agents
 ```
 
-Install optional full-gate Python dependencies only when a module asks for them:
+Verify the single root Studio Python environment before Python-backed gates:
 
 ```powershell
-node ai_studio/dev_environment/python_run.mjs -m pip install -r ai_studio/core_harness/profiling/requirements-full.txt
+node ai_studio/dev_environment/python_check.mjs
 ```
+
+Create or repair that environment through `../../dev_environment/python_setup.mjs`;
+its README owns the required Python 3.12 bootstrap command.
 
 ## Files
 
@@ -63,8 +66,6 @@ node ai_studio/dev_environment/python_run.mjs -m pip install -r ai_studio/core_h
 - `status.mjs`: session report renderer.
 - `agent_rollup.mjs`: optional subagent transcript rollup.
 - `profile_lib.mjs`: shared JSONL/profile helpers.
-- `requirements-full.txt`: pinned optional Python dependencies for full profiling
-  or visual/numeric gates that need Pillow, NumPy, or SciPy.
 - `tests/profiling.test.mjs`: focused profiling tests.
 
 Session-retrospective instructions live in

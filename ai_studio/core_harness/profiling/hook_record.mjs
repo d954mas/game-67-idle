@@ -200,9 +200,8 @@ function environmentBlockReason(command, output) {
   if (
     /no working Python runner found/i.test(text)
     || /ModuleNotFoundError:\s*No module named ['"]?(?:PIL|numpy|scipy)['"]?/i.test(text)
-    || /AI_PIPELINE_PYTHON/i.test(text) && /ai_studio\/core_harness\/profiling\/requirements-full\.txt|requirements-full\.txt/i.test(text)
   ) {
-    return "missing full-gate Python modules; install ai_studio/core_harness/profiling/requirements-full.txt or set AI_PIPELINE_PYTHON";
+    return "missing Studio Python modules; repair the root .venv with ai_studio/dev_environment/python_setup.mjs and verify it with python_check.mjs";
   }
   return "";
 }

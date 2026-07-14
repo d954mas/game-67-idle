@@ -129,7 +129,6 @@ function privateLeakTokens(mounts) {
       ["canvasStore", `${mount.root}/.ai_studio/canvas`],
       ["evidenceStore", `${mount.root}/.ai_studio/evidence`],
       ...asStringArray(mount.aliases, "aliases").map((value) => ["alias", value]),
-      ...asStringArray(mount.remoteHints, "remoteHints").map((value) => ["remote", value]),
     ];
     for (const [kind, raw] of candidates) {
       addLeakToken(tokens, raw, { kind, gameId: mount.gameId });

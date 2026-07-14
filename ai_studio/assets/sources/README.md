@@ -15,8 +15,8 @@ folders by scanning the repository root.
   asset sources.
 - `templates.mjs`: small helper for listing and upserting template
   asset sources backed by the workspace catalog and template manifests.
-- `games.mjs`: small helper for listing and upserting public game asset
-  sources backed by the workspace catalog and game manifests.
+- `games.mjs`: small helper for listing public game asset sources backed by the
+  workspace catalog and game manifests. Game creation writes through Workspace.
 
 `ai_studio/workspace/catalog.json` mounts game template folders and their asset
 roots. `games/new_game.mjs --template <id>` resolves template ids

@@ -394,9 +394,7 @@ def execute_iteration(
     process_runner: Callable[[list[str], str], ToolResult] | None = None,
     game_launcher: Callable[..., Any] | None = None,
     attach_client: Callable[..., Any] | None = None,
-    **legacy_ignored: Any,
 ) -> dict[str, Any]:
-    del legacy_ignored
     started_total = time.perf_counter()
     resolved_port = (DEFAULT_DEVAPI_PORT if port is None else port) if reuse else port
     result = _new_result(reuse, resolved_port)

@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 
-import { gameRegistryPath, listRegisteredGames, registerGameAssetSource } from "../games.mjs";
+import { listRegisteredGames } from "../games.mjs";
+import { upsertWorkspaceMount, writeIdentityManifest } from "../../../workspace/catalog.mjs";
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "catalog-games-"));
@@ -22,20 +23,21 @@ function dependencies(root, id) {
   }));
 }
 
-test("game asset source is a workspace catalog adapter", (t) => {
+test("game asset source lists public workspace mounts", (t) => {
   const root = fixture(t);
   dependencies(root, "demo-game");
-  assert.deepEqual(registerGameAssetSource(root, { id: "demo-game", title: "Demo" }), {
-    id: "demo-game", title: "Demo", folder: "games/demo-game", assets: "games/demo-game/assets", status: "active",
+  writeIdentityManifest(root, "game", { id: "demo-game", title: "Demo" });
+  upsertWorkspaceMount(root, {
+    kind: "game",
+    root: "games/demo-game",
+    visibility: "public",
+    gitRoot: "",
+    commitPolicy: "parent-public",
+    enabledStores: ["assets"],
+    aliases: [],
   });
-  assert.equal(gameRegistryPath(root), "ai_studio/workspace/catalog.json");
-  assert.deepEqual(listRegisteredGames(root).map((game) => game.id), ["demo-game"]);
-  const catalog = JSON.parse(readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8"));
-  assert.deepEqual(catalog.mounts[0].enabledStores, ["assets"]);
-});
 
-test("game asset source enforces derived roots and strict ids", (t) => {
-  const root = fixture(t);
-  assert.throws(() => registerGameAssetSource(root, { id: "Bad" }), /lowercase kebab-case/);
-  assert.throws(() => registerGameAssetSource(root, { id: "demo", folder: "../escape" }), /folder must be games\/demo/);
+  assert.deepEqual(listRegisteredGames(root), [{
+    id: "demo-game", title: "Demo", folder: "games/demo-game", assets: "games/demo-game/assets", status: "active",
+  }]);
 });

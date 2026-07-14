@@ -3,7 +3,7 @@
 Small shared helpers for AI Studio command-line tools.
 
 This is a low-level core harness utility layer. It contains dependency-light
-helpers for CLI failure paths, JSON file IO, hashing, MIME lookup, deterministic
+helpers for CLI failure paths, hashing, MIME lookup, deterministic
 STORE ZIP artifacts, and explicit `tmp/` scratch cleanup.
 
 Do not put domain policy here. Module-specific validation, asset rules, task
