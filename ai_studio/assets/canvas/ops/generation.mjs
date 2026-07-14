@@ -34,7 +34,7 @@ export const RECIPE_ENGINES = new Set(["codex", "gemini", "both"]); // R2/R3: en
 // provenance, and patching it stays a loud unknown-key error below).
 // `model`/`quality` are consumed by the CODEX generator only; gemini/agy consumes only
 // `size` (ENGINE_PARAMS_USED in tools/recipe_generate.mjs — the seam owns that list).
-// `pack` (T0332 v2, build-spec build_spec_pack_card_2026-07-07.md — lead decision "Слить":
+// `pack` (T0332 v2; see contracts/recipe-pack.md — lead decision "Слить":
 // pack mode is NOT a third card type, it is an optional field on the recipe blob) defaults to
 // null — "no pack mode, a single Generate mints one image" (unchanged single-image behavior);
 // non-null turns Generate into a sheet-generation run instead (see
@@ -550,7 +550,7 @@ export async function generateFromRecipe(root, { projectId, groupId, generators,
   const recipe = card.recipe;
   const cardLabel = card.name || groupId;
 
-  // T0332 v2 (build_spec_pack_card_2026-07-07.md §3): recipe.pack turns Generate into a
+  // T0332 v2 (contracts/recipe-pack.md): recipe.pack turns Generate into a
   // SHEET-GENERATION run instead of a single mint — see generatePackSheets below (defined
   // alongside packPreview, which shares its config-assembly helper, buildPackConfig).
   // `runGroupId`/`sheetSlug` are pack-only options (resume / force-regen-one-sheet); the
@@ -844,7 +844,7 @@ export async function expandRecipePrompt(root, { projectId, groupId, assistant }
   return { project, group, expanded };
 }
 
-// ---- pack mode (T0332 v2: build_spec_pack_card_2026-07-07.md — lead decision "Слить"/
+// ---- pack mode (T0332 v2: contracts/recipe-pack.md — lead decision "Слить"/
 // "Merge") -------------------------------------------------------------------------------
 //
 // `recipe.pack`, when non-null, turns Generate into a SHEET GENERATION run instead of a
@@ -1568,8 +1568,8 @@ export async function generatePackSheets(root, { projectId, groupId, generators,
 // ---- animation card (T0265 increment 1, video route) --------------------------
 //
 // An animation card is a GROUP carrying an additive `anim` object — the SAME "group + additive
-// blob" shape as a recipe/style card, not a new element type (design
-// docs/design_video_anim_canvas_2026-07-05.md §1.1). Keyframes (source art + storyboard) are the
+// blob" shape as a recipe/style card, not a new element type (see contracts/animation.md).
+// Keyframes (source art + storyboard) are the
 // card's ordinary member IMAGE elements (assignToGroup / drag-in), ordered left-to-right by X
 // (§5); the card blob itself owns only the motion/profile/seed/matte/loop settings. Generate
 // mints a FLIPBOOK element (`element.flipbook`, §1.2) beside the card in its PARENT scope —

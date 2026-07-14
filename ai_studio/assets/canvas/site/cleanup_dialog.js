@@ -4,7 +4,7 @@
 // backdrop (a web-modal backdrop would cover the canvas, and the preview paints ON the
 // canvas at real zoom, which beats an in-dialog thumbnail for sprite work). ONE dialog at a
 // time — the industry "only one uncommitted preview alive" rule (competitor audit
-// tmp/research_cleanup_ux_competitors_2026-07-04.md) enforced structurally, exactly what a
+// contracts/alpha-and-cleanup.md) enforced structurally, exactly what a
 // Photoshop modal does but without hiding the art; the inspector's launcher buttons are
 // disabled while a dialog is open (inspector.js renderCleanup).
 //

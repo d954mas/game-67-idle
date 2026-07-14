@@ -29,7 +29,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, extname, join, resolve, sep } from "node:path";
-import { canvasLocalCacheRoot, canvasProjectsRoot } from "../../core_harness/tool_lib/studio_config.mjs";
+import { canvasLocalCacheRoot, canvasProjectsRoot } from "./config.mjs";
 import { sha256Hex } from "../../core_harness/tool_lib/hash.mjs";
 
 export const CANVAS_PROJECT_SCHEMA = "ai_studio.canvas.project.v1";

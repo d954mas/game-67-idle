@@ -24,9 +24,6 @@ Top-level groups:
 - `intake/`: stage, accept, and reject operations for candidate assets.
 - `licenses/`: publishability policy and the fail-closed repository guard.
 - `previews/`: preview cache preparation and project-owned preview resources.
-- `backlog/`: temporary holding area only for asset modules that still lack an
-  accepted owner; live storage no longer resides there.
-
 Raster generation is handled by the `nt-asset-image-generation` skill after
 source-first search fails. This module does not own shared generation job
 scaffolds, prompt contracts, or prompt records. If a game needs durable

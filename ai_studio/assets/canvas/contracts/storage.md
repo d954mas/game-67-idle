@@ -1,9 +1,12 @@
 # Canvas storage contract
 
-Projects are plain directories containing `project.json`, append-only
-`journal.jsonl`, sidecar snapshots, immutable `files/`, and generated exports.
-The store uses per-project locking and atomic metadata replacement. Do not hand
-edit project files; use `ops.mjs` or the CLI.
+Portable project folders contain `project.json` and immutable,
+content-addressed `files/`. Per-gesture `journal.jsonl`, snapshots, compaction
+archive, and the cross-process lock live in the machine-local Canvas cache,
+keyed by projects root and project id; undo history is deliberately not synced.
+The store path-confines ids, atomically replaces metadata, and relocates legacy
+in-project history on first access. Do not hand edit project files; use
+`ops.mjs` or the CLI.
 
 `ai_studio/studio.config.json` contains portable defaults. Machine-specific
 roots belong in ignored `ai_studio/studio.config.local.json`, whose fields
@@ -13,3 +16,9 @@ one-off override. The default repo-local projects directory is ignored.
 Shared Canvas storage remains external in normal workstation configuration.
 Project ownership is metadata (`ownership.kind=game`, `gameId`), not a game-side
 copy of project data.
+
+Private game stores are explicit mounts. They are excluded from aggregate reads
+unless the caller opts in, and private exports may not target the public parent
+repository. Public object references use `canvas://<project>/<kind>/<id>`;
+private references include `canvas://game/<gameId>/...` and never fall back to a
+bare-id search across private stores.

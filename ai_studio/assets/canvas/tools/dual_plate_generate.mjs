@@ -20,7 +20,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { promisify } from "node:util";
-import { studioPythonPath } from "../../../core_harness/tool_lib/studio_config.mjs";
+import { studioPythonPath } from "../../../dev_environment/python.mjs";
 
 const execFileAsync = promisify(execFile);
 const REPO_ROOT = fileURLToPath(new URL("../../../..", import.meta.url));

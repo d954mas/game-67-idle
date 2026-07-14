@@ -308,7 +308,7 @@ function itemsFor(target) {
     { label: "New style card", onClick: () => createStyleCardAction(target.world) },
     // T0265: mint an animation card at the click point (a group with an additive `anim`
     // blob — the video-route flipbook workflow, design §1.1). Hidden while
-    // VIDEO_ANIM_FROZEN (video-anim generation frozen 2026-07-06; see app.js/freeze doc).
+    // VIDEO_ANIM_FROZEN (video-anim generation frozen 2026-07-06; see contracts/animation.md).
     ...(VIDEO_ANIM_FROZEN ? [] : [{ label: "New animation card", onClick: () => createAnimCardAction(target.world) }]),
     { label: "Fit", onClick: () => el("zoom-fit").click() },
     { separator: true },

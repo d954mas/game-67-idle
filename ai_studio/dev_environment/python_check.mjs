@@ -4,7 +4,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
-import { studioPythonPath } from "../core_harness/tool_lib/studio_config.mjs";
+import { studioPythonPath } from "./python.mjs";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const requirementsPath = join(repoRoot, "ai_studio", "python", "requirements.direct.txt");

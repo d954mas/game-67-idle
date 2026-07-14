@@ -13,9 +13,8 @@ surface and map data. `taskboard/` owns the board surface and task state.
 - Home content styles: `home.css`.
 - Shared dark sidebar and page frame: `studio_shell.css`.
 - Shared browser behavior for sidebar collapse: `studio_shell.js`.
-- Unified local server: `server.mjs`.
-- Stable local launcher: `start_site.mjs`.
-- Windows-safe launcher: `start_site_windows.ps1`.
+- Foreground cross-platform server: `server.mjs`.
+- Canonical detached Windows agent launcher: `start_site_windows.ps1`.
 
 ## Related Utility
 
@@ -26,17 +25,15 @@ workflow.
 
 ## Start
 
-Use the launcher instead of starting `server.mjs` by hand:
+On Windows, agents start the detached site through this single entry point:
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
 ```
 
-PowerShell 7 also works if `pwsh` is installed:
-
-```powershell
-pwsh -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
-```
+Agent start/restart and the explicit smoke require host-process permission
+outside the managed sandbox. Invoke this PowerShell command directly; never
+route it through WSL.
 
 Useful variants:
 
@@ -46,18 +43,25 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/s
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Port 8780 -Open
 ```
 
-The launcher writes PID and logs to `tmp/ai_studio/`, checks that the page
-really answers, and reports a clear error if the port is busy or the server
-does not start. The `.cmd` wrapper uses the same Windows-safe launcher:
+The launcher accepts ports `1..65535`, writes PID and logs to
+`tmp/ai_studio/`, and reports a clear error if the port is occupied or the
+server does not start. Health is accepted only when the recorded live process
+is the matching `node .../studio_shell/server.mjs <port>` process. `-Restart`
+never stops a stale or reused PID that belongs to another command.
+
+`server.mjs` remains the foreground cross-platform implementation for direct
+debugging and server tests:
 
 ```powershell
-ai_studio\studio_shell\start_site.cmd
+node ai_studio/studio_shell/server.mjs 8765
 ```
 
-Codex managed shell note: background child processes started inside the sandbox
-can be killed when the command finishes. When Codex starts this site for browser
-use, run `start_site_windows.ps1` outside the sandbox, then verify
-`http://127.0.0.1:8765/asset_viewer/` or the needed surface.
+The explicit Windows integration smoke does not open a browser and is not part
+of normal unit-test discovery:
+
+```powershell
+node --test ai_studio/studio_shell/tests/launcher_windows.integration.mjs
+```
 
 ## Surface Rule
 

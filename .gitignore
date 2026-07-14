@@ -23,8 +23,8 @@ __pycache__/
 # The validate_map.mjs CLI still writes it locally for offline inspection.
 ai_studio/architecture_map/validation-report.json
 
-# Per-machine studio config override (points canvas projects at a local/YandexDisk
-# path). Only the committed ai_studio/studio.config.json defaults are tracked.
+# Per-machine Studio config override for local paths and tool roots. Only the
+# committed ai_studio/studio.config.json defaults are tracked.
 ai_studio/studio.config.local.json
 
 # Local/private game workspace mounts. Public games stay in the tracked catalog;

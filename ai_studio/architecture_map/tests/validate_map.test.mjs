@@ -13,6 +13,7 @@ import {
   hasStrictFailures,
   listTrackedPaths,
 } from "../validate_map.mjs";
+import { createArchitectureMapApi } from "../api.mjs";
 import { loadArchitectureTree } from "../tree_loader.mjs";
 
 const fixtureFiles = new Map();
@@ -29,6 +30,7 @@ function write(root, rel, text = "") {
 function report(options) {
   return createValidationReport({
     ...options,
+    excludedPrefixes: options.excludedPrefixes || [],
     trackedPaths: options.trackedPaths || [...(fixtureFiles.get(options.repoRoot) || [])],
   });
 }
@@ -37,6 +39,18 @@ function collectNodes(node, out = []) {
   out.push(node);
   for (const child of node.children || []) collectNodes(child, out);
   return out;
+}
+
+function mockRes() {
+  const res = { statusCode: null, headers: null, body: "" };
+  res.writeHead = (status, headers) => {
+    res.statusCode = status;
+    res.headers = headers;
+  };
+  res.end = (chunk) => {
+    if (chunk) res.body += chunk;
+  };
+  return res;
 }
 
 function loadRepoTreeRoot() {
@@ -137,7 +151,7 @@ test("mapped directories cover their child files", () => {
   assert.ok(!validation.issues.unmappedInAiStudio.some((item) => item.path.endsWith("public/app.js")));
 });
 
-test("test and validation nodes still map files", () => {
+test("a module subtree covers implementation, tests, and validators without authored leaves", () => {
   const root = mkdtempSync(join(tmpdir(), "architecture-map-"));
   mkdirSync(join(root, "ai_studio"), { recursive: true });
   write(
@@ -149,34 +163,196 @@ test("test and validation nodes still map files", () => {
         id: "studio",
         title: "studio",
         children: [
-          { id: "tree", kind: "doc", path: "ai_studio/tree.json", description: "Map source." },
           {
-            id: "sample-test",
-            kind: "test",
-            path: "ai_studio/tests/sample.test.mjs",
-            description: "Test file filtered from the default graph view.",
-          },
-          {
-            id: "sample-validator",
-            kind: "validation",
-            path: "ai_studio/validation/sample_check.mjs",
-            description: "Validation file filtered from the default graph view.",
+            id: "sample-module",
+            kind: "module",
+            path: "ai_studio/sample",
+            owner: "Sample",
+            entry: "ai_studio/sample/README.md",
+            verifyDomain: "harness",
+            description: "Sample ownership boundary.",
           },
         ],
       },
     }),
   );
-  write(root, "ai_studio/tests/sample.test.mjs", "import test from 'node:test';");
-  write(root, "ai_studio/validation/sample_check.mjs", "console.log('validate');");
+  write(root, "ai_studio/sample/README.md", "# sample");
+  write(root, "ai_studio/sample/tests/sample.test.mjs", "import test from 'node:test';");
+  write(root, "ai_studio/sample/validation/sample_check.mjs", "console.log('validate');");
 
   const validation = report({
     repoRoot: root,
     scanRoots: ["ai_studio"],
   });
 
-  assert.equal(validation.summary.unmappedInAiStudio, 0);
-  assert.ok(!validation.issues.unmappedInAiStudio.some((item) => item.path.endsWith("sample.test.mjs")));
-  assert.ok(!validation.issues.unmappedInAiStudio.some((item) => item.path.endsWith("sample_check.mjs")));
+  assert.deepEqual(validation.issues.unmappedInAiStudio, [{ path: "ai_studio/tree.json" }]);
+  const nodes = collectNodes(loadArchitectureTree(root, "ai_studio/tree.json").root);
+  assert.equal(nodes.some((node) => node.kind === "test" || node.kind === "validation"), false);
+});
+
+test("direct-files covers root files but leaves new child directories unmapped", () => {
+  const root = mkdtempSync(join(tmpdir(), "architecture-map-direct-"));
+  write(root, "features/README.md", "# features");
+  write(root, "features/verify.mjs", "export {};");
+  write(root, "features/known/README.md", "# known");
+  write(root, "features/new-pack/README.md", "# new");
+  write(root, "ai_studio/tree.json", JSON.stringify({
+    schema: 2,
+    root: {
+      id: "studio",
+      title: "Studio",
+      kind: "root",
+      owner: "Lead",
+      description: "Studio ownership.",
+      entry: "ai_studio/tree.json",
+      verifyDomain: "harness",
+      children: [{
+        id: "features",
+        title: "Features",
+        kind: "workspace",
+        path: "features",
+        coverage: "direct-files",
+        owner: "Features",
+        description: "Feature pack container.",
+        entry: "features/README.md",
+        verifyDomain: "features",
+        children: [{
+          id: "known",
+          title: "Known",
+          kind: "module",
+          path: "features/known",
+          owner: "Known",
+          description: "Known feature pack.",
+          entry: "features/known/README.md",
+          verifyDomain: "features",
+        }],
+      }],
+    },
+  }));
+
+  const validation = report({
+    repoRoot: root,
+    scanRoots: [{ path: "features", mode: "root-files-and-child-directories" }],
+  });
+  assert.deepEqual(validation.issues.unmappedOutsideAiStudio, [{ path: "features/new-pack" }]);
+});
+
+test("a new top-level Studio module remains unmapped", () => {
+  const root = mkdtempSync(join(tmpdir(), "architecture-map-studio-root-"));
+  write(root, "ai_studio/README.md", "# Studio");
+  write(root, "ai_studio/known/README.md", "# known");
+  write(root, "ai_studio/new-module/README.md", "# new");
+  write(root, "ai_studio/tree.json", JSON.stringify({
+    schema: 1,
+    root: {
+      id: "studio",
+      title: "Studio",
+      kind: "root",
+      path: "ai_studio",
+      coverage: "direct-files",
+      owner: "Lead",
+      description: "Studio ownership.",
+      entry: "ai_studio/README.md",
+      verifyDomain: "harness",
+      children: [{
+        id: "known",
+        title: "Known",
+        kind: "module",
+        path: "ai_studio/known",
+        owner: "Known",
+        description: "Known module.",
+        entry: "ai_studio/known/README.md",
+        verifyDomain: "harness",
+      }],
+    },
+  }));
+
+  const validation = report({ repoRoot: root, scanRoots: ["ai_studio"] });
+  assert.deepEqual(validation.issues.unmappedInAiStudio, [
+    { path: "ai_studio/new-module/README.md" },
+  ]);
+});
+
+test("unknown coverage and escaping locator fields fail strict validation", () => {
+  const root = mkdtempSync(join(tmpdir(), "architecture-map-schema-"));
+  write(root, "ai_studio/module/README.md", "# module");
+  write(root, "ai_studio/tree.json", JSON.stringify({
+    schema: 2,
+    root: {
+      id: "studio",
+      title: "Studio",
+      kind: "root",
+      owner: "Lead",
+      description: "Studio ownership.",
+      entry: "../outside.md",
+      verifyDomain: "not-a-domain",
+      children: [{
+        id: "module",
+        title: "Module",
+        kind: "module",
+        path: "ai_studio/module",
+        coverage: "recursive-ish",
+        owner: "Module",
+        description: "Module ownership.",
+        entry: "ai_studio/module/README.md",
+        verifyDomain: "harness",
+        tags: ["legacy"],
+      }],
+    },
+  }));
+  const validation = report({ repoRoot: root, scanRoots: ["ai_studio"] });
+  assert.deepEqual(validation.issues.invalidNodes, [
+    {
+      id: "studio",
+      path: "",
+      violations: ["invalid-verify-domain", "invalid-entry"],
+    },
+    {
+      id: "module",
+      path: "ai_studio/module",
+      violations: ["invalid-coverage", "legacy-tags"],
+    },
+  ]);
+  assert.equal(hasStrictFailures(validation), true);
+});
+
+test("missing authored entry, contract, and store locators fail strict validation", () => {
+  const root = mkdtempSync(join(tmpdir(), "architecture-map-locators-"));
+  write(root, "ai_studio/tree.json", JSON.stringify({
+    schema: 1,
+    root: {
+      id: "studio",
+      title: "Studio",
+      kind: "root",
+      owner: "Lead",
+      description: "Studio ownership.",
+      entry: "ai_studio/tree.json",
+      verifyDomain: "harness",
+      children: [{
+        id: "module",
+        title: "Module",
+        kind: "module",
+        path: "ai_studio/module",
+        owner: "Module",
+        description: "Module ownership.",
+        entry: "ai_studio/module/MISSING.md",
+        contract: "ai_studio/module/MISSING.contract.json",
+        store: "ai_studio/module/MISSING-store",
+        boundary: "An external conceptual boundary is not a filesystem locator.",
+        verifyDomain: "harness",
+      }],
+    },
+  }));
+  write(root, "ai_studio/module/present.mjs", "export {};");
+
+  const validation = report({ repoRoot: root, scanRoots: [] });
+  assert.deepEqual(validation.issues.missingLocators, [
+    { id: "module", title: "Module", field: "entry", locator: "ai_studio/module/MISSING.md" },
+    { id: "module", title: "Module", field: "contract", locator: "ai_studio/module/MISSING.contract.json" },
+    { id: "module", title: "Module", field: "store", locator: "ai_studio/module/MISSING-store" },
+  ]);
+  assert.equal(validation.summary.missingLocators, 3);
+  assert.equal(hasStrictFailures(validation), true);
 });
 
 test("child-directory scan roots report new folders without scanning their files", () => {
@@ -335,9 +511,10 @@ test("validation report excludes local private game mounts from game scans", () 
     }),
   );
 
-  const validation = report({
+  const validation = createValidationReport({
     repoRoot: root,
     scanRoots: [{ path: "games", mode: "root-files-and-child-directories" }],
+    trackedPaths: [...fixtureFiles.get(root)],
   });
   const reportText = JSON.stringify(validation);
 
@@ -347,36 +524,64 @@ test("validation report excludes local private game mounts from game scans", () 
   ]);
 });
 
-test("repo tree maps workspace and experimental extension ownership without listing implementation files", () => {
+test("malformed private mount configuration blocks validation without exposing mount names", async () => {
+  const root = mkdtempSync(join(tmpdir(), "architecture-map-private-error-"));
+  write(root, "ai_studio/tree.json", JSON.stringify({
+    schema: 1,
+    root: {
+      id: "studio",
+      title: "Studio",
+      kind: "root",
+      owner: "Lead",
+      description: "Studio ownership.",
+      entry: "ai_studio/tree.json",
+      verifyDomain: "harness",
+    },
+  }));
+  write(root, "ai_studio/workspace/catalog.json", JSON.stringify({
+    schema: "ai_studio.workspace.catalog.v1",
+    mounts: [],
+  }));
+  write(root, "ai_studio/workspace/catalog.local.json", '{"mounts":[{"root":"games/secret-game"}');
+
+  assert.throws(
+    () => createValidationReport({ repoRoot: root, trackedPaths: [...fixtureFiles.get(root)] }),
+    /private mount discovery failed/i,
+  );
+
+  const handle = createArchitectureMapApi(root);
+  const res = mockRes();
+  assert.equal(await handle({ method: "GET" }, res, new URL("http://x/api/architecture-validation")), true);
+  assert.equal(res.statusCode, 500);
+  const payload = JSON.parse(res.body);
+  assert.deepEqual(Object.keys(payload), ["error"]);
+  assert.match(payload.error, /private mount discovery failed/i);
+  assert.equal(res.body.includes("secret-game"), false);
+});
+
+test("repo tree maps product boundaries without authored implementation or test leaves", () => {
   const nodes = collectNodes(loadRepoTreeRoot());
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const byPath = new Map(nodes.filter((node) => node.path).map((node) => [node.path, node]));
   const paths = nodes.map((node) => node.path).filter(Boolean);
 
-  assert.equal(byId.get("workspace:templates")?.path, "templates");
-  assert.equal(byId.get("workspace:templates")?.coverage, "self");
-  assert.equal(byId.get("workspace:templates-readme")?.path, "templates/README.md");
-  assert.equal(byId.get("workspace:template:template")?.path, "templates/template");
-  assert.equal(byId.get("workspace:features")?.path, "features");
-  assert.equal(byId.get("workspace:features")?.kind, "group");
-  assert.equal(byId.get("workspace:features")?.coverage, "self");
-  assert.equal(byId.get("workspace:features-readme")?.path, "features/README.md");
-  assert.equal(byId.get("game-design:knowledge-base")?.path, "ai_studio/game_design/knowledge_base");
-  assert.equal(byPath.get("games")?.id, "workspace:games");
-  assert.equal(byPath.get("games")?.coverage, "self");
-  assert.equal(byId.get("workspace:games-readme")?.path, "games/README.md");
-  assert.equal(byId.get("workspace:extensions")?.path, "extensions");
-  assert.equal(byId.get("workspace:extensions")?.coverage, "self");
-  assert.equal(byId.get("workspace:extensions-readme")?.path, "extensions/README.md");
-  assert.equal(byId.get("workspace:extensions:experimental")?.path, "extensions/experimental");
-  assert.equal(
-    byId.get("workspace:extensions:experimental:skeletal-animation")?.path,
-    "extensions/experimental/skeletal_animation",
-  );
+  assert.equal(byPath.get("templates")?.coverage, "direct-files");
+  assert.equal(byPath.get("templates/template")?.coverage, "subtree");
+  assert.match(byPath.get("templates/template")?.boundary || "", /Settings.*resource-panel/);
+  assert.equal(byPath.get("features")?.coverage, "direct-files");
+  assert.equal(byPath.get("games")?.coverage, "direct-files");
+  assert.equal(byPath.get("extensions")?.coverage, "direct-files");
+  assert.equal(byPath.get("extensions/experimental")?.coverage, "direct-files");
+  assert.equal(byPath.get("extensions/experimental/skeletal_animation")?.coverage, "subtree");
+  assert.equal(byPath.get("ai_studio/game_design/knowledge_base")?.id, "design-knowledge-base");
 
-  assert.deepEqual(paths.filter((path) => path.startsWith("templates/template/")), ["templates/template/template.json"]);
-  assert.deepEqual(paths.filter((path) => path.startsWith("features/") && path !== "features/README.md" && path.split("/").length > 2), []);
-  assert.deepEqual(paths.filter((path) => path.startsWith("games/") && path.split("/").length > 2), []);
+  for (const pack of ["audio-core", "game-events", "game-state", "items-core", "platform-sdk", "progression-core"]) {
+    assert.equal(byPath.get(`features/${pack}`)?.coverage, "subtree", `${pack} is an explicit feature boundary`);
+  }
+  assert.equal(paths.some((path) => /(?:^|\/)(?:tests?|fixtures?|generated|history|research|migrations?|implementation)(?:\/|$)/i.test(path)), false);
+  assert.equal(nodes.some((node) => node.kind === "test" || node.kind === "validation"), false);
+  assert.equal(byId.has("settings"), false);
+  assert.equal(byId.has("resource-panel"), false);
 });
 
 test("coverage truth comes from git ls-files while untracked hygiene stays optional", () => {
@@ -398,7 +603,7 @@ test("coverage truth comes from git ls-files while untracked hygiene stays optio
   execFileSync("git", ["add", "ai_studio/tree.json", "ai_studio/tracked.mjs"], { cwd: root, stdio: "ignore" });
 
   assert.deepEqual(listTrackedPaths(root), ["ai_studio/tracked.mjs", "ai_studio/tree.json"]);
-  const validation = createValidationReport({ repoRoot: root, scanRoots: ["ai_studio"], includeHygiene: true });
+  const validation = createValidationReport({ repoRoot: root, scanRoots: ["ai_studio"], excludedPrefixes: [], includeHygiene: true });
   assert.equal(validation.summary.unmappedInAiStudio, 1, "only tracked tree.json is unmapped");
   assert.deepEqual(validation.hygiene.untrackedPaths, [
     "ai_studio/generated-local.mjs",
@@ -438,15 +643,20 @@ test("invalid architectural descriptions are reported and fail strict validation
   assert.equal(hasStrictFailures(validation), true);
 });
 
-test("repo descriptions are concise architectural locators and required agent/runtime ownership is mapped", () => {
-  const nodes = collectNodes(loadRepoTreeRoot()).filter((node) => node.id !== "studio");
+test("repo nodes use the compact owner and verification contract", () => {
+  const nodes = collectNodes(loadRepoTreeRoot());
   const byPath = new Map(nodes.filter((node) => node.path).map((node) => [node.path, node]));
   assert.ok(byPath.has(".codex/agents"), "Codex role catalog ownership must be locatable");
   assert.ok(byPath.has(".claude/agents"), "Claude role catalog ownership must be locatable");
   assert.ok(byPath.has("ai_studio/runtime_automation"), "runtime proof ownership must be locatable");
   for (const node of nodes) {
-    assert.ok(node.title || node.path, `${node.id} needs a human locator`);
-    assert.ok(node.role || node.kind === "module" || node.kind === "shell", `${node.id} needs an ownership role`);
+    for (const field of ["id", "title", "kind", "owner", "description", "entry", "verifyDomain"]) {
+      assert.equal(typeof node[field], "string", `${node.id || "node"} needs ${field}`);
+      assert.ok(node[field].trim(), `${node.id || "node"} needs ${field}`);
+    }
+    for (const legacy of ["tags", "role", "color", "moduleId", "groupId", "item", "href"]) {
+      assert.equal(Object.hasOwn(node, legacy), false, `${node.id} retains legacy ${legacy}`);
+    }
     assert.deepEqual(descriptionPolicyViolations(node.description), [], `${node.id}: ${node.description}`);
   }
 });
@@ -465,7 +675,7 @@ test("CLI help documents every strict description gate", () => {
   const cliPath = fileURLToPath(new URL("../validate_map.mjs", import.meta.url));
   const result = spawnSync(process.execPath, [cliPath, "--help"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /descriptions are missing or violate/);
+  assert.match(result.stdout, /node, locator, coverage, verification-domain, or description contract/);
   assert.match(result.stdout, /--hygiene adds a separate non-gating report/);
 });
 

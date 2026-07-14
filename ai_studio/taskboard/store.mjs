@@ -8,6 +8,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, relative, resolve } from "node:path";
+import { loadQualityCatalog } from "../quality/catalog.mjs";
 
 export const TASK_STATUSES = ["idea", "backlog", "todo", "doing", "review", "done"];
 export const EPIC_STATUSES = ["idea", "active", "done"];
@@ -142,6 +143,13 @@ export function parseDoc(text) {
 
 function parseValue(raw) {
   const value = raw.trim();
+  if (value.startsWith("{") && value.endsWith("}")) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return value;
+    }
+  }
   if (value.startsWith("[") && value.endsWith("]")) {
     const inner = value.slice(1, -1).trim();
     return inner ? inner.split(",").map((item) => unquote(item.trim())) : [];
@@ -179,6 +187,8 @@ export function serializeDoc(fields, body) {
     }
     if (Array.isArray(value)) {
       out.push(`${key}: [${value.map(quoteIfNeeded).join(", ")}]`);
+    } else if (typeof value === "object") {
+      out.push(`${key}: ${JSON.stringify(value)}`);
     } else {
       out.push(`${key}: ${quoteIfNeeded(value)}`);
     }
@@ -652,16 +662,25 @@ export function updateDoc(root, id, patch = {}, options = {}) {
         throw new Error(`Invalid project kind "${value}" (allowed: ${PROJECT_KINDS.join(", ")})`);
       }
     }
+    if (key === "quality" && doc.kind !== "task") {
+      throw new Error("Only task docs can have `quality`");
+    }
     fields[key] = value;
   }
   if (doc.kind === "task" && patch.fields && Object.hasOwn(patch.fields, "epic") && !Object.hasOwn(patch.fields, "project")) {
     const epic = fields.epic ? findDoc(root, fields.epic, options) : null;
     fields.project = epic && epic.kind === "epic" ? (epic.fields.project || "") : "";
   }
+  if (doc.kind === "task" && doc.fields.status === "done" && fields.status !== "done") {
+    delete fields.quality;
+  }
+  if (doc.kind === "task" && Object.hasOwn(fields, "quality")) {
+    fields.quality = validatedQualityDecision(root, fields.quality);
+  }
   fields.updated = todayStamp();
   const body = patch.body !== undefined ? patch.body : doc.body;
   if (doc.kind === "task" && doc.fields.status !== "done" && fields.status === "done") {
-    assertTaskCloseout(id, body);
+    assertTaskCloseout(id, fields, body);
   }
   let file = doc.file;
   let targetFile = doc.file;
@@ -680,7 +699,7 @@ export function updateDoc(root, id, patch = {}, options = {}) {
   return { ...doc, file, fields, body };
 }
 
-const QUALITY_OUTCOMES = ["pass", "block", "review", "skip", "unverified"];
+const QUALITY_OUTCOMES = ["pass", "block", "review", "unverified"];
 
 function stripHtmlCommentContent(line, state) {
   let cursor = 0;
@@ -760,16 +779,17 @@ function canonicalLogPayloads(body, label) {
 }
 
 export function canonicalQualityAssignments(value) {
+  const parsed = parseQualityAssignments(value);
+  return parsed ? parsed.map(({ ruleId, outcome }) => `${ruleId}=${outcome}`).join("; ") : null;
+}
+
+export function parseQualityAssignments(value) {
   const assignments = String(value || "").split(";").map((entry) => entry.trim()).filter(Boolean);
-  const parsed = assignments.map((entry) => entry.match(/^(Q[A-Z0-9_]+)=(pass|block|review|skip|unverified)$/));
-  if (!assignments.length || parsed.some((match) => !match)) {
-    return null;
-  }
-  const ruleIds = parsed.map((match) => match[1]);
-  if (new Set(ruleIds).size !== ruleIds.length) {
-    return null;
-  }
-  return assignments.join("; ");
+  const matches = assignments.map((entry) => entry.match(/^(Q[A-Z0-9_]+)=(pass|block|review|unverified)$/));
+  if (!assignments.length || matches.some((match) => !match)) return null;
+  const parsed = matches.map((match) => ({ ruleId: match[1], outcome: match[2] }));
+  if (new Set(parsed.map(({ ruleId }) => ruleId)).size !== parsed.length) return null;
+  return parsed;
 }
 
 function hasClosureWaiver(body) {
@@ -779,13 +799,43 @@ function hasClosureWaiver(body) {
   });
 }
 
-function hasQualityDecision(body) {
-  return canonicalLogPayloads(body, "Quality").some((line) => {
-    const notApplicable = line.match(/^Quality: not-applicable; reason: (.+)$/);
-    if (notApplicable) return Boolean(notApplicable[1].trim());
-    const evidence = line.match(/^Quality: (.+); evidence: (.+)$/);
-    return Boolean(evidence && canonicalQualityAssignments(evidence[1]) && evidence[2].trim());
-  });
+function qualityCheckIds(root) {
+  return new Set(loadQualityCatalog(root).groups.flatMap((group) => group.checks.map((check) => check.id)));
+}
+
+function validatedQualityDecision(root, value, knownIds = null) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw closeoutError("task_quality_invalid", "quality must be a structured checks or notApplicable object", {});
+  }
+  const hasChecks = Array.isArray(value.checks);
+  const hasNotApplicable = value.notApplicable && typeof value.notApplicable === "object" && !Array.isArray(value.notApplicable);
+  if (hasChecks === Boolean(hasNotApplicable)) {
+    throw closeoutError("task_quality_invalid", "quality requires exactly one of checks or notApplicable", {});
+  }
+  if (hasNotApplicable) {
+    const reason = String(value.notApplicable.reason || "").trim();
+    if (!reason) throw closeoutError("task_quality_invalid", "quality notApplicable requires a reason", {});
+    return { notApplicable: { reason } };
+  }
+  if (!value.checks.length) {
+    throw closeoutError("task_quality_invalid", "quality checks cannot be empty", {});
+  }
+  knownIds ||= qualityCheckIds(root);
+  const checks = value.checks.map((check) => ({
+    id: String(check?.id || "").trim(),
+    outcome: String(check?.outcome || "").trim(),
+    evidence: String(check?.evidence || "").trim(),
+  }));
+  if (checks.some((check) => !check.id || !QUALITY_OUTCOMES.includes(check.outcome) || !check.evidence)) {
+    throw closeoutError("task_quality_invalid", "every quality check requires id, pass|block|review|unverified outcome, and evidence", { allowedOutcomes: QUALITY_OUTCOMES });
+  }
+  if (new Set(checks.map((check) => check.id)).size !== checks.length) {
+    throw closeoutError("task_quality_invalid", "quality check ids must be unique", {});
+  }
+  if (!knownIds.size) throw closeoutError("task_quality_invalid", "Quality catalog must contain checks before task quality can be recorded", {});
+  const unknownIds = checks.map((check) => check.id).filter((id) => !knownIds.has(id));
+  if (unknownIds.length) throw closeoutError("task_quality_invalid", "quality check ids must exist in the Quality catalog", { unknownIds });
+  return { checks };
 }
 
 function closeoutError(code, message, details) {
@@ -794,7 +844,7 @@ function closeoutError(code, message, details) {
   return err;
 }
 
-function assertTaskCloseout(id, body) {
+function assertTaskCloseout(id, fields, body) {
   const criteria = [];
   const malformed = [];
   for (const line of markdownSectionLines(body, "Done when")) {
@@ -814,12 +864,23 @@ function assertTaskCloseout(id, body) {
       { unchecked, malformed, canonicalCriteria: criteria.length },
     );
   }
-  if (!hasQualityDecision(body)) {
+  if (!fields.quality) {
     throw closeoutError(
       "task_quality_decision_required",
-      `${id} cannot move to done: log canonical quality evidence or a not-applicable reason`,
+      `${id} cannot move to done: set structured quality checks or a notApplicable reason`,
       { allowedOutcomes: QUALITY_OUTCOMES },
     );
+  }
+  if (fields.quality.checks) {
+    const outcomes = Object.fromEntries(fields.quality.checks.map(({ id: ruleId, outcome }) => [ruleId, outcome]));
+    const blocking = fields.quality.checks.filter(({ outcome }) => outcome !== "pass");
+    if (blocking.length) {
+      throw closeoutError(
+        "task_quality_blocked",
+        `${id} cannot move to done: every applicable Quality check must pass`,
+        { outcomes, allowedOutcome: "pass" },
+      );
+    }
   }
 }
 
@@ -840,6 +901,7 @@ export function validateStoreDetailed(root, options = {}) {
   const epics = listEpics(root, options);
   const tasks = listTasks(root, { ...options, includeArchive: true });
   const seen = new Map();
+  let knownQualityIds = null;
   for (const doc of [...projects, ...epics, ...tasks]) {
     const id = doc.fields.id;
     if (!id) {
@@ -852,6 +914,14 @@ export function validateStoreDetailed(root, options = {}) {
     seen.set(id, doc.name);
     if (!doc.fields.title) {
       problems.push(problem(`${id}: missing title`, { taskId: id }));
+    }
+    if (doc.kind === "task" && Object.hasOwn(doc.fields, "quality")) {
+      try {
+        knownQualityIds ||= qualityCheckIds(root);
+        validatedQualityDecision(root, doc.fields.quality, knownQualityIds);
+      } catch (error) {
+        problems.push(problem(`${id}: ${error.message}`, { taskId: id, code: error.problem?.code || "task_quality_invalid" }));
+      }
     }
     const statuses = statusesForKind(doc.kind);
     if (!statuses.includes(doc.fields.status)) {

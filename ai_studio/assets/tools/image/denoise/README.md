@@ -2,7 +2,7 @@
 
 Deliberately simple median-filter denoise for noisy AI art — no ML restorer, no
 opencv/skimage (cut in the T0207 research pass,
-`tmp/research_art_cleanup_2026-07-03.md`). One of the two Cleanup tools on the
+`ai_studio/assets/canvas/contracts/alpha-and-cleanup.md`). One of the two Cleanup tools on the
 canvas (the other is `../quantize/`); bg-solidify is NOT a standalone tool here —
 it stays an internal pre-pass of the alpha keyer only.
 

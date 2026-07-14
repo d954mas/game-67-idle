@@ -9,7 +9,7 @@ import {
 import { estimatePackSheetCount, normalizeSmartQuotes, PACK_AXES_SKELETON, parseAxesJson } from "./contracts.js";
 import { field, numberInput, selectInput, textareaInput } from "./controls.js";
 import { collapsible, openPromptModal, readOnly, smallBtn } from "./primitives.js";
-// ---- pack mode (T0332 v2 phase C: build_spec_pack_card_2026-07-07.md) ---------------------
+// ---- pack mode (T0332 v2: contracts/recipe-pack.md) --------------------------------------
 //
 // Smart quotes (typed by a phone keyboard / autocorrect / pasted from a doc) are the single
 // most common way a hand-typed axes JSON silently fails to parse — JSON.parse has no notion

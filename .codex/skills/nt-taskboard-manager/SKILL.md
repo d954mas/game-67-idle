@@ -26,8 +26,8 @@ Taskboard data contract here.
 - Create task: `node ai_studio/taskboard/cli.mjs new task --title "..." --project P### --epic E### --priority P1`.
 - Update item: `node ai_studio/taskboard/cli.mjs set <id> --status <status> --log "..." --json`.
 - Validate after mutations: `node ai_studio/taskboard/cli.mjs validate --json`.
-- Board: `node ai_studio/studio_shell/start_site.mjs --open`, then open
-  `/taskboard/`.
+- Board: `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Open`, then open `/taskboard/`.
+  Run it with host-process permission outside the managed sandbox; never use WSL.
 
 ## Workflow
 

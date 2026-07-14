@@ -14,11 +14,9 @@ of the Node bridge:
     -> regions/detect_regions.py (chroma connected-components, row-major)
     -> slice/slice_regions.py    (crop + per-region key_matte alpha)
 
-Those three tools need numpy/scipy/Pillow, which live ONLY in the studio venv
-(ai_studio/studio.config.json -> pythonPath). Like the Node _bridge, the
-interpreter is resolved from studio config ONLY -- no PATH search, no
-candidate chain; a missing venv is a loud error naming the one-shot setup
-command (ai_studio/assets/tools/image/_bridge/setup_python.mjs).
+Those three tools need numpy/scipy/Pillow, which live in the Studio venv.
+Invoke this script through ai_studio/dev_environment/python_run.mjs; child
+tools reuse that owner-selected interpreter through sys.executable.
 
 HARD GATE (the reason this script exists): detect_regions's region_count
 MUST equal len(job["cells"]). A merged/split/empty region would otherwise
@@ -32,9 +30,9 @@ regardless of its own CWD. --outdir, like a normal CLI path argument, is
 resolved against the current working directory.
 
 Usage:
-  py -3.12 slice_pack.py --jobs tmp/packs/g67-gen-icons/jobs.json
-  py -3.12 slice_pack.py --jobs jobs.json --only grade-rusty__material-copper
-  py -3.12 slice_pack.py --jobs jobs.json --outdir tmp/packs/g67-gen-icons/cut
+  node ai_studio/dev_environment/python_run.mjs .codex/skills/nt-asset-image-generation/scripts/slice_pack.py --jobs tmp/packs/g67-gen-icons/jobs.json
+  node ai_studio/dev_environment/python_run.mjs .codex/skills/nt-asset-image-generation/scripts/slice_pack.py --jobs jobs.json --only grade-rusty__material-copper
+  node ai_studio/dev_environment/python_run.mjs .codex/skills/nt-asset-image-generation/scripts/slice_pack.py --jobs jobs.json --outdir tmp/packs/g67-gen-icons/cut
 """
 from __future__ import annotations
 
@@ -53,7 +51,6 @@ TOOLS_ROOT = REPO_ROOT / "ai_studio" / "assets" / "tools" / "image"
 NORMALIZE_SCRIPT = TOOLS_ROOT / "bg_fix" / "normalize_background.py"
 DETECT_SCRIPT = TOOLS_ROOT / "regions" / "detect_regions.py"
 SLICE_SCRIPT = TOOLS_ROOT / "slice" / "slice_regions.py"
-SETUP_CMD = "node ai_studio/assets/tools/image/_bridge/setup_python.mjs"
 
 # Mirrors the defaults ai_studio/assets/tools/image/regions/api.mjs passes to
 # the same two tools in the production (Node bridge) path.
@@ -62,33 +59,6 @@ DEFAULT_MIN_AREA = 256
 DEFAULT_PADDING = 8
 DEFAULT_MERGE_DISTANCE = 0
 DEFAULT_ROW_TOLERANCE = 32
-
-
-def _load_studio_config(repo_root: Path) -> dict:
-    main_path = repo_root / "ai_studio" / "studio.config.json"
-    local_path = repo_root / "ai_studio" / "studio.config.local.json"
-    config: dict = {}
-    found = False
-    for path in (main_path, local_path):  # local (gitignored) overrides main, same as studio_config.mjs
-        if path.exists():
-            found = True
-            config.update(json.loads(path.read_text(encoding="utf-8")))
-    if not found:
-        raise SystemExit(f"slice_pack: missing studio config: create {main_path}")
-    return config
-
-
-def resolve_python(repo_root: Path) -> Path:
-    """Studio venv interpreter, config-only (no PATH search, no fallback chain)."""
-    raw = str(_load_studio_config(repo_root).get("pythonPath") or "").strip()
-    if not raw:
-        raise SystemExit(f"slice_pack: studio config is missing pythonPath; create the studio venv: {SETUP_CMD}")
-    python = Path(raw)
-    if not python.is_absolute():
-        python = (repo_root / raw).resolve()
-    if not python.exists():
-        raise SystemExit(f"slice_pack: image tools Python interpreter not found at {python}; create the studio venv: {SETUP_CMD}")
-    return python
 
 
 def resolve_repo_path(repo_root: Path, value: str) -> Path:
@@ -232,7 +202,7 @@ def main() -> int:
         if not jobs:
             raise SystemExit(f"slice_pack: --only '{a.only}' matched no job in {jobs_path}")
 
-    python = resolve_python(REPO_ROOT)
+    python = Path(sys.executable).resolve()
     outdir_override = Path(a.outdir).resolve() if a.outdir else None
 
     results = [

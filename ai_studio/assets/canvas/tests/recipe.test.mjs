@@ -486,7 +486,7 @@ test("buildAgyInstruction: no refs (omitted or []) is byte-identical to the verb
   assert.equal(explicitEmpty, expected);
 });
 
-// T0251 (VERIFIED, tmp/research_agy_refs_2026-07-03.md): refs present prepends the "open and
+// T0251: refs present prepends the "open and
 // view + write one sentence to <outPath>.seen.txt" proof clause, names every ref path, and
 // still carries the generation clause (match subject/style/palette).
 test("buildAgyInstruction: refs present prepend the open-and-view + .seen.txt proof clause, list every ref path", () => {

@@ -18,7 +18,7 @@
 // Transport: `codex exec` — the CLI's own non-interactive mode, already used in this repo
 // by scripts/generate_image.py's gen_codex path and .codex/skills/.../codex_imagegen.sh for
 // image generation, and by the T0251 research note as an independent vision judge (`codex
-// exec -i <ref> -i <out>`, tmp/research_agy_refs_2026-07-03.md). Two invocation shapes,
+// exec -i <ref> -i <out>`; T0251). Two invocation shapes,
 // BOTH verified live on this box on 2026-07-03 (`codex exec --help`; two real spawns):
 //
 //   - TEXT ONLY (expandPrompt): the instruction as a plain positional PROMPT argument —
@@ -26,7 +26,7 @@
 //   - VISION (extractFromImage): ONE `-i <imagePath>`. `-i, --image <FILE>...` is a
 //     variadic clap option that GREEDILY consumes any further non-flag token — a plain-text
 //     instruction placed AFTER `-i <imagePath>` would be silently swallowed as a SECOND
-//     image path (the "variadic-arg footgun", tmp/research_agy_refs_2026-07-03.md — verified
+//     image path (the T0251 variadic-argument guard, verified
 //     against this box's actual `codex exec --help`, not assumed). The documented,
 //     empirically-verified workaround (same note): pass a bare "-" as the PROMPT positional
 //     — codex's own --help: "If not provided as an argument (or if `-` is used),

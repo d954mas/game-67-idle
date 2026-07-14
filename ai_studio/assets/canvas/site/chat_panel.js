@@ -5,7 +5,7 @@
 // see chat/README.md for the parity law). This module is a thin renderer over that API,
 // the same stance history_panel.js takes over listHistory/jumpHistory.
 //
-// State model (design doc tmp/design_T0242_chat_panel_2026-07-03.md, REVISIONS R1/R3):
+// State model (contracts/chat.md):
 //   - One chat CONVERSATION = one codex session, held server-side (chat/agent.mjs). This
 //     module never sees the session id beyond what final/error echo back for logging.
 //   - The per-project transcript.jsonl is PANEL DISPLAY ONLY (chat/context.mjs) — loaded on

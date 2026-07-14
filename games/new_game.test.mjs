@@ -3,7 +3,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, 
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import test from "node:test";
+import test, { after } from "node:test";
 
 const script = resolve("games/new_game.mjs");
 
@@ -32,7 +32,7 @@ function taskboardItems(root) {
   return join(root, "ai_studio", "taskboard", "items");
 }
 
-function tempRepo() {
+function buildFixtureRepo() {
   const root = mkdtempSync(join(tmpdir(), "new-game-"));
   mkdirSync(join(root, "templates", "template", "assets"), { recursive: true });
   mkdirSync(join(root, "templates", "template", "src", "generated"), { recursive: true });
@@ -98,6 +98,18 @@ function tempRepo() {
   execFileSync("git", ["config", "user.name", "Tests"], { cwd: root, stdio: "ignore" });
   execFileSync("git", ["add", "."], { cwd: root, stdio: "ignore" });
   execFileSync("git", ["commit", "-m", "fixture"], { cwd: root, stdio: "ignore" });
+  return root;
+}
+
+let fixtureRepo;
+after(() => {
+  if (fixtureRepo) rmSync(fixtureRepo, { recursive: true, force: true });
+});
+
+function tempRepo() {
+  fixtureRepo ||= buildFixtureRepo();
+  const root = mkdtempSync(join(tmpdir(), "new-game-"));
+  cpSync(fixtureRepo, root, { recursive: true });
   return root;
 }
 

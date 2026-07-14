@@ -54,8 +54,8 @@ node matte/matte.mjs     --run-dir <runDir> --tool corridorkey|key_matte
 ## Configuration
 
 Two studio-config keys (committed in `ai_studio/studio.config.json`,
-resolved in `core_harness/tool_lib/studio_config.mjs`, same override chain as
-the canvas roots — the matching env var wins):
+interpreted by this tool's `_lib.mjs` through the neutral Studio loader; the
+matching environment variable wins):
 
 ```
 "videoGenRoot": "C:/projects/video_gen_experiment"

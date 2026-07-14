@@ -643,56 +643,6 @@
         return null;
       }
     }
-    async function materializeTreeRefs(value, referrerUrl, activeRefs = [], storageRootUrl = null, isIndexDocument = true) {
-      if (Array.isArray(value)) {
-        return await Promise.all(value.map((item) => materializeTreeRefs(item, referrerUrl, activeRefs, storageRootUrl, false)));
-      }
-      if (!value || typeof value !== "object") return value;
-      const storageRoot = storageRootUrl || new URL("architecture_map/tree/", referrerUrl);
-      const stripIndex = isIndexDocument && value.root && Object.hasOwn(value.root, "parts");
-      if (Object.hasOwn(value, "parts") && !Array.isArray(value.parts)) {
-        throw new Error(`Architecture tree parts from "${referrerUrl}" must be an array.`);
-      }
-      if (Object.hasOwn(value, "parts") && Object.hasOwn(value, "children")) {
-        throw new Error(`Architecture tree node from "${referrerUrl}" cannot contain both parts and children.`);
-      }
-      const entries = [];
-      for (const [key, item] of Object.entries(value)) {
-        if (key !== "parts") {
-          entries.push([key, await materializeTreeRefs(item, referrerUrl, activeRefs, storageRoot, false)]);
-          continue;
-        }
-        const resolvedParts = await Promise.all(item.map(async (partPath) => {
-          if (typeof partPath !== "string" || !partPath.trim()) {
-            throw new Error(`Invalid architecture tree ref "${partPath}" from "${referrerUrl}".`);
-          }
-          if (/^[a-zA-Z][a-zA-Z\d+.-]*:/.test(partPath) || partPath.startsWith("//") || partPath.startsWith("/")) {
-            throw new Error(`Architecture tree ref "${partPath}" from "${referrerUrl}" must be relative.`);
-          }
-          let partUrl;
-          try {
-            partUrl = new URL(partPath, referrerUrl);
-          } catch (error) {
-            throw new Error(`Invalid architecture tree ref "${partPath}" from "${referrerUrl}".`);
-          }
-          if (!partUrl.href.startsWith(storageRoot.href)) {
-            throw new Error(`Architecture tree ref "${partPath}" from "${referrerUrl}" escapes tree storage "${storageRoot.href}".`);
-          }
-          if (activeRefs.includes(partUrl.href)) {
-            throw new Error(`Architecture tree ref cycle: ${[...activeRefs, partUrl.href].join(" -> ")}`);
-          }
-          const part = await fetchJson(partUrl.href);
-          if (!part) {
-            throw new Error(`Architecture tree ref "${partPath}" from "${referrerUrl}" could not be loaded.`);
-          }
-          return await materializeTreeRefs(part, partUrl, [...activeRefs, partUrl.href], storageRoot, false);
-        }));
-        entries.push(["children", resolvedParts]);
-      }
-      const result = Object.fromEntries(entries);
-      if (stripIndex) delete result.index;
-      return result;
-    }
     function repoHref(path) {
       return path ? "../../" + String(path).replace(/^\/+/, "") : "";
     }
@@ -705,43 +655,18 @@
       root: { label: "Root", color: "#334155" },
       module: { label: "Module", color: "#2563eb" },
       workspace: { label: "Workspace", color: "#7c3aed" },
-      doc: { label: "Doc", color: "#15803d" },
-      config: { label: "Config", color: "#4f46e5" },
-      tool: { label: "Tool", color: "#b45309" },
-      surface: { label: "Surface", color: "#0284c7" },
-      api: { label: "API", color: "#0d9488" },
-      cli: { label: "CLI", color: "#92400e" },
-      workflow: { label: "Workflow", color: "#9333ea" },
-      skill: { label: "Skill", color: "#c026d3" },
-      validation: { label: "Validator", color: "#b91c1c" },
-      test: { label: "Test", color: "#64748b" },
-      contract: { label: "Contract", color: "#b91c1c" },
-      item: { label: "Item", color: "#475569" }
+      group: { label: "Group", color: "#64748b" },
+      boundary: { label: "Boundary", color: "#0d9488" }
     };
-    const typeLegendItems = ["module", "workspace", "surface", "api", "cli", "workflow", "skill", "tool", "doc", "config", "test", "validation"];
-    const defaultHiddenKinds = new Set(["test", "validation"]);
+    const typeLegendItems = ["module", "workspace", "group", "boundary"];
+    const defaultHiddenKinds = new Set();
     function normalizedKind(kind) {
-      const value = String(kind || "item").toLowerCase();
+      const value = String(kind || "module").toLowerCase();
       if (kindPalette[value]) return value;
-      if (value === "group" || value === "section" || value === "dir" || value === "folder" || value === "library" || value === "asset" || value === "backlog") return "workspace";
-      if (value === "shell" || value === "ui-component") return "surface";
-      if (value === "server") return "api";
-      if (value === "generated-output") return "validation";
-      if (value.includes("validation") || value.includes("validator")) return "validation";
-      if (value.includes("test")) return "test";
-      if (value.includes("config") || value.includes("settings")) return "config";
-      if (value.includes("doc")) return "doc";
-      if (value.includes("tool")) return "tool";
-      if (value.includes("surface")) return "surface";
-      if (value.includes("server") || value.includes("api")) return "api";
-      if (value.includes("cli")) return "cli";
-      if (value.includes("workflow")) return "workflow";
-      if (value.includes("skill")) return "skill";
-      if (value.includes("dir") || value.includes("folder")) return "workspace";
-      return "item";
+      return "module";
     }
     function kindMeta(kind) {
-      return kindPalette[normalizedKind(kind)] || kindPalette.item;
+      return kindPalette[normalizedKind(kind)] || kindPalette.module;
     }
     function kindLabel(kind) {
       return kindMeta(kind).label;
@@ -751,42 +676,32 @@
     }
     function normalizeStudioTreeNode(node) {
       const rawChildren = node.children || [];
-      const kind = node.kind || "item";
+      const kind = node.kind || "module";
       const normalized = {
         id: node.id,
         title: defaultTitle(node),
-        subtitle: node.subtitle || node.path || node.role || "",
+        subtitle: node.path || node.entry || "",
         kind,
         color: kindColor(kind),
         description: node.description || "",
         path: node.path || "",
-        href: node.href || (node.path ? repoHref(node.path) : ""),
-        role: node.role || "",
-        tags: node.tags || [],
-        moduleId: node.moduleId || "",
-        groupId: node.groupId || "",
-        item: node.item || null,
+        entry: node.entry || "",
+        contract: node.contract || "",
+        store: node.store || "",
+        boundary: node.boundary || "",
+        owner: node.owner || "",
+        verifyDomain: node.verifyDomain || "",
+        href: repoHref(node.entry || node.path),
         children: rawChildren.map(normalizeStudioTreeNode)
       };
-      if (!normalized.moduleId && normalized.id && normalized.id.startsWith("module:")) {
-        normalized.moduleId = normalized.id.slice("module:".length);
-      }
       return normalized;
     }
     async function loadStudioTree() {
-      // Primary: merged tree served live by Studio Shell.
+      // Primary: authored tree served live by Studio Shell.
       const merged = await fetchJson("/api/architecture-tree");
       if (merged && merged.root) return merged;
-      // Fallback: recursively materialize the on-disk index client-side.
-      const indexUrl = new URL("../tree.json", window.location.href);
-      const index = await fetchJson(indexUrl.href);
-      if (!index || !index.root) return null;
-      try {
-        return await materializeTreeRefs(index, indexUrl);
-      } catch (error) {
-        console.error("Architecture tree fallback failed:", error);
-        return null;
-      }
+      // Fallback: read the same single-file map directly.
+      return await fetchJson(new URL("../tree.json", window.location.href).href);
     }
     async function loadValidationReport() {
       // Primary: live report from Studio Shell; fallback: local generated file.
@@ -809,7 +724,6 @@
       kind: "root",
       color: "#172033",
       description: "ai_studio/tree.json could not be loaded. Open this page through Studio Shell.",
-      tags: ["missing-source"],
       children: []
     };
     const studioExplorerTree = document.getElementById("studioExplorerTree");
@@ -1139,8 +1053,8 @@
       return drillPositions.get(key);
     }
     function nodePath(node) {
-      if (node.item && node.item.path) return node.item.path;
-      if (node.href) return node.href;
+      if (node.path) return node.path;
+      if (node.entry) return node.entry;
       return node.subtitle || node.title || "";
     }
     function renderLeafActions(node) {

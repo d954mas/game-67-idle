@@ -4,7 +4,7 @@
 //   node ai_studio/studio_shell/server.mjs
 //   node ai_studio/studio_shell/server.mjs 8780
 
-import { createReadStream, existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,7 +22,7 @@ const root = findRoot(repoGuess);
 const aiStudioRoot = join(root, "ai_studio");
 const taskboardPublic = join(aiStudioRoot, "taskboard", "public");
 const assetViewerRoot = join(aiStudioRoot, "assets", "gallery");
-const assetPreviewRoot = join(aiStudioRoot, "assets", "backlog", "storage", "previews");
+const assetPreviewRoot = join(aiStudioRoot, "assets", "previews");
 const port = Number.parseInt(process.argv[2] || process.env.AI_STUDIO_PORT || "8765", 10);
 const handleTaskboardApi = createTaskboardApi(root);
 const handleAssetViewerApi = createAssetViewerApi(root);
@@ -209,6 +209,18 @@ server.listen(port, "127.0.0.1", () => {
 let shutdownStarted = false;
 const shutdownTimeoutMs = 5_000;
 
+function removeOwnPidFile() {
+  try {
+    if (readFileSync(pidFile, "utf8").trim() === String(process.pid)) {
+      rmSync(pidFile);
+    }
+  } catch (error) {
+    if (error?.code !== "ENOENT") {
+      console.error(`ai_studio: failed to remove own PID file: ${error?.message || error}`);
+    }
+  }
+}
+
 async function shutdown(signal) {
   if (shutdownStarted) return;
   shutdownStarted = true;
@@ -230,6 +242,7 @@ async function shutdown(signal) {
     console.error(`ai_studio: ${signal} shutdown failed: ${error?.message || error}`);
   } finally {
     clearTimeout(timer);
+    removeOwnPidFile();
     process.exit(exitCode);
   }
 }

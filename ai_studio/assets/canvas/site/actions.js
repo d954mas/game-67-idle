@@ -1120,7 +1120,7 @@ export async function expandRecipePromptAction(groupId, control) {
 // toast instead of the plain success toast so it does not auto-dismiss unnoticed. Only
 // EVERY engine failing throws, which runLongOp already renders as its own error toast.
 //
-// T0332 v2 (build_spec_pack_card_2026-07-07.md phase C): the SAME button/action also drives
+// T0332 v2 (contracts/recipe-pack.md): the SAME button/action also drives
 // the PACK branch now — ops.generateFromRecipe branches on recipe.pack itself, so this action
 // only forwards the two pack-only resume/force-regen options (`opts.runGroupId`/
 // `opts.sheetSlug` — both undefined for a plain single-image call OR a fresh pack run; the

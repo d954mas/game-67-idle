@@ -24,4 +24,5 @@ Operational observability for the canvas (lead: needed for future optimization a
 ## Open questions
 
 ## Log
-- 2026-07-02: Scoped in ai_studio/assets/canvas/PLAN.md (2026-07-02); perf items anchored to bench tmp/canvas_bench_2026-07-02.json + perf research
+- 2026-07-02: Scoped from measured Canvas operation and error-reporting needs;
+  acceptance criteria in this task are the current contract.

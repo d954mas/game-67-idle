@@ -1,32 +1,589 @@
 {
   "schema": 1,
-  "description": "Declarative ownership index for the AI Studio architecture tree.",
-  "index": true,
   "root": {
     "id": "studio",
-    "title": "AI Studio Workspace",
-    "subtitle": "repo roots",
+    "title": "AI Studio",
     "kind": "root",
-    "color": "#172033",
-    "description": "Clean AI Studio architecture tree. Reviewed modules live under ai_studio/, while game, feature, and template workspace folders are shown as root ownership boundaries.",
-    "tags": [
-      "reviewed-only",
-      "workspace-roots",
-      "core-first"
-    ],
-    "parts": [
-      "architecture_map/tree/studio-readme.json",
-      "architecture_map/tree/workspace-folders.json",
-      "architecture_map/tree/studio-shell.json",
-      "architecture_map/tree/module-workspace.json",
-      "architecture_map/tree/module-dev-environment.json",
-      "architecture_map/tree/runtime-automation.json",
-      "architecture_map/tree/module-hot.json",
-      "architecture_map/tree/module-taskboard.json",
-      "architecture_map/tree/module-assets.json",
-      "architecture_map/tree/architecture-map.json",
-      "architecture_map/tree/module-game-design.json",
-      "architecture_map/tree/module-quality.json"
+    "path": "ai_studio",
+    "owner": "Studio Lead",
+    "description": "The reviewed game-production harness and its owner boundaries.",
+    "entry": "ai_studio/README.md",
+    "contract": "AGENTS.md",
+    "boundary": "Top-level modules are explicit; root files share the Studio contract.",
+    "verifyDomain": "harness",
+    "coverage": "direct-files",
+    "children": [
+      {
+        "id": "workspace-folders",
+        "title": "Workspace folders",
+        "kind": "group",
+        "owner": "Workspace Lead",
+        "description": "Public creation roots whose child products and packs require explicit owners.",
+        "entry": "templates/README.md",
+        "verifyDomain": "workspace",
+        "coverage": "self",
+        "children": [
+          {
+            "id": "templates",
+            "title": "Templates",
+            "kind": "workspace",
+            "path": "templates",
+            "owner": "Template Lead",
+            "description": "Reusable game starting points with each template mapped separately.",
+            "entry": "templates/README.md",
+            "contract": "templates/TEMPLATE.md",
+            "verifyDomain": "template-release",
+            "coverage": "direct-files",
+            "children": [
+              {
+                "id": "template-default",
+                "title": "Default template",
+                "kind": "module",
+                "path": "templates/template",
+                "owner": "Template Lead",
+                "description": "The default game scaffold and its template-owned product features.",
+                "entry": "templates/template/README.md",
+                "contract": "templates/template/template.json",
+                "boundary": "Settings and resource-panel implementations remain template-owned features.",
+                "verifyDomain": "template-release",
+                "coverage": "subtree"
+              }
+            ]
+          },
+          {
+            "id": "features",
+            "title": "Feature packs",
+            "kind": "workspace",
+            "path": "features",
+            "owner": "Feature Lead",
+            "description": "Reusable capabilities with every pack exposed as an explicit boundary.",
+            "entry": "features/README.md",
+            "verifyDomain": "features",
+            "coverage": "direct-files",
+            "children": [
+              {
+                "id": "feature-audio-core",
+                "title": "Audio core",
+                "kind": "module",
+                "path": "features/audio-core",
+                "owner": "Audio Feature Owner",
+                "description": "Reusable audio capability and integration contract.",
+                "entry": "features/audio-core/README.md",
+                "contract": "features/audio-core/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
+                "id": "feature-game-events",
+                "title": "Game events",
+                "kind": "module",
+                "path": "features/game-events",
+                "owner": "Events Feature Owner",
+                "description": "Reusable game-event capability and integration contract.",
+                "entry": "features/game-events/README.md",
+                "contract": "features/game-events/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
+                "id": "feature-game-state",
+                "title": "Game state",
+                "kind": "module",
+                "path": "features/game-state",
+                "owner": "State Feature Owner",
+                "description": "Schema-first state capability and integration contract.",
+                "entry": "features/game-state/README.md",
+                "contract": "features/game-state/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
+                "id": "feature-items-core",
+                "title": "Items core",
+                "kind": "module",
+                "path": "features/items-core",
+                "owner": "Items Feature Owner",
+                "description": "Reusable item ownership capability and integration contract.",
+                "entry": "features/items-core/README.md",
+                "contract": "features/items-core/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
+                "id": "feature-platform-sdk",
+                "title": "Platform SDK",
+                "kind": "module",
+                "path": "features/platform-sdk",
+                "owner": "Platform Feature Owner",
+                "description": "Platform-service integration capability and contract.",
+                "entry": "features/platform-sdk/README.md",
+                "contract": "features/platform-sdk/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              },
+              {
+                "id": "feature-progression-core",
+                "title": "Progression core",
+                "kind": "module",
+                "path": "features/progression-core",
+                "owner": "Progression Feature Owner",
+                "description": "Reusable progression capability and integration contract.",
+                "entry": "features/progression-core/README.md",
+                "contract": "features/progression-core/feature.json",
+                "verifyDomain": "features",
+                "coverage": "subtree"
+              }
+            ]
+          },
+          {
+            "id": "games",
+            "title": "Games",
+            "kind": "workspace",
+            "path": "games",
+            "owner": "Game Lead",
+            "description": "Public game mounts; each new game requires an explicit map owner.",
+            "entry": "games/README.md",
+            "verifyDomain": "workspace",
+            "coverage": "direct-files"
+          },
+          {
+            "id": "extensions",
+            "title": "Extensions",
+            "kind": "workspace",
+            "path": "extensions",
+            "owner": "Extension Lead",
+            "description": "Optional Studio extensions with explicit child ownership.",
+            "entry": "extensions/README.md",
+            "verifyDomain": "features",
+            "coverage": "direct-files",
+            "children": [
+              {
+                "id": "extensions-experimental",
+                "title": "Experimental extensions",
+                "kind": "group",
+                "path": "extensions/experimental",
+                "owner": "Extension Lead",
+                "description": "Incubating extensions that are not part of the core harness.",
+                "entry": "extensions/README.md",
+                "verifyDomain": "features",
+                "coverage": "direct-files",
+                "children": [
+                  {
+                    "id": "extension-skeletal-animation",
+                    "title": "Skeletal animation",
+                    "kind": "module",
+                    "path": "extensions/experimental/skeletal_animation",
+                    "owner": "Animation Extension Owner",
+                    "description": "Experimental skeletal-animation capability and ownership boundary.",
+                    "entry": "extensions/experimental/skeletal_animation/README.md",
+                    "verifyDomain": "features",
+                    "coverage": "subtree"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "id": "studio-shell",
+        "title": "Studio shell",
+        "kind": "module",
+        "path": "ai_studio/studio_shell",
+        "owner": "Shell Owner",
+        "description": "The local Studio surface and its canonical Windows launcher.",
+        "entry": "ai_studio/studio_shell/start_site_windows.ps1",
+        "contract": "ai_studio/studio_shell/README.md",
+        "verifyDomain": "shell",
+        "coverage": "subtree"
+      },
+      {
+        "id": "workspace",
+        "title": "Workspace",
+        "kind": "module",
+        "path": "ai_studio/workspace",
+        "owner": "Workspace Lead",
+        "description": "Game mounts, catalogs, dependency state, and workspace privacy boundaries.",
+        "entry": "ai_studio/workspace/README.md",
+        "verifyDomain": "workspace",
+        "coverage": "subtree"
+      },
+      {
+        "id": "dev-environment",
+        "title": "Development environment",
+        "kind": "module",
+        "path": "ai_studio/dev_environment",
+        "owner": "Environment Owner",
+        "description": "Portable environment setup and dependency boundaries.",
+        "entry": "ai_studio/dev_environment/README.md",
+        "verifyDomain": "harness",
+        "coverage": "subtree"
+      },
+      {
+        "id": "python-boundary",
+        "title": "Python boundary",
+        "kind": "boundary",
+        "path": "ai_studio/python",
+        "owner": "Environment Owner",
+        "description": "The direct Python dependency boundary consumed by environment setup.",
+        "entry": "ai_studio/python/requirements.direct.txt",
+        "contract": "ai_studio/dev_environment/python.mjs",
+        "verifyDomain": "harness",
+        "coverage": "subtree"
+      },
+      {
+        "id": "runtime-automation",
+        "title": "Runtime automation",
+        "kind": "module",
+        "path": "ai_studio/runtime_automation",
+        "owner": "Runtime Automation Owner",
+        "description": "Runtime inspection, control, and proof interfaces for running games.",
+        "entry": "ai_studio/runtime_automation/README.md",
+        "verifyDomain": "runtime",
+        "coverage": "subtree"
+      },
+      {
+        "id": "core-harness",
+        "title": "Core harness",
+        "kind": "module",
+        "path": "ai_studio/core_harness",
+        "owner": "Harness Lead",
+        "description": "Shared agent workflow, validation, profiling, and reusable harness utilities.",
+        "entry": "ai_studio/core_harness/README.md",
+        "verifyDomain": "harness",
+        "coverage": "subtree",
+        "children": [
+          {
+            "id": "workflow",
+            "title": "Workflow",
+            "kind": "module",
+            "path": "ai_studio/core_harness/workflow",
+            "owner": "Workflow Owner",
+            "description": "Enforcement labels, proof routes, and shared workflow policy.",
+            "entry": "ai_studio/core_harness/workflow/README.md",
+            "contract": "ai_studio/core_harness/workflow/enforcement_contract.json",
+            "verifyDomain": "harness",
+            "coverage": "subtree"
+          },
+          {
+            "id": "agent-surfaces",
+            "title": "Agent surfaces",
+            "kind": "module",
+            "path": "ai_studio/core_harness/agent_surfaces",
+            "owner": "Agent Surface Owner",
+            "description": "Adapters and shared contracts for supported agent harnesses.",
+            "entry": "ai_studio/core_harness/agent_surfaces/README.md",
+            "verifyDomain": "harness",
+            "coverage": "subtree"
+          },
+          {
+            "id": "profiling",
+            "title": "Profiling",
+            "kind": "module",
+            "path": "ai_studio/core_harness/profiling",
+            "owner": "Profiling Owner",
+            "description": "Cross-harness performance measurement contracts and guidance.",
+            "entry": "ai_studio/core_harness/profiling/README.md",
+            "verifyDomain": "harness",
+            "coverage": "subtree"
+          },
+          {
+            "id": "validation",
+            "title": "Validation",
+            "kind": "module",
+            "path": "ai_studio/core_harness/validation",
+            "owner": "Validation Owner",
+            "description": "Shared validation primitives used by Studio verification domains.",
+            "entry": "ai_studio/core_harness/validation/README.md",
+            "verifyDomain": "harness",
+            "coverage": "subtree"
+          },
+          {
+            "id": "tool-lib",
+            "title": "Tool library",
+            "kind": "module",
+            "path": "ai_studio/core_harness/tool_lib",
+            "owner": "Tooling Owner",
+            "description": "Small reusable utilities shared by Studio tools.",
+            "entry": "ai_studio/core_harness/tool_lib/README.md",
+            "verifyDomain": "harness",
+            "coverage": "subtree"
+          }
+        ]
+      },
+      {
+        "id": "root-agent-contract",
+        "title": "Root agent contract",
+        "kind": "boundary",
+        "path": "AGENTS.md",
+        "owner": "Studio Lead",
+        "description": "Repository-wide routing and invariant contract for agents.",
+        "entry": "AGENTS.md",
+        "verifyDomain": "harness",
+        "coverage": "self"
+      },
+      {
+        "id": "claude-contract",
+        "title": "Claude contract",
+        "kind": "boundary",
+        "path": "CLAUDE.md",
+        "owner": "Agent Surface Owner",
+        "description": "Claude-specific repository entry contract.",
+        "entry": "CLAUDE.md",
+        "verifyDomain": "harness",
+        "coverage": "self"
+      },
+      {
+        "id": "codex-agent-catalog",
+        "title": "Codex agent catalog",
+        "kind": "boundary",
+        "path": ".codex/agents",
+        "owner": "Agent Surface Owner",
+        "description": "Codex role definitions available to the active harness.",
+        "entry": ".codex/agents",
+        "verifyDomain": "harness",
+        "coverage": "subtree"
+      },
+      {
+        "id": "claude-agent-catalog",
+        "title": "Claude agent catalog",
+        "kind": "boundary",
+        "path": ".claude/agents",
+        "owner": "Agent Surface Owner",
+        "description": "Claude role definitions available to the active harness.",
+        "entry": ".claude/agents",
+        "verifyDomain": "harness",
+        "coverage": "subtree"
+      },
+      {
+        "id": "codex-skill-catalog",
+        "title": "Codex skill catalog",
+        "kind": "boundary",
+        "path": ".codex/skills",
+        "owner": "Skill Owner",
+        "description": "Task-specific Codex procedures loaded only when their domain applies.",
+        "entry": ".codex/skills",
+        "verifyDomain": "harness",
+        "coverage": "subtree"
+      },
+      {
+        "id": "taskboard",
+        "title": "Taskboard",
+        "kind": "module",
+        "path": "ai_studio/taskboard",
+        "owner": "Work Management Owner",
+        "description": "Canonical project state, task workflows, and scoped profiling.",
+        "entry": "ai_studio/taskboard/README.md",
+        "store": "ai_studio/taskboard/items",
+        "boundary": "Taskboard owns structured Quality results and Taskboard read profiling.",
+        "verifyDomain": "work-management",
+        "coverage": "subtree"
+      },
+      {
+        "id": "assets",
+        "title": "Assets",
+        "kind": "module",
+        "path": "ai_studio/assets",
+        "owner": "Asset Lead",
+        "description": "Source-first asset workflow, stores, review surfaces, and tools.",
+        "entry": "ai_studio/assets/README.md",
+        "verifyDomain": "assets",
+        "coverage": "subtree",
+        "children": [
+          {
+            "id": "asset-gallery",
+            "title": "Asset gallery",
+            "kind": "module",
+            "path": "ai_studio/assets/gallery",
+            "owner": "Asset Surface Owner",
+            "description": "Visual review surface for cataloged assets.",
+            "entry": "ai_studio/assets/gallery/README.md",
+            "verifyDomain": "assets",
+            "coverage": "subtree"
+          },
+          {
+            "id": "items-viewer",
+            "title": "Items viewer",
+            "kind": "module",
+            "path": "ai_studio/assets/items_viewer",
+            "owner": "Items Surface Owner",
+            "description": "Review surface for item ownership and asset associations.",
+            "entry": "ai_studio/assets/items_viewer/README.md",
+            "verifyDomain": "assets",
+            "coverage": "subtree"
+          },
+          {
+            "id": "asset-tools",
+            "title": "Asset tools",
+            "kind": "module",
+            "path": "ai_studio/assets/tools",
+            "owner": "Asset Tooling Owner",
+            "description": "Asset preparation and media workflow tools.",
+            "entry": "ai_studio/assets/tools/README.md",
+            "verifyDomain": "assets",
+            "coverage": "subtree"
+          },
+          {
+            "id": "canvas",
+            "title": "Canvas",
+            "kind": "module",
+            "path": "ai_studio/assets/canvas",
+            "owner": "Canvas Owner",
+            "description": "Canvas project store, editing operations, and export boundary.",
+            "entry": "ai_studio/assets/canvas/README.md",
+            "contract": "ai_studio/assets/canvas/config.mjs",
+            "verifyDomain": "assets",
+            "coverage": "subtree"
+          },
+          {
+            "id": "asset-catalog",
+            "title": "Asset catalog",
+            "kind": "module",
+            "path": "ai_studio/assets/catalog",
+            "owner": "Asset Data Owner",
+            "description": "Canonical shared asset metadata and lookup boundary.",
+            "entry": "ai_studio/assets/catalog/README.md",
+            "verifyDomain": "assets",
+            "coverage": "subtree"
+          },
+          {
+            "id": "asset-manifests",
+            "title": "Asset manifests",
+            "kind": "module",
+            "path": "ai_studio/assets/manifests",
+            "owner": "Asset Data Owner",
+            "description": "Game-facing asset manifest ownership boundary.",
+            "entry": "ai_studio/assets/manifests/README.md",
+            "verifyDomain": "assets",
+            "coverage": "subtree"
+          },
+          {
+            "id": "asset-sources",
+            "title": "Asset sources",
+            "kind": "module",
+            "path": "ai_studio/assets/sources",
+            "owner": "Asset Sourcing Owner",
+            "description": "Shared source records and provenance boundary.",
+            "entry": "ai_studio/assets/sources/README.md",
+            "verifyDomain": "assets",
+            "coverage": "subtree"
+          },
+          {
+            "id": "asset-intake",
+            "title": "Asset intake",
+            "kind": "module",
+            "path": "ai_studio/assets/intake",
+            "owner": "Asset Sourcing Owner",
+            "description": "Incoming asset review and promotion boundary.",
+            "entry": "ai_studio/assets/intake/README.md",
+            "verifyDomain": "assets",
+            "coverage": "subtree"
+          },
+          {
+            "id": "asset-licenses",
+            "title": "Asset licenses",
+            "kind": "module",
+            "path": "ai_studio/assets/licenses",
+            "owner": "Asset Compliance Owner",
+            "description": "Reusable license records for committed assets.",
+            "entry": "ai_studio/assets/licenses/README.md",
+            "verifyDomain": "assets",
+            "coverage": "subtree"
+          },
+          {
+            "id": "asset-previews",
+            "title": "Asset previews",
+            "kind": "module",
+            "path": "ai_studio/assets/previews",
+            "owner": "Asset Surface Owner",
+            "description": "Generated review previews kept separate from source assets.",
+            "entry": "ai_studio/assets/previews/README.md",
+            "verifyDomain": "assets",
+            "coverage": "subtree"
+          }
+        ]
+      },
+      {
+        "id": "architecture-map",
+        "title": "Architecture map",
+        "kind": "module",
+        "path": "ai_studio/architecture_map",
+        "owner": "Architecture Owner",
+        "description": "Compact owner and boundary index for the Studio repository.",
+        "entry": "ai_studio/architecture_map/README.md",
+        "verifyDomain": "architecture",
+        "coverage": "subtree"
+      },
+      {
+        "id": "game-design",
+        "title": "Game design",
+        "kind": "module",
+        "path": "ai_studio/game_design",
+        "owner": "Design Lead",
+        "description": "Shared design knowledge, GDD structure, and research ownership.",
+        "entry": "ai_studio/game_design/README.md",
+        "verifyDomain": "design",
+        "coverage": "subtree",
+        "children": [
+          {
+            "id": "design-knowledge-base",
+            "title": "Design knowledge base",
+            "kind": "module",
+            "path": "ai_studio/game_design/knowledge_base",
+            "owner": "Design Knowledge Owner",
+            "description": "Promoted reusable game-design knowledge and source notes.",
+            "entry": "ai_studio/game_design/knowledge_base/README.md",
+            "verifyDomain": "design",
+            "coverage": "subtree"
+          },
+          {
+            "id": "design-gdd",
+            "title": "GDD guidance",
+            "kind": "module",
+            "path": "ai_studio/game_design/gdd",
+            "owner": "GDD Owner",
+            "description": "Reusable GDD workflow and document contracts.",
+            "entry": "ai_studio/game_design/gdd/README.md",
+            "verifyDomain": "design",
+            "coverage": "subtree"
+          },
+          {
+            "id": "design-knowledge",
+            "title": "Design knowledge workflow",
+            "kind": "module",
+            "path": "ai_studio/game_design/knowledge",
+            "owner": "Design Knowledge Owner",
+            "description": "Research intake and promotion workflow for shared design knowledge.",
+            "entry": "ai_studio/game_design/knowledge/README.md",
+            "verifyDomain": "design",
+            "coverage": "subtree"
+          }
+        ]
+      },
+      {
+        "id": "quality",
+        "title": "Quality",
+        "kind": "module",
+        "path": "ai_studio/quality",
+        "owner": "Quality Owner",
+        "description": "Quality definitions, evaluation rules, and verification integration.",
+        "entry": "ai_studio/quality/README.md",
+        "verifyDomain": "harness",
+        "coverage": "subtree",
+        "children": [
+          {
+            "id": "quality-rules",
+            "title": "Quality rules",
+            "kind": "module",
+            "path": "ai_studio/quality/rules",
+            "owner": "Quality Owner",
+            "description": "Versioned reusable rules that define product quality expectations.",
+            "entry": "ai_studio/quality/rules",
+            "verifyDomain": "harness",
+            "coverage": "subtree"
+          }
+        ]
+      }
     ]
   }
 }

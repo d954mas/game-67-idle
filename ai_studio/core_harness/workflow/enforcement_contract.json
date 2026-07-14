@@ -95,7 +95,7 @@
     {
       "id": "delegation-policy",
       "classification": "process convention",
-      "claim": "The lead delegates non-trivial work to the closest provider-owned role with bounded packets and integrates the result.",
+      "claim": "The lead keeps coherent work direct and delegates only independent bounded packets whose latency, context, or review benefit exceeds transfer and reintegration cost; independent reviewer count follows work risk.",
       "sources": [
         "AGENTS.md",
         "ai_studio/core_harness/workflow/orchestration/README.md"

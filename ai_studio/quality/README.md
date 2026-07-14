@@ -62,11 +62,13 @@ line:
 - YYYY-MM-DD: Quality: QCLR_001=pass; QART_001=block; evidence: <short proof or artifact>.
 ```
 
-Allowed outcomes are `pass`, `block`, `review`, `skip`, and `unverified`.
-The Taskboard close-transition presence contract, including the explicit
-`Quality: not-applicable; reason: ...` form, is owned by
+Historical logs may contain `pass`, `block`, `review`, `skip`, and `unverified`.
+Current Taskboard state permits `pass`, `block`, `review`, and `unverified`;
+`skip` is history-only and new non-applicable decisions require a reason.
+The structured Taskboard close-transition contract is owned by
 [`task-store-reference.md`](../taskboard/task-store-reference.md#done-and-evidence).
-Quality owns rule meaning; Taskboard only validates the canonical log shape.
+Quality owns rule meaning; Taskboard validates current state and keeps the dated
+log only as profiling history.
 
 Summarize rule usage with:
 

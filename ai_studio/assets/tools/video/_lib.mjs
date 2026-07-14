@@ -23,13 +23,8 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import {
-  corridorKeyRoot,
-  studioPythonPath,
-  videoGenRoot,
-} from "../../../core_harness/tool_lib/studio_config.mjs";
-
-export { videoGenRoot };
+import { STUDIO_CONFIG_SCHEMA, loadStudioConfig } from "../../../config.mjs";
+import { studioPythonPath } from "../../../dev_environment/python.mjs";
 
 // _lib.mjs lives at ai_studio/assets/tools/video/ -> 4 up is the repo root.
 const LIB_DIR = fileURLToPath(new URL(".", import.meta.url));
@@ -57,6 +52,16 @@ export function resolveRepoPython(root = REPO_ROOT) {
 }
 
 // --- Isolated-experiment paths (all under videoGenRoot; machine-local) --------
+
+export function videoGenRoot(root = REPO_ROOT) {
+  const fromEnv = String(process.env.VIDEO_GEN_ROOT || "").trim();
+  if (fromEnv) return resolve(fromEnv);
+  const raw = String(loadStudioConfig(root).videoGenRoot || "").trim();
+  if (!raw) {
+    throw new Error(`studio config is missing videoGenRoot (schema ${STUDIO_CONFIG_SCHEMA})`);
+  }
+  return looksAbsolute(raw) ? resolve(raw) : resolve(root, raw);
+}
 
 export function comfyPortableDir(root = REPO_ROOT) {
   return resolve(videoGenRoot(root), "ComfyUI_windows_portable");
@@ -89,7 +94,13 @@ export function embeddedPython(root = REPO_ROOT) {
 // canvas's first-priority glow/translucency alpha method and outlives the
 // video-gen experiment folder.
 export function corridorKeyDir(root = REPO_ROOT) {
-  return corridorKeyRoot(root);
+  const fromEnv = String(process.env.CORRIDOR_KEY_ROOT || "").trim();
+  if (fromEnv) return resolve(fromEnv);
+  const raw = String(loadStudioConfig(root).corridorKeyRoot || "").trim();
+  if (!raw) {
+    throw new Error(`studio config is missing corridorKeyRoot (schema ${STUDIO_CONFIG_SCHEMA})`);
+  }
+  return looksAbsolute(raw) ? resolve(raw) : resolve(root, raw);
 }
 // CorridorKey's uv-managed venv interpreter. Invoked DIRECTLY (not via `uv run`)
 // on purpose: `uv run` re-syncs the pyproject and can strip the cuda extra (the

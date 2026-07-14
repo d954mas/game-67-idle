@@ -1,7 +1,7 @@
 # Items Viewer — Phase 1 build spec (read-only catalog viewer)
 
 Task T0316 phase 1 of 3. Author: deep-reasoner, 2026-07-08. Status: spec, review pending.
-Module owns its own docs (precedent: `ai_studio/assets/canvas/docs/`).
+Module owns its current contract and implementation documentation.
 
 Sources this spec sits on: taskboard `ai_studio/taskboard/items/active/T0316-ai-studio-content-editor.md`;
 current items contract `features/items-core/README.md`; op-layer

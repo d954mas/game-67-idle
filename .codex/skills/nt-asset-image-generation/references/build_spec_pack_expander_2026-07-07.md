@@ -2,8 +2,8 @@
 
 Status: REVIEWED (dual-review 2026-07-07: философия/simplicity + execution/robustness,
 оба ACCEPT-WITH-CHANGES; правки внесены). Владелец: `.codex/skills/nt-asset-image-generation/`.
-Источник решения: разбор доклада Declarative Art (TiltShift, youtube y9znnFAQWOQ) +
-внутренний ресёрч `ai_studio/assets/canvas/docs/research_genart_workflow_2026-07-03.md`.
+Источник решения: разбор доклада Declarative Art (TiltShift, youtube y9znnFAQWOQ) и
+действующий `ai_studio/assets/canvas/contracts/recipe-pack.md`.
 
 ## Цель
 

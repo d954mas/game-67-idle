@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
 import { isAbsolute, join, resolve, sep } from "node:path";
 
-import { canvasProjectsRoot } from "../../core_harness/tool_lib/studio_config.mjs";
+import { canvasProjectsRoot } from "./config.mjs";
 import { listGameMounts } from "../../workspace/games.mjs";
 import { resolveProjectPath, withCanvasProjectsRoot } from "./store.mjs";
 

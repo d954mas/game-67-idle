@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { canvasHistoryDepth, canvasLocalCacheRoot, canvasProjectsRoot, loadStudioConfig } from "../../../core_harness/tool_lib/studio_config.mjs";
+import { canvasHistoryDepth, canvasLocalCacheRoot, canvasProjectsRoot } from "../config.mjs";
 
 function tempRoot(t) {
   const dir = mkdtempSync(join(tmpdir(), "canvas-config-"));
@@ -18,13 +18,12 @@ function writeConfig(root, name, data) {
   writeFileSync(join(root, "ai_studio", name), `${JSON.stringify(data)}\n`, "utf8");
 }
 
-test("loadStudioConfig merges local override over committed main", (t) => {
+test("canvasProjectsRoot uses the local override over committed main", (t) => {
   delete process.env.CANVAS_PROJECTS_ROOT;
   const root = tempRoot(t);
   writeConfig(root, "studio.config.json", { schema: "ai_studio.studio_config.v1", canvasProjectsRoot: "C:/main/root" });
   writeConfig(root, "studio.config.local.json", { canvasProjectsRoot: "C:/local/override" });
 
-  assert.equal(loadStudioConfig(root).canvasProjectsRoot, "C:/local/override");
   assert.equal(canvasProjectsRoot(root), resolve("C:/local/override"));
 });
 
@@ -46,12 +45,6 @@ test("CANVAS_PROJECTS_ROOT env overrides config and needs no config file", (t) =
   });
 
   assert.equal(canvasProjectsRoot(root), resolve("C:/env/override"));
-});
-
-test("loadStudioConfig throws a clear error when no config exists", (t) => {
-  delete process.env.CANVAS_PROJECTS_ROOT;
-  const root = tempRoot(t);
-  assert.throws(() => loadStudioConfig(root), /missing studio config/);
 });
 
 test("canvasHistoryDepth: env override > config value > default 200 (never throws)", (t) => {

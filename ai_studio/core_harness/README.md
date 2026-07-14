@@ -36,8 +36,8 @@ Reviewed workflow file:
 ## Workflow Orchestration
 
 Orchestration is a child rule inside Workflow, not a sibling module. It exists
-to trigger early subagent use for broad read-heavy work, with a simple
-Task / Scope / Return / Stop packet.
+to define optional bounded delegation and independent review when their benefit
+exceeds coordination cost, using a simple Task / Scope / Return / Stop packet.
 
 Reviewed orchestration file:
 

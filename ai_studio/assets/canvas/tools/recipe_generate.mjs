@@ -17,7 +17,7 @@
 // generation-paths.md): a headless, agentic image-gen call verified by OUTPUT FILE
 // EXISTENCE, never stdout (agy "can be quiet under non-TTY" per the skill notes; gen_both.sh
 // uses the same file-existence check). agy ref support is VERIFIED (T0251, 2026-07-03 — a live
-// agy run + an independent codex vision judge, see tmp/research_agy_refs_2026-07-03.md): agy
+// agy run + an independent codex vision judge, recorded by T0251): agy
 // has no image-attach flag, but as a multimodal AGENT it can open/view a local ref file (given
 // `--add-dir` on its parent dir) via its own tools and condition generation on it. Because agy
 // is an agent, not an API, it can ALSO generate from the text prompt alone and exit 0 even when
@@ -36,7 +36,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, URL } from "node:url";
 import { promisify } from "node:util";
-import { studioPythonPath } from "../../../core_harness/tool_lib/studio_config.mjs";
+import { studioPythonPath } from "../../../dev_environment/python.mjs";
 
 const execFileAsync = promisify(execFile);
 const REPO_ROOT = fileURLToPath(new URL("../../../..", import.meta.url));
@@ -128,7 +128,7 @@ function aspectLabel(size) {
 // Pure instruction-text builder (no spawn). With NO refs this is the verbatim template from
 // gen_both.sh's agy call, generalized with the aspect label + an explicit outPath — kept
 // byte-identical to the pre-T0251 text so the no-refs path never perturbs a known-working
-// prompt. With refs present (T0251-verified shape, tmp/research_agy_refs_2026-07-03.md's
+// prompt. With refs present (the T0251-verified invocation shape),
 // "Exact working invocation shape"), a ref clause is PREPENDED that instructs agy to first
 // open/view each ref file with its own tools and write one sentence describing what it saw to
 // `<outPath>.seen.txt` — the proof `verifyAgyRefProof` checks after the run (silent-divergence
@@ -192,7 +192,7 @@ export function verifyAgyRefProof(outPath, refPaths) {
   if (!seenText.trim()) {
     throw new Error(
       `agy produced ${outPath} but no non-empty ${seenPath} proof it read the ${refPaths.length} reference image(s) — ` +
-        "silent-divergence guard (T0251, tmp/research_agy_refs_2026-07-03.md): agy can generate from the text prompt " +
+        "silent-divergence guard (T0251): agy can generate from the text prompt " +
         "alone and exit 0 without ever opening a ref; file-existence alone would pass that case falsely",
     );
   }

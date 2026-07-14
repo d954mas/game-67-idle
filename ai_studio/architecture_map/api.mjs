@@ -1,7 +1,7 @@
 // Architecture Map HTTP API adapter.
 //
 // Studio Shell mounts this handler. Architecture Map owns the JSON payloads:
-//   GET /api/architecture-tree        merged workspace tree (index + parts)
+//   GET /api/architecture-tree        single authored workspace tree
 //   GET /api/architecture-validation  live validation report (never committed)
 //
 // Serving the report live replaces the committed validation-report.json file.

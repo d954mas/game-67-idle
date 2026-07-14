@@ -73,38 +73,54 @@ references and task project/epic mismatches.
 ## Done And Evidence
 
 A transition of a task from any non-`done` status to `done` must satisfy both
-presence checks below through the final markdown body passed to `updateDoc`:
+checks below through the final document passed to `updateDoc`:
 
 1. `## Done when` contains at least one nonblank canonical `- [x] criterion`,
    every checkbox there is canonical and checked, or `## Log` contains:
    `Closure: waived; reason: <non-empty>; evidence: <non-empty>`.
-2. `## Log` contains either
-   `Quality: Q...=<outcome>[; Q...=<outcome>]; evidence: <non-empty>` or
-   `Quality: not-applicable; reason: <non-empty>`.
+2. Frontmatter has one structured `quality` decision: non-empty `checks` with
+   per-check `id`, `outcome`, and `evidence`, or `notApplicable.reason`.
 
-Log decisions count only as canonical dated bullets such as
-`- YYYY-MM-DD: Quality: ...` or `- YYYY-MM-DD: Closure: ...`, outside fenced
-code blocks. Bare lines and documentation examples do not satisfy the gate.
+A closure waiver counts only as a canonical dated bullet outside fenced code
+blocks. Quality log bullets are history only; bare lines and documentation
+examples satisfy neither gate.
 
-Quality outcomes are `pass`, `block`, `review`, `skip`, or `unverified`. This
-guard checks explicit shape only; it does not select rules, run checks, or infer
-whether an outcome is sufficient for release. Projects, epics, non-`done`
-transitions, and edits to already-`done` tasks are unaffected. Existing direct
-markdown history is grandfathered and needs no migration.
+Only `pass` checks can close a task. `block`, `review`, and `unverified` remain
+valid current decisions but keep it open; new `skip` state is rejected. Check
+IDs must exist in the Quality catalog when the catalog is mounted. Reopening a
+done task removes its old decision so the next close needs fresh evidence.
+Existing archived tasks without structured state are grandfathered.
+
+The persisted form is a compact JSON object in the existing frontmatter, not a
+sidecar or second store:
+
+```yaml
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"node --test ..."}]}
+```
+
+For work to which no Quality rule applies:
+
+```yaml
+quality: {"notApplicable":{"reason":"planning-only task"}}
+```
 
 The CLI can append canonical dated lines before calling the same `updateDoc`
 path:
 
 ```powershell
 node ai_studio/taskboard/cli.mjs set T0001 --status done --waiver-reason "superseded" --closure-evidence "E001 decision" --quality-not-applicable "planning-only" --json
-node ai_studio/taskboard/cli.mjs set T0001 --status done --quality "QCLR_001=pass; QTECH_001=review" --quality-evidence "tests and review" --json
+node ai_studio/taskboard/cli.mjs set T0001 --status done --quality "QCLR_001=pass; QTECH_001=pass" --quality-evidence "QCLR_001=browser review; QTECH_001=node --test" --json
 ```
 
 `--waiver-reason` pairs with `--closure-evidence`; `--quality` pairs with
-`--quality-evidence`; `--quality-not-applicable` is mutually exclusive with
-those quality options. Raw `--log` remains supported. Missing, malformed, or
-conflicting input fails before write/archive with a concise message and a
-machine-readable `problem` code/details in JSON CLI and HTTP API responses.
+`--quality-evidence`. Multiple checks require `Q...=evidence` entries so proof
+cannot leak across judgment groups. `--quality-not-applicable` is mutually
+exclusive with those options. The CLI also appends a dated log summary for
+history/profiling, but logs do not satisfy the transition gate. Missing,
+malformed, or conflicting input fails before write/archive with a concise
+machine-readable problem. When quality is missing, CLI JSON suggests coarse
+groups from task/project tags and ownership metadata; it never selects or
+waives a rule automatically.
 
 Smallest reliable validation by change type starts from the Quality rules:
 `ai_studio/quality/README.md`.
@@ -119,10 +135,11 @@ Task-routing read cost is a separate profiler-owned concern. Reproduce its
 privacy-safe all-store measurements at the Taskboard CLI boundary with:
 
 ```powershell
-node ai_studio/taskboard/cli.mjs profile --json --runs 7
+node ai_studio/taskboard/cli.mjs profile --json
 ```
 
-The report is metadata-only. It must not be used as a substitute for `show`
+The report emits one body-free context-size/count record per Taskboard store.
+It must not be used as a substitute for `show`
 when task details are explicitly needed.
 
 If validation is too slow, unavailable, or fails for an unrelated environment

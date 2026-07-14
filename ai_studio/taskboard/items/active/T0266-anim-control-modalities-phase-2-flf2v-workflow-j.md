@@ -26,3 +26,5 @@ LoRA training feasibility, and ToonCrafter versus FLF tradeoffs.
 ## Log
 - 2026-07-04: Lead ask: MEASURE LoRA training on this box + speedup ladder: draft profile (rank 16, 384px, fewer steps/images, ~30-60min?) vs final (rank 32, 512px, ~3h) - deliverable answers 'does a draft LoRA predict the final one' (identity-lock validation level, not per-frame: training has no shared-seed ladder like generation). Levers to bench: rank, resolution, steps, dataset size, latent caching.
 - 2026-07-06: Заморожен вместе с видео-программой (см. T0265 лог 2026-07-06 и docs/FREEZE_VIDEO_ANIM_2026-07-06.md): FLF/LoRA-исследование возобновлять только после выбора нового движка (fal.ai или новая локальная модель).
+- 2026-07-14: E018 supersedes the deleted freeze document as active routing;
+  use T0265 and `ai_studio/assets/canvas/contracts/animation.md`.

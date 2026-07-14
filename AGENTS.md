@@ -33,23 +33,21 @@ Enforcement labels and proof routes are defined in
 
 Reusable agent roles live in the active harness catalog. Codex custom agents
 live in `.codex/agents/*.toml`; Claude agents live in `.claude/agents/*.md`.
-Standing lead directive: non-trivial work in this checkout authorizes required
-subagent use. If higher-priority tool policy still prevents spawning without
-explicit user authorization, ask once per chat/session when delegation is first
-required and no valid approval is already present. Reuse that approval for this
-checkout unless the lead revokes it, scope leaves this repo, or the session
-changes. Do not do substantial inline work to bypass required delegation.
-Work that is non-trivial, context-heavy, architecture/research/debugging-heavy,
-or faster to describe as a bounded packet than to execute inline must be
-delegated to the closest existing role when subagent tooling is available. The
-lead agent may execute directly only for small local tasks where delegation would
-cost more than the work itself, such as moving a button, making a one-file wording
-tweak, running a simple command, or applying an obvious tiny fix. Before
-delegating, load the matching catalog and choose the closest existing role
-instead of inventing a new one. Create a new role only when the catalog has no
-fitting role. If delegation is required but subagent tooling is unavailable, stop
-and report that delegation is unavailable instead of silently doing the delegated
-work directly.
+Delegate only when an independent bounded packet materially reduces latency,
+context load, or review risk. Keep coherent local work, including related
+multi-file changes, with the lead when context transfer and reintegration would
+cost more than direct work.
+
+When delegating, use the closest existing role, a short
+Task / Scope / Return / Stop packet, and integrate and verify the result. Reuse
+an existing suitable agent instead of creating disposable roles. If host policy
+requires explicit approval, ask once per chat/session and reuse that approval
+while scope remains in this repository.
+
+Review budget follows risk: mechanical documentation, moves, and obvious edits
+need no independent reviewer; normal logic gets one; security, concurrency, and
+release work gets two independent reviewers. Repeat review only after a
+high-risk finding or contract change.
 
 ## Current Game
 

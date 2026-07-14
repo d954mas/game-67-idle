@@ -6,15 +6,18 @@ in the owning Canvas, Taskboard, asset, workspace, feature, and template tools:
 ```powershell
 node ai_studio/studio.mjs describe --json
 node ai_studio/studio.mjs verify --changed
+node ai_studio/studio.mjs verify --domain assets
 node ai_studio/studio.mjs verify --full
 ```
 
 `verify --changed` reads NUL-delimited Git porcelain and selects only shared
-Studio/feature/reference-template owner suites. It never discovers or executes
-`games/<id>`; the root `games/new_game.mjs` workflow is the exact exception.
-`verify --full` is the sequential Windows/Linux CI contract. Native audio is
-reported as a required blocked gate owned by T0393 until its template integration
-is committed; blocked/setup exits `2`, executed failures exit `1`, and passes exit `0`.
+owner domains. Unknown shared paths fail ownership instead of silently running
+everything. It never discovers or executes `games/<id>`; the root
+`games/new_game.mjs` workflow is the exact exception. `verify --domain <id>`
+runs one owner explicitly. `verify --full` runs all domains with concurrency
+two and includes native, web/package, and platform release proof. Checks inside
+one domain remain ordered. Blocked/setup exits `2`, executed failures exit `1`,
+and passes exit `0`.
 
 `ai_studio/` is the target home for reviewed AI game-studio pipeline modules.
 Do not use it as a dump: move a module here only after it has an owner, contract,
@@ -22,6 +25,9 @@ public surface, internals, and validation path.
 
 ## Current Shape
 
+- `config.mjs`: neutral loader for committed Studio defaults plus the ignored
+  local override; key, environment, default, and path interpretation stays in
+  the owning module.
 - `tree.json`: declarative source for the working architecture tree.
 - `studio_shell/`: one browser entry point, shared collapsible left navigation,
   theme, and unified local server for AI Studio surfaces.
@@ -33,8 +39,7 @@ public surface, internals, and validation path.
 - `runtime_automation/`: reviewed local DevAPI, capture, screenshot health, and
   UI readability proof helpers.
 - `core_harness/`: reviewed core routing and agent harness docs.
-- `core_harness/workflow/orchestration/`: reviewed early split rule for broad
-  read-heavy subagent work.
+- `core_harness/workflow/orchestration/`: reviewed bounded orchestration rule.
 - `core_harness/agent_surfaces/`: generated Codex/Claude compatibility surfaces.
 - `core_harness/profiling/`: passive profiling, Codex recovery, session status,
   and chat-session reflection ownership.
@@ -65,7 +70,7 @@ Load only the route that matches the current task:
   passive profiler runs.
 - Agent workflow, context policy, Markdown shape, or multi-agent use:
   `ai_studio/core_harness/workflow/README.md`.
-- Broad read-heavy work that should be split before loading too much context:
+- Independent bounded work where delegation reduces latency, context, or risk:
   `ai_studio/core_harness/workflow/orchestration/README.md`.
 - Core entrypoint/doc references:
   `node ai_studio/core_harness/validation/doc_reference_check.mjs`.
@@ -104,27 +109,20 @@ Detailed procedures belong in owned modules, docs, or skills, not here.
 
 ## Map Ownership
 
-`ai_studio/tree.json` is the architecture source. It is a small index that lists
-per-child parts under `ai_studio/architecture_map/tree/`; the parts merge back
-into one tree. The map page is a renderer: open it through the local server so it
-can fetch JSON data.
+`ai_studio/tree.json` is the single architecture source. It lists durable module
+owners and boundaries, not their implementation files or tests. The map page is
+a renderer: open it through the local server so it can fetch the same JSON data.
 
 ```powershell
 node ai_studio/architecture_map/validate_map.mjs
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File ai_studio/studio_shell/start_site_windows.ps1 -Restart -Open
 ```
 
-Open `http://127.0.0.1:8765/`. The map page reads the merged tree from
+Open `http://127.0.0.1:8765/`. The map page reads the tree from
 `/api/architecture-tree` and a live report from `/api/architecture-validation`;
 the report is generated on demand and is not committed. Scanning is validation
 only: new files or shallow workspace folders appear in the report until a human
 maps, ignores, moves, or deletes them.
-
-## Browser Surfaces
-
-Use `kind: "surface"` for user-facing browser entries. Use `kind: "module"` for
-domain ownership, data, APIs, and contracts. `studio_shell/` hosts surfaces; it
-does not own Architecture Map or Taskboard domain logic.
 
 ## Module Intake Rule
 

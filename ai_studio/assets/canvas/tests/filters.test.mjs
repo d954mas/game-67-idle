@@ -30,7 +30,7 @@ import {
   undoOp,
 } from "../ops.mjs";
 import { createCanvasApi } from "../api.mjs";
-import { canvasProjectsRoot } from "../../../core_harness/tool_lib/studio_config.mjs";
+import { canvasProjectsRoot } from "../config.mjs";
 import { decodePng, encodePng, solidPng } from "./png_fixture.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));

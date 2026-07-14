@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { dirname, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { listGameMounts } from "../workspace/games.mjs";
+import { describeStudio } from "../studio.mjs";
 import { loadArchitectureTree } from "./tree_loader.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -36,6 +37,17 @@ function normalizeMapPath(pathValue) {
   return toPosix(pathValue).replace(/^\/+/, "");
 }
 
+const coverageModes = new Set(["subtree", "direct-files", "self"]);
+const legacyNodeFields = new Set(["tags", "role", "color", "moduleId", "groupId", "item", "href"]);
+
+function invalidRepoLocator(value) {
+  if (typeof value !== "string" || !value.trim()) return true;
+  const locator = value.trim().replaceAll("\\", "/");
+  if (isAbsolute(value) || /^[a-zA-Z]:[\\/]/.test(value) || locator.startsWith("/")) return true;
+  const parts = locator.split("/");
+  return parts.some((part) => part === ".." || part === "." || !part);
+}
+
 function excludedByPrefix(rel, prefixes = []) {
   const posix = normalizeMapPath(rel);
   return prefixes.some((prefix) => posix === prefix || posix.startsWith(`${prefix}/`));
@@ -47,8 +59,11 @@ function privateMountScanExclusions(repoRoot) {
       .filter((mount) => mount.visibility !== "public")
       .map((mount) => normalizeMapPath(mount.root))
       .filter(Boolean);
-  } catch {
-    return [];
+  } catch (error) {
+    throw new Error(
+      "architecture map private mount discovery failed; validate ai_studio/workspace/catalog.local.json before architecture validation",
+      { cause: error },
+    );
   }
 }
 
@@ -152,22 +167,26 @@ function visitNodes(node, visitor, ancestry = []) {
 
 function collectMapEntries(map) {
   const entries = [];
+  const locators = [];
   const missingDescriptions = [];
   const invalidDescriptions = [];
+  const invalidNodes = [];
+  const seenIds = new Set();
+  const validDomains = new Set(describeStudio().verification.domains.map((domain) => domain.id));
   visitNodes(map.root, (node, ancestry) => {
     const pathValue = normalizeMapPath(node.path || "");
-    if (pathValue) {
+    const pathIsValid = !node.path || !invalidRepoLocator(node.path);
+    if (pathValue && pathIsValid) {
       entries.push({
         path: pathValue,
         id: node.id || "",
         title: node.title || pathValue.split("/").at(-1),
         kind: node.kind || "",
-        coverage: node.coverage || "children",
+        coverage: node.coverage || "subtree",
         ancestry: ancestry.map((item) => item.title || item.id || "").filter(Boolean),
       });
     }
-    const generatedOnly = Array.isArray(node.generatedChildren) && node.generatedChildren.length > 0;
-    if (!generatedOnly && node.id && node.id !== "studio" && !String(node.description || "").trim()) {
+    if (node.id && node.id !== "studio" && !String(node.description || "").trim()) {
       missingDescriptions.push({
         id: node.id,
         title: node.title || "",
@@ -183,12 +202,50 @@ function collectMapEntries(map) {
         violations: descriptionViolations,
       });
     }
+    const violations = [];
+    for (const field of ["id", "title", "kind", "owner", "description", "entry", "verifyDomain"]) {
+      if (typeof node[field] !== "string" || !node[field].trim()) violations.push(`missing-${field}`);
+    }
+    if (node.id) {
+      if (seenIds.has(node.id)) violations.push("duplicate-id");
+      seenIds.add(node.id);
+    }
+    if (!coverageModes.has(node.coverage || "subtree")) violations.push("invalid-coverage");
+    if (node.verifyDomain && !validDomains.has(node.verifyDomain)) violations.push("invalid-verify-domain");
+    for (const field of ["path", "entry", "contract", "store"]) {
+      if (Object.hasOwn(node, field) && invalidRepoLocator(node[field])) violations.push(`invalid-${field}`);
+    }
+    for (const field of ["entry", "contract", "store"]) {
+      if (Object.hasOwn(node, field) && !invalidRepoLocator(node[field])) {
+        locators.push({
+          id: node.id || "",
+          title: node.title || "",
+          field,
+          locator: normalizeMapPath(node[field]),
+        });
+      }
+    }
+    for (const field of legacyNodeFields) {
+      if (Object.hasOwn(node, field)) violations.push(`legacy-${field}`);
+    }
+    if (violations.length) {
+      invalidNodes.push({ id: node.id || "", path: pathValue, violations });
+    }
   });
-  return { entries, missingDescriptions, invalidDescriptions };
+  return { entries, locators, missingDescriptions, invalidDescriptions, invalidNodes };
 }
 
-function isCoveredByMappedDirectory(file, mappedDirectories) {
-  return mappedDirectories.some((dir) => file.startsWith(dir));
+function isCoveredByMappedDirectory(file, mappedDirectories, repoRoot) {
+  return mappedDirectories.some(({ prefix, coverage }) => {
+    if (!file.startsWith(prefix)) return false;
+    if (coverage === "subtree") return true;
+    if (coverage === "direct-files") {
+      if (file.slice(prefix.length).includes("/")) return false;
+      const absolute = repoPath(repoRoot, file);
+      return existsSync(absolute) && !statSync(absolute).isDirectory();
+    }
+    return false;
+  });
 }
 
 function createValidationReport(options = {}) {
@@ -197,7 +254,7 @@ function createValidationReport(options = {}) {
   const scanRoots = options.scanRoots || defaultScanRoots;
   const scanExclusions = options.excludedPrefixes || privateMountScanExclusions(repoRoot);
   const map = loadArchitectureTree(repoRoot, mapPath);
-  const { entries, missingDescriptions, invalidDescriptions } = collectMapEntries(map);
+  const { entries, locators, missingDescriptions, invalidDescriptions, invalidNodes } = collectMapEntries(map);
   const pathToEntries = new Map();
   for (const entry of entries) {
     if (!pathToEntries.has(entry.path)) pathToEntries.set(entry.path, []);
@@ -217,7 +274,10 @@ function createValidationReport(options = {}) {
     mappedExactPaths.add(entry.path);
     if (stat.isDirectory()) {
       if (entry.coverage !== "self") {
-        mappedDirectories.push(entry.path.endsWith("/") ? entry.path : `${entry.path}/`);
+        mappedDirectories.push({
+          prefix: entry.path.endsWith("/") ? entry.path : `${entry.path}/`,
+          coverage: entry.coverage,
+        });
       }
     }
   }
@@ -227,12 +287,13 @@ function createValidationReport(options = {}) {
     excludedPrefixes: scanExclusions,
     trackedPaths,
   });
-  const unmapped = scanned.filter((file) => !mappedExactPaths.has(file) && !isCoveredByMappedDirectory(file, mappedDirectories));
+  const unmapped = scanned.filter((file) => !mappedExactPaths.has(file) && !isCoveredByMappedDirectory(file, mappedDirectories, repoRoot));
   const unmappedInAiStudio = unmapped.filter((file) => file.startsWith("ai_studio/"));
   const unmappedOutsideAiStudio = unmapped.filter((file) => !file.startsWith("ai_studio/"));
   const duplicateMappings = [...pathToEntries.entries()]
     .filter(([, items]) => items.length > 1)
     .map(([path, items]) => ({ path, nodes: items.map((item) => ({ id: item.id, title: item.title })) }));
+  const missingLocators = locators.filter((item) => !existsSync(repoPath(repoRoot, item.locator)));
 
   return {
     schema: 1,
@@ -243,19 +304,23 @@ function createValidationReport(options = {}) {
       mappedPaths: entries.length,
       scannedPaths: scanned.length,
       missingInRepo: missingInRepo.length,
+      missingLocators: missingLocators.length,
       duplicateMappings: duplicateMappings.length,
       unmappedInAiStudio: unmappedInAiStudio.length,
       unmappedOutsideAiStudio: unmappedOutsideAiStudio.length,
       missingDescriptions: missingDescriptions.length,
       invalidDescriptions: invalidDescriptions.length,
+      invalidNodes: invalidNodes.length,
     },
     issues: {
       missingInRepo,
+      missingLocators,
       duplicateMappings,
       unmappedInAiStudio: unmappedInAiStudio.map((path) => ({ path })),
       unmappedOutsideAiStudio: unmappedOutsideAiStudio.map((path) => ({ path })),
       missingDescriptions,
       invalidDescriptions,
+      invalidNodes,
     },
     ...(options.includeHygiene ? {
       hygiene: {
@@ -302,17 +367,19 @@ function printUsage() {
 Writes ai_studio/architecture_map/validation-report.json.
 Default mode exits 0 so the site can show open architecture work.
 --hygiene adds a separate non-gating report of generated/untracked paths.
---strict exits non-zero when mapped paths are missing or duplicated, tracked paths are unmapped,
-or descriptions are missing or violate the architectural description policy.`);
+--strict exits non-zero when ownership paths or authored locators are missing, duplicated, unmapped,
+or violate the node, locator, coverage, verification-domain, or description contract.`);
 }
 
 function hasStrictFailures(report) {
   return report.summary.missingInRepo > 0
+    || report.summary.missingLocators > 0
     || report.summary.duplicateMappings > 0
     || report.summary.unmappedInAiStudio > 0
     || report.summary.unmappedOutsideAiStudio > 0
     || report.summary.missingDescriptions > 0
-    || report.summary.invalidDescriptions > 0;
+    || report.summary.invalidDescriptions > 0
+    || report.summary.invalidNodes > 0;
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -330,7 +397,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     });
     writeReport(report, repoRoot, options.reportPath || defaultReportPath);
     console.log(`wrote ${options.reportPath || defaultReportPath}`);
-    console.log(`mapped=${report.summary.mappedPaths} scanned=${report.summary.scannedPaths} unmapped_ai_studio=${report.summary.unmappedInAiStudio} unmapped_outside_ai_studio=${report.summary.unmappedOutsideAiStudio} missing=${report.summary.missingInRepo} duplicates=${report.summary.duplicateMappings} invalid_descriptions=${report.summary.invalidDescriptions}`);
+    console.log(`mapped=${report.summary.mappedPaths} scanned=${report.summary.scannedPaths} unmapped_ai_studio=${report.summary.unmappedInAiStudio} unmapped_outside_ai_studio=${report.summary.unmappedOutsideAiStudio} missing=${report.summary.missingInRepo} missing_locators=${report.summary.missingLocators} duplicates=${report.summary.duplicateMappings} invalid_descriptions=${report.summary.invalidDescriptions} invalid_nodes=${report.summary.invalidNodes}`);
     if (options.strict && hasStrictFailures(report)) process.exit(1);
   } catch (error) {
     console.error(error && error.message ? error.message : String(error));

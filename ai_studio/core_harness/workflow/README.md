@@ -21,11 +21,10 @@ logs, generated artifacts, and broad design only when task-linked or requested.
 
 1. Interpret the request into one working scope.
 2. Select or create a task only when durable tracking is useful.
-3. Before broad reading, decide what to delegate with `orchestration/README.md`.
-4. Read only files needed for the selected scope.
-5. Make the smallest coherent change.
-6. Run the narrowest validation that proves the change.
-7. Record evidence in the task log and final response when project state changes.
+3. Read only files needed for the selected scope.
+4. Make the smallest coherent change.
+5. Run the narrowest validation that proves the change.
+6. Record evidence in the task log and final response when project state changes.
 
 ## Quality Feedback
 
@@ -94,9 +93,10 @@ Delegation entries should show the worker task and the integrated outcome:
 
 ## Delegation
 
-Delegate non-trivial work early. Stay single-agent only for quick edits, narrow
-questions, or tightly coupled changes where splitting would add more overhead
-than it saves.
+Keep coherent work with the lead. Use orchestration only for an independent
+bounded packet whose latency, context, or review benefit exceeds packet writing,
+context transfer, and reintegration cost. Detailed packet, review-budget,
+approval, reuse, and waiting rules live in `orchestration/README.md`.
 
 ## Files
 

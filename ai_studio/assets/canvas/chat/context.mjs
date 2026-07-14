@@ -8,7 +8,7 @@
 //   1. buildChatContext() — a PURE, READ-ONLY digest over ops.getProject + ops.listHistory:
 //      the bounded "what is selected right now" snapshot that rides on the FIRST turn of a
 //      codex conversation (chat/agent.mjs embeds it in the prompt). Never the full project
-//      JSON — see tmp/design_T0242_chat_panel_2026-07-03.md section 2 for why (selection
+//      JSON — see contracts/chat.md (selection
 //      summary + counts + head in the prompt; full project one CLI `show` call away).
 //   2. The chat/ transcript store: <project>/chat/transcript.jsonl (append-only, one line
 //      per turn — PANEL DISPLAY ONLY per design R3, the model's actual memory is the codex

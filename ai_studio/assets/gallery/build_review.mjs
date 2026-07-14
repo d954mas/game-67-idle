@@ -306,7 +306,7 @@ async function main(argv = process.argv.slice(2)) {
   await cp(join(HERE, "viewer.css"), join(outDir, "viewer.css"));
   // shared studio HDR: model-viewer's environment-image, same source the PNG
   // thumbnails are baked with, so preview and live 3D share one light.
-  const hdr = join(HERE, "..", "storage", "previews", "studio_env.hdr");
+  const hdr = join(HERE, "..", "previews", "studio_env.hdr");
   if (existsSync(hdr)) await cp(hdr, join(outDir, "studio_env.hdr"));
   const indexPath = join(outDir, "index.html");
   await writeFile(indexPath, renderHtml({ mode: a.mode, title, cards, packs }), "utf8");

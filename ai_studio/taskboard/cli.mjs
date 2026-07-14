@@ -9,7 +9,7 @@
 //   node ai_studio/taskboard/cli.mjs new task --title "..." [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
 //   node ai_studio/taskboard/cli.mjs set T0001 --status doing [--project P001] [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node ai_studio/taskboard/cli.mjs context [--json] [--tasks-limit 5]
-//   node ai_studio/taskboard/cli.mjs profile [--json] [--runs 5]
+//   node ai_studio/taskboard/cli.mjs profile [--json]
 //   node ai_studio/taskboard/cli.mjs validate [--json]
 //   node ai_studio/taskboard/cli.mjs help
 //
@@ -20,7 +20,7 @@ import {
   findRoot, listTasks, listEpics, listProjects, findDoc, createTask, createEpic, createProject,
   updateDoc, validateStoreDetailed,
 } from "./lib.mjs";
-import { ACTIVE_TASK_STATUSES, canonicalQualityAssignments, idNumber, priorityRank, TASK_STATUSES, taskRank } from "./store.mjs";
+import { ACTIVE_TASK_STATUSES, canonicalQualityAssignments, idNumber, parseQualityAssignments, priorityRank, TASK_STATUSES, taskRank } from "./store.mjs";
 import {
   agentContextPayloadForStores,
   findTaskboardDoc,
@@ -32,7 +32,7 @@ import {
 } from "./stores.mjs";
 import { relative } from "node:path";
 import { fail } from "../core_harness/tool_lib/cli.mjs";
-import { profileTaskboardReads } from "../core_harness/profiling/taskboard_reads.mjs";
+import { profileTaskboardReads } from "./profile.mjs";
 
 const root = findRoot();
 const [cmd, ...rest] = process.argv.slice(2);
@@ -44,7 +44,7 @@ Commands:
   summary [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 5]
   context [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 5]
   show <P###|E###|T####|store:id> [--json] [--store studio|game:<id>] [--game <id>] [--include-private]
-  profile [--json] [--runs 5]
+  profile [--json]
   new project --title "..." [--store studio|game:<id>] [--game <id>] [--kind ai-studio|game|template|tooling|research|other] [--target path] [--tags a,b]
   new epic --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--status active] [--tags a,b]
   new task --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
@@ -109,6 +109,36 @@ function failProblem(args, code, message, details = {}) {
 
 function textOption(value) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
+}
+
+function suggestedQualityGroups(root, doc, patchFields = {}, options = {}) {
+  const fields = { ...doc.fields, ...patchFields };
+  const project = fields.project ? findDoc(root, fields.project, options) : null;
+  const terms = [fields.target, fields.kind, ...(fields.tags || []), project?.fields.kind, project?.fields.target, ...(project?.fields.tags || [])]
+    .join(" ").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  const has = (...values) => values.some((value) => terms.includes(value));
+  const groups = [];
+  const add = (...values) => values.forEach((value) => { if (!groups.includes(value)) groups.push(value); });
+  if (has("art", "visual", "illustration")) add("QART", "QASSET");
+  if (has("asset", "assets", "pipeline")) add("QASSET", "QTECH");
+  if (has("gdd", "design", "gameplay")) add("QGDD", "QDES");
+  if (has("ui", "hud", "player", "clarity")) add("QTECH", "QCLR");
+  return groups.length ? groups : ["QTECH"];
+}
+
+function structuredQualityChecks(canonicalQuality, evidence) {
+  const assignments = parseQualityAssignments(canonicalQuality);
+  if (!assignments) return null;
+  if (assignments.length === 1) {
+    return assignments.map(({ ruleId: id, outcome }) => ({ id, outcome, evidence }));
+  }
+  const evidenceEntries = String(evidence).split(";").map((entry) => {
+    const separator = entry.indexOf("=");
+    return separator > 0 ? [entry.slice(0, separator).trim(), entry.slice(separator + 1).trim()] : ["", ""];
+  });
+  const evidenceById = new Map(evidenceEntries);
+  if (evidenceEntries.length !== evidenceById.size || evidenceById.size !== assignments.length || assignments.some(({ ruleId }) => !evidenceById.get(ruleId))) return null;
+  return assignments.map(({ ruleId: id, outcome }) => ({ id, outcome, evidence: evidenceById.get(id) }));
 }
 
 function printUsage() {
@@ -297,14 +327,14 @@ switch (cmd) {
     break;
   }
   case "profile": {
-    const payload = profileTaskboardReads(root, { runs: numberArg(args.runs, 5) });
+    const payload = profileTaskboardReads(root);
     if (args.json) {
       writeJson(payload);
       break;
     }
-    console.log(`# Taskboard Read Profile (${payload.runs} runs)`);
+    console.log("# Taskboard Context Profile");
     for (const record of payload.records) {
-      console.log(`${record.storeId} ${record.operation}: ${record.bytes} bytes, ${record.durationMs} ms, results=${record.resultCount}, truncated=${record.truncated}`);
+      console.log(`${record.storeId}: ${record.contextBytes} bytes, returned=${record.returnedCount}/${record.totalCount}, truncated=${record.truncated}`);
     }
     break;
   }
@@ -410,11 +440,29 @@ switch (cmd) {
     }
     const canonicalQuality = quality ? canonicalQualityAssignments(quality) : "";
     if (quality && !canonicalQuality) {
-      failProblem(args, "quality_input_invalid", "--quality must contain semicolon-separated Q...=pass|block|review|skip|unverified assignments");
+      let suggestedGroups = ["QTECH"];
+      try {
+        const resolved = findTaskboardDoc(root, id, storeQueryArgs(args));
+        if (resolved) suggestedGroups = suggestedQualityGroups(root, resolved.doc, fields, storeOptions(resolved.store));
+      } catch {
+        // Keep the default suggestion; normal resolution reports the authoritative error later.
+      }
+      failProblem(
+        args,
+        "quality_input_invalid",
+        "--quality must contain unique semicolon-separated Q...=pass|block|review|unverified assignments; use --quality-not-applicable with a reason instead of skip",
+        { suggestedGroups },
+      );
+    }
+    const qualityChecks = canonicalQuality ? structuredQualityChecks(canonicalQuality, qualityEvidence) : null;
+    if (canonicalQuality && !qualityChecks) {
+      failProblem(args, "quality_input_invalid", "multiple Quality checks require per-check evidence: QTECH_001=proof; QCLR_001=review", {});
     }
     if (qualityNotApplicablePresent && !qualityNotApplicable) {
       failProblem(args, "quality_input_invalid", "--quality-not-applicable requires a non-empty reason");
     }
+    if (qualityChecks) fields.quality = { checks: qualityChecks };
+    if (qualityNotApplicable) fields.quality = { notApplicable: { reason: qualityNotApplicable } };
     const patch = { fields };
     let resolvedForLog = null;
     const logEntries = [];
@@ -434,8 +482,10 @@ switch (cmd) {
       patch.body = `${doc.body.replace(/\s+$/, "")}\n${logEntries.map((entry) => `- ${stamp}: ${entry}`).join("\n")}\n`;
     }
     if (!Object.keys(fields).length && !patch.body) fail("nothing to set");
+    let resolvedForUpdate = null;
     try {
       const resolved = resolvedForLog || findTaskboardDoc(root, id, storeQueryArgs(args));
+      resolvedForUpdate = resolved;
       if (!resolved) fail(`no doc with id ${id}`);
       const doc = updateDoc(root, resolved.id, patch, storeOptions(resolved.store));
       if (args.json) {
@@ -444,6 +494,12 @@ switch (cmd) {
         console.log(`updated ${id}: ${shortRow(doc, resolved.store)}`);
       }
     } catch (err) {
+      if (err.problem?.code === "task_quality_decision_required" && resolvedForUpdate?.doc) {
+        err.problem.details = {
+          ...err.problem.details,
+          suggestedGroups: suggestedQualityGroups(root, resolvedForUpdate.doc, fields, storeOptions(resolvedForUpdate.store)),
+        };
+      }
       if (args.json) {
         writeJson({ ok: false, problem: err.problem || { code: "taskboard_error", message: err.message } });
         process.exit(1);

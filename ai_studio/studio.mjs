@@ -7,61 +7,23 @@ import { spawn, spawnSync } from "node:child_process";
 
 const ROOT = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const slash = (value) => String(value || "").replaceAll("\\", "/");
+const NODE_TEST_CONCURRENCY = 4;
+const DOMAIN_CONCURRENCY = 2;
 const PYTHON_RUN = ["node", "ai_studio/dev_environment/python_run.mjs"];
-const pythonCommands = (files) => files.map((file) => [...PYTHON_RUN, file]);
+const pythonCommands = (files, options = {}) => {
+  if (!options.batchUnittest) return files.map((file) => [...PYTHON_RUN, file]);
+  const direct = files.filter((file) => file.endsWith(".test.py"));
+  const batch = files.filter((file) => !file.endsWith(".test.py"));
+  return [
+    ...(batch.length ? [[...PYTHON_RUN, "-m", "unittest", ...batch]] : []),
+    ...direct.map((file) => [...PYTHON_RUN, file]),
+  ];
+};
 
-const CANVAS_PYTHON_TESTS = ["ai_studio/assets/canvas/tools/ck_pixel_ops_test.py"];
-const ASSET_PYTHON_TESTS = [
-  "ai_studio/assets/tools/crop/plan_prepared_crops_from_intake_test.py",
-  "ai_studio/assets/tools/image/alpha_dualplate/dual_plate_alpha_test.py",
-  "ai_studio/assets/tools/image/alpha_dualplate/dual_plate_pair_gate_test.py",
-  "ai_studio/assets/tools/image/alpha_dualplate/pair_align_test.py",
-  "ai_studio/assets/tools/image/alpha_matte/chroma_key_alpha_test.py",
-  "ai_studio/assets/tools/image/alpha_matte/key_matte_test.py",
-  "ai_studio/assets/tools/image/bg_fix/normalize_background_test.py",
-  "ai_studio/assets/tools/image/birefnet_cutout/birefnet_cutout_test.py",
-  "ai_studio/assets/tools/image/denoise/denoise_test.py",
-  "ai_studio/assets/tools/image/quantize/quantize_test.py",
-  "ai_studio/assets/tools/image/regions/detect_regions_test.py",
-  "ai_studio/assets/tools/image/route/route_cutout_test.py",
-  "ai_studio/assets/tools/image/slice/slice_regions_test.py",
-  "ai_studio/assets/tools/image/vitmatte_matte/matte_math_test.py",
-  "ai_studio/assets/tools/lib/atomic_io_test.py",
-  "ai_studio/assets/tools/lib/color_test.py",
-  "ai_studio/assets/tools/review_atlas/atlas_review_labels_test.py",
-  "ai_studio/assets/tools/review_atlas/audit_review_atlas_test.py",
-  "ai_studio/assets/tools/review_atlas/build_review_atlas_test.py",
-  "ai_studio/assets/tools/source_sheets/tests/audit_intake.test.py",
-  "ai_studio/assets/tools/source_sheets/tests/normalize_chroma.test.py",
-  "ai_studio/assets/tools/textures/tests/audit_tileable_texture.test.py",
-  "ai_studio/assets/tools/video/sheet/pack_sheet_test.py",
-];
-const RUNTIME_PYTHON_TESTS = [
-  "ai_studio/runtime_automation/devapi_client_test.py",
-  "ai_studio/runtime_automation/iterate_test.py",
-  "ai_studio/runtime_automation/png_io_test.py",
-  "ai_studio/runtime_automation/state_capture_test.py",
-];
-const RUNTIME_PYTHON_COMMANDS = pythonCommands(RUNTIME_PYTHON_TESTS);
 const RUNTIME_LINUX_ITERATE = [
   "xvfb-run", "-a", "node", "ai_studio/dev_environment/python_run.mjs",
   "ai_studio/runtime_automation/iterate.py", "--no-capture", "--json",
 ];
-const GAME_STATE_PYTHON_TESTS = [
-  "features/game-state/scripts/generate_state_test.py",
-  "features/game-state/scripts/state_modules_test.py",
-  "features/game-state/benchmarks/benchmark_codegen_test.py",
-];
-const ITEMS_PYTHON_TESTS = [
-  "features/items-core/scripts/items_ops_test.py",
-  "features/items-core/scripts/generate_items_api_proof_test.py",
-];
-const PROGRESSION_PYTHON_TESTS = ["features/progression-core/scripts/generate_progression_tracks_test.py"];
-const TEMPLATE_PYTHON_TESTS = [
-  "templates/template/devapi/responsive_viewports_test.py",
-  "templates/template/devapi/smoke_bot_test.py",
-];
-const SKILL_PYTHON_TESTS = [".codex/skills/nt-asset-image-generation/scripts/test_expand_jobs.py"];
 
 const ROUTES = Object.freeze({
   game: {
@@ -138,17 +100,21 @@ const NATIVE_TEST_FILES = Object.freeze([
   "templates/template/tests/test_template_composition.c",
 ]);
 
-const SUITES = Object.freeze([
+const CHECKS = Object.freeze([
   { id: "studio.facade", testFiles: ["ai_studio/studio.test.mjs", "ai_studio/studio_ci.test.mjs"] },
-  { id: "reference-template.native", commands: NATIVE_COMMANDS, nativeFiles: NATIVE_TEST_FILES },
-  { id: "reference-template.web", commands: WEB_COMMANDS, requiresEmsdk: true },
-  { id: "studio.architecture-map", testRoots: ["ai_studio/architecture_map"] },
+  { id: "studio.config", testFiles: ["ai_studio/config.test.mjs"] },
+  { id: "reference-template.native", commands: NATIVE_COMMANDS, nativeFiles: NATIVE_TEST_FILES, releaseOnly: true },
+  { id: "reference-template.web", commands: WEB_COMMANDS, requiresEmsdk: true, releaseOnly: true },
+  {
+    id: "studio.architecture-map",
+    testRoots: ["ai_studio/architecture_map"],
+    commands: [["node", "ai_studio/architecture_map/validate_map.mjs", "--strict", "--report", "tmp/studio-verify-map-report.json"]],
+  },
   { id: "studio.assets.canvas", testRoots: ["ai_studio/assets/canvas"] },
-  { id: "studio.assets.canvas-python", pythonFiles: CANVAS_PYTHON_TESTS, commands: pythonCommands(CANVAS_PYTHON_TESTS) },
+  { id: "studio.assets.canvas-python", pythonRoots: ["ai_studio/assets/canvas/tools"] },
   {
     id: "studio.assets",
     testRoots: [
-      "ai_studio/assets/backlog",
       "ai_studio/assets/catalog",
       "ai_studio/assets/gallery",
       "ai_studio/assets/intake",
@@ -161,31 +127,47 @@ const SUITES = Object.freeze([
       "ai_studio/assets/tools",
     ],
   },
-  { id: "studio.assets.python", pythonFiles: ASSET_PYTHON_TESTS, commands: pythonCommands(ASSET_PYTHON_TESTS) },
-  { id: "studio.core-harness", testRoots: ["ai_studio/core_harness"] },
-  { id: "studio.skills.python", pythonFiles: SKILL_PYTHON_TESTS, commands: pythonCommands(SKILL_PYTHON_TESTS) },
+  { id: "studio.assets.python", pythonRoots: ["ai_studio/assets/tools"], batchPythonUnittest: true },
+  {
+    id: "studio.core-harness",
+    testRoots: ["ai_studio/core_harness"],
+    commands: [
+      ["node", "ai_studio/core_harness/validation/doc_reference_check.mjs"],
+      ["node", "ai_studio/core_harness/validation/enforcement_check.mjs"],
+      ["node", "ai_studio/core_harness/agent_surfaces/sync.mjs", "--check"],
+    ],
+  },
+  { id: "studio.skills.python", pythonRoots: [".codex/skills"] },
   { id: "studio.dev-environment", testRoots: ["ai_studio/dev_environment"] },
-  { id: "studio.game-design", commands: [["node", "ai_studio/core_harness/validation/doc_reference_check.mjs"]] },
   { id: "studio.quality", testRoots: ["ai_studio/quality"] },
   {
     id: "studio.runtime-automation",
-    pythonFiles: RUNTIME_PYTHON_TESTS,
-    commandsByPlatform: {
-      win32: RUNTIME_PYTHON_COMMANDS,
-      linux: [...RUNTIME_PYTHON_COMMANDS, RUNTIME_LINUX_ITERATE],
-      darwin: RUNTIME_PYTHON_COMMANDS,
-    },
+    pythonRoots: ["ai_studio/runtime_automation"],
+  },
+  {
+    id: "studio.runtime-automation.live",
+    commandsByPlatform: { linux: [RUNTIME_LINUX_ITERATE] },
+    releaseOnly: true,
   },
   { id: "studio.shell", testRoots: ["ai_studio/studio_shell"] },
-  { id: "studio.taskboard", testRoots: ["ai_studio/taskboard"] },
+  {
+    id: "studio.taskboard",
+    testRoots: ["ai_studio/taskboard"],
+    commands: [["node", "ai_studio/taskboard/cli.mjs", "validate", "--json"]],
+  },
   { id: "studio.workspace", testRoots: ["ai_studio/workspace"] },
   { id: "workspace.game-create", testFiles: ["games/new_game.test.mjs"] },
   { id: "features.contracts", testFiles: ["features/validate_contracts.test.mjs"], commands: [["node", "features/validate_contracts.mjs"]] },
   { id: "features.audio.web", testFiles: ["features/audio-core/tests/test_audio_web_library.mjs"] },
+  {
+    id: "features.audio.linux",
+    commandsByPlatform: { linux: [["bash", "features/audio-core/tests/run_linux.sh"]] },
+    releaseOnly: true,
+  },
   { id: "features.platform-sdk", testFiles: ["features/platform-sdk/tests/platform_sdk.test.mjs"] },
-  { id: "features.game-state", pythonFiles: GAME_STATE_PYTHON_TESTS, commands: pythonCommands(GAME_STATE_PYTHON_TESTS) },
-  { id: "features.items-core", pythonFiles: ITEMS_PYTHON_TESTS, commands: pythonCommands(ITEMS_PYTHON_TESTS) },
-  { id: "features.progression-core", pythonFiles: PROGRESSION_PYTHON_TESTS, commands: pythonCommands(PROGRESSION_PYTHON_TESTS) },
+  { id: "features.game-state", pythonRoots: ["features/game-state"] },
+  { id: "features.items-core", pythonRoots: ["features/items-core"] },
+  { id: "features.progression-core", pythonRoots: ["features/progression-core"] },
   { id: "reference-template", testFiles: [
     "templates/new_template.test.mjs",
     "templates/template/tools/build_web.test.mjs",
@@ -193,37 +175,29 @@ const SUITES = Object.freeze([
     "templates/template/tools/package_web.test.mjs",
     "templates/template/tools/portal_evidence.test.mjs",
   ] },
-  { id: "reference-template.python", pythonFiles: TEMPLATE_PYTHON_TESTS, commands: pythonCommands(TEMPLATE_PYTHON_TESTS) },
-  { id: "studio.validation", commands: [
-    ["node", "ai_studio/taskboard/cli.mjs", "validate", "--json"],
-    ["node", "ai_studio/architecture_map/validate_map.mjs", "--strict", "--report", "tmp/studio-verify-map-report.json"],
-    ["node", "ai_studio/core_harness/validation/doc_reference_check.mjs"],
-    ["node", "ai_studio/core_harness/validation/enforcement_check.mjs"],
-    ["node", "ai_studio/core_harness/agent_surfaces/sync.mjs", "--check"],
-  ] },
-  {
-    id: "audio.native",
-    commandsByPlatform: {
-      win32: [
-        ["cmake", "--build", "templates/template/build/native-debug", "--target", "test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio"],
-        ["ctest", "--test-dir", "templates/template/build/native-debug", "-R", "^(test_audio_core|test_audio_resource|test_audio_backend_native|test_game_audio|test_audio_web_library)$", "--output-on-failure"],
-      ],
-      linux: [["bash", "features/audio-core/tests/run_linux.sh"]],
-    },
-  },
+  { id: "reference-template.python", pythonRoots: ["templates/template/devapi"] },
 ]);
 
-const FULL_IDS = SUITES.map((suite) => suite.id);
+const DOMAINS = Object.freeze([
+  { id: "harness", checks: ["studio.facade", "studio.config", "studio.core-harness", "studio.skills.python", "studio.dev-environment", "studio.quality"] },
+  { id: "workspace", checks: ["studio.workspace", "workspace.game-create"] },
+  { id: "architecture", checks: ["studio.architecture-map"] },
+  { id: "shell", checks: ["studio.shell"] },
+  { id: "assets", checks: ["studio.assets.canvas", "studio.assets.canvas-python", "studio.assets", "studio.assets.python"] },
+  { id: "work-management", checks: ["studio.taskboard"] },
+  { id: "design", checks: [] },
+  { id: "runtime", checks: ["studio.runtime-automation", "studio.runtime-automation.live"] },
+  { id: "features", checks: ["features.contracts", "features.audio.web", "features.audio.linux", "features.platform-sdk", "features.game-state", "features.items-core", "features.progression-core"] },
+  { id: "template-release", checks: ["reference-template", "reference-template.python", "reference-template.native", "reference-template.web"] },
+]);
 
-function publicSuite(suite) {
+const FULL_IDS = DOMAINS.map((domain) => domain.id);
+
+function publicDomain(domain) {
   return {
-    id: suite.id,
-    availability: suite.availability || "available",
-    commandPlan: suite.commandsByPlatform
-      ? { windows: suite.commandsByPlatform.win32, linux: suite.commandsByPlatform.linux }
-      : (suite.commands || []),
-    ...(suite.owner ? { owner: suite.owner } : {}),
-    ...(suite.reason ? { reason: suite.reason } : {}),
+    id: domain.id,
+    checks: domain.checks.length,
+    releaseProof: domain.checks.some((id) => CHECKS.find((check) => check.id === id)?.releaseOnly),
   };
 }
 
@@ -233,11 +207,13 @@ export function describeStudio() {
     exitSemantics: { pass: 0, failed: 1, blockedOrSetup: 2 },
     routes: ROUTES,
     verification: {
-      execution: "sequential",
+      execution: "owner-domains",
+      domainConcurrency: DOMAIN_CONCURRENCY,
+      nodeTestConcurrency: NODE_TEST_CONCURRENCY,
       changedSource: "git status --porcelain=v1 -z --untracked-files=all",
       gamePolicy: "games/<id> paths are never executed; games/new_game.* is the exact root exception",
-      testInventory: "every tracked deterministic Studio/feature/reference-template test must be assigned to one or more owner suites",
-      suites: SUITES.map(publicSuite),
+      testInventory: "deterministic tests belong to one owner domain; internal checks are not public routing categories",
+      domains: DOMAINS.map(publicDomain),
     },
   };
 }
@@ -260,112 +236,78 @@ export function parsePorcelainZ(raw) {
 }
 
 function isGameOwned(path) {
-  return /^games\/[^/]+(?:\/|$)/.test(path);
+  return /^games\/[^/]+\//.test(path);
 }
 
-function isDocumentationPath(path) {
-  const name = path.split("/").at(-1) || "";
-  return /\.(?:md|rst|adoc)$/i.test(name) || /^(?:README|INSTALL|CHANGELOG|LICENSE|NOTICE)$/i.test(name);
+function domainForPath(path) {
+  if (["games/new_game.mjs", "games/new_game.test.mjs", "games/README.md"].includes(path)) return "workspace";
+  if (isGameOwned(path)) return null;
+  if (path === "ai_studio/tree.json" || path.startsWith("ai_studio/architecture_map/")) return "architecture";
+  if (path.startsWith("ai_studio/assets/")) return "assets";
+  if (path.startsWith("ai_studio/game_design/")) return "design";
+  if (path.startsWith("ai_studio/runtime_automation/")) return "runtime";
+  if (path.startsWith("ai_studio/studio_shell/")) return "shell";
+  if (path.startsWith("ai_studio/taskboard/")) return "work-management";
+  if (path.startsWith("ai_studio/workspace/")) return "workspace";
+  if (path.startsWith("features/")) return "features";
+  if (path.startsWith("templates/")) return "template-release";
+  if (
+    path === ".github/workflows/studio-verify.yml"
+    || path.startsWith(".vscode/")
+    || /^ai_studio\/studio(?:_ci|\.test)?\.mjs$/.test(path)
+    || /^ai_studio\/config(?:\.test)?\.mjs$/.test(path)
+    || /^ai_studio\/studio\.config(?:\.local)?\.json$/.test(path)
+    || path.startsWith("ai_studio/core_harness/")
+    || path.startsWith("ai_studio/dev_environment/")
+    || path.startsWith("ai_studio/python/")
+    || path.startsWith("ai_studio/quality/")
+    || path.startsWith(".codex/")
+    || path.startsWith(".claude/")
+    || ["AGENTS.md", "CLAUDE.md", "README.md", "ai_studio/README.md"].includes(path)
+  ) return "harness";
+  throw new Error(`unowned shared path: ${path}`);
 }
 
-function suitesForPath(path) {
-  const ids = new Set();
-  const add = (...values) => values.forEach((value) => ids.add(value));
-  if (["games/new_game.mjs", "games/new_game.test.mjs", "games/README.md"].includes(path)) add("workspace.game-create");
-  else if (isGameOwned(path)) return [];
-  else if (path === ".github/workflows/studio-verify.yml" || /^ai_studio\/studio(?:_ci|\.test)?\.mjs$/.test(path)) add("studio.facade");
-  else if (path === "ai_studio/tree.json" || path.startsWith("ai_studio/architecture_map/")) add("studio.architecture-map");
-  else if (path.startsWith("ai_studio/assets/canvas/")) {
-    add("studio.assets.canvas");
-    if (path.endsWith(".py")) add("studio.assets.canvas-python");
-  } else if (path.startsWith("ai_studio/assets/")) {
-    add("studio.assets");
-    if (path.endsWith(".py")) add("studio.assets.python");
-  } else if (path.startsWith(".codex/skills/")) {
-    if (path.endsWith(".py")) add("studio.skills.python");
-    else add("studio.core-harness");
-  } else if (path.startsWith("ai_studio/core_harness/") || path.startsWith(".codex/") || path.startsWith(".claude/")) add("studio.core-harness");
-  else if (path.startsWith("ai_studio/dev_environment/") || path.startsWith("ai_studio/python/")) add("studio.dev-environment");
-  else if (path.startsWith("ai_studio/game_design/")) add("studio.game-design");
-  else if (path.startsWith("ai_studio/quality/")) add("studio.quality");
-  else if (path.startsWith("ai_studio/runtime_automation/")) add("studio.runtime-automation");
-  else if (path.startsWith("ai_studio/studio_shell/")) add("studio.shell");
-  else if (path.startsWith("ai_studio/taskboard/")) add("studio.taskboard");
-  else if (path.startsWith("ai_studio/workspace/")) add("studio.workspace");
-  else if (path.startsWith("features/")) {
-    add("features.contracts");
-    const rel = path.split("/").slice(2).join("/");
-    const featureDoc = isDocumentationPath(path);
-    const nativeRuntime = !featureDoc && (/^(?:src|include|vendor|tests|scripts)\//.test(rel) || rel === "feature.json");
-    if (path.startsWith("features/audio-core/")) {
-      add("features.audio.web");
-      if (nativeRuntime && !rel.startsWith("web/")) add("reference-template.native", "audio.native");
-      if (!featureDoc && /^(?:web\/|src\/audio_backend_web\.c|feature\.json)/.test(rel)) add("reference-template.web");
-    } else if (path.startsWith("features/platform-sdk/")) {
-      add("features.platform-sdk");
-      if (nativeRuntime && !rel.startsWith("web/")) add("reference-template.native");
-      if (!featureDoc && /^(?:web\/|publish-targets\/|scripts\/artifact_tools\.mjs|feature\.json)/.test(rel)) add("reference-template.web");
-    } else if (path.startsWith("features/game-state/")) {
-      add("features.game-state");
-      if (nativeRuntime) add("reference-template.native", "reference-template.web");
-    } else if (path.startsWith("features/items-core/")) {
-      add("features.items-core");
-      if (nativeRuntime) add("reference-template.native", "reference-template.web");
-    } else if (path.startsWith("features/progression-core/")) {
-      add("features.progression-core");
-      if (nativeRuntime) add("reference-template.native", "reference-template.web");
-    } else if (path.startsWith("features/game-events/") && nativeRuntime) add("reference-template.native", "reference-template.web");
-  } else if (path.startsWith("templates/template/")) {
-    add("reference-template");
-    if (path === "templates/template/game-dependencies.json") add("features.contracts");
-    if (!isDocumentationPath(path)) {
-      if (/^templates\/template\/(?:CMakeLists\.txt|cmake\/|src\/|assets\/|state\/|content\/|tests\/test_.*\.c$)/.test(path)) add("reference-template.native");
-      if (/^templates\/template\/(?:CMakeLists\.txt|cmake\/|web\/|src\/|assets\/|state\/|content\/|tools\/(?:build_web|game|package_web|lib\/zip_store))/.test(path)) add("reference-template.web");
-      if (path.startsWith("templates/template/devapi/") || TEMPLATE_PYTHON_TESTS.includes(path)) add("reference-template.python");
-    }
-  } else if (path.startsWith("templates/")) add("reference-template");
-  else if (["AGENTS.md", "CLAUDE.md", "README.md", "ai_studio/README.md"].includes(path)) add("studio.validation");
-  else return ["full"];
-
-  if (ids.size && ![...ids].every((id) => id === "workspace.game-create")) ids.add("studio.validation");
-  return SUITES.map((suite) => suite.id).filter((id) => ids.has(id));
-}
-
-export function selectChangedSuites(paths) {
-  const selected = [];
+export function selectChangedDomains(paths) {
+  const selected = new Set();
   for (const raw of paths || []) {
-    for (const id of suitesForPath(slash(raw).replace(/^\.\//, ""))) {
-      if (id === "full") return ["full"];
-      if (!selected.includes(id)) selected.push(id);
-    }
+    const id = domainForPath(slash(raw).replace(/^\.\//, ""));
+    if (id) selected.add(id);
   }
-  return selected;
+  return FULL_IDS.filter((id) => selected.has(id));
 }
 
-function walkTests(root, relRoot) {
+const DISCOVERY_IGNORES = new Set([
+  ".git", ".mypy_cache", ".pytest_cache", ".ruff_cache", ".venv",
+  "venv", "node_modules", "__pycache__", "build", "tmp",
+]);
+
+function walkMatchingFiles(root, relRoot, matches) {
   const absolute = resolve(root, relRoot);
   if (!existsSync(absolute)) return [];
-  if (statSync(absolute).isFile()) return [slash(relRoot)];
+  if (statSync(absolute).isFile()) return matches(absolute.split(/[\\/]/).at(-1)) ? [slash(relRoot)] : [];
   const out = [];
   for (const name of readdirSync(absolute).sort()) {
+    if (DISCOVERY_IGNORES.has(name)) continue;
     const rel = slash(`${relRoot}/${name}`);
     const path = resolve(root, rel);
-    if (statSync(path).isDirectory()) out.push(...walkTests(root, rel));
-    else if (name.endsWith(".test.mjs")) out.push(rel);
+    if (statSync(path).isDirectory()) out.push(...walkMatchingFiles(root, rel, matches));
+    else if (matches(name)) out.push(rel);
   }
   return out;
 }
 
-function suiteCommands(root, suite) {
-  const tests = [
-    ...(suite.testFiles || []),
-    ...(suite.testRoots || []).flatMap((path) => walkTests(root, path)),
-  ];
-  const uniqueTests = [...new Set(tests)].filter((path) => existsSync(resolve(root, path)));
-  const commands = [];
-  if (uniqueTests.length) commands.push([process.execPath, "--test", "--test-concurrency=1", ...uniqueTests]);
-  commands.push(...(suite.commandsByPlatform?.[process.platform] || suite.commands || []));
-  return commands;
+function nodeTestsForCheck(root, check) {
+  return [
+    ...(check.testFiles || []),
+    ...(check.testRoots || []).flatMap((path) => walkMatchingFiles(root, path, (name) => name.endsWith(".test.mjs"))),
+  ].filter((path) => existsSync(resolve(root, path)));
+}
+
+function pythonTestsForCheck(root, check) {
+  return (check.pythonRoots || []).flatMap((path) => walkMatchingFiles(root, path, (name) => (
+    /(?:^test_.+|.+_test|.+\.test)\.py$/.test(name)
+  )));
 }
 
 export function isDeterministicTestPath(path) {
@@ -377,6 +319,7 @@ export function isDeterministicTestPath(path) {
 function suiteOwnsTest(suite, path) {
   if (suite.testFiles?.includes(path) || suite.pythonFiles?.includes(path) || suite.nativeFiles?.includes(path)) return true;
   if (suite.testRoots?.some((root) => path.startsWith(`${root}/`)) && path.endsWith(".test.mjs")) return true;
+  if (suite.pythonRoots?.some((root) => path.startsWith(`${root}/`)) && /(?:^|\/)(?:test_[^/]+|[^/]+_test|[^/]+\.test)\.py$/.test(path)) return true;
   return false;
 }
 
@@ -384,7 +327,7 @@ export function unassignedDeterministicTests(root = ROOT) {
   const repoRoot = resolve(root);
   const result = spawnSync("git", ["-c", `safe.directory=${slash(repoRoot)}`, "ls-files", "-z"], { cwd: repoRoot, encoding: "utf8", shell: false });
   if (result.error || result.status !== 0) throw new Error(result.error?.message || result.stderr || "git ls-files failed");
-  return result.stdout.split("\0").map(slash).filter(isDeterministicTestPath).filter((path) => !SUITES.some((suite) => suiteOwnsTest(suite, path)));
+  return result.stdout.split("\0").map(slash).filter(isDeterministicTestPath).filter((path) => !CHECKS.some((check) => suiteOwnsTest(check, path)));
 }
 
 function tailOutput(value, maxLines = 40, maxBytes = 8192) {
@@ -407,18 +350,55 @@ function runCommandBounded(command, args, options) {
   });
 }
 
-export async function runOwnedSuite(suite, options = {}) {
+export async function runOwnedDomain(domain, options = {}) {
   const root = resolve(options.root || ROOT);
-  if (suite.requiresEmsdk) {
+  const platform = options.platform || process.platform;
+  const includeRelease = options.includeRelease === true;
+  const checks = [];
+  for (const id of domain.checks) {
+    const check = CHECKS.find((entry) => entry.id === id);
+    if (!check) return { status: 2, setupError: true, stderr: `unknown check ${id} in ${domain.id}` };
+    if (!check.releaseOnly || includeRelease) checks.push(check);
+  }
+
+  for (const check of checks) {
+    if (!check.requiresEmsdk) continue;
     const emsdk = process.env.EMSDK || "";
     const toolchain = emsdk ? resolve(emsdk, "upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake") : "";
     if (!emsdk || !existsSync(toolchain)) {
-      return { status: 2, classification: "setup-blocked", code: "missing-emsdk", stderr: emsdk ? `missing Emscripten toolchain: ${toolchain}` : "EMSDK is required for reference-template.web" };
+      return { status: 2, classification: "setup-blocked", code: "missing-emsdk", stderr: emsdk ? `missing Emscripten toolchain: ${toolchain}` : "EMSDK is required for template release proof" };
     }
   }
-  for (const [command, ...args] of suiteCommands(root, suite)) {
-    const result = await runCommandBounded(command, args, { root });
-    if (result.status !== 0) return { status: result.status, stderr: result.tail, ...(result.setupError ? { setupError: true } : {}) };
+
+  const nodeTests = [...new Set(checks.flatMap((check) => nodeTestsForCheck(root, check)))];
+  const steps = [];
+  if (nodeTests.length) {
+    steps.push({ owner: domain.id, command: process.execPath, args: ["--test", `--test-concurrency=${NODE_TEST_CONCURRENCY}`, ...nodeTests] });
+  }
+  for (const check of checks) {
+    const pythonTests = pythonTestsForCheck(root, check);
+    for (const [command, ...args] of pythonCommands(pythonTests, { batchUnittest: check.batchPythonUnittest })) {
+      steps.push({ owner: check.id, command, args });
+    }
+    for (const [command, ...args] of check.commandsByPlatform?.[platform] || check.commands || []) {
+      steps.push({ owner: check.id, command, args });
+    }
+  }
+
+  if (steps.length === 0) {
+    return { status: 0, classification: "not-applicable", reason: "no deterministic technical checks" };
+  }
+
+  const runCommand = options.runCommand || ((command, args) => runCommandBounded(command, args, { root }));
+  for (const step of steps) {
+    const result = await runCommand(step.command, step.args, { root });
+    if (result.status !== 0) {
+      return {
+        status: result.status,
+        ...(result.setupError ? { setupError: true } : {}),
+        stderr: `[${step.owner}]\n${result.tail || result.stderr || result.stdout || "check failed"}`,
+      };
+    }
   }
   return { status: 0, stdout: "", stderr: "" };
 }
@@ -431,32 +411,52 @@ function changedPaths(root) {
 
 export async function verifyStudio(options = {}, dependencies = {}) {
   const mode = options.mode;
-  if (!['changed', 'full'].includes(mode)) throw new Error("verify requires exactly one of --changed or --full");
+  if (!["changed", "domain", "full"].includes(mode)) throw new Error("verify requires --changed, --domain <id>, or --full");
   const root = resolve(options.root || ROOT);
   const readChangedPaths = dependencies.changedPaths || changedPaths;
-  const selection = mode === "full" ? FULL_IDS : selectChangedSuites(options.paths || readChangedPaths(root));
-  const ids = selection.includes("full") ? FULL_IDS : selection;
-  const results = [];
-  for (const id of ids) {
-    const suite = SUITES.find((entry) => entry.id === id);
-    if (suite.availability === "required-pending") {
-      results.push({ id, status: "blocked", owner: suite.owner, reason: suite.reason });
-      continue;
-    }
-    const run = dependencies.runSuite || ((entry) => runOwnedSuite(entry, { root }));
-    const raw = await run(suite);
+  const ids = mode === "full"
+    ? FULL_IDS
+    : mode === "domain"
+      ? [options.domain]
+      : selectChangedDomains(options.paths || readChangedPaths(root));
+  if (mode === "domain" && !FULL_IDS.includes(options.domain)) throw new Error(`unknown verification domain: ${options.domain || "<missing>"}`);
+  const results = new Array(ids.length);
+  let cursor = 0;
+  const run = dependencies.runDomain || ((entry) => runOwnedDomain(entry, { root, includeRelease: mode !== "changed" }));
+  const runNext = async () => {
+    while (cursor < ids.length) {
+      const index = cursor++;
+      const id = ids[index];
+    const startedAt = performance.now();
+    const durationMs = () => Math.round((performance.now() - startedAt) * 1000) / 1000;
+    const domain = DOMAINS.find((entry) => entry.id === id);
+    const raw = await run(domain);
     if (raw.classification === "setup-blocked") {
-      results.push({ id, status: "blocked", code: raw.code || "setup", reason: raw.stderr || "suite setup is unavailable" });
+        results[index] = { id, status: "blocked", code: raw.code || "setup", reason: raw.stderr || "domain setup is unavailable", durationMs: durationMs() };
       continue;
     }
-    if (raw.setupError) throw new Error(raw.stderr || `suite setup failed: ${suite.id}`);
+    if (raw.classification === "not-applicable") {
+      results[index] = { id, status: "not-applicable", reason: raw.reason, durationMs: durationMs() };
+      continue;
+    }
+    if (raw.setupError) throw new Error(raw.stderr || `domain setup failed: ${domain.id}`);
     const status = raw.status === 0 ? "pass" : "fail";
-    results.push({ id, status, ...(status === "fail" ? { tail: tailOutput(`${raw.stdout || ""}${raw.stderr || ""}`) } : {}) });
-  }
+      results[index] = { id, status, durationMs: durationMs(), ...(status === "fail" ? { tail: tailOutput(`${raw.stdout || ""}${raw.stderr || ""}`) } : {}) };
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(DOMAIN_CONCURRENCY, ids.length) }, () => runNext()));
   const blocked = results.some((entry) => entry.status === "blocked");
   const failed = results.some((entry) => entry.status === "fail");
   const status = blocked ? "blocked" : failed ? "failed" : "pass";
-  return { schema: "ai_studio.studio.verify.v1", mode, status, ok: status === "pass", exitCode: blocked ? 2 : failed ? 1 : 0, suites: results };
+  return {
+    schema: "ai_studio.studio.verify.v2",
+    mode,
+    ...(mode === "domain" ? { domain: options.domain } : {}),
+    status,
+    ok: status === "pass",
+    exitCode: blocked ? 2 : failed ? 1 : 0,
+    domains: results,
+  };
 }
 
 function parseCli(argv) {
@@ -465,7 +465,8 @@ function parseCli(argv) {
   const args = rest.filter((arg) => arg !== "--json");
   if (command === "describe" && args.length === 0) return { command, json };
   if (command === "verify" && args.length === 1 && ["--changed", "--full"].includes(args[0])) return { command, json, mode: args[0].slice(2) };
-  throw new Error("usage: node ai_studio/studio.mjs describe [--json] | verify (--changed|--full) [--json]");
+  if (command === "verify" && args.length === 2 && args[0] === "--domain") return { command, json, mode: "domain", domain: args[1] };
+  throw new Error("usage: node ai_studio/studio.mjs describe [--json] | verify (--changed|--domain <id>|--full) [--json]");
 }
 
 function printText(result) {
@@ -473,16 +474,16 @@ function printText(result) {
     console.log(Object.entries(result.routes).map(([id, route]) => `${id}\t${route.owner}`).join("\n"));
     return;
   }
-  for (const suite of result.suites) {
-    console.log(`${suite.status}\t${suite.id}`);
-    if (suite.tail) console.log(suite.tail.split(/\r?\n/).map((line) => `  ${line}`).join("\n"));
+  for (const domain of result.domains) {
+    console.log(`${domain.status}\t${domain.id}`);
+    if (domain.tail) console.log(domain.tail.split(/\r?\n/).map((line) => `  ${line}`).join("\n"));
   }
-  console.log(`${result.status}\t${result.mode}\t${result.suites.length} suites`);
+  console.log(`${result.status}\t${result.mode}\t${result.domains.length} domains`);
 }
 
 function errorEnvelope(error) {
   const message = error?.message || String(error);
-  const code = message.startsWith("usage:") || message.startsWith("verify requires") ? "usage" : "setup";
+  const code = message.startsWith("usage:") || message.startsWith("verify requires") || message.startsWith("unknown verification domain") ? "usage" : "setup";
   return { schema: "ai_studio.studio.error.v1", ok: false, error: { code, message }, exitCode: 2 };
 }
 
@@ -490,7 +491,7 @@ export async function main(argv = process.argv.slice(2), dependencies = {}) {
   const wantsJson = argv.includes("--json");
   try {
     const args = parseCli(argv);
-    const result = args.command === "describe" ? describeStudio() : await verifyStudio({ mode: args.mode }, dependencies);
+    const result = args.command === "describe" ? describeStudio() : await verifyStudio({ mode: args.mode, domain: args.domain }, dependencies);
     if (args.json) console.log(JSON.stringify(result));
     else printText(result);
     return args.command === "verify" ? result.exitCode : 0;

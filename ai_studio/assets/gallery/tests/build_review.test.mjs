@@ -1,7 +1,9 @@
 ﻿import { test } from "node:test";
 import assert from "node:assert/strict";
-import { resolve } from "node:path";
-import { detectOrigin, kindForExt, libraryKind, parseArgs, renderHtml, safeJson, escHtml, resolveScanRoot } from "../build_review.mjs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { detectOrigin, kindForExt, libraryKind, main, parseArgs, renderHtml, safeJson, escHtml, resolveScanRoot } from "../build_review.mjs";
 
 test("kindForExt maps primary extensions, ignores sidecars", () => {
   assert.equal(kindForExt(".obj"), "model");
@@ -87,4 +89,19 @@ test("resolveScanRoot keeps scan mode inside the repository", () => {
   assert.equal(resolveScanRoot(repo, resolve(repo, "games/demo/assets")), resolve(repo, "games/demo/assets"));
   assert.throws(() => resolveScanRoot(repo, "../outside/assets"), /inside --repo/);
   assert.throws(() => resolveScanRoot(repo, "C:/outside/assets"), /inside --repo/);
+});
+
+test("gallery output copies the shared HDR from the owned previews store", async (t) => {
+  const root = mkdtempSync(join(tmpdir(), "asset-gallery-hdr-"));
+  const out = join(root, "out");
+  mkdirSync(join(root, "assets"), { recursive: true });
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const originalLog = console.log;
+  console.log = () => {};
+  try {
+    await main(["--mode", "scan", "--repo", root, "--out", out]);
+  } finally {
+    console.log = originalLog;
+  }
+  assert.equal(existsSync(join(out, "studio_env.hdr")), true);
 });

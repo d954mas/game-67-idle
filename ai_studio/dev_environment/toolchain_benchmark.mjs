@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { performance } from "node:perf_hooks";
 import { spawnSync } from "node:child_process";
 
-import { studioPythonPath } from "../core_harness/tool_lib/studio_config.mjs";
+import { studioPythonPath } from "./python.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const argv = process.argv.slice(2);

@@ -19,4 +19,5 @@ updated: 2026-07-02
 ## Open questions
 
 ## Log
-- 2026-07-02: Future phase; scoped in ai_studio/assets/canvas/PLAN.md (2026-07-02)
+- 2026-07-02: Future phase; acceptance criteria in this task are the current
+  scope.

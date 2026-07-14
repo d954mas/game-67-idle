@@ -4,7 +4,7 @@
 T0207 (lead-settled 2026-07-02/03): Cleanup is TWO separate interactive tools —
 Quantize (`../quantize/quantize.py`) and Denoise (this one). Kept deliberately
 simple and honest per the lead's spec rather than importing an ML restorer or
-opencv/skimage (cut in the research pass, tmp/research_art_cleanup_2026-07-03.md):
+opencv/skimage (excluded by the Canvas alpha-and-cleanup contract):
 strength 1 = one 3px median pass, strength 2 = two 3px passes, strength 3 = one
 5px pass. The alpha channel is NEVER filtered (the halo law — a soft/keyed edge's
 alpha must stay exactly what the keyer produced; only RGB may be smoothed).

@@ -118,7 +118,7 @@ test("buildVisionCommand: codex exec -i <imagePath> with a bare '-' as the PROMP
   const { command, args } = buildVisionCommand({ imagePath: "C:/tmp/ref.png", outputPath: "C:/tmp/last.txt" });
   assert.equal(command, process.execPath);
   assert.deepEqual(args, [CODEX_JS, "exec", "--skip-git-repo-check", "--output-last-message", "C:/tmp/last.txt", "-i", "C:/tmp/ref.png", "-"]);
-  // The variadic-arg footgun (tmp/research_agy_refs_2026-07-03.md): no instruction text
+  // T0251 variadic-argument guard: no instruction text
   // token anywhere in argv — it must travel over stdin instead, never as a positional that
   // -i could greedily swallow.
   assert.ok(!args.some((arg) => arg.includes(" ")), "no free-text instruction token in argv");

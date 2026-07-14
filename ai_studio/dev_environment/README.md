@@ -5,9 +5,11 @@ Local developer-environment helpers for this AI Studio workspace.
 ## Studio Python
 
 Every ordinary Studio Python command resolves the root `.venv` named by
-`studio.config.json.pythonPath` through `studioPythonPath()`. The resolver picks
-`Scripts/python.exe` on Windows and `bin/python` on Linux/macOS. There is no
-PATH, `py`, system-Python, or specialist environment fallback.
+`studio.config.json.pythonPath` through `studioPythonPath()` in `python.mjs`.
+The neutral Studio loader supplies the value; this module owns its path and
+interpreter semantics. The resolver picks `Scripts/python.exe` on Windows and
+`bin/python` on Linux/macOS. There is no PATH, `py`, system-Python, or
+specialist environment fallback.
 
 ```powershell
 node ai_studio/dev_environment/python_check.mjs

@@ -973,7 +973,7 @@ test("canvas API nodes-duplicate / nodes-paste / nodes-delete parity (one entry 
   assert.equal(project.elements.length, 3, "one undo restores the batched delete");
 });
 
-// ---- pack routes (T0332 v2 phase C: build_spec_pack_card_2026-07-07.md) --------------------
+// ---- pack routes (T0332 v2: contracts/recipe-pack.md) --------------------------------------
 //
 // packPreview/packSlice are NOT codex/agy seams (the real expand_jobs.py expander is offline/
 // deterministic/stdlib; region detection/crop_regions.py are the SAME pipeline plain detect-

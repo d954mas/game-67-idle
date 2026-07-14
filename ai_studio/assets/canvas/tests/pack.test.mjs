@@ -1,4 +1,4 @@
-// Pack MODE tests (T0332 v2: build_spec_pack_card_2026-07-07.md — lead decision "Слить"/
+// Pack MODE tests (T0332 v2: contracts/recipe-pack.md — lead decision "Слить"/
 // "Merge"). Pack mode is NOT a third card type; it is an optional `pack` field on the RECIPE
 // card's own blob (`group.recipe.pack`) plus two now-patchable fields inside `recipe.params`
 // (`bg_key`/`n_candidates`) — see recipe.test.mjs for the single-image (pack === null) path,

@@ -13,7 +13,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { listRegisteredTemplates } from "../sources/ops.mjs";
 import { listGameMounts } from "../../workspace/games.mjs";
-import { studioPythonPath } from "../../core_harness/tool_lib/studio_config.mjs";
+import { studioPythonPath } from "../../dev_environment/python.mjs";
 import { buildIconPreview } from "./icon_preview.mjs";
 
 // The ordinary Studio interpreter is resolved once; no system launcher is used.

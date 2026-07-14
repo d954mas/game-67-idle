@@ -46,10 +46,9 @@ Prefer JSON when an agent needs task state:
   `node ai_studio/taskboard/cli.mjs set T0001 --status done --quality "QTECH_001=pass" --quality-evidence "tests passed" --json`.
 - Validate store shape: `node ai_studio/taskboard/cli.mjs validate --json`.
 - Profile routing reads: `node ai_studio/taskboard/cli.mjs profile --json`.
-  The profiler-owned adapter measures summary/context/explicit-show reads for
-  every registered Taskboard-enabled public/private mount. Its serialized
-  records contain store metadata, operation, path/query, UTF-8 bytes, median
-  duration, truncation, and result count, never task titles or bodies.
+  The Taskboard-owned diagnostic emits one record per enabled public/private
+  store: serialized context bytes, returned/total counts, and truncation. It
+  never emits task titles or bodies.
 
 Taskboard is store-qualified:
 
@@ -124,6 +123,9 @@ artifacts unless linked.
 A new task transition to `done` is guarded by the closure and quality-decision
 contract in `task-store-reference.md`. Existing `done` history is grandfathered.
 Use the guide for lifecycle, evidence, CLI options, and canonical log formats.
+Every applicable Quality assignment must be `pass`; `block`, `review`, and
+`unverified` keep the task open. Use `--quality-not-applicable "reason"` when
+no Quality rule applies. New `skip` assignments are rejected.
 
 Validation by change type: `ai_studio/quality/README.md`.
 Repeated quality failures should be visible in task logs and summarized with

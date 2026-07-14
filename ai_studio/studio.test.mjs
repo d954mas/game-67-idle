@@ -11,7 +11,8 @@ import {
   main,
   nativeConfigureCommand,
   parsePorcelainZ,
-  selectChangedSuites,
+  runOwnedDomain,
+  selectChangedDomains,
   unassignedDeterministicTests,
   verifyStudio,
 } from "./studio.mjs";
@@ -34,6 +35,25 @@ test("describe exposes stable owner routes without a Studio game proxy", () => {
   assert.deepEqual(result.exitSemantics, { pass: 0, failed: 1, blockedOrSetup: 2 });
 });
 
+test("verification exposes ten coarse owner domains instead of suite categories", () => {
+  const verification = describeStudio().verification;
+  assert.deepEqual(verification.domains.map((domain) => domain.id), [
+    "harness",
+    "workspace",
+    "architecture",
+    "shell",
+    "assets",
+    "work-management",
+    "design",
+    "runtime",
+    "features",
+    "template-release",
+  ]);
+  assert.equal("suites" in verification, false);
+  assert.equal(verification.domains.some((domain) => domain.id === "studio.validation"), false);
+  assert.equal(verification.domains.some((domain) => domain.id === "audio.native"), false);
+});
+
 test("porcelain -z parser preserves spaces and both rename paths", () => {
   const input = " M ai_studio/a file.mjs\0R  templates/template/old name\0templates/template/new name\0?? games/new_game.test.mjs\0";
   assert.deepEqual(parsePorcelainZ(input), [
@@ -45,73 +65,51 @@ test("porcelain -z parser preserves spaces and both rename paths", () => {
 });
 
 test("changed selection hard-excludes games while preserving the new_game root exception", () => {
-  assert.deepEqual(selectChangedSuites(["games/example-game/src/main.c"]), []);
-  assert.deepEqual(selectChangedSuites([
+  assert.deepEqual(selectChangedDomains(["games/example-game/src/main.c"]), []);
+  assert.deepEqual(selectChangedDomains([
     "games/example-game/src/main.c",
     "ai_studio/taskboard/store.mjs",
-  ]), ["studio.taskboard", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["games/new_game.mjs"]), ["workspace.game-create"]);
+  ]), ["work-management"]);
+  assert.deepEqual(selectChangedDomains(["games/new_game.mjs"]), ["workspace"]);
+  assert.throws(
+    () => selectChangedDomains(["games/root-shared.txt"]),
+    /unowned shared path: games\/root-shared\.txt/,
+  );
 });
 
-test("changed selection is narrow and unknown shared paths fall back to full", () => {
-  assert.deepEqual(selectChangedSuites(["features/platform-sdk/web/platform-sdk.js"]), ["reference-template.web", "features.contracts", "features.platform-sdk", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["templates/template/tools/build_web.mjs"]), ["reference-template.web", "reference-template", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["templates/template/tools/package_web.mjs"]), ["reference-template.web", "reference-template", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["templates/template/tools/portal_evidence.mjs"]), ["reference-template", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["mystery/shared.txt"]), ["full"]);
-  assert.deepEqual(selectChangedSuites(["features/audio-core/src/audio.c"]), [
-    "reference-template.native", "features.contracts", "features.audio.web", "studio.validation", "audio.native",
-  ]);
-  assert.deepEqual(selectChangedSuites(["features/audio-core/vendor/miniaudio/README.md"]), [
-    "features.contracts", "features.audio.web", "studio.validation",
-  ]);
-  assert.deepEqual(selectChangedSuites(["ai_studio/assets/canvas/site/workspace.js"]), ["studio.assets.canvas", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["features/items-core/scripts/items_ops.py"]), ["reference-template.native", "reference-template.web", "features.contracts", "features.items-core", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["templates/template/src/main.c"]), ["reference-template.native", "reference-template.web", "reference-template", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["templates/template/cmake/GamePlatform.cmake"]), ["reference-template.native", "reference-template.web", "reference-template", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["templates/template/assets/ui/README.md"]), ["reference-template", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["templates/template/assets/ui/panel.png"]), ["reference-template.native", "reference-template.web", "reference-template", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["templates/template/src/features/README.md"]), ["reference-template", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["templates/template/game-dependencies.json"]), ["features.contracts", "reference-template", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites(["templates/template/devapi/smoke_bot.py"]), ["reference-template", "reference-template.python", "studio.validation"]);
-  assert.deepEqual(selectChangedSuites([".codex/skills/nt-asset-image-generation/scripts/test_expand_jobs.py"]), ["studio.skills.python", "studio.validation"]);
+test("changed selection is coarse and unknown shared paths fail ownership", () => {
+  assert.deepEqual(selectChangedDomains(["features/platform-sdk/web/platform-sdk.js"]), ["features"]);
+  assert.deepEqual(selectChangedDomains(["templates/template/tools/build_web.mjs"]), ["template-release"]);
+  assert.deepEqual(selectChangedDomains(["templates/template/devapi/smoke_bot.py"]), ["template-release"]);
+  assert.deepEqual(selectChangedDomains(["features/audio-core/src/audio.c"]), ["features"]);
+  assert.deepEqual(selectChangedDomains(["ai_studio/assets/canvas/site/workspace.js"]), ["assets"]);
+  assert.deepEqual(selectChangedDomains([".codex/skills/nt-asset-image-generation/scripts/test_expand_jobs.py"]), ["harness"]);
+  assert.deepEqual(selectChangedDomains(["ai_studio/studio.config.json"]), ["harness"]);
+  assert.deepEqual(selectChangedDomains(["ai_studio/studio.config.local.json"]), ["harness"]);
+  assert.deepEqual(selectChangedDomains(["ai_studio/config.mjs", "ai_studio/config.test.mjs"]), ["harness"]);
+  assert.deepEqual(selectChangedDomains([".vscode/tasks.json", ".vscode/launch.json"]), ["harness"]);
+  assert.throws(() => selectChangedDomains(["mystery/shared.txt"]), /unowned shared path: mystery\/shared\.txt/);
 });
 
-test("C-backed feature docs stay local while runtime paths route native", () => {
+test("feature docs and runtime paths stay in the same owner domain", () => {
   for (const feature of ["audio-core", "game-events", "game-state", "items-core", "platform-sdk", "progression-core"]) {
-    assert.equal(selectChangedSuites([`features/${feature}/README.md`]).includes("reference-template.native"), false, feature);
-    assert.ok(selectChangedSuites([`features/${feature}/src/runtime.c`]).includes("reference-template.native"), feature);
+    assert.deepEqual(selectChangedDomains([`features/${feature}/README.md`]), ["features"], feature);
+    assert.deepEqual(selectChangedDomains([`features/${feature}/src/runtime.c`]), ["features"], feature);
   }
 });
 
-test("full plan pins native before asset and exposes runnable audio platform commands", () => {
+test("full plan exposes owner domains and marks template release proof", () => {
   const result = describeStudio();
-  assert.equal(result.verification.execution, "sequential");
-  assert.equal(result.verification.suites.some((suite) => suite.id === "studio.assets.canvas"), true);
-  assert.equal(result.verification.suites.some((suite) => suite.id === "features.contracts"), true);
-  assert.equal(result.verification.suites.some((suite) => suite.id === "reference-template"), true);
-  const audio = result.verification.suites.find((suite) => suite.id === "audio.native");
-  assert.equal(audio.availability, "available");
-  assert.deepEqual(audio.commandPlan.windows[0], [
-    "cmake", "--build", "templates/template/build/native-debug", "--target",
-    "test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio",
-  ]);
-  assert.deepEqual(audio.commandPlan.linux, [["bash", "features/audio-core/tests/run_linux.sh"]]);
-  const ids = result.verification.suites.map((suite) => suite.id);
-  const native = result.verification.suites.find((suite) => suite.id === "reference-template.native");
-  assert.ok(native.commandPlan[0].includes("-DCMAKE_CXX_COMPILER=clang++"));
+  assert.equal(result.verification.execution, "owner-domains");
+  assert.equal(result.verification.nodeTestConcurrency, 4);
+  assert.equal(result.verification.domains.length, 10);
+  assert.equal(result.verification.domains.find((domain) => domain.id === "template-release").releaseProof, true);
+  assert.equal(result.verification.domains.find((domain) => domain.id === "features").releaseProof, true);
   assert.ok(nativeConfigureCommand("linux").includes("-DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined"));
   assert.equal(nativeConfigureCommand("win32").some((arg) => arg.startsWith("-DCMAKE_EXE_LINKER_FLAGS_DEBUG=")), false);
-  assert.ok(ids.indexOf("reference-template.native") < ids.indexOf("studio.assets"));
-  assert.ok(ids.indexOf("reference-template.native") < ids.indexOf("studio.assets.canvas"));
-  assert.equal(ids.indexOf("reference-template.web"), ids.indexOf("reference-template.native") + 1);
-  const web = result.verification.suites.find((suite) => suite.id === "reference-template.web");
-  assert.deepEqual(web.commandPlan[0], ["node", "templates/template/tools/build_web.mjs", "--preset", "wasm-release", "--target", "itch", "--no-debug-ui"]);
-  assert.match(web.commandPlan[1].at(-1), /game\.js.*game\.wasm.*game\.ntpack/);
-  assert.deepEqual(web.commandPlan[2], ["node", "templates/template/tools/game.mjs", "verify", "--target", "itch", "--no-build", "--template-proof", "--skip-tests", "--out", "build/package-proof"]);
 });
 
-test("portal evidence tests run in the fast reference suite and never route to web/CMake", async () => {
+test("mixed changed paths collapse to stable owner domains", () => {
   const t0401Paths = [
     "templates/template/tools/portal_evidence.mjs",
     "templates/template/tools/portal_evidence.test.mjs",
@@ -122,49 +120,120 @@ test("portal evidence tests run in the fast reference suite and never route to w
     "templates/template/release/README.md",
     "features/platform-sdk/references/publish-targets.md",
   ];
-  const selection = selectChangedSuites(t0401Paths);
-  assert.deepEqual(new Set(selection), new Set([
-    "reference-template",
-    "workspace.game-create",
-    "studio.facade",
-    "features.contracts",
-    "features.platform-sdk",
-    "studio.validation",
-  ]));
-  assert.equal(selection.includes("full"), false);
-  assert.equal(selection.some((id) => id === "reference-template.web" || id === "reference-template.native" || id === "audio.native"), false);
+  assert.deepEqual(selectChangedDomains(t0401Paths), ["harness", "workspace", "features", "template-release"]);
+});
 
-  const seen = new Map();
-  await verifyStudio({ mode: "full" }, {
-    runSuite: async (suite) => {
-      seen.set(suite.id, suite);
-      return { status: 0 };
-    },
+test("runtime domain declares platform release proof without exposing command inventory", () => {
+  const runtime = describeStudio().verification.domains.find((domain) => domain.id === "runtime");
+  assert.equal(runtime.releaseProof, true);
+  assert.deepEqual(Object.keys(runtime).sort(), ["checks", "id", "releaseProof"]);
+});
+
+test("features domain keeps the strict Linux audio runner as release-only proof", async () => {
+  const calls = [];
+  const result = await runOwnedDomain({ id: "features", checks: ["features.audio.linux"] }, {
+    platform: "linux",
+    includeRelease: true,
+    runCommand: async (command, args) => { calls.push([command, ...args]); return { status: 0, tail: "" }; },
   });
-  assert.ok(seen.get("reference-template").testFiles.includes("templates/template/tools/portal_evidence.test.mjs"));
-  assert.equal((seen.get("reference-template.web").testFiles || []).includes("templates/template/tools/portal_evidence.test.mjs"), false);
+  assert.equal(result.status, 0);
+  assert.deepEqual(calls, [["bash", "features/audio-core/tests/run_linux.sh"]]);
+
+  const changed = await runOwnedDomain({ id: "features", checks: ["features.audio.linux"] }, {
+    platform: "linux",
+    includeRelease: false,
+    runCommand: async () => { throw new Error("release proof must not run in changed mode"); },
+  });
+  assert.equal(changed.classification, "not-applicable");
 });
 
-test("runtime automation runs the functional iterate contract only on Linux", () => {
-  const runtime = describeStudio().verification.suites.find((suite) => suite.id === "studio.runtime-automation");
-  const iterateCommand = [
-    "xvfb-run", "-a", "node", "ai_studio/dev_environment/python_run.mjs",
-    "ai_studio/runtime_automation/iterate.py", "--no-capture", "--json",
+test("an owner domain batches its Node tests into one process", async () => {
+  const root = mkdtempSync(join(tmpdir(), "studio-domain-batch-"));
+  const files = [
+    "ai_studio/studio.test.mjs",
+    "ai_studio/studio_ci.test.mjs",
+    "ai_studio/quality/tests/profile.test.mjs",
   ];
-  assert.equal(runtime.commandPlan.windows.some((command) => command.join("\0") === iterateCommand.join("\0")), false);
-  assert.equal(runtime.commandPlan.linux.filter((command) => command.join("\0") === iterateCommand.join("\0")).length, 1);
-  assert.ok(runtime.commandPlan.windows.some((command) => command.includes("ai_studio/runtime_automation/iterate_test.py")));
-  assert.ok(runtime.commandPlan.linux.some((command) => command.includes("ai_studio/runtime_automation/iterate_test.py")));
+  try {
+    for (const path of files) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), "");
+    }
+    const calls = [];
+    const result = await runOwnedDomain({ id: "harness", checks: ["studio.facade", "studio.quality"] }, {
+      root,
+      runCommand: async (command, args) => { calls.push([command, ...args]); return { status: 0, tail: "" }; },
+    });
+    assert.equal(result.status, 0);
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0][1], "--test");
+    for (const path of files) assert.ok(calls[0].includes(path), path);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
-test("missing EMSDK blocks the required web suite with setup exit 2", async () => {
+test("asset Python unittests share one interpreter while dot-named files stay explicit", async () => {
+  const calls = [];
+  const result = await runOwnedDomain({ id: "assets", checks: ["studio.assets.python"] }, {
+    runCommand: async (command, args) => { calls.push([command, ...args]); return { status: 0, tail: "" }; },
+  });
+  assert.equal(result.status, 0);
+  assert.equal(calls.length, 4);
+  assert.deepEqual(calls[0].slice(0, 4), ["node", "ai_studio/dev_environment/python_run.mjs", "-m", "unittest"]);
+  assert.equal(calls[0].filter((arg) => arg.endsWith("_test.py")).length, 20);
+  assert.equal(calls.slice(1).every((command) => command.at(-1).endsWith(".test.py")), true);
+});
+
+test("new Python tests under an owned root need no registry edit", async () => {
+  const root = mkdtempSync(join(tmpdir(), "studio-python-discovery-"));
+  const path = "ai_studio/assets/tools/example/new_tool_test.py";
+  try {
+    mkdirSync(dirname(join(root, path)), { recursive: true });
+    writeFileSync(join(root, path), "");
+    const calls = [];
+    const result = await runOwnedDomain({ id: "assets", checks: ["studio.assets.python"] }, {
+      root,
+      runCommand: async (command, args) => { calls.push([command, ...args]); return { status: 0, tail: "" }; },
+    });
+    assert.equal(result.status, 0);
+    assert.equal(calls.some((command) => command.includes(path)), true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("Python discovery ignores tool caches", async () => {
+  const root = mkdtempSync(join(tmpdir(), "studio-python-cache-"));
+  const source = "ai_studio/assets/tools/example/source_test.py";
+  const cached = "ai_studio/assets/tools/example/.pytest_cache/cached_test.py";
+  try {
+    for (const path of [source, cached]) {
+      mkdirSync(dirname(join(root, path)), { recursive: true });
+      writeFileSync(join(root, path), "");
+    }
+    const calls = [];
+    await runOwnedDomain({ id: "assets", checks: ["studio.assets.python"] }, {
+      root,
+      runCommand: async (command, args) => { calls.push([command, ...args]); return { status: 0, tail: "" }; },
+    });
+    assert.equal(calls.some((command) => command.includes(source)), true);
+    assert.equal(calls.some((command) => command.includes(cached)), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("missing EMSDK blocks the template release domain with setup exit 2", async () => {
   const result = await verifyStudio({ mode: "full" }, {
-    runSuite: async (suite) => suite.id === "reference-template.web"
+    runDomain: async (domain) => domain.id === "template-release"
       ? { status: 2, classification: "setup-blocked", code: "missing-emsdk", stderr: "EMSDK required" }
       : { status: 0 },
   });
-  const web = result.suites.find((suite) => suite.id === "reference-template.web");
-  assert.deepEqual(web, { id: "reference-template.web", status: "blocked", code: "missing-emsdk", reason: "EMSDK required" });
+  const template = result.domains.find((domain) => domain.id === "template-release");
+  const { durationMs, ...templateResult } = template;
+  assert.deepEqual(templateResult, { id: "template-release", status: "blocked", code: "missing-emsdk", reason: "EMSDK required" });
+  assert.ok(Number.isFinite(durationMs) && durationMs >= 0);
   assert.equal(result.status, "blocked");
   assert.equal(result.exitCode, 2);
 });
@@ -172,24 +241,42 @@ test("missing EMSDK blocks the required web suite with setup exit 2", async () =
 test("verify emits compact stable results, bounds failure tails, and passes when every gate passes", async () => {
   const calls = [];
   const result = await verifyStudio({ mode: "changed", paths: ["ai_studio/taskboard/store.mjs"] }, {
-    runSuite: async (suite) => {
-      calls.push(suite.id);
+    runDomain: async (domain) => {
+      calls.push(domain.id);
       return { status: 1, stdout: "", stderr: Array.from({ length: 100 }, (_, i) => `line-${i}`).join("\n") };
     },
   });
-  assert.deepEqual(calls, ["studio.taskboard", "studio.validation"]);
-  assert.equal(result.schema, "ai_studio.studio.verify.v1");
+  assert.deepEqual(calls, ["work-management"]);
+  assert.equal(result.schema, "ai_studio.studio.verify.v2");
   assert.equal(result.ok, false);
   assert.equal(result.exitCode, 1);
-  assert.ok(result.suites[0].tail.split("\n").length <= 40);
+  assert.ok(result.domains[0].tail.split("\n").length <= 40);
 
   const full = await verifyStudio({ mode: "full" }, {
-    runSuite: async () => ({ status: 0, stdout: "ok", stderr: "" }),
+    runDomain: async () => ({ status: 0, stdout: "ok", stderr: "" }),
   });
   assert.equal(full.ok, true);
   assert.equal(full.status, "pass");
+  assert.ok(full.domains.every((domain) => Number.isFinite(domain.durationMs) && domain.durationMs >= 0));
   assert.equal(full.exitCode, 0);
-  assert.equal(full.suites.find((suite) => suite.id === "audio.native").status, "pass");
+  assert.equal(full.domains.length, 10);
+});
+
+test("full verification runs at most two independent owner domains concurrently", async () => {
+  let active = 0;
+  let maxActive = 0;
+  const result = await verifyStudio({ mode: "full" }, {
+    runDomain: async () => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolveWait) => setTimeout(resolveWait, 5));
+      active -= 1;
+      return { status: 0 };
+    },
+  });
+  assert.equal(result.ok, true);
+  assert.equal(maxActive, 2);
+  assert.deepEqual(result.domains.map((domain) => domain.id), describeStudio().verification.domains.map((domain) => domain.id));
 });
 
 test("every tracked deterministic shared test is assigned to an owner suite", () => {
@@ -237,11 +324,21 @@ test("new tracked native tests fail closed until explicitly assigned", () => {
 
 test("no changed files is a successful hard-zero plan", async () => {
   const result = await verifyStudio({ mode: "changed", paths: ["games/example/main.c"] }, {
-    runSuite: async () => { throw new Error("must not run"); },
+    runDomain: async () => { throw new Error("must not run"); },
   });
   assert.equal(result.ok, true);
   assert.equal(result.exitCode, 0);
-  assert.deepEqual(result.suites, []);
+  assert.deepEqual(result.domains, []);
+});
+
+test("an owner domain without mechanical checks reports not-applicable", async () => {
+  const result = await verifyStudio({ mode: "domain", domain: "design" });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.domains.map(({ durationMs: _durationMs, ...domain }) => domain), [{
+    id: "design",
+    status: "not-applicable",
+    reason: "no deterministic technical checks",
+  }]);
 });
 
 test("CLI contract returns stable JSON usage and setup envelopes", async () => {
@@ -257,21 +354,28 @@ test("CLI contract returns stable JSON usage and setup envelopes", async () => {
     assert.deepEqual(JSON.parse(lines.at(-1)), {
       schema: "ai_studio.studio.error.v1",
       ok: false,
-      error: { code: "usage", message: "usage: node ai_studio/studio.mjs describe [--json] | verify (--changed|--full) [--json]" },
+      error: { code: "usage", message: "usage: node ai_studio/studio.mjs describe [--json] | verify (--changed|--domain <id>|--full) [--json]" },
       exitCode: 2,
     });
     lines.length = 0;
     assert.equal(await main(["verify", "--changed", "--json"], { changedPaths: () => { throw new Error("git unavailable"); } }), 2);
     assert.equal(JSON.parse(lines.at(-1)).error.code, "setup");
     lines.length = 0;
-    assert.equal(await main(["verify", "--full"], { runSuite: async () => ({ status: 0 }) }), 0);
+    assert.equal(await main(["verify", "--full"], { runDomain: async () => ({ status: 0 }) }), 0);
     assert.match(lines.at(-1), /^pass\tfull\t/);
+    lines.length = 0;
+    const domainCalls = [];
+    assert.equal(await main(["verify", "--domain", "assets", "--json"], {
+      runDomain: async (domain) => { domainCalls.push(domain.id); return { status: 0 }; },
+    }), 0);
+    assert.deepEqual(domainCalls, ["assets"]);
+    assert.equal(JSON.parse(lines.at(-1)).domain, "assets");
     lines.length = 0;
     assert.equal(await main(["verify", "--changed"], {
       changedPaths: () => ["ai_studio/taskboard/store.mjs"],
-      runSuite: async () => ({ status: 1, stderr: "assertion context\nexact failure" }),
+      runDomain: async () => ({ status: 1, stderr: "assertion context\nexact failure" }),
     }), 1);
-    assert.ok(lines.some((line) => line === "fail\tstudio.taskboard"));
+    assert.ok(lines.some((line) => line === "fail\twork-management"));
     assert.ok(lines.some((line) => line === "  assertion context\n  exact failure"));
   } finally {
     console.log = log;

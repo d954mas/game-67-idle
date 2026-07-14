@@ -1,9 +1,0 @@
-{
-  "id": "assets:ownership-contract",
-  "title": "Asset Ownership Contract",
-  "kind": "test",
-  "path": "ai_studio/assets/tests/ownership.test.mjs",
-  "description": "Guards explicit owner facades, bounded catalog modules, retired temporary paths, and byte-identical canonical preview assets.",
-  "role": "asset ownership architecture test",
-  "tags": ["assets", "ownership", "test"]
-}

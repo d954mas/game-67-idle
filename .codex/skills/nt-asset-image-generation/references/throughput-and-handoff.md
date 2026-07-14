@@ -44,7 +44,7 @@ prompts. Write a pack config and expand it (T0330, dual-reviewed spec + pilot:
    whole pack) + `candidates` N (overgen per sheet, `__cN`) + loud `max_jobs` cap.
 2. `scripts/gen_batch.py --jobs <jobs.json> --concurrency 3` — as above;
    sheet-first = ~7 assets per paid call.
-3. `scripts/slice_pack.py --jobs <jobs.json>` — bg_fix -> detect_regions ->
+3. `node ai_studio/dev_environment/python_run.mjs .codex/skills/nt-asset-image-generation/scripts/slice_pack.py --jobs <jobs.json>` — bg_fix -> detect_regions ->
    HARD count gate (region_count == cells; mismatch rejects the whole sheet:
    a merged/empty cell would silently mislabel axes) -> slice with axis-named
    outputs into per-sheet subdirs.

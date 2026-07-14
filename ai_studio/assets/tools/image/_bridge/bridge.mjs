@@ -17,7 +17,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { extname, isAbsolute, join, normalize, relative, resolve, sep } from "node:path";
 
-import { studioPythonPath } from "../../../../core_harness/tool_lib/studio_config.mjs";
+import { studioPythonPath } from "../../../../dev_environment/python.mjs";
 import { runPythonScript, shutdownImageWorkers } from "./worker.mjs";
 
 export { shutdownImageWorkers };

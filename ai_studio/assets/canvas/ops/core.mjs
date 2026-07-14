@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
-import { canvasHistoryDepth } from "../../../core_harness/tool_lib/studio_config.mjs";
+import { canvasHistoryDepth } from "../config.mjs";
 import { FONTS_DIR_REPO_PATH, FONTS_MANIFEST_REPO_PATH, defaultNoteStyle, defaultTextStyle, mergeNoteStyle, mergeTextStyle } from "../fonts.mjs";
 import { appendArchive, appendError, appendJournalLine, deleteSnapshot, ensureThinJournal, getProject, listProjects, nextJournalSeq, readJournal, readSnapshot, resolveProjectFile, resolveProjectPath, rewriteJournal, updateProject, withProjectLock, writeSnapshot } from "../store.mjs";
 

@@ -1,8 +1,8 @@
 # Workflow Orchestration
 
-Use orchestration by default for non-trivial work. The goal is to keep the lead
-agent focused on scope, integration, and validation while workers do bounded
-reading, research, review, generation, or isolated implementation.
+Orchestration is optional. Keep coherent work with the lead and delegate only
+when an independent bounded packet materially reduces latency, context load, or
+review risk after packet writing, context transfer, and reintegration cost.
 
 Before creating a delegation packet, load the active harness's agent catalog
 and select the closest existing role. Codex uses `.codex/agents/*.toml`; Claude
@@ -11,18 +11,20 @@ role fits.
 
 ## Delegate When
 
-Delegate before broad reading when the task needs:
+Delegate when all of these are true:
 
-- mapping more than one module;
-- reading more than a few files;
-- source, license, or research lookup;
-- independent review or verification;
-- asset search or generation;
-- parallel branches that can be summarized separately.
+- the packet is independent and bounded;
+- its result can be compressed and integrated;
+- the work is parallel-safe or deliberately independent review;
+- the expected latency, context, or risk gain exceeds coordination cost.
 
-Stay single-agent only for trivial edits, immediate blockers, unclear scope that
-must be clarified first, or coupled writes that must be kept in one mental
-model.
+Good cases are large independent research or codebase mapping, disjoint parallel
+implementation, and adversarial review required by the risk tier.
+
+Stay direct for coherent related multi-file implementation, tightly coupled
+writes, work that already fits the lead context, unclear scope requiring lead
+decisions, or any packet whose explanation and reintegration cost as much as
+doing the work.
 
 ## Packet
 
@@ -54,6 +56,18 @@ Stop: after mapping validation flow; do not edit files.
 Subagents start with fresh context. Restate the important local fact in the
 packet instead of assuming they saw the lead conversation.
 
+## Review Budget
+
+- Mechanical documentation, moves, formatting, and obvious edits need no
+  independent reviewer.
+- Normal behavior or logic gets one independent reviewer.
+- Security, concurrency, and release work gets two independent reviewers.
+- Repeat review only after a high-risk finding or contract change.
+
+Independent reviewers receive the current files and evidence, not each other's
+conclusions. Deterministic validation remains required regardless of reviewer
+count.
+
 ## Lead Agent Rules
 
 - Subagents return compressed findings, not transcripts.
@@ -63,8 +77,15 @@ packet instead of assuming they saw the lead conversation.
   verification, and integration using the task-log format from
   `../README.md`.
 - Writes stay serial unless files are clearly disjoint.
-- Use 2-4 workers for normal fan-out.
+- Reuse a fitting existing agent before creating another one.
+- Prefer event-driven completion or one long wait; do not tight-loop poll.
 - Do not create recursive subagent trees.
+
+## Approval
+
+If host policy requires explicit permission for delegation, ask once on the
+first useful delegation and reuse that approval within the same
+chat/session/repository scope. Do not add per-task approval ceremony.
 
 ## Boundary
 

@@ -3,7 +3,7 @@
 
 T0207 (lead-settled 2026-07-02/03): Cleanup is TWO separate interactive tools —
 Quantize (this one) and Denoise (`../denoise/denoise.py`) — not one monolithic
-"clean up" pass. The AI-art-cleanup research (tmp/research_art_cleanup_2026-07-03.md)
+"clean up" pass. The Canvas alpha-and-cleanup contract
 found quantize IS the fix for color-banding/gradient-noise artifacts, and that an
 RGBA image can only be quantized with FASTOCTREE (libimagequant is absent from this
 Pillow build) — so this ALWAYS splits alpha out, quantizes RGB with MEDIANCUT, and

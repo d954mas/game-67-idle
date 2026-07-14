@@ -3,7 +3,7 @@ import { delimiter, dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 
-import { studioPythonPath } from "../core_harness/tool_lib/studio_config.mjs";
+import { studioPythonPath } from "./python.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const args = process.argv.slice(2);
