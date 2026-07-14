@@ -31,11 +31,8 @@ import {
   validateTaskboardStoresDetailed,
 } from "./stores.mjs";
 import { relative } from "node:path";
-import { fail } from "../core_harness/tool_lib/cli.mjs";
+import { isMain } from "../core_harness/tool_lib/cli.mjs";
 import { profileTaskboardReads } from "./profile.mjs";
-
-const root = findRoot();
-const [cmd, ...rest] = process.argv.slice(2);
 
 const USAGE = `usage: cli.mjs <list|summary|context|show|profile|new|set|validate|help> ...
 
@@ -95,18 +92,6 @@ function numberArg(value, fallback) {
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : fallback;
 }
 
-function writeJson(value) {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
-}
-
-function failProblem(args, code, message, details = {}) {
-  if (args.json) {
-    writeJson({ ok: false, problem: { code, message, details } });
-    process.exit(1);
-  }
-  fail(message);
-}
-
 function textOption(value) {
   return typeof value === "string" && value.trim() ? value.trim() : "";
 }
@@ -139,10 +124,6 @@ function structuredQualityChecks(canonicalQuality, evidence) {
   const evidenceById = new Map(evidenceEntries);
   if (evidenceEntries.length !== evidenceById.size || evidenceById.size !== assignments.length || assignments.some(({ ruleId }) => !evidenceById.get(ruleId))) return null;
   return assignments.map(({ ruleId: id, outcome }) => ({ id, outcome, evidence: evidenceById.get(id) }));
-}
-
-function printUsage() {
-  process.stdout.write(USAGE);
 }
 
 function statusCounts(tasks) {
@@ -229,14 +210,41 @@ function renderContext(root, options) {
   return `${lines.join("\n")}\n`;
 }
 
-const args = parseArgs(rest);
+export function main(argv, {
+  root = findRoot(),
+  writeStdout = (text) => process.stdout.write(text),
+  writeStderr = (text) => process.stderr.write(text),
+} = {}) {
+  class CliExit {
+    constructor(code) {
+      this.code = code;
+    }
+  }
+  const [cmd, ...rest] = argv;
+  const args = parseArgs(rest);
+  const writeJson = (value) => writeStdout(`${JSON.stringify(value, null, 2)}\n`);
+  const writeLine = (value = "") => writeStdout(`${value}\n`);
+  const printUsage = () => writeStdout(USAGE);
+  const exit = (code) => { throw new CliExit(code); };
+  const failCommand = (message) => {
+    writeStderr(`error: ${message}\n`);
+    exit(1);
+  };
+  const failProblem = (problemArgs, code, message, details = {}) => {
+    if (problemArgs.json) {
+      writeJson({ ok: false, problem: { code, message, details } });
+      exit(1);
+    }
+    failCommand(message);
+  };
 
-if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") {
-  printUsage();
-  process.exit(0);
-}
+  try {
+    if (!cmd || cmd === "help" || cmd === "--help" || cmd === "-h") {
+      printUsage();
+      return 0;
+    }
 
-switch (cmd) {
+    switch (cmd) {
   case "list": {
     const hidden = new Set(args.all ? [] : ["idea", "done"]);
     if (args.ideas) hidden.delete("idea");
@@ -290,21 +298,21 @@ switch (cmd) {
       if (!args.status && !args.tag && !args.epic && (!args.project || args.project === p.fields.id)) {
         if (!args.all && p.fields.status === "done") continue;
         const id = store.storeId === "studio" ? p.fields.id : `${store.storeId}:${p.fields.id}`;
-        console.log(`# ${id} ${p.fields.title} (${p.fields.status}, ${p.fields.kind || "other"})`);
+        writeLine(`# ${id} ${p.fields.title} (${p.fields.status}, ${p.fields.kind || "other"})`);
       }
     }
     for (const { epic: e, store } of epics) {
       if (!args.status && !args.tag && (!args.project || args.project === e.fields.project) && (!args.epic || args.epic === e.fields.id)) {
         if (!args.all && !args.archive && e.fields.status === "done") continue;
         const id = store.storeId === "studio" ? e.fields.id : `${store.storeId}:${e.fields.id}`;
-        console.log(`# ${id} ${e.fields.title} (${e.fields.status}, ${e.fields.project || "no-project"})`);
+        writeLine(`# ${id} ${e.fields.title} (${e.fields.status}, ${e.fields.project || "no-project"})`);
       }
     }
     for (const { task: t, store } of tasks) {
-      console.log(shortRow(t, store));
+      writeLine(shortRow(t, store));
     }
     if (!tasks.length) {
-      console.log("(no tasks match)");
+      writeLine("(no tasks match)");
     }
     break;
   }
@@ -314,7 +322,7 @@ switch (cmd) {
       writeJson(agentContextPayloadForStores(root, stores, { limit: numberArg(args["tasks-limit"], 5) }));
       break;
     }
-    process.stdout.write(renderSummary(root, args));
+    writeStdout(renderSummary(root, args));
     break;
   }
   case "context": {
@@ -323,7 +331,7 @@ switch (cmd) {
       writeJson(agentContextPayloadForStores(root, stores, { limit: numberArg(args["tasks-limit"], 5) }));
       break;
     }
-    process.stdout.write(renderContext(root, args));
+    writeStdout(renderContext(root, args));
     break;
   }
   case "profile": {
@@ -332,23 +340,23 @@ switch (cmd) {
       writeJson(payload);
       break;
     }
-    console.log("# Taskboard Context Profile");
+    writeLine("# Taskboard Context Profile");
     for (const record of payload.records) {
-      console.log(`${record.storeId}: ${record.contextBytes} bytes, returned=${record.returnedCount}/${record.totalCount}, truncated=${record.truncated}`);
+      writeLine(`${record.storeId}: ${record.contextBytes} bytes, returned=${record.returnedCount}/${record.totalCount}, truncated=${record.truncated}`);
     }
     break;
   }
   case "show": {
-    const id = args._[0] || fail("usage: show <id>");
+    const id = args._[0] || failCommand("usage: show <id>");
     let resolved;
     try {
       resolved = findTaskboardDoc(root, id, storeQueryArgs(args));
     } catch (err) {
-      fail(err.message);
+      failCommand(err.message);
     }
     const doc = resolved ? resolved.doc : null;
     const store = resolved ? resolved.store : null;
-    if (!doc) fail(`no doc with id ${id}`);
+    if (!doc) failCommand(`no doc with id ${id}`);
     if (args.json) {
       let row;
       if (doc.kind === "task") {
@@ -364,17 +372,17 @@ switch (cmd) {
       });
       break;
     }
-    console.log(`file: ${relative(root, doc.file)}`);
+    writeLine(`file: ${relative(root, doc.file)}`);
     for (const [k, v] of Object.entries(doc.fields)) {
-      console.log(`${k}: ${Array.isArray(v) ? v.join(", ") : v}`);
+      writeLine(`${k}: ${Array.isArray(v) ? v.join(", ") : v}`);
     }
-    console.log("\n" + doc.body);
+    writeLine("\n" + doc.body);
     break;
   }
   case "new": {
     const kind = args._[0];
-    if (!["project", "epic", "task"].includes(kind)) fail("usage: new project|epic|task --title \"...\"");
-    if (!args.title) fail("--title is required");
+    if (!["project", "epic", "task"].includes(kind)) failCommand("usage: new project|epic|task --title \"...\"");
+    if (!args.title) failCommand("--title is required");
     const input = {
       title: args.title,
       status: args.status,
@@ -389,7 +397,7 @@ switch (cmd) {
     try {
       store = mutationStore(root, storeQueryArgs(args));
     } catch (err) {
-      fail(err.message);
+      failCommand(err.message);
     }
     const opts = storeOptions(store);
     let doc;
@@ -398,9 +406,9 @@ switch (cmd) {
     } catch (err) {
       if (args.json) {
         writeJson({ ok: false, problem: err.problem || { code: "taskboard_error", message: err.message } });
-        process.exit(1);
+        exit(1);
       }
-      fail(err.message);
+      failCommand(err.message);
     }
     if (args.json) {
       const row = kind === "task"
@@ -408,12 +416,12 @@ switch (cmd) {
         : (kind === "epic" ? agentEpicRow(root, doc, { store }) : agentProjectRow(root, doc, { store }));
       writeJson({ ok: true, doc: row });
     } else {
-      console.log(`created ${doc.fields.id}: ${relative(root, doc.file)}`);
+      writeLine(`created ${doc.fields.id}: ${relative(root, doc.file)}`);
     }
     break;
   }
   case "set": {
-    const id = args._[0] || fail("usage: set <id> --field value ...");
+    const id = args._[0] || failCommand("usage: set <id> --field value ...");
     const fields = {};
     for (const key of ["status", "project", "epic", "priority", "title", "target", "kind"]) {
       if (args[key] !== undefined) fields[key] = args[key];
@@ -474,26 +482,27 @@ switch (cmd) {
       try {
         resolvedForLog = findTaskboardDoc(root, id, storeQueryArgs(args));
       } catch (err) {
-        fail(err.message);
+        failCommand(err.message);
       }
       const doc = resolvedForLog ? resolvedForLog.doc : null;
-      if (!doc) fail(`no doc with id ${id}`);
+      if (!doc) failCommand(`no doc with id ${id}`);
       const stamp = new Date().toISOString().slice(0, 10);
       patch.body = `${doc.body.replace(/\s+$/, "")}\n${logEntries.map((entry) => `- ${stamp}: ${entry}`).join("\n")}\n`;
     }
-    if (!Object.keys(fields).length && !patch.body) fail("nothing to set");
+    if (!Object.keys(fields).length && !patch.body) failCommand("nothing to set");
     let resolvedForUpdate = null;
     try {
       const resolved = resolvedForLog || findTaskboardDoc(root, id, storeQueryArgs(args));
       resolvedForUpdate = resolved;
-      if (!resolved) fail(`no doc with id ${id}`);
+      if (!resolved) failCommand(`no doc with id ${id}`);
       const doc = updateDoc(root, resolved.id, patch, storeOptions(resolved.store));
       if (args.json) {
         writeJson({ ok: true, doc: { id: doc.fields.id, storeId: resolved.store.storeId, qualifiedId: `${resolved.store.storeId}:${doc.fields.id}`, status: doc.fields.status, file: relative(root, doc.file) } });
       } else {
-        console.log(`updated ${id}: ${shortRow(doc, resolved.store)}`);
+        writeLine(`updated ${id}: ${shortRow(doc, resolved.store)}`);
       }
     } catch (err) {
+      if (err instanceof CliExit) throw err;
       if (err.problem?.code === "task_quality_decision_required" && resolvedForUpdate?.doc) {
         err.problem.details = {
           ...err.problem.details,
@@ -502,9 +511,9 @@ switch (cmd) {
       }
       if (args.json) {
         writeJson({ ok: false, problem: err.problem || { code: "taskboard_error", message: err.message } });
-        process.exit(1);
+        exit(1);
       }
-      fail(err.message);
+      failCommand(err.message);
     }
     break;
   }
@@ -513,25 +522,31 @@ switch (cmd) {
     const detailedProblems = validateTaskboardStoresDetailed(root, stores);
     if (args.json) {
       writeJson({ ok: detailedProblems.length === 0, problems: detailedProblems });
-      process.exit(detailedProblems.length ? 1 : 0);
+      return detailedProblems.length ? 1 : 0;
     }
     if (!detailedProblems.length) {
-      console.log("ok: no problems found");
+      writeLine("ok: no problems found");
     } else {
       for (const p of detailedProblems) {
-        console.log(`problem: ${p.message}`);
+        writeLine(`problem: ${p.message}`);
         const hint = remediationHint(p.message);
         if (hint) {
-          console.log(`hint: ${hint}`);
+          writeLine(`hint: ${hint}`);
         }
       }
-      process.exit(1);
+      return 1;
     }
     break;
   }
   default:
     printUsage();
-    process.exit(1);
+    return 1;
+    }
+    return 0;
+  } catch (error) {
+    if (error instanceof CliExit) return error.code;
+    throw error;
+  }
 }
 
 function remediationHint(problem) {
@@ -566,4 +581,9 @@ function remediationHint(problem) {
     return "fill `## Goal`, `## In scope`, and `## Out of scope`, or move the project back to `status: idea`";
   }
   return "";
+}
+
+if (isMain(import.meta.url)) {
+  const exitCode = main(process.argv.slice(2));
+  if (exitCode !== 0) process.exit(exitCode);
 }

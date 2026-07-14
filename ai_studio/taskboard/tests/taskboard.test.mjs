@@ -15,10 +15,22 @@ import {
 import { boardPayload, parseDoc, serializeDoc, slugify } from "../store.mjs";
 import { createTaskboardApi } from "../api.mjs";
 import { profileTaskboardReads } from "../profile.mjs";
+import { main as runTaskboardCli } from "../cli.mjs";
 
 const taskboardDir = dirname(import.meta.dirname);
 const cliPath = join(taskboardDir, "cli.mjs");
 const activeProjectBody = "## Goal\n\nTrack scoped work.\n\n## In scope\n\n- Owned work\n\n## Out of scope\n\n- Unowned work\n\n## Log\n";
+
+function runCliDirect(root, ...args) {
+  let stdout = "";
+  let stderr = "";
+  const status = runTaskboardCli(args, {
+    root,
+    writeStdout: (text) => { stdout += text; },
+    writeStderr: (text) => { stderr += text; },
+  });
+  return { status, stdout, stderr };
+}
 
 function tempRoot(t, options = {}) {
   const dir = mkdtempSync(join(tmpdir(), "taskboard-test-"));
@@ -363,13 +375,11 @@ test("cli list hides ideas by default and shows them explicitly", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "Raw idea", status: "idea" });
   createTask(root, { title: "Actionable", status: "backlog" });
-  const cli = cliPath;
-  const base = { cwd: root, encoding: "utf8" };
-  const normal = spawnSync(process.execPath, [cli, "list"], base);
+  const normal = runCliDirect(root, "list");
   assert.equal(normal.status, 0, normal.stderr);
   assert.match(normal.stdout, /Actionable/);
   assert.doesNotMatch(normal.stdout, /Raw idea/);
-  const ideas = spawnSync(process.execPath, [cli, "list", "--ideas"], base);
+  const ideas = runCliDirect(root, "list", "--ideas");
   assert.equal(ideas.status, 0, ideas.stderr);
   assert.match(ideas.stdout, /Raw idea/);
 });
@@ -379,14 +389,12 @@ test("cli list shows review by default and keeps ideas hidden", (t) => {
   createTask(root, { title: "Active work", status: "todo" });
   createTask(root, { title: "Needs review", status: "review" });
   createTask(root, { title: "Raw idea", status: "idea" });
-  const cli = cliPath;
-  const base = { cwd: root, encoding: "utf8" };
-  const normal = spawnSync(process.execPath, [cli, "list"], base);
+  const normal = runCliDirect(root, "list");
   assert.equal(normal.status, 0, normal.stderr);
   assert.match(normal.stdout, /Active work/);
   assert.match(normal.stdout, /Needs review/);
   assert.doesNotMatch(normal.stdout, /Raw idea/);
-  const ideas = spawnSync(process.execPath, [cli, "list", "--ideas"], base);
+  const ideas = runCliDirect(root, "list", "--ideas");
   assert.equal(ideas.status, 0, ideas.stderr);
   assert.match(ideas.stdout, /Raw idea/);
 });
@@ -412,8 +420,7 @@ ${"LARGE_TASK_BODY_SHOULD_NOT_APPEAR\n".repeat(300)}
   });
   createTask(root, { title: "Review task", status: "review", priority: "P1" });
   createTask(root, { title: "Raw idea", status: "idea", priority: "P1" });
-  const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "context"], { cwd: root, encoding: "utf8" });
+  const result = runCliDirect(root, "context");
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /# Current Context Digest/);
   assert.match(result.stdout, /active_task_counts: idea:1 backlog:0 todo:0 doing:1 review:1/);
@@ -435,22 +442,22 @@ test("cli context defaults to five summaries and expands only through an explici
     });
   }
 
-  const defaultResult = spawnSync(process.execPath, [cliPath, "context", "--json"], { cwd: root, encoding: "utf8" });
+  const defaultResult = runCliDirect(root, "context", "--json");
   assert.equal(defaultResult.status, 0, defaultResult.stderr);
   const defaultPayload = JSON.parse(defaultResult.stdout);
   assert.equal(defaultPayload.currentWork.length, 5);
   assert.equal(defaultPayload.counts.currentWork, 8);
   assert.doesNotMatch(defaultResult.stdout, /CONTEXT_BODY_/);
 
-  const textResult = spawnSync(process.execPath, [cliPath, "context"], { cwd: root, encoding: "utf8" });
+  const textResult = runCliDirect(root, "context");
   assert.equal(textResult.status, 0, textResult.stderr);
   assert.equal((textResult.stdout.match(/^- T\d{4}/gm) || []).length, 5);
 
-  const summaryText = spawnSync(process.execPath, [cliPath, "summary"], { cwd: root, encoding: "utf8" });
+  const summaryText = runCliDirect(root, "summary");
   assert.equal(summaryText.status, 0, summaryText.stderr);
   assert.equal((summaryText.stdout.match(/^- T\d{4}/gm) || []).length, 5);
 
-  const scopedResult = spawnSync(process.execPath, [cliPath, "context", "--json", "--tasks-limit", "8"], { cwd: root, encoding: "utf8" });
+  const scopedResult = runCliDirect(root, "context", "--json", "--tasks-limit", "8");
   assert.equal(scopedResult.status, 0, scopedResult.stderr);
   assert.equal(JSON.parse(scopedResult.stdout).currentWork.length, 8);
   assert.doesNotMatch(scopedResult.stdout, /CONTEXT_BODY_/);
@@ -491,7 +498,7 @@ test("read profiler has one small privacy-safe context contract plus CLI smoke",
   assert.equal(Number.isInteger(payload.records[0].contextBytes), true);
   assert.doesNotMatch(JSON.stringify(payload), /PUBLIC_TITLE_CANARY|PUBLIC_BODY_CANARY|path|query|durationMs/);
 
-  const result = spawnSync(process.execPath, [cliPath, "profile", "--json"], { cwd: root, encoding: "utf8" });
+  const result = runCliDirect(root, "profile", "--json");
   assert.equal(result.status, 0, result.stderr);
   assert.equal(JSON.parse(result.stdout).schema, payload.schema);
 });
@@ -502,7 +509,7 @@ test("aggregate context reports unsliced totals and globally ranks work across s
   const privateStore = ensurePrivateGameMount(root);
   writeTaskDoc(privateStore.itemsRoot, "T0001", "Private doing", "doing", { priority: "P0" });
 
-  const result = spawnSync(process.execPath, [cliPath, "context", "--json", "--include-private", "--tasks-limit", "1"], { cwd: root, encoding: "utf8" });
+  const result = runCliDirect(root, "context", "--json", "--include-private", "--tasks-limit", "1");
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
   assert.equal(payload.currentWork.length, 1);
@@ -516,8 +523,7 @@ test("cli summary is task-derived and shows review as current work", (t) => {
   createTask(root, { title: "Doing task", status: "doing", priority: "P1" });
   createTask(root, { title: "Review task", status: "review", priority: "P1" });
   createTask(root, { title: "Idea task", status: "idea", priority: "P1" });
-  const cli = cliPath;
-  const result = spawnSync(process.execPath, [cli, "summary", "--tasks-limit", "5"], { cwd: root, encoding: "utf8" });
+  const result = runCliDirect(root, "summary", "--tasks-limit", "5");
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /# Taskboard Summary/);
   assert.match(result.stdout, /active_task_counts: idea:1 backlog:0 todo:0 doing:1 review:1/);
@@ -549,7 +555,7 @@ BODY_SHOULD_NOT_APPEAR
   createTask(root, { title: "Needs review", status: "review", priority: "P1" });
   createTask(root, { title: "Raw idea", status: "idea", priority: "P2" });
 
-  const result = spawnSync(process.execPath, [cliPath, "summary", "--json"], { cwd: root, encoding: "utf8" });
+  const result = runCliDirect(root, "summary", "--json");
 
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
@@ -583,14 +589,14 @@ Detailed body.
   });
   createTask(root, { title: "Hidden idea", status: "idea" });
 
-  const list = spawnSync(process.execPath, [cliPath, "list", "--json"], { cwd: root, encoding: "utf8" });
+  const list = runCliDirect(root, "list", "--json");
   assert.equal(list.status, 0, list.stderr);
   const listPayload = JSON.parse(list.stdout);
   assert.equal(listPayload.schema, "ai_studio.taskboard.list.v1");
   assert.deepEqual(listPayload.tasks.map((task) => task.id), ["T0001"]);
   assert.equal("body" in listPayload.tasks[0], false);
 
-  const show = spawnSync(process.execPath, [cliPath, "show", "T0001", "--json"], { cwd: root, encoding: "utf8" });
+  const show = runCliDirect(root, "show", "T0001", "--json");
   assert.equal(show.status, 0, show.stderr);
   const showPayload = JSON.parse(show.stdout);
   assert.equal(showPayload.schema, "ai_studio.taskboard.doc.v1");
@@ -604,13 +610,13 @@ test("cli list is public-only by default and can explicitly include private game
   const privateStore = ensurePrivateGameMount(root);
   writeTaskDoc(privateStore.itemsRoot, "T0001", "Private task");
 
-  const normal = spawnSync(process.execPath, [cliPath, "list", "--json"], { cwd: root, encoding: "utf8" });
+  const normal = runCliDirect(root, "list", "--json");
   assert.equal(normal.status, 0, normal.stderr);
   const normalPayload = JSON.parse(normal.stdout);
   assert.deepEqual(normalPayload.tasks.map((task) => task.title), ["Public task"]);
   assert.deepEqual(normalPayload.tasks.map((task) => task.storeId), ["studio"]);
 
-  const included = spawnSync(process.execPath, [cliPath, "list", "--json", "--include-private"], { cwd: root, encoding: "utf8" });
+  const included = runCliDirect(root, "list", "--json", "--include-private");
   assert.equal(included.status, 0, included.stderr);
   const includedPayload = JSON.parse(included.stdout);
   const privateTask = includedPayload.tasks.find((task) => task.storeId === "game:secret-game");
@@ -625,11 +631,11 @@ test("cli rejects ambiguous bare ids in aggregate context and accepts qualified 
   const privateStore = ensurePrivateGameMount(root);
   writeTaskDoc(privateStore.itemsRoot, "T0001", "Private task");
 
-  const ambiguous = spawnSync(process.execPath, [cliPath, "show", "T0001", "--json", "--include-private"], { cwd: root, encoding: "utf8" });
+  const ambiguous = runCliDirect(root, "show", "T0001", "--json", "--include-private");
   assert.notEqual(ambiguous.status, 0);
   assert.match(ambiguous.stderr || ambiguous.stdout, /ambiguous/i);
 
-  const qualified = spawnSync(process.execPath, [cliPath, "show", "game:secret-game:T0001", "--json", "--include-private"], { cwd: root, encoding: "utf8" });
+  const qualified = runCliDirect(root, "show", "game:secret-game:T0001", "--json", "--include-private");
   assert.equal(qualified.status, 0, qualified.stderr);
   const payload = JSON.parse(qualified.stdout);
   assert.equal(payload.doc.title, "Private task");
@@ -656,13 +662,13 @@ test("cli new task and project write to explicit private game store without publ
   assert.equal(taskPayload.doc.id, "T0001");
   assert.match(taskPayload.doc.file, /games\/secret-game\/\.ai_studio\/taskboard\/items\/active\/T0001-/);
 
-  const projectResult = spawnSync(process.execPath, [
-    cliPath, "new", "project",
+  const projectResult = runCliDirect(root,
+    "new", "project",
     "--game", privateStore.gameId,
     "--title", "Private project",
     "--status", "idea",
     "--json",
-  ], { cwd: root, encoding: "utf8" });
+  );
   assert.equal(projectResult.status, 0, projectResult.stderr);
   const projectPayload = JSON.parse(projectResult.stdout);
   assert.equal(projectPayload.doc.storeId, "game:secret-game");
@@ -735,8 +741,13 @@ test("aggregate validation rejects ambiguous bare cross-store links and accepts 
 });
 
 test("taskboard cli help exits successfully and documents commands", () => {
-  for (const args of [[], ["help"], ["--help"], ["-h"]]) {
-    const result = spawnSync(process.execPath, [cliPath, ...args], { encoding: "utf8" });
+  const standalone = spawnSync(process.execPath, [cliPath], { encoding: "utf8" });
+  for (const result of [
+    standalone,
+    runCliDirect(process.cwd(), "help"),
+    runCliDirect(process.cwd(), "--help"),
+    runCliDirect(process.cwd(), "-h"),
+  ]) {
 
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|profile\|new\|set\|validate\|help>/);
@@ -752,6 +763,14 @@ test("taskboard cli rejects unrelated core commands", () => {
   assert.notEqual(result.status, 0);
   assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|profile\|new\|set\|validate\|help>/);
   assert.doesNotMatch(result.stdout, /workflow-run/);
+});
+
+test("taskboard direct CLI reports a missing set target exactly once", (t) => {
+  const root = tempRoot(t);
+  const result = runCliDirect(root, "set", "T9999", "--status", "doing", "--json");
+  assert.equal(result.status, 1);
+  assert.equal(result.stderr, "error: no doc with id T9999\n");
+  assert.equal(result.stdout, "");
 });
 
 test("updateDoc patches fields, keeps id/created, bumps updated", (t) => {
@@ -991,7 +1010,7 @@ test("quality CLI rejects duplicate rule ids", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "Duplicate quality", status: "review" });
 
-  const cli = spawnSync(process.execPath, [cliPath, "set", "T0001", "--quality", "QTECH_001=pass; QTECH_001=pass", "--quality-evidence", "duplicate", "--json"], { cwd: root, encoding: "utf8" });
+  const cli = runCliDirect(root, "set", "T0001", "--quality", "QTECH_001=pass; QTECH_001=pass", "--quality-evidence", "duplicate", "--json");
   assert.notEqual(cli.status, 0);
   assert.equal(JSON.parse(cli.stdout).problem.code, "quality_input_invalid");
 });
@@ -1082,10 +1101,9 @@ test("taskboard cli appends passing structured closeout log lines before updateD
     body: "## Done when\n\n- [ ] waived\n\n## Log\n",
   });
 
-  const result = spawnSync(process.execPath, [cliPath, "set", "T0001", "--status", "done",
+  const result = runCliDirect(root, "set", "T0001", "--status", "done",
     "--waiver-reason", "criterion superseded", "--closure-evidence", "E001 decision",
-    "--quality", "QCLR_001=pass; QTECH_001=pass", "--quality-evidence", "QCLR_001=scope review; QTECH_001=tests", "--json"],
-  { cwd: root, encoding: "utf8" });
+    "--quality", "QCLR_001=pass; QTECH_001=pass", "--quality-evidence", "QCLR_001=scope review; QTECH_001=tests", "--json");
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const closed = findDoc(root, "T0001");
@@ -1100,13 +1118,13 @@ test("taskboard cli appends passing structured closeout log lines before updateD
 test("taskboard cli rejects skip and unions coarse suggestions for multi-domain work", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "Player HUD polish", status: "review", tags: ["ui", "art"], body: "## Done when\n\n- [x] HUD reviewed\n\n## Log\n" });
-  const result = spawnSync(process.execPath, [cliPath, "set", "T0001", "--quality", "QTECH_001=skip", "--quality-evidence", "not run", "--json"], { cwd: root, encoding: "utf8" });
+  const result = runCliDirect(root, "set", "T0001", "--quality", "QTECH_001=skip", "--quality-evidence", "not run", "--json");
   assert.notEqual(result.status, 0);
   const problem = JSON.parse(result.stdout).problem;
   assert.equal(problem.code, "quality_input_invalid");
   assert.deepEqual(problem.details.suggestedGroups, ["QART", "QASSET", "QTECH", "QCLR"]);
 
-  const close = spawnSync(process.execPath, [cliPath, "set", "T0001", "--status", "done", "--json"], { cwd: root, encoding: "utf8" });
+  const close = runCliDirect(root, "set", "T0001", "--status", "done", "--json");
   assert.notEqual(close.status, 0);
   assert.deepEqual(JSON.parse(close.stdout).problem.details.suggestedGroups, ["QART", "QASSET", "QTECH", "QCLR"]);
 });
@@ -1114,15 +1132,15 @@ test("taskboard cli rejects skip and unions coarse suggestions for multi-domain 
 test("taskboard cli rejects incomplete or conflicting structured closeout inputs early", (t) => {
   const root = tempRoot(t);
   createTask(root, { title: "CLI invalid", status: "review" });
-  const incomplete = spawnSync(process.execPath, [cliPath, "set", "T0001", "--waiver-reason", "because", "--json"], { cwd: root, encoding: "utf8" });
+  const incomplete = runCliDirect(root, "set", "T0001", "--waiver-reason", "because", "--json");
   assert.notEqual(incomplete.status, 0);
   assert.equal(JSON.parse(incomplete.stdout).problem.code, "closure_input_invalid");
 
-  const conflicting = spawnSync(process.execPath, [cliPath, "set", "T0001", "--quality", "QCLR_001=pass", "--quality-evidence", "proof", "--quality-not-applicable", "docs only", "--json"], { cwd: root, encoding: "utf8" });
+  const conflicting = runCliDirect(root, "set", "T0001", "--quality", "QCLR_001=pass", "--quality-evidence", "proof", "--quality-not-applicable", "docs only", "--json");
   assert.notEqual(conflicting.status, 0);
   assert.equal(JSON.parse(conflicting.stdout).problem.code, "quality_input_conflict");
 
-  const duplicateEvidence = spawnSync(process.execPath, [cliPath, "set", "T0001", "--quality", "QCLR_001=pass; QTECH_001=pass", "--quality-evidence", "QCLR_001=one; QCLR_001=two; QTECH_001=tests", "--json"], { cwd: root, encoding: "utf8" });
+  const duplicateEvidence = runCliDirect(root, "set", "T0001", "--quality", "QCLR_001=pass; QTECH_001=pass", "--quality-evidence", "QCLR_001=one; QCLR_001=two; QTECH_001=tests", "--json");
   assert.notEqual(duplicateEvidence.status, 0);
   assert.equal(JSON.parse(duplicateEvidence.stdout).problem.code, "quality_input_invalid");
 });
@@ -1131,7 +1149,7 @@ test("taskboard cli appends a structured quality not-applicable decision", (t) =
   const root = tempRoot(t);
   createTask(root, { title: "CLI not applicable", status: "review", body: "## Done when\n\n- [x] docs updated\n\n## Log\n" });
 
-  const result = spawnSync(process.execPath, [cliPath, "set", "T0001", "--status", "done", "--quality-not-applicable", "documentation-only", "--json"], { cwd: root, encoding: "utf8" });
+  const result = runCliDirect(root, "set", "T0001", "--status", "done", "--quality-not-applicable", "documentation-only", "--json");
 
   assert.equal(result.status, 0, result.stderr || result.stdout);
   assert.deepEqual(findDoc(root, "T0001").fields.quality, { notApplicable: { reason: "documentation-only" } });
