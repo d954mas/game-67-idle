@@ -380,15 +380,24 @@ test("tracked graduated asset owner tests are assigned to the Studio assets suit
   }
 });
 
-test("new tracked native tests fail closed until explicitly assigned", () => {
+test("new tracked native tests fail closed until wired into CMake, without a Studio registry edit", () => {
   const root = mkdtempSync(join(tmpdir(), "studio-native-inventory-"));
-  const testPath = "features/example/tests/test_new.c";
+  const testPath = "templates/template/tests/test_new.c";
+  const cmakePath = "templates/template/cmake/GameTests.cmake";
   try {
-    mkdirSync(join(root, "features/example/tests"), { recursive: true });
+    mkdirSync(join(root, "templates/template/tests"), { recursive: true });
+    mkdirSync(join(root, "templates/template/cmake"), { recursive: true });
     writeFileSync(join(root, testPath), "int main(void) { return 0; }\n");
+    writeFileSync(join(root, cmakePath), [
+      "# tests/test_new.c is not wired yet",
+      "add_executable(not_the_test tests/test_new.c.disabled)",
+      "",
+    ].join("\n"));
     assert.equal(spawnSync("git", ["init", "-q"], { cwd: root }).status, 0);
-    assert.equal(spawnSync("git", ["add", testPath], { cwd: root }).status, 0);
+    assert.equal(spawnSync("git", ["add", testPath, cmakePath], { cwd: root }).status, 0);
     assert.deepEqual(unassignedDeterministicTests(root), [testPath]);
+    writeFileSync(join(root, cmakePath), "add_executable(test_new tests/test_new.c)\n");
+    assert.deepEqual(unassignedDeterministicTests(root), []);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

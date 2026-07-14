@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { existsSync, readdirSync, statSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { basename, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
 
@@ -72,38 +72,15 @@ const WEB_COMMANDS = [
   ["node", "templates/template/tools/game.mjs", "verify", "--target", "itch", "--no-build", "--template-proof", "--skip-tests", "--out", "build/package-proof"],
 ];
 
-const NATIVE_TEST_FILES = Object.freeze([
-  "features/audio-core/tests/test_audio.c",
-  "features/audio-core/tests/test_audio_backend_native.c",
-  "features/audio-core/tests/test_audio_resource.c",
-  "templates/template/tests/test_game_analytics.c",
-  "templates/template/tests/test_game_audio.c",
-  "templates/template/tests/test_game_event_render.c",
-  "templates/template/tests/test_game_events.c",
-  "templates/template/tests/test_game_events_log_mirror.c",
-  "templates/template/tests/test_game_events_typed.c",
-  "templates/template/tests/test_game_format.c",
-  "templates/template/tests/test_game_save.c",
-  "templates/template/tests/test_game_state_json.c",
-  "templates/template/tests/test_game_state_roundtrip.c",
-  "templates/template/tests/test_game_storage.c",
-  "templates/template/tests/test_items_api.c",
-  "templates/template/tests/test_items_api_core_only.c",
-  "templates/template/tests/test_items_catalog.c",
-  "templates/template/tests/test_items_fragment.c",
-  "templates/template/tests/test_platform_lifecycle.c",
-  "templates/template/tests/test_platform_sdk.c",
-  "templates/template/tests/test_platform_sdk_events.c",
-  "templates/template/tests/test_progression.c",
-  "templates/template/tests/test_progression_catalog.c",
-  "templates/template/tests/test_progression_curve.c",
-  "templates/template/tests/test_template_composition.c",
-]);
-
 const CHECKS = Object.freeze([
   { id: "studio.facade", testFiles: ["ai_studio/studio.test.mjs", "ai_studio/studio_ci.test.mjs"] },
   { id: "studio.config", testFiles: ["ai_studio/config.test.mjs"] },
-  { id: "reference-template.native", commands: NATIVE_COMMANDS, nativeFiles: NATIVE_TEST_FILES, releaseOnly: true },
+  {
+    id: "reference-template.native",
+    commands: NATIVE_COMMANDS,
+    nativeRoots: ["features/audio-core/tests", "templates/template/tests"],
+    releaseOnly: true,
+  },
   { id: "reference-template.web", commands: WEB_COMMANDS, requiresEmsdk: true, releaseOnly: true },
   {
     id: "studio.architecture-map",
@@ -317,17 +294,37 @@ export function isDeterministicTestPath(path) {
 }
 
 function suiteOwnsTest(suite, path) {
-  if (suite.testFiles?.includes(path) || suite.pythonFiles?.includes(path) || suite.nativeFiles?.includes(path)) return true;
+  if (suite.testFiles?.includes(path) || suite.pythonFiles?.includes(path)) return true;
   if (suite.testRoots?.some((root) => path.startsWith(`${root}/`)) && path.endsWith(".test.mjs")) return true;
   if (suite.pythonRoots?.some((root) => path.startsWith(`${root}/`)) && /(?:^|\/)(?:test_[^/]+|[^/]+_test|[^/]+\.test)\.py$/.test(path)) return true;
+  if (suite.nativeRoots?.some((root) => path.startsWith(`${root}/`)) && /\/tests\/test_[^/]+\.c$/.test(path)) return true;
   return false;
+}
+
+function cmakeSourceCorpus(root, trackedPaths) {
+  return trackedPaths
+    .filter((path) => path === "templates/template/CMakeLists.txt"
+      || (path.startsWith("templates/template/cmake/") && path.endsWith(".cmake")))
+    .filter((path) => existsSync(resolve(root, path)))
+    .map((path) => readFileSync(resolve(root, path), "utf8").replace(/#.*$/gm, ""))
+    .join("\n");
+}
+
+function cmakeMentionsNativeTest(cmakeSources, testPath) {
+  const escaped = basename(testPath).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(?:^|[^A-Za-z0-9_.-])${escaped}(?:$|[^A-Za-z0-9_.-])`).test(cmakeSources);
 }
 
 export function unassignedDeterministicTests(root = ROOT) {
   const repoRoot = resolve(root);
   const result = spawnSync("git", ["-c", `safe.directory=${slash(repoRoot)}`, "ls-files", "-z"], { cwd: repoRoot, encoding: "utf8", shell: false });
   if (result.error || result.status !== 0) throw new Error(result.error?.message || result.stderr || "git ls-files failed");
-  return result.stdout.split("\0").map(slash).filter(isDeterministicTestPath).filter((path) => !CHECKS.some((check) => suiteOwnsTest(check, path)));
+  const trackedPaths = result.stdout.split("\0").map(slash).filter(Boolean);
+  const cmakeSources = cmakeSourceCorpus(repoRoot, trackedPaths);
+  return trackedPaths.filter(isDeterministicTestPath).filter((path) => (
+    !CHECKS.some((check) => suiteOwnsTest(check, path))
+    || (/\/tests\/test_[^/]+\.c$/.test(path) && !cmakeMentionsNativeTest(cmakeSources, path))
+  ));
 }
 
 function tailOutput(value, maxLines = 40, maxBytes = 8192) {
