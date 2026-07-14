@@ -6,9 +6,12 @@ Source of truth for current work. Detailed protocol:
 - Projects: `ai_studio/taskboard/items/projects/`; epics:
   `ai_studio/taskboard/items/epics/`; active tasks:
   `ai_studio/taskboard/items/active/`.
-- Review/closed history: `ai_studio/taskboard/items/archive/`.
+- Closed history: ignored `items/archive/pending/` Markdown until an explicit
+  seal, then immutable `items/archive/*.zip` batches. There is no global archive
+  index.
 
-Archives are history; load only for linked evidence, regression debug, review
+Archives are history; normal Taskboard reads and repository search exclude them.
+Load one archived task only for linked evidence, regression debug, review
 cleanup, or user request.
 
 ## Product Surface
@@ -37,6 +40,10 @@ Prefer JSON when an agent needs task state:
   only for a scoped routing decision.
 - List rows: `node ai_studio/taskboard/cli.mjs list --json`.
 - Read one file: `node ai_studio/taskboard/cli.mjs show T0001 --json`.
+- Read one historical file explicitly:
+  `node ai_studio/taskboard/cli.mjs show T0001 --archive --json`.
+- Seal pending history into a new immutable batch:
+  `node ai_studio/taskboard/cli.mjs archive seal --name 2026-07-closeout --json`.
 - Help: `node ai_studio/taskboard/cli.mjs help`.
 - Change: `node ai_studio/taskboard/cli.mjs new project --title "..." --kind game --target games/<id>`,
   `node ai_studio/taskboard/cli.mjs new epic --title "..." --project P001`,
@@ -88,8 +95,9 @@ Reusable integrations should treat Taskboard as a feature boundary:
 Internal module ownership is intentionally small:
 
 - `store.mjs`: markdown store, frontmatter parse/serialize, path layout,
-  constants, templates, create/update/list/find, archive movement, stable JSON
+  constants, templates, create/update/list/find, archive routing, stable JSON
   payloads, and validation.
+- `archive.mjs`: immutable ZIP sealing and explicit sealed-entry lookup.
 - `stores.mjs`: workspace store resolver for Studio/game Taskboard stores,
   explicit private inclusion, qualified IDs, and aggregate payloads.
 - `cli.mjs`: public human/agent command surface.
@@ -107,6 +115,14 @@ we later need large full-text search, 10k+ live items, cross-history analytics,
 or low-latency queries across archived logs. It should not replace markdown as
 the canonical store without that pressure.
 
+Closed task bodies are not working knowledge. A guarded close first moves the
+Markdown file to ignored `archive/pending/<epic>/`. Periodic `archive seal`
+writes one deterministic STORE-mode ZIP, reopens it, verifies every byte and
+CRC, atomically publishes it, and only then deletes loose sources. Existing ZIP
+batches are never overwritten or rebuilt. Their entry names are the only
+archive index; `show --archive` returns only the requested body. Humans can open
+the ZIP directly in Explorer.
+
 ## Minimal Context
 
 For substantial work: `node ai_studio/taskboard/cli.mjs summary --json` -> an
@@ -115,13 +131,16 @@ explicitly scoped `list` query or `show <id>` -> needed evidence files ->
 default summary/context payload is capped at five body-free task rows; only
 `show` returns a task body.
 
-Search current scope only. Avoid archives, P3 ideas, broad design, and build
+Search current scope only. `.rgignore` excludes pending and sealed Taskboard
+history. Avoid explicit archive lookup, P3 ideas, broad design, and build
 artifacts unless linked.
 
 ## Done And Validation
 
 A new task transition to `done` is guarded by the closure and quality-decision
-contract in `task-store-reference.md`. Existing `done` history is grandfathered.
+contract in `task-store-reference.md`, then waits under ignored
+`archive/pending/` until the next seal. Existing `done` history is
+grandfathered.
 Use the guide for lifecycle, evidence, CLI options, and canonical log formats.
 Every applicable Quality assignment must be `pass`; `block`, `review`, and
 `unverified` keep the task open. Use `--quality-not-applicable "reason"` when

@@ -245,6 +245,7 @@ export function main(argv, {
   case "list": {
     const hidden = new Set(args.all ? [] : ["idea", "done"]);
     if (args.ideas) hidden.delete("idea");
+    if (args.archive) hidden.delete("done");
     if (args.review) hidden.delete("review");
     if (args.status) hidden.clear();
     const stores = taskboardStoresForQuery(root, storeQueryArgs(args));
@@ -262,6 +263,7 @@ export function main(argv, {
     const projects = storeDocs.flatMap((entry) => entry.projects.map((project) => ({ ...entry, project })));
     const epics = storeDocs.flatMap((entry) => entry.epics.map((epic) => ({ ...entry, epic })));
     const tasks = storeDocs.flatMap((entry) => entry.tasks.map((task) => ({ ...entry, task }))).filter(({ task: t }) => {
+      if (args.archive && t.archived !== true) return false;
       if (hidden.has(t.fields.status)) return false;
       if (args.status && t.fields.status !== args.status) return false;
       if (args.project && t.fields.project !== args.project) return false;

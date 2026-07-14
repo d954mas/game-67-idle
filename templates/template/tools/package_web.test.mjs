@@ -23,10 +23,16 @@ import {
   verifyDependencySources,
   verifyWebPackage,
 } from "./package_web.mjs";
-import { createStoreZip, readStoreZip } from "../../../ai_studio/core_harness/tool_lib/zip_store.mjs";
+import { createStoreZip, readStoreZip } from "./lib/zip_store.mjs";
 
 const studioRoot = resolve(fileURLToPath(new URL("../../..", import.meta.url)));
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+test("standalone template ZIP helper matches the canonical Studio helper", () => {
+  const canonical = readFileSync(join(studioRoot, "ai_studio", "core_harness", "tool_lib", "zip_store.mjs"));
+  const distributionCopy = readFileSync(join(studioRoot, "templates", "template", "tools", "lib", "zip_store.mjs"));
+  assert.equal(distributionCopy.equals(canonical), true);
+});
 const RELEASE_WASM = Buffer.from([
   0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
   0x01, 0x04, 0x01, 0x60, 0x00, 0x00,

@@ -1,7 +1,7 @@
 // Taskboard core tests. Run: node --test ai_studio/taskboard/tests/taskboard.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync, mkdirSync, renameSync, utimesSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync, mkdirSync, renameSync, symlinkSync, utimesSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn, spawnSync } from "node:child_process";
@@ -126,6 +126,42 @@ function spawnConcurrentCloser(root, workerId) {
     stdio: ["ignore", "pipe", "pipe"],
   });
   return captureChildJson(child, `close worker ${workerId}`);
+}
+
+function spawnConcurrentArchivePublisher(root, workerId) {
+  const source = `
+    import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+    import { join } from "node:path";
+    import { sealArchiveBatch } from ${JSON.stringify(new URL("../archive.mjs", import.meta.url).href)};
+    const [root, workerId] = process.argv.slice(1);
+    const archiveRoot = join(root, "ai_studio", "taskboard", "items", "archive");
+    const sourceDir = join(archiveRoot, "pending", "E001");
+    mkdirSync(sourceDir, { recursive: true });
+    const body = Buffer.from("worker=" + workerId + "\\n" + "x".repeat(4 * 1024 * 1024));
+    const sourceFile = join(sourceDir, "T000" + workerId + "-race.md");
+    writeFileSync(sourceFile, body);
+    writeFileSync(join(root, ".seal-ready-" + workerId), "ready");
+    while (!existsSync(join(root, ".seal-go"))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
+    try {
+      const result = sealArchiveBatch({
+        archiveRoot,
+        name: "concurrent-batch",
+        entries: [
+          { path: "E001/T0001-race.md", bytes: body },
+          { path: "MANIFEST.md", bytes: Buffer.from("worker=" + workerId + "\\n") },
+        ],
+        sourceFiles: [sourceFile],
+      });
+      process.stdout.write(JSON.stringify({ ok: true, workerId, file: result.file, sourceFile }));
+    } catch (error) {
+      process.stdout.write(JSON.stringify({ ok: false, workerId, message: error.message, sourceFile }));
+    }
+  `;
+  const child = spawn(process.execPath, ["--input-type=module", "--eval", source, root, String(workerId)], {
+    cwd: root,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return captureChildJson(child, `archive publisher ${workerId}`);
 }
 
 function ensurePrivateGameMount(root, gameId = "secret-game") {
@@ -417,10 +453,13 @@ test("done tasks stay pending until an immutable ZIP batch is sealed", (t) => {
   assert.equal(findDoc(root, "T0001"), null, "normal reads exclude history");
   assert.equal(findDoc(root, "T0001", { includeArchive: true }).fields.status, "done");
 
-  const sealed = sealTaskArchive(root, { name: "2026-07-14-test" });
-  assert.match(sealed.file, /2026-07-14-test\.zip$/);
+  const seal = runCliDirect(root, "archive", "seal", "--name", "2026-07-14-test", "--json");
+  assert.equal(seal.status, 0, seal.stderr);
+  const sealed = JSON.parse(seal.stdout);
+  const sealedFile = join(root, sealed.file);
+  assert.match(sealedFile, /2026-07-14-test\.zip$/);
   assert.equal(existsSync(updated.file), false, "verified sources are removed after sealing");
-  const entries = readStoreZip(sealed.file);
+  const entries = readStoreZip(sealedFile);
   assert.deepEqual([...entries.keys()], ["E001/T0001-archive-me.md", "MANIFEST.md"]);
   assert.match(entries.get("E001/T0001-archive-me.md").toString("utf8"), /status: done/);
   assert.match(entries.get("MANIFEST.md").toString("utf8"), /T0001.*Archive me/);
@@ -433,6 +472,12 @@ test("done tasks stay pending until an immutable ZIP batch is sealed", (t) => {
   const archiveShow = runCliDirect(root, "show", "T0001", "--archive", "--json");
   assert.equal(archiveShow.status, 0, archiveShow.stderr);
   assert.equal(JSON.parse(archiveShow.stdout).doc.id, "T0001");
+  const archiveList = runCliDirect(root, "list", "--archive", "--json");
+  assert.equal(archiveList.status, 0, archiveList.stderr);
+  const historicalRows = JSON.parse(archiveList.stdout).tasks;
+  assert.deepEqual(historicalRows.map((row) => row.id), ["T0001"]);
+  assert.equal(historicalRows[0].archived, true);
+  assert.equal(historicalRows[0].body, undefined, "history list remains metadata-only");
 });
 
 test("archive sealing refuses overwrite before deleting pending sources", (t) => {
@@ -450,6 +495,54 @@ test("archive sealing refuses overwrite before deleting pending sources", (t) =>
 
   assert.throws(() => sealTaskArchive(root, { name: "occupied" }), /already exists/);
   assert.equal(existsSync(updated.file), true, "refused sealing cannot lose pending history");
+});
+
+test("concurrent archive publication is atomic no-replace and preserves the loser source", async (t) => {
+  const root = tempRoot(t);
+  const workers = [spawnConcurrentArchivePublisher(root, 1), spawnConcurrentArchivePublisher(root, 2)];
+  let results;
+  try {
+    await waitFor(() => workers.every((_, index) => existsSync(join(root, `.seal-ready-${index + 1}`))));
+    writeFileSync(join(root, ".seal-go"), "go");
+    results = await Promise.all(workers.map(({ result }) => result));
+  } finally {
+    for (const { child } of workers) if (child.exitCode === null) child.kill();
+    await Promise.allSettled(workers.map(({ closed }) => closed));
+    await Promise.allSettled(workers.map(({ result }) => result));
+  }
+
+  assert.equal(results.filter((result) => result.ok).length, 1);
+  const loser = results.find((result) => !result.ok);
+  assert.equal(existsSync(loser.sourceFile), true);
+  const archive = join(root, "ai_studio", "taskboard", "items", "archive", "concurrent-batch.zip");
+  assert.equal(readStoreZip(archive).size, 2);
+});
+
+test("archive sealing rejects a linked pending group without reading or deleting outside files", (t) => {
+  const root = tempRoot(t);
+  const outside = join(root, "outside-history");
+  const outsideFile = join(outside, "T0999-outside.md");
+  mkdirSync(outside, { recursive: true });
+  writeFileSync(outsideFile, "---\nid: T0999\ntitle: Outside\nstatus: done\n---\n");
+  const pending = join(root, "ai_studio", "taskboard", "items", "archive", "pending");
+  mkdirSync(pending, { recursive: true });
+  symlinkSync(outside, join(pending, "E001"), "junction");
+
+  assert.throws(() => sealTaskArchive(root, { name: "linked-group" }), /link/i);
+  assert.equal(existsSync(outsideFile), true);
+});
+
+test("archive sealing migrates the legacy archive epic directories", (t) => {
+  const root = tempRoot(t);
+  const legacyDir = join(root, "ai_studio", "taskboard", "items", "archive", "E009");
+  const legacyFile = join(legacyDir, "T0099-legacy-history.md");
+  mkdirSync(legacyDir, { recursive: true });
+  writeFileSync(legacyFile, "---\nid: T0099\ntitle: Legacy history\nstatus: done\nproject: P001\nepic: E009\npriority: P2\ntags: []\ncreated: 2026-07-01\nupdated: 2026-07-01\n---\n\n## Log\n");
+
+  const sealed = sealTaskArchive(root, { name: "legacy-migration" });
+  assert.equal(existsSync(legacyFile), false);
+  assert.equal(readStoreZip(sealed.file).has("E009/T0099-legacy-history.md"), true);
+  assert.equal(findDoc(root, "T0099", { includeArchive: true }).fields.title, "Legacy history");
 });
 
 test("cli list hides ideas by default and shows them explicitly", (t) => {

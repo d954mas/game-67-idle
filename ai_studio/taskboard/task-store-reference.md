@@ -45,7 +45,9 @@ Epic statuses: `idea -> active -> done`.
 - `done`: completed or intentionally closed; record the reason in `## Log`.
 
 Default `list --json` shows current work, including `review`. Use
-`list --ideas --json` for raw intake and `list --archive --json` for history.
+`list --ideas --json` for raw intake. Historical reads must be explicit:
+`show T0001 --archive --json` for one body or `list --archive --json` for a
+metadata-only review.
 
 ## Create Or Refine
 
@@ -90,6 +92,20 @@ valid current decisions but keep it open; new `skip` state is rejected. Check
 IDs must exist in the Quality catalog when the catalog is mounted. Reopening a
 done task removes its old decision so the next close needs fresh evidence.
 Existing archived tasks without structured state are grandfathered.
+
+Closed task Markdown is temporary storage, not permanent working context. It is
+written below ignored `items/archive/pending/<epic>/`. Periodically seal it:
+
+```powershell
+node ai_studio/taskboard/cli.mjs archive seal --name 2026-07-closeout --json
+```
+
+The command creates a new immutable ZIP batch containing the original Markdown
+and an internal `MANIFEST.md`, verifies the complete ZIP before deleting source
+files, and refuses an existing name. Do not rebuild old batches and do not add a
+global archive index; ZIP entry names are searched only by explicit archive
+commands. `.counters.json` remains the monotonic ID authority after loose task
+files are removed.
 
 The persisted form is a compact JSON object in the existing frontmatter, not a
 sidecar or second store:

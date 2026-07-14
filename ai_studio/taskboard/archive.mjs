@@ -1,10 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
 import {
   existsSync,
+  linkSync,
+  lstatSync,
   mkdirSync,
-  readFileSync,
   readdirSync,
-  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -35,12 +35,17 @@ export function sealedArchiveFiles(archiveRoot) {
   return readdirSync(archiveRoot)
     .filter((name) => name.endsWith(".zip"))
     .sort()
-    .map((name) => join(archiveRoot, name));
+    .map((name) => {
+      const path = join(archiveRoot, name);
+      const stat = lstatSync(path);
+      if (stat.isSymbolicLink() || !stat.isFile()) throw new Error(`sealed archive must be a regular file, not a link: ${path}`);
+      return path;
+    });
 }
 
 export function sealArchiveBatch({ archiveRoot, name, entries, sourceFiles }) {
   const batch = String(name || "").trim();
-  if (!BATCH_NAME.test(batch)) throw new Error("archive batch name must use lowercase letters, digits, and single hyphens");
+  if (!BATCH_NAME.test(batch)) throw new Error("archive batch name must use lowercase letters, digits, and hyphens");
   if (!Array.isArray(entries) || entries.length < 2) throw new Error("archive batch needs task entries and MANIFEST.md");
   if (!Array.isArray(sourceFiles) || sourceFiles.length !== entries.length - 1) {
     throw new Error("archive source count must match task entry count");
@@ -58,7 +63,8 @@ export function sealArchiveBatch({ archiveRoot, name, entries, sourceFiles }) {
   try {
     writeFileSync(temporary, bytes, { flag: "wx" });
     readStoreZip(temporary);
-    renameSync(temporary, target);
+    linkSync(temporary, target);
+    rmSync(temporary);
   } catch (error) {
     rmSync(temporary, { force: true });
     throw error;

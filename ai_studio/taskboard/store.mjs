@@ -5,7 +5,7 @@
 // frontmatter parsing, paths, templates, mutation, and validation. Keep the
 // public facade in lib.mjs small; do not split this again without a real need.
 
-import { closeSync, existsSync, ftruncateSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, ftruncateSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
@@ -223,7 +223,11 @@ function listDocs(dir, kind, options = {}) {
       continue;
     }
     const file = join(dir, name);
-    if (!statSync(file).isFile()) {
+    const fileStat = options.rejectLinks ? lstatSync(file) : statSync(file);
+    if (options.rejectLinks && fileStat.isSymbolicLink()) {
+      throw new Error(`Taskboard history file must not be a link: ${file}`);
+    }
+    if (!fileStat.isFile()) {
       continue;
     }
     const { fields, body } = parseDoc(readFileSync(file, "utf8"));
@@ -276,19 +280,27 @@ function findDocInDir(dir, kind, id, options = {}) {
 
 function looseArchiveGroupDirs(root, options = {}) {
   const archiveRoot = archiveRootDir(root, options);
-  const roots = [archiveTaskDir(root, options)];
+  const groups = [];
+  if (existsSync(archiveRoot) && lstatSync(archiveRoot).isSymbolicLink()) {
+    throw new Error(`Taskboard archive root must not be a link: ${archiveRoot}`);
+  }
+  const pending = archiveTaskDir(root, options);
+  if (existsSync(pending)) {
+    if (lstatSync(pending).isSymbolicLink()) throw new Error(`Taskboard pending archive must not be a link: ${pending}`);
+    for (const group of readdirSync(pending)) {
+      const dir = join(pending, group);
+      const dirStat = lstatSync(dir);
+      if (dirStat.isSymbolicLink()) throw new Error(`Taskboard archive group must not be a link: ${dir}`);
+      if (dirStat.isDirectory()) groups.push(dir);
+    }
+  }
   if (existsSync(archiveRoot)) {
     for (const name of readdirSync(archiveRoot)) {
       const dir = join(archiveRoot, name);
-      if (name !== "pending" && statSync(dir).isDirectory()) roots.push(dir);
-    }
-  }
-  const groups = [];
-  for (const archive of roots) {
-    if (!existsSync(archive)) continue;
-    for (const group of readdirSync(archive)) {
-      const dir = join(archive, group);
-      if (statSync(dir).isDirectory()) groups.push(dir);
+      if (name === "pending") continue;
+      const dirStat = lstatSync(dir);
+      if (dirStat.isSymbolicLink()) throw new Error(`Taskboard legacy archive group must not be a link: ${dir}`);
+      if (dirStat.isDirectory()) groups.push(dir);
     }
   }
   return groups;
@@ -325,7 +337,7 @@ function findArchivedTask(root, id, options = {}) {
 function listLooseArchiveTasks(root, options = {}) {
   const docs = [];
   for (const dir of looseArchiveGroupDirs(root, options)) {
-    docs.push(...listDocs(dir, "task", { archived: true }));
+    docs.push(...listDocs(dir, "task", { archived: true, rejectLinks: true }));
   }
   docs.sort((a, b) => String(a.fields.id || a.name).localeCompare(String(b.fields.id || b.name)));
   return docs;
@@ -370,9 +382,15 @@ export function findDoc(root, id, options = {}) {
 export function sealTaskArchive(root, { name, ...options } = {}) {
   const docs = listLooseArchiveTasks(root, options);
   if (!docs.length) throw new Error("no pending Taskboard history to seal");
+  const sealedIds = new Set();
+  for (const entry of listSealedTasks(archiveRootDir(root, options))) {
+    const sealedId = docFromArchiveEntry(entry).fields.id;
+    if (sealedIds.has(sealedId)) throw new Error(`${sealedId} appears in multiple sealed Taskboard archives`);
+    sealedIds.add(sealedId);
+  }
   for (const doc of docs) {
     if (doc.fields.status !== "done") throw new Error(`${doc.fields.id || doc.name} is not done and cannot be sealed`);
-    if (findSealedTask(archiveRootDir(root, options), doc.fields.id)) {
+    if (sealedIds.has(doc.fields.id)) {
       throw new Error(`${doc.fields.id} already exists in a sealed Taskboard archive`);
     }
   }

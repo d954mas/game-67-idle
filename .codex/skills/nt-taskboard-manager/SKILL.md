@@ -19,7 +19,11 @@ Taskboard data contract here.
 - Summary: `node ai_studio/taskboard/cli.mjs summary --json`.
 - Current work: `node ai_studio/taskboard/cli.mjs context --json`.
 - List rows: `node ai_studio/taskboard/cli.mjs list --json`.
-- Read one item: `node ai_studio/taskboard/cli.mjs show <P###|E###|T####> --json`.
+- Read one current item: `node ai_studio/taskboard/cli.mjs show <P###|E###|T####> --json`.
+- Read one historical task only when explicitly needed:
+  `node ai_studio/taskboard/cli.mjs show T#### --archive --json`.
+- Seal pending closed history periodically:
+  `node ai_studio/taskboard/cli.mjs archive seal --name <immutable-batch-name> --json`.
 - Help: `node ai_studio/taskboard/cli.mjs help`.
 - Create project: `node ai_studio/taskboard/cli.mjs new project --title "..." --kind <ai-studio|game|template|tooling|research|other> --target <path>`.
 - Create epic: `node ai_studio/taskboard/cli.mjs new epic --title "..." --project P###`.
@@ -39,6 +43,8 @@ Taskboard data contract here.
 4. Capture deferred work as `status: idea`; use `backlog` only after scope and
    checkable done criteria are clear.
 5. Mark `done` only when `## Done when` is checked and `## Log` has evidence.
+6. Do not search archive ZIPs during normal routing; sealed history is explicit
+   evidence, not working context.
 
 ## Boundary
 

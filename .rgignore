@@ -1,0 +1,4 @@
+# Closed Taskboard history is explicit-only context. Loose files exist here only
+# until the next verified immutable ZIP batch is sealed.
+ai_studio/taskboard/items/archive/**
+games/*/.ai_studio/taskboard/items/archive/**
