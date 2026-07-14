@@ -17,6 +17,8 @@ export const PROJECT_STATUSES = ["idea", "active", "done"];
 export const PROJECT_KINDS = ["ai-studio", "game", "template", "tooling", "research", "other"];
 export const PRIORITIES = ["P0", "P1", "P2", "P3"];
 export const ACTIVE_TASK_STATUSES = ["backlog", "todo", "doing", "review"];
+export const CURRENT_TASK_STATUSES = ["todo", "doing", "review"];
+export const READY_QUEUE_LIMIT = 3;
 export const DEFAULT_TASKBOARD_STORE = {
   storeId: "studio",
   visibility: "public",
@@ -1179,14 +1181,22 @@ export function agentTaskRow(root, doc, options = {}) {
   return addStoreFields(row, doc.fields.id, options);
 }
 
-export function currentWorkRows(root, limit = 5, options = {}) {
+function rankedTaskRows(root, statuses, limit, options = {}) {
   const epics = epicsById(root, options);
   const tasks = options.tasks || listTasks(root, options);
   return tasks
-    .filter((task) => ACTIVE_TASK_STATUSES.includes(task.fields.status))
+    .filter((task) => statuses.includes(task.fields.status))
     .sort((a, b) => taskRank(a) - taskRank(b) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)))
     .slice(0, limit)
     .map((task) => agentTaskRow(root, task, { ...options, epicsById: epics }));
+}
+
+export function currentWorkRows(root, limit = 5, options = {}) {
+  return rankedTaskRows(root, CURRENT_TASK_STATUSES, limit, options);
+}
+
+export function readyQueueRows(root, limit = READY_QUEUE_LIMIT, options = {}) {
+  return rankedTaskRows(root, ["backlog"], limit, options);
 }
 
 export function agentContextPayload(root, options = {}) {
@@ -1196,18 +1206,22 @@ export function agentContextPayload(root, options = {}) {
   const projects = listProjects(root, options);
   const epicsByIdMap = new Map(epics.map((epic) => [epic.fields.id, epic]));
   const currentWork = currentWorkRows(root, limit, { ...options, tasks, epicsById: epicsByIdMap });
+  const readyLimit = Math.min(READY_QUEUE_LIMIT, Math.max(0, limit - currentWork.length));
+  const readyQueue = readyQueueRows(root, readyLimit, { ...options, tasks, epicsById: epicsByIdMap });
   return {
-    schema: "ai_studio.taskboard.agent_context.v1",
+    schema: "ai_studio.taskboard.agent_context.v2",
     root,
     counts: {
       projects: countsByStatus(projects, PROJECT_STATUSES),
       epics: countsByStatus(epics, EPIC_STATUSES),
       tasks: countsByStatus(tasks, TASK_STATUSES),
-      currentWork: tasks.filter((task) => ACTIVE_TASK_STATUSES.includes(task.fields.status)).length,
+      currentWork: tasks.filter((task) => CURRENT_TASK_STATUSES.includes(task.fields.status)).length,
+      readyQueue: tasks.filter((task) => task.fields.status === "backlog").length,
       review: tasks.filter((task) => task.fields.status === "review").length,
     },
     currentWork,
-    agentNextStep: "Open only the task file(s) needed for the current decision; do not scan archives unless linked.",
+    readyQueue,
+    agentNextStep: "Work from currentWork; use readyQueue only to select the next task. Open bodies explicitly and do not scan archives unless linked.",
   };
 }
 

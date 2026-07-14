@@ -615,6 +615,7 @@ test("cli context defaults to five summaries and expands only through an explici
       body: `## What\n\nCONTEXT_BODY_${index}_MUST_STAY_SCOPED\n\n## Done when\n\n- [ ] done\n\n## Log\n`,
     });
   }
+  createTask(root, { title: "Ready but outside row budget", status: "backlog", priority: "P0" });
 
   const defaultResult = runCliDirect(root, "context", "--json");
   assert.equal(defaultResult.status, 0, defaultResult.stderr);
@@ -626,6 +627,7 @@ test("cli context defaults to five summaries and expands only through an explici
   const textResult = runCliDirect(root, "context");
   assert.equal(textResult.status, 0, textResult.stderr);
   assert.equal((textResult.stdout.match(/^- T\d{4}/gm) || []).length, 5);
+  assert.match(textResult.stdout, /- omitted; context row limit reached/);
 
   const summaryText = runCliDirect(root, "summary");
   assert.equal(summaryText.status, 0, summaryText.stderr);
@@ -635,6 +637,40 @@ test("cli context defaults to five summaries and expands only through an explici
   assert.equal(scopedResult.status, 0, scopedResult.stderr);
   assert.equal(JSON.parse(scopedResult.stdout).currentWork.length, 8);
   assert.doesNotMatch(scopedResult.stdout, /CONTEXT_BODY_/);
+});
+
+test("agent context separates selected work from three ready backlog candidates", (t) => {
+  const root = tempRoot(t);
+  for (let index = 1; index <= 5; index++) {
+    createTask(root, {
+      title: `Ready backlog ${index}`,
+      status: "backlog",
+      priority: index === 5 ? "P0" : "P1",
+      body: `## What\n\nBACKLOG_BODY_${index}_MUST_STAY_SCOPED\n\n## Done when\n\n- [ ] done\n\n## Log\n`,
+    });
+  }
+  createTask(root, { title: "Selected todo", status: "todo", priority: "P1" });
+  createTask(root, { title: "Active implementation", status: "doing", priority: "P2" });
+  createTask(root, { title: "Awaiting review", status: "review", priority: "P0" });
+
+  const result = runCliDirect(root, "context", "--json");
+  assert.equal(result.status, 0, result.stderr);
+  const payload = JSON.parse(result.stdout);
+  assert.equal(payload.schema, "ai_studio.taskboard.agent_context.v2");
+  assert.deepEqual(payload.currentWork.map((task) => task.status), ["doing", "todo", "review"]);
+  assert.equal(payload.counts.currentWork, 3);
+  assert.equal(payload.counts.readyQueue, 5);
+  assert.deepEqual(payload.readyQueue.map((task) => task.id), ["T0005", "T0004"]);
+  assert.equal(payload.currentWork.length + payload.readyQueue.length <= 5, true);
+  assert.equal(payload.readyQueue.every((task) => task.status === "backlog"), true);
+  assert.doesNotMatch(result.stdout, /BACKLOG_BODY_/);
+
+  const textResult = runCliDirect(root, "context");
+  assert.equal(textResult.status, 0, textResult.stderr);
+  assert.equal((textResult.stdout.match(/^- T\d{4}/gm) || []).length, 5);
+  assert.match(textResult.stdout, /T0005 .* Ready backlog 5/);
+  assert.match(textResult.stdout, /T0004 .* Ready backlog 4/);
+  assert.doesNotMatch(textResult.stdout, /T0003 .* Ready backlog 3/);
 });
 
 test("Taskboard agent API context defaults to five body-free summaries", async (t) => {
@@ -650,6 +686,8 @@ test("Taskboard agent API context defaults to five body-free summaries", async (
   assert.equal(response.status, 200);
   assert.equal(response.data.currentWork.length, 5);
   assert.equal(response.data.counts.currentWork, 7);
+  assert.deepEqual(response.data.readyQueue, []);
+  assert.equal(response.data.counts.readyQueue, 0);
   assert.doesNotMatch(JSON.stringify(response.data), /API_CONTEXT_BODY_/);
 });
 
@@ -683,11 +721,14 @@ test("aggregate context reports unsliced totals and globally ranks work across s
   const privateStore = explicitPrivateTaskboardStore(root);
   writeTaskDoc(privateStore.itemsRoot, "T0001", "Private doing", "doing", { priority: "P0" });
 
-  const payload = agentContextPayloadForStores(root, [studioTaskboardStore(root), privateStore], { limit: 1 });
+  const payload = agentContextPayloadForStores(root, [studioTaskboardStore(root), privateStore], { limit: 2 });
   assert.equal(payload.currentWork.length, 1);
-  assert.equal(payload.counts.currentWork, 2);
+  assert.equal(payload.counts.currentWork, 1);
+  assert.equal(payload.counts.readyQueue, 1);
   assert.equal(payload.currentWork[0].storeId, "game:secret-game");
   assert.equal(payload.currentWork[0].priority, "P0");
+  assert.equal(payload.readyQueue[0].storeId, "studio");
+  assert.equal(payload.readyQueue[0].status, "backlog");
 });
 
 test("cli summary is task-derived and shows review as current work", (t) => {
@@ -699,7 +740,8 @@ test("cli summary is task-derived and shows review as current work", (t) => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /# Taskboard Summary/);
   assert.match(result.stdout, /active_task_counts: idea:1 backlog:0 todo:0 doing:1 review:1/);
-  assert.match(result.stdout, /open_work_items: 2/);
+  assert.match(result.stdout, /current_work_items: 2/);
+  assert.match(result.stdout, /ready_backlog_items: 0/);
   assert.match(result.stdout, /review_tasks: 1/);
   assert.match(result.stdout, /T0001 .* Doing task/);
   assert.match(result.stdout, /T0002 .* Review task/);
@@ -731,11 +773,12 @@ BODY_SHOULD_NOT_APPEAR
 
   assert.equal(result.status, 0, result.stderr);
   const payload = JSON.parse(result.stdout);
-  assert.equal(payload.schema, "ai_studio.taskboard.agent_context.v1");
+  assert.equal(payload.schema, "ai_studio.taskboard.agent_context.v2");
   assert.equal(payload.counts.tasks.doing, 1);
   assert.equal(payload.counts.tasks.review, 1);
   assert.equal(payload.counts.tasks.idea, 1);
   assert.deepEqual(payload.currentWork.map((task) => task.id), ["T0001", "T0002"]);
+  assert.deepEqual(payload.readyQueue, []);
   assert.equal(payload.currentWork[0].file.includes("ai_studio/taskboard/items/active/T0001-"), true);
   assert.equal("body" in payload.currentWork[0], false);
   assert.doesNotMatch(result.stdout, /BODY_SHOULD_NOT_APPEAR/);

@@ -44,7 +44,13 @@ Epic statuses: `idea -> active -> done`.
 - `done`: acceptance criteria checked and evidence logged.
 - `done`: completed or intentionally closed; record the reason in `## Log`.
 
-Default `list --json` shows current work, including `review`. Use
+Agent context distinguishes execution from planning: `currentWork` contains
+only `todo`, `doing`, and `review`; `readyQueue` exposes at most three ranked
+`backlog` candidates for the next selection without exceeding the context row
+limit. Backlog counts remain available separately and are never described as
+work currently in progress.
+
+Default `list --json` shows the actionable queue (`backlog` through `review`). Use
 `list --ideas --json` for raw intake. Historical reads must be explicit:
 `show T0001 --archive --json` for one body or `list --archive --json` for a
 metadata-only review.

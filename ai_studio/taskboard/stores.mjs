@@ -3,7 +3,6 @@ import { join } from "node:path";
 
 import { listGameMounts } from "../workspace/games.mjs";
 import {
-  ACTIVE_TASK_STATUSES,
   agentContextPayload,
   agentTaskRow,
   boardPayload,
@@ -15,6 +14,8 @@ import {
   listProjects,
   listTasks,
   PROJECT_STATUSES,
+  CURRENT_TASK_STATUSES,
+  READY_QUEUE_LIMIT,
   TASK_STATUSES,
   taskRank,
   validateStoreDetailed,
@@ -194,19 +195,25 @@ export function agentContextPayloadForStores(root, stores, options = {}) {
     store.storeId,
     new Map(epics.filter((entry) => entry.store.storeId === store.storeId).map(({ doc }) => [doc.fields.id, doc])),
   ]));
-  const currentEntries = tasks
-    .filter(({ doc }) => ACTIVE_TASK_STATUSES.includes(doc.fields.status))
+  const rankedEntries = (statuses) => tasks
+    .filter(({ doc }) => statuses.includes(doc.fields.status))
     .sort((a, b) =>
       taskRank(a.doc) - taskRank(b.doc) ||
       idNumber(b.doc) - idNumber(a.doc) ||
       a.store.storeId.localeCompare(b.store.storeId) ||
       String(a.doc.fields.id).localeCompare(String(b.doc.fields.id))
     );
+  const currentEntries = rankedEntries(CURRENT_TASK_STATUSES);
+  const readyEntries = rankedEntries(["backlog"]);
   const currentWork = currentEntries.slice(0, limit).map(({ doc, store }) =>
     agentTaskRow(root, doc, { store, epicsById: epicsByStore.get(store.storeId) })
   );
+  const readyLimit = Math.min(READY_QUEUE_LIMIT, Math.max(0, limit - currentWork.length));
+  const readyQueue = readyEntries.slice(0, readyLimit).map(({ doc, store }) =>
+    agentTaskRow(root, doc, { store, epicsById: epicsByStore.get(store.storeId) })
+  );
   return {
-    schema: "ai_studio.taskboard.agent_context.v1",
+    schema: "ai_studio.taskboard.agent_context.v2",
     root,
     stores: stores.map(taskboardStoreSummary),
     counts: {
@@ -214,18 +221,20 @@ export function agentContextPayloadForStores(root, stores, options = {}) {
       epics: countsByStatus(epics.map(({ doc }) => doc), EPIC_STATUSES),
       tasks: countsByStatus(tasks.map(({ doc }) => doc), TASK_STATUSES),
       currentWork: currentEntries.length,
+      readyQueue: readyEntries.length,
       review: tasks.filter(({ doc }) => doc.fields.status === "review").length,
     },
     currentWork,
-    agentNextStep: "Open only the task file(s) needed for the current decision; do not scan archives unless linked.",
+    readyQueue,
+    agentNextStep: "Work from currentWork; use readyQueue only to select the next task. Open bodies explicitly and do not scan archives unless linked.",
   };
 }
 
 export function profileTaskboardReads(root) {
   const records = listTaskboardStores(root, { includePrivate: true }).map((store) => {
     const payload = agentContextPayloadForStores(root, [store], { limit: DEFAULT_CONTEXT_LIMIT });
-    const returnedCount = payload.currentWork.length;
-    const totalCount = payload.counts.currentWork;
+    const returnedCount = payload.currentWork.length + payload.readyQueue.length;
+    const totalCount = payload.counts.currentWork + payload.counts.readyQueue;
     return {
       storeId: store.storeId,
       contextBytes: Buffer.byteLength(`${JSON.stringify(payload, null, 2)}\n`, "utf8"),

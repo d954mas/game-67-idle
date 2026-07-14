@@ -21,7 +21,7 @@ import {
   findRoot, listTasks, listEpics, listProjects, findDoc, createTask, createEpic, createProject,
   sealTaskArchive, updateDoc,
 } from "./lib.mjs";
-import { ACTIVE_TASK_STATUSES, canonicalQualityAssignments, idNumber, parseQualityAssignments, TASK_STATUSES, taskRank } from "./store.mjs";
+import { canonicalQualityAssignments, CURRENT_TASK_STATUSES, idNumber, parseQualityAssignments, READY_QUEUE_LIMIT, TASK_STATUSES, taskRank } from "./store.mjs";
 import {
   agentContextPayloadForStores,
   findTaskboardDoc,
@@ -144,8 +144,8 @@ function taskEntriesForOptions(root, options) {
   );
 }
 
-function currentWorkTaskEntries(entries) {
-  const out = entries.filter(({ task }) => ACTIVE_TASK_STATUSES.includes(task.fields.status));
+function rankedTaskEntries(entries, statuses) {
+  const out = entries.filter(({ task }) => statuses.includes(task.fields.status));
   out.sort((a, b) =>
     taskRank(a.task) - taskRank(b.task) ||
     idNumber(b.task) - idNumber(a.task) ||
@@ -155,29 +155,47 @@ function currentWorkTaskEntries(entries) {
   return out;
 }
 
+function currentWorkTaskEntries(entries) {
+  return rankedTaskEntries(entries, CURRENT_TASK_STATUSES);
+}
+
+function readyQueueTaskEntries(entries) {
+  return rankedTaskEntries(entries, ["backlog"]);
+}
+
 function renderSummary(root, options) {
   const tasksLimit = numberArg(options["tasks-limit"], 5);
   const taskEntries = taskEntriesForOptions(root, options);
   const allTasks = taskEntries.map(({ task }) => task);
-  const openEntries = currentWorkTaskEntries(taskEntries);
+  const currentEntries = currentWorkTaskEntries(taskEntries);
+  const readyEntries = readyQueueTaskEntries(taskEntries);
+  const shownCurrent = currentEntries.slice(0, tasksLimit);
+  const readyLimit = Math.min(READY_QUEUE_LIMIT, Math.max(0, tasksLimit - shownCurrent.length));
   const reviewCount = allTasks.filter((task) => task.fields.status === "review").length;
   const lines = [];
   lines.push("# Taskboard Summary");
   lines.push("");
   lines.push(`active_task_counts: ${statusCounts(allTasks)}`);
-  lines.push(`open_work_items: ${openEntries.length}`);
+  lines.push(`current_work_items: ${currentEntries.length}`);
+  lines.push(`ready_backlog_items: ${readyEntries.length}`);
   lines.push(`review_tasks: ${reviewCount}`);
-  lines.push("## Top Open Tasks");
+  lines.push("## Current Work");
   lines.push("");
-  for (const { task, store } of openEntries.slice(0, tasksLimit)) {
+  for (const { task, store } of shownCurrent) {
     lines.push(`- ${shortRow(task, store)}`);
   }
-  if (openEntries.length > tasksLimit) {
-    lines.push(`- ... ${openEntries.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs context --json\` or \`list --json\` only when needed.`);
+  if (currentEntries.length > tasksLimit) {
+    lines.push(`- ... ${currentEntries.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs context --json\` only when needed.`);
   }
-  if (openEntries.length === 0) {
+  if (currentEntries.length === 0) {
     lines.push("- none");
   }
+  lines.push("");
+  lines.push("## Next Backlog Candidates");
+  lines.push("");
+  for (const { task, store } of readyEntries.slice(0, readyLimit)) lines.push(`- ${shortRow(task, store)}`);
+  if (readyEntries.length === 0) lines.push("- none");
+  else if (readyLimit === 0) lines.push("- omitted; context row limit reached");
   return `${lines.join("\n")}\n`;
 }
 
@@ -185,7 +203,10 @@ function renderContext(root, options) {
   const tasksLimit = numberArg(options["tasks-limit"], 5);
   const taskEntries = taskEntriesForOptions(root, options);
   const allTasks = taskEntries.map(({ task }) => task);
-  const entries = currentWorkTaskEntries(taskEntries);
+  const currentEntries = currentWorkTaskEntries(taskEntries);
+  const readyEntries = readyQueueTaskEntries(taskEntries);
+  const shownCurrent = currentEntries.slice(0, tasksLimit);
+  const readyLimit = Math.min(READY_QUEUE_LIMIT, Math.max(0, tasksLimit - shownCurrent.length));
 
   const lines = [];
   lines.push("# Current Context Digest");
@@ -193,15 +214,21 @@ function renderContext(root, options) {
   lines.push(`active_task_counts: ${statusCounts(allTasks)}`);
   lines.push("## Actionable Tasks");
   lines.push("");
-  for (const { task, store } of entries.slice(0, tasksLimit)) {
+  for (const { task, store } of shownCurrent) {
     lines.push(`- ${shortRow(task, store)}`);
   }
-  if (entries.length > tasksLimit) {
-    lines.push(`- ... ${entries.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs list --json\` or show a specific task only if needed.`);
+  if (currentEntries.length > tasksLimit) {
+    lines.push(`- ... ${currentEntries.length - tasksLimit} more; show a specific task only if needed.`);
   }
-  if (entries.length === 0) {
+  if (currentEntries.length === 0) {
     lines.push("- none");
   }
+  lines.push("");
+  lines.push("## Next Backlog Candidates");
+  lines.push("");
+  for (const { task, store } of readyEntries.slice(0, readyLimit)) lines.push(`- ${shortRow(task, store)}`);
+  if (readyEntries.length === 0) lines.push("- none");
+  else if (readyLimit === 0) lines.push("- omitted; context row limit reached");
   lines.push("");
   lines.push("Next context step: inspect only the linked task files or evidence paths needed for the current decision.");
   return `${lines.join("\n")}\n`;

@@ -49,3 +49,5 @@ content. Green checks should mean a real artifact exists.
 - 2026-07-14: Closed after sealed ZIP history shipped, all loose archive Markdown migrated, and independent review plus full verification passed.
 - 2026-07-14: Reopened for the agreed final grooming of remaining active Taskboard cards after sealed-history rollout.
 - 2026-07-14: Remaining active-card grooming completed: zero review tasks, one selected todo, duplicates merged, completed work sealed.
+- 2026-07-14: Reopened for the approved currentWork versus backlog context correction.
+- 2026-07-14: currentWork now means selected execution only; ready backlog is separately bounded to the remaining context row budget.

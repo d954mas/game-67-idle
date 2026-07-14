@@ -35,9 +35,11 @@ Open `/taskboard/`.
 Prefer JSON when an agent needs task state:
 
 - Orient: `node ai_studio/taskboard/cli.mjs summary --json`.
-- Current work: `node ai_studio/taskboard/cli.mjs context --json` (at most five
-  body-free task summaries by default). Use an explicit `--tasks-limit <n>`
-  only for a scoped routing decision.
+- Current work: `node ai_studio/taskboard/cli.mjs context --json`. `currentWork`
+  contains only `todo`, `doing`, and `review` (at most five body-free rows by
+  default); `readyQueue` fills the remaining row budget with at most three
+  ranked backlog candidates. Use an explicit `--tasks-limit <n>` only for a
+  scoped current-work decision.
 - List rows: `node ai_studio/taskboard/cli.mjs list --json`.
 - Read one file: `node ai_studio/taskboard/cli.mjs show T0001 --json`.
 - Read one historical file explicitly:
