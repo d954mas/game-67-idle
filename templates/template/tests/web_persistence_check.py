@@ -48,8 +48,8 @@ Usage:
 
 Exit codes: 0 = the value round-tripped through a full browser restart (PASS).
             1 = built and ran, but the value did NOT round-trip (FAIL).
-            2 = prerequisite missing or a build/automation step could not run
-                at all (SKIPPED -- advisory, not a test failure).
+            2 = a host prerequisite or launch boundary is unavailable
+                (SKIPPED -- advisory, not a product failure).
 """
 
 import argparse
@@ -114,7 +114,11 @@ def find_chrome(explicit):
 
 
 class Skip(Exception):
-    """Prereq/build/automation step could not run at all -- exit(2), not a failure."""
+    """A host prerequisite or launch boundary is unavailable -- exit(2)."""
+
+
+class CheckFailure(Exception):
+    """The product/build/runtime proof ran and failed -- exit(1)."""
 
 
 # ---- minimal RFC6455 websocket client (text frames only; enough for CDP) ---
@@ -235,7 +239,7 @@ class Cdp:
             msg = json.loads(self.ws.recv_text(timeout=max(0.1, deadline - time.time())))
             if msg.get("id") == msg_id:
                 return msg
-        raise Skip(f"CDP call {method} timed out")
+        raise CheckFailure(f"CDP call {method} timed out")
 
     def eval_js(self, expression, timeout=20.0):
         msg = self.call("Runtime.evaluate", {
@@ -243,7 +247,7 @@ class Cdp:
         }, timeout=timeout)
         result = msg.get("result", {})
         if "exceptionDetails" in result:
-            raise Skip(f"JS exception evaluating {expression!r}: {result['exceptionDetails']}")
+            raise CheckFailure(f"JS exception evaluating {expression!r}: {result['exceptionDetails']}")
         return result.get("result", {}).get("value")
 
     def wait_for_devapi(self, timeout=90.0):
@@ -254,7 +258,7 @@ class Cdp:
             if ready:
                 return
             time.sleep(0.25)
-        raise Skip("window.__devapi never became ready (wasm module did not finish booting)")
+        raise CheckFailure("window.__devapi never became ready (wasm module did not finish booting)")
 
     def devapi_submit(self, method, params):
         request_id = self._next_devapi_request_id
@@ -262,7 +266,7 @@ class Cdp:
         line = json.dumps({"method": method, "request_id": request_id, "params": params})
         raw = self.eval_js(f"window.__devapi.submit({json.dumps(line)})")
         if not raw:
-            raise Skip(f"devapi submit({method}) returned no response")
+            raise CheckFailure(f"devapi submit({method}) returned no response")
         return json.loads(raw)
 
     def close(self):
@@ -284,14 +288,14 @@ def ensure_web_pack(wasm_bin_dir):
         ]
         print("+ " + " ".join(configure))
         if subprocess.run(configure, cwd=TEMPLATE_DIR).returncode != 0:
-            raise Skip("native configure (for pack) failed")
+            raise CheckFailure("native configure (for pack) failed")
     build = ["cmake", "--build", native_dir, "--target", "game_asset_packs"]
     print("+ " + " ".join(build))
     if subprocess.run(build, cwd=TEMPLATE_DIR).returncode != 0:
-        raise Skip("native pack build failed")
+        raise CheckFailure("native pack build failed")
     src_pack = os.path.join(native_dir, "bin", "assets", "game.ntpack")
     if not os.path.isfile(src_pack):
-        raise Skip(f"native pack not found at {src_pack}")
+        raise CheckFailure(f"native pack not found at {src_pack}")
     dst_assets = os.path.join(wasm_bin_dir, "assets")
     os.makedirs(dst_assets, exist_ok=True)
     shutil.copyfile(src_pack, os.path.join(dst_assets, "game.ntpack"))
@@ -318,15 +322,15 @@ def build_wasm_devapi(build_dir="build/wasm-devapi-debug"):
     print("+ " + " ".join(configure))
     r = subprocess.run(configure, cwd=TEMPLATE_DIR)
     if r.returncode != 0:
-        raise Skip(f"cmake configure failed (exit {r.returncode})")
+        raise CheckFailure(f"cmake configure failed (exit {r.returncode})")
     build = ["cmake", "--build", abs_build_dir, "--target", "game"]
     print("+ " + " ".join(build))
     r = subprocess.run(build, cwd=TEMPLATE_DIR)
     if r.returncode != 0:
-        raise Skip(f"wasm build failed (exit {r.returncode}) -- see build log above")
+        raise CheckFailure(f"wasm build failed (exit {r.returncode}) -- see build log above")
     bin_dir = os.path.join(abs_build_dir, "bin")
     if not os.path.isfile(os.path.join(bin_dir, "game.js")):
-        raise Skip(f"build reported success but no game.js under {bin_dir}")
+        raise CheckFailure(f"build reported success but no game.js under {bin_dir}")
     ensure_web_pack(bin_dir)
     return bin_dir
 
@@ -395,7 +399,7 @@ def run(build_dir, chrome_path, http_port, cdp_port, keep_profile):
 
     html_name = "index.html"
     if not os.path.isfile(os.path.join(bin_dir, html_name)):
-        raise Skip(f"{bin_dir} has no index.html shell (configure_file should have delivered it)")
+        raise CheckFailure(f"{bin_dir} has no index.html shell (configure_file should have delivered it)")
 
     resolved_chrome = find_chrome(chrome_path)
     if not resolved_chrome:
@@ -414,11 +418,11 @@ def run(build_dir, chrome_path, http_port, cdp_port, keep_profile):
 
         set_resp = cdp.devapi_submit("game.state.set", {"path": STATE_PATH, "value": STATE_VALUE})
         if not set_resp.get("ok"):
-            raise Skip(f"game.state.set failed before we could test persistence: {set_resp}")
+            raise CheckFailure(f"game.state.set failed before we could test persistence: {set_resp}")
 
         save_resp = cdp.devapi_submit("game.state.save", {})
         if not save_resp.get("ok"):
-            raise Skip(f"game.state.save failed before we could test persistence: {save_resp}")
+            raise CheckFailure(f"game.state.save failed before we could test persistence: {save_resp}")
 
         print(f"Set {STATE_PATH}={STATE_VALUE} and saved (fixed autosave slot); quitting Chrome entirely...")
         quit_chrome(chrome_proc, cdp=cdp)
@@ -482,6 +486,9 @@ def main():
 
     try:
         code = run(args.build_dir, args.chrome, args.port, args.cdp_port, args.keep_profile)
+    except CheckFailure as e:
+        print(f"FAIL: {e}")
+        code = 1
     except Skip as e:
         print(f"SKIP (advisory, not a failure): {e}")
         code = 2

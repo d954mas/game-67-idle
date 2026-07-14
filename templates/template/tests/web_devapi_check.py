@@ -33,7 +33,7 @@ Usage:
 
 Exit codes: 0 = the discovery round-trip answered over the shim (PASS).
             1 = built and booted, but the round-trip did not answer (FAIL).
-            2 = prerequisite/build/automation step could not run (SKIP -- advisory).
+            2 = a host prerequisite or launch boundary is unavailable (SKIP -- advisory).
 """
 
 import argparse
@@ -46,6 +46,7 @@ import time
 
 from web_persistence_check import (
     Cdp,
+    CheckFailure,
     Skip,
     build_wasm_devapi,
     cdp_page_ws_url,
@@ -69,7 +70,7 @@ def detect_pack_fetch_error(cdp, seconds=2.5):
     None. Advisory: a CDP hiccup returns None (never a false positive)."""
     try:
         cdp.call("Log.enable", timeout=10.0)
-    except Skip:
+    except (Skip, CheckFailure):
         return None
     deadline = time.time() + seconds
     while time.time() < deadline:
@@ -99,7 +100,7 @@ def run(chrome_path, http_port, cdp_port):
     bin_dir = build_wasm_devapi()  # build/wasm-devapi-debug, pack copied in
 
     if not os.path.isfile(os.path.join(bin_dir, "index.html")):
-        raise Skip(f"{bin_dir} has no index.html shell (configure_file should have delivered it)")
+        raise CheckFailure(f"{bin_dir} has no index.html shell (configure_file should have delivered it)")
 
     resolved_chrome = find_chrome(chrome_path)
     if not resolved_chrome:
@@ -166,6 +167,9 @@ def main():
 
     try:
         code = run(args.chrome, args.port, args.cdp_port)
+    except CheckFailure as e:
+        print(f"FAIL: {e}")
+        code = 1
     except Skip as e:
         print(f"SKIP (advisory, not a failure): {e}")
         code = 2
