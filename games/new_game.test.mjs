@@ -40,6 +40,12 @@ function buildFixtureRepo() {
   mkdirSync(join(root, "templates", "template", "assets"), { recursive: true });
   mkdirSync(join(root, "templates", "template", "src", "generated"), { recursive: true });
   mkdirSync(join(root, "templates", "template", "build"), { recursive: true });
+  mkdirSync(join(root, "templates", "template", "content"), { recursive: true });
+  writeFileSync(join(root, "templates", "template", "content", "items.lock.json"), JSON.stringify({
+    schema: "game_seed.items_lock", schema_version: 3,
+    receipt: { schema: "items.release_receipt.v1" },
+    def_ids: { "tmpl.shipped": { storage: "stack", level_count: 0 } }, removed: {},
+  }), "utf8");
   writeFileSync(join(root, "templates", "template", "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.20)\nset(GAME_STATE_DIR \"${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state\")\ntarget_compile_definitions(${GAME_TARGET} PRIVATE GAME_STORAGE_APP_ID=\"template\")\n", "utf8");
   mkdirSync(join(root, "templates", "template", "cmake"), { recursive: true });
   mkdirSync(join(root, "templates", "template", "tests"), { recursive: true });
@@ -186,6 +192,10 @@ test("new_game --visibility public copies template and registers game assets in 
   assert.equal(existsSync(join(root, "games", "test-game", "game.json")), true);
   assert.equal(existsSync(join(root, "games", "test-game", "dependencies.json")), true);
   assert.equal(existsSync(join(root, "games", "test-game", "game-dependencies.json")), false);
+  const itemsLock = JSON.parse(readFileSync(join(root, "games", "test-game", "content", "items.lock.json"), "utf8"));
+  assert.equal(itemsLock.schema_version, 3);
+  assert.deepEqual(itemsLock.def_ids, {});
+  assert.equal(itemsLock.receipt.schema, "items.release_receipt.v1");
   const dependencies = JSON.parse(readFileSync(join(root, "games", "test-game", "dependencies.json"), "utf8"));
   assert.match(dependencies.engine.revision, /^[0-9a-f]{40}$/);
   assert.equal(dependencies.engine.version, "0.1.0");

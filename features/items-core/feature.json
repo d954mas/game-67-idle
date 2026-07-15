@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "items-core",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "title": "Items Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -23,6 +23,7 @@
     "list": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py list",
     "validate": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py validate",
     "schema": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py schema",
+    "upgrade_receipt": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py upgrade-receipt",
     "test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops_test.py",
     "api_proof": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof.py --snapshot features/items-core/tests/fixtures/items_api_weapon_proof.json --out-dir <build-dir>",
     "api_proof_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof_test.py",

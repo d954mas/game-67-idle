@@ -71,6 +71,13 @@ Every consumer must supply its own:
 <game>/src/features/items/items_bootstrap.c  # items_on_new_game() only
 ```
 
+Before the Lua cutover, upgrade an existing v2 lock once from the frozen JSON
+catalog. The command updates that same file atomically; repeated runs do nothing:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py upgrade-receipt --catalog <game>/content/items.json --schema <game>/content/item_fields.schema.json --baseline <game>/content/items.lock.json --state-schema <game>/state/items.schema.json
+```
+
 The items save fragment itself (`items_state.*`, generated) comes from
 `features/game-state/scripts/generate_state.py --fragment items` against the
 game's `state/items.schema.json` — this module does not generate the fragment,

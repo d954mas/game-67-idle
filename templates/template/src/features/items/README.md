@@ -169,12 +169,15 @@ convention and its grep-gate).
 
 **Lead-ratified 2026-07-07: deleting/renaming a SHIPPED def_id is destructive
 (existing saves may already reference it) and must FORCE an explicit
-developer reaction — not just log a warning.** `items.lock.json` v2 has two
-sections:
-- `def_ids` — ids currently live and shipped (append-only: once here, stays
-  until deliberately moved to `removed`).
-- `removed` — ids DELIBERATELY removed from the catalog after shipping, keyed
-  by def_id: `{"fragment_version": N, "note": "..."}`. `fragment_version`
+developer reaction — not just log a warning.** `items.lock.json` v3 is the one
+release receipt and has two history sections:
+- `def_ids` — currently shipped ids, mapped to their frozen `storage` (`stack`
+  or `unique`) and highest shipped `level_count`.
+- `removed` — ids DELIBERATELY removed from the catalog after shipping. Keep
+  their storage/level metadata and add `fragment_version` plus an optional note.
+  A pre-v3 removal that cannot be reconstructed is explicitly
+  `storage: "unknown", level_count: null`; never guess old save semantics.
+  `fragment_version`
   (required, integer `>= 2`) records WHICH `state/items.schema.json`
   `version` bump + migration step actually handled the removal, and must be
   `<= ` the CURRENT items fragment version — i.e. DELIVERED, not merely
@@ -182,14 +185,15 @@ sections:
   requires it.
 
 **Fresh games start empty.** `games/new_game.mjs` resets a new game's copy of
-`content/items.lock.json` to an empty baseline (`def_ids: []`, `removed: {}`)
+`content/items.lock.json` to an empty baseline (`def_ids: {}`, `removed: {}`)
 right after copying the template (copy-then-own) — the TEMPLATE's own lock
 legitimately lists ITS shipped demo defs (`tmpl.gold` etc.), but a brand-new
 game has shipped NOTHING to ITS OWN players yet.
 
 **Everyday cases:**
 - **Adding a new item and shipping it — READ THIS ONE TWICE.** Once a def_id
-  has gone out in a release, you MUST append it to `def_ids`. **This is the
+  has gone out in a release, you MUST add it to `def_ids` with its storage and
+  shipped level bound. **This is the
   ONE manual, unenforced link in the whole chain** — nothing currently
   catches "you forgot to append a newly-shipped id to the lock" (only the
   REVERSE mistake, removing a locked id, is machine-enforced). Miss this step
@@ -213,8 +217,9 @@ game has shipped NOTHING to ITS OWN players yet.
 2. Run `validate` — it goes RED with `removed-without-reaction` (the id is
    still in `def_ids`, missing from the catalog, and not yet in `removed`).
    The error message spells out the next three steps.
-3. In `content/items.lock.json`: move the id from `def_ids` to `removed`
-   with `fragment_version = <current items fragment version> + 1` — or just
+3. In `content/items.lock.json`: move the id from `def_ids` to `removed`, keep
+   its storage/level metadata, and add
+   `fragment_version = <current items fragment version> + 1` — or just
    `= <current version>` if you already bumped `state/items.schema.json`'s
    `"version"` earlier in THIS SAME release for an unrelated shape migration.
 4. Bump `state/items.schema.json`'s `"version"` to that same number, and add

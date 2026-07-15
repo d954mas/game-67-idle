@@ -11,7 +11,7 @@ invariant). Extracted in T0337 out of `templates/template/src/features/items/`.
 
 One catalog (item/container/currency definitions, compiled from a game's
 `content/items.json`) + one ownership model (who has what, in which container) +
-a read-only op-layer CLI. No UI, no DevAPI commands of its own, no gameplay
+an op-layer CLI. No UI, no DevAPI commands of its own, no gameplay
 logic — items NEVER executes effects, it only tracks and reports ownership.
 
 Successful mutations emit typed events: `items.txn` for add/remove/create/destroy
@@ -31,7 +31,7 @@ features/items-core/
     generate_items_catalog.py      content codegen (content/items.json -> const C tables)
     generate_items_api_proof.py    normalized proof Snapshot -> typed C API/reference data/LuaLS
     generate_items_api_proof_test.py  schema/API proof regression suite
-    items_ops.py                   read-only op-layer CLI (list/validate/schema)
+    items_ops.py                   op-layer CLI (read operations + receipt upgrade)
     items_ops_test.py              self-contained unittest for items_ops.py's rules
     items_lua_sandbox.py           isolated deterministic Lua declaration evaluator
     items_lua_sandbox_test.py      sandbox, limits, diagnostics, and fixture proof
@@ -89,9 +89,18 @@ returns the authored integer, never a derived object.
 - `generate_items_catalog.py --catalog <items.json> --schema <field_schema.json> --out-dir <dir>` —
   emits `items_catalog.gen.{h,c}` (compile-time const tables) plus a
   lightweight sanity net.
-- `items_ops.py list|validate|schema [--json]` — read-only op-layer CLI;
-  `validate` is a strict superset of the generator's sanity net (imports it,
+- `items_ops.py list|validate|schema [--json]` — read-only catalog operations.
+- `items_ops.py upgrade-receipt ...` — one-shot, write-if-different v2 lock to
+  v3 release-receipt upgrade. It seeds shipped storage/level bounds from the
+  frozen JSON catalog and retains `removed` history in the same lock file.
+  Older removed definitions whose metadata cannot be recovered are marked
+  `storage: unknown`, `level_count: null` rather than guessed.
+  Later runs are no-op.
+
+Every path is passed explicitly by the caller. `validate` is a strict superset
+  of the generator's sanity net (imports it,
   never re-parses) plus the destructive-change (lock-file) guard, full
+  shipped storage/level compatibility checks,
   `<namespace>.<slug>` charset check, composite-key length rule, and an
   advisory display-name-keying lint. **Every path argument (`--catalog`,
   `--schema`, `--baseline`, `--state-schema`, `--src-dir`) must be passed

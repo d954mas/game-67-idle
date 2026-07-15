@@ -1,0 +1,35 @@
+{
+  "schema": "game_seed.items_lock",
+  "schema_version": 3,
+  "comment": "frozen legacy receipt",
+  "receipt": {
+    "schema": "items.release_receipt.v1",
+    "items_core_version": "1.6.0",
+    "lua_evaluation_schema": "items.lua.evaluation.v1",
+    "snapshot_schema": "items.snapshot.v1",
+    "state_schema": {
+      "schema": "game_seed.items",
+      "schema_version": 2,
+      "version": 2
+    },
+    "field_ids": []
+  },
+  "def_ids": {
+    "tmpl.a": {
+      "storage": "stack",
+      "level_count": 0
+    },
+    "tmpl.sword": {
+      "storage": "unique",
+      "level_count": 1
+    }
+  },
+  "removed": {
+    "tmpl.old": {
+      "storage": "unknown",
+      "level_count": null,
+      "fragment_version": 2,
+      "note": "removed"
+    }
+  }
+}

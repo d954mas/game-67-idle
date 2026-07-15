@@ -1,14 +1,44 @@
 {
   "schema": "game_seed.items_lock",
-  "schema_version": 2,
-  "comment": "Baseline of SHIPPED def_id (T0327 И2c; lead-ratified 2026-07-07: deleting/renaming a shipped def_id is destructive and must FORCE an explicit developer reaction). See src/features/items/README.md 'Lock workflow' for the full step-by-step. Two sections: `def_ids` = ids currently live and shipped (append-only -- once here, must stay in the catalog until deliberately moved to `removed`). `removed` = ids DELIBERATELY removed from the catalog after shipping, keyed by def_id, each entry `{fragment_version, note}`: `fragment_version` (required, integer >= 2) records WHICH state/items.schema.json version bump + migration step handled the removal, and must be <= the CURRENT items fragment version (i.e. actually delivered, not just declared); `note` is optional free-text documentation, not checked. Many removals can share the SAME fragment_version -- one release can batch several deletions into one version bump + one migration step (e.g. delete 10 defs -> all 10 get one shared fragment_version in `removed` -> one migration step handles all of them). A shipped id vanishing from items.json without a matching `removed` entry fails `items_ops.py validate` with removed-without-reaction. An id restored to the catalog after being in `removed` is legal (warning only, removed-def-restored) -- move it back to `def_ids` and drop the `removed` entry once confirmed permanent.",
-  "def_ids": [
-    "tmpl.gold",
-    "tmpl.xp",
-    "tmpl.energy",
-    "tmpl.potion",
-    "tmpl.sword",
-    "tmpl.wood"
-  ],
+  "schema_version": 3,
+  "comment": "Release compatibility history. def_ids maps currently shipped IDs to frozen storage/level bounds; removed records deliberate removals and their migration reaction. See src/features/items/README.md 'Lock workflow'.",
+  "receipt": {
+    "schema": "items.release_receipt.v1",
+    "items_core_version": "1.6.0",
+    "lua_evaluation_schema": "items.lua.evaluation.v1",
+    "snapshot_schema": "items.snapshot.v1",
+    "state_schema": {
+      "schema": "game_seed.items",
+      "schema_version": 2,
+      "version": 1
+    },
+    "field_ids": []
+  },
+  "def_ids": {
+    "tmpl.energy": {
+      "storage": "stack",
+      "level_count": 0
+    },
+    "tmpl.gold": {
+      "storage": "stack",
+      "level_count": 0
+    },
+    "tmpl.potion": {
+      "storage": "stack",
+      "level_count": 0
+    },
+    "tmpl.sword": {
+      "storage": "unique",
+      "level_count": 1
+    },
+    "tmpl.wood": {
+      "storage": "stack",
+      "level_count": 0
+    },
+    "tmpl.xp": {
+      "storage": "stack",
+      "level_count": 0
+    }
+  },
   "removed": {}
 }

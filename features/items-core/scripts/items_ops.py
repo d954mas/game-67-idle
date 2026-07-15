@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Read-only op-layer CLI for the items content catalog (T0327 И2c).
+"""Items content op-layer CLI (T0327 И2c, T0381 receipt extension).
 
 Single op-layer that the future T0316 web editor will sit on top of (tool
 parity): subprocess + `--json` gives the Node editor the exact same
-answers this CLI gives a human. Read-only operations only; upsert/deprecate are
-editor-era, out of scope here).
+answers this CLI gives a human. Catalog operations stay read-only; the one write
+is the atomic, idempotent legacy-lock to release-receipt upgrade.
 
 Moved to features/items-core/scripts/ in T0337; its own argparse defaults are
 now script-relative to features/items-core/, NOT the game/template root, so
@@ -33,6 +33,7 @@ tightens it.
 `{rule, id, field, msg}` (stable kebab-case `rule` ids: "generator-check",
 "namespace", "created-missing", "created-invalid", "removed-without-reaction",
 "removed-version-not-shipped", "lock-invalid", "lock-inconsistent",
+"storage-change-without-reaction", "level-shrink-without-reaction",
 "removed-def-restored" (warning), "composite-key-length", "equip-stack",
 "display-name-keying", "rename-guard-skipped") -- not free strings, so the
 future web editor (T0316) can key UI off `rule`/`id` instead of parsing text.
@@ -41,8 +42,8 @@ Exit codes: 0 = OK, 1 = validation FAIL, 2 = usage/IO error. A lock baseline
 that is MISSING because it was never given (default path absent) is NOT an
 IO error -- it prints a warning (lock-file checks skipped, other checks
 still run); an EXPLICITLY passed `--baseline` path that does not exist, OR a
-baseline that exists but has the WRONG SHAPE (schema_version != 2, def_ids
-not a list, removed not an object), IS an IO error (exit 2, consistent with
+baseline that exists but has the WRONG SHAPE (unsupported schema version,
+invalid def_ids/receipt, or removed not an object), IS an IO error (exit 2, consistent with
 `--catalog`/`--schema`/`--state-schema`) -- a broken lock file must never
 SILENTLY disable the destructive-change guard.
 
@@ -58,6 +59,7 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -91,6 +93,9 @@ OWNED_KEY_MAX_LEN = 63
 # creation date lives IN THE DATA instead. "YYYY-MM-DD", checked for both
 # shape (regex) and calendar validity (datetime.date.fromisoformat below).
 CREATED_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+RECEIPT_SCHEMA_VERSION = 3
+RECEIPT_SCHEMA = "items.release_receipt.v1"
+ITEMS_CORE_VERSION = "1.6.0"
 
 Issue = dict  # {"rule": str, "id": str | None, "field": str | None, "msg": str}
 
@@ -115,6 +120,102 @@ def load_json_or_die(path: Path, what: str) -> Any:
         raise OpsError(f"{what} not found: {path}") from exc
     except json.JSONDecodeError as exc:
         raise OpsError(f"{what} is not valid JSON ({path}): {exc}") from exc
+
+
+def _receipt_text(
+    catalog: dict[str, Any],
+    field_schema: dict[str, Any],
+    state_schema: dict[str, Any],
+    legacy: dict[str, Any],
+) -> str:
+    errors = run_generator_checks(catalog, field_schema)
+    if errors:
+        raise OpsError(format_issue(errors[0]))
+    def_ids = legacy.get("def_ids")
+    removed = legacy.get("removed")
+    if legacy.get("schema_version") != 2 or not isinstance(def_ids, list) or not isinstance(removed, dict):
+        raise OpsError("upgrade-receipt requires an items.lock.json schema_version 2 baseline")
+    if not all(isinstance(item_id, str) for item_id in def_ids) or len(def_ids) != len(set(def_ids)):
+        raise OpsError("legacy lock def_ids must be unique strings")
+    items = {item.get("id"): item for item in catalog.get("items", []) if isinstance(item, dict)}
+    missing = sorted(set(def_ids) - set(items))
+    if missing:
+        raise OpsError(f"cannot seed receipt for missing shipped def_id {missing[0]!r}")
+
+    state_version = state_schema.get("version")
+    state_schema_version = state_schema.get("schema_version")
+    if type(state_version) is not int or type(state_schema_version) is not int:
+        raise OpsError("items state schema requires integer schema_version and version")
+
+    receipt: dict[str, Any] = {
+        "schema": legacy.get("schema", "game_seed.items_lock"),
+        "schema_version": RECEIPT_SCHEMA_VERSION,
+    }
+    if "comment" in legacy:
+        receipt["comment"] = legacy["comment"]
+    receipt["receipt"] = {
+        "schema": RECEIPT_SCHEMA,
+        "items_core_version": ITEMS_CORE_VERSION,
+        "lua_evaluation_schema": "items.lua.evaluation.v1",
+        "snapshot_schema": "items.snapshot.v1",
+        "state_schema": {
+            "schema": state_schema.get("schema"),
+            "schema_version": state_schema_version,
+            "version": state_version,
+        },
+        # The legacy JSON schema had no stable user field identities. Do not
+        # invent them from member names; Lua schema extensions add real IDs.
+        "field_ids": [],
+    }
+    receipt["def_ids"] = {
+        item_id: {
+            "storage": "unique" if items[item_id]["stack"] == 1 else "stack",
+            "level_count": 1 if items[item_id]["stack"] == 1 else 0,
+        }
+        for item_id in sorted(def_ids)
+    }
+    receipt["removed"] = {}
+    for item_id in sorted(removed):
+        entry = removed[item_id]
+        if not isinstance(item_id, str) or not isinstance(entry, dict):
+            raise OpsError("legacy lock removed entries must be string/object pairs")
+        receipt["removed"][item_id] = {
+            "storage": entry.get("storage", "unknown"),
+            "level_count": entry.get("level_count"),
+            **entry,
+        }
+    return json.dumps(receipt, ensure_ascii=False, indent=2) + "\n"
+
+
+def _write_utf8_if_changed(path: Path, text: str) -> bool:
+    data = text.encode("utf-8")
+    if path.exists() and path.read_bytes() == data:
+        return False
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_bytes(data)
+    os.replace(temporary, path)
+    return True
+
+
+def cmd_upgrade_receipt(args: argparse.Namespace) -> int:
+    baseline_path = Path(args.baseline)
+    baseline = load_json_or_die(baseline_path, "lock baseline")
+    if baseline.get("schema_version") == RECEIPT_SCHEMA_VERSION:
+        validate_baseline_shape(baseline, baseline_path)
+        changed = False
+    else:
+        catalog = load_json_or_die(Path(args.catalog), "catalog")
+        field_schema = load_json_or_die(Path(args.schema), "field schema")
+        state_schema = load_json_or_die(Path(args.state_schema), "items state fragment schema")
+        changed = _write_utf8_if_changed(
+            baseline_path,
+            _receipt_text(catalog, field_schema, state_schema, baseline),
+        )
+    if args.json:
+        print(json.dumps({"ok": True, "changed": changed, "path": str(baseline_path)}))
+    else:
+        print(f"receipt {'upgraded' if changed else 'unchanged'}: {baseline_path}")
+    return 0
 
 
 # ---------------------------------------------------------------------------
@@ -270,8 +371,8 @@ def check_lock_workflow(
     workflow"): deleting/renaming a SHIPPED def_id is a destructive action
     and must FORCE an explicit developer reaction, not just a warning.
 
-    items.lock.json v2 has two sections: `def_ids` (currently shipped and
-    live -- append-only) and `removed` (deliberately removed after shipping,
+    items.lock.json keeps two history sections: `def_ids` (currently shipped
+    and live) and `removed` (deliberately removed after shipping,
     each entry `{"fragment_version": N, "note": "..." }` recording which
     state/items.schema.json version bump + migration step handled it; `note`
     is OPTIONAL documentation, only `fragment_version` is checked). MANY ids
@@ -293,6 +394,8 @@ def check_lock_workflow(
       non-integer, or < MIN_REMOVED_FRAGMENT_VERSION (2).
     - `lock-inconsistent`: an id is listed in BOTH `def_ids` and `removed` --
       it must be exactly one of "currently shipped" or "documented removal".
+    - v3 receipt storage changes and shipped level shrink require an explicit
+      migration plus receipt update.
     - `removed-def-restored` (warning): a `removed` id has reappeared in the
       catalog -- legal, but flagged so the lock file can be tidied up (move
       back to def_ids, drop the removed entry) once confirmed permanent.
@@ -311,7 +414,10 @@ def check_lock_workflow(
     # whole guard; it must never be reintroduced at this layer.
     def_ids = set(baseline.get("def_ids", []))
     removed: dict[str, Any] = baseline.get("removed", {})
-    current_ids = {item.get("id") for item in doc.get("items", [])}
+    current_items = {
+        item.get("id"): item for item in doc.get("items", []) if isinstance(item, dict)
+    }
+    current_ids = set(current_items)
 
     both = sorted(def_ids & removed.keys())
     for dup_id in both:
@@ -327,6 +433,26 @@ def check_lock_workflow(
 
     needed_version = current_version + 1
     for locked_id in sorted(def_ids):
+        if locked_id in current_ids and baseline.get("schema_version") == RECEIPT_SCHEMA_VERSION:
+            metadata = baseline["def_ids"][locked_id]
+            current_storage = "unique" if current_items[locked_id].get("stack") == 1 else "stack"
+            current_level_count = 1 if current_storage == "unique" else 0
+            if metadata["storage"] != current_storage:
+                errors.append(issue(
+                    "storage-change-without-reaction",
+                    f"def_id {locked_id!r} shipped as {metadata['storage']!r} but is now "
+                    f"{current_storage!r}; migrate saved entries and update the release receipt explicitly",
+                    id=locked_id,
+                    field="storage",
+                ))
+            if current_level_count < metadata["level_count"]:
+                errors.append(issue(
+                    "level-shrink-without-reaction",
+                    f"def_id {locked_id!r} shipped with level_count={metadata['level_count']} but now "
+                    f"has {current_level_count}; migrate out-of-range saved levels and update the receipt explicitly",
+                    id=locked_id,
+                    field="level_count",
+                ))
         if locked_id in current_ids or locked_id in removed:
             continue  # still shipped, or already has a recorded reaction (lock-inconsistent covers "both")
         errors.append(
@@ -586,14 +712,56 @@ def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
     skipping every lock-workflow rule. Same severity as a missing/unparsable
     file: OpsError, exit 2, not a warning."""
     schema_version = baseline.get("schema_version")
-    if schema_version != 2:
-        raise OpsError(f"lock baseline 'schema_version' must be 2, got {schema_version!r} ({path})")
+    if schema_version not in (2, RECEIPT_SCHEMA_VERSION):
+        raise OpsError(f"lock baseline 'schema_version' must be 2 or 3, got {schema_version!r} ({path})")
     def_ids = baseline.get("def_ids")
-    if not isinstance(def_ids, list):
-        raise OpsError(f"lock baseline 'def_ids' must be a list, got {type(def_ids).__name__} ({path})")
+    expected = (list,) if schema_version == 2 else (dict,)
+    if not isinstance(def_ids, expected):
+        shape = "list" if schema_version == 2 else "object"
+        raise OpsError(f"lock baseline 'def_ids' must be a {shape}, got {type(def_ids).__name__} ({path})")
     removed = baseline.get("removed")
     if not isinstance(removed, dict):
         raise OpsError(f"lock baseline 'removed' must be an object, got {type(removed).__name__} ({path})")
+    if schema_version == RECEIPT_SCHEMA_VERSION:
+        receipt = baseline.get("receipt")
+        if not isinstance(receipt, dict) or receipt.get("schema") != RECEIPT_SCHEMA:
+            raise OpsError(f"lock baseline 'receipt' must be a {RECEIPT_SCHEMA} object ({path})")
+        required = {
+            "schema", "items_core_version", "lua_evaluation_schema",
+            "snapshot_schema", "state_schema", "field_ids",
+        }
+        if set(receipt) != required:
+            raise OpsError(f"lock baseline 'receipt' keys are invalid ({path})")
+        if not all(isinstance(receipt.get(key), str) and receipt[key] for key in (
+            "items_core_version", "lua_evaluation_schema", "snapshot_schema",
+        )):
+            raise OpsError(f"lock baseline receipt tool/API versions must be strings ({path})")
+        state = receipt.get("state_schema")
+        if (not isinstance(state, dict) or set(state) != {"schema", "schema_version", "version"}
+                or not isinstance(state.get("schema"), str)
+                or type(state.get("schema_version")) is not int
+                or type(state.get("version")) is not int):
+            raise OpsError(f"lock baseline receipt state_schema is invalid ({path})")
+        field_ids = receipt.get("field_ids")
+        if (not isinstance(field_ids, list) or not all(isinstance(field_id, str) for field_id in field_ids)
+                or len(field_ids) != len(set(field_ids))):
+            raise OpsError(f"lock baseline receipt field_ids must be unique strings ({path})")
+        for item_id, metadata in def_ids.items():
+            if (not isinstance(item_id, str) or not isinstance(metadata, dict)
+                    or set(metadata) != {"storage", "level_count"}
+                    or metadata.get("storage") not in {"stack", "unique"}
+                    or type(metadata.get("level_count")) is not int
+                    or metadata["level_count"] < 0):
+                raise OpsError(f"lock baseline def_ids receipt for {item_id!r} is invalid ({path})")
+        for item_id, metadata in removed.items():
+            if not isinstance(item_id, str) or not isinstance(metadata, dict):
+                raise OpsError(f"lock baseline removed receipt for {item_id!r} is invalid ({path})")
+            storage = metadata.get("storage")
+            level_count = metadata.get("level_count")
+            if (storage not in {"stack", "unique", "unknown"}
+                    or (storage == "unknown" and level_count is not None)
+                    or (storage != "unknown" and (type(level_count) is not int or level_count < 0))):
+                raise OpsError(f"lock baseline removed compatibility data for {item_id!r} is invalid ({path})")
 
 
 def resolve_baseline(args: argparse.Namespace) -> tuple[dict[str, Any] | None, Issue | None]:
@@ -708,6 +876,14 @@ def build_parser() -> argparse.ArgumentParser:
     p_schema.add_argument("--schema", default=str(DEFAULT_FIELD_SCHEMA))
     p_schema.add_argument("--json", action="store_true")
     p_schema.set_defaults(func=cmd_schema)
+
+    p_upgrade = sub.add_parser("upgrade-receipt", help="Upgrade items.lock.json v2 to the extended release receipt.")
+    p_upgrade.add_argument("--catalog", required=True)
+    p_upgrade.add_argument("--schema", required=True)
+    p_upgrade.add_argument("--baseline", required=True)
+    p_upgrade.add_argument("--state-schema", required=True)
+    p_upgrade.add_argument("--json", action="store_true")
+    p_upgrade.set_defaults(func=cmd_upgrade_receipt)
 
     return parser
 

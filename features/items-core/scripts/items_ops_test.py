@@ -74,6 +74,23 @@ def make_lock(def_ids: list[str], removed: dict | None = None, schema_version: i
     }
 
 
+def make_receipt_lock(def_ids: dict[str, dict], *, state_version: int = 1) -> dict:
+    return {
+        "schema": "game_seed.items_lock",
+        "schema_version": 3,
+        "receipt": {
+            "schema": "items.release_receipt.v1",
+            "items_core_version": "1.6.0",
+            "lua_evaluation_schema": "items.lua.evaluation.v1",
+            "snapshot_schema": "items.snapshot.v1",
+            "state_schema": {"schema": "game_seed.items", "schema_version": 2, "version": state_version},
+            "field_ids": [],
+        },
+        "def_ids": def_ids,
+        "removed": {},
+    }
+
+
 def make_state_schema(version: int) -> dict:
     return {
         "schema": "game_seed.items",
@@ -129,6 +146,76 @@ def run_list(catalog_path: Path) -> tuple[int, dict | None, str]:
     stdout_text = stdout.getvalue()
     payload = json.loads(stdout_text) if stdout_text.strip() else None
     return rc, payload, stderr.getvalue()
+
+
+def run_receipt_upgrade(
+    tmp_path: Path,
+    catalog: dict,
+    lock: dict | None,
+    state_version: int,
+) -> tuple[int, dict | None, Path]:
+    catalog_path = _write(tmp_path / "catalog.json", catalog)
+    lock_path = tmp_path / "lock.json"
+    if lock is not None:
+        _write(lock_path, lock)
+    state_path = _write(tmp_path / "state.json", make_state_schema(state_version))
+    argv = [
+        "upgrade-receipt",
+        "--catalog", str(catalog_path),
+        "--schema", str(FIELD_SCHEMA),
+        "--baseline", str(lock_path),
+        "--state-schema", str(state_path),
+        "--json",
+    ]
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout):
+        rc = items_ops.main(argv)
+    payload = json.loads(stdout.getvalue())
+    return rc, payload, lock_path
+
+
+class ReceiptUpgradeTests(unittest.TestCase):
+    def test_upgrade_has_exact_bytes_and_later_runs_are_noop(self):
+        legacy_lock = {
+            "schema": "game_seed.items_lock",
+            "schema_version": 2,
+            "comment": "frozen legacy receipt",
+            "def_ids": ["tmpl.sword", "tmpl.a"],
+            "removed": {"tmpl.old": {"fragment_version": 2, "note": "removed"}},
+        }
+        catalog = make_catalog([
+            make_item("tmpl.a", stack=999),
+            make_item("tmpl.sword", stack=1, equip={"slot": "weapon"}),
+        ])
+        expected = (Path(__file__).resolve().parent.parent / "tests" / "fixtures" /
+                    "items_receipt_upgrade_expected.json").read_bytes()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            rc, payload, lock_path = run_receipt_upgrade(tmp_path, catalog, legacy_lock, state_version=2)
+            self.assertEqual(rc, 0)
+            self.assertTrue(payload["changed"])
+            self.assertEqual(lock_path.read_bytes(), expected)
+
+            rc, payload, _ = run_receipt_upgrade(
+                tmp_path,
+                catalog,
+                None,
+                state_version=2,
+            )
+            self.assertEqual(rc, 0)
+            self.assertFalse(payload["changed"])
+            self.assertEqual(lock_path.read_bytes(), expected)
+
+    def test_unhashable_legacy_def_id_is_a_controlled_error(self):
+        legacy_lock = make_lock([{"bad": "id"}])
+        with self.assertRaises(items_ops.OpsError):
+            items_ops._receipt_text(
+                make_catalog([make_item("tmpl.a")]),
+                json.loads(FIELD_SCHEMA.read_text(encoding="utf-8")),
+                make_state_schema(1),
+                legacy_lock,
+            )
 
 
 class LockWorkflowTests(unittest.TestCase):
@@ -201,6 +288,42 @@ class LockWorkflowTests(unittest.TestCase):
         self.assertEqual(rc, 2)
         self.assertIsNone(payload)
         self.assertIn("schema_version", stderr_text)
+
+    def test_malformed_extended_receipt_is_io_error(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = make_catalog([make_item("tmpl.a")])
+            lock = {
+                "schema": "game_seed.items_lock",
+                "schema_version": 3,
+                "def_ids": {"tmpl.a": {"storage": "stack", "level_count": 0}},
+                "removed": {},
+            }
+            rc, payload, stderr_text = run_validate(tmp_path, catalog, lock, state_version=1)
+
+        self.assertEqual(rc, 2)
+        self.assertIsNone(payload)
+        self.assertIn("receipt", stderr_text)
+
+    def test_shipped_storage_change_requires_reaction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = make_catalog([make_item("tmpl.a", stack=1, equip={"slot": "weapon"})])
+            lock = make_receipt_lock({"tmpl.a": {"storage": "stack", "level_count": 0}})
+            rc, payload, _ = run_validate(tmp_path, catalog, lock, state_version=1)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("storage-change-without-reaction", error_rules(payload))
+
+    def test_shipped_level_shrink_requires_reaction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            catalog = make_catalog([make_item("tmpl.a", stack=1, equip={"slot": "weapon"})])
+            lock = make_receipt_lock({"tmpl.a": {"storage": "unique", "level_count": 2}})
+            rc, payload, _ = run_validate(tmp_path, catalog, lock, state_version=1)
+
+        self.assertEqual(rc, 1)
+        self.assertIn("level-shrink-without-reaction", error_rules(payload))
 
     def test_happy_batch_path(self):
         # (e) tmpl.b and tmpl.c were removed together in one release, sharing
