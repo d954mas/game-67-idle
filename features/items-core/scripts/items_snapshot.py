@@ -16,8 +16,10 @@ from typing import Any
 EVALUATION_SCHEMA = "items.lua.evaluation.v1"
 SNAPSHOT_SCHEMA = "items.snapshot.v1"
 QUERY_SCHEMA = "items.snapshot.query.v1"
+CHART_SCHEMA = "items.snapshot.chart.v1"
 DIFF_SCHEMA = "items.snapshot.diff.v1"
 DEFAULT_QUERY_ROWS = 1_000
+DEFAULT_CHART_POINTS = 200
 DEFAULT_DIFF_CHANGES = 1_000
 MAX_EXACT_INTEGER = 9_007_199_254_740_991
 FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
@@ -483,6 +485,80 @@ def query_snapshot(
     return result
 
 
+def chart_snapshot(
+    snapshot: dict[str, Any],
+    *,
+    item_id: str,
+    field: str,
+    level_from: int | None = None,
+    level_to: int | None = None,
+    max_points: int = DEFAULT_CHART_POINTS,
+) -> dict[str, Any]:
+    if type(max_points) is not int or max_points < 2 or max_points > DEFAULT_QUERY_ROWS:
+        _fail("chart.max_points", f"max_points must be between 2 and {DEFAULT_QUERY_ROWS}")
+    query = query_snapshot(
+        snapshot, item_id=item_id, field=field,
+        level_from=level_from, level_to=level_to,
+        max_rows=MAX_EXACT_INTEGER,
+    )
+    field_metadata = query.get("field")
+    if not isinstance(field_metadata, dict):
+        _fail("chart.field", "chart requires one registered numeric level field", "$.field")
+    field_schema = field_metadata.get("schema")
+    if not isinstance(field_schema, dict):
+        _fail("chart.field", "chart requires a typed field schema", "$.field.schema")
+    minimum, maximum = field_schema.get("min"), field_schema.get("max")
+    rows = query.get("item", {}).get("levels", [])
+    if not isinstance(rows, list) or not rows:
+        _fail("chart.field", "chart requires at least one level value", "$.item.levels")
+
+    source_points: list[dict[str, Any]] = []
+    for index, row in enumerate(rows):
+        values = row.get("values") if isinstance(row, dict) else None
+        provenance = row.get("provenance") if isinstance(row, dict) else None
+        value = values.get(field) if isinstance(values, dict) else None
+        value_provenance = provenance.get(field) if isinstance(provenance, dict) else None
+        if (type(value) is not int or type(minimum) is not int or type(maximum) is not int
+                or value < minimum or value > maximum or not isinstance(value_provenance, str)):
+            _fail("chart.field", "chart points require typed values and provenance", f"$.item.levels[{index}]")
+        source_points.append({
+            "level": row["level"], "value": value, "provenance": value_provenance,
+        })
+
+    count = len(source_points)
+    if count > max_points:
+        indices = [
+            index * (count - 1) // (max_points - 1)
+            for index in range(max_points)
+        ]
+        points = [source_points[index] for index in indices]
+        method = "even-index"
+    else:
+        points = source_points
+        method = "none"
+    values = [point["value"] for point in source_points]
+    return {
+        "schema": CHART_SCHEMA,
+        "content_hash": snapshot.get("content_hash"),
+        "item": item_id,
+        "field": field_metadata,
+        "bounds": {
+            "level_from": source_points[0]["level"],
+            "level_to": source_points[-1]["level"],
+            "value_min": min(values),
+            "value_max": max(values),
+        },
+        "downsampling": {
+            "applied": count > max_points,
+            "method": method,
+            "source_points": count,
+            "returned_points": len(points),
+            "max_points": max_points,
+        },
+        "points": points,
+    }
+
+
 def _diff_items(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
         _fail("diff.snapshot_schema", f"expected {SNAPSHOT_SCHEMA}")
@@ -637,6 +713,13 @@ def main(argv: list[str] | None = None) -> int:
     query.add_argument("--inputs", action="store_true")
     query.add_argument("--dependents", action="store_true")
     query.add_argument("--max-rows", type=int, default=DEFAULT_QUERY_ROWS)
+    chart = subparsers.add_parser("chart")
+    chart.add_argument("--snapshot", type=Path, required=True)
+    chart.add_argument("--item", required=True)
+    chart.add_argument("--field", required=True)
+    chart.add_argument("--level-from", type=int)
+    chart.add_argument("--level-to", type=int)
+    chart.add_argument("--max-points", type=int, default=DEFAULT_CHART_POINTS)
     diff = subparsers.add_parser("diff")
     diff.add_argument("--before", type=Path, required=True)
     diff.add_argument("--after", type=Path, required=True)
@@ -651,6 +734,13 @@ def main(argv: list[str] | None = None) -> int:
                 level_from=args.level_from, level_to=args.level_to,
                 include_inputs=args.inputs, include_dependents=args.dependents,
                 max_rows=args.max_rows,
+            )
+            print(_json_bytes(payload).decode("utf-8"))
+        elif args.command == "chart":
+            payload = chart_snapshot(
+                _load(args.snapshot), item_id=args.item, field=args.field,
+                level_from=args.level_from, level_to=args.level_to,
+                max_points=args.max_points,
             )
             print(_json_bytes(payload).decode("utf-8"))
         else:

@@ -364,6 +364,65 @@ class ItemsSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.level_range"):
             SNAPSHOT.query_snapshot(snapshot, item_id="game.sword", level_from=1001, level_to=1002)
 
+    def test_chart_query_is_bounded_and_discloses_downsampling(self):
+        items = self.base_items()
+        items[1]["levels"]["rows"] = [{"attack": level} for level in range(1, 1002)]
+        items[1]["levels"]["provenance"] = [
+            {"attack": "table"} for _ in range(1, 1002)
+        ]
+        snapshot = SNAPSHOT.build_snapshot(evaluation(items))
+
+        chart = SNAPSHOT.chart_snapshot(
+            snapshot, item_id="game.sword", field="attack", max_points=3,
+        )
+
+        self.assertEqual(chart["schema"], "items.snapshot.chart.v1")
+        self.assertEqual([point["level"] for point in chart["points"]], [1, 501, 1001])
+        self.assertEqual(chart["bounds"], {
+            "level_from": 1, "level_to": 1001,
+            "value_min": 1, "value_max": 1001,
+        })
+        self.assertEqual(chart["downsampling"], {
+            "applied": True,
+            "method": "even-index",
+            "source_points": 1001,
+            "returned_points": 3,
+            "max_points": 3,
+        })
+        self.assertEqual(chart["field"]["schema"]["unit"], "damage")
+        self.assertEqual(chart["points"][0]["provenance"], "table")
+
+        ranged = SNAPSHOT.chart_snapshot(
+            snapshot, item_id="game.sword", field="attack",
+            level_from=100, level_to=200, max_points=3,
+        )
+        self.assertEqual([point["level"] for point in ranged["points"]], [100, 150, 200])
+        self.assertEqual(ranged["bounds"]["value_min"], 100)
+        self.assertEqual(ranged["bounds"]["value_max"], 200)
+
+        full = SNAPSHOT.chart_snapshot(
+            SNAPSHOT.build_snapshot(evaluation(self.base_items())),
+            item_id="game.sword", field="attack", max_points=10,
+        )
+        self.assertFalse(full["downsampling"]["applied"])
+        self.assertEqual(full["downsampling"]["method"], "none")
+
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "chart.max_points"):
+            SNAPSHOT.chart_snapshot(snapshot, item_id="game.sword", field="attack", max_points=1)
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "chart.field"):
+            SNAPSHOT.chart_snapshot(
+                SNAPSHOT.build_snapshot(evaluation(self.base_items())),
+                item_id="game.sword", field="cost_to_reach", level_from=2,
+            )
+
+        stale = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
+        stale["items"][1]["levels"]["rows"][0]["attack"] = 1_000_001
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "chart.field"):
+            SNAPSHOT.chart_snapshot(
+                stale, item_id="game.sword", field="attack",
+                level_from=1, level_to=1,
+            )
+
     def test_diff_reports_only_semantic_changes_in_stable_order(self):
         before = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
         changed_items = self.base_items()
@@ -450,6 +509,18 @@ class ItemsSnapshotTests(unittest.TestCase):
             self.assertEqual(payload["inputs"], ["game.gold"])
             self.assertEqual(payload["field"]["schema"]["unit"], "damage")
             self.assertEqual(payload["field"]["source"]["kind"], "field")
+
+            charted = subprocess.run(
+                [
+                    sys.executable, str(SCRIPT), "chart", "--snapshot", str(target),
+                    "--item", "game.sword", "--field", "attack", "--max-points", "2",
+                ],
+                text=True, capture_output=True, encoding="utf-8", timeout=10,
+            )
+            self.assertEqual(charted.returncode, 0, charted.stderr)
+            chart_payload = json.loads(charted.stdout)
+            self.assertEqual(chart_payload["downsampling"]["returned_points"], 2)
+            self.assertEqual([point["level"] for point in chart_payload["points"]], [1, 3])
 
             changed_items = self.base_items()
             changed_items[1]["levels"]["rows"][1]["attack"] = 16

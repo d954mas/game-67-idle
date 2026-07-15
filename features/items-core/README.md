@@ -187,11 +187,15 @@ field also includes only its schema, registration location, and selected value
 provenance. More than 1000
 level rows requires an explicit smaller range. `diff` compares only normalized
 item data, emits stable JSON Pointer paths, ignores provenance-only movement,
-and stops after 1000 changes by default.
+and stops after 1000 changes by default. `chart` accepts only a registered
+numeric level field, returns at most 200 points by default, preserves range
+endpoints, and discloses full level/value bounds plus its stable downsampling
+method and counts.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py build --evaluation <evaluation.json> --out <snapshot.json>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py query --snapshot <snapshot.json> --item <item-id> --inputs --dependents
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py chart --snapshot <snapshot.json> --item <item-id> --field <field> --max-points 200
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py diff --before <old-snapshot.json> --after <new-snapshot.json>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot_test.py
 ```
