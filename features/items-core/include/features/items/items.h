@@ -121,6 +121,7 @@ const game_container_def_t *item_container_def(const char *container_id);
    дефолты (плоская форма под генератор); смысловы только для УНИКОВ
    (equip-блок). Тела реализованы в items_containers.c (И2b); объявлены здесь
    как единственная публичная поверхность фичи. */
+/* Stack APIs reject unique definitions; instance APIs reject stack definitions. */
 bool items_add(const char *container_id, const char *def_id, int64_t count, const char *reason);
 bool items_remove(const char *container_id, const char *def_id, int64_t count, const char *reason);
 int64_t items_count(const char *container_id, const char *def_id);

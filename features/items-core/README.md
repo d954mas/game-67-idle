@@ -61,6 +61,9 @@ features/items-core/
   `items_instance_destroy(instance_id, reason)` — unique-instance pool.
 - `items_purse(def_id)` — convenience for `items_count("purse", def_id)`.
 
+Stack operations reject `stack == 1`; instance operations reject `stack != 1`.
+A finite authored `stack > 1` is enforced as the per-container stack cap.
+
 `reason` is mandatory on every mutation, format `verb:subject`, verb from a
 closed, append-only list — see "Reason verbs" below.
 

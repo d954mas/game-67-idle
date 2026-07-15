@@ -75,15 +75,16 @@ static int container_record_count(const char *container_id) {
    caller owns both: items_add emits txn; items_move emits move, not txn, since
    ownership of the def does not change, only its container).
    capacity (M1) REJECTs only when allocating a genuinely NEW record; growing an
-   existing stack is never capacity-limited. currency.cap (M3) CLAMPs the
-   resulting sum, never rejects. *out_delta (if non-NULL) receives the actual
+   existing stack is never capacity-limited. currency.cap and stack>1 CLAMP the
+   accepted addition, never reduce an already-over-limit loaded record.
+   *out_delta (if non-NULL) receives the actual
    count applied (post-clamp); meaningful only when this returns true. */
 static bool add_raw(const char *container_id, const char *def_id, int64_t count, int64_t *out_delta) {
     if (count <= 0) {
         return false;
     }
     const game_item_def_t *def = item_core(def_id);
-    if (def == NULL) {
+    if (def == NULL || !def->stackable) {
         return false;
     }
     const game_container_def_t *cdef = item_container_def(container_id);
@@ -100,6 +101,7 @@ static bool add_raw(const char *container_id, const char *def_id, int64_t count,
     }
     ItemsItemOwned *rec = find_owned_by_key(key);
     bool is_new = (rec == NULL);
+    bool restore_quarantined = !is_new && rec->quarantined;
     if (is_new) {
         if (cdef->capacity > 0 && container_record_count(container_id) >= cdef->capacity) {
             return false; /* M1: capacity REJECTs new records, never clamps */
@@ -116,22 +118,22 @@ static bool add_raw(const char *container_id, const char *def_id, int64_t count,
         rec->level = ITEMS_STATE_ITEM_OWNED_LEVEL_DEFAULT;
         rec->durability = ITEMS_STATE_ITEM_OWNED_DURABILITY_DEFAULT;
         rec->quarantined = false;
-    } else if (rec->quarantined) {
-        /* L3 (defensive): item_core resolved def_id above, so this def IS back in
-           the catalog right now -- reconcile re-derives this flag on every load
-           anyway, but an in-session grow-add should not keep a live record hidden
-           from count/can_afford until the next load. */
-        rec->quarantined = false;
     }
 
     int64_t before = rec->count;
-    if (count > ITEMS_STATE_ITEM_OWNED_COUNT_MAX - before) {
-        rec->count = ITEMS_STATE_ITEM_OWNED_COUNT_MAX; /* M1: overflow guard, clamp to schema max */
-    } else {
-        rec->count = before + count;
+    int64_t limit = ITEMS_STATE_ITEM_OWNED_COUNT_MAX;
+    if (def->currency != NULL && def->currency->cap > 0 && def->currency->cap < limit) {
+        limit = def->currency->cap;
     }
-    if (def->currency != NULL && def->currency->cap > 0 && rec->count > def->currency->cap) {
-        rec->count = def->currency->cap; /* M3: cap CLAMPs the sum */
+    if (def->max_stack > 1 && def->max_stack < limit) {
+        limit = def->max_stack;
+    }
+    if (before >= limit) {
+        return false;
+    }
+    rec->count = count > limit - before ? limit : before + count;
+    if (restore_quarantined) {
+        rec->quarantined = false;
     }
     if (out_delta != NULL) {
         *out_delta = rec->count - before; /* honest actual change after BOTH clamps */
@@ -166,6 +168,9 @@ bool items_add(const char *container_id, const char *def_id, int64_t count, cons
         return false;
     }
     const game_item_def_t *def = item_core(def_id);
+    if (def == NULL || !def->stackable) {
+        return false;
+    }
     /* Default by accept policy: currency -> purse, otherwise backpack. */
     const char *target =
         (container_id != NULL && container_id[0] != '\0') ? container_id : (item_is_currency(def) ? "purse" : "backpack");
@@ -188,6 +193,10 @@ bool items_remove(const char *container_id, const char *def_id, int64_t count, c
     if (container_id == NULL || def_id == NULL) {
         return false;
     }
+    const game_item_def_t *def = item_core(def_id);
+    if (def == NULL || !def->stackable) {
+        return false;
+    }
     char key[ITEMS_STATE_STRING_MAX];
     if (!build_stack_key(key, sizeof key, container_id, def_id)) {
         return false;
@@ -204,6 +213,10 @@ int64_t items_count(const char *container_id, const char *def_id) {
     if (container_id == NULL || def_id == NULL) {
         return 0;
     }
+    const game_item_def_t *def = item_core(def_id);
+    if (def == NULL || !def->stackable) {
+        return 0;
+    }
     char key[ITEMS_STATE_STRING_MAX];
     if (!build_stack_key(key, sizeof key, container_id, def_id)) {
         return 0; /* L2: truncated key -- no such record can exist */
@@ -216,6 +229,10 @@ int64_t items_count(const char *container_id, const char *def_id) {
 }
 
 bool items_can_afford(const char *container_id, const char *def_id, int64_t n) {
+    const game_item_def_t *def = item_core(def_id);
+    if (def == NULL || !def->stackable) {
+        return false;
+    }
     if (n < 0) {
         return false; /* L5: consistent with remove's count<=0 rejection */
     }
@@ -282,6 +299,9 @@ bool items_move(const char *from, const char *to, const char *entry_key, int64_t
             return false;
         }
         const game_item_def_t *def = item_core(unique->def_id);
+        if (def == NULL || def->stackable) {
+            return false;
+        }
         if (cdef->accept_policy == ITEM_ACCEPT_CURRENCY_ONLY && !item_is_currency(def)) {
             return false;
         }
@@ -309,7 +329,7 @@ const char *items_instance_create(const char *container_id, const char *def_id, 
         return NULL;
     }
     const game_item_def_t *def = item_core(def_id);
-    if (def == NULL) {
+    if (def == NULL || def->stackable) {
         return NULL;
     }
     const game_container_def_t *cdef = item_container_def(container_id);
@@ -350,6 +370,10 @@ bool items_instance_destroy(const char *instance_id, const char *reason) {
     }
     ItemsItemOwned *rec = find_owned_by_key(instance_id);
     if (rec == NULL) {
+        return false;
+    }
+    const game_item_def_t *def = item_core(rec->def_id);
+    if (def == NULL || def->stackable) {
         return false;
     }
     if (strrchr(rec->key, '#') == NULL) {

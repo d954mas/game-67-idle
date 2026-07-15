@@ -127,6 +127,31 @@ void test_add_accumulate_and_remove_stack(void) {
     TEST_ASSERT_TRUE(slot_freed);
 }
 
+void test_stack_and_unique_routes_and_stack_cap(void) {
+    items_state_fragment.reset();
+
+    TEST_ASSERT_FALSE(items_add("backpack", "tmpl.sword", 1, "loot:test"));
+    TEST_ASSERT_FALSE(items_remove("backpack", "tmpl.sword", 1, "sell:test"));
+    TEST_ASSERT_EQUAL_INT64(0, items_count("backpack", "tmpl.sword"));
+    TEST_ASSERT_FALSE(items_can_afford("backpack", "tmpl.sword", 1));
+    TEST_ASSERT_FALSE(items_can_afford("backpack", "tmpl.sword", 0));
+    TEST_ASSERT_NULL(items_instance_create("backpack", "tmpl.wood", "loot:test"));
+
+    TEST_ASSERT_TRUE(items_add("backpack", "tmpl.potion", 150, "loot:test"));
+    TEST_ASSERT_EQUAL_INT64(99, items_count("backpack", "tmpl.potion"));
+
+    ItemsItemOwned *potion = NULL;
+    for (int i = 0; i < ITEMS_STATE_MAX_OWNED; ++i) {
+        if (items_state.owned[i].used && strcmp(items_state.owned[i].key, "backpack/tmpl.potion") == 0) {
+            potion = &items_state.owned[i];
+        }
+    }
+    TEST_ASSERT_NOT_NULL(potion);
+    potion->count = 120; /* simulate legacy/corrupt over-cap state */
+    TEST_ASSERT_FALSE(items_add("backpack", "tmpl.potion", 1, "loot:test"));
+    TEST_ASSERT_EQUAL_INT64(120, items_count("backpack", "tmpl.potion"));
+}
+
 /* Контейнеры/accept-policy: add currency without explicit container -> purse;
    purse (currency_only) rejects a non-currency add. */
 void test_add_default_container_and_currency_only_policy(void) {
@@ -253,20 +278,19 @@ void test_move_capped_currency_conserves_total_sum(void) {
     TEST_ASSERT_EQUAL_INT64(before_sum, after_sum);
 }
 
-/* T1: unique route re-parents via the field, never the key -- use a
-   currency def so both backpack (any) and purse (currency_only) accept it, to
-   isolate the field-authority behavior from accept-policy. Then M4: filling the
+/* T1: unique route re-parents via the field, never the key. The test creates a
+   real sword instance, then white-box stages it in purse so the positive move
+   targets backpack (`any`) without adding a fake unique currency definition.
+   Then M4: filling the
    destination to its capacity REJECTs a unique move in exactly the same way it
    would reject allocating a new stack record there. */
 void test_unique_move_field_authority_and_capacity_reject(void) {
     items_state_fragment.reset();
 
-    const char *iid = items_instance_create("backpack", "tmpl.gold", "loot:test");
+    const char *iid = items_instance_create("backpack", "tmpl.sword", "loot:test");
     TEST_ASSERT_NOT_NULL(iid);
     char iid_copy[ITEMS_STATE_STRING_MAX];
     (void)snprintf(iid_copy, sizeof iid_copy, "%s", iid); /* alloc_owned_slot -> index 0, first alloc after reset */
-
-    TEST_ASSERT_TRUE(items_move("backpack", "purse", iid_copy, 1, "loot:test"));
 
     ItemsItemOwned *rec = NULL;
     for (int i = 0; i < ITEMS_STATE_MAX_OWNED; ++i) {
@@ -275,8 +299,12 @@ void test_unique_move_field_authority_and_capacity_reject(void) {
         }
     }
     TEST_ASSERT_NOT_NULL(rec);
-    TEST_ASSERT_EQUAL_STRING("purse", rec->container); /* field changed */
+    (void)snprintf(rec->container, sizeof rec->container, "%s", "purse");
+    TEST_ASSERT_TRUE(items_move("purse", "backpack", iid_copy, 1, "loot:test"));
+    TEST_ASSERT_EQUAL_STRING("backpack", rec->container); /* field changed */
     TEST_ASSERT_EQUAL_STRING(iid_copy, rec->key);       /* key untouched -- field authority for uniques */
+
+    (void)snprintf(rec->container, sizeof rec->container, "%s", "purse");
 
     /* Fill backpack to its capacity=20 with fabricated distinct records (slots
        1..20, away from the gold record's slot 0) -- then moving the unique INTO
@@ -641,17 +669,17 @@ void test_capacity_reject_emits_no_txn(void) {
 void test_add_overflow_clamps_to_schema_max(void) {
     items_state_fragment.reset();
     int64_t near_max = ITEMS_STATE_ITEM_OWNED_COUNT_MAX - 10;
-    TEST_ASSERT_TRUE(items_add("backpack", "tmpl.wood", near_max, "loot:test_txn"));
-    TEST_ASSERT_EQUAL_INT64(near_max, items_count("backpack", "tmpl.wood"));
+    TEST_ASSERT_TRUE(items_add("backpack", "tmpl.gold", near_max, "loot:test_txn"));
+    TEST_ASSERT_EQUAL_INT64(near_max, items_count("backpack", "tmpl.gold"));
 
     game_event_frame_reset();
-    TEST_ASSERT_TRUE(items_add("backpack", "tmpl.wood", 1000, "loot:test_txn")); /* would overflow past MAX */
-    TEST_ASSERT_EQUAL_INT64(ITEMS_STATE_ITEM_OWNED_COUNT_MAX, items_count("backpack", "tmpl.wood"));
+    TEST_ASSERT_TRUE(items_add("backpack", "tmpl.gold", 1000, "loot:test_txn")); /* would overflow past MAX */
+    TEST_ASSERT_EQUAL_INT64(ITEMS_STATE_ITEM_OWNED_COUNT_MAX, items_count("backpack", "tmpl.gold"));
     TEST_ASSERT_TRUE(txn_event_exists(
         "add",
-        "tmpl.wood",
+        "tmpl.gold",
         "backpack",
-        "backpack/tmpl.wood",
+        "backpack/tmpl.gold",
         1000,
         10,
         near_max,
@@ -667,6 +695,7 @@ int main(void) {
     RUN_TEST(test_schema_json_contains_owned);
     RUN_TEST(test_fixture_v1_loads);
     RUN_TEST(test_add_accumulate_and_remove_stack);
+    RUN_TEST(test_stack_and_unique_routes_and_stack_cap);
     RUN_TEST(test_add_default_container_and_currency_only_policy);
     RUN_TEST(test_add_default_container_noncurrency_lands_in_backpack);
     RUN_TEST(test_capacity_reject_new_record_grow_existing_ok);
