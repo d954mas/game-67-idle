@@ -349,6 +349,27 @@ test("status reads a session log and reports records, slowest, and rollup", () =
   }
 });
 
+test("status keeps Studio verification intents separate in command rollups", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "verification-intents.jsonl");
+    const statusJson = join(dir, "status.json");
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", duration_ms: 500, commands: ["node ai_studio/studio.mjs verify --changed"], session_id: "s1" },
+      { ts: "2026-06-13T10:00:01+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", duration_ms: 40000, commands: ["node ai_studio/studio.mjs verify --full"], session_id: "s1" },
+      { ts: "2026-06-13T10:00:42+05:00", phase: "session", category: "validation", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", duration_ms: 41000, commands: ["node ai_studio/studio.mjs verify --full --json"], session_id: "s1" },
+    ]);
+
+    run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson]);
+    const status = readJson(statusJson);
+    const byKey = new Map(status.command_rollup.by_count.map((entry) => [entry.key, entry]));
+    assert.equal(byKey.get("node studio.mjs verify --changed")?.count, 1);
+    assert.equal(byKey.get("node studio.mjs verify --full")?.count, 2);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status reports unavailable timing and tokens when the host records results only", () => {
   const dir = tempDir();
   try {

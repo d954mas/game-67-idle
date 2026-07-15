@@ -308,8 +308,16 @@ function commandKey(cmd) {
   const base = (segment) => segment.split(/[\\/]/).pop() || segment;
   let key = base(tokens[0]).replace(/\.(exe|cmd)$/i, "");
   if (/^(node|py|python|python3|bash|sh|npx|deno|pwsh|powershell)$/i.test(key)) {
-    const script = tokens.slice(1).find((token) => !token.startsWith("-"));
-    if (script) key += ` ${base(script)}`;
+    const scriptIndex = tokens.findIndex((token, index) => index > 0 && !token.startsWith("-"));
+    if (scriptIndex > 0) {
+      const script = base(tokens[scriptIndex]);
+      key += ` ${script}`;
+      if (script === "studio.mjs" && tokens[scriptIndex + 1] === "verify") {
+        const mode = tokens[scriptIndex + 2];
+        if (["--changed", "--full"].includes(mode)) key += ` verify ${mode}`;
+        else if (mode === "--domain" && tokens[scriptIndex + 3]) key += ` verify --domain ${tokens[scriptIndex + 3]}`;
+      }
+    }
   }
   return key;
 }

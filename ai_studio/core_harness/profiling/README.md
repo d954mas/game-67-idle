@@ -50,6 +50,8 @@ node ai_studio/core_harness/profiling/status.mjs --complete --verbose
 It also reports a workflow advisory from session age, top-level tool-call count,
 and the latest Codex context-window telemetry: checkpoint after four hours or
 300 calls, and prefer a new session after six hours or 70% context use.
+Command rollups keep `studio.mjs verify --changed`, `--domain`, and `--full`
+separate so repeated release proof is visible without adding another runner.
 
 Show subagent transcript diagnostics:
 
