@@ -46,7 +46,10 @@ def evaluation(items, fields=None):
                 "file": "game/schema.lua",
                 "line": index + 5,
                 "column": 1,
+                "end_line": index + 5,
+                "end_column": 17,
                 "kind": "field",
+                "snippet": "field.i64({...})",
             }
             for index, field in enumerate(fields)
         },
@@ -56,7 +59,10 @@ def evaluation(items, fields=None):
                 "file": "game/items.lua",
                 "line": source_lines[item["id"]],
                 "column": 1,
+                "end_line": source_lines[item["id"]],
+                "end_column": 15,
                 "kind": "definition",
+                "snippet": "items.define({",
             }
             for item in items
         },
@@ -122,7 +128,9 @@ class ItemsSnapshotTests(unittest.TestCase):
 
         moved = evaluation(copy.deepcopy(items))
         moved["sources"]["game.gold"]["line"] = 300
+        moved["sources"]["game.gold"]["end_line"] = 300
         moved["field_sources"]["game.weapon.level.attack"]["line"] = 400
+        moved["field_sources"]["game.weapon.level.attack"]["end_line"] = 400
         self.assertEqual(
             SNAPSHOT.build_snapshot(moved)["content_hash"],
             first["content_hash"],
@@ -168,6 +176,16 @@ class ItemsSnapshotTests(unittest.TestCase):
         malformed_source["field_sources"]["game.weapon.level.attack"]["kind"] = "definition"
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.field_source"):
             SNAPSHOT.build_snapshot(malformed_source)
+
+        malformed_span = evaluation(self.base_items())
+        malformed_span["field_sources"]["game.weapon.level.attack"]["snippet"] = ""
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.field_source"):
+            SNAPSHOT.build_snapshot(malformed_span)
+
+        mismatched_span = evaluation(self.base_items())
+        mismatched_span["field_sources"]["game.weapon.level.attack"]["end_column"] += 1
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.field_source"):
+            SNAPSHOT.build_snapshot(mismatched_span)
 
         unknown = evaluation(self.base_items())
         unknown["items"][1]["levels"]["rows"][0]["damage"] = 2
@@ -216,7 +234,10 @@ class ItemsSnapshotTests(unittest.TestCase):
                 "file": "game/items.lua",
                 "line": 4,
                 "column": 1,
+                "end_line": 4,
+                "end_column": 15,
                 "kind": "definition",
+                "snippet": "items.define({",
             },
             "field": {
                 "schema": attack_field(),
@@ -224,7 +245,10 @@ class ItemsSnapshotTests(unittest.TestCase):
                     "file": "game/schema.lua",
                     "line": 5,
                     "column": 1,
+                    "end_line": 5,
+                    "end_column": 17,
                     "kind": "field",
+                    "snippet": "field.i64({...})",
                 },
             },
         })
@@ -306,10 +330,20 @@ class ItemsSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.source"):
             SNAPSHOT.build_snapshot(bad_source)
 
+        missing_source = evaluation(self.base_items())
+        del missing_source["sources"]["game.sword"]
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.sources"):
+            SNAPSHOT.build_snapshot(missing_source)
+
         malformed_snapshot = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
         malformed_snapshot["sources"]["game.gold"] = "not-a-source"
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.source"):
             SNAPSHOT.query_snapshot(malformed_snapshot, item_id="game.gold")
+
+        missing_query_source = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
+        del missing_query_source["sources"]["game.sword"]
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.source"):
+            SNAPSHOT.query_snapshot(missing_query_source, item_id="game.sword")
 
         missing_field_source = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
         missing_field_source["field_sources"] = {}
@@ -429,6 +463,7 @@ class ItemsSnapshotTests(unittest.TestCase):
         changed_items[1]["levels"]["rows"][1]["attack"] = 16
         after_evaluation = evaluation(changed_items)
         after_evaluation["sources"]["game.sword"]["line"] = 400
+        after_evaluation["sources"]["game.sword"]["end_line"] = 400
         after = SNAPSHOT.build_snapshot(after_evaluation)
 
         result = SNAPSHOT.diff_snapshots(before, after)

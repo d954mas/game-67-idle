@@ -1007,6 +1007,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
     )
     cache: dict[str, Any] = {}
     loading: list[str] = []
+    source_texts: dict[str, str] = {}
     source_bytes = 0
     max_source_bytes = int(request.get("maxSourceBytes", DEFAULT_MAX_SOURCE_BYTES))
     make_env = runtime.eval('''function(allowed, raise_env)
@@ -1102,6 +1103,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
                     "source.encoding", "Lua source must be UTF-8 text",
                     file=rel, path=f"$.modules.{name}",
                 ) from error
+            source_texts[rel] = source
             raw_arithmetic = _raw_arithmetic(source)
             if raw_arithmetic is not None:
                 operator, operator_line = raw_arithmetic
@@ -1158,12 +1160,35 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(kinds, list):
         kinds = [] if kinds == {} else kinds
     sources: dict[str, dict[str, Any]] = {}
+
+    def source_span(source: dict[str, Any]) -> dict[str, Any]:
+        file, line = source.get("file"), source.get("line")
+        if not isinstance(file, str):
+            raise _failure("source.span", "source file must name a loaded module", file=fallback)
+        lines = re.split(r"\r\n|\n|\r", source_texts.get(file, ""))
+        if not isinstance(line, int) or line < 1 or line > len(lines):
+            raise _failure("source.span", "source line is outside loaded module", file=file or fallback)
+        snippet = lines[line - 1]
+        return {
+            **source,
+            "end_line": line,
+            "end_column": len(snippet) + 1,
+            "snippet": snippet,
+        }
+
     for item in normalized_items if isinstance(normalized_items, list) else []:
         if isinstance(item, dict):
             source = item.pop("__studio_source", None)
             item_id = item.get("id")
             if isinstance(item_id, str) and isinstance(source, dict):
-                sources[item_id] = source
+                sources[item_id] = source_span(source)
+    if isinstance(field_sources, dict):
+        enriched_field_sources = {}
+        for field_id, source in field_sources.items():
+            if not isinstance(source, dict):
+                raise _failure("source.span", "field source must be an object", file=fallback)
+            enriched_field_sources[field_id] = source_span(source)
+        field_sources = enriched_field_sources
     max_rows = int(request.get("maxOutputRows", DEFAULT_MAX_OUTPUT_ROWS))
     if _output_rows(normalized_items, fields) > max_rows:
         raise _failure(

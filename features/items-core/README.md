@@ -147,7 +147,9 @@ memory, wall-time, output-row, and output-byte budgets fail as structured
 Successful output is canonical `items.lua.evaluation.v1` JSON with registered
 `fields`/`kinds`, the backend fingerprint, and the honest Lua file/line of each
 field registration and `items.define` call. Typed field-value validation remains
-the Snapshot boundary.
+the Snapshot boundary. Each source is an exact bounded call-line span with its
+UTF-8 snippet; the evaluator does not pretend to reconstruct a multiline Lua
+expression or a symbolic formula.
 Level tables require contiguous keys, levelled items use unique storage, and
 level 2+ rows require a paid or explicit-free transition. `levels.generate`
 uses an explicit `max_level` and named formula columns; formulas may capture
@@ -180,8 +182,8 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 content and registered field schemas, validates required i64 level fields
 against their declared kinds and ranges, requires complete mode-consistent
 per-value provenance, retains the evaluator fingerprint,
-and derives inputs/dependents from actual typed references. Source locations
-remain separate from the content hash. `query` returns one item with its Lua
+and derives inputs/dependents from actual typed references. Complete item/field
+source spans remain separate from the content hash. `query` returns one item with its Lua
 definition location plus an optional field and level range; a selected level
 field also includes only its schema, registration location, and selected value
 provenance. More than 1000

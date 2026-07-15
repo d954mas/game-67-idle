@@ -8,7 +8,7 @@ priority: P0
 tags: [items, balance, snapshot, dependencies]
 created: 2026-07-10
 updated: 2026-07-15
-quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"chart review ACCEPT after stale/out-of-range Snapshot regression; Lua sandbox 16/16; Snapshot 11/11 including 1001-row, subrange, endpoint, CLI, transition rejection, bounds and max-points cases; feature contracts 6 modules/2 pointers; git diff check clean"}]}
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"source-span review ACCEPT after Unicode U+2028 and missing-source regressions; Lua sandbox 16/16; Snapshot 11/11; combined 27/27; feature contracts 6 modules/2 pointers; git diff check clean"}]}
 ---
 
 ## What
@@ -65,3 +65,5 @@ for C export, Viewer, requirements, and agents.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: per-value provenance review ACCEPT; Lua sandbox 16/16; Snapshot 10/10 including transition, override, spoof, cardinality, malformed, CLI, and 1000-row cases; feature contracts 6 modules/2 pointers; git diff check clean
 - 2026-07-15: 2026-07-15: Slice 6: added bounded numeric chart query/CLI with 200 default and 1000 hard output cap, deterministic even-index endpoint-preserving downsampling, full requested level/value bounds, source/returned counts, and selected provenance/schema metadata. Requirements and source spans/snippets remain open.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: chart review ACCEPT after stale/out-of-range Snapshot regression; Lua sandbox 16/16; Snapshot 11/11 including 1001-row, subrange, endpoint, CLI, transition rejection, bounds and max-points cases; feature contracts 6 modules/2 pointers; git diff check clean
+- 2026-07-15: Slice 7: evaluator now emits exact bounded single call-line spans/snippets for every item definition and field registration using Lua CRLF/LF/CR line semantics; Snapshot/build/query require complete matching sources while keeping them outside content_hash. Formula text remains intentionally unreconstructed. Requirements and cross-platform CI proof remain open.
+- 2026-07-15: Quality: QTECH_001=pass; evidence: source-span review ACCEPT after Unicode U+2028 and missing-source regressions; Lua sandbox 16/16; Snapshot 11/11; combined 27/27; feature contracts 6 modules/2 pointers; git diff check clean

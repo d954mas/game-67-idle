@@ -95,13 +95,20 @@ def _source(value: Any, code: str, path: str, *, kind: str = "definition") -> di
         _fail(code, "source must be an object", path)
     line = value.get("line")
     column = value.get("column")
+    end_line = value.get("end_line")
+    end_column = value.get("end_column")
+    snippet = value.get("snippet")
     if (
         not isinstance(value.get("file"), str) or not value["file"]
         or type(line) is not int or line < 1
         or type(column) is not int or column < 1
+        or type(end_line) is not int or end_line != line
+        or type(end_column) is not int
+        or not isinstance(snippet, str) or not snippet or len(snippet) > 4_096
+        or column != 1 or end_column != len(snippet) + 1
         or value.get("kind") != kind
     ):
-        _fail(code, f"source requires file, positive line/column, and {kind} kind", path)
+        _fail(code, f"source requires a bounded span/snippet and {kind} kind", path)
     return _canonical(value, path)
 
 
@@ -303,18 +310,14 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     if field_sources:
         snapshot["field_sources"] = field_sources
     raw_sources = evaluation.get("sources")
-    if raw_sources is not None:
-        if not isinstance(raw_sources, dict):
-            _fail("snapshot.sources", "evaluation sources must be an object", "$.sources")
-        sources: dict[str, dict[str, Any]] = {}
-        if not all(isinstance(item_id, str) for item_id in raw_sources):
-            _fail("snapshot.source", "source item ids must be strings", "$.sources")
-        for item_id in sorted(raw_sources):
-            source = raw_sources[item_id]
-            if item_id not in seen:
-                _fail("snapshot.source", f"invalid source for item: {item_id}", f"$.sources.{item_id}")
-            sources[item_id] = _source(source, "snapshot.source", f"$.sources.{item_id}")
-        snapshot["sources"] = sources
+    if not isinstance(raw_sources, dict) or set(raw_sources) != seen:
+        _fail("snapshot.sources", "sources must exactly match item ids", "$.sources")
+    sources: dict[str, dict[str, Any]] = {}
+    for item_id in sorted(raw_sources):
+        sources[item_id] = _source(
+            raw_sources[item_id], "snapshot.source", f"$.sources.{item_id}",
+        )
+    snapshot["sources"] = sources
     backend = evaluation.get("backend")
     if backend is not None:
         if not isinstance(backend, dict):
@@ -480,8 +483,9 @@ def query_snapshot(
     sources = snapshot.get("sources", {})
     if not isinstance(sources, dict):
         _fail("query.source", "snapshot sources must be an object", "$.sources")
-    if item_id in sources:
-        result["source"] = _source(sources[item_id], "query.source", f"$.sources.{item_id}")
+    if item_id not in sources:
+        _fail("query.source", f"missing source for item: {item_id}", "$.sources")
+    result["source"] = _source(sources[item_id], "query.source", f"$.sources.{item_id}")
     return result
 
 

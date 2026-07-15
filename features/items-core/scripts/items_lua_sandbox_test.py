@@ -116,9 +116,20 @@ items.define({ id="game.gold", kind="currency", stack=0 })
                 "file": "game/items.lua",
                 "line": 3,
                 "column": 1,
+                "end_line": 3,
+                "end_column": 59,
                 "kind": "definition",
+                "snippet": 'items.define({ id="game.gold", kind="currency", stack=0 })',
             },
         })
+
+        unicode_separator = self.evaluate({
+            "game.unicode": 'local items=require("studio.items")\nlocal text="a\u2028b"\nitems.define({ id="game.unicode" })',
+        }, ["game.unicode"])
+        self.assertEqual(unicode_separator.returncode, 0, unicode_separator.stderr)
+        unicode_source = json.loads(unicode_separator.stdout)["sources"]["game.unicode"]
+        self.assertEqual(unicode_source["line"], 3)
+        self.assertEqual(unicode_source["snippet"], 'items.define({ id="game.unicode" })')
 
     def test_refs_resolve_after_registration_and_fail_at_ref_source(self):
         forward = self.evaluate({
@@ -194,7 +205,10 @@ extension.level_row.attack = nil''',
             "file": "game/z_schema.lua",
             "line": 7,
             "column": 1,
+            "end_line": 7,
+            "end_column": 62,
             "kind": "field",
+            "snippet": "local extension = { level_row={ attack=field.i64(options) } }",
         })
         self.assertEqual(payload["fields"], [{
             "id": "game.weapon.level.attack",

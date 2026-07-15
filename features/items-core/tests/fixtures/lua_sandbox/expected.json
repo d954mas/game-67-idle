@@ -62,8 +62,20 @@
   "kinds": ["currency", "weapon"],
   "schema": "items.lua.evaluation.v1",
   "sources": {
-    "game.gold": { "column": 1, "file": "game/items/currencies.lua", "kind": "definition", "line": 3 },
-    "game.iron_sword": { "column": 1, "file": "game/items/weapons.lua", "kind": "definition", "line": 4 },
-    "game.levelled_sword": { "column": 1, "file": "game/items/weapons.lua", "kind": "definition", "line": 12 }
+    "game.gold": {
+      "column": 1, "end_column": 15, "end_line": 3,
+      "file": "game/items/currencies.lua", "kind": "definition", "line": 3,
+      "snippet": "items.define({"
+    },
+    "game.iron_sword": {
+      "column": 1, "end_column": 15, "end_line": 4,
+      "file": "game/items/weapons.lua", "kind": "definition", "line": 4,
+      "snippet": "items.define({"
+    },
+    "game.levelled_sword": {
+      "column": 1, "end_column": 15, "end_line": 12,
+      "file": "game/items/weapons.lua", "kind": "definition", "line": 12,
+      "snippet": "items.define({"
+    }
   }
 }
