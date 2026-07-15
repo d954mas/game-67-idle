@@ -1,3 +1,0 @@
-display_name: NT App Tunnel
-short_description: Share a self-contained local surface through a temporary public tunnel.
-default_prompt: Use $nt-app-tunnel to expose a self-contained local directory through a temporary public URL.

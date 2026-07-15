@@ -9,8 +9,8 @@
     {
       "id": "codex-role-settings",
       "classification": "host-enforced",
-      "proof_kind": "runtime-observed",
-      "claim": "Codex owns loading project role settings; a post-restart native rollout smoke observes the applied role and model.",
+      "proof_kind": "configuration-only",
+      "claim": "Codex owns loading project role settings. Runtime application is not repository-verified.",
       "sources": [
         ".codex/agents/README.md",
         ".codex/agents/fast-worker.toml",
@@ -19,8 +19,11 @@
         ".codex/agents/researcher.toml"
       ],
       "proof": [
-        "ai_studio/core_harness/validation/agent_role_smoke.mjs",
-        "ai_studio/core_harness/validation/tests/agent_role_smoke.test.mjs"
+        ".codex/agents/README.md",
+        ".codex/agents/fast-worker.toml",
+        ".codex/agents/deep-reasoner.toml",
+        ".codex/agents/coding-worker.toml",
+        ".codex/agents/researcher.toml"
       ]
     },
     {
@@ -65,17 +68,6 @@
       "proof": [
         "ai_studio/core_harness/validation/doc_reference_check.mjs",
         "ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs"
-      ]
-    },
-    {
-      "id": "codex-role-model-smoke",
-      "classification": "repository-validator-enforced",
-      "proof_kind": "repository-validator",
-      "claim": "A supplied native Codex subagent transcript matches the requested stock role and expected selected model without generic fallback.",
-      "sources": ["ai_studio/core_harness/workflow/orchestration/README.md"],
-      "proof": [
-        "ai_studio/core_harness/validation/agent_role_smoke.mjs",
-        "ai_studio/core_harness/validation/tests/agent_role_smoke.test.mjs"
       ]
     },
     {

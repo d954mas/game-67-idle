@@ -49,7 +49,6 @@ test("Studio CI is a Windows Ubuntu matrix with pinned current setup contracts",
 test("blocking full verification does not repeat decision-free advisory timing", () => {
   assert.match(workflow, /name: Blocking Studio verification[\s\S]*node ai_studio\/studio\.mjs verify --full/);
   assert.doesNotMatch(workflow, /Build real reference-template wasm release|Assert wasm release artifact/);
-  assert.doesNotMatch(workflow, /Advisory toolchain timing|toolchain_benchmark\.mjs/);
   assert.doesNotMatch(workflow, /Advisory Canvas worker timing|AI_STUDIO_ASSERT_TIMING|worker_warm\.test\.mjs/);
   assert.doesNotMatch(workflow, /continue-on-error: true/);
 });

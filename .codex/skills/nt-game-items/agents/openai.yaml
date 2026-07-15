@@ -1,4 +1,0 @@
-interface:
-  display_name: "NT Game Items"
-  short_description: "Work with the items catalog, op-layer CLI, and ownership API."
-  default_prompt: "Use $nt-game-items to inspect the items catalog/op-layer CLI, the ownership feature API, reason tags, and the migration skeleton before changing items content or code."

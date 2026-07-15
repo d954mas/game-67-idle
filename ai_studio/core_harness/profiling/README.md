@@ -15,8 +15,7 @@ rollout transcripts remain in the user-local Codex session store, so cleaning
 `tmp/` cannot erase the evidence. Generated reports are local and uncommitted.
 
 Reports distinguish observed hook/session records from advisory diagnosis.
-They do not prove process conventions, select models, or replace the explicit
-post-restart role/model smoke in `../validation/agent_role_smoke.mjs`.
+They do not prove process conventions or select models.
 
 Stay local-first for AI observability. Do not add external tracing, eval, or
 dashboard services unless a concrete repeated need exists, such as shared human

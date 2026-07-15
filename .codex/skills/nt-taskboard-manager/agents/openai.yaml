@@ -1,4 +1,0 @@
-interface:
-  display_name: "NT Taskboard Manager"
-  short_description: "Route project, epic, and task work through AI Studio Taskboard."
-  default_prompt: "Use $nt-taskboard-manager to capture, inspect, or update AI Studio Taskboard projects, epics, and tasks through the Taskboard CLI."

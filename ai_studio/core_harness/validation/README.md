@@ -28,8 +28,6 @@ Not checked here:
   references.
 - `enforcement_check.mjs`: validates enforcement classifications and proof
   links from `../workflow/enforcement_contract.json`.
-- `agent_role_smoke.mjs`: checks a supplied native Codex subagent transcript;
-  procedure details live in `../workflow/orchestration/README.md`.
 
 ## When To Use
 
@@ -39,8 +37,6 @@ entrypoints.
 ```powershell
 node ai_studio/core_harness/validation/doc_reference_check.mjs
 node ai_studio/core_harness/validation/enforcement_check.mjs
-node ai_studio/core_harness/validation/agent_role_smoke.mjs --evidence <rollout.jsonl> --requested-role fast-worker
 node --test ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs
 node --test ai_studio/core_harness/validation/tests/enforcement_check.test.mjs
-node --test ai_studio/core_harness/validation/tests/agent_role_smoke.test.mjs
 ```

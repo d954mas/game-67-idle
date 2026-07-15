@@ -1,4 +1,0 @@
-interface:
-  display_name: "Game UI Layout"
-  short_description: "Inventory engine UI before layout edits"
-  default_prompt: "Use $nt-game-ui-layout to make a layout-affecting in-game UI change after inventorying existing engine widgets and proportionate proof."

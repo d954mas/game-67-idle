@@ -1,3 +1,0 @@
-display_name: NT Design Knowledge
-short_description: Route design sources into shared or private game knowledge.
-default_prompt: Use $nt-design-knowledge to route or review game-design sources, shared reusable knowledge, and private game knowledge.

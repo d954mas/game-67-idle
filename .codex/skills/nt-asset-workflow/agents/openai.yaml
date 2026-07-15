@@ -1,4 +1,0 @@
-interface:
-  display_name: "NT Asset Workflow"
-  short_description: "Source, license, manifest, pull, promote, and validate game assets."
-  default_prompt: "Use this skill to route asset work through AI Studio storage/viewer with license and provenance checks."

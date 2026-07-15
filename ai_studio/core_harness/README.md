@@ -85,10 +85,8 @@ Reviewed validation files:
 - `ai_studio/core_harness/validation/README.md`
 - `ai_studio/core_harness/validation/doc_reference_check.mjs`
 - `ai_studio/core_harness/validation/enforcement_check.mjs`
-- `ai_studio/core_harness/validation/agent_role_smoke.mjs`
 - `ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs`
 - `ai_studio/core_harness/validation/tests/enforcement_check.test.mjs`
-- `ai_studio/core_harness/validation/tests/agent_role_smoke.test.mjs`
 
 ## Tree Shape
 
