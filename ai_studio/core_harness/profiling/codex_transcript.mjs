@@ -193,6 +193,17 @@ export function parseCodexTranscript(file) {
       original.output_lines = Number(original.output_lines || 0) + Number(metrics.output_lines || 0);
       original.ts = endTs;
       original.__line = index + 1;
+      if (/automatic permission approval review did not finish before its deadline/i.test(text)) {
+        original.category = "coordination";
+        original.intent = "auto:approval-review";
+        original.result = "blocked";
+        original.value = "necessary_overhead";
+        original.tools = ["codex/approval-review"];
+        original.commands = [`approval review for: ${original.commands[0]}`.slice(0, 500)];
+        original.failure_kind = "approval_timeout";
+        runningCells.delete(waitCell);
+        continue;
+      }
       if (!/^Script running with cell ID\b/m.test(text)) {
         original.result = failed ? "fail" : "pass";
         original.value = failed ? "rework" : "unknown";

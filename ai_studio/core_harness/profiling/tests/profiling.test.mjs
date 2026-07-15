@@ -592,6 +592,71 @@ test("status --complete reads the canonical multi-day Codex transcript", () => {
   }
 });
 
+test("status attributes escalated approval time to approval review, not the command", () => {
+  const dir = tempDir();
+  try {
+    const sessionId = "019f5bd1-2291-7941-b366-13e7327eebc2";
+    const sessionDir = join(dir, "sessions", "2026", "07", "15");
+    const transcript = join(sessionDir, `rollout-2026-07-15T10-00-00-${sessionId}.jsonl`);
+    const statusJson = join(dir, "status.json");
+    mkdirSync(sessionDir, { recursive: true });
+    writeJsonl(transcript, [
+      { timestamp: "2026-07-15T05:00:00.000Z", type: "session_meta", payload: { id: sessionId } },
+      {
+        timestamp: "2026-07-15T05:00:01.000Z",
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call",
+          call_id: "call_escalated",
+          name: "exec",
+          input: "const r = await tools.shell_command({command:\"gh run view 123\",sandbox_permissions:\"require_escalated\"}); text(r);",
+        },
+      },
+      {
+        timestamp: "2026-07-15T10:00:01.000Z",
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call_output",
+          call_id: "call_escalated",
+          output: "Script running with cell ID 99\nWall time 18000.0 seconds\nOutput:\n",
+        },
+      },
+      {
+        timestamp: "2026-07-15T10:00:02.000Z",
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          call_id: "call_wait_approval",
+          name: "wait",
+          arguments: JSON.stringify({ cell_id: "99", yield_time_ms: 1000 }),
+        },
+      },
+      {
+        timestamp: "2026-07-15T10:00:02.100Z",
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "call_wait_approval",
+          output: "Script failed\nThe automatic permission approval review did not finish before its deadline.",
+        },
+      },
+    ]);
+
+    run(["ai_studio/core_harness/profiling/status.mjs", "--complete", "--json-output", statusJson], {
+      env: { CODEX_SESSION_FILE: "", CODEX_SESSION_ROOT: join(dir, "sessions"), CODEX_THREAD_ID: sessionId },
+    });
+    const status = readJson(statusJson);
+    assert.equal(status.unresolved_failed_records, 0);
+    assert.equal(status.slowest_record.category, "coordination");
+    assert.equal(status.slowest_record.intent, "auto:approval-review");
+    assert.match(status.slowest_record.commands[0], /^approval review for: gh run view 123$/);
+    assert.ok(status.command_rollup.by_time.some((entry) => entry.key === "approval"));
+    assert.ok(status.command_rollup.by_time.every((entry) => entry.key !== "gh"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status recommends a checkpoint for a four-hour working session", () => {
   const dir = tempDir();
   try {

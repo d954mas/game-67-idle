@@ -52,6 +52,8 @@ and the latest Codex context-window telemetry: checkpoint after four hours or
 300 calls, and prefer a new session after six hours or 70% context use.
 Command rollups keep `studio.mjs verify --changed`, `--domain`, and `--full`
 separate so repeated release proof is visible without adding another runner.
+Escalated approval-review time is reported as coordination time rather than as
+execution time for the command that was waiting for approval.
 
 Show subagent transcript diagnostics:
 
