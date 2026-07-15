@@ -761,24 +761,6 @@ test("status recommends a checkpoint for a four-hour working session", () => {
   }
 });
 
-test("status recommends a checkpoint after a ten-minute external wait", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "external-wait.jsonl");
-    const statusJson = join(dir, "status.json");
-    writeJsonl(profile, [
-      { ts: "2026-06-13T10:10:00Z", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", duration_ms: 600000, commands: ["gh run watch 123 --exit-status"], session_id: "s1" },
-    ]);
-
-    run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson]);
-    const status = readJson(statusJson);
-    assert.equal(status.session_advisory.status, "checkpoint-recommended");
-    assert.deepEqual(status.session_advisory.reasons, ["external waits >= 10m"]);
-  } finally {
-    cleanup(dir);
-  }
-});
-
 test("status recommends a checkpoint after three hundred tool calls", () => {
   const dir = tempDir();
   try {

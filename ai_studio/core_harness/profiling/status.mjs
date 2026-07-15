@@ -405,14 +405,6 @@ function subagentRollup(records) {
 function sessionAdvisory(records, coverage, tokenTelemetry) {
   const ageMs = Number(coverage.wall_clock_span_ms || 0);
   const toolCalls = records.filter((record) => record.event_type === "tool_call_result").length;
-  const externalWaitMs = records.reduce((longest, record) => {
-    const command = Array.isArray(record.commands) ? String(record.commands[0] || "") : "";
-    const isExternalWait = /^gh run watch\b/i.test(command)
-      || command === "wait_agent"
-      || record.category === "coordination";
-    const durationMs = isExternalWait ? Math.max(0, Number(record.duration_ms || 0)) : 0;
-    return Math.max(longest, durationMs);
-  }, 0);
   const rawUtilization = tokenTelemetry?.context_utilization;
   const utilization = rawUtilization !== null
     && rawUtilization !== undefined
@@ -434,10 +426,6 @@ function sessionAdvisory(records, coverage, tokenTelemetry) {
   }
   if (toolCalls >= 300) {
     reasons.push("tool calls >= 300");
-    status = status === "continue" ? "checkpoint-recommended" : status;
-  }
-  if (externalWaitMs >= 10 * 60 * 1000) {
-    reasons.push("external waits >= 10m");
     status = status === "continue" ? "checkpoint-recommended" : status;
   }
   return { status, reasons, age_ms: ageMs, tool_calls: toolCalls, context_utilization: utilization };
