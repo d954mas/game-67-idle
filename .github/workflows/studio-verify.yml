@@ -2,8 +2,18 @@ name: Studio verification
 
 on:
   pull_request:
+    paths-ignore:
+      - 'ai_studio/taskboard/items/**'
+      - '**/*.md'
+      - '.claude/**/*.md'
+      - '.codex/skills/**/*.md'
   push:
     branches: [master]
+    paths-ignore:
+      - 'ai_studio/taskboard/items/**'
+      - '**/*.md'
+      - '.claude/**/*.md'
+      - '.codex/skills/**/*.md'
 
 permissions:
   contents: read
@@ -24,6 +34,17 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 1
+      - name: Resolve native compiler cache key
+        id: native-cache-key
+        shell: bash
+        run: echo "engine_revision=$(git -C external/neotolis-engine rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Restore native compiler cache
+        uses: hendrikmuhs/ccache-action@v1.2.23
+        with:
+          key: ${{ runner.os }}-${{ steps.native-cache-key.outputs.engine_revision }}-${{ hashFiles('templates/template/CMakeLists.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ steps.native-cache-key.outputs.engine_revision }}-
+            ${{ runner.os }}-
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
@@ -65,14 +86,37 @@ jobs:
       - name: Bootstrap root Python environment (Windows)
         if: runner.os == 'Windows'
         run: node ai_studio/dev_environment/python_setup.mjs --base-python "$env:pythonLocation\python.exe"
+      - name: Restore deterministic Emscripten
+        id: emsdk-cache
+        uses: actions/cache@v5
+        with:
+          path: .toolchains/emsdk
+          key: ${{ runner.os }}-emsdk-${{ env.EMSDK_VERSION }}
       - name: Install deterministic Emscripten
+        if: steps.emsdk-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           git clone --depth 1 --branch "$EMSDK_VERSION" https://github.com/emscripten-core/emsdk.git .toolchains/emsdk
           ./.toolchains/emsdk/emsdk install "$EMSDK_VERSION"
+      - name: Activate deterministic Emscripten
+        shell: bash
+        run: |
           ./.toolchains/emsdk/emsdk activate "$EMSDK_VERSION"
           EMSDK_PATH="$(pwd)/.toolchains/emsdk"
           if [ "$RUNNER_OS" = "Windows" ]; then EMSDK_PATH="$(pwd -W)/.toolchains/emsdk"; fi
           echo "EMSDK=$EMSDK_PATH" >> "$GITHUB_ENV"
+      - name: Configure native compiler cache (Ubuntu)
+        if: runner.os == 'Linux'
+        run: >-
+          cmake -S templates/template -B templates/template/build/native-debug -G Ninja
+          -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_EXE_LINKER_FLAGS_DEBUG=-fsanitize=address,undefined
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+      - name: Configure native compiler cache (Windows)
+        if: runner.os == 'Windows'
+        run: >-
+          cmake -S templates/template -B templates/template/build/native-debug -G Ninja
+          -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_BUILD_TYPE=Debug
+          -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
       - name: Blocking Studio verification
         run: node ai_studio/studio.mjs verify --full

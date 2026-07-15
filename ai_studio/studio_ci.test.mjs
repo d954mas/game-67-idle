@@ -4,6 +4,32 @@ import test from "node:test";
 
 const workflow = readFileSync(new URL("../.github/workflows/studio-verify.yml", import.meta.url), "utf8");
 
+function eventBlock(name, nextMarker) {
+  const start = workflow.indexOf(`  ${name}:`);
+  assert.notEqual(start, -1, `missing ${name} event`);
+  const end = workflow.indexOf(nextMarker, start);
+  assert.notEqual(end, -1, `missing end marker for ${name} event`);
+  return workflow.slice(start, end);
+}
+
+test("documentation-only and taskboard-state changes skip Studio CI without hiding executable surfaces", () => {
+  const pullRequest = eventBlock("pull_request", "  push:");
+  const push = eventBlock("push", "\n\npermissions:");
+  for (const block of [pullRequest, push]) {
+    assert.match(block, /paths-ignore:/);
+    for (const path of [
+      "ai_studio/taskboard/items/**",
+      "**/*.md",
+      ".claude/**/*.md",
+      ".codex/skills/**/*.md",
+    ]) {
+      assert.ok(block.includes(`'${path}'`), `event block is missing ignored path ${path}`);
+    }
+  }
+  assert.doesNotMatch(workflow, /^\s+- ['"]?\.claude\/\*\*['"]?\s*$/m);
+  assert.doesNotMatch(workflow, /^\s+- ['"]?\.codex\/skills\/\*\*['"]?\s*$/m);
+});
+
 test("Studio CI is a Windows Ubuntu matrix with pinned current setup contracts", () => {
   assert.match(workflow, /matrix:\s*[\s\S]*os:\s*\[ubuntu-latest, windows-latest\]/);
   assert.match(workflow, /uses: actions\/checkout@v7/);
@@ -39,11 +65,19 @@ test("Studio CI is a Windows Ubuntu matrix with pinned current setup contracts",
   assert.doesNotMatch(workflow, /Copy-Item -Recurse/);
   assert.match(workflow, /GITHUB_PATH/);
   assert.match(workflow, /EMSDK_VERSION: ['"]4\.0\.10['"]/);
+  assert.match(workflow, /uses: actions\/cache@v5/);
+  assert.match(workflow, /id: emsdk-cache[\s\S]*path: \.toolchains\/emsdk[\s\S]*key: \$\{\{ runner\.os \}\}-emsdk-\$\{\{ env\.EMSDK_VERSION \}\}/);
+  assert.match(workflow, /steps\.emsdk-cache\.outputs\.cache-hit != ['"]true['"]/);
   assert.match(workflow, /github\.com\/emscripten-core\/emsdk\.git/);
   assert.match(workflow, /emsdk install "\$EMSDK_VERSION"/);
   assert.match(workflow, /emsdk activate "\$EMSDK_VERSION"/);
   assert.match(workflow, /echo "EMSDK=\$EMSDK_PATH" >> "\$GITHUB_ENV"/);
   assert.doesNotMatch(workflow, /source\s+[^\n]*emsdk_env\.sh/);
+  assert.match(workflow, /git -C external\/neotolis-engine rev-parse HEAD/);
+  assert.match(workflow, /uses: hendrikmuhs\/ccache-action@v1\.2\.23/);
+  assert.match(workflow, /hashFiles\(['"]templates\/template\/CMakeLists\.txt['"]\)/);
+  assert.match(workflow, /-DCMAKE_C_COMPILER_LAUNCHER=ccache/);
+  assert.match(workflow, /-DCMAKE_CXX_COMPILER_LAUNCHER=ccache/);
 });
 
 test("blocking full verification does not repeat decision-free advisory timing", () => {
