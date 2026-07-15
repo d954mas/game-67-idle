@@ -27,11 +27,18 @@ typedef enum items_catalog_bind_error_t {
     ITEMS_CATALOG_BIND_BAD_LAYOUT,
     ITEMS_CATALOG_BIND_NO_MEMORY,
     ITEMS_CATALOG_BIND_ALREADY_BOUND,
+    ITEMS_CATALOG_BIND_RESOURCE_MISSING,
+    ITEMS_CATALOG_BIND_RESOURCE_NOT_READY,
+    ITEMS_CATALOG_BIND_RESOURCE_WRONG_TYPE,
 } items_catalog_bind_error_t;
 
 bool items_catalog_try_bind(
     const uint8_t *bytes, uint32_t byte_count,
     items_catalog_bind_error_t *out_error);
+/* Looks up a ready blob resource and binds an owned copy of its bytes. The
+   caller owns pack placement/request timing; this function only consumes it. */
+bool items_catalog_try_bind_resource(
+    uint64_t asset_id, items_catalog_bind_error_t *out_error);
 /* Startup/shutdown API: all bind/read/shutdown calls are main-thread-only.
    A host using another thread must serialize the complete catalog lifetime. */
 void items_catalog_shutdown(void);

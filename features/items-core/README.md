@@ -228,14 +228,15 @@ the blob without touching the header. The Python inspector is the wire-format
 reference. The opt-in native binder validates the generated schema/item ABI,
 content digest, UTF-8 strings, ranges, canonical spans, indices, alignment, and
 default 64 MiB budget on an owned copy before publishing it. Its lifecycle is
-main-thread startup/shutdown only. The public resource adapter remains the next
-T0365 slice.
+main-thread startup/shutdown only. `items_catalog_try_bind_resource()` consumes
+a ready engine blob resource and immediately delegates to that copying binder;
+pack placement and request timing remain game-builder responsibilities.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py build --snapshot <snapshot.json> --out <items.catalog> --header-out <items_catalog_abi.gen.h>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package_test.py
-cmake --build templates/template/build/native-debug --target test_items_runtime_package
-ctest --test-dir templates/template/build/native-debug -R "^test_items_runtime_package$" --output-on-failure
+cmake --build templates/template/build/native-debug --target test_items_runtime_package test_items_runtime_resource
+ctest --test-dir templates/template/build/native-debug -R "^test_items_runtime_(package|resource)$" --output-on-failure
 ```
 
 ### T0364 typed API proof
