@@ -132,6 +132,10 @@ memory, wall-time, output-row, and output-byte budgets fail as structured
 `items.lua.error.v1` diagnostics.
 Successful output is canonical `items.lua.evaluation.v1` JSON with the backend
 fingerprint and the honest Lua file/line of each `items.define` call.
+Level tables require contiguous keys, levelled items use unique storage, and
+explicit level 2+ rows require a paid or explicit-free transition. Composite
+costs accept only stackable resources and merge duplicate refs with checked,
+deterministic sums.
 
 Lua 5.4 was selected over bundled LuaJIT 2.1 on the representative
 currency/fixed-sword/levelled-sword workload: both exposed the required hooks,

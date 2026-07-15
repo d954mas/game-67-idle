@@ -100,9 +100,9 @@ return function(raise_internal)
 
   local items = {}
   function items.ref(id) return tagged("item_ref", { id = id }, source_at(3)) end
-  function items.cost(item, count) return tagged("cost", { item = item, count = count }) end
-  function items.costs(entries) return tagged("costs", { entries = entries }) end
-  function items.free() return tagged("free", {}) end
+  function items.cost(item, count) return tagged("cost", { item = item, count = count }, source_at(3)) end
+  function items.costs(entries) return tagged("costs", { entries = entries }, source_at(3)) end
+  function items.free() return tagged("free", {}, source_at(3)) end
   function items.define(definition)
     local copied = copy(definition)
     copied.__studio_source = source_at(3)
@@ -112,10 +112,10 @@ return function(raise_internal)
 
   local levels = {}
   function levels.single(row)
-    return tagged("levels", { mode = "single", rows = { [1] = row } })
+    return tagged("levels", { mode = "single", rows = { [1] = row } }, source_at(3))
   end
   function levels.table(rows)
-    return tagged("levels", { mode = "table", rows = rows })
+    return tagged("levels", { mode = "table", rows = rows }, source_at(3))
   end
   function levels.generate(options)
     if raw_type(options) ~= "table" or raw_type(options.row) ~= "function" then
@@ -129,7 +129,7 @@ return function(raise_internal)
     end
     return tagged("levels", {
       mode = "generate", max_level = options.max_level, row = options.row,
-    })
+    }, source_at(3))
   end
 
   local MAX_EXACT = 9007199254740991
@@ -217,7 +217,7 @@ return function(raise_internal)
             source.file, source.line
           )
         end
-        registered[id] = true
+        registered[id] = definition
       end
     end
     table.sort(declarations, function(a, b) return a.id < b.id end)
@@ -228,8 +228,14 @@ return function(raise_internal)
       if seen[value] then return end
       seen[value] = true
       if value.__studio_kind == "item_ref" then
-        local source, id = source_metadata[value] or fallback_source, value.id
-        if raw_type(id) ~= "string" or not registered[id] then
+        local source, id = source_metadata[value], value.id
+        if source == nil then
+          return raise_internal(
+            "reference.invalid_handle", "item references must come from items.ref",
+            fallback_source.file, fallback_source.line
+          )
+        end
+        if raw_type(id) ~= "string" or registered[id] == nil then
           local message = "item reference id must be a string"
           if raw_type(id) == "string" then message = "missing item reference: " .. id end
           return raise_internal(
@@ -245,22 +251,132 @@ return function(raise_internal)
     for _, definition in ipairs(declarations) do
       resolve_refs(definition, nil, definition.__studio_source)
     end
+
+    local function fail_at(code, message, value, fallback)
+      local source = source_metadata[value] or fallback
+      return raise_internal(code, message, source.file, source.line)
+    end
+
+    local function normalize_cost(value, fallback)
+      if raw_type(value) ~= "table" then
+        return fail_at("cost.contract", "cost must be items.cost, items.costs, or items.free", value, fallback)
+      end
+      local value_source = source_metadata[value]
+      if value_source == nil then
+        return fail_at("cost.invalid_handle", "costs must come from studio.items", value, fallback)
+      end
+      if value.__studio_kind == "free" then return { __studio_kind = "free" } end
+      local entries
+      if value.__studio_kind == "cost" then
+        entries = { value }
+      elseif value.__studio_kind == "costs" and raw_type(value.entries) == "table" then
+        entries = value.entries
+      else
+        return fail_at("cost.contract", "cost must be items.cost, items.costs, or items.free", value, fallback)
+      end
+
+      local count, max_index = 0, 0
+      for key, _ in raw_pairs(entries) do
+        if raw_math.type(key) ~= "integer" or key < 1 then
+          return fail_at("cost.contract", "composite cost entries must be a contiguous list", value, fallback)
+        end
+        count = count + 1
+        if key > max_index then max_index = key end
+      end
+      if count == 0 or count ~= max_index then
+        return fail_at("cost.contract", "composite cost entries must be a non-empty contiguous list", value, fallback)
+      end
+
+      local sums, refs, ids = {}, {}, {}
+      for index = 1, max_index do
+        local entry = entries[index]
+        local entry_source = raw_type(entry) == "table" and source_metadata[entry] or nil
+        if raw_type(entry) ~= "table" or entry.__studio_kind ~= "cost"
+            or entry_source == nil
+            or raw_type(entry.item) ~= "table" or entry.item.__studio_kind ~= "item_ref" then
+          return fail_at("cost.contract", "each cost entry must come from items.cost", entry, value_source)
+        end
+        local id, amount = entry.item.id, entry.count
+        local resource = registered[id]
+        if resource == nil then
+          return fail_at("reference.missing", "missing item reference: " .. id, entry, value_source)
+        end
+        if raw_math.type(resource.stack) ~= "integer" or resource.stack < 0
+            or resource.stack > MAX_EXACT or resource.stack == 1 then
+          return fail_at("cost.stackable_required", "cost resource must use stack=0 or stack>1: " .. id, entry, value_source)
+        end
+        if raw_math.type(amount) ~= "integer" or amount <= 0 or amount > MAX_EXACT then
+          return fail_at("cost.count", "cost count must be a positive exact integer", entry, value_source)
+        end
+        if sums[id] == nil then
+          sums[id], refs[id], ids[#ids + 1] = amount, entry.item, id
+        else
+          if sums[id] > MAX_EXACT - amount then
+            return fail_at("cost.overflow", "cost sum exceeds exact integer range", entry, value_source)
+          end
+          sums[id] = sums[id] + amount
+        end
+      end
+      table.sort(ids)
+      local normalized = {}
+      for index, id in ipairs(ids) do
+        normalized[index] = { __studio_kind = "cost", item = refs[id], count = sums[id] }
+      end
+      if value.__studio_kind == "cost" then return normalized[1] end
+      return { __studio_kind = "costs", entries = normalized }
+    end
+
     for _, definition in ipairs(declarations) do
       local spec = definition.levels
-      if spec ~= nil and spec.__studio_kind == "levels" then
+      if spec ~= nil then
+        if raw_type(spec) ~= "table" or spec.__studio_kind ~= "levels" or source_metadata[spec] == nil then
+          return fail_at("levels.invalid_handle", "levels must come from studio.levels", spec, definition.__studio_source)
+        end
+        if definition.stack ~= 1 then
+          return fail_at("levels.unique_required", "levelled items must use stack=1", spec, definition.__studio_source)
+        end
         local rows = {}
         if spec.mode == "generate" then
           local max_level = checked(spec.max_level)
           if max_level < 1 then return fail("formula.contract", "max_level must be positive") end
           for index = 1, max_level do rows[index] = copy(spec.row(index, math_view)) end
         else
-          local index = 1
-          while spec.rows[index] ~= nil do
+          if raw_type(spec.rows) ~= "table" then
+            return fail_at("levels.contract", "levels rows must be a table", spec, definition.__studio_source)
+          end
+          local count, max_level = 0, 0
+          for key, _ in raw_pairs(spec.rows) do
+            if raw_math.type(key) ~= "integer" or key < 1 then
+              return fail_at("levels.non_contiguous", "level keys must be positive contiguous integers", spec, definition.__studio_source)
+            end
+            count = count + 1
+            if key > max_level then max_level = key end
+          end
+          if count == 0 or count ~= max_level then
+            return fail_at("levels.non_contiguous", "level keys must be positive contiguous integers", spec, definition.__studio_source)
+          end
+          for index = 1, max_level do
             rows[index] = spec.rows[index]
-            index = index + 1
+          end
+        end
+        for index, row in ipairs(rows) do
+          if raw_type(row) ~= "table" then
+            return fail_at("levels.contract", "each level row must be a table", spec, definition.__studio_source)
+          end
+          if index == 1 and row.cost_to_reach ~= nil then
+            return fail_at("levels.level_one_transition", "level 1 cannot have cost_to_reach", spec, definition.__studio_source)
+          end
+          if index >= 2 and spec.mode == "table" and row.cost_to_reach == nil then
+            return fail_at("levels.transition_required", "level 2+ requires paid or explicit free cost_to_reach", spec, definition.__studio_source)
+          end
+          if row.cost_to_reach ~= nil then
+            row.cost_to_reach = normalize_cost(row.cost_to_reach, definition.__studio_source)
           end
         end
         definition.levels = { mode = spec.mode, rows = rows }
+      end
+      if raw_type(definition.acquire) == "table" and definition.acquire.cost ~= nil then
+        definition.acquire.cost = normalize_cost(definition.acquire.cost, definition.__studio_source)
       end
     end
     return declarations
