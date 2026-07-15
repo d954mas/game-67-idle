@@ -346,7 +346,7 @@ return function(raise_internal)
       return raise_internal(code, message, source.file, source.line)
     end
 
-    local fields, registered_field_ids, registered_members = {}, {}, {}
+    local fields, field_sources, registered_field_ids, registered_members = {}, {}, {}, {}
     local registered_kinds, candidates = {}, {}
     for _, extension in ipairs(schema_extensions) do
       local extension_source = extension.__studio_source
@@ -439,6 +439,12 @@ return function(raise_internal)
         member = candidate.member,
         section = candidate.section,
         type = descriptor.__studio_field_type,
+      }
+      field_sources[field_id] = {
+        file = descriptor_source.file,
+        line = descriptor_source.line,
+        column = descriptor_source.column,
+        kind = "field",
       }
       for key, value in raw_pairs(descriptor) do
         if key ~= "__studio_kind" and key ~= "__studio_field_type" and key ~= "id" then
@@ -749,7 +755,12 @@ return function(raise_internal)
     local kinds = {}
     for kind, _ in raw_pairs(registered_kinds) do kinds[#kinds + 1] = kind end
     table.sort(kinds)
-    return { fields = fields, items = declarations, kinds = kinds }
+    return {
+      fields = fields,
+      field_sources = field_sources,
+      items = declarations,
+      kinds = kinds,
+    }
   end
 
   local function lock_string_surface()
@@ -1126,11 +1137,14 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         raise _failure("output.shape", "evaluator finalization must return an object")
     normalized_items = normalized.get("items")
     fields = normalized.get("fields")
+    field_sources = normalized.get("field_sources")
     kinds = normalized.get("kinds")
     if not isinstance(normalized_items, list):
         normalized_items = [] if normalized_items == {} else normalized_items
     if not isinstance(fields, list):
         fields = [] if fields == {} else fields
+    if not isinstance(field_sources, dict):
+        field_sources = {} if field_sources == [] else field_sources
     if not isinstance(kinds, list):
         kinds = [] if kinds == {} else kinds
     sources: dict[str, dict[str, Any]] = {}
@@ -1155,6 +1169,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
             "version": ".".join(map(str, runtime.lua_version)),
         },
         "fields": fields,
+        "field_sources": field_sources,
         "items": normalized_items,
         "kinds": kinds,
         "sources": sources,

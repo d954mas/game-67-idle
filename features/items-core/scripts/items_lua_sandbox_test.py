@@ -190,6 +190,12 @@ extension.level_row.attack = nil''',
         self.assertEqual(first.stdout, second.stdout)
         payload = json.loads(first.stdout)
         self.assertEqual(payload["kinds"], ["weapon"])
+        self.assertEqual(payload["field_sources"]["game.weapon.level.attack"], {
+            "file": "game/z_schema.lua",
+            "line": 7,
+            "column": 1,
+            "kind": "field",
+        })
         self.assertEqual(payload["fields"], [{
             "id": "game.weapon.level.attack",
             "label_key": "item.attack",

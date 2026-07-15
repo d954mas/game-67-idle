@@ -8,6 +8,7 @@ import hashlib
 import json
 import math
 from pathlib import Path
+import re
 import sys
 from typing import Any
 
@@ -18,6 +19,9 @@ QUERY_SCHEMA = "items.snapshot.query.v1"
 DIFF_SCHEMA = "items.snapshot.diff.v1"
 DEFAULT_QUERY_ROWS = 1_000
 DEFAULT_DIFF_CHANGES = 1_000
+MAX_EXACT_INTEGER = 9_007_199_254_740_991
+FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
+MEMBER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 class SnapshotFailure(Exception):
@@ -78,7 +82,7 @@ def _references(value: Any) -> set[str]:
     return found
 
 
-def _source(value: Any, code: str, path: str) -> dict[str, Any]:
+def _source(value: Any, code: str, path: str, *, kind: str = "definition") -> dict[str, Any]:
     if not isinstance(value, dict):
         _fail(code, "source must be an object", path)
     line = value.get("line")
@@ -87,10 +91,114 @@ def _source(value: Any, code: str, path: str) -> dict[str, Any]:
         not isinstance(value.get("file"), str) or not value["file"]
         or type(line) is not int or line < 1
         or type(column) is not int or column < 1
-        or value.get("kind") != "definition"
+        or value.get("kind") != kind
     ):
-        _fail(code, "source requires file, positive line/column, and definition kind", path)
+        _fail(code, f"source requires file, positive line/column, and {kind} kind", path)
     return _canonical(value, path)
+
+
+def _normalize_fields(evaluation: dict[str, Any]) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
+    raw_fields = evaluation.get("fields")
+    if not isinstance(raw_fields, list):
+        _fail("snapshot.fields", "evaluation fields must be a list", "$.fields")
+    fields: list[dict[str, Any]] = []
+    ids: set[str] = set()
+    members: set[tuple[str, str]] = set()
+    for index, raw_field in enumerate(raw_fields):
+        path = f"$.fields[{index}]"
+        if not isinstance(raw_field, dict):
+            _fail("snapshot.field", "field must be an object", path)
+        field = _canonical(raw_field, path)
+        field_id = field.get("id")
+        member = field.get("member")
+        section = field.get("section")
+        required_for = field.get("required_for")
+        minimum, maximum = field.get("min"), field.get("max")
+        if not isinstance(field_id, str) or FIELD_ID_RE.fullmatch(field_id) is None:
+            _fail("snapshot.field_id", "field requires a stable dotted lowercase id", f"{path}.id")
+        if field_id.startswith("items."):
+            _fail("snapshot.sealed_field_id", "items.* field ids are sealed", f"{path}.id")
+        if field_id in ids:
+            _fail("snapshot.duplicate_field", f"duplicate field id: {field_id}", f"{path}.id")
+        if not isinstance(member, str) or MEMBER_RE.fullmatch(member) is None:
+            _fail("snapshot.field_member", "field member must be a lowercase identifier", f"{path}.member")
+        if section != "level_row":
+            _fail("snapshot.field_section", "v1 supports level_row fields", f"{path}.section")
+        if (section, member) in members:
+            _fail("snapshot.duplicate_member", f"duplicate field member: {section}.{member}", path)
+        if field.get("type") != "i64":
+            _fail("snapshot.field_type", "v1 typed Snapshot supports i64 fields", f"{path}.type")
+        if (not isinstance(required_for, list) or not required_for
+                or not all(isinstance(kind, str) and MEMBER_RE.fullmatch(kind) for kind in required_for)
+                or len(required_for) != len(set(required_for))):
+            _fail("snapshot.required_for", "required_for must be a unique non-empty kind list", f"{path}.required_for")
+        if (type(minimum) is not int or type(maximum) is not int
+                or minimum < -MAX_EXACT_INTEGER or maximum > MAX_EXACT_INTEGER or minimum > maximum):
+            _fail("snapshot.field_range", "i64 field requires an ordered exact min/max range", path)
+        if field.get("rounding") != "exact":
+            _fail("snapshot.field_rounding", "i64 field rounding must be exact", f"{path}.rounding")
+        for key in ("unit", "label_key"):
+            if not isinstance(field.get(key), str) or not field[key]:
+                _fail("snapshot.field_metadata", f"field requires non-empty {key}", f"{path}.{key}")
+        ids.add(field_id)
+        members.add((section, member))
+        fields.append(field)
+    fields.sort(key=lambda field: field["id"])
+
+    raw_sources = evaluation.get("field_sources", {})
+    if not isinstance(raw_sources, dict) or set(raw_sources) != ids:
+        _fail("snapshot.field_sources", "field_sources must exactly match registered field ids", "$.field_sources")
+    sources = {
+        field_id: _source(
+            raw_sources[field_id], "snapshot.field_source", f"$.field_sources.{field_id}", kind="field",
+        )
+        for field_id in sorted(ids)
+    }
+    return fields, sources
+
+
+def _validate_typed_rows(items: list[dict[str, Any]], fields: list[dict[str, Any]]) -> None:
+    known_members = {field["member"] for field in fields}
+    for item_index, item in enumerate(items):
+        required_fields = [field for field in fields if item.get("kind") in field["required_for"]]
+        levels = item.get("levels")
+        if levels is None:
+            if required_fields:
+                member = required_fields[0]["member"]
+                _fail(
+                    "snapshot.required_field", f"missing required field: {member}",
+                    f"$.items[{item_index}].levels",
+                )
+            continue
+        if not isinstance(levels, dict) or not isinstance(levels.get("rows"), list):
+            _fail("snapshot.levels", "levels require a rows list", f"$.items[{item_index}].levels")
+        if required_fields and not levels["rows"]:
+            member = required_fields[0]["member"]
+            _fail(
+                "snapshot.required_field", f"missing required field: {member}",
+                f"$.items[{item_index}].levels.rows",
+            )
+        for row_index, row in enumerate(levels["rows"]):
+            path = f"$.items[{item_index}].levels.rows[{row_index}]"
+            if not isinstance(row, dict):
+                _fail("snapshot.level_row", "level row must be an object", path)
+            unknown = sorted(set(row) - known_members - {"cost_to_reach"})
+            if unknown:
+                _fail("snapshot.unknown_field", f"unknown level field: {unknown[0]}", f"{path}.{unknown[0]}")
+            for field in fields:
+                member = field["member"]
+                required = item.get("kind") in field["required_for"]
+                if required and member not in row:
+                    _fail("snapshot.required_field", f"missing required field: {member}", f"{path}.{member}")
+                if member not in row:
+                    continue
+                if not required:
+                    _fail("snapshot.field_kind", f"field {member} is not valid for kind {item.get('kind')!r}", f"{path}.{member}")
+                value = row[member]
+                if type(value) is not int:
+                    _fail("snapshot.field_type", f"field {member} requires i64", f"{path}.{member}")
+                if value < field["min"] or value > field["max"]:
+                    _fail("snapshot.field_range", f"field {member} is outside declared range", f"{path}.{member}")
 
 
 def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
@@ -99,6 +207,7 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     raw_items = evaluation.get("items")
     if not isinstance(raw_items, list):
         _fail("snapshot.items", "evaluation items must be a list", "$.items")
+    fields, field_sources = _normalize_fields(evaluation)
 
     items: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -115,6 +224,7 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
         seen.add(item_id)
         items.append(item)
     items.sort(key=lambda item: item["id"])
+    _validate_typed_rows(items, fields)
 
     dependencies: dict[str, list[str]] = {}
     for item in items:
@@ -138,15 +248,19 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
 
     content_hash = "sha256:" + hashlib.sha256(_json_bytes({
         "schema": SNAPSHOT_SCHEMA,
+        "fields": fields,
         "items": items,
     })).hexdigest()
     snapshot = {
         "schema": SNAPSHOT_SCHEMA,
         "content_hash": content_hash,
+        "fields": fields,
         "items": items,
         "dependencies": dependencies,
         "dependents": dependents,
     }
+    if field_sources:
+        snapshot["field_sources"] = field_sources
     raw_sources = evaluation.get("sources")
     if raw_sources is not None:
         if not isinstance(raw_sources, dict):
@@ -218,6 +332,7 @@ def query_snapshot(
 
     result_rows = []
     field_found = field is None or field in item
+    field_in_rows = False
     for level, row in enumerate(selected, start=start):
         if not isinstance(row, dict):
             _fail("query.level_row", "level row must be an object")
@@ -226,6 +341,7 @@ def query_snapshot(
         elif field in row:
             values = {field: row[field]}
             field_found = True
+            field_in_rows = True
         else:
             values = {}
         result_rows.append({"level": level, "values": values})
@@ -248,6 +364,42 @@ def query_snapshot(
         "content_hash": snapshot.get("content_hash"),
         "item": item_result,
     }
+    if field is not None and field_in_rows:
+        raw_fields = snapshot.get("fields", [])
+        if not isinstance(raw_fields, list):
+            _fail("query.fields", "snapshot fields must be a list", "$.fields")
+        matching_fields = [
+            candidate for candidate in raw_fields
+            if isinstance(candidate, dict)
+            and candidate.get("section") == "level_row"
+            and candidate.get("member") == field
+            and isinstance(candidate.get("required_for"), list)
+            and item.get("kind") in candidate["required_for"]
+        ]
+        if len(matching_fields) != 1:
+            _fail("query.field_schema", f"expected one applicable schema for field: {field}", "$.fields")
+        field_sources = snapshot.get("field_sources", {})
+        if not isinstance(field_sources, dict):
+            _fail("query.field_source", "snapshot field_sources must be an object", "$.field_sources")
+        field_id = matching_fields[0].get("id")
+        if not isinstance(field_id, str):
+            _fail("query.field_schema", "selected field requires a stable id", "$.fields")
+        if field_id not in field_sources:
+            _fail("query.field_source", f"missing source for field: {field_id}", "$.field_sources")
+        try:
+            normalized_fields, normalized_sources = _normalize_fields({
+                "fields": [matching_fields[0]],
+                "field_sources": {field_id: field_sources[field_id]},
+            })
+        except SnapshotFailure as error:
+            code = "query.field_source" if error.code in {
+                "snapshot.field_source", "snapshot.field_sources",
+            } else "query.field_schema"
+            _fail(code, error.message, error.path)
+        result["field"] = {
+            "schema": normalized_fields[0],
+            "source": normalized_sources[field_id],
+        }
     if include_inputs:
         dependencies = snapshot.get("dependencies", {})
         if not isinstance(dependencies, dict) or not isinstance(dependencies.get(item_id, []), list):

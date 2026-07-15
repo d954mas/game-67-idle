@@ -16,7 +16,23 @@ assert SPEC.loader is not None
 SPEC.loader.exec_module(SNAPSHOT)
 
 
-def evaluation(items):
+def attack_field():
+    return {
+        "id": "game.weapon.level.attack",
+        "member": "attack",
+        "section": "level_row",
+        "type": "i64",
+        "required_for": ["weapon"],
+        "min": 0,
+        "max": 1_000_000,
+        "unit": "damage",
+        "rounding": "exact",
+        "label_key": "item.attack",
+    }
+
+
+def evaluation(items, fields=None):
+    fields = [attack_field()] if fields is None else fields
     source_lines = {
         item_id: index + 3
         for index, item_id in enumerate(sorted(item["id"] for item in items))
@@ -24,6 +40,16 @@ def evaluation(items):
     return {
         "schema": "items.lua.evaluation.v1",
         "backend": {"module": "lupa.lua54", "version": "5.4"},
+        "fields": fields,
+        "field_sources": {
+            field["id"]: {
+                "file": "game/schema.lua",
+                "line": index + 5,
+                "column": 1,
+                "kind": "field",
+            }
+            for index, field in enumerate(fields)
+        },
         "items": items,
         "sources": {
             item["id"]: {
@@ -63,7 +89,7 @@ class ItemsSnapshotTests(unittest.TestCase):
                             "item": {"__studio_kind": "item_ref", "id": "game.gold"},
                         },
                     },
-                    {"attack": 20},
+                    {"attack": 20, "cost_to_reach": {"__studio_kind": "free"}},
                 ],
             },
         }
@@ -82,13 +108,65 @@ class ItemsSnapshotTests(unittest.TestCase):
         self.assertEqual(first["dependencies"], {"game.gold": [], "game.sword": ["game.gold"]})
         self.assertEqual(first["dependents"], {"game.gold": ["game.sword"], "game.sword": []})
         self.assertEqual(first["sources"]["game.gold"]["file"], "game/items.lua")
+        self.assertEqual(first["fields"][0]["id"], "game.weapon.level.attack")
+        self.assertEqual(first["field_sources"]["game.weapon.level.attack"]["file"], "game/schema.lua")
 
         moved = evaluation(copy.deepcopy(items))
         moved["sources"]["game.gold"]["line"] = 300
+        moved["field_sources"]["game.weapon.level.attack"]["line"] = 400
         self.assertEqual(
             SNAPSHOT.build_snapshot(moved)["content_hash"],
             first["content_hash"],
         )
+
+    def test_typed_level_fields_enforce_kind_presence_type_and_range(self):
+        no_levels = evaluation(self.base_items())
+        del no_levels["items"][1]["levels"]
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.required_field"):
+            SNAPSHOT.build_snapshot(no_levels)
+
+        empty_levels = evaluation(self.base_items())
+        empty_levels["items"][1]["levels"]["rows"] = []
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.required_field"):
+            SNAPSHOT.build_snapshot(empty_levels)
+
+        missing = evaluation(self.base_items())
+        del missing["items"][1]["levels"]["rows"][0]["attack"]
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.required_field"):
+            SNAPSHOT.build_snapshot(missing)
+
+        wrong_type = evaluation(self.base_items())
+        wrong_type["items"][1]["levels"]["rows"][0]["attack"] = 1.5
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.field_type"):
+            SNAPSHOT.build_snapshot(wrong_type)
+
+        out_of_range = evaluation(self.base_items())
+        out_of_range["items"][1]["levels"]["rows"][0]["attack"] = 1_000_001
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.field_range"):
+            SNAPSHOT.build_snapshot(out_of_range)
+
+        wrong_kind = evaluation(self.base_items())
+        wrong_kind["items"][0]["levels"] = {"mode": "single", "rows": [{"attack": 1}]}
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.field_kind"):
+            SNAPSHOT.build_snapshot(wrong_kind)
+
+        malformed_source = evaluation(self.base_items())
+        malformed_source["field_sources"]["game.weapon.level.attack"]["kind"] = "definition"
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.field_source"):
+            SNAPSHOT.build_snapshot(malformed_source)
+
+        unknown = evaluation(self.base_items())
+        unknown["items"][1]["levels"]["rows"][0]["damage"] = 2
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.unknown_field"):
+            SNAPSHOT.build_snapshot(unknown)
+
+        sealed = evaluation(self.base_items())
+        sealed["fields"][0]["id"] = "items.weapon.level.attack"
+        sealed["field_sources"] = {
+            "items.weapon.level.attack": sealed["field_sources"].pop("game.weapon.level.attack"),
+        }
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.sealed_field_id"):
+            SNAPSHOT.build_snapshot(sealed)
 
     def test_query_selects_one_item_field_and_level_range(self):
         snapshot = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
@@ -120,6 +198,15 @@ class ItemsSnapshotTests(unittest.TestCase):
                 "column": 1,
                 "kind": "definition",
             },
+            "field": {
+                "schema": attack_field(),
+                "source": {
+                    "file": "game/schema.lua",
+                    "line": 5,
+                    "column": 1,
+                    "kind": "field",
+                },
+            },
         })
 
         item_only = SNAPSHOT.query_snapshot(snapshot, item_id="game.gold")
@@ -127,6 +214,15 @@ class ItemsSnapshotTests(unittest.TestCase):
             "id": "game.gold",
             "values": {"kind": "currency", "stack": 0},
         })
+
+        top_level_items = self.base_items()
+        top_level_items[0]["attack"] = 7
+        top_level = SNAPSHOT.query_snapshot(
+            SNAPSHOT.build_snapshot(evaluation(top_level_items)),
+            item_id="game.gold", field="attack",
+        )
+        self.assertEqual(top_level["item"]["values"], {"attack": 7})
+        self.assertNotIn("field", top_level)
 
     def test_non_finite_values_and_unknown_references_are_rejected(self):
         bad_number = self.base_items()
@@ -148,6 +244,32 @@ class ItemsSnapshotTests(unittest.TestCase):
         malformed_snapshot["sources"]["game.gold"] = "not-a-source"
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.source"):
             SNAPSHOT.query_snapshot(malformed_snapshot, item_id="game.gold")
+
+        missing_field_source = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
+        missing_field_source["field_sources"] = {}
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.field_source"):
+            SNAPSHOT.query_snapshot(missing_field_source, item_id="game.sword", field="attack")
+
+        missing_field_schema = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
+        missing_field_schema["fields"] = []
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.field_schema"):
+            SNAPSHOT.query_snapshot(missing_field_schema, item_id="game.sword", field="attack")
+
+        for key, value in (("id", "bad"), ("type", "f64"), ("min", 2_000_000)):
+            malformed_field_schema = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
+            schema = malformed_field_schema["fields"][0]
+            old_id = schema["id"]
+            schema[key] = value
+            if key == "id":
+                malformed_field_schema["field_sources"] = {
+                    value: malformed_field_schema["field_sources"].pop(old_id),
+                }
+            with self.subTest(key=key), self.assertRaisesRegex(
+                SNAPSHOT.SnapshotFailure, "query.field_schema",
+            ):
+                SNAPSHOT.query_snapshot(
+                    malformed_field_schema, item_id="game.sword", field="attack",
+                )
 
     def test_query_requires_a_range_for_more_than_1000_levels(self):
         items = self.base_items()
@@ -243,6 +365,8 @@ class ItemsSnapshotTests(unittest.TestCase):
             payload = json.loads(queried.stdout)
             self.assertEqual(len(payload["item"]["levels"]), 2)
             self.assertEqual(payload["inputs"], ["game.gold"])
+            self.assertEqual(payload["field"]["schema"]["unit"], "damage")
+            self.assertEqual(payload["field"]["source"]["kind"], "field")
 
             changed_items = self.base_items()
             changed_items[1]["levels"]["rows"][1]["attack"] = 16

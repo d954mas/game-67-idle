@@ -146,7 +146,8 @@ memory, wall-time, output-row, and output-byte budgets fail as structured
 `items.lua.error.v1` diagnostics.
 Successful output is canonical `items.lua.evaluation.v1` JSON with registered
 `fields`/`kinds`, the backend fingerprint, and the honest Lua file/line of each
-`items.define` call. Typed field-value validation remains the Snapshot boundary.
+field registration and `items.define` call. Typed field-value validation remains
+the Snapshot boundary.
 Level tables require contiguous keys, levelled items use unique storage, and
 level 2+ rows require a paid or explicit-free transition. `levels.generate`
 uses an explicit `max_level` and named formula columns; formulas may capture
@@ -174,12 +175,15 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 
 `items_snapshot.py build` turns only canonical evaluator JSON into one
 `items.snapshot.v1` document. It sorts item identities, hashes normalized
-content, retains the evaluator fingerprint, and derives inputs/dependents from
-actual typed references. Source locations remain separate from the content
-hash. `query` returns one item with its Lua definition location plus an optional
-field and level range; more than 1000 level rows requires an explicit smaller
-range. `diff` compares only normalized item data, emits stable JSON Pointer
-paths, ignores provenance-only movement, and stops after 1000 changes by default.
+content and registered field schemas, validates required i64 level fields
+against their declared kinds and ranges, retains the evaluator fingerprint,
+and derives inputs/dependents from actual typed references. Source locations
+remain separate from the content hash. `query` returns one item with its Lua
+definition location plus an optional field and level range; a selected level
+field also includes only its schema and registration location. More than 1000
+level rows requires an explicit smaller range. `diff` compares only normalized
+item data, emits stable JSON Pointer paths, ignores provenance-only movement,
+and stops after 1000 changes by default.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py build --evaluation <evaluation.json> --out <snapshot.json>

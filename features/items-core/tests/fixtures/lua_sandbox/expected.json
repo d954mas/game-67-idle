@@ -6,6 +6,7 @@
     "version": "5.4"
   },
   "fields": [],
+  "field_sources": {},
   "items": [
     {
       "id": "game.gold",
