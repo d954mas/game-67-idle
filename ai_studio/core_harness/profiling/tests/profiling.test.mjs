@@ -721,7 +721,10 @@ test("status surfaces noisy-output commands from recorded size metrics", () => {
     assert.equal(status.output_rollup.by_chars[0].key, "node chatty.js");
     assert.equal(status.output_rollup.by_chars[0].total_chars, 2000);
     assert.equal(status.output_rollup.by_chars[0].total_lines, 60);
+    assert.equal(status.noisiest_record.output_chars, 1200);
+    assert.deepEqual(status.noisiest_record.commands, ["node tools/chatty.js"]);
     assert.match(result.stdout, /Top Noisy Outputs/);
+    assert.match(result.stdout, /Noisiest single call: 1200 chars.*node tools\/chatty\.js/);
     assert.match(result.stdout, /node chatty\.js: 2000 chars/);
   } finally {
     cleanup(dir);

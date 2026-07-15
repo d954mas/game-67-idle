@@ -442,6 +442,9 @@ function buildStatus(profilePaths, values = {}, sourceParsed = null) {
   const slowest = records
     .filter((record) => Number(record.duration_ms || 0) > 0)
     .sort((a, b) => Number(b.duration_ms || 0) - Number(a.duration_ms || 0))[0] || null;
+  const noisiest = records
+    .filter((record) => Number(record.output_chars || 0) > 0)
+    .sort((a, b) => Number(b.output_chars || 0) - Number(a.output_chars || 0))[0] || null;
   const lowCoverage = isLowCoverage(coverage);
   const tokenTelemetry = parsed.tokenTelemetry || { available: false, measured_records: 0 };
   const advisory = sessionAdvisory(records, coverage, tokenTelemetry);
@@ -508,6 +511,12 @@ function buildStatus(profilePaths, values = {}, sourceParsed = null) {
       intent: slowest.intent || "",
       result: slowest.result || "",
       commands: slowest.commands || [],
+    } : null,
+    noisiest_record: noisiest ? {
+      line: noisiest.__line,
+      output_chars: Number(noisiest.output_chars || 0),
+      output_lines: Number(noisiest.output_lines || 0),
+      commands: noisiest.commands || [],
     } : null,
     next_action: nextAction,
   };
@@ -584,6 +593,11 @@ function renderStatus(status, { verbose }) {
   if (outputRollupStatus.by_chars.length > 0) {
     lines.push("");
     lines.push("## Top Noisy Outputs (by recorded chars)");
+    const noisiest = status.noisiest_record;
+    if (noisiest) {
+      const command = noisiest.commands[0] || "unknown command";
+      lines.push(`- Noisiest single call: ${formatChars(noisiest.output_chars)}, ${noisiest.output_lines} line(s) - ${command}`);
+    }
     for (const entry of outputRollupStatus.by_chars) {
       lines.push(`- ${entry.key}: ${formatChars(entry.total_chars)} over ${entry.count} run(s), ${Math.round(entry.total_lines)} line(s), max ${formatChars(entry.max_chars)}${entry.fails > 0 ? `, ${entry.fails} failed` : ""}`);
     }
