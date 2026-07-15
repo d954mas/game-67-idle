@@ -10,6 +10,9 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
+
+import items_cli as CLI
 
 
 SCRIPT_DIR = Path(__file__).resolve().parent
@@ -34,7 +37,8 @@ class ItemsCliTests(unittest.TestCase):
         self.assertEqual(payload["schema"], "items.cli.result.v1")
         self.assertEqual(payload["operation"], "list")
         self.assertEqual([item["id"] for item in payload["result"]], [
-            "game.curve_sword", "game.gold", "game.iron_sword", "game.levelled_sword",
+            "game.curve_sword", "game.gold", "game.iron_sword",
+            "game.levelled_sword", "game.other_sword",
         ])
         gold = next(item for item in payload["result"] if item["id"] == "game.gold")
         self.assertEqual(gold["runtime"], {
@@ -203,6 +207,82 @@ class ItemsCliTests(unittest.TestCase):
             "--expected-source-hash", source["source_hash"],
         )
         self.assertEqual(override["result"]["source_diff"]["old_value"], 21)
+
+    def test_same_file_batch_apply_inverse_and_multi_file_refusal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            shutil.copytree(PROJECT, project)
+            source = project / "game" / "items.lua"
+            original = source.read_bytes()
+            source_hash = json.loads(self.run_project(
+                project, "source", "--item", "game.levelled_sword",
+            ).stdout)["result"]["source_hash"]
+            patch_path = project / "batch.json"
+            patch_path.write_text(json.dumps({
+                "schema": "items.cli.patch_batch.v1",
+                "expected_source_hash": source_hash,
+                "operations": [
+                    {
+                        "operation": "level-set", "item": "game.levelled_sword",
+                        "level": 1, "field": "attack", "value": 11,
+                    },
+                    {
+                        "operation": "level-set", "item": "game.levelled_sword",
+                        "level": 2, "field": "attack", "value": 17,
+                    },
+                ],
+            }), encoding="utf-8")
+            preview = self.run_project(project, "batch", "--patch-file", str(patch_path))
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertEqual(source.read_bytes(), original)
+            self.assertEqual(len(json.loads(preview.stdout)["result"]["source_diff"]["edits"]), 2)
+
+            applied = self.run_project(
+                project, "batch", "--patch-file", str(patch_path), "--apply",
+            )
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            applied_result = json.loads(applied.stdout)["result"]
+            self.assertIn("[1] = { attack = 11 }", source.read_text(encoding="utf-8"))
+            self.assertIn("[2] = { attack = 17", source.read_text(encoding="utf-8"))
+
+            inverse_path = project / "inverse.json"
+            inverse_path.write_text(
+                json.dumps(applied_result["inverse_patch"]), encoding="utf-8",
+            )
+            reverted = self.run_project(
+                project, "batch", "--patch-file", str(inverse_path), "--apply",
+            )
+            self.assertEqual(reverted.returncode, 0, reverted.stderr)
+            self.assertEqual(source.read_bytes(), original)
+
+            cross_file = project / "cross-file.json"
+            cross_file.write_text(json.dumps({
+                "schema": "items.cli.patch_batch.v1",
+                "expected_source_hash": source_hash,
+                "operations": [
+                    {
+                        "operation": "level-set", "item": "game.levelled_sword",
+                        "level": 1, "field": "attack", "value": 11,
+                    },
+                    {
+                        "operation": "level-set", "item": "game.other_sword",
+                        "level": 1, "field": "attack", "value": 31,
+                    },
+                ],
+            }), encoding="utf-8")
+            refused = self.run_project(
+                project, "batch", "--patch-file", str(cross_file), "--apply",
+            )
+            self.assertEqual(refused.returncode, 1)
+            self.assertEqual(json.loads(refused.stderr)["error"]["code"], "edit.multi_file")
+
+    def test_batch_loader_rechecks_actual_bytes_after_size_probe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            patch = Path(tmp) / "oversized.json"
+            patch.write_bytes(b" " * (CLI.MAX_PATCH_BYTES + 1))
+            with mock.patch.object(Path, "stat", return_value=mock.Mock(st_size=0)):
+                with self.assertRaisesRegex(CLI.CliFailure, "patch exceeds"):
+                    CLI._load_batch_patch(str(patch))
 
     def test_project_context_is_required_and_manifest_cannot_escape_it(self):
         missing = subprocess.run(

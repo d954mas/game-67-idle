@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 import tempfile
@@ -24,6 +25,8 @@ ERROR_SCHEMA = "items.cli.error.v1"
 DEFAULT_MAX_ITEMS = 1_000
 DEFAULT_MAX_FIELDS = 256
 DEFAULT_MAX_RELATED = 1_000
+MAX_PATCH_BYTES = 64 * 1024
+MAX_BATCH_OPERATIONS = 100
 SCRIPT_DIR = Path(__file__).resolve().parent
 SANDBOX = SCRIPT_DIR / "items_lua_sandbox.py"
 
@@ -251,6 +254,78 @@ def _source_line(source: str, offset: int) -> tuple[int, str]:
     return line, text[:512]
 
 
+def _primitive_edit(
+    source: str, definition: dict[str, Any], operation: dict[str, Any],
+) -> edit_api.EditResult:
+    common = {
+        "definition_line": definition["line"],
+        "item_id": operation["item"],
+        "field": operation["field"],
+        "value": operation["value"],
+    }
+    if operation["operation"] == "level-set":
+        return edit_api.level_set(source, level=operation["level"], **common)
+    if operation["operation"] == "curve-set":
+        return edit_api.curve_set(source, parameter=operation["parameter"], **common)
+    return edit_api.override_set(source, level=operation["level"], **common)
+
+
+def _load_batch_patch(path_value: str) -> dict[str, Any]:
+    path = Path(path_value).resolve()
+    try:
+        if path.stat().st_size > MAX_PATCH_BYTES:
+            raise CliFailure("edit.patch", f"patch exceeds {MAX_PATCH_BYTES} bytes")
+        raw = path.read_bytes()
+        if len(raw) > MAX_PATCH_BYTES:
+            raise CliFailure("edit.patch", f"patch exceeds {MAX_PATCH_BYTES} bytes")
+        patch = json.loads(raw.decode("utf-8"))
+    except CliFailure:
+        raise
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise CliFailure("edit.patch", f"cannot read patch {path}: {error}") from error
+    if (
+        not isinstance(patch, dict)
+        or set(patch) != {"schema", "expected_source_hash", "operations"}
+        or patch.get("schema") != "items.cli.patch_batch.v1"
+        or not isinstance(patch.get("expected_source_hash"), str)
+        or re.fullmatch(r"sha256:[0-9a-f]{64}", patch["expected_source_hash"]) is None
+    ):
+        raise CliFailure("edit.patch", "patch header/schema is invalid")
+    operations = patch.get("operations")
+    if not isinstance(operations, list) or not 1 <= len(operations) <= MAX_BATCH_OPERATIONS:
+        raise CliFailure(
+            "edit.patch", f"operations must contain 1..{MAX_BATCH_OPERATIONS} entries",
+        )
+    targets: set[tuple[Any, ...]] = set()
+    for index, operation in enumerate(operations):
+        if not isinstance(operation, dict):
+            raise CliFailure("edit.patch", f"operation {index} must be an object")
+        name = operation.get("operation")
+        keys = (
+            {"operation", "item", "field", "parameter", "value"}
+            if name == "curve-set"
+            else {"operation", "item", "field", "level", "value"}
+        )
+        if name not in {"level-set", "curve-set", "override-set"} or set(operation) != keys:
+            raise CliFailure("edit.patch", f"operation {index} shape is invalid")
+        if (
+            not isinstance(operation["item"], str) or not operation["item"]
+            or not isinstance(operation["field"], str) or not operation["field"]
+            or type(operation["value"]) is not int
+            or ("level" in operation and type(operation["level"]) is not int)
+            or ("parameter" in operation and not isinstance(operation["parameter"], str))
+        ):
+            raise CliFailure("edit.patch", f"operation {index} values are invalid")
+        target = (
+            name, operation["item"], operation["field"],
+            operation.get("level"), operation.get("parameter"),
+        )
+        if target in targets:
+            raise CliFailure("edit.patch", f"operation {index} duplicates an earlier target")
+        targets.add(target)
+    return patch
+
+
 def _edit(
     root: Path, evaluation: dict[str, Any], snapshot: dict[str, Any], args: argparse.Namespace,
 ) -> tuple[dict[str, Any], int]:
@@ -269,18 +344,17 @@ def _edit(
         source = original_bytes.decode("utf-8")
     except UnicodeDecodeError as error:
         raise CliFailure("edit.source", f"source is not UTF-8: {source_path}") from error
-    common = {
-        "definition_line": definition["line"],
-        "item_id": args.item,
+    operation = {
+        "operation": args.command,
+        "item": args.item,
         "field": args.field,
         "value": args.value,
     }
-    if args.command == "level-set":
-        edited = edit_api.level_set(source, level=args.level, **common)
-    elif args.command == "curve-set":
-        edited = edit_api.curve_set(source, parameter=args.parameter, **common)
+    if args.command in {"level-set", "override-set"}:
+        operation["level"] = args.level
     else:
-        edited = edit_api.override_set(source, level=args.level, **common)
+        operation["parameter"] = args.parameter
+    edited = _primitive_edit(source, definition, operation)
     edited_bytes = edited.source.encode("utf-8")
     after_hash = _source_hash(edited_bytes)
     _, after_snapshot, validation = _copy_project_for_edit(
@@ -321,6 +395,86 @@ def _edit(
         },
         "semantic_diff": semantic_diff,
         "inverse_patch": inverse,
+    }
+    return result, 0 if validation["ok"] else 1
+
+
+def _batch(
+    root: Path, snapshot: dict[str, Any], args: argparse.Namespace,
+) -> tuple[dict[str, Any], int]:
+    patch = _load_batch_patch(args.patch_file)
+    resolved: list[tuple[dict[str, Any], dict[str, Any], Path]] = []
+    source_paths: set[Path] = set()
+    for operation in patch["operations"]:
+        definition = snapshot_api.query_snapshot(
+            snapshot, item_id=operation["item"],
+        )["source"]
+        source_path = _project_file(root, definition["file"], "edit.source")
+        source_paths.add(source_path)
+        resolved.append((operation, definition, source_path))
+    if len(source_paths) != 1:
+        raise CliFailure("edit.multi_file", "v1 batch operations must share one Lua source file")
+    source_path = next(iter(source_paths))
+    original_bytes = source_path.read_bytes()
+    actual_hash = _source_hash(original_bytes)
+    if patch["expected_source_hash"] != actual_hash:
+        raise CliFailure(
+            "edit.conflict", "expected source hash does not match current file",
+            expected=patch["expected_source_hash"], actual=actual_hash,
+        )
+    try:
+        source = original_bytes.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise CliFailure("edit.source", f"source is not UTF-8: {source_path}") from error
+
+    current = source
+    edits: list[dict[str, Any]] = []
+    inverse_operations: list[dict[str, Any]] = []
+    for operation, definition, _ in resolved:
+        edited = _primitive_edit(current, definition, operation)
+        line, before_line = _source_line(current, edited.start)
+        _, after_line = _source_line(edited.source, edited.start)
+        edits.append({
+            "operation": operation["operation"],
+            "item": operation["item"],
+            "field": operation["field"],
+            "line": line,
+            "old_value": edited.old_value,
+            "new_value": operation["value"],
+            "before_line": before_line,
+            "after_line": after_line,
+        })
+        inverse = {**operation, "value": edited.old_value}
+        inverse_operations.append(inverse)
+        current = edited.source
+
+    edited_bytes = current.encode("utf-8")
+    after_hash = _source_hash(edited_bytes)
+    _, after_snapshot, validation = _copy_project_for_edit(
+        root, args, source_path, edited_bytes,
+    )
+    semantic_diff = snapshot_api.diff_snapshots(snapshot, after_snapshot)
+    source_changed = edited_bytes != original_bytes
+    applied = False
+    if validation["ok"] and args.apply and source_changed:
+        _atomic_replace_expected(source_path, actual_hash, edited_bytes)
+        applied = True
+    inverse_patch = {
+        "schema": "items.cli.patch_batch.v1",
+        "expected_source_hash": after_hash,
+        "operations": list(reversed(inverse_operations)),
+    }
+    result = {
+        **validation,
+        "applied": applied,
+        "source_diff": {
+            "file": resolved[0][1]["file"],
+            "before_hash": actual_hash,
+            "after_hash": after_hash,
+            "edits": edits,
+        },
+        "semantic_diff": semantic_diff,
+        "inverse_patch": inverse_patch,
     }
     return result, 0 if validation["ok"] else 1
 
@@ -392,6 +546,11 @@ def _parser() -> argparse.ArgumentParser:
             edit.add_argument("--level", type=int, required=True)
         else:
             edit.add_argument("--parameter", required=True)
+    batch = commands.add_parser("batch")
+    batch.add_argument("--patch-file", required=True)
+    batch.add_argument("--baseline", default="content/items.lock.json")
+    batch.add_argument("--state-schema", default="state/items.schema.json")
+    batch.add_argument("--apply", action="store_true")
     return parser
 
 
@@ -462,6 +621,8 @@ def main(argv: list[str] | None = None) -> int:
             exit_code = 0 if result["ok"] else 1
         elif operation in {"level-set", "curve-set", "override-set"}:
             result, exit_code = _edit(root, evaluation, snapshot, args)
+        elif operation == "batch":
+            result, exit_code = _batch(root, snapshot, args)
         else:
             validation = _validation(root, evaluation, snapshot, args)
             if not validation["ok"]:

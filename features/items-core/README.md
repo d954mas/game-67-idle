@@ -241,8 +241,10 @@ return source/semantic diffs plus an inverse patch. `--apply` uses an exclusive
 same-directory writer lock and atomic replace. A crash-stale lock fails closed
 and is never removed automatically; remove it only after confirming no writer
 is active. Missing rows/overrides, formulas, aliases, noncanonical numbers, and
-unsupported structures are refused. Multi-operation same-file batching is not
-yet exposed.
+unsupported structures are refused. `batch --patch-file` accepts the same three
+operation shapes in one bounded `items.cli.patch_batch.v1`, rejects duplicate
+targets or multiple Lua files, validates once, replaces once, and returns one
+reversed inverse batch. Patch input is capped at 64 KiB and 100 operations.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> list
@@ -254,6 +256,7 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> validate
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> build --out-dir <build-dir>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> level-set --item <item-id> --level <n> --field <field> --value <n> --expected-source-hash <sha256>
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> batch --patch-file <patch.json>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli_test.py
 ```
 
