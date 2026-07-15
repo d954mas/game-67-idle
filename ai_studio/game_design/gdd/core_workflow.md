@@ -1,7 +1,9 @@
-# Core Workflow
+# Primary GDD Workflow
 
-Load this when starting or revising a game concept, first GDD, visual proof
-plan, implementation handoff, or source-of-truth design package.
+Turn a loose game idea into a scoped, implementation-facing design package.
+Use this workflow for concepts, GDDs, gameplay systems, visual proof, web GDDs,
+and implementation handoff. Game content stays under
+`games/<game-id>/design/`; this module owns only the reusable process.
 
 ## Non-Negotiables
 

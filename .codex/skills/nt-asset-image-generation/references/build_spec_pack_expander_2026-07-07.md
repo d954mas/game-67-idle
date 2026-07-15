@@ -1,7 +1,9 @@
 # Build-spec: pack expander — config → jobs.json, sheet-first (T0330)
 
-Status: REVIEWED (dual-review 2026-07-07: философия/simplicity + execution/robustness,
-оба ACCEPT-WITH-CHANGES; правки внесены). Владелец: `.codex/skills/nt-asset-image-generation/`.
+Status: IMPLEMENTED AND CURRENT (verified 2026-07-15: `expand_jobs.py`,
+`slice_pack.py`, tests, and Canvas pack integration exist). Original dual-review
+2026-07-07: philosophy/simplicity + execution/robustness, both
+ACCEPT-WITH-CHANGES; fixes applied. Owner: `.codex/skills/nt-asset-image-generation/`.
 Источник решения: разбор доклада Declarative Art (TiltShift, youtube y9znnFAQWOQ) и
 действующий `ai_studio/assets/canvas/contracts/recipe-pack.md`.
 
@@ -190,13 +192,12 @@ Deliverable фазы 2 — маленький маппер: запускает d
   без слота в subject_template; неизвестная ось в sheet.vary; невалидный
   gen.size; промпт > 20 KB.
 
-## Открытые вопросы (остаются на пилот)
+## Pilot questions and outcomes
 
-- Адхезия сетки gpt-image-2 (2x2 vs 3x3) и читаемость грейд-прогрессии — smoke.
-- Anchor одиночного предмета, ведущий мульти-ячеечный лист, — smoke; пилот на
-  codex-пути (inline-реф), REST-edits смещён к «правке рефа».
-- Magenta-spill на предметах листа: маршрут key_matte/soft_score существует,
-  подтвердить на листах.
+- Grid adhesion and grade readability were confirmed by the pilot below.
+- A single-item anchor driving a multi-cell sheet remains an optional future
+  experiment; the production flow does not require an anchor.
+- Magenta spill was observed and its hard/soft-edge routing is recorded below.
 - Config-файл vs расширение canvas recipe card: v1 = отдельный файл (lean);
   интеграция с картами — после пилота, если захочется.
 

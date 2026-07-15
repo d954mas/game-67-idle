@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 const GROUP_ORDER = [
@@ -55,12 +55,6 @@ function headingTitle(markdown) {
   return match ? match[1].trim() : "";
 }
 
-function firstParagraph(markdown) {
-  const withoutTitle = markdown.replace(/^#\s+.+\n/, "").trimStart();
-  const match = withoutTitle.match(/^(.*?)(?:\n\s*\n|^##\s)/s);
-  return paragraphText(match ? match[1] : withoutTitle);
-}
-
 function section(markdown, title) {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");
   const heading = title.toLowerCase();
@@ -109,41 +103,45 @@ function readCheck(root, filePath) {
   };
 }
 
-function readGroup(root, rulesRoot, slug) {
-  const groupRoot = join(rulesRoot, slug);
-  const readmePath = join(groupRoot, "README.md");
-  const readme = readFileSync(readmePath, "utf8");
-  const checksRoot = join(groupRoot, "checks");
-  const checks = existsSync(checksRoot)
-    ? readdirSync(checksRoot)
-        .filter((name) => /^Q[A-Z]+_\d+_.+\.md$/.test(name))
-        .sort()
-        .map((name) => readCheck(root, join(checksRoot, name)))
-    : [];
-  const prefix = checks[0] ? checks[0].prefix : "";
-
-  return {
-    slug,
-    title: headingTitle(readme),
-    description: firstParagraph(readme),
-    prefix,
-    path: repoPath(root, readmePath),
-    checks,
-  };
+function parseCatalogRows(root, markdown) {
+  const rows = [];
+  for (const line of markdown.replace(/\r\n/g, "\n").split("\n")) {
+    const match = line.match(/^\|\s*([^|]+?)\s*\|\s*\[([A-Z]+_\d+)\]\(([^)]+)\)\s*\|\s*([^|]+?)\s*\|\s*([^|]+?)\s*\|$/);
+    if (!match) continue;
+    const check = readCheck(root, join(root, "ai_studio", "quality", match[3].trim()));
+    if (check.id !== match[2]) {
+      throw new Error(`Quality catalog id ${match[2]} does not match ${check.id} in ${match[3]}`);
+    }
+    rows.push({
+      groupTitle: match[1].trim(),
+      useWhen: match[4].trim(),
+      doNotUseFor: match[5].trim(),
+      check,
+    });
+  }
+  return rows;
 }
 
 export function loadQualityCatalog(root) {
-  const rulesRoot = join(root, "ai_studio", "quality", "rules");
-  const discovered = existsSync(rulesRoot)
-    ? readdirSync(rulesRoot, { withFileTypes: true })
-        .filter((entry) => entry.isDirectory())
-        .map((entry) => entry.name)
-    : [];
+  const readmePath = join(root, "ai_studio", "quality", "README.md");
+  const rows = existsSync(readmePath) ? parseCatalogRows(root, readFileSync(readmePath, "utf8")) : [];
+  const discovered = [...new Set(rows.map((row) => row.check.group))];
   const ordered = [
     ...GROUP_ORDER.filter((slug) => discovered.includes(slug)),
     ...discovered.filter((slug) => !GROUP_ORDER.includes(slug)).sort(),
   ];
-  const groups = ordered.map((slug) => readGroup(root, rulesRoot, slug));
+  const groups = ordered.map((slug) => {
+    const groupRows = rows.filter((row) => row.check.group === slug);
+    const checks = groupRows.map((row) => row.check);
+    return {
+      slug,
+      title: `${groupRows[0].groupTitle} Rules`,
+      description: groupRows.map((row) => row.useWhen).join("; "),
+      prefix: checks[0]?.prefix || "",
+      path: `${repoPath(root, readmePath)}#rule-catalog`,
+      checks,
+    };
+  });
 
   return {
     groups,

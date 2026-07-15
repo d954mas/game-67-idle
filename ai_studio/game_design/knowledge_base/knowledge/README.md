@@ -11,9 +11,9 @@ timestamp: 2026-06-13T00:00:00Z
 Reusable game-development knowledge for game GDD and production work.
 
 This folder is an OKF-lite knowledge bundle: plain Markdown files with small
-YAML frontmatter, links between related pages, citations when external sources
-matter, and a short change log. It is intentionally not a task tracker, GDD,
-status board, database, SDK, or required pipeline.
+YAML frontmatter, links between related pages, and citations when external
+sources matter. It is intentionally not a task tracker, GDD, status board,
+database, SDK, or required pipeline.
 
 ## Folder Roles
 
@@ -27,8 +27,6 @@ status board, database, SDK, or required pipeline.
 
 ## Entry Points
 
-- [Index](index.md) - topic map for agents and humans.
-- [Log](log.md) - compact history of meaningful knowledge-base changes.
 - [GDD Application](gdd_application.md) - how to turn reusable rules into a
   concrete project spec.
 - [Reference Deconstruction](reference_deconstruction.md) - how to study a
@@ -86,8 +84,7 @@ updated when they are edited; do not run a large format-only rewrite.
 When adding or changing durable knowledge:
 
 1. Update the page itself.
-2. Add or fix links in [Index](index.md) if discoverability changed.
-3. Add one short entry to [Log](log.md) for meaningful changes.
-4. Move raw source material to `ai_studio/game_design/knowledge_base/sources/` if it should be preserved.
-5. Keep tooling optional; do not add a validator or script unless repeated
+2. Update this README only when entry-point guidance changes.
+3. Move raw source material to `ai_studio/game_design/knowledge_base/sources/` if it should be preserved.
+4. Keep tooling optional; do not add a validator or script unless repeated
    mistakes prove it would save time.

@@ -10,7 +10,7 @@ implementation-facing primary GDD.
 
 ## Start
 
-1. Read `ai_studio/game_design/gdd/README.md`.
+1. Read `ai_studio/game_design/gdd/core_workflow.md`.
 2. Locate or create the active game design folder under `games/<game-id>/design/`,
    including its private `knowledge/` base.
 3. State the current Definition of Done before writing broad docs.
@@ -35,6 +35,19 @@ implementation-facing primary GDD.
   `games/new_game.mjs --visibility public|private --require-visibility`;
   project-specific design and private knowledge stay under
   `games/<game-id>/design/`.
+
+## Knowledge By Gate
+
+After selecting the gate, load the first two matching reusable topics. Load the
+third only when an unresolved question directly needs it:
+
+| Gate | Knowledge topics |
+| --- | --- |
+| Concept | [player need lanes](../../../ai_studio/game_design/knowledge_base/knowledge/player_need_lanes.md), [iteration scope](../../../ai_studio/game_design/knowledge_base/knowledge/iteration_scope.md), [hybrid-casual patterns](../../../ai_studio/game_design/knowledge_base/knowledge/hybrid_casual_patterns.md) |
+| References | [reference deconstruction](../../../ai_studio/game_design/knowledge_base/knowledge/reference_deconstruction.md), [design review](../../../ai_studio/game_design/knowledge_base/knowledge/design_review.md), [art contract](../../../ai_studio/game_design/knowledge_base/knowledge/art_contract.md) |
+| Visual proof | [visual direction](../../../ai_studio/game_design/knowledge_base/knowledge/visual_direction.md), [art contract](../../../ai_studio/game_design/knowledge_base/knowledge/art_contract.md), [live-state matrix](../../../ai_studio/game_design/knowledge_base/knowledge/live_state_acceptance_matrix.md) |
+| First slice | [core loop](../../../ai_studio/game_design/knowledge_base/knowledge/core_loop.md), [reward feedback](../../../ai_studio/game_design/knowledge_base/knowledge/reward_feedback.md), [FTUE](../../../ai_studio/game_design/knowledge_base/knowledge/ftue.md) |
+| Handoff | [GDD application](../../../ai_studio/game_design/knowledge_base/knowledge/gdd_application.md), [iteration scope](../../../ai_studio/game_design/knowledge_base/knowledge/iteration_scope.md), [playtest validation](../../../ai_studio/game_design/knowledge_base/knowledge/playtest_validation.md) |
 
 ## Rules
 

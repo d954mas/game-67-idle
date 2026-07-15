@@ -517,7 +517,7 @@
             "path": "ai_studio/game_design/gdd",
             "owner": "GDD Owner",
             "description": "Reusable GDD workflow and document contracts.",
-            "entry": "ai_studio/game_design/gdd/README.md",
+            "entry": "ai_studio/game_design/gdd/core_workflow.md",
             "verifyDomain": "design",
             "coverage": "subtree"
           },

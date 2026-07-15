@@ -43,9 +43,17 @@ function tempRoot(t, options = {}) {
     for (const [group, id] of [["technical", "QTECH_001"], ["player_clarity", "QCLR_001"]]) {
       const checksRoot = join(dir, "ai_studio", "quality", "rules", group, "checks");
       mkdirSync(checksRoot, { recursive: true });
-      writeFileSync(join(dirname(checksRoot), "README.md"), `# ${group}\n`, "utf8");
       writeFileSync(join(checksRoot, `${id}_test.md`), `---\nid: ${id}\ngroup: ${group}\n---\n# ${id} Test\n`, "utf8");
     }
+    writeFileSync(join(dir, "ai_studio", "quality", "README.md"), `# Quality
+
+## Rule Catalog
+
+| Group | Rule | Use when | Do not use for |
+| --- | --- | --- | --- |
+| Technical | [QTECH_001](rules/technical/checks/QTECH_001_test.md) | technical behavior changes | presentation-only work |
+| Player Clarity | [QCLR_001](rules/player_clarity/checks/QCLR_001_test.md) | player state can be unclear | technical-only work |
+`, "utf8");
   }
   t.after(() => rmSync(dir, { recursive: true, force: true }));
   return dir;

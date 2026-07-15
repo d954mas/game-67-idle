@@ -9,32 +9,24 @@ or game implementation.
 
 Do not create ad-hoc quality rule IDs in project docs, generated templates, or
 tasks. New reusable rules belong under `ai_studio/quality/rules` and must be
-linked from the matching group README.
+listed in the catalog below.
 
-## Rule Groups
+## Rule Catalog
 
-Open the group or groups that match the changed work:
+Use this table to decide without loading rule files. After selecting an ID,
+open only its linked check.
 
-- [Player Clarity](rules/player_clarity/README.md): UI/UX, HUD, scene clarity,
-  sprite readability/state clarity, feedback, interactive elements, responsive
-  viewports, virtual controls, and player-facing presentation.
-- [Art](rules/art/README.md): art direction, composition, polish, generated
-  art, visual target fit, and final-looking output.
-- [GDD](rules/gdd/README.md): design source packages, source order, file roles,
-  contradictions, requirements, and acceptance criteria.
-- [Game Design](rules/game_design/README.md): core loop, player motivation,
-  economy, progression, feature fit, design data, and playable-slice strength.
-- [Technical](rules/technical/README.md): code, scripts, generated data,
-  runtime behavior, build/run proof, input, state, save/load, packaging, and
-  automation.
-- [Assets](rules/assets/README.md): sourced/generated/prepared assets,
-  provenance, licenses, manifests, publishability, and game-use-ready formats.
-
-Each group has numbered `checks/Q*_NNN_*.md` rules. Rule `001` is the basic
-group check when it matches the task.
-
-Read this file, then the relevant group README, then only the rules needed for
-the task.
+| Group | Rule | Use when | Do not use for |
+| --- | --- | --- | --- |
+| Player Clarity | [QCLR_001](rules/player_clarity/checks/QCLR_001_player_clarity.md) | a changed screen, HUD, feedback, or flow may obscure state or next action | pure geometry, art direction, technical invariants, assets, or game-loop design |
+| Player Clarity | [QCLR_002](rules/player_clarity/checks/QCLR_002_responsive_viewports.md) | viewport ratios or orientation can crop, overlap, hide, or misplace UI | unchanged layout or non-visual technical behavior |
+| Player Clarity | [QCLR_003](rules/player_clarity/checks/QCLR_003_virtual_controls.md) | touch controls may be unclear, unreachable, or cover gameplay/HUD | keyboard/controller delivery or virtual-control-free screens |
+| Art | [QART_001](rules/art/checks/QART_001_closest_practical_visual.md) | player-facing visuals need the closest practical final direction | clarity/layout, asset provenance, runtime behavior, or game-loop design |
+| GDD | [QGDD_001](rules/gdd/checks/QGDD_001_design_source_readiness.md) | a design package must guide implementation, review, or a lead decision | visual clarity, art/assets, runtime behavior, or loop quality |
+| Game Design | [QDES_001](rules/game_design/checks/QDES_001_playable_loop.md) | loop, economy, progression, rewards, or challenge change player action | source-package clarity, presentation, assets, or runtime proof |
+| Technical | [QTECH_001](rules/technical/checks/QTECH_001_behavior_evidence.md) | code, data, build, state, input, packaging, automation, or runtime behavior changes | presentation-only, art/assets, loop design, or source clarity |
+| Assets | [QASSET_001](rules/assets/checks/QASSET_001_asset_readiness.md) | an asset is accepted, published, copied, or claimed game-use-ready | presentation, art fit, or unrelated runtime behavior |
+| Assets | [QASSET_002](rules/assets/checks/QASSET_002_material_readiness.md) | conversion or preparation can lose textures, UVs, colors, maps, or assignments | non-material assets or unrelated presentation/runtime work |
 
 ## How To Use
 
@@ -43,7 +35,7 @@ change can need more than one group: for example, a player-facing asset change
 can need Assets for provenance/readiness, Player Clarity for visible
 understanding, and Technical for behavior evidence.
 
-Start with the group's `001` rule when its "Use When" section matches the task.
+Start with a group's `001` rule when its "Use When" section matches the task.
 If it does not match, use the more specific rule directly.
 
 Use numbered checks when the task matches their "Use When" section. If a

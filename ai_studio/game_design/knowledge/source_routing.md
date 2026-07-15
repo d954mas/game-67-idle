@@ -6,8 +6,9 @@ game-design research sources and reusable knowledge.
 ## Load First
 
 1. Use the already-loaded root rules.
-2. Read `ai_studio/game_design/knowledge_base/README.md`, `ai_studio/game_design/knowledge_base/knowledge/README.md`,
-   `ai_studio/game_design/knowledge_base/sources/README.md`, and `ai_studio/game_design/knowledge_base/knowledge/index.md`.
+2. Read `ai_studio/game_design/knowledge_base/README.md`,
+   `ai_studio/game_design/knowledge_base/knowledge/README.md`, and
+   `ai_studio/game_design/knowledge_base/sources/README.md`.
 3. If references guide gameplay, UI, economy, balance, or final art, also read
    `ai_studio/game_design/knowledge_base/knowledge/reference_deconstruction.md`.
 4. For templates, read `templates.md` only when creating or substantially

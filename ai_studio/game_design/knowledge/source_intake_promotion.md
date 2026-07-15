@@ -28,8 +28,6 @@ proof. If browsing or source access is missing, write the evidence gap plainly.
 3. Extract only reusable conclusions into `ai_studio/game_design/knowledge_base/knowledge/`, or
    game-specific conclusions into `games/<game-id>/design/knowledge/`.
 4. Link the conclusion back to its source note when the source matters.
-5. Update `ai_studio/game_design/knowledge_base/knowledge/index.md` when discoverability changes.
-6. Update `ai_studio/game_design/knowledge_base/knowledge/log.md` for meaningful reusable knowledge-base
-   changes. Keep the log short.
-7. Do not create a new knowledge page if a focused edit to an existing page is
+5. Update the knowledge README only when entry-point guidance changes.
+6. Do not create a new knowledge page if a focused edit to an existing page is
    clearer.

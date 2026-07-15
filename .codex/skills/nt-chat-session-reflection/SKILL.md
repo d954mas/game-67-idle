@@ -55,9 +55,9 @@ When useful, split problems into product, pipeline, and agent behavior.
 ## Durable Changes
 
 Do not edit files by default. If the user asks to preserve lessons, update the
-owning `ai_studio/` module README or `ai_studio/game_design/knowledge_base/knowledge/log.md`,
-depending on whether the lesson is workflow/tooling or reusable game-development
-knowledge. If the reflection creates project work, create or update taskboard
+owning `ai_studio/` module README or the focused reusable knowledge page,
+depending on whether the lesson is workflow/tooling or game-development
+knowledge. If the reflection creates project work, create or update Taskboard
 tasks instead of burying work only in the retrospective.
 
 ## Non-Negotiables

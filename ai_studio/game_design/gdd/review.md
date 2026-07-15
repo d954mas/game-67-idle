@@ -10,16 +10,9 @@ missing proof, stale source-of-truth, and player-facing confusion.
 
 ## Gate Review
 
-Check the current gate:
-
-- Concept: hook, fantasy, audience, platform, pillars, no-go list.
-- References: 3-7 refs, source quality, borrow, avoid, copy-risk.
-- Visual proof: gameplay fake shot or running-game proof exists and is visible.
-- First slice: first 30 seconds, first 5 minutes, loop, economy, UI flow.
-- Handoff: source order, phases, commands, acceptance gates, next prompt.
-
-If the claimed gate is not satisfied, report `partial` and name the missing
-piece.
+Check the current gate against
+[`core_workflow.md#Gates`](core_workflow.md#gates). If it is not satisfied,
+report `partial` and name the missing piece.
 
 ## Quality Routing
 
