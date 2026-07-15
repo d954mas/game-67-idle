@@ -86,7 +86,19 @@ return function(raise_internal)
   function items.costs(entries) return tagged("costs", { entries = entries }) end
   function items.free() return tagged("free", {}) end
   function items.define(definition)
-    declarations[#declarations + 1] = copy(definition)
+    local info = raw_debug.getinfo(2, "Sl")
+    local file = info and info.source or "items.lua.json"
+    if raw_type(file) == "string" and raw_string_sub(file, 1, 1) == "@" then
+      file = raw_string_sub(file, 2)
+    end
+    local copied = copy(definition)
+    copied.__studio_source = {
+      file = file,
+      line = info and info.currentline > 0 and info.currentline or 1,
+      column = 1,
+      kind = "definition",
+    }
+    declarations[#declarations + 1] = copied
   end
 
   local levels = {}
@@ -575,6 +587,13 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         ) from error
     if not isinstance(normalized_items, list):
         normalized_items = [] if normalized_items == {} else normalized_items
+    sources: dict[str, dict[str, Any]] = {}
+    for item in normalized_items if isinstance(normalized_items, list) else []:
+        if isinstance(item, dict):
+            source = item.pop("__studio_source", None)
+            item_id = item.get("id")
+            if isinstance(item_id, str) and isinstance(source, dict):
+                sources[item_id] = source
     max_rows = int(request.get("maxOutputRows", DEFAULT_MAX_OUTPUT_ROWS))
     if _output_rows(normalized_items) > max_rows:
         raise _failure(
@@ -590,6 +609,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
             "version": ".".join(map(str, runtime.lua_version)),
         },
         "items": normalized_items,
+        "sources": sources,
     }
     max_bytes = int(request.get("maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES))
     encoded_size = len(json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8"))

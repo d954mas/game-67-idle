@@ -45,5 +45,10 @@
       "stack": 1
     }
   ],
-  "schema": "items.lua.evaluation.v1"
+  "schema": "items.lua.evaluation.v1",
+  "sources": {
+    "game.gold": { "column": 1, "file": "game/items/currencies.lua", "kind": "definition", "line": 3 },
+    "game.iron_sword": { "column": 1, "file": "game/items/weapons.lua", "kind": "definition", "line": 4 },
+    "game.levelled_sword": { "column": 1, "file": "game/items/weapons.lua", "kind": "definition", "line": 12 }
+  }
 }

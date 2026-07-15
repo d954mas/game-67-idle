@@ -17,10 +17,23 @@ SPEC.loader.exec_module(SNAPSHOT)
 
 
 def evaluation(items):
+    source_lines = {
+        item_id: index + 3
+        for index, item_id in enumerate(sorted(item["id"] for item in items))
+    }
     return {
         "schema": "items.lua.evaluation.v1",
         "backend": {"module": "lupa.lua54", "version": "5.4"},
         "items": items,
+        "sources": {
+            item["id"]: {
+                "file": "game/items.lua",
+                "line": source_lines[item["id"]],
+                "column": 1,
+                "kind": "definition",
+            }
+            for item in items
+        },
     }
 
 
@@ -68,6 +81,14 @@ class ItemsSnapshotTests(unittest.TestCase):
         self.assertEqual([item["id"] for item in first["items"]], ["game.gold", "game.sword"])
         self.assertEqual(first["dependencies"], {"game.gold": [], "game.sword": ["game.gold"]})
         self.assertEqual(first["dependents"], {"game.gold": ["game.sword"], "game.sword": []})
+        self.assertEqual(first["sources"]["game.gold"]["file"], "game/items.lua")
+
+        moved = evaluation(copy.deepcopy(items))
+        moved["sources"]["game.gold"]["line"] = 300
+        self.assertEqual(
+            SNAPSHOT.build_snapshot(moved)["content_hash"],
+            first["content_hash"],
+        )
 
     def test_query_selects_one_item_field_and_level_range(self):
         snapshot = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
@@ -93,6 +114,12 @@ class ItemsSnapshotTests(unittest.TestCase):
             },
             "inputs": ["game.gold"],
             "dependents": [],
+            "source": {
+                "file": "game/items.lua",
+                "line": 4,
+                "column": 1,
+                "kind": "definition",
+            },
         })
 
         item_only = SNAPSHOT.query_snapshot(snapshot, item_id="game.gold")
@@ -111,6 +138,16 @@ class ItemsSnapshotTests(unittest.TestCase):
         bad_reference[1]["acquire"]["cost"]["item"]["id"] = "game.missing"
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.unknown_reference"):
             SNAPSHOT.build_snapshot(evaluation(bad_reference))
+
+        bad_source = evaluation(self.base_items())
+        bad_source["sources"]["game.gold"]["line"] = True
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.source"):
+            SNAPSHOT.build_snapshot(bad_source)
+
+        malformed_snapshot = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
+        malformed_snapshot["sources"]["game.gold"] = "not-a-source"
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.source"):
+            SNAPSHOT.query_snapshot(malformed_snapshot, item_id="game.gold")
 
     def test_query_requires_a_range_for_more_than_1000_levels(self):
         items = self.base_items()

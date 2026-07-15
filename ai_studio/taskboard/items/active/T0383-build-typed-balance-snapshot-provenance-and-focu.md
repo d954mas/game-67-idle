@@ -52,3 +52,5 @@ for C export, Viewer, requirements, and agents.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: items_snapshot_test 5/5, items_lua_sandbox_test 9/9, feature contracts pass, evaluator fixture query returned levels 2-3 and game.gold input.
 - 2026-07-15: Slice 1 review: ACCEPT after structured malformed-snapshot and CLI-argument diagnostics were added; items_snapshot_test now 6/6.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: reviewed items_snapshot_test 6/6, sandbox 9/9, feature contracts 8/8, Taskboard validation pass, evaluator fixture query levels 2-3/game.gold input.
+- 2026-07-15: Slice 2: evaluator now records each items.define Lua file/line; Snapshot keeps definition provenance outside content_hash and focused query returns it. Field/row spans and snippets remain open.
+- 2026-07-15: Quality: QTECH_001=pass; evidence: provenance review ACCEPT, lua sandbox 10/10, Snapshot 6/6 including hash/source and malformed-source cases, feature contracts pass, fixture query returned weapons.lua:12.

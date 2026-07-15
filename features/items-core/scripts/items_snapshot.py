@@ -76,6 +76,21 @@ def _references(value: Any) -> set[str]:
     return found
 
 
+def _source(value: Any, code: str, path: str) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        _fail(code, "source must be an object", path)
+    line = value.get("line")
+    column = value.get("column")
+    if (
+        not isinstance(value.get("file"), str) or not value["file"]
+        or type(line) is not int or line < 1
+        or type(column) is not int or column < 1
+        or value.get("kind") != "definition"
+    ):
+        _fail(code, "source requires file, positive line/column, and definition kind", path)
+    return _canonical(value, path)
+
+
 def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(evaluation, dict) or evaluation.get("schema") != EVALUATION_SCHEMA:
         _fail("snapshot.evaluation_schema", f"expected {EVALUATION_SCHEMA}")
@@ -130,6 +145,19 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
         "dependencies": dependencies,
         "dependents": dependents,
     }
+    raw_sources = evaluation.get("sources")
+    if raw_sources is not None:
+        if not isinstance(raw_sources, dict):
+            _fail("snapshot.sources", "evaluation sources must be an object", "$.sources")
+        sources: dict[str, dict[str, Any]] = {}
+        if not all(isinstance(item_id, str) for item_id in raw_sources):
+            _fail("snapshot.source", "source item ids must be strings", "$.sources")
+        for item_id in sorted(raw_sources):
+            source = raw_sources[item_id]
+            if item_id not in seen:
+                _fail("snapshot.source", f"invalid source for item: {item_id}", f"$.sources.{item_id}")
+            sources[item_id] = _source(source, "snapshot.source", f"$.sources.{item_id}")
+        snapshot["sources"] = sources
     backend = evaluation.get("backend")
     if backend is not None:
         if not isinstance(backend, dict):
@@ -228,6 +256,11 @@ def query_snapshot(
         if not isinstance(dependents, dict) or not isinstance(dependents.get(item_id, []), list):
             _fail("query.dependents", "snapshot dependents must map item ids to lists")
         result["dependents"] = dependents.get(item_id, [])
+    sources = snapshot.get("sources", {})
+    if not isinstance(sources, dict):
+        _fail("query.source", "snapshot sources must be an object", "$.sources")
+    if item_id in sources:
+        result["source"] = _source(sources[item_id], "query.source", f"$.sources.{item_id}")
     return result
 
 

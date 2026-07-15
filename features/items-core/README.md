@@ -119,7 +119,7 @@ evaluation, module exports are read-only, and `items.define` deep-copies its
 input. Source-byte, instruction, recursion, memory, wall-time, output-row, and
 output-byte budgets fail as structured `items.lua.error.v1` diagnostics.
 Successful output is canonical `items.lua.evaluation.v1` JSON with the backend
-fingerprint.
+fingerprint and the honest Lua file/line of each `items.define` call.
 
 Lua 5.4 was selected over bundled LuaJIT 2.1 on the representative
 currency/fixed-sword/levelled-sword workload: both exposed the required hooks,
@@ -137,8 +137,9 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 `items_snapshot.py build` turns only canonical evaluator JSON into one
 `items.snapshot.v1` document. It sorts item identities, hashes normalized
 content, retains the evaluator fingerprint, and derives inputs/dependents from
-actual typed references. `query` returns one item with an optional field and
-level range; more than 1000 level rows requires an explicit smaller range.
+actual typed references. Source locations remain separate from the content
+hash. `query` returns one item with its Lua definition location plus an optional
+field and level range; more than 1000 level rows requires an explicit smaller range.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py build --evaluation <evaluation.json> --out <snapshot.json>

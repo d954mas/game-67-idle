@@ -103,6 +103,23 @@ class ItemsLuaSandboxTests(unittest.TestCase):
         ])
         self.assertEqual(payload["items"][2]["levels"]["rows"][2]["attack"], 20)
 
+    def test_item_definition_sources_are_honest_and_stable(self):
+        result = self.evaluate({"game.items": '''-- heading
+local items = require("studio.items")
+items.define({ id="game.gold", kind="currency", stack=0 })
+'''}, ["game.items"])
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        payload = json.loads(result.stdout)
+        self.assertEqual(payload["sources"], {
+            "game.gold": {
+                "file": "game/items.lua",
+                "line": 3,
+                "column": 1,
+                "kind": "definition",
+            },
+        })
+
     def test_cycle_and_unapproved_module_errors_are_stable(self):
         cycle = self.evaluate({
             "game.a": 'require("game.b")',
