@@ -46,7 +46,9 @@ The full contract is E016 plus
 - [ ] What-if data is never a build input and can only become a reviewed Lua
       patch or `Edit with agent` request.
 - [ ] Developer UI and AI share semantic literal/table/curve/override edits with
-      expected hash, diff, undo, conflict refusal, and full validation.
+      expected hash, diff, undo, conflict refusal, and full validation. The UI
+      invokes T0366 operations directly and stores/replays only their returned
+      inverse patches; it owns no second writer.
 - [ ] Items-only empty/error/loading behavior, path boundaries, icon resolution,
       and Windows browser tests remain green through cutover.
 
@@ -62,6 +64,9 @@ The full contract is E016 plus
 - 2026-07-14: Marked the already accepted phase-1 Viewer criterion complete and
   removed the stale T0364 prerequisite; remaining criteria start at Snapshot
   cutover and Workbench behavior.
+
+- 2026-07-15: Confirmed ownership boundary with T0366: this task owns Developer
+  UI invocation plus session undo storage/replay over T0366 inverse patches.
 
 - 2026-07-14: Moved from E009 to E016 and absorbed T0367. One Workbench card now
   owns grid/chart/diff/what-if and shared semantic editing instead of a separate
