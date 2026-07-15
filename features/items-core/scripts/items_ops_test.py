@@ -74,7 +74,14 @@ def make_lock(def_ids: list[str], removed: dict | None = None, schema_version: i
     }
 
 
-def make_receipt_lock(def_ids: dict[str, dict], *, state_version: int = 1) -> dict:
+def make_receipt_lock(
+    def_ids: dict[str, dict],
+    *,
+    state_version: int = 1,
+    active_fields: list[str] | None = None,
+    reserved_fields: list[str] | None = None,
+    removed: dict | None = None,
+) -> dict:
     return {
         "schema": "game_seed.items_lock",
         "schema_version": 4,
@@ -84,10 +91,13 @@ def make_receipt_lock(def_ids: dict[str, dict], *, state_version: int = 1) -> di
             "lua_evaluation_schema": "items.lua.evaluation.v1",
             "snapshot_schema": "items.snapshot.v1",
             "state_schema": {"schema": "game_seed.items", "schema_version": 2, "version": state_version},
-            "field_ids": {"active": [], "reserved": []},
+            "field_ids": {
+                "active": active_fields or [],
+                "reserved": reserved_fields or [],
+            },
         },
         "def_ids": def_ids,
-        "removed": {},
+        "removed": removed or {},
     }
 
 
@@ -174,6 +184,44 @@ def run_receipt_upgrade(
     return rc, payload, lock_path
 
 
+def make_evaluation(*, fields: list[str], items: list[dict]) -> dict:
+    return {
+        "schema": "items.lua.evaluation.v1",
+        "backend": {"module": "lupa.lua54", "version": "5.4"},
+        "fields": [{"id": field_id, "member": field_id.rsplit(".", 1)[-1], "section": "level_row", "type": "i64"}
+                   for field_id in fields],
+        "items": items,
+        "kinds": sorted({item.get("kind") for item in items if isinstance(item.get("kind"), str)}),
+        "sources": {},
+    }
+
+
+def run_evaluation_receipt(
+    tmp_path: Path,
+    *,
+    evaluation: dict,
+    lock: dict | None,
+    state_version: int,
+    seal: bool,
+) -> tuple[int, dict, Path]:
+    evaluation_path = _write(tmp_path / "evaluation.json", evaluation)
+    lock_path = tmp_path / "lock.json"
+    if lock is not None:
+        _write(lock_path, lock)
+    state_path = _write(tmp_path / "state.json", make_state_schema(state_version))
+    argv = [
+        "seal-evaluation-receipt" if seal else "validate-evaluation-receipt",
+        "--evaluation", str(evaluation_path),
+        "--baseline", str(lock_path),
+        "--state-schema", str(state_path),
+        "--json",
+    ]
+    stdout = io.StringIO()
+    with contextlib.redirect_stdout(stdout):
+        rc = items_ops.main(argv)
+    return rc, json.loads(stdout.getvalue()), lock_path
+
+
 class ReceiptUpgradeTests(unittest.TestCase):
     def test_upgrade_has_exact_bytes_and_later_runs_are_noop(self):
         legacy_lock = {
@@ -249,6 +297,140 @@ class ReceiptUpgradeTests(unittest.TestCase):
                 make_state_schema(1),
                 legacy_lock,
             )
+
+
+class EvaluationReceiptTests(unittest.TestCase):
+    def test_seal_adds_current_history_updates_growth_and_is_exact_noop(self):
+        evaluation = make_evaluation(fields=["game.weapon.level.attack"], items=[
+            {"id": "game.gold", "kind": "currency", "stack": 0},
+            {"id": "game.sword", "kind": "weapon", "stack": 1,
+             "levels": {"mode": "table", "rows": [{"attack": 1}, {"attack": 2}, {"attack": 3}]}},
+        ])
+        baseline = make_receipt_lock({}, state_version=1)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            rc, payload, lock_path = run_evaluation_receipt(
+                tmp_path, evaluation=evaluation, lock=baseline, state_version=2, seal=True,
+            )
+            self.assertEqual(rc, 0)
+            self.assertTrue(payload["changed"])
+            sealed_bytes = lock_path.read_bytes()
+            sealed = json.loads(sealed_bytes)
+            self.assertEqual(sealed["receipt"]["field_ids"], {
+                "active": ["game.weapon.level.attack"], "reserved": [],
+            })
+            self.assertEqual(sealed["receipt"]["state_schema"]["version"], 2)
+            self.assertEqual(sealed["def_ids"], {
+                "game.gold": {"storage": "stack", "level_count": 0},
+                "game.sword": {"storage": "unique", "level_count": 3},
+            })
+
+            rc, payload, _ = run_evaluation_receipt(
+                tmp_path, evaluation=evaluation, lock=None, state_version=2, seal=True,
+            )
+            self.assertEqual(rc, 0)
+            self.assertFalse(payload["changed"])
+            self.assertEqual(lock_path.read_bytes(), sealed_bytes)
+
+    def test_validate_rejects_unreacted_item_and_field_compatibility_changes(self):
+        baseline = make_receipt_lock(
+            {"game.sword": {"storage": "unique", "level_count": 3}},
+            active_fields=["game.weapon.level.attack"],
+        )
+        cases = {
+            "storage-change-without-reaction": make_evaluation(fields=["game.weapon.level.attack"], items=[
+                {"id": "game.sword", "kind": "weapon", "stack": 0},
+            ]),
+            "level-shrink-without-reaction": make_evaluation(fields=["game.weapon.level.attack"], items=[
+                {"id": "game.sword", "kind": "weapon", "stack": 1,
+                 "levels": {"mode": "table", "rows": [{}, {}]}},
+            ]),
+            "field-removed-without-reaction": make_evaluation(fields=["game.weapon.level.damage"], items=[
+                {"id": "game.sword", "kind": "weapon", "stack": 1,
+                 "levels": {"mode": "table", "rows": [{}, {}, {}]}},
+            ]),
+            "removed-without-reaction": make_evaluation(fields=["game.weapon.level.attack"], items=[]),
+        }
+        for expected_rule, evaluation in cases.items():
+            with self.subTest(rule=expected_rule), tempfile.TemporaryDirectory() as tmp:
+                rc, payload, _ = run_evaluation_receipt(
+                    Path(tmp), evaluation=evaluation, lock=baseline, state_version=1, seal=False,
+                )
+                self.assertEqual(rc, 1)
+                self.assertIn(expected_rule, error_rules(payload))
+
+    def test_explicit_field_reservation_allows_rename_and_preserves_history(self):
+        baseline = make_receipt_lock(
+            {"game.sword": {"storage": "unique", "level_count": 1}},
+            reserved_fields=["game.weapon.level.attack"],
+        )
+        evaluation = make_evaluation(fields=["game.weapon.level.damage"], items=[
+            {"id": "game.sword", "kind": "weapon", "stack": 1,
+             "levels": {"mode": "single", "rows": [{"damage": 1}]}},
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, payload, lock_path = run_evaluation_receipt(
+                Path(tmp), evaluation=evaluation, lock=baseline, state_version=1, seal=True,
+            )
+            self.assertEqual(rc, 0)
+            self.assertTrue(payload["changed"])
+            field_ids = json.loads(lock_path.read_text(encoding="utf-8"))["receipt"]["field_ids"]
+            self.assertEqual(field_ids, {
+                "active": ["game.weapon.level.damage"],
+                "reserved": ["game.weapon.level.attack"],
+            })
+
+    def test_state_schema_cannot_regress_below_shipped_receipt(self):
+        baseline = make_receipt_lock({}, state_version=2)
+        evaluation = make_evaluation(fields=[], items=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, payload, _ = run_evaluation_receipt(
+                Path(tmp), evaluation=evaluation, lock=baseline, state_version=1, seal=False,
+            )
+        self.assertEqual(rc, 1)
+        self.assertIn("state-schema-regression", error_rules(payload))
+
+    def test_reserved_field_id_cannot_silently_reappear(self):
+        baseline = make_receipt_lock({}, reserved_fields=["game.weapon.level.attack"])
+        evaluation = make_evaluation(fields=["game.weapon.level.attack"], items=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, payload, _ = run_evaluation_receipt(
+                Path(tmp), evaluation=evaluation, lock=baseline, state_version=1, seal=False,
+            )
+        self.assertEqual(rc, 1)
+        self.assertIn("reserved-field-reused", error_rules(payload))
+
+    def test_restored_removed_item_keeps_storage_and_level_compatibility(self):
+        baseline = make_receipt_lock(
+            {}, state_version=2,
+            removed={
+                "game.sword": {
+                    "storage": "unique", "level_count": 3,
+                    "fragment_version": 2, "note": "removed",
+                },
+            },
+        )
+        evaluation = make_evaluation(fields=[], items=[
+            {"id": "game.sword", "kind": "weapon", "stack": 0},
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, payload, _ = run_evaluation_receipt(
+                Path(tmp), evaluation=evaluation, lock=baseline, state_version=2, seal=True,
+            )
+        self.assertEqual(rc, 1)
+        self.assertFalse(payload["changed"])
+        self.assertIn("storage-change-without-reaction", error_rules(payload))
+
+        shrunk = make_evaluation(fields=[], items=[
+            {"id": "game.sword", "kind": "weapon", "stack": 1,
+             "levels": {"mode": "table", "rows": [{}, {}]}},
+        ])
+        with tempfile.TemporaryDirectory() as tmp:
+            rc, payload, _ = run_evaluation_receipt(
+                Path(tmp), evaluation=shrunk, lock=baseline, state_version=2, seal=False,
+            )
+        self.assertEqual(rc, 1)
+        self.assertIn("level-shrink-without-reaction", error_rules(payload))
 
 
 class LockWorkflowTests(unittest.TestCase):

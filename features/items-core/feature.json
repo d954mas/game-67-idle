@@ -24,6 +24,8 @@
     "validate": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py validate",
     "schema": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py schema",
     "upgrade_receipt": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py upgrade-receipt",
+    "validate_evaluation_receipt": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py validate-evaluation-receipt",
+    "seal_evaluation_receipt": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py seal-evaluation-receipt",
     "test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops_test.py",
     "api_proof": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof.py --snapshot features/items-core/tests/fixtures/items_api_weapon_proof.json --out-dir <build-dir>",
     "api_proof_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof_test.py",

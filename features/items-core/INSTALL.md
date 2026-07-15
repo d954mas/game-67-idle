@@ -78,6 +78,19 @@ catalog. The command updates that same file atomically; repeated runs do nothing
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py upgrade-receipt --catalog <game>/content/items.json --schema <game>/content/item_fields.schema.json --baseline <game>/content/items.lock.json --state-schema <game>/state/items.schema.json
 ```
 
+After Lua evaluation, validate the current build against shipped history. Seal
+only at the release boundary; it is atomic and a repeated identical seal is a
+no-op:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py validate-evaluation-receipt --evaluation <build>/items.evaluation.json --baseline <game>/content/items.lock.json --state-schema <game>/state/items.schema.json
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py seal-evaluation-receipt --evaluation <build>/items.evaluation.json --baseline <game>/content/items.lock.json --state-schema <game>/state/items.schema.json
+```
+
+Move a deliberately removed field ID from `field_ids.active` to `reserved`.
+Item removal/storage/level reactions must include the corresponding delivered
+state migration before updating their frozen receipt entries.
+
 The items save fragment itself (`items_state.*`, generated) comes from
 `features/game-state/scripts/generate_state.py --fragment items` against the
 game's `state/items.schema.json` — this module does not generate the fragment,

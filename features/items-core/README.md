@@ -101,6 +101,12 @@ returns the authored integer, never a derived object.
   Older removed definitions whose metadata cannot be recovered are marked
   `storage: unknown`, `level_count: null` rather than guessed.
   Later runs are no-op.
+- `items_ops.py validate-evaluation-receipt ...` — read-only compatibility
+  check for canonical evaluator JSON against shipped field/item history.
+- `items_ops.py seal-evaluation-receipt ...` — atomic write-if-different release
+  seal. It adds new active field/item IDs and raises shipped level bounds, but
+  refuses unreacted removal/rename, storage changes, level shrink, or state
+  schema regression.
 
 Every path is passed explicitly by the caller. `validate` is a strict superset
   of the generator's sanity net (imports it,

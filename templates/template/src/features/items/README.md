@@ -195,7 +195,8 @@ game has shipped NOTHING to ITS OWN players yet.
 **Everyday cases:**
 - **Adding a new item and shipping it — READ THIS ONE TWICE.** Once a def_id
   has gone out in a release, you MUST add it to `def_ids` with its storage and
-  shipped level bound. **This is the
+  shipped level bound. The current JSON path remains manual until T0386; the
+  Lua path uses `seal-evaluation-receipt` at release time. **For JSON this is the
   ONE manual, unenforced link in the whole chain** — nothing currently
   catches "you forgot to append a newly-shipped id to the lock" (only the
   REVERSE mistake, removing a locked id, is machine-enforced). Miss this step
@@ -205,7 +206,8 @@ game has shipped NOTHING to ITS OWN players yet.
 - **Editing an item that is still unreleased** (not yet in `def_ids`): free
   to rename/remove, no guard fires — it never shipped.
 - **Restoring a previously removed def:** if a def_id in `removed` reappears
-  in the catalog, `validate` only WARNS (`removed-def-restored`) —
+  with compatible stored storage/level bounds, `validate` only WARNS
+  (`removed-def-restored`); incompatible restoration fails —
   restoration is legal, `reconcile()` un-quarantines any matching saved
   records. Move the id back to `def_ids` and drop its `removed` entry once
   you are sure the restoration is permanent. **If a def might come back,
