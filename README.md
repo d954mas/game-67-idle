@@ -44,8 +44,8 @@ textured mesh paths, a movement system, screenshot capture).
 VS Code users can use Run and Debug entries such as
 `Debug Template: template (native debug)`. Build, pack, and run tasks are
 generated from scanned public game/template folders by
-`node ai_studio/dev_environment/vscode_projects.mjs`; `games/new_game.mjs` and
-`templates/new_template.mjs` refresh them after creating a project.
+`node ai_studio/dev_environment/vscode_projects.mjs`; `games/new_game.mjs`
+refreshes them after creating a project.
 
 ```powershell
 cmake -S templates/template -B templates/template/build/native-debug -G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_BUILD_TYPE=Debug

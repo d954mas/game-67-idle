@@ -115,7 +115,6 @@ test("mixed changed paths collapse to stable owner domains", () => {
     "templates/template/tools/portal_evidence.mjs",
     "templates/template/tools/portal_evidence.test.mjs",
     "games/new_game.test.mjs",
-    "templates/new_template.test.mjs",
     "ai_studio/studio.mjs",
     "ai_studio/studio.test.mjs",
     "templates/template/release/README.md",

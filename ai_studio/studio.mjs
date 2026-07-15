@@ -145,7 +145,6 @@ const CHECKS = Object.freeze([
   { id: "features.items-core", pythonRoots: ["features/items-core"] },
   { id: "features.progression-core", pythonRoots: ["features/progression-core"] },
   { id: "reference-template", testFiles: [
-    "templates/new_template.test.mjs",
     "templates/template/tools/build_web.test.mjs",
     "templates/template/tools/game.test.mjs",
     "templates/template/tools/package_web.test.mjs",

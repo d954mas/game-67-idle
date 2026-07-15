@@ -7,9 +7,8 @@ AI Studio surfaces and `games/new_game.mjs --template <template-id>` can find it
 by scanning `templates/<template-id>`.
 Each template also owns `game-dependencies.json`, the explicit engine/feature
 seed used to create exact game-owned dependency records.
-Use `node templates/new_template.mjs --id <template-id>` when creating
-a new reusable template; it registers the template and refreshes VS Code
-build/run entries.
+Reusable templates are maintained directly in their folders; the Studio scans
+their `template.json` manifests without a registration step.
 
 Creating a game copies the selected template into `games/<game-id>/`. After
 that copy, the game owns its files; later template edits do not automatically

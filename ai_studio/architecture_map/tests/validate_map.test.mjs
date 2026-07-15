@@ -440,7 +440,7 @@ test("root-file and child-directory scan roots report workspace root commands", 
     }),
   );
   write(root, "templates/base/README.md", "# mapped template");
-  write(root, "templates/new_template.mjs", "console.log('new template');");
+  write(root, "templates/helper.mjs", "console.log('template helper');");
   write(root, "templates/new-template/README.md", "# unmapped template");
 
   const validation = report({
@@ -452,11 +452,11 @@ test("root-file and child-directory scan roots report workspace root commands", 
     trackedPaths: [...fixtureFiles.get(root)],
   }), [
     "templates/base",
-    "templates/new_template.mjs",
+    "templates/helper.mjs",
     "templates/new-template",
   ]);
   assert.deepEqual(validation.issues.unmappedOutsideAiStudio, [
-    { path: "templates/new_template.mjs" },
+    { path: "templates/helper.mjs" },
     { path: "templates/new-template" },
   ]);
 });

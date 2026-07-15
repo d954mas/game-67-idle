@@ -63,8 +63,6 @@ This resolves `game:<game-id>` under `games/private/`, runs the workspace
 preflight, and writes game-local `.vscode/tasks.json` and `.vscode/launch.json`.
 It does not touch parent `.vscode/`.
 
-Games and templates call this generator after creating a project, but the
-project creation commands live with their workspace roots:
+Public game creation calls this generator after creating a project:
 
 - `games/new_game.mjs`
-- `templates/new_template.mjs`
