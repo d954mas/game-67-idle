@@ -56,6 +56,8 @@ Escalated approval-review time is reported as coordination time rather than as
 execution time for the command that was waiting for approval.
 The report names the noisiest single command as well as aggregate tool output,
 so broad reads can be replaced with scoped queries.
+Parallel `functions.exec` batches stay labeled as composite calls because their
+shared timing and output cannot be attributed honestly to one nested command.
 
 Show subagent transcript diagnostics:
 

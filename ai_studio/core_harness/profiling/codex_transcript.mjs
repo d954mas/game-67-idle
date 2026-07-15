@@ -54,16 +54,17 @@ function parseArguments(raw) {
   try { return JSON.parse(String(raw || "{}")); } catch { return {}; }
 }
 
-function embeddedCommand(input) {
+function embeddedCommands(input) {
   const source = String(input || "");
-  const quoted = source.match(/["']?command["']?\s*:\s*("(?:\\.|[^"\\])*")/s);
-  if (quoted) {
-    try { return JSON.parse(quoted[1]); } catch { /* fall through */ }
+  const commands = [];
+  for (const quoted of source.matchAll(/["']?command["']?\s*:\s*("(?:\\.|[^"\\])*")/gs)) {
+    try { commands.push(JSON.parse(quoted[1])); } catch { /* try other forms */ }
   }
-  const single = source.match(/["']?command["']?\s*:\s*'((?:\\.|[^'\\])*)'/s);
-  if (single) return single[1].replace(/\\'/g, "'").replace(/\\\\/g, "\\");
-  const template = source.match(/["']?command["']?\s*:\s*`([^`$]*)`/s);
-  return template ? template[1] : "";
+  for (const single of source.matchAll(/["']?command["']?\s*:\s*'((?:\\.|[^'\\])*)'/gs)) {
+    commands.push(single[1].replace(/\\'/g, "'").replace(/\\\\/g, "\\"));
+  }
+  for (const template of source.matchAll(/["']?command["']?\s*:\s*`([^`$]*)`/gs)) commands.push(template[1]);
+  return commands.filter((command) => String(command).trim());
 }
 
 function commandFor(payload) {
@@ -75,7 +76,12 @@ function commandFor(payload) {
     }
     return name;
   }
-  if (name === "exec") return embeddedCommand(payload.input) || "functions.exec";
+  if (name === "exec") {
+    const commands = embeddedCommands(payload.input);
+    if (commands.length === 1) return commands[0];
+    if (commands.length > 1) return `functions.exec (${commands.length} nested calls)`;
+    return "functions.exec";
+  }
   return name;
 }
 

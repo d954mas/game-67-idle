@@ -657,6 +657,49 @@ test("status attributes escalated approval time to approval review, not the comm
   }
 });
 
+test("status does not attribute a parallel exec output to its first nested command", () => {
+  const dir = tempDir();
+  try {
+    const sessionId = "019f5bd1-2291-7941-b366-13e7327eebc3";
+    const sessionDir = join(dir, "sessions", "2026", "07", "15");
+    const transcript = join(sessionDir, `rollout-2026-07-15T10-00-00-${sessionId}.jsonl`);
+    const statusJson = join(dir, "status.json");
+    mkdirSync(sessionDir, { recursive: true });
+    writeJsonl(transcript, [
+      { timestamp: "2026-07-15T05:00:00.000Z", type: "session_meta", payload: { id: sessionId } },
+      {
+        timestamp: "2026-07-15T05:00:01.000Z",
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call",
+          call_id: "call_parallel",
+          name: "exec",
+          input: "const results = await Promise.all([tools.shell_command({command:\"node first.mjs\"}), tools.shell_command({command:\"git status --short\"})]); results.forEach(text);",
+        },
+      },
+      {
+        timestamp: "2026-07-15T05:00:02.000Z",
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call_output",
+          call_id: "call_parallel",
+          output: "Script completed\n" + "x".repeat(1200),
+        },
+      },
+    ]);
+
+    run(["ai_studio/core_harness/profiling/status.mjs", "--complete", "--json-output", statusJson], {
+      env: { CODEX_SESSION_FILE: "", CODEX_SESSION_ROOT: join(dir, "sessions"), CODEX_THREAD_ID: sessionId },
+    });
+    const status = readJson(statusJson);
+    assert.deepEqual(status.noisiest_record.commands, ["functions.exec (2 nested calls)"]);
+    assert.ok(status.output_rollup.by_chars.some((entry) => entry.key === "functions.exec"));
+    assert.ok(status.output_rollup.by_chars.every((entry) => entry.key !== "node first.mjs"));
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status recommends a checkpoint for a four-hour working session", () => {
   const dir = tempDir();
   try {
