@@ -8,6 +8,7 @@ priority: P1
 tags: [items, codegen, c, cache]
 created: 2026-07-10
 updated: 2026-07-15
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"Runtime package review ACCEPT after canonical span ownership, full FIELD validation, fail-early budgets, and positive-cost fixes; package tests 5/5 including resigned corruption; all items-core 83/83 before final positive-cost guard plus targeted 5/5 after; studio verify --changed passed features domain; git diff check clean"}]}
 ---
 
 ## What
@@ -65,3 +66,5 @@ package without runtime Lua/JSON parsing.
   the logical asset, catalog-before-state gate, wire/fingerprint checks, and
   honest pack/transport/memory metrics.
 - 2026-07-15: Started after T0383 implementation reached review. First slice will define and measure the minimal Snapshot-only compact package boundary; Linux benchmark evidence remains a later proof gate, not a reason to duplicate evaluator logic.
+- 2026-07-15: Slice 1: added Snapshot-only items runtime package v1 builder plus strict Python reference inspector. The 504-byte vertical fixture uses fixed-width little-endian aligned sections, deduplicated strings, stable XXH64 item/schema/content fingerprints, flat item/field/level/value/cost rows, exact ownership coverage, and early row/byte budgets. Unsupported item capabilities fail instead of being silently dropped; C binding and generated ABI headers remain next.
+- 2026-07-15: Quality: QTECH_001=pass; evidence: Runtime package review ACCEPT after canonical span ownership, full FIELD validation, fail-early budgets, and positive-cost fixes; package tests 5/5 including resigned corruption; all items-core 83/83 before final positive-cost guard plus targeted 5/5 after; studio verify --changed passed features domain; git diff check clean
