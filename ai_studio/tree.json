@@ -235,7 +235,7 @@
             "owner": "Workflow Owner",
             "description": "Enforcement labels, proof routes, and shared workflow policy.",
             "entry": "ai_studio/core_harness/workflow/README.md",
-            "contract": "ai_studio/core_harness/workflow/enforcement_contract.json",
+            "contract": "ai_studio/core_harness/workflow/README.md",
             "verifyDomain": "harness",
             "coverage": "subtree"
           },

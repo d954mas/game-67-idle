@@ -98,11 +98,9 @@ Record any override as explicit lead acceptance, not as an agent decision.
 
 ## Enforcement Boundary
 
-Material rules are classified in
-[`enforcement_contract.json`](enforcement_contract.json) as `host-enforced`,
-`repository-validator-enforced`, or `process convention`. Logs and quality
-outcomes report observed evidence; they do not imply a repository model router
-or turn an advisory process instruction into technical enforcement.
+Mechanical gates are CI `verify --full` on master, `doc_reference_check`,
+`agent_surfaces sync --check`, and the Taskboard quality gate for closing work
+in `store.mjs`. Everything else is advisory; the lead is the backstop.
 
 ## Task Log
 
@@ -120,10 +118,6 @@ Entry shape:
 ```text
 - YYYY-MM-DD: Changed/validated/accepted <scope>. Evidence: <command or result>. Open: <optional next issue>.
 ```
-
-Use `Observed:` only for host or validator evidence that actually ran. Use
-`Advisory:` for review conclusions and process conventions; neither task logs
-nor Quality outcomes turn advisory instructions into enforcement.
 
 Delegation entries should show the worker task and the integrated outcome:
 
@@ -143,7 +137,6 @@ approval, reuse, and waiting rules live in `orchestration/README.md`.
 
 - `README.md`: canonical short workflow contract.
 - `orchestration/README.md`: delegation rule for broad read-heavy work.
-- `enforcement_contract.json`: enforcement labels and evidence routes.
 
 ## Validation
 
@@ -151,6 +144,5 @@ Workflow docs are checked by:
 
 ```powershell
 node ai_studio/core_harness/validation/doc_reference_check.mjs
-node ai_studio/core_harness/validation/enforcement_check.mjs
 node ai_studio/architecture_map/validate_map.mjs
 ```

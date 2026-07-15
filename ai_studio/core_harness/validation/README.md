@@ -26,8 +26,6 @@ Not checked here:
 
 - `doc_reference_check.mjs`: checks agent-facing Markdown for stale local file
   references.
-- `enforcement_check.mjs`: validates enforcement classifications and proof
-  links from `../workflow/enforcement_contract.json`.
 
 ## When To Use
 
@@ -36,7 +34,5 @@ entrypoints.
 
 ```powershell
 node ai_studio/core_harness/validation/doc_reference_check.mjs
-node ai_studio/core_harness/validation/enforcement_check.mjs
 node --test ai_studio/core_harness/validation/tests/doc_reference_check.test.mjs
-node --test ai_studio/core_harness/validation/tests/enforcement_check.test.mjs
 ```

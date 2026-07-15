@@ -84,10 +84,9 @@ recorded only in final responses, PR/review comments, or other artifacts.
 The profile is diagnostic. It shows which rules are used often and which ones
 block or remain unverified, but it is not a global validator.
 
-Quality outcomes are process records. Name executed host or repository proof
-as observed evidence; name review guidance as advisory. The enforcement labels
-and evidence routes live in
-[`enforcement_contract.json`](../core_harness/workflow/enforcement_contract.json).
+Quality outcomes are process records. Mechanical gates and the advisory
+boundary are summarized in the
+[Core Harness workflow](../core_harness/workflow/README.md#enforcement-boundary).
 
 Module implementation tests stay with the owning module.
 

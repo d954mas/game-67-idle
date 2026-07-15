@@ -110,7 +110,6 @@ const CHECKS = Object.freeze([
     testRoots: ["ai_studio/core_harness"],
     commands: [
       ["node", "ai_studio/core_harness/validation/doc_reference_check.mjs"],
-      ["node", "ai_studio/core_harness/validation/enforcement_check.mjs"],
       ["node", "ai_studio/core_harness/agent_surfaces/sync.mjs", "--check"],
     ],
   },

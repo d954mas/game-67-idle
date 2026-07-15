@@ -1,7 +1,7 @@
 @AGENTS.md
 
-Enforcement labels and proof routes are defined in
-`ai_studio/core_harness/workflow/enforcement_contract.json`.
+Mechanical gates and the advisory boundary are summarized in
+`ai_studio/core_harness/workflow/README.md#enforcement-boundary`.
 
 ## Claude orchestration overlay
 
