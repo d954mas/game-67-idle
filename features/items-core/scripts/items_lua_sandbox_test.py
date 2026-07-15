@@ -377,7 +377,7 @@ gold.id = "game.changed"
         self.assert_error(timeout, "sandbox.timeout", "game/loop.lua", 1)
 
         recursion = self.evaluate({"game.deep": '''
-local function recurse() return 1 + recurse() end
+local function recurse() local value = recurse(); return value end
 recurse()
 '''}, ["game.deep"], "--recursion-limit", "32")
         self.assert_error(recursion, "sandbox.recursion_limit", "game/deep.lua", 2)
@@ -446,25 +446,40 @@ items.define({ id="game.a", description="abcdefghijklmnopqrstuvwxyz" })
         generated = self.evaluate({"game.generated": '''
 local items = require("studio.items")
 local levels = require("studio.levels")
+items.define({ id="game.gold", stack=0 })
+local gold = items.ref("game.gold")
 items.define({
   id="game.sword",
   stack=1,
   levels=levels.generate({
     max_level=3,
-    row=function(level, calc) return { attack=calc.mul(level, 5) } end,
+    attack=function(level, calc) return calc.mul(level, 5) end,
+    cost_to_reach=function(level, calc)
+      if level == 1 then return nil end
+      return items.cost(gold, calc.mul(level, 10))
+    end,
   }),
 })
 '''}, ["game.generated"])
         self.assertEqual(generated.returncode, 0, generated.stderr)
-        rows = json.loads(generated.stdout)["items"][0]["levels"]["rows"]
+        sword = next(
+            item for item in json.loads(generated.stdout)["items"]
+            if item["id"] == "game.sword"
+        )
+        rows = sword["levels"]["rows"]
         self.assertEqual([row["attack"] for row in rows], [5, 10, 15])
+        self.assertNotIn("cost_to_reach", rows[0])
+        self.assertEqual(
+            [row["cost_to_reach"]["count"] for row in rows[1:]],
+            [20, 30],
+        )
 
         captured = self.evaluate({"game.captured": '''
 local items = require("studio.items")
 local levels = require("studio.levels")
 local mutable = 5
 items.define({ id="game.sword", levels=levels.generate({
-  max_level=2, row=function(level, calc) return calc.mul(level, mutable) end,
+  max_level=2, attack=function(level, calc) return calc.mul(level, mutable) end,
 }) })
 '''}, ["game.captured"])
         self.assert_error(captured, "formula.mutable_upvalue", "game/captured.lua", 5)
@@ -473,13 +488,78 @@ items.define({ id="game.sword", levels=levels.generate({
 local items = require("studio.items")
 local levels = require("studio.levels")
 items.define({ id="game.sword", levels=levels.generate({
-  max_level=2, row=function(level, calc) return require("studio.math").mul(level, 5) end,
+  max_level=2, attack=function(level, calc) return require("studio.math").mul(level, 5) end,
 }) })
 '''}, ["game.environment"])
         self.assert_error(environment, "formula.mutable_upvalue", "game/environment.lua", 4)
 
+        reassigned = self.evaluate({"game.reassigned": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.gold", stack=0 })
+local gold = items.ref("game.gold")
+items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=2,
+  attack=function(level) return level end,
+  cost_to_reach=function(level)
+    if level == 1 then return nil end
+    local captured = gold
+    gold = nil
+    return items.cost(captured, 1)
+  end,
+}) })'''
+        }, ["game.reassigned"])
+        self.assert_error(reassigned, "formula.mutable_upvalue", "game/reassigned.lua", 5)
+
+        late_definition = self.evaluate({"game.late": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
+  attack=function(level)
+    items.define({ id="game.late" })
+    return level
+  end,
+}) })'''
+        }, ["game.late"])
+        self.assert_error(late_definition, "evaluation.phase", "game/late.lua", 5)
+
+        forged_ref = self.evaluate({"game.forged": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.gold", stack=0 })
+items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=2,
+  attack=function(level) return level end,
+  cost_to_reach=function(level)
+    if level == 1 then return nil end
+    return items.cost({ __studio_kind="item_ref", id="game.gold" }, 1)
+  end,
+}) })'''
+        }, ["game.forged"])
+        self.assert_error(forged_ref, "cost.contract", "game/forged.lua", 6)
+
         exponent = self.evaluate({"game.exponent": "local value = 2 ^ 3"}, ["game.exponent"])
-        self.assert_error(exponent, "source.raw_exponentiation", "game/exponent.lua", 1)
+        self.assert_error(exponent, "source.raw_arithmetic", "game/exponent.lua", 1)
+
+        unchecked = self.evaluate({"game.unchecked": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
+  attack=function(level) return level * 9007199254740991 end,
+}) })'''
+        }, ["game.unchecked"])
+        self.assert_error(unchecked, "source.raw_arithmetic", "game/unchecked.lua", 4)
+
+        unsafe_literal = self.evaluate({"game.literal": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
+  attack=function() return 9007199254740992 end,
+}) })'''
+        }, ["game.literal"])
+        self.assert_error(unsafe_literal, "formula.math", "game/literal.lua", 4)
+
+        unsafe_override = self.evaluate({"game.override": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=1,
+  attack=function(level) return level end,
+  overrides={ [1]={ attack=9007199254740992 } },
+}) })'''
+        }, ["game.override"])
+        self.assert_error(unsafe_override, "formula.math", "game/override.lua", 3)
 
         harmless = self.evaluate({"game.text": '''
 local items = require("studio.items")
@@ -487,6 +567,25 @@ local items = require("studio.items")
 items.define({ id="game.note", description="2 ^ 3" })
 '''}, ["game.text"])
         self.assertEqual(harmless.returncode, 0, harmless.stderr)
+
+        missing_transition = self.evaluate({"game.generated": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.sword", stack=1,
+  levels=levels.generate({ max_level=2, attack=function(level) return level end }),
+})'''
+        }, ["game.generated"])
+        self.assert_error(missing_transition, "levels.transition_required", "game/generated.lua", 4)
+
+        level_one_transition = self.evaluate({"game.generated": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.sword", stack=1,
+  levels=levels.generate({ max_level=2,
+    attack=function(level) return level end,
+    cost_to_reach=function() return items.free() end,
+  }),
+})'''
+        }, ["game.generated"])
+        self.assert_error(level_one_transition, "levels.level_one_transition", "game/generated.lua", 4)
 
     def test_level_tables_and_composite_costs_are_normalized(self):
         gap = self.evaluate({"game.items": '''local items = require("studio.items")
@@ -581,7 +680,7 @@ items.define({ id="game.sword", stack=1, acquire={ cost=items.costs({
     def test_non_finite_output_and_non_string_errors_are_stable(self):
         non_finite = self.evaluate({"game.number": '''
 local items = require("studio.items")
-items.define({ id="game.number", value=1/0 })
+items.define({ id="game.number", value=1e309 })
 '''}, ["game.number"])
         self.assert_error(non_finite, "output.non_finite", "game/number.lua", 1)
 

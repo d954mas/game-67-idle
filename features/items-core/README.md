@@ -125,7 +125,7 @@ deterministic primitives, `require`, `studio.items`, `studio.levels`,
 `studio.field`, and the checked integer `studio.math` surface. Filesystem,
 process/environment, clock,
 random, network, dynamic loading, bytecode, debug/FFI/JIT, unordered iteration,
-mutable globals, and formula upvalues are absent.
+mutable globals, and unapproved/mutable formula upvalues are absent.
 
 The manifest allowlists module names and files; entries are sorted before
 evaluation, module exports are read-only, and `items.define` deep-copies its
@@ -140,7 +140,12 @@ Successful output is canonical `items.lua.evaluation.v1` JSON with registered
 `fields`/`kinds`, the backend fingerprint, and the honest Lua file/line of each
 `items.define` call. Typed field-value validation remains the Snapshot boundary.
 Level tables require contiguous keys, levelled items use unique storage, and
-explicit level 2+ rows require a paid or explicit-free transition. Composite
+level 2+ rows require a paid or explicit-free transition. `levels.generate`
+uses an explicit `max_level` and named formula columns; formulas may capture
+only immutable Studio APIs/item refs, cannot change those captures, and run
+after schema/definition registration has closed. Raw Lua arithmetic/bitwise
+operators are rejected in favor of `studio.math`, and both formula and override
+integers must remain in its exact range. Composite
 costs accept only stackable resources and merge duplicate refs with checked,
 deterministic sums.
 

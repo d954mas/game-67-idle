@@ -35,12 +35,18 @@ return function(raise_internal)
   local declarations = {}
   local schema_extensions = {}
   local frozen_targets = {}
+  local formula_safe_upvalues = {}
+  local formula_upvalues = {}
+  local formula_sources = {}
+  local active_formula_source = nil
+  local authentic_item_refs = {}
   local source_metadata = {}
+  local evaluation_finalizing = false
   local freeze
 
   local function fail(code, message)
     local source, line = "items.lua.json", 1
-    for level = 2, 12 do
+    for level = 2, 32 do
       local info = raw_debug.getinfo(level, "Sl")
       if info == nil then break end
       if raw_type(info.source) == "string" and raw_string_sub(info.source, 1, 1) == "@"
@@ -49,6 +55,9 @@ return function(raise_internal)
         line = info.currentline > 0 and info.currentline or 1
         break
       end
+    end
+    if source == "items.lua.json" and active_formula_source ~= nil then
+      source, line = active_formula_source.file, active_formula_source.line
     end
     return raise_internal(code, message, source, line)
   end
@@ -68,26 +77,37 @@ return function(raise_internal)
   local function copy(value, seen)
     if raw_type(value) ~= "table" then return value end
     local source = source_metadata[value]
+    local authentic_item_ref = authentic_item_refs[value]
     value = frozen_targets[value] or value
     seen = seen or {}
     if seen[value] then return fail("declaration.cycle", "cyclic declaration table") end
     seen[value] = true
     local out = {}
     if source ~= nil then source_metadata[out] = source end
+    if authentic_item_ref then authentic_item_refs[out] = true end
     for key, child in raw_pairs(value) do out[copy(key, seen)] = copy(child, seen) end
     seen[value] = nil
     return out
   end
 
-  local function source_at(level)
-    local info = raw_debug.getinfo(level, "Sl")
-    local file = info and info.source or "items.lua.json"
-    if raw_type(file) == "string" and raw_string_sub(file, 1, 1) == "@" then
-      file = raw_string_sub(file, 2)
+  local function source_at(_level)
+    for level = 2, 32 do
+      local info = raw_debug.getinfo(level, "Sl")
+      if info == nil then break end
+      local file = info.source
+      if raw_type(file) == "string" and raw_string_sub(file, 1, 1) == "@"
+          and file ~= "@studio/sandbox.lua" then
+        return {
+          file = raw_string_sub(file, 2),
+          line = info.currentline > 0 and info.currentline or 1,
+          column = 1,
+        }
+      end
     end
+    if active_formula_source ~= nil then return active_formula_source end
     return {
-      file = file,
-      line = info and info.currentline > 0 and info.currentline or 1,
+      file = "items.lua.json",
+      line = 1,
       column = 1,
     }
   end
@@ -96,21 +116,36 @@ return function(raise_internal)
     value.__studio_kind = kind
     local proxy = freeze(value)
     if source ~= nil then source_metadata[proxy] = source end
+    if kind == "item_ref" then
+      authentic_item_refs[proxy] = true
+      formula_safe_upvalues[proxy] = true
+    end
     return proxy
   end
 
   local items = {}
-  function items.ref(id) return tagged("item_ref", { id = id }, source_at(3)) end
+  function items.ref(id)
+    if evaluation_finalizing then
+      return fail("evaluation.phase", "item refs must be registered before formula evaluation")
+    end
+    return tagged("item_ref", { id = id }, source_at(3))
+  end
   function items.cost(item, count) return tagged("cost", { item = item, count = count }, source_at(3)) end
   function items.costs(entries) return tagged("costs", { entries = entries }, source_at(3)) end
   function items.free() return tagged("free", {}, source_at(3)) end
   function items.define(definition)
+    if evaluation_finalizing then
+      return fail("evaluation.phase", "item definitions are closed before formula evaluation")
+    end
     local copied = copy(definition)
     copied.__studio_source = source_at(3)
     copied.__studio_source.kind = "definition"
     declarations[#declarations + 1] = copied
   end
   function items.extend_schema(extension)
+    if evaluation_finalizing then
+      return fail("evaluation.phase", "schema extensions are closed before formula evaluation")
+    end
     if raw_type(extension) ~= "table" then
       return fail("schema.contract", "items.extend_schema requires a table")
     end
@@ -137,17 +172,47 @@ return function(raise_internal)
     return tagged("levels", { mode = "table", rows = rows }, source_at(3))
   end
   function levels.generate(options)
-    if raw_type(options) ~= "table" or raw_type(options.row) ~= "function" then
-      return fail("formula.contract", "levels.generate requires max_level and row")
+    if raw_type(options) ~= "table" then
+      return fail("formula.contract", "levels.generate requires max_level and formula columns")
     end
-    local index = 1
-    while true do
-      local name = raw_debug.getupvalue(options.row, index)
-      if name == nil then break end
-      return fail("formula.mutable_upvalue", "formula captures mutable upvalue")
+    local columns, count = {}, 0
+    for name, formula in raw_pairs(options) do
+      if name ~= "max_level" and name ~= "overrides" then
+        if raw_type(name) ~= "string" or raw_type(formula) ~= "function" then
+          return fail("formula.contract", "generated columns must be named functions")
+        end
+        local captured, index = {}, 1
+        while true do
+          local upvalue_name, value = raw_debug.getupvalue(formula, index)
+          if upvalue_name == nil then break end
+          if raw_type(value) ~= "table" or formula_safe_upvalues[value] ~= true then
+            return fail("formula.mutable_upvalue", "formula captures mutable upvalue")
+          end
+          captured[index] = value
+          index = index + 1
+        end
+        formula_upvalues[formula] = captured
+        local info = raw_debug.getinfo(formula, "S")
+        local file = info and info.source or "items.lua.json"
+        if raw_type(file) == "string" and raw_string_sub(file, 1, 1) == "@" then
+          file = raw_string_sub(file, 2)
+        end
+        formula_sources[formula] = {
+          file = file,
+          line = info and info.linedefined > 0 and info.linedefined or 1,
+          column = 1,
+        }
+        columns[name], count = formula, count + 1
+      end
+    end
+    if count == 0 then
+      return fail("formula.contract", "levels.generate requires at least one formula column")
     end
     return tagged("levels", {
-      mode = "generate", max_level = options.max_level, row = options.row,
+      mode = "generate",
+      max_level = options.max_level,
+      columns = columns,
+      overrides = copy(options.overrides),
     }, source_at(3))
   end
 
@@ -191,6 +256,9 @@ return function(raise_internal)
     seen[value] = proxy
     for key, child in raw_pairs(value) do target[key] = freeze(child, seen) end
     frozen_targets[proxy] = target
+    if value == items or value == studio_math then
+      formula_safe_upvalues[proxy] = true
+    end
     setmetatable(proxy, {
       __index = target,
       __newindex = function()
@@ -225,6 +293,7 @@ return function(raise_internal)
   end
 
   local function finalize()
+    evaluation_finalizing = true
     local function fail_at(code, message, value, fallback)
       local source = source_metadata[value] or fallback
       return raise_internal(code, message, source.file, source.line)
@@ -387,7 +456,7 @@ return function(raise_internal)
       seen[value] = true
       if value.__studio_kind == "item_ref" then
         local source, id = source_metadata[value], value.id
-        if source == nil then
+        if source == nil or authentic_item_refs[value] ~= true then
           return raise_internal(
             "reference.invalid_handle", "item references must come from items.ref",
             fallback_source.file, fallback_source.line
@@ -446,7 +515,8 @@ return function(raise_internal)
         local entry_source = raw_type(entry) == "table" and source_metadata[entry] or nil
         if raw_type(entry) ~= "table" or entry.__studio_kind ~= "cost"
             or entry_source == nil
-            or raw_type(entry.item) ~= "table" or entry.item.__studio_kind ~= "item_ref" then
+            or raw_type(entry.item) ~= "table" or entry.item.__studio_kind ~= "item_ref"
+            or authentic_item_refs[entry.item] ~= true then
           return fail_at("cost.contract", "each cost entry must come from items.cost", entry, value_source)
         end
         local id, amount = entry.item.id, entry.count
@@ -492,7 +562,46 @@ return function(raise_internal)
         if spec.mode == "generate" then
           local max_level = checked(spec.max_level)
           if max_level < 1 then return fail("formula.contract", "max_level must be positive") end
-          for index = 1, max_level do rows[index] = copy(spec.row(index, math_view)) end
+          local columns = copy(spec.columns)
+          local names = {}
+          for name, _ in raw_pairs(columns) do names[#names + 1] = name end
+          table.sort(names)
+          for index = 1, max_level do
+            local row = {}
+            for _, name in ipairs(names) do
+              local formula = columns[name]
+              active_formula_source = formula_sources[formula]
+              local value = formula(index, math_view)
+              if raw_type(value) == "number" and raw_math.type(value) == "integer" then
+                value = checked(value)
+              end
+              for upvalue_index, expected in ipairs(formula_upvalues[formula]) do
+                local _, current = raw_debug.getupvalue(formula, upvalue_index)
+                if current ~= expected then
+                  return fail_at(
+                    "formula.mutable_upvalue", "formula changed a captured upvalue",
+                    spec, definition.__studio_source
+                  )
+                end
+              end
+              active_formula_source = nil
+              if value ~= nil then row[name] = copy(value) end
+            end
+            rows[index] = row
+          end
+          if spec.overrides ~= nil then
+            local overrides = copy(spec.overrides)
+            if raw_type(overrides) ~= "table" then
+              return fail_at("levels.overrides", "overrides must be a table", spec, definition.__studio_source)
+            end
+            for level, values in raw_pairs(overrides) do
+              if raw_math.type(level) ~= "integer" or level < 1 or level > max_level
+                  or raw_type(values) ~= "table" then
+                return fail_at("levels.overrides", "override levels must be in range with row tables", spec, definition.__studio_source)
+              end
+              for name, value in raw_pairs(values) do rows[level][name] = copy(value) end
+            end
+          end
         else
           if raw_type(spec.rows) ~= "table" then
             return fail_at("levels.contract", "levels rows must be a table", spec, definition.__studio_source)
@@ -516,10 +625,17 @@ return function(raise_internal)
           if raw_type(row) ~= "table" then
             return fail_at("levels.contract", "each level row must be a table", spec, definition.__studio_source)
           end
+          active_formula_source = source_metadata[spec]
+          for name, value in raw_pairs(row) do
+            if raw_type(value) == "number" and raw_math.type(value) == "integer" then
+              row[name] = checked(value)
+            end
+          end
+          active_formula_source = nil
           if index == 1 and row.cost_to_reach ~= nil then
             return fail_at("levels.level_one_transition", "level 1 cannot have cost_to_reach", spec, definition.__studio_source)
           end
-          if index >= 2 and spec.mode == "table" and row.cost_to_reach == nil then
+          if index >= 2 and row.cost_to_reach == nil then
             return fail_at("levels.transition_required", "level 2+ requires paid or explicit free cost_to_reach", spec, definition.__studio_source)
           end
           if row.cost_to_reach ~= nil then
@@ -678,7 +794,7 @@ def _output_rows(items: list[dict[str, Any]], fields: list[dict[str, Any]]) -> i
     return rows
 
 
-def _raw_exponent_line(source: str) -> int | None:
+def _raw_arithmetic(source: str) -> tuple[str, int] | None:
     index, line, length = 0, 1, len(source)
     while index < length:
         char = source[index]
@@ -720,8 +836,10 @@ def _raw_exponent_line(source: str) -> int | None:
             line += source[index:stop].count("\n")
             index = stop
             continue
-        if char == "^":
-            return line
+        if source.startswith(("//", "<<", ">>"), index):
+            return source[index:index + 2], line
+        if char in "+-*/%^#&|" or (char == "~" and not source.startswith("~=", index)):
+            return char, line
         index += 1
     return None
 
@@ -865,12 +983,13 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
                     "source.encoding", "Lua source must be UTF-8 text",
                     file=rel, path=f"$.modules.{name}",
                 ) from error
-            exponent_line = _raw_exponent_line(source)
-            if exponent_line is not None:
+            raw_arithmetic = _raw_arithmetic(source)
+            if raw_arithmetic is not None:
+                operator, operator_line = raw_arithmetic
                 raise _failure(
-                    "source.raw_exponentiation",
-                    "raw exponentiation is unavailable; use the approved Studio math surface",
-                    file=rel, line=exponent_line, path=f"$.modules.{name}",
+                    "source.raw_arithmetic",
+                    f"raw arithmetic operator {operator!r} is unavailable; use studio.math",
+                    file=rel, line=operator_line, path=f"$.modules.{name}",
                 )
             allowed = runtime.table_from({
                 "assert": safe_assert,
