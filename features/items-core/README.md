@@ -116,8 +116,11 @@ mutable globals, and formula upvalues are absent.
 
 The manifest allowlists module names and files; entries are sorted before
 evaluation, module exports are read-only, and `items.define` deep-copies its
-input. Source-byte, instruction, recursion, memory, wall-time, output-row, and
-output-byte budgets fail as structured `items.lua.error.v1` diagnostics.
+input. The evaluator registers every `def_id` before resolving immutable
+`items.ref` handles, so forward refs are module-order independent; missing refs
+and duplicate IDs fail at their Lua source. Source-byte, instruction, recursion,
+memory, wall-time, output-row, and output-byte budgets fail as structured
+`items.lua.error.v1` diagnostics.
 Successful output is canonical `items.lua.evaluation.v1` JSON with the backend
 fingerprint and the honest Lua file/line of each `items.define` call.
 

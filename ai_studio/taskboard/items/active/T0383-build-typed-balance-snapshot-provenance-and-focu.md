@@ -1,7 +1,7 @@
 ---
 id: T0383
 title: Build typed Items Snapshot provenance and focused dependency queries
-status: doing
+status: backlog
 project: P001
 epic: E016
 priority: P0
@@ -56,3 +56,4 @@ for C export, Viewer, requirements, and agents.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: provenance review ACCEPT, lua sandbox 10/10, Snapshot 6/6 including hash/source and malformed-source cases, feature contracts pass, fixture query returned weapons.lua:12.
 - 2026-07-15: Slice 3: added bounded semantic Snapshot diff with stable item-relative JSON Pointer paths; provenance-only movement is ignored and default output stops above 1000 changes. Chart/downsampling remains open.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: semantic-diff review ACCEPT; Snapshot 8/8 covers CLI, stable paths/order, source-only no-op, type changes, add/remove, and 1001-change bound.
+- 2026-07-15: Paused after Snapshot query/provenance/diff slices; T0381 registration and typed-ref prerequisite selected before remaining typed schema/chart/requirements work.

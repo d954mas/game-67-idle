@@ -1,13 +1,13 @@
 ---
 id: T0381
 title: Build phased Items registration refs and release compatibility receipt
-status: backlog
+status: doing
 project: P001
 epic: E016
 priority: P0
 tags: [items, lua, validation, migration]
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-15
 ---
 
 ## What
@@ -58,3 +58,6 @@ references, and extend release compatibility checks beyond removed item IDs.
 - 2026-07-10: Re-scoped from validating an external Items JSON receipt. Items is
   now registered inside the shared Lua evaluator; the receipt remains necessary
   for historical compatibility rather than current-data duplication.
+- 2026-07-15: Started with the smallest evaluator slice: module-order-independent forward item refs and referring-source missing-ref diagnostics; release receipt/runtime compatibility remain out of scope for this increment.
+- 2026-07-15: Slice 1: evaluator registers all def_id values before resolving immutable refs; forward refs are module-order independent, missing refs fail at items.ref source, and duplicate IDs fail at the second registration source. Receipt/storage work remains open.
+- 2026-07-15: Quality: QTECH_001=pass; evidence: registration/ref review ACCEPT, Lua sandbox 11/11 including hidden metadata leak regression, Snapshot 8/8, feature contracts 8/8.

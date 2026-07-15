@@ -34,6 +34,7 @@ return function(raise_internal)
   local raw_string_sub = string.sub
   local declarations = {}
   local frozen_targets = {}
+  local source_metadata = {}
   local freeze
 
   local function fail(code, message)
@@ -65,39 +66,47 @@ return function(raise_internal)
 
   local function copy(value, seen)
     if raw_type(value) ~= "table" then return value end
+    local source = source_metadata[value]
     value = frozen_targets[value] or value
     seen = seen or {}
     if seen[value] then return fail("declaration.cycle", "cyclic declaration table") end
     seen[value] = true
     local out = {}
+    if source ~= nil then source_metadata[out] = source end
     for key, child in raw_pairs(value) do out[copy(key, seen)] = copy(child, seen) end
     seen[value] = nil
     return out
   end
 
-  local function tagged(kind, value)
-    value.__studio_kind = kind
-    return freeze(value)
-  end
-
-  local items = {}
-  function items.ref(id) return tagged("item_ref", { id = id }) end
-  function items.cost(item, count) return tagged("cost", { item = item, count = count }) end
-  function items.costs(entries) return tagged("costs", { entries = entries }) end
-  function items.free() return tagged("free", {}) end
-  function items.define(definition)
-    local info = raw_debug.getinfo(2, "Sl")
+  local function source_at(level)
+    local info = raw_debug.getinfo(level, "Sl")
     local file = info and info.source or "items.lua.json"
     if raw_type(file) == "string" and raw_string_sub(file, 1, 1) == "@" then
       file = raw_string_sub(file, 2)
     end
-    local copied = copy(definition)
-    copied.__studio_source = {
+    return {
       file = file,
       line = info and info.currentline > 0 and info.currentline or 1,
       column = 1,
-      kind = "definition",
     }
+  end
+
+  local function tagged(kind, value, source)
+    value.__studio_kind = kind
+    local proxy = freeze(value)
+    if source ~= nil then source_metadata[proxy] = source end
+    return proxy
+  end
+
+  local items = {}
+  function items.ref(id) return tagged("item_ref", { id = id }, source_at(3)) end
+  function items.cost(item, count) return tagged("cost", { item = item, count = count }) end
+  function items.costs(entries) return tagged("costs", { entries = entries }) end
+  function items.free() return tagged("free", {}) end
+  function items.define(definition)
+    local copied = copy(definition)
+    copied.__studio_source = source_at(3)
+    copied.__studio_source.kind = "definition"
     declarations[#declarations + 1] = copied
   end
 
@@ -197,7 +206,45 @@ return function(raise_internal)
   end
 
   local function finalize()
+    local registered = {}
+    for _, definition in ipairs(declarations) do
+      local id = definition.id
+      if raw_type(id) == "string" then
+        if registered[id] then
+          local source = definition.__studio_source
+          return raise_internal(
+            "definition.duplicate_id", "duplicate item id: " .. id,
+            source.file, source.line
+          )
+        end
+        registered[id] = true
+      end
+    end
     table.sort(declarations, function(a, b) return a.id < b.id end)
+
+    local function resolve_refs(value, seen, fallback_source)
+      if raw_type(value) ~= "table" then return end
+      seen = seen or {}
+      if seen[value] then return end
+      seen[value] = true
+      if value.__studio_kind == "item_ref" then
+        local source, id = source_metadata[value] or fallback_source, value.id
+        if raw_type(id) ~= "string" or not registered[id] then
+          local message = "item reference id must be a string"
+          if raw_type(id) == "string" then message = "missing item reference: " .. id end
+          return raise_internal(
+            "reference.missing", message,
+            source.file, source.line
+          )
+        end
+        source_metadata[value] = nil
+      end
+      for _, child in raw_pairs(value) do resolve_refs(child, seen, fallback_source) end
+    end
+
+    for _, definition in ipairs(declarations) do
+      resolve_refs(definition, nil, definition.__studio_source)
+    end
     for _, definition in ipairs(declarations) do
       local spec = definition.levels
       if spec ~= nil and spec.__studio_kind == "levels" then

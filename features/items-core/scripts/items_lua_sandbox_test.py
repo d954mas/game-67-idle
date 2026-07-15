@@ -120,6 +120,47 @@ items.define({ id="game.gold", kind="currency", stack=0 })
             },
         })
 
+    def test_refs_resolve_after_registration_and_fail_at_ref_source(self):
+        forward = self.evaluate({
+            "game.a_weapon": '''local items = require("studio.items")
+items.define({
+  id="game.sword", kind="weapon", stack=1,
+  acquire={ cost=items.cost(items.ref("game.gold"), 10) },
+})''',
+            "game.z_currency": '''local items = require("studio.items")
+items.define({ id="game.gold", kind="currency", stack=0 })''',
+        }, ["game.a_weapon", "game.z_currency"])
+        self.assertEqual(forward.returncode, 0, forward.stderr)
+        ref = json.loads(forward.stdout)["items"][1]["acquire"]["cost"]["item"]
+        self.assertEqual(ref, {"__studio_kind": "item_ref", "id": "game.gold"})
+
+        hidden = self.evaluate({
+            "game.items": '''local items = require("studio.items")
+local gold = items.ref("game.gold")
+items.define({ id="game.sword", kind="weapon", stack=1, leaked_source=gold.__studio_source })
+items.define({ id="game.gold", kind="currency", stack=0 })''',
+        }, ["game.items"])
+        self.assertEqual(hidden.returncode, 0, hidden.stderr)
+        sword = json.loads(hidden.stdout)["items"][1]
+        self.assertNotIn("leaked_source", sword)
+
+        missing = self.evaluate({
+            "game.weapon": '''local items = require("studio.items")
+items.define({
+  id="game.sword", kind="weapon", stack=1,
+  acquire={ cost=items.cost(items.ref("game.missing"), 10) },
+})''',
+        }, ["game.weapon"])
+        self.assert_error(missing, "reference.missing", "game/weapon.lua", 4)
+        self.assertIn("game.missing", json.loads(missing.stderr)["error"]["message"])
+
+        duplicate = self.evaluate({
+            "game.items": '''local items = require("studio.items")
+items.define({ id="game.same", kind="currency", stack=0 })
+items.define({ id="game.same", kind="material", stack=9 })''',
+        }, ["game.items"])
+        self.assert_error(duplicate, "definition.duplicate_id", "game/items.lua", 3)
+
     def test_cycle_and_unapproved_module_errors_are_stable(self):
         cycle = self.evaluate({
             "game.a": 'require("game.b")',
