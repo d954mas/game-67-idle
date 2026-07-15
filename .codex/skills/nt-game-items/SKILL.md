@@ -29,6 +29,7 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> dependencies --item <item-id>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> source --item <item-id>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> validate
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> validate --affected <item-id>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> build --out-dir <build-dir>
 ```
 
@@ -36,8 +37,10 @@ Use `chart` and `requirements` for bounded reports; inspect command help for
 their filters instead of loading the full Snapshot.
 
 For a supported existing literal, get the hash from `source`, preview a
-`level-set`, `curve-set`, or `override-set`, inspect both diffs, then repeat with
-`--apply`. Never remove an `.items-edit.lock` until no writer process is active.
+`level-set`, `curve-set`, `override-set`, `max-level-append`, or
+`max-level-truncate`, inspect both diffs, then repeat with `--apply`. Max-level
+edits require explicit generate/columns literals and remain receipt-gated.
+Never remove an `.items-edit.lock` until no writer process is active.
 Unsupported source shapes route to direct source/agent editing.
 Use `batch --patch-file` only when every typed operation resolves to the same
 Lua file; preview and store its returned inverse batch before `--apply`.

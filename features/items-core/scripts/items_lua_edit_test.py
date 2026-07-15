@@ -32,6 +32,16 @@ items.define({
     overrides = { [3] = { attack = 21 } },
   }),
 })
+
+items.define({
+  id = "game.generated_sword",
+  kind = "weapon",
+  stack = 1,
+  levels = levels.generate({
+    max_level = 3,
+    attack = function(level) return level end,
+  }),
+})
 '''
 
 
@@ -124,6 +134,40 @@ class ItemsLuaEditTests(unittest.TestCase):
             EDIT.level_set(
                 SOURCE, definition_line=4, item_id="game.table_sword",
                 level=2, field="attack", value=17,
+            )
+
+    def test_max_level_changes_only_explicit_generate_or_columns_literal(self):
+        appended = EDIT.max_level_set(
+            SOURCE, definition_line=26, item_id="game.generated_sword",
+            value=4, direction="append",
+        )
+        self.assertEqual(appended.old_value, 3)
+        self.assertIn("max_level = 4", appended.source)
+        self.assertEqual(appended.source.replace("max_level = 4", "max_level = 3", 1), SOURCE)
+
+        truncated = EDIT.max_level_set(
+            SOURCE, definition_line=15, item_id="game.curve_sword",
+            value=2, direction="truncate",
+        )
+        self.assertEqual(truncated.old_value, 3)
+        self.assertIn("max_level = 2", truncated.source)
+
+    def test_max_level_refuses_wrong_direction_tables_and_computed_values(self):
+        with self.assertRaisesRegex(EDIT.EditFailure, "edit.direction"):
+            EDIT.max_level_set(
+                SOURCE, definition_line=26, item_id="game.generated_sword",
+                value=2, direction="append",
+            )
+        with self.assertRaisesRegex(EDIT.EditFailure, "edit.source_shape"):
+            EDIT.max_level_set(
+                SOURCE, definition_line=5, item_id="game.table_sword",
+                value=3, direction="append",
+            )
+        computed = SOURCE.replace("max_level = 3", "max_level = 1 + 2", 1)
+        with self.assertRaisesRegex(EDIT.EditFailure, "edit.literal_required"):
+            EDIT.max_level_set(
+                computed, definition_line=15, item_id="game.curve_sword",
+                value=4, direction="append",
             )
 
 

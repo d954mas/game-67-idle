@@ -121,7 +121,30 @@ def _validation(
 ) -> dict[str, Any]:
     baseline_path = _project_file(root, args.baseline, "cli.baseline")
     state_path = _project_file(root, args.state_schema, "cli.state_schema")
-    return _validation_paths(evaluation, snapshot, baseline_path, state_path)
+    result = _validation_paths(evaluation, snapshot, baseline_path, state_path)
+    affected = getattr(args, "affected", None)
+    if affected is None:
+        return result
+    neighborhood = _dependencies(snapshot, affected, DEFAULT_MAX_RELATED)
+    global_requirement_errors = sum(
+        entry["severity"] == "error" and entry["effective_status"] == "fail"
+        for entry in result["diagnostics"]
+    )
+    receipt = result["receipt"]
+    result["receipt"] = {
+        "ok": receipt["ok"],
+        "error_count": len(receipt["errors"]),
+        "warning_count": len(receipt["warnings"]),
+    }
+    result["diagnostics"] = snapshot_api.query_requirements(
+        snapshot, item_id=affected,
+    )["results"]
+    result["requirements"] = {
+        "ok": global_requirement_errors == 0,
+        "global_error_count": global_requirement_errors,
+    }
+    result["affected"] = neighborhood
+    return result
 
 
 def _validation_paths(
@@ -164,6 +187,34 @@ def _list(snapshot: dict[str, Any], max_items: int) -> list[dict[str, Any]]:
         }
         for item in items
     ]
+
+
+def _dependencies(
+    snapshot: dict[str, Any], item_id: str, max_related: int,
+) -> dict[str, Any]:
+    if max_related < 1 or max_related > DEFAULT_MAX_RELATED:
+        raise CliFailure(
+            "cli.max_related",
+            f"max-related must be between 1 and {DEFAULT_MAX_RELATED}",
+        )
+    items = snapshot.get("items")
+    if not isinstance(items, list) or not any(
+        isinstance(item, dict) and item.get("id") == item_id for item in items
+    ):
+        raise CliFailure("query.item_not_found", f"unknown item: {item_id}")
+    result = {"item": item_id}
+    for output, key in (("inputs", "dependencies"), ("dependents", "dependents")):
+        mapping = snapshot.get(key)
+        related = mapping.get(item_id) if isinstance(mapping, dict) else None
+        if not isinstance(related, list) or not all(isinstance(value, str) for value in related):
+            raise CliFailure(f"query.{key}", f"snapshot {key} must map item ids to lists")
+        if len(related) > max_related:
+            raise CliFailure(
+                "cli.result_limit",
+                f"{output} result exceeds {max_related}; use a more focused item",
+            )
+        result[output] = related
+    return result
 
 
 def _copy_project_for_edit(
@@ -257,6 +308,14 @@ def _source_line(source: str, offset: int) -> tuple[int, str]:
 def _primitive_edit(
     source: str, definition: dict[str, Any], operation: dict[str, Any],
 ) -> edit_api.EditResult:
+    if operation["operation"] in {"max-level-append", "max-level-truncate"}:
+        return edit_api.max_level_set(
+            source,
+            definition_line=definition["line"],
+            item_id=operation["item"],
+            value=operation["to_level"],
+            direction=operation["operation"].removeprefix("max-level-"),
+        )
     common = {
         "definition_line": definition["line"],
         "item_id": operation["item"],
@@ -301,23 +360,31 @@ def _load_batch_patch(path_value: str) -> dict[str, Any]:
         if not isinstance(operation, dict):
             raise CliFailure("edit.patch", f"operation {index} must be an object")
         name = operation.get("operation")
-        keys = (
-            {"operation", "item", "field", "parameter", "value"}
-            if name == "curve-set"
-            else {"operation", "item", "field", "level", "value"}
-        )
-        if name not in {"level-set", "curve-set", "override-set"} or set(operation) != keys:
+        if name in {"max-level-append", "max-level-truncate"}:
+            keys = {"operation", "item", "to_level"}
+        elif name == "curve-set":
+            keys = {"operation", "item", "field", "parameter", "value"}
+        else:
+            keys = {"operation", "item", "field", "level", "value"}
+        if name not in {
+            "level-set", "curve-set", "override-set",
+            "max-level-append", "max-level-truncate",
+        } or set(operation) != keys:
             raise CliFailure("edit.patch", f"operation {index} shape is invalid")
         if (
             not isinstance(operation["item"], str) or not operation["item"]
-            or not isinstance(operation["field"], str) or not operation["field"]
-            or type(operation["value"]) is not int
+            or ("field" in operation and (
+                not isinstance(operation["field"], str) or not operation["field"]
+            ))
+            or ("value" in operation and type(operation["value"]) is not int)
+            or ("to_level" in operation and type(operation["to_level"]) is not int)
             or ("level" in operation and type(operation["level"]) is not int)
             or ("parameter" in operation and not isinstance(operation["parameter"], str))
         ):
             raise CliFailure("edit.patch", f"operation {index} values are invalid")
         target = (
-            name, operation["item"], operation["field"],
+            "max-level" if name.startswith("max-level-") else name,
+            operation["item"], operation.get("field"),
             operation.get("level"), operation.get("parameter"),
         )
         if target in targets:
@@ -344,16 +411,23 @@ def _edit(
         source = original_bytes.decode("utf-8")
     except UnicodeDecodeError as error:
         raise CliFailure("edit.source", f"source is not UTF-8: {source_path}") from error
-    operation = {
-        "operation": args.command,
-        "item": args.item,
-        "field": args.field,
-        "value": args.value,
-    }
-    if args.command in {"level-set", "override-set"}:
-        operation["level"] = args.level
+    if args.command in {"max-level-append", "max-level-truncate"}:
+        operation = {
+            "operation": args.command,
+            "item": args.item,
+            "to_level": args.to_level,
+        }
     else:
-        operation["parameter"] = args.parameter
+        operation = {
+            "operation": args.command,
+            "item": args.item,
+            "field": args.field,
+            "value": args.value,
+        }
+        if args.command in {"level-set", "override-set"}:
+            operation["level"] = args.level
+        else:
+            operation["parameter"] = args.parameter
     edited = _primitive_edit(source, definition, operation)
     edited_bytes = edited.source.encode("utf-8")
     after_hash = _source_hash(edited_bytes)
@@ -368,18 +442,32 @@ def _edit(
     if validation["ok"] and args.apply and source_changed:
         _atomic_replace_expected(source_path, actual_hash, edited_bytes)
         applied = True
-    inverse = {
-        "schema": "items.cli.patch.v1",
-        "operation": args.command,
-        "item": args.item,
-        "field": args.field,
-        "value": edited.old_value,
-        "expected_source_hash": after_hash,
-    }
-    if args.command in {"level-set", "override-set"}:
-        inverse["level"] = args.level
+    if args.command in {"max-level-append", "max-level-truncate"}:
+        inverse = {
+            "schema": "items.cli.patch.v1",
+            "operation": (
+                "max-level-truncate" if args.command == "max-level-append"
+                else "max-level-append"
+            ),
+            "item": args.item,
+            "to_level": edited.old_value,
+            "expected_source_hash": after_hash,
+        }
+        new_value = args.to_level
     else:
-        inverse["parameter"] = args.parameter
+        inverse = {
+            "schema": "items.cli.patch.v1",
+            "operation": args.command,
+            "item": args.item,
+            "field": args.field,
+            "value": edited.old_value,
+            "expected_source_hash": after_hash,
+        }
+        if args.command in {"level-set", "override-set"}:
+            inverse["level"] = args.level
+        else:
+            inverse["parameter"] = args.parameter
+        new_value = args.value
     result = {
         **validation,
         "applied": applied,
@@ -389,7 +477,7 @@ def _edit(
             "before_hash": actual_hash,
             "after_hash": after_hash,
             "old_value": edited.old_value,
-            "new_value": args.value,
+            "new_value": new_value,
             "before_line": before_line,
             "after_line": after_line,
         },
@@ -434,17 +522,30 @@ def _batch(
         edited = _primitive_edit(current, definition, operation)
         line, before_line = _source_line(current, edited.start)
         _, after_line = _source_line(edited.source, edited.start)
-        edits.append({
+        edit = {
             "operation": operation["operation"],
             "item": operation["item"],
-            "field": operation["field"],
             "line": line,
             "old_value": edited.old_value,
-            "new_value": operation["value"],
+            "new_value": operation.get("value", operation.get("to_level")),
             "before_line": before_line,
             "after_line": after_line,
-        })
-        inverse = {**operation, "value": edited.old_value}
+        }
+        if "field" in operation:
+            edit["field"] = operation["field"]
+        edits.append(edit)
+        if operation["operation"] in {"max-level-append", "max-level-truncate"}:
+            inverse = {
+                **operation,
+                "operation": (
+                    "max-level-truncate"
+                    if operation["operation"] == "max-level-append"
+                    else "max-level-append"
+                ),
+                "to_level": edited.old_value,
+            }
+        else:
+            inverse = {**operation, "value": edited.old_value}
         inverse_operations.append(inverse)
         current = edited.source
 
@@ -529,6 +630,7 @@ def _parser() -> argparse.ArgumentParser:
     validate = commands.add_parser("validate")
     validate.add_argument("--baseline", default="content/items.lock.json")
     validate.add_argument("--state-schema", default="state/items.schema.json")
+    validate.add_argument("--affected")
     build = commands.add_parser("build")
     build.add_argument("--baseline", default="content/items.lock.json")
     build.add_argument("--state-schema", default="state/items.schema.json")
@@ -546,6 +648,14 @@ def _parser() -> argparse.ArgumentParser:
             edit.add_argument("--level", type=int, required=True)
         else:
             edit.add_argument("--parameter", required=True)
+    for name in ("max-level-append", "max-level-truncate"):
+        edit = commands.add_parser(name)
+        edit.add_argument("--item", required=True)
+        edit.add_argument("--to-level", type=int, required=True)
+        edit.add_argument("--expected-source-hash", required=True)
+        edit.add_argument("--baseline", default="content/items.lock.json")
+        edit.add_argument("--state-schema", default="state/items.schema.json")
+        edit.add_argument("--apply", action="store_true")
     batch = commands.add_parser("batch")
     batch.add_argument("--patch-file", required=True)
     batch.add_argument("--baseline", default="content/items.lock.json")
@@ -569,25 +679,7 @@ def main(argv: list[str] | None = None) -> int:
                 level_from=args.level_from, level_to=args.level_to,
             )
         elif operation == "dependencies":
-            if args.max_related < 1 or args.max_related > DEFAULT_MAX_RELATED:
-                raise CliFailure(
-                    "cli.max_related",
-                    f"max-related must be between 1 and {DEFAULT_MAX_RELATED}",
-                )
-            query = snapshot_api.query_snapshot(
-                snapshot, item_id=args.item,
-                include_inputs=True, include_dependents=True,
-            )
-            result = {
-                "item": args.item,
-                "inputs": query["inputs"],
-                "dependents": query["dependents"],
-            }
-            if len(result["inputs"]) > args.max_related or len(result["dependents"]) > args.max_related:
-                raise CliFailure(
-                    "cli.result_limit",
-                    f"dependency result exceeds {args.max_related}; use a more focused item",
-                )
+            result = _dependencies(snapshot, args.item, args.max_related)
         elif operation == "source":
             query = snapshot_api.query_snapshot(snapshot, item_id=args.item, field=args.field)
             source_path = _project_file(root, query["source"]["file"], "edit.source")
@@ -619,7 +711,10 @@ def main(argv: list[str] | None = None) -> int:
         elif operation == "validate":
             result = _validation(root, evaluation, snapshot, args)
             exit_code = 0 if result["ok"] else 1
-        elif operation in {"level-set", "curve-set", "override-set"}:
+        elif operation in {
+            "level-set", "curve-set", "override-set",
+            "max-level-append", "max-level-truncate",
+        }:
             result, exit_code = _edit(root, evaluation, snapshot, args)
         elif operation == "batch":
             result, exit_code = _batch(root, snapshot, args)

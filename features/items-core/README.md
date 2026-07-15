@@ -241,10 +241,16 @@ return source/semantic diffs plus an inverse patch. `--apply` uses an exclusive
 same-directory writer lock and atomic replace. A crash-stale lock fails closed
 and is never removed automatically; remove it only after confirming no writer
 is active. Missing rows/overrides, formulas, aliases, noncanonical numbers, and
-unsupported structures are refused. `batch --patch-file` accepts the same three
-operation shapes in one bounded `items.cli.patch_batch.v1`, rejects duplicate
+unsupported structures are refused. `batch --patch-file` accepts those edits
+and max-level operations in one bounded `items.cli.patch_batch.v1`, rejects duplicate
 targets or multiple Lua files, validates once, replaces once, and returns one
 reversed inverse batch. Patch input is capped at 64 KiB and 100 operations.
+`max-level-append` and `max-level-truncate` replace only an explicit canonical
+`max_level` in `levels.generate` or `levels.columns`; the release receipt blocks
+truncating shipped rows. Explicit tables, computed values, aliases, level
+insertion/renumbering, and arbitrary Lua rewrites are refused. `validate
+--affected <item-id>` still evaluates globally but returns only that item's
+requirement and dependency neighborhood plus global receipt counts.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> list
@@ -254,11 +260,20 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> chart --item <item-id> --field <field>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> requirements --item <item-id> --severity warning
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> validate
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> validate --affected <item-id>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> build --out-dir <build-dir>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> level-set --item <item-id> --level <n> --field <field> --value <n> --expected-source-hash <sha256>
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> max-level-append --item <item-id> --to-level <n> --expected-source-hash <sha256>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> batch --patch-file <patch.json>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli_test.py
 ```
+
+The bounded T0366 edit-loop benchmark records five commands (source, preview,
+affected validation, inspect, and a deliberate conflict), per-command wall
+time, deterministic application-level project reads, exact stdout/stderr bytes,
+and structured diagnostic quality. The dated Windows sample is
+[`benchmarks/results/windows-cli-2026-07-15.json`](benchmarks/results/windows-cli-2026-07-15.json);
+T0380 owns the later full cold/warm/build/runtime benchmark.
 
 ### T0365 compact runtime package
 

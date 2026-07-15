@@ -292,3 +292,35 @@ def override_set(
     overrides = _plain_table(tokens, overrides_equals + 1)
     row = _indexed_row(tokens, *overrides, level)
     return _replace(source, tokens, _direct_assignment(tokens, *row, field), value)
+
+
+def max_level_set(
+    source: str, *, definition_line: int, item_id: str,
+    value: int, direction: str,
+) -> EditResult:
+    if direction not in {"append", "truncate"}:
+        _fail("edit.direction", "max-level direction must be append or truncate")
+    if type(value) is not int or value < 1 or value > MAX_EXACT_INTEGER:
+        _fail("edit.value", f"max_level must be between 1 and {MAX_EXACT_INTEGER}")
+    tokens = tokenize(source)
+    definition = _definition_table(tokens, definition_line, item_id)
+    levels_equals = _direct_assignment(tokens, *definition, "levels")
+    value_index = levels_equals + 1
+    call = [token.text for token in tokens[value_index:value_index + 3]]
+    if call == ["levels", ".", "generate"]:
+        table = _call_table(tokens, value_index, "levels", "generate")
+    elif call == ["levels", ".", "columns"]:
+        table = _call_table(tokens, value_index, "levels", "columns")
+    else:
+        _fail(
+            "edit.source_shape",
+            "max-level edits require explicit levels.generate or levels.columns",
+        )
+    equals = _direct_assignment(tokens, *table, "max_level")
+    start, end, old_value = _integer_literal(tokens, equals + 1)
+    del start, end
+    if (direction == "append" and value <= old_value) or (
+        direction == "truncate" and value >= old_value
+    ):
+        _fail("edit.direction", f"{direction} target must move from current max_level {old_value}")
+    return _replace(source, tokens, equals, value)

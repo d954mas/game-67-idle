@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
 from unittest import mock
 
@@ -37,7 +38,7 @@ class ItemsCliTests(unittest.TestCase):
         self.assertEqual(payload["schema"], "items.cli.result.v1")
         self.assertEqual(payload["operation"], "list")
         self.assertEqual([item["id"] for item in payload["result"]], [
-            "game.curve_sword", "game.gold", "game.iron_sword",
+            "game.curve_sword", "game.generated_sword", "game.gold", "game.iron_sword",
             "game.levelled_sword", "game.other_sword",
         ])
         gold = next(item for item in payload["result"] if item["id"] == "game.gold")
@@ -85,6 +86,49 @@ class ItemsCliTests(unittest.TestCase):
         self.assertTrue(validated["result"]["ok"])
         self.assertEqual(validated["result"]["diagnostics"], [])
         self.assertTrue(validated["result"]["receipt"]["ok"])
+
+        affected = self.payload(
+            "validate", "--affected", "game.levelled_sword",
+        )["result"]
+        self.assertEqual(affected["affected"], {
+            "item": "game.levelled_sword",
+            "inputs": ["game.gold"],
+            "dependents": [],
+        })
+        self.assertEqual(affected["diagnostics"], [])
+
+    def test_affected_validation_explains_global_failures_without_materializing_levels(self):
+        snapshot = {
+            "items": [{"id": "game.large", "levels": {"rows": [{}] * 1001}}],
+            "dependencies": {"game.large": []},
+            "dependents": {"game.large": []},
+        }
+        global_failure = {
+            "ok": False,
+            "diagnostics": [{
+                "severity": "error", "effective_status": "fail",
+                "item": "game.unrelated",
+            }],
+            "receipt": {"ok": True, "errors": [], "warnings": []},
+        }
+        args = SimpleNamespace(
+            baseline="content/items.lock.json",
+            state_schema="state/items.schema.json",
+            affected="game.large",
+        )
+        with (
+            mock.patch.object(CLI, "_validation_paths", return_value=global_failure),
+            mock.patch.object(
+                CLI.snapshot_api, "query_requirements", return_value={"results": []},
+            ),
+        ):
+            result = CLI._validation(PROJECT, {}, snapshot, args)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["diagnostics"], [])
+        self.assertEqual(result["requirements"], {
+            "ok": False, "global_error_count": 1,
+        })
+        self.assertEqual(result["affected"]["item"], "game.large")
 
     def test_chart_and_requirements_delegate_to_bounded_snapshot_reports(self):
         chart = self.payload(
@@ -207,6 +251,76 @@ class ItemsCliTests(unittest.TestCase):
             "--expected-source-hash", source["source_hash"],
         )
         self.assertEqual(override["result"]["source_diff"]["old_value"], 21)
+
+    def test_max_level_truncate_apply_inverse_and_release_gate(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            shutil.copytree(PROJECT, project)
+            source = project / "game" / "items.lua"
+            original = source.read_bytes()
+            source_hash = json.loads(self.run_project(
+                project, "source", "--item", "game.generated_sword",
+            ).stdout)["result"]["source_hash"]
+            args = (
+                "max-level-truncate", "--item", "game.generated_sword",
+                "--to-level", "2", "--expected-source-hash", source_hash,
+            )
+            applied = self.run_project(project, *args, "--apply")
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            result = json.loads(applied.stdout)["result"]
+            self.assertTrue(result["applied"])
+            self.assertIn("max_level = 2", source.read_text(encoding="utf-8"))
+
+            inverse = result["inverse_patch"]
+            reverted = self.run_project(
+                project, inverse["operation"], "--item", inverse["item"],
+                "--to-level", str(inverse["to_level"]),
+                "--expected-source-hash", inverse["expected_source_hash"], "--apply",
+            )
+            self.assertEqual(reverted.returncode, 0, reverted.stderr)
+            self.assertEqual(source.read_bytes(), original)
+
+            batch_path = project / "max-level.json"
+            batch_path.write_text(json.dumps({
+                "schema": "items.cli.patch_batch.v1",
+                "expected_source_hash": source_hash,
+                "operations": [{
+                    "operation": "max-level-truncate",
+                    "item": "game.generated_sword",
+                    "to_level": 2,
+                }],
+            }), encoding="utf-8")
+            batch = self.run_project(
+                project, "batch", "--patch-file", str(batch_path),
+            )
+            self.assertEqual(batch.returncode, 0, batch.stderr)
+            batch_result = json.loads(batch.stdout)["result"]
+            self.assertEqual(
+                batch_result["inverse_patch"]["operations"][0]["operation"],
+                "max-level-append",
+            )
+            self.assertEqual(source.read_bytes(), original)
+
+            lock_path = project / "content" / "items.lock.json"
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            lock["def_ids"]["game.generated_sword"]["level_count"] = 3
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            blocked = self.run_project(project, *args)
+            self.assertEqual(blocked.returncode, 1, blocked.stderr)
+            blocked_result = json.loads(blocked.stdout)["result"]
+            self.assertFalse(blocked_result["ok"])
+            self.assertFalse(blocked_result["applied"])
+            self.assertEqual(source.read_bytes(), original)
+
+            table_hash = json.loads(self.run_project(
+                project, "source", "--item", "game.levelled_sword",
+            ).stdout)["result"]["source_hash"]
+            refused = self.run_project(
+                project, "max-level-append", "--item", "game.levelled_sword",
+                "--to-level", "4", "--expected-source-hash", table_hash,
+            )
+            self.assertEqual(refused.returncode, 1)
+            self.assertEqual(json.loads(refused.stderr)["error"]["code"], "edit.source_shape")
 
     def test_same_file_batch_apply_inverse_and_multi_file_refusal(self):
         with tempfile.TemporaryDirectory() as tmp:

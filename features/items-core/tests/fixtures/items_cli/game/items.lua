@@ -44,3 +44,15 @@ items.define({
     overrides = { [3] = { attack = 21 } },
   }),
 })
+
+items.define({
+  id = "game.generated_sword", kind = "weapon", stack = 1,
+  levels = levels.generate({
+    max_level = 3,
+    attack = function(level) return level end,
+    cost_to_reach = function(level)
+      if level == 1 then return nil end
+      return items.free()
+    end,
+  }),
+})
