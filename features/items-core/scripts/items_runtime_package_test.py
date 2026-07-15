@@ -285,6 +285,46 @@ class ItemsRuntimePackageTests(unittest.TestCase):
             self.assertEqual(second.returncode, 0, second.stderr)
             self.assertEqual(json.loads(second.stdout)["changed"], {"blob": False, "header": False})
 
+    def test_publication_verification_rejects_stale_blob_and_header(self):
+        snapshot = self.snapshot()
+        package = PACKAGE.build_package(snapshot)
+        header = PACKAGE.render_abi_header(snapshot).encode("utf-8")
+        verified = PACKAGE.verify_publication(snapshot, package, header)
+        self.assertEqual(verified["snapshot_content_hash"], snapshot["content_hash"])
+
+        changed_evaluation = evaluation()
+        changed_evaluation["items"][1]["levels"]["rows"][0]["attack"] = 999
+        changed_snapshot = SNAPSHOT.build_snapshot(changed_evaluation)
+        with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.stale_blob"):
+            PACKAGE.verify_publication(changed_snapshot, package, header)
+        with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.stale_header"):
+            PACKAGE.verify_publication(snapshot, package, header + b"\n")
+
+    def test_cli_verifies_selected_outputs_against_current_snapshot(self):
+        snapshot = self.snapshot()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "snapshot.json"
+            blob = root / "items.catalog"
+            header = root / "items_catalog_abi.gen.h"
+            source.write_text(json.dumps(snapshot), encoding="utf-8")
+            blob.write_bytes(PACKAGE.build_package(snapshot))
+            header.write_bytes(PACKAGE.render_abi_header(snapshot).encode("utf-8"))
+            command = [
+                sys.executable, str(SCRIPT_DIR / "items_runtime_package.py"), "verify",
+                "--snapshot", str(source), "--blob", str(blob), "--header", str(header),
+            ]
+            verified = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", timeout=10)
+            self.assertEqual(verified.returncode, 0, verified.stderr)
+            self.assertEqual(json.loads(verified.stdout)["schema"], "items.runtime.package.verify.v1")
+
+            stale_evaluation = evaluation()
+            stale_evaluation["items"][1]["levels"]["rows"][0]["attack"] = 999
+            source.write_text(json.dumps(SNAPSHOT.build_snapshot(stale_evaluation)), encoding="utf-8")
+            stale = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", timeout=10)
+            self.assertEqual(stale.returncode, 1)
+            self.assertIn("package.stale_blob", json.loads(stale.stderr)["error"])
+
     def test_cli_rejects_path_overlap_bad_arguments_and_non_utf8_as_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

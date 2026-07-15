@@ -740,6 +740,20 @@ def inspect_package(package: bytes) -> dict[str, Any]:
     }
 
 
+def verify_publication(
+    snapshot: dict[str, Any], package: bytes, header: bytes,
+) -> dict[str, Any]:
+    """Require selected generated outputs to match the current Snapshot exactly."""
+    inspected = inspect_package(package)
+    expected_package = build_package(snapshot)
+    if package != expected_package:
+        _fail("package.stale_blob", "selected blob does not match current Snapshot export")
+    expected_header = render_abi_header(snapshot).encode("utf-8")
+    if header != expected_header:
+        _fail("package.stale_header", "selected ABI header does not match current Snapshot export")
+    return inspected
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = PackageArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -753,6 +767,12 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("--max-values", type=int, default=MAX_VALUES)
     build.add_argument("--max-costs", type=int, default=MAX_COSTS)
     build.add_argument("--max-bytes", type=int, default=MAX_BYTES)
+    verify = commands.add_parser(
+        "verify", help="Verify selected blob/header outputs against the current Snapshot.",
+    )
+    verify.add_argument("--snapshot", type=Path, required=True)
+    verify.add_argument("--blob", type=Path, required=True)
+    verify.add_argument("--header", type=Path, required=True)
     return parser
 
 
@@ -760,31 +780,46 @@ def main(argv: list[str] | None = None) -> int:
     try:
         args = _parser().parse_args(argv)
         source_path = args.snapshot.resolve()
-        blob_path = args.out.resolve()
-        header_path = args.header_out.resolve()
-        if len({source_path, blob_path, header_path}) != 3:
-            _fail("cli.output_paths", "snapshot, blob, and header paths must be distinct")
         snapshot = json.loads(source_path.read_text(encoding="utf-8"))
-        package = build_package(
-            snapshot,
-            max_items=args.max_items, max_fields=args.max_fields,
-            max_levels=args.max_levels, max_values=args.max_values,
-            max_costs=args.max_costs, max_bytes=args.max_bytes,
-        )
-        header = render_abi_header(snapshot).encode("utf-8")
-        inspected = inspect_package(package)
-        changed = {
-            "blob": write_if_different(blob_path, package),
-            "header": write_if_different(header_path, header),
-        }
-        print(json.dumps({
-            "schema": "items.runtime.package.build.v1",
-            "snapshot_content_hash": inspected["snapshot_content_hash"],
-            "schema_abi_fingerprint": inspected["schema_abi_fingerprint"],
-            "content_fingerprint": inspected["content_fingerprint"],
-            "bytes": len(package),
-            "changed": changed,
-        }, ensure_ascii=False, sort_keys=True))
+        if args.command == "build":
+            blob_path = args.out.resolve()
+            header_path = args.header_out.resolve()
+            if len({source_path, blob_path, header_path}) != 3:
+                _fail("cli.output_paths", "snapshot, blob, and header paths must be distinct")
+            package = build_package(
+                snapshot,
+                max_items=args.max_items, max_fields=args.max_fields,
+                max_levels=args.max_levels, max_values=args.max_values,
+                max_costs=args.max_costs, max_bytes=args.max_bytes,
+            )
+            header = render_abi_header(snapshot).encode("utf-8")
+            inspected = inspect_package(package)
+            changed = {
+                "blob": write_if_different(blob_path, package),
+                "header": write_if_different(header_path, header),
+            }
+            result = {
+                "schema": "items.runtime.package.build.v1",
+                "snapshot_content_hash": inspected["snapshot_content_hash"],
+                "schema_abi_fingerprint": inspected["schema_abi_fingerprint"],
+                "content_fingerprint": inspected["content_fingerprint"],
+                "bytes": len(package),
+                "changed": changed,
+            }
+        else:
+            blob_path = args.blob.resolve()
+            header_path = args.header.resolve()
+            inspected = verify_publication(
+                snapshot, blob_path.read_bytes(), header_path.read_bytes(),
+            )
+            result = {
+                "schema": "items.runtime.package.verify.v1",
+                "snapshot_content_hash": inspected["snapshot_content_hash"],
+                "schema_abi_fingerprint": inspected["schema_abi_fingerprint"],
+                "content_fingerprint": inspected["content_fingerprint"],
+                "bytes": blob_path.stat().st_size,
+            }
+        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0
     except (PackageFailure, OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         print(json.dumps({

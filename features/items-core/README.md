@@ -225,7 +225,10 @@ strings are deduplicated, padding is zero, and schema/content/item identities
 use the engine-compatible seed-0 XXH64 contract. Generated outputs are replaced
 atomically only when their bytes change, so a value-only balance edit changes
 the blob without touching the header. The Python inspector is the wire-format
-reference. The opt-in native binder validates the generated schema/item ABI,
+reference. Before writing its chosen pack, the game builder runs `verify`
+against the current Snapshot, selected blob, and generated header. Verification
+rebuilds the expected outputs in memory and rejects stale or independently
+authored inputs; it writes no second manifest. The opt-in native binder validates the generated schema/item ABI,
 content digest, UTF-8 strings, ranges, canonical spans, indices, alignment, and
 default 64 MiB budget on an owned copy before publishing it. Its lifecycle is
 main-thread startup/shutdown only. `items_catalog_try_bind_resource()` consumes
@@ -239,10 +242,16 @@ level accessors from Snapshot fields; balance values remain only in the blob.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py build --snapshot <snapshot.json> --out <items.catalog> --header-out <items_catalog_abi.gen.h>
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py verify --snapshot <snapshot.json> --blob <items.catalog> --header <items_catalog_abi.gen.h>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package_test.py
 cmake --build templates/template/build/native-debug --target test_items_runtime_package test_items_runtime_resource
 ctest --test-dir templates/template/build/native-debug -R "^test_items_runtime_(package|resource)$" --output-on-failure
 ```
+
+The selected pack(s) mount first; the game resolves logical asset
+`items/catalog`, binds it, and only then loads/reconciles persistent Items state.
+Pre-bind typed access asserts. This module deliberately does not select a pack
+filename or insert a second catalog manifest.
 
 The reproducible generated-C versus blob comparison and current Windows result
 live in [`benchmarks/README.md`](benchmarks/README.md). Linux proof is still an
