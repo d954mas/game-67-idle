@@ -473,6 +473,12 @@ items.define({
             if item["id"] == "game.sword"
         )
         rows = sword["levels"]["rows"]
+        self.assertEqual(sword["authoring_mode"], "generate")
+        self.assertEqual(sword["levels"]["provenance"], [
+            {"attack": "generate"},
+            {"attack": "generate", "cost_to_reach": "generate"},
+            {"attack": "generate", "cost_to_reach": "generate"},
+        ])
         self.assertEqual([row["attack"] for row in rows], [5, 10, 15])
         self.assertNotIn("cost_to_reach", rows[0])
         self.assertEqual(
@@ -559,6 +565,12 @@ items.define({ id="game.sword", stack=1, levels=levels.columns({
             if item["id"] == "game.sword"
         )
         rows = sword["levels"]["rows"]
+        self.assertEqual(sword["authoring_mode"], "columns")
+        self.assertEqual(sword["levels"]["provenance"], [
+            {"attack": "columns"},
+            {"attack": "columns", "cost_to_reach": "columns"},
+            {"attack": "override", "cost_to_reach": "columns"},
+        ])
         self.assertEqual([row["attack"] for row in rows], [10, 15, 21])
         self.assertNotIn("cost_to_reach", rows[0])
         self.assertEqual(rows[1]["cost_to_reach"]["count"], 100)

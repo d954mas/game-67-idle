@@ -604,6 +604,7 @@ return function(raise_internal)
 
     for _, definition in ipairs(declarations) do
       local spec = definition.levels
+      definition.authoring_mode = "none"
       if spec ~= nil then
         if raw_type(spec) ~= "table" or spec.__studio_kind ~= "levels" or source_metadata[spec] == nil then
           return fail_at("levels.invalid_handle", "levels must come from studio.levels", spec, definition.__studio_source)
@@ -712,6 +713,11 @@ return function(raise_internal)
             rows[index] = spec.rows[index]
           end
         end
+        local provenance = {}
+        for index, row in ipairs(rows) do
+          provenance[index] = {}
+          for name, _ in raw_pairs(row) do provenance[index][name] = spec.mode end
+        end
         if spec.overrides ~= nil then
           local overrides = copy(spec.overrides)
           if raw_type(overrides) ~= "table" then
@@ -722,7 +728,10 @@ return function(raise_internal)
                 or raw_type(values) ~= "table" then
               return fail_at("levels.overrides", "override levels must be in range with row tables", spec, definition.__studio_source)
             end
-            for name, value in raw_pairs(values) do rows[level][name] = copy(value) end
+            for name, value in raw_pairs(values) do
+              rows[level][name] = copy(value)
+              provenance[level][name] = "override"
+            end
           end
         end
         for index, row in ipairs(rows) do
@@ -746,7 +755,8 @@ return function(raise_internal)
             row.cost_to_reach = normalize_cost(row.cost_to_reach, definition.__studio_source)
           end
         end
-        definition.levels = { mode = spec.mode, rows = rows }
+        definition.authoring_mode = spec.mode
+        definition.levels = { mode = spec.mode, provenance = provenance, rows = rows }
       end
       if raw_type(definition.acquire) == "table" and definition.acquire.cost ~= nil then
         definition.acquire.cost = normalize_cost(definition.acquire.cost, definition.__studio_source)

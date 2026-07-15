@@ -22,6 +22,12 @@ DEFAULT_DIFF_CHANGES = 1_000
 MAX_EXACT_INTEGER = 9_007_199_254_740_991
 FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 MEMBER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
+PROVENANCE_BY_MODE = {
+    "single": {"single"},
+    "table": {"table"},
+    "generate": {"generate", "override"},
+    "columns": {"columns", "override"},
+}
 
 
 class SnapshotFailure(Exception):
@@ -201,6 +207,38 @@ def _validate_typed_rows(items: list[dict[str, Any]], fields: list[dict[str, Any
                     _fail("snapshot.field_range", f"field {member} is outside declared range", f"{path}.{member}")
 
 
+def _validate_level_provenance(items: list[dict[str, Any]]) -> None:
+    for item_index, item in enumerate(items):
+        path = f"$.items[{item_index}]"
+        mode = item.get("authoring_mode")
+        levels = item.get("levels")
+        if levels is None:
+            if mode != "none":
+                _fail("snapshot.authoring_mode", "item without levels requires authoring_mode none", f"{path}.authoring_mode")
+            continue
+        if mode not in PROVENANCE_BY_MODE or levels.get("mode") != mode:
+            _fail("snapshot.authoring_mode", "level mode must match authoring_mode", f"{path}.authoring_mode")
+        rows = levels.get("rows")
+        provenance = levels.get("provenance")
+        if not isinstance(rows, list) or not rows:
+            _fail("snapshot.levels", "levelled item requires at least one row", f"{path}.levels.rows")
+        if mode == "single" and len(rows) != 1:
+            _fail("snapshot.authoring_mode", "single mode requires exactly one row", f"{path}.levels.rows")
+        if not isinstance(provenance, list) or len(provenance) != len(rows):
+            _fail("snapshot.provenance", "provenance must match level rows", f"{path}.levels.provenance")
+        for row_index, (row, row_provenance) in enumerate(zip(rows, provenance)):
+            row_path = f"{path}.levels.provenance[{row_index}]"
+            if not isinstance(row, dict) or not isinstance(row_provenance, dict):
+                _fail("snapshot.provenance", "each level row requires a provenance object", row_path)
+            if set(row_provenance) != set(row):
+                _fail("snapshot.provenance", "provenance keys must exactly match row values", row_path)
+            if not all(
+                isinstance(value, str) and value in PROVENANCE_BY_MODE[mode]
+                for value in row_provenance.values()
+            ):
+                _fail("snapshot.provenance", f"provenance is inconsistent with {mode} mode", row_path)
+
+
 def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(evaluation, dict) or evaluation.get("schema") != EVALUATION_SCHEMA:
         _fail("snapshot.evaluation_schema", f"expected {EVALUATION_SCHEMA}")
@@ -225,6 +263,7 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
         items.append(item)
     items.sort(key=lambda item: item["id"])
     _validate_typed_rows(items, fields)
+    _validate_level_provenance(items)
 
     dependencies: dict[str, list[str]] = {}
     for item in items:
@@ -315,6 +354,14 @@ def query_snapshot(
     rows = levels.get("rows", [])
     if not isinstance(rows, list):
         _fail("query.levels", "item levels.rows must be a list", f"$.items.{item_id}.levels.rows")
+    mode = item.get("authoring_mode")
+    if rows:
+        if mode not in PROVENANCE_BY_MODE or levels.get("mode") != mode:
+            _fail("query.provenance", "level mode must match authoring_mode")
+        if mode == "single" and len(rows) != 1:
+            _fail("query.provenance", "single mode requires exactly one row")
+    elif "levels" in item or mode != "none":
+        _fail("query.provenance", "item without levels requires authoring_mode none")
     if not rows:
         if level_from is not None or level_to is not None:
             _fail("query.level_range", "item has only 0 levels")
@@ -327,24 +374,42 @@ def query_snapshot(
         if end > len(rows):
             _fail("query.level_range", f"item has only {len(rows)} levels")
         selected = rows[start - 1:end]
+    provenance_rows = levels.get("provenance", [])
+    if not isinstance(provenance_rows, list) or len(provenance_rows) != len(rows):
+        _fail("query.provenance", "level provenance must match rows", f"$.items.{item_id}.levels.provenance")
+    selected_provenance = provenance_rows[start - 1:start - 1 + len(selected)]
     if len(selected) > max_rows:
         _fail("query.row_limit", f"query exceeds {max_rows} level rows; provide a smaller range")
 
     result_rows = []
     field_found = field is None or field in item
     field_in_rows = False
-    for level, row in enumerate(selected, start=start):
+    for level, (row, row_provenance) in enumerate(
+        zip(selected, selected_provenance), start=start,
+    ):
         if not isinstance(row, dict):
             _fail("query.level_row", "level row must be an object")
+        if not isinstance(row_provenance, dict) or set(row_provenance) != set(row):
+            _fail("query.provenance", "level provenance must match row values")
+        if not all(
+            isinstance(value, str) and value in PROVENANCE_BY_MODE[mode]
+            for value in row_provenance.values()
+        ):
+            _fail("query.provenance", f"provenance is inconsistent with {mode} mode")
         if field is None:
             values = row
+            value_provenance = row_provenance
         elif field in row:
             values = {field: row[field]}
+            value_provenance = {field: row_provenance[field]}
             field_found = True
             field_in_rows = True
         else:
             values = {}
-        result_rows.append({"level": level, "values": values})
+            value_provenance = {}
+        result_rows.append({
+            "level": level, "values": values, "provenance": value_provenance,
+        })
     if field is not None and not field_found:
         _fail("query.field_not_found", f"unknown field for {item_id}: {field}", "$.field")
 
@@ -364,7 +429,7 @@ def query_snapshot(
         "content_hash": snapshot.get("content_hash"),
         "item": item_result,
     }
-    if field is not None and field_in_rows:
+    if field is not None and field_in_rows and field != "cost_to_reach":
         raw_fields = snapshot.get("fields", [])
         if not isinstance(raw_fields, list):
             _fail("query.fields", "snapshot fields must be a list", "$.fields")

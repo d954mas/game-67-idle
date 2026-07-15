@@ -8,7 +8,7 @@ priority: P0
 tags: [items, balance, snapshot, dependencies]
 created: 2026-07-10
 updated: 2026-07-15
-quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"typed-schema review ACCEPT; Lua sandbox 16/16; Snapshot 9/9 including CLI and adversarial malformed-schema/cardinality cases; feature contracts 6 modules/2 pointers; git diff check clean"}]}
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"per-value provenance review ACCEPT; Lua sandbox 16/16; Snapshot 10/10 including transition, override, spoof, cardinality, malformed, CLI, and 1000-row cases; feature contracts 6 modules/2 pointers; git diff check clean"}]}
 ---
 
 ## What
@@ -61,3 +61,5 @@ for C export, Viewer, requirements, and agents.
 - 2026-07-15: Resumed after T0381 completion. Registration, schema field handles, generated/mixed level materialization, typed refs/costs, and evaluation release receipt are now available; next slice normalizes typed schema and field provenance into the Snapshot before chart/requirements.
 - 2026-07-15: 2026-07-15: Slice 4: Snapshot now normalizes registered i64 level_row schemas with stable IDs, units/ranges, required kinds, field registration sources outside content_hash, and focused field schema/source output; review-driven regressions reject missing level cardinality, malformed selected schemas, and unrelated top-level name matches. Per-value provenance, source spans/snippets, chart, and requirements remain open.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: typed-schema review ACCEPT; Lua sandbox 16/16; Snapshot 9/9 including CLI and adversarial malformed-schema/cardinality cases; feature contracts 6 modules/2 pointers; git diff check clean
+- 2026-07-15: 2026-07-15: Slice 5: evaluator and Snapshot now record authoring_mode plus exact per-value provenance for single/table/generate/columns/override; focused field and built-in transition queries return only selected provenance. Validation rejects missing/extra/spoofed/mode-inconsistent entries and invalid single cardinality. Source spans/snippets, chart, and requirements remain open.
+- 2026-07-15: Quality: QTECH_001=pass; evidence: per-value provenance review ACCEPT; Lua sandbox 16/16; Snapshot 10/10 including transition, override, spoof, cardinality, malformed, CLI, and 1000-row cases; feature contracts 6 modules/2 pointers; git diff check clean

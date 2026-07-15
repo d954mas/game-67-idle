@@ -156,7 +156,9 @@ after schema/definition registration has closed. Raw Lua arithmetic/bitwise
 operators are rejected in favor of `studio.math`, and both formula and override
 integers must remain in its exact range. `levels.columns` uses the same explicit
 bound with authentic `levels.linear`/`levels.values` handles and deterministic
-overrides. Composite
+overrides. Evaluation records the authored mode and one bounded provenance tag
+for every materialized level value; an override changes only the selected tags
+to `override`. Composite
 costs accept only stackable resources and merge duplicate refs with checked,
 deterministic sums.
 
@@ -176,11 +178,13 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 `items_snapshot.py build` turns only canonical evaluator JSON into one
 `items.snapshot.v1` document. It sorts item identities, hashes normalized
 content and registered field schemas, validates required i64 level fields
-against their declared kinds and ranges, retains the evaluator fingerprint,
+against their declared kinds and ranges, requires complete mode-consistent
+per-value provenance, retains the evaluator fingerprint,
 and derives inputs/dependents from actual typed references. Source locations
 remain separate from the content hash. `query` returns one item with its Lua
 definition location plus an optional field and level range; a selected level
-field also includes only its schema and registration location. More than 1000
+field also includes only its schema, registration location, and selected value
+provenance. More than 1000
 level rows requires an explicit smaller range. `diff` compares only normalized
 item data, emits stable JSON Pointer paths, ignores provenance-only movement,
 and stops after 1000 changes by default.

@@ -65,11 +65,15 @@ def evaluation(items, fields=None):
 
 class ItemsSnapshotTests(unittest.TestCase):
     def base_items(self):
-        gold = {"id": "game.gold", "kind": "currency", "stack": 0}
+        gold = {
+            "id": "game.gold", "kind": "currency", "stack": 0,
+            "authoring_mode": "none",
+        }
         sword = {
             "id": "game.sword",
             "kind": "weapon",
             "stack": 1,
+            "authoring_mode": "table",
             "acquire": {
                 "cost": {
                     "__studio_kind": "cost",
@@ -79,6 +83,11 @@ class ItemsSnapshotTests(unittest.TestCase):
             },
             "levels": {
                 "mode": "table",
+                "provenance": [
+                    {"attack": "table"},
+                    {"attack": "table", "cost_to_reach": "table"},
+                    {"attack": "table", "cost_to_reach": "table"},
+                ],
                 "rows": [
                     {"attack": 10},
                     {
@@ -127,6 +136,7 @@ class ItemsSnapshotTests(unittest.TestCase):
 
         empty_levels = evaluation(self.base_items())
         empty_levels["items"][1]["levels"]["rows"] = []
+        empty_levels["items"][1]["levels"]["provenance"] = []
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.required_field"):
             SNAPSHOT.build_snapshot(empty_levels)
 
@@ -146,7 +156,11 @@ class ItemsSnapshotTests(unittest.TestCase):
             SNAPSHOT.build_snapshot(out_of_range)
 
         wrong_kind = evaluation(self.base_items())
-        wrong_kind["items"][0]["levels"] = {"mode": "single", "rows": [{"attack": 1}]}
+        wrong_kind["items"][0]["authoring_mode"] = "single"
+        wrong_kind["items"][0]["levels"] = {
+            "mode": "single", "rows": [{"attack": 1}],
+            "provenance": [{"attack": "single"}],
+        }
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.field_kind"):
             SNAPSHOT.build_snapshot(wrong_kind)
 
@@ -186,8 +200,14 @@ class ItemsSnapshotTests(unittest.TestCase):
             "item": {
                 "id": "game.sword",
                 "levels": [
-                    {"level": 2, "values": {"attack": 15}},
-                    {"level": 3, "values": {"attack": 20}},
+                    {
+                        "level": 2, "values": {"attack": 15},
+                        "provenance": {"attack": "table"},
+                    },
+                    {
+                        "level": 3, "values": {"attack": 20},
+                        "provenance": {"attack": "table"},
+                    },
                 ],
             },
             "inputs": ["game.gold"],
@@ -212,7 +232,7 @@ class ItemsSnapshotTests(unittest.TestCase):
         item_only = SNAPSHOT.query_snapshot(snapshot, item_id="game.gold")
         self.assertEqual(item_only["item"], {
             "id": "game.gold",
-            "values": {"kind": "currency", "stack": 0},
+            "values": {"authoring_mode": "none", "kind": "currency", "stack": 0},
         })
 
         top_level_items = self.base_items()
@@ -223,6 +243,52 @@ class ItemsSnapshotTests(unittest.TestCase):
         )
         self.assertEqual(top_level["item"]["values"], {"attack": 7})
         self.assertNotIn("field", top_level)
+
+        transition = SNAPSHOT.query_snapshot(
+            snapshot, item_id="game.sword", field="cost_to_reach",
+            level_from=2, level_to=2,
+        )
+        self.assertEqual(
+            transition["item"]["levels"][0]["provenance"],
+            {"cost_to_reach": "table"},
+        )
+        self.assertNotIn("field", transition)
+
+    def test_level_provenance_is_complete_and_mode_consistent(self):
+        missing = evaluation(self.base_items())
+        del missing["items"][1]["levels"]["provenance"][0]["attack"]
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.provenance"):
+            SNAPSHOT.build_snapshot(missing)
+
+        extra = evaluation(self.base_items())
+        extra["items"][1]["levels"]["provenance"][0]["damage"] = "table"
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.provenance"):
+            SNAPSHOT.build_snapshot(extra)
+
+        inconsistent = evaluation(self.base_items())
+        inconsistent["items"][1]["levels"]["provenance"][0]["attack"] = "override"
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.provenance"):
+            SNAPSHOT.build_snapshot(inconsistent)
+
+        malformed = evaluation(self.base_items())
+        malformed["items"][1]["levels"]["provenance"][0]["attack"] = ["table"]
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.provenance"):
+            SNAPSHOT.build_snapshot(malformed)
+
+        wrong_mode = evaluation(self.base_items())
+        wrong_mode["items"][1]["authoring_mode"] = "generate"
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.authoring_mode"):
+            SNAPSHOT.build_snapshot(wrong_mode)
+
+        multiple_single = evaluation(self.base_items())
+        multiple_single["items"][1]["authoring_mode"] = "single"
+        multiple_single["items"][1]["levels"]["mode"] = "single"
+        multiple_single["items"][1]["levels"]["provenance"] = [
+            {key: "single" for key in row}
+            for row in multiple_single["items"][1]["levels"]["rows"]
+        ]
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.authoring_mode"):
+            SNAPSHOT.build_snapshot(multiple_single)
 
     def test_non_finite_values_and_unknown_references_are_rejected(self):
         bad_number = self.base_items()
@@ -271,9 +337,20 @@ class ItemsSnapshotTests(unittest.TestCase):
                     malformed_field_schema, item_id="game.sword", field="attack",
                 )
 
+        spoofed_provenance = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
+        spoofed_provenance["items"][1]["levels"]["provenance"][0]["attack"] = "generate"
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.provenance"):
+            SNAPSHOT.query_snapshot(
+                spoofed_provenance, item_id="game.sword", field="attack",
+                level_from=1, level_to=1,
+            )
+
     def test_query_requires_a_range_for_more_than_1000_levels(self):
         items = self.base_items()
         items[1]["levels"]["rows"] = [{"attack": level} for level in range(1, 1002)]
+        items[1]["levels"]["provenance"] = [
+            {"attack": "table"} for _ in range(1, 1002)
+        ]
         snapshot = SNAPSHOT.build_snapshot(evaluation(items))
 
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.row_limit"):
@@ -322,13 +399,19 @@ class ItemsSnapshotTests(unittest.TestCase):
             "before": 1, "after": True,
         }])
 
-        added_items = self.base_items() + [{"id": "game.z_potion", "kind": "consumable", "stack": 9}]
+        added_items = self.base_items() + [{
+            "id": "game.z_potion", "kind": "consumable", "stack": 9,
+            "authoring_mode": "none",
+        }]
         added = SNAPSHOT.build_snapshot(evaluation(added_items))
         self.assertEqual(SNAPSHOT.diff_snapshots(before, added)["changes"][0]["path"], "")
 
     def test_diff_is_bounded(self):
         before_items = self.base_items()
         before_items[1]["levels"]["rows"] = [{"attack": level} for level in range(1001)]
+        before_items[1]["levels"]["provenance"] = [
+            {"attack": "table"} for _ in range(1001)
+        ]
         after_items = copy.deepcopy(before_items)
         for row in after_items[1]["levels"]["rows"]:
             row["attack"] += 1

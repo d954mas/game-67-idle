@@ -9,6 +9,7 @@
   "field_sources": {},
   "items": [
     {
+      "authoring_mode": "none",
       "id": "game.gold",
       "kind": "currency",
       "stack": 0
@@ -21,16 +22,27 @@
           "item": { "__studio_kind": "item_ref", "id": "game.gold" }
         }
       },
+      "authoring_mode": "single",
       "id": "game.iron_sword",
       "kind": "weapon",
-      "levels": { "mode": "single", "rows": [{ "attack": 15 }] },
+      "levels": {
+        "mode": "single",
+        "provenance": [{ "attack": "single" }],
+        "rows": [{ "attack": 15 }]
+      },
       "stack": 1
     },
     {
+      "authoring_mode": "table",
       "id": "game.levelled_sword",
       "kind": "weapon",
       "levels": {
         "mode": "table",
+        "provenance": [
+          { "attack": "table" },
+          { "attack": "table", "cost_to_reach": "table" },
+          { "attack": "table", "cost_to_reach": "table" }
+        ],
         "rows": [
           { "attack": 10 },
           {
