@@ -1,0 +1,110 @@
+{
+  "build": {
+    "c_compiler": "C:/Program Files/LLVM/bin/clang.exe",
+    "generator": "Ninja",
+    "type": "Release"
+  },
+  "candidates": {
+    "blob": {
+      "compile_link_ms": 779.768,
+      "executable_bytes": 21504,
+      "image_sections": {
+        ".data": 464,
+        ".pdata": 504,
+        ".rdata": 3708,
+        ".reloc": 44,
+        ".rsrc": 424,
+        ".text": 14054
+      },
+      "link_ms": 624.292,
+      "noop_build_ms": 426.572,
+      "runtime": {
+        "access_ns_per_op": 18.005,
+        "access_runs": 1000000,
+        "candidate": "blob",
+        "checksum": 49829954,
+        "schema": "items.runtime.candidate.v1",
+        "startup_bind_ns": 300,
+        "steady_owned_bytes": 568,
+        "transient_input_plus_owned_bytes": 1136
+      },
+      "selected_code_data_section_bytes": 18226
+    },
+    "c_arrays": {
+      "compile_link_ms": 2480.208,
+      "executable_bytes": 13824,
+      "image_sections": {
+        ".data": 352,
+        ".pdata": 492,
+        ".rdata": 3508,
+        ".reloc": 48,
+        ".rsrc": 424,
+        ".text": 6742
+      },
+      "link_ms": 662.72,
+      "noop_build_ms": 423.7,
+      "runtime": {
+        "access_ns_per_op": 2.49,
+        "access_runs": 1000000,
+        "candidate": "c_arrays",
+        "checksum": 49829954,
+        "schema": "items.runtime.candidate.v1",
+        "startup_bind_ns": 0,
+        "steady_owned_bytes": 0,
+        "transient_input_plus_owned_bytes": 0
+      },
+      "selected_code_data_section_bytes": 10602
+    }
+  },
+  "decision": {
+    "default": "blob",
+    "reason": "value-only edits keep the ABI header stable and avoid relinking"
+  },
+  "fixture": {
+    "costs": 2,
+    "fields": 1,
+    "items": 2,
+    "levels": 3
+  },
+  "generation": {
+    "blob": {
+      "cold_ms": 119.069,
+      "header_stable_on_value_edit": true,
+      "noop_ms": 105.436,
+      "raw_blob_bytes": 568,
+      "relink_required_on_value_edit": false,
+      "value_edit_changed": {
+        "blob": true,
+        "header": false
+      },
+      "value_edit_ms": 110.257,
+      "zlib_blob_bytes": 267
+    },
+    "c_arrays": {
+      "cold_ms": 127.432,
+      "noop_ms": 118.955,
+      "raw_data_source_bytes": 3291,
+      "relink_required_on_value_edit": true,
+      "value_edit_changed_files": [
+        "items_game.gen.c"
+      ],
+      "value_edit_ms": 114.339,
+      "zlib_data_source_bytes": 913
+    }
+  },
+  "lookup_strategy": "linear stable-hash definition lookup, then checked dense level/value spans",
+  "pack_rebuild": {
+    "blob_requires_relink": false,
+    "c_arrays_require_relink": true,
+    "current_pack_blob_requires_repack": true,
+    "separate_pack_blob_requires_repack": true,
+    "separate_pack_game_pack_requires_rebuild": false
+  },
+  "platform": {
+    "machine": "AMD64",
+    "python": "3.12.4",
+    "release": "11",
+    "system": "Windows"
+  },
+  "schema": "items.runtime.benchmark.v1"
+}

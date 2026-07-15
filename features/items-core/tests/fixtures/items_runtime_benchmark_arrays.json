@@ -1,0 +1,75 @@
+{
+  "schema": "items.normalized_api_proof",
+  "schema_version": 1,
+  "source": "items_runtime_benchmark.lua",
+  "reserved_field_ids": [],
+  "fields": [
+    {
+      "field_id": "game.weapon.level.attack",
+      "member": "attack",
+      "scope": "level_row",
+      "c_type": "int64_t",
+      "required_for": ["weapon"],
+      "min": 0,
+      "max": 1000000,
+      "unit": "damage",
+      "rounding": "exact",
+      "label_key": "item.attack",
+      "ui": {"format": "integer", "description_key": "item.attack.description"},
+      "evolution": {"since": 1, "deprecated": false},
+      "source": {"file": "items_runtime_benchmark.lua", "line": 1, "column": 1}
+    }
+  ],
+  "views": [
+    {
+      "view_id": "game.weapon.balance",
+      "layout": "table",
+      "order": ["game.weapon.level.attack"],
+      "chart": {"field_ids": ["game.weapon.level.attack"]},
+      "source": {"file": "items_runtime_benchmark.lua", "line": 5, "column": 1}
+    }
+  ],
+  "items": [
+    {
+      "def_id": "game.gold",
+      "kind": "currency",
+      "tags": ["economy"],
+      "stack": 0,
+      "authoring_mode": "none",
+      "acquire": {"kind": "free"},
+      "levels": [],
+      "source": {"file": "items_runtime_benchmark.lua", "line": 10, "column": 1}
+    },
+    {
+      "def_id": "game.sword",
+      "kind": "weapon",
+      "tags": ["melee"],
+      "stack": 1,
+      "authoring_mode": "table",
+      "acquire": {"kind": "cost", "cost": [{"item_ref": "game.gold", "count": 100}]},
+      "levels": [
+        {
+          "level": 1,
+          "attack": 10,
+          "provenance": {"attack": "table"},
+          "source": {"file": "items_runtime_benchmark.lua", "line": 21, "column": 3}
+        },
+        {
+          "level": 2,
+          "attack": 15,
+          "cost_to_reach": {"kind": "cost", "cost": [{"item_ref": "game.gold", "count": 100}]},
+          "provenance": {"attack": "table", "cost_to_reach": "table"},
+          "source": {"file": "items_runtime_benchmark.lua", "line": 22, "column": 3}
+        },
+        {
+          "level": 3,
+          "attack": 21,
+          "cost_to_reach": {"kind": "free"},
+          "provenance": {"attack": "table", "cost_to_reach": "table"},
+          "source": {"file": "items_runtime_benchmark.lua", "line": 23, "column": 3}
+        }
+      ],
+      "source": {"file": "items_runtime_benchmark.lua", "line": 18, "column": 1}
+    }
+  ]
+}

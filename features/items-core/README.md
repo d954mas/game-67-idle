@@ -244,6 +244,10 @@ cmake --build templates/template/build/native-debug --target test_items_runtime_
 ctest --test-dir templates/template/build/native-debug -R "^test_items_runtime_(package|resource)$" --output-on-failure
 ```
 
+The reproducible generated-C versus blob comparison and current Windows result
+live in [`benchmarks/README.md`](benchmarks/README.md). Linux proof is still an
+open closeout gate for T0365.
+
 ### T0364 typed API proof
 
 `generate_items_api_proof.py` is a bounded reference exporter, not the Lua

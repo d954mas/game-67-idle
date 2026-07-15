@@ -349,6 +349,63 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_items_runtime_resource COMMAND test_items_runtime_resource)
 
+    # T0365 benchmark candidates share one public API and equivalent two-item
+    # data; only their storage/bind path differs.
+    set(ITEMS_RUNTIME_BENCHMARK_DIR "${CMAKE_BINARY_DIR}/generated/items-runtime-benchmark")
+    set(ITEMS_RUNTIME_BENCHMARK_FIXTURE
+        "${ITEMS_CORE_DIR}/tests/fixtures/items_runtime_benchmark_arrays.json")
+    add_custom_command(
+        OUTPUT
+            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.gen.h"
+            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.internal.gen.h"
+            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.gen.c"
+            "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.luau"
+        COMMAND "${Python3_EXECUTABLE}" "${ITEMS_API_PROOF_SCRIPT}"
+            --snapshot "${ITEMS_RUNTIME_BENCHMARK_FIXTURE}"
+            --out-dir "${ITEMS_RUNTIME_BENCHMARK_DIR}"
+        DEPENDS
+            "${ITEMS_API_PROOF_SCRIPT}"
+            "${ITEMS_C_IDENTIFIERS}"
+            "${ITEMS_RUNTIME_BENCHMARK_FIXTURE}"
+        COMMENT "Generating C-array Items runtime benchmark candidate"
+        VERBATIM)
+    add_custom_target(items_runtime_benchmark_arrays_gen DEPENDS
+        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.gen.h"
+        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.internal.gen.h"
+        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.gen.c"
+        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.luau")
+
+    add_executable(benchmark_items_c_arrays
+        "${ITEMS_CORE_DIR}/benchmarks/items_runtime_candidate.c"
+        "${ITEMS_CORE_SRC}/items_api.c"
+        "${ITEMS_RUNTIME_BENCHMARK_DIR}/items_game.gen.c")
+    add_dependencies(benchmark_items_c_arrays items_runtime_benchmark_arrays_gen)
+    target_link_libraries(benchmark_items_c_arrays PRIVATE nt_hash nt_core nt_time)
+    target_include_directories(benchmark_items_c_arrays PRIVATE
+        "${ITEMS_CORE_INC}" "${ITEMS_RUNTIME_BENCHMARK_DIR}")
+    target_compile_definitions(benchmark_items_c_arrays PRIVATE
+        ITEMS_GAME_API_ENABLED=1 ITEMS_BENCHMARK_RUNTIME=0 _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(benchmark_items_c_arrays)
+    nt_set_sanitizer_flags(benchmark_items_c_arrays)
+    set_target_properties(benchmark_items_c_arrays PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmarks")
+
+    add_executable(benchmark_items_runtime_blob
+        "${ITEMS_CORE_DIR}/benchmarks/items_runtime_candidate.c"
+        "${ITEMS_CORE_SRC}/items_runtime_package.c")
+    add_dependencies(benchmark_items_runtime_blob items_runtime_package_gen)
+    target_link_libraries(benchmark_items_runtime_blob PRIVATE nt_hash nt_core nt_time)
+    target_include_directories(benchmark_items_runtime_blob PRIVATE
+        "${ITEMS_CORE_INC}" "${ITEMS_RUNTIME_PACKAGE_DIR}")
+    target_compile_definitions(benchmark_items_runtime_blob PRIVATE
+        ITEMS_RUNTIME_PACKAGE_ENABLED=1 ITEMS_BENCHMARK_RUNTIME=1
+        ITEMS_RUNTIME_PACKAGE_PATH="${ITEMS_RUNTIME_PACKAGE_BLOB}"
+        _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(benchmark_items_runtime_blob)
+    nt_set_sanitizer_flags(benchmark_items_runtime_blob)
+    set_target_properties(benchmark_items_runtime_blob PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmarks")
+
     # Items fragment round-trip links generated state/events, game-owned hooks,
     # JSON/event plumbing, ownership core, and the generated catalog.
     # game_save.c is not linked; the test TU stubs game_save_mark_dirty.
