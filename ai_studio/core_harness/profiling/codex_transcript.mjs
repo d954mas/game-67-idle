@@ -22,7 +22,8 @@ function transcriptCandidates(root) {
 }
 
 export function resolveCodexTranscript({ transcript = "", sessionId = "" } = {}) {
-  const explicit = transcript || process.env.CODEX_SESSION_FILE || "";
+  if (transcript) return resolve(transcript);
+  const explicit = process.env.CODEX_SESSION_FILE || "";
   if (explicit && existsSync(explicit)) return resolve(explicit);
 
   const wanted = sessionId || process.env.CODEX_THREAD_ID || "";

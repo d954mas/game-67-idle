@@ -592,7 +592,7 @@ test("status --complete reads the canonical multi-day Codex transcript", () => {
   }
 });
 
-test("status --transcript selects the explicit canonical transcript without --complete", () => {
+test("status --transcript selects the explicit canonical transcript and fails closed when missing", () => {
   const dir = tempDir();
   try {
     const transcript = join(dir, "rollout-explicit.jsonl");
@@ -621,12 +621,25 @@ test("status --transcript selects the explicit canonical transcript without --co
       transcript,
       "--json-output",
       statusJson,
-    ], { env: { CODEX_SESSION_FILE: "", CODEX_THREAD_ID: "" } });
+    ], { env: { CODEX_SESSION_FILE: "", CODEX_THREAD_ID: "", CODEX_SESSION_ROOT: dir } });
 
     const status = readJson(statusJson);
     assert.equal(status.source_kind, "codex-transcript");
     assert.equal(status.profile, transcript);
     assert.equal(status.records, 2);
+
+    const missingTranscript = join(dir, "missing.jsonl");
+    const missingStatusJson = join(dir, "missing-status.json");
+    run([
+      "ai_studio/core_harness/profiling/status.mjs",
+      "--transcript",
+      missingTranscript,
+      "--json-output",
+      missingStatusJson,
+    ], { env: { CODEX_SESSION_FILE: "", CODEX_THREAD_ID: "", CODEX_SESSION_ROOT: dir } });
+    const missingStatus = readJson(missingStatusJson);
+    assert.equal(missingStatus.profile, missingTranscript);
+    assert.equal(missingStatus.exists, false);
   } finally {
     cleanup(dir);
   }
