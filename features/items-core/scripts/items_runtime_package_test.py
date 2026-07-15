@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 from pathlib import Path
 import struct
@@ -45,7 +46,10 @@ def evaluation() -> dict:
         "fields": [attack_field],
         "field_sources": {attack_field["id"]: source(1, "field")},
         "items": [
-            {"id": "game.gold", "kind": "currency", "stack": 0, "authoring_mode": "none"},
+            {
+                "id": "game.gold", "kind": "currency", "stack": 0,
+                "authoring_mode": "none", "acquire": {"cost": {"__studio_kind": "free"}},
+            },
             {
                 "id": "game.sword", "kind": "weapon", "stack": 1,
                 "authoring_mode": "table", "acquire": {"cost": cost},
@@ -102,7 +106,7 @@ class ItemsRuntimePackageTests(unittest.TestCase):
         self.assertEqual(inspected["items"], [
             {
                 "id": "game.gold", "kind": "currency", "storage": "stack",
-                "stack": 0, "level_count": 0, "acquire_costs": [],
+                "stack": 0, "level_count": 0, "acquire_costs": [], "acquire_free": True,
             },
             {
                 "id": "game.sword", "kind": "weapon", "storage": "unique",
@@ -122,6 +126,18 @@ class ItemsRuntimePackageTests(unittest.TestCase):
                 "values": {"game.weapon.level.attack": 21}, "free": True,
             },
         ])
+
+    def test_native_fixture_content_hash_matches_snapshot_payload(self):
+        fixture_path = SCRIPT_DIR.parent / "tests" / "fixtures" / "items_runtime_snapshot_v1.json"
+        fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
+        payload = {
+            key: fixture[key]
+            for key in ("schema", "fields", "items", "requirements")
+        }
+        digest = hashlib.sha256(json.dumps(
+            payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+        ).encode("utf-8")).hexdigest()
+        self.assertEqual(fixture["content_hash"], f"sha256:{digest}")
 
     def test_rejects_corruption_collisions_and_default_budget_overflow(self):
         snapshot = self.snapshot()
@@ -176,8 +192,24 @@ class ItemsRuntimePackageTests(unittest.TestCase):
                 with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.field|package.string"):
                     PACKAGE.inspect_package(self.resign(malformed))
 
+        invalid_item_flag = bytearray(original)
+        gold = list(PACKAGE.ITEM.unpack_from(invalid_item_flag, item_offset))
+        gold[9] = 2
+        PACKAGE.ITEM.pack_into(invalid_item_flag, item_offset, *gold)
+        with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.item"):
+            PACKAGE.inspect_package(self.resign(invalid_item_flag))
+
+        free_with_cost = bytearray(original)
+        sword_offset = item_offset + PACKAGE.ITEM.size
+        sword = list(PACKAGE.ITEM.unpack_from(free_with_cost, sword_offset))
+        sword[9] = PACKAGE.ITEM_ACQUIRE_FREE
+        PACKAGE.ITEM.pack_into(free_with_cost, sword_offset, *sword)
+        with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.item"):
+            PACKAGE.inspect_package(self.resign(free_with_cost))
+
     def test_row_and_byte_budgets_fail_before_materialization(self):
         snapshot = self.snapshot()
+        del snapshot["items"][0]["acquire"]
         del snapshot["items"][1]["acquire"]
         with mock.patch.object(PACKAGE, "_cost_values", side_effect=AssertionError("traversed rows")):
             with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.level_budget"):

@@ -124,6 +124,12 @@ void test_resigned_identity_utf8_range_and_size_corruption_are_rejected(void) {
     TEST_ASSERT_EQUAL(ITEMS_CATALOG_BIND_ABI_MISMATCH, error);
 
     memcpy(copy, s_fixture, s_fixture_size);
+    copy[item_section + 40U] = 2U;
+    resign(copy, s_fixture_size);
+    TEST_ASSERT_FALSE(items_catalog_try_bind(copy, s_fixture_size, &error));
+    TEST_ASSERT_EQUAL(ITEMS_CATALOG_BIND_BAD_LAYOUT, error);
+
+    memcpy(copy, s_fixture, s_fixture_size);
     uint32_t kind_offset = find_bytes(copy, s_fixture_size, "currency");
     TEST_ASSERT_NOT_EQUAL(UINT32_MAX, kind_offset);
     copy[kind_offset] = 0xFFU;
@@ -145,12 +151,45 @@ void test_resigned_identity_utf8_range_and_size_corruption_are_rejected(void) {
     free(copy);
 }
 
+void test_bound_catalog_exposes_typed_base_api(void) {
+    items_catalog_bind_error_t error = ITEMS_CATALOG_BIND_BAD_HEADER;
+    TEST_ASSERT_TRUE(items_catalog_try_bind(s_fixture, s_fixture_size, &error));
+
+    TEST_ASSERT_EQUAL_UINT64(nt_hash64_str("game.gold").value, ITEM_GAME_GOLD.value);
+    TEST_ASSERT_EQUAL_UINT64(nt_hash64_str("game.sword").value, ITEM_GAME_SWORD.value);
+    TEST_ASSERT_TRUE(items_exists(ITEM_GAME_GOLD));
+    TEST_ASSERT_FALSE(items_exists((item_id_t){UINT64_C(0)}));
+    TEST_ASSERT_FALSE(items_try_get(ITEM_GAME_GOLD, NULL));
+
+    item_def_ref_t sword = items_get(ITEM_GAME_SWORD);
+    item_def_ref_t string_ref = {UINT32_MAX};
+    TEST_ASSERT_TRUE(items_try_get_string("game.sword", &string_ref));
+    TEST_ASSERT_EQUAL_UINT32(sword._index, string_ref._index);
+    TEST_ASSERT_FALSE(items_try_get_string("game.missing", &string_ref));
+    TEST_ASSERT_FALSE(items_try_get_string(NULL, &string_ref));
+
+    item_core_t core = items_core(sword);
+    TEST_ASSERT_EQUAL_UINT64(ITEM_GAME_SWORD.value, core.id.value);
+    TEST_ASSERT_EQUAL_INT64(1, core.stack);
+
+    item_transition_t acquire = items_acquire_transition(sword);
+    TEST_ASSERT_EQUAL(ITEM_TRANSITION_COST, acquire.kind);
+    TEST_ASSERT_EQUAL_UINT32(1, items_cost_count(acquire.cost));
+    item_cost_entry_t cost = items_cost_at(acquire.cost, 0);
+    TEST_ASSERT_EQUAL_UINT64(ITEM_GAME_GOLD.value, cost.item.value);
+    TEST_ASSERT_EQUAL_INT64(100, cost.count);
+    TEST_ASSERT_EQUAL(
+        ITEM_TRANSITION_FREE,
+        items_acquire_transition(items_get(ITEM_GAME_GOLD)).kind);
+}
+
 int main(void) {
     load_fixture();
     UNITY_BEGIN();
     RUN_TEST(test_bind_copies_valid_package_and_forbids_rebind);
     RUN_TEST(test_failure_never_publishes_catalog);
     RUN_TEST(test_resigned_identity_utf8_range_and_size_corruption_are_rejected);
+    RUN_TEST(test_bound_catalog_exposes_typed_base_api);
     int result = UNITY_END();
     free(s_fixture);
     return result;

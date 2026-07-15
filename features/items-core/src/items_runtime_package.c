@@ -11,6 +11,16 @@
 #define ITEMS_HEADER_SIZE UINT32_C(144)
 #define ITEMS_SECTION_COUNT UINT32_C(6)
 #define ITEMS_LEVEL_FREE UINT32_C(1)
+#define ITEMS_ITEM_ACQUIRE_FREE UINT32_C(1)
+
+typedef enum items_section_index_t {
+    ITEMS_SECTION_STRINGS = 0,
+    ITEMS_SECTION_ITEMS,
+    ITEMS_SECTION_FIELDS,
+    ITEMS_SECTION_LEVELS,
+    ITEMS_SECTION_VALUES,
+    ITEMS_SECTION_COSTS,
+} items_section_index_t;
 
 typedef struct items_section_t {
     uint32_t offset;
@@ -23,6 +33,7 @@ static uint32_t s_catalog_size;
 static uint32_t s_item_count;
 static uint64_t s_schema_abi;
 static uint64_t s_content_fingerprint;
+static items_section_t s_sections[ITEMS_SECTION_COUNT];
 
 static uint32_t read_u32(const uint8_t *bytes) {
     return (uint32_t)bytes[0] |
@@ -121,7 +132,8 @@ static bool zero_padding(const uint8_t *bytes, uint32_t start, uint32_t end) {
 
 static items_catalog_bind_error_t validate_package(
     uint8_t *bytes, uint32_t size, uint32_t *out_item_count,
-    uint64_t *out_schema_abi, uint64_t *out_content_fingerprint) {
+    uint64_t *out_schema_abi, uint64_t *out_content_fingerprint,
+    items_section_t out_sections[ITEMS_SECTION_COUNT]) {
     static const uint8_t magic[8] = {'N', 'T', 'I', 'T', 'E', 'M', 'S', 0};
     static const uint32_t strides[ITEMS_SECTION_COUNT] = {1U, 48U, 48U, 32U, 24U, 16U};
     if (size < ITEMS_HEADER_SIZE || read_u32(bytes + 12U) != ITEMS_HEADER_SIZE
@@ -205,9 +217,12 @@ static items_catalog_bind_error_t validate_package(
         const char *kind = checked_string(bytes, strings, read_u32(row + 12U));
         uint32_t storage = read_u32(row + 16U);
         uint32_t stack = read_u32(row + 20U);
+        uint32_t flags = read_u32(row + 40U);
         if (id == NULL || kind == NULL || nt_hash64(id, (uint32_t)strlen(id)).value != read_u64(row)
                 || storage > 1U || ((storage == 1U) != (stack == 1U))
-                || read_u32(row + 40U) != 0U || read_u32(row + 44U) != 0U
+                || (flags & ~ITEMS_ITEM_ACQUIRE_FREE) != 0U
+                || ((flags & ITEMS_ITEM_ACQUIRE_FREE) != 0U && read_u32(row + 36U) != 0U)
+                || read_u32(row + 44U) != 0U
                 || (previous_name != NULL && strcmp(previous_name, id) >= 0)) {
             return ITEMS_CATALOG_BIND_BAD_LAYOUT;
         }
@@ -295,6 +310,7 @@ static items_catalog_bind_error_t validate_package(
     *out_item_count = items->count;
     *out_schema_abi = schema_abi;
     *out_content_fingerprint = content_fingerprint;
+    memcpy(out_sections, sections, sizeof(sections));
     return ITEMS_CATALOG_BIND_OK;
 }
 
@@ -317,14 +333,16 @@ bool items_catalog_try_bind(
             uint32_t item_count = 0U;
             uint64_t schema_abi = 0U;
             uint64_t content_fingerprint = 0U;
+            items_section_t sections[ITEMS_SECTION_COUNT] = {{0U, 0U, 0U}};
             error = validate_package(
-                owned, byte_count, &item_count, &schema_abi, &content_fingerprint);
+                owned, byte_count, &item_count, &schema_abi, &content_fingerprint, sections);
             if (error == ITEMS_CATALOG_BIND_OK) {
                 s_catalog = owned;
                 s_catalog_size = byte_count;
                 s_item_count = item_count;
                 s_schema_abi = schema_abi;
                 s_content_fingerprint = content_fingerprint;
+                memcpy(s_sections, sections, sizeof(s_sections));
                 owned = NULL;
             }
             free(owned);
@@ -343,6 +361,7 @@ void items_catalog_shutdown(void) {
     s_item_count = 0U;
     s_schema_abi = 0U;
     s_content_fingerprint = 0U;
+    memset(s_sections, 0, sizeof(s_sections));
 }
 
 bool items_catalog_is_bound(void) { return s_catalog != NULL; }
@@ -360,4 +379,107 @@ uint64_t items_catalog_schema_abi(void) {
 uint64_t items_catalog_content_fingerprint(void) {
     NT_ASSERT(s_catalog != NULL && s_catalog_size >= ITEMS_HEADER_SIZE);
     return s_content_fingerprint;
+}
+
+static const uint8_t *catalog_row(items_section_index_t section, uint32_t index) {
+    const items_section_t *span = &s_sections[(uint32_t)section];
+    NT_ASSERT(s_catalog != NULL && index < span->count);
+    return s_catalog + span->offset + index * span->stride;
+}
+
+static const char *catalog_item_string(uint32_t item_index, uint32_t row_offset) {
+    const uint8_t *item = catalog_row(ITEMS_SECTION_ITEMS, item_index);
+    const items_section_t *strings = &s_sections[ITEMS_SECTION_STRINGS];
+    const char *value = checked_string(s_catalog, strings, read_u32(item + row_offset));
+    NT_ASSERT(value != NULL);
+    return value;
+}
+
+bool items_try_get(item_id_t id, item_def_ref_t *out) {
+    NT_ASSERT(s_catalog != NULL && s_catalog_size >= ITEMS_HEADER_SIZE);
+    if (out == NULL) {
+        return false;
+    }
+    for (uint32_t index = 0; index < s_item_count; ++index) {
+        if (read_u64(catalog_row(ITEMS_SECTION_ITEMS, index)) == id.value) {
+            out->_index = index;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool items_exists(item_id_t id) {
+    item_def_ref_t ignored;
+    return items_try_get(id, &ignored);
+}
+
+item_def_ref_t items_get(item_id_t id) {
+    item_def_ref_t ref = {UINT32_MAX};
+    const bool found = items_try_get(id, &ref);
+    NT_ASSERT(found && "items_get: unknown item id; use items_exists/items_try_get for expected absence");
+    return ref;
+}
+
+bool items_try_get_string(const char *def_id, item_def_ref_t *out) {
+    NT_ASSERT(s_catalog != NULL && s_catalog_size >= ITEMS_HEADER_SIZE);
+    if (def_id == NULL || out == NULL) {
+        return false;
+    }
+    item_def_ref_t ref;
+    const item_id_t id = {nt_hash64_str(def_id).value};
+    if (!items_try_get(id, &ref) || strcmp(catalog_item_string(ref._index, 8U), def_id) != 0) {
+        return false;
+    }
+    *out = ref;
+    return true;
+}
+
+item_core_t items_core(item_def_ref_t ref) {
+    const uint8_t *item = catalog_row(ITEMS_SECTION_ITEMS, ref._index);
+    item_core_t core = {{read_u64(item)}, (int64_t)read_u32(item + 20U)};
+    return core;
+}
+
+item_transition_t items_acquire_transition(item_def_ref_t ref) {
+    const uint8_t *item = catalog_row(ITEMS_SECTION_ITEMS, ref._index);
+    if ((read_u32(item + 40U) & ITEMS_ITEM_ACQUIRE_FREE) != 0U) {
+        return (item_transition_t){ITEM_TRANSITION_FREE, {0U}};
+    }
+    if (read_u32(item + 36U) == 0U) {
+        return (item_transition_t){ITEM_TRANSITION_UNAVAILABLE, {0U}};
+    }
+    return (item_transition_t){ITEM_TRANSITION_COST, {ref._index + 1U}};
+}
+
+static const uint8_t *catalog_acquire_owner(item_cost_ref_t cost) {
+    NT_ASSERT(cost._opaque > 0U && cost._opaque <= s_item_count &&
+              "items cost: invalid runtime cost ref");
+    return catalog_row(ITEMS_SECTION_ITEMS, cost._opaque - 1U);
+}
+
+uint32_t items_cost_count(item_cost_ref_t cost) {
+    const uint8_t *item = catalog_acquire_owner(cost);
+    uint32_t count = read_u32(item + 36U);
+    NT_ASSERT(count > 0U && "items_cost_count: empty cost ref");
+    return count;
+}
+
+item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index) {
+    const uint8_t *item = catalog_acquire_owner(cost);
+    uint32_t count = read_u32(item + 36U);
+    NT_ASSERT(index < count && "items_cost_at: index out of range");
+    const uint8_t *entry = catalog_row(
+        ITEMS_SECTION_COSTS, read_u32(item + 32U) + index);
+    const uint8_t *target = catalog_row(ITEMS_SECTION_ITEMS, read_u32(entry));
+    return (item_cost_entry_t){{read_u64(target)}, read_i64(entry + 8U)};
+}
+
+void items_register_debug_labels(void) {
+    NT_ASSERT(s_catalog != NULL && s_catalog_size >= ITEMS_HEADER_SIZE);
+    for (uint32_t index = 0; index < s_item_count; ++index) {
+        const uint8_t *item = catalog_row(ITEMS_SECTION_ITEMS, index);
+        nt_hash_register_label64(
+            (nt_hash64_t){read_u64(item)}, catalog_item_string(index, 8U));
+    }
 }

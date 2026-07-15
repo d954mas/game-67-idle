@@ -38,6 +38,7 @@ I64_MIN = -(1 << 63)
 I64_MAX = (1 << 63) - 1
 CONTENT_FINGERPRINT_OFFSET = 32
 LEVEL_FREE = 1
+ITEM_ACQUIRE_FREE = 1
 
 
 class PackageFailure(ValueError):
@@ -90,8 +91,9 @@ def _schema_descriptor(fields: list[dict[str, Any]], item_ids: list[str]) -> byt
             for key in ("id", "member", "section", "type", "required_for", "min", "max", "rounding", "unit")
         })
     descriptor = {
-        "accessor_abi": 1,
+        "accessor_abi": 2,
         "format_version": FORMAT_VERSION,
+        "item_flags": {"acquire_free": ITEM_ACQUIRE_FREE},
         "sections": [
             {"name": name, "stride": stride}
             for name, stride in zip(SECTION_NAMES, SECTION_STRIDES)
@@ -421,6 +423,7 @@ def build_package(
         level_start = len(level_rows)
         acquire_start = len(cost_rows)
         acquire = item.get("acquire")
+        acquire_free = False
         if acquire is None:
             acquire_values = []
         elif not isinstance(acquire, dict) or set(acquire) != {"cost"}:
@@ -458,7 +461,8 @@ def build_package(
             _fail("package.runtime_metadata", f"item {item_id} level count mismatch")
         item_rows.append((
             xxh64(item_id.encode("utf-8")), string_offsets[item_id], string_offsets[item["kind"]],
-            storage_code, stack, level_start, len(raw_rows), acquire_start, len(acquire_values), 0, 0,
+            storage_code, stack, level_start, len(raw_rows), acquire_start, len(acquire_values),
+            ITEM_ACQUIRE_FREE if acquire_free else 0, 0,
         ))
 
     for count, limit, code in (
@@ -566,7 +570,8 @@ def inspect_package(package: bytes) -> dict[str, Any]:
         text(row[2])
         if (xxh64(item_id.encode("utf-8")) != row[0] or row[0] in item_hashes
                 or row[3] not in (0, 1) or (row[3] == 1) != (row[4] == 1)
-                or row[9] != 0 or row[10] != 0):
+                or row[9] & ~ITEM_ACQUIRE_FREE or row[10] != 0
+                or (row[9] & ITEM_ACQUIRE_FREE and row[8])):
             _fail("package.item", "item row is invalid")
         item_hashes.add(row[0])
         raw_items.append(row)
@@ -618,6 +623,7 @@ def inspect_package(package: bytes) -> dict[str, Any]:
             "id": item_id, "kind": text(row[2]), "storage": "unique" if row[3] else "stack",
             "stack": row[4], "level_count": level_count,
             "acquire_costs": costs[acquire_start:acquire_start + acquire_count],
+            **({"acquire_free": True} if row[9] & ITEM_ACQUIRE_FREE else {}),
         })
         for expected_level in range(1, level_count + 1):
             level_row = raw_levels[level_cursor]

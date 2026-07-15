@@ -10,46 +10,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-#if defined(ITEMS_RUNTIME_PACKAGE_ENABLED) && ITEMS_RUNTIME_PACKAGE_ENABLED
-#include "items_catalog_abi.gen.h"
-
-#ifndef ITEMS_RUNTIME_PACKAGE_MAX_BYTES
-#define ITEMS_RUNTIME_PACKAGE_MAX_BYTES (UINT32_C(64) * UINT32_C(1024) * UINT32_C(1024))
-#endif
-
-typedef enum items_catalog_bind_error_t {
-    ITEMS_CATALOG_BIND_OK = 0,
-    ITEMS_CATALOG_BIND_BAD_HEADER,
-    ITEMS_CATALOG_BIND_BAD_MAGIC,
-    ITEMS_CATALOG_BIND_BAD_VERSION,
-    ITEMS_CATALOG_BIND_ABI_MISMATCH,
-    ITEMS_CATALOG_BIND_CONTENT_MISMATCH,
-    ITEMS_CATALOG_BIND_BAD_LAYOUT,
-    ITEMS_CATALOG_BIND_NO_MEMORY,
-    ITEMS_CATALOG_BIND_ALREADY_BOUND,
-    ITEMS_CATALOG_BIND_RESOURCE_MISSING,
-    ITEMS_CATALOG_BIND_RESOURCE_NOT_READY,
-    ITEMS_CATALOG_BIND_RESOURCE_WRONG_TYPE,
-} items_catalog_bind_error_t;
-
-bool items_catalog_try_bind(
-    const uint8_t *bytes, uint32_t byte_count,
-    items_catalog_bind_error_t *out_error);
-/* Looks up a ready blob resource and binds an owned copy of its bytes. The
-   caller owns pack placement/request timing; this function only consumes it. */
-bool items_catalog_try_bind_resource(
-    uint64_t asset_id, items_catalog_bind_error_t *out_error);
-/* Startup/shutdown API: all bind/read/shutdown calls are main-thread-only.
-   A host using another thread must serialize the complete catalog lifetime. */
-void items_catalog_shutdown(void);
-bool items_catalog_is_bound(void);
-uint32_t items_catalog_item_count(void);
-uint64_t items_catalog_schema_abi(void);
-uint64_t items_catalog_content_fingerprint(void);
-#endif
-
-/* ---- Typed game catalog API (proof opt-in until the T0386 cutover) ---- */
-#if defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED
+/* ---- Typed catalog API (generated-C proof or runtime package) ---- */
+#if (defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED) || \
+    (defined(ITEMS_RUNTIME_PACKAGE_ENABLED) && ITEMS_RUNTIME_PACKAGE_ENABLED)
 typedef struct item_id_t {
     uint64_t value;
 } item_id_t;
@@ -93,7 +56,47 @@ item_transition_t items_acquire_transition(item_def_ref_t ref);
 uint32_t items_cost_count(item_cost_ref_t cost);
 item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index); /* copy; asserts on invalid range */
 void items_register_debug_labels(void);
+#endif
 
+#if defined(ITEMS_RUNTIME_PACKAGE_ENABLED) && ITEMS_RUNTIME_PACKAGE_ENABLED
+#include "items_catalog_abi.gen.h"
+
+#ifndef ITEMS_RUNTIME_PACKAGE_MAX_BYTES
+#define ITEMS_RUNTIME_PACKAGE_MAX_BYTES (UINT32_C(64) * UINT32_C(1024) * UINT32_C(1024))
+#endif
+
+typedef enum items_catalog_bind_error_t {
+    ITEMS_CATALOG_BIND_OK = 0,
+    ITEMS_CATALOG_BIND_BAD_HEADER,
+    ITEMS_CATALOG_BIND_BAD_MAGIC,
+    ITEMS_CATALOG_BIND_BAD_VERSION,
+    ITEMS_CATALOG_BIND_ABI_MISMATCH,
+    ITEMS_CATALOG_BIND_CONTENT_MISMATCH,
+    ITEMS_CATALOG_BIND_BAD_LAYOUT,
+    ITEMS_CATALOG_BIND_NO_MEMORY,
+    ITEMS_CATALOG_BIND_ALREADY_BOUND,
+    ITEMS_CATALOG_BIND_RESOURCE_MISSING,
+    ITEMS_CATALOG_BIND_RESOURCE_NOT_READY,
+    ITEMS_CATALOG_BIND_RESOURCE_WRONG_TYPE,
+} items_catalog_bind_error_t;
+
+bool items_catalog_try_bind(
+    const uint8_t *bytes, uint32_t byte_count,
+    items_catalog_bind_error_t *out_error);
+/* Looks up a ready blob resource and binds an owned copy of its bytes. The
+   caller owns pack placement/request timing; this function only consumes it. */
+bool items_catalog_try_bind_resource(
+    uint64_t asset_id, items_catalog_bind_error_t *out_error);
+/* Startup/shutdown API: all bind/read/shutdown calls are main-thread-only.
+   A host using another thread must serialize the complete catalog lifetime. */
+void items_catalog_shutdown(void);
+bool items_catalog_is_bound(void);
+uint32_t items_catalog_item_count(void);
+uint64_t items_catalog_schema_abi(void);
+uint64_t items_catalog_content_fingerprint(void);
+#endif
+
+#if defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED
 /* The build selects exactly one game-generated capability header. Consumers
    continue to include only features/items/items.h. */
 #include "items_game.gen.h"

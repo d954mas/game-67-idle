@@ -230,7 +230,11 @@ content digest, UTF-8 strings, ranges, canonical spans, indices, alignment, and
 default 64 MiB budget on an owned copy before publishing it. Its lifecycle is
 main-thread startup/shutdown only. `items_catalog_try_bind_resource()` consumes
 a ready engine blob resource and immediately delegates to that copying binder;
-pack placement and request timing remain game-builder responsibilities.
+pack placement and request timing remain game-builder responsibilities. Once
+bound, the same strong item IDs, required/optional lookups, core copies, acquire
+transitions, and opaque cost copy-out API used by the generated-C proof read
+directly from validated spans. Authored free and absent transitions stay
+distinct.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py build --snapshot <snapshot.json> --out <items.catalog> --header-out <items_catalog_abi.gen.h>

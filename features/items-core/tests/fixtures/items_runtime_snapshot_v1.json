@@ -1,5 +1,5 @@
 {
-  "content_hash": "sha256:4dbaf4ad97d5cd36d6d35eb07ff2e0ecadd9f0a99084b672e5fd48aeaadee072",
+  "content_hash": "sha256:04dce767eb732e92d1b8e3fd84ef0000406b2f84ee394ef14de0b22f9f0b67b5",
   "dependencies": {"game.gold": [], "game.sword": ["game.gold"]},
   "dependents": {"game.gold": ["game.sword"], "game.sword": []},
   "field_sources": {
@@ -20,7 +20,8 @@
   "items": [
     {
       "authoring_mode": "none", "id": "game.gold",
-      "kind": "currency", "stack": 0
+      "kind": "currency", "stack": 0,
+      "acquire": {"cost": {"__studio_kind": "free"}}
     },
     {
       "acquire": {
