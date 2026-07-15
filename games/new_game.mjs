@@ -344,8 +344,8 @@ function resetItemsLock(gameDir) {
   const path = join(gameDir, "content", "items.lock.json");
   if (!existsSync(path)) return false;
   const templateReceipt = readJsonStrict(path, "template items lock");
-  if (templateReceipt.schema_version !== 3 || templateReceipt.receipt?.schema !== "items.release_receipt.v1") {
-    throw new Error("template items lock must be an items.release_receipt.v1 schema_version 3 document");
+  if (templateReceipt.schema_version !== 4 || templateReceipt.receipt?.schema !== "items.release_receipt.v2") {
+    throw new Error("template items lock must be an items.release_receipt.v2 schema_version 4 document");
   }
   writeJson(path, {
     ...templateReceipt,

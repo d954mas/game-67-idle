@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "items-core",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "title": "Items Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",

@@ -77,14 +77,14 @@ def make_lock(def_ids: list[str], removed: dict | None = None, schema_version: i
 def make_receipt_lock(def_ids: dict[str, dict], *, state_version: int = 1) -> dict:
     return {
         "schema": "game_seed.items_lock",
-        "schema_version": 3,
+        "schema_version": 4,
         "receipt": {
-            "schema": "items.release_receipt.v1",
+            "schema": "items.release_receipt.v2",
             "items_core_version": "1.6.0",
             "lua_evaluation_schema": "items.lua.evaluation.v1",
             "snapshot_schema": "items.snapshot.v1",
             "state_schema": {"schema": "game_seed.items", "schema_version": 2, "version": state_version},
-            "field_ids": [],
+            "field_ids": {"active": [], "reserved": []},
         },
         "def_ids": def_ids,
         "removed": {},
@@ -206,6 +206,39 @@ class ReceiptUpgradeTests(unittest.TestCase):
             self.assertEqual(rc, 0)
             self.assertFalse(payload["changed"])
             self.assertEqual(lock_path.read_bytes(), expected)
+
+    def test_v3_receipt_upgrade_preserves_field_ids_as_active_and_is_noop_later(self):
+        old = {
+            "schema": "game_seed.items_lock",
+            "schema_version": 3,
+            "receipt": {
+                "schema": "items.release_receipt.v1",
+                "items_core_version": "1.6.0",
+                "lua_evaluation_schema": "items.lua.evaluation.v1",
+                "snapshot_schema": "items.snapshot.v1",
+                "state_schema": {"schema": "game_seed.items", "schema_version": 2, "version": 1},
+                "field_ids": ["game.weapon.level.attack"],
+            },
+            "def_ids": {"game.sword": {"storage": "unique", "level_count": 3}},
+            "removed": {},
+        }
+        catalog = make_catalog([make_item("game.sword", stack=1, equip={"slot": "weapon"})], namespace="game")
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            rc, payload, lock_path = run_receipt_upgrade(tmp_path, catalog, old, state_version=1)
+            self.assertEqual(rc, 0)
+            self.assertTrue(payload["changed"])
+            upgraded = json.loads(lock_path.read_text(encoding="utf-8"))
+            self.assertEqual(upgraded["schema_version"], 4)
+            self.assertEqual(upgraded["receipt"]["schema"], "items.release_receipt.v2")
+            self.assertEqual(upgraded["receipt"]["field_ids"], {
+                "active": ["game.weapon.level.attack"],
+                "reserved": [],
+            })
+
+            rc, payload, _ = run_receipt_upgrade(tmp_path, catalog, None, state_version=1)
+            self.assertEqual(rc, 0)
+            self.assertFalse(payload["changed"])
 
     def test_unhashable_legacy_def_id_is_a_controlled_error(self):
         legacy_lock = make_lock([{"bad": "id"}])

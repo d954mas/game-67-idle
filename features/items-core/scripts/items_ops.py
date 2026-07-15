@@ -93,9 +93,11 @@ OWNED_KEY_MAX_LEN = 63
 # creation date lives IN THE DATA instead. "YYYY-MM-DD", checked for both
 # shape (regex) and calendar validity (datetime.date.fromisoformat below).
 CREATED_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-RECEIPT_SCHEMA_VERSION = 3
-RECEIPT_SCHEMA = "items.release_receipt.v1"
-ITEMS_CORE_VERSION = "1.6.0"
+RECEIPT_SCHEMA_VERSION = 4
+RECEIPT_SCHEMA = "items.release_receipt.v2"
+LEGACY_RECEIPT_SCHEMA_VERSION = 3
+LEGACY_RECEIPT_SCHEMA = "items.release_receipt.v1"
+ITEMS_CORE_VERSION = "1.7.0"
 
 Issue = dict  # {"rule": str, "id": str | None, "field": str | None, "msg": str}
 
@@ -165,7 +167,7 @@ def _receipt_text(
         },
         # The legacy JSON schema had no stable user field identities. Do not
         # invent them from member names; Lua schema extensions add real IDs.
-        "field_ids": [],
+        "field_ids": {"active": [], "reserved": []},
     }
     receipt["def_ids"] = {
         item_id: {
@@ -197,12 +199,30 @@ def _write_utf8_if_changed(path: Path, text: str) -> bool:
     return True
 
 
+def _receipt_v4_text_from_v3(legacy: dict[str, Any], path: Path) -> str:
+    validate_baseline_shape(legacy, path)
+    upgraded = json.loads(json.dumps(legacy))
+    old_field_ids = upgraded["receipt"]["field_ids"]
+    upgraded["schema_version"] = RECEIPT_SCHEMA_VERSION
+    upgraded["receipt"]["schema"] = RECEIPT_SCHEMA
+    upgraded["receipt"]["field_ids"] = {
+        "active": sorted(old_field_ids),
+        "reserved": [],
+    }
+    return json.dumps(upgraded, ensure_ascii=False, indent=2) + "\n"
+
+
 def cmd_upgrade_receipt(args: argparse.Namespace) -> int:
     baseline_path = Path(args.baseline)
     baseline = load_json_or_die(baseline_path, "lock baseline")
     if baseline.get("schema_version") == RECEIPT_SCHEMA_VERSION:
         validate_baseline_shape(baseline, baseline_path)
         changed = False
+    elif baseline.get("schema_version") == LEGACY_RECEIPT_SCHEMA_VERSION:
+        changed = _write_utf8_if_changed(
+            baseline_path,
+            _receipt_v4_text_from_v3(baseline, baseline_path),
+        )
     else:
         catalog = load_json_or_die(Path(args.catalog), "catalog")
         field_schema = load_json_or_die(Path(args.schema), "field schema")
@@ -433,7 +453,9 @@ def check_lock_workflow(
 
     needed_version = current_version + 1
     for locked_id in sorted(def_ids):
-        if locked_id in current_ids and baseline.get("schema_version") == RECEIPT_SCHEMA_VERSION:
+        if locked_id in current_ids and baseline.get("schema_version") in (
+            LEGACY_RECEIPT_SCHEMA_VERSION, RECEIPT_SCHEMA_VERSION,
+        ):
             metadata = baseline["def_ids"][locked_id]
             current_storage = "unique" if current_items[locked_id].get("stack") == 1 else "stack"
             current_level_count = 1 if current_storage == "unique" else 0
@@ -712,8 +734,8 @@ def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
     skipping every lock-workflow rule. Same severity as a missing/unparsable
     file: OpsError, exit 2, not a warning."""
     schema_version = baseline.get("schema_version")
-    if schema_version not in (2, RECEIPT_SCHEMA_VERSION):
-        raise OpsError(f"lock baseline 'schema_version' must be 2 or 3, got {schema_version!r} ({path})")
+    if schema_version not in (2, LEGACY_RECEIPT_SCHEMA_VERSION, RECEIPT_SCHEMA_VERSION):
+        raise OpsError(f"lock baseline 'schema_version' must be 2, 3, or 4, got {schema_version!r} ({path})")
     def_ids = baseline.get("def_ids")
     expected = (list,) if schema_version == 2 else (dict,)
     if not isinstance(def_ids, expected):
@@ -722,10 +744,13 @@ def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
     removed = baseline.get("removed")
     if not isinstance(removed, dict):
         raise OpsError(f"lock baseline 'removed' must be an object, got {type(removed).__name__} ({path})")
-    if schema_version == RECEIPT_SCHEMA_VERSION:
+    if schema_version in (LEGACY_RECEIPT_SCHEMA_VERSION, RECEIPT_SCHEMA_VERSION):
         receipt = baseline.get("receipt")
-        if not isinstance(receipt, dict) or receipt.get("schema") != RECEIPT_SCHEMA:
-            raise OpsError(f"lock baseline 'receipt' must be a {RECEIPT_SCHEMA} object ({path})")
+        expected_receipt_schema = (
+            LEGACY_RECEIPT_SCHEMA if schema_version == LEGACY_RECEIPT_SCHEMA_VERSION else RECEIPT_SCHEMA
+        )
+        if not isinstance(receipt, dict) or receipt.get("schema") != expected_receipt_schema:
+            raise OpsError(f"lock baseline 'receipt' must be a {expected_receipt_schema} object ({path})")
         required = {
             "schema", "items_core_version", "lua_evaluation_schema",
             "snapshot_schema", "state_schema", "field_ids",
@@ -743,9 +768,19 @@ def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
                 or type(state.get("version")) is not int):
             raise OpsError(f"lock baseline receipt state_schema is invalid ({path})")
         field_ids = receipt.get("field_ids")
-        if (not isinstance(field_ids, list) or not all(isinstance(field_id, str) for field_id in field_ids)
-                or len(field_ids) != len(set(field_ids))):
-            raise OpsError(f"lock baseline receipt field_ids must be unique strings ({path})")
+        if schema_version == LEGACY_RECEIPT_SCHEMA_VERSION:
+            if (not isinstance(field_ids, list) or not all(isinstance(field_id, str) for field_id in field_ids)
+                    or len(field_ids) != len(set(field_ids))):
+                raise OpsError(f"lock baseline receipt field_ids must be unique strings ({path})")
+        else:
+            if not isinstance(field_ids, dict) or set(field_ids) != {"active", "reserved"}:
+                raise OpsError(f"lock baseline receipt field_ids must have active/reserved lists ({path})")
+            active, reserved = field_ids.get("active"), field_ids.get("reserved")
+            if (not isinstance(active, list) or not isinstance(reserved, list)
+                    or not all(isinstance(field_id, str) for field_id in [*active, *reserved])
+                    or len(active) != len(set(active)) or len(reserved) != len(set(reserved))
+                    or set(active) & set(reserved)):
+                raise OpsError(f"lock baseline receipt field_ids must be unique disjoint strings ({path})")
         for item_id, metadata in def_ids.items():
             if (not isinstance(item_id, str) or not isinstance(metadata, dict)
                     or set(metadata) != {"storage", "level_count"}

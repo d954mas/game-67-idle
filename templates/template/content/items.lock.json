@@ -1,10 +1,10 @@
 {
   "schema": "game_seed.items_lock",
-  "schema_version": 3,
+  "schema_version": 4,
   "comment": "Release compatibility history. def_ids maps currently shipped IDs to frozen storage/level bounds; removed records deliberate removals and their migration reaction. See src/features/items/README.md 'Lock workflow'.",
   "receipt": {
-    "schema": "items.release_receipt.v1",
-    "items_core_version": "1.6.0",
+    "schema": "items.release_receipt.v2",
+    "items_core_version": "1.7.0",
     "lua_evaluation_schema": "items.lua.evaluation.v1",
     "snapshot_schema": "items.snapshot.v1",
     "state_schema": {
@@ -12,7 +12,10 @@
       "schema_version": 2,
       "version": 1
     },
-    "field_ids": []
+    "field_ids": {
+      "active": [],
+      "reserved": []
+    }
   },
   "def_ids": {
     "tmpl.energy": {

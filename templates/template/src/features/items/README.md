@@ -169,8 +169,10 @@ convention and its grep-gate).
 
 **Lead-ratified 2026-07-07: deleting/renaming a SHIPPED def_id is destructive
 (existing saves may already reference it) and must FORCE an explicit
-developer reaction — not just log a warning.** `items.lock.json` v3 is the one
-release receipt and has two history sections:
+developer reaction — not just log a warning.** `items.lock.json` v4 is the one
+release receipt. It has item history plus `receipt.field_ids.active` and
+`receipt.field_ids.reserved`, which keep stable schema identities across
+rename/removal:
 - `def_ids` — currently shipped ids, mapped to their frozen `storage` (`stack`
   or `unique`) and highest shipped `level_count`.
 - `removed` — ids DELIBERATELY removed from the catalog after shipping. Keep

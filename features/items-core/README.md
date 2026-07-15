@@ -93,9 +93,11 @@ returns the authored integer, never a derived object.
   emits `items_catalog.gen.{h,c}` (compile-time const tables) plus a
   lightweight sanity net.
 - `items_ops.py list|validate|schema [--json]` — read-only catalog operations.
-- `items_ops.py upgrade-receipt ...` — one-shot, write-if-different v2 lock to
-  v3 release-receipt upgrade. It seeds shipped storage/level bounds from the
+- `items_ops.py upgrade-receipt ...` — one-shot, write-if-different v2/v3 lock
+  to v4 release-receipt upgrade. It seeds shipped storage/level bounds from the
   frozen JSON catalog and retains `removed` history in the same lock file.
+  V4 separates active and reserved stable field IDs so a later Lua schema
+  rename/removal cannot erase identity history.
   Older removed definitions whose metadata cannot be recovered are marked
   `storage: unknown`, `level_count: null` rather than guessed.
   Later runs are no-op.
