@@ -4,12 +4,16 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 from typing import Any
 
+import items_lua_edit as edit_api
 import items_ops as receipt_api
 import items_runtime_package as package_api
 import items_snapshot as snapshot_api
@@ -33,6 +37,10 @@ class CliFailure(Exception):
 class CliArgumentParser(argparse.ArgumentParser):
     def error(self, message: str) -> None:
         raise CliFailure("cli.arguments", message)
+
+
+def _source_hash(data: bytes) -> str:
+    return f"sha256:{hashlib.sha256(data).hexdigest()}"
 
 
 def _project_paths(root_value: str, manifest_value: str) -> tuple[Path, Path]:
@@ -110,6 +118,13 @@ def _validation(
 ) -> dict[str, Any]:
     baseline_path = _project_file(root, args.baseline, "cli.baseline")
     state_path = _project_file(root, args.state_schema, "cli.state_schema")
+    return _validation_paths(evaluation, snapshot, baseline_path, state_path)
+
+
+def _validation_paths(
+    evaluation: dict[str, Any], snapshot: dict[str, Any],
+    baseline_path: Path, state_path: Path,
+) -> dict[str, Any]:
     receipt = receipt_api.validate_evaluation_receipt(
         evaluation,
         _load_json(baseline_path, "cli.baseline"),
@@ -146,6 +161,168 @@ def _list(snapshot: dict[str, Any], max_items: int) -> list[dict[str, Any]]:
         }
         for item in items
     ]
+
+
+def _copy_project_for_edit(
+    root: Path, args: argparse.Namespace, source_path: Path, edited_bytes: bytes,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    _, manifest_path = _project_paths(args.project_root, args.manifest)
+    baseline_path = _project_file(root, args.baseline, "cli.baseline")
+    state_path = _project_file(root, args.state_schema, "cli.state_schema")
+    manifest = _load_json(manifest_path, "cli.manifest")
+    modules = manifest.get("modules")
+    if not isinstance(modules, list):
+        raise CliFailure("cli.manifest", "manifest modules must be a list")
+    module_paths: set[Path] = set()
+    for entry in modules:
+        value = entry.get("file") if isinstance(entry, dict) else None
+        if not isinstance(value, str) or not value:
+            raise CliFailure("cli.manifest", "manifest module requires a file")
+        module_paths.add(_project_file(root, value, "cli.manifest"))
+    if source_path not in module_paths:
+        raise CliFailure("edit.source", "definition source is not an allowlisted manifest module")
+
+    with tempfile.TemporaryDirectory() as temporary:
+        temp_root = Path(temporary)
+        inputs = {*module_paths, manifest_path, baseline_path, state_path}
+        for original in inputs:
+            relative = original.relative_to(root)
+            target = temp_root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(edited_bytes if original == source_path else original.read_bytes())
+        temp_manifest = temp_root / manifest_path.relative_to(root)
+        evaluation = _evaluate(temp_root, temp_manifest)
+        snapshot = snapshot_api.build_snapshot(evaluation)
+        validation = _validation_paths(
+            evaluation, snapshot,
+            temp_root / baseline_path.relative_to(root),
+            temp_root / state_path.relative_to(root),
+        )
+        return evaluation, snapshot, validation
+
+
+def _atomic_replace_expected(path: Path, expected_hash: str, content: bytes) -> None:
+    lock_path = path.with_name(f".{path.name}.items-edit.lock")
+    try:
+        lock_descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+    except FileExistsError as error:
+        raise CliFailure(
+            "edit.locked",
+            f"writer lock exists: {lock_path}; stale locks are never removed automatically, "
+            "confirm no writer is active before deleting it",
+        ) from error
+    temporary: str | None = None
+    try:
+        with os.fdopen(lock_descriptor, "w", encoding="utf-8") as lock_stream:
+            lock_stream.write(json.dumps({"pid": os.getpid(), "source": path.name}) + "\n")
+            lock_stream.flush()
+            os.fsync(lock_stream.fileno())
+        if _source_hash(path.read_bytes()) != expected_hash:
+            raise CliFailure("edit.conflict", "source changed after preview; refresh and retry")
+        file_mode = path.stat().st_mode
+        descriptor, temporary = tempfile.mkstemp(
+            prefix=f".{path.name}.", suffix=".tmp", dir=path.parent,
+        )
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(content)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary, file_mode)
+        if _source_hash(path.read_bytes()) != expected_hash:
+            raise CliFailure("edit.conflict", "source changed while applying; refresh and retry")
+        os.replace(temporary, path)
+        temporary = None
+    finally:
+        if temporary is not None:
+            try:
+                os.unlink(temporary)
+            except FileNotFoundError:
+                pass
+        try:
+            os.unlink(lock_path)
+        except FileNotFoundError:
+            pass
+
+
+def _source_line(source: str, offset: int) -> tuple[int, str]:
+    line = source.count("\n", 0, offset) + 1
+    lines = source.splitlines()
+    text = lines[line - 1] if line <= len(lines) else ""
+    return line, text[:512]
+
+
+def _edit(
+    root: Path, evaluation: dict[str, Any], snapshot: dict[str, Any], args: argparse.Namespace,
+) -> tuple[dict[str, Any], int]:
+    del evaluation  # the edited model is evaluated afresh below
+    query = snapshot_api.query_snapshot(snapshot, item_id=args.item)
+    definition = query["source"]
+    source_path = _project_file(root, definition["file"], "edit.source")
+    original_bytes = source_path.read_bytes()
+    actual_hash = _source_hash(original_bytes)
+    if args.expected_source_hash != actual_hash:
+        raise CliFailure(
+            "edit.conflict", "expected source hash does not match current file",
+            expected=args.expected_source_hash, actual=actual_hash,
+        )
+    try:
+        source = original_bytes.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise CliFailure("edit.source", f"source is not UTF-8: {source_path}") from error
+    common = {
+        "definition_line": definition["line"],
+        "item_id": args.item,
+        "field": args.field,
+        "value": args.value,
+    }
+    if args.command == "level-set":
+        edited = edit_api.level_set(source, level=args.level, **common)
+    elif args.command == "curve-set":
+        edited = edit_api.curve_set(source, parameter=args.parameter, **common)
+    else:
+        edited = edit_api.override_set(source, level=args.level, **common)
+    edited_bytes = edited.source.encode("utf-8")
+    after_hash = _source_hash(edited_bytes)
+    _, after_snapshot, validation = _copy_project_for_edit(
+        root, args, source_path, edited_bytes,
+    )
+    semantic_diff = snapshot_api.diff_snapshots(snapshot, after_snapshot)
+    line, before_line = _source_line(source, edited.start)
+    _, after_line = _source_line(edited.source, edited.start)
+    source_changed = edited_bytes != original_bytes
+    applied = False
+    if validation["ok"] and args.apply and source_changed:
+        _atomic_replace_expected(source_path, actual_hash, edited_bytes)
+        applied = True
+    inverse = {
+        "schema": "items.cli.patch.v1",
+        "operation": args.command,
+        "item": args.item,
+        "field": args.field,
+        "value": edited.old_value,
+        "expected_source_hash": after_hash,
+    }
+    if args.command in {"level-set", "override-set"}:
+        inverse["level"] = args.level
+    else:
+        inverse["parameter"] = args.parameter
+    result = {
+        **validation,
+        "applied": applied,
+        "source_diff": {
+            "file": definition["file"],
+            "line": line,
+            "before_hash": actual_hash,
+            "after_hash": after_hash,
+            "old_value": edited.old_value,
+            "new_value": args.value,
+            "before_line": before_line,
+            "after_line": after_line,
+        },
+        "semantic_diff": semantic_diff,
+        "inverse_patch": inverse,
+    }
+    return result, 0 if validation["ok"] else 1
 
 
 def _result(operation: str, snapshot: dict[str, Any], result: Any) -> dict[str, Any]:
@@ -202,6 +379,19 @@ def _parser() -> argparse.ArgumentParser:
     build.add_argument("--baseline", default="content/items.lock.json")
     build.add_argument("--state-schema", default="state/items.schema.json")
     build.add_argument("--out-dir", required=True)
+    for name in ("level-set", "curve-set", "override-set"):
+        edit = commands.add_parser(name)
+        edit.add_argument("--item", required=True)
+        edit.add_argument("--field", required=True)
+        edit.add_argument("--value", type=int, required=True)
+        edit.add_argument("--expected-source-hash", required=True)
+        edit.add_argument("--baseline", default="content/items.lock.json")
+        edit.add_argument("--state-schema", default="state/items.schema.json")
+        edit.add_argument("--apply", action="store_true")
+        if name in {"level-set", "override-set"}:
+            edit.add_argument("--level", type=int, required=True)
+        else:
+            edit.add_argument("--parameter", required=True)
     return parser
 
 
@@ -241,7 +431,12 @@ def main(argv: list[str] | None = None) -> int:
                 )
         elif operation == "source":
             query = snapshot_api.query_snapshot(snapshot, item_id=args.item, field=args.field)
-            result = {"item": args.item, "definition": query["source"]}
+            source_path = _project_file(root, query["source"]["file"], "edit.source")
+            result = {
+                "item": args.item,
+                "definition": query["source"],
+                "source_hash": _source_hash(source_path.read_bytes()),
+            }
             if args.field is not None and "field" in query:
                 result["field"] = query["field"]["source"]
         elif operation == "chart":
@@ -265,6 +460,8 @@ def main(argv: list[str] | None = None) -> int:
         elif operation == "validate":
             result = _validation(root, evaluation, snapshot, args)
             exit_code = 0 if result["ok"] else 1
+        elif operation in {"level-set", "curve-set", "override-set"}:
+            result, exit_code = _edit(root, evaluation, snapshot, args)
         else:
             validation = _validation(root, evaluation, snapshot, args)
             if not validation["ok"]:
@@ -309,6 +506,10 @@ def main(argv: list[str] | None = None) -> int:
         detail = {"code": "cli.receipt", "message": str(error)}
     except package_api.PackageFailure as error:
         detail = {"code": "cli.package", "message": str(error)}
+    except edit_api.EditFailure as error:
+        message = str(error)
+        code, _, detail_message = message.partition(": ")
+        detail = {"code": code, "message": detail_message or message}
     except (OSError, subprocess.TimeoutExpired) as error:
         detail = {"code": "cli.io", "message": str(error)}
     print(json.dumps({

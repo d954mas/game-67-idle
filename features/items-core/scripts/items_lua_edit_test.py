@@ -99,10 +99,24 @@ class ItemsLuaEditTests(unittest.TestCase):
                 split_negative, definition_line=5, item_id="game.table_sword",
                 level=2, field="attack", value=17,
             )
+        for spelling in ("015", "-0"):
+            with self.subTest(spelling=spelling):
+                noncanonical = SOURCE.replace("attack = 15", f"attack = {spelling}")
+                with self.assertRaisesRegex(EDIT.EditFailure, "edit.literal_required"):
+                    EDIT.level_set(
+                        noncanonical, definition_line=5, item_id="game.table_sword",
+                        level=2, field="attack", value=17,
+                    )
         with self.assertRaisesRegex(EDIT.EditFailure, "edit.value"):
             EDIT.level_set(
                 SOURCE, definition_line=5, item_id="game.table_sword",
                 level=2, field="attack", value=9_007_199_254_740_992,
+            )
+        ignored_parameter = SOURCE.replace("start = 10", "start = 10, foo = 1")
+        with self.assertRaisesRegex(EDIT.EditFailure, "edit.parameter"):
+            EDIT.curve_set(
+                ignored_parameter, definition_line=15, item_id="game.curve_sword",
+                field="attack", parameter="foo", value=2,
             )
 
     def test_definition_line_must_identify_exact_items_define_call(self):

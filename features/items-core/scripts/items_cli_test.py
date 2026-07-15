@@ -34,9 +34,10 @@ class ItemsCliTests(unittest.TestCase):
         self.assertEqual(payload["schema"], "items.cli.result.v1")
         self.assertEqual(payload["operation"], "list")
         self.assertEqual([item["id"] for item in payload["result"]], [
-            "game.gold", "game.iron_sword", "game.levelled_sword",
+            "game.curve_sword", "game.gold", "game.iron_sword", "game.levelled_sword",
         ])
-        self.assertEqual(payload["result"][0]["runtime"], {
+        gold = next(item for item in payload["result"] if item["id"] == "game.gold")
+        self.assertEqual(gold["runtime"], {
             "storage": "stack", "level_count": 0,
         })
 
@@ -67,6 +68,7 @@ class ItemsCliTests(unittest.TestCase):
         source = self.payload("source", "--item", "game.levelled_sword")
         self.assertEqual(source["result"]["definition"]["file"], "game/items.lua")
         self.assertGreater(source["result"]["definition"]["line"], 1)
+        self.assertRegex(source["result"]["source_hash"], r"^sha256:[0-9a-f]{64}$")
 
     def test_schema_and_validate_are_focused_snapshot_views(self):
         schema = self.payload("schema")
@@ -136,6 +138,72 @@ class ItemsCliTests(unittest.TestCase):
             self.assertFalse(payload["result"]["ok"])
             self.assertFalse(out.exists())
 
+    def test_level_set_preview_apply_conflict_and_inverse_patch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            shutil.copytree(PROJECT, project)
+            source = project / "game" / "items.lua"
+            original = source.read_bytes()
+            source_payload = self.run_project(project, "source", "--item", "game.levelled_sword")
+            source_hash = json.loads(source_payload.stdout)["result"]["source_hash"]
+            args = (
+                "level-set", "--item", "game.levelled_sword", "--level", "2",
+                "--field", "attack", "--value", "17",
+                "--expected-source-hash", source_hash,
+            )
+
+            preview = self.run_project(project, *args)
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            preview_result = json.loads(preview.stdout)["result"]
+            self.assertFalse(preview_result["applied"])
+            self.assertEqual(source.read_bytes(), original)
+            self.assertEqual(preview_result["source_diff"]["old_value"], 15)
+            self.assertEqual(preview_result["source_diff"]["new_value"], 17)
+            self.assertTrue(preview_result["semantic_diff"]["changes"])
+
+            lock = source.with_name(f".{source.name}.items-edit.lock")
+            lock.write_text("stale test lock\n", encoding="utf-8")
+            locked = self.run_project(project, *args, "--apply")
+            self.assertEqual(locked.returncode, 1)
+            self.assertEqual(json.loads(locked.stderr)["error"]["code"], "edit.locked")
+            self.assertEqual(source.read_bytes(), original)
+            lock.unlink()
+
+            applied = self.run_project(project, *args, "--apply")
+            self.assertEqual(applied.returncode, 0, applied.stderr)
+            applied_result = json.loads(applied.stdout)["result"]
+            self.assertTrue(applied_result["applied"])
+            self.assertIn("attack = 17", source.read_text(encoding="utf-8"))
+
+            conflict = self.run_project(project, *args, "--value", "18", "--apply")
+            self.assertEqual(conflict.returncode, 1)
+            self.assertEqual(json.loads(conflict.stderr)["error"]["code"], "edit.conflict")
+            self.assertIn("attack = 17", source.read_text(encoding="utf-8"))
+
+            inverse = applied_result["inverse_patch"]
+            reverted = self.run_project(
+                project, inverse["operation"],
+                "--item", inverse["item"], "--level", str(inverse["level"]),
+                "--field", inverse["field"], "--value", str(inverse["value"]),
+                "--expected-source-hash", inverse["expected_source_hash"], "--apply",
+            )
+            self.assertEqual(reverted.returncode, 0, reverted.stderr)
+            self.assertEqual(source.read_bytes(), original)
+
+    def test_curve_and_existing_override_preview_use_same_edit_contract(self):
+        source = self.payload("source", "--item", "game.curve_sword")["result"]
+        common = ("--item", "game.curve_sword", "--field", "attack")
+        curve = self.payload(
+            "curve-set", *common, "--parameter", "step", "--value", "7",
+            "--expected-source-hash", source["source_hash"],
+        )
+        self.assertEqual(curve["result"]["source_diff"]["old_value"], 5)
+        override = self.payload(
+            "override-set", *common, "--level", "3", "--value", "25",
+            "--expected-source-hash", source["source_hash"],
+        )
+        self.assertEqual(override["result"]["source_diff"]["old_value"], 21)
+
     def test_project_context_is_required_and_manifest_cannot_escape_it(self):
         missing = subprocess.run(
             [sys.executable, str(SCRIPT), "list"],
@@ -153,6 +221,12 @@ class ItemsCliTests(unittest.TestCase):
         )
         self.assertEqual(escaped.returncode, 1)
         self.assertEqual(json.loads(escaped.stderr)["error"]["code"], "cli.manifest")
+
+    def run_project(self, project: Path, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), "--project-root", str(project), *args],
+            text=True, capture_output=True, encoding="utf-8", timeout=20,
+        )
 
 
 if __name__ == "__main__":

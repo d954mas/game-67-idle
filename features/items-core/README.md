@@ -39,6 +39,8 @@ features/items-core/
     items_snapshot_test.py         Snapshot hash, dependency, bounds, and CLI proof
     items_cli.py                   explicit-project semantic CLI over evaluator + Snapshot
     items_cli_test.py              focused CLI routing, bounds, and context proof
+    items_lua_edit.py              restricted source-preserving existing-literal writer
+    items_lua_edit_test.py         tokenizer, shape refusal, and exact-token proof
   feature.json
   README.md   (this file)
   INSTALL.md
@@ -229,7 +231,18 @@ reimplement Lua evaluation, Snapshot validation, receipt checks, or package
 encoding, and they never infer a game from cwd. `build` validates requirements
 and the release receipt before atomically replacing changed generated files in
 an explicit output directory. The semantic source-write surface will extend
-this same CLI only after source-preserving edit proofs exist.
+this same CLI only through source-preserving edit proofs.
+
+`level-set`, `curve-set`, and `override-set` replace one existing canonical
+decimal literal in an explicit table cell, `levels.linear` `start|step`, or an
+existing override. They require the exact SHA-256 returned by `source`, preview
+by default, re-evaluate and validate a temporary allowlisted project copy, and
+return source/semantic diffs plus an inverse patch. `--apply` uses an exclusive
+same-directory writer lock and atomic replace. A crash-stale lock fails closed
+and is never removed automatically; remove it only after confirming no writer
+is active. Missing rows/overrides, formulas, aliases, noncanonical numbers, and
+unsupported structures are refused. Multi-operation same-file batching is not
+yet exposed.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> list
@@ -240,6 +253,7 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> requirements --item <item-id> --severity warning
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> validate
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> build --out-dir <build-dir>
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> level-set --item <item-id> --level <n> --field <field> --value <n> --expected-source-hash <sha256>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli_test.py
 ```
 

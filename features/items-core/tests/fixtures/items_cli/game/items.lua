@@ -32,3 +32,15 @@ items.define({
     [3] = { attack = 20, cost_to_reach = items.free() },
   }),
 })
+
+items.define({
+  id = "game.curve_sword", kind = "weapon", stack = 1,
+  levels = levels.columns({
+    max_level = 3,
+    attack = levels.linear({ start = 10, step = 5 }),
+    cost_to_reach = levels.values({
+      [2] = items.free(), [3] = items.free(),
+    }),
+    overrides = { [3] = { attack = 21 } },
+  }),
+})

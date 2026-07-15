@@ -33,6 +33,8 @@ class Token:
 class EditResult:
     source: str
     old_value: int
+    start: int
+    end: int
 
 
 def _long_bracket_end(source: str, start: int) -> int | None:
@@ -229,6 +231,9 @@ def _integer_literal(tokens: list[Token], index: int) -> tuple[int, int, int]:
             _fail("edit.literal_required", "minus sign and decimal digits must be contiguous")
     if index >= len(tokens) or tokens[index].kind != "number" or DECIMAL_INTEGER.fullmatch(tokens[index].text) is None:
         _fail("edit.literal_required", "existing value must be one decimal integer token")
+    digits = tokens[index].text
+    if (len(digits) > 1 and digits.startswith("0")) or (sign < 0 and digits == "0"):
+        _fail("edit.literal_required", "existing integer must use canonical decimal spelling")
     if index + 1 >= len(tokens) or tokens[index + 1].text not in {",", ";", "}"}:
         _fail("edit.literal_required", "existing value must end after one decimal integer token")
     return start, tokens[index].end, sign * int(tokens[index].text)
@@ -240,7 +245,12 @@ def _replace(
     if type(value) is not int or value < -MAX_EXACT_INTEGER or value > MAX_EXACT_INTEGER:
         _fail("edit.value", f"value must be an exact integer in +/-{MAX_EXACT_INTEGER}")
     start, end, old_value = _integer_literal(tokens, equals + 1)
-    return EditResult(source=source[:start] + str(value) + source[end:], old_value=old_value)
+    return EditResult(
+        source=source[:start] + str(value) + source[end:],
+        old_value=old_value,
+        start=start,
+        end=end,
+    )
 
 
 def level_set(
@@ -259,6 +269,8 @@ def curve_set(
     source: str, *, definition_line: int, item_id: str,
     field: str, parameter: str, value: int,
 ) -> EditResult:
+    if parameter not in {"start", "step"}:
+        _fail("edit.parameter", "levels.linear parameter must be start or step")
     tokens = tokenize(source)
     definition = _definition_table(tokens, definition_line, item_id)
     levels_equals = _direct_assignment(tokens, *definition, "levels")

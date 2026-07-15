@@ -35,6 +35,11 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 Use `chart` and `requirements` for bounded reports; inspect command help for
 their filters instead of loading the full Snapshot.
 
+For a supported existing literal, get the hash from `source`, preview a
+`level-set`, `curve-set`, or `override-set`, inspect both diffs, then repeat with
+`--apply`. Never remove an `.items-edit.lock` until no writer process is active.
+Unsupported source shapes route to direct source/agent editing.
+
 Until T0386 removes the legacy JSON catalog, use its existing op-layer only for
 that legacy path:
 
