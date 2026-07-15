@@ -315,7 +315,7 @@ void test_envelope_round_trip(void) {
     TEST_ASSERT_EQUAL_INT(1, (int)cJSON_GetObjectItemCaseSensitive(doc, "save_version")->valuedouble);
     TEST_ASSERT_TRUE((int64_t)cJSON_GetObjectItemCaseSensitive(doc, "saved_at")->valuedouble == g_wall_ms);
     TEST_ASSERT_TRUE(cJSON_IsNumber(cJSON_GetObjectItemCaseSensitive(doc, "save_seq")));
-    TEST_ASSERT_EQUAL_STRING("template_test", cJSON_GetObjectItemCaseSensitive(doc, "app")->valuestring);
+    TEST_ASSERT_EQUAL_STRING(GAME_STORAGE_APP_ID, cJSON_GetObjectItemCaseSensitive(doc, "app")->valuestring);
     const cJSON *game = cJSON_GetObjectItemCaseSensitive(cJSON_GetObjectItemCaseSensitive(doc, "features"), "game");
     TEST_ASSERT_EQUAL_INT(1, (int)cJSON_GetObjectItemCaseSensitive(game, "v")->valuedouble);
     TEST_ASSERT_EQUAL_INT(123, (int)cJSON_GetObjectItemCaseSensitive(game, "coins")->valuedouble);
@@ -418,7 +418,7 @@ void test_recovered_bak_then_next_boot_loaded(void) {
 /* 6. NEWER (versions only): zero bytes written, export still readable. */
 void test_newer_is_read_only(void) {
     const char *newer =
-        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":5,\"app\":\"template_test\","
+        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":5,\"app\":\"" GAME_STORAGE_APP_ID "\","
         "\"features\":{\"game\":{\"v\":2,\"coins\":77,\"name\":\"future\"}}}";
     write_raw(PRIMARY_PATH, newer);
     char *before = read_raw(PRIMARY_PATH);
@@ -442,7 +442,7 @@ void test_newer_is_read_only(void) {
 /* 7. Orphan round trip: unknown feature key retained through save. */
 void test_orphan_round_trip(void) {
     const char *withghost =
-        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":3,\"app\":\"template_test\","
+        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":3,\"app\":\"" GAME_STORAGE_APP_ID "\","
         "\"features\":{\"game\":{\"v\":1,\"coins\":55,\"name\":\"hero\"},"
         "\"extra\":{\"v\":1,\"mark\":9},"
         "\"ghost\":{\"v\":1,\"secret\":\"boo\",\"n\":123}}}";
@@ -574,7 +574,7 @@ void test_transform_seam(void) {
 /* 13. A bad fragment does not drop its neighbours (reset_fragments filled). */
 void test_bad_fragment_isolation(void) {
     const char *doc =
-        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":1,\"app\":\"template_test\","
+        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":1,\"app\":\"" GAME_STORAGE_APP_ID "\","
         "\"features\":{\"game\":{\"v\":1,\"coins\":2000000000},"  /* out of range -> from_json fails */
         "\"extra\":{\"v\":1,\"mark\":7}}}";
     write_raw(PRIMARY_PATH, doc);
@@ -594,7 +594,7 @@ void test_bad_fragment_isolation(void) {
    retained subtree; out-of-range -> NULL without touching the out-param; cleared by new_game. */
 void test_orphan_read_access(void) {
     const char *withghost =
-        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":3,\"app\":\"template_test\","
+        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":3,\"app\":\"" GAME_STORAGE_APP_ID "\","
         "\"features\":{\"game\":{\"v\":1,\"coins\":55,\"name\":\"hero\"},"
         "\"extra\":{\"v\":1,\"mark\":9},"
         "\"ghost\":{\"v\":1,\"secret\":\"boo\",\"n\":123}}}";

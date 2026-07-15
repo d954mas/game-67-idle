@@ -23,10 +23,7 @@ function isMain(moduleUrl) {
 // recorder command template from RECORDERS.
 const HOOK_SOURCE = {
   SessionStart: [{ record: "fast" }],
-  PreToolUse: [
-    { match: "shell", record: "privateGitGuard" },
-    { match: "shell", record: "fast" },
-  ],
+  PreToolUse: [{ match: "shell", record: "fast" }],
   PostToolUse: [
     { match: "shell", record: "fast" },
     { match: "spawnAgent", record: "node" },
@@ -45,11 +42,6 @@ const RECORDERS = {
     type: "command",
     command: `node ai_studio/core_harness/profiling/hook_record.mjs ${label}`,
     commandWindows: `node ai_studio\\core_harness\\profiling\\hook_record.mjs ${label}`,
-  }),
-  privateGitGuard: () => ({
-    type: "command",
-    command: "node ai_studio/workspace/games.mjs hook-guard",
-    commandWindows: "node ai_studio\\workspace\\games.mjs hook-guard",
   }),
 };
 

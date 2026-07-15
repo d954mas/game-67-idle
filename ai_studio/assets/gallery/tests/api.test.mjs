@@ -4,7 +4,6 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { tmpdir } from "node:os";
-import { localWorkspaceCatalogRelPath } from "../../../workspace/games.mjs";
 import { listAssetViewerSources, resolveAssetViewerGalleryPath, safeResolve, selectSource } from "../api.mjs";
 
 function tempRoot() {
@@ -23,25 +22,20 @@ function writeJson(path, value) {
 }
 
 function writePrivateGameMount(root, gameId = "secret-game") {
-  writeGameIdentity(root, gameId, gameId);
-  writeJson(join(root, "ai_studio", "workspace", "catalog.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [] });
-  writeJson(join(root, "ai_studio", "workspace", "catalog.local.json"), {
-    schema: "ai_studio.workspace.catalog.v1",
-    mounts: [{ kind: "game", root: `games/${gameId}`, visibility: "private", gitRoot: `games/${gameId}`, commitPolicy: "nested-private", enabledStores: ["assets", "taskboard", "canvas", "evidence"], aliases: [] }],
-  });
+  writeGameIdentity(root, gameId, gameId, true);
 }
 
-function writeGameIdentity(root, gameId, title) {
-  writeJson(join(root, "games", gameId, "game.json"), { schema: "ai_studio.game.v1", id: gameId, title, storageNamespace: gameId });
-  writeJson(join(root, "games", gameId, "dependencies.json"), { schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" });
+function writeGameIdentity(root, gameId, title, privateGame = false) {
+  const rel = privateGame ? join("games", "private", gameId) : join("games", gameId);
+  writeJson(join(root, rel, "game.json"), { schema: "ai_studio.game.v1", id: gameId, title, storageNamespace: gameId });
+  writeJson(join(root, rel, "dependencies.json"), { schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" });
 }
 
 function privateGameFixture(root, gameId = "secret-game") {
   execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
-  writeFileSync(join(root, ".gitignore"), `${localWorkspaceCatalogRelPath()}\n`, "utf8");
-  writeFileSync(join(root, ".git", "info", "exclude"), `games/${gameId}/\n`, "utf8");
-  mkdirSync(join(root, "games", gameId, "assets"), { recursive: true });
-  execFileSync("git", ["init"], { cwd: join(root, "games", gameId), stdio: "ignore" });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  mkdirSync(join(root, "games", "private", gameId, "assets"), { recursive: true });
+  execFileSync("git", ["init"], { cwd: join(root, "games", "private", gameId), stdio: "ignore" });
   writePrivateGameMount(root, gameId);
 }
 
@@ -92,10 +86,6 @@ test("listAssetViewerSources keeps global library with workspace template and ga
     }), "utf8");
     writeJson(join(root, "templates", "template", "template.json"), { schema: "ai_studio.template.v1", id: "template", title: "Template", storageNamespace: "template" });
     writeGameIdentity(root, "test-game", "Test Game");
-    writeJson(join(root, "ai_studio", "workspace", "catalog.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [
-      { kind: "template", root: "templates/template", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
-      { kind: "game", root: "games/test-game", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
-    ] });
 
     const { sources } = await listAssetViewerSources(root);
 
@@ -119,9 +109,6 @@ test("listAssetViewerSources hides private game mounts unless explicitly include
     mkdirSync(join(root, "games", "public-game", "assets"), { recursive: true });
     privateGameFixture(root);
     writeGameIdentity(root, "public-game", "Public Game");
-    writeJson(join(root, "ai_studio", "workspace", "catalog.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [
-      { kind: "game", root: "games/public-game", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
-    ] });
 
     const visible = await listAssetViewerSources(root);
     assert.deepEqual(visible.sources.filter((source) => source.type === "game").map((source) => source.id), ["game:public-game"]);
@@ -144,10 +131,10 @@ test("selectSource resolves private games by id and blocks raw private paths", (
     const selected = selectSource([], { sourceId: "game:secret-game" }, root);
     assert.equal(selected.id, "game:secret-game");
     assert.equal(selected.visibility, "private");
-    assert.equal(selected.path, resolve(root, "games/secret-game/assets"));
+    assert.equal(selected.path, resolve(root, "games/private/secret-game/assets"));
 
     assert.throws(
-      () => selectSource([], { type: "game", path: "games/secret-game/assets" }, root),
+      () => selectSource([], { type: "game", path: "games/private/secret-game/assets" }, root),
       /private game assets must be selected by game id/,
     );
   } finally {

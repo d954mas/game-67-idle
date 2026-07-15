@@ -55,13 +55,13 @@ function excludedByPrefix(rel, prefixes = []) {
 
 function privateMountScanExclusions(repoRoot) {
   try {
-    return listGameMounts(repoRoot, { includePrivate: true, skipPreflight: true })
+    return ["games/private", ...listGameMounts(repoRoot, { includePrivate: true, skipPreflight: true })
       .filter((mount) => mount.visibility !== "public")
       .map((mount) => normalizeMapPath(mount.root))
-      .filter(Boolean);
+      .filter(Boolean)];
   } catch (error) {
     throw new Error(
-      "architecture map private mount discovery failed; validate ai_studio/workspace/catalog.local.json before architecture validation",
+      "architecture map private game discovery failed; validate games/private identity manifests before architecture validation",
       { cause: error },
     );
   }

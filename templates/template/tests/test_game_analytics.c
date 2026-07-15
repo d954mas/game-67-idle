@@ -109,7 +109,7 @@ static void test_header(void) {
     TEST_ASSERT_NOT_NULL(root);
     TEST_ASSERT_EQUAL_STRING("analytics.v1", cJSON_GetObjectItem(root, "schema")->valuestring);
     TEST_ASSERT_EQUAL_STRING("header", cJSON_GetObjectItem(root, "kind")->valuestring);
-    TEST_ASSERT_EQUAL_STRING("template_test", cJSON_GetObjectItem(root, "app")->valuestring);
+    TEST_ASSERT_EQUAL_STRING(GAME_STORAGE_APP_ID, cJSON_GetObjectItem(root, "app")->valuestring);
     TEST_ASSERT_TRUE(cJSON_GetObjectItem(root, "started_at")->valuedouble == 1720000000000.0);
     cJSON_Delete(root);
 }

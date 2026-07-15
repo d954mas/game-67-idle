@@ -76,6 +76,7 @@ async function api(path, options) {
 }
 
 async function refresh(force = false) {
+  // Studio Shell is local-only; never expose this private-inclusive board API externally.
   const data = await api("/api/board?includePrivate=1");
   const payload = JSON.stringify(data);
   if (!force && payload === state.lastPayload) {

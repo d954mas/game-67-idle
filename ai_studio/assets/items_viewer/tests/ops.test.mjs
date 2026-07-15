@@ -12,7 +12,6 @@ import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { localWorkspaceCatalogRelPath } from "../../../workspace/games.mjs";
 import {
   getCatalogView,
   listCatalogs,
@@ -42,16 +41,13 @@ function writeJson(path, value) {
 }
 
 function writePrivateGameMount(root, gameId = "secret-game") {
-  writeGameIdentity(root, gameId);
-  writeJson(join(root, "ai_studio", "workspace", "catalog.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [] });
-  writeJson(join(root, "ai_studio", "workspace", "catalog.local.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [
-    { kind: "game", root: `games/${gameId}`, visibility: "private", gitRoot: `games/${gameId}`, commitPolicy: "nested-private", enabledStores: ["assets", "taskboard", "canvas", "evidence"], aliases: [] },
-  ] });
+  writeGameIdentity(root, gameId, true);
 }
 
-function writeGameIdentity(root, gameId) {
-  writeJson(join(root, "games", gameId, "game.json"), { schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace: gameId });
-  writeJson(join(root, "games", gameId, "dependencies.json"), { schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" });
+function writeGameIdentity(root, gameId, privateGame = false) {
+  const rel = privateGame ? join("games", "private", gameId) : join("games", gameId);
+  writeJson(join(root, rel, "game.json"), { schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace: gameId });
+  writeJson(join(root, rel, "dependencies.json"), { schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" });
 }
 
 function writeNeutralPublicWorkspace(root, gameId = "fixture-game") {
@@ -62,21 +58,13 @@ function writeNeutralPublicWorkspace(root, gameId = "fixture-game") {
     title: "Fixture Template",
     storageNamespace: "fixture-template",
   });
-  writeJson(join(root, "ai_studio", "workspace", "catalog.json"), {
-    schema: "ai_studio.workspace.catalog.v1",
-    mounts: [
-      { kind: "template", root: "templates/fixture-template", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
-      { kind: "game", root: `games/${gameId}`, visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
-    ],
-  });
 }
 
 function privateGameFixture(root, gameId = "secret-game") {
   execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
-  writeFileSync(join(root, ".gitignore"), `${localWorkspaceCatalogRelPath()}\n`, "utf8");
-  writeFileSync(join(root, ".git", "info", "exclude"), `games/${gameId}/\n`, "utf8");
-  mkdirSync(join(root, "games", gameId, "content"), { recursive: true });
-  execFileSync("git", ["init"], { cwd: join(root, "games", gameId), stdio: "ignore" });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  mkdirSync(join(root, "games", "private", gameId, "content"), { recursive: true });
+  execFileSync("git", ["init"], { cwd: join(root, "games", "private", gameId), stdio: "ignore" });
   writePrivateGameMount(root, gameId);
 }
 
@@ -129,12 +117,9 @@ test("listCatalogs hides private game mounts unless explicitly included", () => 
   try {
     privateGameFixture(root);
     writeGameIdentity(root, "public-game");
-    writeJson(join(root, "ai_studio", "workspace", "catalog.json"), { schema: "ai_studio.workspace.catalog.v1", mounts: [
-      { kind: "game", root: "games/public-game", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] },
-    ] });
     mkdirSync(join(root, "games", "public-game", "content"), { recursive: true });
     writeFileSync(join(root, "games", "public-game", "content", "items.json"), "{}", "utf8");
-    writeFileSync(join(root, "games", "secret-game", "content", "items.json"), "{}", "utf8");
+    writeFileSync(join(root, "games", "private", "secret-game", "content", "items.json"), "{}", "utf8");
 
     assert.deepEqual(listCatalogs(root).catalogs.map((catalog) => catalog.id), ["game:public-game"]);
     assert.deepEqual(listCatalogs(root, { includePrivate: true }).catalogs.map((catalog) => catalog.id), [

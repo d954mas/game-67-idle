@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import test from "node:test";
 
 import { listRegisteredGames } from "../games.mjs";
-import { upsertWorkspaceMount, writeIdentityManifest } from "../../../workspace/catalog.mjs";
+import { writeIdentityManifest } from "../../../workspace/catalog.mjs";
 
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), "catalog-games-"));
@@ -27,16 +27,6 @@ test("game asset source lists public workspace mounts", (t) => {
   const root = fixture(t);
   dependencies(root, "demo-game");
   writeIdentityManifest(root, "game", { id: "demo-game", title: "Demo" });
-  upsertWorkspaceMount(root, {
-    kind: "game",
-    root: "games/demo-game",
-    visibility: "public",
-    gitRoot: "",
-    commitPolicy: "parent-public",
-    enabledStores: ["assets"],
-    aliases: [],
-  });
-
   assert.deepEqual(listRegisteredGames(root), [{
     id: "demo-game", title: "Demo", folder: "games/demo-game", assets: "games/demo-game/assets", status: "active",
   }]);

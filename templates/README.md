@@ -2,9 +2,9 @@
 
 Reusable game starting points live here as `templates/<template-id>/`.
 
-There can be multiple templates. Mount each usable template in
-`ai_studio/workspace/catalog.json` and give it a `template.json` so AI Studio surfaces and
-`games/new_game.mjs --template <template-id>` can find it.
+There can be multiple templates. Give each usable template a `template.json` so
+AI Studio surfaces and `games/new_game.mjs --template <template-id>` can find it
+by scanning `templates/<template-id>`.
 Each template also owns `game-dependencies.json`, the explicit engine/feature
 seed used to create exact game-owned dependency records.
 Use `node templates/new_template.mjs --id <template-id>` when creating
@@ -22,12 +22,10 @@ node games/new_game.mjs --id <game-id> --template <template-id> --visibility pub
 node games/new_game.mjs --id <game-id> --template <template-id> --visibility private
 ```
 
-Use `--visibility public` when the game may be registered in tracked Studio
-files such as the tracked workspace catalog, parent Taskboard projects, and generated
+Use `--visibility public` for a tracked game with parent Taskboard and generated
 VS Code entries. Use `--visibility private` for a nested private repository
-under `games/<game-id>/`; that path keeps game-local taskboard, canvas, evidence,
-and workspace state inside the game and only writes local ignored Studio mount
-metadata.
+under `games/private/<game-id>/`; that ignored path keeps game-local taskboard,
+canvas, evidence, and workspace state inside the game.
 
 The template includes a `design/` scaffold with `concept.md`, `gdd.md`,
 `knowledge/`, and starter structured data. It also includes a game-owned
@@ -41,7 +39,5 @@ compile in place from `features/`; template-owned feature implementations copy
 with the template and become game-owned. Follow each module's `INSTALL.md`
 rather than assuming every feature is copied.
 
-Current registered template list:
-
-- `ai_studio/workspace/catalog.json`
-- `.vscode/tasks.json` and `.vscode/launch.json` are generated from this catalog.
+`.vscode/tasks.json` and `.vscode/launch.json` are generated from scanned public
+template and game folders.

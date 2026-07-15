@@ -43,7 +43,7 @@ textured mesh paths, a movement system, screenshot capture).
 
 VS Code users can use Run and Debug entries such as
 `Debug Template: template (native debug)`. Build, pack, and run tasks are
-generated from `ai_studio/workspace/catalog.json` by
+generated from scanned public game/template folders by
 `node ai_studio/dev_environment/vscode_projects.mjs`; `games/new_game.mjs` and
 `templates/new_template.mjs` refresh them after creating a project.
 

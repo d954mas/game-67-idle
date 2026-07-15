@@ -28,9 +28,8 @@ ai_studio/architecture_map/validation-report.json
 # committed ai_studio/studio.config.json defaults are tracked.
 ai_studio/studio.config.local.json
 
-# Local/private game workspace mounts. Public games stay in the tracked catalog;
-# private commercial game ids, remotes, aliases, and roots must stay local.
-ai_studio/workspace/catalog.local.json
+# Private games are nested repositories or junctions under this ignored root.
+games/private/
 
 # Closed Taskboard bodies are cold history. Pending Markdown stays local until
 # an explicit ZIP seal; sealed ZIP batches remain trackable.

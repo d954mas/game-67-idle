@@ -88,6 +88,7 @@ test("changed selection is coarse and unknown shared paths fail ownership", () =
   assert.deepEqual(selectChangedDomains(["ai_studio/studio.config.local.json"]), ["harness"]);
   assert.deepEqual(selectChangedDomains(["ai_studio/config.mjs", "ai_studio/config.test.mjs"]), ["harness"]);
   assert.deepEqual(selectChangedDomains([".vscode/tasks.json", ".vscode/launch.json"]), ["harness"]);
+  assert.deepEqual(selectChangedDomains([".gitignore"]), ["harness"]);
   assert.throws(() => selectChangedDomains(["mystery/shared.txt"]), /unowned shared path: mystery\/shared\.txt/);
 });
 

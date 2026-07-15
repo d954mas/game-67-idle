@@ -82,8 +82,12 @@ export function listTaskboardStores(root, options = {}) {
 export function selectTaskboardStore(root, options = {}) {
   const gameId = String(options.game || options.activeGameId || "").trim();
   const storeId = String(options.store || options.activeStoreId || "").trim();
-  if (gameId && storeId && storeId !== `game:${gameId}`) {
-    throw new Error(`--store ${storeId} does not match --game ${gameId}`);
+  if (gameId && storeId) {
+    const mount = listGameMounts(root, { activeGameId: gameId, activeStoreId: storeId })
+      .find((entry) => entry.gameId === gameId);
+    if (mount && storeId !== mount.storeId) {
+      throw new Error(`--store ${storeId} does not match --game ${gameId}`);
+    }
   }
   if (!gameId && (!storeId || storeId === STUDIO_STORE_ID)) {
     return studioTaskboardStore(root);

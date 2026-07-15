@@ -34,7 +34,6 @@ function tempRepo() {
   mkdirSync(join(root, "templates", "template", ".ai_studio", "evidence"), { recursive: true });
   writeFileSync(join(root, "templates", "template", ".ai_studio", "evidence", "private.txt"), "private\n", "utf8");
   writeFileSync(join(root, "templates", "template", "build", "stale.obj"), "generated\n", "utf8");
-  mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
   writeFileSync(join(root, "templates", "template", "template.json"), JSON.stringify({
     schema: "ai_studio.template.v1", id: "template", title: "Template", storageNamespace: "template",
   }), "utf8");
@@ -43,10 +42,6 @@ function tempRepo() {
     engine: { source: "external/neotolis-engine", version: "0.1.0", compatibility: "tested" },
     features: [],
     compatibility: "tested",
-  }), "utf8");
-  writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify({
-    schema: "ai_studio.workspace.catalog.v1",
-    mounts: [{ kind: "template", root: "templates/template", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] }],
   }), "utf8");
   execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
   execFileSync("git", ["config", "user.email", "tests@example.invalid"], { cwd: root, stdio: "ignore" });
@@ -76,8 +71,6 @@ test("new_template copies template, registers it, and refreshes VS Code files", 
   }
   assert.equal(existsSync(join(root, "templates", "mobile-template", "build", "stale.obj")), false);
 
-  const registry = JSON.parse(readFileSync(join(root, "ai_studio", "workspace", "catalog.json"), "utf8"));
-  assert.deepEqual(registry.mounts.map((mount) => mount.root), ["templates/mobile-template", "templates/template"]);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "template.json")), true);
   assert.equal(existsSync(join(root, "templates", "mobile-template", "game-dependencies.json")), true);
   const dependencySeed = JSON.parse(readFileSync(join(root, "templates", "mobile-template", "game-dependencies.json"), "utf8"));
@@ -106,7 +99,7 @@ test("new_template rejects existing template folders without --force", (t) => {
 
 });
 
-test("new_template --force fully replaces the target without duplicating its registry row", (t) => {
+test("new_template --force fully replaces the target without disturbing sibling templates", (t) => {
   const root = tempRepo();
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
@@ -115,22 +108,15 @@ test("new_template --force fully replaces the target without duplicating its reg
   writeFileSync(join(target, "target-only.txt"), "must stay\n", "utf8");
   writeFileSync(join(root, "templates", "template", "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.30)\n", "utf8");
 
-  const catalogPath = join(root, "ai_studio", "workspace", "catalog.json");
-  const catalog = JSON.parse(readFileSync(catalogPath, "utf8"));
   mkdirSync(join(root, "templates", "other", "assets"), { recursive: true });
   writeFileSync(join(root, "templates", "other", "template.json"), JSON.stringify({
     schema: "ai_studio.template.v1", id: "other", title: "Other", storageNamespace: "other",
   }), "utf8");
-  catalog.mounts.push({ kind: "template", root: "templates/other", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] });
-  writeFileSync(catalogPath, `${JSON.stringify(catalog)}\n`, "utf8");
-
   execFileSync(process.execPath, [script, "--root", root, "--id", "mobile-template", "--force"], { encoding: "utf8" });
 
   assert.equal(existsSync(join(target, "target-only.txt")), false);
   assert.match(readFileSync(join(target, "CMakeLists.txt"), "utf8"), /3\.30/);
-  const updated = JSON.parse(readFileSync(catalogPath, "utf8"));
-  assert.equal(updated.mounts.filter((mount) => mount.root === "templates/mobile-template").length, 1);
-  assert.equal(updated.mounts.some((mount) => mount.root === "templates/other"), true);
+  assert.equal(existsSync(join(root, "templates", "other", "template.json")), true);
 });
 
 test("new_template --help prints usage", () => {

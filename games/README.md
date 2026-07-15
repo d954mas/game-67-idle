@@ -6,17 +6,15 @@ There can be multiple games at the same time. Each game is an independent copy
 created from a template or another explicit source folder, then customized in
 place.
 
-Mount public/tracked active game roots in
-`ai_studio/workspace/catalog.json`. This lets Asset Viewer and asset tools show public
-game-local assets alongside template and library sources.
+Asset Viewer and other Studio tools discover public game-local sources directly
+from `games/<id>/game.json`.
 Use an explicit visibility choice when creating a new game:
 
 ```powershell
 node games/new_game.mjs --id <game-id> --visibility public
 ```
 
-The public/tracked flow registers the game in the tracked workspace catalog,
-creates/reuses a parent Taskboard project, lays down the game-owned `design/`
+The public/tracked flow creates/reuses a parent Taskboard project, lays down the game-owned `design/`
 and `.ai_studio/` scaffolds, and refreshes VS Code build/run entries.
 
 Private commercial games must be explicit:
@@ -25,14 +23,13 @@ Private commercial games must be explicit:
 node games/new_game.mjs --id <private-game-id> --visibility private
 ```
 
-The private flow creates `games/<private-game-id>/`, initializes or verifies its
-nested Git repository, creates the game-owned `.ai_studio/` scaffold, updates
-only local ignored catalog/exclude files, and skips the tracked workspace catalog,
-parent Taskboard, parent Canvas, and generated `.vscode` entries. Private games
-can then be mounted locally through the ignored registry
-`ai_studio/workspace/catalog.local.json`; see `ai_studio/workspace/README.md`.
-Do not put private game ids, remotes, task logs, canvas refs, or evidence paths
-in the tracked workspace catalog or other tracked Studio files.
+The private flow creates `games/private/<private-game-id>/`, initializes its
+nested Git repository, installs the parent repository's pre-commit privacy
+preflight, creates the
+game-owned `.ai_studio/` scaffold, and skips parent Taskboard, Canvas, and
+generated `.vscode` entries. The committed `games/private/` ignore keeps the
+whole root out of parent Git. Do not put private game ids, remotes, task logs,
+canvas refs, or evidence paths in tracked Studio files.
 
 For backward compatibility, omitting `--visibility` still creates a public
 tracked game. Human-facing, agent-facing, or Studio browser flows should add
@@ -51,6 +48,5 @@ choice is only used at creation time because the template is copied.
 Reusable feature packs can be copied from `features/`, but after copying the
 game owns and may customize its local feature code, assets, and state.
 
-`.vscode/tasks.json` and `.vscode/launch.json` are generated from public
-`ai_studio/workspace/catalog.json`. Private games need explicit
-workspace activation before any private-aware generator may include them.
+`.vscode/tasks.json` and `.vscode/launch.json` are generated from scanned public
+game and template folders. Private games need explicit workspace activation.

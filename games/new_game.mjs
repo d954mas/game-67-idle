@@ -1,23 +1,20 @@
 #!/usr/bin/env node
 // Transactionally copy a registered template into games/<game-id>.
 import {
-  appendFileSync, copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync,
-  renameSync, rmSync, statSync, writeFileSync,
+  chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync,
 } from "node:fs";
 import { randomUUID } from "node:crypto";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import { listRegisteredGames, listRegisteredTemplates } from "../ai_studio/assets/sources/ops.mjs";
+import { listRegisteredTemplates } from "../ai_studio/assets/sources/ops.mjs";
 import { writeVscodeProjectFiles } from "../ai_studio/dev_environment/vscode_projects.mjs";
 import { ensureProject, updateDoc } from "../ai_studio/taskboard/lib.mjs";
-import {
-  localWorkspaceCatalogRelPath, runPrivateGamePreflight, upsertLocalWorkspaceGameMount,
-} from "../ai_studio/workspace/games.mjs";
-import { catalogRelPath, upsertWorkspaceMount } from "../ai_studio/workspace/catalog.mjs";
+import { listGameMounts, runPrivateGamePreflight } from "../ai_studio/workspace/games.mjs";
 import { copyGitSourceTree } from "../ai_studio/workspace/copy_source_tree.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));
+const preflightScript = fileURLToPath(new URL("../ai_studio/workspace/games.mjs", import.meta.url));
 const EXACT_SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 function takeValue(argv, index, flag) {
@@ -150,115 +147,6 @@ function runGit(root, args) {
   return spawnSync("git", ["-C", root, ...args], { encoding: "utf8", shell: false });
 }
 
-function sleepSync(milliseconds) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
-}
-
-function pidIsAlive(pid) {
-  if (!Number.isSafeInteger(pid) || pid <= 0) return true;
-  try { process.kill(pid, 0); return true; }
-  catch (error) { return error.code !== "ESRCH"; }
-}
-
-function cleanupAbandonedClaimCandidates(gamesDir, lockDir) {
-  const exact = /^\.new-game\.claim-(\d+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.candidate$/i;
-  const released = /^\.new-game\.claim\.release-(\d+)-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
-  const now = Date.now();
-  for (const name of readdirSync(gamesDir)) {
-    const path = join(gamesDir, name);
-    if (released.test(name)) {
-      try {
-        if (now - statSync(path).mtimeMs >= 5 * 60 * 1000) {
-          rmSync(path, { recursive: true, force: true, maxRetries: 6, retryDelay: 20 });
-        }
-      } catch { /* Quarantined release cleanup is best-effort. */ }
-      continue;
-    }
-    const match = exact.exec(name);
-    if (!match) continue;
-    if (!statSync(path).isDirectory()) continue;
-    let provenDead = false;
-    let provenLive = false;
-    try {
-      const owner = readJsonStrict(join(path, "owner.json"), "new-game candidate owner");
-      const expectedToken = `${match[1]}-${match[2]}`;
-      if (owner.token === expectedToken && owner.pid === Number(match[1])) {
-        provenLive = pidIsAlive(owner.pid);
-        provenDead = !provenLive;
-      }
-    } catch { /* Fresh incomplete candidates are owned until age proves abandonment. */ }
-    const oldUnpublished = !provenLive && !existsSync(lockDir) && now - statSync(path).mtimeMs >= 5 * 60 * 1000;
-    if (provenDead || oldUnpublished) rmSync(path, { recursive: true, force: true });
-  }
-}
-
-function acquireNewGameClaim(gamesDir) {
-  mkdirSync(gamesDir, { recursive: true });
-  const lockDir = join(gamesDir, ".new-game.claim");
-  cleanupAbandonedClaimCandidates(gamesDir, lockDir);
-  const ownerPath = join(lockDir, "owner.json");
-  const token = `${process.pid}-${randomUUID()}`;
-  const candidateDir = join(gamesDir, `.new-game.claim-${token}.candidate`);
-  mkdirSync(candidateDir);
-  writeJson(join(candidateDir, "owner.json"), { token, pid: process.pid });
-  const deadline = Date.now() + 15000;
-  while (Date.now() < deadline) {
-    try {
-      renameSync(candidateDir, lockDir);
-      let released = false;
-      const release = () => {
-        if (released) return;
-        released = true;
-        process.removeListener("exit", release);
-        try {
-          const owner = readJsonStrict(ownerPath, "new-game claim owner");
-          if (owner.token !== token || owner.pid !== process.pid) return;
-          const releaseDir = join(gamesDir, `.new-game.claim.release-${token}`);
-          renameSync(lockDir, releaseDir);
-          try { rmSync(releaseDir, { recursive: true, force: true, maxRetries: 6, retryDelay: 20 }); }
-          catch { /* The live claim is free; token-unique cleanup is best-effort. */ }
-        } catch { /* Never remove a lock whose ownership cannot be proven. */ }
-      };
-      process.once("exit", release);
-      return release;
-    } catch (error) {
-      if (!existsSync(lockDir)) {
-        if (["EEXIST", "EPERM", "ENOTEMPTY"].includes(error.code)) {
-          sleepSync(25);
-          continue;
-        }
-        rmSync(candidateDir, { recursive: true, force: true });
-        throw error;
-      }
-      try {
-        const first = readJsonStrict(ownerPath, "new-game claim owner");
-        if (!pidIsAlive(first.pid)) {
-          const second = readJsonStrict(ownerPath, "new-game claim owner");
-          if (first.token === second.token && first.pid === second.pid && !pidIsAlive(second.pid)) {
-            rmSync(lockDir, { recursive: true, force: true });
-            continue;
-          }
-        }
-      } catch { /* Owner may still be publishing its token; bounded wait is safer than stealing. */ }
-      sleepSync(25);
-    }
-  }
-  rmSync(candidateDir, { recursive: true, force: true });
-  throw new Error("timed out waiting for the global new-game claim");
-}
-
-function waitAtClaimBarrier() {
-  const barrier = process.env.AI_STUDIO_NEW_GAME_TEST_LOCK_BARRIER || "";
-  if (!barrier) return;
-  if (process.env.NODE_ENV !== "test") throw new Error("new_game lock barrier is test-only (NODE_ENV=test required)");
-  writeFileSync(`${barrier}.ready`, `${process.pid}\n`, "utf8");
-  const deadline = Date.now() + 10000;
-  while (!existsSync(`${barrier}.release`)) {
-    if (Date.now() >= deadline) throw new Error("timed out waiting at the new-game test lock barrier");
-    sleepSync(20);
-  }
-}
-
 function requireGitRevision(root, args, label) {
   const result = runGit(root, args);
   const revision = result.status === 0 ? result.stdout.trim() : "";
@@ -297,24 +185,40 @@ function readEngineSemVer(repoRoot) {
 
 function ensureGameStudioScaffold(gameDir, identity, visibility) {
   const studioDir = join(gameDir, ".ai_studio");
-  for (const rel of ["taskboard/items", "canvas/projects", "evidence"]) mkdirSync(join(studioDir, rel), { recursive: true });
+  if (visibility === "private") {
+    for (const rel of ["taskboard/items", "canvas/projects", "evidence"]) mkdirSync(join(studioDir, rel), { recursive: true });
+  } else {
+    rmSync(join(studioDir, "taskboard"), { recursive: true, force: true });
+    rmSync(join(studioDir, "canvas"), { recursive: true, force: true });
+    mkdirSync(join(studioDir, "evidence"), { recursive: true });
+  }
+  const stores = visibility === "private"
+    ? { taskboard: ".ai_studio/taskboard/items", canvas: ".ai_studio/canvas/projects", evidence: ".ai_studio/evidence", assets: "assets" }
+    : { evidence: ".ai_studio/evidence", assets: "assets" };
   writeJson(join(studioDir, "workspace.json"), {
     schema: "ai_studio.game.workspace.v1", gameId: identity.id, visibility,
-    stores: { taskboard: ".ai_studio/taskboard/items", canvas: ".ai_studio/canvas/projects", evidence: ".ai_studio/evidence", assets: "assets" },
+    stores,
   });
-  for (const [rel, text] of [
+  const docs = [
     ["taskboard/items/README.md", "Game-local taskboard items live here for private or game-owned work.\n"],
     ["canvas/projects/README.md", "Game-local canvas projects live here when they must stay with this game.\n"],
     ["evidence/README.md", "Game-local validation evidence, screenshots, and reports live here.\n"],
-  ]) writeFileSync(join(studioDir, rel), text, "utf8");
+  ];
+  for (const [rel, text] of docs) {
+    if (visibility === "private" || rel.startsWith("evidence/")) writeFileSync(join(studioDir, rel), text, "utf8");
+  }
 }
 
 function transformIdentityOwnedFiles(gameDir, template, identity) {
   // Exact producer-owned substitutions only. This is deliberately not a tree-wide name replacement.
   const table = [
-    ["CMakeLists.txt", `GAME_STORAGE_APP_ID="${template.storageNamespace}"`, `GAME_STORAGE_APP_ID="${identity.storageNamespace}"`, 1],
     ["cmake/GamePlatform.cmake", `GAME_STORAGE_APP_ID="${template.storageNamespace}"`, `GAME_STORAGE_APP_ID="${identity.storageNamespace}"`, 1],
-    ["cmake/GameTests.cmake", `GAME_STORAGE_APP_ID="${template.storageNamespace}_test"`, `GAME_STORAGE_APP_ID="${identity.storageNamespace}-test"`, 4],
+    ...["storage", "save", "analytics", "composition"].map((suffix) => [
+      "cmake/GameTests.cmake",
+      `GAME_STORAGE_APP_ID="${template.storageNamespace}_${suffix}_test"`,
+      `GAME_STORAGE_APP_ID="${identity.storageNamespace}-${suffix}-test"`,
+      1,
+    ]),
     ["src/game_save.c", `GAME_STORAGE_APP_ID "${template.storageNamespace}"`, `GAME_STORAGE_APP_ID "${identity.storageNamespace}"`, 1],
     ["tests/web_persistence_check.py", `STORAGE_KEY = "${template.storageNamespace}/save/autosave"`, `STORAGE_KEY = "${identity.storageNamespace}/save/autosave"`, 1],
     ["cmake/GameOptions.cmake", `set(GAME_TITLE "${template.title}" CACHE STRING "Game window title base")`, `set(GAME_TITLE "${identity.title}" CACHE STRING "Game window title base")`, 1],
@@ -333,11 +237,56 @@ function transformIdentityOwnedFiles(gameDir, template, identity) {
   }
 }
 
+function shellPath(path) {
+  return String(path).replace(/\\/g, "/").replace(/"/g, '\\"');
+}
+
+const PARENT_HOOK_MARKER = "ai-studio-private-preflight-v1";
+
+function parentPrecommitPaths(repoRoot) {
+  const result = runGit(repoRoot, ["rev-parse", "--git-path", "hooks/pre-commit"]);
+  if (result.status !== 0 || !result.stdout.trim()) throw new Error("failed to locate parent Git pre-commit hook");
+  const hook = resolve(repoRoot, result.stdout.trim());
+  return { hook, backup: `${hook}.ai-studio-original` };
+}
+
+function installParentPrecommit(repoRoot) {
+  const paths = parentPrecommitPaths(repoRoot);
+  const snapshots = { hook: snapshotFile(paths.hook), backup: snapshotFile(paths.backup) };
+  try {
+    if (snapshots.hook.existed && !readFileSync(paths.hook, "utf8").includes(PARENT_HOOK_MARKER)) {
+      if (snapshots.backup.existed) throw new Error(`cannot preserve parent pre-commit: backup already exists at ${paths.backup}`);
+      renameSync(paths.hook, paths.backup);
+    }
+    mkdirSync(dirname(paths.hook), { recursive: true });
+    const original = existsSync(paths.backup)
+      ? 'if [ -x "$0.ai-studio-original" ]; then "$0.ai-studio-original" "$@" || exit $?; fi\n'
+      : "";
+    const node = shellPath(process.execPath);
+    const preflight = shellPath(preflightScript);
+    const root = shellPath(repoRoot);
+    writeFileSync(paths.hook, `#!/bin/sh\n# ${PARENT_HOOK_MARKER}\n${original}exec "${node}" "${preflight}" preflight --root "${root}"\n`, "utf8");
+    chmodSync(paths.hook, 0o755);
+    return snapshots;
+  } catch (error) {
+    restoreFile({ ...snapshots.hook, path: paths.hook });
+    restoreFile({ ...snapshots.backup, path: paths.backup });
+    throw error;
+  }
+}
+
+function rollbackParentPrecommit(repoRoot, snapshots) {
+  if (!snapshots) return;
+  const paths = parentPrecommitPaths(repoRoot);
+  restoreFile({ ...snapshots.hook, path: paths.hook });
+  restoreFile({ ...snapshots.backup, path: paths.backup });
+}
+
 function ensureNestedGit(gameDir, gameId) {
   const init = runGit(gameDir, ["init"]);
   if (init.status !== 0) throw new Error(`failed to initialize private game git repository: ${init.stderr}`);
   const proof = runGit(gameDir, ["rev-parse", "--is-inside-work-tree", "--show-prefix"]);
-  if (proof.status !== 0 || proof.stdout.trim() !== "true") throw new Error(`games/${gameId} does not contain a valid nested git repository`);
+  if (proof.status !== 0 || proof.stdout.trim() !== "true") throw new Error(`games/private/${gameId} does not contain a valid nested git repository`);
 }
 
 function resetItemsLock(gameDir) {
@@ -358,7 +307,7 @@ function resetItemsLock(gameDir) {
 function validatePreparedGame(gameDir, expected, dependencies, visibility) {
   if (!existsSync(join(gameDir, "CMakeLists.txt"))) throw new Error("prepared game has no CMakeLists.txt");
   const identity = readJsonStrict(join(gameDir, "game.json"), "generated game identity");
-  exactKeys(identity, ["schema", "id", "title", "storageNamespace"], "generated game identity");
+  exactKeys(identity, Object.keys(expected), "generated game identity");
   if (JSON.stringify(identity) !== JSON.stringify(expected)) throw new Error("generated game identity failed strict reread");
   const rereadDependencies = readJsonStrict(join(gameDir, "dependencies.json"), "generated dependencies");
   if (JSON.stringify(rereadDependencies) !== JSON.stringify(dependencies)) throw new Error("generated dependencies failed strict reread");
@@ -369,65 +318,29 @@ function validatePreparedGame(gameDir, expected, dependencies, visibility) {
   return identity;
 }
 
-function requireParentGitExcludePath(repoRoot) {
-  const result = runGit(repoRoot, ["rev-parse", "--git-path", "info/exclude"]);
-  if (result.status !== 0) throw new Error("private game creation requires the parent Studio checkout to be a Git repository");
-  const text = result.stdout.trim();
-  return isAbsolute(text) ? text : resolve(repoRoot, text);
-}
-
-function ensureParentExclude(excludePath, relRoot, directory = false) {
-  mkdirSync(dirname(excludePath), { recursive: true });
-  const normalized = relRoot.replace(/\\/g, "/").replace(/\/+$/, "");
-  const line = directory ? `${normalized}/` : normalized;
-  const existing = existsSync(excludePath) ? readFileSync(excludePath, "utf8") : "";
-  if (!existing.split(/\r?\n/).includes(line)) appendFileSync(excludePath, `${existing && !existing.endsWith("\n") ? "\n" : ""}${line}\n`, "utf8");
-}
-
-function parentTracksPath(repoRoot, relRoot) {
-  const result = runGit(repoRoot, ["ls-files", "--", relRoot.replace(/\\/g, "/")]);
-  if (result.status !== 0) throw new Error(`failed to inspect parent git tracking: ${result.stderr}`);
-  return Boolean(result.stdout.trim());
-}
-
-function readCatalogMounts(path) {
-  if (!existsSync(path)) return [];
-  const catalog = readJsonStrict(path, `workspace catalog ${path}`);
-  return Array.isArray(catalog.mounts) ? catalog.mounts : [];
-}
-
 function registeredGameIdentities(repoRoot) {
-  const mounts = [
-    ...readCatalogMounts(join(repoRoot, catalogRelPath(false))),
-    ...readCatalogMounts(join(repoRoot, localWorkspaceCatalogRelPath())),
-  ];
-  const identities = [];
-  for (const mount of mounts) {
-    if (mount.kind !== "game" || typeof mount.root !== "string") continue;
-    const identityPath = join(repoRoot, mount.root, "game.json");
-    if (!existsSync(identityPath)) continue;
-    const identity = readJsonStrict(identityPath, `registered game identity ${mount.root}`);
-    if (typeof identity.id === "string" && typeof identity.storageNamespace === "string") identities.push({ ...identity, root: mount.root });
-  }
-  return identities;
+  return listGameMounts(repoRoot, { includePrivate: true, skipPreflight: true, warnings: [] });
 }
 
 function snapshotFile(path) {
-  return { path, existed: existsSync(path), bytes: existsSync(path) ? readFileSync(path) : null };
+  return {
+    path,
+    existed: existsSync(path),
+    bytes: existsSync(path) ? readFileSync(path) : null,
+    mode: existsSync(path) ? statSync(path).mode : null,
+  };
 }
 
 function restoreFile(snapshot) {
   if (snapshot.existed) {
     mkdirSync(dirname(snapshot.path), { recursive: true });
     writeFileSync(snapshot.path, snapshot.bytes);
+    if (snapshot.mode !== null) chmodSync(snapshot.path, snapshot.mode);
   } else rmSync(snapshot.path, { force: true });
 }
 
-function snapshotExternal(repoRoot, excludePath) {
+function snapshotExternal(repoRoot) {
   return [
-    snapshotFile(join(repoRoot, catalogRelPath(false))),
-    snapshotFile(join(repoRoot, localWorkspaceCatalogRelPath())),
-    snapshotFile(excludePath),
     snapshotFile(join(repoRoot, ".vscode", "tasks.json")),
     snapshotFile(join(repoRoot, ".vscode", "launch.json")),
   ];
@@ -448,66 +361,12 @@ function restoreUnchangedWrites(writes) {
   }
 }
 
-function restoreOwnedCatalogMount(write, ownedRoot) {
-  const current = snapshotFile(write.after.path);
-  if (!current.existed) return !sameSnapshot(current, write.before);
-  const catalog = readJsonStrict(current.path, `workspace catalog ${current.path}`);
-  const beforeCatalog = write.before.existed
-    ? JSON.parse(write.before.bytes.toString("utf8").replace(/^\uFEFF/, "")) : { mounts: [] };
-  const previous = (beforeCatalog.mounts || []).find((mount) => mount.root === ownedRoot);
-  catalog.mounts = (catalog.mounts || []).filter((mount) => mount.root !== ownedRoot);
-  if (previous) catalog.mounts.push(previous);
-  const onlyOwnedCreatedCatalog = !write.before.existed
-    && (catalog.mounts || []).length === 0
-    && Object.keys(catalog).every((key) => key === "schema" || key === "mounts");
-  if (onlyOwnedCreatedCatalog || JSON.stringify(catalog) === JSON.stringify(beforeCatalog)) {
-    restoreFile(write.before);
-    return false;
-  }
-  writeJson(current.path, catalog);
-  return true;
-}
-
-function restoreOwnedExclude(write, ownedLines) {
-  const current = snapshotFile(write.after.path);
-  if (!current.existed) return !sameSnapshot(current, write.before);
-  const beforeLines = new Set(write.before.existed ? write.before.bytes.toString("utf8").split(/\r?\n/) : []);
-  const segments = current.bytes.toString("utf8").match(/[^\r\n]*(?:\r\n|\n|\r|$)/g) || [];
-  const restored = segments.filter((segment) => {
-    const line = segment.replace(/(?:\r\n|\n|\r)$/, "");
-    return !ownedLines.includes(line) || beforeLines.has(line);
-  }).join("");
-  const before = write.before.existed ? write.before.bytes.toString("utf8") : "";
-  if (restored === before) {
-    restoreFile(write.before);
-    return false;
-  }
-  writeFileSync(current.path, restored, "utf8");
-  return true;
-}
-
-function rollbackExternalWrites(writes, { repoRoot, identity, isPrivate, excludePath }) {
-  const byPath = new Map(writes.map((write) => [resolve(write.after.path), write]));
-  const publicCatalog = byPath.get(resolve(join(repoRoot, catalogRelPath(false))));
-  const localCatalog = byPath.get(resolve(join(repoRoot, localWorkspaceCatalogRelPath())));
-  const exclude = byPath.get(resolve(excludePath));
-  const concurrentCatalogWrite = [publicCatalog, localCatalog]
-    .filter(Boolean)
-    .map((write) => restoreOwnedCatalogMount(write, `games/${identity.id}`))
-    .some(Boolean);
-  if (exclude && isPrivate) restoreOwnedExclude(exclude, [localWorkspaceCatalogRelPath(), `games/${identity.id}/`]);
-  const vscodeWrites = writes.filter((write) => /[\\/]\.vscode[\\/](tasks|launch)\.json$/.test(write.after.path));
-  if (concurrentCatalogWrite || vscodeWrites.some((write) => !sameSnapshot(snapshotFile(write.after.path), write.after))) {
-    writeVscodeProjectFiles(repoRoot);
-  } else restoreUnchangedWrites(vscodeWrites);
+function rollbackExternalWrites(writes) {
+  restoreUnchangedWrites(writes);
 }
 
 function rollbackTaskboardMutation(mutation) {
   if (!mutation) return;
-  if (process.env.AI_STUDIO_NEW_GAME_TEST_FAIL_ROLLBACK_AT === "taskboard") {
-    if (process.env.NODE_ENV !== "test") throw new Error("new_game rollback injection is test-only (NODE_ENV=test required)");
-    throw new Error(`injected Taskboard rollback failure for ${mutation.post.path}`);
-  }
   const current = snapshotFile(mutation.post.path);
   if (!sameSnapshot(current, mutation.post)) return;
   if (mutation.created) rmSync(mutation.post.path, { force: true });
@@ -517,37 +376,7 @@ function rollbackTaskboardMutation(mutation) {
   }
 }
 
-function injectConcurrentSentinel(repoRoot, sourceGameId, point = "after-post-capture") {
-  const requestedPoint = process.env.AI_STUDIO_NEW_GAME_TEST_CONCURRENT_SENTINEL_AT
-    || (process.env.AI_STUDIO_NEW_GAME_TEST_CONCURRENT_SENTINEL === "1" ? "after-post-capture" : "");
-  if (requestedPoint !== point) return;
-  if (process.env.NODE_ENV !== "test") throw new Error("new_game concurrency injection is test-only (NODE_ENV=test required)");
-  const sentinelDir = join(repoRoot, "games", "concurrent-sentinel");
-  mkdirSync(join(sentinelDir, "assets"), { recursive: true });
-  writeJson(join(sentinelDir, "game.json"), {
-    schema: "ai_studio.game.v1", id: "concurrent-sentinel", title: "Concurrent Sentinel", storageNamespace: "concurrent-sentinel",
-  });
-  copyFileSync(join(repoRoot, "games", sourceGameId, "dependencies.json"), join(sentinelDir, "dependencies.json"));
-  writeFileSync(join(sentinelDir, "CMakeLists.txt"), "cmake_minimum_required(VERSION 3.20)\n", "utf8");
-  upsertWorkspaceMount(repoRoot, {
-    kind: "game", root: "games/concurrent-sentinel", visibility: "public", gitRoot: "",
-    commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [],
-  }, { local: false });
-  writeVscodeProjectFiles(repoRoot);
-  appendFileSync(requireParentGitExcludePath(repoRoot), "/concurrent-sentinel/\n", "utf8");
-  const projectDir = join(repoRoot, "ai_studio", "taskboard", "items", "projects");
-  mkdirSync(projectDir, { recursive: true });
-  writeFileSync(join(projectDir, "P777-concurrent-sentinel.md"), "concurrent sentinel\n", "utf8");
-  writeJson(join(repoRoot, "ai_studio", "taskboard", "items", ".counters.json"), { project: 777, epic: 55, task: 9999 });
-}
-
 function cleanupCommittedBackup(backupDir) {
-  if (process.env.AI_STUDIO_NEW_GAME_TEST_FAIL_AT === "backup-cleanup-partial") {
-    if (process.env.NODE_ENV !== "test") throw new Error("new_game backup cleanup injection is test-only (NODE_ENV=test required)");
-    const first = readdirSync(backupDir).sort()[0];
-    if (first) rmSync(join(backupDir, first), { recursive: true, force: true });
-    throw new Error("injected partial backup cleanup failure");
-  }
   rmSync(backupDir, { recursive: true, force: true });
 }
 
@@ -565,8 +394,6 @@ function fail(message, showUsage = false) {
 }
 
 function executeMain(argv, io) {
-let releaseClaim;
-try {
 let args;
 try { args = parseArgs(argv); }
 catch (error) { fail(error.message, true); }
@@ -577,6 +404,7 @@ let visibility;
 try {
   requestedIdentity = validateRequestedIdentity(args);
   visibility = resolveVisibility(args);
+  if (visibility === "private" && args.publicAlias) requestedIdentity.aliases = [args.publicAlias];
 } catch (error) { fail(error.message, true); }
 
 const repoRoot = args.root ? resolve(args.root) : defaultRepoRoot;
@@ -591,12 +419,10 @@ try {
 } catch (error) { fail(error.message); }
 
 const fromDir = join(repoRoot, fromRel);
-const gamesDir = join(repoRoot, "games");
-const finalDir = join(gamesDir, args.id);
-try {
-  releaseClaim = acquireNewGameClaim(gamesDir);
-  waitAtClaimBarrier();
-} catch (error) { fail(error.message); }
+const gameRel = visibility === "private" ? `games/private/${args.id}` : `games/${args.id}`;
+const gamesDir = join(repoRoot, visibility === "private" ? "games/private" : "games");
+const finalDir = join(repoRoot, gameRel);
+mkdirSync(gamesDir, { recursive: true });
 let templateIdentity;
 let dependencySeed;
 let repoRevision;
@@ -635,17 +461,9 @@ try {
   const identities = registeredGameIdentities(repoRoot);
   const namespaceOwner = identities.find((game) => game.id !== args.id && game.storageNamespace === requestedIdentity.storageNamespace);
   if (namespaceOwner) throw new Error(`storage namespace '${requestedIdentity.storageNamespace}' is already owned by game '${namespaceOwner.id}'`);
-  if (isPrivate) {
-    const publicGame = listRegisteredGames(repoRoot).find((game) => game.id === args.id && game.status !== "fixture");
-    if (publicGame) throw new Error(`private game id '${args.id}' is already registered as a public game`);
-    if (parentTracksPath(repoRoot, `games/${args.id}`)) throw new Error(`games/${args.id} is already tracked by the parent repository; cannot create it as private`);
-  } else {
-    const localRoot = `games/${args.id}`;
-    const localOwnsId = readCatalogMounts(join(repoRoot, localWorkspaceCatalogRelPath()))
-      .some((mount) => mount.kind === "game" && mount.root === localRoot);
-    if (localOwnsId || existsSync(join(finalDir, ".git"))) {
-      throw new Error(`public game id '${args.id}' is already owned by a private game`);
-    }
+  const conflictingRoot = identities.find((game) => game.id === args.id && game.root !== gameRel);
+  if (conflictingRoot) {
+    throw new Error(`${visibility} game id '${args.id}' is already owned by ${conflictingRoot.root}`);
   }
 } catch (error) { fail(error.message); }
 
@@ -687,10 +505,10 @@ catch (error) {
   fail(error.message);
 }
 
-const excludePath = requireParentGitExcludePath(repoRoot);
-const external = snapshotExternal(repoRoot, excludePath);
+const external = snapshotExternal(repoRoot);
 let externalWrites = [];
 let taskboardMutation = null;
+let parentHookMutation = null;
 let backupMade = false;
 let published = false;
 const registrationMessages = [];
@@ -703,26 +521,20 @@ try {
   published = true;
 
   if (isPrivate) {
-    ensureParentExclude(excludePath, localWorkspaceCatalogRelPath());
-    ensureParentExclude(excludePath, `games/${identity.id}`, true);
-    const mount = upsertLocalWorkspaceGameMount(repoRoot, {
-      gameId: identity.id, visibility: "private", commitPolicy: "nested-private", publicAlias: args.publicAlias,
-    });
+    const mount = listGameMounts(repoRoot, { activeGameId: identity.id, skipPreflight: true, warnings: [] })
+      .find((entry) => entry.root === gameRel);
+    if (!mount) throw new Error(`private game scanner did not discover ${gameRel}`);
     const preflight = runPrivateGamePreflight(repoRoot, { mounts: [mount] });
     if (!preflight.ok) throw new Error(`private game preflight failed:\n${preflight.violations.map((item) => `- ${item.path}: ${item.reason}`).join("\n")}`);
-    injectConcurrentSentinel(repoRoot, identity.id, "before-post-capture");
+    parentHookMutation = installParentPrecommit(repoRoot);
     externalWrites = capturePostWrites(external);
     maybeFail("private-preflight");
   } else {
-    const mount = upsertWorkspaceMount(repoRoot, {
-      kind: "game", root: `games/${identity.id}`, visibility: "public", gitRoot: "",
-      commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [],
-    }, { local: false });
+    const mount = listGameMounts(repoRoot, { warnings: [] }).find((entry) => entry.root === gameRel);
+    if (!mount) throw new Error(`public game scanner did not discover ${gameRel}`);
     const registered = { assets: mount.assetRoot };
     const vscode = writeVscodeProjectFiles(repoRoot);
-    injectConcurrentSentinel(repoRoot, identity.id, "before-post-capture");
     externalWrites = capturePostWrites(external);
-    injectConcurrentSentinel(repoRoot, identity.id);
     maybeFail("public-registration");
     const taskboard = ensureProject(repoRoot, {
       title: identity.title, kind: "game", target: `games/${identity.id}`, tags: ["game"],
@@ -738,10 +550,9 @@ try {
       });
       taskboardMutation = { created: false, before: projectBefore, post: snapshotFile(taskboard.project.file) };
     }
-    if ((process.env.AI_STUDIO_NEW_GAME_TEST_FAIL_AT || "") === "after-taskboard") injectConcurrentSentinel(repoRoot, identity.id);
     maybeFail("after-taskboard");
     registrationMessages.push(
-      `registered assets: ${catalogRelPath(false)} -> ${registered.assets}`,
+      `discovered assets: ${registered.assets}`,
       `${taskboard.created ? "created" : "existing"} taskboard project: ${taskboard.project.fields.id}`,
       `updated VS Code tasks/launch for ${vscode.projects.length} playable project(s)`,
     );
@@ -753,6 +564,7 @@ try {
     catch (rollbackError) { residuals.push(`${label}: ${rollbackError.message}`); }
   };
   rollbackPhase("taskboard", () => rollbackTaskboardMutation(taskboardMutation));
+  rollbackPhase("parent pre-commit", () => rollbackParentPrecommit(repoRoot, parentHookMutation));
   rollbackPhase("published destination", () => {
     if (published && existsSync(finalDir)) rmSync(finalDir, { recursive: true, force: true });
   });
@@ -761,7 +573,7 @@ try {
   });
   rollbackPhase("external", () => {
     if (!externalWrites.length) externalWrites = capturePostWrites(external);
-    rollbackExternalWrites(externalWrites, { repoRoot, identity, isPrivate, excludePath });
+    rollbackExternalWrites(externalWrites);
   });
   rollbackPhase("staging", () => {
     if (existsSync(stagingDir)) rmSync(stagingDir, { recursive: true, force: true });
@@ -780,18 +592,15 @@ if (backupMade && existsSync(backupDir)) {
 for (const message of registrationMessages) io.log(message);
 
 if (isPrivate) {
-  io.log(`new private game '${identity.id}' created from ${fromRel}/ -> games/${identity.id}/`);
+  io.log(`new private game '${identity.id}' created from ${fromRel}/ -> ${gameRel}/`);
   io.log(`nested git repository: created`);
-  io.log(`local workspace catalog: ${localWorkspaceCatalogRelPath()} -> games/${identity.id}`);
+  io.log(`parent pre-commit privacy preflight: installed`);
   io.log("public Studio registries, Taskboard, Canvas, and VS Code files were not updated");
 } else {
-  io.log(`new game '${identity.id}' created from ${fromRel}/ -> games/${identity.id}/`);
+  io.log(`new game '${identity.id}' created from ${fromRel}/ -> ${gameRel}/`);
 }
-if (itemsLockReset) io.log(`reset items lock baseline: games/${identity.id}/content/items.lock.json`);
+if (itemsLockReset) io.log(`reset items lock baseline: ${gameRel}/content/items.lock.json`);
 return 0;
-} finally {
-  releaseClaim?.();
-}
 }
 
 export function main(argv, io = console) {

@@ -1,28 +1,23 @@
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readFileSync,
-  realpathSync,
+  readdirSync,
   renameSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, join } from "node:path";
 
-export const CATALOG_SCHEMA = "ai_studio.workspace.catalog.v1";
 export const GAME_IDENTITY_SCHEMA = "ai_studio.game.v1";
 export const TEMPLATE_IDENTITY_SCHEMA = "ai_studio.template.v1";
 export const GAME_DEPENDENCIES_SCHEMA = "ai_studio.game.dependencies.v2";
 
-const CATALOG_KEYS = new Set(["schema", "mounts"]);
-const MOUNT_KEYS = new Set([
-  "kind", "root", "visibility", "gitRoot", "commitPolicy", "enabledStores", "aliases",
-]);
-const IDENTITY_KEYS = new Set(["schema", "id", "title", "storageNamespace"]);
+const IDENTITY_KEYS = new Set(["schema", "id", "title", "storageNamespace", "aliases"]);
 const DEPENDENCY_KEYS = new Set(["schema", "engine", "features", "compatibility"]);
 const ENGINE_KEYS = new Set(["source", "version", "revision", "compatibility"]);
 const FEATURE_KEYS = new Set(["id", "source", "version", "revision", "compatibility"]);
-const ALLOWED_STORES = new Set(["assets", "taskboard", "canvas", "evidence"]);
 const EXACT_SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
 function slash(value) {
@@ -62,23 +57,6 @@ function normalizeId(value, label) {
   return text;
 }
 
-function normalizeRoot(value, label) {
-  const text = slash(value).trim().replace(/^\.\//, "").replace(/\/+$/, "");
-  if (!text || isAbsolute(text) || /^[a-z]:\//i.test(text) || text.startsWith("//") || text.split("/").includes("..")) {
-    throw new Error(`${label} must be repo-relative and stay inside the repository`);
-  }
-  return text;
-}
-
-function ensureRealRootInsideRepository(repoRoot, relRoot, label) {
-  const abs = join(repoRoot, relRoot);
-  if (!existsSync(abs) || !statSync(abs).isDirectory()) throw new Error(`${label} does not exist: ${relRoot}`);
-  const realRepo = realpathSync(repoRoot);
-  const realRoot = realpathSync(abs);
-  const rel = relative(realRepo, realRoot);
-  if (rel.startsWith("..") || isAbsolute(rel)) throw new Error(`${label} resolves outside the repository: ${relRoot}`);
-}
-
 function normalizeAliases(value, label) {
   if (value === undefined) return [];
   if (!Array.isArray(value)) throw new Error(`${label} must be an array`);
@@ -89,95 +67,6 @@ function normalizeAliases(value, label) {
     }
     return alias;
   });
-}
-
-function normalizeStores(value, label) {
-  if (!Array.isArray(value) || value.length === 0) throw new Error(`${label} must be a non-empty array`);
-  const stores = value.map((item) => String(item || "").trim());
-  for (const store of stores) {
-    if (!ALLOWED_STORES.has(store)) throw new Error(`${label}: unknown store '${store}'`);
-  }
-  if (new Set(stores).size !== stores.length) throw new Error(`${label} contains duplicates`);
-  return stores;
-}
-
-export function catalogRelPath(local = false) {
-  return `ai_studio/workspace/catalog${local ? ".local" : ""}.json`;
-}
-
-function catalogPath(root, local = false) {
-  return join(root, ...catalogRelPath(local).split("/"));
-}
-
-function normalizeMount(raw, index, local) {
-  const label = `${catalogRelPath(local)}: mounts[${index}]`;
-  assertObject(raw, label);
-  assertKnownKeys(raw, MOUNT_KEYS, label);
-  const kind = String(raw.kind || "").trim();
-  if (kind !== "game" && kind !== "template") throw new Error(`${label}.kind must be game or template`);
-  const root = normalizeRoot(raw.root, `${label}.root`);
-  const expectedPrefix = kind === "game" ? "games/" : "templates/";
-  if (!root.startsWith(expectedPrefix) || root.slice(expectedPrefix.length).includes("/")) {
-    throw new Error(`${label}.root must be a direct child of ${expectedPrefix.slice(0, -1)}`);
-  }
-  const visibility = String(raw.visibility || "").trim();
-  const allowedVisibility = local ? ["private", "local"] : ["public"];
-  if (!allowedVisibility.includes(visibility)) {
-    throw new Error(`${label}.visibility must be ${allowedVisibility.join(" or ")}`);
-  }
-  const commitPolicy = String(raw.commitPolicy || "").trim();
-  if (visibility === "public" && commitPolicy !== "parent-public") {
-    throw new Error(`${label}.commitPolicy must be parent-public`);
-  }
-  if (visibility !== "public" && !["nested-private", "local-only"].includes(commitPolicy)) {
-    throw new Error(`${label}.commitPolicy must be nested-private or local-only`);
-  }
-  const gitRoot = raw.gitRoot === "" ? "" : normalizeRoot(raw.gitRoot, `${label}.gitRoot`);
-  if (visibility === "public" && gitRoot !== "") throw new Error(`${label}.gitRoot must be empty for public mounts`);
-  if (visibility !== "public" && gitRoot !== root) throw new Error(`${label}.gitRoot must match root`);
-  return {
-    kind,
-    root,
-    visibility,
-    gitRoot,
-    commitPolicy,
-    enabledStores: normalizeStores(raw.enabledStores, `${label}.enabledStores`),
-    aliases: normalizeAliases(raw.aliases, `${label}.aliases`),
-  };
-}
-
-export function readWorkspaceCatalog(root, { local = false } = {}) {
-  const path = catalogPath(root, local);
-  if (!existsSync(path)) {
-    if (local) return { schema: CATALOG_SCHEMA, mounts: [] };
-    throw new Error(`${catalogRelPath(false)}: catalog is required`);
-  }
-  const document = readJson(path, catalogRelPath(local));
-  assertKnownKeys(document, CATALOG_KEYS, catalogRelPath(local));
-  if (document.schema !== CATALOG_SCHEMA) {
-    throw new Error(`${catalogRelPath(local)}: expected schema ${CATALOG_SCHEMA}`);
-  }
-  if (!Array.isArray(document.mounts)) throw new Error(`${catalogRelPath(local)}: mounts must be an array`);
-  return {
-    schema: CATALOG_SCHEMA,
-    mounts: document.mounts.map((mount, index) => normalizeMount(mount, index, local)),
-  };
-}
-
-function readIdentity(root, mount) {
-  ensureRealRootInsideRepository(root, mount.root, `${mount.kind} root`);
-  const path = join(root, mount.root, `${mount.kind}.json`);
-  if (!existsSync(path)) throw new Error(`${mount.root}: missing identity manifest ${mount.kind}.json`);
-  const identity = readJson(path, `${mount.root}/${mount.kind}.json`);
-  assertKnownKeys(identity, IDENTITY_KEYS, `${mount.root}/${mount.kind}.json`);
-  const expectedSchema = mount.kind === "game" ? GAME_IDENTITY_SCHEMA : TEMPLATE_IDENTITY_SCHEMA;
-  if (identity.schema !== expectedSchema) throw new Error(`${mount.root}/${mount.kind}.json: expected schema ${expectedSchema}`);
-  const id = normalizeId(identity.id, `${mount.kind} id`);
-  if (mount.root.split("/").at(-1) !== id) throw new Error(`${mount.root}: root basename must match identity id '${id}'`);
-  const title = String(identity.title || "").trim();
-  if (!title) throw new Error(`${mount.root}/${mount.kind}.json: title must not be empty`);
-  const storageNamespace = normalizeId(identity.storageNamespace, `${mount.kind} storageNamespace`);
-  return { id, title, storageNamespace };
 }
 
 function validateGameDependenciesValue(value, rel) {
@@ -209,28 +98,98 @@ function validateGameDependenciesValue(value, rel) {
   return value;
 }
 
-function validateGameDependencies(root, mount) {
-  const rel = `${mount.root}/dependencies.json`;
-  const path = join(root, rel);
-  if (!existsSync(path)) throw new Error(`${mount.root}: missing game dependencies.json`);
-  return validateGameDependenciesValue(readJson(path, rel), rel);
+function readIdentity(root, relRoot, kind) {
+  const rel = `${relRoot}/${kind}.json`;
+  const identity = readJson(join(root, rel), rel);
+  assertKnownKeys(identity, IDENTITY_KEYS, rel);
+  const expectedSchema = kind === "game" ? GAME_IDENTITY_SCHEMA : TEMPLATE_IDENTITY_SCHEMA;
+  if (identity.schema !== expectedSchema) throw new Error(`${rel}: expected schema ${expectedSchema}`);
+  const id = normalizeId(identity.id, `${kind} id`);
+  if (basename(relRoot) !== id) throw new Error(`${relRoot}: root basename must match identity id '${id}'`);
+  const title = String(identity.title || "").trim();
+  if (!title) throw new Error(`${rel}: title must not be empty`);
+  return {
+    id,
+    title,
+    storageNamespace: normalizeId(identity.storageNamespace, `${kind} storageNamespace`),
+    aliases: normalizeAliases(identity.aliases, `${rel}.aliases`),
+  };
 }
 
-function resolveMount(root, mount, source) {
-  const identity = readIdentity(root, mount);
-  if (mount.kind === "game") validateGameDependencies(root, mount);
+function enabledStores(root, relRoot, kind) {
+  const candidates = [
+    ["assets", "assets"],
+    ["taskboard", ".ai_studio/taskboard/items"],
+    ["canvas", ".ai_studio/canvas"],
+    ["evidence", ".ai_studio/evidence"],
+  ];
+  return candidates
+    .filter(([store]) => kind === "game" || store === "assets")
+    .filter(([, rel]) => {
+      try { return statSync(join(root, relRoot, rel)).isDirectory(); }
+      catch { return false; }
+    })
+    .map(([store]) => store);
+}
+
+function resolveMount(root, relRoot, kind, visibility) {
+  const absolute = join(root, relRoot);
+  const linked = lstatSync(absolute).isSymbolicLink();
+  if (visibility === "public" && linked) {
+    throw new Error(`public ${kind} root must not be a symlink or junction: ${relRoot}`);
+  }
+  const identity = readIdentity(root, relRoot, kind);
+  if (kind === "game") {
+    const rel = `${relRoot}/dependencies.json`;
+    if (!existsSync(join(root, rel))) throw new Error(`${relRoot}: missing game dependencies.json`);
+    validateGameDependenciesValue(readJson(join(root, rel), rel), rel);
+  }
+  const nestedGit = kind === "game" && visibility === "private" && existsSync(join(absolute, ".git"));
   return {
-    ...mount,
+    kind,
+    root: relRoot,
+    visibility,
+    gitRoot: visibility === "public" ? "" : relRoot,
+    commitPolicy: visibility === "public" ? "parent-public" : nestedGit ? "nested-private" : "local-only",
+    enabledStores: enabledStores(root, relRoot, kind),
+    aliases: identity.aliases,
     ...identity,
-    storeId: `${mount.kind}:${identity.storageNamespace}`,
-    gameId: mount.kind === "game" ? identity.id : undefined,
-    templateId: mount.kind === "template" ? identity.id : undefined,
-    folder: mount.root,
-    assetRoot: `${mount.root}/assets`,
-    assets: `${mount.root}/assets`,
-    publicAlias: mount.aliases[0] || "",
-    source,
+    storeId: `${kind}:${identity.storageNamespace}`,
+    gameId: kind === "game" ? identity.id : undefined,
+    templateId: kind === "template" ? identity.id : undefined,
+    folder: relRoot,
+    assetRoot: `${relRoot}/assets`,
+    assets: `${relRoot}/assets`,
+    publicAlias: identity.aliases[0] || "",
+    source: "scan",
   };
+}
+
+function warn(options, message) {
+  if (Array.isArray(options.warnings)) options.warnings.push(message);
+  else console.warn(`warning: ${message}`);
+}
+
+function scanChildren(root, relParent, kind, visibility, options) {
+  const parent = join(root, relParent);
+  if (!existsSync(parent)) return [];
+  const mounts = [];
+  for (const entry of readdirSync(parent, { withFileTypes: true })) {
+    if (entry.name.startsWith(".")) continue;
+    if (relParent === "games" && entry.name === "private") continue;
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
+    const relRoot = `${relParent}/${entry.name}`;
+    if (visibility === "public" && lstatSync(join(root, relRoot)).isSymbolicLink()) {
+      throw new Error(`public ${kind} root must not be a symlink or junction: ${relRoot}`);
+    }
+    const manifest = join(root, relRoot, `${kind}.json`);
+    if (!existsSync(manifest)) {
+      warn(options, `${relRoot}: missing ${kind}.json; skipping incomplete folder`);
+      continue;
+    }
+    mounts.push(resolveMount(root, relRoot, kind, visibility));
+  }
+  return mounts;
 }
 
 function assertUniqueResolved(mounts) {
@@ -241,40 +200,36 @@ function assertUniqueResolved(mounts) {
     ["store id", (mount) => mount.storeId],
   ];
   for (const [label, select] of dimensions) {
-    const seen = new Map();
+    const seen = new Set();
     for (const mount of mounts) {
       const value = comparable(select(mount));
-      if (seen.has(value)) throw new Error(`duplicate ${label} '${select(mount)}' in workspace catalogs`);
-      seen.set(value, mount.root);
+      if (seen.has(value)) throw new Error(`duplicate ${label} '${select(mount)}' in workspace folders`);
+      seen.add(value);
     }
   }
-  const aliases = new Map();
-  for (const mount of mounts) {
-    for (const value of [mount.id, mount.storageNamespace, mount.storeId]) aliases.set(comparable(value), mount.root);
-  }
+  const aliases = new Set(mounts.flatMap((mount) => [mount.id, mount.storageNamespace, mount.storeId]).map(comparable));
   for (const mount of mounts) {
     for (const alias of mount.aliases) {
       const key = comparable(alias);
-      if (aliases.has(key)) throw new Error(`colliding alias '${alias}' in workspace catalogs`);
-      aliases.set(key, mount.root);
+      if (aliases.has(key)) throw new Error(`colliding alias '${alias}' in workspace folders`);
+      aliases.add(key);
     }
   }
 }
 
-function localMountSelected(mount, options) {
+function privateMountSelected(mount, options) {
   return options.includePrivate === true
-    || (options.activeGameId && mount.kind === "game" && comparable(options.activeGameId) === comparable(mount.id))
+    || (options.activeGameId && comparable(options.activeGameId) === comparable(mount.id))
     || (options.activeStoreId && comparable(options.activeStoreId) === comparable(mount.storeId));
 }
 
 export function listWorkspaceMounts(root, options = {}) {
-  const publicMounts = readWorkspaceCatalog(root).mounts.map((mount) => resolveMount(root, mount, "public"));
-  let mounts = publicMounts;
+  const mounts = [
+    ...scanChildren(root, "games", "game", "public", options),
+    ...scanChildren(root, "templates", "template", "public", options),
+  ];
   if (options.includePrivate === true || options.activeGameId || options.activeStoreId) {
-    const local = readWorkspaceCatalog(root, { local: true }).mounts
-      .map((mount) => resolveMount(root, mount, "local"))
-      .filter((mount) => localMountSelected(mount, options));
-    mounts = [...publicMounts, ...local];
+    mounts.push(...scanChildren(root, "games/private", "game", "private", options).filter((mount) => privateMountSelected(mount, options)));
   }
   assertUniqueResolved(mounts);
   const kinds = options.kinds ? new Set(options.kinds) : null;
@@ -290,26 +245,7 @@ function atomicWriteJson(path, value) {
   renameSync(temp, path);
 }
 
-export function upsertWorkspaceMount(root, mount, { local = mount.visibility !== "public" } = {}) {
-  const normalized = normalizeMount(mount, 0, local);
-  const catalog = !local && !existsSync(catalogPath(root, false))
-    ? { schema: CATALOG_SCHEMA, mounts: [] }
-    : readWorkspaceCatalog(root, { local });
-  const existing = catalog.mounts.findIndex((entry) => comparable(entry.root) === comparable(normalized.root));
-  if (existing >= 0) catalog.mounts[existing] = normalized;
-  else catalog.mounts.push(normalized);
-  catalog.mounts.sort((a, b) => a.kind.localeCompare(b.kind) || a.root.localeCompare(b.root));
-  const publicMounts = (local ? readWorkspaceCatalog(root).mounts : catalog.mounts)
-    .map((entry) => resolveMount(root, entry, "public"));
-  const localMounts = (local ? catalog.mounts : readWorkspaceCatalog(root, { local: true }).mounts)
-    .map((entry) => resolveMount(root, entry, "local"));
-  const resolved = [...publicMounts, ...localMounts];
-  assertUniqueResolved(resolved);
-  atomicWriteJson(catalogPath(root, local), catalog);
-  return resolved.find((entry) => comparable(entry.root) === comparable(normalized.root));
-}
-
-export function writeIdentityManifest(root, kind, { id, title, storageNamespace = id }) {
+export function writeIdentityManifest(root, kind, { id, title, storageNamespace = id, aliases = [] }) {
   const normalizedId = normalizeId(id, `${kind} id`);
   const folder = kind === "game" ? "games" : kind === "template" ? "templates" : "";
   if (!folder) throw new Error("identity kind must be game or template");
@@ -318,6 +254,7 @@ export function writeIdentityManifest(root, kind, { id, title, storageNamespace 
     id: normalizedId,
     title: String(title || "").trim(),
     storageNamespace: normalizeId(storageNamespace, `${kind} storageNamespace`),
+    ...(aliases.length ? { aliases: normalizeAliases(aliases, `${kind} aliases`) } : {}),
   };
   if (!value.title) throw new Error(`${kind} title must not be empty`);
   atomicWriteJson(join(root, folder, normalizedId, `${kind}.json`), value);
@@ -326,10 +263,7 @@ export function writeIdentityManifest(root, kind, { id, title, storageNamespace 
 
 export function writeGameDependencies(root, gameId, value) {
   const id = normalizeId(gameId, "game id");
-  const candidate = {
-    schema: GAME_DEPENDENCIES_SCHEMA,
-    ...value,
-  };
+  const candidate = { schema: GAME_DEPENDENCIES_SCHEMA, ...value };
   const rel = `games/${id}/dependencies.json`;
   validateGameDependenciesValue(candidate, rel);
   atomicWriteJson(join(root, rel), candidate);

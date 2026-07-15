@@ -237,8 +237,8 @@ function printUsage() {
   node ai_studio/dev_environment/vscode_projects.mjs [--root <repo>]
   node ai_studio/dev_environment/vscode_projects.mjs [--root <repo>] --game <private-game-id>
 
-Regenerates parent .vscode/tasks.json and .vscode/launch.json from the tracked workspace catalog.
-With --game, writes game-local .vscode files inside a private mounted game after workspace preflight.`);
+Regenerates parent .vscode/tasks.json and .vscode/launch.json from scanned public folders.
+With --game, writes game-local .vscode files inside a private game after workspace preflight.`);
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {

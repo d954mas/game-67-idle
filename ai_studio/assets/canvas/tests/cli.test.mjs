@@ -9,6 +9,7 @@ import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { main } from "../cli.mjs";
+import { selectCanvasStore } from "../stores.mjs";
 import { solidPng } from "./png_fixture.mjs";
 
 const CLI = fileURLToPath(new URL("../cli.mjs", import.meta.url));
@@ -24,16 +25,6 @@ async function runInProcess(env, ...args) {
       canvasProjectsRoot: env.CANVAS_PROJECTS_ROOT,
     }), "utf8");
   }
-  const workspaceDir = join(configDir, "workspace");
-  mkdirSync(workspaceDir, { recursive: true });
-  const catalogPath = join(workspaceDir, "catalog.json");
-  if (!existsSync(catalogPath)) {
-    writeFileSync(catalogPath, JSON.stringify({
-      schema: "ai_studio.workspace.catalog.v1",
-      mounts: [],
-    }), "utf8");
-  }
-
   const previousProjectsRoot = process.env.CANVAS_PROJECTS_ROOT;
   delete process.env.CANVAS_PROJECTS_ROOT;
   try {
@@ -55,31 +46,34 @@ async function runInProcessFail(env, ...args) {
   return failure;
 }
 
-function ensurePrivateGameMount(root, gameId = "secret-game", enabledStores = ["canvas"]) {
-  const gameRoot = join(root, "games", gameId);
+function ensurePrivateGameMount(root, gameId = "secret-game", enabledStores = ["canvas"], storageNamespace = gameId) {
+  const gameRoot = join(root, "games", "private", gameId);
   mkdirSync(gameRoot, { recursive: true });
   execFileSync("git", ["init"], { cwd: root, encoding: "utf8" });
   execFileSync("git", ["init"], { cwd: gameRoot, encoding: "utf8" });
-  mkdirSync(join(root, ".git", "info"), { recursive: true });
-  writeFileSync(
-    join(root, ".git", "info", "exclude"),
-    `ai_studio/workspace/catalog.local.json\ngames/${gameId}/\n`,
-    "utf8",
-  );
-  mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
-  writeFileSync(join(gameRoot, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace: gameId }), "utf8");
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(gameRoot, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace }), "utf8");
   writeFileSync(join(gameRoot, "dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }), "utf8");
-  writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify({ schema: "ai_studio.workspace.catalog.v1", mounts: [] }), "utf8");
-  writeFileSync(join(root, "ai_studio", "workspace", "catalog.local.json"), JSON.stringify({
-    schema: "ai_studio.workspace.catalog.v1",
-    mounts: [{ kind: "game", root: `games/${gameId}`, visibility: "private", gitRoot: `games/${gameId}`, commitPolicy: "nested-private", enabledStores, aliases: [] }],
-  }, null, 2) + "\n", "utf8");
+  if (enabledStores.includes("canvas")) mkdirSync(join(gameRoot, ".ai_studio", "canvas", "projects"), { recursive: true });
+  if (enabledStores.includes("assets")) mkdirSync(join(gameRoot, "assets"), { recursive: true });
   return {
     gameId,
     gameRoot,
     canvasRoot: join(gameRoot, ".ai_studio", "canvas", "projects"),
   };
 }
+
+test("canvas accepts a game id paired with its derived namespace store id", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "canvas-store-namespace-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  mkdirSync(join(root, "ai_studio"), { recursive: true });
+  writeFileSync(join(root, "ai_studio", "studio.config.json"), JSON.stringify({
+    schema: "ai_studio.studio_config.v1", canvasProjectsRoot: "ai_studio/assets/canvas/projects",
+  }), "utf8");
+  ensurePrivateGameMount(root, "secret-game", ["canvas"], "secret-store");
+  const store = selectCanvasStore(root, { game: "secret-game", store: "game:secret-store" });
+  assert.equal(store.storeId, "game:secret-store");
+});
 
 // Spawn the CLI expecting a non-zero exit (fail()'s contract: "error: <message>" to
 // stderr, exit 1) — used to assert the T0234 --expect-head guard's loud-failure path.
@@ -225,7 +219,7 @@ test("cli routes selected private game canvas store and keeps default list publi
   }
 });
 
-test("cli ignores accidental game-local Canvas folders unless the mount explicitly enables Canvas", async (t) => {
+test("cli discovers a private Canvas store when its folder exists", async (t) => {
   const root = mkdtempSync(join(tmpdir(), "canvas-cli-no-auto-mount-"));
   const publicRoot = join(root, "public-canvas");
   const privateStore = ensurePrivateGameMount(root, "no-canvas", ["assets"]);
@@ -234,8 +228,8 @@ test("cli ignores accidental game-local Canvas folders unless the mount explicit
   t.after(() => rmSync(root, { recursive: true, force: true }));
 
   const listed = await runInProcess(env, "list", "--include-private");
-  assert.deepEqual(listed.stores.map((store) => store.storeId), ["studio"]);
-  assert.match((await runInProcessFail(env, "create", "--game", privateStore.gameId, "--title", "Should Fail")).message, /No Canvas store/);
+  assert.deepEqual(listed.stores.map((store) => store.storeId), ["studio", "game:no-canvas"]);
+  assert.equal((await runInProcess(env, "create", "--game", privateStore.gameId, "--title", "Discovered")).project.title, "Discovered");
 });
 
 test("cli history-list + history-jump parity (Base spine + jump reaches panel states)", async (t) => {

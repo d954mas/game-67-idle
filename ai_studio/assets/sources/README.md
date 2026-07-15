@@ -1,40 +1,27 @@
-# Source Registry
+# Source Discovery
 
-Explicit registry of asset source roots used by AI Studio surfaces.
+Asset source discovery used by AI Studio surfaces.
 
 ## Role
 
-Source Registry owns the helper modules for explicit asset source roots that
-should appear in Asset Viewer. It avoids guessing libraries, templates, or game
-folders by scanning the repository root.
+Source discovery owns helpers for roots that should appear in Asset Viewer.
+Libraries remain explicit; templates and games are discovered from identity
+manifests in their conventional folders.
 
 ## Files
 
 - `libraries.json`: registered global reusable asset library roots.
 - `libraries.mjs`: small helper for listing and upserting library
   asset sources.
-- `templates.mjs`: small helper for listing and upserting template
-  asset sources backed by the workspace catalog and template manifests.
-- `games.mjs`: small helper for listing public game asset sources backed by the
-  workspace catalog and game manifests. Game creation writes through Workspace.
+- `templates.mjs`: helper for listing template asset sources from manifests.
+- `games.mjs`: helper for listing public game asset sources from manifests.
 
-`ai_studio/workspace/catalog.json` mounts game template folders and their asset
-roots. `games/new_game.mjs --template <id>` resolves template ids
-from this file.
+`games/new_game.mjs --template <id>` resolves template ids by scanning
+`templates/<id>/template.json`. Public games are discovered from
+`games/<id>/game.json`; after copy, each game owns its folder.
 
-The same catalog mounts public/tracked game folders and their asset roots.
-It is not a template lineage/provenance file; after copy, each game owns its
-folder.
-
-New public games created through
-`games/new_game.mjs --visibility public` are registered in the tracked workspace catalog.
-Private games created through `games/new_game.mjs --visibility private` must not
-be added here.
-
-Private commercial game mounts live in the ignored
-`ai_studio/workspace/catalog.local.json` overlay and are resolved through
-`ai_studio/workspace/games.mjs` only after explicit private opt-in and preflight.
-Do not add private game entries to this public source registry.
+Private commercial games live under ignored `games/private/<id>` and are
+resolved only after explicit private opt-in and preflight.
 
 ## Path Boundary
 

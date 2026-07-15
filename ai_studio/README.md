@@ -66,9 +66,8 @@ Load only the route that matches the current task:
   `ai_studio/workspace/README.md` and
   `node ai_studio/workspace/games.mjs preflight --json`.
 - Agent shell hooks are generated from
-  `ai_studio/core_harness/agent_surfaces/hooks_sync.mjs`; the workspace
-  `hook-guard` blocks unsafe parent Git commands for private mounts before the
-  passive profiler runs.
+  `ai_studio/core_harness/agent_surfaces/hooks_sync.mjs`; private game creation
+  installs the parent repository's pre-commit privacy preflight.
 - Agent workflow, context policy, Markdown shape, or multi-agent use:
   `ai_studio/core_harness/workflow/README.md`.
 - Independent bounded work where delegation reduces latency, context, or risk:

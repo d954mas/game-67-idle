@@ -73,7 +73,7 @@ if(NOT EMSCRIPTEN)
     target_link_libraries(test_game_storage PRIVATE unity nt_log nt_core nt_hash)
     target_include_directories(test_game_storage PRIVATE src)
     target_compile_definitions(test_game_storage PRIVATE
-        GAME_STORAGE_APP_ID="template_test" _CRT_SECURE_NO_WARNINGS)
+        GAME_STORAGE_APP_ID="template_storage_test" _CRT_SECURE_NO_WARNINGS)
     # MoveFileExA (native quarantine/atomic-replace) is in kernel32, linked by default.
     set_target_properties(test_game_storage PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -88,7 +88,7 @@ if(NOT EMSCRIPTEN)
     target_include_directories(test_game_save PRIVATE src)
     target_compile_definitions(test_game_save PRIVATE
         GAME_SAVE_TESTING=1
-        GAME_STORAGE_APP_ID="template_test"
+        GAME_STORAGE_APP_ID="template_save_test"
         GAME_SAVE_AUTOSAVE_SLOT="test_slot"
         GAME_SAVE_DEBOUNCE_MS=2000
         GAME_SAVE_MAX_INTERVAL_MS=30000
@@ -194,7 +194,7 @@ if(NOT EMSCRIPTEN)
         FEATURE_GAME_ANALYTICS=1 GAME_ANALYTICS_TESTING=1
         GAME_ANALYTICS_BUF_BYTES=256u        # small buffer -> threshold/drop are cheap
         GAME_ANALYTICS_FLUSH_BYTES=192u
-        GAME_STORAGE_APP_ID="template_test"  # header app field
+        GAME_STORAGE_APP_ID="template_analytics_test"  # header app field
         _CRT_SECURE_NO_WARNINGS)
     set_target_properties(test_game_analytics PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
@@ -603,7 +603,7 @@ if(NOT EMSCRIPTEN)
         "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src
         "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_template_composition PRIVATE
-        GAME_SAVE_TESTING=1 GAME_STORAGE_APP_ID="template_test"
+        GAME_SAVE_TESTING=1 GAME_STORAGE_APP_ID="template_composition_test"
         GAME_SAVE_AUTOSAVE_SLOT="test_composition"
         GAME_SAVE_DEBOUNCE_MS=2000 GAME_SAVE_MAX_INTERVAL_MS=30000 GAME_SAVE_DOC_VERSION=1
         _CRT_SECURE_NO_WARNINGS)

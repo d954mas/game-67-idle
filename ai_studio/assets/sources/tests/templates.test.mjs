@@ -17,7 +17,7 @@ test("template asset source is a workspace catalog adapter", (t) => {
   assert.deepEqual(registerTemplateAssetSource(root, { id: "demo-template", title: "Demo" }), {
     id: "demo-template", title: "Demo", folder: "templates/demo-template", assets: "templates/demo-template/assets", status: "active",
   });
-  assert.equal(templateRegistryPath(root), "ai_studio/workspace/catalog.json");
+  assert.equal(templateRegistryPath(root), "templates/");
   assert.deepEqual(listRegisteredTemplates(root).map((template) => template.id), ["demo-template"]);
 });
 

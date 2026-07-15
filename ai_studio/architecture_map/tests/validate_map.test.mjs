@@ -498,27 +498,11 @@ test("validation report excludes local private game mounts from game scans", (t)
     }),
   );
   write(root, "games/public-game/README.md", "# public game");
-  write(root, "games/secret-game/README.md", "# private game");
-  write(
-    root,
-    "ai_studio/workspace/catalog.json",
-    JSON.stringify({
-      schema: "ai_studio.workspace.catalog.v1",
-      mounts: [{ kind: "game", root: "games/public-game", visibility: "public", gitRoot: "", commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [] }],
-    }),
-  );
+  write(root, "games/private/secret-game/README.md", "# private game");
   write(root, "games/public-game/game.json", JSON.stringify({ schema: "ai_studio.game.v1", id: "public-game", title: "Public Game", storageNamespace: "public-game" }));
   write(root, "games/public-game/dependencies.json", JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }));
-  write(root, "games/secret-game/game.json", JSON.stringify({ schema: "ai_studio.game.v1", id: "secret-game", title: "Secret Game", storageNamespace: "secret-game" }));
-  write(root, "games/secret-game/dependencies.json", JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }));
-  write(
-    root,
-    "ai_studio/workspace/catalog.local.json",
-    JSON.stringify({
-      schema: "ai_studio.workspace.catalog.v1",
-      mounts: [{ kind: "game", root: "games/secret-game", visibility: "private", gitRoot: "games/secret-game", commitPolicy: "nested-private", enabledStores: ["assets"], aliases: [] }],
-    }),
-  );
+  write(root, "games/private/secret-game/game.json", JSON.stringify({ schema: "ai_studio.game.v1", id: "secret-game", title: "Secret Game", storageNamespace: "secret-game" }));
+  write(root, "games/private/secret-game/dependencies.json", JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }));
 
   const validation = createValidationReport({
     repoRoot: root,
@@ -533,7 +517,7 @@ test("validation report excludes local private game mounts from game scans", (t)
   ]);
 });
 
-test("malformed private mount configuration blocks validation without exposing mount names", async (t) => {
+test("malformed private identity blocks validation without exposing game names", async (t) => {
   const root = tempRoot(t, "architecture-map-private-error-");
   write(root, "ai_studio/tree.json", JSON.stringify({
     schema: 1,
@@ -547,15 +531,11 @@ test("malformed private mount configuration blocks validation without exposing m
       verifyDomain: "harness",
     },
   }));
-  write(root, "ai_studio/workspace/catalog.json", JSON.stringify({
-    schema: "ai_studio.workspace.catalog.v1",
-    mounts: [],
-  }));
-  write(root, "ai_studio/workspace/catalog.local.json", '{"mounts":[{"root":"games/secret-game"}');
+  write(root, "games/private/secret-game/game.json", '{"id":"secret-game"');
 
   assert.throws(
     () => createValidationReport({ repoRoot: root, trackedPaths: [...fixtureFiles.get(root)] }),
-    /private mount discovery failed/i,
+    /private game discovery failed/i,
   );
 
   const handle = createArchitectureMapApi(root);
@@ -564,7 +544,7 @@ test("malformed private mount configuration blocks validation without exposing m
   assert.equal(res.statusCode, 500);
   const payload = JSON.parse(res.body);
   assert.deepEqual(Object.keys(payload), ["error"]);
-  assert.match(payload.error, /private mount discovery failed/i);
+  assert.match(payload.error, /private game discovery failed/i);
   assert.equal(res.body.includes("secret-game"), false);
 });
 

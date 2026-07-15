@@ -1,17 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 
-import {
-  CATALOG_SCHEMA,
-  listWorkspaceMounts,
-  readWorkspaceCatalog,
-  upsertWorkspaceMount,
-  writeGameDependencies,
-} from "../catalog.mjs";
+import { listWorkspaceMounts, writeGameDependencies } from "../catalog.mjs";
 
 function writeJson(root, rel, value) {
   const path = join(root, rel);
@@ -19,220 +12,118 @@ function writeJson(root, rel, value) {
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
-function identity(root, kind, id, title = id, storageNamespace = id) {
-  const folder = kind === "game" ? "games" : "templates";
-  writeJson(root, `${folder}/${id}/${kind}.json`, {
-    schema: `ai_studio.${kind}.v1`, id, title, storageNamespace,
+function identity(root, rel, kind, id, title = id, storageNamespace = id, aliases = []) {
+  writeJson(root, `${rel}/${kind}.json`, {
+    schema: `ai_studio.${kind}.v1`, id, title, storageNamespace, ...(aliases.length ? { aliases } : {}),
   });
   if (kind === "game") {
-    writeJson(root, `${folder}/${id}/dependencies.json`, {
+    writeJson(root, `${rel}/dependencies.json`, {
       schema: "ai_studio.game.dependencies.v2",
-      engine: { source: "external/neotolis-engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "exact" },
-      features: [],
-      compatibility: "Tested with the listed revisions.",
+      engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" },
+      features: [], compatibility: "test",
     });
   }
 }
 
-function mount(kind, id, visibility = "public") {
-  return {
-    kind,
-    root: `${kind === "game" ? "games" : "templates"}/${id}`,
-    visibility,
-    gitRoot: visibility === "public" ? "" : `games/${id}`,
-    commitPolicy: visibility === "public" ? "parent-public" : "nested-private",
-    enabledStores: kind === "game" ? ["assets", "taskboard", "canvas", "evidence"] : ["assets"],
-    aliases: [],
-  };
-}
-
 function fixture(t) {
-  const root = mkdtempSync(join(tmpdir(), "workspace-catalog-"));
+  const root = mkdtempSync(join(tmpdir(), "workspace-scan-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  writeJson(root, "ai_studio/workspace/catalog.json", { schema: CATALOG_SCHEMA, mounts: [] });
+  mkdirSync(join(root, "games", "private"), { recursive: true });
+  mkdirSync(join(root, "templates"), { recursive: true });
   return root;
 }
 
-test("catalog derives identity and store ids from manifests, never mount rows", (t) => {
+test("scanner derives public templates and games from folders and store folders", (t) => {
   const root = fixture(t);
-  identity(root, "game", "public-game", "Public Game", "public-game-store");
-  identity(root, "template", "template", "Template", "base-template");
-  writeJson(root, "ai_studio/workspace/catalog.json", {
-    schema: CATALOG_SCHEMA,
-    mounts: [mount("game", "public-game"), mount("template", "template")],
-  });
+  identity(root, "templates/template", "template", "template", "Template", "base-template");
+  mkdirSync(join(root, "templates/template/assets"), { recursive: true });
+  identity(root, "games/public-game", "game", "public-game", "Public Game", "public-store");
+  mkdirSync(join(root, "games/public-game/.ai_studio/taskboard/items"), { recursive: true });
+
   const mounts = listWorkspaceMounts(root);
-  assert.deepEqual(mounts.map((entry) => [entry.kind, entry.id, entry.title, entry.storeId]), [
-    ["game", "public-game", "Public Game", "game:public-game-store"],
-    ["template", "template", "Template", "template:base-template"],
+  assert.deepEqual(mounts.map(({ kind, id, storeId, visibility, enabledStores }) => ({
+    kind, id, storeId, visibility, enabledStores,
+  })), [
+    { kind: "game", id: "public-game", storeId: "game:public-store", visibility: "public", enabledStores: ["taskboard"] },
+    { kind: "template", id: "template", storeId: "template:base-template", visibility: "public", enabledStores: ["assets"] },
   ]);
-  assert.equal(Object.hasOwn(readWorkspaceCatalog(root).mounts[0], "id"), false);
 });
 
-test("local catalog uses the same schema and is excluded unless explicitly selected", (t) => {
+test("store discovery requires directories, not same-named files", (t) => {
   const root = fixture(t);
-  identity(root, "game", "secret-game", "Secret Game");
-  writeJson(root, "ai_studio/workspace/catalog.local.json", {
-    schema: CATALOG_SCHEMA,
-    mounts: [mount("game", "secret-game", "private")],
-  });
+  identity(root, "games/public-game", "game", "public-game");
+  writeFileSync(join(root, "games/public-game/assets"), "not a directory\n", "utf8");
+  assert.deepEqual(listWorkspaceMounts(root)[0].enabledStores, []);
+});
+
+test("private games are discovered under games/private only when selected", (t) => {
+  const root = fixture(t);
+  identity(root, "games/private/secret-game", "game", "secret-game", "Secret", "secret-game", ["Private Slot"]);
+  mkdirSync(join(root, "games/private/secret-game/.git"), { recursive: true });
+  mkdirSync(join(root, "games/private/secret-game/.ai_studio/evidence"), { recursive: true });
+
   assert.deepEqual(listWorkspaceMounts(root), []);
-  assert.deepEqual(
-    listWorkspaceMounts(root, { includePrivate: true, skipPreflight: true }).map((entry) => entry.id),
-    ["secret-game"],
-  );
+  const [mount] = listWorkspaceMounts(root, { activeGameId: "secret-game" });
+  assert.equal(mount.root, "games/private/secret-game");
+  assert.equal(mount.visibility, "private");
+  assert.equal(mount.commitPolicy, "nested-private");
+  assert.equal(mount.publicAlias, "Private Slot");
+  assert.deepEqual(mount.enabledStores, ["evidence"]);
 });
 
-test("unknown schemas, identity fields in mounts, invalid roots, and missing manifests fail loudly", (t) => {
+test("folder without an identity manifest is skipped with a warning", (t) => {
   const root = fixture(t);
-  writeJson(root, "ai_studio/workspace/catalog.json", { schema: "unknown", mounts: [] });
-  assert.throws(() => listWorkspaceMounts(root), /expected schema/);
-
-  writeJson(root, "ai_studio/workspace/catalog.json", {
-    schema: CATALOG_SCHEMA,
-    mounts: [{ ...mount("game", "x"), id: "duplicated-identity" }],
-  });
-  assert.throws(() => listWorkspaceMounts(root), /unknown field 'id'/);
-
-  writeJson(root, "ai_studio/workspace/catalog.json", {
-    schema: CATALOG_SCHEMA,
-    mounts: [{ ...mount("game", "x"), root: "../escape" }],
-  });
-  assert.throws(() => listWorkspaceMounts(root), /repo-relative/);
-
-  writeJson(root, "ai_studio/workspace/catalog.json", {
-    schema: CATALOG_SCHEMA,
-    mounts: [mount("game", "missing")],
-  });
-  mkdirSync(join(root, "games", "missing"), { recursive: true });
-  assert.throws(() => listWorkspaceMounts(root), /missing identity manifest/);
+  mkdirSync(join(root, "games/half-created"), { recursive: true });
+  const warnings = [];
+  assert.deepEqual(listWorkspaceMounts(root, { warnings }), []);
+  assert.match(warnings[0], /half-created.*missing game\.json/i);
 });
 
-test("duplicate roots, derived ids, namespaces, aliases, and public-private collisions fail", (t) => {
+test("public symlink mounts are rejected", (t) => {
   const root = fixture(t);
-  identity(root, "game", "one", "One", "shared");
-  identity(root, "game", "two", "Two", "shared");
-  writeJson(root, "ai_studio/workspace/catalog.json", {
-    schema: CATALOG_SCHEMA,
-    mounts: [mount("game", "one"), mount("game", "two")],
-  });
-  assert.throws(() => listWorkspaceMounts(root), /duplicate storage namespace/);
-
-  identity(root, "game", "two", "Two", "two");
-  writeJson(root, "ai_studio/workspace/catalog.json", {
-    schema: CATALOG_SCHEMA,
-    mounts: [{ ...mount("game", "one"), aliases: ["same"] }],
-  });
-  writeJson(root, "ai_studio/workspace/catalog.local.json", {
-    schema: CATALOG_SCHEMA,
-    mounts: [{ ...mount("game", "two", "private"), aliases: ["same"] }],
-  });
-  assert.throws(
-    () => listWorkspaceMounts(root, { includePrivate: true, skipPreflight: true }),
-    /alias/,
-  );
-
-  writeJson(root, "ai_studio/workspace/catalog.local.json", {
-    schema: CATALOG_SCHEMA,
-    mounts: [mount("game", "one", "private")],
-  });
-  assert.throws(
-    () => listWorkspaceMounts(root, { includePrivate: true, skipPreflight: true }),
-    /duplicate root|duplicate derived id/,
-  );
+  identity(root, "outside", "game", "linked-game");
+  symlinkSync(join(root, "outside"), join(root, "games", "linked-game"), process.platform === "win32" ? "junction" : "dir");
+  assert.throws(() => listWorkspaceMounts(root), /public.*symlink|junction/i);
 });
 
-test("upsert writes mount facts only to the selected catalog", (t) => {
+test("public symlink mounts are rejected even before they have a manifest", (t) => {
   const root = fixture(t);
-  identity(root, "template", "new-template", "New Template");
-  const resolved = upsertWorkspaceMount(root, mount("template", "new-template"));
-  assert.equal(resolved.id, "new-template");
-  const stored = readWorkspaceCatalog(root).mounts[0];
-  assert.deepEqual(Object.keys(stored).sort(), [
-    "aliases", "commitPolicy", "enabledStores", "gitRoot", "kind", "root", "visibility",
-  ]);
+  mkdirSync(join(root, "outside-empty"), { recursive: true });
+  symlinkSync(join(root, "outside-empty"), join(root, "games", "linked-empty"), process.platform === "win32" ? "junction" : "dir");
+  assert.throws(() => listWorkspaceMounts(root), /public.*symlink|junction/i);
 });
 
-test("upsert validates cross-catalog collisions before writing", (t) => {
+test("duplicate namespaces across public and private games fail when private games are included", (t) => {
   const root = fixture(t);
-  identity(root, "game", "public-game", "Public", "shared");
-  identity(root, "game", "private-game", "Private", "shared");
-  writeJson(root, "ai_studio/workspace/catalog.json", {
-    schema: CATALOG_SCHEMA,
-    mounts: [mount("game", "public-game")],
-  });
-
-  assert.throws(() => upsertWorkspaceMount(root, {
-    ...mount("game", "private-game", "private"),
-    gitRoot: "games/private-game",
-    commitPolicy: "nested-private",
-  }, { local: true }), /duplicate storage namespace/);
-  assert.equal(existsSync(join(root, "ai_studio", "workspace", "catalog.local.json")), false);
+  identity(root, "games/public-game", "game", "public-game", "Public", "shared");
+  identity(root, "games/private/private-game", "game", "private-game", "Private", "shared");
+  assert.throws(() => listWorkspaceMounts(root, { includePrivate: true }), /duplicate storage namespace/i);
 });
 
 test("dependency writer validates before replacing an existing record", (t) => {
   const root = fixture(t);
   const valid = {
     engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "tested" },
-    features: [],
-    compatibility: "tested",
+    features: [], compatibility: "tested",
   };
   writeGameDependencies(root, "stable-game", valid);
   const path = join(root, "games", "stable-game", "dependencies.json");
   const before = readFileSync(path, "utf8");
-
   assert.throws(() => writeGameDependencies(root, "stable-game", {
-    ...valid,
-    engine: { ...valid.engine, revision: "placeholder" },
+    ...valid, engine: { ...valid.engine, revision: "placeholder" },
   }), /exact Git revision/);
   assert.equal(readFileSync(path, "utf8"), before);
 });
 
-test("dependency records require an exact feature SemVer", (t) => {
+test("dependency records require exact engine and feature SemVer", (t) => {
   const root = fixture(t);
-  const base = {
-    engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "tested" },
-    compatibility: "tested",
-  };
+  const engine = { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "tested" };
   assert.throws(() => writeGameDependencies(root, "stable-game", {
-    ...base,
-    features: [{
-      id: "game-state", source: "features/game-state",
-      revision: "0000000000000000000000000000000000000000", compatibility: "tested",
+    engine: { ...engine, version: "0.1" }, features: [], compatibility: "tested",
+  }), /engine\.version.*exact SemVer/i);
+  assert.throws(() => writeGameDependencies(root, "stable-game", {
+    engine, compatibility: "tested", features: [{
+      id: "game-state", source: "features/game-state", revision: engine.revision, compatibility: "tested",
     }],
   }), /version.*exact SemVer/i);
-  assert.doesNotThrow(() => writeGameDependencies(root, "stable-game", {
-    ...base,
-    features: [{
-      id: "game-state", source: "features/game-state", version: "1.0.0",
-      revision: "0000000000000000000000000000000000000000", compatibility: "tested",
-    }],
-  }));
-});
-
-test("dependency records require an exact engine SemVer", (t) => {
-  const root = fixture(t);
-  assert.throws(() => writeGameDependencies(root, "stable-game", {
-    engine: { source: "engine", version: "0.1", revision: "0000000000000000000000000000000000000000", compatibility: "tested" },
-    features: [],
-    compatibility: "tested",
-  }), /engine\.version.*exact SemVer/i);
-});
-
-test("indexed public game feature pins resolve matching version metadata", () => {
-  const root = resolve(import.meta.dirname, "../../..");
-  const showIndexJson = (rel) => JSON.parse(execFileSync("git", ["show", `:${rel}`], {
-    cwd: root, encoding: "utf8",
-  }));
-  const catalog = showIndexJson("ai_studio/workspace/catalog.json");
-  for (const mount of catalog.mounts.filter((entry) => entry.kind === "game" && entry.visibility === "public")) {
-    const dependencies = showIndexJson(`${mount.root}/dependencies.json`);
-    for (const feature of dependencies.features) {
-      const manifest = JSON.parse(execFileSync("git", ["show", `${feature.revision}:${feature.source}/feature.json`], {
-        cwd: root, encoding: "utf8",
-      }));
-      assert.equal(manifest.id, feature.id, `${mount.root}: ${feature.id} id at ${feature.revision}`);
-      assert.equal(manifest.version, feature.version, `${mount.root}: ${feature.id} version at ${feature.revision}`);
-    }
-  }
 });

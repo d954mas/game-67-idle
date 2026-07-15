@@ -164,31 +164,29 @@ function spawnConcurrentArchivePublisher(root, workerId) {
   return captureChildJson(child, `archive publisher ${workerId}`);
 }
 
-function ensurePrivateGameMount(root, gameId = "secret-game") {
-  const gameRoot = join(root, "games", gameId);
+function ensurePrivateGameMount(root, gameId = "secret-game", storageNamespace = gameId) {
+  const gameRoot = join(root, "games", "private", gameId);
   mkdirSync(gameRoot, { recursive: true });
   spawnSync("git", ["init"], { cwd: root, encoding: "utf8" });
   spawnSync("git", ["init"], { cwd: gameRoot, encoding: "utf8" });
-  mkdirSync(join(root, ".git", "info"), { recursive: true });
-  writeFileSync(
-    join(root, ".git", "info", "exclude"),
-    `ai_studio/workspace/catalog.local.json\ngames/${gameId}/\n`,
-    "utf8",
-  );
-  mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
-  writeFileSync(join(gameRoot, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace: gameId }), "utf8");
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(gameRoot, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace }), "utf8");
   writeFileSync(join(gameRoot, "dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }), "utf8");
-  writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify({ schema: "ai_studio.workspace.catalog.v1", mounts: [] }), "utf8");
-  writeFileSync(join(root, "ai_studio", "workspace", "catalog.local.json"), JSON.stringify({
-    schema: "ai_studio.workspace.catalog.v1",
-    mounts: [{ kind: "game", root: `games/${gameId}`, visibility: "private", gitRoot: `games/${gameId}`, commitPolicy: "nested-private", enabledStores: ["taskboard"], aliases: [] }],
-  }, null, 2) + "\n", "utf8");
+  mkdirSync(join(gameRoot, ".ai_studio", "taskboard", "items"), { recursive: true });
   return {
     gameId,
     gameRoot,
     itemsRoot: join(gameRoot, ".ai_studio", "taskboard", "items"),
   };
 }
+
+test("taskboard accepts a game id paired with its derived namespace store id", (t) => {
+  const root = tempRoot(t);
+  ensurePrivateGameMount(root, "secret-game", "secret-store");
+  const result = runCliDirect(root, "context", "--game", "secret-game", "--store", "game:secret-store", "--json");
+  assert.equal(result.status, 0, result.stderr);
+  assert.deepEqual(JSON.parse(result.stdout).stores.map((store) => store.storeId), ["game:secret-store"]);
+});
 
 function explicitPrivateTaskboardStore(root, gameId = "secret-game") {
   return {
@@ -197,7 +195,7 @@ function explicitPrivateTaskboardStore(root, gameId = "secret-game") {
     kind: "game",
     gameId,
     label: gameId,
-    itemsRoot: join(root, "games", gameId, ".ai_studio", "taskboard", "items"),
+    itemsRoot: join(root, "games", "private", gameId, ".ai_studio", "taskboard", "items"),
   };
 }
 
@@ -688,8 +686,6 @@ test("Taskboard agent API context defaults to five body-free summaries", async (
 
 test("read profiler has one small privacy-safe context contract plus CLI smoke", (t) => {
   const root = tempRoot(t);
-  mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
-  writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), '{"schema":"ai_studio.workspace.catalog.v1","mounts":[]}\n', "utf8");
   for (let index = 1; index <= 7; index++) {
     createTask(root, {
       title: index === 1 ? "PUBLIC_TITLE_CANARY" : `Public task ${index}`,
@@ -817,7 +813,7 @@ test("cli new task and project write to explicit private game store without publ
   const taskPayload = JSON.parse(taskResult.stdout);
   assert.equal(taskPayload.doc.storeId, "game:secret-game");
   assert.equal(taskPayload.doc.id, "T0001");
-  assert.match(taskPayload.doc.file, /games\/secret-game\/\.ai_studio\/taskboard\/items\/active\/T0001-/);
+  assert.match(taskPayload.doc.file, /games\/private\/secret-game\/\.ai_studio\/taskboard\/items\/active\/T0001-/);
 
   const projectResult = runCliDirect(root,
     "new", "project",
@@ -830,7 +826,7 @@ test("cli new task and project write to explicit private game store without publ
   const projectPayload = JSON.parse(projectResult.stdout);
   assert.equal(projectPayload.doc.storeId, "game:secret-game");
   assert.equal(projectPayload.doc.id, "P001");
-  assert.match(projectPayload.doc.file, /games\/secret-game\/\.ai_studio\/taskboard\/items\/projects\/P001-/);
+  assert.match(projectPayload.doc.file, /games\/private\/secret-game\/\.ai_studio\/taskboard\/items\/projects\/P001-/);
   assert.deepEqual(listTasks(root).map((task) => task.fields.title), ["Public task"]);
   assert.deepEqual(listProjects(root).map((project) => project.fields.title), []);
 });

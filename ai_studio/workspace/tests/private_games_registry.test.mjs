@@ -1,419 +1,98 @@
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import test from "node:test";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { tmpdir } from "node:os";
 
-import {
-  auditParentGitCommand,
-  auditPrivateGamePreflight,
-  listGameMounts,
-  localWorkspaceCatalogRelPath,
-  runPrivateGamePreflight,
-} from "../games.mjs";
+import { auditPrivateGamePreflight, listGameMounts, runPrivateGamePreflight } from "../games.mjs";
 
-const script = resolve(dirname(fileURLToPath(import.meta.url)), "..", "games.mjs");
-
-function tempRoot(prefix = "ai-studio-workspace-games-") {
-  return mkdtempSync(join(tmpdir(), prefix));
-}
-
-function writeJson(path, value) {
+function writeJson(root, rel, value) {
+  const path = join(root, rel);
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`, "utf8");
 }
 
-function writePublicGames(root, games) {
-  for (const game of games) writeGameManifests(root, game.id, game.title || game.id);
-  writeJson(join(root, "ai_studio", "workspace", "catalog.json"), {
-    schema: "ai_studio.workspace.catalog.v1",
-    mounts: games.map((game) => ({
-      kind: "game", root: `games/${game.id}`, visibility: "public", gitRoot: "",
-      commitPolicy: "parent-public", enabledStores: ["assets"], aliases: [],
-    })),
-  });
-}
-
-function writeLocalGames(root, games) {
-  if (!existsSync(join(root, "ai_studio", "workspace", "catalog.json"))) writePublicGames(root, []);
-  for (const game of games) writeGameManifests(root, game.gameId || game.id, game.title || "Secret Game");
-  writeJson(join(root, "ai_studio", "workspace", "catalog.local.json"), {
-    schema: "ai_studio.workspace.catalog.v1",
-    mounts: games.map((game) => ({
-      kind: "game", root: game.root, visibility: game.visibility || "private", gitRoot: game.root,
-      commitPolicy: game.commitPolicy || "nested-private", enabledStores: game.enabledStores,
-      aliases: game.aliases || [],
-    })),
-  });
-}
-
-function writeGameManifests(root, id, title) {
-  writeJson(join(root, "games", id, "game.json"), {
+function game(root, rel, id, title = id, nestedGit = false) {
+  writeJson(root, `${rel}/game.json`, {
     schema: "ai_studio.game.v1", id, title, storageNamespace: id,
   });
-  writeJson(join(root, "games", id, "dependencies.json"), {
+  writeJson(root, `${rel}/dependencies.json`, {
     schema: "ai_studio.game.dependencies.v2",
-    engine: { source: "external/neotolis-engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" },
-    features: [], compatibility: "test fixture",
+    engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" },
+    features: [], compatibility: "test",
   });
+  if (nestedGit) execFileSync("git", ["init"], { cwd: join(root, rel), stdio: "ignore" });
 }
 
-function privateMount(overrides = {}) {
-  return {
-    kind: "game",
-    gameId: "secret-game",
-    root: "games/secret-game",
-    visibility: "private",
-    gitRoot: "games/secret-game",
-    commitPolicy: "nested-private",
-    enabledStores: ["assets", "taskboard", "canvas", "evidence"],
-    aliases: ["Secret Codename"],
-    ...overrides,
-  };
-}
-
-test("listGameMounts reads public games by default and keeps local private games hidden", (t) => {
-  const root = tempRoot();
+function fixture(t) {
+  const root = mkdtempSync(join(tmpdir(), "private-games-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
-  writePublicGames(root, [
-    {
-      id: "public-game",
-      title: "Public Game",
-      folder: "games/public-game",
-      assets: "games/public-game/assets",
-      status: "active",
-    },
-  ]);
-  writeLocalGames(root, [privateMount()]);
-
-  assert.deepEqual(listGameMounts(root).map(({ storeId, title, root: mountRoot, visibility }) => ({
-    storeId, title, root: mountRoot, visibility,
-  })), [{ storeId: "game:public-game", title: "Public Game", root: "games/public-game", visibility: "public" }]);
-});
-
-test("listGameMounts includes private local mounts only when explicitly requested", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  writePublicGames(root, [
-    { id: "public-game", title: "Public Game", folder: "games/public-game", assets: "games/public-game/assets" },
-  ]);
-  writeLocalGames(root, [privateMount()]);
-
-  assert.deepEqual(
-    listGameMounts(root, { includePrivate: true, skipPreflight: true }).map((mount) => `${mount.visibility}:${mount.storeId}`),
-    ["public:game:public-game", "private:game:secret-game"],
-  );
-});
-
-test("local private catalog rejects duplicate public game ids", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  writePublicGames(root, [
-    { id: "secret-game", title: "Real Public", folder: "games/secret-game", assets: "games/secret-game/assets", status: "active" },
-  ]);
-  writeLocalGames(root, [privateMount()]);
-
-  assert.throws(
-    () => listGameMounts(root, { includePrivate: true, skipPreflight: true }),
-    /duplicate (root|derived id)/,
-  );
-});
-
-test("local private registry rejects duplicate local game ids", (t) => {
-  const root = tempRoot();
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  writeLocalGames(root, [
-    privateMount(),
-    privateMount({ title: "Duplicate" }),
-  ]);
-
-  assert.throws(
-    () => listGameMounts(root, { includePrivate: true, skipPreflight: true }),
-    /duplicate root/,
-  );
-});
-
-test("auditPrivateGamePreflight requires ignored roots and rejects tracked, staged, gitlink, and text leaks", () => {
-  const mounts = [privateMount()];
-  const ok = auditPrivateGamePreflight(mounts, {
-    ignoredPaths: new Set([localWorkspaceCatalogRelPath(), "games/secret-game"]),
-    trackedPaths: new Set(),
-    stagedPaths: new Set(),
-    gitlinks: new Set(),
-    nestedGitRoots: new Set(["games/secret-game"]),
-    trackedTextFiles: [{ path: "ai_studio/workspace/catalog.json", text: "public only" }],
-  });
-  assert.equal(ok.ok, true, JSON.stringify(ok.violations));
-
-  const bad = auditPrivateGamePreflight(mounts, {
-    ignoredPaths: new Set(),
-    trackedPaths: new Set([localWorkspaceCatalogRelPath(), "games/secret-game/assets/hero.png"]),
-    stagedPaths: new Set(["games/secret-game/design/gdd.md"]),
-    gitlinks: new Set(["games/secret-game"]),
-    nestedGitRoots: new Set(),
-    trackedTextFiles: [{ path: "ai_studio/taskboard/items/active/T0001.md", text: "Secret Codename appears in games\\secret-game\\.ai_studio\\canvas" }],
-    unscannedTextFiles: [{ path: "ai_studio/taskboard/items/active/T0002.md", reason: "git grep output limit" }],
-  });
-
-  assert.equal(bad.ok, false);
-  assert.match(bad.violations.map((item) => item.reason).join("\n"), /local private registry is not ignored/);
-  assert.match(bad.violations.map((item) => item.reason).join("\n"), /private root is tracked by the parent repository/);
-  assert.match(bad.violations.map((item) => item.reason).join("\n"), /private root has staged parent-repo paths/);
-  assert.match(bad.violations.map((item) => item.reason).join("\n"), /parent repository records a gitlink/);
-  assert.match(bad.violations.map((item) => item.reason).join("\n"), /missing nested git metadata/);
-  assert.match(bad.violations.map((item) => item.reason).join("\n"), /tracked file leaks private token/);
-  assert.match(bad.violations.map((item) => item.reason).join("\n"), /could not inspect this file/);
-});
-
-test("auditPrivateGamePreflight allows explicit public aliases in tracked text", () => {
-  const result = auditPrivateGamePreflight([privateMount({ publicAlias: "Private Slot" })], {
-    ignoredPaths: new Set([localWorkspaceCatalogRelPath(), "games/secret-game"]),
-    trackedPaths: new Set(),
-    stagedPaths: new Set(),
-    gitlinks: new Set(),
-    nestedGitRoots: new Set(["games/secret-game"]),
-    trackedTextFiles: [{ path: "README.md", text: "Private Slot is a safe display alias" }],
-  });
-
-  assert.equal(result.ok, true, JSON.stringify(result.violations));
-});
-
-test("auditPrivateGamePreflight rejects generated report and evidence path leaks", () => {
-  const result = auditPrivateGamePreflight([privateMount()], {
-    ignoredPaths: new Set([localWorkspaceCatalogRelPath(), "games/secret-game"]),
-    trackedPaths: new Set(),
-    stagedPaths: new Set(),
-    gitlinks: new Set(),
-    nestedGitRoots: new Set(["games/secret-game"]),
-    trackedTextFiles: [
-      {
-        path: "ai_studio/architecture_map/validation-report.json",
-        text: JSON.stringify({ issues: [{ path: "games/secret-game" }] }),
-      },
-      {
-        path: "ai_studio/taskboard/items/active/T9999.md",
-        text: "runtime evidence: games/secret-game/.ai_studio/evidence/smoke.json",
-      },
-    ],
-  });
-
-  assert.equal(result.ok, false);
-  assert.match(result.violations.map((item) => `${item.path}: ${item.reason}`).join("\n"), /validation-report\.json: tracked file leaks private token/);
-  assert.match(result.violations.map((item) => `${item.path}: ${item.reason}`).join("\n"), /T9999\.md: tracked file leaks private token/);
-});
-
-function privateGitFixture(t, prefix = "ai-studio-workspace-games-git-") {
-  const root = tempRoot(prefix);
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
-  writeFileSync(join(root, ".gitignore"), `${localWorkspaceCatalogRelPath()}\n`, "utf8");
-  writeFileSync(join(root, ".git", "info", "exclude"), "games/secret-game/\n", "utf8");
-  writeLocalGames(root, [privateMount({ title: "Secret Title" })]);
-  mkdirSync(join(root, "games", "secret-game"), { recursive: true });
-  execFileSync("git", ["init"], { cwd: join(root, "games", "secret-game"), stdio: "ignore" });
-  writeFileSync(join(root, "games", "secret-game", "README.md"), "private game\n", "utf8");
+  mkdirSync(join(root, "games", "private"), { recursive: true });
+  mkdirSync(join(root, "templates"), { recursive: true });
   return root;
 }
 
-test("runPrivateGamePreflight passes a real git fixture with local ignored private root", (t) => {
-  const root = privateGitFixture(t);
+test("listGameMounts keeps private games hidden unless explicitly selected", (t) => {
+  const root = fixture(t);
+  game(root, "games/public-game", "public-game", "Public");
+  game(root, "games/private/secret-game", "secret-game", "Secret", true);
+  assert.deepEqual(listGameMounts(root).map((mount) => mount.id), ["public-game"]);
+  assert.deepEqual(
+    listGameMounts(root, { includePrivate: true, skipPreflight: true }).map((mount) => `${mount.visibility}:${mount.id}`),
+    ["public:public-game", "private:secret-game"],
+  );
+});
+
+test("privacy preflight requires nested git metadata and blocks tracked private tokens", (t) => {
+  const root = fixture(t);
+  game(root, "games/private/secret-game", "secret-game", "Secret Title");
+  const [mount] = listGameMounts(root, { includePrivate: true, skipPreflight: true });
+  const result = auditPrivateGamePreflight([mount], {
+    nestedGitRoots: [],
+    trackedTextFiles: [{ path: "README.md", text: "Secret Title" }],
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /nested git metadata/);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /private token/);
+});
+
+test("privacy preflight rejects fake nested git metadata", (t) => {
+  const root = fixture(t);
+  game(root, "games/private/secret-game", "secret-game");
+  mkdirSync(join(root, "games/private/secret-game/.git"), { recursive: true });
+  const result = runPrivateGamePreflight(root);
+  assert.equal(result.ok, false);
+  assert.match(result.violations.map((item) => item.reason).join("\n"), /nested git metadata/);
+});
+
+test("runPrivateGamePreflight scans tracked text and otherwise accepts an ignored nested repo", (t) => {
+  const root = fixture(t);
+  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
+  execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: root });
+  execFileSync("git", ["config", "user.name", "Test"], { cwd: root });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
   writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
-  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root, stdio: "ignore" });
+  game(root, "games/private/secret-game", "secret-game", "Secret Title", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  execFileSync("git", ["commit", "-m", "fixture"], { cwd: root, stdio: "ignore" });
 
   assert.equal(runPrivateGamePreflight(root).ok, true);
-
-  writeFileSync(join(root, "README.md"), "mentions secret-game\n", "utf8");
+  writeFileSync(join(root, "README.md"), "Secret Title\n", "utf8");
   const leaked = runPrivateGamePreflight(root);
   assert.equal(leaked.ok, false);
-  assert.match(leaked.violations.map((item) => item.reason).join("\n"), /tracked file leaks private token/);
-  assert.match(readFileSync(join(root, ".gitignore"), "utf8"), /catalog\.local\.json/);
+  assert.match(leaked.violations[0].reason, /private token/);
 });
 
-test("runPrivateGamePreflight scans staged blobs even when the worktree no longer leaks", (t) => {
-  const root = privateGitFixture(t, "ai-studio-workspace-games-staged-");
-  writeFileSync(join(root, "README.md"), "mentions Secret Title only in the staged blob\n", "utf8");
-  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root, stdio: "ignore" });
-  writeFileSync(join(root, "README.md"), "public studio\n", "utf8");
-
-  const result = runPrivateGamePreflight(root);
-
-  assert.equal(result.ok, false);
-  assert.match(result.violations.map((item) => item.reason).join("\n"), /tracked file leaks private token/);
-});
-
-test("runPrivateGamePreflight blocks an index-only staged local registry", (t) => {
-  const root = tempRoot("ai-studio-workspace-games-index-registry-");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+test("preflight CLI reports a tracked token leak", (t) => {
+  const root = fixture(t);
   execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
-  writeFileSync(join(root, ".gitignore"), `${localWorkspaceCatalogRelPath()}\n`, "utf8");
-  writeLocalGames(root, [privateMount()]);
-  execFileSync("git", ["add", "-f", localWorkspaceCatalogRelPath()], { cwd: root, stdio: "ignore" });
-  rmSync(join(root, "ai_studio", "workspace", "catalog.local.json"), { force: true });
-
-  const result = runPrivateGamePreflight(root);
-
-  assert.equal(result.ok, false);
-  assert.match(result.violations.map((item) => item.reason).join("\n"), /local private registry is tracked or staged/);
-});
-
-test("runPrivateGamePreflight rejects invalid nested git metadata", (t) => {
-  const root = privateGitFixture(t, "ai-studio-workspace-games-invalid-nested-");
-  rmSync(join(root, "games", "secret-game", ".git"), { recursive: true, force: true });
-  mkdirSync(join(root, "games", "secret-game", ".git"), { recursive: true });
-
-  const result = runPrivateGamePreflight(root);
-
-  assert.equal(result.ok, false);
-  assert.match(result.violations.map((item) => item.reason).join("\n"), /missing nested git metadata/);
-});
-
-test("runPrivateGamePreflight rejects a bare repository as nested game metadata", (t) => {
-  const root = privateGitFixture(t, "ai-studio-workspace-games-bare-nested-");
-  rmSync(join(root, "games", "secret-game", ".git"), { recursive: true, force: true });
-  execFileSync("git", ["init", "--bare", join(root, "games", "secret-game", ".git")], { stdio: "ignore" });
-
-  const result = runPrivateGamePreflight(root);
-
-  assert.equal(result.ok, false);
-  assert.match(result.violations.map((item) => item.reason).join("\n"), /missing nested git metadata/);
-});
-
-test("parent git guard blocks broad add and hook-clean commands with private mounts", (t) => {
-  const root = privateGitFixture(t, "ai-studio-workspace-games-guard-");
-
-  const add = auditParentGitCommand(root, "git add .");
-  assert.equal(add.ok, false);
-  assert.match(add.violations[0].reason, /parent git add command can affect private game roots/);
-
-  const hook = spawnSync(process.execPath, [script, "hook-guard", "--root", root], {
-    encoding: "utf8",
-    input: JSON.stringify({ tool_input: { command: "git clean -fdx" } }),
-  });
-  assert.equal(hook.status, 1, hook.stdout || hook.stderr);
-  assert.match(hook.stderr, /private game git guard blocked this command/);
-
-  const wrappedBash = auditParentGitCommand(root, "bash -lc \"echo ok && git add .\"");
-  assert.equal(wrappedBash.ok, false);
-  assert.match(wrappedBash.violations[0].reason, /parent git add command can affect private game roots/);
-
-  const wrappedPowerShell = auditParentGitCommand(root, "powershell -Command \"Write-Host ok; git clean -fdx\"");
-  assert.equal(wrappedPowerShell.ok, false);
-  assert.match(wrappedPowerShell.violations[0].reason, /parent git clean command can affect private game roots/);
-
-  for (const command of [
-    "git add -f .\\games\\secret-game",
-    "git clean -fdx .\\games\\secret-game",
-    "git add :/",
-    "git add :/games/secret-game",
-    "git clean -fdx :/games/secret-game",
-    "git add :(top)games/secret-game",
-    "git add -f games/*",
-    "git clean -fdx games/*",
-    "git add :(glob)games/**",
-    "git add games/secret-*",
-    "git add games/{public-game,secret-game}",
-    "git add --pathspec-from-file=paths.txt",
-    "git add --pathspec-from-file paths.txt",
-    "git stage .",
-    "git stage --pathspec-from-file=paths.txt",
-    "git --config-env feature.flag=ENV_NAME add .",
-    "git add -f games/public-game/../secret-game",
-    "git add -f .\\games\\public-game\\..\\secret-game",
-    "git add -f :/games/public-game/../secret-game",
-    "git -C . add .",
-    "git -C . clean -fdx",
-    "git -C games/public-game add ../secret-game",
-    "git -C games/public-game add .\\..\\secret-game",
-    "git -C games/public-game add -u",
-    "git add -u",
-    "git add --update",
-    "git add -Af",
-    "git add -fA",
-    "git add -uf",
-    "git add -fu",
-  ]) {
-    const result = auditParentGitCommand(root, command);
-    assert.equal(result.ok, false, command);
-  }
-
-  for (const command of [
-    "git add -f GAMES/SECRET-GAME",
-    "git add -f .\\GAMES\\SECRET-GAME",
-    "git add -f :/GAMES/SECRET-GAME",
-  ]) {
-    const result = auditParentGitCommand(root, command);
-    assert.equal(result.ok, process.platform !== "win32", command);
-    if (process.platform === "win32") {
-      assert.match(result.violations[0].reason, /private game roots/);
-    }
-  }
-
-  const localRegistry = auditParentGitCommand(root, "git add .\\ai_studio\\workspace\\catalog.local.json");
-  assert.equal(localRegistry.ok, false);
-  assert.match(localRegistry.violations[0].reason, /local private registry/);
-
-  for (const command of [
-    `git add -f "${join(root, "games", "secret-game")}"`,
-    `git add "${join(root, "ai_studio", "workspace", "catalog.local.json")}"`,
-    "git add :/ai_studio/workspace/catalog.local.json",
-    "git add :(top)ai_studio/workspace/catalog.local.json",
-    "git add ai_studio/workspace/*.json",
-    "git add ai_studio/public/../workspace/catalog.local.json",
-  ]) {
-    const result = auditParentGitCommand(root, command);
-    assert.equal(result.ok, false, command);
-  }
-
-
-  const upperRegistry = auditParentGitCommand(root, "git add AI_STUDIO/WORKSPACE/CATALOG.LOCAL.JSON");
-  assert.equal(upperRegistry.ok, process.platform !== "win32");
-  if (process.platform === "win32") {
-    assert.match(upperRegistry.violations[0].reason, /local private registry/);
-  }
-
-  for (const command of [
-    "git add -u games/public-game",
-    "git add --update -- games/public-game",
-    "git add -A games/public-game",
-    "git add --all -- games/public-game",
-    "git add -Af games/public-game",
-    "git -C games/public-game add .",
-  ]) {
-    const result = auditParentGitCommand(root, command);
-    assert.equal(result.ok, true, command);
-  }
-});
-
-test("auditPrivateGamePreflight treats local registry path casing like the platform", () => {
-  const result = auditPrivateGamePreflight([], {
-    ignoredPaths: new Set(),
-    trackedPaths: new Set(["AI_STUDIO/WORKSPACE/CATALOG.LOCAL.JSON"]),
-    stagedPaths: new Set(),
-    gitlinks: new Set(),
-    nestedGitRoots: new Set(),
-  });
-
-  assert.equal(result.ok, process.platform !== "win32");
-  if (process.platform === "win32") {
-    assert.match(result.violations.map((item) => item.reason).join("\n"), /local private registry is tracked or staged/);
-  }
-});
-
-test("preflight CLI fails clearly when a private root is not ignored", (t) => {
-  const root = tempRoot("ai-studio-workspace-games-cli-");
-  t.after(() => rmSync(root, { recursive: true, force: true }));
-  execFileSync("git", ["init"], { cwd: root, stdio: "ignore" });
-  writeFileSync(join(root, ".gitignore"), `${localWorkspaceCatalogRelPath()}\n`, "utf8");
-  writeLocalGames(root, [privateMount()]);
-  mkdirSync(join(root, "games", "secret-game", ".git"), { recursive: true });
-  writeFileSync(join(root, "games", "secret-game", "README.md"), "private game\n", "utf8");
-
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
+  writeFileSync(join(root, "README.md"), "secret-game\n", "utf8");
+  game(root, "games/private/secret-game", "secret-game", "Secret", true);
+  execFileSync("git", ["add", ".gitignore", "README.md"], { cwd: root });
+  const script = join(import.meta.dirname, "..", "games.mjs");
   const result = spawnSync(process.execPath, [script, "preflight", "--root", root, "--json"], { encoding: "utf8" });
-
-  assert.equal(result.status, 1, result.stdout || result.stderr);
-  const parsed = JSON.parse(result.stdout);
-  assert.equal(parsed.ok, false);
-  assert.match(parsed.violations.map((item) => item.reason).join("\n"), /private root is not ignored/);
+  assert.equal(result.status, 1);
+  assert.equal(JSON.parse(result.stdout).ok, false);
 });

@@ -239,7 +239,7 @@ function domainForPath(path) {
     || path.startsWith("ai_studio/quality/")
     || path.startsWith(".codex/")
     || path.startsWith(".claude/")
-    || ["AGENTS.md", "CLAUDE.md", "README.md", "ai_studio/README.md"].includes(path)
+    || [".gitignore", "AGENTS.md", "CLAUDE.md", "README.md", "ai_studio/README.md"].includes(path)
   ) return "harness";
   throw new Error(`unowned shared path: ${path}`);
 }

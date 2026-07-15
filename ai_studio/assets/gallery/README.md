@@ -90,14 +90,11 @@ node ai_studio/assets/gallery/pull.mjs --ids <asset-ids> --to <game>/assets
 - `api.mjs` lists available sources, opens the selected source in the gallery,
   rebuilds/queries `../catalog/`, and maps gallery media back
   into the Studio Shell server.
-- The gallery consumes registered sources through `../sources/ops.mjs` and
-  workspace helpers. It does not own registry data: global library data lives in
-  `../sources/libraries.json`, template data in
-  `ai_studio/workspace/catalog.json`, and local private mounts in ignored
-  `ai_studio/workspace/catalog.local.json`.
-- `../sources/ops.mjs` and
-  `../../workspace/games.mjs` read/update those registries for the gallery and
-  CLI commands.
+- The gallery consumes sources through `../sources/ops.mjs` and workspace
+  helpers. Global library data lives in `../sources/libraries.json`; template
+  and game roots are discovered from identity manifests.
+- `../sources/ops.mjs` and `../../workspace/games.mjs` expose those sources to
+  the gallery and CLI commands.
 - `viewer.js` and `viewer.css` are surface implementation details.
 - `serve_gallery.mjs` is kept because library mode can reference a large
   external asset library through `/lib/` instead of copying every model.

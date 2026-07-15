@@ -51,24 +51,14 @@ function withCanvasProjectsRoot(t, dir) {
 }
 
 function ensurePrivateGameMount(root, gameId = "secret-game") {
-  const gameRoot = join(root, "games", gameId);
+  const gameRoot = join(root, "games", "private", gameId);
   mkdirSync(gameRoot, { recursive: true });
   execFileSync("git", ["init"], { cwd: root, encoding: "utf8" });
   execFileSync("git", ["init"], { cwd: gameRoot, encoding: "utf8" });
-  mkdirSync(join(root, ".git", "info"), { recursive: true });
-  writeFileSync(
-    join(root, ".git", "info", "exclude"),
-    `ai_studio/workspace/catalog.local.json\ngames/${gameId}/\n`,
-    "utf8",
-  );
-  mkdirSync(join(root, "ai_studio", "workspace"), { recursive: true });
+  writeFileSync(join(root, ".gitignore"), "games/private/\n", "utf8");
   writeFileSync(join(gameRoot, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: gameId, title: gameId, storageNamespace: gameId }), "utf8");
   writeFileSync(join(gameRoot, "dependencies.json"), JSON.stringify({ schema: "ai_studio.game.dependencies.v2", engine: { source: "engine", version: "0.1.0", revision: "0000000000000000000000000000000000000000", compatibility: "test" }, features: [], compatibility: "test" }), "utf8");
-  writeFileSync(join(root, "ai_studio", "workspace", "catalog.json"), JSON.stringify({ schema: "ai_studio.workspace.catalog.v1", mounts: [] }), "utf8");
-  writeFileSync(join(root, "ai_studio", "workspace", "catalog.local.json"), JSON.stringify({
-    schema: "ai_studio.workspace.catalog.v1",
-    mounts: [{ kind: "game", root: `games/${gameId}`, visibility: "private", gitRoot: `games/${gameId}`, commitPolicy: "nested-private", enabledStores: ["canvas"], aliases: [] }],
-  }, null, 2) + "\n", "utf8");
+  mkdirSync(join(gameRoot, ".ai_studio", "canvas", "projects"), { recursive: true });
   return {
     gameId,
     gameRoot,
