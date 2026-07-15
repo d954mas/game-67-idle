@@ -23,15 +23,14 @@ Use durable evidence before memory or chat recollection:
 2. For a non-Codex harness, use the lightweight hook profile:
    `node ai_studio/core_harness/profiling/status.mjs --verbose`.
 3. Task state when relevant:
-   `node ai_studio/taskboard/cli.mjs summary --json`
+   `node ai_studio/taskboard/cli.mjs context --json`
 4. Changed durable artifacts:
    `git status --short`
 5. Relevant task logs, validation output, reports, screenshots, or generated
    artifacts.
 6. Conversation context last.
 
-Avoid broad reads. Use `ai_studio/taskboard/cli.mjs context --json` only when
-the task summary is not enough.
+Avoid broad reads. Open a specific task only when the context row is not enough.
 
 ## Review Shape
 

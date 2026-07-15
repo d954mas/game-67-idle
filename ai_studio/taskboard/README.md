@@ -34,8 +34,8 @@ Open `/taskboard/`.
 
 Prefer JSON when an agent needs task state:
 
-- Orient: `node ai_studio/taskboard/cli.mjs summary --json`.
-- Current work: `node ai_studio/taskboard/cli.mjs context --json`. `currentWork`
+- Orient and read current work: `node ai_studio/taskboard/cli.mjs context --json`.
+  `currentWork`
   contains only `todo`, `doing`, and `review` (at most five body-free rows by
   default); `readyQueue` fills the remaining row budget with at most three
   ranked backlog candidates. Use an explicit `--tasks-limit <n>` only for a
@@ -127,10 +127,10 @@ the ZIP directly in Explorer.
 
 ## Minimal Context
 
-For substantial work: `node ai_studio/taskboard/cli.mjs summary --json` -> an
+For substantial work: `node ai_studio/taskboard/cli.mjs context --json` -> an
 explicitly scoped `list` query or `show <id>` -> needed evidence files ->
 `games/<game-id>/` only for game-specific work -> one matching skill. The
-default summary/context payload is capped at five body-free task rows; only
+default context payload is capped at five body-free task rows; only
 `show` returns a task body.
 
 Search current scope only. `.rgignore` excludes pending and sealed Taskboard

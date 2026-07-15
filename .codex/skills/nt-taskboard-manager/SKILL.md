@@ -16,8 +16,7 @@ Taskboard data contract here.
 
 ## Commands
 
-- Summary: `node ai_studio/taskboard/cli.mjs summary --json`.
-- Current work: `node ai_studio/taskboard/cli.mjs context --json`.
+- Context: `node ai_studio/taskboard/cli.mjs context --json`.
 - List rows: `node ai_studio/taskboard/cli.mjs list --json`.
 - Read one current item: `node ai_studio/taskboard/cli.mjs show <P###|E###|T####> --json`.
 - Read one historical task only when explicitly needed:
@@ -35,7 +34,7 @@ Taskboard data contract here.
 
 ## Workflow
 
-1. Start with `summary --json`; use `context --json` only for longer work.
+1. Start with `context --json`; open a specific item only when needed.
 2. Use projects as top-level owners, epics as grouped slices, and tasks as
    actionable cards.
 3. Load `task-store-reference.md` only when changing project/task fields,

@@ -628,10 +628,6 @@ test("cli context defaults to five summaries and expands only through an explici
   assert.equal((textResult.stdout.match(/^- T\d{4}/gm) || []).length, 5);
   assert.match(textResult.stdout, /- omitted; context row limit reached/);
 
-  const summaryText = runCliDirect(root, "summary");
-  assert.equal(summaryText.status, 0, summaryText.stderr);
-  assert.equal((summaryText.stdout.match(/^- T\d{4}/gm) || []).length, 5);
-
   const scopedResult = runCliDirect(root, "context", "--json", "--tasks-limit", "8");
   assert.equal(scopedResult.status, 0, scopedResult.stderr);
   assert.equal(JSON.parse(scopedResult.stdout).currentWork.length, 8);
@@ -728,59 +724,6 @@ test("aggregate context reports unsliced totals and globally ranks work across s
   assert.equal(payload.currentWork[0].priority, "P0");
   assert.equal(payload.readyQueue[0].storeId, "studio");
   assert.equal(payload.readyQueue[0].status, "backlog");
-});
-
-test("cli summary is task-derived and shows review as current work", (t) => {
-  const root = tempRoot(t);
-  createTask(root, { title: "Doing task", status: "doing", priority: "P1" });
-  createTask(root, { title: "Review task", status: "review", priority: "P1" });
-  createTask(root, { title: "Idea task", status: "idea", priority: "P1" });
-  const result = runCliDirect(root, "summary", "--tasks-limit", "5");
-  assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /# Taskboard Summary/);
-  assert.match(result.stdout, /active_task_counts: idea:1 backlog:0 todo:0 doing:1 review:1/);
-  assert.match(result.stdout, /current_work_items: 2/);
-  assert.match(result.stdout, /ready_backlog_items: 0/);
-  assert.match(result.stdout, /review_tasks: 1/);
-  assert.match(result.stdout, /T0001 .* Doing task/);
-  assert.match(result.stdout, /T0002 .* Review task/);
-  assert.doesNotMatch(result.stdout, /T0003 .* Idea task/);
-  assert.doesNotMatch(result.stdout, /## Current Goal/);
-});
-
-test("cli summary json is a compact agent API payload", (t) => {
-  const root = tempRoot(t);
-  createTask(root, {
-    title: "Implement thing",
-    status: "doing",
-    priority: "P0",
-    body: `## What
-
-BODY_SHOULD_NOT_APPEAR
-
-## Done when
-
-- [ ] done
-
-## Log
-`,
-  });
-  createTask(root, { title: "Needs review", status: "review", priority: "P1" });
-  createTask(root, { title: "Raw idea", status: "idea", priority: "P2" });
-
-  const result = runCliDirect(root, "summary", "--json");
-
-  assert.equal(result.status, 0, result.stderr);
-  const payload = JSON.parse(result.stdout);
-  assert.equal(payload.schema, "ai_studio.taskboard.agent_context.v2");
-  assert.equal(payload.counts.tasks.doing, 1);
-  assert.equal(payload.counts.tasks.review, 1);
-  assert.equal(payload.counts.tasks.idea, 1);
-  assert.deepEqual(payload.currentWork.map((task) => task.id), ["T0001", "T0002"]);
-  assert.deepEqual(payload.readyQueue, []);
-  assert.equal(payload.currentWork[0].file.includes("ai_studio/taskboard/items/active/T0001-"), true);
-  assert.equal("body" in payload.currentWork[0], false);
-  assert.doesNotMatch(result.stdout, /BODY_SHOULD_NOT_APPEAR/);
 });
 
 test("cli list and show json expose stable agent rows", (t) => {
@@ -968,19 +911,21 @@ test("taskboard cli help exits successfully and documents commands", () => {
   ]) {
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|archive\|profile\|new\|set\|validate\|help>/);
+    assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|archive\|profile\|new\|set\|validate\|help>/);
     assert.match(result.stdout, /new project --title/);
-    assert.match(result.stdout, /summary \[--json\]/);
+    assert.match(result.stdout, /context \[--json\]/);
+    assert.doesNotMatch(result.stdout, /summary/);
     assert.match(result.stdout, /validate \[--json\]/);
   }
 });
 
-test("taskboard cli rejects unrelated core commands", () => {
-  const result = runCliDirect(process.cwd(), "workflow-run");
-
-  assert.notEqual(result.status, 0);
-  assert.match(result.stdout, /usage: cli\.mjs <list\|summary\|context\|show\|archive\|profile\|new\|set\|validate\|help>/);
-  assert.doesNotMatch(result.stdout, /workflow-run/);
+test("taskboard cli rejects removed and unrelated commands", () => {
+  for (const command of ["summary", "workflow-run"]) {
+    const result = runCliDirect(process.cwd(), command);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|archive\|profile\|new\|set\|validate\|help>/);
+    assert.doesNotMatch(result.stdout, /summary|workflow-run/);
+  }
 });
 
 test("taskboard direct CLI reports a missing set target exactly once", (t) => {

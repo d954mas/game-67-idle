@@ -2,7 +2,6 @@
 // Taskboard CLI for humans and agents.
 //
 //   node ai_studio/taskboard/cli.mjs list [--json] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
-//   node ai_studio/taskboard/cli.mjs summary [--json] [--tasks-limit 5]
 //   node ai_studio/taskboard/cli.mjs show T0001 [--archive] [--json]
 //   node ai_studio/taskboard/cli.mjs archive seal --name 2026-07-closeout [--json]
 //   node ai_studio/taskboard/cli.mjs new project --title "..." [--kind ai-studio|game|template|tooling|research|other] [--target ai_studio]
@@ -35,11 +34,10 @@ import {
 import { relative } from "node:path";
 import { isMain } from "../core_harness/tool_lib/cli.mjs";
 
-const USAGE = `usage: cli.mjs <list|summary|context|show|archive|profile|new|set|validate|help> ...
+const USAGE = `usage: cli.mjs <list|context|show|archive|profile|new|set|validate|help> ...
 
 Commands:
   list [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
-  summary [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 5]
   context [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 5]
   show <P###|E###|T####|store:id> [--archive] [--json] [--store studio|game:<id>] [--game <id>] [--include-private]
   archive seal --name <immutable-batch-name> [--json] [--store studio|game:<id>] [--game <id>]
@@ -161,42 +159,6 @@ function currentWorkTaskEntries(entries) {
 
 function readyQueueTaskEntries(entries) {
   return rankedTaskEntries(entries, ["backlog"]);
-}
-
-function renderSummary(root, options) {
-  const tasksLimit = numberArg(options["tasks-limit"], 5);
-  const taskEntries = taskEntriesForOptions(root, options);
-  const allTasks = taskEntries.map(({ task }) => task);
-  const currentEntries = currentWorkTaskEntries(taskEntries);
-  const readyEntries = readyQueueTaskEntries(taskEntries);
-  const shownCurrent = currentEntries.slice(0, tasksLimit);
-  const readyLimit = Math.min(READY_QUEUE_LIMIT, Math.max(0, tasksLimit - shownCurrent.length));
-  const reviewCount = allTasks.filter((task) => task.fields.status === "review").length;
-  const lines = [];
-  lines.push("# Taskboard Summary");
-  lines.push("");
-  lines.push(`active_task_counts: ${statusCounts(allTasks)}`);
-  lines.push(`current_work_items: ${currentEntries.length}`);
-  lines.push(`ready_backlog_items: ${readyEntries.length}`);
-  lines.push(`review_tasks: ${reviewCount}`);
-  lines.push("## Current Work");
-  lines.push("");
-  for (const { task, store } of shownCurrent) {
-    lines.push(`- ${shortRow(task, store)}`);
-  }
-  if (currentEntries.length > tasksLimit) {
-    lines.push(`- ... ${currentEntries.length - tasksLimit} more; run \`node ai_studio/taskboard/cli.mjs context --json\` only when needed.`);
-  }
-  if (currentEntries.length === 0) {
-    lines.push("- none");
-  }
-  lines.push("");
-  lines.push("## Next Backlog Candidates");
-  lines.push("");
-  for (const { task, store } of readyEntries.slice(0, readyLimit)) lines.push(`- ${shortRow(task, store)}`);
-  if (readyEntries.length === 0) lines.push("- none");
-  else if (readyLimit === 0) lines.push("- omitted; context row limit reached");
-  return `${lines.join("\n")}\n`;
 }
 
 function renderContext(root, options) {
@@ -340,15 +302,6 @@ export function main(argv, {
     if (!tasks.length) {
       writeLine("(no tasks match)");
     }
-    break;
-  }
-  case "summary": {
-    if (args.json) {
-      const stores = taskboardStoresForQuery(root, storeQueryArgs(args));
-      writeJson(agentContextPayloadForStores(root, stores, { limit: numberArg(args["tasks-limit"], 5) }));
-      break;
-    }
-    writeStdout(renderSummary(root, args));
     break;
   }
   case "context": {
