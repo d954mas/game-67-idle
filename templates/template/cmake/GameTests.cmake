@@ -245,6 +245,7 @@ if(NOT EMSCRIPTEN)
     # T0364 proof: the same stable Items header compiles against either a
     # core-only or weapon-specific generated API. Outputs stay build-local.
     set(ITEMS_API_PROOF_SCRIPT "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof.py")
+    set(ITEMS_C_IDENTIFIERS "${ITEMS_CORE_SCRIPTS}/items_c_identifiers.py")
     set(ITEMS_API_PROOF_FIXTURES "${ITEMS_CORE_DIR}/tests/fixtures")
     set(ITEMS_API_CORE_ONLY_DIR "${CMAKE_BINARY_DIR}/generated/items-api-core-only")
     set(ITEMS_API_WEAPON_DIR "${CMAKE_BINARY_DIR}/generated/items-api-weapon")
@@ -264,7 +265,7 @@ if(NOT EMSCRIPTEN)
                 "${_out_dir}/items_game.luau"
             COMMAND "${Python3_EXECUTABLE}" "${ITEMS_API_PROOF_SCRIPT}"
                 --snapshot "${_snapshot}" --out-dir "${_out_dir}"
-            DEPENDS "${ITEMS_API_PROOF_SCRIPT}" "${_snapshot}"
+            DEPENDS "${ITEMS_API_PROOF_SCRIPT}" "${ITEMS_C_IDENTIFIERS}" "${_snapshot}"
             COMMENT "Generating ${_variant} Items API proof"
             VERBATIM)
     endforeach()
@@ -308,6 +309,7 @@ if(NOT EMSCRIPTEN)
         DEPENDS
             "${ITEMS_CORE_SCRIPTS}/items_runtime_package.py"
             "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof.py"
+            "${ITEMS_C_IDENTIFIERS}"
             "${ITEMS_RUNTIME_PACKAGE_SNAPSHOT}"
         COMMENT "Generating compact Items runtime package proof"
         VERBATIM)

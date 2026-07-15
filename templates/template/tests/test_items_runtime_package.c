@@ -7,6 +7,9 @@
 #include "features/items/items.h"
 #include "hash/nt_hash.h"
 
+#ifndef ITEMS_GAME_HAS_WEAPON
+#error "runtime package did not generate its weapon capability API"
+#endif
 
 static uint8_t *s_fixture;
 static uint32_t s_fixture_size;
@@ -183,6 +186,36 @@ void test_bound_catalog_exposes_typed_base_api(void) {
         items_acquire_transition(items_get(ITEM_GAME_GOLD)).kind);
 }
 
+void test_bound_catalog_exposes_typed_weapon_levels(void) {
+    items_catalog_bind_error_t error = ITEMS_CATALOG_BIND_BAD_HEADER;
+    TEST_ASSERT_TRUE(items_catalog_try_bind(s_fixture, s_fixture_size, &error));
+    item_def_ref_t sword = items_get(ITEM_GAME_SWORD);
+    item_def_ref_t invalid = {UINT32_MAX};
+
+    TEST_ASSERT_TRUE(items_is_weapon(sword));
+    TEST_ASSERT_FALSE(items_is_weapon(items_get(ITEM_GAME_GOLD)));
+    TEST_ASSERT_FALSE(items_is_weapon(invalid));
+    TEST_ASSERT_EQUAL_UINT32(0, items_weapon_level_count(invalid));
+    TEST_ASSERT_FALSE(items_weapon_level_exists(invalid, 1));
+    TEST_ASSERT_EQUAL_UINT32(3, items_weapon_level_count(sword));
+    TEST_ASSERT_TRUE(items_weapon_level_exists(sword, 1));
+    TEST_ASSERT_FALSE(items_weapon_level_exists(sword, 4));
+
+    item_weapon_level_t level1 = items_weapon_level(sword, 1);
+    item_weapon_level_t level2 = items_weapon_level(sword, 2);
+    item_weapon_level_t level3 = items_weapon_level(sword, 3);
+    TEST_ASSERT_EQUAL_INT64(10, level1.attack);
+    TEST_ASSERT_EQUAL(ITEM_TRANSITION_UNAVAILABLE, level1.cost_to_reach.kind);
+    TEST_ASSERT_EQUAL_INT64(15, level2.attack);
+    TEST_ASSERT_EQUAL(ITEM_TRANSITION_COST, level2.cost_to_reach.kind);
+    TEST_ASSERT_EQUAL_UINT32(1, items_cost_count(level2.cost_to_reach.cost));
+    item_cost_entry_t level_cost = items_cost_at(level2.cost_to_reach.cost, 0);
+    TEST_ASSERT_EQUAL_UINT64(ITEM_GAME_GOLD.value, level_cost.item.value);
+    TEST_ASSERT_EQUAL_INT64(100, level_cost.count);
+    TEST_ASSERT_EQUAL_INT64(21, level3.attack);
+    TEST_ASSERT_EQUAL(ITEM_TRANSITION_FREE, level3.cost_to_reach.kind);
+}
+
 int main(void) {
     load_fixture();
     UNITY_BEGIN();
@@ -190,6 +223,7 @@ int main(void) {
     RUN_TEST(test_failure_never_publishes_catalog);
     RUN_TEST(test_resigned_identity_utf8_range_and_size_corruption_are_rejected);
     RUN_TEST(test_bound_catalog_exposes_typed_base_api);
+    RUN_TEST(test_bound_catalog_exposes_typed_weapon_levels);
     int result = UNITY_END();
     free(s_fixture);
     return result;

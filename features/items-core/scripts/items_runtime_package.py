@@ -13,6 +13,7 @@ import tempfile
 from typing import Any
 
 from generate_items_api_proof import xxh64
+from items_c_identifiers import is_c_member_name
 
 
 SNAPSHOT_SCHEMA = "items.snapshot.v1"
@@ -91,7 +92,7 @@ def _schema_descriptor(fields: list[dict[str, Any]], item_ids: list[str]) -> byt
             for key in ("id", "member", "section", "type", "required_for", "min", "max", "rounding", "unit")
         })
     descriptor = {
-        "accessor_abi": 2,
+        "accessor_abi": 3,
         "format_version": FORMAT_VERSION,
         "item_flags": {"acquire_free": ITEM_ACQUIRE_FREE},
         "sections": [
@@ -207,7 +208,7 @@ def render_abi_header(snapshot: dict[str, Any]) -> str:
         member = field.get("member") if isinstance(field, dict) else None
         unit = field.get("unit") if isinstance(field, dict) else None
         if (not isinstance(field_id, str) or not field_id
-                or not isinstance(member, str) or not member
+                or not is_c_member_name(member)
                 or not isinstance(unit, str) or not unit
                 or field.get("type") != "i64" or field.get("rounding") != "exact"):
             _fail("package.field_id", "field ABI metadata is invalid")
@@ -218,6 +219,23 @@ def render_abi_header(snapshot: dict[str, Any]) -> str:
             _fail("package.field_id", f"field macro collision: {field_id}")
         field_macros.add(macro)
         field_records.append((field_id, member, unit, minimum, maximum, macro))
+
+    capability_fields: dict[str, list[tuple[int, str]]] = {}
+    capability_names: set[str] = set()
+    for field_index, field in enumerate(sorted_fields):
+        required_for = field.get("required_for")
+        if not isinstance(required_for, list) or not all(
+            isinstance(capability, str) and capability for capability in required_for
+        ):
+            _fail("package.field_id", "field required_for must contain capability names")
+        for capability in required_for:
+            capability_name = _c_name(capability).lower()
+            if not capability_name:
+                _fail("package.field_id", "capability name cannot be empty")
+            if capability_name in capability_names and capability not in capability_fields:
+                _fail("package.field_id", f"capability C name collision: {capability}")
+            capability_names.add(capability_name)
+            capability_fields.setdefault(capability, []).append((field_index, field["member"]))
 
     item_ids = [record[0] for record in item_records]
     lines = [
@@ -240,9 +258,37 @@ def render_abi_header(snapshot: dict[str, Any]) -> str:
         lines.append("")
     for field_id, _, _, _, _, macro in field_records:
         lines.append(f"#define {macro} {json.dumps(field_id)}")
+
+    for capability, members in capability_fields.items():
+        capability_name = _c_name(capability).lower()
+        capability_upper = _c_name(capability)
+        lines.extend([
+            "",
+            f"#define ITEMS_GAME_HAS_{capability_upper} 1",
+            f"typedef struct item_{capability_name}_level_t {{",
+        ])
+        lines.extend(f"    int64_t {member};" for _, member in members)
+        lines.extend([
+            "    item_transition_t cost_to_reach;",
+            f"}} item_{capability_name}_level_t;",
+            "",
+            f"bool items_is_{capability_name}(item_def_ref_t ref);",
+            f"uint32_t items_{capability_name}_level_count(item_def_ref_t ref);",
+            f"bool items_{capability_name}_level_exists(item_def_ref_t ref, uint32_t level);",
+            f"item_{capability_name}_level_t items_{capability_name}_level(item_def_ref_t ref, uint32_t level);",
+        ])
+
     lines.extend([
         "",
         "#if defined(ITEMS_RUNTIME_PACKAGE_IMPLEMENTATION)",
+        '#include "core/nt_assert.h"',
+        "",
+        "static bool items_catalog_internal_is_kind(item_def_ref_t ref, const char *kind);",
+        "static uint32_t items_catalog_internal_level_count(item_def_ref_t ref);",
+        "static bool items_catalog_internal_level_exists(item_def_ref_t ref, uint32_t level);",
+        "static int64_t items_catalog_internal_level_i64(item_def_ref_t ref, uint32_t level, uint32_t field_index);",
+        "static item_transition_t items_catalog_internal_level_transition(item_def_ref_t ref, uint32_t level);",
+        "",
         "typedef struct items_catalog_expected_field_t {",
         "    const char *id;",
         "    const char *member;",
@@ -280,7 +326,38 @@ def render_abi_header(snapshot: dict[str, Any]) -> str:
         )
     if not field_records:
         lines.append('    { "", "", "", INT64_C(0), INT64_C(0), UINT32_C(0), UINT32_C(0) },')
-    lines.extend(["};", "#endif", ""])
+    lines.extend(["};", ""])
+
+    for capability, members in capability_fields.items():
+        capability_name = _c_name(capability).lower()
+        lines.extend([
+            f"bool items_is_{capability_name}(item_def_ref_t ref) {{",
+            f"    return items_catalog_internal_is_kind(ref, {json.dumps(capability)});",
+            "}",
+            "",
+            f"uint32_t items_{capability_name}_level_count(item_def_ref_t ref) {{",
+            f"    return items_is_{capability_name}(ref) ? items_catalog_internal_level_count(ref) : 0U;",
+            "}",
+            "",
+            f"bool items_{capability_name}_level_exists(item_def_ref_t ref, uint32_t level) {{",
+            f"    return items_is_{capability_name}(ref) && items_catalog_internal_level_exists(ref, level);",
+            "}",
+            "",
+            f"item_{capability_name}_level_t items_{capability_name}_level(item_def_ref_t ref, uint32_t level) {{",
+            f"    NT_ASSERT(items_{capability_name}_level_exists(ref, level) && \"items_{capability_name}_level: invalid item or target level\");",
+            f"    return (item_{capability_name}_level_t){{",
+        ])
+        lines.extend(
+            f"        .{member} = items_catalog_internal_level_i64(ref, level, UINT32_C({field_index})),"
+            for field_index, member in members
+        )
+        lines.extend([
+            "        .cost_to_reach = items_catalog_internal_level_transition(ref, level),",
+            "    };",
+            "}",
+            "",
+        ])
+    lines.extend(["#endif", ""])
     lines.extend(["", "#endif", ""])
     return "\n".join(lines)
 

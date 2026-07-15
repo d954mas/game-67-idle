@@ -148,6 +148,11 @@ class ItemsSnapshotTests(unittest.TestCase):
         )
 
     def test_typed_level_fields_enforce_kind_presence_type_and_range(self):
+        keyword = evaluation(self.base_items())
+        keyword["fields"][0]["member"] = "int"
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.field_member"):
+            SNAPSHOT.build_snapshot(keyword)
+
         no_levels = evaluation(self.base_items())
         del no_levels["items"][1]["levels"]
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.required_field"):

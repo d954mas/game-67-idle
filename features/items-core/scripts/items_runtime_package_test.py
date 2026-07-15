@@ -238,6 +238,14 @@ class ItemsRuntimePackageTests(unittest.TestCase):
         self.assertIn("ITEMS_CATALOG_SCHEMA_ABI", header)
         self.assertIn("ITEM_GAME_GOLD", header)
         self.assertIn("ITEM_FIELD_GAME_WEAPON_LEVEL_ATTACK", header)
+        self.assertIn("ITEMS_GAME_HAS_WEAPON", header)
+        self.assertIn("item_weapon_level_t", header)
+        self.assertIn("items_weapon_level", header)
+
+        keyword = copy.deepcopy(snapshot)
+        keyword["fields"][0]["member"] = "int"
+        with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.field_id"):
+            PACKAGE.render_abi_header(keyword)
 
         full_i64 = copy.deepcopy(snapshot)
         full_i64["fields"][0]["min"] = PACKAGE.I64_MIN

@@ -234,7 +234,8 @@ pack placement and request timing remain game-builder responsibilities. Once
 bound, the same strong item IDs, required/optional lookups, core copies, acquire
 transitions, and opaque cost copy-out API used by the generated-C proof read
 directly from validated spans. Authored free and absent transitions stay
-distinct.
+distinct. The generated header also derives capability structs and checked
+level accessors from Snapshot fields; balance values remain only in the blob.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py build --snapshot <snapshot.json> --out <items.catalog> --header-out <items_catalog_abi.gen.h>

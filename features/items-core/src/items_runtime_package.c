@@ -12,6 +12,7 @@
 #define ITEMS_SECTION_COUNT UINT32_C(6)
 #define ITEMS_LEVEL_FREE UINT32_C(1)
 #define ITEMS_ITEM_ACQUIRE_FREE UINT32_C(1)
+#define ITEMS_COST_LEVEL_FLAG UINT32_C(0x80000000)
 
 typedef enum items_section_index_t {
     ITEMS_SECTION_STRINGS = 0,
@@ -395,6 +396,61 @@ static const char *catalog_item_string(uint32_t item_index, uint32_t row_offset)
     return value;
 }
 
+static uint32_t catalog_level_index(item_def_ref_t ref, uint32_t level) {
+    const uint8_t *item = catalog_row(ITEMS_SECTION_ITEMS, ref._index);
+    uint32_t level_count = read_u32(item + 28U);
+    NT_ASSERT(level > 0U && level <= level_count);
+    return read_u32(item + 24U) + level - 1U;
+}
+
+static bool items_catalog_internal_is_kind(item_def_ref_t ref, const char *kind) {
+    NT_ASSERT(kind != NULL);
+    NT_ASSERT(s_catalog != NULL && s_catalog_size >= ITEMS_HEADER_SIZE);
+    if (ref._index >= s_item_count) {
+        return false;
+    }
+    return strcmp(catalog_item_string(ref._index, 12U), kind) == 0;
+}
+
+static uint32_t items_catalog_internal_level_count(item_def_ref_t ref) {
+    return read_u32(catalog_row(ITEMS_SECTION_ITEMS, ref._index) + 28U);
+}
+
+static bool items_catalog_internal_level_exists(item_def_ref_t ref, uint32_t level) {
+    return level > 0U && level <= items_catalog_internal_level_count(ref);
+}
+
+static int64_t items_catalog_internal_level_i64(
+    item_def_ref_t ref, uint32_t level, uint32_t field_index) {
+    NT_ASSERT(field_index < s_sections[ITEMS_SECTION_FIELDS].count);
+    const uint8_t *row = catalog_row(
+        ITEMS_SECTION_LEVELS, catalog_level_index(ref, level));
+    uint32_t value_start = read_u32(row + 8U);
+    uint32_t value_count = read_u32(row + 12U);
+    for (uint32_t index = 0; index < value_count; ++index) {
+        const uint8_t *value = catalog_row(ITEMS_SECTION_VALUES, value_start + index);
+        if (read_u32(value + 8U) == field_index) {
+            return read_i64(value + 16U);
+        }
+    }
+    NT_ASSERT(false && "generated required field is absent from runtime level");
+    return 0;
+}
+
+static item_transition_t items_catalog_internal_level_transition(
+    item_def_ref_t ref, uint32_t level) {
+    uint32_t level_index = catalog_level_index(ref, level);
+    const uint8_t *row = catalog_row(ITEMS_SECTION_LEVELS, level_index);
+    if ((read_u32(row + 24U) & ITEMS_LEVEL_FREE) != 0U) {
+        return (item_transition_t){ITEM_TRANSITION_FREE, {0U}};
+    }
+    if (read_u32(row + 20U) == 0U) {
+        return (item_transition_t){ITEM_TRANSITION_UNAVAILABLE, {0U}};
+    }
+    return (item_transition_t){
+        ITEM_TRANSITION_COST, {ITEMS_COST_LEVEL_FLAG | (level_index + 1U)}};
+}
+
 bool items_try_get(item_id_t id, item_def_ref_t *out) {
     NT_ASSERT(s_catalog != NULL && s_catalog_size >= ITEMS_HEADER_SIZE);
     if (out == NULL) {
@@ -452,25 +508,37 @@ item_transition_t items_acquire_transition(item_def_ref_t ref) {
     return (item_transition_t){ITEM_TRANSITION_COST, {ref._index + 1U}};
 }
 
-static const uint8_t *catalog_acquire_owner(item_cost_ref_t cost) {
-    NT_ASSERT(cost._opaque > 0U && cost._opaque <= s_item_count &&
-              "items cost: invalid runtime cost ref");
-    return catalog_row(ITEMS_SECTION_ITEMS, cost._opaque - 1U);
+static void catalog_cost_span(
+    item_cost_ref_t cost, uint32_t *out_start, uint32_t *out_count) {
+    NT_ASSERT(out_start != NULL && out_count != NULL);
+    uint32_t owner = cost._opaque & ~ITEMS_COST_LEVEL_FLAG;
+    NT_ASSERT(owner > 0U && "items cost: invalid runtime cost ref");
+    if ((cost._opaque & ITEMS_COST_LEVEL_FLAG) != 0U) {
+        const uint8_t *level = catalog_row(ITEMS_SECTION_LEVELS, owner - 1U);
+        *out_start = read_u32(level + 16U);
+        *out_count = read_u32(level + 20U);
+    } else {
+        const uint8_t *item = catalog_row(ITEMS_SECTION_ITEMS, owner - 1U);
+        *out_start = read_u32(item + 32U);
+        *out_count = read_u32(item + 36U);
+    }
+    NT_ASSERT(*out_count > 0U && "items cost: empty runtime cost ref");
 }
 
 uint32_t items_cost_count(item_cost_ref_t cost) {
-    const uint8_t *item = catalog_acquire_owner(cost);
-    uint32_t count = read_u32(item + 36U);
-    NT_ASSERT(count > 0U && "items_cost_count: empty cost ref");
+    uint32_t start = 0U;
+    uint32_t count = 0U;
+    catalog_cost_span(cost, &start, &count);
+    (void)start;
     return count;
 }
 
 item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index) {
-    const uint8_t *item = catalog_acquire_owner(cost);
-    uint32_t count = read_u32(item + 36U);
+    uint32_t start = 0U;
+    uint32_t count = 0U;
+    catalog_cost_span(cost, &start, &count);
     NT_ASSERT(index < count && "items_cost_at: index out of range");
-    const uint8_t *entry = catalog_row(
-        ITEMS_SECTION_COSTS, read_u32(item + 32U) + index);
+    const uint8_t *entry = catalog_row(ITEMS_SECTION_COSTS, start + index);
     const uint8_t *target = catalog_row(ITEMS_SECTION_ITEMS, read_u32(entry));
     return (item_cost_entry_t){{read_u64(target)}, read_i64(entry + 8U)};
 }

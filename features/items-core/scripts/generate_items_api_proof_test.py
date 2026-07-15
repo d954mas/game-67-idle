@@ -99,6 +99,8 @@ class GenerateItemsApiProofTests(unittest.TestCase):
         self.assert_code(bad, "invalid-field-range")
         bad = copy.deepcopy(base); bad["fields"][0]["unit"] = 7
         self.assert_code(bad, "invalid-field-metadata")
+        bad = copy.deepcopy(base); bad["fields"][0]["member"] = "int"
+        self.assert_code(bad, "invalid-field-member")
         bad = copy.deepcopy(base); bad["fields"][0]["ui"]["layout"] = "grid"
         self.assert_code(bad, "field-ui-key-forbidden")
         bad = copy.deepcopy(base); bad["fields"][0]["evolution"]["since"] = 0

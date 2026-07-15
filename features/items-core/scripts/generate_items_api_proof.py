@@ -15,6 +15,8 @@ import tempfile
 from pathlib import Path
 from typing import Any, Callable
 
+from items_c_identifiers import is_c_member_name
+
 
 MASK64 = (1 << 64) - 1
 DEF_ID_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
@@ -262,7 +264,7 @@ def load_and_validate(snapshot: dict[str, Any], hasher: Callable[..., int] = xxh
             _fail("field-c-name-collision", f"{path}.field_id", field, root)
         field_c_names[field_c_name] = field_id
         member = field.get("member")
-        if not isinstance(member, str) or not re.fullmatch(r"[a-z][a-z0-9_]*", member):
+        if not is_c_member_name(member):
             _fail("invalid-field-member", f"{path}.member", field, root)
         if member in field_members:
             _fail("duplicate-field-member", f"{path}.member", field, root)

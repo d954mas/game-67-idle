@@ -12,6 +12,8 @@ import re
 import sys
 from typing import Any
 
+from items_c_identifiers import is_c_member_name
+
 
 EVALUATION_SCHEMA = "items.lua.evaluation.v1"
 SNAPSHOT_SCHEMA = "items.snapshot.v1"
@@ -139,8 +141,12 @@ def _normalize_fields(evaluation: dict[str, Any]) -> tuple[list[dict[str, Any]],
             _fail("snapshot.sealed_field_id", "items.* field ids are sealed", f"{path}.id")
         if field_id in ids:
             _fail("snapshot.duplicate_field", f"duplicate field id: {field_id}", f"{path}.id")
-        if not isinstance(member, str) or MEMBER_RE.fullmatch(member) is None:
-            _fail("snapshot.field_member", "field member must be a lowercase identifier", f"{path}.member")
+        if not is_c_member_name(member):
+            _fail(
+                "snapshot.field_member",
+                "field member must be a lowercase non-reserved C identifier",
+                f"{path}.member",
+            )
         if section != "level_row":
             _fail("snapshot.field_section", "v1 supports level_row fields", f"{path}.section")
         if (section, member) in members:
