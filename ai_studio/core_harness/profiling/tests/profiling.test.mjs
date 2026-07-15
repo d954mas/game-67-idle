@@ -1045,10 +1045,15 @@ test("codexAgentRollup reads subagent function-call tools and filters by parent"
   const dir = tempDir();
   try {
     writeJsonl(join(dir, "rollout-sub.jsonl"), [
-      { type: "session_meta", timestamp: "2026-06-22T10:00:00Z", payload: { id: "thread-child", thread_source: "subagent", source: { subagent: { thread_spawn: { parent_thread_id: "thread-parent", agent_role: "explorer", agent_nickname: "Euclid" } } } } },
+      { type: "session_meta", timestamp: "2026-06-22T10:00:00Z", payload: { id: "thread-child", thread_source: "subagent", source: { subagent: { thread_spawn: { parent_thread_id: "thread-parent", agent_role: "explorer", agent_nickname: "Euclid", agent_path: "/root/asset_loader_review" } } } } },
       { type: "response_item", payload: { type: "message", role: "user", content: [{ type: "input_text", text: "explore the asset loader" }] } },
       { type: "response_item", payload: { type: "function_call", name: "shell_command", call_id: "1" } },
       { type: "response_item", payload: { type: "function_call", name: "shell_command", call_id: "2" } },
+    ]);
+    // Internal approval-review guardians are implementation detail, not delegated work.
+    writeJsonl(join(dir, "rollout-guardian.jsonl"), [
+      { type: "session_meta", timestamp: "2026-06-22T10:00:00Z", payload: { id: "thread-guardian", thread_source: "subagent", source: { subagent: { other: "guardian" } } } },
+      { type: "response_item", payload: { type: "message", role: "developer", content: [{ type: "input_text", text: "<permissions instructions>" }] } },
     ]);
     // a non-subagent (main) rollout must be ignored
     writeJsonl(join(dir, "rollout-main.jsonl"), [
@@ -1058,7 +1063,7 @@ test("codexAgentRollup reads subagent function-call tools and filters by parent"
     const matched = codexAgentRollup("thread-parent", dir);
     assert.equal(matched.length, 1);
     assert.equal(matched[0].type, "explorer");
-    assert.equal(matched[0].objective, "explore the asset loader");
+    assert.equal(matched[0].objective, "asset_loader_review");
     assert.equal(matched[0].tools.shell_command, 2);
     // a different parent yields nothing
     assert.equal(codexAgentRollup("other-parent", dir).length, 0);

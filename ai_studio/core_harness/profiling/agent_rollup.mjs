@@ -183,7 +183,9 @@ export function codexAgentRollup(parentThreadId, dayDir) {
     const meta = metaRecord ? (metaRecord.payload || metaRecord) : null;
     if (!meta || meta.thread_source !== "subagent") continue;
     const spawn = (meta.source && meta.source.subagent && meta.source.subagent.thread_spawn) || {};
-    if (parentThreadId && spawn.parent_thread_id && spawn.parent_thread_id !== parentThreadId) continue;
+    const spawnParent = String(spawn.parent_thread_id || "");
+    if (!spawnParent || (parentThreadId && spawnParent !== parentThreadId)) continue;
+    const taskName = String(spawn.agent_path || "").split("/").filter(Boolean).at(-1) || "";
     const tools = {};
     let firstTs = meta.timestamp || "";
     let lastTs = meta.timestamp || "";
@@ -204,7 +206,7 @@ export function codexAgentRollup(parentThreadId, dayDir) {
     agents.push({
       id: String(meta.id || entry.name).slice(0, 12),
       type: spawn.agent_role || "subagent",
-      objective: firstUserText(records) || String(spawn.agent_nickname || "").slice(0, 110),
+      objective: taskName || firstUserText(records) || String(spawn.agent_nickname || "").slice(0, 110),
       tools,
       tool_total: toolTotal(tools),
       tool_errors: toolErrors,
