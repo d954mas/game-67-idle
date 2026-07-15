@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
-import { canonicalTaskLogPayloads, findRoot, listTasks } from "../taskboard/lib.mjs";
+import { canonicalTaskLogPayloads, findRoot, listTasks } from "../taskboard/store.mjs";
 
 const OUTCOMES = ["pass", "block", "review", "skip", "unverified"];
 const GROUPS = {

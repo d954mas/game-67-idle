@@ -9,20 +9,18 @@ import {
   countsByStatus,
   EPIC_STATUSES,
   findDoc,
-  idNumber,
   listEpics,
   listProjects,
   listTasks,
   PROJECT_STATUSES,
+  rankTaskEntries,
   CURRENT_TASK_STATUSES,
   READY_QUEUE_LIMIT,
   TASK_STATUSES,
-  taskRank,
   validateStoreDetailed,
 } from "./store.mjs";
 
 export const STUDIO_STORE_ID = "studio";
-const DEFAULT_CONTEXT_LIMIT = 5;
 
 export function studioTaskboardStore(root) {
   return {
@@ -199,16 +197,8 @@ export function agentContextPayloadForStores(root, stores, options = {}) {
     store.storeId,
     new Map(epics.filter((entry) => entry.store.storeId === store.storeId).map(({ doc }) => [doc.fields.id, doc])),
   ]));
-  const rankedEntries = (statuses) => tasks
-    .filter(({ doc }) => statuses.includes(doc.fields.status))
-    .sort((a, b) =>
-      taskRank(a.doc) - taskRank(b.doc) ||
-      idNumber(b.doc) - idNumber(a.doc) ||
-      a.store.storeId.localeCompare(b.store.storeId) ||
-      String(a.doc.fields.id).localeCompare(String(b.doc.fields.id))
-    );
-  const currentEntries = rankedEntries(CURRENT_TASK_STATUSES);
-  const readyEntries = rankedEntries(["backlog"]);
+  const currentEntries = rankTaskEntries(tasks, CURRENT_TASK_STATUSES);
+  const readyEntries = rankTaskEntries(tasks, ["backlog"]);
   const currentWork = currentEntries.slice(0, limit).map(({ doc, store }) =>
     agentTaskRow(root, doc, { store, epicsById: epicsByStore.get(store.storeId) })
   );
@@ -232,22 +222,6 @@ export function agentContextPayloadForStores(root, stores, options = {}) {
     readyQueue,
     agentNextStep: "Work from currentWork; use readyQueue only to select the next task. Open bodies explicitly and do not scan archives unless linked.",
   };
-}
-
-export function profileTaskboardReads(root) {
-  const records = listTaskboardStores(root, { includePrivate: true }).map((store) => {
-    const payload = agentContextPayloadForStores(root, [store], { limit: DEFAULT_CONTEXT_LIMIT });
-    const returnedCount = payload.currentWork.length + payload.readyQueue.length;
-    const totalCount = payload.counts.currentWork + payload.counts.readyQueue;
-    return {
-      storeId: store.storeId,
-      contextBytes: Buffer.byteLength(`${JSON.stringify(payload, null, 2)}\n`, "utf8"),
-      returnedCount,
-      totalCount,
-      truncated: returnedCount < totalCount,
-    };
-  });
-  return { schema: "ai_studio.taskboard.context_profile.v1", records };
 }
 
 export function validateTaskboardStoresDetailed(root, stores) {

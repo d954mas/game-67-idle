@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 
 import { registerTemplateAssetSource, templateRegistryPath } from "../ai_studio/assets/sources/ops.mjs";
 import { writeVscodeProjectFiles } from "../ai_studio/dev_environment/vscode_projects.mjs";
-import { ensureProject } from "../ai_studio/taskboard/lib.mjs";
+import { ensureProject } from "../ai_studio/taskboard/store.mjs";
 import { copyGitSourceTree } from "../ai_studio/workspace/copy_source_tree.mjs";
 
 const defaultRepoRoot = resolve(fileURLToPath(new URL("..", import.meta.url)));

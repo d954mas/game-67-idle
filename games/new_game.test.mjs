@@ -124,7 +124,7 @@ test("public creation is discovered from its folder and updates public integrati
   assert.deepEqual(lock.def_ids, {});
   const tasks = JSON.parse(readFileSync(join(root, ".vscode", "tasks.json"), "utf8"));
   assert.equal(tasks.tasks.some((task) => task.label === "Game: test-game: build native debug"), true);
-  assert.equal(existsSync(join(root, "ai_studio", "taskboard", "items", "projects", "P001-test-game.md")), true);
+  assert.equal(existsSync(join(root, "ai_studio", "taskboard", "items", "projects", "P001.md")), true);
 });
 
 test("private creation uses games/private, installs parent preflight, and stays invisible to parent git", (t) => {
@@ -139,7 +139,7 @@ test("private creation uses games/private, installs parent preflight, and stays 
   assert.match(hook, /workspace[\\/]games\.mjs.*preflight/);
   assert.equal(execFileSync("git", ["status", "--short", "--untracked-files=all"], { cwd: root, encoding: "utf8" }).trim(), "");
   assert.equal(existsSync(join(root, ".vscode", "tasks.json")), false);
-  assert.equal(existsSync(join(root, "ai_studio", "taskboard", "items", "projects", "P001-secret-game.md")), false);
+  assert.equal(existsSync(join(root, "ai_studio", "taskboard", "items", "projects", "P001.md")), false);
 
   write(root, "README.md", "Secret Title\n");
   execFileSync("git", ["add", "README.md"], { cwd: root });
@@ -168,7 +168,7 @@ test("public failure after Taskboard mutation restores game, VS Code, and Taskbo
   assert.equal(result.status, 1);
   assert.equal(existsSync(join(root, "games", "rollback-game")), false);
   assert.equal(existsSync(join(root, ".vscode", "tasks.json")), false);
-  assert.equal(existsSync(join(root, "ai_studio", "taskboard", "items", "projects", "P001-rollback-game.md")), false);
+  assert.equal(existsSync(join(root, "ai_studio", "taskboard", "items", "projects", "P001.md")), false);
 });
 
 test("replace rollback restores the previous game directory", (t) => {

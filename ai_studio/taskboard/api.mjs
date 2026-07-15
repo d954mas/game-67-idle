@@ -12,7 +12,7 @@ import {
   listTasks,
   publicDoc,
   updateDoc,
-} from "./lib.mjs";
+} from "./store.mjs";
 import {
   agentContextPayloadForStores,
   boardPayloadForStores,

@@ -9,7 +9,6 @@
 //   node ai_studio/taskboard/cli.mjs new task --title "..." [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
 //   node ai_studio/taskboard/cli.mjs set T0001 --status doing [--project P001] [--epic E001] [--priority P1] [--title "..."] [--log "evidence line"] [--json]
 //   node ai_studio/taskboard/cli.mjs context [--json] [--tasks-limit 5]
-//   node ai_studio/taskboard/cli.mjs profile [--json]
 //   node ai_studio/taskboard/cli.mjs validate [--json]
 //   node ai_studio/taskboard/cli.mjs help
 //
@@ -18,14 +17,13 @@
 import {
   agentEpicRow, agentProjectRow, agentTaskRow,
   findRoot, listTasks, listEpics, listProjects, findDoc, createTask, createEpic, createProject,
-  sealTaskArchive, updateDoc,
-} from "./lib.mjs";
-import { canonicalQualityAssignments, CURRENT_TASK_STATUSES, idNumber, parseQualityAssignments, READY_QUEUE_LIMIT, TASK_STATUSES, taskRank } from "./store.mjs";
+  sealTaskArchive, updateDoc, canonicalQualityAssignments, CURRENT_TASK_STATUSES,
+  parseQualityAssignments, rankTaskEntries, READY_QUEUE_LIMIT, TASK_STATUSES,
+} from "./store.mjs";
 import {
   agentContextPayloadForStores,
   findTaskboardDoc,
   mutationStore,
-  profileTaskboardReads,
   storeOptions,
   taskboardStoresForQuery,
   taskboardStoreSummary,
@@ -34,14 +32,13 @@ import {
 import { relative } from "node:path";
 import { isMain } from "../core_harness/tool_lib/cli.mjs";
 
-const USAGE = `usage: cli.mjs <list|context|show|archive|profile|new|set|validate|help> ...
+const USAGE = `usage: cli.mjs <list|context|show|archive|new|set|validate|help> ...
 
 Commands:
   list [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--status s] [--project P001] [--epic E001] [--tag t] [--ideas] [--all] [--archive]
   context [--json] [--store studio|game:<id>] [--game <id>] [--include-private] [--tasks-limit 5]
   show <P###|E###|T####|store:id> [--archive] [--json] [--store studio|game:<id>] [--game <id>] [--include-private]
   archive seal --name <immutable-batch-name> [--json] [--store studio|game:<id>] [--game <id>]
-  profile [--json]
   new project --title "..." [--store studio|game:<id>] [--game <id>] [--kind ai-studio|game|template|tooling|research|other] [--target path] [--tags a,b]
   new epic --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--status active] [--tags a,b]
   new task --title "..." [--store studio|game:<id>] [--game <id>] [--project P001] [--epic E001] [--priority P1] [--status backlog] [--tags a,b]
@@ -143,14 +140,7 @@ function taskEntriesForOptions(root, options) {
 }
 
 function rankedTaskEntries(entries, statuses) {
-  const out = entries.filter(({ task }) => statuses.includes(task.fields.status));
-  out.sort((a, b) =>
-    taskRank(a.task) - taskRank(b.task) ||
-    idNumber(b.task) - idNumber(a.task) ||
-    a.store.storeId.localeCompare(b.store.storeId) ||
-    String(a.task.fields.id).localeCompare(String(b.task.fields.id))
-  );
-  return out;
+  return rankTaskEntries(entries, statuses);
 }
 
 function currentWorkTaskEntries(entries) {
@@ -311,18 +301,6 @@ export function main(argv, {
       break;
     }
     writeStdout(renderContext(root, args));
-    break;
-  }
-  case "profile": {
-    const payload = profileTaskboardReads(root);
-    if (args.json) {
-      writeJson(payload);
-      break;
-    }
-    writeLine("# Taskboard Context Profile");
-    for (const record of payload.records) {
-      writeLine(`${record.storeId}: ${record.contextBytes} bytes, returned=${record.returnedCount}/${record.totalCount}, truncated=${record.truncated}`);
-    }
     break;
   }
   case "show": {

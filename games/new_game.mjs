@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { listRegisteredTemplates } from "../ai_studio/assets/sources/ops.mjs";
 import { writeVscodeProjectFiles } from "../ai_studio/dev_environment/vscode_projects.mjs";
-import { ensureProject, updateDoc } from "../ai_studio/taskboard/lib.mjs";
+import { ensureProject, updateDoc } from "../ai_studio/taskboard/store.mjs";
 import { listGameMounts, runPrivateGamePreflight } from "../ai_studio/workspace/games.mjs";
 import { copyGitSourceTree } from "../ai_studio/workspace/copy_source_tree.mjs";
 

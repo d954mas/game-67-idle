@@ -1,7 +1,7 @@
 // Taskboard core tests. Run: node --test ai_studio/taskboard/tests/taskboard.test.mjs
 import test from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync, mkdirSync, renameSync, symlinkSync, utimesSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync, readFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawn, spawnSync } from "node:child_process";
@@ -11,13 +11,12 @@ import vm from "node:vm";
 import {
   createTask, createEpic, createProject, listTasks,
   listEpics, listProjects, updateDoc, findDoc, sealTaskArchive, validateStore, validateStoreDetailed,
-} from "../lib.mjs";
+} from "../store.mjs";
 import { createStoreZip, readStoreZip } from "../../core_harness/tool_lib/zip_store.mjs";
-import { boardPayload, parseDoc, serializeDoc, slugify } from "../store.mjs";
+import { boardPayload, parseDoc, serializeDoc } from "../store.mjs";
 import { createTaskboardApi } from "../api.mjs";
 import {
   agentContextPayloadForStores,
-  profileTaskboardReads,
   studioTaskboardStore,
   validateTaskboardStoresDetailed,
 } from "../stores.mjs";
@@ -89,7 +88,7 @@ function spawnConcurrentCreator(root, workerId, kind) {
   const source = `
     import { existsSync, writeFileSync } from "node:fs";
     import { join } from "node:path";
-    import { createTask, createEpic, createProject } from ${JSON.stringify(new URL("../lib.mjs", import.meta.url).href)};
+    import { createTask, createEpic, createProject } from ${JSON.stringify(new URL("../store.mjs", import.meta.url).href)};
     const [root, workerId, kind] = process.argv.slice(1);
     writeFileSync(join(root, \`.ready-\${workerId}\`), "ready");
     while (!existsSync(join(root, ".go"))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
@@ -108,7 +107,7 @@ function spawnConcurrentCloser(root, workerId) {
   const source = `
     import { existsSync, writeFileSync } from "node:fs";
     import { join } from "node:path";
-    import { updateDoc } from ${JSON.stringify(new URL("../lib.mjs", import.meta.url).href)};
+    import { updateDoc } from ${JSON.stringify(new URL("../store.mjs", import.meta.url).href)};
     const [root, workerId] = process.argv.slice(1);
     writeFileSync(join(root, ".close-ready-" + workerId), "ready");
     while (!existsSync(join(root, ".close-go"))) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);
@@ -276,12 +275,6 @@ test("parseDoc tolerates files without frontmatter", () => {
   assert.equal(parsed.body, "just text\n");
 });
 
-test("slugify handles non-ascii and empty titles", () => {
-  assert.equal(slugify("Camp Rest Action!"), "camp-rest-action");
-  assert.equal(slugify("\u0418\u0434\u0435\u044f \u0431\u0435\u0437 \u043b\u0430\u0442\u0438\u043d\u0438\u0446\u044b"), "item");
-  assert.equal(slugify(""), "item");
-});
-
 test("createTask allocates sequential ids and createEpic separate sequence", (t) => {
   const root = tempRoot(t);
   const t1 = createTask(root, { title: "First" });
@@ -290,8 +283,16 @@ test("createTask allocates sequential ids and createEpic separate sequence", (t)
   assert.equal(t1.fields.id, "T0001");
   assert.equal(t2.fields.id, "T0002");
   assert.equal(e1.fields.id, "E001");
+  assert.equal(basename(t1.file), "T0001.md");
   assert.equal(listTasks(root).length, 2);
   assert.equal(listEpics(root).length, 1);
+});
+
+test("loader keeps legacy id-slug markdown names readable", (t) => {
+  const root = tempRoot(t);
+  const itemsRoot = join(root, "ai_studio", "taskboard", "items");
+  writeTaskDoc(itemsRoot, "T0042", "Legacy slug", "backlog");
+  assert.equal(listTasks(root)[0].fields.id, "T0042");
 });
 
 test("createTask rejects status done before allocating or writing", (t) => {
@@ -444,7 +445,7 @@ test("done tasks stay pending until an immutable ZIP batch is sealed", (t) => {
     body: "## Done when\n\n- [x] archived\n\n## Log\n\n- 2026-07-11: Quality: not-applicable; reason: storage behavior fixture\n",
   });
   const updated = updateDoc(root, "T0001", { fields: { status: "done", quality: { notApplicable: { reason: "storage behavior fixture" } } } });
-  assert.match(updated.file, /ai_studio[\\/]taskboard[\\/]items[\\/]archive[\\/]pending[\\/]E001[\\/]T0001-/);
+  assert.match(updated.file, /ai_studio[\\/]taskboard[\\/]items[\\/]archive[\\/]pending[\\/]E001[\\/]T0001\.md$/);
   assert.equal(existsSync(updated.file), true);
   assert.equal(listTasks(root).length, 0);
   assert.equal(listTasks(root, { includeArchive: true }).length, 1);
@@ -458,8 +459,8 @@ test("done tasks stay pending until an immutable ZIP batch is sealed", (t) => {
   assert.match(sealedFile, /2026-07-14-test\.zip$/);
   assert.equal(existsSync(updated.file), false, "verified sources are removed after sealing");
   const entries = readStoreZip(sealedFile);
-  assert.deepEqual([...entries.keys()], ["E001/T0001-archive-me.md", "MANIFEST.md"]);
-  assert.match(entries.get("E001/T0001-archive-me.md").toString("utf8"), /status: done/);
+  assert.deepEqual([...entries.keys()], ["E001/T0001.md", "MANIFEST.md"]);
+  assert.match(entries.get("E001/T0001.md").toString("utf8"), /status: done/);
   assert.match(entries.get("MANIFEST.md").toString("utf8"), /T0001.*Archive me/);
   assert.equal(findDoc(root, "T0001"), null);
   assert.equal(findDoc(root, "T0001", { includeArchive: true }).fields.status, "done");
@@ -632,6 +633,18 @@ test("cli context defaults to five summaries and expands only through an explici
   assert.doesNotMatch(scopedResult.stdout, /CONTEXT_BODY_/);
 });
 
+test("context JSON and text render the canonical task order identically", (t) => {
+  const root = tempRoot(t);
+  for (const [title, status, priority] of [
+    ["Review", "review", "P0"], ["Doing", "doing", "P2"], ["Todo", "todo", "P1"],
+    ["Backlog newer", "backlog", "P1"], ["Backlog older", "backlog", "P1"],
+  ]) createTask(root, { title, status, priority });
+  const json = JSON.parse(runCliDirect(root, "context", "--json").stdout);
+  const textResult = runCliDirect(root, "context");
+  const textIds = [...textResult.stdout.matchAll(/^- (T\d+)\s/gm)].map((match) => match[1]);
+  assert.deepEqual(textIds, [...json.currentWork, ...json.readyQueue].map((row) => row.id));
+});
+
 test("agent context separates selected work from three ready backlog candidates", (t) => {
   const root = tempRoot(t);
   for (let index = 1; index <= 5; index++) {
@@ -682,28 +695,6 @@ test("Taskboard agent API context defaults to five body-free summaries", async (
   assert.deepEqual(response.data.readyQueue, []);
   assert.equal(response.data.counts.readyQueue, 0);
   assert.doesNotMatch(JSON.stringify(response.data), /API_CONTEXT_BODY_/);
-});
-
-test("read profiler has one small privacy-safe context contract plus CLI smoke", (t) => {
-  const root = tempRoot(t);
-  for (let index = 1; index <= 7; index++) {
-    createTask(root, {
-      title: index === 1 ? "PUBLIC_TITLE_CANARY" : `Public task ${index}`,
-      status: "doing",
-      body: index === 1 ? "## What\n\nPUBLIC_BODY_CANARY\n\n## Done when\n\n- [ ] done\n\n## Log\n" : undefined,
-    });
-  }
-  const payload = profileTaskboardReads(root);
-  assert.equal(payload.schema, "ai_studio.taskboard.context_profile.v1");
-  assert.deepEqual(payload.records.map(({ storeId, returnedCount, totalCount, truncated }) => ({ storeId, returnedCount, totalCount, truncated })), [
-    { storeId: "studio", returnedCount: 5, totalCount: 7, truncated: true },
-  ]);
-  assert.equal(Number.isInteger(payload.records[0].contextBytes), true);
-  assert.doesNotMatch(JSON.stringify(payload), /PUBLIC_TITLE_CANARY|PUBLIC_BODY_CANARY|path|query|durationMs/);
-
-  const result = runCliDirect(root, "profile", "--json");
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(JSON.parse(result.stdout).schema, payload.schema);
 });
 
 test("aggregate context reports unsliced totals and globally ranks work across stores", (t) => {
@@ -813,7 +804,7 @@ test("cli new task and project write to explicit private game store without publ
   const taskPayload = JSON.parse(taskResult.stdout);
   assert.equal(taskPayload.doc.storeId, "game:secret-game");
   assert.equal(taskPayload.doc.id, "T0001");
-  assert.match(taskPayload.doc.file, /games\/private\/secret-game\/\.ai_studio\/taskboard\/items\/active\/T0001-/);
+  assert.match(taskPayload.doc.file, /games\/private\/secret-game\/\.ai_studio\/taskboard\/items\/active\/T0001\.md$/);
 
   const projectResult = runCliDirect(root,
     "new", "project",
@@ -826,7 +817,7 @@ test("cli new task and project write to explicit private game store without publ
   const projectPayload = JSON.parse(projectResult.stdout);
   assert.equal(projectPayload.doc.storeId, "game:secret-game");
   assert.equal(projectPayload.doc.id, "P001");
-  assert.match(projectPayload.doc.file, /games\/private\/secret-game\/\.ai_studio\/taskboard\/items\/projects\/P001-/);
+  assert.match(projectPayload.doc.file, /games\/private\/secret-game\/\.ai_studio\/taskboard\/items\/projects\/P001\.md$/);
   assert.deepEqual(listTasks(root).map((task) => task.fields.title), ["Public task"]);
   assert.deepEqual(listProjects(root).map((project) => project.fields.title), []);
 });
@@ -871,7 +862,7 @@ test("Taskboard API accepts private store scope through headers without query pa
   }, { "x-ai-studio-store": "game:secret-game" });
   assert.equal(created.status, 201);
   assert.equal(created.data.storeId, "game:secret-game");
-  assert.equal(existsSync(join(privateStore.itemsRoot, "active", "T0002-header-created.md")), true);
+  assert.equal(existsSync(join(privateStore.itemsRoot, "active", "T0002.md")), true);
 
   const mismatch = await invokeApi(handler, "POST", "/api/tasks", {
     title: "Wrong store",
@@ -907,7 +898,7 @@ test("taskboard cli help exits successfully and documents commands", () => {
   ]) {
 
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|archive\|profile\|new\|set\|validate\|help>/);
+    assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|archive\|new\|set\|validate\|help>/);
     assert.match(result.stdout, /new project --title/);
     assert.match(result.stdout, /context \[--json\]/);
     assert.doesNotMatch(result.stdout, /summary/);
@@ -916,11 +907,11 @@ test("taskboard cli help exits successfully and documents commands", () => {
 });
 
 test("taskboard cli rejects removed and unrelated commands", () => {
-  for (const command of ["summary", "workflow-run"]) {
+  for (const command of ["profile", "summary", "workflow-run"]) {
     const result = runCliDirect(process.cwd(), command);
     assert.notEqual(result.status, 0);
-    assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|archive\|profile\|new\|set\|validate\|help>/);
-    assert.doesNotMatch(result.stdout, /summary|workflow-run/);
+    assert.match(result.stdout, /usage: cli\.mjs <list\|context\|show\|archive\|new\|set\|validate\|help>/);
+    assert.doesNotMatch(result.stdout, /profile|summary|workflow-run/);
   }
 });
 
@@ -1356,7 +1347,7 @@ test("updateDoc checks archive move conflicts before rewriting source", (t) => {
   const original = readFileSync(task.file, "utf8");
   const archiveDir = join(root, "ai_studio", "taskboard", "items", "archive", "pending", "E001");
   mkdirSync(archiveDir, { recursive: true });
-  writeFileSync(join(archiveDir, "T0001-conflict-move.md"), "existing archive task\n");
+  writeFileSync(join(archiveDir, "T0001.md"), "existing archive task\n");
 
   assert.throws(
     () => updateDoc(root, "T0001", { fields: { status: "done", quality: { notApplicable: { reason: "storage conflict fixture" } } } }),
@@ -1493,11 +1484,49 @@ test("nextId stays monotonic across archive pruning via items/.counters.json", (
   assert.equal(counters.T, 201);
 });
 
-test("concurrent processes preserve unique ids and all shared counter keys", async (t) => {
+test("counter reconciliation rescans after a stale writer overwrites a newer high-water mark", (t) => {
   const root = tempRoot(t);
-  const workerCount = 12;
-  const kinds = ["task", "epic", "project"];
-  const workers = Array.from({ length: workerCount }, (_, index) => spawnConcurrentCreator(root, index, kinds[index % kinds.length]));
+  const itemsDir = join(root, "ai_studio", "taskboard", "items");
+  const activeDir = join(itemsDir, "active");
+  let injected = false;
+
+  const task = createTask(root, { title: "First task" }, {
+    _testBeforeCounterWrite() {
+      if (injected) return;
+      injected = true;
+      writeFileSync(join(activeDir, "T0002.md"), serializeDoc({
+        id: "T0002",
+        title: "Concurrent higher task",
+        status: "backlog",
+        priority: "P2",
+        tags: [],
+        created: "2026-07-15",
+        updated: "2026-07-15",
+      }, "## What\n\nConcurrent fixture.\n\n## Done when\n\n- [ ] preserved\n\n## Open questions\n\n## Log\n"));
+      writeFileSync(join(itemsDir, ".counters.json"), JSON.stringify({ T: 2 }));
+    },
+  });
+
+  assert.equal(task.fields.id, "T0001");
+  assert.deepEqual(listTasks(root).map((doc) => doc.fields.id).sort(), ["T0001", "T0002"]);
+  assert.deepEqual(JSON.parse(readFileSync(join(itemsDir, ".counters.json"), "utf8")), { T: 2 });
+});
+
+test("failed counter persistence removes the exact task file it reserved", (t) => {
+  const root = tempRoot(t);
+  const itemsDir = join(root, "ai_studio", "taskboard", "items");
+  const activeDir = join(itemsDir, "active");
+  mkdirSync(join(itemsDir, ".counters.json"), { recursive: true });
+
+  assert.throws(() => createTask(root, { title: "Must roll back" }, { counterWriteMaxAttempts: 1 }));
+  assert.equal(existsSync(join(activeDir, "T0001.md")), false);
+  assert.deepEqual(listTasks(root), []);
+});
+
+test("ten concurrent task creates preserve unique ids and the counter high-water mark", async (t) => {
+  const root = tempRoot(t);
+  const workerCount = 10;
+  const workers = Array.from({ length: workerCount }, (_, index) => spawnConcurrentCreator(root, index, "task"));
   let created;
   try {
     await waitFor(() => Array.from({ length: workerCount }, (_, index) => existsSync(join(root, `.ready-${index}`))).every(Boolean));
@@ -1511,126 +1540,13 @@ test("concurrent processes preserve unique ids and all shared counter keys", asy
     await Promise.allSettled(workers.map(({ result }) => result));
   }
 
-  for (const kind of kinds) {
-    const ids = created.filter((doc) => doc.kind === kind).map(({ id }) => id);
-    assert.equal(new Set(ids).size, workerCount / kinds.length);
-  }
-  assert.equal(listTasks(root).length, workerCount / kinds.length);
-  assert.equal(listEpics(root).length, workerCount / kinds.length);
-  assert.equal(listProjects(root).length, workerCount / kinds.length);
+  const ids = created.map(({ id }) => id);
+  assert.equal(new Set(ids).size, workerCount);
+  assert.equal(listTasks(root).length, workerCount);
   const counters = JSON.parse(readFileSync(join(root, "ai_studio", "taskboard", "items", ".counters.json"), "utf8"));
-  assert.deepEqual(counters, { T: 4, E: 4, P: 4 });
+  assert.deepEqual(counters, { T: 10 });
   assert.deepEqual(
-    readdirSync(join(root, "ai_studio", "taskboard", "items")).filter((name) => name.startsWith(".allocation.lock")),
-    [],
+    readdirSync(join(root, "ai_studio", "taskboard", "items", "active")).sort(),
+    ids.sort().map((id) => `${id}.md`),
   );
-});
-
-test("allocation failure after counter commit preserves valid monotonic state", (t) => {
-  const root = tempRoot(t);
-  const activeDir = join(root, "ai_studio", "taskboard", "items", "active");
-  const itemsDir = dirname(activeDir);
-  mkdirSync(itemsDir, { recursive: true });
-  writeFileSync(join(itemsDir, ".counters.json"), JSON.stringify({ E: 9, P: 4 }));
-  mkdirSync(join(activeDir, "T0001-injected-failure.md"), { recursive: true });
-
-  assert.throws(
-    () => createTask(root, { title: "Injected failure" }, { allocationMaxAttempts: 1 }),
-    /Could not allocate a unique task id after 1 attempts/,
-  );
-
-  const countersAfterFailure = JSON.parse(readFileSync(join(root, "ai_studio", "taskboard", "items", ".counters.json"), "utf8"));
-  assert.deepEqual(countersAfterFailure, { E: 9, P: 4, T: 1 });
-  assert.equal(listTasks(root).length, 0);
-  rmSync(join(activeDir, "T0001-injected-failure.md"), { recursive: true });
-  const recovered = createTask(root, { title: "Recovered" });
-  assert.equal(recovered.fields.id, "T0002");
-});
-
-test("allocation reclaims a stale lock without blocking reads", (t) => {
-  const root = tempRoot(t);
-  const itemsDir = join(root, "ai_studio", "taskboard", "items");
-  const lockDir = join(itemsDir, ".allocation.lock");
-  mkdirSync(lockDir, { recursive: true });
-  writeFileSync(join(lockDir, "owner.json"), JSON.stringify({ pid: 999999, acquiredAt: "2000-01-01T00:00:00.000Z" }));
-  const old = new Date(Date.now() - 60_000);
-  utimesSync(lockDir, old, old);
-
-  assert.deepEqual(listTasks(root), []);
-  const task = createTask(root, { title: "After stale lock" }, { allocationLockStaleMs: 100 });
-
-  assert.equal(task.fields.id, "T0001");
-  assert.equal(existsSync(lockDir), false);
-});
-
-test("allocation reaps a quarantined release directory", (t) => {
-  const root = tempRoot(t);
-  const itemsDir = join(root, "ai_studio", "taskboard", "items");
-  const orphan = join(itemsDir, ".allocation.lock.release-orphan");
-  mkdirSync(orphan, { recursive: true });
-  writeFileSync(join(orphan, "owner.json"), "{}\n");
-  const old = new Date(Date.now() - 60_000);
-  utimesSync(orphan, old, old);
-
-  assert.equal(createTask(root, { title: "Reaper" }, { allocationLockStaleMs: 100 }).fields.id, "T0001");
-  assert.equal(existsSync(orphan), false);
-});
-
-test("allocation release does not delete a successor lock with a different token", (t) => {
-  const root = tempRoot(t);
-  const itemsDir = join(root, "ai_studio", "taskboard", "items");
-  const lockDir = join(itemsDir, ".allocation.lock");
-  const displacedLock = join(itemsDir, ".allocation.lock.displaced");
-  let replaced = false;
-  const title = {
-    toString() {
-      if (!replaced) {
-        replaced = true;
-        renameSync(lockDir, displacedLock);
-        mkdirSync(lockDir);
-        writeFileSync(join(lockDir, "owner.json"), JSON.stringify({
-          pid: process.pid,
-          token: "successor-token",
-          acquiredAt: new Date().toISOString(),
-        }));
-      }
-      return "ABA replacement";
-    },
-  };
-
-  const task = createTask(root, { title });
-
-  assert.equal(task.fields.id, "T0001");
-  assert.equal(JSON.parse(readFileSync(join(lockDir, "owner.json"), "utf8")).token, "successor-token");
-  assert.equal(existsSync(displacedLock), true);
-});
-
-test("fresh live lock times out without blocking reads or edits", (t) => {
-  const root = tempRoot(t);
-  const existing = createTask(root, { title: "Existing", status: "todo" });
-  const lockDir = join(root, "ai_studio", "taskboard", "items", ".allocation.lock");
-  mkdirSync(lockDir);
-  writeFileSync(join(lockDir, "owner.json"), JSON.stringify({
-    pid: process.pid,
-    token: "live-token",
-    acquiredAt: new Date().toISOString(),
-  }));
-  const old = new Date(Date.now() - 60_000);
-  utimesSync(lockDir, old, old);
-
-  assert.equal(listTasks(root).length, 1);
-  assert.equal(updateDoc(root, existing.fields.id, { fields: { priority: "P0" } }).fields.priority, "P0");
-  const startedAt = Date.now();
-  assert.throws(
-    () => createTask(root, { title: "Must time out" }, {
-      allocationLockRetryMs: 5,
-      allocationLockTimeoutMs: 30,
-      allocationLockStaleMs: 10,
-    }),
-    /Timed out waiting for Taskboard allocation lock/,
-  );
-  const elapsedMs = Date.now() - startedAt;
-  assert.ok(elapsedMs >= 20, `timeout returned too early after ${elapsedMs}ms`);
-  assert.ok(elapsedMs < 250, `timeout exceeded its bounded margin at ${elapsedMs}ms`);
-  assert.equal(JSON.parse(readFileSync(join(lockDir, "owner.json"), "utf8")).token, "live-token");
 });

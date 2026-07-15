@@ -9,7 +9,7 @@ import { createServer } from "node:http";
 import { extname, join, normalize, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createTaskboardApi } from "../taskboard/api.mjs";
-import { findRoot } from "../taskboard/lib.mjs";
+import { findRoot } from "../taskboard/store.mjs";
 import { createAssetViewerApi, resolveAssetViewerGalleryPath } from "../assets/gallery/api.mjs";
 import { createArchitectureMapApi } from "../architecture_map/api.mjs";
 import { createCanvasApi } from "../assets/canvas/api.mjs";

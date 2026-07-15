@@ -48,7 +48,7 @@ Example:
 ```text
 Agent: deep-reasoner
 Task: Map how Taskboard validation currently works.
-Scope: ai_studio/taskboard/cli.mjs, ai_studio/taskboard/lib.mjs, ai_studio/taskboard/tests/
+Scope: ai_studio/taskboard/cli.mjs, ai_studio/taskboard/store.mjs, ai_studio/taskboard/tests/
 Return: commands, data flow, risks, and suggested split. Max 20 bullets.
 Stop: after mapping validation flow; do not edit files.
 ```

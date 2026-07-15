@@ -82,7 +82,7 @@ test("new_template copies template, registers it, and refreshes VS Code files", 
   assert.ok(tasks.tasks.some((task) => task.label === "Template: mobile-template: build packs native debug"));
   assert.ok(launch.configurations.some((config) => config.name === "Debug Template: mobile-template (native debug)"));
 
-  const taskboardProject = readFileSync(join(taskboardItems(root), "projects", "P001-mobile-template.md"), "utf8");
+  const taskboardProject = readFileSync(join(taskboardItems(root), "projects", "P001.md"), "utf8");
   assert.match(taskboardProject, /kind: template/);
   assert.match(taskboardProject, /target: templates\/mobile-template/);
 });

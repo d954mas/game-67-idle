@@ -153,17 +153,6 @@ Repeated quality failures should be visible in task logs and summarized with:
 node ai_studio/quality/profile.mjs
 ```
 
-Task-routing read cost is a separate profiler-owned concern. Reproduce its
-privacy-safe all-store measurements at the Taskboard CLI boundary with:
-
-```powershell
-node ai_studio/taskboard/cli.mjs profile --json
-```
-
-The report emits one body-free context-size/count record per Taskboard store.
-It must not be used as a substitute for `show`
-when task details are explicitly needed.
-
 If validation is too slow, unavailable, or fails for an unrelated environment
 reason, record that explicitly. Do not silently mark the task done.
 
@@ -269,17 +258,12 @@ The Studio store uses `storeId: studio`; game stores use `storeId: game:<id>`.
 Rows exposed through CLI/API include `qualifiedId` such as
 `game:fixture-game:T0001`.
 
-Creation serializes only ID allocation and the initial markdown write through
-`items/.allocation.lock`; reads and edits do not take this lock. The allocator
-updates `.counters.json` by atomic replacement and creates the target markdown
-with exclusive-create semantics. A failed create may consume an ID, but never
-rewinds or corrupts the counter.
-
-The allocator automatically reclaims a lock older than 30 seconds when its
-recorded PID is no longer alive. If a create times out on a stale lock, inspect
-`items/.allocation.lock/owner.json`; remove the lock directory manually only
-after confirming that PID is gone and no Taskboard create command is running.
-The next create scans existing documents before advancing the counter.
+Creation reserves the final `<id>.md` with exclusive-create (`wx`) semantics.
+A concurrent collision rescans and retries the next ID; there is no allocation
+lock or PID-recovery protocol. After reservation, the allocator reconciles the
+shared `.counters.json` high-water marks by atomic replacement. New files use
+the compact ID-only name; existing `T####-slug.md`, `E###-slug.md`, and
+`P###-slug.md` files remain readable and need no migration.
 
 Use bare IDs only inside one selected store. When a reference intentionally
 crosses stores, write it as a qualified ID so aggregate validation can resolve

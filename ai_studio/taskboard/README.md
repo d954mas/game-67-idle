@@ -54,10 +54,6 @@ Prefer JSON when an agent needs task state:
 - Close with structured evidence:
   `node ai_studio/taskboard/cli.mjs set T0001 --status done --quality "QTECH_001=pass" --quality-evidence "tests passed" --json`.
 - Validate store shape: `node ai_studio/taskboard/cli.mjs validate --json`.
-- Profile routing reads: `node ai_studio/taskboard/cli.mjs profile --json`.
-  The Taskboard-owned diagnostic emits one record per enabled public/private
-  store: serialized context bytes, returned/total counts, and truncation. It
-  never emits task titles or bodies.
 
 Taskboard is store-qualified:
 
@@ -86,7 +82,7 @@ mounts the API and serves the surface.
 Reusable integrations should treat Taskboard as a feature boundary:
 
 - Use `ai_studio/taskboard/cli.mjs` for agent/human commands.
-- Use `ai_studio/taskboard/lib.mjs` only for direct store operations:
+- Use `ai_studio/taskboard/store.mjs` for direct store operations:
   `findRoot`, list/find, project ensure/create, item create/update, payload
   builders, and validate.
 - Use `ai_studio/taskboard/stores.mjs` when a caller needs workspace-mounted

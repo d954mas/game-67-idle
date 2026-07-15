@@ -3,10 +3,9 @@
 // One project/epic/task is one markdown file under ai_studio/taskboard/items/.
 // This file intentionally owns the small private details too: statuses,
 // frontmatter parsing, paths, templates, mutation, and validation. Keep the
-// public facade in lib.mjs small; do not split this again without a real need.
+// public contract here; do not add a second facade without a real need.
 
 import { closeSync, existsSync, ftruncateSync, lstatSync, mkdirSync, openSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { randomUUID } from "node:crypto";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { loadQualityCatalog } from "../quality/catalog.mjs";
 import { findSealedTask, listSealedTasks, sealArchiveBatch } from "./archive.mjs";
@@ -99,7 +98,7 @@ function todayStamp() {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function priorityRank(priority) {
+function priorityRank(priority) {
   return { P0: 0, P1: 1, P2: 2, P3: 3 }[priority] ?? 9;
 }
 
@@ -108,9 +107,24 @@ export function idNumber(doc) {
   return match ? Number(match[0]) : 0;
 }
 
-export function taskRank(task) {
+function taskRank(task) {
   const statusRank = { doing: 0, todo: 1, backlog: 2, review: 3, idea: 4, done: 5 }[task.fields.status] ?? 9;
   return statusRank * 10 + priorityRank(task.fields.priority);
+}
+
+export function rankTaskEntries(entries, statuses, options = {}) {
+  const docFor = options.docFor || ((entry) => entry.doc || entry.task || entry);
+  const storeFor = options.storeFor || ((entry) => entry.store?.storeId || "");
+  return [...entries]
+    .filter((entry) => statuses.includes(docFor(entry).fields.status))
+    .sort((a, b) => {
+      const left = docFor(a);
+      const right = docFor(b);
+      return taskRank(left) - taskRank(right)
+        || idNumber(right) - idNumber(left)
+        || storeFor(a).localeCompare(storeFor(b))
+        || String(left.fields.id).localeCompare(String(right.fields.id));
+    });
 }
 
 export function countsByStatus(docs, statuses) {
@@ -203,15 +217,6 @@ export function serializeDoc(fields, body) {
   out.push("---", "");
   out.push(body.replace(/\s+$/, ""), "");
   return out.join("\n");
-}
-
-export function slugify(title) {
-  const slug = String(title)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-  return slug || "item";
 }
 
 function listDocs(dir, kind, options = {}) {
@@ -424,10 +429,6 @@ function countersPath(root, options = {}) {
   return join(itemDir(root, options), ".counters.json");
 }
 
-function allocationLockPath(root, options = {}) {
-  return join(itemDir(root, options), ".allocation.lock");
-}
-
 function readCounters(root, options = {}) {
   const path = countersPath(root, options);
   if (!existsSync(path)) return {};
@@ -437,140 +438,6 @@ function readCounters(root, options = {}) {
   } catch {
     return {};
   }
-}
-
-function sleepSync(milliseconds) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
-}
-
-function reclaimStaleAllocationLock(lockPath, staleMs, attempt) {
-  let ageMs;
-  try {
-    ageMs = Date.now() - statSync(lockPath).mtimeMs;
-  } catch (error) {
-    if (error.code === "ENOENT") return true;
-    throw error;
-  }
-  if (ageMs <= staleMs) return false;
-  try {
-    const owner = JSON.parse(readFileSync(join(lockPath, "owner.json"), "utf8"));
-    if (Number.isInteger(owner.pid) && owner.pid > 0) {
-      try {
-        process.kill(owner.pid, 0);
-        return false;
-      } catch (error) {
-        if (error.code === "EPERM") return false;
-      }
-    }
-  } catch {
-    // Missing or malformed metadata cannot make an expired lock permanent.
-  }
-  const stalePath = `${lockPath}.stale-${process.pid}-${attempt}-${randomUUID()}`;
-  try {
-    renameSync(lockPath, stalePath);
-  } catch (error) {
-    if (error.code === "ENOENT") return true;
-    if (error.code === "EEXIST" || error.code === "EPERM" || error.code === "ENOTEMPTY") return false;
-    throw error;
-  }
-  rmSync(stalePath, { recursive: true, force: true });
-  return true;
-}
-
-function readAllocationOwner(lockPath) {
-  try {
-    return JSON.parse(readFileSync(join(lockPath, "owner.json"), "utf8"));
-  } catch {
-    return null;
-  }
-}
-
-function releaseAllocationLock(lockPath, token) {
-  const owner = readAllocationOwner(lockPath);
-  if (!owner || owner.token !== token) return;
-  const releasePath = `${lockPath}.release-${process.pid}-${token}`;
-  try {
-    renameSync(lockPath, releasePath);
-  } catch (error) {
-    if (error.code === "ENOENT") return;
-    throw error;
-  }
-  const displacedOwner = readAllocationOwner(releasePath);
-  if (!displacedOwner || displacedOwner.token !== token) {
-    if (!existsSync(releasePath) || existsSync(lockPath)) return;
-    try {
-      renameSync(releasePath, lockPath);
-    } catch (error) {
-      if (!["ENOENT", "EEXIST", "EPERM", "ENOTEMPTY"].includes(error.code)) throw error;
-    }
-    return;
-  }
-  try {
-    rmSync(releasePath, { recursive: true, force: true, maxRetries: 6, retryDelay: 20 });
-  } catch {
-    // Allocation already committed and the live lock name is free. A later
-    // acquisition reaps this token-unique quarantine without risking duplicates.
-  }
-}
-
-function reapReleasedAllocationLocks(items, lockPath, staleMs) {
-  const prefix = `${basename(lockPath)}.release-`;
-  for (const name of readdirSync(items)) {
-    if (!name.startsWith(prefix)) continue;
-    const path = join(items, name);
-    try {
-      if (Date.now() - statSync(path).mtimeMs <= staleMs) continue;
-    } catch {
-      continue;
-    }
-    try {
-      rmSync(path, { recursive: true, force: true, maxRetries: 6, retryDelay: 20 });
-    } catch {
-      // Best-effort hygiene only; a quarantined path is never the live lock.
-    }
-  }
-}
-
-function withAllocationLock(root, options, allocate) {
-  const items = itemDir(root, options);
-  const lockPath = allocationLockPath(root, options);
-  const retryMs = Math.max(1, Number(options.allocationLockRetryMs) || 10);
-  const timeoutMs = Math.max(retryMs, Number(options.allocationLockTimeoutMs) || 5000);
-  const staleMs = Math.max(retryMs, Number(options.allocationLockStaleMs) || 30000);
-  const deadline = Date.now() + timeoutMs;
-  mkdirSync(items, { recursive: true });
-  reapReleasedAllocationLocks(items, lockPath, staleMs);
-
-  for (let attempt = 0; attempt === 0 || Date.now() < deadline; attempt += 1) {
-    const token = randomUUID();
-    const candidatePath = `${lockPath}.candidate-${process.pid}-${token}`;
-    let acquired = false;
-    try {
-      mkdirSync(candidatePath);
-      writeFileSync(join(candidatePath, "owner.json"), JSON.stringify({
-        pid: process.pid,
-        token,
-        acquiredAt: new Date().toISOString(),
-      }) + "\n", { flag: "wx" });
-      renameSync(candidatePath, lockPath);
-      acquired = true;
-    } catch (error) {
-      if (error.code !== "EEXIST" && error.code !== "EPERM" && error.code !== "ENOTEMPTY") throw error;
-    } finally {
-      if (!acquired) rmSync(candidatePath, { recursive: true, force: true });
-    }
-    if (acquired) {
-      try {
-        return allocate();
-      } finally {
-        releaseAllocationLock(lockPath, token);
-      }
-    }
-    if (reclaimStaleAllocationLock(lockPath, staleMs, attempt)) continue;
-    const remainingMs = deadline - Date.now();
-    if (remainingMs > 0) sleepSync(Math.min(retryMs, remainingMs));
-  }
-  throw new Error(`Timed out waiting for Taskboard allocation lock ${lockPath}; recover it only if older than ${staleMs}ms`);
 }
 
 function writeCountersAtomic(root, counters, options = {}) {
@@ -584,10 +451,11 @@ function writeCountersAtomic(root, counters, options = {}) {
   }
 }
 
-// Ids must stay monotonic even after archive pruning: scanning files alone
-// rewinds the sequence when history is deleted, so the high-water mark persists
-// in items/.counters.json and the scan only ever raises it.
-function commitNextId(root, docs, prefix, pad, options = {}) {
+function sleepSync(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function nextId(root, docs, prefix, pad, options = {}) {
   const counters = readCounters(root, options);
   let max = Number(counters[prefix]) || 0;
   for (const doc of docs) {
@@ -596,29 +464,73 @@ function commitNextId(root, docs, prefix, pad, options = {}) {
       max = Math.max(max, Number(match[1]));
     }
   }
-  const next = max + 1;
-  counters[prefix] = next;
-  writeCountersAtomic(root, counters, options);
-  return prefix + String(next).padStart(pad, "0");
+  return prefix + String(max + 1).padStart(pad, "0");
+}
+
+// Preserve archive high-water marks while reconciling every live reservation.
+// The last concurrent writer sees all successfully created <id>.md files, so it
+// cannot drop a counter key written by another project/epic/task creator.
+function refreshCounterHighWater(root, options = {}) {
+  const maxAttempts = Math.max(1, Number(options.counterWriteMaxAttempts) || 100);
+  const retryMs = Math.max(1, Number(options.counterWriteRetryMs) || 5);
+  const groupsForStore = () => ({
+    P: listProjects(root, options),
+    E: listEpics(root, options),
+    T: [...listTasks(root, options), ...listPendingArchiveTasks(root, options)],
+  });
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const counters = readCounters(root, options);
+    const groups = groupsForStore();
+    for (const [prefix, docs] of Object.entries(groups)) {
+      let max = Number(counters[prefix]) || 0;
+      for (const doc of docs) {
+        const match = String(doc.fields.id || doc.name).match(new RegExp(`^${prefix}(\\d+)`));
+        if (match) max = Math.max(max, Number(match[1]));
+      }
+      if (max > 0) counters[prefix] = max;
+    }
+    if (typeof options._testBeforeCounterWrite === "function") {
+      options._testBeforeCounterWrite({ attempt, counters: { ...counters } });
+    }
+    try {
+      writeCountersAtomic(root, counters, options);
+    } catch (error) {
+      if (!["EACCES", "EBUSY", "EPERM"].includes(error.code) || attempt === maxAttempts - 1) throw error;
+      sleepSync(retryMs);
+      continue;
+    }
+    const written = readCounters(root, options);
+    const complete = Object.entries(groupsForStore()).every(([prefix, docs]) => docs.every((doc) => {
+      const match = String(doc.fields.id || doc.name).match(new RegExp(`^${prefix}(\\d+)`));
+      return !match || Number(written[prefix]) >= Number(match[1]);
+    }));
+    if (complete) return;
+  }
+  throw new Error("Could not reconcile Taskboard counter high-water marks");
 }
 
 function createAllocatedDoc(root, options, config) {
   mkdirSync(config.dir, { recursive: true });
-  return withAllocationLock(root, options, () => {
-    const maxAttempts = Math.max(1, Number(options.allocationMaxAttempts) || 100);
-    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-      const id = commitNextId(root, config.listDocs(), config.prefix, config.pad, options);
-      const fields = config.makeFields(id);
-      const file = join(config.dir, `${id}-${slugify(fields.title)}.md`);
-      try {
-        writeFileSync(file, serializeDoc(fields, config.body), { flag: "wx" });
-        return { kind: config.kind, file, fields, body: config.body };
-      } catch (error) {
-        if (error.code !== "EEXIST") throw error;
-      }
+  const maxAttempts = Math.max(1, Number(options.allocationMaxAttempts) || 100);
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    const id = nextId(root, config.listDocs(), config.prefix, config.pad, options);
+    const fields = config.makeFields(id);
+    const file = join(config.dir, `${id}.md`);
+    try {
+      writeFileSync(file, serializeDoc(fields, config.body), { flag: "wx" });
+    } catch (error) {
+      if (error.code === "EEXIST") continue;
+      throw error;
     }
-    throw new Error(`Could not allocate a unique ${config.kind} id after ${maxAttempts} attempts`);
-  });
+    try {
+      refreshCounterHighWater(root, options);
+    } catch (error) {
+      rmSync(file, { force: true });
+      throw error;
+    }
+    return { kind: config.kind, file, fields, body: config.body };
+  }
+  throw new Error(`Could not allocate a unique ${config.kind} id after ${maxAttempts} attempts`);
 }
 
 export function createProject(root, input = {}, options = {}) {
@@ -1175,9 +1087,7 @@ export function agentTaskRow(root, doc, options = {}) {
 function rankedTaskRows(root, statuses, limit, options = {}) {
   const epics = epicsById(root, options);
   const tasks = options.tasks || listTasks(root, options);
-  return tasks
-    .filter((task) => statuses.includes(task.fields.status))
-    .sort((a, b) => taskRank(a) - taskRank(b) || idNumber(b) - idNumber(a) || String(a.fields.id).localeCompare(String(b.fields.id)))
+  return rankTaskEntries(tasks, statuses)
     .slice(0, limit)
     .map((task) => agentTaskRow(root, task, { ...options, epicsById: epics }));
 }
