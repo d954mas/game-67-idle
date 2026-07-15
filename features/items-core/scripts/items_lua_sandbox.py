@@ -31,8 +31,9 @@ return function(raise_internal)
   local raw_error = error
   local raw_debug, raw_math = debug, math
   local raw_pairs, raw_type = pairs, type
-  local raw_string_sub = string.sub
+  local raw_string_match, raw_string_sub = string.match, string.sub
   local declarations = {}
+  local schema_extensions = {}
   local frozen_targets = {}
   local source_metadata = {}
   local freeze
@@ -108,6 +109,24 @@ return function(raise_internal)
     copied.__studio_source = source_at(3)
     copied.__studio_source.kind = "definition"
     declarations[#declarations + 1] = copied
+  end
+  function items.extend_schema(extension)
+    if raw_type(extension) ~= "table" then
+      return fail("schema.contract", "items.extend_schema requires a table")
+    end
+    local copied = copy(extension)
+    copied.__studio_source = source_at(3)
+    schema_extensions[#schema_extensions + 1] = copied
+  end
+
+  local field = {}
+  function field.i64(options)
+    if raw_type(options) ~= "table" then
+      return fail("schema.field_contract", "field.i64 requires a table")
+    end
+    local descriptor = copy(options)
+    descriptor.__studio_field_type = "i64"
+    return tagged("field", descriptor, source_at(3))
   end
 
   local levels = {}
@@ -206,6 +225,142 @@ return function(raise_internal)
   end
 
   local function finalize()
+    local function fail_at(code, message, value, fallback)
+      local source = source_metadata[value] or fallback
+      return raise_internal(code, message, source.file, source.line)
+    end
+
+    local fields, registered_field_ids, registered_members = {}, {}, {}
+    local registered_kinds, candidates = {}, {}
+    for _, extension in ipairs(schema_extensions) do
+      local extension_source = extension.__studio_source
+      for section, members in raw_pairs(extension) do
+        if section ~= "__studio_source" then
+          if raw_type(section) ~= "string" or raw_type(members) ~= "table" then
+            return fail_at(
+              "schema.contract", "schema sections must contain field members",
+              members, extension_source
+            )
+          end
+          for member, descriptor in raw_pairs(members) do
+            candidates[#candidates + 1] = {
+              descriptor = descriptor,
+              fallback = extension_source,
+              member = member,
+              section = section,
+            }
+          end
+        end
+      end
+    end
+    local function candidate_text(value)
+      if raw_type(value) == "string" then return value end
+      return ""
+    end
+    table.sort(candidates, function(a, b)
+      local a_id = raw_type(a.descriptor) == "table" and candidate_text(a.descriptor.id) or ""
+      local b_id = raw_type(b.descriptor) == "table" and candidate_text(b.descriptor.id) or ""
+      local a_key = candidate_text(a.section) .. "\0" .. candidate_text(a.member) .. "\0" .. a_id
+      local b_key = candidate_text(b.section) .. "\0" .. candidate_text(b.member) .. "\0" .. b_id
+      if a_key ~= b_key then return a_key < b_key end
+      local a_source = raw_type(a.descriptor) == "table" and source_metadata[a.descriptor] or a.fallback
+      local b_source = raw_type(b.descriptor) == "table" and source_metadata[b.descriptor] or b.fallback
+      if a_source.file ~= b_source.file then return a_source.file < b_source.file end
+      return a_source.line < b_source.line
+    end)
+    for _, candidate in ipairs(candidates) do
+      local descriptor = candidate.descriptor
+      local descriptor_source = raw_type(descriptor) == "table"
+        and source_metadata[descriptor] or nil
+      if raw_type(candidate.member) ~= "string" or raw_type(descriptor) ~= "table"
+          or descriptor.__studio_kind ~= "field" or descriptor_source == nil then
+        return fail_at(
+          "schema.invalid_handle", "schema fields must come from studio.field",
+          descriptor, candidate.fallback
+        )
+      end
+      local field_id = descriptor.id
+      if raw_type(field_id) ~= "string"
+          or raw_string_match(field_id, "^[a-z][a-z0-9_]*%.[a-z][a-z0-9_.]*$") == nil
+          or raw_string_match(field_id, "%.%.") ~= nil
+          or raw_string_match(field_id, "%.$") ~= nil
+          or raw_string_match(field_id, "%.[^a-z]") ~= nil then
+        return fail_at(
+          "schema.field_id", "field id must contain valid lowercase segments",
+          descriptor, candidate.fallback
+        )
+      end
+      if raw_string_sub(field_id, 1, 6) == "items." then
+        return fail_at(
+          "schema.sealed_field_id", "items.* field ids are sealed",
+          descriptor, candidate.fallback
+        )
+      end
+      if registered_field_ids[field_id] ~= nil then
+        return fail_at(
+          "schema.duplicate_field_id", "duplicate field id: " .. field_id,
+          descriptor, candidate.fallback
+        )
+      end
+      local member_key = candidate.section .. "." .. candidate.member
+      if registered_members[member_key] ~= nil then
+        return fail_at(
+          "schema.duplicate_member", "duplicate schema member: " .. member_key,
+          descriptor, candidate.fallback
+        )
+      end
+      for _, reserved in ipairs({ "member", "section", "type" }) do
+        if descriptor[reserved] ~= nil then
+          return fail_at(
+            "schema.reserved_key", "field descriptor cannot set reserved key: " .. reserved,
+            descriptor, candidate.fallback
+          )
+        end
+      end
+      registered_field_ids[field_id], registered_members[member_key] = true, true
+      local normalized = {
+        id = field_id,
+        member = candidate.member,
+        section = candidate.section,
+        type = descriptor.__studio_field_type,
+      }
+      for key, value in raw_pairs(descriptor) do
+        if key ~= "__studio_kind" and key ~= "__studio_field_type" and key ~= "id" then
+          normalized[key] = copy(value)
+        end
+      end
+      local required_for = normalized.required_for
+      if required_for ~= nil then
+        if raw_type(required_for) ~= "table" then
+          return fail_at(
+            "schema.required_for", "required_for must be a contiguous kind list",
+            descriptor, candidate.fallback
+          )
+        end
+        local count, max_index = 0, 0
+        for index, kind in raw_pairs(required_for) do
+          if raw_math.type(index) ~= "integer" or index < 1
+              or raw_type(kind) ~= "string" or kind == "" then
+            return fail_at(
+              "schema.required_for", "required_for must be a contiguous kind list",
+              descriptor, candidate.fallback
+            )
+          end
+          count = count + 1
+          if index > max_index then max_index = index end
+          registered_kinds[kind] = true
+        end
+        if count ~= max_index then
+          return fail_at(
+            "schema.required_for", "required_for must be a contiguous kind list",
+            descriptor, candidate.fallback
+          )
+        end
+      end
+      fields[#fields + 1] = normalized
+    end
+    table.sort(fields, function(a, b) return a.id < b.id end)
+
     local registered = {}
     for _, definition in ipairs(declarations) do
       local id = definition.id
@@ -218,6 +373,9 @@ return function(raise_internal)
           )
         end
         registered[id] = definition
+      end
+      if raw_type(definition.kind) == "string" and definition.kind ~= "" then
+        registered_kinds[definition.kind] = true
       end
     end
     table.sort(declarations, function(a, b) return a.id < b.id end)
@@ -250,11 +408,6 @@ return function(raise_internal)
 
     for _, definition in ipairs(declarations) do
       resolve_refs(definition, nil, definition.__studio_source)
-    end
-
-    local function fail_at(code, message, value, fallback)
-      local source = source_metadata[value] or fallback
-      return raise_internal(code, message, source.file, source.line)
     end
 
     local function normalize_cost(value, fallback)
@@ -379,7 +532,10 @@ return function(raise_internal)
         definition.acquire.cost = normalize_cost(definition.acquire.cost, definition.__studio_source)
       end
     end
-    return declarations
+    local kinds = {}
+    for kind, _ in raw_pairs(registered_kinds) do kinds[#kinds + 1] = kind end
+    table.sort(kinds)
+    return { fields = fields, items = declarations, kinds = kinds }
   end
 
   local function lock_string_surface()
@@ -391,7 +547,7 @@ return function(raise_internal)
     })
   end
 
-  return items, levels, math_view, finalize, freeze, setup_limits,
+  return items, levels, field, math_view, finalize, freeze, setup_limits,
     safe_assert, safe_error, lock_string_surface
 end
 '''
@@ -513,8 +669,8 @@ def _normalize_lua_failure(
     return _failure("lua.execution", message.splitlines()[0], file=file, line=line, path=path)
 
 
-def _output_rows(items: list[dict[str, Any]]) -> int:
-    rows = len(items)
+def _output_rows(items: list[dict[str, Any]], fields: list[dict[str, Any]]) -> int:
+    rows = len(items) + len(fields)
     for item in items:
         levels = item.get("levels")
         if isinstance(levels, dict) and isinstance(levels.get("rows"), list):
@@ -597,7 +753,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         attribute_filter=lambda _obj, _name, _setting: (_ for _ in ()).throw(AttributeError("access denied")),
     )
     (
-        items, levels, studio_math, finalize, freeze, setup_limits,
+        items, levels, field, studio_math, finalize, freeze, setup_limits,
         safe_assert, safe_error, lock_string_surface,
     ) = runtime.execute(
         PRELUDE, name="@studio/sandbox.lua", mode="t",
@@ -605,6 +761,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
     builtins = {
         "studio.items": freeze(items),
         "studio.levels": freeze(levels),
+        "studio.field": freeze(field),
         "studio.math": studio_math,
     }
     setup_limits(
@@ -743,13 +900,22 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
     for name in entries:
         require_module(name)
     try:
-        normalized_items = _convert(lupa.lua_type, finalize())
+        normalized = _convert(lupa.lua_type, finalize())
     except Exception as error:
         raise _normalize_lua_failure(
             error, fallback, "$.items", {rel for _path, rel in modules.values()},
         ) from error
+    if not isinstance(normalized, dict):
+        raise _failure("output.shape", "evaluator finalization must return an object")
+    normalized_items = normalized.get("items")
+    fields = normalized.get("fields")
+    kinds = normalized.get("kinds")
     if not isinstance(normalized_items, list):
         normalized_items = [] if normalized_items == {} else normalized_items
+    if not isinstance(fields, list):
+        fields = [] if fields == {} else fields
+    if not isinstance(kinds, list):
+        kinds = [] if kinds == {} else kinds
     sources: dict[str, dict[str, Any]] = {}
     for item in normalized_items if isinstance(normalized_items, list) else []:
         if isinstance(item, dict):
@@ -758,7 +924,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
             if isinstance(item_id, str) and isinstance(source, dict):
                 sources[item_id] = source
     max_rows = int(request.get("maxOutputRows", DEFAULT_MAX_OUTPUT_ROWS))
-    if _output_rows(normalized_items) > max_rows:
+    if _output_rows(normalized_items, fields) > max_rows:
         raise _failure(
             "output.row_limit", f"output exceeds {max_rows} rows",
             file=fallback, path="$.items",
@@ -771,7 +937,9 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
             "implementation": runtime.lua_implementation,
             "version": ".".join(map(str, runtime.lua_version)),
         },
+        "fields": fields,
         "items": normalized_items,
+        "kinds": kinds,
         "sources": sources,
     }
     max_bytes = int(request.get("maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES))

@@ -121,20 +121,24 @@ Every path is passed explicitly by the caller. `validate` is a strict superset
 `items_lua_sandbox.py evaluate` is the build-time boundary for Lua Items and
 Balance declarations. Every call starts a new Python worker containing a
 memory-bounded `lupa==2.8` `lupa.lua54` runtime. Author code receives only
-deterministic primitives, `require`, `studio.items`, `studio.levels`, and the
-checked integer `studio.math` surface. Filesystem, process/environment, clock,
+deterministic primitives, `require`, `studio.items`, `studio.levels`,
+`studio.field`, and the checked integer `studio.math` surface. Filesystem,
+process/environment, clock,
 random, network, dynamic loading, bytecode, debug/FFI/JIT, unordered iteration,
 mutable globals, and formula upvalues are absent.
 
 The manifest allowlists module names and files; entries are sorted before
 evaluation, module exports are read-only, and `items.define` deep-copies its
-input. The evaluator registers every `def_id` before resolving immutable
-`items.ref` handles, so forward refs are module-order independent; missing refs
-and duplicate IDs fail at their Lua source. Source-byte, instruction, recursion,
+input. `items.extend_schema` deep-copies authentic `field.i64` handles; finalize
+registers and sorts field IDs, members, kinds, and every `def_id` before it
+resolves immutable `items.ref` handles. Schema and item module order therefore
+does not affect output; sealed/duplicate fields, missing refs, and duplicate IDs
+fail at their Lua source. Source-byte, instruction, recursion,
 memory, wall-time, output-row, and output-byte budgets fail as structured
 `items.lua.error.v1` diagnostics.
-Successful output is canonical `items.lua.evaluation.v1` JSON with the backend
-fingerprint and the honest Lua file/line of each `items.define` call.
+Successful output is canonical `items.lua.evaluation.v1` JSON with registered
+`fields`/`kinds`, the backend fingerprint, and the honest Lua file/line of each
+`items.define` call. Typed field-value validation remains the Snapshot boundary.
 Level tables require contiguous keys, levelled items use unique storage, and
 explicit level 2+ rows require a paid or explicit-free transition. Composite
 costs accept only stackable resources and merge duplicate refs with checked,

@@ -161,6 +161,116 @@ items.define({ id="game.same", kind="material", stack=9 })''',
         }, ["game.items"])
         self.assert_error(duplicate, "definition.duplicate_id", "game/items.lua", 3)
 
+    def test_schema_and_kinds_register_before_definitions_independent_of_module_order(self):
+        modules = {
+            "game.a_items": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.sword", kind="weapon", stack=1,
+  levels=levels.single({ attack=15 }),
+})''',
+            "game.z_schema": '''local field = require("studio.field")
+local items = require("studio.items")
+local options = {
+  id="game.weapon.level.attack", required_for={"weapon"}, min=0, max=100,
+  unit="damage", rounding="exact", label_key="item.attack",
+}
+local extension = { level_row={ attack=field.i64(options) } }
+items.extend_schema(extension)
+options.id = "game.changed"
+extension.level_row.attack = nil''',
+        }
+        first = self.evaluate(modules, ["game.a_items", "game.z_schema"])
+        second = self.evaluate(
+            dict(reversed(list(modules.items()))),
+            ["game.z_schema", "game.a_items"],
+        )
+
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        self.assertEqual(first.stdout, second.stdout)
+        payload = json.loads(first.stdout)
+        self.assertEqual(payload["kinds"], ["weapon"])
+        self.assertEqual(payload["fields"], [{
+            "id": "game.weapon.level.attack",
+            "label_key": "item.attack",
+            "max": 100,
+            "member": "attack",
+            "min": 0,
+            "required_for": ["weapon"],
+            "rounding": "exact",
+            "section": "level_row",
+            "type": "i64",
+            "unit": "damage",
+        }])
+
+    def test_schema_handles_are_authentic_and_field_id_conflicts_are_source_local(self):
+        forged = self.evaluate({"game.schema": '''local items = require("studio.items")
+items.extend_schema({ level_row={ attack={
+  __studio_kind="field", type="i64", id="game.weapon.level.attack",
+} } })'''
+        }, ["game.schema"])
+        self.assert_error(forged, "schema.invalid_handle", "game/schema.lua", 2)
+
+        duplicate = self.evaluate({"game.schema": '''local field = require("studio.field")
+local items = require("studio.items")
+items.extend_schema({ level_row={ attack=field.i64({ id="game.weapon.level.attack" }) } })
+items.extend_schema({ level_row={ damage=field.i64({ id="game.weapon.level.attack" }) } })'''
+        }, ["game.schema"])
+        self.assert_error(duplicate, "schema.duplicate_field_id", "game/schema.lua", 4)
+
+        duplicate_member = self.evaluate({"game.schema": '''local field = require("studio.field")
+local items = require("studio.items")
+items.extend_schema({ level_row={ attack=field.i64({ id="game.weapon.level.attack" }) } })
+items.extend_schema({ level_row={ attack=field.i64({ id="game.weapon.level.damage" }) } })'''
+        }, ["game.schema"])
+        self.assert_error(duplicate_member, "schema.duplicate_member", "game/schema.lua", 4)
+
+        sealed = self.evaluate({"game.schema": '''local field = require("studio.field")
+local items = require("studio.items")
+items.extend_schema({ level_row={ attack=field.i64({ id="items.level.attack" }) } })'''
+        }, ["game.schema"])
+        self.assert_error(sealed, "schema.sealed_field_id", "game/schema.lua", 3)
+
+        reserved = self.evaluate({"game.schema": '''local field = require("studio.field")
+local items = require("studio.items")
+items.extend_schema({ level_row={ attack=field.i64({
+  id="game.weapon.level.attack", type="string",
+}) } })'''
+        }, ["game.schema"])
+        self.assert_error(reserved, "schema.reserved_key", "game/schema.lua", 3)
+
+        for invalid_id in (
+            "game.weapon..attack",
+            "game.weapon.1attack",
+            "game.weapon.",
+        ):
+            with self.subTest(invalid_id=invalid_id):
+                invalid = self.evaluate({"game.schema": f'''local field = require("studio.field")
+local items = require("studio.items")
+items.extend_schema({{ level_row={{ attack=field.i64({{ id="{invalid_id}" }}) }} }})'''
+                }, ["game.schema"])
+                self.assert_error(invalid, "schema.field_id", "game/schema.lua", 3)
+
+    def test_schema_conflicts_and_output_budget_are_deterministic(self):
+        conflict = '''local field = require("studio.field")
+local items = require("studio.items")
+items.extend_schema({ level_row={
+  damage=field.i64({ id="game.weapon.level.same" }),
+  attack=field.i64({ id="game.weapon.level.same" }),
+} })'''
+        results = [self.evaluate({"game.schema": conflict}, ["game.schema"]) for _ in range(3)]
+        for result in results:
+            self.assert_error(result, "schema.duplicate_field_id", "game/schema.lua", 4)
+
+        budget = self.evaluate({"game.schema": '''local field = require("studio.field")
+local items = require("studio.items")
+items.extend_schema({ level_row={
+  attack=field.i64({ id="game.weapon.level.attack" }),
+  defense=field.i64({ id="game.weapon.level.defense" }),
+} })'''
+        }, ["game.schema"], "--max-output-rows", "1")
+        self.assert_error(budget, "output.row_limit", "game/schema.lua", 1)
+
     def test_cycle_and_unapproved_module_errors_are_stable(self):
         cycle = self.evaluate({
             "game.a": 'require("game.b")',

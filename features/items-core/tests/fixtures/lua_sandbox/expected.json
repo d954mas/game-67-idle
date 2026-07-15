@@ -5,6 +5,7 @@
     "package": "lupa@2.8",
     "version": "5.4"
   },
+  "fields": [],
   "items": [
     {
       "id": "game.gold",
@@ -45,6 +46,7 @@
       "stack": 1
     }
   ],
+  "kinds": ["currency", "weapon"],
   "schema": "items.lua.evaluation.v1",
   "sources": {
     "game.gold": { "column": 1, "file": "game/items/currencies.lua", "kind": "definition", "line": 3 },
