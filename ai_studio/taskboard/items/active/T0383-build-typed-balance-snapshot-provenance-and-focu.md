@@ -1,13 +1,13 @@
 ---
 id: T0383
 title: Build typed Items Snapshot provenance and focused dependency queries
-status: backlog
+status: doing
 project: P001
 epic: E016
 priority: P0
 tags: [items, balance, snapshot, dependencies]
 created: 2026-07-10
-updated: 2026-07-10
+updated: 2026-07-15
 ---
 
 ## What
@@ -48,3 +48,7 @@ for C export, Viewer, requirements, and agents.
 
 - 2026-07-10: Re-scoped from joined JSON/Balance projection to the single-source
   Items Snapshot and honest formula/source capabilities.
+- 2026-07-15: Slice 1: added deterministic items.snapshot.v1 build plus bounded item/field/level query with derived inputs and dependents; remaining provenance, typed schema, diff, chart, requirements, and cross-platform work stays open.
+- 2026-07-15: Quality: QTECH_001=pass; evidence: items_snapshot_test 5/5, items_lua_sandbox_test 9/9, feature contracts pass, evaluator fixture query returned levels 2-3 and game.gold input.
+- 2026-07-15: Slice 1 review: ACCEPT after structured malformed-snapshot and CLI-argument diagnostics were added; items_snapshot_test now 6/6.
+- 2026-07-15: Quality: QTECH_001=pass; evidence: reviewed items_snapshot_test 6/6, sandbox 9/9, feature contracts 8/8, Taskboard validation pass, evaluator fixture query levels 2-3/game.gold input.

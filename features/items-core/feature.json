@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "items-core",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "title": "Items Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -27,7 +27,10 @@
     "api_proof": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof.py --snapshot features/items-core/tests/fixtures/items_api_weapon_proof.json --out-dir <build-dir>",
     "api_proof_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/generate_items_api_proof_test.py",
     "lua_evaluate": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox.py evaluate --root <game-root> --manifest <game-root>/items.lua.json",
-    "lua_sandbox_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox_test.py"
+    "lua_sandbox_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox_test.py",
+    "snapshot_build": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py build --evaluation <evaluation.json> --out <snapshot.json>",
+    "snapshot_query": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py query --snapshot <snapshot.json> --item <item-id>",
+    "snapshot_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot_test.py"
   },
   "manuals": {
     "install": "features/items-core/INSTALL.md",
@@ -41,7 +44,8 @@
     "items_game.internal.gen.h",
     "items_game.gen.c",
     "items_game.luau",
-    "items.lua.evaluation.v1 JSON"
+    "items.lua.evaluation.v1 JSON",
+    "items.snapshot.v1 JSON"
   ],
   "registers": {
     "note": "Describes the EXISTING wiring in templates/template/CMakeLists.txt (target_sources/ctest) -- items-core is an in-place module (precedent features/game-state), not an install-script target. This section documents the consuming game's provisioning, it does not perform it.",

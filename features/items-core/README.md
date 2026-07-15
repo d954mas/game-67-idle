@@ -35,6 +35,8 @@ features/items-core/
     items_ops_test.py              self-contained unittest for items_ops.py's rules
     items_lua_sandbox.py           isolated deterministic Lua declaration evaluator
     items_lua_sandbox_test.py      sandbox, limits, diagnostics, and fixture proof
+    items_snapshot.py              evaluation JSON -> deterministic Snapshot + focused query
+    items_snapshot_test.py         Snapshot hash, dependency, bounds, and CLI proof
   feature.json
   README.md   (this file)
   INSTALL.md
@@ -130,6 +132,20 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox_test.py
 ```
 
+### Deterministic Snapshot and focused query
+
+`items_snapshot.py build` turns only canonical evaluator JSON into one
+`items.snapshot.v1` document. It sorts item identities, hashes normalized
+content, retains the evaluator fingerprint, and derives inputs/dependents from
+actual typed references. `query` returns one item with an optional field and
+level range; more than 1000 level rows requires an explicit smaller range.
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py build --evaluation <evaluation.json> --out <snapshot.json>
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py query --snapshot <snapshot.json> --item <item-id> --inputs --dependents
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot_test.py
+```
+
 ### T0364 typed API proof
 
 `generate_items_api_proof.py` is a bounded reference exporter, not the Lua
@@ -205,7 +221,7 @@ and read-only authoring tools.
 
 ## Validation
 
-Run the `test`, `api_proof_test`, and `lua_sandbox_test` commands from
+Run the `test`, `api_proof_test`, `lua_sandbox_test`, and `snapshot_test` commands from
 `feature.json`, then `node features/validate_contracts.mjs`.
 
 ## Compatibility
