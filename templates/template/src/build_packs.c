@@ -176,36 +176,36 @@ int main(int argc, char *argv[]) {
     atlas_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
     atlas_opts.wrap_v = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
     atlas_opts.gen_mipmaps = false;
-    nt_builder_begin_atlas(ctx, "ui", &atlas_opts);
+    NtAtlasBuild *ui_atlas = nt_atlas_begin(ctx, "ui", &atlas_opts);
 
     // 1x1 white pixel: UI rect fill + nt_ui's required white region.
     static const uint8_t white_pixel[4] = {255, 255, 255, 255};
     nt_atlas_sprite_opts_t white_opts = nt_atlas_sprite_opts_defaults();
     white_opts.name = "_white";
-    nt_builder_atlas_add_raw(ctx, white_pixel, 1, 1, &white_opts);
+    nt_atlas_add_raw(ui_atlas, white_pixel, 1, 1, &white_opts);
 
     nt_atlas_sprite_opts_t panel_opts = nt_atlas_sprite_opts_defaults();
     panel_opts.name = "panel";
     panel_opts.slice9_left = panel_opts.slice9_right = panel_opts.slice9_top = panel_opts.slice9_bottom = PANEL_BORDER;
-    nt_builder_atlas_add(ctx, "assets/ui/panel.png", &panel_opts);
+    nt_atlas_add(ui_atlas, "assets/ui/panel.png", &panel_opts);
 
     nt_atlas_sprite_opts_t button_opts = nt_atlas_sprite_opts_defaults();
     button_opts.name = "button";
     button_opts.slice9_left = button_opts.slice9_right = button_opts.slice9_top = button_opts.slice9_bottom = BUTTON_BORDER;
-    nt_builder_atlas_add(ctx, "assets/ui/button.png", &button_opts);
+    nt_atlas_add(ui_atlas, "assets/ui/button.png", &button_opts);
 
     nt_atlas_sprite_opts_t bar_opts = nt_atlas_sprite_opts_defaults();
     bar_opts.slice9_left = bar_opts.slice9_right = bar_opts.slice9_top = bar_opts.slice9_bottom = BAR_BORDER;
     bar_opts.name = "slider_track";
-    nt_builder_atlas_add(ctx, "assets/ui/slider_track.png", &bar_opts);
+    nt_atlas_add(ui_atlas, "assets/ui/slider_track.png", &bar_opts);
     bar_opts.name = "slider_fill";
-    nt_builder_atlas_add(ctx, "assets/ui/slider_fill.png", &bar_opts);
+    nt_atlas_add(ui_atlas, "assets/ui/slider_fill.png", &bar_opts);
 
     nt_atlas_sprite_opts_t thumb_opts = nt_atlas_sprite_opts_defaults();
     thumb_opts.name = "slider_thumb"; // circle: no slice9
-    nt_builder_atlas_add(ctx, "assets/ui/slider_thumb.png", &thumb_opts);
+    nt_atlas_add(ui_atlas, "assets/ui/slider_thumb.png", &thumb_opts);
 
-    nt_builder_end_atlas(ctx);
+    (void)nt_atlas_commit(ui_atlas);
 
     // Item icons: SECOND atlas (ui is first). Explicit region names = the
     // authored "icons/<name>" contract half. debug_png=true emits the page PNG
@@ -228,16 +228,16 @@ int main(int argc, char *argv[]) {
     icons_opts.wrap_u = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
     icons_opts.wrap_v = NT_TEXTURE_DEFAULT_WRAP_CLAMP_TO_EDGE;
     icons_opts.gen_mipmaps = false;
-    nt_builder_begin_atlas(ctx, "icons", &icons_opts);
+    NtAtlasBuild *icons_atlas = nt_atlas_begin(ctx, "icons", &icons_opts);
     static const char *icon_names[] = {"gold","xp","energy","potion","sword","wood"};
     for (int i = 0; i < 6; ++i) {
         nt_atlas_sprite_opts_t o = nt_atlas_sprite_opts_defaults();
         o.name = icon_names[i];
         char path[128];
         (void)snprintf(path, sizeof path, "assets/icons/%s.png", icon_names[i]);
-        nt_builder_atlas_add(ctx, path, &o);
+        nt_atlas_add(icons_atlas, path, &o);
     }
-    nt_builder_end_atlas(ctx);
+    (void)nt_atlas_commit(icons_atlas);
 
     nt_build_result_t r = nt_builder_finish_pack(ctx);
     nt_builder_free_pack(ctx);

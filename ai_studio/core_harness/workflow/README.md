@@ -102,6 +102,9 @@ Mechanical gates are CI `verify --full` on master, `doc_reference_check`,
 `agent_surfaces sync --check`, and the Taskboard quality gate for closing work
 in `store.mjs`. Everything else is advisory; the lead is the backstop.
 
+Pin the engine submodule only to reviewed commits from the engine's main branch
+(`master`).
+
 ## Task Log
 
 When a durable task is selected, `## Log` is the handoff record for the lead and
