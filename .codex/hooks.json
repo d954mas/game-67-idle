@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "ai_studio/core_harness/profiling/hook_record_fast codex",
+            "command": ":",
             "commandWindows": "ai_studio\\core_harness\\profiling\\hook_record_fast.exe codex"
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "ai_studio/core_harness/profiling/hook_record_fast codex",
+            "command": ":",
             "commandWindows": "ai_studio\\core_harness\\profiling\\hook_record_fast.exe codex"
           }
         ]
@@ -29,18 +29,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "ai_studio/core_harness/profiling/hook_record_fast codex",
+            "command": ":",
             "commandWindows": "ai_studio\\core_harness\\profiling\\hook_record_fast.exe codex"
-          }
-        ]
-      },
-      {
-        "matcher": "(?i)spawn_agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ai_studio/core_harness/profiling/hook_record.mjs codex",
-            "commandWindows": "node ai_studio\\core_harness\\profiling\\hook_record.mjs codex"
           }
         ]
       }

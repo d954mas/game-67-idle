@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { spawn, spawnSync } from "node:child_process";
@@ -55,27 +55,6 @@ function writeJsonl(file, records) {
   writeFileSync(file, records.map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
 }
 
-function runHook(payload, profile, harness = "codex", env = {}) {
-  const result = spawnSync(process.execPath, ["ai_studio/core_harness/profiling/hook_record.mjs", harness], {
-    cwd: root,
-    env: {
-      ...process.env,
-      AI_PROFILE_FILE: profile,
-      CODEX_SESSION_FILE: join(dirname(profile), "missing-codex-session.jsonl"),
-      ...env,
-    },
-    input: JSON.stringify(payload),
-    encoding: "utf8",
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-  assert.equal(
-    result.status,
-    0,
-    `hook_record ${payload.hook_event_name || ""}\nstdout:\n${result.stdout}\nstderr:\n${result.stderr}`,
-  );
-  return result;
-}
-
 function runFastHook(payload, profile, harness = "codex") {
   const exe = join(root, "ai_studio", "core_harness", "profiling", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast");
   const result = spawnSync(exe, [harness], {
@@ -111,146 +90,6 @@ function runFastHookAsync(payload, profile, harness = "codex") {
     child.stdin.end(JSON.stringify(payload));
   });
 }
-
-test("hook_record logs session start and command start records", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "hook.jsonl");
-    runHook({ hook_event_name: "SessionStart" }, profile);
-    runHook({
-      hook_event_name: "PreToolUse",
-      tool_name: "Bash",
-      tool_input: { command: "node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs" },
-    }, profile);
-
-    const records = readJsonl(profile);
-    assert.equal(records.length, 2);
-    assert.equal(records[0].event_type, "session_start");
-    assert.equal(records[0].intent, "session start (codex)");
-    assert.deepEqual(records[0].tools, ["codex/session"]);
-
-    assert.equal(records[1].event_type, "tool_call_start");
-    assert.equal(records[1].category, "validation");
-    assert.equal(records[1].result, "unknown");
-    assert.equal(records[1].value, "necessary_overhead");
-    assert.deepEqual(records[1].tools, ["codex/Bash"]);
-    assert.deepEqual(records[1].commands, ["node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs"]);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("hook_record logs failed command result records", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "hook-fail.jsonl");
-    runHook({
-      hook_event_name: "PostToolUse",
-      tool_name: "Bash",
-      tool_input: { command: "git status --short" },
-      tool_response: { exit_code: 7 },
-    }, profile);
-
-    const records = readJsonl(profile);
-    assert.equal(records.length, 1);
-    assert.equal(records[0].event_type, "tool_call_result");
-    assert.equal(records[0].category, "task_status");
-    assert.equal(records[0].result, "fail");
-    assert.equal(records[0].value, "rework");
-    assert.deepEqual(records[0].commands, ["git status --short"]);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("hook_record records output size metrics without storing output text", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "hook-output-size.jsonl");
-    runHook({
-      hook_event_name: "PostToolUse",
-      tool_name: "Bash",
-      tool_input: { command: "node tools/chatty.js" },
-      tool_response: { exit_code: 0, output: "alpha\nbeta\n" },
-    }, profile);
-
-    const records = readJsonl(profile);
-    assert.equal(records.length, 1);
-    assert.equal(records[0].output_chars, 11);
-    assert.equal(records[0].output_lines, 2);
-    assert.doesNotMatch(readFileSync(profile, "utf8"), /alpha|beta/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("hook_record marks full Python dependency failures as environment blocked", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "hook-env-blocked.jsonl");
-    runHook({
-      hook_event_name: "PostToolUse",
-      tool_name: "Bash",
-      tool_input: { command: "node --test ai_studio/dev_environment/vscode_projects.test.mjs" },
-      tool_response: {
-        exit_code: 1,
-        output: "error: no working Python runner found with required modules: PIL, numpy, scipy\nhint: repair the root Studio .venv with ai_studio/dev_environment/python_setup.mjs",
-      },
-    }, profile);
-
-    const records = readJsonl(profile);
-    assert.equal(records.length, 1);
-    assert.equal(records[0].result, "fail");
-    assert.equal(records[0].value, "necessary_overhead");
-    assert.equal(records[0].failure_kind, "environment_blocked");
-    assert.match(records[0].blocked_by, /missing Studio Python modules/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("hook_record skips successful read-only plumbing commands", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "hook-plumbing.jsonl");
-    runHook({
-      hook_event_name: "PreToolUse",
-      tool_name: "Bash",
-      tool_input: { command: "git -c core.excludesFile= status --short" },
-    }, profile);
-    runHook({
-      hook_event_name: "PostToolUse",
-      tool_name: "Bash",
-      tool_input: { command: "Get-Content ai_studio\\core_harness\\profiling\\hook_record.mjs" },
-      tool_response: { exit_code: 0 },
-    }, profile);
-
-    assert.throws(() => readJsonl(profile), /ENOENT/);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("hook_record keeps failed read-only plumbing commands", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "hook-plumbing-fail.jsonl");
-    runHook({
-      hook_event_name: "PostToolUse",
-      tool_name: "Bash",
-      tool_input: { command: "git status --short" },
-      tool_response: { exit_code: 1 },
-    }, profile);
-
-    const records = readJsonl(profile);
-    assert.equal(records.length, 1);
-    assert.equal(records[0].event_type, "tool_call_result");
-    assert.equal(records[0].result, "fail");
-    assert.deepEqual(records[0].commands, ["git status --short"]);
-  } finally {
-    cleanup(dir);
-  }
-});
 
 test("hook_record_fast records work and skips successful plumbing when built", {
   skip: !existsSync(join(root, "ai_studio", "core_harness", "profiling", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast")),
@@ -972,31 +811,6 @@ test("status flags low wall-clock coverage and gaps in verbose mode", () => {
   }
 });
 
-// PARITY: the native hot path (hook_record_fast.c) and the JS fallback
-// (hook_record.mjs) duplicate the result/category logic. This test feeds
-// identical payloads to BOTH and asserts they agree, so the two sources of
-// truth cannot silently drift (e.g. a fix applied to only one of them).
-test("hook_record logs subagent spawn telemetry for delegation tools", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "hook.jsonl");
-    runHook({ hook_event_name: "PostToolUse", tool_name: "Agent", tool_input: { description: "map world", subagent_type: "Explore", prompt: "Map src/world" }, tool_response: {} }, profile, "claude");
-    runHook({ hook_event_name: "PostToolUse", tool_name: "Task", tool_input: { description: "review readability", prompt: "Review X" }, tool_response: {} }, profile, "claude");
-    runHook({ hook_event_name: "PostToolUse", tool_name: "spawn_agent", tool_input: { instruction: "explore Y" }, tool_response: {} }, profile, "codex");
-    // a non-delegation tool with no command must NOT be recorded
-    runHook({ hook_event_name: "PostToolUse", tool_name: "Read", tool_input: { file_path: "x" }, tool_response: {} }, profile, "claude");
-    const records = readJsonl(profile).filter((record) => record.event_type === "subagent_spawn");
-    assert.equal(records.length, 3);
-    assert.equal(records[0].subagent_type, "Explore");
-    assert.equal(records[0].category, "delegation");
-    assert.deepEqual(records[0].commands, ["map world"]);
-    assert.deepEqual(records[1].commands, ["review readability"]);
-    assert.deepEqual(records[2].commands, ["explore Y"]);
-  } finally {
-    cleanup(dir);
-  }
-});
-
 test("status surfaces an advisory subagent rollup", () => {
   const dir = tempDir();
   try {
@@ -1232,42 +1046,7 @@ test("parseSince and --since filter recent agents", () => {
   }
 });
 
-test("hook_record_fast (C) and hook_record.mjs (JS) agree on result + category", {
-  skip: !existsSync(join(root, "ai_studio", "core_harness", "profiling", process.platform === "win32" ? "hook_record_fast.exe" : "hook_record_fast")),
-}, () => {
-  const dir = tempDir();
-  try {
-    const cases = [
-      { cmd: "rg nomatch_xyz", exit: 1, want: "pass" },   // search no-match -> pass
-      { cmd: "rg --badflag", exit: 2, want: "fail" },     // search real error -> fail
-      { cmd: "ninja -C build", exit: 1, want: "fail" },   // real build failure -> fail
-      { cmd: "git commit -m x", exit: 0, want: "pass" },  // task_status
-      { cmd: "cmake --build .", exit: 0, want: "pass" },  // validation
-      { cmd: "node ai_studio/core_harness/tool_lib/x.mjs", exit: 0, want: "pass" }, // tooling
-    ];
-    for (const item of cases) {
-      const payload = { hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command: item.cmd }, tool_response: { exit_code: item.exit } };
-      const pc = join(dir, "c.jsonl");
-      const pj = join(dir, "j.jsonl");
-      rmSync(pc, { force: true });
-      rmSync(pj, { force: true });
-      runFastHook(payload, pc, "claude");
-      runHook(payload, pj, "claude");
-      const recC = readJsonl(pc).find((r) => r.event_type === "tool_call_result");
-      const recJ = readJsonl(pj).find((r) => r.event_type === "tool_call_result");
-      assert.ok(recC && recJ, `"${item.cmd}": missing result record (C=${!!recC} JS=${!!recJ})`);
-      assert.equal(recC.result, item.want, `C result for "${item.cmd}"`);
-      assert.equal(recJ.result, recC.result, `C/JS RESULT diverge for "${item.cmd}": C=${recC.result} JS=${recJ.result}`);
-      assert.equal(recJ.category, recC.category, `C/JS CATEGORY diverge for "${item.cmd}": C=${recC.category} JS=${recJ.category}`);
-    }
-  } finally {
-    cleanup(dir);
-  }
-});
-
-// The two harness hook configs are hand-mirrored; this guards them from drifting
-// (e.g. adding PreToolUse to one but not the other). They must register the same
-// events and invoke hook_record_fast for each (modulo the harness name token).
+// The generator mirrors both harness configs; this guards them from drifting.
 test("hook configs (.claude/settings.json and .codex/hooks.json) stay in sync", () => {
   const claude = JSON.parse(readFileSync(join(root, ".claude", "settings.json"), "utf8"));
   const codex = JSON.parse(readFileSync(join(root, ".codex", "hooks.json"), "utf8"));

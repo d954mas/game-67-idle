@@ -36,20 +36,18 @@ test("Claude render preserves non-hook keys (e.g. $comment)", () => {
 });
 
 test("each tool tags hooks with its own agent label", () => {
-  assert.match(JSON.stringify(buildHooks(TOOLS.codex)), /hook_record_fast codex/);
-  assert.match(JSON.stringify(buildHooks(TOOLS.claude)), /hook_record_fast claude/);
+  assert.match(JSON.stringify(buildHooks(TOOLS.codex)), /hook_record_fast\.exe codex/);
+  assert.match(JSON.stringify(buildHooks(TOOLS.claude)), /hook_record_fast\.exe claude/);
 });
 
 test("matcher vocabularies stay tool-specific", () => {
   const codex = JSON.stringify(buildHooks(TOOLS.codex));
   const claude = JSON.stringify(buildHooks(TOOLS.claude));
   assert.match(codex, /\(\?i\)\(bash\|shell\|exec\)/);
-  assert.match(codex, /\(\?i\)spawn_agent/);
   assert.match(claude, /"matcher":"Bash"/);
-  assert.match(claude, /"matcher":"Agent\|Task"/);
   // Codex regex matchers must not leak into the Claude file and vice versa.
-  assert.ok(!claude.includes("spawn_agent"));
-  assert.ok(!codex.includes("Agent|Task"));
+  assert.ok(!claude.includes("(?i)(bash|shell|exec)"));
+  assert.ok(!codex.includes('"matcher":"Bash"'));
 });
 
 test("committed files actually exist (guards against a moved path)", () => {

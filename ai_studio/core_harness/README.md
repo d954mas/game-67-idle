@@ -59,7 +59,7 @@ Reviewed agent surface files:
 
 Profiling is part of Core Harness because it observes the harness work loop:
 session starts, command start/result pairs, failures, repeated commands, slow
-commands, coverage gaps, and subagent spawn diagnostics.
+commands, coverage gaps, and subagent transcript diagnostics.
 
 Agent Surfaces owns the generated hook config. Profiling owns the recorder and
 review commands those hooks call.
@@ -68,7 +68,6 @@ Reviewed profiling files:
 
 - `ai_studio/core_harness/profiling/README.md`
 - `ai_studio/core_harness/profiling/status.mjs`
-- `ai_studio/core_harness/profiling/hook_record.mjs`
 - `ai_studio/core_harness/profiling/hook_record_fast.c`
 - `ai_studio/core_harness/profiling/tests/profiling.test.mjs`
 

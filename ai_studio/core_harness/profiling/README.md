@@ -3,7 +3,7 @@
 Profiling records and reviews agent harness behavior. It is part of Core
 Harness because it observes the agent loop itself: session starts, shell command
 starts/results, failures, repeated commands, slow commands, coverage gaps, and
-subagent spawn diagnostics.
+subagent transcript diagnostics.
 
 Lightweight hook profiles require matching start events or an explicit
 `duration_ms`; some hosts record results only. A complete Codex review reads the
@@ -75,9 +75,9 @@ its README owns the required Python 3.12 bootstrap command.
 
 ## Files
 
-- `hook_record_fast.c` / `hook_record_fast.exe`: fast hook recorder used by the
-  hot path.
-- `hook_record.mjs`: JS fallback and subagent spawn telemetry.
+- `hook_record_fast.c` / `hook_record_fast.exe`: the single hook-recorder
+  implementation. Windows hooks run the committed binary; other hosts no-op
+  unless the binary is built explicitly with `build_hook_record_fast.mjs`.
 - `codex_transcript.mjs`: canonical Codex rollout resolver and normalizer.
 - `status.mjs`: lightweight or complete session report renderer.
 - `agent_rollup.mjs`: optional subagent transcript rollup.

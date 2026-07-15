@@ -24,24 +24,17 @@ function isMain(moduleUrl) {
 const HOOK_SOURCE = {
   SessionStart: [{ record: "fast" }],
   PreToolUse: [{ match: "shell", record: "fast" }],
-  PostToolUse: [
-    { match: "shell", record: "fast" },
-    { match: "spawnAgent", record: "node" },
-  ],
+  PostToolUse: [{ match: "shell", record: "fast" }],
 };
 
 // Recorder command templates. `label` (the agent name) is appended as the last
-// arg; commandWindows is the native/.exe variant with Windows path separators.
+// arg on Windows. Other hosts degrade profiling hooks to a no-op; CI can still
+// build and test the C source explicitly without introducing a second recorder.
 const RECORDERS = {
   fast: (label) => ({
     type: "command",
-    command: `ai_studio/core_harness/profiling/hook_record_fast ${label}`,
+    command: ":",
     commandWindows: `ai_studio\\core_harness\\profiling\\hook_record_fast.exe ${label}`,
-  }),
-  node: (label) => ({
-    type: "command",
-    command: `node ai_studio/core_harness/profiling/hook_record.mjs ${label}`,
-    commandWindows: `node ai_studio\\core_harness\\profiling\\hook_record.mjs ${label}`,
   }),
 };
 
@@ -50,14 +43,14 @@ const TOOLS = {
   codex: {
     file: ".codex/hooks.json",
     label: "codex",
-    matchers: { shell: "(?i)(bash|shell|exec)", spawnAgent: "(?i)spawn_agent" },
+    matchers: { shell: "(?i)(bash|shell|exec)" },
     // The whole Codex file is exactly { hooks }.
     render: (hooks) => ({ hooks }),
   },
   claude: {
     file: ".claude/settings.json",
     label: "claude",
-    matchers: { shell: "Bash", spawnAgent: "Agent|Task" },
+    matchers: { shell: "Bash" },
     // Preserve every existing Claude-only key (e.g. $comment); replace only hooks.
     render: (hooks, existing) => {
       const out = existing && typeof existing === "object" ? { ...existing } : {};

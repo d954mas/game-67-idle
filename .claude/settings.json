@@ -1,12 +1,12 @@
 {
-  "$comment": "Passive profiling: hot path uses native hook_record_fast(.exe); rebuild it from hook_record_fast.c if missing. Pre+PostToolUse record start/result so `status` derives each command's duration_ms (the native hot path keeps overhead ~1-2ms/call); successful read-only plumbing/search commands are skipped. Records append per-session to tmp/session_profiles/sessions/ for `node ai_studio/core_harness/profiling/status.mjs`. Mirror config for Codex: .codex/hooks.json.",
+  "$comment": "Passive profiling uses the native hook_record_fast.exe on Windows; non-Windows hooks are a no-op. Pre+PostToolUse record start/result so `status` derives each command's duration_ms (the native hot path keeps overhead ~1-2ms/call); successful read-only plumbing/search commands are skipped. Records append per-session to tmp/session_profiles/sessions/ for `node ai_studio/core_harness/profiling/status.mjs`. Mirror config for Codex: .codex/hooks.json.",
   "hooks": {
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "ai_studio/core_harness/profiling/hook_record_fast claude",
+            "command": ":",
             "commandWindows": "ai_studio\\core_harness\\profiling\\hook_record_fast.exe claude"
           }
         ]
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "ai_studio/core_harness/profiling/hook_record_fast claude",
+            "command": ":",
             "commandWindows": "ai_studio\\core_harness\\profiling\\hook_record_fast.exe claude"
           }
         ]
@@ -30,18 +30,8 @@
         "hooks": [
           {
             "type": "command",
-            "command": "ai_studio/core_harness/profiling/hook_record_fast claude",
+            "command": ":",
             "commandWindows": "ai_studio\\core_harness\\profiling\\hook_record_fast.exe claude"
-          }
-        ]
-      },
-      {
-        "matcher": "Agent|Task",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node ai_studio/core_harness/profiling/hook_record.mjs claude",
-            "commandWindows": "node ai_studio\\core_harness\\profiling\\hook_record.mjs claude"
           }
         ]
       }
