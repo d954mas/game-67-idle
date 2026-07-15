@@ -1,13 +1,13 @@
 ---
 id: T0366
 title: Create focused Items CLI and agent skill routing
-status: backlog
+status: doing
 project: P001
 epic: E016
 priority: P1
 tags: [items, balance, cli, skill, agent]
 created: 2026-07-10
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 ## What
@@ -65,3 +65,4 @@ Items-owned scope.
 - 2026-07-10: Red-team review limited v1 atomicity to one source file; modular
   Lua makes multi-file rollback a separate durability feature.
 - 2026-07-10: Absorbed the durable explicit-context requirement from superseded E015 task T0360.
+- 2026-07-15: Started after T0365 local implementation reached review. First slice will inventory and consolidate existing evaluator/Snapshot operations behind one explicit-context Items CLI before adding any write surface.

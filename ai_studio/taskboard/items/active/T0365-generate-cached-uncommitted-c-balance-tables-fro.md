@@ -1,7 +1,7 @@
 ---
 id: T0365
 title: Benchmark and build the compact typed Items runtime package
-status: doing
+status: review
 project: P001
 epic: E016
 priority: P1
@@ -77,3 +77,4 @@ package without runtime Lua/JSON parsing.
 - 2026-07-15: Slice 6: generated runtime capability structs and checked level accessors directly from Snapshot required_for fields while keeping values only in the blob. Weapon parity now covers kind probes, bounded level lookup, typed i64 copies, unavailable/cost/free transitions, and opaque level-cost copy-out. Review fixes make invalid capability refs return false/0 like generated-C and add one shared C-member guard at Snapshot/proof/runtime-header boundaries. Review ACCEPT; all items-core Python 87/87; warning-gated generated-C/runtime CTests 4/4; studio verify --changed passed features/template-release; git diff check clean.
 - 2026-07-15: Added bounded Release benchmark for equivalent C-array and validated-blob candidates. Windows proof records equal typed-access checksum/run count, blob no-relink value edits, arrays winning tiny-fixture latency/section size, and honest non-RSS byte metrics; independent review accepted after Release/timer/metric/gate fixes. Linux current-branch benchmark remains required before closure; T0380 owns representative full-pipeline/RSS/budget ratification.
 - 2026-07-15: Slice 7: added a read-only publication gate that regenerates expected blob/header solely from the current Snapshot and rejects stale selected pack inputs without a second manifest. Documented pack-owned placement plus catalog-before-state startup, exposed items-core 1.9.0, and synchronized canonical receipt/template pins. Review ACCEPT after fixing receipt-writer version drift; Items Python 89/89, feature contracts pass, studio verify --changed passed features/template-release, and git diff check clean.
+- 2026-07-15: Local implementation complete and independently accepted. Review remains open only for the required Linux current-branch benchmark/CI proof; no local WSL, running Docker daemon, or authorized push is available.
