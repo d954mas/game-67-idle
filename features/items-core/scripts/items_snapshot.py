@@ -18,6 +18,7 @@ SNAPSHOT_SCHEMA = "items.snapshot.v1"
 QUERY_SCHEMA = "items.snapshot.query.v1"
 CHART_SCHEMA = "items.snapshot.chart.v1"
 REQUIREMENTS_SCHEMA = "items.snapshot.requirements.v1"
+RUNTIME_EXPORT_SCHEMA = "items.runtime_export.v1"
 DIFF_SCHEMA = "items.snapshot.diff.v1"
 DEFAULT_QUERY_ROWS = 1_000
 DEFAULT_CHART_POINTS = 200
@@ -25,6 +26,7 @@ DEFAULT_REQUIREMENT_RESULTS = 1_000
 DEFAULT_DIFF_CHANGES = 1_000
 MAX_EXACT_INTEGER = 9_007_199_254_740_991
 FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
+ITEM_ID_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 MEMBER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 PROVENANCE_BY_MODE = {
     "single": {"single"},
@@ -365,6 +367,54 @@ def _normalize_requirements(
     return requirements, sources, waiver_sources
 
 
+def _runtime_export_metadata(
+    items: list[dict[str, Any]], fields: list[dict[str, Any]],
+) -> dict[str, Any]:
+    metadata = []
+    item_ids: set[str] = set()
+    for index, item in enumerate(items):
+        item_id = item.get("id") if isinstance(item, dict) else None
+        if not isinstance(item_id, str) or ITEM_ID_RE.fullmatch(item_id) is None:
+            _fail("snapshot.item_id", "item requires a two-segment dotted lowercase id", f"$.items[{index}].id")
+        if item_id in item_ids:
+            _fail("snapshot.duplicate_item", f"duplicate item id: {item_id}", f"$.items[{index}].id")
+        item_ids.add(item_id)
+        stack = item.get("stack")
+        if type(stack) is not int or stack < 0:
+            _fail("snapshot.stack", f"item {item_id} requires integer stack >= 0", f"$.items[{index}].stack")
+        levels = item.get("levels")
+        if levels is None:
+            level_count = 0
+        elif not isinstance(levels, dict) or not isinstance(levels.get("rows"), list):
+            _fail("snapshot.levels", f"item {item_id} levels require rows", f"$.items[{index}].levels")
+        else:
+            level_count = len(levels["rows"])
+        storage = "unique" if stack == 1 else "stack"
+        if storage == "stack" and level_count != 0:
+            _fail("snapshot.storage", f"stack item {item_id} cannot have levels", f"$.items[{index}].levels")
+        metadata.append({
+            "id": item_id,
+            "storage": storage,
+            "level_count": level_count,
+        })
+    metadata.sort(key=lambda entry: entry["id"])
+
+    field_ids = []
+    for index, field in enumerate(fields):
+        field_id = field.get("id") if isinstance(field, dict) else None
+        if not isinstance(field_id, str) or FIELD_ID_RE.fullmatch(field_id) is None:
+            _fail("snapshot.field_id", "field requires a stable dotted lowercase id", f"$.fields[{index}].id")
+        field_ids.append(field_id)
+    if len(field_ids) != len(set(field_ids)):
+        _fail("snapshot.duplicate_field", "runtime field ids must be unique", "$.fields")
+    field_ids.sort()
+    return {
+        "schema": RUNTIME_EXPORT_SCHEMA,
+        "field_ids": field_ids,
+        "items": metadata,
+    }
+
+
 def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(evaluation, dict) or evaluation.get("schema") != EVALUATION_SCHEMA:
         _fail("snapshot.evaluation_schema", f"expected {EVALUATION_SCHEMA}")
@@ -390,6 +440,7 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     items.sort(key=lambda item: item["id"])
     _validate_typed_rows(items, fields)
     _validate_level_provenance(items)
+    runtime_export = _runtime_export_metadata(items, fields)
     requirements, requirement_sources, waiver_sources = _normalize_requirements(evaluation, seen)
 
     dependencies: dict[str, list[str]] = {}
@@ -424,6 +475,7 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
         "fields": fields,
         "items": items,
         "requirements": requirements,
+        "runtime_export": runtime_export,
         "dependencies": dependencies,
         "dependents": dependents,
     }
@@ -610,6 +662,21 @@ def query_snapshot(
     if item_id not in sources:
         _fail("query.source", f"missing source for item: {item_id}", "$.sources")
     result["source"] = _source(sources[item_id], "query.source", f"$.sources.{item_id}")
+    runtime_export = snapshot.get("runtime_export")
+    raw_fields = snapshot.get("fields")
+    if not isinstance(runtime_export, dict) or not isinstance(raw_fields, list):
+        _fail("query.runtime", "snapshot runtime_export metadata is invalid", "$.runtime_export")
+    try:
+        expected_runtime = _runtime_export_metadata(items, raw_fields)
+    except SnapshotFailure as error:
+        _fail("query.runtime", error.message, error.path)
+    if _json_bytes(runtime_export) != _json_bytes(expected_runtime):
+        _fail("query.runtime", "runtime metadata does not match snapshot fields/items", "$.runtime_export")
+    runtime = next(entry for entry in expected_runtime["items"] if entry["id"] == item_id)
+    result["runtime"] = {
+        "storage": runtime["storage"],
+        "level_count": runtime["level_count"],
+    }
     return result
 
 

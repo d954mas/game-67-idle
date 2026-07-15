@@ -8,7 +8,7 @@ priority: P0
 tags: [items, balance, snapshot, dependencies]
 created: 2026-07-10
 updated: 2026-07-15
-quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"Snapshot requirements review ACCEPT after evidence-array parity and requirement-aware semantic diff fixes; Lua sandbox 17/17; Snapshot 12/12; combined 29/29; feature contracts 6 modules/2 pointers; source-only hash/diff no-op and malformed waiver/dependency/source regressions pass"}]}
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"Runtime metadata review ACCEPT after four projection-parity/integrity fixes; items Snapshot 13/13; combined Lua/Snapshot 30/30; all items-core 78/78; studio verify --changed passed features domain; feature contracts 6 modules/2 pointers; git diff check clean"}]}
 ---
 
 ## What
@@ -71,3 +71,5 @@ for C export, Viewer, requirements, and agents.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: requirements evaluator review ACCEPT after strict-ID, empty-dependency-array, and scoped JSON-safe evidence fixes; Lua sandbox 17/17; combined evaluator/Snapshot 28/28; git diff check clean
 - 2026-07-15: Slice 8b: normalized requirement results and reviewed waivers into semantic Snapshot content/hash, kept requirement/waiver spans outside hash, added bounded item-dependency/severity query and CLI, and extended semantic diff with stable requirement identities/paths. Evidence accepts the evaluator's bounded JSON object/array contract.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: Snapshot requirements review ACCEPT after evidence-array parity and requirement-aware semantic diff fixes; Lua sandbox 17/17; Snapshot 12/12; combined 29/29; feature contracts 6 modules/2 pointers; source-only hash/diff no-op and malformed waiver/dependency/source regressions pass
+- 2026-07-15: Slice 9: Snapshot now exposes deterministic items.runtime_export.v1 metadata with sorted field IDs plus receipt-aligned item storage and level counts. Focused query validates the complete derived projection; review-driven regressions reject invalid IDs, bool stacks/counts, malformed fields, incomplete metadata, and reordered lists. This remains metadata only; compact package generation stays T0365. Current-branch Linux execution proof remains open because no Linux runner is available locally and push is prohibited.
+- 2026-07-15: Quality: QTECH_001=pass; evidence: Runtime metadata review ACCEPT after four projection-parity/integrity fixes; items Snapshot 13/13; combined Lua/Snapshot 30/30; all items-core 78/78; studio verify --changed passed features domain; feature contracts 6 modules/2 pointers; git diff check clean

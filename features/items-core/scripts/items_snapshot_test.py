@@ -128,6 +128,14 @@ class ItemsSnapshotTests(unittest.TestCase):
         self.assertEqual(first["sources"]["game.gold"]["file"], "game/items.lua")
         self.assertEqual(first["fields"][0]["id"], "game.weapon.level.attack")
         self.assertEqual(first["field_sources"]["game.weapon.level.attack"]["file"], "game/schema.lua")
+        self.assertEqual(first["runtime_export"], {
+            "schema": "items.runtime_export.v1",
+            "field_ids": ["game.weapon.level.attack"],
+            "items": [
+                {"id": "game.gold", "storage": "stack", "level_count": 0},
+                {"id": "game.sword", "storage": "unique", "level_count": 3},
+            ],
+        })
 
         moved = evaluation(copy.deepcopy(items))
         moved["sources"]["game.gold"]["line"] = 300
@@ -203,6 +211,28 @@ class ItemsSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.sealed_field_id"):
             SNAPSHOT.build_snapshot(sealed)
 
+    def test_runtime_export_metadata_requires_valid_storage_and_level_count(self):
+        missing_stack = evaluation(self.base_items())
+        del missing_stack["items"][0]["stack"]
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.stack"):
+            SNAPSHOT.build_snapshot(missing_stack)
+
+        invalid_stack = evaluation(self.base_items())
+        invalid_stack["items"][0]["stack"] = True
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.stack"):
+            SNAPSHOT.build_snapshot(invalid_stack)
+
+        stacked_levels = evaluation(self.base_items())
+        stacked_levels["items"][1]["stack"] = 2
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.storage"):
+            SNAPSHOT.build_snapshot(stacked_levels)
+
+        invalid_id = evaluation(self.base_items())
+        invalid_id["items"][0]["id"] = "BAD"
+        invalid_id["sources"]["BAD"] = invalid_id["sources"].pop("game.gold")
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.item_id"):
+            SNAPSHOT.build_snapshot(invalid_id)
+
     def test_query_selects_one_item_field_and_level_range(self):
         snapshot = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
         result = SNAPSHOT.query_snapshot(
@@ -254,6 +284,7 @@ class ItemsSnapshotTests(unittest.TestCase):
                     "snippet": "field.i64({...})",
                 },
             },
+            "runtime": {"storage": "unique", "level_count": 3},
         })
 
         item_only = SNAPSHOT.query_snapshot(snapshot, item_id="game.gold")
@@ -270,6 +301,34 @@ class ItemsSnapshotTests(unittest.TestCase):
         )
         self.assertEqual(top_level["item"]["values"], {"attack": 7})
         self.assertNotIn("field", top_level)
+        self.assertEqual(top_level["runtime"], {"storage": "stack", "level_count": 0})
+
+        malformed = copy.deepcopy(snapshot)
+        malformed["runtime_export"]["items"][1]["level_count"] = True
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.runtime"):
+            SNAPSHOT.query_snapshot(malformed, item_id="game.sword")
+
+        stale_fields = copy.deepcopy(snapshot)
+        stale_fields["runtime_export"]["field_ids"] = []
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.runtime"):
+            SNAPSHOT.query_snapshot(stale_fields, item_id="game.sword", field="attack")
+
+        incomplete = copy.deepcopy(snapshot)
+        incomplete["runtime_export"]["items"] = incomplete["runtime_export"]["items"][1:]
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.runtime"):
+            SNAPSHOT.query_snapshot(incomplete, item_id="game.sword")
+
+        malformed_fields = copy.deepcopy(snapshot)
+        malformed_fields["fields"] = [{}]
+        malformed_fields["runtime_export"]["field_ids"] = []
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.runtime"):
+            SNAPSHOT.query_snapshot(malformed_fields, item_id="game.gold")
+
+        reordered = copy.deepcopy(snapshot)
+        reordered["items"].reverse()
+        reordered["runtime_export"]["items"].reverse()
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.runtime"):
+            SNAPSHOT.query_snapshot(reordered, item_id="game.sword")
 
         transition = SNAPSHOT.query_snapshot(
             snapshot, item_id="game.sword", field="cost_to_reach",
@@ -594,12 +653,15 @@ class ItemsSnapshotTests(unittest.TestCase):
         source_only["sources"]["game.sword"]["line"] = 999
         self.assertEqual(SNAPSHOT.diff_snapshots(before, source_only)["changes"], [])
 
-        typed_items = self.base_items()
-        typed_items[1]["stack"] = True
-        typed = SNAPSHOT.build_snapshot(evaluation(typed_items))
-        self.assertEqual(SNAPSHOT.diff_snapshots(before, typed)["changes"], [{
-            "op": "replace", "item": "game.sword", "path": "/stack",
-            "before": 1, "after": True,
+        bool_items = self.base_items()
+        bool_items[1]["tradeable"] = True
+        bool_snapshot = SNAPSHOT.build_snapshot(evaluation(bool_items))
+        int_items = self.base_items()
+        int_items[1]["tradeable"] = 1
+        int_snapshot = SNAPSHOT.build_snapshot(evaluation(int_items))
+        self.assertEqual(SNAPSHOT.diff_snapshots(bool_snapshot, int_snapshot)["changes"], [{
+            "op": "replace", "item": "game.sword", "path": "/tradeable",
+            "before": True, "after": 1,
         }])
 
         added_items = self.base_items() + [{

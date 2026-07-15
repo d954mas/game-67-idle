@@ -193,7 +193,9 @@ and derives inputs/dependents from actual typed references. Complete item/field
 source spans remain separate from the content hash. `query` returns one item with its Lua
 definition location plus an optional field and level range; a selected level
 field also includes only its schema, registration location, and selected value
-provenance. More than 1000
+provenance. The Snapshot also carries derived `items.runtime_export.v1`
+metadata (field IDs, item storage, and level counts); the compact runtime
+package itself is produced by the next export stage. More than 1000
 level rows requires an explicit smaller range. `diff` compares only normalized
 item and requirement data, emits stable identity-relative JSON Pointer paths,
 ignores source-only movement,
