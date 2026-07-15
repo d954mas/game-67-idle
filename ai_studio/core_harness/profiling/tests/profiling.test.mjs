@@ -592,6 +592,46 @@ test("status --complete reads the canonical multi-day Codex transcript", () => {
   }
 });
 
+test("status --transcript selects the explicit canonical transcript without --complete", () => {
+  const dir = tempDir();
+  try {
+    const transcript = join(dir, "rollout-explicit.jsonl");
+    const statusJson = join(dir, "status.json");
+    writeJsonl(transcript, [
+      {
+        timestamp: "2026-07-15T05:00:00.000Z",
+        type: "session_meta",
+        payload: { id: "thread-explicit" },
+      },
+      {
+        timestamp: "2026-07-15T05:00:01.000Z",
+        type: "response_item",
+        payload: { type: "function_call", name: "shell_command", call_id: "call-1", arguments: '{"command":"git status --short"}' },
+      },
+      {
+        timestamp: "2026-07-15T05:00:02.000Z",
+        type: "response_item",
+        payload: { type: "function_call_output", call_id: "call-1", output: "Exit code: 0\nOutput:\n" },
+      },
+    ]);
+
+    run([
+      "ai_studio/core_harness/profiling/status.mjs",
+      "--transcript",
+      transcript,
+      "--json-output",
+      statusJson,
+    ], { env: { CODEX_SESSION_FILE: "", CODEX_THREAD_ID: "" } });
+
+    const status = readJson(statusJson);
+    assert.equal(status.source_kind, "codex-transcript");
+    assert.equal(status.profile, transcript);
+    assert.equal(status.records, 2);
+  } finally {
+    cleanup(dir);
+  }
+});
+
 test("status attributes escalated approval time to approval review, not the command", () => {
   const dir = tempDir();
   try {

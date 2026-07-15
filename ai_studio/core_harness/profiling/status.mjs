@@ -644,9 +644,10 @@ if (values.help) usage();
 
 let profilePaths;
 let sourceParsed = null;
-if (values.complete === true) {
+const explicitTranscript = stringArg(values, "transcript", "");
+if (values.complete === true || explicitTranscript) {
   const transcript = resolveCodexTranscript({
-    transcript: stringArg(values, "transcript", ""),
+    transcript: explicitTranscript,
     sessionId: stringArg(values, "session", ""),
   });
   profilePaths = transcript ? [transcript] : [];
