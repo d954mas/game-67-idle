@@ -1,13 +1,13 @@
 ---
 id: T0365
 title: Benchmark and build the compact typed Items runtime package
-status: backlog
+status: doing
 project: P001
 epic: E016
 priority: P1
 tags: [items, codegen, c, cache]
 created: 2026-07-10
-updated: 2026-07-14
+updated: 2026-07-15
 ---
 
 ## What
@@ -64,3 +64,4 @@ package without runtime Lua/JSON parsing.
   the lead later made physical placement a game-builder choice while retaining
   the logical asset, catalog-before-state gate, wire/fingerprint checks, and
   honest pack/transport/memory metrics.
+- 2026-07-15: Started after T0383 implementation reached review. First slice will define and measure the minimal Snapshot-only compact package boundary; Linux benchmark evidence remains a later proof gate, not a reason to duplicate evaluator logic.

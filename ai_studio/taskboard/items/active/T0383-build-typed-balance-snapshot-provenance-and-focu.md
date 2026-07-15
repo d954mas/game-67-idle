@@ -1,7 +1,7 @@
 ---
 id: T0383
 title: Build typed Items Snapshot provenance and focused dependency queries
-status: doing
+status: review
 project: P001
 epic: E016
 priority: P0
@@ -73,3 +73,4 @@ for C export, Viewer, requirements, and agents.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: Snapshot requirements review ACCEPT after evidence-array parity and requirement-aware semantic diff fixes; Lua sandbox 17/17; Snapshot 12/12; combined 29/29; feature contracts 6 modules/2 pointers; source-only hash/diff no-op and malformed waiver/dependency/source regressions pass
 - 2026-07-15: Slice 9: Snapshot now exposes deterministic items.runtime_export.v1 metadata with sorted field IDs plus receipt-aligned item storage and level counts. Focused query validates the complete derived projection; review-driven regressions reject invalid IDs, bool stacks/counts, malformed fields, incomplete metadata, and reordered lists. This remains metadata only; compact package generation stays T0365. Current-branch Linux execution proof remains open because no Linux runner is available locally and push is prohibited.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: Runtime metadata review ACCEPT after four projection-parity/integrity fixes; items Snapshot 13/13; combined Lua/Snapshot 30/30; all items-core 78/78; studio verify --changed passed features domain; feature contracts 6 modules/2 pointers; git diff check clean
+- 2026-07-15: Implementation and independent review are complete. Deferred proof gate: run the current 33-commit local branch on the configured Ubuntu CI runner; no equivalent Linux runtime is available locally, and this autonomous run is not authorized to push. Ask the lead for CI/push permission when they return.
