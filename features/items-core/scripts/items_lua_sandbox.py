@@ -34,12 +34,17 @@ return function(raise_internal)
   local raw_string_match, raw_string_sub = string.match, string.sub
   local declarations = {}
   local schema_extensions = {}
+  local requirement_declarations, waiver_declarations = {}, {}
   local frozen_targets = {}
   local formula_safe_upvalues = {}
+  local requirement_safe_upvalues = {}
   local formula_upvalues = {}
   local formula_sources = {}
   local active_formula_source = nil
   local authentic_item_refs = {}
+  local authentic_fields = {}
+  local authentic_requirement_results = {}
+  local requirement_upvalues = {}
   local source_metadata = {}
   local evaluation_finalizing = false
   local freeze
@@ -78,6 +83,7 @@ return function(raise_internal)
     if raw_type(value) ~= "table" then return value end
     local source = source_metadata[value]
     local authentic_item_ref = authentic_item_refs[value]
+    local authentic_field = authentic_fields[value]
     value = frozen_targets[value] or value
     seen = seen or {}
     if seen[value] then return fail("declaration.cycle", "cyclic declaration table") end
@@ -85,6 +91,7 @@ return function(raise_internal)
     local out = {}
     if source ~= nil then source_metadata[out] = source end
     if authentic_item_ref then authentic_item_refs[out] = true end
+    if authentic_field then authentic_fields[out] = true end
     for key, child in raw_pairs(value) do out[copy(key, seen)] = copy(child, seen) end
     seen[value] = nil
     return out
@@ -112,6 +119,14 @@ return function(raise_internal)
     }
   end
 
+  local function valid_dotted_id(value)
+    return raw_type(value) == "string"
+      and raw_string_match(value, "^[a-z][a-z0-9_]*%.[a-z][a-z0-9_.]*$") ~= nil
+      and raw_string_match(value, "%.%.") == nil
+      and raw_string_match(value, "%.$") == nil
+      and raw_string_match(value, "%.[^a-z]") == nil
+  end
+
   local function tagged(kind, value, source)
     value.__studio_kind = kind
     local proxy = freeze(value)
@@ -119,6 +134,12 @@ return function(raise_internal)
     if kind == "item_ref" then
       authentic_item_refs[proxy] = true
       formula_safe_upvalues[proxy] = true
+      requirement_safe_upvalues[proxy] = true
+    elseif kind == "field" then
+      authentic_fields[proxy] = true
+      requirement_safe_upvalues[proxy] = true
+    elseif kind == "requirement_result" then
+      authentic_requirement_results[proxy] = true
     end
     return proxy
   end
@@ -162,6 +183,43 @@ return function(raise_internal)
     local descriptor = copy(options)
     descriptor.__studio_field_type = "i64"
     return tagged("field", descriptor, source_at(3))
+  end
+
+  local requirements = {}
+  function requirements.define(options)
+    if evaluation_finalizing then
+      return fail("evaluation.phase", "requirements are closed during finalization")
+    end
+    if raw_type(options) ~= "table" or raw_type(options.check) ~= "function" then
+      return fail("requirement.contract", "requirements.define requires a check function")
+    end
+    local captured, index = {}, 1
+    while true do
+      local name, value = raw_debug.getupvalue(options.check, index)
+      if name == nil then break end
+      if raw_type(value) ~= "table" or requirement_safe_upvalues[value] ~= true then
+        return fail("requirement.mutable_upvalue", "requirement captures a mutable upvalue")
+      end
+      captured[index] = value
+      index = index + 1
+    end
+    local declaration = copy(options)
+    declaration.__studio_source = source_at(3)
+    declaration.__studio_source.kind = "requirement"
+    requirement_upvalues[declaration.check] = captured
+    requirement_declarations[#requirement_declarations + 1] = declaration
+  end
+  function requirements.waive(options)
+    if evaluation_finalizing then
+      return fail("evaluation.phase", "requirement waivers are closed during finalization")
+    end
+    if raw_type(options) ~= "table" then
+      return fail("waiver.contract", "requirements.waive requires a table")
+    end
+    local declaration = copy(options)
+    declaration.__studio_source = source_at(3)
+    declaration.__studio_source.kind = "waiver"
+    waiver_declarations[#waiver_declarations + 1] = declaration
   end
 
   local levels = {}
@@ -347,6 +405,7 @@ return function(raise_internal)
     end
 
     local fields, field_sources, registered_field_ids, registered_members = {}, {}, {}, {}
+    local registered_field_by_id = {}
     local registered_kinds, candidates = {}, {}
     for _, extension in ipairs(schema_extensions) do
       local extension_source = extension.__studio_source
@@ -396,11 +455,7 @@ return function(raise_internal)
         )
       end
       local field_id = descriptor.id
-      if raw_type(field_id) ~= "string"
-          or raw_string_match(field_id, "^[a-z][a-z0-9_]*%.[a-z][a-z0-9_.]*$") == nil
-          or raw_string_match(field_id, "%.%.") ~= nil
-          or raw_string_match(field_id, "%.$") ~= nil
-          or raw_string_match(field_id, "%.[^a-z]") ~= nil then
+      if not valid_dotted_id(field_id) then
         return fail_at(
           "schema.field_id", "field id must contain valid lowercase segments",
           descriptor, candidate.fallback
@@ -451,6 +506,7 @@ return function(raise_internal)
           normalized[key] = copy(value)
         end
       end
+      registered_field_by_id[field_id] = normalized
       local required_for = normalized.required_for
       if required_for ~= nil then
         if raw_type(required_for) ~= "table" then
@@ -762,6 +818,143 @@ return function(raise_internal)
         definition.acquire.cost = normalize_cost(definition.acquire.cost, definition.__studio_source)
       end
     end
+
+    local requirement_results, requirement_sources = {}, {}
+    local waiver_by_id, waiver_sources = {}, {}
+    for _, waiver in ipairs(waiver_declarations) do
+      local id, reason, reviewed_by = waiver.requirement, waiver.reason, waiver.reviewed_by
+      if not valid_dotted_id(id)
+          or raw_type(reason) ~= "string" or reason == ""
+          or raw_type(reviewed_by) ~= "string" or reviewed_by == "" then
+        return fail_at("waiver.contract", "waiver requires requirement, reason, and reviewed_by", waiver, waiver.__studio_source)
+      end
+      if waiver_by_id[id] ~= nil then
+        return fail_at("waiver.duplicate", "duplicate waiver: " .. id, waiver, waiver.__studio_source)
+      end
+      waiver_by_id[id] = { reason = reason, reviewed_by = reviewed_by }
+      waiver_sources[id] = waiver.__studio_source
+    end
+
+    table.sort(requirement_declarations, function(a, b)
+      local a_id = raw_type(a.id) == "string" and a.id or ""
+      local b_id = raw_type(b.id) == "string" and b.id or ""
+      return a_id < b_id
+    end)
+    local seen_requirements = {}
+    for _, requirement in ipairs(requirement_declarations) do
+      local id, severity, check = requirement.id, requirement.severity, requirement.check
+      if not valid_dotted_id(id) then
+        return fail_at("requirement.id", "requirement id must use stable lowercase segments", requirement, requirement.__studio_source)
+      end
+      if seen_requirements[id] then
+        return fail_at("requirement.duplicate", "duplicate requirement: " .. id, requirement, requirement.__studio_source)
+      end
+      if severity ~= "warning" and severity ~= "error" then
+        return fail_at("requirement.severity", "severity must be warning or error", requirement, requirement.__studio_source)
+      end
+      seen_requirements[id] = true
+      local dependencies = {}
+      local query = {}
+      function query.level(item_ref, field_ref, level)
+        if raw_type(item_ref) ~= "table" or authentic_item_refs[item_ref] ~= true
+            or raw_type(field_ref) ~= "table" or authentic_fields[field_ref] ~= true then
+          return fail_at("requirement.query", "level requires authentic item and field handles", requirement, requirement.__studio_source)
+        end
+        if raw_math.type(level) ~= "integer" or level < 1 then
+          return fail_at("requirement.query", "level must be a positive integer", requirement, requirement.__studio_source)
+        end
+        local item, registered_field = registered[item_ref.id], registered_field_by_id[field_ref.id]
+        if item == nil or registered_field == nil then
+          return fail_at("requirement.query", "requirement handle is not registered", requirement, requirement.__studio_source)
+        end
+        local rows = raw_type(item.levels) == "table" and item.levels.rows or nil
+        local row = raw_type(rows) == "table" and rows[level] or nil
+        local value = raw_type(row) == "table" and row[registered_field.member] or nil
+        if raw_math.type(value) ~= "integer" then
+          return fail_at("requirement.query", "requested level field is unavailable", requirement, requirement.__studio_source)
+        end
+        dependencies[item_ref.id] = true
+        return value
+      end
+      local function validate_evidence(value, seen, depth, budget)
+        budget.count = budget.count + 1
+        if budget.count > 1000 or depth > 32 then
+          return fail_at("requirement.evidence", "evidence exceeds structural bounds", requirement, requirement.__studio_source)
+        end
+        local value_type = raw_type(value)
+        if value_type == "nil" or value_type == "boolean" or value_type == "string" then return end
+        if value_type == "number" then
+          if value ~= value or value == raw_math.huge or value == -raw_math.huge then
+            return fail_at("requirement.evidence", "evidence numbers must be finite", requirement, requirement.__studio_source)
+          end
+          return
+        end
+        if value_type ~= "table" or value.__studio_kind ~= nil then
+          return fail_at("requirement.evidence", "evidence must contain only JSON-safe values", requirement, requirement.__studio_source)
+        end
+        if seen[value] then
+          return fail_at("requirement.evidence", "evidence cannot contain cycles", requirement, requirement.__studio_source)
+        end
+        seen[value] = true
+        local key_mode, count, max_index = nil, 0, 0
+        for key, child in raw_pairs(value) do
+          local key_type = raw_type(key)
+          local mode = key_type == "string" and "object" or "array"
+          if key_type ~= "string" and (raw_math.type(key) ~= "integer" or key < 1) then
+            return fail_at("requirement.evidence", "evidence keys must be strings or contiguous positive integers", requirement, requirement.__studio_source)
+          end
+          if key_mode ~= nil and key_mode ~= mode then
+            return fail_at("requirement.evidence", "evidence cannot mix object and array keys", requirement, requirement.__studio_source)
+          end
+          key_mode, count = mode, count + 1
+          if mode == "array" and key > max_index then max_index = key end
+          validate_evidence(child, seen, depth + 1, budget)
+        end
+        if key_mode == "array" and count ~= max_index then
+          return fail_at("requirement.evidence", "evidence arrays must be contiguous", requirement, requirement.__studio_source)
+        end
+        seen[value] = nil
+      end
+      local function make_result(pass, expected, actual)
+        if raw_type(pass) ~= "boolean" or raw_type(expected) ~= "table" or raw_type(actual) ~= "table" then
+          return fail_at("requirement.result", "result requires boolean pass and expected/actual tables", requirement, requirement.__studio_source)
+        end
+        local budget = { count = 0 }
+        validate_evidence(expected, {}, 0, budget)
+        validate_evidence(actual, {}, 0, budget)
+        return tagged("requirement_result", {
+          pass = pass, expected = copy(expected), actual = copy(actual),
+        }, requirement.__studio_source)
+      end
+      local result = check(freeze(query), make_result)
+      if raw_type(result) ~= "table" or authentic_requirement_results[result] ~= true then
+        return fail_at("requirement.result", "check must return the provided result handle", requirement, requirement.__studio_source)
+      end
+      for index, expected in ipairs(requirement_upvalues[check]) do
+        local _, current = raw_debug.getupvalue(check, index)
+        if current ~= expected then
+          return fail_at("requirement.mutable_upvalue", "requirement changed a captured upvalue", requirement, requirement.__studio_source)
+        end
+      end
+      local dependency_ids = {}
+      for dependency, _ in raw_pairs(dependencies) do dependency_ids[#dependency_ids + 1] = dependency end
+      table.sort(dependency_ids)
+      local normalized_result = {
+        id = id,
+        severity = severity,
+        status = result.pass and "pass" or "fail",
+        evidence = { expected = copy(result.expected), actual = copy(result.actual) },
+        dependencies = dependency_ids,
+      }
+      if waiver_by_id[id] ~= nil then normalized_result.waiver = waiver_by_id[id] end
+      requirement_results[#requirement_results + 1] = normalized_result
+      requirement_sources[id] = requirement.__studio_source
+    end
+    for waiver_id, _ in raw_pairs(waiver_by_id) do
+      if not seen_requirements[waiver_id] then
+        return fail_at("waiver.unknown", "waiver names unknown requirement: " .. waiver_id, nil, waiver_sources[waiver_id])
+      end
+    end
     local kinds = {}
     for kind, _ in raw_pairs(registered_kinds) do kinds[#kinds + 1] = kind end
     table.sort(kinds)
@@ -770,6 +963,9 @@ return function(raise_internal)
       field_sources = field_sources,
       items = declarations,
       kinds = kinds,
+      requirements = requirement_results,
+      requirement_sources = requirement_sources,
+      waiver_sources = waiver_sources,
     }
   end
 
@@ -782,7 +978,7 @@ return function(raise_internal)
     })
   end
 
-  return items, levels, field, math_view, finalize, freeze, setup_limits,
+  return items, levels, field, requirements, math_view, finalize, freeze, setup_limits,
     safe_assert, safe_error, lock_string_surface
 end
 '''
@@ -904,8 +1100,10 @@ def _normalize_lua_failure(
     return _failure("lua.execution", message.splitlines()[0], file=file, line=line, path=path)
 
 
-def _output_rows(items: list[dict[str, Any]], fields: list[dict[str, Any]]) -> int:
-    rows = len(items) + len(fields)
+def _output_rows(
+    items: list[dict[str, Any]], fields: list[dict[str, Any]], requirements: list[dict[str, Any]],
+) -> int:
+    rows = len(items) + len(fields) + len(requirements)
     for item in items:
         levels = item.get("levels")
         if isinstance(levels, dict) and isinstance(levels.get("rows"), list):
@@ -990,7 +1188,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         attribute_filter=lambda _obj, _name, _setting: (_ for _ in ()).throw(AttributeError("access denied")),
     )
     (
-        items, levels, field, studio_math, finalize, freeze, setup_limits,
+        items, levels, field, requirements, studio_math, finalize, freeze, setup_limits,
         safe_assert, safe_error, lock_string_surface,
     ) = runtime.execute(
         PRELUDE, name="@studio/sandbox.lua", mode="t",
@@ -999,6 +1197,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         "studio.items": freeze(items),
         "studio.levels": freeze(levels),
         "studio.field": freeze(field),
+        "studio.requirements": freeze(requirements),
         "studio.math": studio_math,
     }
     setup_limits(
@@ -1151,6 +1350,9 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
     fields = normalized.get("fields")
     field_sources = normalized.get("field_sources")
     kinds = normalized.get("kinds")
+    requirement_results = normalized.get("requirements")
+    requirement_sources = normalized.get("requirement_sources")
+    waiver_sources = normalized.get("waiver_sources")
     if not isinstance(normalized_items, list):
         normalized_items = [] if normalized_items == {} else normalized_items
     if not isinstance(fields, list):
@@ -1159,6 +1361,16 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         field_sources = {} if field_sources == [] else field_sources
     if not isinstance(kinds, list):
         kinds = [] if kinds == {} else kinds
+    if not isinstance(requirement_results, list):
+        requirement_results = [] if requirement_results == {} else requirement_results
+    if isinstance(requirement_results, list):
+        for requirement_result in requirement_results:
+            if isinstance(requirement_result, dict) and requirement_result.get("dependencies") == {}:
+                requirement_result["dependencies"] = []
+    if not isinstance(requirement_sources, dict):
+        requirement_sources = {} if requirement_sources == [] else requirement_sources
+    if not isinstance(waiver_sources, dict):
+        waiver_sources = {} if waiver_sources == [] else waiver_sources
     sources: dict[str, dict[str, Any]] = {}
 
     def source_span(source: dict[str, Any]) -> dict[str, Any]:
@@ -1189,8 +1401,18 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
                 raise _failure("source.span", "field source must be an object", file=fallback)
             enriched_field_sources[field_id] = source_span(source)
         field_sources = enriched_field_sources
+    if isinstance(requirement_sources, dict):
+        requirement_sources = {
+            requirement_id: source_span(source)
+            for requirement_id, source in requirement_sources.items()
+        }
+    if isinstance(waiver_sources, dict):
+        waiver_sources = {
+            requirement_id: source_span(source)
+            for requirement_id, source in waiver_sources.items()
+        }
     max_rows = int(request.get("maxOutputRows", DEFAULT_MAX_OUTPUT_ROWS))
-    if _output_rows(normalized_items, fields) > max_rows:
+    if _output_rows(normalized_items, fields, requirement_results) > max_rows:
         raise _failure(
             "output.row_limit", f"output exceeds {max_rows} rows",
             file=fallback, path="$.items",
@@ -1207,6 +1429,9 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
         "field_sources": field_sources,
         "items": normalized_items,
         "kinds": kinds,
+        "requirements": requirement_results,
+        "requirement_sources": requirement_sources,
+        "waiver_sources": waiver_sources,
         "sources": sources,
     }
     max_bytes = int(request.get("maxOutputBytes", DEFAULT_MAX_OUTPUT_BYTES))

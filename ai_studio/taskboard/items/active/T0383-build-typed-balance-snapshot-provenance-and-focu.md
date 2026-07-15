@@ -8,7 +8,7 @@ priority: P0
 tags: [items, balance, snapshot, dependencies]
 created: 2026-07-10
 updated: 2026-07-15
-quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"source-span review ACCEPT after Unicode U+2028 and missing-source regressions; Lua sandbox 16/16; Snapshot 11/11; combined 27/27; feature contracts 6 modules/2 pointers; git diff check clean"}]}
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"requirements evaluator review ACCEPT after strict-ID, empty-dependency-array, and scoped JSON-safe evidence fixes; Lua sandbox 17/17; combined evaluator/Snapshot 28/28; git diff check clean"}]}
 ---
 
 ## What
@@ -67,3 +67,5 @@ for C export, Viewer, requirements, and agents.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: chart review ACCEPT after stale/out-of-range Snapshot regression; Lua sandbox 16/16; Snapshot 11/11 including 1001-row, subrange, endpoint, CLI, transition rejection, bounds and max-points cases; feature contracts 6 modules/2 pointers; git diff check clean
 - 2026-07-15: Slice 7: evaluator now emits exact bounded single call-line spans/snippets for every item definition and field registration using Lua CRLF/LF/CR line semantics; Snapshot/build/query require complete matching sources while keeping them outside content_hash. Formula text remains intentionally unreconstructed. Requirements and cross-platform CI proof remain open.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: source-span review ACCEPT after Unicode U+2028 and missing-source regressions; Lua sandbox 16/16; Snapshot 11/11; combined 27/27; feature contracts 6 modules/2 pointers; git diff check clean
+- 2026-07-15: Slice 8a: added pure named Lua requirement evaluation with static warning/error severity, bounded authentic typed level queries, automatically recorded actual item dependencies, JSON-safe expected/actual evidence, exact sources, and explicit reason/reviewed_by waiver records. Snapshot normalization remains the next slice.
+- 2026-07-15: Quality: QTECH_001=pass; evidence: requirements evaluator review ACCEPT after strict-ID, empty-dependency-array, and scoped JSON-safe evidence fixes; Lua sandbox 17/17; combined evaluator/Snapshot 28/28; git diff check clean

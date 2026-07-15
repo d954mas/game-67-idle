@@ -164,6 +164,13 @@ to `override`. Composite
 costs accept only stackable resources and merge duplicate refs with checked,
 deterministic sums.
 
+`studio.requirements` runs named warning/error checks after materialization.
+Checks receive only bounded typed `q.level(item_ref, field_handle, level)` reads
+and an authentic result constructor; those reads record actual item
+dependencies automatically. Expected/actual evidence is bounded JSON-safe data.
+An optional waiver names the requirement and records a non-empty reason plus
+`reviewed_by`; it does not mutate the authored item data or hide the raw result.
+
 Lua 5.4 was selected over bundled LuaJIT 2.1 on the representative
 currency/fixed-sword/levelled-sword workload: both exposed the required hooks,
 while Lua 5.4 needed no JIT policy or Lua 5.1 integer compatibility layer. The

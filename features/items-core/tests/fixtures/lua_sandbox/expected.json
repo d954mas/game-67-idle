@@ -60,6 +60,8 @@
     }
   ],
   "kinds": ["currency", "weapon"],
+  "requirement_sources": {},
+  "requirements": [],
   "schema": "items.lua.evaluation.v1",
   "sources": {
     "game.gold": {
@@ -77,5 +79,6 @@
       "file": "game/items/weapons.lua", "kind": "definition", "line": 12,
       "snippet": "items.define({"
     }
-  }
+  },
+  "waiver_sources": {}
 }

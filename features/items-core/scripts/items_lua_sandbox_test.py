@@ -676,6 +676,73 @@ items.define({ id="game.sword", stack=1,
         }, ["game.generated"])
         self.assert_error(level_one_transition, "levels.level_one_transition", "game/generated.lua", 4)
 
+    def test_named_requirements_record_query_dependencies_and_reviewed_waivers(self):
+        checked = self.evaluate({"game.requirements": '''local items = require("studio.items")
+local field = require("studio.field")
+local requirements = require("studio.requirements")
+local attack = field.i64({ id="game.weapon.level.attack", required_for={"weapon"}, min=0, max=100, unit="damage", rounding="exact", label_key="item.attack" })
+items.extend_schema({ level_row={ attack=attack } })
+items.define({ id="game.sword", kind="weapon", stack=1, levels=require("studio.levels").single({ attack=15 }) })
+local sword = items.ref("game.sword")
+requirements.define({
+  id="game.weapon.attack_floor", severity="warning",
+  check=function(q, result)
+    local actual = q.level(sword, attack, 1)
+    return result(actual >= 20, { minimum=20 }, { value=actual })
+  end,
+})
+requirements.waive({ requirement="game.weapon.attack_floor", reason="tutorial weapon", reviewed_by="lead" })
+'''}, ["game.requirements"])
+        self.assertEqual(checked.returncode, 0, checked.stderr)
+        payload = json.loads(checked.stdout)
+        self.assertEqual(payload["requirements"], [{
+            "id": "game.weapon.attack_floor",
+            "severity": "warning",
+            "status": "fail",
+            "evidence": {"expected": {"minimum": 20}, "actual": {"value": 15}},
+            "dependencies": ["game.sword"],
+            "waiver": {"reason": "tutorial weapon", "reviewed_by": "lead"},
+        }])
+        self.assertEqual(
+            payload["requirement_sources"]["game.weapon.attack_floor"]["kind"],
+            "requirement",
+        )
+        self.assertEqual(
+            payload["waiver_sources"]["game.weapon.attack_floor"]["kind"],
+            "waiver",
+        )
+
+        zero_dependencies = self.evaluate({"game.zero": '''local requirements=require("studio.requirements")
+requirements.define({ id="game.zero.check", severity="warning", check=function(q, result) return result(true, {}, {}) end })'''
+        }, ["game.zero"])
+        self.assertEqual(zero_dependencies.returncode, 0, zero_dependencies.stderr)
+        self.assertEqual(json.loads(zero_dependencies.stdout)["requirements"][0]["dependencies"], [])
+
+        forged = self.evaluate({"game.bad": '''local requirements=require("studio.requirements")
+requirements.define({ id="game.bad.result", severity="warning", check=function() return { pass=true } end })'''
+        }, ["game.bad"])
+        self.assert_error(forged, "requirement.result", "game/bad.lua", 2)
+
+        malformed_id = self.evaluate({"game.bad": '''local requirements=require("studio.requirements")
+requirements.define({ id="game.bad.", severity="warning", check=function(q, result) return result(true, {}, {}) end })'''
+        }, ["game.bad"])
+        self.assert_error(malformed_id, "requirement.id", "game/bad.lua", 2)
+
+        bad_evidence = self.evaluate({"game.bad": '''local requirements=require("studio.requirements")
+requirements.define({ id="game.bad.evidence", severity="warning", check=function(q, result) return result(true, { callback=function() end }, {}) end })'''
+        }, ["game.bad"])
+        self.assert_error(bad_evidence, "requirement.evidence", "game/bad.lua", 2)
+
+        unknown_waiver = self.evaluate({"game.bad": '''local requirements=require("studio.requirements")
+requirements.waive({ requirement="game.missing", reason="reason", reviewed_by="lead" })'''
+        }, ["game.bad"])
+        self.assert_error(unknown_waiver, "waiver.unknown", "game/bad.lua", 2)
+
+        malformed_waiver = self.evaluate({"game.bad": '''local requirements=require("studio.requirements")
+requirements.waive({ requirement="game.bad..id", reason="reason", reviewed_by="lead" })'''
+        }, ["game.bad"])
+        self.assert_error(malformed_waiver, "waiver.contract", "game/bad.lua", 2)
+
     def test_level_tables_and_composite_costs_are_normalized(self):
         gap = self.evaluate({"game.items": '''local items = require("studio.items")
 local levels = require("studio.levels")
