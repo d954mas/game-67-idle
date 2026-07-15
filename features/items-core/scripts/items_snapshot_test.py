@@ -165,11 +165,65 @@ class ItemsSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.level_range"):
             SNAPSHOT.query_snapshot(snapshot, item_id="game.sword", level_from=1001, level_to=1002)
 
-    def test_cli_build_then_query_emits_bounded_json(self):
+    def test_diff_reports_only_semantic_changes_in_stable_order(self):
+        before = SNAPSHOT.build_snapshot(evaluation(self.base_items()))
+        changed_items = self.base_items()
+        changed_items[1]["levels"]["rows"][1]["attack"] = 16
+        after_evaluation = evaluation(changed_items)
+        after_evaluation["sources"]["game.sword"]["line"] = 400
+        after = SNAPSHOT.build_snapshot(after_evaluation)
+
+        result = SNAPSHOT.diff_snapshots(before, after)
+
+        self.assertEqual(result, {
+            "schema": "items.snapshot.diff.v1",
+            "before_hash": before["content_hash"],
+            "after_hash": after["content_hash"],
+            "changes": [{
+                "op": "replace",
+                "item": "game.sword",
+                "path": "/levels/rows/1/attack",
+                "before": 15,
+                "after": 16,
+            }],
+        })
+
+        source_only = copy.deepcopy(before)
+        source_only["sources"]["game.sword"]["line"] = 999
+        self.assertEqual(SNAPSHOT.diff_snapshots(before, source_only)["changes"], [])
+
+        typed_items = self.base_items()
+        typed_items[1]["stack"] = True
+        typed = SNAPSHOT.build_snapshot(evaluation(typed_items))
+        self.assertEqual(SNAPSHOT.diff_snapshots(before, typed)["changes"], [{
+            "op": "replace", "item": "game.sword", "path": "/stack",
+            "before": 1, "after": True,
+        }])
+
+        added_items = self.base_items() + [{"id": "game.z_potion", "kind": "consumable", "stack": 9}]
+        added = SNAPSHOT.build_snapshot(evaluation(added_items))
+        self.assertEqual(SNAPSHOT.diff_snapshots(before, added)["changes"][0]["path"], "")
+
+    def test_diff_is_bounded(self):
+        before_items = self.base_items()
+        before_items[1]["levels"]["rows"] = [{"attack": level} for level in range(1001)]
+        after_items = copy.deepcopy(before_items)
+        for row in after_items[1]["levels"]["rows"]:
+            row["attack"] += 1
+
+        before = SNAPSHOT.build_snapshot(evaluation(before_items))
+        after = SNAPSHOT.build_snapshot(evaluation(after_items))
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "diff.change_limit"):
+            SNAPSHOT.diff_snapshots(before, after)
+        self.assertEqual(len(SNAPSHOT.diff_snapshots(before, after, max_changes=1001)["changes"]), 1001)
+
+    def test_cli_build_query_and_diff_emit_bounded_json(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "evaluation.json"
             target = root / "snapshot.json"
+            changed_source = root / "evaluation-changed.json"
+            changed_target = root / "snapshot-changed.json"
             source.write_text(json.dumps(evaluation(self.base_items())), encoding="utf-8")
 
             built = subprocess.run(
@@ -189,6 +243,27 @@ class ItemsSnapshotTests(unittest.TestCase):
             payload = json.loads(queried.stdout)
             self.assertEqual(len(payload["item"]["levels"]), 2)
             self.assertEqual(payload["inputs"], ["game.gold"])
+
+            changed_items = self.base_items()
+            changed_items[1]["levels"]["rows"][1]["attack"] = 16
+            changed_source.write_text(json.dumps(evaluation(changed_items)), encoding="utf-8")
+            built_changed = subprocess.run(
+                [
+                    sys.executable, str(SCRIPT), "build", "--evaluation",
+                    str(changed_source), "--out", str(changed_target),
+                ],
+                text=True, capture_output=True, encoding="utf-8", timeout=10,
+            )
+            self.assertEqual(built_changed.returncode, 0, built_changed.stderr)
+            diffed = subprocess.run(
+                [
+                    sys.executable, str(SCRIPT), "diff", "--before", str(target),
+                    "--after", str(changed_target),
+                ],
+                text=True, capture_output=True, encoding="utf-8", timeout=10,
+            )
+            self.assertEqual(diffed.returncode, 0, diffed.stderr)
+            self.assertEqual(json.loads(diffed.stdout)["changes"][0]["path"], "/levels/rows/1/attack")
 
     def test_malformed_snapshot_and_cli_arguments_are_structured_errors(self):
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "query.item"):

@@ -139,11 +139,14 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 content, retains the evaluator fingerprint, and derives inputs/dependents from
 actual typed references. Source locations remain separate from the content
 hash. `query` returns one item with its Lua definition location plus an optional
-field and level range; more than 1000 level rows requires an explicit smaller range.
+field and level range; more than 1000 level rows requires an explicit smaller
+range. `diff` compares only normalized item data, emits stable JSON Pointer
+paths, ignores provenance-only movement, and stops after 1000 changes by default.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py build --evaluation <evaluation.json> --out <snapshot.json>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py query --snapshot <snapshot.json> --item <item-id> --inputs --dependents
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py diff --before <old-snapshot.json> --after <new-snapshot.json>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot_test.py
 ```
 

@@ -15,7 +15,9 @@ from typing import Any
 EVALUATION_SCHEMA = "items.lua.evaluation.v1"
 SNAPSHOT_SCHEMA = "items.snapshot.v1"
 QUERY_SCHEMA = "items.snapshot.query.v1"
+DIFF_SCHEMA = "items.snapshot.diff.v1"
 DEFAULT_QUERY_ROWS = 1_000
+DEFAULT_DIFF_CHANGES = 1_000
 
 
 class SnapshotFailure(Exception):
@@ -264,6 +266,122 @@ def query_snapshot(
     return result
 
 
+def _diff_items(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
+        _fail("diff.snapshot_schema", f"expected {SNAPSHOT_SCHEMA}")
+    items = snapshot.get("items")
+    if not isinstance(items, list):
+        _fail("diff.items", "snapshot items must be a list", "$.items")
+    result: dict[str, dict[str, Any]] = {}
+    for index, item in enumerate(items):
+        if not isinstance(item, dict) or not isinstance(item.get("id"), str) or not item["id"]:
+            _fail("diff.item", "snapshot item requires an id", f"$.items[{index}]")
+        normalized = _canonical(item, f"$.items[{index}]")
+        if normalized["id"] in result:
+            _fail("diff.item", f"duplicate item id: {normalized['id']}", f"$.items[{index}].id")
+        result[normalized["id"]] = normalized
+    return result
+
+
+def _pointer(path: str, key: str | int) -> str:
+    token = str(key).replace("~", "~0").replace("/", "~1")
+    return f"{path}/{token}"
+
+
+def _record(changes: list[dict[str, Any]], change: dict[str, Any], max_changes: int) -> None:
+    if len(changes) >= max_changes:
+        _fail("diff.change_limit", f"diff exceeds {max_changes} changes")
+    changes.append(change)
+
+
+def _diff_value(
+    before: Any,
+    after: Any,
+    *,
+    item_id: str,
+    path: str,
+    changes: list[dict[str, Any]],
+    max_changes: int,
+) -> None:
+    if isinstance(before, dict) and isinstance(after, dict):
+        for key in sorted(set(before) | set(after)):
+            child_path = _pointer(path, key)
+            if key not in after:
+                _record(changes, {
+                    "op": "remove", "item": item_id, "path": child_path,
+                    "before": before[key],
+                }, max_changes)
+            elif key not in before:
+                _record(changes, {
+                    "op": "add", "item": item_id, "path": child_path,
+                    "after": after[key],
+                }, max_changes)
+            else:
+                _diff_value(
+                    before[key], after[key], item_id=item_id, path=child_path,
+                    changes=changes, max_changes=max_changes,
+                )
+        return
+    if isinstance(before, list) and isinstance(after, list):
+        shared = min(len(before), len(after))
+        for index in range(shared):
+            _diff_value(
+                before[index], after[index], item_id=item_id,
+                path=_pointer(path, index), changes=changes, max_changes=max_changes,
+            )
+        for index in range(shared, len(before)):
+            _record(changes, {
+                "op": "remove", "item": item_id, "path": _pointer(path, index),
+                "before": before[index],
+            }, max_changes)
+        for index in range(shared, len(after)):
+            _record(changes, {
+                "op": "add", "item": item_id, "path": _pointer(path, index),
+                "after": after[index],
+            }, max_changes)
+        return
+    if type(before) is not type(after) or before != after:
+        _record(changes, {
+            "op": "replace", "item": item_id, "path": path,
+            "before": before, "after": after,
+        }, max_changes)
+
+
+def diff_snapshots(
+    before: dict[str, Any],
+    after: dict[str, Any],
+    *,
+    max_changes: int = DEFAULT_DIFF_CHANGES,
+) -> dict[str, Any]:
+    if type(max_changes) is not int or max_changes < 1:
+        _fail("diff.max_changes", "max_changes must be positive")
+    before_items = _diff_items(before)
+    after_items = _diff_items(after)
+    changes: list[dict[str, Any]] = []
+    for item_id in sorted(set(before_items) | set(after_items)):
+        if item_id not in after_items:
+            _record(changes, {
+                "op": "remove", "item": item_id, "path": "",
+                "before": before_items[item_id],
+            }, max_changes)
+        elif item_id not in before_items:
+            _record(changes, {
+                "op": "add", "item": item_id, "path": "",
+                "after": after_items[item_id],
+            }, max_changes)
+        else:
+            _diff_value(
+                before_items[item_id], after_items[item_id], item_id=item_id,
+                path="", changes=changes, max_changes=max_changes,
+            )
+    return {
+        "schema": DIFF_SCHEMA,
+        "before_hash": before.get("content_hash"),
+        "after_hash": after.get("content_hash"),
+        "changes": changes,
+    }
+
+
 def _load(path: Path) -> dict[str, Any]:
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -302,16 +420,25 @@ def main(argv: list[str] | None = None) -> int:
     query.add_argument("--inputs", action="store_true")
     query.add_argument("--dependents", action="store_true")
     query.add_argument("--max-rows", type=int, default=DEFAULT_QUERY_ROWS)
+    diff = subparsers.add_parser("diff")
+    diff.add_argument("--before", type=Path, required=True)
+    diff.add_argument("--after", type=Path, required=True)
+    diff.add_argument("--max-changes", type=int, default=DEFAULT_DIFF_CHANGES)
     try:
         args = parser.parse_args(argv)
         if args.command == "build":
             _write_if_different(args.out, build_snapshot(_load(args.evaluation)))
-        else:
+        elif args.command == "query":
             payload = query_snapshot(
                 _load(args.snapshot), item_id=args.item, field=args.field,
                 level_from=args.level_from, level_to=args.level_to,
                 include_inputs=args.inputs, include_dependents=args.dependents,
                 max_rows=args.max_rows,
+            )
+            print(_json_bytes(payload).decode("utf-8"))
+        else:
+            payload = diff_snapshots(
+                _load(args.before), _load(args.after), max_changes=args.max_changes,
             )
             print(_json_bytes(payload).decode("utf-8"))
         return 0

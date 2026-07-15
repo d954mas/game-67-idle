@@ -54,3 +54,5 @@ for C export, Viewer, requirements, and agents.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: reviewed items_snapshot_test 6/6, sandbox 9/9, feature contracts 8/8, Taskboard validation pass, evaluator fixture query levels 2-3/game.gold input.
 - 2026-07-15: Slice 2: evaluator now records each items.define Lua file/line; Snapshot keeps definition provenance outside content_hash and focused query returns it. Field/row spans and snippets remain open.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: provenance review ACCEPT, lua sandbox 10/10, Snapshot 6/6 including hash/source and malformed-source cases, feature contracts pass, fixture query returned weapons.lua:12.
+- 2026-07-15: Slice 3: added bounded semantic Snapshot diff with stable item-relative JSON Pointer paths; provenance-only movement is ignored and default output stops above 1000 changes. Chart/downsampling remains open.
+- 2026-07-15: Quality: QTECH_001=pass; evidence: semantic-diff review ACCEPT; Snapshot 8/8 covers CLI, stable paths/order, source-only no-op, type changes, add/remove, and 1001-change bound.

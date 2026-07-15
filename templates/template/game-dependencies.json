@@ -9,7 +9,7 @@
     { "id": "audio-core", "source": "features/audio-core", "version": "1.0.1", "compatibility": "validated by the template build and test suite" },
     { "id": "game-events", "source": "features/game-events", "version": "1.0.0", "compatibility": "validated by the template build and test suite" },
     { "id": "game-state", "source": "features/game-state", "version": "1.0.0", "compatibility": "validated by the template build and test suite" },
-    { "id": "items-core", "source": "features/items-core", "version": "1.3.0", "compatibility": "validated by the template build and test suite" },
+    { "id": "items-core", "source": "features/items-core", "version": "1.4.0", "compatibility": "validated by the template build and test suite" },
     { "id": "platform-sdk", "source": "features/platform-sdk", "version": "1.1.0", "compatibility": "validated by the template build and test suite" },
     { "id": "progression-core", "source": "features/progression-core", "version": "2.0.0", "compatibility": "validated by the template build and test suite" }
   ],
