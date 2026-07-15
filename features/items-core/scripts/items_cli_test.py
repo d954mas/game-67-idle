@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 
 
@@ -76,6 +78,63 @@ class ItemsCliTests(unittest.TestCase):
         validated = self.payload("validate")
         self.assertTrue(validated["result"]["ok"])
         self.assertEqual(validated["result"]["diagnostics"], [])
+        self.assertTrue(validated["result"]["receipt"]["ok"])
+
+    def test_chart_and_requirements_delegate_to_bounded_snapshot_reports(self):
+        chart = self.payload(
+            "chart", "--item", "game.levelled_sword", "--field", "attack",
+            "--max-points", "2",
+        )
+        self.assertEqual(chart["result"]["schema"], "items.snapshot.chart.v1")
+        self.assertEqual(chart["result"]["points"], [
+            {"level": 1, "value": 10, "provenance": "table"},
+            {"level": 3, "value": 20, "provenance": "table"},
+        ])
+
+        requirements = self.payload(
+            "requirements", "--item", "game.levelled_sword", "--severity", "warning",
+        )
+        self.assertEqual(requirements["result"]["schema"], "items.snapshot.requirements.v1")
+        self.assertEqual(requirements["result"]["results"], [])
+
+    def test_build_validates_then_writes_snapshot_blob_and_stable_header(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = self.payload("build", "--out-dir", tmp)
+            self.assertTrue(first["result"]["ok"])
+            self.assertEqual(first["result"]["changed"], {
+                "snapshot": True, "blob": True, "header": True,
+            })
+            root = Path(tmp)
+            self.assertTrue((root / "items.snapshot.json").is_file())
+            self.assertTrue((root / "items.catalog").is_file())
+            self.assertTrue((root / "items_catalog_abi.gen.h").is_file())
+
+            second = self.payload("build", "--out-dir", tmp)
+            self.assertEqual(second["result"]["changed"], {
+                "snapshot": False, "blob": False, "header": False,
+            })
+
+    def test_build_refuses_receipt_failure_before_writing_outputs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            project = root / "project"
+            out = root / "out"
+            shutil.copytree(PROJECT, project)
+            lock_path = project / "content" / "items.lock.json"
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            lock["def_ids"]["game.removed"] = {"storage": "stack", "level_count": 0}
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            result = subprocess.run(
+                [
+                    sys.executable, str(SCRIPT), "--project-root", str(project),
+                    "build", "--out-dir", str(out),
+                ],
+                text=True, capture_output=True, encoding="utf-8", timeout=20,
+            )
+            self.assertEqual(result.returncode, 1)
+            payload = json.loads(result.stdout)
+            self.assertFalse(payload["result"]["ok"])
+            self.assertFalse(out.exists())
 
     def test_project_context_is_required_and_manifest_cannot_escape_it(self):
         missing = subprocess.run(

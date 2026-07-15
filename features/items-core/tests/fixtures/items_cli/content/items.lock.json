@@ -1,0 +1,21 @@
+{
+  "schema": "game.items_lock",
+  "schema_version": 4,
+  "receipt": {
+    "schema": "items.release_receipt.v2",
+    "items_core_version": "1.11.0",
+    "lua_evaluation_schema": "items.lua.evaluation.v1",
+    "snapshot_schema": "items.snapshot.v1",
+    "state_schema": { "schema": "game.items", "schema_version": 2, "version": 1 },
+    "field_ids": {
+      "active": ["game.weapon.level.attack"],
+      "reserved": []
+    }
+  },
+  "def_ids": {
+    "game.gold": { "storage": "stack", "level_count": 0 },
+    "game.iron_sword": { "storage": "unique", "level_count": 1 },
+    "game.levelled_sword": { "storage": "unique", "level_count": 3 }
+  },
+  "removed": {}
+}

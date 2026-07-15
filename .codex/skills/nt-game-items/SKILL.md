@@ -29,7 +29,11 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> dependencies --item <item-id>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> source --item <item-id>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> validate
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> build --out-dir <build-dir>
 ```
+
+Use `chart` and `requirements` for bounded reports; inspect command help for
+their filters instead of loading the full Snapshot.
 
 Until T0386 removes the legacy JSON catalog, use its existing op-layer only for
 that legacy path:

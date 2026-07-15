@@ -223,17 +223,23 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 `items_cli.py` is the single AI/UI-facing read route over the existing isolated
 Lua evaluator and Snapshot functions. It requires an explicit `--project-root`;
 the manifest defaults only within that root and cannot escape it. `list`,
-`inspect`, `dependencies`, `source`, `schema`, and `validate` return bounded
-`items.cli.result.v1` JSON. They do not reimplement Lua evaluation or Snapshot
-validation, and they never infer a game from cwd. The write/build surface will
-extend this same CLI after source-preserving edit proofs exist.
+`inspect`, `dependencies`, `source`, `schema`, `chart`, `requirements`,
+`validate`, and `build` return bounded `items.cli.result.v1` JSON. They do not
+reimplement Lua evaluation, Snapshot validation, receipt checks, or package
+encoding, and they never infer a game from cwd. `build` validates requirements
+and the release receipt before atomically replacing changed generated files in
+an explicit output directory. The semantic source-write surface will extend
+this same CLI only after source-preserving edit proofs exist.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> list
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> inspect --item <item-id> --level-from 20 --level-to 30
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> dependencies --item <item-id>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> source --item <item-id>
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> chart --item <item-id> --field <field>
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> requirements --item <item-id> --severity warning
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> validate
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> build --out-dir <build-dir>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli_test.py
 ```
 

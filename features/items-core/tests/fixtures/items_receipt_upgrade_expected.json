@@ -4,7 +4,7 @@
   "comment": "frozen legacy receipt",
   "receipt": {
     "schema": "items.release_receipt.v2",
-    "items_core_version": "1.10.0",
+    "items_core_version": "1.11.0",
     "lua_evaluation_schema": "items.lua.evaluation.v1",
     "snapshot_schema": "items.snapshot.v1",
     "state_schema": {

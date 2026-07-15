@@ -99,7 +99,7 @@ RECEIPT_SCHEMA_VERSION = 4
 RECEIPT_SCHEMA = "items.release_receipt.v2"
 LEGACY_RECEIPT_SCHEMA_VERSION = 3
 LEGACY_RECEIPT_SCHEMA = "items.release_receipt.v1"
-ITEMS_CORE_VERSION = "1.10.0"
+ITEMS_CORE_VERSION = "1.11.0"
 
 Issue = dict  # {"rule": str, "id": str | None, "field": str | None, "msg": str}
 
@@ -413,16 +413,32 @@ def _load_evaluation_receipt_inputs(
     return evaluation, baseline, state_schema, baseline_path
 
 
-def cmd_validate_evaluation_receipt(args: argparse.Namespace) -> int:
-    evaluation, baseline, state_schema, _ = _load_evaluation_receipt_inputs(args)
+def validate_evaluation_receipt(
+    evaluation: dict[str, Any],
+    baseline: dict[str, Any],
+    state_schema: dict[str, Any],
+    *,
+    baseline_path: Path,
+) -> dict[str, Any]:
+    """Validate in-memory evaluator output against the canonical release receipt."""
+    validate_baseline_shape(baseline, baseline_path)
+    if baseline.get("schema_version") != RECEIPT_SCHEMA_VERSION:
+        raise OpsError("evaluation receipt requires schema_version 4; run upgrade-receipt first")
     errors, warnings, _, _ = _evaluation_receipt_checks(evaluation, baseline, state_schema)
-    ok = not errors
-    payload = {"ok": ok, "errors": errors, "warnings": warnings}
+    return {"ok": not errors, "errors": errors, "warnings": warnings}
+
+
+def cmd_validate_evaluation_receipt(args: argparse.Namespace) -> int:
+    evaluation, baseline, state_schema, baseline_path = _load_evaluation_receipt_inputs(args)
+    payload = validate_evaluation_receipt(
+        evaluation, baseline, state_schema, baseline_path=baseline_path,
+    )
+    ok = payload["ok"]
     if args.json:
         print(json.dumps(payload, ensure_ascii=False, indent=2))
     else:
         print("evaluation receipt OK" if ok else "evaluation receipt FAILED")
-        for entry in [*errors, *warnings]:
+        for entry in [*payload["errors"], *payload["warnings"]]:
             print(f"  {format_issue(entry)}")
     return 0 if ok else 1
 

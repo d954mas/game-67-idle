@@ -80,6 +80,13 @@ def _json_bytes(value: Any) -> bytes:
     ).encode("utf-8")
 
 
+def snapshot_json_bytes(snapshot: dict[str, Any]) -> bytes:
+    """Return the canonical persisted Snapshot encoding without a trailing newline."""
+    if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
+        _fail("snapshot.schema", f"expected {SNAPSHOT_SCHEMA}")
+    return _json_bytes(snapshot)
+
+
 def _references(value: Any) -> set[str]:
     found: set[str] = set()
     if isinstance(value, list):
