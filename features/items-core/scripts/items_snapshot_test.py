@@ -54,6 +54,9 @@ def evaluation(items, fields=None):
             for index, field in enumerate(fields)
         },
         "items": items,
+        "requirements": [],
+        "requirement_sources": {},
+        "waiver_sources": {},
         "sources": {
             item["id"]: {
                 "file": "game/items.lua",
@@ -314,6 +317,112 @@ class ItemsSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.authoring_mode"):
             SNAPSHOT.build_snapshot(multiple_single)
 
+    def test_requirements_are_normalized_with_actual_dependencies_and_waivers(self):
+        required = evaluation(self.base_items())
+        required["requirements"] = [{
+            "id": "game.weapon.attack_floor",
+            "severity": "warning",
+            "status": "fail",
+            "evidence": {"expected": {"minimum": 20}, "actual": {"value": 15}},
+            "dependencies": ["game.sword"],
+            "waiver": {"reason": "tutorial weapon", "reviewed_by": "lead"},
+        }]
+        required["requirement_sources"] = {
+            "game.weapon.attack_floor": {
+                "file": "game/requirements.lua", "line": 4, "column": 1,
+                "end_line": 4, "end_column": 22, "kind": "requirement",
+                "snippet": "requirements.define({",
+            },
+        }
+        required["waiver_sources"] = {
+            "game.weapon.attack_floor": {
+                "file": "game/requirements.lua", "line": 12, "column": 1,
+                "end_line": 12, "end_column": 21, "kind": "waiver",
+                "snippet": "requirements.waive({",
+            },
+        }
+
+        snapshot = SNAPSHOT.build_snapshot(required)
+        self.assertEqual(snapshot["requirements"][0]["effective_status"], "waived")
+        self.assertEqual(snapshot["requirements"][0]["dependencies"], ["game.sword"])
+        self.assertEqual(
+            snapshot["requirement_sources"]["game.weapon.attack_floor"]["kind"],
+            "requirement",
+        )
+
+        focused = SNAPSHOT.query_requirements(
+            snapshot, item_id="game.sword", severity="warning",
+        )
+        self.assertEqual(focused["schema"], "items.snapshot.requirements.v1")
+        self.assertEqual(focused["results"][0]["effective_status"], "waived")
+        self.assertEqual(focused["results"][0]["source"]["kind"], "requirement")
+        self.assertEqual(focused["results"][0]["waiver_source"]["kind"], "waiver")
+        self.assertEqual(
+            SNAPSHOT.query_requirements(snapshot, item_id="game.gold")["results"], [],
+        )
+
+        changed = copy.deepcopy(required)
+        changed["requirements"][0]["evidence"]["expected"]["minimum"] = 21
+        changed_snapshot = SNAPSHOT.build_snapshot(changed)
+        self.assertNotEqual(
+            changed_snapshot["content_hash"], snapshot["content_hash"],
+        )
+        self.assertEqual(SNAPSHOT.diff_snapshots(snapshot, changed_snapshot)["changes"], [{
+            "op": "replace",
+            "requirement": "game.weapon.attack_floor",
+            "path": "/evidence/expected/minimum",
+            "before": 20,
+            "after": 21,
+        }])
+
+        moved_source = copy.deepcopy(required)
+        moved_source["requirement_sources"]["game.weapon.attack_floor"]["line"] = 40
+        moved_source["requirement_sources"]["game.weapon.attack_floor"]["end_line"] = 40
+        moved_source["waiver_sources"]["game.weapon.attack_floor"]["line"] = 41
+        moved_source["waiver_sources"]["game.weapon.attack_floor"]["end_line"] = 41
+        self.assertEqual(
+            SNAPSHOT.build_snapshot(moved_source)["content_hash"], snapshot["content_hash"],
+        )
+        self.assertEqual(
+            SNAPSHOT.diff_snapshots(snapshot, SNAPSHOT.build_snapshot(moved_source))["changes"], [],
+        )
+
+        array_evidence = copy.deepcopy(required)
+        array_evidence["requirements"][0]["evidence"] = {
+            "expected": [20], "actual": [15],
+        }
+        self.assertEqual(
+            SNAPSHOT.build_snapshot(array_evidence)["requirements"][0]["evidence"],
+            {"expected": [20], "actual": [15]},
+        )
+
+        cyclic_evidence = copy.deepcopy(required)
+        cycle = {}
+        cycle["self"] = cycle
+        cyclic_evidence["requirements"][0]["evidence"]["actual"] = cycle
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.requirement_evidence"):
+            SNAPSHOT.build_snapshot(cyclic_evidence)
+
+        unknown_dependency = copy.deepcopy(required)
+        unknown_dependency["requirements"][0]["dependencies"] = ["game.missing"]
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.requirement_dependencies"):
+            SNAPSHOT.build_snapshot(unknown_dependency)
+
+        stale_waiver = copy.deepcopy(required)
+        stale_waiver["requirements"][0]["status"] = "pass"
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.waiver"):
+            SNAPSHOT.build_snapshot(stale_waiver)
+
+        missing_source = copy.deepcopy(required)
+        missing_source["requirement_sources"] = {}
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.requirement_sources"):
+            SNAPSHOT.build_snapshot(missing_source)
+
+        stale_snapshot = copy.deepcopy(snapshot)
+        stale_snapshot["requirement_sources"] = {}
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "requirements.source"):
+            SNAPSHOT.query_requirements(stale_snapshot)
+
     def test_non_finite_values_and_unknown_references_are_rejected(self):
         bad_number = self.base_items()
         bad_number[1]["levels"]["rows"][0]["attack"] = math.inf
@@ -556,6 +665,13 @@ class ItemsSnapshotTests(unittest.TestCase):
             chart_payload = json.loads(charted.stdout)
             self.assertEqual(chart_payload["downsampling"]["returned_points"], 2)
             self.assertEqual([point["level"] for point in chart_payload["points"]], [1, 3])
+
+            requirements = subprocess.run(
+                [sys.executable, str(SCRIPT), "requirements", "--snapshot", str(target)],
+                text=True, capture_output=True, encoding="utf-8", timeout=10,
+            )
+            self.assertEqual(requirements.returncode, 0, requirements.stderr)
+            self.assertEqual(json.loads(requirements.stdout)["results"], [])
 
             changed_items = self.base_items()
             changed_items[1]["levels"]["rows"][1]["attack"] = 16

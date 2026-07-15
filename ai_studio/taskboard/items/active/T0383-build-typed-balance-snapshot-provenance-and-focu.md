@@ -8,7 +8,7 @@ priority: P0
 tags: [items, balance, snapshot, dependencies]
 created: 2026-07-10
 updated: 2026-07-15
-quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"requirements evaluator review ACCEPT after strict-ID, empty-dependency-array, and scoped JSON-safe evidence fixes; Lua sandbox 17/17; combined evaluator/Snapshot 28/28; git diff check clean"}]}
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"Snapshot requirements review ACCEPT after evidence-array parity and requirement-aware semantic diff fixes; Lua sandbox 17/17; Snapshot 12/12; combined 29/29; feature contracts 6 modules/2 pointers; source-only hash/diff no-op and malformed waiver/dependency/source regressions pass"}]}
 ---
 
 ## What
@@ -69,3 +69,5 @@ for C export, Viewer, requirements, and agents.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: source-span review ACCEPT after Unicode U+2028 and missing-source regressions; Lua sandbox 16/16; Snapshot 11/11; combined 27/27; feature contracts 6 modules/2 pointers; git diff check clean
 - 2026-07-15: Slice 8a: added pure named Lua requirement evaluation with static warning/error severity, bounded authentic typed level queries, automatically recorded actual item dependencies, JSON-safe expected/actual evidence, exact sources, and explicit reason/reviewed_by waiver records. Snapshot normalization remains the next slice.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: requirements evaluator review ACCEPT after strict-ID, empty-dependency-array, and scoped JSON-safe evidence fixes; Lua sandbox 17/17; combined evaluator/Snapshot 28/28; git diff check clean
+- 2026-07-15: Slice 8b: normalized requirement results and reviewed waivers into semantic Snapshot content/hash, kept requirement/waiver spans outside hash, added bounded item-dependency/severity query and CLI, and extended semantic diff with stable requirement identities/paths. Evidence accepts the evaluator's bounded JSON object/array contract.
+- 2026-07-15: Quality: QTECH_001=pass; evidence: Snapshot requirements review ACCEPT after evidence-array parity and requirement-aware semantic diff fixes; Lua sandbox 17/17; Snapshot 12/12; combined 29/29; feature contracts 6 modules/2 pointers; source-only hash/diff no-op and malformed waiver/dependency/source regressions pass

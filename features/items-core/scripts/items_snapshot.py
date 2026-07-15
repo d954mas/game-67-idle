@@ -17,9 +17,11 @@ EVALUATION_SCHEMA = "items.lua.evaluation.v1"
 SNAPSHOT_SCHEMA = "items.snapshot.v1"
 QUERY_SCHEMA = "items.snapshot.query.v1"
 CHART_SCHEMA = "items.snapshot.chart.v1"
+REQUIREMENTS_SCHEMA = "items.snapshot.requirements.v1"
 DIFF_SCHEMA = "items.snapshot.diff.v1"
 DEFAULT_QUERY_ROWS = 1_000
 DEFAULT_CHART_POINTS = 200
+DEFAULT_REQUIREMENT_RESULTS = 1_000
 DEFAULT_DIFF_CHANGES = 1_000
 MAX_EXACT_INTEGER = 9_007_199_254_740_991
 FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
@@ -248,6 +250,121 @@ def _validate_level_provenance(items: list[dict[str, Any]]) -> None:
                 _fail("snapshot.provenance", f"provenance is inconsistent with {mode} mode", row_path)
 
 
+def _normalize_requirements(
+    evaluation: dict[str, Any], item_ids: set[str],
+) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    raw_requirements = evaluation.get("requirements")
+    if not isinstance(raw_requirements, list):
+        _fail("snapshot.requirements", "evaluation requirements must be a list", "$.requirements")
+    requirements: list[dict[str, Any]] = []
+    ids: set[str] = set()
+    waived_ids: set[str] = set()
+
+    def validate_evidence(value: Any, path: str, seen: set[int], depth: int, budget: list[int]) -> None:
+        budget[0] += 1
+        if budget[0] > 1_000 or depth > 32:
+            _fail("snapshot.requirement_evidence", "evidence exceeds structural bounds", path)
+        if value is None or isinstance(value, (bool, str, int)):
+            return
+        if isinstance(value, float):
+            if not math.isfinite(value):
+                _fail("snapshot.requirement_evidence", "evidence numbers must be finite", path)
+            return
+        if not isinstance(value, (dict, list)):
+            _fail("snapshot.requirement_evidence", "evidence must contain only JSON-safe values", path)
+        identity = id(value)
+        if identity in seen:
+            _fail("snapshot.requirement_evidence", "evidence cannot contain cycles", path)
+        seen.add(identity)
+        if isinstance(value, dict):
+            if not all(isinstance(key, str) for key in value):
+                _fail("snapshot.requirement_evidence", "evidence object keys must be strings", path)
+            for key, child in value.items():
+                validate_evidence(child, f"{path}.{key}", seen, depth + 1, budget)
+        else:
+            for child_index, child in enumerate(value):
+                validate_evidence(child, f"{path}[{child_index}]", seen, depth + 1, budget)
+        seen.remove(identity)
+
+    for index, raw_requirement in enumerate(raw_requirements):
+        path = f"$.requirements[{index}]"
+        if not isinstance(raw_requirement, dict):
+            _fail("snapshot.requirement", "requirement result must be an object", path)
+        raw_evidence = raw_requirement.get("evidence")
+        if not isinstance(raw_evidence, dict) or set(raw_evidence) != {"expected", "actual"}:
+            _fail("snapshot.requirement_evidence", "evidence requires expected and actual", f"{path}.evidence")
+        evidence_budget = [0]
+        for evidence_key in ("expected", "actual"):
+            if not isinstance(raw_evidence[evidence_key], (dict, list)):
+                _fail("snapshot.requirement_evidence", "expected and actual must be objects or arrays", f"{path}.evidence.{evidence_key}")
+            validate_evidence(
+                raw_evidence[evidence_key], f"{path}.evidence.{evidence_key}",
+                set(), 0, evidence_budget,
+            )
+        requirement = _canonical(raw_requirement, path)
+        requirement_id = requirement.get("id")
+        required_keys = {"id", "severity", "status", "evidence", "dependencies"}
+        allowed_keys = required_keys | {"waiver"}
+        if set(requirement) - allowed_keys or not required_keys.issubset(requirement):
+            _fail("snapshot.requirement", "requirement result has invalid keys", path)
+        if not isinstance(requirement_id, str) or FIELD_ID_RE.fullmatch(requirement_id) is None:
+            _fail("snapshot.requirement_id", "requirement requires a stable dotted lowercase id", f"{path}.id")
+        if requirement_id in ids:
+            _fail("snapshot.requirement_id", f"duplicate requirement: {requirement_id}", f"{path}.id")
+        if requirement.get("severity") not in {"warning", "error"}:
+            _fail("snapshot.requirement_severity", "severity must be warning or error", f"{path}.severity")
+        if requirement.get("status") not in {"pass", "fail"}:
+            _fail("snapshot.requirement_status", "status must be pass or fail", f"{path}.status")
+        evidence = requirement.get("evidence")
+        if not isinstance(evidence, dict) or set(evidence) != {"expected", "actual"}:
+            _fail("snapshot.requirement_evidence", "evidence requires expected and actual", f"{path}.evidence")
+        dependencies = requirement.get("dependencies")
+        if (not isinstance(dependencies, list)
+                or not all(isinstance(item_id, str) for item_id in dependencies)
+                or len(dependencies) != len(set(dependencies))):
+            _fail("snapshot.requirement_dependencies", "dependencies must be a unique item id list", f"{path}.dependencies")
+        unknown = sorted(set(dependencies) - item_ids)
+        if unknown:
+            _fail("snapshot.requirement_dependencies", f"unknown dependency: {unknown[0]}", f"{path}.dependencies")
+        requirement["dependencies"] = sorted(dependencies)
+        waiver = requirement.get("waiver")
+        if waiver is not None:
+            if (requirement["status"] != "fail" or not isinstance(waiver, dict)
+                    or set(waiver) != {"reason", "reviewed_by"}
+                    or not isinstance(waiver["reason"], str) or not waiver["reason"]
+                    or not isinstance(waiver["reviewed_by"], str) or not waiver["reviewed_by"]):
+                _fail("snapshot.waiver", "only a failing requirement accepts reason and reviewed_by", f"{path}.waiver")
+            requirement["effective_status"] = "waived"
+            waived_ids.add(requirement_id)
+        else:
+            requirement["effective_status"] = requirement["status"]
+        ids.add(requirement_id)
+        requirements.append(requirement)
+    requirements.sort(key=lambda requirement: requirement["id"])
+
+    raw_sources = evaluation.get("requirement_sources")
+    if not isinstance(raw_sources, dict) or set(raw_sources) != ids:
+        _fail("snapshot.requirement_sources", "requirement_sources must exactly match requirement ids", "$.requirement_sources")
+    sources = {
+        requirement_id: _source(
+            raw_sources[requirement_id], "snapshot.requirement_source",
+            f"$.requirement_sources.{requirement_id}", kind="requirement",
+        )
+        for requirement_id in sorted(ids)
+    }
+    raw_waiver_sources = evaluation.get("waiver_sources")
+    if not isinstance(raw_waiver_sources, dict) or set(raw_waiver_sources) != waived_ids:
+        _fail("snapshot.waiver_sources", "waiver_sources must exactly match waived requirement ids", "$.waiver_sources")
+    waiver_sources = {
+        requirement_id: _source(
+            raw_waiver_sources[requirement_id], "snapshot.waiver_source",
+            f"$.waiver_sources.{requirement_id}", kind="waiver",
+        )
+        for requirement_id in sorted(waived_ids)
+    }
+    return requirements, sources, waiver_sources
+
+
 def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(evaluation, dict) or evaluation.get("schema") != EVALUATION_SCHEMA:
         _fail("snapshot.evaluation_schema", f"expected {EVALUATION_SCHEMA}")
@@ -273,6 +390,7 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     items.sort(key=lambda item: item["id"])
     _validate_typed_rows(items, fields)
     _validate_level_provenance(items)
+    requirements, requirement_sources, waiver_sources = _normalize_requirements(evaluation, seen)
 
     dependencies: dict[str, list[str]] = {}
     for item in items:
@@ -298,17 +416,23 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
         "schema": SNAPSHOT_SCHEMA,
         "fields": fields,
         "items": items,
+        "requirements": requirements,
     })).hexdigest()
     snapshot = {
         "schema": SNAPSHOT_SCHEMA,
         "content_hash": content_hash,
         "fields": fields,
         "items": items,
+        "requirements": requirements,
         "dependencies": dependencies,
         "dependents": dependents,
     }
     if field_sources:
         snapshot["field_sources"] = field_sources
+    if requirement_sources:
+        snapshot["requirement_sources"] = requirement_sources
+    if waiver_sources:
+        snapshot["waiver_sources"] = waiver_sources
     raw_sources = evaluation.get("sources")
     if not isinstance(raw_sources, dict) or set(raw_sources) != seen:
         _fail("snapshot.sources", "sources must exactly match item ids", "$.sources")
@@ -563,6 +687,67 @@ def chart_snapshot(
     }
 
 
+def query_requirements(
+    snapshot: dict[str, Any],
+    *,
+    item_id: str | None = None,
+    severity: str | None = None,
+    max_results: int = DEFAULT_REQUIREMENT_RESULTS,
+) -> dict[str, Any]:
+    if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
+        _fail("requirements.snapshot_schema", f"expected {SNAPSHOT_SCHEMA}")
+    if type(max_results) is not int or max_results < 1 or max_results > DEFAULT_REQUIREMENT_RESULTS:
+        _fail("requirements.max_results", f"max_results must be between 1 and {DEFAULT_REQUIREMENT_RESULTS}")
+    if severity is not None and severity not in {"warning", "error"}:
+        _fail("requirements.severity", "severity must be warning or error")
+    raw_items = snapshot.get("items")
+    if not isinstance(raw_items, list):
+        _fail("requirements.items", "snapshot items must be a list", "$.items")
+    item_ids = {
+        item["id"] for item in raw_items
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+    if len(item_ids) != len(raw_items):
+        _fail("requirements.items", "snapshot items require unique string ids", "$.items")
+    if item_id is not None and item_id not in item_ids:
+        _fail("requirements.item_not_found", f"unknown item: {item_id}", "$.item")
+    try:
+        raw_requirements = snapshot.get("requirements")
+        normalized_input = [
+            {key: value for key, value in requirement.items() if key != "effective_status"}
+            if isinstance(requirement, dict) else requirement
+            for requirement in raw_requirements
+        ] if isinstance(raw_requirements, list) else raw_requirements
+        requirements, sources, waiver_sources = _normalize_requirements({
+            "requirements": normalized_input,
+            "requirement_sources": snapshot.get("requirement_sources", {}),
+            "waiver_sources": snapshot.get("waiver_sources", {}),
+        }, item_ids)
+    except SnapshotFailure as error:
+        code = "requirements.source" if "source" in error.code else "requirements.result"
+        _fail(code, error.message, error.path)
+    selected = [
+        requirement for requirement in requirements
+        if (item_id is None or item_id in requirement["dependencies"])
+        and (severity is None or requirement["severity"] == severity)
+    ]
+    if len(selected) > max_results:
+        _fail("requirements.result_limit", f"query exceeds {max_results} results; add a filter")
+    results = []
+    for requirement in selected:
+        requirement_id = requirement["id"]
+        result = {**requirement, "source": sources[requirement_id]}
+        if requirement_id in waiver_sources:
+            result["waiver_source"] = waiver_sources[requirement_id]
+        results.append(result)
+    return {
+        "schema": REQUIREMENTS_SCHEMA,
+        "content_hash": snapshot.get("content_hash"),
+        "filters": {"item": item_id, "severity": severity},
+        "results": results,
+    }
+
+
 def _diff_items(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
         _fail("diff.snapshot_schema", f"expected {SNAPSHOT_SCHEMA}")
@@ -580,6 +765,30 @@ def _diff_items(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
+def _diff_requirements(snapshot: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    items = snapshot.get("items")
+    if not isinstance(items, list):
+        _fail("diff.items", "snapshot items must be a list", "$.items")
+    item_ids = {
+        item["id"] for item in items
+        if isinstance(item, dict) and isinstance(item.get("id"), str)
+    }
+    if len(item_ids) != len(items):
+        _fail("diff.items", "snapshot items require unique string ids", "$.items")
+    raw_requirements = snapshot.get("requirements")
+    normalized_input = [
+        {key: value for key, value in requirement.items() if key != "effective_status"}
+        if isinstance(requirement, dict) else requirement
+        for requirement in raw_requirements
+    ] if isinstance(raw_requirements, list) else raw_requirements
+    requirements, _sources, _waiver_sources = _normalize_requirements({
+        "requirements": normalized_input,
+        "requirement_sources": snapshot.get("requirement_sources", {}),
+        "waiver_sources": snapshot.get("waiver_sources", {}),
+    }, item_ids)
+    return {requirement["id"]: requirement for requirement in requirements}
+
+
 def _pointer(path: str, key: str | int) -> str:
     token = str(key).replace("~", "~0").replace("/", "~1")
     return f"{path}/{token}"
@@ -595,7 +804,7 @@ def _diff_value(
     before: Any,
     after: Any,
     *,
-    item_id: str,
+    identity: dict[str, str],
     path: str,
     changes: list[dict[str, Any]],
     max_changes: int,
@@ -605,17 +814,17 @@ def _diff_value(
             child_path = _pointer(path, key)
             if key not in after:
                 _record(changes, {
-                    "op": "remove", "item": item_id, "path": child_path,
+                    "op": "remove", **identity, "path": child_path,
                     "before": before[key],
                 }, max_changes)
             elif key not in before:
                 _record(changes, {
-                    "op": "add", "item": item_id, "path": child_path,
+                    "op": "add", **identity, "path": child_path,
                     "after": after[key],
                 }, max_changes)
             else:
                 _diff_value(
-                    before[key], after[key], item_id=item_id, path=child_path,
+                    before[key], after[key], identity=identity, path=child_path,
                     changes=changes, max_changes=max_changes,
                 )
         return
@@ -623,23 +832,23 @@ def _diff_value(
         shared = min(len(before), len(after))
         for index in range(shared):
             _diff_value(
-                before[index], after[index], item_id=item_id,
+                before[index], after[index], identity=identity,
                 path=_pointer(path, index), changes=changes, max_changes=max_changes,
             )
         for index in range(shared, len(before)):
             _record(changes, {
-                "op": "remove", "item": item_id, "path": _pointer(path, index),
+                "op": "remove", **identity, "path": _pointer(path, index),
                 "before": before[index],
             }, max_changes)
         for index in range(shared, len(after)):
             _record(changes, {
-                "op": "add", "item": item_id, "path": _pointer(path, index),
+                "op": "add", **identity, "path": _pointer(path, index),
                 "after": after[index],
             }, max_changes)
         return
     if type(before) is not type(after) or before != after:
         _record(changes, {
-            "op": "replace", "item": item_id, "path": path,
+            "op": "replace", **identity, "path": path,
             "before": before, "after": after,
         }, max_changes)
 
@@ -654,6 +863,8 @@ def diff_snapshots(
         _fail("diff.max_changes", "max_changes must be positive")
     before_items = _diff_items(before)
     after_items = _diff_items(after)
+    before_requirements = _diff_requirements(before)
+    after_requirements = _diff_requirements(after)
     changes: list[dict[str, Any]] = []
     for item_id in sorted(set(before_items) | set(after_items)):
         if item_id not in after_items:
@@ -668,8 +879,25 @@ def diff_snapshots(
             }, max_changes)
         else:
             _diff_value(
-                before_items[item_id], after_items[item_id], item_id=item_id,
+                before_items[item_id], after_items[item_id], identity={"item": item_id},
                 path="", changes=changes, max_changes=max_changes,
+            )
+    for requirement_id in sorted(set(before_requirements) | set(after_requirements)):
+        if requirement_id not in after_requirements:
+            _record(changes, {
+                "op": "remove", "requirement": requirement_id, "path": "",
+                "before": before_requirements[requirement_id],
+            }, max_changes)
+        elif requirement_id not in before_requirements:
+            _record(changes, {
+                "op": "add", "requirement": requirement_id, "path": "",
+                "after": after_requirements[requirement_id],
+            }, max_changes)
+        else:
+            _diff_value(
+                before_requirements[requirement_id], after_requirements[requirement_id],
+                identity={"requirement": requirement_id}, path="",
+                changes=changes, max_changes=max_changes,
             )
     return {
         "schema": DIFF_SCHEMA,
@@ -724,6 +952,11 @@ def main(argv: list[str] | None = None) -> int:
     chart.add_argument("--level-from", type=int)
     chart.add_argument("--level-to", type=int)
     chart.add_argument("--max-points", type=int, default=DEFAULT_CHART_POINTS)
+    requirements = subparsers.add_parser("requirements")
+    requirements.add_argument("--snapshot", type=Path, required=True)
+    requirements.add_argument("--item")
+    requirements.add_argument("--severity")
+    requirements.add_argument("--max-results", type=int, default=DEFAULT_REQUIREMENT_RESULTS)
     diff = subparsers.add_parser("diff")
     diff.add_argument("--before", type=Path, required=True)
     diff.add_argument("--after", type=Path, required=True)
@@ -745,6 +978,12 @@ def main(argv: list[str] | None = None) -> int:
                 _load(args.snapshot), item_id=args.item, field=args.field,
                 level_from=args.level_from, level_to=args.level_to,
                 max_points=args.max_points,
+            )
+            print(_json_bytes(payload).decode("utf-8"))
+        elif args.command == "requirements":
+            payload = query_requirements(
+                _load(args.snapshot), item_id=args.item, severity=args.severity,
+                max_results=args.max_results,
             )
             print(_json_bytes(payload).decode("utf-8"))
         else:
