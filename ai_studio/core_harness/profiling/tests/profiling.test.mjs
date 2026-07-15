@@ -1042,11 +1042,11 @@ test("claudeAgentRollup reads per-agent tools from native transcripts", () => {
     const agents = claudeAgentRollup(session, dir);
     assert.equal(agents.length, 2);
     const direct = agents.find((a) => a.id === "aaa111");
-    assert.equal(direct.objective, "cut the proof layer");
+    assert.equal(direct.label, "cut the proof layer");
     assert.deepEqual(direct.tools, { Edit: 2, Read: 1 });
     assert.equal(direct.group, "agent");
     const wf = agents.find((a) => a.id === "bbb222");
-    assert.equal(wf.objective, "map the world module");
+    assert.equal(wf.label, "map the world module");
     assert.equal(wf.group, "workflow");
     assert.equal(wf.tools.Grep, 1);
   } finally {
@@ -1076,7 +1076,7 @@ test("codexAgentRollup reads subagent function-call tools and filters by parent"
     const matched = codexAgentRollup("thread-parent", dir);
     assert.equal(matched.length, 1);
     assert.equal(matched[0].type, "explorer");
-    assert.equal(matched[0].objective, "asset_loader_review");
+    assert.equal(matched[0].label, "asset_loader_review");
     assert.equal(matched[0].tools.shell_command, 2);
     // a different parent yields nothing
     assert.equal(codexAgentRollup("other-parent", dir).length, 0);
@@ -1104,6 +1104,47 @@ test("status --agents renders an advisory per-agent rollup", () => {
     assert.match(result.stdout, /## Agents - Claude/);
     assert.match(result.stdout, /ccc333 \[Explore\] map runtime - Read 1, Grep 1/);
     assert.match(result.stdout, /Total: 1 agent\(s\), 2 tool call\(s\)/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status --complete --agents resolves Codex children from CODEX_THREAD_ID", () => {
+  const dir = tempDir();
+  try {
+    const parent = "thread-parent";
+    const day = join(dir, "sessions", "2026", "07", "15");
+    const transcript = join(day, `rollout-main-${parent}.jsonl`);
+    const statusJson = join(dir, "status.json");
+    mkdirSync(day, { recursive: true });
+    writeJsonl(transcript, [
+      { type: "session_meta", timestamp: "2026-07-15T10:00:00Z", payload: { id: parent, thread_source: "user" } },
+    ]);
+    writeJsonl(join(day, "rollout-child.jsonl"), [
+      { type: "session_meta", timestamp: "2026-07-15T10:00:01Z", payload: { id: "thread-child", thread_source: "subagent", source: { subagent: { thread_spawn: { parent_thread_id: parent, agent_path: "/root/review_packet" } } } } },
+      { type: "response_item", timestamp: "2026-07-15T10:00:02Z", payload: { type: "function_call", name: "shell_command" } },
+      { type: "event_msg", timestamp: "2026-07-15T10:00:03Z", payload: { type: "task_complete" } },
+    ]);
+    writeJsonl(join(day, "rollout-unrelated-child.jsonl"), [
+      { type: "session_meta", timestamp: "2026-07-15T10:00:01Z", payload: { id: "thread-unrelated", thread_source: "subagent", source: { subagent: { thread_spawn: { parent_thread_id: "other-parent", agent_path: "/root/unrelated_packet" } } } } },
+    ]);
+
+    run([
+      "ai_studio/core_harness/profiling/status.mjs",
+      "--complete",
+      "--agents",
+      "--json-output",
+      statusJson,
+    ], { env: {
+      CODEX_SESSION_FILE: "",
+      CODEX_SESSION_ROOT: join(dir, "sessions"),
+      CODEX_THREAD_ID: parent,
+      AI_AGENT_CODEX_DAY_DIR: "",
+      AI_AGENT_CODEX_PARENT: "",
+    } });
+    const status = readJson(statusJson);
+    assert.equal(status.agent_tool_rollup.codex.length, 1);
+    assert.equal(status.agent_tool_rollup.codex[0].label, "review_packet");
   } finally {
     cleanup(dir);
   }

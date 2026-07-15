@@ -660,7 +660,16 @@ const status = buildStatus(profilePaths, values, sourceParsed);
 let rendered = renderStatus(status, { verbose: values.verbose === true });
 
 if (values.agents === true) {
-  const agentRollup = buildAgentToolRollup(values);
+  const agentEnv = { ...process.env };
+  if (sourceParsed !== null) {
+    const sessionStart = sourceParsed.records.find((record) => record.event_type === "session_start");
+    agentEnv.CODEX_SESSION_FILE = sourceParsed.exists ? profilePaths[0] : "";
+    agentEnv.AI_AGENT_CODEX_DAY_DIR = "";
+    agentEnv.AI_AGENT_CODEX_PARENT = String(sessionStart?.session_id || "missing-parent");
+  } else if (!agentEnv.CODEX_SESSION_FILE && agentEnv.CODEX_THREAD_ID) {
+    agentEnv.CODEX_SESSION_FILE = resolveCodexTranscript({ sessionId: agentEnv.CODEX_THREAD_ID });
+  }
+  const agentRollup = buildAgentToolRollup(values, agentEnv);
   status.agent_tool_rollup = agentRollup;
   rendered += renderAgentRollup(agentRollup);
 }

@@ -139,7 +139,7 @@ export function claudeAgentRollup(sessionId, projectsRoot = join(homedir(), ".cl
     agents.push({
       id: id.slice(0, 12),
       type: meta.agentType || "",
-      objective: String(meta.description || parsed.firstUser || "").split(/\r?\n/)[0].slice(0, 110),
+      label: String(meta.description || parsed.firstUser || "").split(/\r?\n/)[0].slice(0, 110),
       tools: parsed.tools,
       tool_total: toolTotal(parsed.tools),
       tool_errors: parsed.toolErrors,
@@ -206,7 +206,7 @@ export function codexAgentRollup(parentThreadId, dayDir) {
     agents.push({
       id: String(meta.id || entry.name).slice(0, 12),
       type: spawn.agent_role || "subagent",
-      objective: taskName || firstUserText(records) || String(spawn.agent_nickname || "").slice(0, 110),
+      label: taskName || firstUserText(records) || String(spawn.agent_nickname || "").slice(0, 110),
       tools,
       tool_total: toolTotal(tools),
       tool_errors: toolErrors,
@@ -257,13 +257,13 @@ function renderSection(title, agents) {
   for (const agent of agents) {
     const tools = sortedTools(agent.tools).map(([name, n]) => `${name} ${n}`).join(", ") || "no tool calls";
     const type = agent.type ? `[${agent.type}] ` : "";
-    const objective = agent.objective || "(no objective recorded)";
+    const label = agent.label || "(no label recorded)";
     const meta = [
       formatDuration(agent.duration_ms),
       agent.tool_errors > 0 ? `${agent.tool_errors} tool-err` : null,
       agent.status === "ok" ? "ok" : agent.status,
     ].filter(Boolean).join(", ");
-    lines.push(`- ${agent.id} ${type}${objective} - ${tools} | ${meta}`);
+    lines.push(`- ${agent.id} ${type}${label} - ${tools} | ${meta}`);
   }
   const totalCalls = agents.reduce((sum, a) => sum + a.tool_total, 0);
   const totalErr = agents.reduce((sum, a) => sum + a.tool_errors, 0);
