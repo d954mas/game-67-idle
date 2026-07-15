@@ -10,6 +10,37 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#if defined(ITEMS_RUNTIME_PACKAGE_ENABLED) && ITEMS_RUNTIME_PACKAGE_ENABLED
+#include "items_catalog_abi.gen.h"
+
+#ifndef ITEMS_RUNTIME_PACKAGE_MAX_BYTES
+#define ITEMS_RUNTIME_PACKAGE_MAX_BYTES (UINT32_C(64) * UINT32_C(1024) * UINT32_C(1024))
+#endif
+
+typedef enum items_catalog_bind_error_t {
+    ITEMS_CATALOG_BIND_OK = 0,
+    ITEMS_CATALOG_BIND_BAD_HEADER,
+    ITEMS_CATALOG_BIND_BAD_MAGIC,
+    ITEMS_CATALOG_BIND_BAD_VERSION,
+    ITEMS_CATALOG_BIND_ABI_MISMATCH,
+    ITEMS_CATALOG_BIND_CONTENT_MISMATCH,
+    ITEMS_CATALOG_BIND_BAD_LAYOUT,
+    ITEMS_CATALOG_BIND_NO_MEMORY,
+    ITEMS_CATALOG_BIND_ALREADY_BOUND,
+} items_catalog_bind_error_t;
+
+bool items_catalog_try_bind(
+    const uint8_t *bytes, uint32_t byte_count,
+    items_catalog_bind_error_t *out_error);
+/* Startup/shutdown API: all bind/read/shutdown calls are main-thread-only.
+   A host using another thread must serialize the complete catalog lifetime. */
+void items_catalog_shutdown(void);
+bool items_catalog_is_bound(void);
+uint32_t items_catalog_item_count(void);
+uint64_t items_catalog_schema_abi(void);
+uint64_t items_catalog_content_fingerprint(void);
+#endif
+
 /* ---- Typed game catalog API (proof opt-in until the T0386 cutover) ---- */
 #if defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED
 typedef struct item_id_t {

@@ -8,7 +8,7 @@ priority: P1
 tags: [items, codegen, c, cache]
 created: 2026-07-10
 updated: 2026-07-15
-quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"Slice 2 review ACCEPT; runtime package 8/8; items ops 29/29; all items-core 86/86; feature contracts pass; studio verify --changed passed features and template-release; git diff check clean"}]}
+quality: {"checks":[{"id":"QTECH_001","outcome":"pass","evidence":"Two independent native parser reviews ACCEPT after generated expectation, UTF-8, field-count, value-range, size-gate, dependency, and INT64_MIN fixes; Python items-core 86/86; warning-gated native test_items_runtime_package CTest 1/1; feature contracts pass; studio verify changed passed features/template-release; git diff check clean"}]}
 ---
 
 ## What
@@ -70,3 +70,5 @@ package without runtime Lua/JSON parsing.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: Runtime package review ACCEPT after canonical span ownership, full FIELD validation, fail-early budgets, and positive-cost fixes; package tests 5/5 including resigned corruption; all items-core 83/83 before final positive-cost guard plus targeted 5/5 after; studio verify --changed passed features domain; git diff check clean
 - 2026-07-15: Slice 2: added structured build CLI, atomically write-if-different blob/header outputs, and an ABI header containing only schema/item/field identity. Value-only edits leave header bytes/mtime unchanged. Review fixes reject all input/output path overlap before writes, normalize argument/encoding failures to JSON, and publish the additive surface as items-core 1.8.0 with exact template/receipt pins.
 - 2026-07-15: Quality: QTECH_001=pass; evidence: Slice 2 review ACCEPT; runtime package 8/8; items ops 29/29; all items-core 86/86; feature contracts pass; studio verify --changed passed features and template-release; git diff check clean
+- 2026-07-15: Slice 3: added opt-in native package bind over the exact Python-generated fixture. Bind copies first, validates magic/version/generated item+field ABI/content digest/canonical layout/UTF-8/ranges/indices/spans/default 64 MiB gate, and publishes atomically only on success; rebind is refused, shutdown permits a later bind, and the lifecycle is explicitly main-thread serialized. Public resource acquisition remains next.
+- 2026-07-15: Quality: QTECH_001=pass; evidence: Two independent native parser reviews ACCEPT after generated expectation, UTF-8, field-count, value-range, size-gate, dependency, and INT64_MIN fixes; Python items-core 86/86; warning-gated native test_items_runtime_package CTest 1/1; feature contracts pass; studio verify changed passed features/template-release; git diff check clean

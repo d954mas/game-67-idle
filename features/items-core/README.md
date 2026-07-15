@@ -225,11 +225,17 @@ strings are deduplicated, padding is zero, and schema/content/item identities
 use the engine-compatible seed-0 XXH64 contract. Generated outputs are replaced
 atomically only when their bytes change, so a value-only balance edit changes
 the blob without touching the header. The Python inspector is the wire-format
-reference; native resource binding remains the next T0365 slice.
+reference. The opt-in native binder validates the generated schema/item ABI,
+content digest, UTF-8 strings, ranges, canonical spans, indices, alignment, and
+default 64 MiB budget on an owned copy before publishing it. Its lifecycle is
+main-thread startup/shutdown only. The public resource adapter remains the next
+T0365 slice.
 
 ```powershell
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py build --snapshot <snapshot.json> --out <items.catalog> --header-out <items_catalog_abi.gen.h>
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package_test.py
+cmake --build templates/template/build/native-debug --target test_items_runtime_package
+ctest --test-dir templates/template/build/native-debug -R "^test_items_runtime_package$" --output-on-failure
 ```
 
 ### T0364 typed API proof

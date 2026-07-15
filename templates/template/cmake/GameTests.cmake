@@ -294,6 +294,41 @@ if(NOT EMSCRIPTEN)
     add_test(NAME generate_items_api_proof_test
         COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof_test.py")
 
+    # T0365 native proof: bind the exact Python-generated compact package.
+    set(ITEMS_RUNTIME_PACKAGE_DIR "${CMAKE_BINARY_DIR}/generated/items-runtime")
+    set(ITEMS_RUNTIME_PACKAGE_BLOB "${ITEMS_RUNTIME_PACKAGE_DIR}/items.catalog")
+    set(ITEMS_RUNTIME_PACKAGE_HEADER "${ITEMS_RUNTIME_PACKAGE_DIR}/items_catalog_abi.gen.h")
+    set(ITEMS_RUNTIME_PACKAGE_SNAPSHOT "${ITEMS_CORE_DIR}/tests/fixtures/items_runtime_snapshot_v1.json")
+    add_custom_command(
+        OUTPUT "${ITEMS_RUNTIME_PACKAGE_BLOB}" "${ITEMS_RUNTIME_PACKAGE_HEADER}"
+        COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_runtime_package.py" build
+            --snapshot "${ITEMS_RUNTIME_PACKAGE_SNAPSHOT}"
+            --out "${ITEMS_RUNTIME_PACKAGE_BLOB}"
+            --header-out "${ITEMS_RUNTIME_PACKAGE_HEADER}"
+        DEPENDS
+            "${ITEMS_CORE_SCRIPTS}/items_runtime_package.py"
+            "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof.py"
+            "${ITEMS_RUNTIME_PACKAGE_SNAPSHOT}"
+        COMMENT "Generating compact Items runtime package proof"
+        VERBATIM)
+    add_custom_target(items_runtime_package_gen DEPENDS
+        "${ITEMS_RUNTIME_PACKAGE_BLOB}" "${ITEMS_RUNTIME_PACKAGE_HEADER}")
+    add_executable(test_items_runtime_package
+        tests/test_items_runtime_package.c
+        "${ITEMS_CORE_SRC}/items_runtime_package.c")
+    add_dependencies(test_items_runtime_package items_runtime_package_gen)
+    target_link_libraries(test_items_runtime_package PRIVATE unity nt_hash nt_core)
+    target_include_directories(test_items_runtime_package PRIVATE
+        "${ITEMS_CORE_INC}" "${ITEMS_RUNTIME_PACKAGE_DIR}")
+    target_compile_definitions(test_items_runtime_package PRIVATE
+        ITEMS_RUNTIME_PACKAGE_ENABLED=1
+        ITEMS_RUNTIME_PACKAGE_PATH="${ITEMS_RUNTIME_PACKAGE_BLOB}"
+        _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(test_items_runtime_package)
+    set_target_properties(test_items_runtime_package PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_items_runtime_package COMMAND test_items_runtime_package)
+
     # Items fragment round-trip links generated state/events, game-owned hooks,
     # JSON/event plumbing, ownership core, and the generated catalog.
     # game_save.c is not linked; the test TU stubs game_save_mark_dirty.
@@ -510,7 +545,7 @@ if(NOT EMSCRIPTEN)
         test_game_events test_game_events_overflow test_game_state_roundtrip
         test_game_events_typed test_game_event_render test_game_analytics
         test_game_events_log_mirror test_items_catalog test_items_api_core_only
-        test_items_api test_items_fragment test_progression test_progression_curve
+        test_items_api test_items_runtime_package test_items_fragment test_progression test_progression_curve
         test_game_format test_platform_sdk test_platform_lifecycle
         test_platform_sdk_events test_template_composition)
     foreach(_test_target IN LISTS GAME_NATIVE_TEST_TARGETS)

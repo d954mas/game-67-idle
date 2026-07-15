@@ -197,9 +197,23 @@ class ItemsRuntimePackageTests(unittest.TestCase):
         changed = copy.deepcopy(snapshot)
         changed["items"][1]["levels"]["rows"][0]["attack"] = 999
         self.assertEqual(PACKAGE.render_abi_header(changed), header)
+        added = copy.deepcopy(snapshot)
+        added["items"].append({
+            "id": "game.wood", "kind": "material", "stack": 99,
+            "authoring_mode": "none",
+        })
+        self.assertNotEqual(PACKAGE.render_abi_header(added), header)
         self.assertIn("ITEMS_CATALOG_SCHEMA_ABI", header)
         self.assertIn("ITEM_GAME_GOLD", header)
         self.assertIn("ITEM_FIELD_GAME_WEAPON_LEVEL_ATTACK", header)
+
+        full_i64 = copy.deepcopy(snapshot)
+        full_i64["fields"][0]["min"] = PACKAGE.I64_MIN
+        full_i64["fields"][0]["max"] = PACKAGE.I64_MAX
+        boundary_header = PACKAGE.render_abi_header(full_i64)
+        self.assertIn("INT64_MIN", boundary_header)
+        self.assertIn("INT64_MAX", boundary_header)
+        self.assertNotIn("INT64_C(9223372036854775808)", boundary_header)
 
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "items_catalog_abi.gen.h"

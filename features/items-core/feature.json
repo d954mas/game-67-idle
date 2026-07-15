@@ -77,6 +77,7 @@
       "items_ops_test",
       "test_items_api_core_only",
       "test_items_api",
+      "test_items_runtime_package",
       "generate_items_api_proof_test"
     ]
   },

@@ -1,0 +1,77 @@
+{
+  "content_hash": "sha256:4dbaf4ad97d5cd36d6d35eb07ff2e0ecadd9f0a99084b672e5fd48aeaadee072",
+  "dependencies": {"game.gold": [], "game.sword": ["game.gold"]},
+  "dependents": {"game.gold": ["game.sword"], "game.sword": []},
+  "field_sources": {
+    "game.weapon.level.attack": {
+      "column": 1, "end_column": 12, "end_line": 1,
+      "file": "game/items.lua", "kind": "field", "line": 1,
+      "snippet": "field.i64({"
+    }
+  },
+  "fields": [
+    {
+      "id": "game.weapon.level.attack", "label_key": "item.attack",
+      "max": 1000000, "member": "attack", "min": 0,
+      "required_for": ["weapon"], "rounding": "exact",
+      "section": "level_row", "type": "i64", "unit": "damage"
+    }
+  ],
+  "items": [
+    {
+      "authoring_mode": "none", "id": "game.gold",
+      "kind": "currency", "stack": 0
+    },
+    {
+      "acquire": {
+        "cost": {
+          "__studio_kind": "cost", "count": 100,
+          "item": {"__studio_kind": "item_ref", "id": "game.gold"}
+        }
+      },
+      "authoring_mode": "table", "id": "game.sword", "kind": "weapon",
+      "levels": {
+        "mode": "table",
+        "provenance": [
+          {"attack": "table"},
+          {"attack": "table", "cost_to_reach": "table"},
+          {"attack": "table", "cost_to_reach": "table"}
+        ],
+        "rows": [
+          {"attack": 10},
+          {
+            "attack": 15,
+            "cost_to_reach": {
+              "__studio_kind": "cost", "count": 100,
+              "item": {"__studio_kind": "item_ref", "id": "game.gold"}
+            }
+          },
+          {"attack": 21, "cost_to_reach": {"__studio_kind": "free"}}
+        ]
+      },
+      "stack": 1
+    }
+  ],
+  "requirements": [],
+  "runtime_export": {
+    "field_ids": ["game.weapon.level.attack"],
+    "items": [
+      {"id": "game.gold", "level_count": 0, "storage": "stack"},
+      {"id": "game.sword", "level_count": 3, "storage": "unique"}
+    ],
+    "schema": "items.runtime_export.v1"
+  },
+  "schema": "items.snapshot.v1",
+  "sources": {
+    "game.gold": {
+      "column": 1, "end_column": 15, "end_line": 10,
+      "file": "game/items.lua", "kind": "definition", "line": 10,
+      "snippet": "items.define({"
+    },
+    "game.sword": {
+      "column": 1, "end_column": 15, "end_line": 20,
+      "file": "game/items.lua", "kind": "definition", "line": 20,
+      "snippet": "items.define({"
+    }
+  }
+}
