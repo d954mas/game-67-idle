@@ -26,6 +26,47 @@ logs, generated artifacts, and broad design only when task-linked or requested.
 5. Run the narrowest validation that proves the change.
 6. Record evidence in the task log and final response when project state changes.
 
+For substantial implementation, state four short fields before changing code:
+
+```text
+Goal: concrete outcome
+Scope: allowed modules
+Done: observable completion condition
+Proof: commands or evidence that establish Done
+```
+
+Use the validation ladder once per meaningful state change: focused proof during
+RED/GREEN, `studio.mjs verify --changed` after the coherent change, and one
+`verify --full` before publishing or closing the work. Run CI once per SHA.
+After the same unexplained failure twice, diagnose the cause instead of retrying
+the same command again.
+
+## Checkpoint And Handoff
+
+Checkpoint when the task finishes, scope or domain changes, two or three
+independent commits accumulate, an external pause exceeds ten minutes, or the
+lead leaves a long-running work packet. For long sessions, checkpoint after four
+hours; start a fresh session after six hours or when current model context reaches
+70%. A 300-tool-call session also needs a checkpoint. These are advisory
+boundaries: continuing is allowed when the reason is explicit.
+
+`profiling/status.mjs --complete` reports `continue`,
+`checkpoint-recommended`, or `new-session-recommended` from the evidence the
+Codex transcript exposes.
+
+Keep handoff content compact and point to canonical state instead of copying it:
+
+```text
+Task:
+Accepted decisions:
+Current SHA and dirty state:
+Changed:
+Proven:
+Remaining:
+Next command:
+Do not repeat:
+```
+
 ## Quality Feedback
 
 Quality checks are iterative feedback, not only final acceptance gates.

@@ -41,8 +41,8 @@ public surface, internals, and validation path.
 - `core_harness/`: reviewed core routing and agent harness docs.
 - `core_harness/workflow/orchestration/`: reviewed bounded orchestration rule.
 - `core_harness/agent_surfaces/`: generated Codex/Claude compatibility surfaces.
-- `core_harness/profiling/`: passive profiling, Codex recovery, session status,
-  and chat-session reflection ownership.
+- `core_harness/profiling/`: passive hook diagnostics, canonical Codex session
+  status, and chat-session reflection ownership.
 - `dev_environment/`: local developer-environment generators such as VS Code
   task and launch file generation.
 - `quality/`: reviewed small quality rules for selecting evidence and checks.

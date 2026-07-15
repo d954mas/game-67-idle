@@ -10,10 +10,11 @@ import {
   todaySessionProfiles,
 } from "./profile_lib.mjs";
 import { buildAgentToolRollup, renderAgentRollup } from "./agent_rollup.mjs";
+import { parseCodexTranscript, resolveCodexTranscript } from "./codex_transcript.mjs";
 
 function usage() {
   console.error(`usage:
-  node ai_studio/core_harness/profiling/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--agents] [--since <Nm|Nh|Nd|ISO>] [--json-output <status.json>] [--verbose]
+  node ai_studio/core_harness/profiling/status.mjs [--profile <p>] [--session <id>] [--harness claude|codex] [--all] [--complete] [--transcript <p>] [--agents] [--since <Nm|Nh|Nd|ISO>] [--json-output <status.json>] [--verbose]
 
 Profiling is fully passive: the PostToolUse hook records every tool call to a
 per-session log automatically. This command READS that log and reports commands,
@@ -25,8 +26,10 @@ Default reads the ACTIVE session log (the current session, self-identified from
 the harness env; newest tmp/session_profiles/sessions/*.jsonl as a fallback).
 --harness <name> picks the newest log for that harness; --all aggregates today's
 session logs; --session <id> picks one session; --profile <p> reads an explicit
-file. --verbose adds coverage gaps and parse errors. --json-output writes the
-status JSON to a file.`);
+file. --complete reads the canonical Codex transcript by CODEX_THREAD_ID across
+date folders, so cleanup of tmp/ cannot erase the evidence; --transcript selects
+it explicitly. --verbose adds coverage gaps and parse errors. --json-output
+writes the status JSON to a file.`);
   process.exit(2);
 }
 
@@ -105,6 +108,8 @@ function parseProfiles(files) {
       result_records: resultRecords,
       measured_records: measuredRecords,
     },
+    tokenTelemetry: { available: false, measured_records: 0 },
+    sourceKind: "hook-profile",
   };
 }
 
@@ -374,7 +379,8 @@ function outputRollup(records) {
 }
 
 function subagentRollup(records) {
-  const spawns = records.filter((record) => record.event_type === "subagent_spawn");
+  const spawns = records.filter((record) => record.event_type === "subagent_spawn"
+    || (record.tools || []).some((tool) => /(?:^|\/)spawn_agent$/.test(String(tool))));
   const byType = {};
   const objectives = [];
   for (const record of spawns) {
@@ -388,9 +394,38 @@ function subagentRollup(records) {
   return { count: spawns.length, by_type: byType, objectives };
 }
 
-function buildStatus(profilePaths, values = {}) {
+function sessionAdvisory(records, coverage, tokenTelemetry) {
+  const ageMs = Number(coverage.wall_clock_span_ms || 0);
+  const toolCalls = records.filter((record) => record.event_type === "tool_call_result").length;
+  const rawUtilization = tokenTelemetry?.context_utilization;
+  const utilization = rawUtilization !== null
+    && rawUtilization !== undefined
+    && Number.isFinite(Number(rawUtilization))
+    ? Number(tokenTelemetry.context_utilization)
+    : null;
+  const reasons = [];
+  let status = "continue";
+  if (utilization !== null && utilization >= 0.7) {
+    reasons.push("context >= 70%");
+    status = "new-session-recommended";
+  }
+  if (ageMs >= 6 * 60 * 60 * 1000) {
+    reasons.push("session age >= 6h");
+    status = "new-session-recommended";
+  } else if (ageMs >= 4 * 60 * 60 * 1000) {
+    reasons.push("session age >= 4h");
+    status = status === "continue" ? "checkpoint-recommended" : status;
+  }
+  if (toolCalls >= 300) {
+    reasons.push("tool calls >= 300");
+    status = status === "continue" ? "checkpoint-recommended" : status;
+  }
+  return { status, reasons, age_ms: ageMs, tool_calls: toolCalls, context_utilization: utilization };
+}
+
+function buildStatus(profilePaths, values = {}, sourceParsed = null) {
   const files = Array.isArray(profilePaths) ? profilePaths : [profilePaths];
-  const parsed = parseProfiles(files);
+  const parsed = sourceParsed || parseProfiles(files);
   const records = parsed.records;
   const failedRecords = records.filter((record) => record.result === "fail").length;
   const failedClassification = classifyFailedRecords(records);
@@ -400,6 +435,8 @@ function buildStatus(profilePaths, values = {}) {
     .filter((record) => Number(record.duration_ms || 0) > 0)
     .sort((a, b) => Number(b.duration_ms || 0) - Number(a.duration_ms || 0))[0] || null;
   const lowCoverage = isLowCoverage(coverage);
+  const tokenTelemetry = parsed.tokenTelemetry || { available: false, measured_records: 0 };
+  const advisory = sessionAdvisory(records, coverage, tokenTelemetry);
 
   let nextAction;
   if (!parsed.exists) {
@@ -408,6 +445,10 @@ function buildStatus(profilePaths, values = {}) {
     nextAction = "Fix the invalid JSONL lines before trusting this profile.";
   } else if (records.length === 0) {
     nextAction = "No tool calls recorded yet in this session.";
+  } else if (advisory.status === "new-session-recommended") {
+    nextAction = "Checkpoint accepted decisions, SHA, dirty state, proof, and next command; then continue in a fresh session.";
+  } else if (advisory.status === "checkpoint-recommended") {
+    nextAction = "Record a compact checkpoint before expanding scope or continuing the session.";
   } else if (failedClassification.unresolved > 0) {
     nextAction = "Inspect the unresolved failed commands before drawing conclusions.";
   } else if (failedClassification.environmentBlocked > 0) {
@@ -423,6 +464,7 @@ function buildStatus(profilePaths, values = {}) {
   return {
     schema_version: 2,
     report_kind: "observed-telemetry-advisory-diagnosis",
+    source_kind: parsed.sourceKind || "hook-profile",
     profile: files.length === 1 ? files[0] : `${files.length} session logs`,
     profile_files: files,
     exists: parsed.exists,
@@ -445,7 +487,8 @@ function buildStatus(profilePaths, values = {}) {
     wall_clock_coverage: coverage,
     low_profile_coverage: lowCoverage,
     duration_telemetry: parsed.durationTelemetry,
-    token_telemetry: { available: false, measured_records: 0 },
+    token_telemetry: tokenTelemetry,
+    session_advisory: advisory,
     command_rollup: commandRollup(records),
     output_rollup: outputRollup(records),
     subagent_rollup: subagentRollup(records),
@@ -468,6 +511,7 @@ function renderStatus(status, { verbose }) {
   lines.push("");
   lines.push("Report kind: observed telemetry with advisory diagnosis; not enforcement.");
   lines.push(`Profile: ${status.profile}`);
+  if (status.source_kind === "codex-transcript") lines.push("Source: canonical Codex transcript");
   if (status.profile_files.length > 1) lines.push(`Profile files: ${status.profile_files.join(", ")}`);
   lines.push(`Records: ${status.records}`);
   const durationTelemetry = status.duration_telemetry;
@@ -476,7 +520,16 @@ function renderStatus(status, { verbose }) {
   } else {
     lines.push(`Command timing: unavailable (${durationTelemetry.measured_records}/${durationTelemetry.result_records} tool result(s) measured)`);
   }
-  lines.push("Token usage: unavailable (not recorded by this profile format)");
+  const tokenTelemetry = status.token_telemetry;
+  if (tokenTelemetry.available) {
+    lines.push(`Token usage: ${Number(tokenTelemetry.total_tokens || 0).toLocaleString("en-US")} total (${Number(tokenTelemetry.input_tokens || 0).toLocaleString("en-US")} input, ${Number(tokenTelemetry.cached_input_tokens || 0).toLocaleString("en-US")} cached input, ${Number(tokenTelemetry.output_tokens || 0).toLocaleString("en-US")} output, ${Number(tokenTelemetry.reasoning_output_tokens || 0).toLocaleString("en-US")} reasoning)`);
+  } else {
+    lines.push("Token usage: unavailable (not recorded by this profile format)");
+  }
+  const advisory = status.session_advisory;
+  const advisoryLabel = advisory.status.replaceAll("-", " ");
+  const advisoryReasons = advisory.reasons.length > 0 ? ` (${advisory.reasons.join(", ")})` : "";
+  lines.push(`Session advisory: ${advisoryLabel}${advisoryReasons}`);
   lines.push(`Unresolved failures: ${status.unresolved_failed_records}`);
   lines.push(`Resolved later failures: ${status.resolved_later_failed_records}`);
   lines.push(`Environment-blocked failures: ${status.environment_blocked_failed_records}`);
@@ -567,9 +620,20 @@ function renderStatus(status, { verbose }) {
 const { values } = parseArgs(process.argv.slice(2));
 if (values.help) usage();
 
-const profilePaths = resolveProfilePaths(values);
+let profilePaths;
+let sourceParsed = null;
+if (values.complete === true) {
+  const transcript = resolveCodexTranscript({
+    transcript: stringArg(values, "transcript", ""),
+    sessionId: stringArg(values, "session", ""),
+  });
+  profilePaths = transcript ? [transcript] : [];
+  sourceParsed = parseCodexTranscript(transcript);
+} else {
+  profilePaths = resolveProfilePaths(values);
+}
 const jsonOutputFile = stringArg(values, "json-output", "");
-const status = buildStatus(profilePaths, values);
+const status = buildStatus(profilePaths, values, sourceParsed);
 let rendered = renderStatus(status, { verbose: values.verbose === true });
 
 if (values.agents === true) {

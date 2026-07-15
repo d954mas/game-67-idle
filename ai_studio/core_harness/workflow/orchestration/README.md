@@ -70,6 +70,8 @@ count.
 
 ## Lead Agent Rules
 
+- Keep at most three subagents active at once; use a later wave when more
+  independent packets exist.
 - Subagents return compressed findings, not transcripts.
 - The lead verifies current files before trusting results.
 - The lead integrates changes, runs validation, and owns the final answer.
@@ -79,6 +81,9 @@ count.
 - Writes stay serial unless files are clearly disjoint.
 - Reuse a fitting existing agent before creating another one.
 - Prefer event-driven completion or one long wait; do not tight-loop poll.
+- An external wait over ten minutes becomes a checkpoint: record the external
+  identifier and resume by bounded polling instead of holding an approval or
+  tool call open indefinitely.
 - Do not create recursive subagent trees.
 
 ## Approval

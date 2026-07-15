@@ -15,11 +15,13 @@ This is not a normal status report. Be direct, evidence-based, and practical.
 
 Use durable evidence before memory or chat recollection:
 
-1. Profiling:
-   `node ai_studio/core_harness/profiling/status.mjs --verbose`
-2. If Codex failures look missing:
-   `node ai_studio/core_harness/profiling/hook_record.mjs codex --recover-only`,
-   then rerun status.
+1. Complete Codex profiling:
+   `node ai_studio/core_harness/profiling/status.mjs --complete --verbose`.
+   This reads the canonical rollout by `CODEX_THREAD_ID`, including sessions
+   that cross midnight; do not use the disposable hook profile for a full
+   Codex retrospective.
+2. For a non-Codex harness, use the lightweight hook profile:
+   `node ai_studio/core_harness/profiling/status.mjs --verbose`.
 3. Task state when relevant:
    `node ai_studio/taskboard/cli.mjs summary --json`
 4. Changed durable artifacts:

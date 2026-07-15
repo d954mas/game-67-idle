@@ -311,162 +311,6 @@ test("hook_record_fast keeps parallel JSONL appends valid", {
   }
 });
 
-test("hook_record recovers missed Codex failed shell commands from session transcript", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "hook-recovered.jsonl");
-    const session = join(dir, "codex-session.jsonl");
-    writeFileSync(session, [
-      {
-        timestamp: "2026-06-16T03:24:19.271Z",
-        type: "response_item",
-        payload: {
-          type: "function_call",
-          name: "shell_command",
-          call_id: "call_failed_probe",
-          arguments: JSON.stringify({
-            command: "Write-Error 'HOOK_FAIL'; exit 9",
-            workdir: root,
-          }),
-        },
-      },
-      {
-        timestamp: "2026-06-16T03:24:20.318Z",
-        type: "response_item",
-        payload: {
-          type: "function_call_output",
-          call_id: "call_failed_probe",
-          output: "Exit code: 9\nWall time: 0.7 seconds\nOutput:\nHOOK_FAIL\n",
-        },
-      },
-    ].map((record) => JSON.stringify(record)).join("\n") + "\n", "utf8");
-
-    runHook({
-      hook_event_name: "PostToolUse",
-      tool_name: "Bash",
-      tool_input: { command: "node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs" },
-      tool_response: { exit_code: 0 },
-    }, profile, "codex", { CODEX_SESSION_FILE: session });
-    runHook({
-      hook_event_name: "PostToolUse",
-      tool_name: "Bash",
-      tool_input: { command: "node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs" },
-      tool_response: { exit_code: 0 },
-    }, profile, "codex", { CODEX_SESSION_FILE: session });
-
-    const recovered = readJsonl(profile).filter((record) => record.event_type === "tool_call_result_recovered");
-    assert.equal(recovered.length, 1);
-    assert.equal(recovered[0].result, "fail");
-    assert.equal(recovered[0].value, "rework");
-    assert.equal(recovered[0].source_call_id, "call_failed_probe");
-    assert.equal(recovered[0].exit_code, 9);
-    assert.equal(recovered[0].output_chars, 54);
-    assert.equal(recovered[0].output_lines, 4);
-    assert.deepEqual(recovered[0].commands, ["Write-Error 'HOOK_FAIL'; exit 9"]);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("hook_record --recover-only imports Codex failed shell commands", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "hook-recover-only.jsonl");
-    const session = join(dir, "codex-session.jsonl");
-    writeFileSync(session, [
-      JSON.stringify({
-        type: "response_item",
-        payload: {
-          type: "function_call",
-          call_id: "call_recover_only",
-          arguments: JSON.stringify({ command: "node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs" }),
-        },
-      }),
-      JSON.stringify({
-        type: "response_item",
-        payload: {
-          type: "function_call_output",
-          call_id: "call_recover_only",
-          output: "Exit code: 1\n",
-        },
-      }),
-    ].join("\n") + "\n", "utf8");
-
-    run([
-      "ai_studio/core_harness/profiling/hook_record.mjs",
-      "codex",
-      "--recover-only",
-      "--profile",
-      profile,
-      "--session",
-      session,
-    ]);
-
-    const records = readJsonl(profile);
-    assert.equal(records.length, 1);
-    assert.equal(records[0].event_type, "tool_call_result_recovered");
-    assert.equal(records[0].source_call_id, "call_recover_only");
-    assert.deepEqual(records[0].commands, ["node --test ai_studio/core_harness/profiling/tests/profiling.test.mjs"]);
-  } finally {
-    cleanup(dir);
-  }
-});
-
-test("hook_record recover-only ignores search no-match transcript exits", () => {
-  const dir = tempDir();
-  try {
-    const profile = join(dir, "hook-recover-search.jsonl");
-    const session = join(dir, "codex-session.jsonl");
-    writeFileSync(session, [
-      JSON.stringify({
-        type: "response_item",
-        payload: {
-          type: "function_call",
-          call_id: "call_rg_nomatch",
-          arguments: JSON.stringify({ command: "rg definitely-not-present" }),
-        },
-      }),
-      JSON.stringify({
-        type: "response_item",
-        payload: {
-          type: "function_call_output",
-          call_id: "call_rg_nomatch",
-          output: "Exit code: 1\nWall time: 0.1 seconds\nOutput:\n",
-        },
-      }),
-      JSON.stringify({
-        type: "response_item",
-        payload: {
-          type: "function_call",
-          call_id: "call_real_fail",
-          arguments: JSON.stringify({ command: "node --test tools/missing.test.mjs" }),
-        },
-      }),
-      JSON.stringify({
-        type: "response_item",
-        payload: {
-          type: "function_call_output",
-          call_id: "call_real_fail",
-          output: "Exit code: 1\nWall time: 0.2 seconds\nOutput:\nnot ok\n",
-        },
-      }),
-    ].join("\n") + "\n", "utf8");
-
-    runHook({}, profile, "codex", {
-      AI_PROFILE_RECOVER_ONLY: "1",
-      CODEX_SESSION_FILE: session,
-    });
-
-    const records = readJsonl(profile);
-    assert.equal(records.length, 1);
-    assert.equal(records[0].source_call_id, "call_real_fail");
-    assert.equal(records[0].result, "fail");
-    assert.deepEqual(records[0].commands, ["node --test tools/missing.test.mjs"]);
-  } finally {
-    cleanup(dir);
-  }
-});
-
 test("status reads a session log and reports records, slowest, and rollup", () => {
   const dir = tempDir();
   try {
@@ -490,6 +334,13 @@ test("status reads a session log and reports records, slowest, and rollup", () =
     assert.equal(status.slowest_record.duration_ms, 3000);
     assert.equal(status.command_rollup.by_count[0].key, "node x.test.mjs");
     assert.equal(status.command_rollup.by_count[0].count, 2);
+    assert.deepEqual(status.session_advisory, {
+      status: "continue",
+      reasons: [],
+      age_ms: 6000,
+      tool_calls: 2,
+      context_utilization: null,
+    });
     assert.match(result.stdout, /Records: 2/);
     assert.match(result.stdout, /Report kind: observed telemetry with advisory diagnosis; not enforcement\./);
     assert.match(result.stdout, /Most-Run Commands/);
@@ -521,6 +372,248 @@ test("status reports unavailable timing and tokens when the host records results
     assert.match(result.stdout, /Token usage: unavailable/);
     assert.match(result.stdout, /Observed activity estimate:/);
     assert.match(result.stdout, /Slowest Recorded Work\n- unavailable:/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status --complete reads the canonical multi-day Codex transcript", () => {
+  const dir = tempDir();
+  try {
+    const sessionId = "019f5bd1-2291-7941-b366-13e7327eebc1";
+    const sessionDir = join(dir, "sessions", "2026", "07", "13");
+    const transcript = join(sessionDir, `rollout-2026-07-13T19-11-05-${sessionId}.jsonl`);
+    const statusJson = join(dir, "status.json");
+    mkdirSync(sessionDir, { recursive: true });
+    writeJsonl(transcript, [
+      {
+        timestamp: "2026-07-13T14:11:05.000Z",
+        type: "session_meta",
+        payload: { id: sessionId },
+      },
+      {
+        timestamp: "2026-07-13T14:12:00.000Z",
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call",
+          call_id: "call_slow",
+          name: "exec",
+          input: "const r = await tools.shell_command({\"command\":\"node --test slow.test.mjs\"}); text(r);",
+        },
+      },
+      {
+        timestamp: "2026-07-13T14:12:05.000Z",
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call_output",
+          call_id: "call_slow",
+          output: "Script running with cell ID 7\nWall time 5.0 seconds\nOutput:\n",
+        },
+      },
+      {
+        timestamp: "2026-07-13T14:12:06.000Z",
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          call_id: "call_wait",
+          name: "wait",
+          arguments: JSON.stringify({ cell_id: "7", yield_time_ms: 10000 }),
+        },
+      },
+      {
+        timestamp: "2026-07-13T14:12:15.000Z",
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "call_wait",
+          output: "Script completed\nWall time 15.0 seconds\nOutput:\nExit code: 0\n",
+        },
+      },
+      {
+        timestamp: "2026-07-15T02:00:00.000Z",
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call",
+          call_id: "call_failed",
+          name: "exec",
+          input: "const r = await tools.shell_command({ command: \"node broken.mjs\" }); text(r);",
+        },
+      },
+      {
+        timestamp: "2026-07-15T01:59:58.000Z",
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call",
+          call_id: "call_rg_nomatch",
+          name: "exec",
+          input: "const r = await tools.shell_command({command:\"rg absent-token src\"}); text(r);",
+        },
+      },
+      {
+        timestamp: "2026-07-15T01:59:59.000Z",
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call_output",
+          call_id: "call_rg_nomatch",
+          output: "Script failed\nWall time 1.0 seconds\nOutput:\nExit code: 1\n",
+        },
+      },
+      {
+        timestamp: "2026-07-15T02:00:02.000Z",
+        type: "response_item",
+        payload: {
+          type: "custom_tool_call_output",
+          call_id: "call_failed",
+          output: [
+            { type: "input_text", text: "Script failed\nWall time 2.0 seconds\nOutput:\n" },
+            { type: "input_text", text: "Exit code: 1\nboom\n" },
+          ],
+        },
+      },
+      {
+        timestamp: "2026-07-15T02:00:03.000Z",
+        type: "response_item",
+        payload: {
+          type: "function_call",
+          call_id: "call_spawn",
+          name: "spawn_agent",
+          arguments: JSON.stringify({ task_name: "review", message: "gAAAA-encrypted-prompt" }),
+        },
+      },
+      {
+        timestamp: "2026-07-15T02:00:04.000Z",
+        type: "response_item",
+        payload: {
+          type: "function_call_output",
+          call_id: "call_spawn",
+          output: JSON.stringify({ task_name: "/root/review" }),
+        },
+      },
+      {
+        timestamp: "2026-07-15T02:00:04.100Z",
+        type: "event_msg",
+        payload: {
+          type: "token_count",
+          info: {
+            total_token_usage: {
+              input_tokens: 1200,
+              cached_input_tokens: 900,
+              output_tokens: 300,
+              reasoning_output_tokens: 80,
+              total_tokens: 1500,
+            },
+            last_token_usage: {
+              input_tokens: 700,
+              cached_input_tokens: 500,
+              output_tokens: 50,
+              reasoning_output_tokens: 10,
+              total_tokens: 750,
+            },
+            model_context_window: 1000,
+          },
+        },
+      },
+    ]);
+
+    const result = run([
+      "ai_studio/core_harness/profiling/status.mjs",
+      "--complete",
+      "--json-output",
+      statusJson,
+      "--verbose",
+    ], {
+      env: {
+        CODEX_SESSION_FILE: "",
+        CODEX_SESSION_ROOT: join(dir, "sessions"),
+        CODEX_THREAD_ID: sessionId,
+      },
+    });
+
+    const status = readJson(statusJson);
+    assert.equal(status.source_kind, "codex-transcript");
+    assert.equal(status.profile, transcript);
+    assert.equal(status.records, 5);
+    assert.deepEqual(status.duration_telemetry, {
+      available: true,
+      start_records: 4,
+      result_records: 4,
+      measured_records: 4,
+    });
+    assert.equal(status.slowest_record.duration_ms, 15000);
+    assert.equal(status.slowest_record.commands[0], "node --test slow.test.mjs");
+    assert.equal(status.unresolved_failed_records, 1);
+    assert.equal(status.command_rollup.by_count.find((entry) => entry.key === "rg").fails, 0);
+    assert.equal(status.subagent_rollup.count, 1);
+    assert.ok(status.command_rollup.by_count.some((entry) => entry.key === "spawn_agent"));
+    assert.ok(status.command_rollup.by_count.every((entry) => entry.key !== "wait"));
+    assert.ok(status.command_rollup.by_count.every((entry) => !entry.key.startsWith("gAAAA")));
+    assert.deepEqual(status.token_telemetry, {
+      available: true,
+      measured_records: 1,
+      input_tokens: 1200,
+      cached_input_tokens: 900,
+      output_tokens: 300,
+      reasoning_output_tokens: 80,
+      total_tokens: 1500,
+      current_context_tokens: 750,
+      model_context_window: 1000,
+      context_utilization: 0.75,
+    });
+    assert.equal(status.session_advisory.status, "new-session-recommended");
+    assert.ok(status.session_advisory.reasons.includes("context >= 70%"));
+    assert.ok(status.session_advisory.reasons.includes("session age >= 6h"));
+    assert.match(status.next_action, /fresh session/i);
+    assert.match(result.stdout, /Source: canonical Codex transcript/);
+    assert.match(result.stdout, /Token usage: 1,500 total/);
+    assert.match(result.stdout, /Session advisory: new session recommended/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status recommends a checkpoint for a four-hour working session", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "long-session.jsonl");
+    const statusJson = join(dir, "status.json");
+    writeJsonl(profile, [
+      { ts: "2026-06-13T10:00:00Z", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", duration_ms: 100, commands: ["node first.mjs"], session_id: "s1" },
+      { ts: "2026-06-13T14:05:00Z", phase: "session", category: "tooling", intent: "auto:Bash", result: "pass", value: "unknown", event_type: "tool_call_result", duration_ms: 100, commands: ["node last.mjs"], session_id: "s1" },
+    ]);
+
+    const result = run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson]);
+    const status = readJson(statusJson);
+    assert.equal(status.session_advisory.status, "checkpoint-recommended");
+    assert.deepEqual(status.session_advisory.reasons, ["session age >= 4h"]);
+    assert.match(status.next_action, /checkpoint/i);
+    assert.match(result.stdout, /Session advisory: checkpoint recommended/);
+  } finally {
+    cleanup(dir);
+  }
+});
+
+test("status recommends a checkpoint after three hundred tool calls", () => {
+  const dir = tempDir();
+  try {
+    const profile = join(dir, "many-tools.jsonl");
+    const statusJson = join(dir, "status.json");
+    writeJsonl(profile, Array.from({ length: 300 }, (_, index) => ({
+      ts: new Date(Date.parse("2026-06-13T10:00:00Z") + index * 1000).toISOString(),
+      phase: "session",
+      category: "tooling",
+      intent: "auto:Bash",
+      result: "pass",
+      value: "unknown",
+      event_type: "tool_call_result",
+      duration_ms: 1,
+      commands: [`node tool-${index}.mjs`],
+      session_id: "s1",
+    })));
+
+    run(["ai_studio/core_harness/profiling/status.mjs", "--profile", profile, "--json-output", statusJson]);
+    const status = readJson(statusJson);
+    assert.equal(status.session_advisory.status, "checkpoint-recommended");
+    assert.deepEqual(status.session_advisory.reasons, ["tool calls >= 300"]);
   } finally {
     cleanup(dir);
   }
