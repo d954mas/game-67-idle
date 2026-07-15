@@ -18,6 +18,8 @@ const activeContracts = [
   "features/items-core/scripts/generate_items_catalog.py",
   "features/items-core/scripts/items_ops.py",
   "features/items-core/scripts/items_ops_test.py",
+  "features/items-core/scripts/items_cli.py",
+  "features/items-core/scripts/items_cli_test.py",
   "features/progression-core/README.md",
   "features/progression-core/scripts/generate_progression_tracks.py",
   "templates/template/README.md",

@@ -19,12 +19,27 @@ Workflow router for the split items feature. The invariant core lives in
 
 ## Catalog workflow
 
+For single-source Lua catalogs, use the focused semantic CLI. It always takes
+an explicit game root and delegates evaluation/validation to the canonical
+sandbox and Snapshot:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> list
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> inspect --item <item-id> --level-from <n> --level-to <n>
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> dependencies --item <item-id>
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> source --item <item-id>
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> validate
+```
+
+Until T0386 removes the legacy JSON catalog, use its existing op-layer only for
+that legacy path:
+
 Use the module op-layer; do not add a second catalog parser:
 
 ```powershell
-py -3.12 features/items-core/scripts/items_ops.py list --catalog <game>/content/items.json --json
-py -3.12 features/items-core/scripts/items_ops.py validate --catalog <game>/content/items.json --schema <game>/content/item_fields.schema.json --baseline <game>/content/items.lock.json --state-schema <game>/state/items.schema.json --json
-py -3.12 features/items-core/scripts/items_ops.py schema --schema <game>/content/item_fields.schema.json --json
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py list --catalog <game>/content/items.json --json
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py validate --catalog <game>/content/items.json --schema <game>/content/item_fields.schema.json --baseline <game>/content/items.lock.json --state-schema <game>/state/items.schema.json --json
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py schema --schema <game>/content/item_fields.schema.json --json
 ```
 
 Pass consumer paths explicitly. Follow the consumer README for additions,

@@ -386,7 +386,6 @@ if(NOT EMSCRIPTEN)
     target_compile_definitions(benchmark_items_c_arrays PRIVATE
         ITEMS_GAME_API_ENABLED=1 ITEMS_BENCHMARK_RUNTIME=0 _CRT_SECURE_NO_WARNINGS)
     nt_set_warning_flags(benchmark_items_c_arrays)
-    nt_set_sanitizer_flags(benchmark_items_c_arrays)
     set_target_properties(benchmark_items_c_arrays PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmarks")
 
@@ -402,7 +401,6 @@ if(NOT EMSCRIPTEN)
         ITEMS_RUNTIME_PACKAGE_PATH="${ITEMS_RUNTIME_PACKAGE_BLOB}"
         _CRT_SECURE_NO_WARNINGS)
     nt_set_warning_flags(benchmark_items_runtime_blob)
-    nt_set_sanitizer_flags(benchmark_items_runtime_blob)
     set_target_properties(benchmark_items_runtime_blob PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmarks")
 
@@ -623,6 +621,7 @@ if(NOT EMSCRIPTEN)
         test_game_events_typed test_game_event_render test_game_analytics
         test_game_events_log_mirror test_items_catalog test_items_api_core_only
         test_items_api test_items_runtime_package test_items_runtime_resource test_items_fragment test_progression test_progression_curve
+        benchmark_items_c_arrays benchmark_items_runtime_blob
         test_game_format test_platform_sdk test_platform_lifecycle
         test_platform_sdk_events test_template_composition)
     foreach(_test_target IN LISTS GAME_NATIVE_TEST_TARGETS)

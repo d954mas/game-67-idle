@@ -1,0 +1,7 @@
+{
+  "schema": "items.lua.sandbox.v1",
+  "modules": [
+    { "name": "game.items", "file": "game/items.lua" }
+  ],
+  "entries": ["game.items"]
+}
