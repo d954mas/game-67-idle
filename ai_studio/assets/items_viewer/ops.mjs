@@ -112,7 +112,11 @@ function readLockRaw(lockPath) {
     const text = raw.charCodeAt(0) === 0xfeff ? raw.slice(1) : raw;
     const parsed = JSON.parse(text);
     return {
-      defIds: Array.isArray(parsed.def_ids) ? parsed.def_ids : [],
+      defIds: Array.isArray(parsed.def_ids)
+        ? parsed.def_ids
+        : parsed.def_ids && typeof parsed.def_ids === "object"
+          ? Object.keys(parsed.def_ids)
+          : [],
       removed: parsed.removed && typeof parsed.removed === "object" ? parsed.removed : {},
     };
   } catch {
