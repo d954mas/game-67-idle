@@ -216,6 +216,22 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot_test.py
 ```
 
+### T0365 compact runtime package
+
+`items_runtime_package.py` consumes only `items.snapshot.v1`. It writes one
+fixed-width little-endian `items/catalog` blob plus an ABI-stable generated
+header. Item/field/level/value/cost sections use checked offset/count spans;
+strings are deduplicated, padding is zero, and schema/content/item identities
+use the engine-compatible seed-0 XXH64 contract. Generated outputs are replaced
+atomically only when their bytes change, so a value-only balance edit changes
+the blob without touching the header. The Python inspector is the wire-format
+reference; native resource binding remains the next T0365 slice.
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py build --snapshot <snapshot.json> --out <items.catalog> --header-out <items_catalog_abi.gen.h>
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package_test.py
+```
+
 ### T0364 typed API proof
 
 `generate_items_api_proof.py` is a bounded reference exporter, not the Lua
@@ -291,8 +307,9 @@ and read-only authoring tools.
 
 ## Validation
 
-Run the `test`, `api_proof_test`, `lua_sandbox_test`, and `snapshot_test` commands from
-`feature.json`, then `node features/validate_contracts.mjs`.
+Run the `test`, `api_proof_test`, `lua_sandbox_test`, `snapshot_test`, and
+`runtime_package_test` commands from `feature.json`, then
+`node features/validate_contracts.mjs`.
 
 ## Compatibility
 

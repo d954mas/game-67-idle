@@ -99,7 +99,7 @@ RECEIPT_SCHEMA_VERSION = 4
 RECEIPT_SCHEMA = "items.release_receipt.v2"
 LEGACY_RECEIPT_SCHEMA_VERSION = 3
 LEGACY_RECEIPT_SCHEMA = "items.release_receipt.v1"
-ITEMS_CORE_VERSION = "1.7.0"
+ITEMS_CORE_VERSION = "1.8.0"
 
 Issue = dict  # {"rule": str, "id": str | None, "field": str | None, "msg": str}
 

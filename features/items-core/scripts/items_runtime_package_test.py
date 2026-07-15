@@ -4,9 +4,12 @@
 from __future__ import annotations
 
 import copy
+import json
 from pathlib import Path
 import struct
+import subprocess
 import sys
+import tempfile
 import unittest
 from unittest import mock
 
@@ -187,6 +190,85 @@ class ItemsRuntimePackageTests(unittest.TestCase):
     def test_export_requires_snapshot_and_never_accepts_evaluator_output(self):
         with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.snapshot_schema"):
             PACKAGE.build_package(evaluation())
+
+    def test_generated_abi_header_is_value_stable_and_write_if_different(self):
+        snapshot = self.snapshot()
+        header = PACKAGE.render_abi_header(snapshot)
+        changed = copy.deepcopy(snapshot)
+        changed["items"][1]["levels"]["rows"][0]["attack"] = 999
+        self.assertEqual(PACKAGE.render_abi_header(changed), header)
+        self.assertIn("ITEMS_CATALOG_SCHEMA_ABI", header)
+        self.assertIn("ITEM_GAME_GOLD", header)
+        self.assertIn("ITEM_FIELD_GAME_WEAPON_LEVEL_ATTACK", header)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "items_catalog_abi.gen.h"
+            self.assertTrue(PACKAGE.write_if_different(target, header.encode("utf-8")))
+            first_mtime = target.stat().st_mtime_ns
+            self.assertFalse(PACKAGE.write_if_different(target, header.encode("utf-8")))
+            self.assertEqual(target.stat().st_mtime_ns, first_mtime)
+
+    def test_cli_builds_blob_and_reports_noop_rebuild(self):
+        snapshot = self.snapshot()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "snapshot.json"
+            blob = root / "items.catalog"
+            header = root / "items_catalog_abi.gen.h"
+            source.write_text(json.dumps(snapshot), encoding="utf-8")
+            command = [
+                sys.executable, str(SCRIPT_DIR / "items_runtime_package.py"), "build",
+                "--snapshot", str(source), "--out", str(blob), "--header-out", str(header),
+            ]
+            first = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", timeout=10)
+            self.assertEqual(first.returncode, 0, first.stderr)
+            first_payload = json.loads(first.stdout)
+            self.assertEqual(first_payload["schema"], "items.runtime.package.build.v1")
+            self.assertEqual(first_payload["changed"], {"blob": True, "header": True})
+            self.assertEqual(PACKAGE.inspect_package(blob.read_bytes())["snapshot_content_hash"], snapshot["content_hash"])
+
+            second = subprocess.run(command, text=True, capture_output=True, encoding="utf-8", timeout=10)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertEqual(json.loads(second.stdout)["changed"], {"blob": False, "header": False})
+
+    def test_cli_rejects_path_overlap_bad_arguments_and_non_utf8_as_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "snapshot.json"
+            source.write_text(json.dumps(self.snapshot()), encoding="utf-8")
+            script = str(SCRIPT_DIR / "items_runtime_package.py")
+
+            overlap = subprocess.run([
+                sys.executable, script, "build", "--snapshot", str(source),
+                "--out", str(root / "same"), "--header-out", str(root / "same"),
+            ], text=True, capture_output=True, encoding="utf-8", timeout=10)
+            self.assertEqual(overlap.returncode, 1)
+            self.assertEqual(json.loads(overlap.stderr)["schema"], "items.runtime.package.error.v1")
+            self.assertFalse((root / "same").exists())
+
+            original_source = source.read_bytes()
+            input_overlap = subprocess.run([
+                sys.executable, script, "build", "--snapshot", str(source),
+                "--out", str(source), "--header-out", str(root / "header"),
+            ], text=True, capture_output=True, encoding="utf-8", timeout=10)
+            self.assertEqual(input_overlap.returncode, 1)
+            self.assertEqual(source.read_bytes(), original_source)
+
+            missing = subprocess.run(
+                [sys.executable, script, "build"],
+                text=True, capture_output=True, encoding="utf-8", timeout=10,
+            )
+            self.assertEqual(missing.returncode, 1)
+            self.assertEqual(json.loads(missing.stderr)["schema"], "items.runtime.package.error.v1")
+
+            invalid = root / "invalid.json"
+            invalid.write_bytes(b"\xff")
+            bad_encoding = subprocess.run([
+                sys.executable, script, "build", "--snapshot", str(invalid),
+                "--out", str(root / "blob"), "--header-out", str(root / "header"),
+            ], text=True, capture_output=True, encoding="utf-8", timeout=10)
+            self.assertEqual(bad_encoding.returncode, 1)
+            self.assertEqual(json.loads(bad_encoding.stderr)["schema"], "items.runtime.package.error.v1")
 
 
 if __name__ == "__main__":

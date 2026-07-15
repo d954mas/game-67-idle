@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "items-core",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "title": "Items Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -33,8 +33,12 @@
     "lua_sandbox_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox_test.py",
     "snapshot_build": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py build --evaluation <evaluation.json> --out <snapshot.json>",
     "snapshot_query": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py query --snapshot <snapshot.json> --item <item-id>",
+    "snapshot_chart": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py chart --snapshot <snapshot.json> --item <item-id> --field <field>",
+    "snapshot_requirements": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py requirements --snapshot <snapshot.json>",
     "snapshot_diff": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot.py diff --before <old-snapshot.json> --after <new-snapshot.json>",
-    "snapshot_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot_test.py"
+    "snapshot_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot_test.py",
+    "runtime_package": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py build --snapshot <snapshot.json> --out <items.catalog> --header-out <items_catalog_abi.gen.h>",
+    "runtime_package_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package_test.py"
   },
   "manuals": {
     "install": "features/items-core/INSTALL.md",
@@ -50,7 +54,11 @@
     "items_game.luau",
     "items.lua.evaluation.v1 JSON",
     "items.snapshot.v1 JSON",
-    "items.snapshot.diff.v1 JSON"
+    "items.snapshot.chart.v1 JSON",
+    "items.snapshot.requirements.v1 JSON",
+    "items.snapshot.diff.v1 JSON",
+    "items/catalog compact runtime package v1",
+    "items_catalog_abi.gen.h"
   ],
   "registers": {
     "note": "Describes the EXISTING wiring in templates/template/CMakeLists.txt (target_sources/ctest) -- items-core is an in-place module (precedent features/game-state), not an install-script target. This section documents the consuming game's provisioning, it does not perform it.",
