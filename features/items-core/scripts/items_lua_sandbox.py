@@ -215,6 +215,46 @@ return function(raise_internal)
       overrides = copy(options.overrides),
     }, source_at(3))
   end
+  function levels.linear(options)
+    if raw_type(options) ~= "table" then
+      return fail("levels.column_contract", "levels.linear requires a table")
+    end
+    return tagged("level_column", {
+      mode = "linear", start = options.start, step = options.step,
+    }, source_at(3))
+  end
+  function levels.values(values)
+    if raw_type(values) ~= "table" then
+      return fail("levels.column_contract", "levels.values requires a table")
+    end
+    return tagged("level_column", {
+      mode = "values", values = copy(values),
+    }, source_at(3))
+  end
+  function levels.columns(options)
+    if raw_type(options) ~= "table" then
+      return fail("levels.column_contract", "levels.columns requires a table")
+    end
+    local columns, count = {}, 0
+    for name, column in raw_pairs(options) do
+      if name ~= "max_level" and name ~= "overrides" then
+        if raw_type(name) ~= "string" then
+          return fail("levels.column_contract", "mixed columns must have string names")
+        end
+        columns[name] = column
+        count = count + 1
+      end
+    end
+    if count == 0 then
+      return fail("levels.column_contract", "levels.columns requires at least one column")
+    end
+    return tagged("levels", {
+      mode = "columns",
+      max_level = options.max_level,
+      columns = columns,
+      overrides = copy(options.overrides),
+    }, source_at(3))
+  end
 
   local MAX_EXACT = 9007199254740991
   local function checked(value)
@@ -250,12 +290,19 @@ return function(raise_internal)
   freeze = function(value, seen)
     if raw_type(value) ~= "table" then return value end
     if frozen_targets[value] then return value end
+    local source = source_metadata[value]
+    local authentic_item_ref = authentic_item_refs[value]
     seen = seen or {}
     if seen[value] then return seen[value] end
     local target, proxy = {}, {}
     seen[value] = proxy
     for key, child in raw_pairs(value) do target[key] = freeze(child, seen) end
     frozen_targets[proxy] = target
+    if source ~= nil then source_metadata[proxy] = source end
+    if authentic_item_ref then
+      authentic_item_refs[proxy] = true
+      formula_safe_upvalues[proxy] = true
+    end
     if value == items or value == studio_math then
       formula_safe_upvalues[proxy] = true
     end
@@ -559,9 +606,17 @@ return function(raise_internal)
           return fail_at("levels.unique_required", "levelled items must use stack=1", spec, definition.__studio_source)
         end
         local rows = {}
+        if spec.mode == "generate" or spec.mode == "columns" then
+          if raw_math.type(spec.max_level) ~= "integer"
+              or spec.max_level < 1 or spec.max_level > MAX_EXACT then
+            return fail_at(
+              "levels.max_level", "generated and mixed levels require a positive exact max_level",
+              spec, definition.__studio_source
+            )
+          end
+        end
         if spec.mode == "generate" then
-          local max_level = checked(spec.max_level)
-          if max_level < 1 then return fail("formula.contract", "max_level must be positive") end
+          local max_level = spec.max_level
           local columns = copy(spec.columns)
           local names = {}
           for name, _ in raw_pairs(columns) do names[#names + 1] = name end
@@ -589,17 +644,47 @@ return function(raise_internal)
             end
             rows[index] = row
           end
-          if spec.overrides ~= nil then
-            local overrides = copy(spec.overrides)
-            if raw_type(overrides) ~= "table" then
-              return fail_at("levels.overrides", "overrides must be a table", spec, definition.__studio_source)
+        elseif spec.mode == "columns" then
+          local max_level, columns = spec.max_level, copy(spec.columns)
+          for index = 1, max_level do rows[index] = {} end
+          local names = {}
+          for name, _ in raw_pairs(columns) do names[#names + 1] = name end
+          table.sort(names)
+          for _, name in ipairs(names) do
+            local column = columns[name]
+            local column_source = raw_type(column) == "table" and source_metadata[column] or nil
+            if raw_type(column) ~= "table" or column.__studio_kind ~= "level_column"
+                or column_source == nil then
+              return fail_at(
+                "levels.column_handle", "mixed columns must come from studio.levels",
+                column, source_metadata[spec]
+              )
             end
-            for level, values in raw_pairs(overrides) do
-              if raw_math.type(level) ~= "integer" or level < 1 or level > max_level
-                  or raw_type(values) ~= "table" then
-                return fail_at("levels.overrides", "override levels must be in range with row tables", spec, definition.__studio_source)
+            if column.mode == "linear" then
+              active_formula_source = column_source
+              local start, step = checked(column.start), checked(column.step)
+              for index = 1, max_level do
+                rows[index][name] = studio_math.add(
+                  start, studio_math.mul(index - 1, step)
+                )
               end
-              for name, value in raw_pairs(values) do rows[level][name] = copy(value) end
+              active_formula_source = nil
+            elseif column.mode == "values" then
+              local values = copy(column.values)
+              for level, value in raw_pairs(values) do
+                if raw_math.type(level) ~= "integer" or level < 1 or level > max_level then
+                  return fail_at(
+                    "levels.column_range", "column value level is outside max_level",
+                    column, source_metadata[spec]
+                  )
+                end
+                rows[level][name] = copy(value)
+              end
+            else
+              return fail_at(
+                "levels.column_handle", "unknown mixed column mode",
+                column, source_metadata[spec]
+              )
             end
           end
         else
@@ -619,6 +704,19 @@ return function(raise_internal)
           end
           for index = 1, max_level do
             rows[index] = spec.rows[index]
+          end
+        end
+        if spec.overrides ~= nil then
+          local overrides = copy(spec.overrides)
+          if raw_type(overrides) ~= "table" then
+            return fail_at("levels.overrides", "overrides must be a table", spec, definition.__studio_source)
+          end
+          for level, values in raw_pairs(overrides) do
+            if raw_math.type(level) ~= "integer" or level < 1 or level > #rows
+                or raw_type(values) ~= "table" then
+              return fail_at("levels.overrides", "override levels must be in range with row tables", spec, definition.__studio_source)
+            end
+            for name, value in raw_pairs(values) do rows[level][name] = copy(value) end
           end
         end
         for index, row in ipairs(rows) do

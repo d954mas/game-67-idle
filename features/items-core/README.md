@@ -145,7 +145,9 @@ uses an explicit `max_level` and named formula columns; formulas may capture
 only immutable Studio APIs/item refs, cannot change those captures, and run
 after schema/definition registration has closed. Raw Lua arithmetic/bitwise
 operators are rejected in favor of `studio.math`, and both formula and override
-integers must remain in its exact range. Composite
+integers must remain in its exact range. `levels.columns` uses the same explicit
+bound with authentic `levels.linear`/`levels.values` handles and deterministic
+overrides. Composite
 costs accept only stackable resources and merge duplicate refs with checked,
 deterministic sums.
 

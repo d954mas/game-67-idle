@@ -533,6 +533,63 @@ items.define({ id="game.sword", stack=1, levels=levels.generate({ max_level=2,
         }, ["game.forged"])
         self.assert_error(forged_ref, "cost.contract", "game/forged.lua", 6)
 
+    def test_mixed_level_columns_materialize_with_bounds_and_overrides(self):
+        mixed = self.evaluate({"game.mixed": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.gold", stack=0 })
+local gold = items.ref("game.gold")
+items.define({ id="game.sword", stack=1, levels=levels.columns({
+  max_level=3,
+  attack=levels.linear({ start=10, step=5 }),
+  cost_to_reach=levels.values({
+    [2]=items.cost(gold, 100), [3]=items.free(),
+  }),
+  overrides={ [3]={ attack=21 } },
+}) })'''
+        }, ["game.mixed"])
+        self.assertEqual(mixed.returncode, 0, mixed.stderr)
+        sword = next(
+            item for item in json.loads(mixed.stdout)["items"]
+            if item["id"] == "game.sword"
+        )
+        rows = sword["levels"]["rows"]
+        self.assertEqual([row["attack"] for row in rows], [10, 15, 21])
+        self.assertNotIn("cost_to_reach", rows[0])
+        self.assertEqual(rows[1]["cost_to_reach"]["count"], 100)
+        self.assertEqual(rows[2]["cost_to_reach"]["__studio_kind"], "free")
+
+        missing_max = self.evaluate({"game.mixed": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.sword", stack=1, levels=levels.columns({
+  attack=levels.linear({ start=10, step=5 }),
+}) })'''
+        }, ["game.mixed"])
+        self.assert_error(missing_max, "levels.max_level", "game/mixed.lua", 3)
+
+        empty = self.evaluate({"game.mixed": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.sword", stack=1,
+  levels=levels.columns({ max_level=1 }),
+})'''
+        }, ["game.mixed"])
+        self.assert_error(empty, "levels.column_contract", "game/mixed.lua", 4)
+
+        forged = self.evaluate({"game.mixed": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.sword", stack=1, levels=levels.columns({ max_level=1,
+  attack={ __studio_kind="level_column", mode="linear", start=10, step=5 },
+}) })'''
+        }, ["game.mixed"])
+        self.assert_error(forged, "levels.column_handle", "game/mixed.lua", 3)
+
+        out_of_range = self.evaluate({"game.mixed": '''local items = require("studio.items")
+local levels = require("studio.levels")
+items.define({ id="game.sword", stack=1, levels=levels.columns({ max_level=1,
+  attack=levels.values({ [2]=10 }),
+}) })'''
+        }, ["game.mixed"])
+        self.assert_error(out_of_range, "levels.column_range", "game/mixed.lua", 4)
+
         exponent = self.evaluate({"game.exponent": "local value = 2 ^ 3"}, ["game.exponent"])
         self.assert_error(exponent, "source.raw_arithmetic", "game/exponent.lua", 1)
 
