@@ -14,10 +14,11 @@ node ai_studio/studio.mjs verify --full
 owner domains. Unknown shared paths fail ownership instead of silently running
 everything. It never discovers or executes `games/<id>`; the root
 `games/new_game.mjs` workflow is the exact exception. `verify --domain <id>`
-runs one owner explicitly. `verify --full` runs all domains with concurrency
-two and includes native, web/package, and platform release proof. Checks inside
-one domain remain ordered. Blocked/setup exits `2`, executed failures exit `1`,
-and passes exit `0`.
+runs one owner explicitly. `verify --full` runs up to three owner domains in
+parallel; each domain batches Node tests with concurrency four and includes its
+native, web/package, and platform release proof. Checks inside one domain remain
+ordered. Blocked/setup exits `2`, executed failures exit `1`, and passes exit
+`0`.
 
 `ai_studio/` is the target home for reviewed AI game-studio pipeline modules.
 Do not use it as a dump: move a module here only after it has an owner, contract,
