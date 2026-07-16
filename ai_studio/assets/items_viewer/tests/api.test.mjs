@@ -20,17 +20,21 @@ function responseCapture() {
   };
 }
 
-async function request(path, { method = "GET", body } = {}) {
+async function request(path, { method = "GET", body, headers = {} } = {}) {
   const response = responseCapture();
   const encoded = body === undefined ? null : Buffer.from(JSON.stringify(body));
   const req = {
     method,
-    headers: encoded ? { "content-type": "application/json" } : {},
+    headers: {
+      host: "studio.local",
+      ...(encoded ? { "content-type": "application/json", origin: "http://studio.local" } : {}),
+      ...headers,
+    },
     async *[Symbol.asyncIterator]() {
       if (encoded) yield encoded;
     },
   };
-  const handled = await createItemsViewerApi(REPO_ROOT)(
+  const handled = await createItemsViewerApi(REPO_ROOT, { allowedHosts: ["studio.local"] })(
     req,
     response,
     new URL(path, "http://studio.local"),
@@ -88,4 +92,36 @@ test("edit endpoint delegates preview refusal and rejects operations outside the
   });
   assert.equal(invalid.response.status, 400);
   assert.match(invalid.json.error, /unsupported/);
+});
+
+test("edit endpoint rejects hostile Host or non-same Origin before invoking the writer", async () => {
+  const edit = {
+    schema: "items.cli.patch.v1",
+    operation: "level-set",
+    item: "tmpl.sword",
+    field: "attack",
+    level: 1,
+    value: 16,
+    expected_source_hash: `sha256:${"a".repeat(64)}`,
+  };
+  const hostileHost = await request("/api/items-viewer/edit", {
+    method: "POST",
+    body: { catalog: "template:template", edit, apply: false },
+    headers: { host: "evil.test", origin: "http://evil.test" },
+  });
+  assert.equal(hostileHost.response.status, 403);
+
+  const hostileOrigin = await request("/api/items-viewer/edit", {
+    method: "POST",
+    body: { catalog: "template:template", edit, apply: false },
+    headers: { origin: "http://evil.test" },
+  });
+  assert.equal(hostileOrigin.response.status, 403);
+
+  const missingOrigin = await request("/api/items-viewer/edit", {
+    method: "POST",
+    body: { catalog: "template:template", edit, apply: false },
+    headers: { origin: "" },
+  });
+  assert.equal(missingOrigin.response.status, 403);
 });

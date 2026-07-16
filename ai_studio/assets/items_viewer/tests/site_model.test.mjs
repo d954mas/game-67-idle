@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { formatCost } from "../site/item_detail.js";
-import { buildEditPatch, editableFields, editableOperations } from "../site/semantic_editor.js";
+import { buildEditPatch, editableFields, editableLevels, editableOperations } from "../site/semantic_editor.js";
 
 test("Workbench formats normalized free, single, and composite cost lists", () => {
   const gold = { __studio_kind: "cost", count: 100, item: { id: "game.gold" } };
@@ -40,6 +40,19 @@ test("Workbench offers only fields whose provenance matches the selected operati
   assert.deepEqual(editableFields(detail, "rewrite-lua"), []);
 });
 
+test("Workbench offers only levels whose provenance matches the selected operation and field", () => {
+  const detail = {
+    fields: [{ member: "attack" }],
+    item: { item: { levels: [
+      { level: 1, provenance: { attack: "columns" } },
+      { level: 2, provenance: { attack: "columns" } },
+      { level: 3, provenance: { attack: "override" } },
+    ] } },
+  };
+  assert.deepEqual(editableLevels(detail, "override-set", "attack"), [3]);
+  assert.deepEqual(editableLevels(detail, "curve-set", "attack"), []);
+});
+
 test("Workbench builds the exact T0366 patch contract with expected hash", () => {
   assert.deepEqual(buildEditPatch({
     operation: "level-set",
@@ -74,4 +87,5 @@ test("Workbench builds the exact T0366 patch contract with expected hash", () =>
     expected_source_hash: `sha256:${"b".repeat(64)}`,
   });
   assert.throws(() => buildEditPatch({ operation: "rewrite-lua", value: 1 }), /Unsupported/);
+  assert.throws(() => buildEditPatch({ operation: "level-set", value: "" }), /required/);
 });

@@ -25,8 +25,20 @@ export function editableFields(detail, operation) {
   return fields.filter((field) => provenance.some((row) => row.provenance?.[field] === expected));
 }
 
+export function editableLevels(detail, operation, field) {
+  const expected = {
+    "level-set": "table",
+    "override-set": "override",
+  }[operation];
+  if (!expected) return [];
+  return (detail?.item?.item?.levels || [])
+    .filter((row) => row.provenance?.[field] === expected)
+    .map((row) => row.level);
+}
+
 export function buildEditPatch({ operation, item, field, level, parameter, value, expectedSourceHash }) {
   if (!EDIT_OPERATIONS.has(operation)) throw new Error("Unsupported edit operation.");
+  if (String(value).trim() === "") throw new Error("Value is required.");
   const numericValue = Number(value);
   if (!Number.isSafeInteger(numericValue)) throw new Error("Value must be a safe integer.");
   const patch = {
@@ -106,11 +118,11 @@ export function renderSemanticEditor(model) {
   }
 
   const draft = model.draft || {};
-  const levels = (model.detail.item?.item?.levels || []).map((row) => row.level);
   const operation = selectFor(operations, draft.operation || operations[0]);
   const initialFields = editableFields(model.detail, operation.value);
   const field = selectFor(initialFields, draft.field || initialFields[0]);
-  const level = selectFor(levels, draft.level || levels[0]);
+  const initialLevels = editableLevels(model.detail, operation.value, field.value);
+  const level = selectFor(initialLevels, draft.level || initialLevels[0]);
   const parameter = selectFor(["start", "step"], draft.parameter || "step");
   const value = make("input", "iv-edit-input");
   value.type = "number";
@@ -123,24 +135,28 @@ export function renderSemanticEditor(model) {
   const levelControl = control("Level", level);
   const parameterControl = control("Curve parameter", parameter);
   const valueControl = control("Integer value", value);
-  const form = make("div", "iv-edit-form");
+  const form = make("form", "iv-edit-form");
   form.append(operationControl, fieldControl, levelControl, parameterControl, valueControl);
   root.append(form);
 
   const syncShape = () => {
     const curve = operation.value === "curve-set";
     replaceOptions(field, editableFields(model.detail, operation.value), field.value);
+    replaceOptions(level, editableLevels(model.detail, operation.value, field.value), level.value);
     levelControl.classList.toggle("is-hidden", curve);
     parameterControl.classList.toggle("is-hidden", !curve);
   };
   operation.addEventListener("change", syncShape);
+  field.addEventListener("change", syncShape);
   syncShape();
 
   const actions = make("div", "iv-edit-actions");
   const previewButton = make("button", "iv-action-button", model.busy ? "Working…" : "Preview what-if");
-  previewButton.type = "button";
+  previewButton.type = "submit";
   previewButton.disabled = model.busy;
-  previewButton.addEventListener("click", () => {
+  form.addEventListener("submit", (event) => {
+    event.preventDefault();
+    if (!form.reportValidity()) return;
     try {
       model.onPreview(buildEditPatch({
         operation: operation.value,
@@ -171,7 +187,7 @@ export function renderSemanticEditor(model) {
     undo.addEventListener("click", model.onUndo);
     actions.append(undo);
   }
-  root.append(actions);
+  form.append(actions);
 
   if (model.message) root.append(make("p", model.error ? "iv-edit-message is-error" : "iv-edit-message", model.message));
   if (model.preview) root.append(renderPreview(model.preview));

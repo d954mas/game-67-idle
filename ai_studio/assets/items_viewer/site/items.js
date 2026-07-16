@@ -1,6 +1,7 @@
 // Items Workbench page. Bare ESM, no framework or build step.
 import { field, make } from "./dom.js";
 import { renderItemDetail } from "./item_detail.js";
+import { captureCatalogScope, captureEditScope, scopeIsCurrent, scopedUndo } from "./request_scope.js";
 
 const state = {
   catalogs: [],
@@ -11,6 +12,7 @@ const state = {
   chart: null,
   chartField: null,
   detailRequest: 0,
+  catalogRequest: 0,
   issuesById: new Map(),
   editDraft: null,
   preview: null,
@@ -242,8 +244,8 @@ function detailModel(extra = {}) {
   };
 }
 
-function focusedUrl(endpoint, values) {
-  const params = new URLSearchParams({ catalog: state.selectedId, ...values });
+function focusedUrl(endpoint, values, catalogId = state.selectedId) {
+  const params = new URLSearchParams({ catalog: catalogId, ...values });
   return `/api/items-viewer/${endpoint}?${params}`;
 }
 
@@ -267,11 +269,11 @@ function editFailureMessage(payload) {
   return "Semantic edit failed.";
 }
 
-async function submitSemanticEdit(edit, apply) {
+async function submitSemanticEdit(catalogId, edit, apply) {
   const response = await fetch("/api/items-viewer/edit", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ catalog: state.selectedId, edit, apply }),
+    body: JSON.stringify({ catalog: catalogId, edit, apply }),
   });
   const payload = await response.json();
   return payload.ok ? payload : { ...payload, ok: false };
@@ -285,6 +287,8 @@ function showEditInputError(message) {
 }
 
 async function previewEdit(edit) {
+  const scope = captureEditScope(state, edit.item);
+  if (!scopeIsCurrent(state, scope)) return;
   state.editDraft = edit;
   state.previewEdit = edit;
   state.preview = null;
@@ -293,7 +297,8 @@ async function previewEdit(edit) {
   state.editError = false;
   renderCurrentDetail();
   try {
-    const payload = await submitSemanticEdit(edit, false);
+    const payload = await submitSemanticEdit(scope.catalogId, edit, false);
+    if (!scopeIsCurrent(state, scope)) return;
     state.editBusy = false;
     if (!payload.ok) {
       state.editMessage = editFailureMessage(payload);
@@ -304,6 +309,7 @@ async function previewEdit(edit) {
       state.editError = false;
     }
   } catch (error) {
+    if (!scopeIsCurrent(state, scope)) return;
     state.editBusy = false;
     state.editMessage = `Preview request failed: ${error.message}`;
     state.editError = true;
@@ -315,12 +321,15 @@ async function previewEdit(edit) {
 async function applyPreview() {
   const edit = state.previewEdit;
   if (!edit || !state.preview) return;
+  const scope = captureEditScope(state, edit.item);
+  if (!scopeIsCurrent(state, scope)) return;
   state.editBusy = true;
   state.editMessage = "Applying reviewed semantic patch…";
   state.editError = false;
   renderCurrentDetail();
   try {
-    const payload = await submitSemanticEdit(edit, true);
+    const payload = await submitSemanticEdit(scope.catalogId, edit, true);
+    if (!scopeIsCurrent(state, scope)) return;
     if (!payload.ok) {
       state.editBusy = false;
       state.editMessage = editFailureMessage(payload);
@@ -329,11 +338,12 @@ async function applyPreview() {
       els.itemDetail.querySelector(".iv-action-primary")?.focus();
       return;
     }
-    if (payload.result.applied) state.undoStack.push(payload.result.inverse_patch);
+    if (payload.result.applied) state.undoStack.push(scopedUndo(scope, payload.result.inverse_patch));
     await selectItem(edit.item, { focus: true });
     state.editMessage = payload.result.applied ? "Patch applied and full validation passed." : "Preview matched the current source; no bytes changed.";
     renderCurrentDetail();
   } catch (error) {
+    if (!scopeIsCurrent(state, scope)) return;
     state.editBusy = false;
     state.editMessage = `Apply request failed: ${error.message}`;
     state.editError = true;
@@ -342,14 +352,17 @@ async function applyPreview() {
 }
 
 async function undoLastEdit() {
-  const inverse = state.undoStack.at(-1);
-  if (!inverse) return;
+  const undo = state.undoStack.at(-1);
+  if (!undo) return;
+  const scope = captureEditScope(state, undo.itemId);
+  if (scope.catalogId !== undo.catalogId || !scopeIsCurrent(state, scope)) return;
   state.editBusy = true;
   state.editMessage = "Replaying returned inverse patch…";
   state.editError = false;
   renderCurrentDetail();
   try {
-    const payload = await submitSemanticEdit(inverse, true);
+    const payload = await submitSemanticEdit(undo.catalogId, undo.inverse, true);
+    if (!scopeIsCurrent(state, scope)) return;
     if (!payload.ok) {
       state.editBusy = false;
       state.editMessage = editFailureMessage(payload);
@@ -358,10 +371,11 @@ async function undoLastEdit() {
       return;
     }
     state.undoStack.pop();
-    await selectItem(inverse.item, { focus: true });
+    await selectItem(undo.inverse.item, { focus: true });
     state.editMessage = payload.result.applied ? "Undo applied from the stored inverse patch." : "Undo required no source change.";
     renderCurrentDetail();
   } catch (error) {
+    if (!scopeIsCurrent(state, scope)) return;
     state.editBusy = false;
     state.editMessage = `Undo request failed: ${error.message}`;
     state.editError = true;
@@ -381,12 +395,14 @@ function focusSeriesSelect() {
 
 async function loadSelectedChart(field, options = {}) {
   const request = state.detailRequest;
+  const catalogId = state.selectedId;
+  const itemId = state.selectedItemId;
   state.chartField = field;
   state.chart = null;
   renderItemDetail(els.itemDetail, detailModel());
   if (options.focus) focusSeriesSelect();
   try {
-    const response = await fetch(focusedUrl("chart", { item: state.selectedItemId, field }), { cache: "no-store" });
+    const response = await fetch(focusedUrl("chart", { item: itemId, field }, catalogId), { cache: "no-store" });
     if (!response.ok) throw new Error(`status ${response.status}`);
     const chart = await response.json();
     if (request !== state.detailRequest) return;
@@ -402,6 +418,7 @@ async function loadSelectedChart(field, options = {}) {
 }
 
 async function selectItem(itemId, options = {}) {
+  const catalogId = state.selectedId;
   state.selectedItemId = itemId;
   state.detail = null;
   state.chart = null;
@@ -412,7 +429,7 @@ async function selectItem(itemId, options = {}) {
   if (options.focus) focusSelectedItem();
   renderItemDetail(els.itemDetail, detailModel({ loading: true, message: "Loading item detail…" }));
   try {
-    const response = await fetch(focusedUrl("item", { item: itemId }), { cache: "no-store" });
+    const response = await fetch(focusedUrl("item", { item: itemId }, catalogId), { cache: "no-store" });
     if (!response.ok) throw new Error(`status ${response.status}`);
     const detail = await response.json();
     if (request !== state.detailRequest) return;
@@ -462,6 +479,8 @@ function renderDropdown() {
 // empty state.
 async function loadCatalog(id) {
   state.selectedId = id;
+  state.catalogRequest += 1;
+  const scope = captureCatalogScope(state);
   state.selectedItemId = null;
   state.detail = null;
   state.chart = null;
@@ -474,25 +493,30 @@ async function loadCatalog(id) {
     const response = await fetch(`/api/items-viewer/catalog?id=${encodeURIComponent(id)}`, { cache: "no-store" });
     if (!response.ok) throw new Error(`status ${response.status}`);
     const view = await response.json();
-    state.view = view;
+    if (!scopeIsCurrent(state, scope)) return;
     // One decode for the whole page, BEFORE render() (spec §5) — every row's
     // canvas crop below reads from this same decoded <img>, never re-fetches.
-    state.iconsImage = null;
+    let iconsImage = null;
     if (view.icons && view.icons.page_data_uri) {
       const img = new Image();
       img.src = view.icons.page_data_uri;
       try {
         await img.decode();
-        state.iconsImage = img;
+        if (!scopeIsCurrent(state, scope)) return;
+        iconsImage = img;
       } catch {
-        state.iconsImage = null; // decode failure degrades to the "?" placeholder, same as a missing region
+        iconsImage = null; // decode failure degrades to the "?" placeholder, same as a missing region
       }
     }
+    if (!scopeIsCurrent(state, scope)) return;
+    state.view = view;
+    state.iconsImage = iconsImage;
     render(view);
     setStatus(`${view.items.length} item(s) in ${view.meta.title}`);
     if (view.items.length) await selectItem(view.items[0].id);
     else renderItemDetail(els.itemDetail, { message: "No item selected." });
   } catch (error) {
+    if (!scopeIsCurrent(state, scope)) return;
     setStatus(`Could not load catalog: ${error.message}`, true);
   }
 }

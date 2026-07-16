@@ -49,7 +49,25 @@ function sendJson(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
-export function createItemsViewerApi(root) {
+function headerValue(req, name) {
+  const value = req.headers?.[name.toLowerCase()];
+  return Array.isArray(value) ? value[0] : (value || "");
+}
+
+function sameOriginRequest(req, allowedHosts) {
+  const host = headerValue(req, "host");
+  const origin = headerValue(req, "origin");
+  if (!allowedHosts.has(host) || !origin) return false;
+  try {
+    const parsed = new URL(origin);
+    return parsed.protocol === "http:" && parsed.host === host && parsed.origin === origin;
+  } catch {
+    return false;
+  }
+}
+
+export function createItemsViewerApi(root, options = {}) {
+  const allowedHosts = new Set(options.allowedHosts || []);
   return async function handleItemsViewerApi(req, res, url) {
     try {
       if (url.pathname === "/api/items-viewer/catalogs") {
@@ -117,6 +135,10 @@ export function createItemsViewerApi(root) {
       if (url.pathname === "/api/items-viewer/edit") {
         if (req.method !== "POST") {
           sendJson(res, 405, { error: "method not allowed" });
+          return true;
+        }
+        if (!sameOriginRequest(req, allowedHosts)) {
+          sendJson(res, 403, { error: "items request rejected" });
           return true;
         }
         const payload = await readJsonBody(req);
