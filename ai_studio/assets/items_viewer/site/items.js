@@ -1,8 +1,4 @@
-// Items Viewer page (T0316 phase 1) — read-only. Bare ESM, no framework, no build
-// step: fetches the two /api/items-viewer/* endpoints and renders. See the module
-// README ("Why the site can't import ops.mjs") for why the tiny "issue routing" and
-// BOM-agnostic-JSON logic here is a deliberate, small duplication of ops.mjs's own
-// pure helpers rather than a shared import.
+// Read-only Items Viewer page. Bare ESM, no framework or build step.
 const state = {
   catalogs: [],
   selectedId: null,
@@ -29,9 +25,7 @@ function make(tag, className, text) {
   return node;
 }
 
-// Phase-1 label rule (spec §4): item_fields.schema.json fields carry ONLY
-// {type, required} -- no labels. Humanize the key ("display_name" -> "Display name")
-// until a future ui:{} namespace ships real labels; this is the single seam to swap.
+// Snapshot fields carry stable machine names; humanize them at this UI boundary.
 function humanize(key) {
   const text = String(key || "").replace(/_/g, " ");
   return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
@@ -52,7 +46,7 @@ function setStatus(text, isError = false) {
   els.status.classList.toggle("is-error", Boolean(isError));
 }
 
-// Icons (T0316 spec §5): view.icons.regions maps an icon_asset_id ("icons/gold")
+// Icons: view.icons.regions maps an item icon id ("icons/gold")
 // straight to a pixel rect on the ALREADY-DECODED atlas debug-PNG page (decoded
 // once in loadCatalog, before render() — see state.iconsImage). No gallery
 // search, no icon-link write layer (phase 2) — this reads exactly what the
@@ -63,7 +57,7 @@ function resolveIcon(view, assetId) {
 
 function renderIconSlot(item, view) {
   const box = make("div", "iv-icon-slot");
-  const region = resolveIcon(view, item.icon_asset_id);
+  const region = resolveIcon(view, item.icon);
   if (region && state.iconsImage) {
     const canvas = document.createElement("canvas");
     canvas.width = region.w;
@@ -79,37 +73,13 @@ function renderIconSlot(item, view) {
   }
   box.classList.add("iv-icon-missing");
   box.append(make("span", "iv-icon-glyph", "?"));
-  box.append(make("span", "iv-icon-caption", item.icon_asset_id || "no icon"));
+  box.append(make("span", "iv-icon-caption", item.icon || "no icon"));
   if (view.icons && view.icons.reason) box.title = view.icons.reason;
   return box;
 }
 
-// Per-type render rules (spec §4): object -> recurse into its own .fields; list<string>
-// -> join; i64/string/bool -> scalar; enum -> the value itself. A schema key absent
-// from the record renders as an em-dash (handled by field() above).
-function renderTypedValue(type, value, spec) {
-  if (value === undefined || value === null) return "—";
-  if (type === "object") {
-    if (spec && spec.fields) {
-      const nested = make("div", "iv-nested");
-      for (const [key, nestedSpec] of Object.entries(spec.fields)) {
-        nested.append(field(humanize(key), renderTypedValue(nestedSpec.type, value[key], nestedSpec)));
-      }
-      return nested;
-    }
-    // An object-typed field with no declared sub-fields (e.g. blocks.use.params, an
-    // open bag — item_fields.schema.json only says {"type":"object"}) -- render its
-    // own keys directly instead of the useless default String(value) ("[object
-    // Object]"), same degradation renderRawValue uses when the schema is unavailable.
-    return renderRawValue(value);
-  }
-  if (type === "list<string>") return Array.isArray(value) && value.length ? value.join(", ") : "—";
-  if (type === "bool") return value ? "true" : "false";
-  return String(value);
-}
-
-// Degradation (spec §4): schema unavailable -> iterate the record's OWN keys, no type
-// info to lean on.
+// The Snapshot summary is bounded. Only nested capability params need a generic
+// object renderer.
 function renderRawValue(value) {
   if (value === undefined || value === null) return "—";
   if (Array.isArray(value)) return value.length ? value.map(String).join(", ") : "—";
@@ -122,26 +92,23 @@ function renderRawValue(value) {
   return String(value);
 }
 
-function renderBlock(blockName, blockValue, blockSpec) {
+const CORE_FIELDS = ["created", "tags", "base_value", "stack", "authoring_mode"];
+const BLOCK_FIELDS = {
+  equip: ["slot"],
+  use: ["effect_id", "params"],
+  currency: ["hud", "cap"],
+};
+
+function renderBlock(blockName, blockValue) {
   const box = make("div", "iv-block");
   box.append(make("span", "iv-chip iv-chip-block", humanize(blockName)));
   const rows = make("div", "iv-block-rows");
-  if (blockSpec && blockSpec.fields) {
-    for (const [key, spec] of Object.entries(blockSpec.fields)) {
-      rows.append(field(humanize(key), renderTypedValue(spec.type, blockValue ? blockValue[key] : undefined, spec)));
-    }
-  } else if (blockValue && typeof blockValue === "object") {
-    for (const [key, v] of Object.entries(blockValue)) rows.append(field(humanize(key), renderRawValue(v)));
+  for (const key of BLOCK_FIELDS[blockName]) {
+    rows.append(field(humanize(key), renderRawValue(blockValue[key])));
   }
   box.append(rows);
   return box;
 }
-
-// Chrome keys are hand-rendered at fixed positions (icon/title/subtitle/kind chip),
-// so they are excluded from the schema-iterated generic rows (spec §4). `blocks` is
-// the item_json_record's own bookkeeping array, never a displayable field.
-const CHROME_KEYS = new Set(["id", "display_name", "icon_asset_id", "kind", "blocks"]);
-const BLOCK_KEYS = new Set(["equip", "use", "currency"]);
 
 function renderCard(item, view, issues) {
   const card = make("article", "iv-card");
@@ -149,7 +116,7 @@ function renderCard(item, view, issues) {
   const top = make("div", "iv-card-top");
   top.append(renderIconSlot(item, view));
   const titleBox = make("div", "iv-card-title");
-  titleBox.append(make("h3", "", item.display_name || item.id || "—"));
+  titleBox.append(make("h3", "", item.name || item.id || "—"));
   titleBox.append(make("span", "iv-card-id", item.id || "—"));
   top.append(titleBox);
   card.append(top);
@@ -162,22 +129,12 @@ function renderCard(item, view, issues) {
   card.append(chips);
 
   const rows = make("div", "iv-card-rows");
-  if (view.schema && view.schema.core) {
-    for (const [key, spec] of Object.entries(view.schema.core)) {
-      if (CHROME_KEYS.has(key)) continue;
-      rows.append(field(humanize(key), renderTypedValue(spec.type, item[key], spec)));
-    }
-  } else {
-    for (const key of Object.keys(item)) {
-      if (CHROME_KEYS.has(key) || BLOCK_KEYS.has(key)) continue;
-      rows.append(field(humanize(key), renderRawValue(item[key])));
-    }
-  }
+  for (const key of CORE_FIELDS) rows.append(field(humanize(key), renderRawValue(item[key])));
   card.append(rows);
 
-  for (const blockName of item.blocks || []) {
-    const blockSpec = view.schema && view.schema.blocks ? view.schema.blocks[blockName] : null;
-    card.append(renderBlock(blockName, item[blockName], blockSpec));
+  for (const blockName of Object.keys(BLOCK_FIELDS)) {
+    if (!item[blockName]) continue;
+    card.append(renderBlock(blockName, item[blockName]));
   }
 
   if (issues.length) {
@@ -246,29 +203,6 @@ function renderSummary(view, catalogIssues) {
   meta.append(field("Errors", String(view.validate.errors.length)));
   meta.append(field("Warnings", String(view.validate.warnings.length)));
   root.append(meta);
-
-  const containersBox = make("div", "iv-containers");
-  containersBox.append(make("h3", "", `Containers (${view.containers.length})`));
-  if (view.containers.length) {
-    const table = make("table", "iv-table");
-    const thead = make("thead");
-    const headRow = make("tr");
-    for (const key of ["id", "capacity", "accept_policy", "hidden"]) headRow.append(make("th", "", humanize(key)));
-    thead.append(headRow);
-    table.append(thead);
-    const tbody = make("tbody");
-    for (const container of view.containers) {
-      const row = make("tr");
-      row.append(make("td", "", container.id));
-      row.append(make("td", "", container.capacity ? String(container.capacity) : "unlimited"));
-      row.append(make("td", "", container.accept_policy));
-      row.append(make("td", "", container.hidden ? "yes" : "no"));
-      tbody.append(row);
-    }
-    table.append(tbody);
-    containersBox.append(table);
-  }
-  root.append(containersBox);
 
   if (catalogIssues.length) {
     const box = make("div", "iv-catalog-issues");

@@ -55,7 +55,7 @@ export function createItemsViewerApi(root) {
       sendJson(res, 404, { error: "not found" });
       return true;
     } catch (error) {
-      // TOOL-FAILURE only (spec §3): py could not be spawned, or items_ops.py emitted
+      // TOOL-FAILURE only: Studio Python could not be spawned, or items_cli.py emitted
       // unparseable JSON on an otherwise-successful exit — a viewer/env bug, never the
       // game's own data (that is content_error, 200, handled above).
       sendJson(res, 500, { error: error && error.message ? error.message : String(error) });

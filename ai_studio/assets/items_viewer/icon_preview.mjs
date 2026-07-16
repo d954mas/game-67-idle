@@ -103,7 +103,7 @@ export function parsePackBuffer(buf) {
 // macro's hash and NtAtlasRegion.name_hash both hash ONLY the sprite name (e.g.
 // "gold"), never the full "icons/gold" path (nt_builder_atlas.c:1943) -- the
 // join below is correct by construction; the map is keyed by the full comment
-// path because that string IS the icon_asset_id contract ("icons/gold").
+// path because that string IS the item.icon contract ("icons/gold").
 const HDR_DEFINE_RE = /#define\s+ASSET_ATLAS_REGION_\S+\s+\(\(nt_hash64_t\)\{0x([0-9A-Fa-f]+)ULL\}\)\s*\/\*\s*(\S+)\s*\*\//g;
 
 export function parseIconRegionNames(hdrText) {
