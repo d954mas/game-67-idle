@@ -37,6 +37,7 @@
     "semantic_cli": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> <operation>",
     "semantic_cli_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli_test.py",
     "semantic_cli_benchmark": "node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_items_cli.py --project-root <game-root> --out <result.json>",
+    "pipeline_benchmark": "node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_items_pipeline.py --build-dir <release-build-dir> --out <result.json>",
     "runtime_package": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py build --snapshot <snapshot.json> --out <items.catalog> --header-out <items_catalog_abi.gen.h>",
     "runtime_package_verify": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package.py verify --snapshot <snapshot.json> --blob <items.catalog> --header <items_catalog_abi.gen.h>",
     "runtime_package_test": "node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package_test.py"

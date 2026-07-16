@@ -1,6 +1,6 @@
 # Items runtime package benchmark
 
-This is the bounded T0365 comparison, not the later full Balance pipeline
+This is the bounded T0365 comparison, not the later full Items pipeline
 benchmark. Both candidates expose the same typed API and the runner refuses to
 measure them unless their two-item/three-level catalogs are semantically equal.
 
@@ -36,3 +36,18 @@ stands for scalable iteration and pack placement; C arrays remain the tiny
 fallback/reference candidate. This does not claim that the blob wins
 tiny-fixture access latency. T0380 owns representative full-pipeline sizes,
 memory profiling, and budget ratification.
+
+## Finished pipeline
+
+T0380's production/agent-loop benchmark, profile, before/after evidence, and
+backend decision are recorded in
+[`items_pipeline_2026-07-16.md`](items_pipeline_2026-07-16.md). Reproduce the
+current Windows result with:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_items_pipeline.py --build-dir templates/template/build/items-benchmark-release --out features/items-core/benchmarks/results/windows-pipeline-2026-07-16.json
+node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_items_pipeline_test.py
+```
+
+The runner uses a copied editable fixture and temporary build outputs. It does
+not modify game or template authoring sources.

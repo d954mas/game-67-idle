@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -10,6 +11,9 @@ import sys
 import unittest
 
 import benchmark_items_pipeline as BENCHMARK
+
+
+RESULT = Path(__file__).resolve().parent / "results" / "windows-pipeline-2026-07-16.json"
 
 
 class ItemsPipelineBenchmarkTests(unittest.TestCase):
@@ -61,6 +65,15 @@ class ItemsPipelineBenchmarkTests(unittest.TestCase):
         quality = BENCHMARK.conflict_quality(json.dumps(payload).encode("utf-8"))
         self.assertTrue(all(quality.values()))
         self.assertFalse(all(BENCHMARK.conflict_quality(b"not-json").values()))
+
+    def test_recorded_result_matches_every_measured_source(self):
+        recorded = json.loads(RESULT.read_text(encoding="utf-8"))
+        expected = {
+            name: "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+            for name, path in BENCHMARK.BENCHMARK_SOURCES.items()
+        }
+        self.assertEqual(recorded["method"]["source_sha256"], expected)
+        self.assertEqual(recorded["decision"]["status"], "ratified")
 
 
 if __name__ == "__main__":

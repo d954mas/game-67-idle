@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import argparse
-import importlib.metadata
 import json
 import math
 from pathlib import Path
@@ -12,6 +11,8 @@ import re
 import subprocess
 import sys
 from typing import Any
+
+import lupa as lupa_package
 
 
 SCHEMA = "items.lua.sandbox.v1"
@@ -1420,7 +1421,7 @@ def _evaluate(request: dict[str, Any]) -> dict[str, Any]:
     payload = {
         "schema": "items.lua.evaluation.v1",
         "backend": {
-            "package": f"lupa@{importlib.metadata.version('lupa')}",
+            "package": f"lupa@{lupa_package.__version__}",
             "module": BACKEND_MODULE,
             "implementation": runtime.lua_implementation,
             "version": ".".join(map(str, runtime.lua_version)),
