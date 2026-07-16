@@ -34,6 +34,21 @@ class ItemsCliTests(unittest.TestCase):
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertTrue(json.loads(process.stdout)["result"]["receipt"]["ok"])
 
+    def test_list_exposes_bounded_viewer_metadata_without_level_tables(self):
+        process = subprocess.run(
+            [sys.executable, str(SCRIPT), "--project-root", str(TEMPLATE_ROOT), "list"],
+            text=True, capture_output=True, encoding="utf-8", timeout=20,
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        items = json.loads(process.stdout)["result"]
+        energy = next(item for item in items if item["id"] == "tmpl.energy")
+        self.assertEqual(energy["name"], "Energy")
+        self.assertEqual(energy["icon"], "icons/energy")
+        self.assertEqual(energy["currency"], {"cap": 100, "hud": "counter"})
+        self.assertEqual(energy["tags"], [])
+        self.assertNotIn("levels", energy)
+        self.assertNotIn("acquire", energy)
+
     def test_template_lua_builds_the_runtime_projection(self):
         with tempfile.TemporaryDirectory() as tmp:
             process = subprocess.run(

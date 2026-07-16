@@ -241,6 +241,8 @@ encoding, and they never infer a game from cwd. `build` validates requirements
 and the release receipt before atomically replacing changed generated files in
 an explicit output directory. The semantic source-write surface will extend
 this same CLI only through source-preserving edit proofs.
+`list` includes explicit authored card metadata and runtime identity but omits
+level tables and acquire transitions; callers use focused `inspect` for those.
 
 `level-set`, `curve-set`, and `override-set` replace one existing canonical
 decimal literal in an explicit table cell, `levels.linear` `start|step`, or an

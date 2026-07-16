@@ -27,6 +27,10 @@ DEFAULT_MAX_FIELDS = 256
 DEFAULT_MAX_RELATED = 1_000
 MAX_PATCH_BYTES = 64 * 1024
 MAX_BATCH_OPERATIONS = 100
+LIST_ITEM_KEYS = (
+    "id", "created", "name", "icon", "kind", "tags", "base_value", "stack",
+    "currency", "use", "equip", "authoring_mode",
+)
 SCRIPT_DIR = Path(__file__).resolve().parent
 SANDBOX = SCRIPT_DIR / "items_lua_sandbox.py"
 
@@ -176,17 +180,16 @@ def _list(snapshot: dict[str, Any], max_items: int) -> list[dict[str, Any]]:
     if len(items) > max_items:
         raise CliFailure("cli.result_limit", f"list exceeds {max_items} items; increase max-items")
     runtime = {entry["id"]: entry for entry in snapshot["runtime_export"]["items"]}
-    return [
-        {
-            "id": item["id"],
-            "kind": item["kind"],
-            "runtime": {
-                "storage": runtime[item["id"]]["storage"],
-                "level_count": runtime[item["id"]]["level_count"],
-            },
+    result = []
+    for item in items:
+        summary = {key: item[key] for key in LIST_ITEM_KEYS if key in item}
+        summary["tags"] = item.get("tags", [])
+        summary["runtime"] = {
+            "storage": runtime[item["id"]]["storage"],
+            "level_count": runtime[item["id"]]["level_count"],
         }
-        for item in items
-    ]
+        result.append(summary)
+    return result
 
 
 def _dependencies(
