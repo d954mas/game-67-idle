@@ -515,7 +515,7 @@ class ItemsCliTests(unittest.TestCase):
             )
 
             self.assertEqual(
-                {path.relative_to(project).as_posix() for path in captured},
+                {path.relative_to(project.resolve()).as_posix() for path in captured},
                 {
                     "items.lua.json",
                     "game/items.lua",
