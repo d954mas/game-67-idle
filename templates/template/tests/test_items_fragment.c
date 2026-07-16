@@ -31,6 +31,18 @@ static items_container_ref_t create_container(uint32_t capacity, items_container
     return ref;
 }
 
+static items_container_ref_t create_ephemeral_container(
+    uint32_t capacity, items_container_policy_t policy) {
+    items_container_ref_t ref = ITEMS_CONTAINER_REF_NONE;
+    items_container_desc_t desc = {
+        .capacity = capacity,
+        .policy = policy,
+        .lifetime = ITEMS_LIFETIME_EPHEMERAL,
+    };
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_container_create(desc, &ref));
+    return ref;
+}
+
 void test_empty_nested_state_round_trip(void) {
     cJSON *json = items_state_to_json(&items_state);
     cJSON *containers = cJSON_GetObjectItemCaseSensitive(json, "containers");
@@ -211,6 +223,107 @@ void test_missing_definition_quarantines_and_restores(void) {
     TEST_ASSERT_FALSE(items_state.containers_entries[entry.index].quarantined);
 }
 
+void test_ephemeral_entries_never_enter_persistent_state(void) {
+    items_container_ref_t chest = create_ephemeral_container(4, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_entry_ref_t wood = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(ITEMS_LIFETIME_EPHEMERAL, items_container_lifetime(chest));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(chest, "tmpl.wood", 8, 0, "loot:test", &wood, NULL));
+    TEST_ASSERT_EQUAL_INT(ITEMS_LIFETIME_EPHEMERAL, items_entry_view(wood).lifetime);
+    TEST_ASSERT_EQUAL_INT64(8, items_stack_count(chest, "tmpl.wood"));
+
+    cJSON *json = items_state_to_json(&items_state);
+    TEST_ASSERT_EQUAL_INT(
+        0, cJSON_GetArraySize(cJSON_GetObjectItemCaseSensitive(json, "containers")));
+    TEST_ASSERT_EQUAL_UINT32(0, items_state.last_container_id);
+    TEST_ASSERT_EQUAL_UINT32(0, items_state.last_entry_id);
+    cJSON_Delete(json);
+
+    items_container_ref_t old = chest;
+    TEST_ASSERT_TRUE(items_runtime_rebuild(NULL, 0));
+    items_container_ref_t replacement = create_ephemeral_container(4, ITEMS_CONTAINER_POLICY_GENERIC);
+    TEST_ASSERT_TRUE(old.index == replacement.index);
+    TEST_ASSERT_TRUE(old.generation != replacement.generation);
+}
+
+void test_lifetime_boundary_rejects_persistent_to_ephemeral_and_acquires_reverse(void) {
+    items_container_ref_t bag = create_container(4, ITEMS_CONTAINER_POLICY_GENERIC);
+    items_container_ref_t chest = create_ephemeral_container(4, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_entry_ref_t persistent = ITEM_ENTRY_REF_NONE;
+    item_entry_ref_t temporary = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 10, 0, "loot:test", &persistent, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_LIFETIME,
+        items_try_entry_move(persistent, chest, 4, 0, "drop:test", NULL));
+    TEST_ASSERT_EQUAL_INT64(10, items_entry_view(persistent).count);
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(chest, "tmpl.wood", 10, 0, "loot:test", &temporary, NULL));
+    item_entry_ref_t acquired = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_entry_move(temporary, bag, 4, 1, "pickup:test", &acquired));
+    TEST_ASSERT_EQUAL_INT(ITEMS_LIFETIME_PERSISTENT, items_entry_view(acquired).lifetime);
+    TEST_ASSERT_TRUE(items_entry_id(acquired) > ITEMS_ID_NONE);
+    TEST_ASSERT_EQUAL_INT64(4, items_entry_view(acquired).count);
+    TEST_ASSERT_EQUAL_INT64(6, items_entry_view(temporary).count);
+}
+
+void test_ephemeral_move_preserves_runtime_identity(void) {
+    items_container_ref_t source = create_ephemeral_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
+    items_container_ref_t destination = create_ephemeral_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_entry_ref_t entry = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(source, "tmpl.wood", 3, 0, "loot:test", &entry, NULL));
+    item_entry_ref_t moved = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_entry_move(entry, destination, 3, 1, "drop:test", &moved));
+    TEST_ASSERT_EQUAL_UINT32(entry.index, moved.index);
+    TEST_ASSERT_EQUAL_UINT32(entry.generation, moved.generation);
+    TEST_ASSERT_EQUAL_INT64(3, items_stack_count(destination, "tmpl.wood"));
+}
+
+void test_ephemeral_partial_self_move_never_duplicates_a_slot(void) {
+    items_container_ref_t chest = create_ephemeral_container(3, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_entry_ref_t source = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(chest, "tmpl.wood", 10, 0, "loot:test", &source, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_SLOT_OCCUPIED,
+        items_try_entry_move(source, chest, 4, 0, "split:test", NULL));
+    TEST_ASSERT_EQUAL_INT64(10, items_entry_view(source).count);
+
+    item_entry_ref_t split = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_entry_move(source, chest, 4, ITEMS_SLOT_AUTO, "split:test", &split));
+    TEST_ASSERT_EQUAL_UINT32(0, items_entry_view(source).slot);
+    TEST_ASSERT_EQUAL_UINT32(1, items_entry_view(split).slot);
+    TEST_ASSERT_EQUAL_INT64(6, items_entry_view(source).count);
+    TEST_ASSERT_EQUAL_INT64(4, items_entry_view(split).count);
+}
+
+void test_rejected_rebuild_preserves_ephemeral_state(void) {
+    items_container_ref_t first = create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
+    items_container_ref_t second = create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
+    items_container_ref_t chest = create_ephemeral_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(chest, "tmpl.wood", 3, 0, "loot:test", NULL, NULL));
+
+    items_state.containers[second.index].container_id = items_state.containers[first.index].container_id;
+    char error[128] = {0};
+    TEST_ASSERT_FALSE(items_runtime_rebuild(error, (int)sizeof(error)));
+    TEST_ASSERT_EQUAL_INT64(3, items_stack_count(chest, "tmpl.wood"));
+}
+
 void test_success_emits_one_numeric_compatibility_event(void) {
     items_container_ref_t wallet = create_container(2, ITEMS_CONTAINER_POLICY_CURRENCY_ONLY);
     game_event_frame_reset();
@@ -247,6 +360,11 @@ int main(void) {
     RUN_TEST(test_rebuild_rejects_duplicates_and_counter_regression);
     RUN_TEST(test_one_hundred_persistent_containers_round_trip);
     RUN_TEST(test_missing_definition_quarantines_and_restores);
+    RUN_TEST(test_ephemeral_entries_never_enter_persistent_state);
+    RUN_TEST(test_lifetime_boundary_rejects_persistent_to_ephemeral_and_acquires_reverse);
+    RUN_TEST(test_ephemeral_move_preserves_runtime_identity);
+    RUN_TEST(test_ephemeral_partial_self_move_never_duplicates_a_slot);
+    RUN_TEST(test_rejected_rebuild_preserves_ephemeral_state);
     RUN_TEST(test_success_emits_one_numeric_compatibility_event);
     int result = UNITY_END();
     game_events_shutdown();

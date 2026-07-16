@@ -128,3 +128,9 @@ T0392.
   progression and HUD receive explicit wallet refs; the obsolete template
   Items bootstrap TU was deleted. Native `game`, `test_game_state_roundtrip`,
   and `test_template_composition` built; focused tests passed (2/2).
+- 2026-07-16: Slice 3 added separately bounded/configurable ephemeral pools
+  behind tagged generation refs. Ephemeral state is excluded from JSON and
+  discarded only after a successful rebuild; persistent-to-ephemeral moves
+  refuse, while reverse acquisition creates a persistent ID. Independent
+  review found and regression-tested rejected-rebuild state loss and partial
+  self-move slot duplication. Native game build and Items tests pass.

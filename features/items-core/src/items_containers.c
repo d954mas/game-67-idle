@@ -25,6 +25,19 @@ static uint32_t s_container_generation[ITEMS_STATE_MAX_CONTAINERS];
 static uint32_t s_entry_generation[ITEMS_STATE_MAX_CONTAINERS_ENTRIES];
 static bool s_ready;
 
+#define ITEMS_EPHEMERAL_REF_BIT UINT32_C(0x80000000)
+#ifndef ITEMS_EPHEMERAL_MAX_CONTAINERS
+#define ITEMS_EPHEMERAL_MAX_CONTAINERS 64U
+#endif
+#ifndef ITEMS_EPHEMERAL_MAX_ENTRIES
+#define ITEMS_EPHEMERAL_MAX_ENTRIES 512U
+#endif
+
+static ItemsItemContainer s_ephemeral_containers[ITEMS_EPHEMERAL_MAX_CONTAINERS];
+static ItemsItemEntry s_ephemeral_entries[ITEMS_EPHEMERAL_MAX_ENTRIES];
+static uint32_t s_ephemeral_container_generation[ITEMS_EPHEMERAL_MAX_CONTAINERS];
+static uint32_t s_ephemeral_entry_generation[ITEMS_EPHEMERAL_MAX_ENTRIES];
+
 static void set_error(char *error, int cap, const char *message) {
     if (error != NULL && cap > 0) {
         (void)snprintf(error, (size_t)cap, "%s", message);
@@ -145,7 +158,16 @@ static bool build_indices(bool invalidate_refs, char *error, int error_cap) {
 }
 
 bool items_runtime_rebuild(char *error, int error_cap) {
-    return build_indices(true, error, error_cap);
+    if (!build_indices(true, error, error_cap)) { return false; }
+    memset(s_ephemeral_containers, 0, sizeof(s_ephemeral_containers));
+    memset(s_ephemeral_entries, 0, sizeof(s_ephemeral_entries));
+    for (uint32_t i = 0; i < ITEMS_EPHEMERAL_MAX_CONTAINERS; i++) {
+        s_ephemeral_container_generation[i] = next_generation(s_ephemeral_container_generation[i]);
+    }
+    for (uint32_t i = 0; i < ITEMS_EPHEMERAL_MAX_ENTRIES; i++) {
+        s_ephemeral_entry_generation[i] = next_generation(s_ephemeral_entry_generation[i]);
+    }
+    return true;
 }
 
 static void ensure_ready(void) {
@@ -190,6 +212,44 @@ static items_container_ref_t container_ref(uint32_t index) {
 
 static item_entry_ref_t entry_ref(uint32_t index) {
     return (item_entry_ref_t){index, s_entry_generation[index]};
+}
+
+static bool ephemeral_ref(uint32_t index) {
+    return (index & ITEMS_EPHEMERAL_REF_BIT) != 0;
+}
+
+static uint32_t ephemeral_index(uint32_t encoded) {
+    return encoded & ~ITEMS_EPHEMERAL_REF_BIT;
+}
+
+static items_container_ref_t ephemeral_container_ref(uint32_t index) {
+    return (items_container_ref_t){
+        index | ITEMS_EPHEMERAL_REF_BIT,
+        s_ephemeral_container_generation[index],
+    };
+}
+
+static item_entry_ref_t ephemeral_entry_ref(uint32_t index) {
+    return (item_entry_ref_t){
+        index | ITEMS_EPHEMERAL_REF_BIT,
+        s_ephemeral_entry_generation[index],
+    };
+}
+
+static ItemsItemContainer *require_ephemeral_container(items_container_ref_t ref) {
+    uint32_t index = ephemeral_index(ref.index);
+    NT_ASSERT(ephemeral_ref(ref.index) && index < ITEMS_EPHEMERAL_MAX_CONTAINERS);
+    NT_ASSERT(ref.generation != 0 && s_ephemeral_container_generation[index] == ref.generation);
+    NT_ASSERT(s_ephemeral_containers[index].used);
+    return &s_ephemeral_containers[index];
+}
+
+static ItemsItemEntry *require_ephemeral_entry(item_entry_ref_t ref) {
+    uint32_t index = ephemeral_index(ref.index);
+    NT_ASSERT(ephemeral_ref(ref.index) && index < ITEMS_EPHEMERAL_MAX_ENTRIES);
+    NT_ASSERT(ref.generation != 0 && s_ephemeral_entry_generation[index] == ref.generation);
+    NT_ASSERT(s_ephemeral_entries[index].used);
+    return &s_ephemeral_entries[index];
 }
 
 bool items_container_try_from_id(uint32_t container_id, items_container_ref_t *out_container) {
@@ -261,11 +321,243 @@ static items_result_t policy_allows(const ItemsItemContainer *container, item_de
     return ITEMS_RESULT_OK;
 }
 
+static uint32_t ephemeral_free_container(void) {
+    for (uint32_t i = 0; i < ITEMS_EPHEMERAL_MAX_CONTAINERS; i++) {
+        if (!s_ephemeral_containers[i].used) { return i; }
+    }
+    return UINT32_MAX;
+}
+
+static uint32_t ephemeral_free_entry(void) {
+    for (uint32_t i = 0; i < ITEMS_EPHEMERAL_MAX_ENTRIES; i++) {
+        if (!s_ephemeral_entries[i].used) { return i; }
+    }
+    return UINT32_MAX;
+}
+
+static ItemsItemEntry *ephemeral_entry_at_slot(uint32_t container_index, uint32_t slot) {
+    for (uint32_t i = 0; i < ITEMS_EPHEMERAL_MAX_ENTRIES; i++) {
+        ItemsItemEntry *entry = &s_ephemeral_entries[i];
+        if (entry->used && entry->parent_index == (int)container_index && entry->slot == slot) { return entry; }
+    }
+    return NULL;
+}
+
+static uint32_t ephemeral_choose_slot(uint32_t container_index, uint32_t requested, uint32_t ignore_entry) {
+    const ItemsItemContainer *container = &s_ephemeral_containers[container_index];
+    if (requested != ITEMS_SLOT_AUTO) {
+        ItemsItemEntry *entry = ephemeral_entry_at_slot(container_index, requested);
+        bool available = entry == NULL || (uint32_t)(entry - s_ephemeral_entries) == ignore_entry;
+        return requested < container->capacity && available ? requested : UINT32_MAX;
+    }
+    for (uint32_t slot = 0; slot < container->capacity; slot++) {
+        ItemsItemEntry *entry = ephemeral_entry_at_slot(container_index, slot);
+        if (entry == NULL || (uint32_t)(entry - s_ephemeral_entries) == ignore_entry) { return slot; }
+    }
+    return UINT32_MAX;
+}
+
+static void ephemeral_erase_entry(uint32_t index) {
+    memset(&s_ephemeral_entries[index], 0, sizeof(s_ephemeral_entries[index]));
+    s_ephemeral_entry_generation[index] = next_generation(s_ephemeral_entry_generation[index]);
+}
+
+static items_result_t ephemeral_container_create(
+    items_container_desc_t desc, items_container_ref_t *out_container) {
+    if (desc.capacity > ITEMS_STATE_ITEM_CONTAINER_CAPACITY_MAX ||
+        desc.policy < ITEMS_CONTAINER_POLICY_GENERIC || desc.policy > ITEMS_CONTAINER_POLICY_EQUIPMENT) {
+        return ITEMS_RESULT_CAPACITY;
+    }
+    uint32_t index = ephemeral_free_container();
+    if (index == UINT32_MAX) { return ITEMS_RESULT_POOL_EXHAUSTED; }
+    ItemsItemContainer *container = &s_ephemeral_containers[index];
+    memset(container, 0, sizeof(*container));
+    container->used = true;
+    container->capacity = desc.capacity;
+    container->policy = (int)desc.policy;
+    s_ephemeral_container_generation[index] = next_generation(s_ephemeral_container_generation[index]);
+    *out_container = ephemeral_container_ref(index);
+    return ITEMS_RESULT_OK;
+}
+
+static items_result_t ephemeral_container_destroy(items_container_ref_t ref) {
+    uint32_t index = ephemeral_index(ref.index);
+    (void)require_ephemeral_container(ref);
+    for (uint32_t i = 0; i < ITEMS_EPHEMERAL_MAX_ENTRIES; i++) {
+        if (s_ephemeral_entries[i].used && s_ephemeral_entries[i].parent_index == (int)index) {
+            return ITEMS_RESULT_NOT_EMPTY;
+        }
+    }
+    memset(&s_ephemeral_containers[index], 0, sizeof(s_ephemeral_containers[index]));
+    s_ephemeral_container_generation[index] = next_generation(s_ephemeral_container_generation[index]);
+    return ITEMS_RESULT_OK;
+}
+
+static items_result_t ephemeral_container_resize(items_container_ref_t ref, uint32_t capacity) {
+    uint32_t index = ephemeral_index(ref.index);
+    ItemsItemContainer *container = require_ephemeral_container(ref);
+    if (capacity > ITEMS_STATE_ITEM_CONTAINER_CAPACITY_MAX) { return ITEMS_RESULT_CAPACITY; }
+    for (uint32_t i = 0; i < ITEMS_EPHEMERAL_MAX_ENTRIES; i++) {
+        const ItemsItemEntry *entry = &s_ephemeral_entries[i];
+        if (entry->used && entry->parent_index == (int)index && entry->slot >= capacity) {
+            return ITEMS_RESULT_CAPACITY;
+        }
+    }
+    container->capacity = capacity;
+    return ITEMS_RESULT_OK;
+}
+
+static int64_t stack_limit(item_def_ref_t ref, item_core_t core);
+
+static items_result_t ephemeral_stack_add(
+    items_container_ref_t container_ref_value, const char *def_id, int64_t count,
+    uint32_t requested_slot, item_entry_ref_t *out_entry, int64_t *out_applied) {
+    uint32_t container_index = ephemeral_index(container_ref_value.index);
+    ItemsItemContainer *container = require_ephemeral_container(container_ref_value);
+    if (count <= 0 || def_id == NULL) { return ITEMS_RESULT_INSUFFICIENT; }
+    item_def_ref_t def;
+    item_core_t core;
+    if (!lookup_item(def_id, &def, &core) || !item_is_stackable(core)) { return ITEMS_RESULT_WRONG_STORAGE; }
+    items_result_t allowed = policy_allows(container, def, core);
+    if (allowed != ITEMS_RESULT_OK) { return allowed; }
+    int64_t limit = stack_limit(def, core);
+
+    ItemsItemEntry *entry = NULL;
+    for (uint32_t i = 0; i < ITEMS_EPHEMERAL_MAX_ENTRIES; i++) {
+        ItemsItemEntry *candidate = &s_ephemeral_entries[i];
+        if (!candidate->used || candidate->parent_index != (int)container_index ||
+            strcmp(candidate->def_id, def_id) != 0) { continue; }
+        if (requested_slot != ITEMS_SLOT_AUTO && candidate->slot != requested_slot) { continue; }
+        if (requested_slot != ITEMS_SLOT_AUTO || candidate->count < limit) { entry = candidate; break; }
+    }
+    if (entry != NULL) {
+        int64_t applied = count > limit - entry->count ? limit - entry->count : count;
+        if (applied <= 0) { return ITEMS_RESULT_CAPACITY; }
+        entry->count += applied;
+        if (out_entry != NULL) { *out_entry = ephemeral_entry_ref((uint32_t)(entry - s_ephemeral_entries)); }
+        if (out_applied != NULL) { *out_applied = applied; }
+        return ITEMS_RESULT_OK;
+    }
+
+    uint32_t slot = ephemeral_choose_slot(container_index, requested_slot, UINT32_MAX);
+    if (slot == UINT32_MAX) {
+        return requested_slot == ITEMS_SLOT_AUTO ? ITEMS_RESULT_CAPACITY : ITEMS_RESULT_SLOT_OCCUPIED;
+    }
+    uint32_t index = ephemeral_free_entry();
+    if (index == UINT32_MAX) { return ITEMS_RESULT_POOL_EXHAUSTED; }
+    int64_t applied = count > limit ? limit : count;
+    entry = &s_ephemeral_entries[index];
+    memset(entry, 0, sizeof(*entry));
+    entry->used = true;
+    entry->parent_index = (int)container_index;
+    entry->slot = slot;
+    (void)snprintf(entry->def_id, sizeof(entry->def_id), "%s", def_id);
+    entry->count = applied;
+    entry->level = ITEMS_STATE_ITEM_ENTRY_LEVEL_DEFAULT;
+    entry->durability = ITEMS_STATE_ITEM_ENTRY_DURABILITY_DEFAULT;
+    s_ephemeral_entry_generation[index] = next_generation(s_ephemeral_entry_generation[index]);
+    if (out_entry != NULL) { *out_entry = ephemeral_entry_ref(index); }
+    if (out_applied != NULL) { *out_applied = applied; }
+    return ITEMS_RESULT_OK;
+}
+
+static int64_t ephemeral_stack_count(items_container_ref_t container_ref_value, const char *def_id) {
+    uint32_t container_index = ephemeral_index(container_ref_value.index);
+    (void)require_ephemeral_container(container_ref_value);
+    item_core_t core;
+    if (!lookup_item(def_id, NULL, &core) || !item_is_stackable(core)) { return 0; }
+    int64_t total = 0;
+    for (uint32_t i = 0; i < ITEMS_EPHEMERAL_MAX_ENTRIES; i++) {
+        const ItemsItemEntry *entry = &s_ephemeral_entries[i];
+        if (!entry->used || entry->quarantined || entry->parent_index != (int)container_index ||
+            strcmp(entry->def_id, def_id) != 0) { continue; }
+        if (entry->count > INT64_MAX - total) { return INT64_MAX; }
+        total += entry->count;
+    }
+    return total;
+}
+
+static items_result_t ephemeral_stack_remove(item_entry_ref_t ref, int64_t count) {
+    uint32_t index = ephemeral_index(ref.index);
+    ItemsItemEntry *entry = require_ephemeral_entry(ref);
+    item_core_t core;
+    if (!lookup_item(entry->def_id, NULL, &core) || !item_is_stackable(core)) { return ITEMS_RESULT_WRONG_STORAGE; }
+    if (count <= 0 || entry->count < count) { return ITEMS_RESULT_INSUFFICIENT; }
+    entry->count -= count;
+    if (entry->count == 0) { ephemeral_erase_entry(index); }
+    return ITEMS_RESULT_OK;
+}
+
+static items_result_t ephemeral_stack_remove_from_container(
+    items_container_ref_t container_ref_value, const char *def_id, int64_t count) {
+    uint32_t container_index = ephemeral_index(container_ref_value.index);
+    ItemsItemContainer *container = require_ephemeral_container(container_ref_value);
+    item_core_t core;
+    if (!lookup_item(def_id, NULL, &core) || !item_is_stackable(core)) {
+        return ITEMS_RESULT_WRONG_STORAGE;
+    }
+    if (count <= 0 || ephemeral_stack_count(container_ref_value, def_id) < count) { return ITEMS_RESULT_INSUFFICIENT; }
+    int64_t remaining = count;
+    for (uint32_t slot = 0; slot < container->capacity && remaining > 0; slot++) {
+        ItemsItemEntry *entry = ephemeral_entry_at_slot(container_index, slot);
+        if (entry == NULL || entry->quarantined || strcmp(entry->def_id, def_id) != 0) { continue; }
+        int64_t take = entry->count < remaining ? entry->count : remaining;
+        entry->count -= take;
+        remaining -= take;
+        if (entry->count == 0) { ephemeral_erase_entry((uint32_t)(entry - s_ephemeral_entries)); }
+    }
+    NT_ASSERT(remaining == 0);
+    return ITEMS_RESULT_OK;
+}
+
+static items_result_t ephemeral_unique_create(
+    items_container_ref_t container_ref_value, const char *def_id,
+    uint32_t requested_slot, item_entry_ref_t *out_entry) {
+    uint32_t container_index = ephemeral_index(container_ref_value.index);
+    ItemsItemContainer *container = require_ephemeral_container(container_ref_value);
+    item_def_ref_t def;
+    item_core_t core;
+    if (!lookup_item(def_id, &def, &core) || item_is_stackable(core) || items_has_currency(def)) {
+        return ITEMS_RESULT_WRONG_STORAGE;
+    }
+    items_result_t allowed = policy_allows(container, def, core);
+    if (allowed != ITEMS_RESULT_OK) { return allowed; }
+    uint32_t slot = ephemeral_choose_slot(container_index, requested_slot, UINT32_MAX);
+    if (slot == UINT32_MAX) { return requested_slot == ITEMS_SLOT_AUTO ? ITEMS_RESULT_CAPACITY : ITEMS_RESULT_SLOT_OCCUPIED; }
+    uint32_t index = ephemeral_free_entry();
+    if (index == UINT32_MAX) { return ITEMS_RESULT_POOL_EXHAUSTED; }
+    ItemsItemEntry *entry = &s_ephemeral_entries[index];
+    memset(entry, 0, sizeof(*entry));
+    entry->used = true;
+    entry->parent_index = (int)container_index;
+    entry->slot = slot;
+    (void)snprintf(entry->def_id, sizeof(entry->def_id), "%s", def_id);
+    entry->count = 1;
+    entry->level = ITEMS_STATE_ITEM_ENTRY_LEVEL_DEFAULT;
+    entry->durability = ITEMS_STATE_ITEM_ENTRY_DURABILITY_DEFAULT;
+    s_ephemeral_entry_generation[index] = next_generation(s_ephemeral_entry_generation[index]);
+    *out_entry = ephemeral_entry_ref(index);
+    return ITEMS_RESULT_OK;
+}
+
+static items_result_t ephemeral_entry_destroy(item_entry_ref_t ref) {
+    uint32_t index = ephemeral_index(ref.index);
+    ItemsItemEntry *entry = require_ephemeral_entry(ref);
+    item_core_t core;
+    if (!lookup_item(entry->def_id, NULL, &core) || item_is_stackable(core)) { return ITEMS_RESULT_WRONG_STORAGE; }
+    ephemeral_erase_entry(index);
+    return ITEMS_RESULT_OK;
+}
+
 items_result_t items_try_container_create(items_container_desc_t desc, items_container_ref_t *out_container) {
     ensure_ready();
     NT_ASSERT(out_container != NULL);
+    if (desc.lifetime == ITEMS_LIFETIME_EPHEMERAL) {
+        return ephemeral_container_create(desc, out_container);
+    }
     if (desc.lifetime != ITEMS_LIFETIME_PERSISTENT) { return ITEMS_RESULT_LIFETIME; }
-    if (desc.capacity > ITEMS_STATE_ITEM_CONTAINER_CAPACITY_MAX || desc.policy > ITEMS_CONTAINER_POLICY_EQUIPMENT) {
+    if (desc.capacity > ITEMS_STATE_ITEM_CONTAINER_CAPACITY_MAX ||
+        desc.policy < ITEMS_CONTAINER_POLICY_GENERIC || desc.policy > ITEMS_CONTAINER_POLICY_EQUIPMENT) {
         return ITEMS_RESULT_CAPACITY;
     }
     uint32_t index = free_container_index();
@@ -288,6 +580,7 @@ items_result_t items_try_container_create(items_container_desc_t desc, items_con
 }
 
 items_result_t items_try_container_destroy_empty(items_container_ref_t ref) {
+    if (ephemeral_ref(ref.index)) { return ephemeral_container_destroy(ref); }
     ItemsItemContainer *container = require_container(ref);
     for (uint32_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS_ENTRIES; i++) {
         if (items_state.containers_entries[i].used &&
@@ -304,6 +597,7 @@ items_result_t items_try_container_destroy_empty(items_container_ref_t ref) {
 }
 
 items_result_t items_try_container_resize(items_container_ref_t ref, uint32_t capacity) {
+    if (ephemeral_ref(ref.index)) { return ephemeral_container_resize(ref, capacity); }
     ItemsItemContainer *container = require_container(ref);
     if (capacity > ITEMS_STATE_ITEM_CONTAINER_CAPACITY_MAX) { return ITEMS_RESULT_CAPACITY; }
     for (uint32_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS_ENTRIES; i++) {
@@ -318,14 +612,21 @@ items_result_t items_try_container_resize(items_container_ref_t ref, uint32_t ca
 }
 
 uint32_t items_container_id(items_container_ref_t ref) {
+    NT_ASSERT(!ephemeral_ref(ref.index) && "ephemeral containers have no persistent id");
+    if (ephemeral_ref(ref.index)) { return ITEMS_ID_NONE; }
     return require_container(ref)->container_id;
 }
 
 uint32_t items_container_capacity(items_container_ref_t ref) {
+    if (ephemeral_ref(ref.index)) { return require_ephemeral_container(ref)->capacity; }
     return require_container(ref)->capacity;
 }
 
 items_lifetime_t items_container_lifetime(items_container_ref_t ref) {
+    if (ephemeral_ref(ref.index)) {
+        (void)require_ephemeral_container(ref);
+        return ITEMS_LIFETIME_EPHEMERAL;
+    }
     (void)require_container(ref);
     return ITEMS_LIFETIME_PERSISTENT;
 }
@@ -361,6 +662,10 @@ items_result_t items_try_stack_add(
     items_container_ref_t container_ref_value, const char *def_id, int64_t count,
     uint32_t requested_slot, const char *reason, item_entry_ref_t *out_entry, int64_t *out_applied) {
     items_reason_check(reason);
+    if (ephemeral_ref(container_ref_value.index)) {
+        return ephemeral_stack_add(
+            container_ref_value, def_id, count, requested_slot, out_entry, out_applied);
+    }
     ItemsItemContainer *container = require_container(container_ref_value);
     if (count <= 0 || def_id == NULL) { return ITEMS_RESULT_INSUFFICIENT; }
     item_def_ref_t def;
@@ -425,6 +730,7 @@ items_result_t items_try_stack_add(
 
 items_result_t items_try_stack_remove(item_entry_ref_t entry_ref_value, int64_t count, const char *reason) {
     items_reason_check(reason);
+    if (ephemeral_ref(entry_ref_value.index)) { return ephemeral_stack_remove(entry_ref_value, count); }
     ItemsItemEntry *entry = require_entry(entry_ref_value);
     item_core_t core;
     if (!lookup_item(entry->def_id, NULL, &core) || !item_is_stackable(core) || entry->quarantined) {
@@ -455,10 +761,14 @@ items_result_t items_try_stack_remove(item_entry_ref_t entry_ref_value, int64_t 
 items_result_t items_try_stack_remove_from_container(
     items_container_ref_t container_ref_value, const char *def_id, int64_t count, const char *reason) {
     items_reason_check(reason);
+    if (ephemeral_ref(container_ref_value.index)) {
+        return ephemeral_stack_remove_from_container(container_ref_value, def_id, count);
+    }
     ItemsItemContainer *container = require_container(container_ref_value);
     item_core_t core;
     if (!lookup_item(def_id, NULL, &core) || !item_is_stackable(core)) { return ITEMS_RESULT_WRONG_STORAGE; }
-    if (count <= 0 || items_stack_count(container_ref_value, def_id) < count) { return ITEMS_RESULT_INSUFFICIENT; }
+    int64_t before = items_stack_count(container_ref_value, def_id);
+    if (count <= 0 || before < count) { return ITEMS_RESULT_INSUFFICIENT; }
 
     int64_t remaining = count;
     for (uint32_t slot = 0; slot < container->capacity && remaining > 0; slot++) {
@@ -479,11 +789,14 @@ items_result_t items_try_stack_remove_from_container(
     game_save_mark_dirty();
     char container_id_text[16];
     format_id(container_id_text, sizeof(container_id_text), container->container_id);
-    items_emit_txn("remove", def_id, container_id_text, "scope", -count, -count, count, 0, reason);
+    items_emit_txn("remove", def_id, container_id_text, "scope", -count, -count, before, before - count, reason);
     return ITEMS_RESULT_OK;
 }
 
 int64_t items_stack_count(items_container_ref_t container_ref_value, const char *def_id) {
+    if (ephemeral_ref(container_ref_value.index)) {
+        return ephemeral_stack_count(container_ref_value, def_id);
+    }
     (void)require_container(container_ref_value);
     item_core_t core;
     if (!lookup_item(def_id, NULL, &core) || !item_is_stackable(core)) { return 0; }
@@ -507,6 +820,10 @@ items_result_t items_try_unique_create(
     items_container_ref_t container_ref_value, const char *def_id, uint32_t requested_slot,
     const char *reason, item_entry_ref_t *out_entry) {
     items_reason_check(reason);
+    if (ephemeral_ref(container_ref_value.index)) {
+        NT_ASSERT(out_entry != NULL);
+        return ephemeral_unique_create(container_ref_value, def_id, requested_slot, out_entry);
+    }
     ItemsItemContainer *container = require_container(container_ref_value);
     NT_ASSERT(out_entry != NULL);
     item_def_ref_t def;
@@ -548,6 +865,7 @@ items_result_t items_try_unique_create(
 
 items_result_t items_try_entry_destroy(item_entry_ref_t entry_ref_value, const char *reason) {
     items_reason_check(reason);
+    if (ephemeral_ref(entry_ref_value.index)) { return ephemeral_entry_destroy(entry_ref_value); }
     ItemsItemEntry *entry = require_entry(entry_ref_value);
     item_core_t core;
     if (!lookup_item(entry->def_id, NULL, &core) || item_is_stackable(core)) { return ITEMS_RESULT_WRONG_STORAGE; }
@@ -576,11 +894,154 @@ static ItemsItemEntry *entry_at_slot(uint32_t parent_index, uint32_t slot) {
     return NULL;
 }
 
+static items_result_t ephemeral_entry_move(
+    item_entry_ref_t source_ref, items_container_ref_t destination_ref,
+    int64_t count, uint32_t requested_slot, const char *reason,
+    item_entry_ref_t *out_destination) {
+    uint32_t source_index = ephemeral_index(source_ref.index);
+    ItemsItemEntry *source = require_ephemeral_entry(source_ref);
+    if (count <= 0 || count > source->count) { return ITEMS_RESULT_INSUFFICIENT; }
+    item_def_ref_t def;
+    item_core_t core;
+    if (!lookup_item(source->def_id, &def, &core) || source->quarantined) { return ITEMS_RESULT_NOT_FOUND; }
+    int64_t limit = item_is_stackable(core) ? stack_limit(def, core) : 1;
+
+    if (!ephemeral_ref(destination_ref.index)) {
+        ItemsItemContainer *destination = require_container(destination_ref);
+        items_result_t allowed = policy_allows(destination, def, core);
+        if (allowed != ITEMS_RESULT_OK) { return allowed; }
+
+        item_entry_ref_t acquired = ITEM_ENTRY_REF_NONE;
+        items_result_t result;
+        if (!item_is_stackable(core)) {
+            if (count != 1) { return ITEMS_RESULT_WRONG_STORAGE; }
+            result = items_try_unique_create(
+                destination_ref, source->def_id, requested_slot, reason, &acquired);
+            if (result != ITEMS_RESULT_OK) { return result; }
+            ItemsItemEntry *persistent = require_entry(acquired);
+            persistent->level = source->level;
+            persistent->durability = source->durability;
+        } else {
+            if (count > limit) { return ITEMS_RESULT_CAPACITY; }
+            uint32_t target_slot = requested_slot;
+            if (target_slot == ITEMS_SLOT_AUTO) {
+                for (uint32_t slot = 0; slot < destination->capacity; slot++) {
+                    ItemsItemEntry *candidate = entry_at_slot(destination_ref.index, slot);
+                    if (candidate != NULL && !candidate->quarantined &&
+                        strcmp(candidate->def_id, source->def_id) == 0 &&
+                        candidate->count <= limit - count) {
+                        target_slot = slot;
+                        break;
+                    }
+                }
+                if (target_slot == ITEMS_SLOT_AUTO) {
+                    target_slot = choose_slot(destination_ref.index, ITEMS_SLOT_AUTO, UINT32_MAX);
+                }
+            } else {
+                ItemsItemEntry *candidate = entry_at_slot(destination_ref.index, target_slot);
+                if (candidate != NULL &&
+                    (candidate->quarantined || strcmp(candidate->def_id, source->def_id) != 0 ||
+                     candidate->count > limit - count)) {
+                    return ITEMS_RESULT_SLOT_OCCUPIED;
+                }
+            }
+            if (target_slot == UINT32_MAX || target_slot >= destination->capacity) {
+                return ITEMS_RESULT_CAPACITY;
+            }
+            int64_t applied = 0;
+            result = items_try_stack_add(
+                destination_ref, source->def_id, count, target_slot,
+                reason, &acquired, &applied);
+            NT_ASSERT(result != ITEMS_RESULT_OK || applied == count);
+            if (result != ITEMS_RESULT_OK) { return result; }
+        }
+
+        if (count == source->count) { ephemeral_erase_entry(source_index); }
+        else { source->count -= count; }
+        if (out_destination != NULL) { *out_destination = acquired; }
+        return ITEMS_RESULT_OK;
+    }
+
+    uint32_t destination_index = ephemeral_index(destination_ref.index);
+    ItemsItemContainer *destination = require_ephemeral_container(destination_ref);
+    items_result_t allowed = policy_allows(destination, def, core);
+    if (allowed != ITEMS_RESULT_OK) { return allowed; }
+
+    bool whole = count == source->count;
+    bool same_container = source->parent_index == (int)destination_index;
+    if (!whole && same_container && requested_slot == source->slot) {
+        return ITEMS_RESULT_SLOT_OCCUPIED;
+    }
+    uint32_t target_slot = requested_slot;
+    ItemsItemEntry *merge = NULL;
+    if (target_slot == ITEMS_SLOT_AUTO && item_is_stackable(core)) {
+        for (uint32_t slot = 0; slot < destination->capacity; slot++) {
+            ItemsItemEntry *candidate = ephemeral_entry_at_slot(destination_index, slot);
+            if (candidate != NULL && candidate != source &&
+                strcmp(candidate->def_id, source->def_id) == 0 &&
+                candidate->count <= limit - count) {
+                target_slot = slot;
+                merge = candidate;
+                break;
+            }
+        }
+    }
+    if (target_slot == ITEMS_SLOT_AUTO) {
+        target_slot = ephemeral_choose_slot(
+            destination_index, ITEMS_SLOT_AUTO,
+            whole ? source_index : UINT32_MAX);
+    } else {
+        if (target_slot >= destination->capacity) { return ITEMS_RESULT_CAPACITY; }
+        merge = ephemeral_entry_at_slot(destination_index, target_slot);
+        if (merge == source) { merge = NULL; }
+    }
+    if (target_slot == UINT32_MAX) { return ITEMS_RESULT_CAPACITY; }
+    if (merge != NULL &&
+        (!item_is_stackable(core) || strcmp(merge->def_id, source->def_id) != 0 ||
+         merge->count > limit - count)) {
+        return ITEMS_RESULT_SLOT_OCCUPIED;
+    }
+    if (merge == NULL) {
+        ItemsItemEntry *occupied = ephemeral_entry_at_slot(destination_index, target_slot);
+        if (occupied != NULL && occupied != source) { return ITEMS_RESULT_SLOT_OCCUPIED; }
+    }
+
+    item_entry_ref_t result_ref = source_ref;
+    if (merge != NULL) {
+        merge->count += count;
+        result_ref = ephemeral_entry_ref((uint32_t)(merge - s_ephemeral_entries));
+        if (whole) { ephemeral_erase_entry(source_index); }
+        else { source->count -= count; }
+    } else if (whole) {
+        source->parent_index = (int)destination_index;
+        source->slot = target_slot;
+    } else {
+        if (!item_is_stackable(core)) { return ITEMS_RESULT_WRONG_STORAGE; }
+        uint32_t split_index = ephemeral_free_entry();
+        if (split_index == UINT32_MAX) { return ITEMS_RESULT_POOL_EXHAUSTED; }
+        ItemsItemEntry *split = &s_ephemeral_entries[split_index];
+        *split = *source;
+        split->parent_index = (int)destination_index;
+        split->slot = target_slot;
+        split->count = count;
+        source->count -= count;
+        s_ephemeral_entry_generation[split_index] = next_generation(s_ephemeral_entry_generation[split_index]);
+        result_ref = ephemeral_entry_ref(split_index);
+    }
+    if (out_destination != NULL) { *out_destination = result_ref; }
+    return ITEMS_RESULT_OK;
+}
+
 items_result_t items_try_entry_move(
     item_entry_ref_t source_ref, items_container_ref_t destination_ref,
     int64_t count, uint32_t requested_slot, const char *reason,
     item_entry_ref_t *out_destination) {
     items_reason_check(reason);
+    if (ephemeral_ref(source_ref.index)) {
+        return ephemeral_entry_move(
+            source_ref, destination_ref, count, requested_slot, reason, out_destination);
+    }
+    if (ephemeral_ref(destination_ref.index)) { return ITEMS_RESULT_LIFETIME; }
     ItemsItemEntry *source = require_entry(source_ref);
     ItemsItemContainer *destination = require_container(destination_ref);
     if (count <= 0 || count > source->count) { return ITEMS_RESULT_INSUFFICIENT; }
@@ -671,15 +1132,34 @@ items_result_t items_try_entry_move(
 }
 
 uint32_t items_entry_id(item_entry_ref_t ref) {
+    NT_ASSERT(!ephemeral_ref(ref.index) && "ephemeral entries have no persistent id");
+    if (ephemeral_ref(ref.index)) { return ITEMS_ID_NONE; }
     return require_entry(ref)->entry_id;
 }
 
 items_container_ref_t items_entry_container(item_entry_ref_t ref) {
+    if (ephemeral_ref(ref.index)) {
+        ItemsItemEntry *entry = require_ephemeral_entry(ref);
+        return ephemeral_container_ref((uint32_t)entry->parent_index);
+    }
     ItemsItemEntry *entry = require_entry(ref);
     return container_ref((uint32_t)entry->parent_index);
 }
 
 items_entry_view_t items_entry_view(item_entry_ref_t ref) {
+    if (ephemeral_ref(ref.index)) {
+        ItemsItemEntry *entry = require_ephemeral_entry(ref);
+        return (items_entry_view_t){
+            .entry_id = ITEMS_ID_NONE,
+            .slot = entry->slot,
+            .def_id = entry->def_id,
+            .count = entry->count,
+            .level = entry->level,
+            .durability = entry->durability,
+            .quarantined = false,
+            .lifetime = ITEMS_LIFETIME_EPHEMERAL,
+        };
+    }
     ItemsItemEntry *entry = require_entry(ref);
     return (items_entry_view_t){
         .entry_id = entry->entry_id,
