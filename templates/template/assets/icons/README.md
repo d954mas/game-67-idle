@@ -1,6 +1,6 @@
 # Template item icons
 
-Six demo-item icons for the template's `content/items.json` catalog, packed into
+Six demo-item icons for the template's Lua Items catalog, packed into
 the `icons` atlas by `src/build_packs.c` (region names `icons/<name>`, RECT,
 `allow_transform=false`). 128×128 px, RGBA, transparent background.
 

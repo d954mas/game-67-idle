@@ -34,6 +34,20 @@ class ItemsCliTests(unittest.TestCase):
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertTrue(json.loads(process.stdout)["result"]["receipt"]["ok"])
 
+    def test_seal_receipt_is_the_single_idempotent_release_write_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            shutil.copytree(PROJECT, project)
+            first = self.run_project(project, "seal-receipt")
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertTrue(json.loads(first.stdout)["result"]["ok"])
+
+            second = self.run_project(project, "seal-receipt")
+            self.assertEqual(second.returncode, 0, second.stderr)
+            result = json.loads(second.stdout)["result"]
+            self.assertTrue(result["ok"])
+            self.assertFalse(result["changed"])
+
     def test_list_exposes_bounded_viewer_metadata_without_level_tables(self):
         process = subprocess.run(
             [sys.executable, str(SCRIPT), "--project-root", str(TEMPLATE_ROOT), "list"],

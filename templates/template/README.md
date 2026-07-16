@@ -32,10 +32,8 @@ Layout (decomposition the template teaches by example — no god-file):
     assets/shaders/          common/ + slug_text + sprite + mesh_inst + mesh_tex.
     state/                   the 4 fragment schemas (codegen source): settings/items/
                              progression/game.
-    content/                 items.json / progression.json / item_fields.schema.json /
-                             items.lock.json — item + progression catalog content, read by
-                             the codegen and the read-only op-CLI.
-    items.lua.json           evaluator manifest for the E016 Lua catalog candidate.
+    content/                 progression.json + items.lock.json (release history).
+    items.lua.json           canonical Items Lua evaluator manifest.
     design/                  game-owned concept, GDD, private knowledge base, and
                              modular Items Lua plus structured design data.
 

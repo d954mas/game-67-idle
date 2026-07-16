@@ -230,18 +230,6 @@ if(NOT EMSCRIPTEN)
     target_link_libraries(check_mini_state_events PRIVATE nt_hash nt_log nt_core)  # headers only (OBJECT does not link)
     nt_set_warning_flags(check_mini_state_events)  # same -W set + -Werror toggle as the game target
 
-    # Catalog lookup over the generated const tables.
-    add_executable(test_items_catalog
-        tests/test_items_catalog.c
-        "${ITEMS_CORE_SRC}/items_catalog.c"
-        "${ITEMS_CATALOG_GENERATED_SOURCE}")
-    target_link_libraries(test_items_catalog PRIVATE unity)
-    target_include_directories(test_items_catalog PRIVATE "${ITEMS_CORE_INC}" src "${GAME_SOURCE_GENERATED_DIR}")
-    target_compile_definitions(test_items_catalog PRIVATE _CRT_SECURE_NO_WARNINGS)
-    set_target_properties(test_items_catalog PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
-    add_test(NAME test_items_catalog COMMAND test_items_catalog)
-
     # T0364 proof: the same stable Items header compiles against either a
     # core-only or weapon-specific generated API. Outputs stay build-local.
     set(ITEMS_API_PROOF_SCRIPT "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof.py")
@@ -437,42 +425,10 @@ if(NOT EMSCRIPTEN)
     add_test(NAME test_items_fragment COMMAND test_items_fragment
         WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/tests")
 
-    # F1 (deep-review, T0327 И2c destructive-change guard follow-up): the
-    # guard was VOLUNTARY until this line -- items_ops.py validate ran only
-    # when a human remembered to invoke it by hand. Wiring it into ctest
-    # means deleting a shipped def_id without a lock.removed reaction now
-    # turns the BUILD's test suite red automatically; the forcing chain
-    # The README Lock workflow starts at an automated gate, not a manual step.
-    # Reads only committed source (content/items.json,
-    # content/items.lock.json, state/items.schema.json) -- no generated-file
-    # dependency, so no add_dependencies needed. WORKING_DIRECTORY is the
-    # template root so the CWD-relative --catalog/--schema/--baseline/
-    # --state-schema/--src-dir arguments resolve the same way a human running
-    # the command from templates/template/ would see it.
-    # T0337 M1 (H2/R7, CRITICAL): items_ops.py's own argparse defaults are
-    # SCRIPT-relative (Path(__file__).parent.parent). After the move to
-    # features/items-core/scripts/, those defaults would resolve into a
-    # nonexistent features/items-core/content/ -- pass every path explicitly,
-    # CWD-relative to the template root (WORKING_DIRECTORY below). Principle:
-    # the module CLI takes paths ONLY from the caller (CWD/args), never from
-    # __file__. --src-dir now points at the game-side items corner only
-    # (src/features/items/) -- the display_name-keying lint no longer scans
-    # the (relocated) ownership core; see items README L5-note.
-    add_test(NAME items_ops_validate COMMAND "${Python3_EXECUTABLE}"
-        "${ITEMS_CORE_SCRIPTS}/items_ops.py" validate
-        --catalog content/items.json --schema content/item_fields.schema.json
-        --baseline content/items.lock.json --state-schema state/items.schema.json
-        --src-dir src/features/items
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
-
-    # F4 (deep-review): committed proof that the lock-workflow rules
-    # themselves actually fire correctly (removed-without-reaction,
-    # removed-version-not-shipped, lock-inconsistent, the F3 malformed-lock
-    # IO error, the happy batch path) -- not just a manually re-run scratch
-    # check. unittest against temp fixtures, precedent
-    # features/game-state/scripts/generate_state_test.py.
-    add_test(NAME items_ops_test COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_ops_test.py"
-        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+    # Keep the shipped Lua catalog and release receipt on the normal ctest path.
+    add_test(NAME items_catalog_validate COMMAND "${Python3_EXECUTABLE}"
+        "${ITEMS_CORE_SCRIPTS}/items_cli.py"
+        --project-root "${CMAKE_CURRENT_SOURCE_DIR}" validate)
 
     # test_progression compiles progression.c against the real generated state.
     # #includes progression_tracks.gen.h -- but does NOT link
@@ -630,7 +586,7 @@ if(NOT EMSCRIPTEN)
         test_game_state_json test_game_storage test_game_save
         test_game_events test_game_events_overflow test_game_state_roundtrip
         test_game_events_typed test_game_event_render test_game_analytics
-        test_game_events_log_mirror test_items_catalog test_items_api_core_only
+        test_game_events_log_mirror test_items_api_core_only
         test_items_api test_items_runtime_package test_items_runtime_resource test_items_fragment test_progression test_progression_curve
         benchmark_items_c_arrays benchmark_items_runtime_blob
         test_game_format test_platform_sdk test_platform_lifecycle

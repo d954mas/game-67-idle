@@ -14,9 +14,7 @@ DEF_ID_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 RECEIPT_SCHEMA_VERSION = 4
 RECEIPT_SCHEMA = "items.release_receipt.v2"
-LEGACY_RECEIPT_SCHEMA_VERSION = 3
-LEGACY_RECEIPT_SCHEMA = "items.release_receipt.v1"
-ITEMS_CORE_VERSION = "1.14.0"
+ITEMS_CORE_VERSION = "2.0.0"
 
 Issue = dict
 
@@ -25,26 +23,8 @@ def issue(rule: str, msg: str, *, id: str | None = None, field: str | None = Non
     return {"rule": rule, "id": id, "field": field, "msg": msg}
 
 
-def format_issue(entry: Issue) -> str:
-    where = "".join(
-        f" {key}={value!r}"
-        for key, value in (("id", entry.get("id")), ("field", entry.get("field")))
-        if value
-    )
-    return f"[{entry['rule']}]{where}: {entry['msg']}"
-
-
 class OpsError(Exception):
     """Usage or I/O problem reported as CLI exit code 2."""
-
-
-def _load_json(path: Path, what: str) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError as exc:
-        raise OpsError(f"{what} not found: {path}") from exc
-    except json.JSONDecodeError as exc:
-        raise OpsError(f"{what} is not valid JSON ({path}): {exc}") from exc
 
 
 def write_utf8_if_changed(path: Path, text: str) -> bool:
@@ -59,34 +39,24 @@ def write_utf8_if_changed(path: Path, text: str) -> bool:
 
 def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
     schema_version = baseline.get("schema_version")
-    if schema_version not in (2, LEGACY_RECEIPT_SCHEMA_VERSION, RECEIPT_SCHEMA_VERSION):
+    if schema_version != RECEIPT_SCHEMA_VERSION:
         raise OpsError(
-            f"lock baseline 'schema_version' must be 2, 3, or 4, got {schema_version!r} ({path})"
+            f"lock baseline 'schema_version' must be 4, got {schema_version!r} ({path})"
         )
     def_ids = baseline.get("def_ids")
-    expected = (list,) if schema_version == 2 else (dict,)
-    if not isinstance(def_ids, expected):
-        shape = "list" if schema_version == 2 else "object"
+    if not isinstance(def_ids, dict):
         raise OpsError(
-            f"lock baseline 'def_ids' must be a {shape}, got {type(def_ids).__name__} ({path})"
+            f"lock baseline 'def_ids' must be an object, got {type(def_ids).__name__} ({path})"
         )
     removed = baseline.get("removed")
     if not isinstance(removed, dict):
         raise OpsError(
             f"lock baseline 'removed' must be an object, got {type(removed).__name__} ({path})"
         )
-    if schema_version not in (LEGACY_RECEIPT_SCHEMA_VERSION, RECEIPT_SCHEMA_VERSION):
-        return
-
     receipt = baseline.get("receipt")
-    expected_receipt_schema = (
-        LEGACY_RECEIPT_SCHEMA
-        if schema_version == LEGACY_RECEIPT_SCHEMA_VERSION
-        else RECEIPT_SCHEMA
-    )
-    if not isinstance(receipt, dict) or receipt.get("schema") != expected_receipt_schema:
+    if not isinstance(receipt, dict) or receipt.get("schema") != RECEIPT_SCHEMA:
         raise OpsError(
-            f"lock baseline 'receipt' must be a {expected_receipt_schema} object ({path})"
+            f"lock baseline 'receipt' must be a {RECEIPT_SCHEMA} object ({path})"
         )
     required = {
         "schema", "items_core_version", "lua_evaluation_schema",
@@ -109,38 +79,25 @@ def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
     ):
         raise OpsError(f"lock baseline receipt state_schema is invalid ({path})")
     field_ids = receipt.get("field_ids")
-    if schema_version == LEGACY_RECEIPT_SCHEMA_VERSION:
-        if (
-            not isinstance(field_ids, list)
-            or not all(
-                isinstance(field_id, str) and FIELD_ID_RE.fullmatch(field_id)
-                for field_id in field_ids
-            )
-            or len(field_ids) != len(set(field_ids))
-        ):
-            raise OpsError(
-                f"lock baseline receipt field_ids must be unique strings ({path})"
-            )
-    else:
-        if not isinstance(field_ids, dict) or set(field_ids) != {"active", "reserved"}:
-            raise OpsError(
-                f"lock baseline receipt field_ids must have active/reserved lists ({path})"
-            )
-        active, reserved = field_ids.get("active"), field_ids.get("reserved")
-        if (
-            not isinstance(active, list)
-            or not isinstance(reserved, list)
-            or not all(
-                isinstance(field_id, str) and FIELD_ID_RE.fullmatch(field_id)
-                for field_id in [*active, *reserved]
-            )
-            or len(active) != len(set(active))
-            or len(reserved) != len(set(reserved))
-            or set(active) & set(reserved)
-        ):
-            raise OpsError(
-                f"lock baseline receipt field_ids must be unique disjoint strings ({path})"
-            )
+    if not isinstance(field_ids, dict) or set(field_ids) != {"active", "reserved"}:
+        raise OpsError(
+            f"lock baseline receipt field_ids must have active/reserved lists ({path})"
+        )
+    active, reserved = field_ids.get("active"), field_ids.get("reserved")
+    if (
+        not isinstance(active, list)
+        or not isinstance(reserved, list)
+        or not all(
+            isinstance(field_id, str) and FIELD_ID_RE.fullmatch(field_id)
+            for field_id in [*active, *reserved]
+        )
+        or len(active) != len(set(active))
+        or len(reserved) != len(set(reserved))
+        or set(active) & set(reserved)
+    ):
+        raise OpsError(
+            f"lock baseline receipt field_ids must be unique disjoint strings ({path})"
+        )
     for item_id, metadata in def_ids.items():
         if (
             not isinstance(item_id, str)
@@ -355,62 +312,28 @@ def validate_evaluation_receipt(
     baseline_path: Path,
 ) -> dict[str, Any]:
     validate_baseline_shape(baseline, baseline_path)
-    if baseline.get("schema_version") != RECEIPT_SCHEMA_VERSION:
-        raise OpsError(
-            "evaluation receipt requires schema_version 4; run upgrade-receipt first"
-        )
     errors, warnings, _, _ = _evaluation_receipt_checks(
         evaluation, baseline, state_schema,
     )
     return {"ok": not errors, "errors": errors, "warnings": warnings}
 
 
-def _load_evaluation_receipt_inputs(args: Any) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], Path]:
-    evaluation = _load_json(Path(args.evaluation), "Items Lua evaluation")
-    baseline_path = Path(args.baseline)
-    baseline = _load_json(baseline_path, "lock baseline")
+def seal_evaluation_receipt(
+    evaluation: dict[str, Any],
+    baseline: dict[str, Any],
+    state_schema: dict[str, Any],
+    *,
+    baseline_path: Path,
+) -> dict[str, Any]:
     validate_baseline_shape(baseline, baseline_path)
-    if baseline.get("schema_version") != RECEIPT_SCHEMA_VERSION:
-        raise OpsError(
-            "evaluation receipt requires schema_version 4; run upgrade-receipt first"
-        )
-    state_schema = _load_json(
-        Path(args.state_schema), "items state fragment schema",
-    )
-    return evaluation, baseline, state_schema, baseline_path
-
-
-def cmd_validate_evaluation_receipt(args: Any) -> int:
-    evaluation, baseline, state_schema, baseline_path = _load_evaluation_receipt_inputs(args)
-    payload = validate_evaluation_receipt(
-        evaluation, baseline, state_schema, baseline_path=baseline_path,
-    )
-    if args.json:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
-    else:
-        print("evaluation receipt OK" if payload["ok"] else "evaluation receipt FAILED")
-        for entry in [*payload["errors"], *payload["warnings"]]:
-            print(f"  {format_issue(entry)}")
-    return 0 if payload["ok"] else 1
-
-
-def cmd_seal_evaluation_receipt(args: Any) -> int:
-    evaluation, baseline, state_schema, baseline_path = _load_evaluation_receipt_inputs(args)
     errors, warnings, field_ids, items = _evaluation_receipt_checks(
         evaluation, baseline, state_schema,
     )
     if errors:
-        payload = {
+        return {
             "ok": False, "changed": False,
             "errors": errors, "warnings": warnings,
         }
-        if args.json:
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-        else:
-            print("evaluation receipt FAILED")
-            for entry in errors:
-                print(f"  {format_issue(entry)}")
-        return 1
 
     sealed = json.loads(json.dumps(baseline))
     receipt = sealed["receipt"]
@@ -441,19 +364,10 @@ def cmd_seal_evaluation_receipt(args: Any) -> int:
         baseline_path,
         json.dumps(sealed, ensure_ascii=False, indent=2) + "\n",
     )
-    payload = {
+    return {
         "ok": True,
         "changed": changed,
         "errors": [],
         "warnings": warnings,
         "path": str(baseline_path),
     }
-    if args.json:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
-    else:
-        print(
-            f"evaluation receipt {'sealed' if changed else 'unchanged'}: {baseline_path}"
-        )
-        for entry in warnings:
-            print(f"  {format_issue(entry)}")
-    return 0

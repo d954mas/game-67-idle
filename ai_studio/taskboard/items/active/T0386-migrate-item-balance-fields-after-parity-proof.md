@@ -19,23 +19,23 @@ old JSON/schema/parser path without a compatibility fallback.
 
 ## Done when
 
-- [ ] Inventory all `items.json`, `item_fields.schema.json`, generator, ops,
+- [x] Inventory all `items.json`, `item_fields.schema.json`, generator, ops,
       CMake, public header, runtime, tests, Viewer, docs, lock, new-game, and
       progression-reference consumers before cutover.
-- [ ] Lua fixtures reproduce all six item definitions, kinds, core blocks,
+- [x] Lua fixtures reproduce all six item definitions, kinds, core blocks,
       diagnostics, lock/removal behavior, and Viewer output. Runtime containers
       remain independent E019 work and are never copied into Lua.
-- [ ] New strict storage-mode enforcement and saved-level bounds/migration
+- [x] New strict storage-mode enforcement and saved-level bounds/migration
       behavior have explicit fixtures; deliberate behavior changes are not
       mislabeled byte parity.
-- [ ] CLI, Viewer, build codegen, tests, docs, and skills switch to Snapshot in
+- [x] CLI, Viewer, build codegen, tests, docs, and skills switch to Snapshot in
       one cutover; `items.json`, `item_fields.schema.json`, old JSON parser, and
       stale instructions are removed.
-- [ ] `items.lock.json` remains the sole extended release receipt across the
+- [x] `items.lock.json` remains the sole extended release receipt across the
       cutover and proves parity for shipped/removed IDs and migration reactions.
-- [ ] Migration preserves the read-only Viewer first, then enables T0366/T0316
+- [x] Migration preserves the read-only Viewer first, then enables T0366/T0316
       semantic editing only after Lua source spans/write refusal are proven.
-- [ ] No code reads both Lua and JSON, and rollback is defined only before the
+- [x] No code reads both Lua and JSON, and rollback is defined only before the
       cutover; after cutover version control is the rollback.
 - [ ] Windows/Linux full CI passes and focused timing shows no unexplained
       regression; final performance-budget ratification belongs to T0380.
@@ -70,3 +70,5 @@ old JSON/schema/parser path without a compatibility fallback.
 - 2026-07-16: Slice 11: ownership/reconcile now resolve item storage, stack caps, currency flags, and currency caps exclusively through the bound compact runtime package. Fixed backpack/purse container policy stays local to ownership pending E019 instead of expanding the item blob. Converted test_items_fragment, test_progression, and test_template_composition to bind the production Lua-derived package; removed legacy generated-C catalog linkage from those consumers. Verification: focused build passed; ctest test_items_fragment/test_progression/test_template_composition 3/3 passed.
 - 2026-07-16: Slice 11 verification addendum: studio.mjs verify --changed passed all changed domains (work-management 4.298s, features 49.048s, template-release 2.676s). Local diff review found no unresolved correctness issue; stale test linkage comments were corrected.
 - 2026-07-16: Slice 12: production game target now compiles the compact package/runtime-resource path and no longer links the legacy generated-C item catalog. Startup requests items/catalog from the pack and uses its successful typed bind as a hard barrier before save load/reconcile, feature initialization, DevAPI exposure, updates, UI, autosave, or capture readiness; missing/failed/wrong package state fails closed. Core-only generated ABIs now compile out unused capability accessors instead of weakening -Werror. Verification: package Python suite 11/11; native focused ctest 5/5; production game build passed under warnings-as-errors; fresh-state capture smoke reached ready state and emitted Items transactions; verify --changed passed features and template-release.
+- 2026-07-16: Slice 13: completed the no-fallback cutover. Deleted items.json, item_fields.schema.json, legacy generator, JSON op-layer/tests, generated-table runtime/API/test, and unused upgrade fixture (3,167 deleted lines); removed all executable references. items-core 2.0.0 docs/manifest/skill/template wiring now describe only Lua -> Snapshot -> compact package. Added semantic CLI seal-receipt as the sole idempotent release-history writer and retained production receipt parity. Verification: CLI 18/18, package/native focused 6/6, full Windows build and CTest 30/30, feature contracts, Python/CMake contract tests, and release sealing changed=false. Focused five-command benchmark retains identical 30 logical reads and 2,972/331 stdout/stderr bytes; advisory wall sample 2,849.822 ms under current machine load, with no changed hot-path operation (new seal command is outside the scenario); T0380 owns full budget ratification. External gate recorded: no WSL distro and no Docker daemon are available locally; repository policy requires real Ubuntu CI, and the no-push instruction prevents triggering it from this branch. Ubuntu full remains the only unchecked T0386 criterion.
+- 2026-07-16: Slice 13 final local gate: after staging deletions so tracked-file ownership reflects the cutover, studio.mjs verify --changed passed harness, work-management, features, and template-release. No local correctness/review findings remain; only the recorded Ubuntu CI gate is pending external execution.

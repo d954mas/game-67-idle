@@ -12,8 +12,8 @@
      - `casc_a` / `casc_b`: a mutual threshold xp-cascade (A's on_level_up
        feeds B, B's feeds A) -- without PROGRESSION_MAX_CASCADE_DEPTH the
        resolve_track() recursion never terminates.
-   Both use demo items currencies (tmpl.gold/tmpl.xp) from content/items.json
-   -- this test binary links the demo items catalog + items runtime. */
+   Both use demo item currencies (tmpl.gold/tmpl.xp) from the production
+   compact package bound by this test binary. */
 
 static const int64_t COST_MAN[] = {10LL, 20LL, 30LL};
 static const int64_t COST_AUTO1[] = {5LL, 5LL, 5LL, 5LL, 5LL};

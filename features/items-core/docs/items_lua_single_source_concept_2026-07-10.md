@@ -1,9 +1,8 @@
 # Items Lua single-source concept — reviewed architecture
 
-Status: consolidated design for implementation planning. It records accepted
-authoring, runtime-package, generated-ID, container, persistence, and editing
-boundaries. Runtime code and state migration are not implemented by this
-document.
+Status: accepted architecture, implemented through the E016/T0386 cutover.
+This document records the design rationale; current commands and wiring live in
+the module README and INSTALL manual.
 
 ## 1. Product goal
 
@@ -60,7 +59,7 @@ Items owns a complete item definition. Balance may provide pure formula helpers
 without creating a second record of the item. The exact Lua file split is
 game-owned; modules must remain small, deterministic, and source-navigable.
 
-After migration parity is proven, these old authoring sources are removed:
+T0386 removed the old authoring sources after migration parity was proven:
 
 ```text
 content/items.json

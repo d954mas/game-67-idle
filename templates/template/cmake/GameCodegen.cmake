@@ -60,38 +60,8 @@ target_sources(${GAME_TARGET} PRIVATE
 target_include_directories(${GAME_TARGET} PRIVATE "${ITEMS_CATALOG_BUILD_DIR}")
 target_compile_definitions(${GAME_TARGET} PRIVATE ITEMS_RUNTIME_PACKAGE_ENABLED=1)
 
-# И2a: items CONTENT codegen (SECOND codegen, deliberately separate from the
-# game-state generator below). Compile-time const
-# tables from content/items.json, referenced by the unconditional add_executable
-# above (items_catalog.c / items_catalog.gen.c) -- must run after find_package(Python3)
-# (code-review H1/#10); textual order vs. that add_executable use does not matter to
-# CMake (OUTPUT<->SOURCES path matching is order-independent within a directory).
-set(ITEMS_CATALOG_JSON "${CMAKE_CURRENT_SOURCE_DIR}/content/items.json")
-set(ITEMS_CATALOG_FIELDS_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/content/item_fields.schema.json")
-set(ITEMS_CATALOG_GENERATOR "${ITEMS_CORE_SCRIPTS}/generate_items_catalog.py")
-set(ITEMS_CATALOG_GENERATED_HEADER "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.h")
-set(ITEMS_CATALOG_GENERATED_SOURCE "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.c")
-add_custom_command(
-    OUTPUT
-        "${ITEMS_CATALOG_GENERATED_HEADER}"
-        "${ITEMS_CATALOG_GENERATED_SOURCE}"
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_SOURCE_GENERATED_DIR}"
-    COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CATALOG_GENERATOR}"
-        --catalog "${ITEMS_CATALOG_JSON}"
-        --schema "${ITEMS_CATALOG_FIELDS_SCHEMA}"
-        --out-dir "${GAME_SOURCE_GENERATED_DIR}"
-    DEPENDS
-        "${ITEMS_CATALOG_JSON}"
-        "${ITEMS_CATALOG_FIELDS_SCHEMA}"
-        "${ITEMS_CATALOG_GENERATOR}"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
-    COMMENT "Generating items content catalog (const C tables)"
-    VERBATIM
-)
-
-# И3a: progression tracks CONTENT codegen (mirrors the items content-codegen
-# block above -- deliberately a separate content-codegen invocation, not the
-# game-state generator below). Bakes content/progression.json's curve presets
+# И3a: progression tracks content codegen is separate from the game-state
+# generator below. It bakes content/progression.json's curve presets
 # into compile-time const int64 cost tables; --items-snapshot cross-checks
 # currency_def against the canonical Items Snapshot generated above.
 set(PROG_TRACKS_JSON "${CMAKE_CURRENT_SOURCE_DIR}/content/progression.json")

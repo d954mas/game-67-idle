@@ -117,7 +117,7 @@ def validate_state_schema(doc: Any) -> int:
 
 
 # ---------------------------------------------------------------------------
-# Validation (lightweight generator sanity net, mirrors generate_items_catalog.py)
+# Validation (lightweight generator sanity net)
 # ---------------------------------------------------------------------------
 
 

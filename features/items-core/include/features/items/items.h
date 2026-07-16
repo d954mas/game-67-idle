@@ -104,58 +104,6 @@ int64_t items_currency_cap(item_def_ref_t ref); /* 0 = unlimited; asserts unless
 #include "items_game.gen.h"
 #endif
 
-/* ---- Каталог (const-таблица из content/items.json; компилируется ВСЕГДА) ---- */
-typedef enum item_accept_policy_t {
-    ITEM_ACCEPT_ANY = 0,
-    ITEM_ACCEPT_CURRENCY_ONLY,
-    ITEM_ACCEPT_SLOT_FILTER,
-    ITEM_ACCEPT_CAPACITY_1,
-} item_accept_policy_t;
-
-typedef struct item_use_block_t {
-    const char *effect_id; /* плоские use-params — по мере нужды (эпоха эффектов) */
-} item_use_block_t;
-
-typedef struct item_equip_block_t {
-    const char *slot;
-} item_equip_block_t;
-
-typedef struct item_currency_block_t {
-    const char *hud_hint;
-    int64_t cap; /* 0 = безлимит */
-} item_currency_block_t;
-
-typedef struct game_item_def_t {
-    const char *id;            /* <namespace>.<slug>; НИКОГДА не ключуемся по display_name */
-    const char *display_name;  /* Display only; never a behavior key. */
-    const char *icon_asset_id; /* логический id; хендл арта даёт игра (И3) */
-    const char *kind;          /* витрина-категория (item_kinds) */
-    const char *const *tags;
-    int tag_count;
-    int64_t base_value;
-    /* derived from content items.json "stack" int: max_stack 0=unlimited, 1=unique, N=cap */
-    bool stackable;
-    int64_t max_stack;
-    bool unlimited;
-    const item_equip_block_t *equip;       /* NULL если нет блока */
-    const item_use_block_t *use;           /* NULL если нет блока */
-    const item_currency_block_t *currency; /* NULL если нет блока */
-} game_item_def_t;
-
-typedef struct game_container_def_t {
-    const char *id;
-    int64_t capacity; /* 0 = безлимит */
-    item_accept_policy_t accept_policy;
-    bool hidden;
-} game_container_def_t;
-
-const game_item_def_t *item_core(const char *def_id); /* NULL если неизвестен */
-const game_item_def_t *item_at(int index);
-int items_def_count(void);
-int items_with_tag(const char *tag, const game_item_def_t **out, int out_cap);
-bool item_is_currency(const game_item_def_t *def);
-const game_container_def_t *item_container_def(const char *container_id);
-
 /* ---- Владение (поверх генерируемого фрагмента items_state) ----
    Единый глагол add/remove: потратить золото / съесть зелье / израсходовать
    3 дерева / потратить опыт — ОДИН код. reason обязателен:

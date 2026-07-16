@@ -1,17 +1,7 @@
 # Items Core Install
 
-In-place module (precedent `features/game-state`) — no copy step. A consuming
-template/game references this module's source and scripts from its own
-`CMakeLists.txt` by the depth-2-invariant relative path
-`${CMAKE_CURRENT_SOURCE_DIR}/../../features/items-core`, which resolves to the
-same repo-root module whether the caller is `templates/template` or
-`games/<id>` (both live exactly two levels below the repo root, same as
-`ENGINE_DIR` and `GAME_STATE_GENERATOR`).
-
-## CMake wiring
-
-Define the module path variables once (near `ENGINE_DIR`, before the game's
-`add_executable`):
+Items Core is an in-place module. Templates and games live two levels below
+the repository root and reference the same source directory:
 
 ```cmake
 set(ITEMS_CORE_DIR     "${CMAKE_CURRENT_SOURCE_DIR}/../../features/items-core")
@@ -20,124 +10,111 @@ set(ITEMS_CORE_SRC     "${ITEMS_CORE_DIR}/src")
 set(ITEMS_CORE_SCRIPTS "${ITEMS_CORE_DIR}/scripts")
 ```
 
-Content codegen (writes into the game's OWN generated dir, not the module):
-
-```cmake
-add_custom_command(
-    OUTPUT "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.h" "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.c"
-    COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/generate_items_catalog.py"
-        --catalog "<game>/content/items.json"
-        --schema "<game>/content/item_fields.schema.json"
-        --out-dir "${GAME_SOURCE_GENERATED_DIR}"
-    DEPENDS "<game>/content/items.json" "<game>/content/item_fields.schema.json"
-        "${ITEMS_CORE_SCRIPTS}/generate_items_catalog.py")
-```
-
-Ownership core (`target_sources`):
-
-```cmake
-target_sources(${GAME_TARGET} PRIVATE
-    "${ITEMS_CORE_SRC}/items_catalog.c"
-    "${ITEMS_CORE_SRC}/items_containers.c"
-    "${ITEMS_CORE_SRC}/items_reconcile.c"
-    src/features/items/items_bootstrap.c   # game-owned: items_on_new_game() only
-)
-```
-
-Include path — `ITEMS_CORE_INC` **ahead of** the game's own `src` (so a stray
-copy of `items.h` under the game's `src/features/items/` can never shadow the
-module; the grep-gate `G-copies` also forbids that copy from existing):
-
-```cmake
-target_include_directories(${GAME_TARGET} PRIVATE "${ITEMS_CORE_INC}" src ...)
-```
-
-`items_containers.c` calls `items_reason_check()`, declared in the GAME's own
-`src/features/items/reason_tags.h` — resolved through the game's `src` on the
-include path as part of the game-owned items corner, not shipped by this module
-(`G-noleak` grep-gate forbids `reason_tags.h` from existing inside
-`features/items-core`).
-
 ## Required game-owned files
 
-Every consumer must supply its own:
-
 ```text
-<game>/content/items.json
-<game>/content/item_fields.schema.json
-<game>/content/items.lock.json           # destructive-change guard baseline
-<game>/state/items.schema.json           # version + hooks: on_new_game/reconcile + migrations
-<game>/src/features/items/reason_tags.h  # closed reason-verb list
-<game>/src/features/items/items_bootstrap.c  # items_on_new_game() only
+<game>/items.lua.json
+<game>/design/items/*.lua
+<game>/content/items.lock.json
+<game>/state/items.schema.json
+<game>/src/features/items/reason_tags.h
+<game>/src/features/items/items_bootstrap.c
 ```
 
-Before the Lua cutover, upgrade an existing v2 lock once from the frozen JSON
-catalog. The command updates that same file atomically; repeated runs do nothing:
+The manifest allowlists every Lua module. The lock is release compatibility
+history; the state schema owns save versioning and hooks. Reason verbs, initial
+grants, and game-specific migrations remain game code.
 
-```powershell
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py upgrade-receipt --catalog <game>/content/items.json --schema <game>/content/item_fields.schema.json --baseline <game>/content/items.lock.json --state-schema <game>/state/items.schema.json
-```
+## Build-local catalog
 
-After Lua evaluation, validate the current build against shipped history. Seal
-only at the release boundary; it is atomic and a repeated identical seal is a
-no-op:
-
-```powershell
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py validate-evaluation-receipt --evaluation <build>/items.evaluation.json --baseline <game>/content/items.lock.json --state-schema <game>/state/items.schema.json
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops.py seal-evaluation-receipt --evaluation <build>/items.evaluation.json --baseline <game>/content/items.lock.json --state-schema <game>/state/items.schema.json
-```
-
-Move a deliberately removed field ID from `field_ids.active` to `reserved`.
-Item removal/storage/level reactions must include the corresponding delivered
-state migration before updating their frozen receipt entries.
-
-The items save fragment itself (`items_state.*`, generated) comes from
-`features/game-state/scripts/generate_state.py --fragment items` against the
-game's `state/items.schema.json` — this module does not generate the fragment,
-only the const catalog and the ownership logic that reads/writes it.
-
-## ctest wiring
-
-`items_ops_validate` — the destructive-change guard, run as a ctest target
-against the game's REAL committed content. **Every path must be passed
-explicitly** (this script's own argparse defaults are script-relative and
-resolve inside the module after this move, not the game — R7/H2 of the build
-spec):
+Generate Snapshot, package, and ABI header through the semantic CLI:
 
 ```cmake
-add_test(NAME items_ops_validate COMMAND "${Python3_EXECUTABLE}"
-    "${ITEMS_CORE_SCRIPTS}/items_ops.py" validate
-    --catalog content/items.json --schema content/item_fields.schema.json
-    --baseline content/items.lock.json --state-schema state/items.schema.json
-    --src-dir src/features/items
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+set(ITEMS_CATALOG_BUILD_DIR "${CMAKE_BINARY_DIR}/generated/items-catalog")
+set(ITEMS_CATALOG_SNAPSHOT "${ITEMS_CATALOG_BUILD_DIR}/items.snapshot.json")
+set(ITEMS_CATALOG_PACKAGE "${ITEMS_CATALOG_BUILD_DIR}/items.catalog")
+set(ITEMS_CATALOG_ABI_HEADER "${ITEMS_CATALOG_BUILD_DIR}/items_catalog_abi.gen.h")
+
+file(GLOB ITEMS_CATALOG_LUA_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/design/items/*.lua")
+add_custom_command(
+    OUTPUT
+        "${ITEMS_CATALOG_SNAPSHOT}"
+        "${ITEMS_CATALOG_PACKAGE}"
+        "${ITEMS_CATALOG_ABI_HEADER}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${ITEMS_CATALOG_BUILD_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_cli.py"
+        --project-root "${CMAKE_CURRENT_SOURCE_DIR}"
+        build --out-dir "${ITEMS_CATALOG_BUILD_DIR}"
+    DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/items.lua.json"
+        ${ITEMS_CATALOG_LUA_SOURCES}
+        "${CMAKE_CURRENT_SOURCE_DIR}/content/items.lock.json"
+        "${CMAKE_CURRENT_SOURCE_DIR}/state/items.schema.json"
+    VERBATIM)
+add_custom_target(items_catalog_gen DEPENDS
+    "${ITEMS_CATALOG_SNAPSHOT}"
+    "${ITEMS_CATALOG_PACKAGE}"
+    "${ITEMS_CATALOG_ABI_HEADER}")
 ```
 
-`--src-dir` points at the GAME's own items corner (`reason_tags.h` +
-`items_bootstrap.c`) — the display-name-keying lint only scans that game code;
-the ownership core lives (and can be linted separately) inside this module.
+Pack `${ITEMS_CATALOG_PACKAGE}` as the blob asset `items/catalog`. Do not copy
+the Snapshot or header into source control.
 
-`items_ops_test` — self-contained unittest, no game content dependency beyond
-the reused `content/item_fields.schema.json`:
+## Runtime wiring
 
 ```cmake
-add_test(NAME items_ops_test COMMAND "${Python3_EXECUTABLE}"
-    "${ITEMS_CORE_SCRIPTS}/items_ops_test.py"
-    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
+add_dependencies(${GAME_TARGET} items_catalog_gen)
+target_sources(${GAME_TARGET} PRIVATE
+    "${ITEMS_CORE_SRC}/items_runtime_package.c"
+    "${ITEMS_CORE_SRC}/items_runtime_resource.c"
+    "${ITEMS_CORE_SRC}/items_containers.c"
+    "${ITEMS_CORE_SRC}/items_reconcile.c"
+    src/features/items/items_bootstrap.c)
+target_include_directories(${GAME_TARGET} PRIVATE
+    "${ITEMS_CATALOG_BUILD_DIR}"
+    "${ITEMS_CORE_INC}"
+    src)
+target_compile_definitions(${GAME_TARGET} PRIVATE
+    ITEMS_RUNTIME_PACKAGE_ENABLED=1)
+```
+
+After mounting/loading the selected pack, request `items/catalog` as
+`NT_ASSET_BLOB`. Once ready, call `items_catalog_try_bind_resource()`. Only a
+successful bind may be followed by save load/reconcile, feature initialization,
+gameplay, DevAPI state commands, or autosave. Call `items_catalog_shutdown()`
+before `nt_resource_shutdown()`.
+
+## Tests and release receipt
+
+Use the production Lua catalog in ownership and composition tests. A small test
+loader may read `${ITEMS_CATALOG_PACKAGE}` and call `items_catalog_try_bind()`;
+compile those targets with the same ABI header and
+`ITEMS_RUNTIME_PACKAGE_ENABLED=1`.
+
+Keep committed catalog validation on ctest:
+
+```cmake
+add_test(NAME items_catalog_validate COMMAND "${Python3_EXECUTABLE}"
+    "${ITEMS_CORE_SCRIPTS}/items_cli.py"
+    --project-root "${CMAKE_CURRENT_SOURCE_DIR}" validate)
+```
+
+At a release boundary, after migrations and validation are complete, seal the
+compatible storage/level/field history atomically:
+
+```powershell
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game-root> seal-receipt
 ```
 
 ## Verify
 
 ```powershell
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_ops_test.py
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_lua_sandbox_test.py
-node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_snapshot_test.py
-ctest --test-dir templates/template/build/native-debug --output-on-failure
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli_test.py
+node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_runtime_package_test.py
+cmake --build templates/template/build/native-debug --target game test_items_runtime_package test_items_runtime_resource test_items_fragment
+ctest --test-dir templates/template/build/native-debug -R "items|progression|template_composition" --output-on-failure
 ```
 
-## Uninstall
-
-No soft (CMake-flag) uninstall. Remove the `ITEMS_CORE_*` CMake wiring, the
-`target_sources`/`target_include_directories` entries, the `items_ops_validate`/
-`items_ops_test` ctest registrations, and the game-owned files listed above if
-no other feature in that game needs them.
+To remove the module, remove this CMake wiring and the game-owned Items files.
+There is no compatibility flag or fallback catalog path.

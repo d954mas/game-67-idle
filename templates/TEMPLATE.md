@@ -208,8 +208,9 @@ modules from day one so a copied game keeps them apart:
                               plus ui.tree bounds for responsive-layout review
     state/                    the 4 fragment schemas (codegen source): settings/
                               items/progression/game
-    content/                  items.json / progression.json / item_fields.schema.json /
-                              items.lock.json -- item + progression catalog content
+    content/                  progression.json + items.lock.json (Items release history)
+    items.lua.json            canonical Items Lua evaluator manifest
+    design/items/             modular Items Lua declarations
 
 Outside `src/`, two in-place modules carry the L1/L2 learning-feature runtime
 (one shared copy, linked in-place, NOT copy-then-own): `features/items-core/`

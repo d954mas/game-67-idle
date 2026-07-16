@@ -634,6 +634,9 @@ def _parser() -> argparse.ArgumentParser:
     validate.add_argument("--baseline", default="content/items.lock.json")
     validate.add_argument("--state-schema", default="state/items.schema.json")
     validate.add_argument("--affected")
+    seal = commands.add_parser("seal-receipt")
+    seal.add_argument("--baseline", default="content/items.lock.json")
+    seal.add_argument("--state-schema", default="state/items.schema.json")
     build = commands.add_parser("build")
     build.add_argument("--baseline", default="content/items.lock.json")
     build.add_argument("--state-schema", default="state/items.schema.json")
@@ -713,6 +716,16 @@ def main(argv: list[str] | None = None) -> int:
             }
         elif operation == "validate":
             result = _validation(root, evaluation, snapshot, args)
+            exit_code = 0 if result["ok"] else 1
+        elif operation == "seal-receipt":
+            baseline_path = _project_file(root, args.baseline, "cli.baseline")
+            state_path = _project_file(root, args.state_schema, "cli.state_schema")
+            result = receipt_api.seal_evaluation_receipt(
+                evaluation,
+                _load_json(baseline_path, "cli.baseline"),
+                _load_json(state_path, "cli.state_schema"),
+                baseline_path=baseline_path,
+            )
             exit_code = 0 if result["ok"] else 1
         elif operation in {
             "level-set", "curve-set", "override-set",
