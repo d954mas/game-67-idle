@@ -5,7 +5,11 @@ read-only Workbench slice shows a compact master table plus bounded Snapshot
 detail, level/cost/provenance rows, selected-series charts, release state,
 diagnostics, dependencies, checked source locations, and built icon previews.
 Semantic preview/apply is delegated to the same T0366 CLI operations used by
-agents; the browser owns no Lua writer.
+agents; the browser owns no Lua writer. The editor offers only fields whose
+Snapshot provenance matches the selected literal, curve, or override operation.
+Preview state is visibly ephemeral, Apply resubmits the reviewed patch with its
+expected source hash, and session Undo replays only the inverse patch returned
+by the CLI.
 
 ## Boundary
 

@@ -12,6 +12,13 @@ const state = {
   chartField: null,
   detailRequest: 0,
   issuesById: new Map(),
+  editDraft: null,
+  preview: null,
+  previewEdit: null,
+  editBusy: false,
+  editMessage: "",
+  editError: false,
+  undoStack: [],
   // T0316: the view.icons.page_data_uri, decoded ONCE per loadCatalog (before
   // render()) so every row's canvas crop reads from the same already-decoded
   // <img> instead of each row re-decoding the same base64 PNG.
@@ -219,6 +226,18 @@ function detailModel(extra = {}) {
     release: state.view?.lock.status_by_id[state.selectedItemId] || "draft",
     issues: state.issuesById.get(state.selectedItemId) || [],
     onChartField: loadSelectedChart,
+    editor: {
+      draft: state.editDraft,
+      preview: state.preview,
+      busy: state.editBusy,
+      message: state.editMessage,
+      error: state.editError,
+      undoCount: state.undoStack.length,
+      onPreview: previewEdit,
+      onApply: applyPreview,
+      onUndo: undoLastEdit,
+      onInputError: showEditInputError,
+    },
     ...extra,
   };
 }
@@ -226,6 +245,128 @@ function detailModel(extra = {}) {
 function focusedUrl(endpoint, values) {
   const params = new URLSearchParams({ catalog: state.selectedId, ...values });
   return `/api/items-viewer/${endpoint}?${params}`;
+}
+
+function resetEditView() {
+  state.editDraft = null;
+  state.preview = null;
+  state.previewEdit = null;
+  state.editBusy = false;
+  state.editMessage = "";
+  state.editError = false;
+}
+
+function renderCurrentDetail() {
+  renderItemDetail(els.itemDetail, detailModel());
+}
+
+function editFailureMessage(payload) {
+  const error = payload?.error;
+  if (typeof error === "string") return error;
+  if (error?.message) return `${error.code ? `${error.code}: ` : ""}${error.message}`;
+  return "Semantic edit failed.";
+}
+
+async function submitSemanticEdit(edit, apply) {
+  const response = await fetch("/api/items-viewer/edit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ catalog: state.selectedId, edit, apply }),
+  });
+  const payload = await response.json();
+  return payload.ok ? payload : { ...payload, ok: false };
+}
+
+function showEditInputError(message) {
+  state.editMessage = message;
+  state.editError = true;
+  renderCurrentDetail();
+  els.itemDetail.querySelector(".iv-action-button")?.focus();
+}
+
+async function previewEdit(edit) {
+  state.editDraft = edit;
+  state.previewEdit = edit;
+  state.preview = null;
+  state.editBusy = true;
+  state.editMessage = "Evaluating ephemeral preview…";
+  state.editError = false;
+  renderCurrentDetail();
+  try {
+    const payload = await submitSemanticEdit(edit, false);
+    state.editBusy = false;
+    if (!payload.ok) {
+      state.editMessage = editFailureMessage(payload);
+      state.editError = true;
+    } else {
+      state.preview = payload.result;
+      state.editMessage = "Preview validated. Review the source and semantic diff before Apply.";
+      state.editError = false;
+    }
+  } catch (error) {
+    state.editBusy = false;
+    state.editMessage = `Preview request failed: ${error.message}`;
+    state.editError = true;
+  }
+  renderCurrentDetail();
+  els.itemDetail.querySelector(state.preview ? ".iv-action-primary" : ".iv-action-button")?.focus();
+}
+
+async function applyPreview() {
+  const edit = state.previewEdit;
+  if (!edit || !state.preview) return;
+  state.editBusy = true;
+  state.editMessage = "Applying reviewed semantic patch…";
+  state.editError = false;
+  renderCurrentDetail();
+  try {
+    const payload = await submitSemanticEdit(edit, true);
+    if (!payload.ok) {
+      state.editBusy = false;
+      state.editMessage = editFailureMessage(payload);
+      state.editError = true;
+      renderCurrentDetail();
+      els.itemDetail.querySelector(".iv-action-primary")?.focus();
+      return;
+    }
+    if (payload.result.applied) state.undoStack.push(payload.result.inverse_patch);
+    await selectItem(edit.item, { focus: true });
+    state.editMessage = payload.result.applied ? "Patch applied and full validation passed." : "Preview matched the current source; no bytes changed.";
+    renderCurrentDetail();
+  } catch (error) {
+    state.editBusy = false;
+    state.editMessage = `Apply request failed: ${error.message}`;
+    state.editError = true;
+    renderCurrentDetail();
+  }
+}
+
+async function undoLastEdit() {
+  const inverse = state.undoStack.at(-1);
+  if (!inverse) return;
+  state.editBusy = true;
+  state.editMessage = "Replaying returned inverse patch…";
+  state.editError = false;
+  renderCurrentDetail();
+  try {
+    const payload = await submitSemanticEdit(inverse, true);
+    if (!payload.ok) {
+      state.editBusy = false;
+      state.editMessage = editFailureMessage(payload);
+      state.editError = true;
+      renderCurrentDetail();
+      return;
+    }
+    state.undoStack.pop();
+    await selectItem(inverse.item, { focus: true });
+    state.editMessage = payload.result.applied ? "Undo applied from the stored inverse patch." : "Undo required no source change.";
+    renderCurrentDetail();
+  } catch (error) {
+    state.editBusy = false;
+    state.editMessage = `Undo request failed: ${error.message}`;
+    state.editError = true;
+    renderCurrentDetail();
+  }
 }
 
 function focusSelectedItem() {
@@ -265,6 +406,7 @@ async function selectItem(itemId, options = {}) {
   state.detail = null;
   state.chart = null;
   state.chartField = null;
+  resetEditView();
   const request = ++state.detailRequest;
   renderItemTable(state.view, state.issuesById);
   if (options.focus) focusSelectedItem();
@@ -324,6 +466,8 @@ async function loadCatalog(id) {
   state.detail = null;
   state.chart = null;
   state.chartField = null;
+  state.undoStack = [];
+  resetEditView();
   state.detailRequest += 1;
   setStatus("Loading…");
   try {

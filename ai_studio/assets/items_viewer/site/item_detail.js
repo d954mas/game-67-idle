@@ -1,4 +1,5 @@
 import { field, humanize, make, renderValue } from "./dom.js";
+import { renderSemanticEditor } from "./semantic_editor.js";
 
 export function formatCost(value) {
   if (!value || typeof value !== "object") return "—";
@@ -147,6 +148,13 @@ export function renderItemDetail(root, model) {
     chartSection.append(make("p", "iv-muted", "No generated numeric level fields for this item."));
   }
   root.append(chartSection);
+
+  root.append(renderSemanticEditor({
+    detail,
+    itemId: summary.id,
+    sourceHash: detail.source?.source_hash,
+    ...model.editor,
+  }));
 
   const dependencies = section("Dependencies");
   const depGrid = make("div", "iv-detail-grid");
