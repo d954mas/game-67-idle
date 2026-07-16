@@ -59,6 +59,20 @@ test("template production Items package is generated from the semantic Lua route
   assert.match(text, /items\.snapshot\.json[\s\S]*items\.catalog[\s\S]*items_catalog_abi\.gen\.h/);
 });
 
+test("template game pack consumes the generated Items package once", () => {
+  const conductor = readFileSync(join(root, "templates", "template", "CMakeLists.txt"), "utf8");
+  const assets = readFileSync(join(root, "templates", "template", "cmake", "GameAssets.cmake"), "utf8");
+  const builder = readFileSync(join(root, "templates", "template", "src", "build_packs.c"), "utf8");
+  assert.ok(
+    conductor.indexOf("include(cmake/GameCodegen.cmake)") < conductor.indexOf("include(cmake/GameAssets.cmake)"),
+    "codegen must publish the package path before GameAssets consumes it",
+  );
+  assert.match(assets, /build_game_packs>\s+"\$\{GAME_PACK_DIR\}"\s+"\$\{ITEMS_CATALOG_PACKAGE\}"/);
+  assert.match(assets, /DEPENDS[\s\S]*"\$\{ITEMS_CATALOG_PACKAGE\}"/);
+  assert.match(builder, /argc\s*!=\s*3/);
+  assert.match(builder, /add_blob_file\(ctx,\s*argv\[2\],\s*"items\/catalog"\)/);
+});
+
 test("template audio ownership stays in the exact CMake concern files", () => {
   const dir = join(root, "templates", "template", "cmake");
   const conductor = readFileSync(join(root, "templates", "template", "CMakeLists.txt"), "utf8");
