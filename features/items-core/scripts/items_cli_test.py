@@ -34,6 +34,23 @@ class ItemsCliTests(unittest.TestCase):
         self.assertEqual(process.returncode, 0, process.stderr)
         self.assertTrue(json.loads(process.stdout)["result"]["receipt"]["ok"])
 
+    def test_template_lua_builds_the_runtime_projection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            process = subprocess.run(
+                [
+                    sys.executable, str(SCRIPT), "--project-root", str(TEMPLATE_ROOT),
+                    "build", "--out-dir", tmp,
+                ],
+                text=True, capture_output=True, encoding="utf-8", timeout=20,
+            )
+            self.assertEqual(process.returncode, 0, process.stderr)
+            payload = json.loads(process.stdout)
+            self.assertTrue(payload["result"]["ok"])
+            inspected = CLI.package_api.inspect_package(
+                (Path(tmp) / "items.catalog").read_bytes(),
+            )
+            self.assertEqual(inspected["sections"]["items"]["count"], 6)
+
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(SCRIPT), "--project-root", str(PROJECT), *args],

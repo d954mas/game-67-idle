@@ -293,7 +293,12 @@ strings are deduplicated, padding is zero, and schema/content/item identities
 use the engine-compatible seed-0 XXH64 contract. Generated outputs are replaced
 atomically only when their bytes change, so a value-only balance edit changes
 the blob without touching the header. The Python inspector is the wire-format
-reference. Before writing its chosen pack, the game builder runs `verify`
+reference. The current blob projects only runtime-consumed identity, kind,
+storage, level, field, and cost facts; names/icons/tags and inactive capability
+metadata remain in Snapshot. Their changes still alter the embedded full
+Snapshot digest/content fingerprint. A new wire section requires a concrete
+runtime consumer instead of pre-allocating a generic property bag. Before
+writing its chosen pack, the game builder runs `verify`
 against the current Snapshot, selected blob, and generated header. Verification
 rebuilds the expected outputs in memory and rejects stale or independently
 authored inputs; it writes no second manifest. The opt-in native binder validates the generated schema/item ABI,

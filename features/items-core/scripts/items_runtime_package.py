@@ -14,6 +14,7 @@ from typing import Any
 
 from generate_items_api_proof import xxh64
 from items_c_identifiers import is_c_member_name
+from items_snapshot import ITEM_KEYS as SNAPSHOT_ITEM_KEYS
 
 
 SNAPSHOT_SCHEMA = "items.snapshot.v1"
@@ -480,7 +481,11 @@ def build_package(
     cost_rows: list[tuple[int, ...]] = []
     for item_index, item in enumerate(sorted_items):
         item_id = item["id"]
-        unsupported = set(item) - {"id", "kind", "stack", "authoring_mode", "levels", "acquire"}
+        # Snapshot owns the complete authoring contract. This compact runtime
+        # projection stores only facts consumed by the current typed API; the
+        # full Snapshot digest still makes every semantic metadata edit change
+        # the package content fingerprint.
+        unsupported = set(item) - SNAPSHOT_ITEM_KEYS
         if unsupported:
             _fail("package.unsupported_item_field", f"item {item_id}: {sorted(unsupported)[0]}")
         metadata = runtime_by_id[item_id]
