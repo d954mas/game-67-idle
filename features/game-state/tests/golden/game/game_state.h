@@ -26,6 +26,12 @@
 #define GAME_STATE_TEST_LABEL_TEXT_DEFAULT "Template ready"
 #define GAME_STATE_TEST_BUTTON_TEXT_DEFAULT "Cycle"
 #define GAME_STATE_TUTORIAL_DONE_DEFAULT 0
+#define GAME_STATE_INVENTORY_CONTAINER_ID_DEFAULT UINT32_C(0)
+#define GAME_STATE_INVENTORY_CONTAINER_ID_MIN UINT32_C(0)
+#define GAME_STATE_INVENTORY_CONTAINER_ID_MAX UINT32_C(4294967294)
+#define GAME_STATE_WALLET_CONTAINER_ID_DEFAULT UINT32_C(0)
+#define GAME_STATE_WALLET_CONTAINER_ID_MIN UINT32_C(0)
+#define GAME_STATE_WALLET_CONTAINER_ID_MAX UINT32_C(4294967294)
 
 typedef enum GameStateShape {
     GAME_STATE_SHAPE_CUBE = 0,
@@ -52,6 +58,8 @@ typedef struct GameState {
     char test_label_text[GAME_STATE_STRING_MAX];
     char test_button_text[GAME_STATE_STRING_MAX];
     bool tutorial_done;
+    uint32_t inventory_container_id;
+    uint32_t wallet_container_id;
 } GameState;
 
 /* Instance owned by this fragment TU (the shared global-state monolith is gone).
