@@ -124,6 +124,85 @@ export async function loadItemChart(root, projectRoot, itemId, field) {
   return result.ok ? result.data : { content_error: result.content_error };
 }
 
+const EDIT_OPERATIONS = new Set(["level-set", "override-set", "curve-set"]);
+const SOURCE_HASH = /^sha256:[0-9a-f]{64}$/;
+
+export class ItemEditInputError extends Error {}
+
+function semanticEditArgs(edit) {
+  if (!edit || typeof edit !== "object" || Array.isArray(edit)) {
+    throw new ItemEditInputError("edit must be an object");
+  }
+  const operation = edit.operation;
+  if (!EDIT_OPERATIONS.has(operation)) throw new ItemEditInputError("unsupported semantic edit operation");
+  if (edit.schema !== undefined && edit.schema !== "items.cli.patch.v1") {
+    throw new ItemEditInputError("edit schema must be items.cli.patch.v1");
+  }
+  const operationKey = operation === "curve-set" ? "parameter" : "level";
+  const expectedKeys = new Set([
+    "operation", "item", "field", operationKey, "value", "expected_source_hash",
+    ...(edit.schema === undefined ? [] : ["schema"]),
+  ]);
+  if (Object.keys(edit).some((key) => !expectedKeys.has(key)) || Object.keys(edit).length !== expectedKeys.size) {
+    throw new ItemEditInputError("semantic edit has unexpected or missing fields");
+  }
+  for (const key of ["item", "field"]) {
+    if (typeof edit[key] !== "string" || !edit[key] || edit[key].length > 256 || edit[key].includes("\0")) {
+      throw new ItemEditInputError(`${key} must be a bounded non-empty string`);
+    }
+  }
+  if (!SOURCE_HASH.test(edit.expected_source_hash)) throw new ItemEditInputError("expected_source_hash is invalid");
+  if (!Number.isSafeInteger(edit.value)) throw new ItemEditInputError("value must be a safe integer");
+
+  const args = [
+    operation,
+    "--item", edit.item,
+    "--field", edit.field,
+    "--value", String(edit.value),
+    "--expected-source-hash", edit.expected_source_hash,
+  ];
+  if (operation === "curve-set") {
+    if (!new Set(["start", "step"]).has(edit.parameter)) throw new ItemEditInputError("curve parameter must be start or step");
+    args.push("--parameter", edit.parameter);
+  } else {
+    if (!Number.isSafeInteger(edit.level) || edit.level < 1) throw new ItemEditInputError("level must be a positive safe integer");
+    args.push("--level", String(edit.level));
+  }
+  return args;
+}
+
+function parseEditFailure(stdout, stderr) {
+  for (const text of [stderr, stdout]) {
+    if (!text.trim()) continue;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed.error) return { ok: false, error: parsed.error };
+      if (parsed.result) {
+        return {
+          ok: false,
+          error: { code: "edit.validation", message: "semantic edit validation failed" },
+          result: parsed.result,
+        };
+      }
+    } catch {
+      // Controlled CLI failures are JSON. Preserve a bounded fallback below.
+    }
+  }
+  return { ok: false, error: { code: "edit.failed", message: (stderr || stdout).trim().slice(0, 2000) } };
+}
+
+// UI preview/apply/undo all invoke the same T0366 semantic operation. Preview
+// omits --apply and therefore evaluates only an allowlisted temporary copy;
+// undo passes the returned inverse patch back through this exact function.
+export async function runItemEdit(root, projectRoot, edit, { apply = false } = {}) {
+  const args = semanticEditArgs(edit);
+  if (apply) args.push("--apply");
+  const { code, stdout, stderr } = await runItemsCliRaw(root, projectRoot, args);
+  if (code === 0) return { ok: true, result: parseJsonOrThrow(stdout, edit.operation).result };
+  if (code === 1) return parseEditFailure(stdout, stderr);
+  throw new Error(`items_cli.py ${edit.operation} exited ${code} unexpectedly: ${stderr.trim()}`);
+}
+
 // items.lock.json is read directly — a separate
 // artifact, not a second model of items (decision (а)). A malformed lock degrades the
 // lock DISPLAY only (empty status/removed) rather than a 500 for the whole catalog;
@@ -322,4 +401,10 @@ export async function getItemChart(root, catalogId, itemId, field, options = {})
   const entry = resolveCatalogEntry(root, catalogId, options);
   if (!entry) return null;
   return loadItemChart(root, join(root, entry.folder), itemId, field);
+}
+
+export async function editCatalogItem(root, catalogId, edit, editOptions = {}, catalogOptions = {}) {
+  const entry = resolveCatalogEntry(root, catalogId, catalogOptions);
+  if (!entry) return null;
+  return runItemEdit(root, join(root, entry.folder), edit, editOptions);
 }

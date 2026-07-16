@@ -4,7 +4,8 @@ Studio surface for a registered template or game Items catalog. The current
 read-only Workbench slice shows a compact master table plus bounded Snapshot
 detail, level/cost/provenance rows, selected-series charts, release state,
 diagnostics, dependencies, checked source locations, and built icon previews.
-Semantic editing is added by later T0316 slices over the same CLI operations.
+Semantic preview/apply is delegated to the same T0366 CLI operations used by
+agents; the browser owns no Lua writer.
 
 ## Boundary
 
@@ -46,6 +47,10 @@ surface does not display a catalog container table.
   bounded inspect/schema/source/dependency detail.
 - `GET /api/items-viewer/chart?catalog=<kind>:<id>&item=<def_id>&field=<member>`
   returns only the selected generated numeric series.
+- `POST /api/items-viewer/edit` accepts exactly a registered catalog, one
+  `items.cli.patch.v1`, and `apply`. `apply: false` is an ephemeral what-if;
+  `apply: true` uses the CLI's expected-hash/lock/validation/atomic-replace
+  path. Returned inverse patches are replayed through the same endpoint.
 
 A folder with no `items.lua.json` is a valid empty state. Invalid Lua or a
 Snapshot failure returns a top-level `content_error` with no JSON fallback.

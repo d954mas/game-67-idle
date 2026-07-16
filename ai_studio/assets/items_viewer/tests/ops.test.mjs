@@ -2,7 +2,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -14,6 +14,7 @@ import {
   loadCatalogView,
   parseJsonOrThrow,
   routeIssues,
+  runItemEdit,
   runItemsCliRaw,
 } from "../ops.mjs";
 
@@ -155,6 +156,42 @@ test("item detail stays bounded to semantic inspect, schema, source, dependencie
     [2, 15, "table"],
     [3, 20, "table"],
   ]);
+});
+
+test("Workbench edit bridge previews, applies, and replays only the returned inverse patch", async (t) => {
+  const project = join(tempDir(t), "project");
+  cpSync(join(REPO_ROOT, "features", "items-core", "tests", "fixtures", "items_cli"), project, { recursive: true });
+  const sourcePath = join(project, "game", "items.lua");
+  const original = readFileSync(sourcePath, "utf8");
+  const detail = await loadItemDetail(REPO_ROOT, project, "game.levelled_sword");
+  const edit = {
+    operation: "level-set",
+    item: "game.levelled_sword",
+    level: 2,
+    field: "attack",
+    value: 17,
+    expected_source_hash: detail.source.source_hash,
+  };
+
+  const preview = await runItemEdit(REPO_ROOT, project, edit);
+  assert.equal(preview.ok, true);
+  assert.equal(preview.result.applied, false);
+  assert.equal(preview.result.source_diff.old_value, 15);
+  assert.equal(preview.result.source_diff.new_value, 17);
+  assert.equal(readFileSync(sourcePath, "utf8"), original);
+
+  const applied = await runItemEdit(REPO_ROOT, project, edit, { apply: true });
+  assert.equal(applied.ok, true);
+  assert.equal(applied.result.applied, true);
+  assert.match(readFileSync(sourcePath, "utf8"), /attack = 17/);
+
+  const conflict = await runItemEdit(REPO_ROOT, project, edit, { apply: true });
+  assert.equal(conflict.ok, false);
+  assert.equal(conflict.error.code, "edit.conflict");
+
+  const undone = await runItemEdit(REPO_ROOT, project, applied.result.inverse_patch, { apply: true });
+  assert.equal(undone.ok, true);
+  assert.equal(readFileSync(sourcePath, "utf8"), original);
 });
 
 test("unknown catalog id returns null", async () => {

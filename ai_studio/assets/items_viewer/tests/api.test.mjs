@@ -20,10 +20,18 @@ function responseCapture() {
   };
 }
 
-async function request(path) {
+async function request(path, { method = "GET", body } = {}) {
   const response = responseCapture();
+  const encoded = body === undefined ? null : Buffer.from(JSON.stringify(body));
+  const req = {
+    method,
+    headers: encoded ? { "content-type": "application/json" } : {},
+    async *[Symbol.asyncIterator]() {
+      if (encoded) yield encoded;
+    },
+  };
   const handled = await createItemsViewerApi(REPO_ROOT)(
-    { method: "GET" },
+    req,
     response,
     new URL(path, "http://studio.local"),
   );
@@ -52,4 +60,32 @@ test("focused chart endpoint requires an explicit selected field", async () => {
   );
   assert.equal(response.status, 400);
   assert.match(json.error, /field/);
+});
+
+test("edit endpoint delegates preview refusal and rejects operations outside the shared semantic contract", async () => {
+  const detail = await request(
+    "/api/items-viewer/item?catalog=template%3Atemplate&item=tmpl.sword",
+  );
+  const edit = {
+    schema: "items.cli.patch.v1",
+    operation: "level-set",
+    item: "tmpl.sword",
+    field: "attack",
+    level: 1,
+    value: 16,
+    expected_source_hash: detail.json.source.source_hash,
+  };
+  const refused = await request("/api/items-viewer/edit", {
+    method: "POST",
+    body: { catalog: "template:template", edit, apply: false },
+  });
+  assert.equal(refused.response.status, 422);
+  assert.equal(refused.json.ok, false);
+
+  const invalid = await request("/api/items-viewer/edit", {
+    method: "POST",
+    body: { catalog: "template:template", edit: { ...edit, operation: "rewrite-lua" }, apply: false },
+  });
+  assert.equal(invalid.response.status, 400);
+  assert.match(invalid.json.error, /unsupported/);
 });
