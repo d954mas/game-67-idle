@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createItemsViewerApi, createRequestCoordinator } from "../api.mjs";
 
@@ -20,7 +21,7 @@ function responseCapture() {
   };
 }
 
-async function request(path, { method = "GET", body, headers = {} } = {}) {
+async function request(path, { method = "GET", body, headers = {}, viewerOptions = {} } = {}) {
   const response = responseCapture();
   const encoded = body === undefined ? null : Buffer.from(JSON.stringify(body));
   const req = {
@@ -34,7 +35,10 @@ async function request(path, { method = "GET", body, headers = {} } = {}) {
       if (encoded) yield encoded;
     },
   };
-  const handled = await createItemsViewerApi(REPO_ROOT, { allowedHosts: ["studio.local"] })(
+  const handled = await createItemsViewerApi(REPO_ROOT, {
+    allowedHosts: ["studio.local"],
+    ...viewerOptions,
+  })(
     req,
     response,
     new URL(path, "http://studio.local"),
@@ -91,12 +95,24 @@ test("focused item endpoint resolves only registered catalogs", async () => {
 });
 
 test("catalog JSON references a separately served bounded icon page", async () => {
-  const catalog = await request("/api/items-viewer/catalog?id=template%3Atemplate");
+  const png = readFileSync(new URL("./fixtures/icon_pack/icons_page0.png", import.meta.url));
+  const viewerOptions = {
+    getCatalogView: async (_root, id) => (
+      id === "fixture:icons" ? { icons: { page_available: true } } : null
+    ),
+    getIconPage: async (_root, id) => (
+      id === "fixture:icons" ? { data: png } : null
+    ),
+  };
+  const catalog = await request(
+    "/api/items-viewer/catalog?id=fixture%3Aicons",
+    { viewerOptions },
+  );
   assert.equal(catalog.response.status, 200);
   assert.equal(Object.hasOwn(catalog.json.icons, "page_data_uri"), false);
-  assert.equal(catalog.json.icons.page_url, "/api/items-viewer/icon-page?catalog=template%3Atemplate");
+  assert.equal(catalog.json.icons.page_url, "/api/items-viewer/icon-page?catalog=fixture%3Aicons");
 
-  const page = await request(catalog.json.icons.page_url);
+  const page = await request(catalog.json.icons.page_url, { viewerOptions });
   assert.equal(page.response.status, 200);
   assert.equal(page.response.headers["content-type"], "image/png");
   assert.ok(Buffer.isBuffer(page.response.body));

@@ -116,6 +116,8 @@ export function createRequestCoordinator(maxConcurrent = 1) {
 export function createItemsViewerApi(root, options = {}) {
   const allowedHosts = new Set(options.allowedHosts || []);
   const catalogRequests = createRequestCoordinator(options.maxCatalogReads || 1);
+  const readCatalogView = options.getCatalogView || getCatalogView;
+  const readIconPage = options.getIconPage || getIconPage;
   return async function handleItemsViewerApi(req, res, url) {
     try {
       if (url.pathname === "/api/items-viewer/catalogs") {
@@ -143,7 +145,7 @@ export function createItemsViewerApi(root, options = {}) {
           || boolQueryParam(url.searchParams.get("includePrivate"));
         const view = await catalogRequests.run(
           `${id}\0${includePrivate}`,
-          () => getCatalogView(root, id, { includePrivate }),
+          () => readCatalogView(root, id, { includePrivate }),
         );
         if (!view) {
           sendJson(res, 404, { error: "catalog not found" });
@@ -166,7 +168,7 @@ export function createItemsViewerApi(root, options = {}) {
           sendJson(res, 400, { error: "catalog is required" });
           return true;
         }
-        const page = await getIconPage(root, catalogId, {
+        const page = await readIconPage(root, catalogId, {
           includePrivate: boolQueryParam(url.searchParams.get("include-private"))
             || boolQueryParam(url.searchParams.get("includePrivate")),
         });
