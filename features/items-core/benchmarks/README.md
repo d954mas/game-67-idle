@@ -12,6 +12,9 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/ben
 node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/benchmark_runtime_package_test.py
 ```
 
+Recorded cross-platform results live in
+`results/windows-2026-07-15.json` and `results/linux-2026-07-16.json`.
+
 The runner records cold candidate compile/link, link-only and no-op build wall
 time; cold/no-op/value-edit generation; raw bytes and a zlib compression proxy;
 executable bytes and selected code/data section payloads; blob bind/copy bytes; and one million checked typed
@@ -27,8 +30,9 @@ smaller as authored data (568 raw / 267 zlib bytes versus 3,291 / 913) and a
 value edit changes only the blob; the ABI header stays byte-identical and no C
 relink is required. Its copy peak was 1,136 bytes for this fixture.
 
-Therefore the provisional blob default stands for scalable iteration and pack
-placement; C arrays remain the tiny fallback/reference candidate. This does not
-claim that the blob wins tiny-fixture access latency. Linux evidence remains
-required before T0365 closes, and T0380 owns representative full-pipeline sizes,
+The Linux run reproduces the same semantic checksum, output sizes, stable-header
+value edit, and no-relink decision. Therefore the provisional blob default
+stands for scalable iteration and pack placement; C arrays remain the tiny
+fallback/reference candidate. This does not claim that the blob wins
+tiny-fixture access latency. T0380 owns representative full-pipeline sizes,
 memory profiling, and budget ratification.
