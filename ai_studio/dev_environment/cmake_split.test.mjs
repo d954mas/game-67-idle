@@ -9,7 +9,7 @@ const expectedTests = {
   "templates/template": ["test_audio_core", "test_audio_resource", "test_audio_backend_native", "test_game_audio", "test_audio_web_library", "test_game_state_json", "test_game_storage", "test_game_save", "test_game_events", "test_game_events_overflow", "test_game_state_roundtrip", "test_game_events_typed", "test_game_event_render", "test_game_analytics", "test_game_events_log_mirror", "test_items_catalog", "test_items_api_core_only", "test_items_api", "generate_items_api_proof_test", "test_items_runtime_package", "test_items_runtime_resource", "test_items_fragment", "items_ops_validate", "items_ops_test", "test_progression", "test_progression_curve", "test_game_format", "test_platform_sdk", "test_platform_lifecycle", "test_platform_sdk_events", "platform_sdk_node_test", "test_template_composition"],
 };
 const expectedCustomTargets = {
-  "templates/template": ["game_asset_packs", "platform_sdk_web_assets", "platform_sdk_playgama_config_asset", "devapi_smoke", "quality_responsive", "items_runtime_package_gen", "items_runtime_benchmark_arrays_gen", "progression_tracks_gen"],
+  "templates/template": ["game_asset_packs", "items_catalog_gen", "platform_sdk_web_assets", "platform_sdk_playgama_config_asset", "devapi_smoke", "quality_responsive", "items_runtime_package_gen", "items_runtime_benchmark_arrays_gen", "progression_tracks_gen"],
 };
 
 function declarations(text, expression) {
@@ -48,6 +48,15 @@ test("codegen selects Studio Python by host platform for Emscripten builds", () 
     assert.match(text, /if\(CMAKE_HOST_WIN32\)/, source);
     assert.doesNotMatch(text, /if\(WIN32\)/, source);
   }
+});
+
+test("template production Items package is generated from the semantic Lua route", () => {
+  const text = readFileSync(join(root, "templates", "template", "cmake", "GameCodegen.cmake"), "utf8");
+  assert.match(text, /add_custom_target\(items_catalog_gen\b/);
+  assert.match(text, /items_cli\.py[\s\S]*--project-root[\s\S]*build[\s\S]*--out-dir/);
+  assert.match(text, /items\.lua\.json/);
+  assert.match(text, /design\/items\/\*\.lua/);
+  assert.match(text, /items\.snapshot\.json[\s\S]*items\.catalog[\s\S]*items_catalog_abi\.gen\.h/);
 });
 
 test("template audio ownership stays in the exact CMake concern files", () => {

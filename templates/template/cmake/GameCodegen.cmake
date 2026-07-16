@@ -11,6 +11,49 @@ endif()
 set(Python3_EXECUTABLE "${STUDIO_PYTHON}" CACHE FILEPATH "Studio root venv Python" FORCE)
 find_package(Python3 3.12 EXACT COMPONENTS Interpreter REQUIRED)
 
+# Production Items export. Lua is evaluated once through the semantic CLI,
+# which owns receipt validation, Snapshot normalization, and compact-package
+# encoding. The generated files stay build-local until the pack step consumes
+# the blob.
+set(ITEMS_CATALOG_MANIFEST "${CMAKE_CURRENT_SOURCE_DIR}/items.lua.json")
+file(GLOB ITEMS_CATALOG_LUA_SOURCES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/design/items/*.lua")
+set(ITEMS_CATALOG_BUILD_DIR "${CMAKE_BINARY_DIR}/generated/items-catalog")
+set(ITEMS_CATALOG_SNAPSHOT "${ITEMS_CATALOG_BUILD_DIR}/items.snapshot.json")
+set(ITEMS_CATALOG_PACKAGE "${ITEMS_CATALOG_BUILD_DIR}/items.catalog")
+set(ITEMS_CATALOG_ABI_HEADER "${ITEMS_CATALOG_BUILD_DIR}/items_catalog_abi.gen.h")
+set(ITEMS_CATALOG_BUILD_SCRIPTS
+    "${ITEMS_CORE_SCRIPTS}/items_cli.py"
+    "${ITEMS_CORE_SCRIPTS}/items_lua_edit.py"
+    "${ITEMS_CORE_SCRIPTS}/items_lua_sandbox.py"
+    "${ITEMS_CORE_SCRIPTS}/items_receipt.py"
+    "${ITEMS_CORE_SCRIPTS}/items_runtime_package.py"
+    "${ITEMS_CORE_SCRIPTS}/items_snapshot.py"
+    "${ITEMS_CORE_SCRIPTS}/items_c_identifiers.py"
+    "${ITEMS_CORE_SCRIPTS}/generate_items_api_proof.py")
+add_custom_command(
+    OUTPUT
+        "${ITEMS_CATALOG_SNAPSHOT}"
+        "${ITEMS_CATALOG_PACKAGE}"
+        "${ITEMS_CATALOG_ABI_HEADER}"
+    COMMAND ${CMAKE_COMMAND} -E make_directory "${ITEMS_CATALOG_BUILD_DIR}"
+    COMMAND "${Python3_EXECUTABLE}" "${ITEMS_CORE_SCRIPTS}/items_cli.py"
+        --project-root "${CMAKE_CURRENT_SOURCE_DIR}"
+        build --out-dir "${ITEMS_CATALOG_BUILD_DIR}"
+    DEPENDS
+        "${ITEMS_CATALOG_MANIFEST}"
+        ${ITEMS_CATALOG_LUA_SOURCES}
+        "${CMAKE_CURRENT_SOURCE_DIR}/content/items.lock.json"
+        "${CMAKE_CURRENT_SOURCE_DIR}/state/items.schema.json"
+        ${ITEMS_CATALOG_BUILD_SCRIPTS}
+    WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+    COMMENT "Generating Items Snapshot and compact runtime package from Lua"
+    VERBATIM)
+add_custom_target(items_catalog_gen DEPENDS
+    "${ITEMS_CATALOG_SNAPSHOT}"
+    "${ITEMS_CATALOG_PACKAGE}"
+    "${ITEMS_CATALOG_ABI_HEADER}")
+
 # И2a: items CONTENT codegen (SECOND codegen, deliberately separate from the
 # game-state generator below). Compile-time const
 # tables from content/items.json, referenced by the unconditional add_executable
