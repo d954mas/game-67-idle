@@ -5,7 +5,7 @@ logic live in `features/items-core`. This directory contains only game-owned
 policy:
 
 - `reason_tags.h`: closed mutation-reason verbs;
-- `items_bootstrap.c`: initial grants for a normal new game;
+- `src/game_items.c`: concrete player containers, owner refs, and initial grants;
 - this integration and migration note.
 
 ## Authoring and build
@@ -26,13 +26,19 @@ generated-table fallback.
 
 ## Ownership
 
-Stack APIs reject `stack == 1`; instance APIs require it. The template keeps
-the current fixed ownership policy from Items Core: a 20-record `backpack` and
-an unlimited currency-only `purse`. Currency and finite stack caps come from
-the bound catalog package.
+Stack APIs reject `stack == 1`; instance APIs require it. The template creates
+its finite player inventory and currency-only wallet in `src/game_items.c`,
+stores only their persistent numeric IDs in the game fragment, and passes
+explicit runtime refs to progression and UI consumers. Reusable Items Core has
+no fixed backpack/purse or implicit payment scope. Currency and finite stack
+caps come from the bound catalog package.
+
+Runtime tools use the bounded inspection API rather than serializing the whole
+Items fragment: container lists are filtered and paginated, entry reads require
+an explicit slot range, and every query carries row/byte/context budgets.
 
 Every mutation uses a `verb:subject` reason from `reason_tags.h`. Normal new
-games are seeded in `items_bootstrap.c`; `--fresh-state` intentionally runs only
+games are seeded in `src/game_items.c`; `--fresh-state` intentionally runs only
 the generated reset defaults and skips those grants.
 
 ## Release receipt and destructive changes

@@ -43,6 +43,14 @@ static items_container_ref_t create_ephemeral_container(
     return ref;
 }
 
+static items_inspection_budget_t inspection_budget(uint32_t rows) {
+    return (items_inspection_budget_t){
+        .max_rows = rows,
+        .max_bytes = ITEMS_INSPECTION_MAX_BYTES,
+        .max_context_rows = ITEMS_INSPECTION_MAX_CONTEXT_ROWS,
+    };
+}
+
 void test_empty_nested_state_round_trip(void) {
     cJSON *json = items_state_to_json(&items_state);
     cJSON *containers = cJSON_GetObjectItemCaseSensitive(json, "containers");
@@ -324,6 +332,133 @@ void test_rejected_rebuild_preserves_ephemeral_state(void) {
     TEST_ASSERT_EQUAL_INT64(3, items_stack_count(chest, "tmpl.wood"));
 }
 
+void test_container_inspection_is_paginated_filterable_and_bounded(void) {
+    items_container_ref_t empty = create_container(4, ITEMS_CONTAINER_POLICY_GENERIC);
+    items_container_ref_t wallet = create_container(3, ITEMS_CONTAINER_POLICY_CURRENCY_ONLY);
+    items_container_ref_t chest = create_ephemeral_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(wallet, "tmpl.gold", 5, 1, "loot:test", NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(chest, "tmpl.wood", 2, 0, "loot:test", NULL, NULL));
+
+    items_container_inspection_t rows[2] = {0};
+    items_inspection_page_t page = {0};
+    items_container_list_query_t query = {
+        .offset = 0,
+        .policy = ITEMS_INSPECTION_FILTER_ANY,
+        .lifetime = ITEMS_INSPECTION_FILTER_ANY,
+        .include_empty = true,
+        .budget = inspection_budget(2),
+    };
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_INSPECTION_OK,
+        items_inspect_container_list(&query, rows, 2, &page));
+    TEST_ASSERT_EQUAL_UINT32(2, page.count);
+    TEST_ASSERT_TRUE(page.has_more);
+    TEST_ASSERT_EQUAL_UINT32(2, page.next_offset);
+    TEST_ASSERT_EQUAL_UINT32(items_container_id(empty), rows[0].container_id);
+    TEST_ASSERT_EQUAL_UINT32(items_container_id(wallet), rows[1].container_id);
+    TEST_ASSERT_EQUAL_INT(ITEMS_LIFETIME_PERSISTENT, rows[1].lifetime);
+    TEST_ASSERT_EQUAL_UINT32(1, rows[1].entry_count);
+
+    query.offset = page.next_offset;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_INSPECTION_OK,
+        items_inspect_container_list(&query, rows, 2, &page));
+    TEST_ASSERT_EQUAL_UINT32(1, page.count);
+    TEST_ASSERT_FALSE(page.has_more);
+    TEST_ASSERT_EQUAL_INT(ITEMS_LIFETIME_EPHEMERAL, rows[0].lifetime);
+    TEST_ASSERT_EQUAL_UINT32(ITEMS_ID_NONE, rows[0].container_id);
+    TEST_ASSERT_EQUAL_UINT32(chest.index, rows[0].ref.index);
+
+    query.offset = 0;
+    query.include_empty = false;
+    query.lifetime = ITEMS_LIFETIME_PERSISTENT;
+    query.policy = ITEMS_CONTAINER_POLICY_CURRENCY_ONLY;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_INSPECTION_OK,
+        items_inspect_container_list(&query, rows, 2, &page));
+    TEST_ASSERT_EQUAL_UINT32(1, page.count);
+    TEST_ASSERT_EQUAL_UINT32(items_container_id(wallet), rows[0].container_id);
+
+    query.budget.max_rows = ITEMS_INSPECTION_MAX_ROWS + 1U;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_INSPECTION_ROW_LIMIT,
+        items_inspect_container_list(&query, rows, 2, &page));
+    query.budget = inspection_budget(1);
+    query.budget.max_bytes = (uint32_t)sizeof(items_container_inspection_t) - 1U;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_INSPECTION_BYTE_LIMIT,
+        items_inspect_container_list(&query, rows, 2, &page));
+    query.budget = inspection_budget(1);
+    query.budget.max_context_rows = 1;
+    query.policy = ITEMS_CONTAINER_POLICY_EQUIPMENT;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_INSPECTION_CONTEXT_LIMIT,
+        items_inspect_container_list(&query, rows, 2, &page));
+}
+
+void test_container_entry_inspection_requires_range_and_filters_in_slot_order(void) {
+    items_container_ref_t bag = create_container(8, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_entry_ref_t wood = ITEM_ENTRY_REF_NONE;
+    item_entry_ref_t potion = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 3, 5, "loot:test", &wood, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.potion", 2, 2, "loot:test", &potion, NULL));
+    items_state.containers_entries[wood.index].quarantined = true;
+
+    items_entry_inspection_t rows[2] = {0};
+    items_inspection_page_t page = {0};
+    items_entry_list_query_t query = {
+        .offset = 0,
+        .slot_begin = 0,
+        .slot_end = 8,
+        .def_id = NULL,
+        .quarantined = ITEMS_INSPECTION_FILTER_ANY,
+        .budget = inspection_budget(1),
+    };
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_INSPECTION_OK,
+        items_inspect_container_entries(bag, &query, rows, 2, &page));
+    TEST_ASSERT_EQUAL_UINT32(1, page.count);
+    TEST_ASSERT_TRUE(page.has_more);
+    TEST_ASSERT_EQUAL_UINT32(2, rows[0].view.slot);
+    TEST_ASSERT_EQUAL_STRING("tmpl.potion", rows[0].view.def_id);
+
+    query.offset = page.next_offset;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_INSPECTION_OK,
+        items_inspect_container_entries(bag, &query, rows, 2, &page));
+    TEST_ASSERT_EQUAL_UINT32(1, page.count);
+    TEST_ASSERT_FALSE(page.has_more);
+    TEST_ASSERT_EQUAL_UINT32(5, rows[0].view.slot);
+    TEST_ASSERT_TRUE(rows[0].view.quarantined);
+
+    query.offset = 0;
+    query.def_id = "tmpl.wood";
+    query.quarantined = 1;
+    query.budget = inspection_budget(2);
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_INSPECTION_OK,
+        items_inspect_container_entries(bag, &query, rows, 2, &page));
+    TEST_ASSERT_EQUAL_UINT32(1, page.count);
+    TEST_ASSERT_EQUAL_UINT32(items_entry_id(wood), rows[0].view.entry_id);
+
+    query.slot_end = query.slot_begin;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_INSPECTION_BAD_QUERY,
+        items_inspect_container_entries(bag, &query, rows, 2, &page));
+    query.slot_end = 9;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_INSPECTION_BAD_QUERY,
+        items_inspect_container_entries(bag, &query, rows, 2, &page));
+}
+
 void test_success_emits_one_numeric_compatibility_event(void) {
     items_container_ref_t wallet = create_container(2, ITEMS_CONTAINER_POLICY_CURRENCY_ONLY);
     game_event_frame_reset();
@@ -365,6 +500,8 @@ int main(void) {
     RUN_TEST(test_ephemeral_move_preserves_runtime_identity);
     RUN_TEST(test_ephemeral_partial_self_move_never_duplicates_a_slot);
     RUN_TEST(test_rejected_rebuild_preserves_ephemeral_state);
+    RUN_TEST(test_container_inspection_is_paginated_filterable_and_bounded);
+    RUN_TEST(test_container_entry_inspection_requires_range_and_filters_in_slot_order);
     RUN_TEST(test_success_emits_one_numeric_compatibility_event);
     int result = UNITY_END();
     game_events_shutdown();

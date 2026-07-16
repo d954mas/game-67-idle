@@ -134,3 +134,4 @@ T0392.
   refuse, while reverse acquisition creates a persistent ID. Independent
   review found and regression-tested rejected-rebuild state loss and partial
   self-move slot duplication. Native game build and Items tests pass.
+- 2026-07-16: Slice 4 added caller-buffer bounded container and entry inspection: filtered pagination across persistent IDs and ephemeral refs, explicit slot ranges plus definition/quarantine filters, and hard 64-row/32-KiB/2048-context caps. TDD red was undefined inspection symbols; then test_items_fragment passed 18/18, focused Items/progression/composition ctest passed 10/10, and feature contracts passed.

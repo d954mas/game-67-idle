@@ -66,20 +66,28 @@ The typed catalog API uses strong item IDs and opaque references:
 
 The ownership API is:
 
-- `items_add`, `items_remove`, `items_count`, `items_can_afford`
-- `items_move`
-- `items_instance_create`, `items_instance_destroy`
-- `items_purse`
+- persistent or ephemeral `items_try_container_create`, destroy-empty, and resize;
+- stack add/remove/count/afford operations against an explicit container ref;
+- unique entry create/destroy and whole/split/merge move operations;
+- persistent ID lookup plus generation-checked runtime refs.
 
 `stack == 0` is unlimited, `stack == 1` is unique, and `stack > 1` is a finite
 per-container cap. Currency caps are also enforced by ownership. Mutations
 require a game-owned `verb:subject` reason and emit typed `items.txn` or
 `items.move` events.
 
-The current ownership policy has two fixed containers: `backpack` accepts any
-item and has 20 distinct-record slots; `purse` is unlimited and accepts only
-currency items. Dynamic container definitions belong to the Containers work,
-not to the item catalog wire format.
+Games create concrete inventory, wallet, equipment, merchant, and chest
+containers. Capacity is a finite slot range; built-in serializable policy is
+fixed at create time. Persistent containers and entries live in generated
+nested state pools, while separately bounded ephemeral pools never enter a
+save. The reusable core has no global backpack, purse, or hidden payment scope.
+
+Bounded runtime inspection uses caller-owned buffers. Container listing filters
+policy, lifetime, and empty rows, then paginates persistent IDs followed by
+ephemeral runtime refs. One-container entry inspection requires an explicit
+`[slot_begin, slot_end)` range and can filter definition or quarantine state.
+Every query supplies row, projected-byte, and scanned-context budgets below the
+hard `64` row, `32 KiB`, and `2048` context-row ceilings.
 
 `items_reconcile()` quarantines unknown definitions without deleting saved
 records, restores records whose definition returns, and reseeds unique IDs from

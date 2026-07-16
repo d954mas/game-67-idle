@@ -138,6 +138,66 @@ typedef struct items_entry_view_t {
     items_lifetime_t lifetime;
 } items_entry_view_t;
 
+#define ITEMS_INSPECTION_FILTER_ANY (-1)
+#define ITEMS_INSPECTION_MAX_ROWS UINT32_C(64)
+#define ITEMS_INSPECTION_MAX_BYTES (UINT32_C(32) * UINT32_C(1024))
+#define ITEMS_INSPECTION_MAX_CONTEXT_ROWS UINT32_C(2048)
+
+typedef enum items_inspection_result_t {
+    ITEMS_INSPECTION_OK = 0,
+    ITEMS_INSPECTION_BAD_QUERY,
+    ITEMS_INSPECTION_NOT_FOUND,
+    ITEMS_INSPECTION_ROW_LIMIT,
+    ITEMS_INSPECTION_BYTE_LIMIT,
+    ITEMS_INSPECTION_CONTEXT_LIMIT,
+} items_inspection_result_t;
+
+typedef struct items_inspection_budget_t {
+    uint32_t max_rows;
+    uint32_t max_bytes;
+    uint32_t max_context_rows;
+} items_inspection_budget_t;
+
+typedef struct items_inspection_page_t {
+    uint32_t count;
+    uint32_t next_offset;
+    uint32_t projected_bytes;
+    uint32_t context_rows;
+    bool has_more;
+} items_inspection_page_t;
+
+typedef struct items_container_list_query_t {
+    uint32_t offset;
+    int policy;
+    int lifetime;
+    bool include_empty;
+    items_inspection_budget_t budget;
+} items_container_list_query_t;
+
+typedef struct items_container_inspection_t {
+    items_container_ref_t ref;
+    uint32_t container_id;
+    uint32_t capacity;
+    uint32_t entry_count;
+    uint32_t quarantined_count;
+    items_container_policy_t policy;
+    items_lifetime_t lifetime;
+} items_container_inspection_t;
+
+typedef struct items_entry_list_query_t {
+    uint32_t offset;
+    uint32_t slot_begin;
+    uint32_t slot_end;
+    const char *def_id;
+    int quarantined;
+    items_inspection_budget_t budget;
+} items_entry_list_query_t;
+
+typedef struct items_entry_inspection_t {
+    item_entry_ref_t ref;
+    items_entry_view_t view;
+} items_entry_inspection_t;
+
 bool items_runtime_rebuild(char *error, int error_cap);
 void items_reconcile(void);
 
@@ -171,5 +231,17 @@ bool items_entry_try_from_id(uint32_t entry_id, item_entry_ref_t *out_entry);
 uint32_t items_entry_id(item_entry_ref_t entry);
 items_container_ref_t items_entry_container(item_entry_ref_t entry);
 items_entry_view_t items_entry_view(item_entry_ref_t entry);
+
+items_inspection_result_t items_inspect_container_list(
+    const items_container_list_query_t *query,
+    items_container_inspection_t *rows,
+    uint32_t row_capacity,
+    items_inspection_page_t *out_page);
+items_inspection_result_t items_inspect_container_entries(
+    items_container_ref_t container,
+    const items_entry_list_query_t *query,
+    items_entry_inspection_t *rows,
+    uint32_t row_capacity,
+    items_inspection_page_t *out_page);
 
 #endif /* FEATURES_ITEMS_H */

@@ -1172,3 +1172,275 @@ items_entry_view_t items_entry_view(item_entry_ref_t ref) {
         .lifetime = ITEMS_LIFETIME_PERSISTENT,
     };
 }
+
+static bool inspection_budget_valid(
+    items_inspection_budget_t budget, uint32_t row_capacity,
+    items_inspection_result_t *out_error) {
+    if (budget.max_rows == 0 || budget.max_rows > ITEMS_INSPECTION_MAX_ROWS ||
+        budget.max_rows > row_capacity) {
+        *out_error = ITEMS_INSPECTION_ROW_LIMIT;
+        return false;
+    }
+    if (budget.max_bytes == 0 || budget.max_bytes > ITEMS_INSPECTION_MAX_BYTES) {
+        *out_error = ITEMS_INSPECTION_BYTE_LIMIT;
+        return false;
+    }
+    if (budget.max_context_rows == 0 ||
+        budget.max_context_rows > ITEMS_INSPECTION_MAX_CONTEXT_ROWS) {
+        *out_error = ITEMS_INSPECTION_CONTEXT_LIMIT;
+        return false;
+    }
+    return true;
+}
+
+static void inspect_container_counts(
+    uint32_t container_index, items_lifetime_t lifetime,
+    uint32_t *out_entries, uint32_t *out_quarantined) {
+    uint32_t entries = 0;
+    uint32_t quarantined = 0;
+    if (lifetime == ITEMS_LIFETIME_EPHEMERAL) {
+        for (uint32_t i = 0; i < ITEMS_EPHEMERAL_MAX_ENTRIES; i++) {
+            const ItemsItemEntry *entry = &s_ephemeral_entries[i];
+            if (!entry->used || entry->parent_index != (int)container_index) { continue; }
+            entries++;
+            if (entry->quarantined) { quarantined++; }
+        }
+    } else {
+        for (uint32_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS_ENTRIES; i++) {
+            const ItemsItemEntry *entry = &items_state.containers_entries[i];
+            if (!entry->used || entry->parent_index != (int)container_index) { continue; }
+            entries++;
+            if (entry->quarantined) { quarantined++; }
+        }
+    }
+    *out_entries = entries;
+    *out_quarantined = quarantined;
+}
+
+static bool inspection_container_matches(
+    const items_container_list_query_t *query,
+    items_container_policy_t policy, items_lifetime_t lifetime,
+    uint32_t entry_count) {
+    return (query->policy == ITEMS_INSPECTION_FILTER_ANY || query->policy == (int)policy) &&
+        (query->lifetime == ITEMS_INSPECTION_FILTER_ANY || query->lifetime == (int)lifetime) &&
+        (query->include_empty || entry_count > 0);
+}
+
+static items_inspection_result_t inspect_container_candidate(
+    const items_container_list_query_t *query,
+    items_container_ref_t ref, const ItemsItemContainer *container,
+    items_lifetime_t lifetime, uint32_t *matched,
+    items_container_inspection_t *rows, items_inspection_page_t *page) {
+    if (page->context_rows >= query->budget.max_context_rows) {
+        return ITEMS_INSPECTION_CONTEXT_LIMIT;
+    }
+    page->context_rows++;
+    uint32_t entries = 0;
+    uint32_t quarantined = 0;
+    uint32_t index = lifetime == ITEMS_LIFETIME_EPHEMERAL
+        ? ephemeral_index(ref.index) : ref.index;
+    inspect_container_counts(index, lifetime, &entries, &quarantined);
+    if (!inspection_container_matches(
+            query, (items_container_policy_t)container->policy, lifetime, entries)) {
+        return ITEMS_INSPECTION_OK;
+    }
+    if (*matched < query->offset) {
+        (*matched)++;
+        return ITEMS_INSPECTION_OK;
+    }
+    if (page->count >= query->budget.max_rows) {
+        page->has_more = true;
+        return ITEMS_INSPECTION_OK;
+    }
+    uint32_t bytes = (uint32_t)sizeof(items_container_inspection_t);
+    if (bytes > query->budget.max_bytes - page->projected_bytes) {
+        if (page->count == 0) { return ITEMS_INSPECTION_BYTE_LIMIT; }
+        page->has_more = true;
+        return ITEMS_INSPECTION_OK;
+    }
+    rows[page->count++] = (items_container_inspection_t){
+        .ref = ref,
+        .container_id = lifetime == ITEMS_LIFETIME_PERSISTENT
+            ? container->container_id : ITEMS_ID_NONE,
+        .capacity = container->capacity,
+        .entry_count = entries,
+        .quarantined_count = quarantined,
+        .policy = (items_container_policy_t)container->policy,
+        .lifetime = lifetime,
+    };
+    page->projected_bytes += bytes;
+    (*matched)++;
+    return ITEMS_INSPECTION_OK;
+}
+
+items_inspection_result_t items_inspect_container_list(
+    const items_container_list_query_t *query,
+    items_container_inspection_t *rows,
+    uint32_t row_capacity,
+    items_inspection_page_t *out_page) {
+    if (out_page != NULL) { memset(out_page, 0, sizeof(*out_page)); }
+    if (query == NULL || rows == NULL || out_page == NULL ||
+        (query->policy != ITEMS_INSPECTION_FILTER_ANY &&
+         (query->policy < ITEMS_CONTAINER_POLICY_GENERIC ||
+          query->policy > ITEMS_CONTAINER_POLICY_EQUIPMENT)) ||
+        (query->lifetime != ITEMS_INSPECTION_FILTER_ANY &&
+         query->lifetime != ITEMS_LIFETIME_PERSISTENT &&
+         query->lifetime != ITEMS_LIFETIME_EPHEMERAL)) {
+        return ITEMS_INSPECTION_BAD_QUERY;
+    }
+    items_inspection_result_t budget_error = ITEMS_INSPECTION_OK;
+    if (!inspection_budget_valid(query->budget, row_capacity, &budget_error)) {
+        return budget_error;
+    }
+    ensure_ready();
+
+    items_inspection_page_t page = {0};
+    uint32_t matched = 0;
+    if (query->lifetime == ITEMS_INSPECTION_FILTER_ANY ||
+        query->lifetime == ITEMS_LIFETIME_PERSISTENT) {
+        for (uint32_t i = 0; i < s_container_index_count; i++) {
+            uint32_t index = s_container_index[i].index;
+            items_inspection_result_t result = inspect_container_candidate(
+                query, container_ref(index), &items_state.containers[index],
+                ITEMS_LIFETIME_PERSISTENT, &matched, rows, &page);
+            if (result != ITEMS_INSPECTION_OK) { return result; }
+            if (page.has_more) {
+                page.next_offset = query->offset + page.count;
+                *out_page = page;
+                return ITEMS_INSPECTION_OK;
+            }
+        }
+    }
+    if (query->lifetime == ITEMS_INSPECTION_FILTER_ANY ||
+        query->lifetime == ITEMS_LIFETIME_EPHEMERAL) {
+        for (uint32_t i = 0; i < ITEMS_EPHEMERAL_MAX_CONTAINERS; i++) {
+            if (!s_ephemeral_containers[i].used) { continue; }
+            items_inspection_result_t result = inspect_container_candidate(
+                query, ephemeral_container_ref(i), &s_ephemeral_containers[i],
+                ITEMS_LIFETIME_EPHEMERAL, &matched, rows, &page);
+            if (result != ITEMS_INSPECTION_OK) { return result; }
+            if (page.has_more) {
+                page.next_offset = query->offset + page.count;
+                *out_page = page;
+                return ITEMS_INSPECTION_OK;
+            }
+        }
+    }
+    page.next_offset = query->offset + page.count;
+    *out_page = page;
+    return ITEMS_INSPECTION_OK;
+}
+
+static bool inspect_container_ref(
+    items_container_ref_t ref, const ItemsItemContainer **out_container,
+    uint32_t *out_index, items_lifetime_t *out_lifetime) {
+    ensure_ready();
+    if (ephemeral_ref(ref.index)) {
+        uint32_t index = ephemeral_index(ref.index);
+        if (index >= ITEMS_EPHEMERAL_MAX_CONTAINERS || ref.generation == 0 ||
+            s_ephemeral_container_generation[index] != ref.generation ||
+            !s_ephemeral_containers[index].used) {
+            return false;
+        }
+        *out_container = &s_ephemeral_containers[index];
+        *out_index = index;
+        *out_lifetime = ITEMS_LIFETIME_EPHEMERAL;
+        return true;
+    }
+    if (ref.index >= ITEMS_STATE_MAX_CONTAINERS || ref.generation == 0 ||
+        s_container_generation[ref.index] != ref.generation ||
+        !items_state.containers[ref.index].used) {
+        return false;
+    }
+    *out_container = &items_state.containers[ref.index];
+    *out_index = ref.index;
+    *out_lifetime = ITEMS_LIFETIME_PERSISTENT;
+    return true;
+}
+
+static bool entry_inspection_matches(
+    const items_entry_list_query_t *query, const ItemsItemEntry *entry) {
+    return (query->def_id == NULL || strcmp(query->def_id, entry->def_id) == 0) &&
+        (query->quarantined == ITEMS_INSPECTION_FILTER_ANY ||
+         query->quarantined == (entry->quarantined ? 1 : 0));
+}
+
+items_inspection_result_t items_inspect_container_entries(
+    items_container_ref_t container_ref_value,
+    const items_entry_list_query_t *query,
+    items_entry_inspection_t *rows,
+    uint32_t row_capacity,
+    items_inspection_page_t *out_page) {
+    if (out_page != NULL) { memset(out_page, 0, sizeof(*out_page)); }
+    if (query == NULL || rows == NULL || out_page == NULL ||
+        query->slot_end <= query->slot_begin ||
+        (query->quarantined != ITEMS_INSPECTION_FILTER_ANY &&
+         query->quarantined != 0 && query->quarantined != 1) ||
+        (query->def_id != NULL &&
+         (query->def_id[0] == '\0' || strlen(query->def_id) >= ITEMS_STATE_STRING_MAX))) {
+        return ITEMS_INSPECTION_BAD_QUERY;
+    }
+    items_inspection_result_t budget_error = ITEMS_INSPECTION_OK;
+    if (!inspection_budget_valid(query->budget, row_capacity, &budget_error)) {
+        return budget_error;
+    }
+    const ItemsItemContainer *container = NULL;
+    uint32_t container_index = 0;
+    items_lifetime_t lifetime = ITEMS_LIFETIME_PERSISTENT;
+    if (!inspect_container_ref(
+            container_ref_value, &container, &container_index, &lifetime)) {
+        return ITEMS_INSPECTION_NOT_FOUND;
+    }
+    if (query->slot_end > container->capacity) { return ITEMS_INSPECTION_BAD_QUERY; }
+
+    items_inspection_page_t page = {0};
+    uint32_t matched = 0;
+    for (uint32_t slot = query->slot_begin; slot < query->slot_end; slot++) {
+        if (page.context_rows >= query->budget.max_context_rows) {
+            return ITEMS_INSPECTION_CONTEXT_LIMIT;
+        }
+        page.context_rows++;
+        ItemsItemEntry *entry = lifetime == ITEMS_LIFETIME_EPHEMERAL
+            ? ephemeral_entry_at_slot(container_index, slot)
+            : entry_at_slot(container_index, slot);
+        if (entry == NULL || !entry_inspection_matches(query, entry)) { continue; }
+        if (matched < query->offset) {
+            matched++;
+            continue;
+        }
+        if (page.count >= query->budget.max_rows) {
+            page.has_more = true;
+            break;
+        }
+        size_t byte_size = sizeof(items_entry_inspection_t) + strlen(entry->def_id) + 1U;
+        if (byte_size > query->budget.max_bytes - page.projected_bytes) {
+            if (page.count == 0) { return ITEMS_INSPECTION_BYTE_LIMIT; }
+            page.has_more = true;
+            break;
+        }
+        uint32_t entry_index = lifetime == ITEMS_LIFETIME_EPHEMERAL
+            ? (uint32_t)(entry - s_ephemeral_entries)
+            : (uint32_t)(entry - items_state.containers_entries);
+        item_entry_ref_t ref = lifetime == ITEMS_LIFETIME_EPHEMERAL
+            ? ephemeral_entry_ref(entry_index) : entry_ref(entry_index);
+        rows[page.count++] = (items_entry_inspection_t){
+            .ref = ref,
+            .view = {
+                .entry_id = lifetime == ITEMS_LIFETIME_PERSISTENT
+                    ? entry->entry_id : ITEMS_ID_NONE,
+                .slot = entry->slot,
+                .def_id = entry->def_id,
+                .count = entry->count,
+                .level = entry->level,
+                .durability = entry->durability,
+                .quarantined = entry->quarantined,
+                .lifetime = lifetime,
+            },
+        };
+        page.projected_bytes += (uint32_t)byte_size;
+        matched++;
+    }
+    page.next_offset = query->offset + page.count;
+    *out_page = page;
+    return ITEMS_INSPECTION_OK;
+}

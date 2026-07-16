@@ -18,12 +18,14 @@ set(ITEMS_CORE_SCRIPTS "${ITEMS_CORE_DIR}/scripts")
 <game>/content/items.lock.json
 <game>/state/items.schema.json
 <game>/src/features/items/reason_tags.h
-<game>/src/features/items/items_bootstrap.c
+<game>/src/game_items.c
+<game>/src/game_items.h
 ```
 
 The manifest allowlists every Lua module. The lock is release compatibility
-history; the state schema owns save versioning and hooks. Reason verbs, initial
-grants, and game-specific migrations remain game code.
+history; the state schema owns save versioning and hooks. Reason verbs,
+game-created containers, owner references, initial grants, and game-specific
+migrations remain game code.
 
 ## Build-local catalog
 
@@ -70,7 +72,7 @@ target_sources(${GAME_TARGET} PRIVATE
     "${ITEMS_CORE_SRC}/items_runtime_resource.c"
     "${ITEMS_CORE_SRC}/items_containers.c"
     "${ITEMS_CORE_SRC}/items_reconcile.c"
-    src/features/items/items_bootstrap.c)
+    src/game_items.c)
 target_include_directories(${GAME_TARGET} PRIVATE
     "${ITEMS_CATALOG_BUILD_DIR}"
     "${ITEMS_CORE_INC}"
