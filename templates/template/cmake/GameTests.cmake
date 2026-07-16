@@ -392,6 +392,19 @@ if(NOT EMSCRIPTEN)
     set_target_properties(benchmark_items_runtime_blob PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmarks")
 
+    add_executable(benchmark_items_runtime_bind
+        "${ITEMS_CORE_DIR}/benchmarks/items_runtime_bind_benchmark.c"
+        "${ITEMS_CORE_SRC}/items_runtime_package.c")
+    add_dependencies(benchmark_items_runtime_bind items_catalog_gen)
+    target_link_libraries(benchmark_items_runtime_bind PRIVATE nt_hash nt_core nt_time)
+    target_include_directories(benchmark_items_runtime_bind PRIVATE
+        "${ITEMS_CORE_INC}" "${ITEMS_CATALOG_BUILD_DIR}")
+    target_compile_definitions(benchmark_items_runtime_bind PRIVATE
+        ITEMS_RUNTIME_PACKAGE_ENABLED=1 _CRT_SECURE_NO_WARNINGS)
+    nt_set_warning_flags(benchmark_items_runtime_bind)
+    set_target_properties(benchmark_items_runtime_bind PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmarks")
+
     function(configure_items_runtime_catalog_test target_name)
         add_dependencies(${target_name} items_catalog_gen)
         target_sources(${target_name} PRIVATE
@@ -588,7 +601,7 @@ if(NOT EMSCRIPTEN)
         test_game_events_typed test_game_event_render test_game_analytics
         test_game_events_log_mirror test_items_api_core_only
         test_items_api test_items_runtime_package test_items_runtime_resource test_items_fragment test_progression test_progression_curve
-        benchmark_items_c_arrays benchmark_items_runtime_blob
+        benchmark_items_c_arrays benchmark_items_runtime_blob benchmark_items_runtime_bind
         test_game_format test_platform_sdk test_platform_lifecycle
         test_platform_sdk_events test_template_composition)
     foreach(_test_target IN LISTS GAME_NATIVE_TEST_TARGETS)
