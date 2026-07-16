@@ -9,12 +9,19 @@
 // against templates/template.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, copyFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, copyFileSync, mkdirSync, readFileSync, rmSync, truncateSync } from "node:fs";
 import { inflateSync } from "node:zlib";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildIconPreview, parseIconRegionNames, parsePackBuffer, readPngDims } from "../icon_preview.mjs";
+import {
+  buildIconPreview,
+  ICON_LIMITS,
+  loadIconPage,
+  parseIconRegionNames,
+  parsePackBuffer,
+  readPngDims,
+} from "../icon_preview.mjs";
 
 const FIXTURE_DIR = fileURLToPath(new URL("./fixtures/icon_pack", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -41,15 +48,16 @@ function layoutFixture(dir, { preset = "native-debug", withPack = true, withPng 
 
 const ICON_NAMES = ["gold", "xp", "energy", "potion", "sword", "wood"];
 
-test("buildIconPreview: real two-atlas fixture resolves all 6 icons/* regions, ui/* never leaks in", (t) => {
+test("buildIconPreview: real two-atlas fixture resolves all 6 icons/* regions, ui/* never leaks in", async (t) => {
   const dir = tempFixtureDir(t);
   layoutFixture(dir);
 
-  const preview = buildIconPreview(dir);
+  const preview = await buildIconPreview(dir);
   assert.equal(preview.reason, undefined);
   assert.equal(preview.page_w, 512);
   assert.equal(preview.page_h, 256);
-  assert.ok(preview.page_data_uri.startsWith("data:image/png;base64,"));
+  assert.equal(preview.page_available, true);
+  assert.equal(Object.hasOwn(preview, "page_data_uri"), false);
 
   const keys = Object.keys(preview.regions).sort();
   assert.deepEqual(keys, ICON_NAMES.map((n) => `icons/${n}`).sort());
@@ -68,27 +76,27 @@ test("buildIconPreview: real two-atlas fixture resolves all 6 icons/* regions, u
   for (const key of keys) assert.ok(key.startsWith("icons/"), `${key} must not be a ui/* leak`);
 });
 
-test("buildIconPreview: no build at all -> reason distinguishes 'pack not built'", (t) => {
+test("buildIconPreview: no build at all -> reason distinguishes 'pack not built'", async (t) => {
   const dir = tempFixtureDir(t); // empty -- no build/, no src/generated/
-  const preview = buildIconPreview(dir);
-  assert.equal(preview.page_data_uri, null);
+  const preview = await buildIconPreview(dir);
+  assert.equal(preview.page_available, false);
   assert.deepEqual(preview.regions, {});
   assert.match(preview.reason, /pack not built/);
 });
 
-test("buildIconPreview: pack + header built but debug PNG missing -> a DISTINCT reason from 'pack not built'", (t) => {
+test("buildIconPreview: pack + header built but debug PNG missing -> a DISTINCT reason from 'pack not built'", async (t) => {
   const dir = tempFixtureDir(t);
   layoutFixture(dir, { withPng: false });
-  const preview = buildIconPreview(dir);
+  const preview = await buildIconPreview(dir);
   assert.deepEqual(preview.regions, {});
   assert.match(preview.reason, /page PNG missing/);
   assert.doesNotMatch(preview.reason, /pack not built/, "must not be conflated with the 'pack not built' reason");
 });
 
-test("buildIconPreview: devapi-debug preset resolves too when native-debug has no pack (preset order fallback)", (t) => {
+test("buildIconPreview: devapi-debug preset resolves too when native-debug has no pack (preset order fallback)", async (t) => {
   const dir = tempFixtureDir(t);
   layoutFixture(dir, { preset: "devapi-debug" });
-  const preview = buildIconPreview(dir);
+  const preview = await buildIconPreview(dir);
   assert.equal(preview.reason, undefined);
   assert.equal(Object.keys(preview.regions).length, 6);
 });
@@ -108,6 +116,21 @@ test("parsePackBuffer: bad magic is rejected, not silently parsed as garbage", (
   mutated.writeUInt32LE(0, 0); // corrupt NT_PACK_MAGIC
   const result = parsePackBuffer(mutated);
   assert.match(result.reason, /bad pack magic/);
+});
+
+test("icon preview rejects oversized files, section counts, and image dimensions", async (t) => {
+  const dir = tempFixtureDir(t);
+  layoutFixture(dir);
+  truncateSync(join(dir, "build", "native-debug", "pack", "game.ntpack"), ICON_LIMITS.maxPackBytes + 1);
+  assert.match((await buildIconPreview(dir)).reason, /pack file exceeds/);
+
+  const tableOverflow = Buffer.from(readFileSync(join(FIXTURE_DIR, "game.ntpack")));
+  tableOverflow.writeUInt16LE(0xffff, 10);
+  assert.match(parsePackBuffer(tableOverflow).reason, /asset count exceeds/);
+
+  const pngHeader = Buffer.from(readFileSync(join(FIXTURE_DIR, "icons_page0.png")).subarray(0, 24));
+  pngHeader.writeUInt32BE(ICON_LIMITS.maxImageDimension + 1, 16);
+  assert.throws(() => readPngDims(pngHeader), /dimensions exceed/);
 });
 
 test("parseIconRegionNames: BigInt hashes, icons/* only, ui/* filtered out of the SAME header text", () => {
@@ -130,7 +153,7 @@ test("readPngDims: matches the real fixture's known page size (512x256)", () => 
 // --- straight-alpha regression: the debug PNG must never be treated as
 // premultiplied (spec §5/§8's "previous version required un-premultiply — this
 // was a bug, fixed"). icon_preview.mjs performs NO pixel math at all -- proven
-// here by asserting the returned page_data_uri round-trips the fixture PNG
+// here by asserting the focused icon-page response round-trips the fixture PNG
 // byte-for-byte -- and the fixture itself carries at least one genuinely
 // semi-transparent (antialiased-edge) pixel inside a resolved icon's crop rect,
 // so "no processing happened" is a meaningful claim, not a vacuous one.
@@ -203,10 +226,10 @@ function decodePngRgba(buf) {
   return { width, height, pixels };
 }
 
-test("fixture sanity: the real icons page has at least one genuinely semi-transparent pixel inside a resolved crop rect", (t) => {
+test("fixture sanity: the real icons page has at least one genuinely semi-transparent pixel inside a resolved crop rect", async (t) => {
   const dir = tempFixtureDir(t);
   layoutFixture(dir);
-  const preview = buildIconPreview(dir);
+  const preview = await buildIconPreview(dir);
 
   const pngBuf = readFileSync(join(FIXTURE_DIR, "icons_page0.png"));
   const decoded = decodePngRgba(pngBuf);
@@ -227,13 +250,12 @@ test("fixture sanity: the real icons page has at least one genuinely semi-transp
   assert.ok(sawSemiTransparent, "expected at least one antialiased (partial-alpha) edge pixel across the 6 icon crops");
 });
 
-test("buildIconPreview: page_data_uri is a byte-exact passthrough of the source PNG -- no alpha/pixel processing happens server-side", (t) => {
+test("loadIconPage is a bounded byte-exact passthrough of the source PNG", async (t) => {
   const dir = tempFixtureDir(t);
   layoutFixture(dir);
-  const preview = buildIconPreview(dir);
+  const page = await loadIconPage(dir);
 
   const expected = readFileSync(join(FIXTURE_DIR, "icons_page0.png"));
-  const actualBase64 = preview.page_data_uri.slice("data:image/png;base64,".length);
-  const actual = Buffer.from(actualBase64, "base64");
-  assert.ok(expected.equals(actual), "page_data_uri must be the exact source PNG bytes -- any RGB/alpha transform here would risk un-premultiply burning (spec §5/§8)");
+  const actual = page.data;
+  assert.ok(expected.equals(actual), "served bytes must not apply RGB/alpha transforms");
 });

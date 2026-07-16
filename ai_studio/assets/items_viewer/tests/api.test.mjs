@@ -39,7 +39,11 @@ async function request(path, { method = "GET", body, headers = {} } = {}) {
     response,
     new URL(path, "http://studio.local"),
   );
-  return { handled, response, json: JSON.parse(response.body) };
+  const contentType = String(response.headers?.["content-type"] || "");
+  const json = contentType.startsWith("application/json")
+    ? JSON.parse(Buffer.isBuffer(response.body) ? response.body.toString("utf8") : response.body)
+    : null;
+  return { handled, response, json };
 }
 
 test("catalog request coordinator coalesces duplicates and enforces one active job", async () => {
@@ -84,6 +88,19 @@ test("focused item endpoint resolves only registered catalogs", async () => {
     "/api/items-viewer/item?catalog=template%3Aunknown&item=tmpl.sword",
   );
   assert.equal(missing.response.status, 404);
+});
+
+test("catalog JSON references a separately served bounded icon page", async () => {
+  const catalog = await request("/api/items-viewer/catalog?id=template%3Atemplate");
+  assert.equal(catalog.response.status, 200);
+  assert.equal(Object.hasOwn(catalog.json.icons, "page_data_uri"), false);
+  assert.equal(catalog.json.icons.page_url, "/api/items-viewer/icon-page?catalog=template%3Atemplate");
+
+  const page = await request(catalog.json.icons.page_url);
+  assert.equal(page.response.status, 200);
+  assert.equal(page.response.headers["content-type"], "image/png");
+  assert.ok(Buffer.isBuffer(page.response.body));
+  assert.ok(page.response.body.length > 24);
 });
 
 test("focused chart endpoint requires an explicit selected field", async () => {

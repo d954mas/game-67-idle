@@ -21,7 +21,7 @@ const state = {
   editMessage: "",
   editError: false,
   undoStack: [],
-  // T0316: the view.icons.page_data_uri, decoded ONCE per loadCatalog (before
+  // T0316: the bounded view.icons.page_url, decoded ONCE per loadCatalog (before
   // render()) so every row's canvas crop reads from the same already-decoded
   // <img> instead of each row re-decoding the same base64 PNG.
   iconsImage: null,
@@ -497,9 +497,9 @@ async function loadCatalog(id) {
     // One decode for the whole page, BEFORE render() (spec §5) — every row's
     // canvas crop below reads from this same decoded <img>, never re-fetches.
     let iconsImage = null;
-    if (view.icons && view.icons.page_data_uri) {
+    if (view.icons && view.icons.page_url) {
       const img = new Image();
-      img.src = view.icons.page_data_uri;
+      img.src = view.icons.page_url;
       try {
         await img.decode();
         if (!scopeIsCurrent(state, scope)) return;

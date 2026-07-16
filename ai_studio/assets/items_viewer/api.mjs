@@ -6,12 +6,14 @@
 // POST preview/apply delegates directly to the shared T0366 semantic CLI.
 //   GET /api/items-viewer/catalogs         -- the dropdown list
 //   GET /api/items-viewer/catalog?id=<id>  -- the whole view for one catalog
+//   GET /api/items-viewer/icon-page        -- bounded built atlas PNG
 //   GET /api/items-viewer/item             -- one selected Snapshot detail
 //   GET /api/items-viewer/chart            -- one selected generated series
 //   POST /api/items-viewer/edit             -- preview/apply one semantic patch
 import {
   editCatalogItem,
   getCatalogView,
+  getIconPage,
   getItemChart,
   getItemDetail,
   ItemEditInputError,
@@ -47,6 +49,15 @@ function boolQueryParam(value) {
 function sendJson(res, status, data) {
   res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   res.end(JSON.stringify(data));
+}
+
+function sendPng(res, data) {
+  res.writeHead(200, {
+    "content-type": "image/png",
+    "content-length": String(data.length),
+    "cache-control": "no-store",
+  });
+  res.end(data);
 }
 
 function headerValue(req, name) {
@@ -138,7 +149,36 @@ export function createItemsViewerApi(root, options = {}) {
           sendJson(res, 404, { error: "catalog not found" });
           return true;
         }
+        if (view.icons?.page_available) {
+          view.icons.page_url = `/api/items-viewer/icon-page?catalog=${encodeURIComponent(id)}`;
+        }
         sendJson(res, 200, view);
+        return true;
+      }
+
+      if (url.pathname === "/api/items-viewer/icon-page") {
+        if (req.method !== "GET") {
+          sendJson(res, 405, { error: "method not allowed" });
+          return true;
+        }
+        const catalogId = url.searchParams.get("catalog");
+        if (!catalogId) {
+          sendJson(res, 400, { error: "catalog is required" });
+          return true;
+        }
+        const page = await getIconPage(root, catalogId, {
+          includePrivate: boolQueryParam(url.searchParams.get("include-private"))
+            || boolQueryParam(url.searchParams.get("includePrivate")),
+        });
+        if (!page) {
+          sendJson(res, 404, { error: "catalog not found" });
+          return true;
+        }
+        if (page.reason) {
+          sendJson(res, 404, { error: page.reason });
+          return true;
+        }
+        sendPng(res, page.data);
         return true;
       }
 

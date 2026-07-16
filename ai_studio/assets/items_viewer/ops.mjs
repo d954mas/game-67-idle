@@ -9,7 +9,7 @@ import { join } from "node:path";
 import { listRegisteredTemplates } from "../sources/ops.mjs";
 import { listGameMounts } from "../../workspace/games.mjs";
 import { studioPythonPath } from "../../dev_environment/python.mjs";
-import { buildIconPreview } from "./icon_preview.mjs";
+import { buildIconPreview, loadIconPage } from "./icon_preview.mjs";
 
 // Production uses the configured Studio interpreter. `bin` is only a test seam for
 // exercising a real spawn failure.
@@ -287,7 +287,7 @@ export async function loadCatalogView(root, folderAbs, meta) {
       // Icon preview is independent of the catalog source (it reads the build
       // tree, not content/) — computed even for the empty state so the page
       // never has to special-case a missing view.icons.
-      icons: buildIconPreview(folderAbs),
+      icons: await buildIconPreview(folderAbs),
     };
   }
 
@@ -310,7 +310,7 @@ export async function loadCatalogView(root, folderAbs, meta) {
     validate: validateResult,
     // Pixel crops for the catalog's icon values, read
     // from the BUILT pack (not committed source) — sync, no subprocess.
-    icons: buildIconPreview(folderAbs),
+    icons: await buildIconPreview(folderAbs),
   };
   if (contentError) view.content_error = contentError;
   return view;
@@ -381,6 +381,12 @@ export async function getItemChart(root, catalogId, itemId, field, options = {})
   const entry = resolveCatalogEntry(root, catalogId, options);
   if (!entry) return null;
   return loadItemChart(root, join(root, entry.folder), itemId, field);
+}
+
+export async function getIconPage(root, catalogId, options = {}) {
+  const entry = resolveCatalogEntry(root, catalogId, options);
+  if (!entry) return null;
+  return loadIconPage(join(root, entry.folder));
 }
 
 export async function editCatalogItem(root, catalogId, edit, editOptions = {}, catalogOptions = {}) {

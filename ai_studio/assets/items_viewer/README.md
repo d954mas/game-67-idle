@@ -47,6 +47,8 @@ surface does not display a catalog container table.
 - `GET /api/items-viewer/catalogs` lists registered catalogs. Private games
   require `?include-private=true` and still pass workspace privacy checks.
 - `GET /api/items-viewer/catalog?id=<kind>:<id>` returns one complete view.
+- `GET /api/items-viewer/icon-page?catalog=<kind>:<id>` serves the bounded built
+  atlas PNG referenced by catalog metadata; catalog JSON never embeds base64.
 - `GET /api/items-viewer/item?catalog=<kind>:<id>&item=<def_id>` returns one
   bounded `detail` result from one evaluator process.
 - `GET /api/items-viewer/chart?catalog=<kind>:<id>&item=<def_id>&field=<member>`
@@ -76,11 +78,13 @@ compatible; the Viewer does not duplicate those rules.
 
 ## Icon preview
 
-`icon_preview.mjs` reads a built `game.ntpack`, the generated asset header, and
-the icons atlas debug PNG. It version-checks the pack/atlas formats, preserves
-64-bit hashes as `BigInt`, and degrades to a reason when build artifacts are
-missing. The page decodes the atlas image once and crops every item icon from
-that shared image.
+`icon_preview.mjs` asynchronously reads capped built `game.ntpack` and generated
+header inputs, then reads only the PNG header for catalog metadata. It caps file,
+asset, atlas, page, region, vertex, image-dimension, and pixel counts before
+using offsets. The focused icon-page route separately serves the capped PNG.
+The parser preserves 64-bit hashes as `BigInt` and degrades to a reason when
+build artifacts are missing. The browser decodes the shared atlas image once
+and crops every item icon from it.
 
 The preferred long-term replacement is a native Studio adapter over the
 engine's public atlas reader; the current JS binary reader stays isolated in
