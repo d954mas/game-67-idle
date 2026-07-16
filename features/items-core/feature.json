@@ -61,7 +61,7 @@
     "items.snapshot.chart.v1 JSON",
     "items.snapshot.requirements.v1 JSON",
     "items.snapshot.diff.v1 JSON",
-    "items/catalog compact runtime package v1",
+    "items/catalog compact runtime package v2",
     "items_catalog_abi.gen.h"
   ],
   "registers": {

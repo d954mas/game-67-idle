@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Encode a normalized Items Snapshot as the compact runtime package v1."""
+"""Encode a normalized Items Snapshot as the compact runtime package v2."""
 
 from __future__ import annotations
 
@@ -18,11 +18,11 @@ from items_snapshot import ITEM_KEYS as SNAPSHOT_ITEM_KEYS
 
 
 SNAPSHOT_SCHEMA = "items.snapshot.v1"
-INSPECT_SCHEMA = "items.runtime.package.inspect.v1"
+INSPECT_SCHEMA = "items.runtime.package.inspect.v2"
 MAGIC = b"NTITEMS\0"
-FORMAT_VERSION = 1
+FORMAT_VERSION = 2
 HEADER = struct.Struct("<8sIIIIQQ" + "III" * 6 + "32s")
-ITEM = struct.Struct("<QIIIIIIIIII")
+ITEM = struct.Struct("<QIIIIIIIIIIq")
 FIELD = struct.Struct("<QIIIIqqII")
 LEVEL = struct.Struct("<IIIIIIII")
 VALUE = struct.Struct("<IIIIq")
@@ -41,6 +41,7 @@ I64_MAX = (1 << 63) - 1
 CONTENT_FINGERPRINT_OFFSET = 32
 LEVEL_FREE = 1
 ITEM_ACQUIRE_FREE = 1
+ITEM_HAS_CURRENCY = 2
 
 
 class PackageFailure(ValueError):
@@ -93,9 +94,12 @@ def _schema_descriptor(fields: list[dict[str, Any]], item_ids: list[str]) -> byt
             for key in ("id", "member", "section", "type", "required_for", "min", "max", "rounding", "unit")
         })
     descriptor = {
-        "accessor_abi": 3,
+        "accessor_abi": 4,
         "format_version": FORMAT_VERSION,
-        "item_flags": {"acquire_free": ITEM_ACQUIRE_FREE},
+        "item_flags": {
+            "acquire_free": ITEM_ACQUIRE_FREE,
+            "has_currency": ITEM_HAS_CURRENCY,
+        },
         "sections": [
             {"name": name, "stride": stride}
             for name, stride in zip(SECTION_NAMES, SECTION_STRIDES)
@@ -494,6 +498,16 @@ def build_package(
         if storage_code < 0:
             _fail("package.runtime_metadata", f"item {item_id} has invalid storage")
         stack = _u32(item.get("stack"), "package.stack")
+        currency = item.get("currency")
+        currency_cap = 0
+        item_flags = 0
+        if currency is not None:
+            if (not isinstance(currency, dict) or set(currency) != {"hud", "cap"}
+                    or type(currency.get("cap")) is not int or currency["cap"] < 0
+                    or currency["cap"] > I64_MAX or item.get("kind") != "currency"):
+                _fail("package.currency", f"item {item_id} has invalid currency block")
+            currency_cap = currency["cap"]
+            item_flags |= ITEM_HAS_CURRENCY
 
         levels = item.get("levels")
         raw_rows = [] if levels is None else levels.get("rows") if isinstance(levels, dict) else None
@@ -544,7 +558,7 @@ def build_package(
         item_rows.append((
             xxh64(item_id.encode("utf-8")), string_offsets[item_id], string_offsets[item["kind"]],
             storage_code, stack, level_start, len(raw_rows), acquire_start, len(acquire_values),
-            ITEM_ACQUIRE_FREE if acquire_free else 0, 0,
+            item_flags | (ITEM_ACQUIRE_FREE if acquire_free else 0), 0, currency_cap,
         ))
 
     for count, limit, code in (
@@ -649,10 +663,12 @@ def inspect_package(package: bytes) -> dict[str, Any]:
     for index in range(item_section["count"]):
         row = ITEM.unpack_from(package, item_section["offset"] + index * ITEM.size)
         item_id = text(row[1])
-        text(row[2])
+        kind = text(row[2])
         if (xxh64(item_id.encode("utf-8")) != row[0] or row[0] in item_hashes
                 or row[3] not in (0, 1) or (row[3] == 1) != (row[4] == 1)
-                or row[9] & ~ITEM_ACQUIRE_FREE or row[10] != 0
+                or row[9] & ~(ITEM_ACQUIRE_FREE | ITEM_HAS_CURRENCY) or row[10] != 0
+                or row[11] < 0 or (not row[9] & ITEM_HAS_CURRENCY and row[11] != 0)
+                or (row[9] & ITEM_HAS_CURRENCY and kind != "currency")
                 or (row[9] & ITEM_ACQUIRE_FREE and row[8])):
             _fail("package.item", "item row is invalid")
         item_hashes.add(row[0])
@@ -706,6 +722,7 @@ def inspect_package(package: bytes) -> dict[str, Any]:
             "stack": row[4], "level_count": level_count,
             "acquire_costs": costs[acquire_start:acquire_start + acquire_count],
             **({"acquire_free": True} if row[9] & ITEM_ACQUIRE_FREE else {}),
+            **({"currency": {"cap": row[11]}} if row[9] & ITEM_HAS_CURRENCY else {}),
         })
         for expected_level in range(1, level_count + 1):
             level_row = raw_levels[level_cursor]

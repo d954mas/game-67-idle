@@ -127,7 +127,13 @@ void test_resigned_identity_utf8_range_and_size_corruption_are_rejected(void) {
     TEST_ASSERT_EQUAL(ITEMS_CATALOG_BIND_ABI_MISMATCH, error);
 
     memcpy(copy, s_fixture, s_fixture_size);
-    copy[item_section + 40U] = 2U;
+    copy[item_section + 40U] = 4U;
+    resign(copy, s_fixture_size);
+    TEST_ASSERT_FALSE(items_catalog_try_bind(copy, s_fixture_size, &error));
+    TEST_ASSERT_EQUAL(ITEMS_CATALOG_BIND_BAD_LAYOUT, error);
+
+    memcpy(copy, s_fixture, s_fixture_size);
+    write_le64(copy + item_section + 48U, UINT64_MAX);
     resign(copy, s_fixture_size);
     TEST_ASSERT_FALSE(items_catalog_try_bind(copy, s_fixture_size, &error));
     TEST_ASSERT_EQUAL(ITEMS_CATALOG_BIND_BAD_LAYOUT, error);
@@ -136,6 +142,12 @@ void test_resigned_identity_utf8_range_and_size_corruption_are_rejected(void) {
     uint32_t kind_offset = find_bytes(copy, s_fixture_size, "currency");
     TEST_ASSERT_NOT_EQUAL(UINT32_MAX, kind_offset);
     copy[kind_offset] = 0xFFU;
+    resign(copy, s_fixture_size);
+    TEST_ASSERT_FALSE(items_catalog_try_bind(copy, s_fixture_size, &error));
+    TEST_ASSERT_EQUAL(ITEMS_CATALOG_BIND_BAD_LAYOUT, error);
+
+    memcpy(copy, s_fixture, s_fixture_size);
+    memcpy(copy + kind_offset, "material", 8U);
     resign(copy, s_fixture_size);
     TEST_ASSERT_FALSE(items_catalog_try_bind(copy, s_fixture_size, &error));
     TEST_ASSERT_EQUAL(ITEMS_CATALOG_BIND_BAD_LAYOUT, error);
@@ -165,6 +177,7 @@ void test_bound_catalog_exposes_typed_base_api(void) {
     TEST_ASSERT_FALSE(items_try_get(ITEM_GAME_GOLD, NULL));
 
     item_def_ref_t sword = items_get(ITEM_GAME_SWORD);
+    item_def_ref_t gold = items_get(ITEM_GAME_GOLD);
     item_def_ref_t string_ref = {UINT32_MAX};
     TEST_ASSERT_TRUE(items_try_get_string("game.sword", &string_ref));
     TEST_ASSERT_EQUAL_UINT32(sword._index, string_ref._index);
@@ -174,6 +187,9 @@ void test_bound_catalog_exposes_typed_base_api(void) {
     item_core_t core = items_core(sword);
     TEST_ASSERT_EQUAL_UINT64(ITEM_GAME_SWORD.value, core.id.value);
     TEST_ASSERT_EQUAL_INT64(1, core.stack);
+    TEST_ASSERT_TRUE(items_has_currency(gold));
+    TEST_ASSERT_FALSE(items_has_currency(sword));
+    TEST_ASSERT_EQUAL_INT64(100, items_currency_cap(gold));
 
     item_transition_t acquire = items_acquire_transition(sword);
     TEST_ASSERT_EQUAL(ITEM_TRANSITION_COST, acquire.kind);

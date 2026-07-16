@@ -94,6 +94,8 @@ bool items_catalog_is_bound(void);
 uint32_t items_catalog_item_count(void);
 uint64_t items_catalog_schema_abi(void);
 uint64_t items_catalog_content_fingerprint(void);
+bool items_has_currency(item_def_ref_t ref);
+int64_t items_currency_cap(item_def_ref_t ref); /* 0 = unlimited; asserts unless currency */
 #endif
 
 #if defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED

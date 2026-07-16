@@ -48,6 +48,7 @@ def evaluation() -> dict:
         "items": [
             {
                 "id": "game.gold", "kind": "currency", "stack": 0,
+                "currency": {"hud": "counter", "cap": 100},
                 "authoring_mode": "none", "acquire": {"cost": {"__studio_kind": "free"}},
             },
             {
@@ -93,11 +94,11 @@ class ItemsRuntimePackageTests(unittest.TestCase):
         self.assertEqual(first, second)
 
         inspected = PACKAGE.inspect_package(first)
-        self.assertEqual(inspected["schema"], "items.runtime.package.inspect.v1")
+        self.assertEqual(inspected["schema"], "items.runtime.package.inspect.v2")
         self.assertEqual(inspected["snapshot_content_hash"], snapshot["content_hash"])
         self.assertEqual(inspected["sections"], {
             "strings": {"count": 77, "stride": 1},
-            "items": {"count": 2, "stride": 48},
+            "items": {"count": 2, "stride": 56},
             "fields": {"count": 1, "stride": 48},
             "levels": {"count": 3, "stride": 32},
             "values": {"count": 3, "stride": 24},
@@ -107,6 +108,7 @@ class ItemsRuntimePackageTests(unittest.TestCase):
             {
                 "id": "game.gold", "kind": "currency", "storage": "stack",
                 "stack": 0, "level_count": 0, "acquire_costs": [], "acquire_free": True,
+                "currency": {"cap": 100},
             },
             {
                 "id": "game.sword", "kind": "weapon", "storage": "unique",
@@ -162,6 +164,11 @@ class ItemsRuntimePackageTests(unittest.TestCase):
                 with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.cost_count"):
                     PACKAGE.build_package(invalid_cost)
 
+        invalid_currency = self.snapshot()
+        invalid_currency["items"][0]["kind"] = "material"
+        with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.currency"):
+            PACKAGE.build_package(invalid_currency)
+
     def test_inspector_rejects_noncanonical_ownership_and_field_metadata(self):
         original = PACKAGE.build_package(self.snapshot())
         header = PACKAGE.HEADER.unpack_from(original)
@@ -194,7 +201,7 @@ class ItemsRuntimePackageTests(unittest.TestCase):
 
         invalid_item_flag = bytearray(original)
         gold = list(PACKAGE.ITEM.unpack_from(invalid_item_flag, item_offset))
-        gold[9] = 2
+        gold[9] = 4
         PACKAGE.ITEM.pack_into(invalid_item_flag, item_offset, *gold)
         with self.assertRaisesRegex(PACKAGE.PackageFailure, "package.item"):
             PACKAGE.inspect_package(self.resign(invalid_item_flag))

@@ -12,6 +12,7 @@
 #define ITEMS_SECTION_COUNT UINT32_C(6)
 #define ITEMS_LEVEL_FREE UINT32_C(1)
 #define ITEMS_ITEM_ACQUIRE_FREE UINT32_C(1)
+#define ITEMS_ITEM_HAS_CURRENCY UINT32_C(2)
 #define ITEMS_COST_LEVEL_FLAG UINT32_C(0x80000000)
 
 typedef enum items_section_index_t {
@@ -136,7 +137,7 @@ static items_catalog_bind_error_t validate_package(
     uint64_t *out_schema_abi, uint64_t *out_content_fingerprint,
     items_section_t out_sections[ITEMS_SECTION_COUNT]) {
     static const uint8_t magic[8] = {'N', 'T', 'I', 'T', 'E', 'M', 'S', 0};
-    static const uint32_t strides[ITEMS_SECTION_COUNT] = {1U, 48U, 48U, 32U, 24U, 16U};
+    static const uint32_t strides[ITEMS_SECTION_COUNT] = {1U, 56U, 48U, 32U, 24U, 16U};
     if (size < ITEMS_HEADER_SIZE || read_u32(bytes + 12U) != ITEMS_HEADER_SIZE
             || read_u32(bytes + 16U) != size || read_u32(bytes + 20U) != 0U) {
         return ITEMS_CATALOG_BIND_BAD_HEADER;
@@ -221,9 +222,12 @@ static items_catalog_bind_error_t validate_package(
         uint32_t flags = read_u32(row + 40U);
         if (id == NULL || kind == NULL || nt_hash64(id, (uint32_t)strlen(id)).value != read_u64(row)
                 || storage > 1U || ((storage == 1U) != (stack == 1U))
-                || (flags & ~ITEMS_ITEM_ACQUIRE_FREE) != 0U
+                || (flags & ~(ITEMS_ITEM_ACQUIRE_FREE | ITEMS_ITEM_HAS_CURRENCY)) != 0U
                 || ((flags & ITEMS_ITEM_ACQUIRE_FREE) != 0U && read_u32(row + 36U) != 0U)
                 || read_u32(row + 44U) != 0U
+                || read_i64(row + 48U) < 0
+                || ((flags & ITEMS_ITEM_HAS_CURRENCY) == 0U && read_i64(row + 48U) != 0)
+                || ((flags & ITEMS_ITEM_HAS_CURRENCY) != 0U && strcmp(kind, "currency") != 0)
                 || (previous_name != NULL && strcmp(previous_name, id) >= 0)) {
             return ITEMS_CATALOG_BIND_BAD_LAYOUT;
         }
@@ -495,6 +499,19 @@ item_core_t items_core(item_def_ref_t ref) {
     const uint8_t *item = catalog_row(ITEMS_SECTION_ITEMS, ref._index);
     item_core_t core = {{read_u64(item)}, (int64_t)read_u32(item + 20U)};
     return core;
+}
+
+bool items_has_currency(item_def_ref_t ref) {
+    if (s_catalog == NULL || ref._index >= s_item_count) {
+        return false;
+    }
+    return (read_u32(catalog_row(ITEMS_SECTION_ITEMS, ref._index) + 40U)
+        & ITEMS_ITEM_HAS_CURRENCY) != 0U;
+}
+
+int64_t items_currency_cap(item_def_ref_t ref) {
+    NT_ASSERT(items_has_currency(ref) && "items_currency_cap: item has no currency block");
+    return read_i64(catalog_row(ITEMS_SECTION_ITEMS, ref._index) + 48U);
 }
 
 item_transition_t items_acquire_transition(item_def_ref_t ref) {
