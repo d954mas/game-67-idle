@@ -525,6 +525,30 @@ class ItemsCliTests(unittest.TestCase):
                 },
             )
 
+    def test_project_capture_canonicalizes_equivalent_root_spelling(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            shutil.copytree(PROJECT, project)
+            project_alias = project / "game" / ".."
+
+            captured = CLI._capture_project_inputs(
+                project_alias,
+                project_alias / "items.lua.json",
+                project_alias / "content" / "items.lock.json",
+                project_alias / "state" / "items.schema.json",
+            )
+
+            self.assertEqual(
+                {path.relative_to(project.resolve()).as_posix() for path in captured},
+                {
+                    "items.lua.json",
+                    "game/items.lua",
+                    "game/other.lua",
+                    "content/items.lock.json",
+                    "state/items.schema.json",
+                },
+            )
+
     def test_project_writer_uses_unique_fsynced_atomic_replacement(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

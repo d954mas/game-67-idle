@@ -64,15 +64,20 @@ def _project_paths(root_value: str, manifest_value: str) -> tuple[Path, Path]:
     return root, manifest
 
 
-def _project_file(root: Path, value: str, code: str) -> Path:
-    path = (root / value).resolve()
+def _resolved_project_file(root: Path, path: Path, code: str, display: str) -> Path:
+    root = root.resolve()
+    path = path.resolve()
     try:
         path.relative_to(root)
     except ValueError as error:
-        raise CliFailure(code, f"path must stay inside project root: {value}") from error
+        raise CliFailure(code, f"path must stay inside project root: {display}") from error
     if not path.is_file():
         raise CliFailure(code, f"file not found: {path}")
     return path
+
+
+def _project_file(root: Path, value: str, code: str) -> Path:
+    return _resolved_project_file(root, root / value, code, value)
 
 
 def _evaluate(root: Path, manifest: Path) -> dict[str, Any]:
@@ -131,6 +136,16 @@ def _load_json_bytes(data: bytes, path: Path, code: str) -> dict[str, Any]:
 def _capture_project_inputs(
     root: Path, manifest_path: Path, baseline_path: Path, state_path: Path,
 ) -> dict[Path, bytes]:
+    root = root.resolve()
+    manifest_path = _resolved_project_file(
+        root, manifest_path, "cli.manifest", str(manifest_path),
+    )
+    baseline_path = _resolved_project_file(
+        root, baseline_path, "cli.baseline", str(baseline_path),
+    )
+    state_path = _resolved_project_file(
+        root, state_path, "cli.state_schema", str(state_path),
+    )
     manifest_bytes = manifest_path.read_bytes()
     manifest = _load_json_bytes(manifest_bytes, manifest_path, "cli.manifest")
     modules = manifest.get("modules")
