@@ -255,6 +255,7 @@ def render_abi_header(snapshot: dict[str, Any]) -> str:
         f"#define ITEMS_CATALOG_SCHEMA_ABI UINT64_C(0x{xxh64(_schema_descriptor(sorted_fields, item_ids)):016X})",
         f"#define ITEMS_CATALOG_ITEM_COUNT UINT32_C({len(sorted_items)})",
         f"#define ITEMS_CATALOG_FIELD_COUNT UINT32_C({len(sorted_fields)})",
+        f"#define ITEMS_CATALOG_CAPABILITY_COUNT UINT32_C({len(capability_fields)})",
         "",
     ]
     for item_id, macro, digest in item_records:
@@ -288,11 +289,13 @@ def render_abi_header(snapshot: dict[str, Any]) -> str:
         "#if defined(ITEMS_RUNTIME_PACKAGE_IMPLEMENTATION)",
         '#include "core/nt_assert.h"',
         "",
+        "#if ITEMS_CATALOG_CAPABILITY_COUNT > 0U",
         "static bool items_catalog_internal_is_kind(item_def_ref_t ref, const char *kind);",
         "static uint32_t items_catalog_internal_level_count(item_def_ref_t ref);",
         "static bool items_catalog_internal_level_exists(item_def_ref_t ref, uint32_t level);",
         "static int64_t items_catalog_internal_level_i64(item_def_ref_t ref, uint32_t level, uint32_t field_index);",
         "static item_transition_t items_catalog_internal_level_transition(item_def_ref_t ref, uint32_t level);",
+        "#endif",
         "",
         "typedef struct items_catalog_expected_field_t {",
         "    const char *id;",

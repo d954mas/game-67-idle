@@ -53,6 +53,12 @@ add_custom_target(items_catalog_gen DEPENDS
     "${ITEMS_CATALOG_SNAPSHOT}"
     "${ITEMS_CATALOG_PACKAGE}"
     "${ITEMS_CATALOG_ABI_HEADER}")
+add_dependencies(${GAME_TARGET} items_catalog_gen)
+target_sources(${GAME_TARGET} PRIVATE
+    "${ITEMS_CORE_SRC}/items_runtime_package.c"
+    "${ITEMS_CORE_SRC}/items_runtime_resource.c")
+target_include_directories(${GAME_TARGET} PRIVATE "${ITEMS_CATALOG_BUILD_DIR}")
+target_compile_definitions(${GAME_TARGET} PRIVATE ITEMS_RUNTIME_PACKAGE_ENABLED=1)
 
 # И2a: items CONTENT codegen (SECOND codegen, deliberately separate from the
 # game-state generator below). Compile-time const

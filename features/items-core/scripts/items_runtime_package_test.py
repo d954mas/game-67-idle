@@ -243,11 +243,22 @@ class ItemsRuntimePackageTests(unittest.TestCase):
         })
         self.assertNotEqual(PACKAGE.render_abi_header(added), header)
         self.assertIn("ITEMS_CATALOG_SCHEMA_ABI", header)
+        self.assertIn("ITEMS_CATALOG_CAPABILITY_COUNT UINT32_C(1)", header)
         self.assertIn("ITEM_GAME_GOLD", header)
         self.assertIn("ITEM_FIELD_GAME_WEAPON_LEVEL_ATTACK", header)
         self.assertIn("ITEMS_GAME_HAS_WEAPON", header)
         self.assertIn("item_weapon_level_t", header)
         self.assertIn("items_weapon_level", header)
+
+        core_only = copy.deepcopy(snapshot)
+        core_only["fields"] = []
+        core_header = PACKAGE.render_abi_header(core_only)
+        self.assertIn("ITEMS_CATALOG_CAPABILITY_COUNT UINT32_C(0)", core_header)
+        self.assertIn(
+            "#if ITEMS_CATALOG_CAPABILITY_COUNT > 0U\n"
+            "static bool items_catalog_internal_is_kind",
+            core_header,
+        )
 
         keyword = copy.deepcopy(snapshot)
         keyword["fields"][0]["member"] = "int"

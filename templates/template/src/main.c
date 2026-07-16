@@ -41,6 +41,7 @@
 #endif
 
 #include "features/game_features.h"
+#include "features/items/items.h"
 #include "features/platform_sdk/platform_sdk.h"
 #include "features/platform_sdk/platform_sdk_events.h"
 #include "features/settings/settings.h"
@@ -89,6 +90,7 @@ static nt_font_t s_font;
 static nt_resource_t s_text_vs, s_text_fs, s_font_resource;
 static nt_resource_t s_mesh_vs, s_mesh_fs, s_cube;
 static nt_resource_t s_tex_vs, s_tex_fs, s_uv_texture;
+static nt_resource_t s_items_catalog_resource;
 static World s_world;
 static char s_capture_path[260];
 static bool s_capture;
@@ -98,6 +100,9 @@ static bool s_disable_autosave;
 static int s_window_width = 1280;
 static int s_window_height = 720;
 static int s_frame_count;
+static bool s_game_runtime_initialized;
+static bool s_game_runtime_ready;
+static bool s_game_runtime_failed;
 
 #if NT_DEVAPI_ENABLED
 static bool s_devapi_requested;
@@ -254,6 +259,96 @@ static void devapi_shutdown_runtime(void) {}
 #endif
 #endif
 
+static void game_runtime_fail(const char *message, int detail) {
+    fprintf(stderr, "%s (%d)\n", message, detail);
+    s_game_runtime_failed = true;
+    nt_app_quit();
+}
+
+static void game_runtime_load_state(void) {
+    if (!s_fresh_state) {
+        game_save_load_result_t load_result;
+        game_save_load(&load_result);
+        if (load_result.status == GAME_SAVE_LOAD_CORRUPT_RESET) {
+            /* load already did reset()+quarantine but NOT on_new_game; this is
+               the single on_new_game call on the corrupt-save path. */
+            char save_err[128];
+            (void)game_save_new_game(save_err, (int)sizeof save_err);
+        }
+        return;
+    }
+
+    /* --fresh-state skips load. Seed deterministic reset defaults only; Items
+       deliberately does not run the normal new-game grant in this mode. */
+    settings_state_fragment.reset();
+    items_state_fragment.reset();
+    progression_state_fragment.reset();
+    game_state_fragment.reset();
+}
+
+static void game_runtime_try_start(void) {
+    if (s_game_runtime_ready || s_game_runtime_failed) {
+        return;
+    }
+
+    const nt_pack_state_t pack_state = nt_resource_pack_state(s_pack_id);
+    if (pack_state == NT_PACK_STATE_FAILED) {
+        game_runtime_fail("items catalog pack failed to load", (int)pack_state);
+        return;
+    }
+    if (!nt_resource_is_ready(s_items_catalog_resource)) {
+        if (pack_state == NT_PACK_STATE_READY) {
+            game_runtime_fail("items/catalog is missing or not a ready blob", (int)pack_state);
+        }
+        return;
+    }
+
+    items_catalog_bind_error_t bind_error = ITEMS_CATALOG_BIND_OK;
+    if (!items_catalog_try_bind_resource(rid("items/catalog").value, &bind_error)) {
+        game_runtime_fail("items catalog bind failed", (int)bind_error);
+        return;
+    }
+
+    /* Catalog binding is the startup barrier: save reconciliation and every
+       feature that can query Items run only after this point. */
+    game_runtime_load_state();
+    game_features_init(&s_world);
+    platform_lifecycle_init();
+    s_game_runtime_initialized = true;
+
+    if (!devapi_start()) {
+        game_runtime_fail("failed to start game runtime DevAPI", 0);
+        return;
+    }
+    if (s_open_settings_on_start) {
+        settings_open();
+    }
+    s_game_runtime_ready = true;
+}
+
+static void game_runtime_update(void) {
+    if (!s_game_runtime_ready) {
+        game_event_frame_reset();
+        return;
+    }
+
+    s_world.time_seconds += g_nt_app.dt;
+    /* Apply deferred new-game requests before feature updates and rendering. */
+    (void)game_save_apply_pending_new_game();
+
+    game_features_update(&s_world, g_nt_app.dt);
+    game_events_react_begin();
+    do {
+        game_features_react(&s_world);
+    } while (game_events_react_progressed());
+    game_events_set_phase(GAME_EVENT_PHASE_RECORD);
+    game_features_record(&s_world);
+    if (!s_disable_autosave) {
+        game_save_tick();
+    }
+    game_event_frame_reset();
+}
+
 // The frame loop: poll, advance the world, render. Calls subsystems only.
 static void frame(void) {
     const double frame_begin = nt_time_now();
@@ -270,27 +365,12 @@ static void frame(void) {
 #endif
     nt_resource_step();
     nt_material_step();
-    const bool playable_shell_ready = render_mesh_ready(&s_world) && ui_runtime_ready();
+    game_runtime_try_start();
+    const bool playable_shell_ready =
+        s_game_runtime_ready && render_mesh_ready(&s_world) && ui_runtime_ready();
     (void)platform_sdk_game_loading_progress(initial_pack_loading_progress());
     platform_lifecycle_update(playable_shell_ready, !settings_is_open());
-    s_world.time_seconds += g_nt_app.dt;
-
-    // Р11 «Hold to reset progress» (settings_screen.c): apply a deferred new-game
-    // request, if any, at the very start of update -- safe EMIT phase, before any GPU
-    // render pass this frame (see game_save_apply_pending_new_game's doc comment).
-    (void)game_save_apply_pending_new_game();
-
-    // ---- feature two-phase event frame: react to quiescence, then record ----
-    game_features_update(&s_world, g_nt_app.dt);   // emit phase (sys_move moved in); phase=EMIT default
-    game_events_react_begin();                     // fixpoint baseline = count after update
-    do {
-        game_features_react(&s_world);             // reactors (may cascade-emit)
-    } while (game_events_react_progressed());       // fixpoint under generation cap
-    game_events_set_phase(GAME_EVENT_PHASE_RECORD);
-    game_features_record(&s_world);                // recorders (E3/E4 fill; empty now)
-    // Autosave: after the RECORD phase (the anchor at the old sys_move site).
-    if (!s_disable_autosave) { game_save_tick(); }
-    game_event_frame_reset();                       // close the event frame (poison in debug); phase->EMIT
+    game_runtime_update();
 
     nt_gfx_begin_frame();
     if (g_nt_gfx.context_restored) {
@@ -312,12 +392,16 @@ static void frame(void) {
     render_mesh_draw(&s_world, s_frame_ubo);
     hud_draw(s_text_material, s_font_resource, s_font, s_frame_ubo);
     // UI-слой фич: агрегатор владеет ui_runtime-кадром и рисует settings (z-order).
-    game_features_draw_ui(&s_world);
+    if (s_game_runtime_ready) {
+        game_features_draw_ui(&s_world);
+    }
     nt_gfx_end_pass();
 
     // --capture: after a few frames (resources loaded + rendered), grab + quit.
-    s_frame_count += 1;
-    if (s_capture && s_frame_count >= 10) {
+    if (s_game_runtime_ready) {
+        s_frame_count += 1;
+    }
+    if (s_capture && s_game_runtime_ready && s_frame_count >= 10) {
         capture_write_ppm(s_capture_path);
         nt_app_quit();
     }
@@ -442,25 +526,6 @@ int main(int argc, char **argv) {
     game_save_register_fragment(&progression_state_fragment); /* L2 depends on items: register after items */
     game_save_register_fragment(&game_state_fragment);     /* `game` last (most dependent) */
     game_save_init();
-    if (!s_fresh_state) {
-        game_save_load_result_t load_result;
-        game_save_load(&load_result);
-        if (load_result.status == GAME_SAVE_LOAD_CORRUPT_RESET) {
-            /* load already did reset()+quarantine but NOT on_new_game (Р10); new_game() is the
-               single on_new_game on this path and also resumes autosave. */
-            char save_err[128];
-            (void)game_save_new_game(save_err, (int)sizeof save_err);
-        }
-        /* NEWER/RECOVERED_BAK: a game may show a toast (advisory); autosave is already
-           paused on NEWER, and RECOVERED_BAK has already rewritten the primary. */
-    } else {
-        /* --fresh-state skips load; the static instances are 0-init, so seed real
-           defaults through both generated descriptors. */
-        settings_state_fragment.reset();
-        items_state_fragment.reset(); /* --fresh-state: deliberately reset-only, no on_new_game bootstrap */
-        progression_state_fragment.reset(); /* И3a: no hooks -- reset() alone is the correct fresh state (empty tracks) */
-        game_state_fragment.reset();
-    }
 #ifdef NT_PLATFORM_WEB
     game_save_install_web_flush();
 #endif
@@ -469,6 +534,7 @@ int main(int argc, char **argv) {
     nt_resource_mount(s_pack_id, 100);
     nt_resource_load_auto(s_pack_id, GAME_ASSET_PACK_PATH);
     nt_resource_set_activate_time_budget(0);
+    s_items_catalog_resource = nt_resource_request(rid("items/catalog"), NT_ASSET_BLOB);
 
     s_text_vs = nt_resource_request(rid("assets/shaders/slug_text.vert"), NT_ASSET_SHADER_CODE);
     s_text_fs = nt_resource_request(rid("assets/shaders/slug_text.frag"), NT_ASSET_SHADER_CODE);
@@ -512,24 +578,16 @@ int main(int argc, char **argv) {
 
     // engine UI stack (sprite renderer + slice9 atlas + nt_ui ctx); reuses the font + text material
     ui_runtime_init(s_text_material, s_font, s_font_resource);
-    game_features_init(&s_world); // world is constructed and spawned by this point
-    platform_lifecycle_init();
-
-    if (!devapi_start()) {
-        return 1;
-    }
-
-    if (s_open_settings_on_start) {
-        settings_open();
-    }
 
     g_nt_app.target_dt = 1.0F / 60.0F;
     nt_app_run(frame);
 
 #ifndef NT_PLATFORM_WEB
     devapi_shutdown_runtime();
-    game_features_shutdown(&s_world);
-    platform_lifecycle_shutdown();
+    if (s_game_runtime_initialized) {
+        game_features_shutdown(&s_world);
+        platform_lifecycle_shutdown();
+    }
     ui_runtime_shutdown();
 #if FEATURE_GAME_ANALYTICS
     game_analytics_shutdown(); // E4: final flush + close (before event infra teardown)
@@ -541,6 +599,7 @@ int main(int argc, char **argv) {
     nt_font_shutdown();
     nt_material_destroy(s_text_material);
     nt_material_shutdown();
+    items_catalog_shutdown();
     nt_resource_shutdown();
     nt_fs_shutdown();
     nt_http_shutdown();

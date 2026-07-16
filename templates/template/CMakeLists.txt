@@ -59,8 +59,6 @@ add_executable(${GAME_TARGET}
     src/render/capture.c
     src/systems/sys_move.c
     src/features/settings/settings_screen.c
-    "${ITEMS_CORE_SRC}/items_catalog.c"        # И2a: catalog-lookup over the codegen tables below (T0337 M1: in-place module)
-    "${GAME_SOURCE_GENERATED_DIR}/items_catalog.gen.c" # И2a: const item/container tables (content codegen)
     "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c" # И3a: const progression track/curve tables (content codegen)
     src/game_format.c                                # И3b: L0 int64-abbrev formatter
     "${PLATFORM_SDK_SRC}/platform_sdk.c"             # T0339: target/sdk identity + policy capabilities

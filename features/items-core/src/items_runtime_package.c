@@ -400,6 +400,7 @@ static const char *catalog_item_string(uint32_t item_index, uint32_t row_offset)
     return value;
 }
 
+#if ITEMS_CATALOG_CAPABILITY_COUNT > 0U
 static uint32_t catalog_level_index(item_def_ref_t ref, uint32_t level) {
     const uint8_t *item = catalog_row(ITEMS_SECTION_ITEMS, ref._index);
     uint32_t level_count = read_u32(item + 28U);
@@ -454,6 +455,7 @@ static item_transition_t items_catalog_internal_level_transition(
     return (item_transition_t){
         ITEM_TRANSITION_COST, {ITEMS_COST_LEVEL_FLAG | (level_index + 1U)}};
 }
+#endif
 
 bool items_try_get(item_id_t id, item_def_ref_t *out) {
     NT_ASSERT(s_catalog != NULL && s_catalog_size >= ITEMS_HEADER_SIZE);
