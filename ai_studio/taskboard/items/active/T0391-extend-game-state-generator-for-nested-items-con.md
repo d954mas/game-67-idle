@@ -1,13 +1,13 @@
 ---
 id: T0391
 title: Extend Game State generator for nested Items container state
-status: backlog
+status: doing
 project: P001
 epic: E019
 priority: P1
 tags: [game-state, generator, items, serialization]
 created: 2026-07-10
-updated: 2026-07-14
+updated: 2026-07-16
 ---
 
 ## What
@@ -44,6 +44,16 @@ collections, flat bounded C pools, and nested JSON/DevAPI projection.
 - Keep this extension narrowly bounded to the first proven nested aggregate;
   do not introduce arbitrary recursive schemas or heap-backed collections.
 
+## Plan
+
+1. Add exact `u32` schema/codegen/JSON-helper support with focused RED tests.
+2. Add one bounded schema-v2 `list<Object>` aggregate shape with separate top-
+   level and nested pools; reject deeper recursion and unsupported shapes.
+3. Project the pools as nested JSON in schema-declared primitive `order_by`
+   order and parse into staged state under explicit collection budgets.
+4. Prove the complete T0390 schema as a generator fixture, then run generator,
+   native round-trip, template-build, and changed-domain verification.
+
 ## Log
 
 - 2026-07-14: Moved to E019 as the first runtime-v2 prerequisite. It no longer
@@ -52,3 +62,7 @@ collections, flat bounded C pools, and nested JSON/DevAPI projection.
 - 2026-07-10: Created after review proved the current generator supports neither
   `u32` nor nested object collections. This is a prerequisite for T0390, not an
   optional cleanup.
+- 2026-07-16: Plan review ACCEPT. Keep the extension to exact `u32` plus a
+  depth-two `list<Object>` aggregate; preserve existing map/list behavior and
+  reject arbitrary recursion, heap storage, numeric field IDs, and Items domain
+  invariants in the generator.

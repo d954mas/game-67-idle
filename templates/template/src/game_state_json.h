@@ -30,6 +30,9 @@ bool gsj_read_bool(const cJSON *obj, const char *name, bool *out,
 bool gsj_read_int_range(const cJSON *obj, const char *name,
                         int min_value, int max_value, int *out,
                         char *error, int error_cap);
+bool gsj_read_u32(const cJSON *obj, const char *name,
+                  uint32_t min_value, uint32_t max_value, uint32_t *out,
+                  char *error, int error_cap);
 bool gsj_read_float_range(const cJSON *obj, const char *name,
                           float min_value, float max_value, float *out,
                           char *error, int error_cap);
@@ -45,6 +48,9 @@ bool gsj_read_enum(const cJSON *obj, const char *name,
 /* Парсеры одного узла (для элементов map/list). */
 bool gsj_parse_int_value(const cJSON *item, int min_value, int max_value,
                          int *out, char *error, int error_cap);
+bool gsj_parse_u32_value(const cJSON *item,
+                         uint32_t min_value, uint32_t max_value, uint32_t *out,
+                         char *error, int error_cap);
 bool gsj_parse_enum_value(const cJSON *item, const char *const *names,
                           int count, int *out, char *error, int error_cap);
 

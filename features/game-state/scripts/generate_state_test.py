@@ -152,6 +152,40 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn("state->world_visited_location_ids_count = 1;", text)
         self.assertNotIn("hero_hp_max", text)
 
+    def test_u32_generates_exact_numeric_wire(self):
+        schema = {
+            "schema": "ids.state",
+            "schema_version": 2,
+            "fragment": "ids",
+            "version": 1,
+            "string_max": 32,
+            "enums": {},
+            "types": {
+                "Record": {
+                    "kind": "object",
+                    "fields": {
+                        "entry_id": {"type": "u32", "default": 1, "min": 1, "max": 4294967294},
+                    },
+                },
+            },
+            "fields": {
+                "last_id": {"type": "u32", "default": 0, "min": 0, "max": 4294967294},
+                "records": {"type": "map<string,Record>", "max_count": 4},
+            },
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            schema_path = Path(tmp) / "ids.schema.json"
+            schema_path.write_text(json.dumps(schema), encoding="utf-8")
+            text = generate_and_join(schema_path, Path(tmp) / "generated", "ids_state", "ids")
+
+        self.assertIn("uint32_t last_id;", text)
+        self.assertIn("uint32_t entry_id;", text)
+        self.assertIn("UINT32_C(4294967294)", text)
+        self.assertIn("gsj_read_u32", text)
+        self.assertIn("gsj_parse_u32_value", text)
+        self.assertIn('cJSON_AddNumberToObject(root, "last_id", (double)state->last_id);', text)
+        self.assertNotIn('gsj_add_i64(root, "last_id"', text)
+
     # ------------------------------------------------------------------ golden
 
     def _assert_golden(self, schema_path: Path, prefix: str, fragment: str, golden_sub: str):
@@ -324,6 +358,17 @@ class StateCodegenTests(unittest.TestCase):
     def test_reject_i64_max_beyond_int64(self):
         with self.assertRaises(SystemExit):
             self._write_and_load(self._base(fields={"big": {"type": "i64", "default": 0, "min": 0, "max": 2**63}}))
+
+    def test_reject_u32_bounds_and_default(self):
+        bad_specs = (
+            {"type": "u32", "default": 0, "min": -1, "max": 9},
+            {"type": "u32", "default": 0, "min": 0, "max": 2**32},
+            {"type": "u32", "default": 10, "min": 0, "max": 9},
+            {"type": "u32", "default": False, "min": 0, "max": 9},
+        )
+        for spec in bad_specs:
+            with self.subTest(spec=spec), self.assertRaises(SystemExit):
+                self._write_and_load(self._base(fields={"id": spec}))
 
     def test_reject_reserved_name_reused(self):
         with self.assertRaises(SystemExit):

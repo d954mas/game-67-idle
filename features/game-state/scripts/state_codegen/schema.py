@@ -9,9 +9,10 @@ from .naming import c_ident
 
 INT64_MIN = -(2**63)
 INT64_MAX = 2**63 - 1
+UINT32_MAX = 2**32 - 1
 FRAGMENT_RE = re.compile(r"[a-z_][a-z0-9_]*")
 C_IDENT_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-SCALAR_TYPES = {"bool", "int", "i64", "float", "string", "string?", "enum"}
+SCALAR_TYPES = {"bool", "int", "u32", "i64", "float", "string", "string?", "enum"}
 EVENT_NAME_RE = re.compile(r"[a-z][a-z0-9_]*")
 EVENT_FIELD_TYPES = {"bool", "int", "i64", "float", "string", "hash", "bytes"}
 EVENT_RESERVED_FIELDS = {"type", "seq", "tick"}
@@ -287,6 +288,14 @@ def validate_field_shape(
             for key in ("default", "min", "max"):
                 if key not in field:
                     raise SystemExit(f"{path} must declare {key}")
+        if typ == "u32":
+            for key in ("default", "min", "max"):
+                if not isinstance(field.get(key), int) or isinstance(field.get(key), bool):
+                    raise SystemExit(f"{path} u32 {key} must be an integer")
+            if not (0 <= field["min"] <= field["max"] <= UINT32_MAX):
+                raise SystemExit(f"{path} u32 min/max must fit uint32 with min <= max")
+            if not (field["min"] <= field["default"] <= field["max"]):
+                raise SystemExit(f"{path} u32 default must be within [min, max]")
         if typ == "i64":
             for key in ("default", "min", "max"):
                 if key not in field:

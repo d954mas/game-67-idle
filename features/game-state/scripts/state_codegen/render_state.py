@@ -22,6 +22,8 @@ class StateRenderer:
             return "bool"
         if typ == "int":
             return "int"
+        if typ == "u32":
+            return "uint32_t"
         if typ == "i64":
             return "int64_t"
         if typ == "float":
@@ -56,6 +58,12 @@ class StateRenderer:
         if not isinstance(value, int) or isinstance(value, bool):
             raise SystemExit(f"expected i64 integer value, got {value!r}")
         return f"{value}LL"
+
+
+    def c_u32(self, value: Any) -> str:
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise SystemExit(f"expected u32 integer value, got {value!r}")
+        return f"UINT32_C({value})"
 
 
     def c_string(self, value: Any) -> str:
@@ -164,6 +172,10 @@ class StateRenderer:
                 lines.append(f"#define {self.ns.macro}{name}_DEFAULT {self.c_int(field['default'])}")
                 lines.append(f"#define {self.ns.macro}{name}_MIN {self.c_int(field['min'])}")
                 lines.append(f"#define {self.ns.macro}{name}_MAX {self.c_int(field['max'])}")
+            elif typ == "u32":
+                lines.append(f"#define {self.ns.macro}{name}_DEFAULT {self.c_u32(field['default'])}")
+                lines.append(f"#define {self.ns.macro}{name}_MIN {self.c_u32(field['min'])}")
+                lines.append(f"#define {self.ns.macro}{name}_MAX {self.c_u32(field['max'])}")
             elif typ == "i64":
                 lines.append(f"#define {self.ns.macro}{name}_DEFAULT {self.c_i64(field['default'])}")
                 lines.append(f"#define {self.ns.macro}{name}_MIN {self.c_i64(field['min'])}")
@@ -309,7 +321,7 @@ extern const GameSaveFragment {self.ns.frag};
         if typ == "enum":
             _, count_macro = self.enum_table(field)
             condition = f"{target}->{ident} < 0 || {target}->{ident} >= {count_macro}"
-        elif typ in {"int", "float", "i64"}:
+        elif typ in {"int", "u32", "float", "i64"}:
             condition = f"{target}->{ident} < {macro}_MIN || {target}->{ident} > {macro}_MAX"
         elif typ == "string":
             condition = f"{target}->{ident}[0] == '\\0'"
@@ -337,6 +349,8 @@ extern const GameSaveFragment {self.ns.frag};
             return [f'    cJSON_AddStringToObject({target}, "{key}", {self.ns.fn}{ename}_name({state_expr}->{ident}));']
         if typ == "int":
             return [f'    cJSON_AddNumberToObject({target}, "{key}", {state_expr}->{ident});']
+        if typ == "u32":
+            return [f'    cJSON_AddNumberToObject({target}, "{key}", (double){state_expr}->{ident});']
         if typ == "i64":
             return [f'    gsj_add_i64({target}, "{key}", {state_expr}->{ident});']
         if typ == "float":
@@ -364,6 +378,8 @@ extern const GameSaveFragment {self.ns.frag};
             return f"cJSON_CreateString({self.ns.fn}{ename}_name({state_expr}->{ident}))"
         if typ == "int":
             return f"cJSON_CreateNumber({state_expr}->{ident})"
+        if typ == "u32":
+            return f"cJSON_CreateNumber((double){state_expr}->{ident})"
         if typ == "i64":
             # Compound literal lives until the end of the full return expression;
             # gsj_i64_to_string fills it and cJSON_CreateString copies immediately.
@@ -412,6 +428,11 @@ extern const GameSaveFragment {self.ns.frag};
                 "        int parsed = 0;",
                 f"        if (!gsj_parse_int_value(value, {macro}_MIN, {macro}_MAX, &parsed, error, error_cap)) {{ return false; }}",
                 f"        {state_expr}->{ident} = parsed;",
+                "        return true;",
+            ]
+        elif typ == "u32":
+            body = [
+                f"        if (!gsj_parse_u32_value(value, {macro}_MIN, {macro}_MAX, &{state_expr}->{ident}, error, error_cap)) {{ return false; }}",
                 "        return true;",
             ]
         elif typ == "i64":
@@ -463,6 +484,8 @@ extern const GameSaveFragment {self.ns.frag};
             call = f'gsj_read_enum({source}, "{key}", {names_table}, {count_macro}, &{target}->{ident}, error, error_cap)'
         elif typ == "int":
             call = f'gsj_read_int_range({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
+        elif typ == "u32":
+            call = f'gsj_read_u32({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
         elif typ == "i64":
             call = f'gsj_read_i64({source}, "{key}", {macro}_MIN, {macro}_MAX, &{target}->{ident}, error, error_cap)'
         elif typ == "float":
