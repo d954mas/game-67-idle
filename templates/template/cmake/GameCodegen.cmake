@@ -188,11 +188,11 @@ add_custom_command(
 target_sources(${GAME_TARGET} PRIVATE
     "${GAME_STATE_GENERATED_SOURCE}"          # includes game_state_fragment descriptor
     "${GAME_STATE_GENERATED_EVENTS_SOURCE}"   # typed event structs/emit/descriptors
+    src/game_items.c                           # game-owned container refs and seeding
     "${SETTINGS_STATE_GENERATED_SOURCE}"      # generated settings fragment state
     src/features/settings/settings.c          # hand-written settings logic
     "${ITEMS_STATE_GENERATED_SOURCE}"         # generated items fragment state
     "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"  # non-empty items.txn event
-    src/features/items/items_bootstrap.c       # game-owned on_new_game hook
     "${ITEMS_CORE_SRC}/items_reconcile.c"    # T0337 M1: reconcile/seq-reseed split out of items_bootstrap.c (in-place module)
     "${ITEMS_CORE_SRC}/items_containers.c"   # И2b: ownership/containers/purse (add/remove/move/count/can_afford; T0337 M1: in-place module)
     "${PROGRESSION_STATE_GENERATED_SOURCE}"        # generated progression fragment state

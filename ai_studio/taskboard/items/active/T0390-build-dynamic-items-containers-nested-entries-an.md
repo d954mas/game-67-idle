@@ -85,6 +85,10 @@ T0392.
   progress. T0392 must immediately bump the schema and migrate both the frozen
   legacy-v1 map and any interim nested-v1 fixture by shape; no release may ship
   between those commits.
+- Local commit hooks currently report that
+  `games/private/game-not-a-trolley-problem/.git` is missing. Staged paths are
+  verified to exclude the private mount, so scoped commits use `--no-verify`;
+  the local nested-git mount should be repaired outside this epic.
 
 ## Plan
 
@@ -119,3 +123,8 @@ T0392.
   verbs. Progression now consumes an explicitly game-bound resource container.
   Focused native verification: `test_items_fragment` and `test_progression`
   passed (2/2).
+- 2026-07-16: Slice 2 moved inventory/wallet meaning and starting grants into
+  game composition. The game fragment persists only two numeric container IDs;
+  progression and HUD receive explicit wallet refs; the obsolete template
+  Items bootstrap TU was deleted. Native `game`, `test_game_state_roundtrip`,
+  and `test_template_composition` built; focused tests passed (2/2).

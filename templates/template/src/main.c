@@ -65,6 +65,7 @@
 #include "world/world.h"
 #include "game_save.h"
 #include "game_state.h"
+#include "game_items.h"
 #include "game_state_events.gen.h" /* E2: game_ev_register (typed event labels) */
 #include "platform_lifecycle.h"
 #include "settings_state.h"        /* A6: SettingsState + settings_state_fragment (NOT the events header) */
@@ -278,12 +279,13 @@ static void game_runtime_load_state(void) {
         return;
     }
 
-    /* --fresh-state skips load. Seed deterministic reset defaults only; Items
-       deliberately does not run the normal new-game grant in this mode. */
+    /* --fresh-state skips load and grants, but still creates required game-owned
+       containers so every runtime consumer has valid explicit ownership. */
     settings_state_fragment.reset();
     items_state_fragment.reset();
     progression_state_fragment.reset();
     game_state_fragment.reset();
+    game_items_create_defaults(false);
 }
 
 static void game_runtime_try_start(void) {

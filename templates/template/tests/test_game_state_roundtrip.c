@@ -2,6 +2,10 @@
 
 #include "game_state.h"
 
+/* This pure generated-state target does not link game composition hooks. */
+void game_on_new_game(void) {}
+void game_reconcile(void) {}
+
 #include <stdint.h>
 #include <string.h>
 

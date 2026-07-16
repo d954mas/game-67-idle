@@ -7,12 +7,13 @@
 #include "features/resource_panel/resource_panel.h"
 #include "features/items/items.h"
 #include "features/progression/progression.h"
+#include "game_items.h"
 
 #include "app/nt_app.h" /* dt для idle-аккумулятора */
 
 static int64_t get_gold(void *ud) {
     (void)ud;
-    return items_purse("tmpl.gold");
+    return items_stack_count(game_wallet_container(), "tmpl.gold");
 }
 static int64_t get_hero_xp(void *ud) {
     (void)ud;
@@ -41,7 +42,9 @@ void demo_hud_update(float dt) {
     if (s_xp_accum >= 1.0F) {
         int64_t whole = (int64_t)s_xp_accum;
         s_xp_accum -= (float)whole;
-        items_add("purse", "tmpl.xp", whole, "loot:demo_idle");
+        (void)items_try_stack_add(
+            game_wallet_container(), "tmpl.xp", whole, ITEMS_SLOT_AUTO,
+            "loot:demo_idle", NULL, NULL);
     }
 }
 

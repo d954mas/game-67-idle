@@ -21,6 +21,7 @@
 #include "features/items/items.h"
 #include "features/progression/progression.h"
 #include "game_events.h"
+#include "game_items.h"
 #include "unity.h"
 /* clang-format on */
 
@@ -38,6 +39,14 @@ static int64_t g_mono_ms;
 static int64_t g_wall_ms;
 static int64_t test_mono(void) { return g_mono_ms; }
 static int64_t test_wall(void) { return g_wall_ms; }
+
+static bool add_stack(
+    items_container_ref_t container, const char *def_id,
+    int64_t count, const char *reason) {
+    return items_try_stack_add(
+               container, def_id, count, ITEMS_SLOT_AUTO,
+               reason, NULL, NULL) == ITEMS_RESULT_OK;
+}
 
 static void remove_slot_files(void) {
     (void)remove(PRIMARY_PATH);
@@ -78,8 +87,8 @@ void test_new_game_seeds_across_all_fragments(void) {
     char err[128] = {0};
     TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
 
-    TEST_ASSERT_EQUAL_INT64(50, items_count("purse", "tmpl.gold"));
-    TEST_ASSERT_EQUAL_INT64(1, items_count("backpack", "tmpl.potion"));
+    TEST_ASSERT_EQUAL_INT64(50, items_stack_count(game_wallet_container(), "tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(1, items_stack_count(game_inventory_container(), "tmpl.potion"));
     TEST_ASSERT_EQUAL_INT(0, progression_level("hero")); /* empty tracks = lazy */
     TEST_ASSERT_TRUE(fabsf(settings_master() - 0.8f) < COMPOSITION_TEST_FLOAT_EPS);
 }
@@ -94,9 +103,9 @@ void test_cross_fragment_save_load_roundtrip(void) {
     char err[128] = {0};
     TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err)); /* baseline: 50 gold */
 
-    TEST_ASSERT_TRUE(items_add("purse", "tmpl.gold", 25, "cheat:rt")); /* gold -> 75; "cheat" is items' closed reason-verb (reason_tags.h), not free text */
+    TEST_ASSERT_TRUE(add_stack(game_wallet_container(), "tmpl.gold", 25, "cheat:rt"));
     const int64_t need = progression_xp_needed("hero"); /* curve-agnostic (T5 curve edits safe) */
-    TEST_ASSERT_TRUE(items_add("purse", "tmpl.xp", need, "cheat:rt"));
+    TEST_ASSERT_TRUE(add_stack(game_wallet_container(), "tmpl.xp", need, "cheat:rt"));
     progression_update(); /* auto-mode consumes xp -> level 1 */
     TEST_ASSERT_EQUAL_INT(1, progression_level("hero"));
     settings_set_master(0.30f);
@@ -110,14 +119,15 @@ void test_cross_fragment_save_load_roundtrip(void) {
     progression_state_fragment.reset();
     game_state_fragment.reset();
 
-    TEST_ASSERT_EQUAL_INT64(0, items_count("purse", "tmpl.gold"));
+    TEST_ASSERT_EQUAL_UINT32(0, game_state.wallet_container_id);
+    TEST_ASSERT_EQUAL_UINT32(0, game_state.inventory_container_id);
     TEST_ASSERT_EQUAL_INT(0, progression_level("hero"));
     TEST_ASSERT_TRUE(fabsf(settings_master() - 0.8f) < COMPOSITION_TEST_FLOAT_EPS); /* reset default */
 
     TEST_ASSERT_TRUE(game_save_import_string(snap, err, (int)sizeof err));
     free(snap);
 
-    TEST_ASSERT_EQUAL_INT64(75, items_count("purse", "tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(75, items_stack_count(game_wallet_container(), "tmpl.gold"));
     TEST_ASSERT_EQUAL_INT(1, progression_level("hero"));
     TEST_ASSERT_TRUE(fabsf(settings_master() - 0.30f) < COMPOSITION_TEST_FLOAT_EPS);
 }
@@ -129,15 +139,15 @@ void test_hold_to_reset_preserves_settings(void) {
     char err[128] = {0};
     TEST_ASSERT_TRUE(game_save_new_game(err, (int)sizeof err));
     settings_set_master(0.30f);
-    TEST_ASSERT_TRUE(items_add("purse", "tmpl.gold", 999, "cheat:test")); /* "cheat" is items' closed reason-verb */
+    TEST_ASSERT_TRUE(add_stack(game_wallet_container(), "tmpl.gold", 999, "cheat:test"));
     progression_set_level("hero", 3, "test:prologue"); /* deterministic, no xp economics */
 
     game_save_request_new_game("settings");
     TEST_ASSERT_TRUE(game_save_apply_pending_new_game());
 
     TEST_ASSERT_TRUE(fabsf(settings_master() - 0.30f) < COMPOSITION_TEST_FLOAT_EPS); /* skipped fragment survived (crown invariant) */
-    TEST_ASSERT_EQUAL_INT64(50, items_count("purse", "tmpl.gold"));  /* reset + on_new_game re-seeded */
-    TEST_ASSERT_EQUAL_INT64(1, items_count("backpack", "tmpl.potion"));
+    TEST_ASSERT_EQUAL_INT64(50, items_stack_count(game_wallet_container(), "tmpl.gold"));
+    TEST_ASSERT_EQUAL_INT64(1, items_stack_count(game_inventory_container(), "tmpl.potion"));
     TEST_ASSERT_EQUAL_INT(0, progression_level("hero")); /* reset, no hook -> empty tracks */
 }
 

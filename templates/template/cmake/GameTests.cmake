@@ -456,7 +456,6 @@ if(NOT EMSCRIPTEN)
         tests/test_items_fragment.c
         "${ITEMS_STATE_GENERATED_SOURCE}"
         "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
-        src/features/items/items_bootstrap.c
         "${ITEMS_CORE_SRC}/items_reconcile.c"
         "${ITEMS_CORE_SRC}/items_containers.c"
         src/game_state_json.c
@@ -495,7 +494,6 @@ if(NOT EMSCRIPTEN)
         "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"           # progression_state_events.gen.c
         "${ITEMS_CORE_SRC}/items_containers.c"                    # items runtime (progression spends/reads purse; T0337 M1: in-place module)
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
-        src/features/items/items_bootstrap.c                     # items on_new_game (link completeness)
         "${ITEMS_CORE_SRC}/items_reconcile.c"                     # items reconcile (T0337 M1 split, link completeness)
         src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c")
     add_dependencies(test_progression progression_tracks_gen)   # H2: guarantees progression_tracks.gen.h before progression.c compiles
@@ -596,11 +594,11 @@ if(NOT EMSCRIPTEN)
     # GAME_SAVE_TESTING injects clocks & avoids nt_time (precedent test_game_save).
     add_executable(test_template_composition
         tests/test_template_composition.c
+        src/game_items.c
         src/game_save.c src/game_storage.c src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c"
         "${GAME_STATE_GENERATED_SOURCE}" "${GAME_STATE_GENERATED_EVENTS_SOURCE}"
         "${SETTINGS_STATE_GENERATED_SOURCE}" src/features/settings/settings.c
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
-        src/features/items/items_bootstrap.c
         "${ITEMS_CORE_SRC}/items_reconcile.c" "${ITEMS_CORE_SRC}/items_containers.c"
         "${PROGRESSION_STATE_GENERATED_SOURCE}" "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"
         "${PROGRESSION_CORE_SRC}/progression.c"
