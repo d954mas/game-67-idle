@@ -1,8 +1,10 @@
-# Items Viewer
+# Items Workbench
 
-Read-only Studio surface for a registered template or game Items catalog. It
-shows bounded Snapshot summaries, release-receipt status, validation issues,
-and built icon previews. Definition editing belongs to T0316.
+Studio surface for a registered template or game Items catalog. The current
+read-only Workbench slice shows a compact master table plus bounded Snapshot
+detail, level/cost/provenance rows, selected-series charts, release state,
+diagnostics, dependencies, checked source locations, and built icon previews.
+Semantic editing is added by later T0316 slices over the same CLI operations.
 
 ## Boundary
 
@@ -14,9 +16,11 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_cli.py --project-root <game> validate
 ```
 
-`list` supplies explicit card metadata without level tables or acquire
-transitions. `validate` supplies Snapshot/requirements/release-receipt
-diagnostics. The Viewer adapts those bounded results to its HTTP shape; it
+`list` supplies compact master rows and `validate` supplies
+Snapshot/requirements/release-receipt diagnostics. A selected item composes
+the existing bounded `inspect`, `schema`, `source`, and `dependencies` results;
+one selected chart field invokes `chart` lazily. The Workbench adapts those
+results to HTTP without a second evaluator or browser-side Items model; it
 never reads `items.json`, the old field schema, or the legacy op-layer, and it
 does not invent a second schema for rendering.
 
@@ -27,8 +31,9 @@ surface does not display a catalog container table.
 
 - `ops.mjs` resolves registered catalogs, invokes the semantic CLI, projects
   release status, and attaches built icon previews.
-- `api.mjs` exposes the read-only HTTP routes.
-- `site/` renders the view with bare ESM and no build step.
+- `api.mjs` exposes the focused HTTP routes.
+- `site/` renders the responsive master/detail view with bare ESM and no build
+  step.
 - `tests/` covers the Lua route, private mount visibility, receipt status,
   invalid-source degradation, icon pack parsing, and tool failures.
 
@@ -37,6 +42,10 @@ surface does not display a catalog container table.
 - `GET /api/items-viewer/catalogs` lists registered catalogs. Private games
   require `?include-private=true` and still pass workspace privacy checks.
 - `GET /api/items-viewer/catalog?id=<kind>:<id>` returns one complete view.
+- `GET /api/items-viewer/item?catalog=<kind>:<id>&item=<def_id>` returns one
+  bounded inspect/schema/source/dependency detail.
+- `GET /api/items-viewer/chart?catalog=<kind>:<id>&item=<def_id>&field=<member>`
+  returns only the selected generated numeric series.
 
 A folder with no `items.lua.json` is a valid empty state. Invalid Lua or a
 Snapshot failure returns a top-level `content_error` with no JSON fallback.
@@ -71,6 +80,6 @@ this module.
 ## Verify
 
 ```powershell
-node --test ai_studio/assets/items_viewer/tests/
+node --test ai_studio/assets/items_viewer/tests/api.test.mjs ai_studio/assets/items_viewer/tests/icon_preview.test.mjs ai_studio/assets/items_viewer/tests/ops.test.mjs ai_studio/assets/items_viewer/tests/site_model.test.mjs
 node ai_studio/studio.mjs verify --changed
 ```

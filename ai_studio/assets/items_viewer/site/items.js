@@ -1,11 +1,20 @@
-// Read-only Items Viewer page. Bare ESM, no framework or build step.
+// Items Workbench page. Bare ESM, no framework or build step.
+import { field, make } from "./dom.js";
+import { renderItemDetail } from "./item_detail.js";
+
 const state = {
   catalogs: [],
   selectedId: null,
+  selectedItemId: null,
   view: null,
+  detail: null,
+  chart: null,
+  chartField: null,
+  detailRequest: 0,
+  issuesById: new Map(),
   // T0316: the view.icons.page_data_uri, decoded ONCE per loadCatalog (before
-  // render()) so every card's canvas crop reads from the same already-decoded
-  // <img> instead of each card re-decoding the same base64 PNG.
+  // render()) so every row's canvas crop reads from the same already-decoded
+  // <img> instead of each row re-decoding the same base64 PNG.
   iconsImage: null,
 };
 
@@ -15,31 +24,9 @@ const els = {
   topBanner: document.getElementById("topBanner"),
   summaryPanel: document.getElementById("summaryPanel"),
   removedSection: document.getElementById("removedSection"),
-  cardGrid: document.getElementById("cardGrid"),
+  itemList: document.getElementById("itemList"),
+  itemDetail: document.getElementById("itemDetail"),
 };
-
-function make(tag, className, text) {
-  const node = document.createElement(tag);
-  if (className) node.className = className;
-  if (text !== undefined) node.textContent = text;
-  return node;
-}
-
-// Snapshot fields carry stable machine names; humanize them at this UI boundary.
-function humanize(key) {
-  const text = String(key || "").replace(/_/g, " ");
-  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
-}
-
-function field(label, value) {
-  const row = make("div", "iv-field");
-  row.append(make("strong", "iv-field-label", label));
-  const box = make("span", "iv-field-value");
-  if (value instanceof Node) box.append(value);
-  else box.textContent = value === undefined || value === null || value === "" ? "—" : value;
-  row.append(box);
-  return row;
-}
 
 function setStatus(text, isError = false) {
   els.status.textContent = text;
@@ -78,79 +65,9 @@ function renderIconSlot(item, view) {
   return box;
 }
 
-// The Snapshot summary is bounded. Only nested capability params need a generic
-// object renderer.
-function renderRawValue(value) {
-  if (value === undefined || value === null) return "—";
-  if (Array.isArray(value)) return value.length ? value.map(String).join(", ") : "—";
-  if (typeof value === "boolean") return value ? "true" : "false";
-  if (typeof value === "object") {
-    const nested = make("div", "iv-nested");
-    for (const [key, v] of Object.entries(value)) nested.append(field(humanize(key), renderRawValue(v)));
-    return nested;
-  }
-  return String(value);
-}
-
-const CORE_FIELDS = ["created", "tags", "base_value", "stack", "authoring_mode"];
-const BLOCK_FIELDS = {
-  equip: ["slot"],
-  use: ["effect_id", "params"],
-  currency: ["hud", "cap"],
-};
-
-function renderBlock(blockName, blockValue) {
-  const box = make("div", "iv-block");
-  box.append(make("span", "iv-chip iv-chip-block", humanize(blockName)));
-  const rows = make("div", "iv-block-rows");
-  for (const key of BLOCK_FIELDS[blockName]) {
-    rows.append(field(humanize(key), renderRawValue(blockValue[key])));
-  }
-  box.append(rows);
-  return box;
-}
-
-function renderCard(item, view, issues) {
-  const card = make("article", "iv-card");
-
-  const top = make("div", "iv-card-top");
-  top.append(renderIconSlot(item, view));
-  const titleBox = make("div", "iv-card-title");
-  titleBox.append(make("h3", "", item.name || item.id || "—"));
-  titleBox.append(make("span", "iv-card-id", item.id || "—"));
-  top.append(titleBox);
-  card.append(top);
-
-  const chips = make("div", "iv-card-chips");
-  const kindEntry = view.item_kinds.find((k) => k.id === item.kind);
-  chips.append(make("span", "iv-chip iv-chip-kind", (kindEntry && kindEntry.label) || item.kind || "—"));
-  const lockStatus = view.lock.status_by_id[item.id] || "draft";
-  chips.append(make("span", `iv-chip iv-chip-lock iv-chip-lock-${lockStatus}`, lockStatus));
-  card.append(chips);
-
-  const rows = make("div", "iv-card-rows");
-  for (const key of CORE_FIELDS) rows.append(field(humanize(key), renderRawValue(item[key])));
-  card.append(rows);
-
-  for (const blockName of Object.keys(BLOCK_FIELDS)) {
-    if (!item[blockName]) continue;
-    card.append(renderBlock(blockName, item[blockName]));
-  }
-
-  if (issues.length) {
-    const issuesBox = make("div", "iv-card-issues");
-    for (const issue of issues) {
-      issuesBox.append(make("p", `iv-issue iv-issue-${issue.severity}`, `[${issue.rule}] ${issue.msg}`));
-    }
-    card.append(issuesBox);
-  }
-
-  return card;
-}
 
 // Tag validate.errors/warnings with a severity so the same list can be filtered once
-// for card/summary/removed placement (spec §4 "Per-item issues": red/yellow on the
-// card).
+// for item/summary/removed placement.
 function taggedIssues(view) {
   const errors = (view.validate.errors || []).map((issue) => ({ ...issue, severity: "error" }));
   const warnings = (view.validate.warnings || []).map((issue) => ({ ...issue, severity: "warning" }));
@@ -159,10 +76,10 @@ function taggedIssues(view) {
 
 // Issue routing rule (spec §4, load-bearing — mirrors ops.mjs's routeIssues(), which
 // this module cannot import: it pulls in node:child_process/node:fs and there is no
-// build step to strip that for a browser bundle). An issue attaches to a card IFF its
+// build step to strip that for a browser bundle). An issue attaches to an item IFF its
 // `id` is present in items[]; a catalog-level rule (id:null) goes to the Summary
-// panel; a rule keyed on a DELETED id (removed-without-reaction and neighbors) has no
-// card and goes to the Removed/lock section.
+// panel; a rule keyed on a deleted id has no current item and goes to the
+// Removed/lock section.
 function renderTopBanner(view) {
   els.topBanner.replaceChildren();
   els.topBanner.classList.add("is-hidden");
@@ -247,15 +164,124 @@ function renderRemovedSection(view, homelessIssues) {
   root.append(list);
 }
 
-function renderCards(view, cardIssuesById) {
-  const root = els.cardGrid;
+function renderItemTable(view, issuesById) {
+  const root = els.itemList;
   root.replaceChildren();
   if (!view.items.length) {
     root.append(make("div", "iv-empty", view.meta.hasItems ? "No items in this catalog." : "Items not connected for this game."));
     return;
   }
+  const table = make("table", "iv-table iv-master-table");
+  const thead = make("thead", "");
+  const heading = make("tr", "");
+  for (const label of ["Item", "Kind", "Storage", "Release", "Issues"]) {
+    heading.append(make("th", "", label));
+  }
+  thead.append(heading);
+  table.append(thead);
+  const body = make("tbody", "");
   for (const item of view.items) {
-    root.append(renderCard(item, view, cardIssuesById.get(item.id) || []));
+    const row = make("tr", item.id === state.selectedItemId ? "is-selected" : "");
+    const itemCell = make("td", "");
+    const button = make("button", "iv-item-button");
+    button.type = "button";
+    button.dataset.itemId = item.id;
+    button.setAttribute("aria-label", `Inspect ${item.name || item.id} (${item.id})`);
+    button.setAttribute("aria-current", item.id === state.selectedItemId ? "true" : "false");
+    button.append(renderIconSlot(item, view));
+    const title = make("span", "iv-item-title");
+    title.append(make("strong", "", item.name || item.id));
+    title.append(make("code", "", item.id));
+    button.append(title);
+    button.addEventListener("click", () => selectItem(item.id, { focus: true }));
+    itemCell.append(button);
+    row.append(itemCell);
+    row.append(make("td", "", item.kind || "—"));
+    row.append(make("td", "", item.runtime?.storage || "—"));
+    const release = view.lock.status_by_id[item.id] || "draft";
+    const releaseCell = make("td", "");
+    releaseCell.append(make("span", `iv-chip iv-chip-lock iv-chip-lock-${release}`, release));
+    row.append(releaseCell);
+    row.append(make("td", "iv-diagnostic-count", String((issuesById.get(item.id) || []).length)));
+    body.append(row);
+  }
+  table.append(body);
+  root.append(table);
+}
+
+function detailModel(extra = {}) {
+  const summary = state.view?.items.find((item) => item.id === state.selectedItemId);
+  return {
+    summary,
+    detail: state.detail,
+    chart: state.chart,
+    chartField: state.chartField,
+    release: state.view?.lock.status_by_id[state.selectedItemId] || "draft",
+    issues: state.issuesById.get(state.selectedItemId) || [],
+    onChartField: loadSelectedChart,
+    ...extra,
+  };
+}
+
+function focusedUrl(endpoint, values) {
+  const params = new URLSearchParams({ catalog: state.selectedId, ...values });
+  return `/api/items-viewer/${endpoint}?${params}`;
+}
+
+function focusSelectedItem() {
+  const selected = [...els.itemList.querySelectorAll(".iv-item-button")]
+    .find((button) => button.dataset.itemId === state.selectedItemId);
+  selected?.focus();
+}
+
+function focusSeriesSelect() {
+  els.itemDetail.querySelector(".iv-series-select")?.focus();
+}
+
+async function loadSelectedChart(field, options = {}) {
+  const request = state.detailRequest;
+  state.chartField = field;
+  state.chart = null;
+  renderItemDetail(els.itemDetail, detailModel());
+  if (options.focus) focusSeriesSelect();
+  try {
+    const response = await fetch(focusedUrl("chart", { item: state.selectedItemId, field }), { cache: "no-store" });
+    if (!response.ok) throw new Error(`status ${response.status}`);
+    const chart = await response.json();
+    if (request !== state.detailRequest) return;
+    state.chart = chart;
+    renderItemDetail(els.itemDetail, detailModel());
+    if (options.focus) focusSeriesSelect();
+  } catch (error) {
+    if (request !== state.detailRequest) return;
+    state.chart = { content_error: { stderr: `Could not load chart: ${error.message}` } };
+    renderItemDetail(els.itemDetail, detailModel());
+    if (options.focus) focusSeriesSelect();
+  }
+}
+
+async function selectItem(itemId, options = {}) {
+  state.selectedItemId = itemId;
+  state.detail = null;
+  state.chart = null;
+  state.chartField = null;
+  const request = ++state.detailRequest;
+  renderItemTable(state.view, state.issuesById);
+  if (options.focus) focusSelectedItem();
+  renderItemDetail(els.itemDetail, detailModel({ loading: true, message: "Loading item detail…" }));
+  try {
+    const response = await fetch(focusedUrl("item", { item: itemId }), { cache: "no-store" });
+    if (!response.ok) throw new Error(`status ${response.status}`);
+    const detail = await response.json();
+    if (request !== state.detailRequest) return;
+    state.detail = detail;
+    state.chartField = detail.fields?.[0]?.member || null;
+    renderItemDetail(els.itemDetail, detailModel());
+    if (state.chartField && !detail.content_error) await loadSelectedChart(state.chartField);
+  } catch (error) {
+    if (request !== state.detailRequest) return;
+    state.detail = { content_error: { stderr: `Could not load item: ${error.message}` } };
+    renderItemDetail(els.itemDetail, detailModel());
   }
 }
 
@@ -266,16 +292,17 @@ function render(view) {
   const allIssues = taggedIssues(view);
   const catalogIssues = allIssues.filter((issue) => issue.id == null);
   const homelessIssues = allIssues.filter((issue) => issue.id != null && !itemIds.has(issue.id));
-  const cardIssuesById = new Map();
+  const itemIssuesById = new Map();
   for (const issue of allIssues) {
     if (issue.id == null || !itemIds.has(issue.id)) continue;
-    if (!cardIssuesById.has(issue.id)) cardIssuesById.set(issue.id, []);
-    cardIssuesById.get(issue.id).push(issue);
+    if (!itemIssuesById.has(issue.id)) itemIssuesById.set(issue.id, []);
+    itemIssuesById.get(issue.id).push(issue);
   }
 
   renderSummary(view, catalogIssues);
   renderRemovedSection(view, homelessIssues);
-  renderCards(view, cardIssuesById);
+  state.issuesById = itemIssuesById;
+  renderItemTable(view, itemIssuesById);
 }
 
 function renderDropdown() {
@@ -293,13 +320,18 @@ function renderDropdown() {
 // empty state.
 async function loadCatalog(id) {
   state.selectedId = id;
+  state.selectedItemId = null;
+  state.detail = null;
+  state.chart = null;
+  state.chartField = null;
+  state.detailRequest += 1;
   setStatus("Loading…");
   try {
     const response = await fetch(`/api/items-viewer/catalog?id=${encodeURIComponent(id)}`, { cache: "no-store" });
     if (!response.ok) throw new Error(`status ${response.status}`);
     const view = await response.json();
     state.view = view;
-    // One decode for the whole page, BEFORE render() (spec §5) — every card's
+    // One decode for the whole page, BEFORE render() (spec §5) — every row's
     // canvas crop below reads from this same decoded <img>, never re-fetches.
     state.iconsImage = null;
     if (view.icons && view.icons.page_data_uri) {
@@ -314,6 +346,8 @@ async function loadCatalog(id) {
     }
     render(view);
     setStatus(`${view.items.length} item(s) in ${view.meta.title}`);
+    if (view.items.length) await selectItem(view.items[0].id);
+    else renderItemDetail(els.itemDetail, { message: "No item selected." });
   } catch (error) {
     setStatus(`Could not load catalog: ${error.message}`, true);
   }

@@ -1,4 +1,4 @@
-// Items Viewer HTTP API adapter (T0316 phase 1) — read-only.
+// Items Workbench HTTP API adapter — focused read-only slice.
 //
 // Studio Shell mounts this on /api/items-viewer/. It only marshals HTTP <-> ops.mjs; no
 // items logic lives here (mirrors assets/canvas/api.mjs:239's shape — an async
