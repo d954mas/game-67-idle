@@ -216,6 +216,43 @@ class ItemsSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.sealed_field_id"):
             SNAPSHOT.build_snapshot(sealed)
 
+    def test_core_metadata_and_capability_blocks_are_strict_when_authored(self):
+        valid = evaluation(self.base_items())
+        valid["items"][0].update({
+            "created": "2026-07-07",
+            "name": "Gold",
+            "icon": "icons/gold",
+            "base_value": 1,
+            "currency": {"hud": "counter", "cap": 0},
+        })
+        valid["items"][1].update({
+            "created": "2026-07-07",
+            "name": "Sword",
+            "icon": "icons/sword",
+            "base_value": 50,
+            "tags": ["melee"],
+            "equip": {"slot": "weapon"},
+        })
+        SNAPSHOT.build_snapshot(valid)
+
+        cases = [
+            ("snapshot.item_key", lambda doc: doc["items"][0].update({"display_name": "Gold"})),
+            ("snapshot.created", lambda doc: doc["items"][0].update({"created": "2026-02-30"})),
+            ("snapshot.name", lambda doc: doc["items"][0].update({"name": ""})),
+            ("snapshot.tags", lambda doc: doc["items"][1].update({"tags": ["weapon"]})),
+            ("snapshot.base_value", lambda doc: doc["items"][0].update({"base_value": True})),
+            ("snapshot.base_value", lambda doc: doc["items"][0].update({"base_value": 9_007_199_254_740_992})),
+            ("snapshot.currency", lambda doc: doc["items"][0].update({"currency": {"hud": "counter"}})),
+            ("snapshot.currency_kind", lambda doc: doc["items"][1].update({"currency": {"hud": "counter", "cap": 0}})),
+            ("snapshot.equip", lambda doc: doc["items"][1].update({"equip": {"slot": ""}})),
+        ]
+        for code, mutate in cases:
+            with self.subTest(code=code):
+                malformed = copy.deepcopy(valid)
+                mutate(malformed)
+                with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, code):
+                    SNAPSHOT.build_snapshot(malformed)
+
     def test_runtime_export_metadata_requires_valid_storage_and_level_count(self):
         missing_stack = evaluation(self.base_items())
         del missing_stack["items"][0]["stack"]
@@ -226,6 +263,11 @@ class ItemsSnapshotTests(unittest.TestCase):
         invalid_stack["items"][0]["stack"] = True
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.stack"):
             SNAPSHOT.build_snapshot(invalid_stack)
+
+        inexact_stack = evaluation(self.base_items())
+        inexact_stack["items"][0]["stack"] = 9_007_199_254_740_992
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.stack"):
+            SNAPSHOT.build_snapshot(inexact_stack)
 
         stacked_levels = evaluation(self.base_items())
         stacked_levels["items"][1]["stack"] = 2
@@ -299,12 +341,12 @@ class ItemsSnapshotTests(unittest.TestCase):
         })
 
         top_level_items = self.base_items()
-        top_level_items[0]["attack"] = 7
+        top_level_items[0]["base_value"] = 7
         top_level = SNAPSHOT.query_snapshot(
             SNAPSHOT.build_snapshot(evaluation(top_level_items)),
-            item_id="game.gold", field="attack",
+            item_id="game.gold", field="base_value",
         )
-        self.assertEqual(top_level["item"]["values"], {"attack": 7})
+        self.assertEqual(top_level["item"]["values"], {"base_value": 7})
         self.assertNotIn("field", top_level)
         self.assertEqual(top_level["runtime"], {"storage": "stack", "level_count": 0})
 
@@ -659,13 +701,13 @@ class ItemsSnapshotTests(unittest.TestCase):
         self.assertEqual(SNAPSHOT.diff_snapshots(before, source_only)["changes"], [])
 
         bool_items = self.base_items()
-        bool_items[1]["tradeable"] = True
+        bool_items[1]["use"] = {"effect_id": "flag", "params": {"tradeable": True}}
         bool_snapshot = SNAPSHOT.build_snapshot(evaluation(bool_items))
         int_items = self.base_items()
-        int_items[1]["tradeable"] = 1
+        int_items[1]["use"] = {"effect_id": "flag", "params": {"tradeable": 1}}
         int_snapshot = SNAPSHOT.build_snapshot(evaluation(int_items))
         self.assertEqual(SNAPSHOT.diff_snapshots(bool_snapshot, int_snapshot)["changes"], [{
-            "op": "replace", "item": "game.sword", "path": "/tradeable",
+            "op": "replace", "item": "game.sword", "path": "/use/params/tradeable",
             "before": True, "after": 1,
         }])
 

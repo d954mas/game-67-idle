@@ -197,7 +197,11 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 `items.snapshot.v1` document. It sorts item identities, hashes normalized
 content and registered field schemas, validates required i64 level fields
 against their declared kinds and ranges, requires complete mode-consistent
-per-value provenance, retains the evaluator fingerprint,
+per-value provenance, and rejects unknown top-level item fields instead of
+preserving a generic property bag. Authored `created`/`name`/`icon`/`tags`/
+`base_value` plus `currency`/`equip`/`use` blocks are shape-checked; tags cannot
+duplicate `kind`, currency blocks require the currency kind, and equip requires
+unique storage. The Snapshot retains the evaluator fingerprint,
 and derives inputs/dependents from actual typed references. Complete item/field
 source spans remain separate from the content hash. `query` returns one item with its Lua
 definition location plus an optional field and level range; a selected level
