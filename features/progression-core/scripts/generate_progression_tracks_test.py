@@ -43,6 +43,15 @@ def progression_schema(*, string_max: object = 64) -> dict:
     }
 
 
+def items_snapshot(*, schema: str = "items.snapshot.v1") -> dict:
+    return {
+        "schema": schema,
+        "items": [
+            {"id": "coin", "kind": "currency", "currency": {}},
+        ],
+    }
+
+
 def run_direct(args: list[str]) -> int:
     with contextlib.redirect_stderr(io.StringIO()):
         return generator.main(args)
@@ -64,23 +73,31 @@ class ProgressionTrackGeneratorTest(unittest.TestCase):
         content.mkdir(parents=True)
         state.mkdir(parents=True)
         (content / "progression.json").write_text(json.dumps(progression_catalog(track_id)), encoding="utf-8")
-        (content / "items.json").write_text(
-            json.dumps({"items": [{"id": "coin", "currency": {}}]}), encoding="utf-8"
-        )
+        snapshot = game / "build" / "items" / "items.snapshot.json"
+        snapshot.parent.mkdir(parents=True)
+        snapshot.write_text(json.dumps(items_snapshot()), encoding="utf-8")
         (state / "progression.schema.json").write_text(
             json.dumps(schema if schema is not None else progression_schema()), encoding="utf-8"
         )
         args = [
             "--catalog",
             str(content / "progression.json"),
-            "--items",
-            str(content / "items.json"),
+            "--items-snapshot",
+            str(snapshot),
             "--out-dir",
             str(out),
         ]
         if include_state_schema:
             args.extend(["--state-schema", str(state / "progression.schema.json")])
         return args, out, temp, game
+
+    def test_rejects_non_snapshot_items_input(self) -> None:
+        args, _out, temp, game = self.generator_args()
+        self.addCleanup(temp.cleanup)
+        snapshot = game / "build" / "items" / "items.snapshot.json"
+        snapshot.write_text(json.dumps(items_snapshot(schema="legacy.items.json")), encoding="utf-8")
+        with self.assertRaisesRegex(SystemExit, "items snapshot schema"):
+            generator.main(args)
 
     def test_state_schema_argument_is_required(self) -> None:
         args, _out, temp, game = self.generator_args(include_state_schema=False)

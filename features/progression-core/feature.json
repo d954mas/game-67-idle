@@ -1,7 +1,7 @@
 {
   "schema": "ai_studio.feature.v1",
   "id": "progression-core",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "title": "Progression Core",
   "status": "reusable",
   "kind": "gameplay-infrastructure",
@@ -11,14 +11,14 @@
   "dependencies": [
     "items-core",
     "Python 3.12",
-    "templates/template/content/progression.json + content/items.json (currency_def cross-check) (or a game-local progression catalog)",
+    "templates/template/content/progression.json + the game-local items.snapshot.v1 build output (currency_def cross-check)",
     "template or game C runtime using the generated progression_tracks.gen.{h,c} + the generated progression save fragment (features/game-state)"
   ],
   "owners": [
     "features/progression-core"
   ],
   "commands": {
-    "generate": "node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py --catalog <game>/content/progression.json --items <game>/content/items.json --state-schema <game>/state/progression.schema.json --out-dir <generated-dir>"
+    "generate": "node ai_studio/dev_environment/python_run.mjs features/progression-core/scripts/generate_progression_tracks.py --catalog <game>/content/progression.json --items-snapshot <build>/items.snapshot.json --state-schema <game>/state/progression.schema.json --out-dir <generated-dir>"
   },
   "manuals": {
     "install": "features/progression-core/INSTALL.md"
@@ -43,7 +43,7 @@
   },
   "default_template": {
     "catalog": "templates/template/content/progression.json",
-    "items_catalog_crosscheck": "templates/template/content/items.json",
+    "items_snapshot_crosscheck": "<build>/generated/items-catalog/items.snapshot.json",
     "state_schema": "templates/template/state/progression.schema.json",
     "generated_dir": "templates/template/src/generated",
     "game_side_sources": []

@@ -86,8 +86,8 @@ add_custom_command(
 # И3a: progression tracks CONTENT codegen (mirrors the items content-codegen
 # block above -- deliberately a separate content-codegen invocation, not the
 # game-state generator below). Bakes content/progression.json's curve presets
-# into compile-time const int64 cost tables; --items cross-checks currency_def
-# against the items catalog (ITEMS_CATALOG_JSON, defined just above).
+# into compile-time const int64 cost tables; --items-snapshot cross-checks
+# currency_def against the canonical Items Snapshot generated above.
 set(PROG_TRACKS_JSON "${CMAKE_CURRENT_SOURCE_DIR}/content/progression.json")
 set(PROG_TRACKS_STATE_SCHEMA "${CMAKE_CURRENT_SOURCE_DIR}/state/progression.schema.json")
 set(PROG_TRACKS_GENERATOR "${PROGRESSION_CORE_SCRIPTS}/generate_progression_tracks.py")
@@ -97,10 +97,10 @@ add_custom_command(
         "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${GAME_SOURCE_GENERATED_DIR}"
     COMMAND "${Python3_EXECUTABLE}" "${PROG_TRACKS_GENERATOR}"
-        --catalog "${PROG_TRACKS_JSON}" --items "${ITEMS_CATALOG_JSON}"
+        --catalog "${PROG_TRACKS_JSON}" --items-snapshot "${ITEMS_CATALOG_SNAPSHOT}"
         --state-schema "${PROG_TRACKS_STATE_SCHEMA}"
         --out-dir "${GAME_SOURCE_GENERATED_DIR}"
-    DEPENDS "${PROG_TRACKS_JSON}" "${ITEMS_CATALOG_JSON}" "${PROG_TRACKS_STATE_SCHEMA}" "${PROG_TRACKS_GENERATOR}"
+    DEPENDS "${PROG_TRACKS_JSON}" "${ITEMS_CATALOG_SNAPSHOT}" "${PROG_TRACKS_STATE_SCHEMA}" "${PROG_TRACKS_GENERATOR}"
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "Generating progression tracks catalog (const int64 curve tables)"
     VERBATIM)
