@@ -15,7 +15,7 @@ import tempfile
 from typing import Any
 
 import items_lua_edit as edit_api
-import items_ops as receipt_api
+import items_receipt as receipt_api
 import items_runtime_package as package_api
 import items_snapshot as snapshot_api
 

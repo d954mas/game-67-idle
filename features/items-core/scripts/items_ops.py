@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Items content op-layer CLI (T0327 И2c, T0381 receipt extension).
 
-Single op-layer that the future T0316 web editor will sit on top of (tool
-parity): subprocess + `--json` gives the Node editor the exact same
-answers this CLI gives a human. Catalog operations stay read-only; the one write
-is the atomic, idempotent legacy-lock to release-receipt upgrade.
+JSON catalog operations remain here until their consumers move to the canonical
+Lua CLI. Lua evaluation receipt checks live in `items_receipt.py`; the matching
+subcommands below delegate there so the old and new entry points share one
+implementation during migration. The one legacy write is the atomic,
+idempotent legacy-lock to release-receipt upgrade.
 
 Moved to features/items-core/scripts/ in T0337; its own argparse defaults are
 now script-relative to features/items-core/, NOT the game/template root, so
@@ -59,7 +60,6 @@ from __future__ import annotations
 import argparse
 import datetime
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -70,6 +70,20 @@ from typing import Any
 # schema/source of truth without duplicating a second data model.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import generate_items_catalog as gen  # noqa: E402
+from items_receipt import (  # noqa: E402
+    ITEMS_CORE_VERSION,
+    LEGACY_RECEIPT_SCHEMA_VERSION,
+    MIN_REMOVED_FRAGMENT_VERSION,
+    OpsError,
+    RECEIPT_SCHEMA,
+    RECEIPT_SCHEMA_VERSION,
+    cmd_seal_evaluation_receipt,
+    cmd_validate_evaluation_receipt,
+    format_issue,
+    issue,
+    validate_baseline_shape,
+    write_utf8_if_changed as _write_utf8_if_changed,
+)
 
 TEMPLATE_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_CATALOG = TEMPLATE_ROOT / "content" / "items.json"
@@ -77,11 +91,6 @@ DEFAULT_FIELD_SCHEMA = TEMPLATE_ROOT / "content" / "item_fields.schema.json"
 DEFAULT_LOCK = TEMPLATE_ROOT / "content" / "items.lock.json"
 DEFAULT_STATE_SCHEMA = TEMPLATE_ROOT / "state" / "items.schema.json"
 DEFAULT_SRC_DIR = TEMPLATE_ROOT / "src" / "features" / "items"
-
-# A removal always corresponds to a real state/items.schema.json version bump
-# (fragment version 1 is the initial no-migrations skeleton -- there is no
-# earlier version a removal could have shipped in).
-MIN_REMOVED_FRAGMENT_VERSION = 2
 
 # state/items.schema.json string_max=64 -> ITEMS_STATE_STRING_MAX=64 -> a
 # NUL-terminated C string holds at most 63 payload chars (deep-review L2/L1;
@@ -93,28 +102,8 @@ OWNED_KEY_MAX_LEN = 63
 # creation date lives IN THE DATA instead. "YYYY-MM-DD", checked for both
 # shape (regex) and calendar validity (datetime.date.fromisoformat below).
 CREATED_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-DEF_ID_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
-FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
-RECEIPT_SCHEMA_VERSION = 4
-RECEIPT_SCHEMA = "items.release_receipt.v2"
-LEGACY_RECEIPT_SCHEMA_VERSION = 3
-LEGACY_RECEIPT_SCHEMA = "items.release_receipt.v1"
-ITEMS_CORE_VERSION = "1.14.0"
 
 Issue = dict  # {"rule": str, "id": str | None, "field": str | None, "msg": str}
-
-
-def issue(rule: str, msg: str, *, id: str | None = None, field: str | None = None) -> Issue:  # noqa: A002
-    return {"rule": rule, "id": id, "field": field, "msg": msg}
-
-
-def format_issue(entry: Issue) -> str:
-    where = "".join(f" {k}={v!r}" for k, v in (("id", entry.get("id")), ("field", entry.get("field"))) if v)
-    return f"[{entry['rule']}]{where}: {entry['msg']}"
-
-
-class OpsError(Exception):
-    """Usage/IO problem (bad path, malformed JSON) -- exit code 2."""
 
 
 def load_json_or_die(path: Path, what: str) -> Any:
@@ -191,16 +180,6 @@ def _receipt_text(
     return json.dumps(receipt, ensure_ascii=False, indent=2) + "\n"
 
 
-def _write_utf8_if_changed(path: Path, text: str) -> bool:
-    data = text.encode("utf-8")
-    if path.exists() and path.read_bytes() == data:
-        return False
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_bytes(data)
-    os.replace(temporary, path)
-    return True
-
-
 def _receipt_v4_text_from_v3(legacy: dict[str, Any], path: Path) -> str:
     validate_baseline_shape(legacy, path)
     upgraded = json.loads(json.dumps(legacy))
@@ -238,263 +217,6 @@ def cmd_upgrade_receipt(args: argparse.Namespace) -> int:
     else:
         print(f"receipt {'upgraded' if changed else 'unchanged'}: {baseline_path}")
     return 0
-
-
-def _evaluation_receipt_view(evaluation: dict[str, Any]) -> tuple[set[str], dict[str, dict[str, Any]]]:
-    if not isinstance(evaluation, dict) or evaluation.get("schema") != "items.lua.evaluation.v1":
-        raise OpsError("evaluation must be an items.lua.evaluation.v1 object")
-    raw_fields = evaluation.get("fields")
-    raw_items = evaluation.get("items")
-    if not isinstance(raw_fields, list) or not isinstance(raw_items, list):
-        raise OpsError("evaluation requires fields/items lists")
-
-    field_ids: list[str] = []
-    for field in raw_fields:
-        field_id = field.get("id") if isinstance(field, dict) else None
-        if not isinstance(field_id, str) or FIELD_ID_RE.fullmatch(field_id) is None:
-            raise OpsError("evaluation fields require non-empty string ids")
-        field_ids.append(field_id)
-    if len(field_ids) != len(set(field_ids)):
-        raise OpsError("evaluation field ids must be unique")
-
-    items: dict[str, dict[str, Any]] = {}
-    for item in raw_items:
-        if (not isinstance(item, dict) or not isinstance(item.get("id"), str)
-                or DEF_ID_RE.fullmatch(item["id"]) is None):
-            raise OpsError("evaluation items require non-empty string ids")
-        item_id = item["id"]
-        if item_id in items:
-            raise OpsError(f"evaluation item id is duplicated: {item_id!r}")
-        stack = item.get("stack")
-        if type(stack) is not int or stack < 0:
-            raise OpsError(f"evaluation item {item_id!r} requires an integer stack >= 0")
-        levels = item.get("levels")
-        if levels is None:
-            level_count = 0
-        elif not isinstance(levels, dict) or not isinstance(levels.get("rows"), list):
-            raise OpsError(f"evaluation item {item_id!r} levels require a rows list")
-        else:
-            level_count = len(levels["rows"])
-        storage = "unique" if stack == 1 else "stack"
-        if storage == "stack" and level_count != 0:
-            raise OpsError(f"evaluation stack item {item_id!r} cannot have levels")
-        items[item_id] = {
-            "storage": storage,
-            "level_count": level_count,
-        }
-    return set(field_ids), items
-
-
-def _evaluation_receipt_checks(
-    evaluation: dict[str, Any],
-    baseline: dict[str, Any],
-    state_schema: dict[str, Any],
-) -> tuple[list[Issue], list[Issue], set[str], dict[str, dict[str, Any]]]:
-    field_ids, items = _evaluation_receipt_view(evaluation)
-    state_version = state_schema.get("version")
-    if (not isinstance(state_schema.get("schema"), str)
-            or type(state_schema.get("schema_version")) is not int
-            or type(state_version) is not int):
-        raise OpsError("items state schema requires schema plus integer schema_version/version")
-
-    errors: list[Issue] = []
-    warnings: list[Issue] = []
-    receipt = baseline["receipt"]
-    frozen_state = receipt["state_schema"]
-    active_fields = set(receipt["field_ids"]["active"])
-    reserved_fields = set(receipt["field_ids"]["reserved"])
-    if receipt["lua_evaluation_schema"] != evaluation["schema"]:
-        errors.append(issue(
-            "receipt-evaluation-schema",
-            f"receipt expects {receipt['lua_evaluation_schema']!r}, got {evaluation['schema']!r}",
-        ))
-    if (frozen_state["schema"] != state_schema["schema"]
-            or frozen_state["schema_version"] != state_schema["schema_version"]):
-        errors.append(issue(
-            "state-schema-identity-change",
-            "items state schema identity/version differs from the shipped receipt",
-        ))
-    elif state_version < frozen_state["version"]:
-        errors.append(issue(
-            "state-schema-regression",
-            f"items state version regressed from {frozen_state['version']} to {state_version}",
-        ))
-    for field_id in sorted(active_fields - field_ids):
-        errors.append(issue(
-            "field-removed-without-reaction",
-            f"shipped field_id {field_id!r} is absent; move it from field_ids.active to reserved explicitly",
-            id=field_id,
-        ))
-    for field_id in sorted(reserved_fields & field_ids):
-        errors.append(issue(
-            "reserved-field-reused",
-            f"reserved field_id {field_id!r} cannot be reused; restore it explicitly in the receipt or choose a new id",
-            id=field_id,
-        ))
-
-    locked = baseline["def_ids"]
-    removed = baseline["removed"]
-    for item_id in sorted(set(locked) & set(removed)):
-        errors.append(issue(
-            "lock-inconsistent",
-            f"def_id {item_id!r} is listed in both def_ids and removed",
-            id=item_id,
-        ))
-    for item_id in sorted(locked):
-        if item_id not in items:
-            if item_id not in removed:
-                errors.append(issue(
-                    "removed-without-reaction",
-                    f"shipped def_id {item_id!r} is absent; move it to removed with a delivered migration reaction",
-                    id=item_id,
-                ))
-            continue
-        current, shipped = items[item_id], locked[item_id]
-        if current["storage"] != shipped["storage"]:
-            errors.append(issue(
-                "storage-change-without-reaction",
-                f"def_id {item_id!r} shipped as {shipped['storage']!r} but is now {current['storage']!r}",
-                id=item_id, field="storage",
-            ))
-        if current["level_count"] < shipped["level_count"]:
-            errors.append(issue(
-                "level-shrink-without-reaction",
-                f"def_id {item_id!r} shipped with level_count={shipped['level_count']} but now has {current['level_count']}",
-                id=item_id, field="level_count",
-            ))
-    for item_id in sorted(removed):
-        entry = removed[item_id]
-        fragment_version = entry.get("fragment_version")
-        if type(fragment_version) is not int or fragment_version < MIN_REMOVED_FRAGMENT_VERSION:
-            errors.append(issue(
-                "lock-invalid",
-                f"removed def_id {item_id!r} requires fragment_version >= {MIN_REMOVED_FRAGMENT_VERSION}",
-                id=item_id, field="fragment_version",
-            ))
-        elif fragment_version > state_version:
-            errors.append(issue(
-                "removed-version-not-shipped",
-                f"removed def_id {item_id!r} reaction version {fragment_version} exceeds state version {state_version}",
-                id=item_id, field="fragment_version",
-            ))
-        if item_id in items:
-            current = items[item_id]
-            if entry.get("storage") in {"stack", "unique"} and current["storage"] != entry["storage"]:
-                errors.append(issue(
-                    "storage-change-without-reaction",
-                    f"restored def_id {item_id!r} was {entry['storage']!r} but is now {current['storage']!r}",
-                    id=item_id, field="storage",
-                ))
-            removed_level_count = entry.get("level_count")
-            if type(removed_level_count) is int and current["level_count"] < removed_level_count:
-                errors.append(issue(
-                    "level-shrink-without-reaction",
-                    f"restored def_id {item_id!r} shipped with level_count={removed_level_count} but now has {current['level_count']}",
-                    id=item_id, field="level_count",
-                ))
-            warnings.append(issue(
-                "removed-def-restored",
-                f"removed def_id {item_id!r} is active again; move it back to def_ids if restoration is permanent",
-                id=item_id,
-            ))
-    return errors, warnings, field_ids, items
-
-
-def _load_evaluation_receipt_inputs(
-    args: argparse.Namespace,
-) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], Path]:
-    evaluation = load_json_or_die(Path(args.evaluation), "Items Lua evaluation")
-    baseline_path = Path(args.baseline)
-    baseline = load_json_or_die(baseline_path, "lock baseline")
-    validate_baseline_shape(baseline, baseline_path)
-    if baseline.get("schema_version") != RECEIPT_SCHEMA_VERSION:
-        raise OpsError("evaluation receipt requires schema_version 4; run upgrade-receipt first")
-    state_schema = load_json_or_die(Path(args.state_schema), "items state fragment schema")
-    return evaluation, baseline, state_schema, baseline_path
-
-
-def validate_evaluation_receipt(
-    evaluation: dict[str, Any],
-    baseline: dict[str, Any],
-    state_schema: dict[str, Any],
-    *,
-    baseline_path: Path,
-) -> dict[str, Any]:
-    """Validate in-memory evaluator output against the canonical release receipt."""
-    validate_baseline_shape(baseline, baseline_path)
-    if baseline.get("schema_version") != RECEIPT_SCHEMA_VERSION:
-        raise OpsError("evaluation receipt requires schema_version 4; run upgrade-receipt first")
-    errors, warnings, _, _ = _evaluation_receipt_checks(evaluation, baseline, state_schema)
-    return {"ok": not errors, "errors": errors, "warnings": warnings}
-
-
-def cmd_validate_evaluation_receipt(args: argparse.Namespace) -> int:
-    evaluation, baseline, state_schema, baseline_path = _load_evaluation_receipt_inputs(args)
-    payload = validate_evaluation_receipt(
-        evaluation, baseline, state_schema, baseline_path=baseline_path,
-    )
-    ok = payload["ok"]
-    if args.json:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
-    else:
-        print("evaluation receipt OK" if ok else "evaluation receipt FAILED")
-        for entry in [*payload["errors"], *payload["warnings"]]:
-            print(f"  {format_issue(entry)}")
-    return 0 if ok else 1
-
-
-def cmd_seal_evaluation_receipt(args: argparse.Namespace) -> int:
-    evaluation, baseline, state_schema, baseline_path = _load_evaluation_receipt_inputs(args)
-    errors, warnings, field_ids, items = _evaluation_receipt_checks(evaluation, baseline, state_schema)
-    if errors:
-        payload = {"ok": False, "changed": False, "errors": errors, "warnings": warnings}
-        if args.json:
-            print(json.dumps(payload, ensure_ascii=False, indent=2))
-        else:
-            print("evaluation receipt FAILED")
-            for entry in errors:
-                print(f"  {format_issue(entry)}")
-        return 1
-
-    sealed = json.loads(json.dumps(baseline))
-    receipt = sealed["receipt"]
-    reserved_fields = set(receipt["field_ids"]["reserved"])
-    receipt["items_core_version"] = ITEMS_CORE_VERSION
-    receipt["lua_evaluation_schema"] = evaluation["schema"]
-    receipt["snapshot_schema"] = "items.snapshot.v1"
-    receipt["state_schema"] = {
-        "schema": state_schema["schema"],
-        "schema_version": state_schema["schema_version"],
-        "version": state_schema["version"],
-    }
-    receipt["field_ids"] = {
-        "active": sorted(field_ids - reserved_fields),
-        "reserved": sorted(reserved_fields),
-    }
-    removed_ids = set(sealed["removed"])
-    sealed["def_ids"] = {
-        item_id: items[item_id]
-        for item_id in sorted(items)
-        if item_id not in removed_ids
-    }
-    sealed["removed"] = {item_id: sealed["removed"][item_id] for item_id in sorted(sealed["removed"])}
-    changed = _write_utf8_if_changed(
-        baseline_path,
-        json.dumps(sealed, ensure_ascii=False, indent=2) + "\n",
-    )
-    payload = {"ok": True, "changed": changed, "errors": [], "warnings": warnings, "path": str(baseline_path)}
-    if args.json:
-        print(json.dumps(payload, ensure_ascii=False, indent=2))
-    else:
-        print(f"evaluation receipt {'sealed' if changed else 'unchanged'}: {baseline_path}")
-        for entry in warnings:
-            print(f"  {format_issue(entry)}")
-    return 0
-
-
-# ---------------------------------------------------------------------------
-# list
-# ---------------------------------------------------------------------------
 
 
 def block_names(item: dict[str, Any]) -> list[str]:
@@ -977,82 +699,6 @@ def run_generator_checks(doc: dict[str, Any], field_schema: dict[str, Any]) -> l
     except (KeyError, TypeError, ValueError, AttributeError) as exc:
         errors.append(issue("generator-check", f"items catalog validation: {exc}"))
     return errors
-
-
-def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
-    """F3 (deep-review): a broken lock file must NEVER silently disable the
-    destructive-change guard. Before this check existed, check_lock_workflow
-    coerced a malformed `def_ids`/`removed` to an empty set/dict and moved on
-    -- a typo'd lock file (e.g. `def_ids` accidentally overwritten with a
-    string, or a stray `"removed": null`) would validate GREEN while quietly
-    skipping every lock-workflow rule. Same severity as a missing/unparsable
-    file: OpsError, exit 2, not a warning."""
-    schema_version = baseline.get("schema_version")
-    if schema_version not in (2, LEGACY_RECEIPT_SCHEMA_VERSION, RECEIPT_SCHEMA_VERSION):
-        raise OpsError(f"lock baseline 'schema_version' must be 2, 3, or 4, got {schema_version!r} ({path})")
-    def_ids = baseline.get("def_ids")
-    expected = (list,) if schema_version == 2 else (dict,)
-    if not isinstance(def_ids, expected):
-        shape = "list" if schema_version == 2 else "object"
-        raise OpsError(f"lock baseline 'def_ids' must be a {shape}, got {type(def_ids).__name__} ({path})")
-    removed = baseline.get("removed")
-    if not isinstance(removed, dict):
-        raise OpsError(f"lock baseline 'removed' must be an object, got {type(removed).__name__} ({path})")
-    if schema_version in (LEGACY_RECEIPT_SCHEMA_VERSION, RECEIPT_SCHEMA_VERSION):
-        receipt = baseline.get("receipt")
-        expected_receipt_schema = (
-            LEGACY_RECEIPT_SCHEMA if schema_version == LEGACY_RECEIPT_SCHEMA_VERSION else RECEIPT_SCHEMA
-        )
-        if not isinstance(receipt, dict) or receipt.get("schema") != expected_receipt_schema:
-            raise OpsError(f"lock baseline 'receipt' must be a {expected_receipt_schema} object ({path})")
-        required = {
-            "schema", "items_core_version", "lua_evaluation_schema",
-            "snapshot_schema", "state_schema", "field_ids",
-        }
-        if set(receipt) != required:
-            raise OpsError(f"lock baseline 'receipt' keys are invalid ({path})")
-        if not all(isinstance(receipt.get(key), str) and receipt[key] for key in (
-            "items_core_version", "lua_evaluation_schema", "snapshot_schema",
-        )):
-            raise OpsError(f"lock baseline receipt tool/API versions must be strings ({path})")
-        state = receipt.get("state_schema")
-        if (not isinstance(state, dict) or set(state) != {"schema", "schema_version", "version"}
-                or not isinstance(state.get("schema"), str)
-                or type(state.get("schema_version")) is not int
-                or type(state.get("version")) is not int):
-            raise OpsError(f"lock baseline receipt state_schema is invalid ({path})")
-        field_ids = receipt.get("field_ids")
-        if schema_version == LEGACY_RECEIPT_SCHEMA_VERSION:
-            if (not isinstance(field_ids, list)
-                    or not all(isinstance(field_id, str) and FIELD_ID_RE.fullmatch(field_id) for field_id in field_ids)
-                    or len(field_ids) != len(set(field_ids))):
-                raise OpsError(f"lock baseline receipt field_ids must be unique strings ({path})")
-        else:
-            if not isinstance(field_ids, dict) or set(field_ids) != {"active", "reserved"}:
-                raise OpsError(f"lock baseline receipt field_ids must have active/reserved lists ({path})")
-            active, reserved = field_ids.get("active"), field_ids.get("reserved")
-            if (not isinstance(active, list) or not isinstance(reserved, list)
-                    or not all(isinstance(field_id, str) and FIELD_ID_RE.fullmatch(field_id)
-                               for field_id in [*active, *reserved])
-                    or len(active) != len(set(active)) or len(reserved) != len(set(reserved))
-                    or set(active) & set(reserved)):
-                raise OpsError(f"lock baseline receipt field_ids must be unique disjoint strings ({path})")
-        for item_id, metadata in def_ids.items():
-            if (not isinstance(item_id, str) or not isinstance(metadata, dict)
-                    or set(metadata) != {"storage", "level_count"}
-                    or metadata.get("storage") not in {"stack", "unique"}
-                    or type(metadata.get("level_count")) is not int
-                    or metadata["level_count"] < 0):
-                raise OpsError(f"lock baseline def_ids receipt for {item_id!r} is invalid ({path})")
-        for item_id, metadata in removed.items():
-            if not isinstance(item_id, str) or not isinstance(metadata, dict):
-                raise OpsError(f"lock baseline removed receipt for {item_id!r} is invalid ({path})")
-            storage = metadata.get("storage")
-            level_count = metadata.get("level_count")
-            if (storage not in {"stack", "unique", "unknown"}
-                    or (storage == "unknown" and level_count is not None)
-                    or (storage != "unknown" and (type(level_count) is not int or level_count < 0))):
-                raise OpsError(f"lock baseline removed compatibility data for {item_id!r} is invalid ({path})")
 
 
 def resolve_baseline(args: argparse.Namespace) -> tuple[dict[str, Any] | None, Issue | None]:

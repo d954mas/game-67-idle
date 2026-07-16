@@ -1,13 +1,13 @@
 ---
 id: T0386
 title: Cut over Items JSON and schema to single-source modular Lua
-status: backlog
+status: doing
 project: P001
 epic: E016
 priority: P1
 tags: [items, lua, migration]
 created: 2026-07-10
-updated: 2026-07-14
+updated: 2026-07-16
 ---
 
 ## What
@@ -52,3 +52,5 @@ old JSON/schema/parser path without a compatibility fallback.
 - 2026-07-10: Replaced partial migration of selected numeric fields. The lead
   selected complete single-source Items Lua, so the correct migration is one
   explicit catalog/schema cutover and deletion.
+- 2026-07-16: Started after T0383/T0365 closure. First slice inventories every JSON/schema/parser/runtime/Viewer consumer and resolves the legacy container boundary before any deletion.
+- 2026-07-16: 2026-07-16: Slice 1 isolated Lua release-receipt validation from the legacy JSON op-layer. items_cli now imports items_receipt directly; items_ops delegates to the same module. RED dependency test, 14 semantic CLI tests, 29 legacy op-layer tests, benchmark contract, and verify --changed passed.

@@ -22,6 +22,9 @@ PROJECT = SCRIPT_DIR.parent / "tests" / "fixtures" / "items_cli"
 
 
 class ItemsCliTests(unittest.TestCase):
+    def test_lua_cli_does_not_depend_on_legacy_json_ops(self):
+        self.assertEqual(CLI.receipt_api.__name__, "items_receipt")
+
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(SCRIPT), "--project-root", str(PROJECT), *args],

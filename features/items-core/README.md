@@ -31,8 +31,9 @@ features/items-core/
     generate_items_catalog.py      content codegen (content/items.json -> const C tables)
     generate_items_api_proof.py    normalized proof Snapshot -> typed C API/reference data/LuaLS
     generate_items_api_proof_test.py  schema/API proof regression suite
-    items_ops.py                   op-layer CLI (read operations + receipt upgrade)
+    items_ops.py                   legacy JSON operations + receipt upgrade bridge
     items_ops_test.py              self-contained unittest for items_ops.py's rules
+    items_receipt.py               Lua evaluation release-receipt validation/sealing
     items_lua_sandbox.py           isolated deterministic Lua declaration evaluator
     items_lua_sandbox_test.py      sandbox, limits, diagnostics, and fixture proof
     items_snapshot.py              evaluation JSON -> deterministic Snapshot + focused query
@@ -111,6 +112,10 @@ returns the authored integer, never a derived object.
   seal. It adds new active field/item IDs and raises shipped level bounds, but
   refuses unreacted removal/rename, storage changes, level shrink, or state
   schema regression.
+
+`items_receipt.py` owns both Lua evaluation receipt operations. During T0386,
+the matching `items_ops.py` subcommands remain as a compatibility entry point
+and delegate to that module.
 
 Every path is passed explicitly by the caller. `validate` is a strict superset
   of the generator's sanity net (imports it,
