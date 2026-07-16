@@ -382,6 +382,9 @@ void test_container_inspection_is_paginated_filterable_and_bounded(void) {
         items_inspect_container_list(&query, rows, 2, &page));
     TEST_ASSERT_EQUAL_UINT32(1, page.count);
     TEST_ASSERT_EQUAL_UINT32(items_container_id(wallet), rows[0].container_id);
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_CONTAINER_POLICY_CURRENCY_ONLY,
+        items_container_policy(rows[0].ref));
 
     query.budget.max_rows = ITEMS_INSPECTION_MAX_ROWS + 1U;
     TEST_ASSERT_EQUAL_INT(

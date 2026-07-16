@@ -92,7 +92,8 @@
     "game_side_sources": [
       "templates/template/src/features/items/reason_tags.h",
       "templates/template/src/game_items.c",
-      "templates/template/src/game_items.h"
+      "templates/template/src/game_items.h",
+      "templates/template/src/game_items_devapi.c"
     ]
   }
 }

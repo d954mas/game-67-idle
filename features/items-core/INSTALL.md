@@ -20,6 +20,7 @@ set(ITEMS_CORE_SCRIPTS "${ITEMS_CORE_DIR}/scripts")
 <game>/src/features/items/reason_tags.h
 <game>/src/game_items.c
 <game>/src/game_items.h
+<game>/src/game_items_devapi.c
 ```
 
 The manifest allowlists every Lua module. The lock is release compatibility
@@ -86,6 +87,11 @@ After mounting/loading the selected pack, request `items/catalog` as
 successful bind may be followed by save load/reconcile, feature initialization,
 gameplay, DevAPI state commands, or autosave. Call `items_catalog_shutdown()`
 before `nt_resource_shutdown()`.
+
+When DevAPI is enabled, compile the game-owned `src/game_items_devapi.c` and
+register it after `nt_devapi_register_default()`. It exposes bounded
+`game.items.container.list` and `game.items.container.inspect` projections.
+Do not compile or register this adapter when DevAPI is disabled.
 
 ## Tests and release receipt
 

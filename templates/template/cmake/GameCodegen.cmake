@@ -194,7 +194,7 @@ target_sources(${GAME_TARGET} PRIVATE
     "${ITEMS_STATE_GENERATED_SOURCE}"         # generated items fragment state
     "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"  # non-empty items.txn event
     "${ITEMS_CORE_SRC}/items_reconcile.c"    # T0337 M1: reconcile/seq-reseed split out of items_bootstrap.c (in-place module)
-    "${ITEMS_CORE_SRC}/items_containers.c"   # И2b: ownership/containers/purse (add/remove/move/count/can_afford; T0337 M1: in-place module)
+    "${ITEMS_CORE_SRC}/items_containers.c"   # dynamic persistent/ephemeral containers, entries, and bounded inspection
     "${PROGRESSION_STATE_GENERATED_SOURCE}"        # generated progression fragment state
     "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}" # non-empty progression.levelup event
     "${PROGRESSION_CORE_SRC}/progression.c"   # queries/mutations/update over state, items, and tracks
@@ -215,6 +215,7 @@ if(GAME_DEVAPI_ENABLED)
     # fragment registry), no longer a generated per-fragment source.
     target_sources(${GAME_TARGET} PRIVATE
         src/iteration_proof_devapi.c
+        src/game_items_devapi.c
         src/game_save_devapi.c
         "${GAME_EVENTS_SRC}/game_events_devapi.c" # event-log tail ring + game.events.tail
         "${GAME_EVENTS_SRC}/game_event_render.c") # descriptor-driven JSON renderer

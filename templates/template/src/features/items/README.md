@@ -6,6 +6,7 @@ policy:
 
 - `reason_tags.h`: closed mutation-reason verbs;
 - `src/game_items.c`: concrete player containers, owner refs, and initial grants;
+- `src/game_items_devapi.c`: development-only bounded runtime projection;
 - this integration and migration note.
 
 ## Authoring and build
@@ -36,6 +37,10 @@ caps come from the bound catalog package.
 Runtime tools use the bounded inspection API rather than serializing the whole
 Items fragment: container lists are filtered and paginated, entry reads require
 an explicit slot range, and every query carries row/byte/context budgets.
+DevAPI-enabled builds expose this as `game.items.container.list` and
+`game.items.container.inspect`; entry `count` is an exact decimal string so
+the JSON bridge never rounds i64 values. Release builds do not compile the
+adapter.
 
 Every mutation uses a `verb:subject` reason from `reason_tags.h`. Normal new
 games are seeded in `src/game_items.c`; `--fresh-state` intentionally runs only

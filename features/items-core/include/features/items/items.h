@@ -207,6 +207,7 @@ items_result_t items_try_container_resize(items_container_ref_t container, uint3
 bool items_container_try_from_id(uint32_t container_id, items_container_ref_t *out_container);
 uint32_t items_container_id(items_container_ref_t container);
 uint32_t items_container_capacity(items_container_ref_t container);
+items_container_policy_t items_container_policy(items_container_ref_t container);
 items_lifetime_t items_container_lifetime(items_container_ref_t container);
 
 items_result_t items_try_stack_add(

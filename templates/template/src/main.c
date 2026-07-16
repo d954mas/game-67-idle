@@ -179,6 +179,7 @@ static bool devapi_start(void) {
 #endif
     nt_devapi_register_default();
     game_iteration_proof_register_devapi();
+    game_items_register_devapi();
     game_save_register_devapi();
     game_events_register_devapi(); // E3: game.events.tail (+ enables the recorder)
 #ifdef NT_DEVAPI_GROUP_UI

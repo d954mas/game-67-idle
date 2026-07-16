@@ -622,6 +622,12 @@ uint32_t items_container_capacity(items_container_ref_t ref) {
     return require_container(ref)->capacity;
 }
 
+items_container_policy_t items_container_policy(items_container_ref_t ref) {
+    const ItemsItemContainer *container = ephemeral_ref(ref.index)
+        ? require_ephemeral_container(ref) : require_container(ref);
+    return (items_container_policy_t)container->policy;
+}
+
 items_lifetime_t items_container_lifetime(items_container_ref_t ref) {
     if (ephemeral_ref(ref.index)) {
         (void)require_ephemeral_container(ref);
