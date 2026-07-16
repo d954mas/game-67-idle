@@ -8,6 +8,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   getCatalogView,
+  loadItemChart,
+  loadItemDetail,
   listCatalogs,
   loadCatalogView,
   parseJsonOrThrow,
@@ -133,6 +135,26 @@ test("live template view exposes Snapshot fields, receipt status, and no catalog
   assert.deepEqual(energy.currency, { cap: 100, hud: "counter" });
   assert.deepEqual(energy.tags, []);
   for (const item of view.items) assert.equal(view.lock.status_by_id[item.id], "shipped");
+});
+
+test("item detail stays bounded to semantic inspect, schema, source, dependencies, and one selected chart", async () => {
+  const project = join(REPO_ROOT, "features", "items-core", "tests", "fixtures", "items_cli");
+  const detail = await loadItemDetail(REPO_ROOT, project, "game.levelled_sword");
+
+  assert.equal(detail.item.item.id, "game.levelled_sword");
+  assert.equal(detail.item.item.levels.length, 3);
+  assert.equal(detail.item.item.levels[1].values.cost_to_reach.__studio_kind, "cost");
+  assert.equal(detail.source.definition.file, "game/items.lua");
+  assert.match(detail.source.source_hash, /^sha256:[0-9a-f]{64}$/);
+  assert.deepEqual(detail.dependencies.inputs, ["game.gold"]);
+  assert.deepEqual(detail.fields.map((field) => field.member), ["attack"]);
+
+  const chart = await loadItemChart(REPO_ROOT, project, "game.levelled_sword", "attack");
+  assert.deepEqual(chart.points.map((point) => [point.level, point.value, point.provenance]), [
+    [1, 10, "table"],
+    [2, 15, "table"],
+    [3, 20, "table"],
+  ]);
 });
 
 test("unknown catalog id returns null", async () => {

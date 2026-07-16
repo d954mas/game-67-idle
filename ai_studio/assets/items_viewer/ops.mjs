@@ -79,6 +79,51 @@ async function runValidate(root, projectRoot) {
   throw new Error(`items_cli.py validate exited ${code} unexpectedly: ${stderr.trim()}`);
 }
 
+async function runFocusedRead(root, projectRoot, command, args = []) {
+  const { code, stdout, stderr } = await runItemsCliRaw(root, projectRoot, [command, ...args]);
+  if (code === 0) return { ok: true, data: parseJsonOrThrow(stdout, command).result };
+  if (code === 1) return { ok: false, content_error: { source: command, stderr: stderr.trim() } };
+  throw new Error(`items_cli.py ${command} exited ${code} unexpectedly: ${stderr.trim()}`);
+}
+
+function relevantFields(schema, item) {
+  const fields = Array.isArray(schema?.fields) ? schema.fields : [];
+  const members = new Set((item?.levels || []).flatMap((row) => Object.keys(row?.values || {})));
+  return fields.filter((field) => field && field.section === "level_row" && members.has(field.member));
+}
+
+// Selected-item Workbench data remains a direct composition of bounded semantic
+// CLI results. It carries Snapshot query/source objects unchanged and adds only
+// the relevant generated field metadata needed to render the level grid.
+export async function loadItemDetail(root, projectRoot, itemId) {
+  const reads = await Promise.all([
+    runFocusedRead(root, projectRoot, "inspect", ["--item", itemId]),
+    runFocusedRead(root, projectRoot, "schema"),
+    runFocusedRead(root, projectRoot, "source", ["--item", itemId]),
+    runFocusedRead(root, projectRoot, "dependencies", ["--item", itemId]),
+  ]);
+  const failed = reads.find((result) => !result.ok);
+  if (failed) return { content_error: failed.content_error };
+
+  const [item, schema, source, dependencies] = reads.map((result) => result.data);
+  return {
+    item,
+    fields: relevantFields(schema, item?.item),
+    source,
+    dependencies,
+  };
+}
+
+// Charts are requested for one selected generated field instead of eagerly
+// evaluating every series on item selection.
+export async function loadItemChart(root, projectRoot, itemId, field) {
+  const result = await runFocusedRead(root, projectRoot, "chart", [
+    "--item", itemId,
+    "--field", field,
+  ]);
+  return result.ok ? result.data : { content_error: result.content_error };
+}
+
 // items.lock.json is read directly — a separate
 // artifact, not a second model of items (decision (а)). A malformed lock degrades the
 // lock DISPLAY only (empty status/removed) rather than a 500 for the whole catalog;
@@ -265,4 +310,16 @@ export async function getCatalogView(root, id, options = {}) {
   if (!entry) return null;
   const folderAbs = join(root, entry.folder);
   return loadCatalogView(root, folderAbs, { id, kind: entry.kind, title: entry.title, folder: entry.folder });
+}
+
+export async function getItemDetail(root, catalogId, itemId, options = {}) {
+  const entry = resolveCatalogEntry(root, catalogId, options);
+  if (!entry) return null;
+  return loadItemDetail(root, join(root, entry.folder), itemId);
+}
+
+export async function getItemChart(root, catalogId, itemId, field, options = {}) {
+  const entry = resolveCatalogEntry(root, catalogId, options);
+  if (!entry) return null;
+  return loadItemChart(root, join(root, entry.folder), itemId, field);
 }

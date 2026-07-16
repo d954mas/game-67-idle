@@ -1,13 +1,13 @@
 ---
 id: T0316
 title: "AI Studio: Items Workbench поверх Lua Snapshot"
-status: backlog
+status: doing
 project: P001
 epic: E016
 priority: P1
 tags: [viewer, items, tooling]
 created: 2026-07-05
-updated: 2026-07-14
+updated: 2026-07-16
 ---
 
 ## What
@@ -38,7 +38,7 @@ The full contract is E016 plus
 
 - [x] Viewer shows the catalog of every registered game/template with icons and
       no per-game JavaScript data model.
-- [ ] After T0386 it reads bounded focused Snapshot queries from Items Lua; no
+- [x] After T0386 it reads bounded focused Snapshot queries from Items Lua; no
       consumer parses `items.json` or recalculates game math.
 - [ ] Typed blocks, levels, overrides, cost lists, diagnostics, release state,
       source links, grid/chart, semantic diff, and what-if render from generated
@@ -86,3 +86,5 @@ The full contract is E016 plus
   read-only surface remains the migration slice, not the final product; safe
   literal/table/curve/override editing must use the same semantic ops as AI.
 - 2026-07-11: T0375 status reconciliation: moved stale doing to backlog. Phase 1 is accepted, but all six current cutover/Workbench criteria remain pending on E016 T0366/T0367/T0386; E016 is outside E015 execution scope.
+- 2026-07-16: Started after T0386 completed with green Ubuntu/Windows CI. First slice will expose one bounded Workbench detail payload from the existing semantic CLI rather than adding browser-side catalog logic.
+- 2026-07-16: Slice 1 added focused registered-catalog item and selected-series HTTP reads by composing the existing inspect, schema, source, dependencies, and chart CLI operations. Snapshot objects stay unchanged, charts remain lazy, and no browser or Node evaluator/model was added. RED/green Viewer tests pass 22/22.
