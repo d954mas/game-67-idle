@@ -53,4 +53,5 @@ old JSON/schema/parser path without a compatibility fallback.
   selected complete single-source Items Lua, so the correct migration is one
   explicit catalog/schema cutover and deletion.
 - 2026-07-16: Started after T0383/T0365 closure. First slice inventories every JSON/schema/parser/runtime/Viewer consumer and resolves the legacy container boundary before any deletion.
-- 2026-07-16: 2026-07-16: Slice 1 isolated Lua release-receipt validation from the legacy JSON op-layer. items_cli now imports items_receipt directly; items_ops delegates to the same module. RED dependency test, 14 semantic CLI tests, 29 legacy op-layer tests, benchmark contract, and verify --changed passed.
+- 2026-07-16: Slice 1 isolated Lua release-receipt validation from the legacy JSON op-layer. items_cli now imports items_receipt directly; items_ops delegates to the same module. RED dependency test, 14 semantic CLI tests, 29 legacy op-layer tests, benchmark contract, and verify --changed passed.
+- 2026-07-16: Slice 2 added the six template definitions as modular Lua plus manifest. Parity proof preserves ids/kinds/storage/core values, deliberately renames display_name/icon_asset_id/hud_hint to name/icon/hud, removes tags that duplicated kind, excludes container rows, and represents the shipped unique sword as levels.single({}) so the v4 release receipt validates.

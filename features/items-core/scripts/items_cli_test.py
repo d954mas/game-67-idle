@@ -19,11 +19,20 @@ import items_cli as CLI
 SCRIPT_DIR = Path(__file__).resolve().parent
 SCRIPT = SCRIPT_DIR / "items_cli.py"
 PROJECT = SCRIPT_DIR.parent / "tests" / "fixtures" / "items_cli"
+TEMPLATE_ROOT = SCRIPT_DIR.parents[2] / "templates" / "template"
 
 
 class ItemsCliTests(unittest.TestCase):
     def test_lua_cli_does_not_depend_on_legacy_json_ops(self):
         self.assertEqual(CLI.receipt_api.__name__, "items_receipt")
+
+    def test_template_lua_matches_the_shipped_release_receipt(self):
+        process = subprocess.run(
+            [sys.executable, str(SCRIPT), "--project-root", str(TEMPLATE_ROOT), "validate"],
+            text=True, capture_output=True, encoding="utf-8", timeout=20,
+        )
+        self.assertEqual(process.returncode, 0, process.stderr)
+        self.assertTrue(json.loads(process.stdout)["result"]["receipt"]["ok"])
 
     def run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(

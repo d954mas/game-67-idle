@@ -35,8 +35,9 @@ Layout (decomposition the template teaches by example — no god-file):
     content/                 items.json / progression.json / item_fields.schema.json /
                              items.lock.json — item + progression catalog content, read by
                              the codegen and the read-only op-CLI.
+    items.lua.json           evaluator manifest for the E016 Lua catalog candidate.
     design/                  game-owned concept, GDD, private knowledge base, and
-                             structured design data scaffold.
+                             modular Items Lua plus structured design data.
 
 Dropped on purpose: a src-level `devapi/` dir and a `scene/` builder do NOT
 exist — game-owned DevAPI commands ship as `src/game_*_devapi.c` under

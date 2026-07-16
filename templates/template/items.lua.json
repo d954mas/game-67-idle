@@ -1,0 +1,15 @@
+{
+  "schema": "items.lua.sandbox.v1",
+  "modules": [
+    { "name": "template.items.currencies", "file": "design/items/currencies.lua" },
+    { "name": "template.items.consumables", "file": "design/items/consumables.lua" },
+    { "name": "template.items.weapons", "file": "design/items/weapons.lua" },
+    { "name": "template.items.materials", "file": "design/items/materials.lua" }
+  ],
+  "entries": [
+    "template.items.currencies",
+    "template.items.consumables",
+    "template.items.weapons",
+    "template.items.materials"
+  ]
+}
