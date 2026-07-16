@@ -87,6 +87,29 @@ void test_container_ids_are_monotone_and_reserved_max_refuses(void) {
     cJSON_Delete(before);
 }
 
+void test_entry_id_reaches_maximum_then_exhausts_without_mutation(void) {
+    items_container_ref_t bag = create_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
+    items_state.last_entry_id = UINT32_MAX - 2U;
+
+    item_entry_ref_t maximum = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 1, 0, "loot:test", &maximum, NULL));
+    TEST_ASSERT_EQUAL_UINT32(UINT32_MAX - 1U, items_entry_id(maximum));
+
+    cJSON *before = items_state_to_json(&items_state);
+    TEST_ASSERT_EQUAL_UINT32(
+        UINT32_MAX - 1U,
+        (uint32_t)cJSON_GetObjectItemCaseSensitive(before, "last_entry_id")->valuedouble);
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_ID_EXHAUSTED,
+        items_try_stack_add(bag, "tmpl.potion", 1, 1, "loot:test", NULL, NULL));
+    cJSON *after = items_state_to_json(&items_state);
+    TEST_ASSERT_TRUE(cJSON_Compare(before, after, true));
+    cJSON_Delete(after);
+    cJSON_Delete(before);
+}
+
 void test_stack_slots_caps_and_multiple_stacks(void) {
     items_container_ref_t bag = create_container(3, ITEMS_CONTAINER_POLICY_GENERIC);
     item_entry_ref_t first = {0};
@@ -198,6 +221,20 @@ void test_rebuild_rejects_duplicates_and_counter_regression(void) {
     items_state.containers[b.index].container_id = 2;
     items_state.last_container_id = 1;
     TEST_ASSERT_FALSE(items_runtime_rebuild(error, (int)sizeof(error)));
+}
+
+void test_rebuild_rejects_reserved_persisted_counters(void) {
+    (void)create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
+    char error[128] = {0};
+
+    items_state.last_container_id = UINT32_MAX;
+    TEST_ASSERT_FALSE(items_runtime_rebuild(error, (int)sizeof(error)));
+    TEST_ASSERT_EQUAL_STRING("reserved persisted id counter", error);
+
+    items_state.last_container_id = 1;
+    items_state.last_entry_id = UINT32_MAX;
+    TEST_ASSERT_FALSE(items_runtime_rebuild(error, (int)sizeof(error)));
+    TEST_ASSERT_EQUAL_STRING("reserved persisted id counter", error);
 }
 
 void test_one_hundred_persistent_containers_round_trip(void) {
@@ -490,12 +527,14 @@ int main(void) {
     UNITY_BEGIN();
     RUN_TEST(test_empty_nested_state_round_trip);
     RUN_TEST(test_container_ids_are_monotone_and_reserved_max_refuses);
+    RUN_TEST(test_entry_id_reaches_maximum_then_exhausts_without_mutation);
     RUN_TEST(test_stack_slots_caps_and_multiple_stacks);
     RUN_TEST(test_zero_capacity_and_currency_policy);
     RUN_TEST(test_unique_instances_keep_independent_fields);
     RUN_TEST(test_whole_split_and_merge_identity);
     RUN_TEST(test_resize_requires_all_occupied_slots_to_fit);
     RUN_TEST(test_rebuild_rejects_duplicates_and_counter_regression);
+    RUN_TEST(test_rebuild_rejects_reserved_persisted_counters);
     RUN_TEST(test_one_hundred_persistent_containers_round_trip);
     RUN_TEST(test_missing_definition_quarantines_and_restores);
     RUN_TEST(test_ephemeral_entries_never_enter_persistent_state);

@@ -78,6 +78,12 @@ static bool build_indices(bool invalidate_refs, char *error, int error_cap) {
     uint32_t max_container_id = 0;
     uint32_t max_entry_id = 0;
 
+    if (items_state.last_container_id == ITEMS_ID_RESERVED ||
+        items_state.last_entry_id == ITEMS_ID_RESERVED) {
+        set_error(error, error_cap, "reserved persisted id counter");
+        return false;
+    }
+
     for (uint32_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS; i++) {
         const ItemsItemContainer *container = &items_state.containers[i];
         if (!container->used) { continue; }
