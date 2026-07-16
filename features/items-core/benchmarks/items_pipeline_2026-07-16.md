@@ -32,26 +32,33 @@ evaluator, or weaker isolation boundary.
 
 | Flow | Before (ms) | After (ms) | Change |
 |---|---:|---:|---:|
-| Cold validate | 380.741 | 302.825 | -20.5% |
-| Warm validate median | 371.985 | 314.622 | -15.4% |
-| Cold build | 387.518 | 318.186 | -17.9% |
-| No-op build | 377.428 | 295.104 | -21.8% |
-| One-edit apply | 672.043 | 550.161 | -18.1% |
-| Eight-command agent scenario | 4024.548 | 3288.347 | -18.3% |
+| Cold validate | 380.741 | 325.104 | -14.6% |
+| Warm validate median | 371.985 | 286.074 | -23.1% |
+| Cold build | 387.518 | 329.818 | -14.9% |
+| No-op build | 377.428 | 274.629 | -27.2% |
+| One-edit apply | 672.043 | 711.074 | +5.8% |
+| Eight-command agent scenario | 4024.548 | 3441.259 | -14.5% |
 
 The accepted result was remeasured after T0438 added project-wide input
 rechecks, so these advisory timings describe the current path rather than an
 isolated attribution to the import optimization. Agent peak process-tree RSS
-was 84,639,744 bytes versus the 93,257,728-byte baseline (-9.2%).
+was 91,656,192 bytes versus the 93,257,728-byte baseline (-1.7%). The apply
+sample now includes the deliberate project-wide input rechecks from T0438.
 The final scenario performs source, preview, apply, build, affected validate,
 focused inspect, stale-hash conflict, and returned-inverse undo: 8 tools, 79
 logical project reads, 6,455 stdout bytes, 331 stderr bytes, and four passing
 diagnostic-quality checks.
 
+The Workbench initial catalog/detail/chart benchmark compares the removed
+four-process detail fan-out with the single focused `detail` command while
+keeping catalog and chart phases identical. The current path uses 4 commands
+instead of 7, 946.712 ms instead of 1,084.472 ms, 4,274 instead of 4,757 stdout
+bytes, and 166,645,760 instead of 277,229,568 peak combined process-tree RSS.
+
 ## Runtime and backend decision
 
 The generated production blob binds through the shipping C implementation.
-Nine in-process samples produced a 399 ns median; owned memory is exactly 616
+Nine in-process samples produced a 400 ns median; owned memory is exactly 616
 bytes steady and 1,232 bytes while the input and owned copy coexist. The
 external benchmark process wall time is reported separately and is not treated
 as bind latency.

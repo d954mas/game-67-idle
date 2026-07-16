@@ -22,9 +22,9 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/scripts/items_
 ```
 
 `list` supplies compact master rows and `validate` supplies
-Snapshot/requirements/release-receipt diagnostics. A selected item composes
-the existing bounded `inspect`, `schema`, `source`, and `dependencies` results;
-one selected chart field invokes `chart` lazily. The Workbench adapts those
+Snapshot/requirements/release-receipt diagnostics. A selected item invokes one
+bounded `detail` composition of inspect/schema/source/dependencies; one selected
+chart field invokes `chart` lazily. The Workbench adapts those
 results to HTTP without a second evaluator or browser-side Items model; it
 never reads `items.json`, the old field schema, or the legacy op-layer, and it
 does not invent a second schema for rendering.
@@ -48,7 +48,7 @@ surface does not display a catalog container table.
   require `?include-private=true` and still pass workspace privacy checks.
 - `GET /api/items-viewer/catalog?id=<kind>:<id>` returns one complete view.
 - `GET /api/items-viewer/item?catalog=<kind>:<id>&item=<def_id>` returns one
-  bounded inspect/schema/source/dependency detail.
+  bounded `detail` result from one evaluator process.
 - `GET /api/items-viewer/chart?catalog=<kind>:<id>&item=<def_id>&field=<member>`
   returns only the selected generated numeric series.
 - `POST /api/items-viewer/edit` accepts exactly a registered catalog, one

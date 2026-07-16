@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
-import { createItemsViewerApi } from "../api.mjs";
+import { createItemsViewerApi, createRequestCoordinator } from "../api.mjs";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../..", import.meta.url)).replace(/[\\/]$/, "");
 
@@ -41,6 +41,34 @@ async function request(path, { method = "GET", body, headers = {} } = {}) {
   );
   return { handled, response, json: JSON.parse(response.body) };
 }
+
+test("catalog request coordinator coalesces duplicates and enforces one active job", async () => {
+  const coordinator = createRequestCoordinator(1);
+  let active = 0;
+  let peak = 0;
+  let calls = 0;
+  let releaseFirst;
+  const blocked = new Promise((resolve) => { releaseFirst = resolve; });
+  const work = async (value, gate) => {
+    calls += 1;
+    active += 1;
+    peak = Math.max(peak, active);
+    await gate;
+    active -= 1;
+    return value;
+  };
+
+  const first = coordinator.run("catalog:a", () => work("a", blocked));
+  const duplicate = coordinator.run("catalog:a", () => work("duplicate", Promise.resolve()));
+  const second = coordinator.run("catalog:b", () => work("b", Promise.resolve()));
+  await Promise.resolve();
+  assert.equal(calls, 1);
+  releaseFirst();
+
+  assert.deepEqual(await Promise.all([first, duplicate, second]), ["a", "a", "b"]);
+  assert.equal(calls, 2);
+  assert.equal(peak, 1);
+});
 
 test("focused item endpoint resolves only registered catalogs", async () => {
   const { handled, response, json } = await request(

@@ -75,6 +75,21 @@ class ItemsPipelineBenchmarkTests(unittest.TestCase):
         self.assertEqual(recorded["method"]["source_sha256"], expected)
         self.assertEqual(recorded["decision"]["status"], "ratified")
 
+    def test_workbench_initial_load_uses_one_focused_detail_command(self):
+        recorded = json.loads(RESULT.read_text(encoding="utf-8"))
+        measured = recorded["workbench_initial_load"]
+        self.assertEqual(measured["before"]["command_count"], 7)
+        self.assertEqual(measured["after"]["command_count"], 4)
+        self.assertLess(measured["after"]["wall_ms"], measured["before"]["wall_ms"])
+        self.assertLess(
+            measured["after"]["stdout_context_bytes"],
+            measured["before"]["stdout_context_bytes"],
+        )
+        self.assertLessEqual(
+            measured["after"]["peak_process_tree_rss_bytes"],
+            measured["before"]["peak_process_tree_rss_bytes"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

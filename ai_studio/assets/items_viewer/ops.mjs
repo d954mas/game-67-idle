@@ -86,32 +86,12 @@ async function runFocusedRead(root, projectRoot, command, args = []) {
   throw new Error(`items_cli.py ${command} exited ${code} unexpectedly: ${stderr.trim()}`);
 }
 
-function relevantFields(schema, item) {
-  const fields = Array.isArray(schema?.fields) ? schema.fields : [];
-  const members = new Set((item?.levels || []).flatMap((row) => Object.keys(row?.values || {})));
-  return fields.filter((field) => field && field.section === "level_row" && members.has(field.member));
-}
-
-// Selected-item Workbench data remains a direct composition of bounded semantic
-// CLI results. It carries Snapshot query/source objects unchanged and adds only
-// the relevant generated field metadata needed to render the level grid.
+// One CLI evaluation composes the bounded selected-item view. Spawning inspect,
+// schema, source, and dependencies separately multiplied fresh-worker cost and
+// peak RSS without adding an isolation boundary.
 export async function loadItemDetail(root, projectRoot, itemId) {
-  const reads = await Promise.all([
-    runFocusedRead(root, projectRoot, "inspect", ["--item", itemId]),
-    runFocusedRead(root, projectRoot, "schema"),
-    runFocusedRead(root, projectRoot, "source", ["--item", itemId]),
-    runFocusedRead(root, projectRoot, "dependencies", ["--item", itemId]),
-  ]);
-  const failed = reads.find((result) => !result.ok);
-  if (failed) return { content_error: failed.content_error };
-
-  const [item, schema, source, dependencies] = reads.map((result) => result.data);
-  return {
-    item,
-    fields: relevantFields(schema, item?.item),
-    source,
-    dependencies,
-  };
+  const result = await runFocusedRead(root, projectRoot, "detail", ["--item", itemId]);
+  return result.ok ? result.data : { content_error: result.content_error };
 }
 
 // Charts are requested for one selected generated field instead of eagerly

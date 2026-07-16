@@ -66,8 +66,45 @@ function sameOriginRequest(req, allowedHosts) {
   }
 }
 
+export function createRequestCoordinator(maxConcurrent = 1) {
+  if (!Number.isSafeInteger(maxConcurrent) || maxConcurrent < 1) {
+    throw new TypeError("maxConcurrent must be a positive integer");
+  }
+  const inFlight = new Map();
+  const queue = [];
+  let active = 0;
+
+  function drain() {
+    while (active < maxConcurrent && queue.length) {
+      const job = queue.shift();
+      active += 1;
+      Promise.resolve().then(job.work).then(job.resolve, job.reject).finally(() => {
+        active -= 1;
+        drain();
+      });
+    }
+  }
+
+  return {
+    run(key, work) {
+      if (inFlight.has(key)) return inFlight.get(key);
+      const promise = new Promise((resolve, reject) => {
+        queue.push({ work, resolve, reject });
+        drain();
+      });
+      inFlight.set(key, promise);
+      promise.then(
+        () => inFlight.delete(key),
+        () => inFlight.delete(key),
+      );
+      return promise;
+    },
+  };
+}
+
 export function createItemsViewerApi(root, options = {}) {
   const allowedHosts = new Set(options.allowedHosts || []);
+  const catalogRequests = createRequestCoordinator(options.maxCatalogReads || 1);
   return async function handleItemsViewerApi(req, res, url) {
     try {
       if (url.pathname === "/api/items-viewer/catalogs") {
@@ -91,9 +128,12 @@ export function createItemsViewerApi(root, options = {}) {
           return true;
         }
         const id = url.searchParams.get("id");
-        const view = await getCatalogView(root, id, {
-          includePrivate: boolQueryParam(url.searchParams.get("include-private")) || boolQueryParam(url.searchParams.get("includePrivate")),
-        });
+        const includePrivate = boolQueryParam(url.searchParams.get("include-private"))
+          || boolQueryParam(url.searchParams.get("includePrivate"));
+        const view = await catalogRequests.run(
+          `${id}\0${includePrivate}`,
+          () => getCatalogView(root, id, { includePrivate }),
+        );
         if (!view) {
           sendJson(res, 404, { error: "catalog not found" });
           return true;

@@ -175,6 +175,45 @@ def measure_command(
     }
 
 
+def measure_commands_parallel(
+    commands: list[list[str]], *, cwd: Path = ROOT, timeout: float = 120.0,
+) -> list[dict[str, Any]]:
+    """Run one Workbench phase concurrently and sample combined process-tree RSS."""
+    started = time.perf_counter_ns()
+    processes = [
+        subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        for command in commands
+    ]
+    deadline = time.monotonic() + timeout
+    peak_rss = 0
+    while any(process.poll() is None for process in processes):
+        peak_rss = max(peak_rss, sum(
+            _process_tree_rss(process.pid) for process in processes if process.poll() is None
+        ))
+        if time.monotonic() >= deadline:
+            for process in processes:
+                if process.poll() is None:
+                    process.kill()
+            for process in processes:
+                process.communicate()
+            raise subprocess.TimeoutExpired(commands, timeout)
+        time.sleep(0.005)
+    wall_ms = round((time.perf_counter_ns() - started) / 1_000_000, 3)
+    measurements = []
+    for process in processes:
+        stdout, stderr = process.communicate()
+        measurements.append({
+            "exit_code": process.returncode,
+            "wall_ms": wall_ms,
+            "peak_process_tree_rss_bytes": peak_rss,
+            "stdout_bytes": len(stdout),
+            "stderr_bytes": len(stderr),
+            "stdout": stdout,
+            "stderr": stderr,
+        })
+    return measurements
+
+
 def conflict_quality(stderr: bytes) -> dict[str, bool]:
     try:
         payload = json.loads(stderr)
@@ -239,6 +278,25 @@ def _cli(project: Path, *arguments: str) -> dict[str, Any]:
     return measure_command([
         sys.executable, str(CLI), "--project-root", str(project), *arguments,
     ])
+
+
+def _parallel_cli(project: Path, commands: list[list[str]]) -> list[dict[str, Any]]:
+    return measure_commands_parallel([
+        [sys.executable, str(CLI), "--project-root", str(project), *arguments]
+        for arguments in commands
+    ])
+
+
+def _workbench_summary(phases: list[list[dict[str, Any]]]) -> dict[str, int | float]:
+    return {
+        "command_count": sum(len(phase) for phase in phases),
+        "wall_ms": round(sum(phase[0]["wall_ms"] for phase in phases), 3),
+        "stdout_context_bytes": sum(command["stdout_bytes"] for phase in phases for command in phase),
+        "stderr_context_bytes": sum(command["stderr_bytes"] for phase in phases for command in phase),
+        "peak_process_tree_rss_bytes": max(
+            command["peak_process_tree_rss_bytes"] for phase in phases for command in phase
+        ),
+    }
 
 
 def _require_success(measured: dict[str, Any], operation: str) -> dict[str, Any]:
@@ -316,6 +374,38 @@ def benchmark(project: Path, edit_project: Path, build_dir: Path, *, warm_runs: 
         shutil.copytree(edit_project, edit_copy)
         edit_output = temporary_root / "edit-output"
         agent: list[dict[str, Any]] = []
+
+        catalog_phase = _parallel_cli(edit_copy, [["list"], ["validate"]])
+        legacy_detail_phase = _parallel_cli(edit_copy, [
+            ["inspect", "--item", "game.levelled_sword"],
+            ["schema"],
+            ["source", "--item", "game.levelled_sword"],
+            ["dependencies", "--item", "game.levelled_sword"],
+        ])
+        focused_detail_phase = _parallel_cli(
+            edit_copy, [["detail", "--item", "game.levelled_sword"]],
+        )
+        chart_phase = _parallel_cli(edit_copy, [[
+            "chart", "--item", "game.levelled_sword", "--field", "attack",
+        ]])
+        for label, phase in (
+            ("catalog", catalog_phase), ("legacy detail", legacy_detail_phase),
+            ("focused detail", focused_detail_phase), ("chart", chart_phase),
+        ):
+            for measured in phase:
+                _require_success(measured, label)
+        focused_detail = _payload(focused_detail_phase[0])["result"]
+        legacy_results = [_payload(measured)["result"] for measured in legacy_detail_phase]
+        if (
+            focused_detail["item"] != legacy_results[0]
+            or focused_detail["source"] != legacy_results[2]
+            or focused_detail["dependencies"] != legacy_results[3]
+        ):
+            raise RuntimeError("focused Workbench detail does not match the legacy composition")
+        workbench_initial_load = {
+            "before": _workbench_summary([catalog_phase, legacy_detail_phase, chart_phase]),
+            "after": _workbench_summary([catalog_phase, focused_detail_phase, chart_phase]),
+        }
 
         source = _cli(edit_copy, "source", "--item", "game.levelled_sword")
         source_payload = _require_success(source, "source")
@@ -443,6 +533,7 @@ def benchmark(project: Path, edit_project: Path, build_dir: Path, *, warm_runs: 
             "totals": _agent_totals(agent),
             "diagnostic_quality": diagnostic_quality,
         },
+        "workbench_initial_load": workbench_initial_load,
         "bottlenecks": [
             {"flow": name, "wall_ms": wall_ms}
             for name, wall_ms in sorted(bottleneck_candidates.items(), key=lambda entry: entry[1], reverse=True)

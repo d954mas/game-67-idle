@@ -273,6 +273,32 @@ def _dependencies(
     return result
 
 
+def _detail(root: Path, snapshot: dict[str, Any], item_id: str) -> dict[str, Any]:
+    item = snapshot_api.query_snapshot(snapshot, item_id=item_id)
+    if len(snapshot["fields"]) > DEFAULT_MAX_FIELDS:
+        raise CliFailure("cli.result_limit", f"schema exceeds {DEFAULT_MAX_FIELDS} fields")
+    members = {
+        member
+        for row in item["item"].get("levels", [])
+        for member in row.get("values", {})
+    }
+    fields = [
+        field for field in snapshot["fields"]
+        if field.get("section") == "level_row" and field.get("member") in members
+    ]
+    source_path = _project_file(root, item["source"]["file"], "edit.source")
+    return {
+        "item": item,
+        "fields": fields,
+        "source": {
+            "item": item_id,
+            "definition": item["source"],
+            "source_hash": _source_hash(source_path.read_bytes()),
+        },
+        "dependencies": _dependencies(snapshot, item_id, DEFAULT_MAX_RELATED),
+    }
+
+
 def _copy_project_for_edit(
     root: Path, args: argparse.Namespace, source_path: Path,
     original_bytes: bytes, edited_bytes: bytes,
@@ -696,6 +722,9 @@ def _parser() -> argparse.ArgumentParser:
     dependencies.add_argument("--item", required=True)
     dependencies.add_argument("--max-related", type=int, default=DEFAULT_MAX_RELATED)
 
+    detail = commands.add_parser("detail")
+    detail.add_argument("--item", required=True)
+
     source = commands.add_parser("source")
     source.add_argument("--item", required=True)
     source.add_argument("--field")
@@ -779,6 +808,8 @@ def main(argv: list[str] | None = None) -> int:
             )
         elif operation == "dependencies":
             result = _dependencies(snapshot, args.item, args.max_related)
+        elif operation == "detail":
+            result = _detail(root, snapshot, args.item)
         elif operation == "source":
             query = snapshot_api.query_snapshot(snapshot, item_id=args.item, field=args.field)
             source_path = _project_file(root, query["source"]["file"], "edit.source")

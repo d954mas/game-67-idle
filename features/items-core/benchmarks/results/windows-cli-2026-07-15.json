@@ -7,7 +7,7 @@
       "operation": "source",
       "stderr_bytes": 0,
       "stdout_bytes": 434,
-      "wall_ms": 290.708
+      "wall_ms": 252.421
     },
     {
       "exit_code": 0,
@@ -15,7 +15,7 @@
       "operation": "level-set",
       "stderr_bytes": 0,
       "stdout_bytes": 1311,
-      "wall_ms": 462.312
+      "wall_ms": 408.453
     },
     {
       "exit_code": 0,
@@ -23,7 +23,7 @@
       "operation": "validate",
       "stderr_bytes": 0,
       "stdout_bytes": 400,
-      "wall_ms": 281.213
+      "wall_ms": 246.116
     },
     {
       "exit_code": 0,
@@ -31,7 +31,7 @@
       "operation": "inspect",
       "stderr_bytes": 0,
       "stdout_bytes": 827,
-      "wall_ms": 284.454
+      "wall_ms": 236.161
     },
     {
       "exit_code": 1,
@@ -39,7 +39,7 @@
       "operation": "level-set",
       "stderr_bytes": 331,
       "stdout_bytes": 0,
-      "wall_ms": 288.262
+      "wall_ms": 241.993
     }
   ],
   "diagnostic_quality": {
@@ -52,7 +52,7 @@
     "context_bytes": "exact captured UTF-8 stdout/stderr byte counts",
     "file_reads": "deterministic application-level project reads implied by the manifest, temporary validation copy, receipt and state inputs; excludes OS/library reads",
     "latency": "subprocess wall clock; advisory machine sample",
-    "source_sha256": "sha256:6c493c3e20e52f90c861220cd83cc6b9244e041e8590a7206d69546d2821a02e"
+    "source_sha256": "sha256:df711c8481c0dc06f0c4293bf85bcf871609bf5790eef8da6a9112012faa7789"
   },
   "scenario": "source-preview-validate-affected-inspect-conflict",
   "schema": "items.cli.benchmark.v1",
@@ -60,6 +60,6 @@
     "logical_project_file_reads": 28,
     "stderr_bytes": 331,
     "stdout_bytes": 2972,
-    "wall_ms": 1606.949
+    "wall_ms": 1385.144
   }
 }

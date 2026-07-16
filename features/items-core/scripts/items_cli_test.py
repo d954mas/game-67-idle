@@ -148,6 +148,19 @@ class ItemsCliTests(unittest.TestCase):
         self.assertGreater(source["result"]["definition"]["line"], 1)
         self.assertRegex(source["result"]["source_hash"], r"^sha256:[0-9a-f]{64}$")
 
+    def test_detail_composes_one_bounded_selected_item_view(self):
+        detail = self.payload("detail", "--item", "game.levelled_sword")["result"]
+
+        self.assertEqual(detail["item"]["item"]["id"], "game.levelled_sword")
+        self.assertEqual([field["member"] for field in detail["fields"]], ["attack"])
+        self.assertEqual(detail["source"]["definition"]["file"], "game/items.lua")
+        self.assertRegex(detail["source"]["source_hash"], r"^sha256:[0-9a-f]{64}$")
+        self.assertEqual(detail["dependencies"], {
+            "item": "game.levelled_sword",
+            "inputs": ["game.gold"],
+            "dependents": [],
+        })
+
     def test_schema_and_validate_are_focused_snapshot_views(self):
         schema = self.payload("schema")
         self.assertEqual(schema["result"]["kinds"], ["currency", "weapon"])
