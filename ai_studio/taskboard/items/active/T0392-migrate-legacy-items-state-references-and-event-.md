@@ -40,12 +40,22 @@ and transient event consumers to the new identity model.
 - [ ] Event payload IDs and every producer/consumer are changed as a code/API
       cutover with compatibility tests; transient events are not treated as save
       rows to migrate.
+- [ ] Release-visible reason validation rejects null, malformed, unknown-verb,
+      and oversized reasons before mutation; every successful mutation emits one
+      bounded audit event or fails without state change.
+- [ ] Game-owned new-game seed code checks every grant against catalog
+      requirements and refuses partial initialization when an ID, storage route,
+      capacity, or minimum seed amount is incompatible.
 - [ ] Raw DevAPI writes cannot create half-updated ownership relationships;
       supported domain operations update both fragments.
 - [ ] Frozen v1 fixtures cover flat `owned`, fixed names, missing/removed item
       definitions, external references, deterministic order, and rollback/fail
       behavior, including one owner-fragment migration failure with exact
       unchanged document state, without hand-editing generated state C.
+- [ ] Legacy fixtures include overflowing `#<seq>` suffixes, truncated/noncanonical
+      keys, mismatched key/container/definition fields, duplicate logical stacks,
+      unique counts other than one, and unsupported storage/container routes;
+      structural corruption rejects the staged document instead of becoming live.
 - [ ] A well-formed missing/removed definition quarantines the unchanged entry
       and keeps its slot/capacity; structural corruption rejects the whole staged
       document. Restoration of a compatible definition unquarantines it.

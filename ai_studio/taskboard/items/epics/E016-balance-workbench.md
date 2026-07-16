@@ -1,7 +1,7 @@
 ---
 id: E016
 title: Items Lua authoring and Workbench
-status: done
+status: active
 project: P001
 priority: P2
 tags: [balance, items, lua, game-design, tooling]
@@ -340,3 +340,6 @@ truth.
   became resource-only with runtime payment scope; state nests globally unique
   numeric entries/slots; generated item hashes and assert-first APIs mirror the
   atlas pattern; pack placement became a game-builder choice.
+- 2026-07-16: Reopened after three independent full Items reviews confirmed
+  Workbench security/race, authoring integrity, and bounded-I/O defects. Fixes
+  remain in E016; runtime/state findings stay in existing E019.

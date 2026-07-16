@@ -27,6 +27,9 @@ T0392.
       `last_entry_id`, allocate only `1..UINT32_MAX - 1` without wrap/reuse,
       serialize exactly as numbers, and remain distinct from runtime
       index+generation refs.
+- [ ] Allocation and load fixtures cover exhausted/reserved counters, maximum
+      IDs, long valid definition IDs, key/collision pressure, and prove there is
+      no signed overflow, truncation, wrap, or process-global reseed state.
 - [ ] State owns `containers[].entries[]`: every entry is nested in exactly one
       container, has a unique `entry_id` and explicit unique `slot`, and does
       not duplicate `container_id`.
@@ -43,6 +46,9 @@ T0392.
       missing/removed `def_id` alone is quarantined in place, still occupies its
       slot, is excluded from gameplay, and restores if the definition returns.
       Live allocation exhaustion refuses before mutation and never wraps.
+- [ ] Currency definitions use stack storage only; authoring/package/runtime
+      reject unique currency rather than inventing instance-cap or purse-count
+      semantics.
 - [ ] Capacity is addressable slots: `slot < capacity`, auto placement is first
       free, and shrink requires `max_occupied_slot < new_capacity`. V1
       has no unlimited sentinel (`capacity = 0` means zero slots). Policy is
