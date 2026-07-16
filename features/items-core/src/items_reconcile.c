@@ -27,7 +27,8 @@ void items_reconcile(void) {
         if (!rec->used) {
             continue;
         }
-        rec->quarantined = (item_core(rec->def_id) == NULL);
+        item_def_ref_t ref;
+        rec->quarantined = !items_catalog_is_bound() || !items_try_get_string(rec->def_id, &ref);
 
         const char *hash = strrchr(rec->key, '#');
         if (hash != NULL && hash[1] != '\0') {

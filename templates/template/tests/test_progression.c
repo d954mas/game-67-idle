@@ -10,13 +10,15 @@
 #include "features/items/items.h"
 #include "game_events.h"
 #include "items_state.h"
+#include "items_runtime_test_catalog.h"
 #include "progression_state.h"
 #include "progression_state_events.gen.h"
 
 /* Full-stack И3a test: progression logic + items runtime + generated state
-   layers, over the RUKOPISNYY test catalog (tests/test_progression_catalog.c,
-   §5.7) -- NOT the demo progression_tracks.gen.c (anti-duplicate k_tracks
-   symbol, R10; the golden catalog is exercised separately by
+   layers, over the hand-written progression catalog
+   (tests/test_progression_catalog.c, §5.7) -- NOT progression_tracks.gen.c
+   (anti-duplicate k_tracks symbol, R10). The generated progression catalog is
+   exercised separately by
    tests/test_progression_curve.c). game_save.c is NOT linked -- items_containers.c/
    items_bootstrap.c/progression.c only need game_save_mark_dirty(), stubbed
    below (precedent: test_items_fragment.c). */
@@ -382,6 +384,9 @@ void test_lazy_allocation_no_gratuitous_records(void) {
 }
 
 int main(void) {
+    if (!items_runtime_test_catalog_bind()) {
+        return 1;
+    }
     game_events_init();
     UNITY_BEGIN();
     RUN_TEST(test_cost_lookup_and_xp_needed);
@@ -399,5 +404,6 @@ int main(void) {
     RUN_TEST(test_lazy_allocation_no_gratuitous_records);
     int result = UNITY_END();
     game_events_shutdown();
+    items_catalog_shutdown();
     return result;
 }

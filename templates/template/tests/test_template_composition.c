@@ -15,6 +15,7 @@
 #include "game_state.h"
 #include "settings_state.h"
 #include "items_state.h"
+#include "items_runtime_test_catalog.h"
 #include "progression_state.h"
 #include "features/settings/settings.h"
 #include "features/items/items.h"
@@ -141,6 +142,9 @@ void test_hold_to_reset_preserves_settings(void) {
 }
 
 int main(void) {
+    if (!items_runtime_test_catalog_bind()) {
+        return 1;
+    }
     /* registration ONCE (no unregister API; registering per-setUp would
        duplicate/overflow), in the documented order (settings -> items ->
        progression -> game; `game` last). */
@@ -158,5 +162,6 @@ int main(void) {
     const int r = UNITY_END();
 
     game_events_shutdown();
+    items_catalog_shutdown();
     return r;
 }

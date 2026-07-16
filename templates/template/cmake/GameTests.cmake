@@ -404,8 +404,20 @@ if(NOT EMSCRIPTEN)
     set_target_properties(benchmark_items_runtime_blob PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/benchmarks")
 
+    function(configure_items_runtime_catalog_test target_name)
+        add_dependencies(${target_name} items_catalog_gen)
+        target_sources(${target_name} PRIVATE
+            tests/items_runtime_test_catalog.c
+            "${ITEMS_CORE_SRC}/items_runtime_package.c")
+        target_include_directories(${target_name} PRIVATE
+            tests "${ITEMS_CATALOG_BUILD_DIR}")
+        target_compile_definitions(${target_name} PRIVATE
+            ITEMS_RUNTIME_PACKAGE_ENABLED=1
+            ITEMS_RUNTIME_PACKAGE_PATH="${ITEMS_CATALOG_PACKAGE}")
+    endfunction()
+
     # Items fragment round-trip links generated state/events, game-owned hooks,
-    # JSON/event plumbing, ownership core, and the generated catalog.
+    # JSON/event plumbing, ownership core, and the compact runtime catalog.
     # game_save.c is not linked; the test TU stubs game_save_mark_dirty.
     add_executable(test_items_fragment
         tests/test_items_fragment.c
@@ -414,10 +426,9 @@ if(NOT EMSCRIPTEN)
         src/features/items/items_bootstrap.c
         "${ITEMS_CORE_SRC}/items_reconcile.c"
         "${ITEMS_CORE_SRC}/items_containers.c"
-        "${ITEMS_CORE_SRC}/items_catalog.c"
-        "${ITEMS_CATALOG_GENERATED_SOURCE}"
         src/game_state_json.c
         "${GAME_EVENTS_SRC}/game_events.c")
+    configure_items_runtime_catalog_test(test_items_fragment)
     target_link_libraries(test_items_fragment PRIVATE cjson unity nt_hash nt_log nt_core)
     target_include_directories(test_items_fragment PRIVATE "${ITEMS_CORE_INC}" "${GAME_EVENTS_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_items_fragment PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -482,12 +493,12 @@ if(NOT EMSCRIPTEN)
         "${PROGRESSION_STATE_GENERATED_SOURCE}"                  # progression_state.c
         "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"           # progression_state_events.gen.c
         "${ITEMS_CORE_SRC}/items_containers.c"                    # items runtime (progression spends/reads purse; T0337 M1: in-place module)
-        "${ITEMS_CORE_SRC}/items_catalog.c" "${ITEMS_CATALOG_GENERATED_SOURCE}"
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
         src/features/items/items_bootstrap.c                     # items on_new_game (link completeness)
         "${ITEMS_CORE_SRC}/items_reconcile.c"                     # items reconcile (T0337 M1 split, link completeness)
         src/game_state_json.c "${GAME_EVENTS_SRC}/game_events.c")
     add_dependencies(test_progression progression_tracks_gen)   # H2: guarantees progression_tracks.gen.h before progression.c compiles
+    configure_items_runtime_catalog_test(test_progression)
     target_link_libraries(test_progression PRIVATE cjson unity nt_hash nt_log nt_core)
     target_include_directories(test_progression PRIVATE "${ITEMS_CORE_INC}" "${PROGRESSION_CORE_INC}" "${GAME_EVENTS_INC}" src "${GAME_STATE_GENERATED_DIR}" "${GAME_SOURCE_GENERATED_DIR}")
     target_compile_definitions(test_progression PRIVATE _CRT_SECURE_NO_WARNINGS)
@@ -590,11 +601,11 @@ if(NOT EMSCRIPTEN)
         "${ITEMS_STATE_GENERATED_SOURCE}" "${ITEMS_STATE_GENERATED_EVENTS_SOURCE}"
         src/features/items/items_bootstrap.c
         "${ITEMS_CORE_SRC}/items_reconcile.c" "${ITEMS_CORE_SRC}/items_containers.c"
-        "${ITEMS_CORE_SRC}/items_catalog.c" "${ITEMS_CATALOG_GENERATED_SOURCE}"
         "${PROGRESSION_STATE_GENERATED_SOURCE}" "${PROGRESSION_STATE_GENERATED_EVENTS_SOURCE}"
         "${PROGRESSION_CORE_SRC}/progression.c"
         "${GAME_SOURCE_GENERATED_DIR}/progression_tracks.gen.c")   # REAL hero curve (cf. test_progression_curve)
     add_dependencies(test_template_composition progression_tracks_gen)  # progression.c #includes .gen.h
+    configure_items_runtime_catalog_test(test_template_composition)
     # nt_ui_interface (review #1 smoke-check): settings.h pulls ui/nt_ui.h for
     # nt_ui_context_t; header-only include-root + NT_UI_DEBUG_TOOLS define, no
     # Clay/impl chain -- draw_ui is never called in this TU, only declared.

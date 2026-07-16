@@ -16,11 +16,12 @@
 #include "game_events.h"
 #include "items_state.h"
 #include "items_state_events.gen.h"
+#include "items_runtime_test_catalog.h"
 
 /* Items fragment round-trip. Links items_state.c + items_state_
    events.gen.c (R2: not empty, unlike settings) + items_bootstrap.c (real Р9
-   bodies) + items_containers.c (ownership) + items_catalog.c/
-   items_catalog.gen.c (item_core, reconcile/containers need it) + game_events.c;
+   bodies) + items_containers.c (ownership) + the same compact package used by
+   the game + game_events.c;
    game_save.c is NOT linked -- items_containers.c/items_bootstrap.c only need
    game_save_mark_dirty(), stubbed below (precedent: test_game_state_roundtrip,
    code-review #11). */
@@ -688,6 +689,9 @@ void test_add_overflow_clamps_to_schema_max(void) {
 }
 
 int main(void) {
+    if (!items_runtime_test_catalog_bind()) {
+        return 1;
+    }
     game_events_init();
     UNITY_BEGIN();
     RUN_TEST(test_reset_owned_empty);
@@ -719,5 +723,6 @@ int main(void) {
     RUN_TEST(test_add_overflow_clamps_to_schema_max);
     int result = UNITY_END();
     game_events_shutdown();
+    items_catalog_shutdown();
     return result;
 }

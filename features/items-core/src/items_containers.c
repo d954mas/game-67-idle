@@ -17,6 +17,48 @@
 
 static int64_t s_instance_seq; /* unique-instance id counter: "<def_id>#<seq>" */
 
+typedef struct items_container_policy_t {
+    const char *id;
+    int64_t capacity; /* distinct records; 0 = unlimited */
+    bool currency_only;
+} items_container_policy_t;
+
+/* Containers are runtime ownership policy, not item catalog data. E019 owns
+   making this policy dynamic; until then keep the two shipped policies local
+   instead of carrying them through the catalog package. */
+static const items_container_policy_t k_container_policies[] = {
+    {.id = "backpack", .capacity = 20, .currency_only = false},
+    {.id = "purse", .capacity = 0, .currency_only = true},
+};
+
+static const items_container_policy_t *container_policy(const char *container_id) {
+    if (container_id == NULL) {
+        return NULL;
+    }
+    for (size_t i = 0; i < sizeof k_container_policies / sizeof k_container_policies[0]; ++i) {
+        if (strcmp(k_container_policies[i].id, container_id) == 0) {
+            return &k_container_policies[i];
+        }
+    }
+    return NULL;
+}
+
+static bool lookup_item(const char *def_id, item_def_ref_t *out_ref, item_core_t *out_core) {
+    item_def_ref_t ref;
+    if (def_id == NULL || !items_catalog_is_bound() || !items_try_get_string(def_id, &ref)) {
+        return false;
+    }
+    if (out_ref != NULL) {
+        *out_ref = ref;
+    }
+    if (out_core != NULL) {
+        *out_core = items_core(ref);
+    }
+    return true;
+}
+
+static bool item_is_stackable(item_core_t core) { return core.stack != 1; }
+
 /* H1 (deep-review): feature-internal only -- NOT in items.h. items_bootstrap.c's
    reconcile forward-declares this itself and calls it once per used record's
    parsed "#<seq>" suffix after every load, so a freshly created unique can never
@@ -83,15 +125,16 @@ static bool add_raw(const char *container_id, const char *def_id, int64_t count,
     if (count <= 0) {
         return false;
     }
-    const game_item_def_t *def = item_core(def_id);
-    if (def == NULL || !def->stackable) {
+    item_def_ref_t ref;
+    item_core_t core;
+    if (!lookup_item(def_id, &ref, &core) || !item_is_stackable(core)) {
         return false;
     }
-    const game_container_def_t *cdef = item_container_def(container_id);
-    if (cdef == NULL) {
+    const items_container_policy_t *policy = container_policy(container_id);
+    if (policy == NULL) {
         return false;
     }
-    if (cdef->accept_policy == ITEM_ACCEPT_CURRENCY_ONLY && !item_is_currency(def)) {
+    if (policy->currency_only && !items_has_currency(ref)) {
         return false; /* L6: slot_filter/capacity_1 are inert in И2, treated as `any` */
     }
 
@@ -103,7 +146,7 @@ static bool add_raw(const char *container_id, const char *def_id, int64_t count,
     bool is_new = (rec == NULL);
     bool restore_quarantined = !is_new && rec->quarantined;
     if (is_new) {
-        if (cdef->capacity > 0 && container_record_count(container_id) >= cdef->capacity) {
+        if (policy->capacity > 0 && container_record_count(container_id) >= policy->capacity) {
             return false; /* M1: capacity REJECTs new records, never clamps */
         }
         rec = alloc_owned_slot();
@@ -122,11 +165,14 @@ static bool add_raw(const char *container_id, const char *def_id, int64_t count,
 
     int64_t before = rec->count;
     int64_t limit = ITEMS_STATE_ITEM_OWNED_COUNT_MAX;
-    if (def->currency != NULL && def->currency->cap > 0 && def->currency->cap < limit) {
-        limit = def->currency->cap;
+    if (items_has_currency(ref)) {
+        const int64_t currency_cap = items_currency_cap(ref);
+        if (currency_cap > 0 && currency_cap < limit) {
+            limit = currency_cap;
+        }
     }
-    if (def->max_stack > 1 && def->max_stack < limit) {
-        limit = def->max_stack;
+    if (core.stack > 1 && core.stack < limit) {
+        limit = core.stack;
     }
     if (before >= limit) {
         return false;
@@ -167,13 +213,14 @@ bool items_add(const char *container_id, const char *def_id, int64_t count, cons
     if (def_id == NULL) {
         return false;
     }
-    const game_item_def_t *def = item_core(def_id);
-    if (def == NULL || !def->stackable) {
+    item_def_ref_t ref;
+    item_core_t core;
+    if (!lookup_item(def_id, &ref, &core) || !item_is_stackable(core)) {
         return false;
     }
     /* Default by accept policy: currency -> purse, otherwise backpack. */
     const char *target =
-        (container_id != NULL && container_id[0] != '\0') ? container_id : (item_is_currency(def) ? "purse" : "backpack");
+        (container_id != NULL && container_id[0] != '\0') ? container_id : (items_has_currency(ref) ? "purse" : "backpack");
 
     char key[ITEMS_STATE_STRING_MAX];
     if (!build_stack_key(key, sizeof key, target, def_id)) {
@@ -193,8 +240,8 @@ bool items_remove(const char *container_id, const char *def_id, int64_t count, c
     if (container_id == NULL || def_id == NULL) {
         return false;
     }
-    const game_item_def_t *def = item_core(def_id);
-    if (def == NULL || !def->stackable) {
+    item_core_t core;
+    if (!lookup_item(def_id, NULL, &core) || !item_is_stackable(core)) {
         return false;
     }
     char key[ITEMS_STATE_STRING_MAX];
@@ -213,8 +260,8 @@ int64_t items_count(const char *container_id, const char *def_id) {
     if (container_id == NULL || def_id == NULL) {
         return 0;
     }
-    const game_item_def_t *def = item_core(def_id);
-    if (def == NULL || !def->stackable) {
+    item_core_t core;
+    if (!lookup_item(def_id, NULL, &core) || !item_is_stackable(core)) {
         return 0;
     }
     char key[ITEMS_STATE_STRING_MAX];
@@ -229,8 +276,8 @@ int64_t items_count(const char *container_id, const char *def_id) {
 }
 
 bool items_can_afford(const char *container_id, const char *def_id, int64_t n) {
-    const game_item_def_t *def = item_core(def_id);
-    if (def == NULL || !def->stackable) {
+    item_core_t core;
+    if (!lookup_item(def_id, NULL, &core) || !item_is_stackable(core)) {
         return false;
     }
     if (n < 0) {
@@ -294,22 +341,23 @@ bool items_move(const char *from, const char *to, const char *entry_key, int64_t
        .container is authoritative for uniques -> only the field changes. */
     ItemsItemOwned *unique = find_owned_by_key(entry_key);
     if (unique != NULL && strcmp(unique->container, from) == 0) {
-        const game_container_def_t *cdef = item_container_def(to);
-        if (cdef == NULL) {
+        const items_container_policy_t *policy = container_policy(to);
+        if (policy == NULL) {
             return false;
         }
-        const game_item_def_t *def = item_core(unique->def_id);
-        if (def == NULL || def->stackable) {
+        item_def_ref_t ref;
+        item_core_t core;
+        if (!lookup_item(unique->def_id, &ref, &core) || item_is_stackable(core)) {
             return false;
         }
-        if (cdef->accept_policy == ITEM_ACCEPT_CURRENCY_ONLY && !item_is_currency(def)) {
+        if (policy->currency_only && !items_has_currency(ref)) {
             return false;
         }
         /* M4: capacity is "max DISTINCT records in a container" regardless of how
            they arrive -- a unique moving in must obey the same destination check
            new-record allocation does (the mover is still in `from` here, so this
            does not double-count it). */
-        if (cdef->capacity > 0 && container_record_count(to) >= cdef->capacity) {
+        if (policy->capacity > 0 && container_record_count(to) >= policy->capacity) {
             return false;
         }
         char def_id[ITEMS_STATE_STRING_MAX];
@@ -328,18 +376,19 @@ const char *items_instance_create(const char *container_id, const char *def_id, 
     if (container_id == NULL || def_id == NULL) {
         return NULL;
     }
-    const game_item_def_t *def = item_core(def_id);
-    if (def == NULL || def->stackable) {
+    item_def_ref_t ref;
+    item_core_t core;
+    if (!lookup_item(def_id, &ref, &core) || item_is_stackable(core)) {
         return NULL;
     }
-    const game_container_def_t *cdef = item_container_def(container_id);
-    if (cdef == NULL) {
+    const items_container_policy_t *policy = container_policy(container_id);
+    if (policy == NULL) {
         return NULL;
     }
-    if (cdef->accept_policy == ITEM_ACCEPT_CURRENCY_ONLY && !item_is_currency(def)) {
+    if (policy->currency_only && !items_has_currency(ref)) {
         return NULL;
     }
-    if (cdef->capacity > 0 && container_record_count(container_id) >= cdef->capacity) {
+    if (policy->capacity > 0 && container_record_count(container_id) >= policy->capacity) {
         return NULL; /* M1: same REJECT rule as items_add applies to unique allocation */
     }
 
@@ -372,8 +421,8 @@ bool items_instance_destroy(const char *instance_id, const char *reason) {
     if (rec == NULL) {
         return false;
     }
-    const game_item_def_t *def = item_core(rec->def_id);
-    if (def == NULL || def->stackable) {
+    item_core_t core;
+    if (!lookup_item(rec->def_id, NULL, &core) || item_is_stackable(core)) {
         return false;
     }
     if (strrchr(rec->key, '#') == NULL) {
