@@ -359,6 +359,13 @@ items.extend_schema({ level_row={
         unapproved = self.evaluate({"game.a": '-- missing below\nrequire("outside.module")'}, ["game.a"])
         self.assert_error(unapproved, "module.not_approved", "game/a.lua", 2)
 
+    def test_manifest_rejects_builtin_module_collisions_and_unknown_entries(self):
+        reserved = self.evaluate({"studio.items": "return {}"}, ["studio.items"])
+        self.assert_error(reserved, "manifest.reserved_module", "items.lua.json", 1)
+
+        unknown = self.evaluate({"game.items": "return {}"}, ["game.missing"])
+        self.assert_error(unknown, "manifest.entry", "items.lua.json", 1)
+
     def test_unsafe_globals_and_mutable_globals_are_unavailable(self):
         cases = {
             "filesystem": "io.open('x')",

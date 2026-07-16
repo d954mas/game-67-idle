@@ -269,6 +269,16 @@ class ItemsSnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.stack"):
             SNAPSHOT.build_snapshot(inexact_stack)
 
+        overflowing_stack = evaluation(self.base_items())
+        overflowing_stack["items"][0]["stack"] = 1 << 32
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.stack"):
+            SNAPSHOT.build_snapshot(overflowing_stack)
+
+        unique_currency = evaluation(self.base_items())
+        unique_currency["items"][0]["stack"] = 1
+        with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.currency_storage"):
+            SNAPSHOT.build_snapshot(unique_currency)
+
         stacked_levels = evaluation(self.base_items())
         stacked_levels["items"][1]["stack"] = 2
         with self.assertRaisesRegex(SNAPSHOT.SnapshotFailure, "snapshot.storage"):

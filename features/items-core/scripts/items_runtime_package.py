@@ -14,7 +14,11 @@ from typing import Any
 
 from generate_items_api_proof import xxh64
 from items_c_identifiers import is_c_member_name
-from items_snapshot import ITEM_KEYS as SNAPSHOT_ITEM_KEYS
+from items_snapshot import (
+    ITEM_KEYS as SNAPSHOT_ITEM_KEYS,
+    SnapshotFailure,
+    validate_snapshot_content_hash,
+)
 
 
 SNAPSHOT_SCHEMA = "items.snapshot.v1"
@@ -74,10 +78,10 @@ def _align8(value: int) -> int:
 
 
 def _snapshot_digest(snapshot: dict[str, Any]) -> bytes:
-    content_hash = snapshot.get("content_hash")
-    if (not isinstance(content_hash, str) or not content_hash.startswith("sha256:")
-            or len(content_hash) != 71):
-        _fail("package.content_hash", "Snapshot requires sha256 content_hash")
+    try:
+        content_hash = validate_snapshot_content_hash(snapshot)
+    except SnapshotFailure as error:
+        _fail("package.content_hash", error.message)
     try:
         return bytes.fromhex(content_hash[7:])
     except ValueError:
@@ -186,6 +190,7 @@ def render_abi_header(snapshot: dict[str, Any]) -> str:
     """Render only schema/item identity ABI; balance values never enter this header."""
     if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
         _fail("package.snapshot_schema", f"expected {SNAPSHOT_SCHEMA}")
+    _snapshot_digest(snapshot)
     fields = snapshot.get("fields")
     items = snapshot.get("items")
     if not isinstance(fields, list) or not isinstance(items, list):
@@ -403,6 +408,7 @@ def build_package(
     """Build package bytes from an already-normalized Snapshot only."""
     if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
         _fail("package.snapshot_schema", f"expected {SNAPSHOT_SCHEMA}")
+    snapshot_digest = _snapshot_digest(snapshot)
     items = snapshot.get("items")
     fields = snapshot.get("fields")
     runtime = snapshot.get("runtime_export")
@@ -591,7 +597,7 @@ def build_package(
     section_words = [word for offset, count, stride in zip(offsets, counts, SECTION_STRIDES) for word in (offset, count, stride)]
     header = HEADER.pack(
         MAGIC, FORMAT_VERSION, HEADER.size, total_size, 0, xxh64(_schema_descriptor(sorted_fields, item_ids)), 0,
-        *section_words, _snapshot_digest(snapshot),
+        *section_words, snapshot_digest,
     )
     package = bytearray(header + body)
     fingerprint = xxh64(bytes(package))

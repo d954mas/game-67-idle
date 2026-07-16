@@ -28,6 +28,7 @@ DEFAULT_CHART_POINTS = 200
 DEFAULT_REQUIREMENT_RESULTS = 1_000
 DEFAULT_DIFF_CHANGES = 1_000
 MAX_EXACT_INTEGER = 9_007_199_254_740_991
+UINT32_MAX = (1 << 32) - 1
 FIELD_ID_RE = re.compile(r"^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$")
 ITEM_ID_RE = re.compile(r"^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*$")
 MEMBER_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -90,6 +91,25 @@ def snapshot_json_bytes(snapshot: dict[str, Any]) -> bytes:
     if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
         _fail("snapshot.schema", f"expected {SNAPSHOT_SCHEMA}")
     return _json_bytes(snapshot)
+
+
+def snapshot_content_hash(snapshot: dict[str, Any]) -> str:
+    """Hash the canonical authoring payload represented by a Snapshot."""
+    if not isinstance(snapshot, dict) or snapshot.get("schema") != SNAPSHOT_SCHEMA:
+        _fail("snapshot.schema", f"expected {SNAPSHOT_SCHEMA}")
+    keys = ("schema", "fields", "items", "requirements")
+    missing = [key for key in keys if key not in snapshot]
+    if missing:
+        _fail("snapshot.content_hash", f"Snapshot hash input is missing {missing[0]}")
+    return "sha256:" + hashlib.sha256(_json_bytes({key: snapshot[key] for key in keys})).hexdigest()
+
+
+def validate_snapshot_content_hash(snapshot: dict[str, Any]) -> str:
+    """Require the stored hash to match the canonical Snapshot authoring payload."""
+    expected = snapshot_content_hash(snapshot)
+    if snapshot.get("content_hash") != expected:
+        _fail("snapshot.content_hash", "Snapshot content_hash does not match its canonical payload")
+    return expected
 
 
 def _references(value: Any) -> set[str]:
@@ -284,6 +304,13 @@ def _validate_item_contract(items: list[dict[str, Any]]) -> None:
             _fail("snapshot.base_value", "base_value must be an exact integer", f"{path}.base_value")
 
         currency = item.get("currency")
+        stack = item.get("stack")
+        if item.get("kind") == "currency" and type(stack) is int and stack == 1:
+            _fail(
+                "snapshot.currency_storage",
+                "currency items require stack storage",
+                f"{path}.stack",
+            )
         if currency is not None:
             if (
                 not isinstance(currency, dict)
@@ -482,8 +509,8 @@ def _runtime_export_metadata(
             _fail("snapshot.duplicate_item", f"duplicate item id: {item_id}", f"$.items[{index}].id")
         item_ids.add(item_id)
         stack = item.get("stack")
-        if type(stack) is not int or stack < 0 or stack > MAX_EXACT_INTEGER:
-            _fail("snapshot.stack", f"item {item_id} requires exact integer stack >= 0", f"$.items[{index}].stack")
+        if type(stack) is not int or stack < 0 or stack > UINT32_MAX:
+            _fail("snapshot.stack", f"item {item_id} requires uint32 stack", f"$.items[{index}].stack")
         levels = item.get("levels")
         if levels is None:
             level_count = 0
@@ -566,15 +593,8 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
     for refs in dependents.values():
         refs.sort()
 
-    content_hash = "sha256:" + hashlib.sha256(_json_bytes({
-        "schema": SNAPSHOT_SCHEMA,
-        "fields": fields,
-        "items": items,
-        "requirements": requirements,
-    })).hexdigest()
     snapshot = {
         "schema": SNAPSHOT_SCHEMA,
-        "content_hash": content_hash,
         "fields": fields,
         "items": items,
         "requirements": requirements,
@@ -582,6 +602,7 @@ def build_snapshot(evaluation: dict[str, Any]) -> dict[str, Any]:
         "dependencies": dependencies,
         "dependents": dependents,
     }
+    snapshot["content_hash"] = snapshot_content_hash(snapshot)
     if field_sources:
         snapshot["field_sources"] = field_sources
     if requirement_sources:

@@ -4,66 +4,66 @@
       {
         "exit_code": 0,
         "operation": "source",
-        "peak_process_tree_rss_bytes": 83279872,
+        "peak_process_tree_rss_bytes": 82526208,
         "stderr_bytes": 0,
         "stdout_bytes": 434,
-        "wall_ms": 332.236
+        "wall_ms": 905.448
       },
       {
         "exit_code": 0,
         "operation": "preview",
-        "peak_process_tree_rss_bytes": 83460096,
+        "peak_process_tree_rss_bytes": 82763776,
         "stderr_bytes": 0,
         "stdout_bytes": 1311,
-        "wall_ms": 592.965
+        "wall_ms": 613.807
       },
       {
         "exit_code": 0,
         "operation": "apply",
-        "peak_process_tree_rss_bytes": 83283968,
+        "peak_process_tree_rss_bytes": 82763776,
         "stderr_bytes": 0,
         "stdout_bytes": 1310,
-        "wall_ms": 581.84
+        "wall_ms": 576.744
       },
       {
         "exit_code": 0,
         "operation": "build",
-        "peak_process_tree_rss_bytes": 83759104,
+        "peak_process_tree_rss_bytes": 84054016,
         "stderr_bytes": 0,
         "stdout_bytes": 863,
-        "wall_ms": 410.199
+        "wall_ms": 337.029
       },
       {
         "exit_code": 0,
         "operation": "validate",
-        "peak_process_tree_rss_bytes": 81514496,
+        "peak_process_tree_rss_bytes": 82132992,
         "stderr_bytes": 0,
         "stdout_bytes": 400,
-        "wall_ms": 350.637
+        "wall_ms": 313.696
       },
       {
         "exit_code": 0,
         "operation": "inspect",
-        "peak_process_tree_rss_bytes": 83292160,
+        "peak_process_tree_rss_bytes": 82722816,
         "stderr_bytes": 0,
         "stdout_bytes": 827,
-        "wall_ms": 338.528
+        "wall_ms": 312.115
       },
       {
         "exit_code": 1,
         "operation": "conflict",
-        "peak_process_tree_rss_bytes": 80908288,
+        "peak_process_tree_rss_bytes": 82436096,
         "stderr_bytes": 331,
         "stdout_bytes": 0,
-        "wall_ms": 327.992
+        "wall_ms": 316.301
       },
       {
         "exit_code": 0,
         "operation": "undo",
-        "peak_process_tree_rss_bytes": 83394560,
+        "peak_process_tree_rss_bytes": 84398080,
         "stderr_bytes": 0,
         "stdout_bytes": 1310,
-        "wall_ms": 569.952
+        "wall_ms": 515.855
       }
     ],
     "diagnostic_quality": {
@@ -75,41 +75,41 @@
     "name": "source-preview-apply-build-validate-inspect-conflict-undo",
     "totals": {
       "logical_project_file_reads": 63,
-      "peak_process_tree_rss_bytes": 83759104,
+      "peak_process_tree_rss_bytes": 84398080,
       "stderr_context_bytes": 331,
       "stdout_context_bytes": 6455,
       "tool_count": 8,
-      "wall_ms": 3504.349
+      "wall_ms": 3890.995
     }
   },
   "bottlenecks": [
     {
-      "flow": "one-edit apply",
-      "wall_ms": 581.84
-    },
-    {
-      "flow": "one-edit build",
-      "wall_ms": 410.199
-    },
-    {
-      "flow": "cold evaluate/validate",
-      "wall_ms": 336.407
-    },
-    {
-      "flow": "warm evaluate/validate",
-      "wall_ms": 333.168
-    },
-    {
       "flow": "no-op build",
-      "wall_ms": 314.245
+      "wall_ms": 859.279
     },
     {
       "flow": "cold build",
-      "wall_ms": 313.57
+      "wall_ms": 683.634
+    },
+    {
+      "flow": "one-edit apply",
+      "wall_ms": 576.744
+    },
+    {
+      "flow": "warm evaluate/validate",
+      "wall_ms": 431.676
+    },
+    {
+      "flow": "cold evaluate/validate",
+      "wall_ms": 376.635
+    },
+    {
+      "flow": "one-edit build",
+      "wall_ms": 337.029
     },
     {
       "flow": "runtime bind process",
-      "wall_ms": 51.809
+      "wall_ms": 65.403
     }
   ],
   "budgets": {
@@ -140,18 +140,18 @@
       },
       "exit_code": 0,
       "operation": "build",
-      "peak_process_tree_rss_bytes": 83038208,
+      "peak_process_tree_rss_bytes": 82067456,
       "stderr_bytes": 0,
       "stdout_bytes": 881,
-      "wall_ms": 313.57
+      "wall_ms": 683.634
     },
     "cold_evaluate_validate": {
       "exit_code": 0,
       "operation": "validate",
-      "peak_process_tree_rss_bytes": 82563072,
+      "peak_process_tree_rss_bytes": 83406848,
       "stderr_bytes": 0,
       "stdout_bytes": 249,
-      "wall_ms": 336.407
+      "wall_ms": 376.635
     },
     "noop_build": {
       "changed": {
@@ -161,26 +161,26 @@
       },
       "exit_code": 0,
       "operation": "build",
-      "peak_process_tree_rss_bytes": 82870272,
+      "peak_process_tree_rss_bytes": 83103744,
       "stderr_bytes": 0,
       "stdout_bytes": 884,
-      "wall_ms": 314.245
+      "wall_ms": 859.279
     },
     "one_edit_apply": {
       "exit_code": 0,
       "operation": "apply",
-      "peak_process_tree_rss_bytes": 83283968,
+      "peak_process_tree_rss_bytes": 82763776,
       "stderr_bytes": 0,
       "stdout_bytes": 1310,
-      "wall_ms": 581.84
+      "wall_ms": 576.744
     },
     "one_edit_build": {
       "exit_code": 0,
       "operation": "build",
-      "peak_process_tree_rss_bytes": 83759104,
+      "peak_process_tree_rss_bytes": 84054016,
       "stderr_bytes": 0,
       "stdout_bytes": 863,
-      "wall_ms": 410.199
+      "wall_ms": 337.029
     },
     "runtime_bind": {
       "bind_samples": 9,
@@ -189,21 +189,21 @@
       "operation": "runtime-bind",
       "peak_process_tree_rss_bytes": 32768,
       "schema": "items.runtime.bind.benchmark.v1",
-      "startup_bind_ns": 500,
+      "startup_bind_ns": 701,
       "stderr_bytes": 0,
       "stdout_bytes": 191,
       "steady_owned_bytes": 616,
       "transient_input_plus_owned_bytes": 1232,
-      "wall_ms": 51.809
+      "wall_ms": 65.403
     },
     "warm_evaluate_validate": {
-      "max_peak_process_tree_rss_bytes": 83095552,
-      "median_wall_ms": 333.168,
+      "max_peak_process_tree_rss_bytes": 83722240,
+      "median_wall_ms": 431.676,
       "runs": 3,
       "samples_wall_ms": [
-        291.575,
-        333.168,
-        337.099
+        401.947,
+        431.676,
+        849.683
       ]
     }
   },
@@ -215,7 +215,7 @@
     "source_sha256": {
       "benchmark": "sha256:7e27e4d2a647fde0100d0b545e9854667b13bfa90132dee8b2dc5ace6d1a725d",
       "cli": "sha256:86dc1a77095ca0a400bce21b9679401db27f429eff4aab25f3d579f15ec9920c",
-      "evaluator": "sha256:b3c7bcf0154a4f326db3ef4754eed6bb9c8f8e2858c8db038bd47ea7a762fee0",
+      "evaluator": "sha256:dccd55441db416b17061bdee4932f35adcfcc1135351fd30f7427f33dfd68a44",
       "runtime_bind": "sha256:a72f532281738adc4a7082884db93e16f206ea300a294f0d48c9233eca2c4d8f"
     },
     "warm": "median of 3 later fresh evaluator processes with ordinary OS caches"
