@@ -1,7 +1,7 @@
 # Items Workbench
 
 Studio surface for a registered template or game Items catalog. The current
-read-only Workbench slice shows a compact master table plus bounded Snapshot
+Workbench shows a compact master table plus bounded Snapshot
 detail, level/cost/provenance rows, selected-series charts, release state,
 diagnostics, dependencies, checked source locations, and built icon previews.
 Semantic preview/apply is delegated to the same T0366 CLI operations used by

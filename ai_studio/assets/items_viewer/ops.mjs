@@ -1,4 +1,4 @@
-// Items Viewer — read-only catalog ops (T0316 phase 1).
+// Items Workbench catalog, focused-query, and semantic-edit operations.
 //
 // Pure logic, no HTTP. Merges the template/game registries and delegates every
 // catalog read to the single-source semantic Items CLI. The Viewer only adapts

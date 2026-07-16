@@ -43,7 +43,7 @@ function setStatus(text, isError = false) {
 // Icons: view.icons.regions maps an item icon id ("icons/gold")
 // straight to a pixel rect on the ALREADY-DECODED atlas debug-PNG page (decoded
 // once in loadCatalog, before render() — see state.iconsImage). No gallery
-// search, no icon-link write layer (phase 2) — this reads exactly what the
+// search and no icon-link write layer — this reads exactly what the
 // engine packed.
 function resolveIcon(view, assetId) {
   return view.icons && view.icons.regions ? view.icons.regions[assetId] : undefined;

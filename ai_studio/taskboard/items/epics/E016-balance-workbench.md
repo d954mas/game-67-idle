@@ -228,7 +228,7 @@ cross-owner transaction disappears under one canonical Lua source.
 - generated strong item hashes, collision rejection, required assert API, and
   explicit exists/try/string boundary;
 - one release-receipt proof that rejects an incompatible shipped level bound;
-- read-only Viewer source/grid/chart proof plus one shared literal and one table
+- Workbench source/grid/chart proof plus one shared literal and one table
   cell semantic edit with expected hash/diff/undo and formula refusal;
 - Windows/Linux repeat and timing evidence.
 
