@@ -1,13 +1,13 @@
 ---
 id: T0380
-title: Benchmark complete Balance build and agent loop
-status: backlog
+title: Benchmark complete Items build and agent loop
+status: doing
 project: P001
 epic: E016
 priority: P2
 tags: [balance, performance, benchmark]
 created: 2026-07-10
-updated: 2026-07-14
+updated: 2026-07-16
 ---
 
 ## What
@@ -36,3 +36,5 @@ end-to-end build and agent loop and use the results to optimize real bottlenecks
 
 - 2026-07-10: Resolves the dependency cycle found in final transcript audit:
   backend selection precedes production implementation; full-loop proof follows.
+- 2026-07-16: Started after T0316 completed with green Ubuntu/Windows CI. Measure the finished Items production and agent loops before changing implementation; budgets remain advisory unless explicitly accepted.
+- 2026-07-16: Slice 1 established the cross-platform measurement contract. One runner records subprocess-tree peak RSS, wall time, and exact stdout/stderr bytes on Windows and `/proc` platforms; pure tests require complete build/no-op/runtime-bind proof before ratifying pinned `lupa.lua54`/Lua 5.4/`lupa@2.8` plus compact blob v2. RED/green benchmark tests pass 3/3.
