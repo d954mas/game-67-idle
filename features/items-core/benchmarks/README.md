@@ -51,3 +51,10 @@ node ai_studio/dev_environment/python_run.mjs features/items-core/benchmarks/ben
 
 The runner uses a copied editable fixture and temporary build outputs. It does
 not modify game or template authoring sources.
+
+The finished pipeline profile is a Windows measurement, including native
+process-tree RSS. Cross-platform CI verifies behavior and builds but is not
+presented as a second full performance profile. The older Linux JSON above is
+the separate T0365 package-format proof (semantic checksum, output sizes,
+stable header/no-relink, and fixture bind); it is not a Linux rerun of the
+finished Workbench/agent pipeline benchmark.

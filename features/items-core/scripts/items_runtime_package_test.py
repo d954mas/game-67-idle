@@ -78,6 +78,11 @@ class ItemsRuntimePackageTests(unittest.TestCase):
     def snapshot(self) -> dict:
         return SNAPSHOT.build_snapshot(evaluation())
 
+    def test_production_package_uses_the_neutral_hash_module(self):
+        source_text = Path(PACKAGE.__file__).read_text(encoding="utf-8")
+        self.assertNotIn("from generate_items_api_proof import", source_text)
+        self.assertEqual(PACKAGE.xxh64(b"game.gold"), 0xE662E696028B01C4)
+
     @staticmethod
     def rehash(snapshot: dict) -> dict:
         snapshot["content_hash"] = SNAPSHOT.snapshot_content_hash(snapshot)

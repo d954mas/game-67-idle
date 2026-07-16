@@ -46,11 +46,13 @@ scripts/items_snapshot.py            normalized model and focused queries
 scripts/items_runtime_package.py     package/header builder and verifier
 scripts/items_cli.py                 single AI/UI/build authoring surface
 scripts/items_receipt.py             release-history validation and sealing
+scripts/items_xxh64.py               neutral hash primitive for package/proof tools
 ```
 
-`generate_items_api_proof.py` and `items_api.c` remain bounded proof fixtures
-for schema-derived capability APIs. Production runtime data comes only from the
-compact package.
+`feature.json.outputs` lists only production artifacts.
+`feature.json.proof_outputs`, `generate_items_api_proof.py`, and `items_api.c`
+remain bounded proof fixtures for schema-derived capability APIs. Production
+runtime data comes only from the compact package.
 
 ## Public surface
 

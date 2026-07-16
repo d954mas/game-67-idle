@@ -12,13 +12,13 @@ import sys
 import tempfile
 from typing import Any
 
-from generate_items_api_proof import xxh64
 from items_c_identifiers import is_c_member_name
 from items_snapshot import (
     ITEM_KEYS as SNAPSHOT_ITEM_KEYS,
     SnapshotFailure,
     validate_snapshot_content_hash,
 )
+from items_xxh64 import xxh64
 
 
 SNAPSHOT_SCHEMA = "items.snapshot.v1"

@@ -49,10 +49,6 @@
     "lua_authoring_contract": "features/items-core/docs/items_lua_single_source_concept_2026-07-10.md"
   },
   "outputs": [
-    "items_game.gen.h",
-    "items_game.internal.gen.h",
-    "items_game.gen.c",
-    "items_game.luau",
     "items.lua.evaluation.v1 JSON",
     "items.snapshot.v1 JSON",
     "items.snapshot.chart.v1 JSON",
@@ -60,6 +56,12 @@
     "items.snapshot.diff.v1 JSON",
     "items/catalog compact runtime package v2",
     "items_catalog_abi.gen.h"
+  ],
+  "proof_outputs": [
+    "items_game.gen.h",
+    "items_game.internal.gen.h",
+    "items_game.gen.c",
+    "items_game.luau"
   ],
   "registers": {
     "note": "Describes the EXISTING wiring in templates/template/CMakeLists.txt (target_sources/ctest) -- items-core is an in-place module (precedent features/game-state), not an install-script target. This section documents the consuming game's provisioning, it does not perform it.",
