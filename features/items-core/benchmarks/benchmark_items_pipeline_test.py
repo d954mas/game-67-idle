@@ -21,7 +21,7 @@ class ItemsPipelineBenchmarkTests(unittest.TestCase):
         measured = BENCHMARK.measure_command([
             sys.executable,
             "-c",
-            "import sys; print('ready'); print('note', file=sys.stderr)",
+            "import sys, time; print('ready'); print('note', file=sys.stderr); time.sleep(0.05)",
         ])
         self.assertEqual(measured["exit_code"], 0)
         self.assertGreater(measured["wall_ms"], 0)
