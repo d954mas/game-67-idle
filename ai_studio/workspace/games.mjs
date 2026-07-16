@@ -138,9 +138,10 @@ function nestedGitRoots(root, mounts) {
   for (const mount of mounts) {
     const gameRoot = resolve(root, mount.gitRoot);
     if (!existsSync(join(gameRoot, ".git"))) continue;
-    const result = git(gameRoot, ["rev-parse", "--show-toplevel"]);
+    const result = git(gameRoot, ["rev-parse", "--is-inside-work-tree", "--show-prefix"]);
     if (result.error || result.status !== 0) continue;
-    if (comparable(resolve(result.stdout.trim())) === comparable(gameRoot)) valid.push(mount.gitRoot);
+    const [inside, ...prefixLines] = result.stdout.replace(/\r\n/g, "\n").split("\n");
+    if (inside.trim() === "true" && prefixLines.join("\n").trim() === "") valid.push(mount.gitRoot);
   }
   return valid;
 }
