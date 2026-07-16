@@ -21,7 +21,7 @@ class ItemsCliBenchmarkTests(unittest.TestCase):
         self.assertEqual(result["schema"], "items.cli.benchmark.v1")
         self.assertEqual(result["command_count"], 5)
         self.assertGreater(result["totals"]["wall_ms"], 0)
-        self.assertEqual(result["totals"]["logical_project_file_reads"], 30)
+        self.assertEqual(result["totals"]["logical_project_file_reads"], 28)
         self.assertGreater(result["totals"]["stdout_bytes"], 0)
         self.assertGreater(result["totals"]["stderr_bytes"], 0)
         self.assertTrue(all(result["diagnostic_quality"].values()))
@@ -30,7 +30,7 @@ class ItemsCliBenchmarkTests(unittest.TestCase):
         recorded = json.loads(RESULT.read_text(encoding="utf-8"))
         source_hash = "sha256:" + hashlib.sha256(BENCHMARK.SCRIPT.read_bytes()).hexdigest()
         self.assertEqual(recorded["method"]["source_sha256"], source_hash)
-        self.assertEqual(recorded["totals"]["logical_project_file_reads"], 30)
+        self.assertEqual(recorded["totals"]["logical_project_file_reads"], 28)
 
 
 if __name__ == "__main__":

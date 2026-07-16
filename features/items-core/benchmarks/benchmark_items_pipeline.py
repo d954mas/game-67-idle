@@ -33,13 +33,13 @@ BENCHMARK_SOURCES = {
 }
 LOGICAL_READS = {
     "source": 4,
-    "preview": 14,
-    "apply": 14,
+    "preview": 12,
+    "apply": 23,
     "build": 5,
     "validate": 5,
     "inspect": 3,
     "conflict": 4,
-    "undo": 14,
+    "undo": 23,
 }
 
 

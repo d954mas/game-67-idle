@@ -13,7 +13,7 @@ import time
 
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "items_cli.py"
-READS = {"source": 4, "level-set": 14, "validate": 5, "inspect": 3, "conflict": 4}
+READS = {"source": 4, "level-set": 12, "validate": 5, "inspect": 3, "conflict": 4}
 
 
 def _run(project: Path, *arguments: str, read_kind: str) -> tuple[dict, subprocess.CompletedProcess[str]]:

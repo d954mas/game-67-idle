@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -47,6 +48,20 @@ class ItemsCliTests(unittest.TestCase):
             result = json.loads(second.stdout)["result"]
             self.assertTrue(result["ok"])
             self.assertFalse(result["changed"])
+
+    def test_seal_receipt_uses_the_shared_project_writer_lock(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            shutil.copytree(PROJECT, project)
+            baseline = project / "content" / "items.lock.json"
+            original = baseline.read_bytes()
+            (project / ".items-writer.lock").write_text("active writer\n", encoding="utf-8")
+
+            sealed = self.run_project(project, "seal-receipt")
+
+            self.assertEqual(sealed.returncode, 1)
+            self.assertEqual(json.loads(sealed.stderr)["error"]["code"], "writer.locked")
+            self.assertEqual(baseline.read_bytes(), original)
 
     def test_list_exposes_bounded_viewer_metadata_without_level_tables(self):
         process = subprocess.run(
@@ -267,11 +282,11 @@ class ItemsCliTests(unittest.TestCase):
             self.assertEqual(preview_result["source_diff"]["new_value"], 17)
             self.assertTrue(preview_result["semantic_diff"]["changes"])
 
-            lock = source.with_name(f".{source.name}.items-edit.lock")
+            lock = project / ".items-writer.lock"
             lock.write_text("stale test lock\n", encoding="utf-8")
             locked = self.run_project(project, *args, "--apply")
             self.assertEqual(locked.returncode, 1)
-            self.assertEqual(json.loads(locked.stderr)["error"]["code"], "edit.locked")
+            self.assertEqual(json.loads(locked.stderr)["error"]["code"], "writer.locked")
             self.assertEqual(source.read_bytes(), original)
             lock.unlink()
 
@@ -455,6 +470,69 @@ class ItemsCliTests(unittest.TestCase):
             with mock.patch.object(Path, "stat", return_value=mock.Mock(st_size=0)):
                 with self.assertRaisesRegex(CLI.CliFailure, "patch exceeds"):
                     CLI._load_batch_patch(str(patch))
+
+    def test_project_writer_rechecks_the_complete_captured_input_set(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "items.lua"
+            companion = root / "items.lua.json"
+            target.write_bytes(b"before")
+            companion.write_bytes(b"manifest-v1")
+            expected = {
+                target: CLI._source_hash(target.read_bytes()),
+                companion: CLI._source_hash(companion.read_bytes()),
+            }
+            companion.write_bytes(b"manifest-v2")
+
+            with self.assertRaisesRegex(CLI.CliFailure, "validation input changed") as failure:
+                CLI._atomic_replace_project_input(root, target, expected, b"after")
+
+            self.assertEqual(failure.exception.error["code"], "writer.conflict")
+            self.assertEqual(target.read_bytes(), b"before")
+
+    def test_project_capture_includes_manifest_modules_receipt_and_state_schema(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            project = Path(tmp) / "project"
+            shutil.copytree(PROJECT, project)
+            captured = CLI._capture_project_inputs(
+                project,
+                project / "items.lua.json",
+                project / "content" / "items.lock.json",
+                project / "state" / "items.schema.json",
+            )
+
+            self.assertEqual(
+                {path.relative_to(project).as_posix() for path in captured},
+                {
+                    "items.lua.json",
+                    "game/items.lua",
+                    "game/other.lua",
+                    "content/items.lock.json",
+                    "state/items.schema.json",
+                },
+            )
+
+    def test_project_writer_uses_unique_fsynced_atomic_replacement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            target = root / "items.lock.json"
+            target.write_bytes(b"before")
+            expected = {target: CLI._source_hash(target.read_bytes())}
+            real_mkstemp = tempfile.mkstemp
+
+            with (
+                mock.patch.object(CLI.tempfile, "mkstemp", wraps=real_mkstemp) as mkstemp,
+                mock.patch.object(CLI.os, "fsync", wraps=os.fsync) as fsync,
+                mock.patch.object(CLI.os, "replace", wraps=os.replace) as replace,
+            ):
+                changed = CLI._atomic_replace_project_input(root, target, expected, b"after")
+
+            self.assertTrue(changed)
+            self.assertEqual(target.read_bytes(), b"after")
+            self.assertEqual(mkstemp.call_count, 1)
+            self.assertTrue(fsync.called)
+            replace.assert_called_once()
+            self.assertFalse(list(root.glob(".*.tmp")))
 
     def test_project_context_is_required_and_manifest_cannot_escape_it(self):
         missing = subprocess.run(

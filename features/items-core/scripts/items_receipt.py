@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from pathlib import Path
 from typing import Any
@@ -25,16 +24,6 @@ def issue(rule: str, msg: str, *, id: str | None = None, field: str | None = Non
 
 class OpsError(Exception):
     """Usage or I/O problem reported as CLI exit code 2."""
-
-
-def write_utf8_if_changed(path: Path, text: str) -> bool:
-    data = text.encode("utf-8")
-    if path.exists() and path.read_bytes() == data:
-        return False
-    temporary = path.with_name(path.name + ".tmp")
-    temporary.write_bytes(data)
-    os.replace(temporary, path)
-    return True
 
 
 def validate_baseline_shape(baseline: dict[str, Any], path: Path) -> None:
@@ -318,13 +307,13 @@ def validate_evaluation_receipt(
     return {"ok": not errors, "errors": errors, "warnings": warnings}
 
 
-def seal_evaluation_receipt(
+def prepare_evaluation_receipt(
     evaluation: dict[str, Any],
     baseline: dict[str, Any],
     state_schema: dict[str, Any],
     *,
     baseline_path: Path,
-) -> dict[str, Any]:
+) -> tuple[dict[str, Any], bytes | None]:
     validate_baseline_shape(baseline, baseline_path)
     errors, warnings, field_ids, items = _evaluation_receipt_checks(
         evaluation, baseline, state_schema,
@@ -333,7 +322,7 @@ def seal_evaluation_receipt(
         return {
             "ok": False, "changed": False,
             "errors": errors, "warnings": warnings,
-        }
+        }, None
 
     sealed = json.loads(json.dumps(baseline))
     receipt = sealed["receipt"]
@@ -360,14 +349,10 @@ def seal_evaluation_receipt(
         item_id: sealed["removed"][item_id]
         for item_id in sorted(sealed["removed"])
     }
-    changed = write_utf8_if_changed(
-        baseline_path,
-        json.dumps(sealed, ensure_ascii=False, indent=2) + "\n",
-    )
+    encoded = (json.dumps(sealed, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
     return {
         "ok": True,
-        "changed": changed,
         "errors": [],
         "warnings": warnings,
         "path": str(baseline_path),
-    }
+    }, encoded
