@@ -1,30 +1,16 @@
 #ifndef FEATURES_ITEMS_H
 #define FEATURES_ITEMS_H
 // feature-layer: L1
-/* Единственный публичный хедер фичи items — вся публичная поверхность; остальное
-   в папке static. L1 foundation: зависит только от L0-шелла (game_save-toolkit +
-   gsj_ + движок), НЕ от других фич. Владение ведётся в int64 ВЕЗДЕ (валюты тоже
-   int64, НЕ double; большие счётчики в JSON — строкой). Дробное
-   производство копит аккумулятор в game glue, НЕ в count (Р1; паттерн задокументирован
-   в game glue и описана в скилле nt-game-items). */
+
 #include <stdbool.h>
 #include <stdint.h>
 
 /* ---- Typed catalog API (generated-C proof or runtime package) ---- */
 #if (defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED) || \
     (defined(ITEMS_RUNTIME_PACKAGE_ENABLED) && ITEMS_RUNTIME_PACKAGE_ENABLED)
-typedef struct item_id_t {
-    uint64_t value;
-} item_id_t;
-
-typedef struct item_def_ref_t {
-    uint32_t _index;
-} item_def_ref_t;
-
-/* Opaque index into generated immutable cost spans. */
-typedef struct item_cost_ref_t {
-    uint32_t _opaque;
-} item_cost_ref_t;
+typedef struct item_id_t { uint64_t value; } item_id_t;
+typedef struct item_def_ref_t { uint32_t _index; } item_def_ref_t;
+typedef struct item_cost_ref_t { uint32_t _opaque; } item_cost_ref_t;
 
 typedef enum item_transition_kind_t {
     ITEM_TRANSITION_UNAVAILABLE = 0,
@@ -47,14 +33,14 @@ typedef struct item_core_t {
     int64_t stack;
 } item_core_t;
 
-item_def_ref_t items_get(item_id_t id); /* required: asserts when absent */
+item_def_ref_t items_get(item_id_t id);
 bool items_exists(item_id_t id);
 bool items_try_get(item_id_t id, item_def_ref_t *out);
 bool items_try_get_string(const char *def_id, item_def_ref_t *out);
-item_core_t items_core(item_def_ref_t ref); /* copy; asserts on invalid ref */
+item_core_t items_core(item_def_ref_t ref);
 item_transition_t items_acquire_transition(item_def_ref_t ref);
 uint32_t items_cost_count(item_cost_ref_t cost);
-item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index); /* copy; asserts on invalid range */
+item_cost_entry_t items_cost_at(item_cost_ref_t cost, uint32_t index);
 void items_register_debug_labels(void);
 #endif
 
@@ -83,44 +69,107 @@ typedef enum items_catalog_bind_error_t {
 bool items_catalog_try_bind(
     const uint8_t *bytes, uint32_t byte_count,
     items_catalog_bind_error_t *out_error);
-/* Looks up a ready blob resource and binds an owned copy of its bytes. The
-   caller owns pack placement/request timing; this function only consumes it. */
 bool items_catalog_try_bind_resource(
     uint64_t asset_id, items_catalog_bind_error_t *out_error);
-/* Startup/shutdown API: all bind/read/shutdown calls are main-thread-only.
-   A host using another thread must serialize the complete catalog lifetime. */
 void items_catalog_shutdown(void);
 bool items_catalog_is_bound(void);
 uint32_t items_catalog_item_count(void);
 uint64_t items_catalog_schema_abi(void);
 uint64_t items_catalog_content_fingerprint(void);
 bool items_has_currency(item_def_ref_t ref);
-int64_t items_currency_cap(item_def_ref_t ref); /* 0 = unlimited; asserts unless currency */
+int64_t items_currency_cap(item_def_ref_t ref);
 #endif
 
 #if defined(ITEMS_GAME_API_ENABLED) && ITEMS_GAME_API_ENABLED
-/* The build selects exactly one game-generated capability header. Consumers
-   continue to include only features/items/items.h. */
 #include "items_game.gen.h"
 #endif
 
-/* ---- Владение (поверх генерируемого фрагмента items_state) ----
-   Единый глагол add/remove: потратить золото / съесть зелье / израсходовать
-   3 дерева / потратить опыт — ОДИН код. reason обязателен:
-   формат verb:subject, verb из закрытого списка reason_tags.h (debug-assert,
-   И2b). L1-нота: для СТАКОВ per-copy поля level/durability — игнорируемые
-   дефолты (плоская форма под генератор); смысловы только для УНИКОВ
-   (equip-блок). Тела реализованы в items_containers.c (И2b); объявлены здесь
-   как единственная публичная поверхность фичи. */
-/* Stack APIs reject unique definitions; instance APIs reject stack definitions. */
-bool items_add(const char *container_id, const char *def_id, int64_t count, const char *reason);
-bool items_remove(const char *container_id, const char *def_id, int64_t count, const char *reason);
-int64_t items_count(const char *container_id, const char *def_id);
-bool items_can_afford(const char *container_id, const char *def_id, int64_t n);
-bool items_move(const char *from, const char *to, const char *entry_key, int64_t count, const char *reason);
-const char *items_instance_create(const char *container_id, const char *def_id, const char *reason); /* уник -> instance_id */
-bool items_instance_destroy(const char *instance_id, const char *reason);
-/* purse-удобства: валюты по умолчанию едут в purse (accept-policy). */
-int64_t items_purse(const char *def_id);
+/* ---- Runtime containers and owned entries ---- */
+
+#define ITEMS_ID_NONE UINT32_C(0)
+#define ITEMS_ID_RESERVED UINT32_MAX
+#define ITEMS_SLOT_AUTO UINT32_MAX
+
+typedef enum items_container_policy_t {
+    ITEMS_CONTAINER_POLICY_GENERIC = 0,
+    ITEMS_CONTAINER_POLICY_CURRENCY_ONLY,
+    ITEMS_CONTAINER_POLICY_EQUIPMENT,
+} items_container_policy_t;
+
+typedef enum items_lifetime_t {
+    ITEMS_LIFETIME_PERSISTENT = 0,
+    ITEMS_LIFETIME_EPHEMERAL,
+} items_lifetime_t;
+
+typedef enum items_result_t {
+    ITEMS_RESULT_OK = 0,
+    ITEMS_RESULT_NOT_FOUND,
+    ITEMS_RESULT_CAPACITY,
+    ITEMS_RESULT_SLOT_OCCUPIED,
+    ITEMS_RESULT_POLICY,
+    ITEMS_RESULT_WRONG_STORAGE,
+    ITEMS_RESULT_INSUFFICIENT,
+    ITEMS_RESULT_POOL_EXHAUSTED,
+    ITEMS_RESULT_ID_EXHAUSTED,
+    ITEMS_RESULT_NOT_EMPTY,
+    ITEMS_RESULT_LIFETIME,
+} items_result_t;
+
+typedef struct items_container_ref_t { uint32_t index; uint32_t generation; } items_container_ref_t;
+typedef struct item_entry_ref_t { uint32_t index; uint32_t generation; } item_entry_ref_t;
+
+#define ITEMS_CONTAINER_REF_NONE ((items_container_ref_t){0, 0})
+#define ITEM_ENTRY_REF_NONE ((item_entry_ref_t){0, 0})
+
+typedef struct items_container_desc_t {
+    uint32_t capacity;
+    items_container_policy_t policy;
+    items_lifetime_t lifetime;
+} items_container_desc_t;
+
+typedef struct items_entry_view_t {
+    uint32_t entry_id;
+    uint32_t slot;
+    const char *def_id;
+    int64_t count;
+    int level;
+    float durability;
+    bool quarantined;
+    items_lifetime_t lifetime;
+} items_entry_view_t;
+
+bool items_runtime_rebuild(char *error, int error_cap);
+void items_reconcile(void);
+
+items_result_t items_try_container_create(items_container_desc_t desc, items_container_ref_t *out_container);
+items_result_t items_try_container_destroy_empty(items_container_ref_t container);
+items_result_t items_try_container_resize(items_container_ref_t container, uint32_t capacity);
+bool items_container_try_from_id(uint32_t container_id, items_container_ref_t *out_container);
+uint32_t items_container_id(items_container_ref_t container);
+uint32_t items_container_capacity(items_container_ref_t container);
+items_lifetime_t items_container_lifetime(items_container_ref_t container);
+
+items_result_t items_try_stack_add(
+    items_container_ref_t container, const char *def_id, int64_t count,
+    uint32_t slot, const char *reason, item_entry_ref_t *out_entry, int64_t *out_applied);
+items_result_t items_try_stack_remove(item_entry_ref_t entry, int64_t count, const char *reason);
+items_result_t items_try_stack_remove_from_container(
+    items_container_ref_t container, const char *def_id, int64_t count, const char *reason);
+int64_t items_stack_count(items_container_ref_t container, const char *def_id);
+bool items_can_afford(items_container_ref_t container, const char *def_id, int64_t count);
+
+items_result_t items_try_unique_create(
+    items_container_ref_t container, const char *def_id, uint32_t slot,
+    const char *reason, item_entry_ref_t *out_entry);
+items_result_t items_try_entry_destroy(item_entry_ref_t entry, const char *reason);
+items_result_t items_try_entry_move(
+    item_entry_ref_t entry, items_container_ref_t destination,
+    int64_t count, uint32_t destination_slot, const char *reason,
+    item_entry_ref_t *out_destination);
+
+bool items_entry_try_from_id(uint32_t entry_id, item_entry_ref_t *out_entry);
+uint32_t items_entry_id(item_entry_ref_t entry);
+items_container_ref_t items_entry_container(item_entry_ref_t entry);
+items_entry_view_t items_entry_view(item_entry_ref_t entry);
 
 #endif /* FEATURES_ITEMS_H */

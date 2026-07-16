@@ -13,6 +13,20 @@
 #include <stdio.h>
 #include <string.h>
 
+static items_container_ref_t s_resource_container = ITEMS_CONTAINER_REF_NONE;
+
+void progression_bind_resource_container(items_container_ref_t container) {
+    if (container.generation != 0) {
+        s_resource_container = container;
+    } else {
+        s_resource_container = ITEMS_CONTAINER_REF_NONE;
+    }
+}
+
+static int64_t resource_count(const char *def_id) {
+    return items_stack_count(s_resource_container, def_id);
+}
+
 /* reason contract (lightweight; not the items verb list -- progression does not
    тянет чужой internal-хедер reason_tags.h). Формат "verb:subject"; debug-only,
    no-op в release. Спенды в purse передают reason В items_remove/add, где
@@ -164,7 +178,7 @@ int64_t progression_xp_current(const char *track) {
         return 0;
     }
     if (def->mode == PROGRESSION_MODE_MANUAL || def->mode == PROGRESSION_MODE_AUTO) {
-        return items_purse(def->currency_def); /* L2 -> L1 dependency. */
+        return resource_count(def->currency_def);
     }
     const ProgressionTrackState *st = find_track(track);
     return st ? st->xp : 0;
@@ -206,7 +220,7 @@ bool progression_level_up(const char *track, const char *reason) {
         return false;
     }
     int64_t cost = track_cost_at(def, level);
-    if (items_purse(def->currency_def) < cost) {
+    if (resource_count(def->currency_def) < cost) {
         return false;
     }
     /* H-fix (deep-review #1, data-loss): allocate BEFORE spending -- mirrors
@@ -220,12 +234,12 @@ bool progression_level_up(const char *track, const char *reason) {
         return false; /* PROGRESSION_STATE_MAX_TRACKS budget exhausted -- purse untouched */
     }
     int old_level = st->level;
-    int64_t resource_before = items_purse(def->currency_def);
-    if (!items_remove("purse", def->currency_def, cost, reason)) {
+    int64_t resource_before = resource_count(def->currency_def);
+    if (items_try_stack_remove_from_container(s_resource_container, def->currency_def, cost, reason) != ITEMS_RESULT_OK) {
         return false; /* defensive: items-side verb-check/purse mismatch; level not bumped */
     }
     st->level += 1;
-    emit_levelup(def, "manual", reason, old_level, st->level, cost, resource_before, items_purse(def->currency_def), 0);
+    emit_levelup(def, "manual", reason, old_level, st->level, cost, resource_before, resource_count(def->currency_def), 0);
     apply_on_level_up(def, 0); /* Cut A: shipped/demo on_level_up is always empty -> no-op */
     game_save_mark_dirty();
     return true;
@@ -321,7 +335,7 @@ static void resolve_track(const progression_track_def_t *def, int depth) {
         }
         int64_t cost = track_cost_at(def, level);
         if (def->mode == PROGRESSION_MODE_AUTO) {
-            if (items_purse(def->currency_def) < cost) {
+            if (resource_count(def->currency_def) < cost) {
                 break; /* purse empty -> records not created for nothing */
             }
         } else { /* THRESHOLD */
@@ -340,15 +354,15 @@ static void resolve_track(const progression_track_def_t *def, int depth) {
                path already does (progression_level_up above); this was the
                one asymmetric spot that granted a "free" level on an
                items-side rejection instead of treating it as a hard stop. */
-            int64_t resource_before = items_purse(def->currency_def);
-            if (!items_remove("purse", def->currency_def, cost, "level_cost:auto")) {
-                nt_log_warn("progression: items_remove failed for '%s' despite affordability check (purse desync?)", def->id);
+            int64_t resource_before = resource_count(def->currency_def);
+            if (items_try_stack_remove_from_container(s_resource_container, def->currency_def, cost, "level_cost:auto") != ITEMS_RESULT_OK) {
+                nt_log_warn("progression: resource removal failed for '%s' despite affordability check", def->id);
                 break; /* do not grant a level the player didn't pay for */
             }
             int old_level = st->level;
             st->level += 1;
             level = st->level;
-            emit_levelup(def, "auto", "level_cost:auto", old_level, st->level, cost, resource_before, items_purse(def->currency_def), depth);
+            emit_levelup(def, "auto", "level_cost:auto", old_level, st->level, cost, resource_before, resource_count(def->currency_def), depth);
         } else {
             int64_t resource_before = st->xp;
             st->xp -= cost;
@@ -375,7 +389,9 @@ static void apply_on_level_up(const progression_track_def_t *def, int depth) {
     for (int i = 0; i < def->on_level_up_count; ++i) {
         const progression_emit_t *e = &def->on_level_up[i];
         if (e->def_id != NULL) {
-            items_add("purse", e->def_id, e->amount, "loot:levelup");
+            (void)items_try_stack_add(
+                s_resource_container, e->def_id, e->amount,
+                ITEMS_SLOT_AUTO, "loot:levelup", NULL, NULL);
         }
         if (e->to_track != NULL) {
             progression_add_xp(e->to_track, e->amount, "convert:cascade");

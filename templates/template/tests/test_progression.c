@@ -24,7 +24,36 @@
    below (precedent: test_items_fragment.c). */
 void game_save_mark_dirty(void) {}
 
-void setUp(void) { game_event_frame_reset(); /* per-test event-log isolation */ }
+static items_container_ref_t s_resources = ITEMS_CONTAINER_REF_NONE;
+
+static void reset_test_state(void) {
+    char error[128] = {0};
+    items_state_fragment.reset();
+    TEST_ASSERT_TRUE_MESSAGE(items_runtime_rebuild(error, (int)sizeof(error)), error);
+    items_container_desc_t desc = {
+        .capacity = 32,
+        .policy = ITEMS_CONTAINER_POLICY_GENERIC,
+        .lifetime = ITEMS_LIFETIME_PERSISTENT,
+    };
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK, items_try_container_create(desc, &s_resources));
+    progression_state_fragment.reset();
+    progression_bind_resource_container(s_resources);
+}
+
+static bool resource_add(const char *def_id, int64_t count, const char *reason) {
+    return items_try_stack_add(
+               s_resources, def_id, count, ITEMS_SLOT_AUTO, reason, NULL, NULL) == ITEMS_RESULT_OK;
+}
+
+static int64_t resource_count(const char *def_id) {
+    return items_stack_count(s_resources, def_id);
+}
+
+void setUp(void) {
+    game_event_frame_reset();
+    reset_test_state();
+}
 void tearDown(void) {}
 
 static bool levelup_event_exists(
@@ -128,8 +157,7 @@ static bool reset_event_exists(const char *track, const char *reason, int64_t ol
 /* ---- cost-lookup / xp_needed ---- */
 
 void test_cost_lookup_and_xp_needed(void) {
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
+    reset_test_state();
 
     const progression_track_def_t *man = progression_track_def("man");
     TEST_ASSERT_NOT_NULL(man);
@@ -163,21 +191,20 @@ void test_int64_cost_no_truncation(void) {
 /* ---- manual mode ---- */
 
 void test_manual_level_up_spends_purse(void) {
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
+    reset_test_state();
 
-    TEST_ASSERT_TRUE(items_add("purse", "tmpl.gold", 25, "cheat:test"));
+    TEST_ASSERT_TRUE(resource_add("tmpl.gold", 25, "cheat:test"));
 
     TEST_ASSERT_TRUE(progression_level_up("man", "level_cost:test"));
     TEST_ASSERT_EQUAL_INT(1, progression_level("man"));
-    TEST_ASSERT_EQUAL_INT64(15, items_purse("tmpl.gold")); /* 25 - cost[0]=10 */
+    TEST_ASSERT_EQUAL_INT64(15, resource_count("tmpl.gold")); /* 25 - cost[0]=10 */
     TEST_ASSERT_TRUE(levelup_event_exists(
         "man", "manual", "manual", "level_cost:test", 0, 1, "tmpl.gold", 10, 25, 15, 0));
 
     /* cost[1]=20 > remaining 15 -> insufficient, level_up rejects, level stays put. */
     TEST_ASSERT_FALSE(progression_level_up("man", "level_cost:test"));
     TEST_ASSERT_EQUAL_INT(1, progression_level("man"));
-    TEST_ASSERT_EQUAL_INT64(15, items_purse("tmpl.gold")); /* untouched by the rejected call */
+    TEST_ASSERT_EQUAL_INT64(15, resource_count("tmpl.gold")); /* untouched by the rejected call */
 }
 
 /* H-fix regression (deep-review #1, data-loss): saturate the 32-slot tracks
@@ -188,8 +215,7 @@ void test_manual_level_up_spends_purse(void) {
    ever recorded. After the fix, the alloc failure must be caught BEFORE any
    currency is touched. */
 void test_manual_level_up_budget_exhausted_leaves_purse_untouched(void) {
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
+    reset_test_state();
 
     for (int i = 0; i < PROGRESSION_STATE_MAX_TRACKS; ++i) {
         ProgressionTrackState *slot = &progression_state.tracks[i];
@@ -199,33 +225,31 @@ void test_manual_level_up_budget_exhausted_leaves_purse_untouched(void) {
         slot->xp = 0;
     }
 
-    TEST_ASSERT_TRUE(items_add("purse", "tmpl.gold", 25, "cheat:test"));
+    TEST_ASSERT_TRUE(resource_add("tmpl.gold", 25, "cheat:test"));
     TEST_ASSERT_FALSE(progression_level_up("man", "level_cost:test")); /* budget exhausted -- must fail closed */
-    TEST_ASSERT_EQUAL_INT64(25, items_purse("tmpl.gold"));             /* H-fix: purse untouched -- no data loss */
+    TEST_ASSERT_EQUAL_INT64(25, resource_count("tmpl.gold"));          /* resource container untouched */
     TEST_ASSERT_EQUAL_INT(0, progression_level("man"));                /* never got a record -- lazy default reads 0 */
 }
 
 /* ---- auto mode (tick) ---- */
 
 void test_auto_tick_buys_while_affordable(void) {
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
+    reset_test_state();
 
-    TEST_ASSERT_TRUE(items_add("purse", "tmpl.xp", 12, "cheat:test"));
+    TEST_ASSERT_TRUE(resource_add("tmpl.xp", 12, "cheat:test"));
     progression_update();
 
     /* auto1 cost {5,5,5,5,5}: 12 -> buys level0 (7 left) -> buys level1 (2 left) ->
        cost[2]=5 > 2, stops. */
     TEST_ASSERT_EQUAL_INT(2, progression_level("auto1"));
-    TEST_ASSERT_EQUAL_INT64(2, items_purse("tmpl.xp"));
+    TEST_ASSERT_EQUAL_INT64(2, resource_count("tmpl.xp"));
     TEST_ASSERT_EQUAL_INT64(2, progression_xp_current("auto1")); /* == purse for auto mode */
 }
 
 /* ---- threshold mode (tick) ---- */
 
 void test_threshold_tick_buys_from_internal_xp(void) {
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
+    reset_test_state();
 
     progression_add_xp("thr", 25, "loot:test");
     TEST_ASSERT_TRUE(xp_added_event_exists("thr", "loot:test", 25, 0, 25));
@@ -240,8 +264,7 @@ void test_threshold_tick_buys_from_internal_xp(void) {
 /* ---- set_level (Р6: prologue) ---- */
 
 void test_set_level_clamps_and_leaves_xp_untouched(void) {
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
+    reset_test_state();
 
     progression_set_level("man", 3, "admin:prologue");
     TEST_ASSERT_EQUAL_INT(3, progression_level("man")); /* == max_level */
@@ -261,8 +284,7 @@ void test_set_level_clamps_and_leaves_xp_untouched(void) {
 /* ---- reset (Р6: prestige) ---- */
 
 void test_reset_zeroes_level_and_internal_xp(void) {
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
+    reset_test_state();
 
     progression_add_xp("thr", 25, "loot:test");
     progression_update();
@@ -287,10 +309,9 @@ void test_reset_zeroes_level_and_internal_xp(void) {
 /* ---- progression.levelup event ---- */
 
 void test_levelup_events_include_context_for_auto_and_manual(void) {
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
+    reset_test_state();
 
-    TEST_ASSERT_TRUE(items_add("purse", "tmpl.xp", 12, "cheat:test"));
+    TEST_ASSERT_TRUE(resource_add("tmpl.xp", 12, "cheat:test"));
     progression_update(); /* auto1: 0->1->2 (two levelups) */
 
     TEST_ASSERT_TRUE(levelup_event_exists(
@@ -300,7 +321,7 @@ void test_levelup_events_include_context_for_auto_and_manual(void) {
 
     /* Manual level_up is also a fact event now; analytics should not infer it from items.txn. */
     game_event_frame_reset();
-    TEST_ASSERT_TRUE(items_add("purse", "tmpl.gold", 25, "cheat:test"));
+    TEST_ASSERT_TRUE(resource_add("tmpl.gold", 25, "cheat:test"));
     TEST_ASSERT_TRUE(progression_level_up("man", "level_cost:test"));
     TEST_ASSERT_TRUE(levelup_event_exists(
         "man", "manual", "manual", "level_cost:test", 0, 1, "tmpl.gold", 10, 25, 15, 0));
@@ -309,18 +330,16 @@ void test_levelup_events_include_context_for_auto_and_manual(void) {
 /* ---- T5 HARD caps (G6 -- anti-hang, критично) ---- */
 
 void test_t5_per_track_cap_self_refund_terminates(void) {
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
+    reset_test_state();
 
-    TEST_ASSERT_TRUE(items_add("purse", "tmpl.xp", 100, "cheat:test"));
+    TEST_ASSERT_TRUE(resource_add("tmpl.xp", 100, "cheat:test"));
     progression_update(); /* MUST return -- proves the per-track cap, not a hang */
 
     TEST_ASSERT_EQUAL_INT(64, progression_level("runaway")); /* ровно кап, не 100, не ∞ */
 }
 
 void test_t5_cascade_depth_cap_terminates(void) {
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
+    reset_test_state();
 
     progression_add_xp("casc_a", 5, "loot:test");
     progression_update(); /* MUST return -- proves the cascade depth cap, not a hang */
@@ -333,10 +352,9 @@ void test_t5_cascade_depth_cap_terminates(void) {
 /* ---- round-trip byte-stable (G4) ---- */
 
 void test_round_trip_byte_stable(void) {
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
+    reset_test_state();
 
-    TEST_ASSERT_TRUE(items_add("purse", "tmpl.xp", 12, "cheat:test"));
+    TEST_ASSERT_TRUE(resource_add("tmpl.xp", 12, "cheat:test"));
     progression_update(); /* auto1 -> level 2, xp record allocated */
 
     cJSON *ja = progression_state_to_json(&progression_state);
@@ -362,8 +380,7 @@ void test_round_trip_byte_stable(void) {
 /* ---- lazy allocation (#6) ---- */
 
 void test_lazy_allocation_no_gratuitous_records(void) {
-    items_state_fragment.reset();
-    progression_state_fragment.reset();
+    reset_test_state();
 
     TEST_ASSERT_EQUAL_INT(0, progression_level("hero-absent")); /* unknown track -> 0, not a crash */
 

@@ -1,13 +1,13 @@
 ---
 id: T0390
 title: Build dynamic Items containers and nested runtime entries
-status: backlog
+status: doing
 project: P001
 epic: E019
 priority: P1
 tags: [items, containers, state, runtime]
 created: 2026-07-10
-updated: 2026-07-14
+updated: 2026-07-16
 ---
 
 ## What
@@ -81,6 +81,23 @@ T0392.
 - Owner state stores only `container_id`; registry plus owner references commit
   in one save envelope and game-owned create/destroy actions update both. The
   strict template default is whole-operation/load refusal, not silent repair.
+- The epic branch will use the new shape as schema version 1 while T0390 is in
+  progress. T0392 must immediately bump the schema and migrate both the frozen
+  legacy-v1 map and any interim nested-v1 fixture by shape; no release may ship
+  between those commits.
+
+## Plan
+
+1. Replace flat `owned` with the generated depth-two container/entry pools and
+   implement exact persistent ID allocation, runtime refs, rebuild, and staged
+   validation.
+2. Add persistent container/entry create, destroy, resize, stack, unique,
+   split/merge/move, policy, slot, capacity, and quarantine verbs.
+3. Add separately bounded ephemeral pools and enforce lifetime boundaries.
+4. Move template seed/owner refs and progression/HUD consumers to explicit
+   game-owned containers while keeping event compatibility isolated for T0392.
+5. Add bounded inspection plus max/exhaustion/save/load fixtures, then run the
+   full Items/progression/template and Studio quality gates.
 
 ## Log
 
@@ -92,3 +109,13 @@ T0392.
   canonical persistence shape and flat lookup tables are derived caches only.
 - 2026-07-10: Split legacy migration/reference/event cutover into T0392 after
   red-team review; T0390 now owns only the new runtime/state contract.
+- 2026-07-16: Plan review ACCEPT. Build one numeric runtime directly on the
+  generated pools; do not retain a second flat ownership path, fixed-name core
+  policy, or a generic transaction framework. Legacy save/event cutover stays
+  T0392 and atomic payment stays T0388.
+- 2026-07-16: Slice 1 replaced the flat ownership map with generated nested
+  container/entry pools, exact monotonic IDs, generation refs, strict rebuild,
+  slots/capacity/policy/quarantine rules, and persistent stack/unique/move
+  verbs. Progression now consumes an explicitly game-bound resource container.
+  Focused native verification: `test_items_fragment` and `test_progression`
+  passed (2/2).

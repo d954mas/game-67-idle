@@ -3,23 +3,49 @@
   "schema_version": 2,
   "fragment": "items",
   "version": 1,
-  "string_max": 64,
-  "hooks": { "on_new_game": true, "reconcile": true },
+  "string_max": 128,
+  "reserved": ["owned"],
+  "hooks": { "reconcile": true },
+  "enums": {
+    "ContainerPolicy": ["generic", "currency_only", "equipment"]
+  },
   "types": {
-    "ItemOwned": {
+    "ItemEntry": {
       "kind": "object",
+      "reserved": ["container", "container_id", "entry_key", "key"],
       "fields": {
-        "def_id":      { "type": "string", "max_length": 63 },
-        "container":   { "type": "string", "max_length": 63 },
-        "count":       { "type": "i64", "default": 1, "min": 0, "max": 9000000000000000000 },
-        "level":       { "type": "int", "default": 1, "min": 1, "max": 9999 },
-        "durability":  { "type": "float", "default": 1, "min": 0, "max": 1 },
+        "entry_id": { "type": "u32", "default": 1, "min": 1, "max": 4294967294 },
+        "slot": { "type": "u32", "default": 0, "min": 0, "max": 1023 },
+        "def_id": { "type": "string", "max_length": 127 },
+        "count": { "type": "i64", "default": 0, "min": 0, "max": 9000000000000000000 },
+        "level": { "type": "int", "default": 1, "min": 1, "max": 9999 },
+        "durability": { "type": "float", "default": 1, "min": 0, "max": 1 },
         "quarantined": { "type": "bool", "default": false }
+      }
+    },
+    "ItemContainer": {
+      "kind": "object",
+      "reserved": ["entry_keys", "id", "name"],
+      "fields": {
+        "container_id": { "type": "u32", "default": 1, "min": 1, "max": 4294967294 },
+        "capacity": { "type": "u32", "default": 0, "min": 0, "max": 1024 },
+        "policy": { "type": "enum", "enum": "ContainerPolicy", "default": "generic" },
+        "entries": {
+          "type": "list<ItemEntry>",
+          "max_count": 1024,
+          "order_by": ["slot", "entry_id"]
+        }
       }
     }
   },
   "fields": {
-    "owned": { "type": "map<string,ItemOwned>", "max_count": 64 }
+    "last_container_id": { "type": "u32", "default": 0, "min": 0, "max": 4294967294 },
+    "last_entry_id": { "type": "u32", "default": 0, "min": 0, "max": 4294967294 },
+    "containers": {
+      "type": "list<ItemContainer>",
+      "max_count": 128,
+      "order_by": ["container_id"]
+    }
   },
   "events": {
     "txn": {
