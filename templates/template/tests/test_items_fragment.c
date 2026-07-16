@@ -252,6 +252,118 @@ void test_one_hundred_persistent_containers_round_trip(void) {
     cJSON_Delete(json);
 }
 
+void test_loaded_maximum_ids_and_long_definition_reseed_without_truncation(void) {
+    char long_id[ITEMS_STATE_STRING_MAX];
+    memset(long_id, 'x', sizeof(long_id) - 1U);
+    long_id[sizeof(long_id) - 1U] = '\0';
+
+    cJSON *json = cJSON_CreateObject();
+    cJSON_AddNumberToObject(json, "last_container_id", (double)(UINT32_MAX - 2U));
+    cJSON_AddNumberToObject(json, "last_entry_id", (double)(UINT32_MAX - 2U));
+    cJSON *containers = cJSON_AddArrayToObject(json, "containers");
+    cJSON *container = cJSON_CreateObject();
+    cJSON_AddNumberToObject(container, "container_id", (double)(UINT32_MAX - 2U));
+    cJSON_AddNumberToObject(container, "capacity", 2);
+    cJSON_AddStringToObject(container, "policy", "generic");
+    cJSON *entries = cJSON_AddArrayToObject(container, "entries");
+    cJSON *entry = cJSON_CreateObject();
+    cJSON_AddNumberToObject(entry, "entry_id", (double)(UINT32_MAX - 2U));
+    cJSON_AddNumberToObject(entry, "slot", 0);
+    cJSON_AddStringToObject(entry, "def_id", long_id);
+    cJSON_AddNumberToObject(entry, "count", 1);
+    cJSON_AddNumberToObject(entry, "level", 1);
+    cJSON_AddNumberToObject(entry, "durability", 1);
+    cJSON_AddBoolToObject(entry, "quarantined", false);
+    cJSON_AddItemToArray(entries, entry);
+    cJSON_AddItemToArray(containers, container);
+
+    ItemsState loaded;
+    char error[128] = {0};
+    TEST_ASSERT_TRUE(items_state_from_json(&loaded, json, error, (int)sizeof(error)));
+    items_state = loaded;
+    TEST_ASSERT_TRUE(items_runtime_rebuild(error, (int)sizeof(error)));
+    items_reconcile();
+
+    item_entry_ref_t loaded_entry = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_TRUE(items_entry_try_from_id(UINT32_MAX - 2U, &loaded_entry));
+    TEST_ASSERT_EQUAL_UINT32(sizeof(long_id) - 1U, strlen(items_entry_view(loaded_entry).def_id));
+    TEST_ASSERT_TRUE(items_entry_view(loaded_entry).quarantined);
+
+    items_container_ref_t loaded_container = ITEMS_CONTAINER_REF_NONE;
+    TEST_ASSERT_TRUE(items_container_try_from_id(UINT32_MAX - 2U, &loaded_container));
+    items_container_ref_t maximum_container = ITEMS_CONTAINER_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_container_create(
+            (items_container_desc_t){1, ITEMS_CONTAINER_POLICY_GENERIC, ITEMS_LIFETIME_PERSISTENT},
+            &maximum_container));
+    TEST_ASSERT_EQUAL_UINT32(UINT32_MAX - 1U, items_container_id(maximum_container));
+
+    item_entry_ref_t maximum_entry = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(
+            loaded_container, "tmpl.wood", 1, 1, "loot:test", &maximum_entry, NULL));
+    TEST_ASSERT_EQUAL_UINT32(UINT32_MAX - 1U, items_entry_id(maximum_entry));
+
+    cJSON *before = items_state_to_json(&items_state);
+    items_container_ref_t refused_container = ITEMS_CONTAINER_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_ID_EXHAUSTED,
+        items_try_container_create(
+            (items_container_desc_t){1, ITEMS_CONTAINER_POLICY_GENERIC, ITEMS_LIFETIME_PERSISTENT},
+            &refused_container));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_ID_EXHAUSTED,
+        items_try_stack_add(
+            maximum_container, "tmpl.wood", 1, 0, "loot:test", NULL, NULL));
+    cJSON *after = items_state_to_json(&items_state);
+    TEST_ASSERT_TRUE(cJSON_Compare(before, after, true));
+    cJSON_Delete(after);
+    cJSON_Delete(before);
+    cJSON_Delete(json);
+}
+
+void test_canonical_serialization_ignores_dense_pool_reuse_order(void) {
+    items_container_ref_t first = create_container(6, ITEMS_CONTAINER_POLICY_GENERIC);
+    items_container_ref_t reused = create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
+    items_container_ref_t third = create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
+    TEST_ASSERT_EQUAL_INT(ITEMS_RESULT_OK, items_try_container_destroy_empty(reused));
+    items_container_ref_t fourth = create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(first, "tmpl.wood", 1, 5, "loot:test", NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(first, "tmpl.potion", 1, 2, "loot:test", NULL, NULL));
+
+    cJSON *json = items_state_to_json(&items_state);
+    cJSON *containers = cJSON_GetObjectItemCaseSensitive(json, "containers");
+    TEST_ASSERT_EQUAL_UINT32(
+        items_container_id(first),
+        (uint32_t)cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(containers, 0), "container_id")->valuedouble);
+    TEST_ASSERT_EQUAL_UINT32(
+        items_container_id(third),
+        (uint32_t)cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(containers, 1), "container_id")->valuedouble);
+    TEST_ASSERT_EQUAL_UINT32(
+        items_container_id(fourth),
+        (uint32_t)cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(containers, 2), "container_id")->valuedouble);
+    cJSON *entries = cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(containers, 0), "entries");
+    TEST_ASSERT_EQUAL_INT(
+        2, (int)cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(entries, 0), "slot")->valuedouble);
+    TEST_ASSERT_EQUAL_INT(
+        5, (int)cJSON_GetObjectItemCaseSensitive(cJSON_GetArrayItem(entries, 1), "slot")->valuedouble);
+
+    ItemsState loaded;
+    char error[128] = {0};
+    TEST_ASSERT_TRUE(items_state_from_json(&loaded, json, error, (int)sizeof(error)));
+    cJSON *again = items_state_to_json(&loaded);
+    TEST_ASSERT_TRUE(cJSON_Compare(json, again, true));
+    cJSON_Delete(again);
+    cJSON_Delete(json);
+}
+
 void test_missing_definition_quarantines_and_restores(void) {
     items_container_ref_t bag = create_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
     item_entry_ref_t entry = {0};
@@ -536,6 +648,8 @@ int main(void) {
     RUN_TEST(test_rebuild_rejects_duplicates_and_counter_regression);
     RUN_TEST(test_rebuild_rejects_reserved_persisted_counters);
     RUN_TEST(test_one_hundred_persistent_containers_round_trip);
+    RUN_TEST(test_loaded_maximum_ids_and_long_definition_reseed_without_truncation);
+    RUN_TEST(test_canonical_serialization_ignores_dense_pool_reuse_order);
     RUN_TEST(test_missing_definition_quarantines_and_restores);
     RUN_TEST(test_ephemeral_entries_never_enter_persistent_state);
     RUN_TEST(test_lifetime_boundary_rejects_persistent_to_ephemeral_and_acquires_reverse);
