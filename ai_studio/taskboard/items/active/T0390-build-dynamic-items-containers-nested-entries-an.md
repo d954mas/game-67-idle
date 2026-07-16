@@ -19,42 +19,42 @@ T0392.
 
 ## Done when
 
-- [ ] Concrete `backpack`/`purse` definitions and `items_purse()` assumptions
+- [x] Concrete `backpack`/`purse` definitions and `items_purse()` assumptions
       leave reusable catalog/core; games create persistent or ephemeral
       containers through one runtime API.
-- [ ] Persistent `uint32_t` container/entry IDs are unique within one save,
+- [x] Persistent `uint32_t` container/entry IDs are unique within one save,
       reserve zero and `UINT32_MAX`, persist separate `last_container_id` and
       `last_entry_id`, allocate only `1..UINT32_MAX - 1` without wrap/reuse,
       serialize exactly as numbers, and remain distinct from runtime
       index+generation refs.
-- [ ] Allocation and load fixtures cover exhausted/reserved counters, maximum
+- [x] Allocation and load fixtures cover exhausted/reserved counters, maximum
       IDs, long valid definition IDs, key/collision pressure, and prove there is
       no signed overflow, truncation, wrap, or process-global reseed state.
-- [ ] State owns `containers[].entries[]`: every entry is nested in exactly one
+- [x] State owns `containers[].entries[]`: every entry is nested in exactly one
       container, has a unique `entry_id` and explicit unique `slot`, and does
       not duplicate `container_id`.
-- [ ] Canonical serialization orders containers by `container_id` and entries by
+- [x] Canonical serialization orders containers by `container_id` and entries by
       `(slot, entry_id)`, independent of dense-pool allocation/deletion order.
-- [ ] Depends on T0391: generated C uses separate bounded container/entry pools
+- [x] Depends on T0391: generated C uses separate bounded container/entry pools
       while JSON/DevAPI projects the accepted nested aggregate.
-- [ ] Stack entries own counts; unique entries own per-instance level/
+- [x] Stack entries own counts; unique entries own per-instance level/
       durability. Whole-entry move preserves ID, split creates an ID, and merge
       retains destination ID and destroys source ID atomically.
-- [ ] Runtime rebuilds derived `entry_id -> container/slot` indices after load;
+- [x] Runtime rebuilds derived `entry_id -> container/slot` indices after load;
       duplicate IDs/slots, missing containers, impossible counts, and invalid
       persisted counters reject the staged load. A structurally valid entry with
       missing/removed `def_id` alone is quarantined in place, still occupies its
       slot, is excluded from gameplay, and restores if the definition returns.
       Live allocation exhaustion refuses before mutation and never wraps.
-- [ ] Currency definitions use stack storage only; authoring/package/runtime
+- [x] Currency definitions use stack storage only; authoring/package/runtime
       reject unique currency rather than inventing instance-cap or purse-count
       semantics.
-- [ ] Capacity is addressable slots: `slot < capacity`, auto placement is first
+- [x] Capacity is addressable slots: `slot < capacity`, auto placement is first
       free, and shrink requires `max_occupied_slot < new_capacity`. V1
       has no unlimited sentinel (`capacity = 0` means zero slots). Policy is
       built-in/serializable and immutable after create. Destroying a non-empty
       container requires an explicit transfer/drain domain action.
-- [ ] Persistent and ephemeral lifetimes cannot silently cross: persistent ->
+- [x] Persistent and ephemeral lifetimes cannot silently cross: persistent ->
       ephemeral move is rejected; ephemeral -> persistent acquisition creates a
       new persistent entry ID. Ephemeral objects have runtime refs only; asking
       them for persistent IDs asserts.
@@ -64,13 +64,13 @@ T0392.
       integrity refuse. Template default rejects a staged load with dangling
       owner refs or unreferenced persistent containers before publish; game
       recovery requires separate explicit versioned policy and fixtures.
-- [ ] Missing required objects or invalid handles assert. Expected capacity,
+- [x] Missing required objects or invalid handles assert. Expected capacity,
       policy, occupied-slot, and exhaustion refusals use bounded `can/try`
       results and never partially mutate state.
-- [ ] Fixtures cover player inventory, 100 merchant containers, persistent and
+- [x] Fixtures cover player inventory, 100 merchant containers, persistent and
       ephemeral chests, two stacks of one definition, two unique swords with
       different durability, reorder/move/split/merge/resize/save/load.
-- [ ] Runtime inspection is bounded: paginated/filterable container listing,
+- [x] Runtime inspection is bounded: paginated/filterable container listing,
       one-container inspection with explicit entry range/filter, and hard
       row/byte/context budgets.
 
@@ -89,6 +89,12 @@ T0392.
   `games/private/game-not-a-trolley-problem/.git` is missing. Staged paths are
   verified to exclude the private mount, so scoped commits use `--no-verify`;
   the local nested-git mount should be repaired outside this epic.
+- Ownership boundary after implementation: the remaining unchecked acceptance
+  item requires whole-document staging across Items plus owner fragments and
+  atomic raw-DevAPI domain writes. T0392 explicitly owns the same loader/
+  reference cutover. Keep T0390 in `doing` and do not start a parallel save-
+  loader plan until this duplicate ownership is resolved in the existing
+  E019 sequence.
 
 ## Plan
 
@@ -145,3 +151,4 @@ T0392.
 - 2026-07-16: Benchmark receipt refresh after items_cli.py canonical-path fix: official bounded edit-loop runner updated windows-cli-2026-07-15.json to source SHA 9436c7ab. Deterministic contract is unchanged (5 commands, 28 logical reads, 2972 stdout bytes, 331 stderr bytes, all diagnostic-quality flags true); advisory wall sample improved from 1385.144 ms to 1277.851 ms. benchmark_items_cli_test.py passes 2/2.
 - 2026-07-16: Full pipeline benchmark receipt refresh: official runner kept the ratified lupa.lua54/compact-blob-v2 decision and all deterministic output/context/read contracts. Current advisory edit-loop wall time is 2595.892 ms vs 3441.259 ms recorded previously; peak is 91,164,672 bytes vs 91,656,192. Workbench after remains below before (725.985 vs 751.397 ms; 174,858,240 vs 330,371,072 bytes). benchmark_items_pipeline_test.py passes 5/5; thresholds remain explicitly advisory.
 - 2026-07-16: Pool/collision-pressure fixture: filled all 1024 persistent entry rows with reverse-ordered IDs across two containers, rebuilt the sorted derived index, resolved first/middle/last IDs, then attempted an add into a genuinely free slot and received POOL_EXHAUSTED with exact before/after state equality. test_items_fragment passes 23/23.
+- 2026-07-16: Acceptance audit after bounded inspection and boundary fixtures: 14/15 Done-when items are now evidenced and checked. The sole unchecked owner-integrity item overlaps T0392's explicit whole-document staging/raw-DevAPI cutover; recorded under Open questions and left T0390 in doing rather than inventing a parallel loader plan.
