@@ -364,6 +364,51 @@ void test_canonical_serialization_ignores_dense_pool_reuse_order(void) {
     cJSON_Delete(json);
 }
 
+void test_full_entry_pool_rebuilds_reverse_id_index_and_refuses_atomically(void) {
+    items_container_ref_t large = create_container(
+        ITEMS_STATE_ITEM_CONTAINER_CAPACITY_MAX,
+        ITEMS_CONTAINER_POLICY_GENERIC);
+    items_container_ref_t spill = create_container(1, ITEMS_CONTAINER_POLICY_GENERIC);
+
+    for (uint32_t i = 0; i < ITEMS_STATE_MAX_CONTAINERS_ENTRIES; i++) {
+        ItemsItemEntry *entry = &items_state.containers_entries[i];
+        memset(entry, 0, sizeof(*entry));
+        entry->used = true;
+        entry->parent_index = i + 1U == ITEMS_STATE_MAX_CONTAINERS_ENTRIES
+            ? (int)spill.index : (int)large.index;
+        entry->entry_id = ITEMS_STATE_MAX_CONTAINERS_ENTRIES - i;
+        entry->slot = i + 1U == ITEMS_STATE_MAX_CONTAINERS_ENTRIES ? 0 : i;
+        (void)snprintf(entry->def_id, sizeof(entry->def_id), "tmpl.wood");
+        entry->count = 1;
+        entry->level = ITEMS_STATE_ITEM_ENTRY_LEVEL_DEFAULT;
+        entry->durability = ITEMS_STATE_ITEM_ENTRY_DURABILITY_DEFAULT;
+    }
+    items_state.last_entry_id = ITEMS_STATE_MAX_CONTAINERS_ENTRIES;
+
+    char error[128] = {0};
+    TEST_ASSERT_TRUE(items_runtime_rebuild(error, (int)sizeof(error)));
+    TEST_ASSERT_TRUE(items_container_try_from_id(1U, &large));
+    const uint32_t ids[] = {1U, ITEMS_STATE_MAX_CONTAINERS_ENTRIES / 2U,
+                            ITEMS_STATE_MAX_CONTAINERS_ENTRIES};
+    for (uint32_t i = 0; i < sizeof(ids) / sizeof(ids[0]); i++) {
+        item_entry_ref_t found = ITEM_ENTRY_REF_NONE;
+        TEST_ASSERT_TRUE(items_entry_try_from_id(ids[i], &found));
+        TEST_ASSERT_EQUAL_UINT32(ids[i], items_entry_id(found));
+    }
+
+    cJSON *before = items_state_to_json(&items_state);
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_POOL_EXHAUSTED,
+        items_try_stack_add(
+            large, "tmpl.potion", 1,
+            ITEMS_STATE_ITEM_CONTAINER_CAPACITY_MAX - 1U,
+            "loot:test", NULL, NULL));
+    cJSON *after = items_state_to_json(&items_state);
+    TEST_ASSERT_TRUE(cJSON_Compare(before, after, true));
+    cJSON_Delete(after);
+    cJSON_Delete(before);
+}
+
 void test_missing_definition_quarantines_and_restores(void) {
     items_container_ref_t bag = create_container(2, ITEMS_CONTAINER_POLICY_GENERIC);
     item_entry_ref_t entry = {0};
@@ -650,6 +695,7 @@ int main(void) {
     RUN_TEST(test_one_hundred_persistent_containers_round_trip);
     RUN_TEST(test_loaded_maximum_ids_and_long_definition_reseed_without_truncation);
     RUN_TEST(test_canonical_serialization_ignores_dense_pool_reuse_order);
+    RUN_TEST(test_full_entry_pool_rebuilds_reverse_id_index_and_refuses_atomically);
     RUN_TEST(test_missing_definition_quarantines_and_restores);
     RUN_TEST(test_ephemeral_entries_never_enter_persistent_state);
     RUN_TEST(test_lifetime_boundary_rejects_persistent_to_ephemeral_and_acquires_reverse);
