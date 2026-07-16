@@ -68,6 +68,38 @@ if(NOT EMSCRIPTEN)
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
     add_test(NAME test_game_state_json COMMAND test_game_state_json)
 
+    set(NESTED_STATE_TEST_SCHEMA
+        "${CMAKE_CURRENT_SOURCE_DIR}/../../features/game-state/tests/items_containers.schema.json")
+    set(NESTED_STATE_TEST_GENERATED_DIR "${CMAKE_BINARY_DIR}/generated/game-state-nested-test")
+    set(NESTED_STATE_TEST_SOURCE "${NESTED_STATE_TEST_GENERATED_DIR}/items_v2_state.c")
+    add_custom_command(
+        OUTPUT
+            "${NESTED_STATE_TEST_GENERATED_DIR}/items_v2_state.h"
+            "${NESTED_STATE_TEST_SOURCE}"
+            "${NESTED_STATE_TEST_GENERATED_DIR}/items_v2_state_schema.gen.h"
+            "${NESTED_STATE_TEST_GENERATED_DIR}/items_v2_state_events.gen.h"
+            "${NESTED_STATE_TEST_GENERATED_DIR}/items_v2_state_events.gen.c"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${NESTED_STATE_TEST_GENERATED_DIR}"
+        COMMAND "${Python3_EXECUTABLE}" "${GAME_STATE_GENERATOR}"
+            --schema "${NESTED_STATE_TEST_SCHEMA}"
+            --out-dir "${NESTED_STATE_TEST_GENERATED_DIR}"
+            --fragment items_v2
+        DEPENDS "${NESTED_STATE_TEST_SCHEMA}" ${GAME_STATE_GENERATOR_SOURCES}
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/../.."
+        COMMENT "Generating nested game-state test fixture"
+        VERBATIM)
+    add_executable(test_game_state_nested
+        tests/test_game_state_nested.c
+        src/game_state_json.c
+        "${NESTED_STATE_TEST_SOURCE}")
+    target_link_libraries(test_game_state_nested PRIVATE cjson unity)
+    target_include_directories(test_game_state_nested PRIVATE
+        src "${NESTED_STATE_TEST_GENERATED_DIR}")
+    target_compile_definitions(test_game_state_nested PRIVATE _CRT_SECURE_NO_WARNINGS)
+    set_target_properties(test_game_state_nested PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/tests")
+    add_test(NAME test_game_state_nested COMMAND test_game_state_nested)
+
     add_executable(test_game_storage tests/test_game_storage.c src/game_storage.c)
     # nt_log: game_storage.c warns via nt_log_warn on a read ERROR (nt_hash/nt_core are nt_log's deps).
     target_link_libraries(test_game_storage PRIVATE unity nt_log nt_core nt_hash)
@@ -596,7 +628,7 @@ if(NOT EMSCRIPTEN)
     # executable that can link them must carry the matching runtime at link time.
     set(GAME_NATIVE_TEST_TARGETS
         test_audio_core test_audio_resource test_audio_backend_native test_game_audio
-        test_game_state_json test_game_storage test_game_save
+        test_game_state_json test_game_state_nested test_game_storage test_game_save
         test_game_events test_game_events_overflow test_game_state_roundtrip
         test_game_events_typed test_game_event_render test_game_analytics
         test_game_events_log_mirror test_items_api_core_only

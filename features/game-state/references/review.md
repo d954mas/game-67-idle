@@ -34,6 +34,11 @@ fixtures, references, or save/load behavior.
 - Check shipped cross-fragment moves bump `GAME_SAVE_DOC_VERSION` and migrate
   raw `features`; otherwise require an explicit pre-ship data-loss decision.
 - Check integer and enum parsing rejects fractional JSON numbers.
+- Check `u32` remains a JSON number and rejects string/fractional/negative/
+  overflow values.
+- Check the optional nested aggregate has one root and one nested object list,
+  separate fixed pools, explicit primitive `order_by`, strict object fields,
+  bounded staged parsing, and no recursive or map-reused aggregate types.
 - Check ordinary tests are isolated from persisted state and exercise restart.
 - Check inventory/equipment references point to existing owned objects.
 

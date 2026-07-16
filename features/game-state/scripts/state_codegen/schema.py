@@ -29,6 +29,12 @@ def map_type_name(type_text: str) -> str | None:
 def is_list_type(type_text: str) -> bool:
     return type_text == "list<string>"
 
+def object_list_type_name(type_text: str) -> str | None:
+    match = re.fullmatch(r"list<([A-Za-z_][A-Za-z0-9_]*)>", type_text)
+    if not match or match.group(1) == "string":
+        return None
+    return match.group(1)
+
 def _normalize_fields(raw_fields: Any, scope: str) -> list[dict[str, Any]]:
     """v2 fields/type-fields are a MAP path -> spec; expand to an ordered list
     with the key injected as ``path`` (file order = struct/golden order)."""
@@ -225,8 +231,11 @@ def load_schema(schema_path: Path) -> dict[str, Any]:
             raise SystemExit("type names must be non-empty strings")
         if not isinstance(type_def, dict) or type_def.get("kind") != "object":
             raise SystemExit(f"types.{type_name} must be an object type")
+        type_reserved = type_def.get("reserved", [])
+        if not isinstance(type_reserved, list) or any(not isinstance(item, str) or not item for item in type_reserved):
+            raise SystemExit(f"types.{type_name}.reserved must be a list of non-empty field names")
         type_fields = _normalize_fields(type_def.get("fields"), f"types.{type_name}.fields")
-        types[type_name] = {"kind": "object", "fields": type_fields}
+        types[type_name] = {"kind": "object", "reserved": list(type_reserved), "fields": type_fields}
 
     fields = _normalize_fields(raw.get("fields"), "fields")
 
@@ -260,14 +269,70 @@ def validate_supported_shape(schema: dict[str, Any]) -> None:
     enums = schema["enums"]
     types = schema["types"]
 
+    validate_field_names("fields", schema["fields"], reserved_names, forbid_v=True)
+    aggregate_fields = [field for field in schema["fields"] if object_list_type_name(field.get("type"))]
+    if len(aggregate_fields) > 1:
+        raise SystemExit("schema-v2 supports at most one depth-two list<Object> aggregate")
+
+    root_type_name: str | None = None
+    nested_type_name: str | None = None
+    if aggregate_fields:
+        aggregate = aggregate_fields[0]
+        root_type_name = object_list_type_name(aggregate["type"])
+        if root_type_name not in types:
+            raise SystemExit(f"{aggregate['path']} references unknown type {root_type_name}")
+        validate_object_list_field(aggregate, types[root_type_name], aggregate["path"])
+
+        nested_fields = [field for field in types[root_type_name]["fields"] if object_list_type_name(field.get("type"))]
+        if len(nested_fields) != 1:
+            raise SystemExit("depth-two list<Object> aggregate must declare exactly one nested object list")
+        nested = nested_fields[0]
+        nested_type_name = object_list_type_name(nested["type"])
+        if nested_type_name not in types:
+            raise SystemExit(f"{nested['path']} references unknown type {nested_type_name}")
+        if nested_type_name == root_type_name:
+            raise SystemExit("depth-two list<Object> aggregate cannot recurse")
+        validate_object_list_field(nested, types[nested_type_name], f"{aggregate['path']}.{nested['path']}")
+
     for type_name, type_def in types.items():
-        validate_field_names(f"types.{type_name}", type_def["fields"], set(), forbid_v=False)
+        validate_field_names(
+            f"types.{type_name}",
+            type_def["fields"],
+            set(type_def.get("reserved", [])),
+            forbid_v=False,
+        )
         for field in type_def["fields"]:
+            object_list_name = object_list_type_name(field.get("type"))
+            if object_list_name:
+                if type_name != root_type_name:
+                    raise SystemExit("list<Object> recursion beyond the supported depth-two aggregate is not allowed")
+                continue
             validate_field_shape(schema, field, enums, types, allow_collections=False)
 
-    validate_field_names("fields", schema["fields"], reserved_names, forbid_v=True)
+    map_types = {map_type_name(field["type"]) for field in schema["fields"] if map_type_name(field["type"])}
+    if root_type_name in map_types or nested_type_name in map_types:
+        raise SystemExit("aggregate object types cannot also back map fields")
+
     for field in schema["fields"]:
+        if object_list_type_name(field.get("type")):
+            continue
         validate_field_shape(schema, field, enums, types, allow_collections=True)
+
+
+def validate_object_list_field(field: dict[str, Any], type_def: dict[str, Any], path: str) -> None:
+    validate_max_count(field, path)
+    order_by = field.get("order_by")
+    if not isinstance(order_by, list) or not order_by or any(not isinstance(item, str) or not item for item in order_by):
+        raise SystemExit(f"{path} must declare a non-empty order_by field list")
+    if len(set(order_by)) != len(order_by):
+        raise SystemExit(f"{path} order_by contains duplicate fields")
+    fields_by_path = {item["path"]: item for item in type_def["fields"]}
+    for order_path in order_by:
+        ordered = fields_by_path.get(order_path)
+        if not ordered:
+            raise SystemExit(f"{path} order_by references unknown field {order_path}")
+        if ordered.get("type") not in {"bool", "int", "u32", "i64", "string", "enum"}:
+            raise SystemExit(f"{path} order_by field {order_path} must be a canonical primitive")
 
 
 def validate_field_shape(

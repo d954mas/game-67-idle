@@ -5,7 +5,7 @@ import re
 from typing import Any
 
 from .naming import Ns, c_ident, c_macro
-from .schema import SCALAR_TYPES, is_list_type, map_type_name
+from .schema import SCALAR_TYPES, is_list_type, map_type_name, object_list_type_name
 
 TOOL_LABEL = "features/game-state/scripts/generate_state.py"
 
@@ -94,6 +94,25 @@ class StateRenderer:
 
     def list_fields(self, schema: dict[str, Any]) -> list[dict[str, Any]]:
         return [f for f in schema["fields"] if is_list_type(f["type"])]
+
+
+    def aggregate_field(self, schema: dict[str, Any]) -> dict[str, Any] | None:
+        return next((field for field in schema["fields"] if object_list_type_name(field["type"])), None)
+
+
+    def aggregate_info(self, schema: dict[str, Any]) -> tuple[dict[str, Any], str, dict[str, Any], str] | None:
+        aggregate = self.aggregate_field(schema)
+        if not aggregate:
+            return None
+        root_type = object_list_type_name(aggregate["type"])
+        assert root_type is not None
+        nested = next(
+            field for field in self.schema_types(schema)[root_type]["fields"]
+            if object_list_type_name(field["type"])
+        )
+        nested_type = object_list_type_name(nested["type"])
+        assert nested_type is not None
+        return aggregate, root_type, nested, nested_type
 
 
     def scalar_fields(self, schema: dict[str, Any]) -> list[dict[str, Any]]:
@@ -198,6 +217,13 @@ class StateRenderer:
                 emit_scalar(field, f"{type_name}.")
         for field in self.map_fields(schema) + self.list_fields(schema):
             lines.append(f"#define {self.collection_macro(field['path'])} {self.c_int(field['max_count'])}")
+        if (aggregate_info := self.aggregate_info(schema)):
+            aggregate, _, nested, _ = aggregate_info
+            lines.append(f"#define {self.collection_macro(aggregate['path'])} {self.c_int(aggregate['max_count'])}")
+            lines.append(
+                f"#define {self.collection_macro(aggregate['path'] + '.' + nested['path'])} "
+                f"{self.c_int(nested['max_count'])}"
+            )
         return "\n".join(lines)
 
 
@@ -213,12 +239,22 @@ class StateRenderer:
 
     def render_object_structs(self, schema: dict[str, Any]) -> str:
         blocks: list[str] = []
+        aggregate_info = self.aggregate_info(schema)
+        aggregate_types = set()
+        nested_type = None
+        if aggregate_info:
+            _, root_type, _, nested_type = aggregate_info
+            aggregate_types = {root_type, nested_type}
         for type_name, type_def in self.schema_types(schema).items():
             lines = [f"typedef struct {self.object_type_c_name(type_name)} {{"]
             lines.append("    bool used;")
-            lines.append(f"    char key[{self.ns.macro}STRING_MAX];")
+            if type_name not in aggregate_types:
+                lines.append(f"    char key[{self.ns.macro}STRING_MAX];")
+            if type_name == nested_type:
+                lines.append("    int parent_index;")
             for field in type_def["fields"]:
-                lines.extend(self.render_struct_scalar_field(field))
+                if field["type"] in SCALAR_TYPES:
+                    lines.extend(self.render_struct_scalar_field(field))
             lines.append(f"}} {self.object_type_c_name(type_name)};")
             blocks.append("\n".join(lines))
         return "\n\n".join(blocks)
@@ -236,6 +272,14 @@ class StateRenderer:
                 lines.append(f"    int {name}_count;")
             elif (type_name := map_type_name(typ)):
                 lines.append(f"    {self.object_type_c_name(type_name)} {name}[{self.collection_macro(field['path'])}];")
+            elif (type_name := object_list_type_name(typ)):
+                aggregate_info = self.aggregate_info(schema)
+                assert aggregate_info is not None
+                _, _, nested, nested_type = aggregate_info
+                lines.append(f"    {self.object_type_c_name(type_name)} {name}[{self.collection_macro(field['path'])}];")
+                nested_ident = c_ident(f"{field['path']}.{nested['path']}")
+                nested_macro = self.collection_macro(f"{field['path']}.{nested['path']}")
+                lines.append(f"    {self.object_type_c_name(nested_type)} {nested_ident}[{nested_macro}];")
         lines.append(f"}} {self.ns.type};")
         return "\n".join(lines)
 
@@ -521,7 +565,14 @@ extern const GameSaveFragment {self.ns.frag};
 
     def render_object_helpers(self, schema: dict[str, Any]) -> str:
         blocks: list[str] = []
+        aggregate_info = self.aggregate_info(schema)
+        aggregate_types = set()
+        if aggregate_info:
+            _, root_type, _, nested_type = aggregate_info
+            aggregate_types = {root_type, nested_type}
         for type_name, type_def in self.schema_types(schema).items():
+            if type_name in aggregate_types:
+                continue
             fname = self.object_type_func_name(type_name)
             cname = self.object_type_c_name(type_name)
             default_lines = [
@@ -666,6 +717,270 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
     return true;
 }}
 """)
+        aggregate_helpers = self.render_aggregate_helpers(schema)
+        if aggregate_helpers:
+            blocks.append(aggregate_helpers)
+        return "\n\n".join(blocks)
+
+
+    def render_order_comparator(
+        self,
+        function_name: str,
+        type_name: str,
+        fields: list[dict[str, Any]],
+        order_by: list[str],
+    ) -> str:
+        by_path = {field["path"]: field for field in fields}
+        cname = self.object_type_c_name(type_name)
+        lines = [
+            f"static int {function_name}(const void *a, const void *b) {{",
+            f"    const {cname} *lhs = *(const {cname} *const *)a;",
+            f"    const {cname} *rhs = *(const {cname} *const *)b;",
+        ]
+        for index, path in enumerate(order_by):
+            field = by_path[path]
+            ident = c_ident(path)
+            if field["type"] == "string":
+                lines.extend([
+                    f"    int cmp_{index} = strcmp(lhs->{ident}, rhs->{ident});",
+                    f"    if (cmp_{index} != 0) {{ return cmp_{index}; }}",
+                ])
+            else:
+                lines.extend([
+                    f"    if (lhs->{ident} < rhs->{ident}) {{ return -1; }}",
+                    f"    if (lhs->{ident} > rhs->{ident}) {{ return 1; }}",
+                ])
+        lines.extend(["    return 0;", "}"])
+        return "\n".join(lines)
+
+
+    def render_required_object_read(
+        self,
+        fields: list[dict[str, Any]],
+        source: str,
+        target: str,
+        type_name: str,
+    ) -> list[str]:
+        lines: list[str] = []
+        for field in fields:
+            if field["type"] not in SCALAR_TYPES:
+                continue
+            key = field["path"]
+            lines.extend([
+                f'    if (!gsj_object_item({source}, "{key}")) {{',
+                f'        gsj_set_error(error, error_cap, "missing required aggregate field {key}");',
+                "        return false;",
+                "    }",
+            ])
+            lines.extend(self.render_read_scalar(field, source, target, key, f"{type_name}."))
+        return lines
+
+
+    def render_aggregate_helpers(self, schema: dict[str, Any]) -> str:
+        info = self.aggregate_info(schema)
+        if not info:
+            return ""
+        aggregate, root_type, nested, nested_type = info
+        root_def = self.schema_types(schema)[root_type]
+        nested_def = self.schema_types(schema)[nested_type]
+        root_fields = self.scalar_type_fields(root_def["fields"])
+        nested_fields = self.scalar_type_fields(nested_def["fields"])
+        aggregate_ident = c_ident(aggregate["path"])
+        nested_ident = c_ident(f"{aggregate['path']}.{nested['path']}")
+        root_cname = self.object_type_c_name(root_type)
+        nested_cname = self.object_type_c_name(nested_type)
+        root_max = self.collection_macro(aggregate["path"])
+        nested_max = self.collection_macro(f"{aggregate['path']}.{nested['path']}")
+        root_cmp = f"compare_{aggregate_ident}"
+        nested_cmp = f"compare_{nested_ident}"
+
+        blocks = [
+            self.render_order_comparator(root_cmp, root_type, root_fields, aggregate["order_by"]),
+            self.render_order_comparator(nested_cmp, nested_type, nested_fields, nested["order_by"]),
+        ]
+
+        root_init = [
+            f"static void {aggregate_ident}_init_defaults({root_cname} *obj) {{",
+            "    memset(obj, 0, sizeof(*obj));",
+            "    obj->used = true;",
+        ]
+        for field in root_fields:
+            root_init.extend(self.render_scalar_default_assignment(field, "obj", f"{root_type}."))
+        root_init.append("}")
+
+        nested_init = [
+            f"static void {nested_ident}_init_defaults({nested_cname} *obj, int parent_index) {{",
+            "    memset(obj, 0, sizeof(*obj));",
+            "    obj->used = true;",
+            "    obj->parent_index = parent_index;",
+        ]
+        for field in nested_fields:
+            nested_init.extend(self.render_scalar_default_assignment(field, "obj", f"{nested_type}."))
+        nested_init.append("}")
+
+        root_validate = [
+            f"static bool {aggregate_ident}_validate_object(const {root_cname} *obj, char *error, int error_cap) {{",
+            "    if (!obj->used) { return true; }",
+        ]
+        for field in root_fields:
+            root_validate.extend(self.render_scalar_validation(field, "obj", field["path"], f"{root_type}."))
+        root_validate.extend(["    return true;", "}"])
+
+        nested_validate = [
+            f"static bool {nested_ident}_validate_object(const {nested_cname} *obj, char *error, int error_cap) {{",
+            "    if (!obj->used) { return true; }",
+        ]
+        for field in nested_fields:
+            nested_validate.extend(self.render_scalar_validation(field, "obj", field["path"], f"{nested_type}."))
+        nested_validate.extend(["    return true;", "}"])
+
+        nested_to_json = [f"static cJSON *{nested_ident}_object_to_json(const {nested_cname} *obj) {{", "    cJSON *json = cJSON_CreateObject();"]
+        for field in nested_fields:
+            nested_to_json.extend(self.render_cjson_add_scalar(field, "json", "obj", field["path"]))
+        nested_to_json.extend(["    return json;", "}"])
+
+        nested_list_to_json = [
+            f"static cJSON *{nested_ident}_to_json(const {self.ns.type} *state, int parent_index) {{",
+            "    cJSON *json = cJSON_CreateArray();",
+            f"    const {nested_cname} *ordered[{nested_max}];",
+            "    int count = 0;",
+            f"    for (int i = 0; i < {nested_max}; i++) {{",
+            f"        if (state->{nested_ident}[i].used && state->{nested_ident}[i].parent_index == parent_index) {{",
+            f"            ordered[count++] = &state->{nested_ident}[i];",
+            "        }",
+            "    }",
+            f"    qsort(ordered, (size_t)count, sizeof(ordered[0]), {nested_cmp});",
+            "    for (int i = 0; i < count; i++) {",
+            f"        cJSON_AddItemToArray(json, {nested_ident}_object_to_json(ordered[i]));",
+            "    }",
+            "    return json;",
+            "}",
+        ]
+
+        root_to_json = [
+            f"static cJSON *{aggregate_ident}_object_to_json(const {self.ns.type} *state, const {root_cname} *obj) {{",
+            "    cJSON *json = cJSON_CreateObject();",
+        ]
+        for field in root_fields:
+            root_to_json.extend(self.render_cjson_add_scalar(field, "json", "obj", field["path"]))
+        root_to_json.extend([
+            f"    int parent_index = (int)(obj - state->{aggregate_ident});",
+            f'    cJSON_AddItemToObject(json, "{nested["path"]}", {nested_ident}_to_json(state, parent_index));',
+            "    return json;",
+            "}",
+        ])
+
+        aggregate_to_json = [
+            f"static cJSON *{aggregate_ident}_to_json(const {self.ns.type} *state) {{",
+            "    cJSON *json = cJSON_CreateArray();",
+            f"    const {root_cname} *ordered[{root_max}];",
+            "    int count = 0;",
+            f"    for (int i = 0; i < {root_max}; i++) {{",
+            f"        if (state->{aggregate_ident}[i].used) {{ ordered[count++] = &state->{aggregate_ident}[i]; }}",
+            "    }",
+            f"    qsort(ordered, (size_t)count, sizeof(ordered[0]), {root_cmp});",
+            "    for (int i = 0; i < count; i++) {",
+            f"        cJSON_AddItemToArray(json, {aggregate_ident}_object_to_json(state, ordered[i]));",
+            "    }",
+            "    return json;",
+            "}",
+        ]
+
+        nested_from_json = [
+            f"static bool {nested_ident}_object_from_json({nested_cname} *obj, const cJSON *json, int parent_index, char *error, int error_cap) {{",
+            "    if (!cJSON_IsObject(json)) { gsj_set_error(error, error_cap, \"nested entry must be object\"); return false; }",
+            f"    {nested_ident}_init_defaults(obj, parent_index);",
+        ]
+        nested_from_json.extend(self.render_required_object_read(nested_fields, "json", "obj", nested_type))
+        nested_from_json.extend([f"    return {nested_ident}_validate_object(obj, error, error_cap);", "}"])
+
+        root_from_json = [
+            f"static bool {aggregate_ident}_object_from_json({self.ns.type} *state, {root_cname} *obj, const cJSON *json, int parent_index, int *nested_cursor, char *error, int error_cap) {{",
+            "    if (!cJSON_IsObject(json)) { gsj_set_error(error, error_cap, \"aggregate entry must be object\"); return false; }",
+            f"    {aggregate_ident}_init_defaults(obj);",
+        ]
+        root_from_json.extend(self.render_required_object_read(root_fields, "json", "obj", root_type))
+        root_from_json.extend([
+            f'    const cJSON *nested_json = gsj_object_item(json, "{nested["path"]}");',
+            "    if (!cJSON_IsArray(nested_json)) { gsj_set_error(error, error_cap, \"missing required nested array\"); return false; }",
+            "    int nested_count = cJSON_GetArraySize((cJSON *)nested_json);",
+            f"    if (nested_count < 0 || *nested_cursor > {nested_max} - nested_count) {{ gsj_set_error(error, error_cap, \"too many nested entries\"); return false; }}",
+            "    for (int i = 0; i < nested_count; i++) {",
+            "        const cJSON *entry_json = cJSON_GetArrayItem((cJSON *)nested_json, i);",
+            f"        if (!{nested_ident}_object_from_json(&state->{nested_ident}[*nested_cursor], entry_json, parent_index, error, error_cap)) {{ return false; }}",
+            "        (*nested_cursor)++;",
+            "    }",
+            f"    return {aggregate_ident}_validate_object(obj, error, error_cap);",
+            "}",
+        ])
+
+        root_preflight = [
+            f"static bool {aggregate_ident}_object_preflight(const cJSON *json, char *error, int error_cap) {{",
+            "    if (!cJSON_IsObject(json)) { gsj_set_error(error, error_cap, \"aggregate entry must be object\"); return false; }",
+            f"    {root_cname} root;",
+            f"    {aggregate_ident}_init_defaults(&root);",
+        ]
+        root_preflight.extend(self.render_required_object_read(root_fields, "json", "(&root)", root_type))
+        root_preflight.extend([
+            f"    if (!{aggregate_ident}_validate_object(&root, error, error_cap)) {{ return false; }}",
+            f'    const cJSON *nested_json = gsj_object_item(json, "{nested["path"]}");',
+            "    if (!cJSON_IsArray(nested_json)) { gsj_set_error(error, error_cap, \"missing required nested array\"); return false; }",
+            "    int count = cJSON_GetArraySize((cJSON *)nested_json);",
+            "    for (int i = 0; i < count; i++) {",
+            f"        {nested_cname} entry;",
+            "        const cJSON *entry_json = cJSON_GetArrayItem((cJSON *)nested_json, i);",
+            f"        if (!{nested_ident}_object_from_json(&entry, entry_json, 0, error, error_cap)) {{ return false; }}",
+            "    }",
+            "    return true;",
+            "}",
+        ])
+
+        aggregate_from_json = [
+            f"static bool set_{aggregate_ident}_from_json({self.ns.type} *state, const cJSON *json, char *error, int error_cap) {{",
+            "    if (!cJSON_IsArray(json)) { gsj_set_error(error, error_cap, \"aggregate must be array\"); return false; }",
+            "    int count = cJSON_GetArraySize((cJSON *)json);",
+            f"    if (count < 0 || count > {root_max}) {{ gsj_set_error(error, error_cap, \"too many aggregate entries\"); return false; }}",
+            "    int structural_nested_count = 0;",
+            "    for (int i = 0; i < count; i++) {",
+            "        const cJSON *item = cJSON_GetArrayItem((cJSON *)json, i);",
+            f'        const cJSON *children = cJSON_IsObject(item) ? gsj_object_item(item, "{nested["path"]}") : NULL;',
+            "        if (!cJSON_IsArray(children)) { gsj_set_error(error, error_cap, \"aggregate entry is truncated\"); return false; }",
+            "        int child_count = cJSON_GetArraySize((cJSON *)children);",
+            f"        if (child_count < 0 || structural_nested_count > {nested_max} - child_count) {{ gsj_set_error(error, error_cap, \"too many nested entries\"); return false; }}",
+            "        structural_nested_count += child_count;",
+            "    }",
+            "    for (int i = 0; i < count; i++) {",
+            "        const cJSON *item = cJSON_GetArrayItem((cJSON *)json, i);",
+            f"        if (!{aggregate_ident}_object_preflight(item, error, error_cap)) {{ return false; }}",
+            "    }",
+            f"    memset(state->{aggregate_ident}, 0, sizeof(state->{aggregate_ident}));",
+            f"    memset(state->{nested_ident}, 0, sizeof(state->{nested_ident}));",
+            "    int nested_cursor = 0;",
+            "    for (int i = 0; i < count; i++) {",
+            "        const cJSON *item = cJSON_GetArrayItem((cJSON *)json, i);",
+            f"        if (!{aggregate_ident}_object_from_json(state, &state->{aggregate_ident}[i], item, i, &nested_cursor, error, error_cap)) {{ return false; }}",
+            "    }",
+            "    return true;",
+            "}",
+        ]
+
+        blocks.extend(
+            "\n".join(block)
+            for block in (
+                root_init,
+                nested_init,
+                root_validate,
+                nested_validate,
+                nested_to_json,
+                nested_list_to_json,
+                root_to_json,
+                aggregate_to_json,
+                nested_from_json,
+                root_from_json,
+                root_preflight,
+                aggregate_from_json,
+            )
+        )
         return "\n\n".join(blocks)
 
 
@@ -691,7 +1006,7 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
                 lines.append(f'    cJSON *{parent} = cJSON_AddObjectToObject(root, "{group}");')
             if field["type"] in SCALAR_TYPES:
                 lines.extend(self.render_cjson_add_scalar(field, parent, "state", key))
-            elif is_map_type(field["type"]) or is_list_type(field["type"]):
+            elif is_map_type(field["type"]) or is_list_type(field["type"]) or object_list_type_name(field["type"]):
                 lines.append(f'    cJSON_AddItemToObject({parent}, "{key}", {c_ident(field["path"])}_to_json(state));')
         return "\n".join(lines)
 
@@ -743,6 +1058,26 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
                 "        }",
                 "    }",
             ])
+        if (aggregate_info := self.aggregate_info(schema)):
+            aggregate, _, nested, _ = aggregate_info
+            aggregate_ident = c_ident(aggregate["path"])
+            nested_ident = c_ident(f"{aggregate['path']}.{nested['path']}")
+            root_max = self.collection_macro(aggregate["path"])
+            nested_max = self.collection_macro(f"{aggregate['path']}.{nested['path']}")
+            lines.extend([
+                f"    for (int i = 0; i < {root_max}; i++) {{",
+                f"        if (state->{aggregate_ident}[i].used && !{aggregate_ident}_validate_object(&state->{aggregate_ident}[i], error, error_cap)) {{ return false; }}",
+                "    }",
+                f"    for (int i = 0; i < {nested_max}; i++) {{",
+                f"        if (!state->{nested_ident}[i].used) {{ continue; }}",
+                f"        int parent = state->{nested_ident}[i].parent_index;",
+                f"        if (parent < 0 || parent >= {root_max} || !state->{aggregate_ident}[parent].used) {{",
+                "            gsj_set_error(error, error_cap, \"nested entry has no live parent\");",
+                "            return false;",
+                "        }",
+                f"        if (!{nested_ident}_validate_object(&state->{nested_ident}[i], error, error_cap)) {{ return false; }}",
+                "    }",
+            ])
         return "\n".join(lines)
 
 
@@ -791,6 +1126,14 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
                 f"        return {fname}_get_field_json(obj, field, error, error_cap);",
                 "    }",
             ])
+        if (aggregate := self.aggregate_field(schema)):
+            path = aggregate["path"]
+            ident = c_ident(path)
+            lines.extend([
+                f'    if (strcmp(path, "{path}") == 0) {{',
+                f"        return {ident}_to_json(state);",
+                "    }",
+            ])
         return "\n".join(lines)
 
 
@@ -836,6 +1179,14 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
                 f"        return field ? {fname}_set_field_json(obj, field, value, error, error_cap) : {fname}_from_json(obj, value, error, error_cap);",
                 "    }",
             ])
+        if (aggregate := self.aggregate_field(schema)):
+            path = aggregate["path"]
+            ident = c_ident(path)
+            lines.extend([
+                f'    if (strcmp(path, "{path}") == 0) {{',
+                f"        return set_{ident}_from_json(state, value, error, error_cap);",
+                "    }",
+            ])
         return "\n".join(lines)
 
 
@@ -850,7 +1201,7 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
             source = parent if group else "json"
             if field["type"] in SCALAR_TYPES:
                 lines.extend(self.render_read_scalar(field, source, "(&next)", key))
-            elif is_list_type(field["type"]) or is_map_type(field["type"]):
+            elif is_list_type(field["type"]) or is_map_type(field["type"]) or object_list_type_name(field["type"]):
                 item_var = c_ident(f"{field['path']}_json")
                 lines.extend([
                     f'    const cJSON *{item_var} = gsj_object_item({source}, "{key}");',
@@ -939,11 +1290,15 @@ static bool set_{ident}_from_json({self.ns.type} *state, const cJSON *json, char
         embed["schema_version"] = 2
         embed["string_max"] = schema["string_max"]
         embed["enums"] = schema["enums"]
-        embed["types"] = {
-            name: {"kind": "object", "fields": type_def["fields"]}
-            for name, type_def in schema["types"].items()
-        }
+        embed["types"] = {}
+        for name, type_def in schema["types"].items():
+            embedded_type = {"kind": "object", "fields": type_def["fields"]}
+            if type_def.get("reserved"):
+                embedded_type["reserved"] = type_def["reserved"]
+            embed["types"][name] = embedded_type
         embed["fields"] = schema["fields"]
+        if schema.get("reserved"):
+            embed["reserved"] = schema["reserved"]
         return embed
 
 

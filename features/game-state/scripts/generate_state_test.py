@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[3]
 TEMPLATE_SCHEMA = ROOT / "templates" / "template" / "state" / "game_state.schema.json"
 SETTINGS_SCHEMA = ROOT / "templates" / "template" / "state" / "settings.schema.json"
 MINI_SCHEMA = ROOT / "features" / "game-state" / "tests" / "mini_state.schema.json"
+ITEMS_CONTAINERS_SCHEMA = ROOT / "features" / "game-state" / "tests" / "items_containers.schema.json"
 GOLDEN = ROOT / "features" / "game-state" / "tests" / "golden"
 CLOSED_TOKENS = ("rune_", "fishing_", "Rune", "Fishing", "rune.", "fishing.")
 
@@ -185,6 +186,35 @@ class StateCodegenTests(unittest.TestCase):
         self.assertIn("gsj_parse_u32_value", text)
         self.assertIn('cJSON_AddNumberToObject(root, "last_id", (double)state->last_id);', text)
         self.assertNotIn('gsj_add_i64(root, "last_id"', text)
+
+    def test_items_nested_aggregate_uses_separate_bounded_pools(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            text = generate_and_join(
+                ITEMS_CONTAINERS_SCHEMA,
+                Path(tmp) / "generated",
+                "items_v2_state",
+                "items_v2",
+            )
+
+        self.assertIn("ItemsV2ItemContainer containers[ITEMS_V2_STATE_MAX_CONTAINERS];", text)
+        self.assertIn("ItemsV2ItemEntry containers_entries[ITEMS_V2_STATE_MAX_CONTAINERS_ENTRIES];", text)
+        self.assertNotIn("MAX_CONTAINERS *", text)
+        self.assertIn("int parent_index;", text)
+        self.assertIn("compare_containers", text)
+        self.assertIn("compare_containers_entries", text)
+        self.assertIn('cJSON_AddItemToObject(json, "entries"', text)
+        self.assertIn('\\"reserved\\":[\\"owned\\"]', text)
+        self.assertIn('\\"reserved\\":[\\"container_id\\",\\"entry_key\\"]', text)
+
+    def test_nested_aggregate_generation_is_deterministic(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            generate(ITEMS_CONTAINERS_SCHEMA, root / "a", "items_v2")
+            generate(ITEMS_CONTAINERS_SCHEMA, root / "b", "items_v2")
+            self.assertEqual(
+                read_outputs(root / "a", "items_v2_state"),
+                read_outputs(root / "b", "items_v2_state"),
+            )
 
     # ------------------------------------------------------------------ golden
 
@@ -369,6 +399,30 @@ class StateCodegenTests(unittest.TestCase):
         for spec in bad_specs:
             with self.subTest(spec=spec), self.assertRaises(SystemExit):
                 self._write_and_load(self._base(fields={"id": spec}))
+
+    def test_reject_nested_aggregate_without_canonical_order(self):
+        schema = json.loads(ITEMS_CONTAINERS_SCHEMA.read_text(encoding="utf-8"))
+        del schema["types"]["ItemContainer"]["fields"]["entries"]["order_by"]
+        with self.assertRaisesRegex(SystemExit, "order_by"):
+            self._write_and_load(schema)
+
+    def test_reject_nested_aggregate_recursion(self):
+        schema = json.loads(ITEMS_CONTAINERS_SCHEMA.read_text(encoding="utf-8"))
+        schema["types"]["ItemEntry"]["fields"]["children"] = {
+            "type": "list<ItemEntry>",
+            "max_count": 8,
+            "order_by": ["entry_id"],
+        }
+        with self.assertRaisesRegex(SystemExit, "depth-two"):
+            self._write_and_load(schema)
+
+    def test_reject_reusing_reserved_nested_field(self):
+        schema = json.loads(ITEMS_CONTAINERS_SCHEMA.read_text(encoding="utf-8"))
+        schema["types"]["ItemEntry"]["fields"]["container_id"] = {
+            "type": "u32", "default": 1, "min": 1, "max": 4294967294,
+        }
+        with self.assertRaisesRegex(SystemExit, "reserved"):
+            self._write_and_load(schema)
 
     def test_reject_reserved_name_reused(self):
         with self.assertRaises(SystemExit):

@@ -36,6 +36,8 @@ features/game-state/
     run_tests.py
     state_modules_test.py
     state_codegen/
+  tests/
+    items_containers.schema.json
   benchmarks/
     benchmark_codegen.py
     baseline.json
@@ -123,6 +125,9 @@ node ai_studio/dev_environment/python_run.mjs features/game-state/benchmarks/ben
   commands.
 - Generated state stores and serializes data. Gameplay rules belong in domain
   actions owned by the game or template.
+- Schema v2 supports one deliberately narrow depth-two `list<Object>`
+  aggregate. It generates separate fixed top-level and nested pools and a
+  nested JSON projection; it is not a recursive object graph facility.
 - Migrations transform old JSON before parsing into current runtime structs.
   They must not call domain actions.
 - Raw `game.state.*` writes are for debug/editor overrides, fixtures, and
