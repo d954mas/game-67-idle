@@ -14,7 +14,7 @@ import { animateElementFromText, createAnimCard, createRecipeCard, createStyleCa
 // operations: specs validate atomically, fresh ids are minted server-side, and
 // each visible gesture produces one reversible entry.
 
-export function pasteNodes(root, { projectId, spec, dx, dy, scopeId } = {}) {
+function pasteNodesImpl(root, { projectId, spec, dx, dy, scopeId } = {}, { preserveReviewState = false } = {}) {
   if (!projectId) throw new Error("pasteNodes requires projectId");
   if (!spec || typeof spec !== "object" || Array.isArray(spec)) throw new Error("pasteNodes requires a spec object");
   const nodes = spec.nodes;
@@ -69,8 +69,18 @@ export function pasteNodes(root, { projectId, spec, dx, dy, scopeId } = {}) {
     if (node.kind === "element") {
       const def = JSON.parse(JSON.stringify(node.element)); // isolate from the (page-held) spec
       const oldId = typeof def.id === "string" ? def.id : null;
-      const rec = { ...def, id: `el_${randomUUID().slice(0, 8)}`, x: Number(def.x) + offX, y: Number(def.y) + offY };
+      let rec = { ...def, id: `el_${randomUUID().slice(0, 8)}`, x: Number(def.x) + offX, y: Number(def.y) + offY };
       delete rec.order;
+      if ((rec.type || "image") === "image" && !preserveReviewState) {
+        rec.assetStatus = "quarantine";
+        if (rec.meta && typeof rec.meta === "object" && !Array.isArray(rec.meta)) {
+          const meta = { ...rec.meta };
+          delete meta.technical_gate;
+          delete meta.style_verdict;
+          delete meta.style_decision;
+          rec = { ...rec, meta };
+        }
+      }
       if (parentScope != null) rec.groupId = parentScope;
       else delete rec.groupId;
       if (orderVal != null) rec.order = orderVal;
@@ -165,9 +175,17 @@ export function pasteNodes(root, { projectId, spec, dx, dy, scopeId } = {}) {
   return { project, nodeIds: roots.map((node) => node.id), elementIds, groupIds, count: roots.length };
 }
 
+// Hand-authored API/CLI clipboard specs are untrusted review-state input. Image
+// pixels may be reused, but every public paste re-enters the review workflow in
+// quarantine and cannot carry caller-authored gate/verdict/decision evidence.
+export function pasteNodes(root, args = {}) {
+  return pasteNodesImpl(root, args);
+}
+
 // Duplicate LIVE nodes in place (+offset) in ONE journaled gesture — the page's Ctrl+D and
 // the CLI nodes-duplicate convenience. Builds the spec from the current project (pure
-// tree.buildNodesSpec, throws on an unknown id) and delegates to pasteNodes (so it stays
+// tree.buildNodesSpec, throws on an unknown id) and delegates to the private paste core
+// with review state preserved (so it stays
 // ONE op = one undo). Default offset +16,+16; default destination = the originals' COMMON
 // scope (a duplicate lands beside its source), overridable by an explicit scopeId
 // (including null for root).
@@ -186,7 +204,7 @@ export function duplicateNodes(root, { projectId, nodeIds, dx, dy, scopeId } = {
     }));
     scope = scopes.size === 1 ? [...scopes][0] : null;
   }
-  return pasteNodes(root, { projectId, spec, dx: offX, dy: offY, scopeId: scope });
+  return pasteNodesImpl(root, { projectId, spec, dx: offX, dy: offY, scopeId: scope }, { preserveReviewState: true });
 }
 
 // Delete a MIXED set of nodes (loose elements AND whole group subtrees) in ONE journaled
@@ -442,6 +460,7 @@ export function historyEntryLabel(op, args = {}) {
     case "setAssetStatus": return { label: "Set asset status", summary: String(a.status || "") };
     case "runAssetTechnicalGate": return { label: "Check asset quality", summary: String(a.verdict || "") };
     case "runAssetStyleVerdict": return { label: "Check asset style", summary: String(a.verdict || "") };
+    case "decideAssetStyle": return { label: "Decide asset style", summary: String(a.decision || "") };
     case "patchElements": return { label: "Move elements", summary: plural(count(a.count), "element") };
     case "removeElement": return { label: "Delete element", summary: "" };
     case "removeElements": return { label: "Delete elements", summary: plural(count(a.count), "element") };

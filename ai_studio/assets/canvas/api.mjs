@@ -55,6 +55,7 @@
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/asset-status {status} (image-only; initialize quarantine or downgrade; upward transitions require gate evidence; one entry)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/asset-status-check {} (runs the trusted technical gate; PASS -> checked, FAIL -> quarantine; one entry)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/asset-style-check {} (runs trusted advisory vision compare; stores evidence without accepting)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/asset-style-decision {decision,reason} (explicit lead backstop; accept -> accepted, revise/reject -> quarantine)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
 //   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
 //   POST   /api/canvas/projects/<id>/nodes-align   {nodeIds, align, reference?} (align to selection bbox or parent frame; one entry)
@@ -141,6 +142,7 @@ import {
   removeElement,
   removeElements,
   renderGroup,
+  decideAssetStyle,
   runAssetTechnicalGate,
   runAssetStyleVerdict,
   reorderElement,
@@ -1078,6 +1080,21 @@ export function createCanvasApi(root) {
         const elementId = decodeURIComponent(parts[5]);
         await readJsonBody(req);
         sendMutation(200, await runAssetStyleVerdict(root, { projectId: id, elementId }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/asset-style-decision
+      // Unlike the advisory report, decision + reason are intentionally caller-authored:
+      // this explicit lead action is the acceptance backstop and remains fully journaled.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "asset-style-decision" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendMutation(200, await locked(id, () => decideAssetStyle(root, {
+          projectId: id,
+          elementId,
+          decision: body.decision,
+          reason: body.reason,
+        })));
         return true;
       }
 

@@ -301,7 +301,17 @@ test("cleanupApply preserves an existing alpha meta alongside the new cleanup me
   // real alpha pipeline — this test only cares that cleanup's meta write is additive.
   const before = getProject(REPO_ROOT, project.id);
   const withFakeAlphaMeta = before.elements.map((item) =>
-    item.id === element.id ? { ...item, meta: { ...(item.meta || {}), alpha: { method: "matte" } } } : item,
+    item.id === element.id ? {
+      ...item,
+      assetStatus: "accepted",
+      meta: {
+        ...(item.meta || {}),
+        alpha: { method: "matte" },
+        technical_gate: { source_ref: item.src },
+        style_verdict: { source_ref: item.src },
+        style_decision: { decision: "accept", source_ref: item.src },
+      },
+    } : item,
   );
   // Direct project write (not journaled) just to seed the fixture state.
   updateProject(REPO_ROOT, project.id, { elements: withFakeAlphaMeta });
@@ -316,6 +326,10 @@ test("cleanupApply preserves an existing alpha meta alongside the new cleanup me
 
   assert.equal(result.element.meta.alpha.method, "matte", "pre-existing alpha meta survives");
   assert.equal(result.element.meta.cleanup.tool, "quantize", "cleanup meta added alongside it");
+  assert.equal(result.element.assetStatus, "quarantine", "new cleanup pixels re-enter review");
+  assert.equal(result.element.meta.technical_gate, undefined);
+  assert.equal(result.element.meta.style_verdict, undefined);
+  assert.equal(result.element.meta.style_decision, undefined);
 });
 
 // ---- API + CLI parity (real pipeline; skips without the venv) -----------------

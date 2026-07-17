@@ -60,7 +60,7 @@ starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
       lock id into the sidecar/origin; `--no-lock` taints origin.
 - [x] 4. `checked` = technical auto-gates pass (T0317: bg purity/spill, halo,
       alpha, bbox, aspect).
-- [ ] 5. `accepted` = style verdict: vision compare vs lock exemplars +
+- [x] 5. `accepted` = style verdict: vision compare vs lock exemplars +
       Do/Don't, 3-way advisory verdict, lead backstop.
 - [ ] 6. Hard gate at promote: only `accepted` assets can enter
       `games/<id>/assets/` (and therefore the pack); quarantined art stays in
@@ -98,3 +98,8 @@ starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
 - 2026-07-17: Increment 5 slice A review hardening pins the vision judge to an ephemeral read-only Codex process, resolves the real Windows codex.exe without a cmd wrapper, bounds untrusted report size, and revalidates the external style-lock plus every exemplar source_ref after the slow call. Evidence now binds logical exemplar refs to their exact Canvas source refs; any lock, exemplar, or Canvas-head change conflicts before write.
 - 2026-07-17: Increment 5 slice A re-review hardening confines the Codex process to an isolated temporary root containing only copied target/exemplar images, preserves explicit oversized-output failures, and normalizes vanished or malformed final style-lock/exemplar inputs to HEAD_CONFLICT before any write.
 - 2026-07-17: Quality: QTECH_001=pass; evidence: focused Canvas style/API/CLI suite passed 68/68, changed verify passed assets and work-management, full Studio verify passed all 10 domains, and independent final re-review found no actionable issues.
+- 2026-07-17: Increment 5 slice A published in draft PR #16. GitHub Actions run 29607884365 passed blocking Studio verification on Ubuntu (4m29s) and Windows (4m39s).
+- 2026-07-17: Increment 5 complete: asset-style-decide records an explicit bounded lead reason and keeps the model advisory, allowing the lead to accept despite reject or quarantine despite accept. The one undoable decision requires current source-bound technical PASS, the exact full style-lock snapshot, and unchanged owned exemplars; accept alone mints accepted. Increment 6 hard promotion enforcement is next.
+- 2026-07-17: Increment 5 review hardening closes a public nodes-paste acceptance bypass: caller-authored image specs always re-enter quarantine and lose technical/style/decision evidence, while unrelated metadata remains. The separate internal live-node duplicate path preserves already-persisted review state. API and CLI regression tests cover forged accepted payloads.
+- 2026-07-17: Increment 5 re-review hardening closes the remaining source-mutation bypass: cleanupApply and single/batch bakeFilters now quarantine newly materialized pixels and remove old technical/style/decision evidence while retaining unrelated provenance. Accepted-input regression tests cover all three paths; undo still restores exact prior state.
+- 2026-07-17: Quality: QTECH_001=pass; evidence: combined lead-decision, style, API/CLI, cleanup, and filter-bake tests passed 96/96; changed verify passed assets/work-management; final full Studio verify passed all 10 domains; third independent re-review was clean after closing both acceptance bypasses.

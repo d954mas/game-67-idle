@@ -1392,6 +1392,20 @@ export async function cleanupPreview(root, { projectId, elementId, tool, params 
   return { elementId, tool: spec.name, params: clean, previewBase64: bytes.toString("base64"), report };
 }
 
+// Any operation that materializes a new pixel source starts a fresh review
+// lifecycle. Preserve unrelated provenance, but never carry acceptance or evidence
+// that was bound to the previous content-addressed src.
+function resetReviewAfterPixelMutation(element, patch = {}) {
+  const meta = {
+    ...((element.meta && typeof element.meta === "object" && !Array.isArray(element.meta)) ? element.meta : {}),
+    ...((patch.meta && typeof patch.meta === "object" && !Array.isArray(patch.meta)) ? patch.meta : {}),
+  };
+  delete meta.technical_gate;
+  delete meta.style_verdict;
+  delete meta.style_decision;
+  return { ...element, ...patch, assetStatus: "quarantine", meta };
+}
+
 // Apply a cleanup tool's result as ONE journaled mutation: a new content-addressed file +
 // the element's src swap + additive element.meta.cleanup ({tool, params, report,
 // prev_src, at}); the previous src file stays in files/ (immutable), so undo restores the
@@ -1424,7 +1438,9 @@ export async function cleanupApply(root, { projectId, elementId, tool, params } 
     result_summary: { changed_pixel_pct: report && report.changed_pixel_pct },
   };
   const nextElements = (current.elements || []).map((item) =>
-    item.id === elementId ? { ...item, src: newSrc, meta: { ...(item.meta || {}), cleanup: cleanupMeta } } : item,
+    item.id === elementId
+      ? resetReviewAfterPixelMutation(item, { src: newSrc, meta: { cleanup: cleanupMeta } })
+      : item,
   );
   const after = updateProject(root, projectId, {
     elements: nextElements,
@@ -1557,7 +1573,7 @@ export async function bakeFiltersSingle(root, projectId, before, elementId, star
   const { run, bakeMeta } = buildBakeProvenance(elementId, element, report, target.src);
   const nextElements = (current.elements || []).map((item) => {
     if (item.id !== elementId) return item;
-    const next = { ...item, src: newSrc, meta: { ...(item.meta || {}), filters_bake: bakeMeta } };
+    const next = resetReviewAfterPixelMutation(item, { src: newSrc, meta: { filters_bake: bakeMeta } });
     delete next.filters;
     delete next.opacity;
     return next;
@@ -1609,7 +1625,7 @@ export async function bakeFiltersBatch(root, projectId, before, elementIds, star
   const nextElements = (current.elements || []).map((item) => {
     const swap = swapById.get(item.id);
     if (!swap) return item;
-    const next = { ...item, src: swap.newSrc, meta: { ...(item.meta || {}), filters_bake: swap.bakeMeta } };
+    const next = resetReviewAfterPixelMutation(item, { src: swap.newSrc, meta: { filters_bake: swap.bakeMeta } });
     delete next.filters;
     delete next.opacity;
     return next;

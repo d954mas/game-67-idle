@@ -19,6 +19,7 @@
 //   node ai_studio/assets/canvas/cli.mjs asset-status-set <id> --element <eid> --status quarantine|checked|accepted
 //   node ai_studio/assets/canvas/cli.mjs asset-status-check <id> --element <eid>   (trusted technical gate; PASS -> checked, FAIL -> quarantine)
 //   node ai_studio/assets/canvas/cli.mjs asset-style-check <id> --element <eid>   (trusted advisory vision verdict; status stays checked/accepted)
+//   node ai_studio/assets/canvas/cli.mjs asset-style-decide <id> --element <eid> --decision accept|revise|reject --reason "..."   (explicit lead backstop)
 //   node ai_studio/assets/canvas/cli.mjs regions-set <id> --element <eid> --json path.json
 //   node ai_studio/assets/canvas/cli.mjs regions-show <id> --element <eid>
 //   node ai_studio/assets/canvas/cli.mjs slice9-set <id> --element <eid> [--left n --top n --right n --bottom n] [--scale n] | --clear   (T0233: 9-slice insets, SOURCE pixels; missing flags merge over the element's current slice9 (or 0s); --scale multiplies the DESTINATION corner/edge band only, default 1; --clear sends null)
@@ -140,6 +141,7 @@ import {
   removeElement,
   removeElements,
   renderGroup,
+  decideAssetStyle,
   runAssetTechnicalGate,
   runAssetStyleVerdict,
   reorderElement,
@@ -249,7 +251,7 @@ function copyExportTo(result, toDir) {
 }
 
 function usage() {
-  console.log(`usage: cli.mjs <list|create|show|rename|project-set|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|asset-status-show|asset-status-set|asset-status-check|asset-style-check|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|filters-bake|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|recipe-pack-preview|recipe-pack-generate|recipe-pack-slice|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
+  console.log(`usage: cli.mjs <list|create|show|rename|project-set|delete|add-image|add-images|add-image-from-file|add-text|add-note|detect-regions|move|element-set|asset-status-show|asset-status-set|asset-status-check|asset-style-check|asset-style-decide|element-remove|elements-set|elements-remove|element-reorder|node-reorder|nodes-move|nodes-reorder|nodes-align|nodes-distribute|nodes-paste|nodes-duplicate|nodes-delete|regions-set|regions-show|slice9-set|animation-set|slice|alpha|alpha-dual|alpha-dual-generate|quantize|denoise|filters-bake|export-set|export|group-create|group-reparent|group-move|group-set|groups-set|group-fit|group-scale|group-assign|group-ungroup|group-delete|recipe-create|recipe-set|recipe-generate|recipe-expand|recipe-pack-preview|recipe-pack-generate|recipe-pack-slice|style-create|style-set|extract|promote-recipe|promote-style|render-group|undo|redo|history|history-list|history-jump>
   list [--full] [--owner-game <gameId>] [--include-archived]   (summary by default: [{id,title,ownerGame,created,updated,elements,groups,head}]; --include-archived adds archived; --full = every project in full, today's original dump)
   create [--title <title>] [--owner-game <gameId>]     (omit --title for a random default)
   show <id>
@@ -268,6 +270,7 @@ function usage() {
   asset-status-set <id> --element <eid> --status quarantine|checked|accepted   (image-only; one undo step; initializes quarantine or downgrades; upward transitions require gate evidence)
   asset-status-check <id> --element <eid>   (runs the accepted style lock's deterministic technical gate; PASS -> checked, FAIL -> quarantine; report + problem thumbnail stored as evidence)
   asset-style-check <id> --element <eid>   (vision-compares current technically-checked art with lock exemplars + Do/Don't; stores accept|revise|reject advisory evidence without minting accepted)
+  asset-style-decide <id> --element <eid> --decision accept|revise|reject --reason "..."   (explicit lead decision; accept -> accepted, revise/reject -> quarantine; current gate + advisory evidence required)
   element-remove <id> --element <eid>
   elements-set <id> --json <path>   (batched patch: [{elementId,x?,y?,w?,h?,name?,visible?,rotation?,flipH?,flipV?,opacity?,filters?}] or {patches:[...]}; one undo step)
   elements-remove <id> --elements e1,e2   (batched delete; one undo step)
@@ -557,6 +560,18 @@ async function runCommand(command, id, positional, flags, { repoRoot, print }) {
       if (!id) fail("asset-style-check requires <id>");
       if (!flags.element || flags.element === "true") fail("asset-style-check requires --element <eid>");
       return print(await runAssetStyleVerdict(repoRoot, { projectId: id, elementId: flags.element }));
+    }
+    case "asset-style-decide": {
+      if (!id) fail("asset-style-decide requires <id>");
+      if (!flags.element || flags.element === "true") fail("asset-style-decide requires --element <eid>");
+      if (!flags.decision || flags.decision === "true") fail("asset-style-decide requires --decision accept|revise|reject");
+      if (!flags.reason || flags.reason === "true") fail("asset-style-decide requires --reason <text>");
+      return print(decideAssetStyle(repoRoot, {
+        projectId: id,
+        elementId: flags.element,
+        decision: flags.decision,
+        reason: flags.reason,
+      }));
     }
     case "element-remove": {
       if (!id) fail("element-remove requires <id>");

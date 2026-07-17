@@ -80,9 +80,15 @@ Vision/style acceptance remains advisory against exemplars plus Do/Don't, with
 the lead as backstop. `asset-style-check` uses `exemplar_refs` as the owned
 images, `prompt_preamble` as the machine Do direction, and `negative_prompt` as
 the machine Don't direction. Its strict 3-way report is stored as evidence but
-does not promote status; the explicit lead-decision transition remains a
-separate operation. No CLIP, embedding, or palette-delta gate is part of v1.
+does not promote status. `asset-style-decide --decision accept|revise|reject
+--reason "..."` is the separate explicit lead action: accept promotes current
+evidence to `accepted`, while revise/reject quarantine it. The lead may override
+the model in either direction, so the model never becomes a hidden hard gate.
+No CLIP, embedding, or palette-delta gate is part of v1.
 The slow check revalidates the lock and exemplar source refs before committing,
 so replacing canon art or editing the lock invalidates an in-flight verdict. Its
 read-only vision process receives temporary copies of only the target and those
 exemplars; it does not run with the repository as its working directory.
+The verdict freezes the complete style lock, and the lead action rechecks that
+snapshot plus current technical thresholds/key and exemplar sources. Any
+changed contract or canon requires fresh checks before acceptance.

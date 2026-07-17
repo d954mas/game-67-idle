@@ -209,6 +209,15 @@ test("canvas API sets and reads image asset status through the shared operation"
   assert.equal(styleCheck.status, 400);
   assert.match(styleCheck.json().error, /requires a game-owned Canvas project/);
 
+  const styleDecision = await invokeApi(
+    handler,
+    "POST",
+    `/api/canvas/projects/${projectId}/elements/${elementId}/asset-style-decision`,
+    { decision: "accept", reason: "Lead decision." },
+  );
+  assert.equal(styleDecision.status, 400);
+  assert.match(styleDecision.json().error, /requires current style-verdict evidence/);
+
   const invalid = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`, {
     status: "approved",
   });
@@ -970,6 +979,20 @@ test("canvas API nodes-duplicate / nodes-paste / nodes-delete parity (one entry 
     })
   ).json().element;
 
+  const seeded = getProject(ROOT, projectId);
+  updateProject(ROOT, projectId, {
+    elements: seeded.elements.map((item) => item.id === el.id ? {
+      ...item,
+      assetStatus: "accepted",
+      meta: {
+        ...(item.meta || {}),
+        technical_gate: { forged: true },
+        style_verdict: { forged: true },
+        style_decision: { forged: true },
+      },
+    } : item),
+  });
+
   // nodes-duplicate: 201, fresh id, +offset, one entry.
   const dup = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/nodes-duplicate`, {
     nodeIds: [el.id],
@@ -982,11 +1005,29 @@ test("canvas API nodes-duplicate / nodes-paste / nodes-delete parity (one entry 
   assert.notEqual(dupId, el.id);
   let project = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
   assert.equal(project.elements.length, 2);
+  const duplicated = project.elements.find((item) => item.id === dupId);
+  assert.equal(duplicated.assetStatus, "accepted", "trusted live duplicate preserves existing review state");
+  assert.deepEqual(duplicated.meta.style_decision, { forged: true });
 
   // nodes-paste: a captured spec referencing the same immutable file.
   const spec = {
     schema: "ai_studio.canvas.nodes_spec.v1",
-    nodes: [{ kind: "element", element: { type: "image", x: 0, y: 0, w: 4, h: 4, src: el.src, name: "pasted" } }],
+    nodes: [{ kind: "element", element: {
+      type: "image",
+      x: 0,
+      y: 0,
+      w: 4,
+      h: 4,
+      src: el.src,
+      name: "pasted",
+      assetStatus: "accepted",
+      meta: {
+        origin: { retained: true },
+        technical_gate: { forged: true },
+        style_verdict: { forged: true },
+        style_decision: { forged: true },
+      },
+    } }],
   };
   const pasted = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/nodes-paste`, {
     spec,
@@ -997,6 +1038,9 @@ test("canvas API nodes-duplicate / nodes-paste / nodes-delete parity (one entry 
   assert.equal(pasted.status, 201);
   project = (await invokeApi(handler, "GET", `/api/canvas/projects/${projectId}`)).json().project;
   assert.equal(project.elements.length, 3);
+  const pastedElement = project.elements.find((item) => item.id === pasted.json().elementIds[0]);
+  assert.equal(pastedElement.assetStatus, "quarantine");
+  assert.deepEqual(pastedElement.meta, { origin: { retained: true } });
 
   // A bad file ref is a loud 400 (no silent fallback), no write.
   const bad = await invokeApi(handler, "POST", `/api/canvas/projects/${projectId}/nodes-paste`, {

@@ -19,7 +19,9 @@ import {
   updateProject,
 } from "../ops.mjs";
 import { assetStatusBadge, assetStatusChipLayout } from "../asset_status.mjs";
+import { thresholdsFromStyleLock } from "../../tools/image/quality_gate/api.mjs";
 import { __runAssetTechnicalGateForTest } from "../ops/technical_gate.mjs";
+import { __decideAssetStyleForTest } from "../ops/style_decision.mjs";
 import { __runAssetStyleVerdictForTest } from "../ops/style_verdict.mjs";
 import { solidPng } from "./png_fixture.mjs";
 
@@ -129,6 +131,10 @@ test("asset status badge uses text as well as stable semantic colors", () => {
   assert.deepEqual(historyEntryLabel("runAssetStyleVerdict", { verdict: "revise" }), {
     label: "Check asset style",
     summary: "revise",
+  });
+  assert.deepEqual(historyEntryLabel("decideAssetStyle", { decision: "accept" }), {
+    label: "Decide asset style",
+    summary: "accept",
   });
 });
 
@@ -334,6 +340,8 @@ function styleVerdictFixture(t) {
           verdict: "pass",
           style_lock_id: lock.id,
           source_ref: target.src,
+          key_color: lock.bg_rule.key_color,
+          thresholds: thresholdsFromStyleLock(lock),
         },
       },
     } : element),
@@ -373,6 +381,118 @@ function styleDeps(lock, report, { duringRun, finalError, finalLock = lock } = {
   };
 }
 
+async function judgedStyleFixture(t, verdict = "accept") {
+  const fixture = styleVerdictFixture(t);
+  await __runAssetStyleVerdictForTest(REPO_ROOT, {
+    projectId: fixture.projectId,
+    elementId: fixture.target.id,
+  }, styleDeps(fixture.lock, styleReport(verdict)).dependencies);
+  return fixture;
+}
+
+function decisionDeps(lock) {
+  return {
+    resolveStyleLock() {
+      return { gameId: "test-game", lock };
+    },
+  };
+}
+
+test("decideAssetStyle keeps the model advisory and makes the explicit lead decision undoable", async (t) => {
+  const fixture = await judgedStyleFixture(t, "reject");
+  const beforeDecision = getProject(REPO_ROOT, fixture.projectId);
+
+  const accepted = __decideAssetStyleForTest(REPO_ROOT, {
+    projectId: fixture.projectId,
+    elementId: fixture.target.id,
+    decision: "accept",
+    reason: "Lead accepts the intentional silhouette exception.",
+  }, decisionDeps(fixture.lock));
+
+  assert.equal(accepted.status, "accepted", "the explicit lead remains the backstop over a model reject");
+  assert.equal(accepted.element.meta.style_verdict.verdict, "reject");
+  assert.deepEqual(accepted.element.meta.style_decision, {
+    schema: "game.asset_style_decision",
+    version: 1,
+    decision: "accept",
+    decided_at: accepted.element.meta.style_decision.decided_at,
+    reason: "Lead accepts the intentional silhouette exception.",
+    style_lock_id: fixture.lock.id,
+    source_ref: fixture.target.src,
+    advisory_verdict: "reject",
+    advisory_checked_at: accepted.element.meta.style_verdict.checked_at,
+  });
+  assert.match(accepted.element.meta.style_decision.decided_at, /^\d{4}-\d{2}-\d{2}T/);
+
+  const undone = undoOp(REPO_ROOT, { projectId: fixture.projectId }).project;
+  const undoneElement = undone.elements.find((item) => item.id === fixture.target.id);
+  assert.equal(undone.history_seq, beforeDecision.history_seq);
+  assert.equal(undoneElement.assetStatus, "checked");
+  assert.equal(undoneElement.meta.style_decision, undefined);
+
+  const revised = __decideAssetStyleForTest(REPO_ROOT, {
+    projectId: fixture.projectId,
+    elementId: fixture.target.id,
+    decision: "revise",
+    reason: "Tighten the surface treatment before acceptance.",
+  }, decisionDeps(fixture.lock));
+  assert.equal(revised.status, "quarantine");
+  assert.equal(revised.element.meta.style_decision.decision, "revise");
+  assert.equal(undoOp(REPO_ROOT, { projectId: fixture.projectId }).project.elements.find((item) => item.id === fixture.target.id).assetStatus, "checked");
+
+  const rejected = __decideAssetStyleForTest(REPO_ROOT, {
+    projectId: fixture.projectId,
+    elementId: fixture.target.id,
+    decision: "reject",
+    reason: "The direction conflicts with the locked canon.",
+  }, decisionDeps(fixture.lock));
+  assert.equal(rejected.status, "quarantine");
+  assert.equal(rejected.element.meta.style_decision.advisory_verdict, "reject");
+});
+
+test("decideAssetStyle fails closed on invalid decisions and stale verdict inputs", async (t) => {
+  const fixture = await judgedStyleFixture(t, "accept");
+  const args = { projectId: fixture.projectId, elementId: fixture.target.id };
+
+  assert.throws(
+    () => __decideAssetStyleForTest(REPO_ROOT, { ...args, decision: "approve", reason: "No." }, decisionDeps(fixture.lock)),
+    /decision must be accept\|revise\|reject/,
+  );
+  assert.throws(
+    () => __decideAssetStyleForTest(REPO_ROOT, { ...args, decision: "accept", reason: "" }, decisionDeps(fixture.lock)),
+    /non-empty reason/,
+  );
+  assert.throws(
+    () => __decideAssetStyleForTest(REPO_ROOT, { ...args, decision: "accept", reason: "x".repeat(1001) }, decisionDeps(fixture.lock)),
+    /at most 1000 characters/,
+  );
+  assert.throws(
+    () => __decideAssetStyleForTest(REPO_ROOT, { ...args, decision: "accept", reason: "Stale lock." }, decisionDeps({
+      ...fixture.lock,
+      negative_prompt: "Changed after the verdict.",
+    })),
+    /current style-verdict evidence/,
+  );
+  assert.throws(
+    () => __decideAssetStyleForTest(REPO_ROOT, { ...args, decision: "accept", reason: "Stale technical contract." }, decisionDeps({
+      ...fixture.lock,
+      asset_size: { ...fixture.lock.asset_size, width: fixture.lock.asset_size.width + 1 },
+    })),
+    /current style-verdict evidence/,
+  );
+
+  const current = getProject(REPO_ROOT, fixture.projectId);
+  updateProject(REPO_ROOT, fixture.projectId, {
+    elements: current.elements.map((element) => element.id === fixture.world.id
+      ? { ...element, src: fixture.gui.src }
+      : element),
+  });
+  assert.throws(
+    () => __decideAssetStyleForTest(REPO_ROOT, { ...args, decision: "accept", reason: "Stale exemplar." }, decisionDeps(fixture.lock)),
+    /current style-verdict evidence/,
+  );
+});
+
 test("runAssetStyleVerdict stores 3-way advisory evidence without promoting checked art", async (t) => {
   const fixture = styleVerdictFixture(t);
   const before = getProject(REPO_ROOT, fixture.projectId);
@@ -393,6 +513,7 @@ test("runAssetStyleVerdict stores 3-way advisory evidence without promoting chec
   assert.equal(calls[0].doPrompt, fixture.lock.prompt_preamble);
   assert.equal(calls[0].dontPrompt, fixture.lock.negative_prompt);
   assert.equal(result.element.meta.style_verdict.style_lock_id, fixture.lock.id);
+  assert.deepEqual(result.element.meta.style_verdict.style_lock_snapshot, fixture.lock);
   assert.equal(result.element.meta.style_verdict.source_ref, fixture.target.src);
   assert.equal(result.element.meta.style_verdict.verdict, "accept");
   assert.deepEqual(
@@ -440,6 +561,33 @@ test("runAssetStyleVerdict accepts all advisory verdicts but refuses stale techn
     elements: repaired.elements.map((element) => element.id === fixture.target.id ? {
       ...element,
       meta: { ...element.meta, technical_gate: { ...element.meta.technical_gate, source_ref: fixture.target.src } },
+    } : element),
+  });
+  const currentThresholds = getProject(REPO_ROOT, fixture.projectId);
+  updateProject(REPO_ROOT, fixture.projectId, {
+    elements: currentThresholds.elements.map((element) => element.id === fixture.target.id ? {
+      ...element,
+      meta: {
+        ...element.meta,
+        technical_gate: {
+          ...element.meta.technical_gate,
+          thresholds: { ...element.meta.technical_gate.thresholds, max_alpha_noise_ratio: 0.99 },
+        },
+      },
+    } : element),
+  });
+  await assert.rejects(
+    () => __runAssetStyleVerdictForTest(REPO_ROOT, {
+      projectId: fixture.projectId,
+      elementId: fixture.target.id,
+    }, styleDeps(fixture.lock, styleReport()).dependencies),
+    /current passing technical-gate evidence/,
+  );
+  const staleThresholds = getProject(REPO_ROOT, fixture.projectId);
+  updateProject(REPO_ROOT, fixture.projectId, {
+    elements: staleThresholds.elements.map((element) => element.id === fixture.target.id ? {
+      ...element,
+      meta: { ...element.meta, technical_gate: { ...element.meta.technical_gate, thresholds: thresholdsFromStyleLock(fixture.lock) } },
     } : element),
   });
   for (const report of [

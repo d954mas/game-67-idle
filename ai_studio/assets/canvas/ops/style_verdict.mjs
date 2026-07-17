@@ -3,6 +3,7 @@ import { isDeepStrictEqual } from "node:util";
 
 import { normalizeAssetStatus } from "../asset_status.mjs";
 import { resolveAcceptedGameStyleLock } from "../../style_lock/generation_origin.mjs";
+import { thresholdsFromStyleLock } from "../../tools/image/quality_gate/api.mjs";
 import { runStyleVerdict } from "../tools/style_verdict.mjs";
 import { getProject, resolveProjectFile, updateProject, withProjectLock } from "../store.mjs";
 import { commitMutation, refuseIfHeadMoved } from "./core.mjs";
@@ -51,13 +52,17 @@ function validateReport(report) {
 function requireCurrentTechnicalPass(element, lock) {
   const status = element.assetStatus == null ? null : normalizeAssetStatus(element.assetStatus);
   const gate = element.meta?.technical_gate;
+  const expectedThresholds = thresholdsFromStyleLock(lock);
+  const expectedKeyColor = lock.bg_rule?.mode === "chroma" ? String(lock.bg_rule.key_color).toUpperCase() : null;
   if (
     !["checked", "accepted"].includes(status) ||
     gate?.schema !== "game.asset_technical_gate" ||
     gate?.version !== 1 ||
     gate?.verdict !== "pass" ||
     gate?.style_lock_id !== lock.id ||
-    gate?.source_ref !== element.src
+    gate?.source_ref !== element.src ||
+    gate?.key_color !== expectedKeyColor ||
+    !isDeepStrictEqual(gate?.thresholds, expectedThresholds)
   ) {
     throw new Error("asset style verdict requires current passing technical-gate evidence for this source and style lock");
   }
@@ -144,6 +149,7 @@ async function runAssetStyleVerdictImpl(root, { projectId, elementId } = {}, dep
       verdict: report.verdict,
       checked_at: checkedAt,
       style_lock_id: lock.id,
+      style_lock_snapshot: structuredClone(lock),
       source_ref: currentTarget.src,
       exemplar_refs: lock.exemplar_refs.map((entry, index) => ({
         ...structuredClone(entry),

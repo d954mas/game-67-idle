@@ -30,3 +30,16 @@ Writers must use the Canvas operation/CLI instead of editing `project.json`.
 The latest deterministic evidence lives in `element.meta.technical_gate`; it is
 a frozen report snapshot, not caller-authored state, and may reference a
 content-addressed failed-region thumbnail under the project's `files/` folder.
+The latest advisory vision report lives in `element.meta.style_verdict` and
+binds the target source, exact style-lock snapshot, and logical plus physical
+exemplar refs. The explicit lead result lives in `element.meta.style_decision`:
+it freezes `accept|revise|reject`, the bounded caller-authored reason, timestamp,
+source/lock ids, and the advisory verdict it considered. Only a current explicit
+`accept` decision can mint `assetStatus: "accepted"`; direct status writers cannot
+promote art.
+External clipboard specs cannot mint it either: public image paste always stores
+`quarantine` and strips all three review-evidence fields. Live-node duplication
+is the distinct trusted path that may preserve existing persisted review state.
+Any cleanup or filter bake that materializes pixels into a source file likewise
+starts a fresh `quarantine` lifecycle and removes review evidence for the old
+source; undo restores the exact prior accepted state with its original bytes.

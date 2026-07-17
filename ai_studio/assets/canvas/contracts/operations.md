@@ -40,18 +40,42 @@ advisory step before that decision: it requires current passing technical-gate
 evidence for the same source and lock, resolves the lock's owned exemplar
 images, and vision-compares them with the target against the lock's
 `prompt_preamble` (Do) and `negative_prompt` (Don't). It stores one strict
-`accept|revise|reject` report with source/lock/exemplar refs in an undoable
+`accept|revise|reject` report with source/exemplar refs and the complete lock
+snapshot in an undoable
 commit, but deliberately preserves `checked`/`accepted` status so the model
-cannot become a hidden hard gate. CLI parity is `asset-status-show`,
-`asset-status-set`, `asset-status-check`, and `asset-style-check`; HTTP parity
-adds `POST .../asset-style-check`. Request bodies cannot supply either trusted
-technical or style verdicts.
+cannot become a hidden hard gate. `decideAssetStyle` is the explicit lead
+backstop: a required caller-authored `decision` plus bounded non-empty `reason`
+records `meta.style_decision`; `accept` moves current checked art to `accepted`,
+while `revise`/`reject` return it to `quarantine`. A lead may override any model
+verdict, but only while the source, technical PASS, complete style lock, and all
+exemplar sources still match the advisory evidence. The decision and status
+change share one undoable commit.
+
+CLI parity is `asset-status-show`, `asset-status-set`, `asset-status-check`,
+`asset-style-check`, and `asset-style-decide`; HTTP parity adds
+`POST .../asset-style-check` and `POST .../asset-style-decision`. Request bodies
+cannot supply trusted technical/style reports. Decision and reason are
+intentionally caller-authored because that route represents the explicit lead
+action, not model evidence.
+
+Hand-authored `nodes-paste` specs are never an acceptance path. Every pasted
+image re-enters `quarantine`, and any supplied `technical_gate`, `style_verdict`,
+or `style_decision` metadata is discarded while unrelated metadata is retained.
+The separate live-project `nodes-duplicate` path may preserve an already-valid
+review state because its spec is built internally from persisted nodes rather
+than caller-authored JSON.
+
+Pixel-materializing mutations also restart review. `cleanupApply` and both
+single/batch `bakeFilters` paths set the changed image to `quarantine` and remove
+technical/style/decision evidence bound to the previous source, while retaining
+unrelated provenance such as alpha, cleanup, origin, and filters-bake records.
 
 The vision subprocess is ephemeral, ignores project/user execution rules, and
 pins the read-only Codex sandbox to an isolated temporary root containing only
-copies of the target and selected exemplar images. Before committing after the slow call, the op
-re-resolves the external style-lock file and rechecks every exemplar's current
-`source_ref`; evidence freezes those source refs beside the logical Canvas refs.
+copies of the target and selected exemplar images. Before committing after the
+slow call, the op re-resolves the external style-lock file and rechecks every
+exemplar's current `source_ref`; evidence freezes those source refs beside the
+logical Canvas refs.
 Changed, missing, or malformed lock/exemplar inputs and a moved Canvas head
 return a conflict instead of storing stale judgment. Model reports are exact-key
 and size-bounded before any project write.
