@@ -114,6 +114,58 @@ static const GameSaveFragment s_extra_fragment = {
     .schema_json = NULL,
 };
 
+/* ---- document v1 -> v2 migration test seam ---- */
+static bool s_document_migration_fail;
+
+static bool migrate_document_v1_to_v2(cJSON *features, char *err, int cap) {
+    cJSON *legacy = cJSON_GetObjectItemCaseSensitive(features, "legacy_pair");
+    if (!legacy) {
+        return true;
+    }
+    cJSON *game = cJSON_GetObjectItemCaseSensitive(features, "game");
+    cJSON *extra = cJSON_GetObjectItemCaseSensitive(features, "extra");
+    cJSON *coins = cJSON_GetObjectItemCaseSensitive(legacy, "coins");
+    cJSON *mark = cJSON_GetObjectItemCaseSensitive(legacy, "mark");
+    if (!cJSON_IsObject(game) || !cJSON_IsObject(extra) ||
+        !cJSON_IsNumber(coins) || !cJSON_IsNumber(mark)) {
+        gsj_set_error(err, cap, "legacy owner pair is malformed");
+        return false;
+    }
+    if (!cJSON_ReplaceItemInObjectCaseSensitive(
+            game, "coins", cJSON_CreateNumber(coins->valuedouble))) {
+        gsj_set_error(err, cap, "failed to migrate game owner");
+        return false;
+    }
+    if (s_document_migration_fail) {
+        gsj_set_error(err, cap, "injected owner migration failure");
+        return false;
+    }
+    if (!cJSON_ReplaceItemInObjectCaseSensitive(
+            extra, "mark", cJSON_CreateNumber(mark->valuedouble))) {
+        gsj_set_error(err, cap, "failed to migrate extra owner");
+        return false;
+    }
+    cJSON_DeleteItemFromObjectCaseSensitive(features, "legacy_pair");
+    return true;
+}
+
+static const GameSaveDocumentMigrateFn s_document_migrations[] = {
+    migrate_document_v1_to_v2,
+};
+
+static bool validate_document_fragments(const cJSON *features, char *err, int cap) {
+    const cJSON *game = cJSON_GetObjectItemCaseSensitive(features, "game");
+    const cJSON *extra = cJSON_GetObjectItemCaseSensitive(features, "extra");
+    if (!cJSON_IsObject(game) || !cJSON_IsObject(extra)) {
+        gsj_set_error(err, cap, "game and extra fragments are required");
+        return false;
+    }
+    int staged_coins = 0;
+    int staged_mark = 0;
+    return gsj_read_int_range(game, "coins", 0, 1000000000, &staged_coins, err, cap) &&
+           gsj_read_int_range(extra, "mark", 0, 1000000, &staged_mark, err, cap);
+}
+
 /* ---- identity-ish transform (case toggle: involutive, never emits NUL) ---- */
 static char *xf_toggle_case(const char *in, char *err, int cap) {
     (void)err;
@@ -293,10 +345,13 @@ void setUp(void) {
     s_frag_coins = 0;
     s_frag_name[0] = '\0';
     s_extra_mark = 0;
+    s_document_migration_fail = false;
     g_mono_ms = 5000000;
     g_wall_ms = 1720080000000LL;
     game_save__set_clocks_for_test(test_mono, test_wall);
     game_save_set_transforms(NULL, 0);
+    game_save_set_document_migrations(s_document_migrations, 1);
+    game_save_set_document_validator(validate_document_fragments);
     game_save_init();
 }
 void tearDown(void) { cleanup_all(); }
@@ -312,7 +367,7 @@ void test_envelope_round_trip(void) {
 
     cJSON *doc = parse_primary();
     TEST_ASSERT_EQUAL_INT(1, (int)cJSON_GetObjectItemCaseSensitive(doc, "format")->valuedouble);
-    TEST_ASSERT_EQUAL_INT(1, (int)cJSON_GetObjectItemCaseSensitive(doc, "save_version")->valuedouble);
+    TEST_ASSERT_EQUAL_INT(2, (int)cJSON_GetObjectItemCaseSensitive(doc, "save_version")->valuedouble);
     TEST_ASSERT_TRUE((int64_t)cJSON_GetObjectItemCaseSensitive(doc, "saved_at")->valuedouble == g_wall_ms);
     TEST_ASSERT_TRUE(cJSON_IsNumber(cJSON_GetObjectItemCaseSensitive(doc, "save_seq")));
     TEST_ASSERT_EQUAL_STRING(GAME_STORAGE_APP_ID, cJSON_GetObjectItemCaseSensitive(doc, "app")->valuestring);
@@ -573,8 +628,9 @@ void test_transform_seam(void) {
 
 /* 13. A bad fragment does not drop its neighbours (reset_fragments filled). */
 void test_bad_fragment_isolation(void) {
+    game_save_set_document_validator(NULL); /* current-version fragment-local contract */
     const char *doc =
-        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":1,\"app\":\"" GAME_STORAGE_APP_ID "\","
+        "{\"format\":1,\"save_version\":2,\"saved_at\":1,\"save_seq\":1,\"app\":\"" GAME_STORAGE_APP_ID "\","
         "\"features\":{\"game\":{\"v\":1,\"coins\":2000000000},"  /* out of range -> from_json fails */
         "\"extra\":{\"v\":1,\"mark\":7}}}";
     write_raw(PRIMARY_PATH, doc);
@@ -819,6 +875,85 @@ void test_pending_new_game_skips_one_fragment(void) {
     TEST_ASSERT_FALSE(game_save_apply_pending_new_game());
 }
 
+/* 19. A versioned document migration updates multiple owner fragments from one
+   staged copy before either fragment becomes live. */
+void test_document_migration_publishes_owner_pair_together(void) {
+    const char *legacy =
+        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":3,\"app\":\"" GAME_STORAGE_APP_ID "\","
+        "\"features\":{\"game\":{\"v\":1,\"coins\":1,\"name\":\"legacy\"},"
+        "\"extra\":{\"v\":1,\"mark\":2},\"legacy_pair\":{\"coins\":77,\"mark\":88}}}";
+    write_raw(PRIMARY_PATH, legacy);
+    s_frag_coins = 11;
+    s_extra_mark = 22;
+
+    game_save_load_result_t result;
+    game_save_load(&result);
+
+    TEST_ASSERT_EQUAL_INT(GAME_SAVE_LOAD_LOADED, result.status);
+    TEST_ASSERT_EQUAL_INT(77, s_frag_coins);
+    TEST_ASSERT_EQUAL_INT(88, s_extra_mark);
+}
+
+/* 20. Failure after mutating the staged first owner leaves both live owners and
+   the caller-owned import bytes exactly unchanged. */
+void test_document_migration_failure_keeps_input_and_live_state_exact(void) {
+    const char *legacy =
+        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":3,\"app\":\"" GAME_STORAGE_APP_ID "\","
+        "\"features\":{\"game\":{\"v\":1,\"coins\":1,\"name\":\"legacy\"},"
+        "\"extra\":{\"v\":1,\"mark\":2},\"legacy_pair\":{\"coins\":77,\"mark\":88}}}";
+    char before[512];
+    (void)snprintf(before, sizeof before, "%s", legacy);
+    s_frag_coins = 11;
+    s_extra_mark = 22;
+    s_document_migration_fail = true;
+    char err[128] = {0};
+
+    TEST_ASSERT_FALSE(game_save_import_string(legacy, err, (int)sizeof err));
+
+    TEST_ASSERT_EQUAL_STRING("injected owner migration failure", err);
+    TEST_ASSERT_EQUAL_STRING(before, legacy);
+    TEST_ASSERT_EQUAL_INT(11, s_frag_coins);
+    TEST_ASSERT_EQUAL_INT(22, s_extra_mark);
+}
+
+/* 21. Old envelopes cannot skip a version when the game did not register the
+   corresponding cross-fragment step. */
+void test_document_migration_rejects_missing_step_without_publish(void) {
+    const char *legacy =
+        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":3,\"app\":\"" GAME_STORAGE_APP_ID "\","
+        "\"features\":{\"game\":{\"v\":1,\"coins\":1,\"name\":\"legacy\"},"
+        "\"extra\":{\"v\":1,\"mark\":2}}}";
+    s_frag_coins = 11;
+    s_extra_mark = 22;
+    game_save_set_document_migrations(NULL, 0);
+    char err[128] = {0};
+
+    TEST_ASSERT_FALSE(game_save_import_string(legacy, err, (int)sizeof err));
+
+    TEST_ASSERT_EQUAL_STRING("missing document migration step", err);
+    TEST_ASSERT_EQUAL_INT(11, s_frag_coins);
+    TEST_ASSERT_EQUAL_INT(22, s_extra_mark);
+}
+
+/* 22. A successful migration whose second owner cannot be staged is rejected
+   by the mandatory document validator before the first owner is published. */
+void test_document_migration_rejects_second_owner_parse_before_publish(void) {
+    const char *legacy =
+        "{\"format\":1,\"save_version\":1,\"saved_at\":1,\"save_seq\":3,\"app\":\"" GAME_STORAGE_APP_ID "\","
+        "\"features\":{\"game\":{\"v\":1,\"coins\":1,\"name\":\"legacy\"},"
+        "\"extra\":{\"v\":1,\"mark\":2},"
+        "\"legacy_pair\":{\"coins\":77,\"mark\":1000001}}}";
+    s_frag_coins = 11;
+    s_extra_mark = 22;
+    char err[128] = {0};
+
+    TEST_ASSERT_FALSE(game_save_import_string(legacy, err, (int)sizeof err));
+
+    TEST_ASSERT_EQUAL_STRING("number out of range", err);
+    TEST_ASSERT_EQUAL_INT(11, s_frag_coins);
+    TEST_ASSERT_EQUAL_INT(22, s_extra_mark);
+}
+
 int main(void) {
     game_save_register_fragment(&s_extra_fragment);
     game_save_register_fragment(&s_fake_fragment); /* `game` registered last */
@@ -842,5 +977,9 @@ int main(void) {
     RUN_TEST(test_read_error_recovers_from_backup);
     RUN_TEST(test_read_error_bad_backup_corrupt_resets);
     RUN_TEST(test_pending_new_game_skips_one_fragment);
+    RUN_TEST(test_document_migration_publishes_owner_pair_together);
+    RUN_TEST(test_document_migration_failure_keeps_input_and_live_state_exact);
+    RUN_TEST(test_document_migration_rejects_missing_step_without_publish);
+    RUN_TEST(test_document_migration_rejects_second_owner_parse_before_publish);
     return UNITY_END();
 }

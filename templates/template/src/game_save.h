@@ -12,6 +12,7 @@
 
 /* ---- Контракт фрагмента: весь ABI между шеллом и фичей ---- */
 typedef bool (*GameSaveMigrateFn)(cJSON *frag, char *err, int cap); /* v(i)->v(i+1) */
+typedef bool (*GameSaveDocumentMigrateFn)(cJSON *features, char *err, int cap); /* save v(i)->v(i+1) */
 typedef bool (*GameSaveDocumentValidateFn)(const cJSON *features, char *err, int cap);
 
 typedef struct GameSaveFragment {
@@ -31,6 +32,12 @@ typedef struct GameSaveFragment {
 /* Регистрация ДО первого load; порядок = порядок reconcile/on_new_game.
    Фрагмент game регистрируется ПОСЛЕДНИМ. Указатель должен пережить рантайм. */
 void game_save_register_fragment(const GameSaveFragment *fragment);
+
+/* Ordered game-owned cross-fragment migrations. steps[v-1] migrates the
+   features object from save_version v to v+1. A document validator is mandatory
+   for old versions and must stage-parse every affected fragment without live
+   mutation. Load/import run both on a deep copy before publishing state. */
+void game_save_set_document_migrations(const GameSaveDocumentMigrateFn *steps, int step_count);
 
 /* One game-owned cross-fragment invariant checked before a save document is
    published and after raw DevAPI writes. NULL restores fragment-only behavior. */
@@ -80,8 +87,9 @@ typedef struct {
 /* Инициализация оркестратора (после регистрации ВСЕХ фрагментов). */
 void game_save_init(void);
 
-/* Грузит автослот (GAME_SAVE_AUTOSAVE_SLOT); никогда не
-   all-or-nothing (плохой фрагмент не роняет остальные). Заполняет *result. */
+/* Грузит автослот (GAME_SAVE_AUTOSAVE_SLOT). Обычные fragment-local ошибки
+   изолированы; versioned document migrations stage+validate весь features{} до
+   публикации любого затронутого фрагмента. Заполняет *result. */
 void game_save_load(game_save_load_result_t *result);
 
 /* Явная новая игра: reset всех -> on_new_game всех -> save -> возобновляет автосейв (Р10). */
