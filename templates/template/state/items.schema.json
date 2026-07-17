@@ -52,8 +52,8 @@
       "fields": {
         "op":              { "type": "string" },
         "def_id":          { "type": "string" },
-        "container":       { "type": "string" },
-        "entry_key":       { "type": "string" },
+        "container_id":    { "type": "i64" },
+        "entry_id":        { "type": "i64" },
         "requested_delta": { "type": "i64" },
         "applied_delta":   { "type": "i64" },
         "before_count":    { "type": "i64" },
@@ -106,9 +106,9 @@
     "move": {
       "fields": {
         "def_id":          { "type": "string" },
-        "entry_key":       { "type": "string" },
-        "from_container":  { "type": "string" },
-        "to_container":    { "type": "string" },
+        "entry_id":         { "type": "i64" },
+        "from_container_id": { "type": "i64" },
+        "to_container_id":   { "type": "i64" },
         "requested_count": { "type": "i64" },
         "moved_count":     { "type": "i64" },
         "reason":          { "type": "string" }

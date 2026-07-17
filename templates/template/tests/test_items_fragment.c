@@ -1069,7 +1069,7 @@ void test_container_entry_inspection_requires_range_and_filters_in_slot_order(vo
         items_inspect_container_entries(bag, &query, rows, 2, &page));
 }
 
-void test_success_emits_one_numeric_compatibility_event(void) {
+void test_success_emits_one_numeric_identity_event(void) {
     items_container_ref_t wallet = create_container(2, ITEMS_CONTAINER_POLICY_CURRENCY_ONLY);
     game_event_frame_reset();
     item_entry_ref_t entry = {0};
@@ -1083,9 +1083,72 @@ void test_success_emits_one_numeric_compatibility_event(void) {
     for (int i = 0; i < count; i++) {
         if (events[i].type.value != items_ev_txn_type().value) { continue; }
         const ItemsEvTxn *event = (const ItemsEvTxn *)events[i].payload;
-        TEST_ASSERT_EQUAL_STRING("1", items_ev_txn_container(event));
-        TEST_ASSERT_EQUAL_STRING("1", items_ev_txn_entry_key(event));
+        TEST_ASSERT_EQUAL_INT64(items_container_id(wallet), event->container_id);
+        TEST_ASSERT_EQUAL_INT64(items_entry_id(entry), event->entry_id);
         TEST_ASSERT_EQUAL_INT64(42, event->applied_delta);
+        txn_count++;
+    }
+    TEST_ASSERT_EQUAL_INT(1, txn_count);
+}
+
+void test_move_event_uses_persistent_numeric_identity(void) {
+    items_container_ref_t source = create_container(2, ITEMS_CONTAINER_POLICY_EQUIPMENT);
+    items_container_ref_t destination = create_container(2, ITEMS_CONTAINER_POLICY_EQUIPMENT);
+    item_entry_ref_t sword = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_unique_create(source, "tmpl.sword", 0, "loot:event", &sword));
+    const uint32_t entry_id = items_entry_id(sword);
+    game_event_frame_reset();
+    item_entry_ref_t moved = ITEM_ENTRY_REF_NONE;
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_entry_move(sword, destination, 1, 0, "split:event", &moved));
+
+    int count = 0;
+    const game_event_t *events = game_event_log(&count);
+    int move_count = 0;
+    for (int i = 0; i < count; i++) {
+        if (events[i].type.value != items_ev_move_type().value) { continue; }
+        const ItemsEvMove *event = (const ItemsEvMove *)events[i].payload;
+        TEST_ASSERT_EQUAL_INT64(entry_id, event->entry_id);
+        TEST_ASSERT_EQUAL_INT64(items_container_id(source), event->from_container_id);
+        TEST_ASSERT_EQUAL_INT64(items_container_id(destination), event->to_container_id);
+        TEST_ASSERT_EQUAL_INT64(1, event->moved_count);
+        move_count++;
+    }
+    TEST_ASSERT_EQUAL_INT(1, move_count);
+    TEST_ASSERT_EQUAL_UINT32(entry_id, items_entry_id(moved));
+}
+
+void test_aggregate_remove_event_uses_none_entry_id(void) {
+    items_container_ref_t bag = create_container(4, ITEMS_CONTAINER_POLICY_GENERIC);
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 3, 0, "loot:event", NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 4, 1, "loot:event", NULL, NULL));
+    game_event_frame_reset();
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_remove_from_container(bag, "tmpl.wood", 5, "use:event"));
+
+    int count = 0;
+    const game_event_t *events = game_event_log(&count);
+    int txn_count = 0;
+    for (int i = 0; i < count; i++) {
+        if (events[i].type.value != items_ev_txn_type().value) { continue; }
+        const ItemsEvTxn *event = (const ItemsEvTxn *)events[i].payload;
+        TEST_ASSERT_EQUAL_STRING("remove", items_ev_txn_op(event));
+        TEST_ASSERT_EQUAL_INT64(items_container_id(bag), event->container_id);
+        TEST_ASSERT_EQUAL_INT64(ITEMS_ID_NONE, event->entry_id);
+        TEST_ASSERT_EQUAL_INT64(-5, event->requested_delta);
+        TEST_ASSERT_EQUAL_INT64(-5, event->applied_delta);
+        TEST_ASSERT_EQUAL_INT64(7, event->before_count);
+        TEST_ASSERT_EQUAL_INT64(2, event->after_count);
         txn_count++;
     }
     TEST_ASSERT_EQUAL_INT(1, txn_count);
@@ -1123,7 +1186,9 @@ int main(void) {
     RUN_TEST(test_rejected_rebuild_preserves_ephemeral_state);
     RUN_TEST(test_container_inspection_is_paginated_filterable_and_bounded);
     RUN_TEST(test_container_entry_inspection_requires_range_and_filters_in_slot_order);
-    RUN_TEST(test_success_emits_one_numeric_compatibility_event);
+    RUN_TEST(test_success_emits_one_numeric_identity_event);
+    RUN_TEST(test_move_event_uses_persistent_numeric_identity);
+    RUN_TEST(test_aggregate_remove_event_uses_none_entry_id);
     int result = UNITY_END();
     game_events_shutdown();
     items_catalog_shutdown();

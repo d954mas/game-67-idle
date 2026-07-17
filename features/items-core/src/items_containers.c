@@ -683,10 +683,6 @@ static int64_t stack_limit(item_def_ref_t ref, item_core_t core) {
     return limit;
 }
 
-static void format_id(char *out, size_t cap, uint32_t id) {
-    (void)snprintf(out, cap, "%u", (unsigned)id);
-}
-
 items_result_t items_try_stack_add(
     items_container_ref_t container_ref_value, const char *def_id, int64_t count,
     uint32_t requested_slot, const char *reason, item_entry_ref_t *out_entry, int64_t *out_applied) {
@@ -712,11 +708,8 @@ items_result_t items_try_stack_add(
         entry->count += applied;
         if (entry->quarantined) { entry->quarantined = false; }
         game_save_mark_dirty();
-        char container_id_text[16];
-        char entry_id_text[16];
-        format_id(container_id_text, sizeof(container_id_text), container->container_id);
-        format_id(entry_id_text, sizeof(entry_id_text), entry->entry_id);
-        items_emit_txn("add", def_id, container_id_text, entry_id_text, count, applied, before, entry->count, reason);
+        items_emit_txn("add", def_id, (int64_t)container->container_id,
+                       (int64_t)entry->entry_id, count, applied, before, entry->count, reason);
         if (out_entry != NULL) { *out_entry = entry_ref((uint32_t)(entry - items_state.containers_entries)); }
         if (out_applied != NULL) { *out_applied = applied; }
         return ITEMS_RESULT_OK;
@@ -747,11 +740,8 @@ items_result_t items_try_stack_add(
     bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
-    char container_id_text[16];
-    char entry_id_text[16];
-    format_id(container_id_text, sizeof(container_id_text), container->container_id);
-    format_id(entry_id_text, sizeof(entry_id_text), id);
-    items_emit_txn("add", def_id, container_id_text, entry_id_text, count, applied, 0, applied, reason);
+    items_emit_txn("add", def_id, (int64_t)container->container_id,
+                   (int64_t)id, count, applied, 0, applied, reason);
     if (out_entry != NULL) { *out_entry = entry_ref(index); }
     if (out_applied != NULL) { *out_applied = applied; }
     return ITEMS_RESULT_OK;
@@ -779,11 +769,9 @@ items_result_t items_try_stack_remove(item_entry_ref_t entry_ref_value, int64_t 
         NT_ASSERT(ok);
     }
     game_save_mark_dirty();
-    char container_id_text[16];
-    char entry_id_text[16];
-    format_id(container_id_text, sizeof(container_id_text), items_state.containers[container_index].container_id);
-    format_id(entry_id_text, sizeof(entry_id_text), entry_id_value);
-    items_emit_txn("remove", def_id, container_id_text, entry_id_text, -count, -count, before, before - count, reason);
+    items_emit_txn("remove", def_id,
+                   (int64_t)items_state.containers[container_index].container_id,
+                   (int64_t)entry_id_value, -count, -count, before, before - count, reason);
     return ITEMS_RESULT_OK;
 }
 
@@ -816,9 +804,8 @@ items_result_t items_try_stack_remove_from_container(
     bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
-    char container_id_text[16];
-    format_id(container_id_text, sizeof(container_id_text), container->container_id);
-    items_emit_txn("remove", def_id, container_id_text, "scope", -count, -count, before, before - count, reason);
+    items_emit_txn("remove", def_id, (int64_t)container->container_id,
+                   0, -count, -count, before, before - count, reason);
     return ITEMS_RESULT_OK;
 }
 
@@ -883,11 +870,8 @@ items_result_t items_try_unique_create(
     bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
-    char container_id_text[16];
-    char entry_id_text[16];
-    format_id(container_id_text, sizeof(container_id_text), container->container_id);
-    format_id(entry_id_text, sizeof(entry_id_text), id);
-    items_emit_txn("create", def_id, container_id_text, entry_id_text, 1, 1, 0, 1, reason);
+    items_emit_txn("create", def_id, (int64_t)container->container_id,
+                   (int64_t)id, 1, 1, 0, 1, reason);
     *out_entry = entry_ref(index);
     return ITEMS_RESULT_OK;
 }
@@ -907,11 +891,8 @@ items_result_t items_try_entry_destroy(item_entry_ref_t entry_ref_value, const c
     bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
-    char container_id_text[16];
-    char entry_id_text[16];
-    format_id(container_id_text, sizeof(container_id_text), container_id_value);
-    format_id(entry_id_text, sizeof(entry_id_text), entry_id_value);
-    items_emit_txn("destroy", def_id, container_id_text, entry_id_text, -1, -1, 1, 0, reason);
+    items_emit_txn("destroy", def_id, (int64_t)container_id_value,
+                   (int64_t)entry_id_value, -1, -1, 1, 0, reason);
     return ITEMS_RESULT_OK;
 }
 
@@ -1486,13 +1467,9 @@ items_result_t items_try_entry_move(
     bool ok = build_indices(&items_state, true, false, NULL, 0);
     NT_ASSERT(ok);
     game_save_mark_dirty();
-    char from_text[16];
-    char to_text[16];
-    char entry_text[16];
-    format_id(from_text, sizeof(from_text), source_container_id);
-    format_id(to_text, sizeof(to_text), destination->container_id);
-    format_id(entry_text, sizeof(entry_text), source_entry_id);
-    items_emit_move(def_id, entry_text, from_text, to_text, count, count, reason);
+    items_emit_move(def_id, (int64_t)source_entry_id,
+                    (int64_t)source_container_id, (int64_t)destination->container_id,
+                    count, count, reason);
     if (out_destination != NULL) { *out_destination = result_ref; }
     return ITEMS_RESULT_OK;
 }
