@@ -200,6 +200,15 @@ test("canvas API sets and reads image asset status through the shared operation"
   assert.equal(technicalCheck.status, 400);
   assert.match(technicalCheck.json().error, /requires a game-owned Canvas project/);
 
+  const styleCheck = await invokeApi(
+    handler,
+    "POST",
+    `/api/canvas/projects/${projectId}/elements/${elementId}/asset-style-check`,
+    { report: { verdict: "accept" } },
+  );
+  assert.equal(styleCheck.status, 400);
+  assert.match(styleCheck.json().error, /requires a game-owned Canvas project/);
+
   const invalid = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`, {
     status: "approved",
   });

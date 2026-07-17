@@ -9,3 +9,4 @@ export { animateElementFromText, createAnimCard, createRecipeCard, createStyleCa
 export { deleteNodes, duplicateNodes, historyEntryLabel, historyFlags, jumpHistory, listHistory, opsStats, pasteNodes, readHistory, redoOp, undoOp } from "./ops/history.mjs";
 export { alphaCutout, alphaDualPlate, alphaDualPlateGenerate, bakeFilters, cleanupApply, cleanupPreview, detectRegions, exportElements, exportProject, hasBakeableFilters, isCorridorKeyGreenKey, isCorridorKeyMagentaKey, nameDetectedRegions, packSlice, renderGroup, sliceRegions, zipExport } from "./ops/image_pipeline.mjs";
 export { runAssetTechnicalGate } from "./ops/technical_gate.mjs";
+export { runAssetStyleVerdict } from "./ops/style_verdict.mjs";

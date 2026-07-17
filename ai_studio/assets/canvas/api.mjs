@@ -54,6 +54,7 @@
 //   GET    /api/canvas/projects/<id>/elements/<eid>/asset-status
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/asset-status {status} (image-only; initialize quarantine or downgrade; upward transitions require gate evidence; one entry)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/asset-status-check {} (runs the trusted technical gate; PASS -> checked, FAIL -> quarantine; one entry)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/asset-style-check {} (runs trusted advisory vision compare; stores evidence without accepting)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
 //   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
 //   POST   /api/canvas/projects/<id>/nodes-align   {nodeIds, align, reference?} (align to selection bbox or parent frame; one entry)
@@ -141,6 +142,7 @@ import {
   removeElements,
   renderGroup,
   runAssetTechnicalGate,
+  runAssetStyleVerdict,
   reorderElement,
   reorderNode,
   reorderNodes,
@@ -1066,6 +1068,16 @@ export function createCanvasApi(root) {
         const elementId = decodeURIComponent(parts[5]);
         await readJsonBody(req);
         sendMutation(200, await runAssetTechnicalGate(root, { projectId: id, elementId }));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/asset-style-check
+      // Request-body verdicts are ignored. The trusted vision judge produces advisory
+      // evidence, while a later explicit lead decision owns the accepted transition.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "asset-style-check" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        await readJsonBody(req);
+        sendMutation(200, await runAssetStyleVerdict(root, { projectId: id, elementId }));
         return true;
       }
 

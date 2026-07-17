@@ -35,6 +35,23 @@ Canvas head and commits the verdict, metrics, thresholds, lock id, source ref,
 and optional problem thumbnail in one undoable step. PASS promotes untracked or
 quarantined art to `checked` (and preserves `accepted`); FAIL moves any state to
 `quarantine`. Public callers cannot submit verdict evidence. `accepted` remains
-reserved for the later style-verdict operation. CLI parity is
-`asset-status-show` / `asset-status-set` / `asset-status-check`; HTTP parity is
-`GET` / `PUT .../asset-status` and `POST .../asset-status-check`.
+reserved for an explicit lead decision. `runAssetStyleVerdict` is the trusted
+advisory step before that decision: it requires current passing technical-gate
+evidence for the same source and lock, resolves the lock's owned exemplar
+images, and vision-compares them with the target against the lock's
+`prompt_preamble` (Do) and `negative_prompt` (Don't). It stores one strict
+`accept|revise|reject` report with source/lock/exemplar refs in an undoable
+commit, but deliberately preserves `checked`/`accepted` status so the model
+cannot become a hidden hard gate. CLI parity is `asset-status-show`,
+`asset-status-set`, `asset-status-check`, and `asset-style-check`; HTTP parity
+adds `POST .../asset-style-check`. Request bodies cannot supply either trusted
+technical or style verdicts.
+
+The vision subprocess is ephemeral, ignores project/user execution rules, and
+pins the read-only Codex sandbox to an isolated temporary root containing only
+copies of the target and selected exemplar images. Before committing after the slow call, the op
+re-resolves the external style-lock file and rechecks every exemplar's current
+`source_ref`; evidence freezes those source refs beside the logical Canvas refs.
+Changed, missing, or malformed lock/exemplar inputs and a moved Canvas head
+return a conflict instead of storing stale judgment. Model reports are exact-key
+and size-bounded before any project write.

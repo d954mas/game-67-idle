@@ -77,4 +77,12 @@ game's values only after its real broken/clean corpus separates; the committed
 example is synthetic contract evidence, not universal tuning.
 
 Vision/style acceptance remains advisory against exemplars plus Do/Don't, with
-the lead as backstop. No CLIP, embedding, or palette-delta gate is part of v1.
+the lead as backstop. `asset-style-check` uses `exemplar_refs` as the owned
+images, `prompt_preamble` as the machine Do direction, and `negative_prompt` as
+the machine Don't direction. Its strict 3-way report is stored as evidence but
+does not promote status; the explicit lead-decision transition remains a
+separate operation. No CLIP, embedding, or palette-delta gate is part of v1.
+The slow check revalidates the lock and exemplar source refs before committing,
+so replacing canon art or editing the lock invalidates an in-flight verdict. Its
+read-only vision process receives temporary copies of only the target and those
+exemplars; it does not run with the repository as its working directory.

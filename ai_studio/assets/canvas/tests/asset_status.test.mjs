@@ -20,6 +20,7 @@ import {
 } from "../ops.mjs";
 import { assetStatusBadge, assetStatusChipLayout } from "../asset_status.mjs";
 import { __runAssetTechnicalGateForTest } from "../ops/technical_gate.mjs";
+import { __runAssetStyleVerdictForTest } from "../ops/style_verdict.mjs";
 import { solidPng } from "./png_fixture.mjs";
 
 const REPO_ROOT = resolve(fileURLToPath(new URL("../../../..", import.meta.url)));
@@ -124,6 +125,10 @@ test("asset status badge uses text as well as stable semantic colors", () => {
   assert.deepEqual(historyEntryLabel("runAssetTechnicalGate", { verdict: "pass" }), {
     label: "Check asset quality",
     summary: "pass",
+  });
+  assert.deepEqual(historyEntryLabel("runAssetStyleVerdict", { verdict: "revise" }), {
+    label: "Check asset style",
+    summary: "revise",
   });
 });
 
@@ -296,4 +301,234 @@ test("runAssetTechnicalGate fails closed on malformed evaluator output and on a 
   const stored = getProject(REPO_ROOT, project.id).elements.find((item) => item.id === image.id);
   assert.equal(stored.assetStatus, "quarantine", "the concurrent journaled edit survives");
   assert.equal(stored.meta?.technical_gate, undefined, "the stale gate result is never written");
+});
+
+function styleVerdictFixture(t) {
+  tempProjects(t);
+  const project = createProject(REPO_ROOT, {
+    title: "Style verdict",
+    ownership: { kind: "game", gameId: "test-game" },
+  });
+  const target = addImage(REPO_ROOT, project.id, { name: "target.png", bytes: solidPng(32, 32, [180, 110, 40]) }).element;
+  const world = addImage(REPO_ROOT, project.id, { name: "world.png", bytes: solidPng(32, 32, [80, 120, 180]) }).element;
+  const gui = addImage(REPO_ROOT, project.id, { name: "gui.png", bytes: solidPng(32, 32, [120, 80, 180]) }).element;
+  const lock = {
+    ...TECHNICAL_LOCK,
+    prompt_preamble: "Chunky painterly dark fantasy with readable silhouettes.",
+    negative_prompt: "No photorealism, thin silhouettes, text, or watermarks.",
+    exemplar_refs: [
+      { ref: `canvas://${project.id}/element/${world.id}`, origin: "owned", domain: "world" },
+      { ref: `canvas://${project.id}/element/${gui.id}`, origin: "owned", domain: "gui" },
+    ],
+  };
+  const current = getProject(REPO_ROOT, project.id);
+  updateProject(REPO_ROOT, project.id, {
+    elements: current.elements.map((element) => element.id === target.id ? {
+      ...element,
+      assetStatus: "checked",
+      meta: {
+        ...element.meta,
+        technical_gate: {
+          schema: "game.asset_technical_gate",
+          version: 1,
+          verdict: "pass",
+          style_lock_id: lock.id,
+          source_ref: target.src,
+        },
+      },
+    } : element),
+  });
+  return { projectId: project.id, target, world, gui, lock };
+}
+
+function styleReport(verdict = "accept") {
+  return {
+    schema: "game.asset_style_verdict",
+    version: 1,
+    verdict,
+    summary: verdict === "accept" ? "Matches the locked direction." : "Needs a style correction.",
+    strengths: ["Readable silhouette"],
+    concerns: verdict === "accept" ? [] : ["Surface treatment drifts"],
+  };
+}
+
+function styleDeps(lock, report, { duringRun, finalError, finalLock = lock } = {}) {
+  const calls = [];
+  let resolutions = 0;
+  return {
+    calls,
+    dependencies: {
+      resolveStyleLock() {
+        const firstResolution = resolutions++ === 0;
+        if (!firstResolution && finalError) throw finalError;
+        const resolvedLock = firstResolution ? lock : finalLock;
+        return { gameId: "test-game", lock: resolvedLock };
+      },
+      async runJudge(args) {
+        calls.push(args);
+        if (duringRun) duringRun();
+        return report;
+      },
+    },
+  };
+}
+
+test("runAssetStyleVerdict stores 3-way advisory evidence without promoting checked art", async (t) => {
+  const fixture = styleVerdictFixture(t);
+  const before = getProject(REPO_ROOT, fixture.projectId);
+  const { calls, dependencies } = styleDeps(fixture.lock, styleReport("accept"));
+
+  const result = await __runAssetStyleVerdictForTest(REPO_ROOT, {
+    projectId: fixture.projectId,
+    elementId: fixture.target.id,
+  }, dependencies);
+
+  assert.equal(result.status, "checked", "the advisory model cannot mint accepted state");
+  assert.equal(result.report.verdict, "accept");
+  assert.equal(calls.length, 1);
+  assert.match(calls[0].targetPath, /files[\\/].+\.png$/);
+  assert.equal(calls[0].exemplars.length, 2);
+  assert.deepEqual(calls[0].exemplars.map((entry) => entry.domain), ["world", "gui"]);
+  assert.deepEqual(calls[0].exemplars.map((entry) => entry.ref), fixture.lock.exemplar_refs.map((entry) => entry.ref));
+  assert.equal(calls[0].doPrompt, fixture.lock.prompt_preamble);
+  assert.equal(calls[0].dontPrompt, fixture.lock.negative_prompt);
+  assert.equal(result.element.meta.style_verdict.style_lock_id, fixture.lock.id);
+  assert.equal(result.element.meta.style_verdict.source_ref, fixture.target.src);
+  assert.equal(result.element.meta.style_verdict.verdict, "accept");
+  assert.deepEqual(
+    result.element.meta.style_verdict.exemplar_refs,
+    fixture.lock.exemplar_refs.map((entry, index) => ({
+      ...entry,
+      source_ref: index === 0 ? fixture.world.src : fixture.gui.src,
+    })),
+  );
+  assert.match(result.element.meta.style_verdict.checked_at, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(undoOp(REPO_ROOT, { projectId: fixture.projectId }).project.history_seq, before.history_seq);
+  const redone = redoOp(REPO_ROOT, { projectId: fixture.projectId }).project.elements.find((item) => item.id === fixture.target.id);
+  assert.equal(redone.assetStatus, "checked");
+  assert.equal(redone.meta.style_verdict.verdict, "accept");
+});
+
+test("runAssetStyleVerdict accepts all advisory verdicts but refuses stale technical evidence, malformed reports, and moved heads", async (t) => {
+  const fixture = styleVerdictFixture(t);
+  for (const verdict of ["accept", "revise", "reject"]) {
+    const result = await __runAssetStyleVerdictForTest(REPO_ROOT, {
+      projectId: fixture.projectId,
+      elementId: fixture.target.id,
+    }, styleDeps(fixture.lock, styleReport(verdict)).dependencies);
+    assert.equal(result.report.verdict, verdict);
+    assert.equal(result.status, "checked");
+  }
+
+  const current = getProject(REPO_ROOT, fixture.projectId);
+  updateProject(REPO_ROOT, fixture.projectId, {
+    elements: current.elements.map((element) => element.id === fixture.target.id ? {
+      ...element,
+      meta: { ...element.meta, technical_gate: { ...element.meta.technical_gate, source_ref: "files/stale.png" } },
+    } : element),
+  });
+  await assert.rejects(
+    () => __runAssetStyleVerdictForTest(REPO_ROOT, {
+      projectId: fixture.projectId,
+      elementId: fixture.target.id,
+    }, styleDeps(fixture.lock, styleReport()).dependencies),
+    /current passing technical-gate evidence/,
+  );
+
+  const repaired = getProject(REPO_ROOT, fixture.projectId);
+  updateProject(REPO_ROOT, fixture.projectId, {
+    elements: repaired.elements.map((element) => element.id === fixture.target.id ? {
+      ...element,
+      meta: { ...element.meta, technical_gate: { ...element.meta.technical_gate, source_ref: fixture.target.src } },
+    } : element),
+  });
+  for (const report of [
+    { ...styleReport(), verdict: "maybe" },
+    { ...styleReport(), summary: "" },
+    { ...styleReport(), summary: "x".repeat(1001) },
+    { ...styleReport(), concerns: [42] },
+    { ...styleReport(), concerns: ["x".repeat(501)] },
+  ]) {
+    await assert.rejects(
+      () => __runAssetStyleVerdictForTest(REPO_ROOT, {
+        projectId: fixture.projectId,
+        elementId: fixture.target.id,
+      }, styleDeps(fixture.lock, report).dependencies),
+      /invalid style verdict report/,
+    );
+  }
+
+  await assert.rejects(
+    () => __runAssetStyleVerdictForTest(REPO_ROOT, {
+      projectId: fixture.projectId,
+      elementId: fixture.target.id,
+    }, styleDeps(fixture.lock, styleReport(), {
+      finalLock: { ...fixture.lock, negative_prompt: "Changed while judging." },
+    }).dependencies),
+    (error) => error?.code === "HEAD_CONFLICT" && /style lock changed/.test(error.message),
+  );
+
+  await assert.rejects(
+    () => __runAssetStyleVerdictForTest(REPO_ROOT, {
+      projectId: fixture.projectId,
+      elementId: fixture.target.id,
+    }, styleDeps(fixture.lock, styleReport(), {
+      finalError: new Error("accepted style lock disappeared"),
+    }).dependencies),
+    (error) => error?.code === "HEAD_CONFLICT"
+      && /style lock changed/.test(error.message)
+      && /accepted style lock disappeared/.test(error.message),
+  );
+
+  await assert.rejects(
+    () => __runAssetStyleVerdictForTest(REPO_ROOT, {
+      projectId: fixture.projectId,
+      elementId: fixture.target.id,
+    }, styleDeps(fixture.lock, styleReport(), {
+      duringRun() {
+        const project = getProject(REPO_ROOT, fixture.projectId);
+        updateProject(REPO_ROOT, fixture.projectId, {
+          elements: project.elements.map((element) => element.id === fixture.world.id
+            ? { ...element, src: fixture.gui.src }
+            : element),
+        });
+      },
+    }).dependencies),
+    (error) => error?.code === "HEAD_CONFLICT" && /exemplars changed/.test(error.message),
+  );
+
+  const moved = styleDeps(fixture.lock, styleReport(), {
+    duringRun() {
+      setAssetStatus(REPO_ROOT, { projectId: fixture.projectId, elementId: fixture.target.id, status: "quarantine" });
+    },
+  });
+  await assert.rejects(
+    () => __runAssetStyleVerdictForTest(REPO_ROOT, {
+      projectId: fixture.projectId,
+      elementId: fixture.target.id,
+    }, moved.dependencies),
+    (error) => error?.code === "HEAD_CONFLICT",
+  );
+  const stored = getProject(REPO_ROOT, fixture.projectId).elements.find((item) => item.id === fixture.target.id);
+  assert.equal(stored.assetStatus, "quarantine");
+  assert.equal(stored.meta.style_verdict.verdict, "reject", "the stale accept verdict was never committed");
+});
+
+test("runAssetStyleVerdict normalizes an exemplar disappearing during the judge to a head conflict", async (t) => {
+  const fixture = styleVerdictFixture(t);
+
+  await assert.rejects(
+    () => __runAssetStyleVerdictForTest(REPO_ROOT, {
+      projectId: fixture.projectId,
+      elementId: fixture.target.id,
+    }, styleDeps(fixture.lock, styleReport(), {
+      duringRun() {
+        const project = getProject(REPO_ROOT, fixture.projectId);
+        updateProject(REPO_ROOT, fixture.projectId, {
+          elements: project.elements.filter((element) => element.id !== fixture.gui.id),
+        });
+      },
+    }).dependencies),
+    (error) => error?.code === "HEAD_CONFLICT" && /exemplars changed/.test(error.message),
+  );
 });
