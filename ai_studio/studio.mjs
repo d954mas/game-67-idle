@@ -148,6 +148,7 @@ const CHECKS = Object.freeze([
   { id: "reference-template", testFiles: [
     "templates/template/tools/build_web.test.mjs",
     "templates/template/tools/game.test.mjs",
+    "templates/template/tools/lib/studio_root.test.mjs",
     "templates/template/tools/package_web.test.mjs",
     "templates/template/tools/portal_evidence.test.mjs",
   ] },
