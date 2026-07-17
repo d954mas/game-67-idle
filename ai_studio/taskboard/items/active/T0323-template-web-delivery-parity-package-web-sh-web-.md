@@ -45,3 +45,4 @@ frame.
   reopen the canonical ZIP, serve only reopened entries, run headless Chrome
   through CDP, and fail closed on browser errors, readiness, or blank frame.
 - 2026-07-17: Independent review findings resolved: browser smoke is limited to the offline itch/mock target so portal SDK targets retain deterministic package verification; CDP event normalization and canvas-only capture now have direct regression coverage. Focused tests, real itch ZIP proof in Chrome, and full 10-domain verify passed; awaiting Ubuntu/Windows CI.
+- 2026-07-17: CI run 29575827414 failed in the new browser proof on both platforms: Ubuntu exposed a zero-capability graphics backend and Windows did not expose the reserved CDP endpoint. Added a tested launch contract using Chrome-owned DevToolsActivePort plus ANGLE SwiftShader; focused tests and the real local itch ZIP proof pass. Re-running full verify before publishing the CI fix.

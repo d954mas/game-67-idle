@@ -250,32 +250,54 @@ class CdpClient {
   }
 }
 
-async function reserveLoopbackPort() {
-  const probe = createServer();
-  await new Promise((resolveListen, rejectListen) => {
-    probe.once("error", rejectListen);
-    probe.listen(0, "127.0.0.1", resolveListen);
-  });
-  const port = probe.address().port;
-  await new Promise((resolveClose, rejectClose) => probe.close((error) => error ? rejectClose(error) : resolveClose()));
-  return port;
+export function readDevToolsPort(profileDir) {
+  const portFile = join(profileDir, "DevToolsActivePort");
+  try {
+    if (!existsSync(portFile)) return 0;
+    const port = Number(readFileSync(portFile, "utf8").split(/\r?\n/, 1)[0]);
+    return Number.isInteger(port) && port > 0 && port <= 65535 ? port : 0;
+  } catch {
+    return 0;
+  }
 }
 
-async function waitForDebugTarget(port, browser, launchState, timeoutMs) {
+async function waitForDebugTarget(profileDir, browser, launchState, timeoutMs) {
   const deadline = Date.now() + timeoutMs;
+  let discoveredPort = 0;
   while (Date.now() < deadline) {
     if (launchState.error) throw launchState.error;
-    if (browser.exitCode !== null) throw new Error(`browser smoke browser exited ${browser.exitCode}`);
-    try {
-      const targets = await (await fetch(`http://127.0.0.1:${port}/json/list`, { signal: AbortSignal.timeout(1000) })).json();
-      const page = targets.find((target) => target.type === "page" && target.webSocketDebuggerUrl);
-      if (page) return page.webSocketDebuggerUrl;
-    } catch {
-      // Chrome may not have bound the discovery endpoint yet.
+    if (browser.exitCode !== null || browser.signalCode !== null) {
+      throw new Error(`browser smoke browser exited ${browser.exitCode ?? browser.signalCode}`);
+    }
+    if (!discoveredPort) discoveredPort = readDevToolsPort(profileDir);
+    if (discoveredPort) {
+      try {
+        const targets = await (await fetch(`http://127.0.0.1:${discoveredPort}/json/list`, { signal: AbortSignal.timeout(1000) })).json();
+        const page = targets.find((target) => target.type === "page" && target.webSocketDebuggerUrl);
+        if (page) return page.webSocketDebuggerUrl;
+      } catch {
+        // Chrome writes DevToolsActivePort before the discovery endpoint is ready.
+      }
     }
     await delay(100);
   }
-  throw new Error(`browser smoke browser did not expose a CDP page on 127.0.0.1:${port}`);
+  throw new Error(`browser smoke browser did not expose a CDP page (${discoveredPort ? `port ${discoveredPort}` : "DevToolsActivePort missing"})`);
+}
+
+export function chromeLaunchArgs(profileDir) {
+  return [
+    "--headless=new",
+    "--disable-dev-shm-usage",
+    "--enable-unsafe-swiftshader",
+    "--no-first-run",
+    "--no-default-browser-check",
+    "--remote-debugging-port=0",
+    `--user-data-dir=${profileDir}`,
+    "--use-gl=angle",
+    "--use-angle=swiftshader",
+    "--window-size=960,540",
+    "about:blank",
+  ];
 }
 
 export function normalizeBrowserEvent(message) {
@@ -333,26 +355,13 @@ export async function smokePackagedWeb({ zipPath, chromePath, timeoutMs = 45000 
   try {
     profileDir = mkdtempSync(join(tmpdir(), "game-browser-smoke-"));
     debug("temporary browser profile created");
-    const cdpPort = await reserveLoopbackPort();
-    debug(`reserved CDP port ${cdpPort}`);
     const browserPath = findChrome(chromePath);
     debug(`launching ${basename(browserPath)}`);
-    browser = spawn(browserPath, [
-      "--headless=new",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--no-first-run",
-      "--no-default-browser-check",
-      `--remote-debugging-port=${cdpPort}`,
-      `--user-data-dir=${profileDir}`,
-      "--use-gl=swiftshader",
-      "--window-size=960,540",
-      "about:blank",
-    ], { stdio: "ignore", windowsHide: true });
+    browser = spawn(browserPath, chromeLaunchArgs(profileDir), { stdio: "ignore", windowsHide: true });
     launchState = { error: null };
     browser.once("error", (error) => { launchState.error = error; });
-    debug(`browser process launched on CDP port ${cdpPort}`);
-    const target = await waitForDebugTarget(cdpPort, browser, launchState, Math.min(timeoutMs, 15000));
+    debug("browser process launched with Chrome-owned CDP port");
+    const target = await waitForDebugTarget(profileDir, browser, launchState, Math.min(timeoutMs, 30000));
     debug("browser CDP target ready");
     client = new CdpClient(target, (message) => {
       const issue = normalizeBrowserEvent(message);
@@ -397,10 +406,10 @@ export async function smokePackagedWeb({ zipPath, chromePath, timeoutMs = 45000 
       client.close();
     }
     debug("browser close requested");
-    if (browser?.exitCode === null) {
+    if (browser?.exitCode === null && browser?.signalCode === null) {
       await Promise.race([new Promise((resolveExit) => browser.once("exit", resolveExit)), delay(2000)]);
     }
-    if (browser?.exitCode === null) {
+    if (browser?.exitCode === null && browser?.signalCode === null) {
       browser.kill();
       await Promise.race([new Promise((resolveExit) => browser.once("exit", resolveExit)), delay(2000)]);
     }

@@ -9,8 +9,10 @@ import {
   analyzePngFrame,
   assertBrowserSmokeResult,
   canvasScreenshotClip,
+  chromeLaunchArgs,
   findChrome,
   normalizeBrowserEvent,
+  readDevToolsPort,
   startZipServer,
 } from "./browser_smoke.mjs";
 import { crc32, createStoreZip } from "./lib/zip_store.mjs";
@@ -46,6 +48,27 @@ function rgbaPng(width, height, pixels) {
 test("explicit supported-browser path resolves without platform probing", () => {
   assert.equal(findChrome(process.execPath, "win32", {}), resolve(process.execPath));
   assert.throws(() => findChrome(join(tmpdir(), "missing-chrome"), "linux", {}), /does not exist/);
+});
+
+test("headless launch delegates the debug port to Chrome and enables ANGLE SwiftShader", () => {
+  const profile = "C:\\temp\\isolated-profile";
+  const args = chromeLaunchArgs(profile);
+  assert.ok(args.includes("--remote-debugging-port=0"));
+  assert.ok(args.includes(`--user-data-dir=${profile}`));
+  assert.ok(args.includes("--use-gl=angle"));
+  assert.ok(args.includes("--use-angle=swiftshader"));
+  assert.ok(args.includes("--enable-unsafe-swiftshader"));
+  assert.equal(args.includes("--disable-gpu"), false);
+});
+
+test("DevToolsActivePort parser fails closed until Chrome publishes a valid owned port", (t) => {
+  const profile = mkdtempSync(join(tmpdir(), "browser-smoke-profile-"));
+  t.after(() => rmSync(profile, { recursive: true, force: true }));
+  assert.equal(readDevToolsPort(profile), 0);
+  writeFileSync(join(profile, "DevToolsActivePort"), "not-a-port\n/devtools/browser/id\n");
+  assert.equal(readDevToolsPort(profile), 0);
+  writeFileSync(join(profile, "DevToolsActivePort"), "49231\n/devtools/browser/id\n");
+  assert.equal(readDevToolsPort(profile), 49231);
 });
 
 test("ZIP server exposes only reopened package entries", async (t) => {
