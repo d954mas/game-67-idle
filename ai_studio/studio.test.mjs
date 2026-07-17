@@ -181,7 +181,8 @@ test("asset Python unittests share one interpreter while dot-named files stay ex
   assert.equal(result.status, 0);
   assert.equal(calls.length, 4);
   assert.deepEqual(calls[0].slice(0, 4), ["node", "ai_studio/dev_environment/python_run.mjs", "-m", "unittest"]);
-  assert.equal(calls[0].filter((arg) => arg.endsWith("_test.py")).length, 20);
+  assert.equal(calls[0].filter((arg) => arg.endsWith("_test.py")).length, 21);
+  assert.ok(calls[0].includes("ai_studio/assets/tools/image/quality_gate/asset_quality_gate_test.py"));
   assert.equal(calls.slice(1).every((command) => command.at(-1).endsWith(".test.py")), true);
 });
 

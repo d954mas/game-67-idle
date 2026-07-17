@@ -24,6 +24,7 @@ const TOP_LEVEL_KEYS = [
   "bg_rule",
   "exemplar_refs",
   "asset_size",
+  "technical_gate",
   "model_checkpoint",
 ];
 
@@ -45,6 +46,12 @@ function exactKeys(value, keys, label) {
 
 function nonEmptyString(value, label) {
   if (typeof value !== "string" || !value.trim()) throw new Error(`${label} must be a non-empty string`);
+}
+
+function ratio(value, label) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(`${label} must be a ratio in 0..1`);
+  }
 }
 
 function boundedInteger(value, label, minimum = 1, maximum = 4096) {
@@ -113,6 +120,26 @@ export function validateStyleLock(value) {
   exactKeys(value.asset_size, ["width", "height"], "style lock asset_size");
   boundedInteger(value.asset_size.width, "style lock asset_size.width", 64);
   boundedInteger(value.asset_size.height, "style lock asset_size.height", 64);
+
+  exactKeys(value.technical_gate, [
+    "max_spill_edge_ratio",
+    "max_halo_edge_ratio",
+    "max_alpha_noise_ratio",
+    "max_empty_margin_ratio",
+    "max_aspect_relative_error",
+  ], "style lock technical_gate");
+  if (value.bg_rule.mode === "chroma") {
+    if (value.technical_gate.max_spill_edge_ratio === null || value.technical_gate.max_halo_edge_ratio === null) {
+      throw new Error("style lock chroma technical_gate requires spill and halo ratios");
+    }
+    ratio(value.technical_gate.max_spill_edge_ratio, "style lock technical_gate.max_spill_edge_ratio");
+    ratio(value.technical_gate.max_halo_edge_ratio, "style lock technical_gate.max_halo_edge_ratio");
+  } else if (value.technical_gate.max_spill_edge_ratio !== null || value.technical_gate.max_halo_edge_ratio !== null) {
+    throw new Error("style lock transparent technical_gate requires spill and halo to be null");
+  }
+  ratio(value.technical_gate.max_alpha_noise_ratio, "style lock technical_gate.max_alpha_noise_ratio");
+  ratio(value.technical_gate.max_empty_margin_ratio, "style lock technical_gate.max_empty_margin_ratio");
+  ratio(value.technical_gate.max_aspect_relative_error, "style lock technical_gate.max_aspect_relative_error");
 
   if (value.model_checkpoint !== null) throw new Error("style lock model_checkpoint is parked and must remain null in v1");
   return value;

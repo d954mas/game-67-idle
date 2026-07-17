@@ -1,13 +1,13 @@
 ---
 id: T0317
 title: "AI Studio: арт-гейт против битых вырезок - авто-проверка альфы/фона/обрезки до попадания ассета в игру"
-status: backlog
+status: doing
 project: P001
 epic: E010
 priority: P1
 tags: [assets, quality, art-gate, vibejam-retro]
 created: 2026-07-05
-updated: 2026-07-14
+updated: 2026-07-17
 ---
 
 ## What
@@ -32,9 +32,14 @@ cutout/slice-операций image tools + promote в ассеты игры (nt
 
 ## Open questions
 
-- Порог spill/halo: фиксированный или per-style из art_contract?
+- Resolved 2026-07-17: thresholds are per-style in
+  `design/style_lock.json#technical_gate`; T0317 owns the metric formulas and
+  corpus calibration, while the broader art contract remains taste/review
+  guidance.
 
 ## Log
 
 - 2026-07-06: заполнен из ретро-разбора (пункт 2 плана); решение лида о
   размещении гейта на этапе подготовки ассетов зафиксировано.
+- 2026-07-17: Started slice 1 after T0326 increment 1: define calibrated post-cutout metric formulas and a fail-closed evaluator/CLI with synthetic clean-vs-broken corpus and problem thumbnail. This slice will add threshold fields to style_lock only after formulas exist; alpha/canvas/promote wiring remains a later slice. T0258 is a separate weak-alpha product-choice optimization and does not block this gate.
+- 2026-07-17: Slice 1 complete: added deterministic post-cutout spill, halo, alpha-noise, empty-margin, and aspect formulas; fail-closed CLI/reporting; stale-thumbnail cleanup on every invocation; synthetic clean/broken regression corpus; and per-style technical_gate thresholds. Independent review clean. Focused suites, changed verify, architecture validation, Taskboard/doc-reference checks, diff check, and full 10-domain verify pass. Canvas alpha-output and asset-promote wiring plus real jam-corpus calibration remain for later slices.

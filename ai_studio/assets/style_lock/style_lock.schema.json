@@ -18,6 +18,7 @@
     "bg_rule",
     "exemplar_refs",
     "asset_size",
+    "technical_gate",
     "model_checkpoint"
   ],
   "properties": {
@@ -93,8 +94,60 @@
       }
     },
     "asset_size": { "$ref": "#/$defs/size" },
+    "technical_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_spill_edge_ratio",
+        "max_halo_edge_ratio",
+        "max_alpha_noise_ratio",
+        "max_empty_margin_ratio",
+        "max_aspect_relative_error"
+      ],
+      "properties": {
+        "max_spill_edge_ratio": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "max_halo_edge_ratio": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+        "max_alpha_noise_ratio": { "$ref": "#/$defs/ratio" },
+        "max_empty_margin_ratio": { "$ref": "#/$defs/ratio" },
+        "max_aspect_relative_error": { "$ref": "#/$defs/ratio" }
+      }
+    },
     "model_checkpoint": { "type": "null" }
   },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "bg_rule": {
+            "type": "object",
+            "required": ["mode"],
+            "properties": { "mode": { "const": "chroma" } }
+          }
+        },
+        "required": ["bg_rule"]
+      },
+      "then": {
+        "properties": {
+          "technical_gate": {
+            "properties": {
+              "max_spill_edge_ratio": { "type": "number" },
+              "max_halo_edge_ratio": { "type": "number" }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "technical_gate": {
+            "properties": {
+              "max_spill_edge_ratio": { "type": "null" },
+              "max_halo_edge_ratio": { "type": "null" }
+            }
+          }
+        }
+      }
+    }
+  ],
   "$defs": {
     "canvasGroupRef": {
       "type": "string",
@@ -104,6 +157,7 @@
       "type": "string",
       "pattern": "^canvas://(?:(?:game/[a-z][a-z0-9-]*/)?[A-Za-z0-9_-]+)/element/[A-Za-z0-9_-]+$"
     },
+    "ratio": { "type": "number", "minimum": 0, "maximum": 1 },
     "size": {
       "type": "object",
       "additionalProperties": false,

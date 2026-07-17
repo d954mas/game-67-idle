@@ -25,8 +25,8 @@ file inside that game's physical design directory.
 brief: audience, fantasy, materials, camera, UI hierarchy, and yes/no
 references. `design/style_lock.json` is its compact operational twin. It links
 back through `art_contract_ref` and owns only repeatable prompt inputs, accepted
-owned exemplars, background preparation, and asset dimensions. Do not copy the
-whole art contract into the lock.
+owned exemplars, background preparation, asset dimensions, and calibrated
+technical-gate thresholds. Do not copy the whole art contract into the lock.
 
 `draft` is exploration state. `accepted` means the lead has chosen one shared
 direction for world/sprites and GUI. Later T0326 increments enforce generation,
@@ -60,14 +60,18 @@ Palette feeds prompts and review context; it is not a palette-distance gate.
 - A non-empty prompt preamble and negative prompt.
 - 2-12 unique colors and an explicit transparent or magenta/green chroma rule.
 - 2-3 owned Canvas exemplars with both world and GUI represented.
-- Fixed generation size.
+- Fixed generation size and complete deterministic gate thresholds. Chroma
+  locks require spill/halo ratios; native-transparent locks use `null` for
+  those two color-key metrics.
 - `model_checkpoint` stays `null`; per-game LoRA/checkpoints remain parked for
   long projects and require a future schema version.
 
 T0317 owns the measurement formulas and calibration evidence for deterministic
-background, alpha, crop, and aspect checks. It will add only the threshold
-fields those formulas can consume; this increment deliberately does not freeze
-metric names or denominators early.
+background, alpha, crop, and aspect checks. The formulas and exact mapping from
+`technical_gate` plus `asset_size` are defined in the
+[post-cutout quality gate](../tools/image/quality_gate/README.md). Accept a
+game's values only after its real broken/clean corpus separates; the committed
+example is synthetic contract evidence, not universal tuning.
 
 Vision/style acceptance remains advisory against exemplars plus Do/Don't, with
 the lead as backstop. No CLIP, embedding, or palette-delta gate is part of v1.

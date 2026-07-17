@@ -18,6 +18,9 @@ test("committed example and schema expose the v1 style-lock contract", () => {
   assert.equal(schema.properties.exemplar_refs.allOf.length, 2);
   assert.match(schema.$comment, /validate\.mjs.*same Canvas project/i);
   assert.equal("technical_thresholds" in schema.properties, false);
+  assert.ok(schema.properties.technical_gate);
+  assert.equal(schema.allOf[0].then.properties.technical_gate.properties.max_spill_edge_ratio.type, "number");
+  assert.equal(schema.allOf[0].else.properties.technical_gate.properties.max_spill_edge_ratio.type, "null");
   assert.deepEqual(validateStyleLock(example), example);
 });
 
@@ -65,6 +68,26 @@ test("parked model checkpoints stay unused", () => {
   const checkpoint = clone(example);
   checkpoint.model_checkpoint = "style-v1.safetensors";
   assert.throws(() => validateStyleLock(checkpoint), /model_checkpoint.*null/i);
+});
+
+test("technical gate thresholds are complete and conditional on background mode", () => {
+  const invalidRatio = clone(example);
+  invalidRatio.technical_gate.max_alpha_noise_ratio = 1.1;
+  assert.throws(() => validateStyleLock(invalidRatio), /max_alpha_noise_ratio.*0\.\.1/i);
+
+  const transparent = clone(example);
+  transparent.bg_rule.mode = "transparent";
+  transparent.bg_rule.key_color = null;
+  transparent.technical_gate.max_spill_edge_ratio = null;
+  transparent.technical_gate.max_halo_edge_ratio = null;
+  assert.doesNotThrow(() => validateStyleLock(transparent));
+
+  transparent.technical_gate.max_spill_edge_ratio = 0.05;
+  assert.throws(() => validateStyleLock(transparent), /transparent.*spill.*halo.*null/i);
+
+  const keyedWithoutThreshold = clone(example);
+  keyedWithoutThreshold.technical_gate.max_spill_edge_ratio = null;
+  assert.throws(() => validateStyleLock(keyedWithoutThreshold), /chroma.*spill.*halo.*ratios/i);
 });
 
 test("file validation binds a lock to its game path and existing art contract", () => {
