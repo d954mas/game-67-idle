@@ -1,7 +1,7 @@
 ---
 id: T0317
 title: "AI Studio: арт-гейт против битых вырезок - авто-проверка альфы/фона/обрезки до попадания ассета в игру"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P1
@@ -24,7 +24,7 @@ cutout/slice-операций image tools + promote в ассеты игры (nt
 
 ## Done when
 
-- [ ] Автопроверка запускается на выходе alpha_matte/alpha_dualplate/corridorkey
+- [x] Автопроверка запускается на выходе alpha_matte/alpha_dualplate/corridorkey
       и при promote ассета в games/<id>/assets/: fail при spill/halo/bbox-браке.
 - [x] На corpus джема (location_scene_sprites_01 и соседние паки) гейт ловит
       известный битый ассет с зелёным фоном и не флажит принятые чистые.
@@ -45,8 +45,8 @@ cutout/slice-операций image tools + promote в ассеты игры (nt
 - 2026-07-17: Started slice 1 after T0326 increment 1: define calibrated post-cutout metric formulas and a fail-closed evaluator/CLI with synthetic clean-vs-broken corpus and problem thumbnail. This slice will add threshold fields to style_lock only after formulas exist; alpha/canvas/promote wiring remains a later slice. T0258 is a separate weak-alpha product-choice optimization and does not block this gate.
 - 2026-07-17: Slice 1 complete: added deterministic post-cutout spill, halo, alpha-noise, empty-margin, and aspect formulas; fail-closed CLI/reporting; stale-thumbnail cleanup on every invocation; synthetic clean/broken regression corpus; and per-style technical_gate thresholds. Independent review clean. Focused suites, changed verify, architecture validation, Taskboard/doc-reference checks, diff check, and full 10-domain verify pass. Canvas alpha-output and asset-promote wiring plus real jam-corpus calibration remain for later slices.
 - 2026-07-17: Slice 2 adds the trusted Canvas checked-transition seam: `asset-status-check` resolves the accepted game style lock, maps its thresholds, runs the real evaluator outside the project lock, then stores frozen evidence and PASS→checked / FAIL→quarantine in one conflict-safe journal step. CLI/API bodies cannot supply verdict evidence. A real adapter test also closed a warm-worker PYTHONPATH parity gap. Automatic alpha-output invocation, promote enforcement, and jam-corpus calibration remain open, so no Done-when checkbox closes yet.
-- 2026-07-17: 2026-07-17: Slice 3 auto-wires the trusted technical gate into manual alphaDualPlate: accepted-lock PASS mints checked, FAIL stays quarantine with frozen thumbnail evidence, Explore/no accepted lock stays quarantine, and HEAD_CONFLICT is checked before mint; API/CLI share the op's single lock and one undo.
-- 2026-07-17: 2026-07-17: Quality: QTECH_001=pass; evidence: focused alphaDualPlate auto-gate tests prove PASS->checked, FAIL->quarantine+thumbnail, Explore quarantine, one journal/undo, pre-mint HEAD_CONFLICT, and API/CLI lock parity; independent review clean; changed/full verify green.
+- 2026-07-17: Slice 3 auto-wires the trusted technical gate into manual alphaDualPlate: accepted-lock PASS mints checked, FAIL stays quarantine with frozen thumbnail evidence, Explore/no accepted lock stays quarantine, and HEAD_CONFLICT is checked before mint; API/CLI share the op's single lock and one undo.
+- 2026-07-17: Quality: QTECH_001=pass; evidence: focused alphaDualPlate auto-gate tests prove PASS->checked, FAIL->quarantine+thumbnail, Explore quarantine, one journal/undo, pre-mint HEAD_CONFLICT, and API/CLI lock parity; independent review clean; changed/full verify green.
 - 2026-07-17: Slice 4 auto-wires the trusted technical gate into the shared alphaCutout single/batch mint path, covering matte, corridorkey, vitmatte, and birefnet. PASS/FAIL evidence is committed with the copy in one undo; Explore remains quarantine; evaluator failure or HEAD_CONFLICT occurs before the first mint.
 - 2026-07-17: Quality: QTECH_001=pass; evidence: focused alphaCutout single/batch tests cover exact output bytes, PASS/FAIL evidence, Explore quarantine, evaluator refusal, one undo, pre-mint HEAD_CONFLICT, and API/CLI lock parity; independent review clean; changed/full verify green
 - 2026-07-17: Slice 5 calibrates the committed evaluator against preserved assets from rb-dark-rpg-vibejam1-2026-07-05: the known mill-scavenger green-spill cutout fails key_spill and edge_halo with a one-line verdict plus thumbnail, while the accepted neighboring pack passes. Fixture origin, project-internal license, source paths/blob ids, dimensions, and SHA-256 are frozen in the corpus manifest. Existing formulas and thresholds already separate the corpus, so no relaxation was made.
@@ -56,3 +56,5 @@ cutout/slice-операций image tools + promote в ассеты игры (nt
 - 2026-07-17: Quality: QTECH_001=pass; evidence: archived ancestor-tag blobs are verified by Git object id plus SHA-256, known spill fails, accepted city-style-v2 prop passes, exact one-line verdict and bounded PNG thumbnail; focused and inventory suites green; independent review clean; full verify pending CI correction publication
 - 2026-07-17: CI correction local verification is green: focused quality-gate 7/7, tracked-binary inventory 20/20, changed verify across harness/assets/work-management, and full verify across all 10 domains.
 - 2026-07-17: Quality: QTECH_001=pass; evidence: ancestor-tag blobs verified by Git object id plus SHA-256; known spill fails and accepted city-style-v2 prop passes; exact one-line verdict and bounded PNG thumbnail; focused 7/7, inventory 20/20, changed 3-domain and full 10-domain verify green; independent CI-fix review pending
+- 2026-07-17: Closeout dependency proof: combined alpha and asset-promotion suite ran 54 tests (52 pass, 2 expected environment skips). alphaCutout covers matte/corridorkey and alphaDualPlate freezes automatic PASS/FAIL evidence in the same undoable commit; asset-promote refuses non-accepted, forged, stale, or non-publishable art before writing. The final Done criterion is satisfied by the already-reviewed Slice 3/4 and T0326 increment 6 boundaries; no duplicate implementation is needed.
+- 2026-07-17: Closeout quality: combined alpha/promotion suite passed 52 with 2 expected environment skips; Taskboard and diff checks pass; final full Studio verify passed all 10 domains. Two unrelated one-off failures (test_game_save and asset-promotion timing) passed exact reruns before the final clean full run.
