@@ -29,7 +29,31 @@ node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/itera
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/iterate.py 17890 --reuse --json
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/ui_readability.py tmp/captures/screenshot.png
 node ai_studio/dev_environment/python_run.mjs ai_studio/runtime_automation/pixel_health.py tmp/captures/screenshot.png
+node ai_studio/runtime_automation/web_local_mock_probe.mjs --url http://127.0.0.1:8092/ --cdp http://127.0.0.1:9222 --out tmp/local-mock-observation.json
 ```
+
+## Local mock web proof
+
+`web_local_mock_probe.mjs` connects to an isolated Chromium/Chrome page through
+raw CDP using Node's built-in `WebSocket`; it has no Puppeteer dependency and
+never navigates outside localhost. Start the exact local mock build's static
+server, then start a fresh headless browser with a local debugging endpoint,
+for example `--headless=new --remote-debugging-port=9222
+--user-data-dir=<fresh-temp-dir> --use-angle=swiftshader
+--enable-unsafe-swiftshader about:blank`.
+
+The probe creates its own page target, instruments the loading hooks before any
+page script runs, and enables console, exception, and network capture before
+navigation. It passes only when a `release:true` local mock page receives final
+progress and loading-finished through the named C-to-JS bridge functions, hides
+the overlay, exposes a non-zero render canvas, stays entirely on loopback, and
+reports no errors. One absolute timeout covers target creation, WebSocket/CDP
+calls, navigation, polling, and cleanup.
+
+The deterministic output is deliberately a runtime observation, not release
+evidence: a separately supplied ZIP hash would not prove that the observed page
+came from those bytes. Portal attachment remains `unverified` until packaging
+and the local build expose a shared, mechanically checked build fingerprint.
 
 ## Native source-to-runtime proof
 
