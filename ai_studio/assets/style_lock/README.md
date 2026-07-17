@@ -29,9 +29,12 @@ owned exemplars, background preparation, asset dimensions, and calibrated
 technical-gate thresholds. Do not copy the whole art contract into the lock.
 
 `draft` is exploration state. `accepted` means the lead has chosen one shared
-direction for world/sprites and GUI. Later T0326 increments enforce generation,
-quarantine, status, and promotion behavior; v1 validation alone does not claim
-that those gates already exist.
+direction for world/sprites and GUI. Recipe and pack generation on a game-owned
+Canvas project is production mode: it requires the accepted game lock before any
+paid generation and freezes its `id` into `element.meta.origin`. `--no-lock`
+explicitly switches that run to explore mode and records a visible `no-lock`
+taint; unowned Canvas projects remain untainted exploration workspaces. Animation
+and dual-plate generation adopt the same origin contract in the next slice.
 
 ## Canvas convention
 

@@ -12,6 +12,7 @@ import { runAnimateFromText } from "../tools/animation_assist.mjs";
 import { frontOrder } from "../tree.mjs";
 import { validateAnimation } from "../animation.mjs";
 import { addFile as storeAddFile, addGeneratedImage as storeAddImage, capToolRuns, getProject, resolveProjectFile, updateProject, withProjectLock } from "../store.mjs";
+import { resolveGenerationOrigin } from "../../style_lock/generation_origin.mjs";
 import { commitMutation, finite, groupsOf, hexColor, refuseIfHeadMoved } from "./core.mjs";
 import { findGroup } from "./groups.mjs";
 
@@ -538,7 +539,7 @@ export function recipeCardMembers(project, cardId) {
   return (project.elements || []).filter((el) => el.groupId === cardId && el.type === "image" && el.visible !== false);
 }
 
-export async function generateFromRecipe(root, { projectId, groupId, generators, runGroupId, sheetSlug } = {}) {
+export async function generateFromRecipe(root, { projectId, groupId, generators, runGroupId, sheetSlug, noLock = false } = {}) {
   if (!projectId) throw new Error("generateFromRecipe requires projectId");
   if (!groupId) throw new Error("generateFromRecipe requires groupId");
   const startedAt = performance.now();
@@ -557,7 +558,7 @@ export async function generateFromRecipe(root, { projectId, groupId, generators,
   // single-image branch below never reads them. Everything from here down this function is
   // the ORIGINAL single-image branch, UNCHANGED by this increment.
   if (recipe.pack) {
-    return generatePackSheets(root, { projectId, groupId, generators, runGroupId, sheetSlug, before, card, recipe, cardLabel, startedAt });
+    return generatePackSheets(root, { projectId, groupId, generators, runGroupId, sheetSlug, before, card, recipe, cardLabel, startedAt, noLock });
   }
 
   const promptText = resolveRecipePromptText(recipe);
@@ -618,6 +619,7 @@ export async function generateFromRecipe(root, { projectId, groupId, generators,
   // reading a ref) lives in tools/recipe_generate.mjs's generateImageGemini/verifyAgyRefProof,
   // not here.
   const gens = { codex: generateImageCodex, gemini: generateImageGemini, ...(generators || {}) };
+  const generationOrigin = resolveGenerationOrigin(root, before, { noLock });
   const attempts = [];
   if (requestedEngine === "both") {
     attempts.push({ engine: "codex" });
@@ -673,6 +675,7 @@ export async function generateFromRecipe(root, { projectId, groupId, generators,
         x: startX,
         y: cursorY,
         meta: {
+          origin: generationOrigin,
           recipe: {
             cardId: groupId,
             engine: result.engine,
@@ -1203,7 +1206,7 @@ export function findForcedSheetReplacementTargets(project, runGroupId, cardId, j
 // before/after diff — this function does not special-case that itself.
 export async function commitPackSheetOutcome(root, projectId, {
   groupId, sheetBefore, job, sheetName, engine, jobSheetAxes, mintPayload, currentRunGroupId, styleSnapshot, varyAxis,
-  at, failedSoFar, isLast, priorResults, outcomeStatus, outcomeError, refSrcs, recipe, startedAt, forced,
+  at, failedSoFar, isLast, priorResults, outcomeStatus, outcomeError, refSrcs, recipe, startedAt, forced, generationOrigin,
 }) {
   return withProjectLock(root, projectId, () => {
     const current = getProject(root, projectId);
@@ -1257,7 +1260,11 @@ export async function commitPackSheetOutcome(root, projectId, {
         }
       }
 
-      const added = storeAddImage(root, projectId, { name: sheetName, bytes: mintPayload.bytes, meta: { pack: mintPayload.meta } });
+      const added = storeAddImage(root, projectId, {
+        name: sheetName,
+        bytes: mintPayload.bytes,
+        meta: { origin: generationOrigin, pack: mintPayload.meta },
+      });
       workingProject = added.project;
       mintedElementId = added.element.id;
 
@@ -1351,7 +1358,7 @@ export async function commitPackSheetOutcome(root, projectId, {
 // same `{prompt, refPaths, params}` seam as the single-image branch; each sheet records the
 // engine that ACTUALLY generated it in meta.pack, and sheet identity everywhere (resume dedup,
 // forced replace) is the (sheet_axes, engine) pair, legacy engineless sheets counting as codex.
-export async function generatePackSheets(root, { projectId, groupId, generators, runGroupId, sheetSlug, before, card, recipe, cardLabel, startedAt }) {
+export async function generatePackSheets(root, { projectId, groupId, generators, runGroupId, sheetSlug, before, card, recipe, cardLabel, startedAt, noLock = false }) {
   const { config: baseConfig, styleSnapshot } = buildPackConfig(before, card);
 
   // opts.sheetSlug WITHOUT an explicit opts.runGroupId (deep-review поправка, 2026-07-07): a
@@ -1415,6 +1422,7 @@ export async function generatePackSheets(root, { projectId, groupId, generators,
   // Expand FRESH (build-spec: "пересобрать config и вызвать экспандер СВЕЖИМ") — a brand-new
   // tmp workDir + config, never packPreview's (torn down before generation even starts here;
   // out_dir/job.out/job.input_image are dead fields on the canvas path either way).
+  const generationOrigin = resolveGenerationOrigin(root, before, { noLock });
   const workDir = mkdtempSync(join(tmpdir(), "canvas-pack-gen-"));
   let jobs;
   try {
@@ -1501,7 +1509,7 @@ export async function generatePackSheets(root, { projectId, groupId, generators,
           const sheetBefore = getProject(root, projectId);
           const outcome = await commitPackSheetOutcome(root, projectId, {
             groupId, sheetBefore, job, sheetName, engine, jobSheetAxes, mintPayload: null, currentRunGroupId, styleSnapshot, varyAxis, at,
-            failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "skipped", refSrcs, recipe, startedAt,
+            failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "skipped", refSrcs, recipe, startedAt, generationOrigin,
           });
           results.push(outcome.resultRow);
           currentRunGroupId = outcome.targetGroupId;
@@ -1524,7 +1532,7 @@ export async function generatePackSheets(root, { projectId, groupId, generators,
         failed.push({ sheet_axes: jobSheetAxes, engine, error: genError.message });
         const outcome = await commitPackSheetOutcome(root, projectId, {
           groupId, sheetBefore, job, sheetName, engine, jobSheetAxes, mintPayload: null, currentRunGroupId, styleSnapshot, varyAxis, at,
-          failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "failed", outcomeError: genError.message, refSrcs, recipe, startedAt,
+          failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "failed", outcomeError: genError.message, refSrcs, recipe, startedAt, generationOrigin,
         });
         results.push(outcome.resultRow);
         currentRunGroupId = outcome.targetGroupId;
@@ -1546,7 +1554,7 @@ export async function generatePackSheets(root, { projectId, groupId, generators,
       };
       const outcome = await commitPackSheetOutcome(root, projectId, {
         groupId, sheetBefore, job, sheetName, engine, jobSheetAxes, mintPayload: { bytes, meta }, currentRunGroupId, styleSnapshot, varyAxis, at,
-        failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "ok", refSrcs, recipe, startedAt, forced,
+        failedSoFar: failed, isLast, priorResults: results, outcomeStatus: "ok", refSrcs, recipe, startedAt, forced, generationOrigin,
       });
       results.push(outcome.resultRow);
       currentRunGroupId = outcome.targetGroupId;

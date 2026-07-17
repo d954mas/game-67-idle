@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { validateStyleLock, validateStyleLockFile } from "./validate.mjs";
+import { resolveGenerationOrigin } from "./generation_origin.mjs";
 
 const readJson = (relative) => JSON.parse(readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8"));
 const example = readJson("./style_lock.example.json");
@@ -22,6 +23,71 @@ test("committed example and schema expose the v1 style-lock contract", () => {
   assert.equal(schema.allOf[0].then.properties.technical_gate.properties.max_spill_edge_ratio.type, "number");
   assert.equal(schema.allOf[0].else.properties.technical_gate.properties.max_spill_edge_ratio.type, "null");
   assert.deepEqual(validateStyleLock(example), example);
+});
+
+test("generation origin distinguishes explore, locked production, and explicit no-lock taint", () => {
+  const root = mkdtempSync(join(tmpdir(), "style-lock-origin-"));
+  try {
+    const unowned = resolveGenerationOrigin(root, {});
+    assert.deepEqual(unowned, {
+      schema: "ai_studio.asset.generation_origin.v1",
+      source: "ai",
+      mode: "explore",
+      game_id: null,
+      style_lock_id: null,
+      tainted: false,
+      taint_reason: null,
+    });
+
+    const ownedProject = { ownership: { kind: "game", gameId: example.game_id } };
+    assert.throws(
+      () => resolveGenerationOrigin(root, { ownership: { kind: "other", gameId: example.game_id } }),
+      /ownership must be.*kind:game/i,
+    );
+    assert.throws(
+      () => resolveGenerationOrigin(root, { ownership: { kind: "game", gameId: "private/example-game" } }),
+      /ownership\.gameId must be a lowercase slug/i,
+    );
+    assert.throws(
+      () => resolveGenerationOrigin(root, { ownership: { kind: "game", gameId: "" } }, { noLock: true }),
+      /ownership\.gameId must be a lowercase slug/i,
+    );
+    assert.throws(
+      () => resolveGenerationOrigin(root, ownedProject),
+      /production generation requires.*style_lock\.json.*--no-lock/i,
+    );
+    assert.deepEqual(resolveGenerationOrigin(root, ownedProject, { noLock: true }), {
+      schema: "ai_studio.asset.generation_origin.v1",
+      source: "ai",
+      mode: "explore",
+      game_id: example.game_id,
+      style_lock_id: null,
+      tainted: true,
+      taint_reason: "no-lock",
+    });
+
+    const designDir = join(root, "games", example.game_id, "design");
+    mkdirSync(join(designDir, "art"), { recursive: true });
+    writeFileSync(join(designDir, "art", "art_contract.json"), "{}\n");
+    const lockPath = join(designDir, "style_lock.json");
+    writeFileSync(lockPath, `${JSON.stringify(example, null, 2)}\n`);
+    assert.deepEqual(resolveGenerationOrigin(root, ownedProject), {
+      schema: "ai_studio.asset.generation_origin.v1",
+      source: "ai",
+      mode: "production",
+      game_id: example.game_id,
+      style_lock_id: example.id,
+      tainted: false,
+      taint_reason: null,
+    });
+
+    const draft = clone(example);
+    draft.status = "draft";
+    writeFileSync(lockPath, `${JSON.stringify(draft, null, 2)}\n`);
+    assert.throws(() => resolveGenerationOrigin(root, ownedProject), /requires an accepted style lock/i);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("style lock requires 2-3 owned Canvas exemplars covering world and GUI", () => {

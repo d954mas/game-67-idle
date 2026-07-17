@@ -811,6 +811,7 @@ export function createCanvasApi(root) {
       // optional, pack-only — the single-image branch above ignores them, see
       // generateFromRecipe's own doc) resume an existing run / force-regenerate exactly one
       // sheet — the same body fields the inspector's Pack "Generate"/"Regenerate" buttons send.
+      // body.noLock=true explicitly bypasses a game style lock and taints the frozen origin.
       if (parts.length === 7 && sub === "recipe-cards" && parts[6] === "generate" && req.method === "POST") {
         const groupId = decodeURIComponent(parts[5]);
         const body = await readJsonBody(req);
@@ -819,6 +820,7 @@ export function createCanvasApi(root) {
           groupId,
           runGroupId: body.runGroupId,
           sheetSlug: body.sheetSlug,
+          noLock: body.noLock ?? false,
         }));
         return true;
       }

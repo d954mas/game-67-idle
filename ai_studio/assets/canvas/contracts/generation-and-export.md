@@ -7,6 +7,15 @@ reported explicitly. Every newly minted generated or pixel-derived image enters
 the asset review workflow with top-level `assetStatus: "quarantine"`; ordinary
 user imports remain untracked until a review operation enrolls them.
 
+Recipe and pack generation freeze `meta.origin` before slow/paid work. Unowned
+Canvas projects record untainted `explore` origin. Game-owned projects default to
+`production`, require an accepted `design/style_lock.json`, and stamp its stable
+lock id. CLI `--no-lock` / API `noLock: true` is the explicit escape hatch: it
+generates quarantined explore output with `tainted: true` and
+`taint_reason: "no-lock"`. Missing/draft/invalid production locks refuse before a
+generator call. Animation and dual-plate generation are not wired to this origin
+resolver yet.
+
 Long generation runs happen outside the project lock. Their short final commit
 must still validate the current project/history head, import immutable output,
 record provenance, and journal one accepted result. A generated result lands
