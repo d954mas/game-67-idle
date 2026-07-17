@@ -92,3 +92,33 @@ exemplars; it does not run with the repository as its working directory.
 The verdict freezes the complete style lock, and the lead action rechecks that
 snapshot plus current technical thresholds/key and exemplar sources. Any
 changed contract or canon requires fresh checks before acceptance.
+
+## Style library seed
+
+Search accepted past-game locks before rebuilding a direction from scratch. Seed
+a new game's draft lock and its owned Canvas exemplar copies with:
+
+```powershell
+node ai_studio/assets/style_lock/seed.mjs --game <new-game-id> --from games/<past-game-id>/design/style_lock.json
+```
+
+The source must be an accepted, workspace-validated game lock with live physical
+Canvas exemplar files. The target game and its matching `art_contract_ref` must
+already exist, and `design/style_lock.json` must not. The operation creates a
+new game-owned Canvas project, verifies each content-addressed source hash, and
+copies only the 2–3 immutable exemplar bytes into a `passport` style card under
+its `style` group. The card mirrors `prompt_preamble`, uses the first copied
+image as its ref, and sits beside seeded `palette`, `references`, and `do-dont`
+child groups. The operation records source lock/Canvas provenance and writes a
+target-owned lock with a fresh `<game>-style-v1` id and `status: "draft"`.
+Prompt, Don't, palette, background, size, and calibrated technical thresholds
+are seeded; acceptance never transfers across games. Public and private Canvas
+refs remain store-canonical. Nothing is copied into either game's `assets/`, and
+there is no overwrite or force option. A target-scoped cross-process lock uses
+an atomic PID/token-owned reclaim directory with a hard-link snapshot of the
+exact stale inode. Abandoned claims are ownership-checked and atomically moved
+aside before cleanup, including process death on either side of stale-lock
+unlink; the final lock also commits with an atomic no-replace hard link. A restart
+marker keeps the Canvas project and lock file paired across concurrent calls or
+process death: a failed prepared transaction is recoverably trashed before a
+retry, while an atomically committed lock preserves its project.

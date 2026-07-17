@@ -1,7 +1,7 @@
 ---
 id: T0326
 title: "style lock: canvas style group + style_lock.json + acceptance gate in asset pipeline"
-status: doing
+status: review
 project: P001
 epic: E010
 priority: P1
@@ -65,7 +65,7 @@ starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
 - [x] 6. Hard gate at promote: only `accepted` assets can enter
       `games/<id>/assets/` (and therefore the pack); quarantined art stays in
       canvas/staging, visible but not promotable.
-- [ ] 7. Style library: `--from <past-game-lock>` seeds a new game's lock.
+- [x] 7. Style library: `--from <past-game-lock>` seeds a new game's lock.
 
 ## Open questions
 
@@ -109,3 +109,9 @@ starts QUARANTINED, flag visible in canvas; only accepted art reaches the game):
 - 2026-07-17: Increment 6 second review hardening makes the cross-process lock ownership-safe (live-PID check, unique release token, torn-lock age recovery), physically confines Canvas source files, and adds prepared/committed transaction recovery for process death between pack renames. Real child-process tests cover a live holder beyond the stale threshold and restart after a forced exit with an orphan destination.
 - 2026-07-17: Increment 6 final transaction hardening keeps committed markers authoritative through cleanup, revalidates physical recovery ancestors before deletion, opens fixed marker temps exclusively, and restricts promotion to Canvas image extensions. Regression tests force death during committed cleanup, replace recovery files with a junction, pre-plant a marker temp, and reject a hash-valid non-image extension.
 - 2026-07-17: Quality: QTECH_001=pass; evidence: combined promotion, accepted-evidence, API, and CLI suite passed 76/76; changed verify passed assets/work-management; final full Studio verify passed all 10 domains; independent final re-review passed promotion tests 12/12 and found no remaining actionable issues.
+- 2026-07-17: Increment 6 published in draft PR #18. GitHub Actions run 29612530974 passed blocking Studio verification on Ubuntu (3m52s) and Windows (4m56s).
+- 2026-07-17: Increment 7 implementation complete: style_lock/seed.mjs requires an accepted workspace past-game lock, copies its 2–3 live owned exemplars into a new target-owned Canvas `style` group with source provenance, and writes a fresh target `draft` lock through an exclusive no-overwrite boundary. Prompt/Don't, palette, background, dimensions, and calibrated technical thresholds transfer; acceptance and game assets do not. Public/private refs remain store-canonical. All seven T0326 increments are now implemented; quality and publication gates remain.
+- 2026-07-17: Increment 7 review hardening builds the full portable Canvas convention (`style` + `passport` style card + palette/references/do-dont children), binds the card prompt/ref/membership, and verifies every accepted exemplar's content-addressed hash before copy. A target-scoped PID/token lock plus restart marker and atomic lock-file commit recover process death without leaving a live orphan; real child-process tests cover project/temp crashes and concurrent seeds, with private-target routing also covered.
+- 2026-07-17: Increment 7 concurrency re-review hardening replaces the final precheck/rename with an atomic no-replace hard link and serializes dead-lock reclamation through a fixed hard-link claim on the exact stale inode, closing POSIX overwrite and stale-lock ABA races. Tests preserve a competing final writer, race three processes over one dead stale lock, and preserve a committed project/lock pair after process death.
+- 2026-07-17: Increment 7 crash-window hardening gives the reclaim election its own PID/token-owned atomic directory and retains the exact stale inode as an inner hard link. A later process atomically moves aside only a dead owner's claim, so breaker death before or after stale-lock unlink recovers without ABA or permanent blockage; unexpected reclaim errors release their claim before surfacing. Forced-kill and injected-error regressions cover both boundaries.
+- 2026-07-17: Quality: QTECH_001=pass; evidence: focused seed suite passed 13/13 and combined style-lock suite passed 22/22; changed verify passed assets/work-management; Taskboard, doc-reference, architecture-map, and diff checks are clean; final full Studio verify passed all 10 domains; independent final re-review found no actionable issues.
