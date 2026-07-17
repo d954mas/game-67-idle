@@ -56,6 +56,7 @@
 //   POST   /api/canvas/projects/<id>/elements/<eid>/asset-status-check {} (runs the trusted technical gate; PASS -> checked, FAIL -> quarantine; one entry)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/asset-style-check {} (runs trusted advisory vision compare; stores evidence without accepting)
 //   POST   /api/canvas/projects/<id>/elements/<eid>/asset-style-decision {decision,reason} (explicit lead backstop; accept -> accepted, revise/reject -> quarantine)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/asset-promote {metadata} (accepted-only game-local Pack Manifest promotion)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
 //   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
 //   POST   /api/canvas/projects/<id>/nodes-align   {nodeIds, align, reference?} (align to selection bbox or parent frame; one entry)
@@ -134,6 +135,7 @@ import {
   patchProject,
   patchRecipe,
   patchStyle,
+  promoteAssetToGame,
   promoteExtractedRecipe,
   promoteExtractedStyle,
   readHistory,
@@ -1094,6 +1096,20 @@ export function createCanvasApi(root) {
           elementId,
           decision: body.decision,
           reason: body.reason,
+        })));
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/asset-promote
+      // This is the only Canvas -> games/<id>/assets write boundary. The operation
+      // revalidates current acceptance and publishable metadata before touching disk.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "asset-promote" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        const body = await readJsonBody(req);
+        sendJson(res, 201, await locked(id, () => promoteAssetToGame(root, {
+          projectId: id,
+          elementId,
+          metadata: body.metadata,
         })));
         return true;
       }

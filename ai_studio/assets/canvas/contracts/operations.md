@@ -41,8 +41,8 @@ evidence for the same source and lock, resolves the lock's owned exemplar
 images, and vision-compares them with the target against the lock's
 `prompt_preamble` (Do) and `negative_prompt` (Don't). It stores one strict
 `accept|revise|reject` report with source/exemplar refs and the complete lock
-snapshot in an undoable
-commit, but deliberately preserves `checked`/`accepted` status so the model
+snapshot in an undoable commit, but deliberately preserves `checked`/`accepted`
+status so the model
 cannot become a hidden hard gate. `decideAssetStyle` is the explicit lead
 backstop: a required caller-authored `decision` plus bounded non-empty `reason`
 records `meta.style_decision`; `accept` moves current checked art to `accepted`,
@@ -52,11 +52,30 @@ exemplar sources still match the advisory evidence. The decision and status
 change share one undoable commit.
 
 CLI parity is `asset-status-show`, `asset-status-set`, `asset-status-check`,
-`asset-style-check`, and `asset-style-decide`; HTTP parity adds
-`POST .../asset-style-check` and `POST .../asset-style-decision`. Request bodies
-cannot supply trusted technical/style reports. Decision and reason are
-intentionally caller-authored because that route represents the explicit lead
-action, not model evidence.
+`asset-style-check`, `asset-style-decide`, and `asset-promote`; HTTP parity adds
+`POST .../asset-style-check`, `POST .../asset-style-decision`, and
+`POST .../asset-promote`. Request bodies cannot supply trusted technical/style
+reports. Decision and reason are intentionally caller-authored because that
+route represents the explicit lead action, not model evidence.
+
+`promoteAssetToGame` is the only Canvas-to-game asset write boundary. It refuses
+anything except a current `accepted` image with a matching technical PASS,
+style-lock snapshot, exemplar sources, advisory report, and explicit lead accept
+decision. It also requires complete publishable license/provenance metadata and
+refuses overwrite. A per-game local/cross-process lock covers manifest read,
+duplicate checks, staging, and commit; physical-directory checks reject symlink
+or junction escapes. Source bytes must still match their Canvas content-addressed
+filename after staging. Success copies immutable bytes into the owning public/private
+game's `assets/packs/canvas-promotions/files/<asset-id>/` and appends a Pack
+Manifest row with SHA-256, byte count, Canvas source ref, lock id, and frozen lead
+decision. Private provenance uses the canonical scoped
+`canvas://game/<game-id>/<project-id>/element/<element-id>` ref. Prepared/committed
+transaction markers recover an interrupted rename sequence before the next
+promotion; recovery revalidates physical ancestors before cleanup, and a
+committed marker remains authoritative until finalization completes. Only the
+Canvas image extension allowlist (`png|jpg|jpeg|gif|webp`) can be promoted. The
+CLI reads metadata from `--metadata <json>`; the API body uses
+`{metadata}`.
 
 Hand-authored `nodes-paste` specs are never an acceptance path. Every pasted
 image re-enters `quarantine`, and any supplied `technical_gate`, `style_verdict`,

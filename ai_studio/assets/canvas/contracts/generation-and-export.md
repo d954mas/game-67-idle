@@ -35,3 +35,15 @@ groups simply are not marked as screens.
 The browser owns only save-dialog/download delivery. Naming, render order,
 filters, fonts, scale resolution, manifests, and output bytes are operation
 contracts shared with CLI/API.
+
+Export is review-neutral and may write previews anywhere the caller chooses;
+game asset promotion is a separate hard-gated operation. `asset-promote` accepts
+only game-owned, currently accepted Canvas images and writes the owning game's
+`assets/packs/canvas-promotions` Pack Manifest. Its metadata JSON must explicitly
+provide asset id/title/description/kind/tags, `origin` (`mine|ai|sourced`),
+license name/URL/kind, source page, author/vendor, provenance, credit, and all
+six rights/publish flags as `"true"|"false"`. The license decision must pass the
+release/public-binary gate; pending values and `private|unknown` license kinds
+are refused. Promotion verifies the immutable content-addressed source bytes,
+physically confines every game-pack directory, and serializes writers per game.
+There is no `--no-lock`, force, overwrite, or raw destination flag.

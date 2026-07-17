@@ -218,6 +218,15 @@ test("canvas API sets and reads image asset status through the shared operation"
   assert.equal(styleDecision.status, 400);
   assert.match(styleDecision.json().error, /requires current style-verdict evidence/);
 
+  const promotion = await invokeApi(
+    handler,
+    "POST",
+    `/api/canvas/projects/${projectId}/elements/${elementId}/asset-promote`,
+    {},
+  );
+  assert.equal(promotion.status, 400);
+  assert.match(promotion.json().error, /requires a metadata object/);
+
   const invalid = await invokeApi(handler, "PUT", `/api/canvas/projects/${projectId}/elements/${elementId}/asset-status`, {
     status: "approved",
   });

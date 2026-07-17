@@ -43,3 +43,11 @@ is the distinct trusted path that may preserve existing persisted review state.
 Any cleanup or filter bake that materializes pixels into a source file likewise
 starts a fresh `quarantine` lifecycle and removes review evidence for the old
 source; undo restores the exact prior accepted state with its original bytes.
+Promotion does not mutate the Canvas project. It copies accepted immutable bytes
+to the owning game's `assets/packs/canvas-promotions` pack and records resource,
+SHA-256, byte count, Canvas source ref, style lock, and lead-decision provenance
+in `assets.jsonl`. Duplicate asset ids or destination files fail loudly.
+Promotion stages bytes and manifest under a per-game cross-process lock, verifies
+the staged hash against the content-addressed Canvas source name, rolls back a
+failed commit, recovers a process crash through prepared/committed markers, and
+rejects any symlink/junction in the physical Canvas source or game-pack path.

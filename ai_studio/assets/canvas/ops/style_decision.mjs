@@ -43,7 +43,7 @@ function exemplarElementId(ref, projectId) {
   return match[2];
 }
 
-function requireCurrentStyleEvidence(project, element, lock) {
+export function requireCurrentStyleEvidence(project, element, lock) {
   const status = element.assetStatus == null ? null : normalizeAssetStatus(element.assetStatus);
   const technical = element.meta?.technical_gate;
   const advisory = element.meta?.style_verdict;
@@ -89,6 +89,33 @@ function requireCurrentStyleEvidence(project, element, lock) {
     throw new Error("asset style decision requires current style-verdict evidence for every owned exemplar");
   }
   return { status, advisory };
+}
+
+export function requireAcceptedStyleDecision(project, element, lock) {
+  const status = element.assetStatus == null ? null : normalizeAssetStatus(element.assetStatus);
+  if (status !== "accepted") {
+    throw new Error(`asset promotion requires accepted review state, got ${status || "untracked"}`);
+  }
+  const { advisory } = requireCurrentStyleEvidence(project, element, lock);
+  const decision = element.meta?.style_decision;
+  const reasonValid = typeof decision?.reason === "string"
+    && decision.reason.trim().length > 0
+    && decision.reason.length <= MAX_REASON_CHARS;
+  if (
+    decision?.schema !== "game.asset_style_decision" ||
+    decision?.version !== 1 ||
+    decision?.decision !== "accept" ||
+    typeof decision?.decided_at !== "string" ||
+    !decision.decided_at ||
+    !reasonValid ||
+    decision?.style_lock_id !== lock.id ||
+    decision?.source_ref !== element.src ||
+    decision?.advisory_verdict !== advisory.verdict ||
+    decision?.advisory_checked_at !== advisory.checked_at
+  ) {
+    throw new Error("asset promotion requires an explicit current lead accept decision for this source and advisory verdict");
+  }
+  return { advisory, decision };
 }
 
 function decideAssetStyleImpl(root, { projectId, elementId, decision, reason } = {}, dependencies = {}) {

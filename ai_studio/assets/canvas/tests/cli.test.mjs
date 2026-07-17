@@ -164,6 +164,10 @@ test("cli sets and reads an image asset status", async (t) => {
     /requires current style-verdict evidence/,
   );
   assert.match(
+    runFail(env, "asset-promote", projectId, "--element", elementId).stderr,
+    /requires --metadata/,
+  );
+  assert.match(
     (await runInProcessFail(env, "asset-status-set", projectId, "--element", elementId, "--status", "approved")).message,
     /asset status must be quarantine\|checked\|accepted/,
   );
