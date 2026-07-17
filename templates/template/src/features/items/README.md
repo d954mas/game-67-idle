@@ -42,7 +42,9 @@ DevAPI-enabled builds expose this as `game.items.container.list` and
 the JSON bridge never rounds i64 values. Release builds do not compile the
 adapter.
 
-Every mutation uses a `verb:subject` reason from `reason_tags.h`. Normal new
+Every mutation uses a bounded `verb:subject` reason from `reason_tags.h`.
+Malformed, unknown, or oversized reasons return `ITEMS_RESULT_INVALID_REASON`
+before any state change or audit event, including in release builds. Normal new
 games are seeded in `src/game_items.c`; `--fresh-state` intentionally runs only
 the generated reset defaults and skips those grants.
 

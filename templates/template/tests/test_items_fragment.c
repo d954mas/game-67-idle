@@ -1154,6 +1154,38 @@ void test_aggregate_remove_event_uses_none_entry_id(void) {
     TEST_ASSERT_EQUAL_INT(1, txn_count);
 }
 
+void test_invalid_reasons_are_release_visible_and_atomic(void) {
+    items_container_ref_t bag = create_container(4, ITEMS_CONTAINER_POLICY_GENERIC);
+    cJSON *before = items_state_to_json(&items_state);
+    game_event_frame_reset();
+
+    char oversized[ITEMS_REASON_MAX_LENGTH + 2U];
+    memset(oversized, 'x', sizeof(oversized));
+    memcpy(oversized, "loot:", 5U);
+    oversized[sizeof(oversized) - 1U] = '\0';
+    const char *invalid[] = {
+        NULL,
+        "loot",
+        "unknown:test",
+        "loot:bad subject",
+        "loot:two:parts",
+        oversized,
+    };
+    for (size_t i = 0; i < sizeof(invalid) / sizeof(invalid[0]); i++) {
+        TEST_ASSERT_EQUAL_INT(
+            ITEMS_RESULT_INVALID_REASON,
+            items_try_stack_add(bag, "tmpl.wood", 1, 0, invalid[i], NULL, NULL));
+    }
+
+    cJSON *after = items_state_to_json(&items_state);
+    TEST_ASSERT_TRUE(cJSON_Compare(before, after, true));
+    cJSON_Delete(after);
+    cJSON_Delete(before);
+    int event_count = -1;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(0, event_count);
+}
+
 int main(void) {
     if (!items_runtime_test_catalog_bind()) { return 1; }
     game_events_init();
@@ -1189,6 +1221,7 @@ int main(void) {
     RUN_TEST(test_success_emits_one_numeric_identity_event);
     RUN_TEST(test_move_event_uses_persistent_numeric_identity);
     RUN_TEST(test_aggregate_remove_event_uses_none_entry_id);
+    RUN_TEST(test_invalid_reasons_are_release_visible_and_atomic);
     int result = UNITY_END();
     game_events_shutdown();
     items_catalog_shutdown();

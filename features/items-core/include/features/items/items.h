@@ -120,7 +120,10 @@ typedef enum items_result_t {
     ITEMS_RESULT_LIFETIME,
     ITEMS_RESULT_STALE_LEVEL,
     ITEMS_RESULT_COMMIT_FAILED,
+    ITEMS_RESULT_INVALID_REASON,
 } items_result_t;
+
+#define ITEMS_REASON_MAX_LENGTH 127U
 
 typedef struct items_container_ref_t { uint32_t index; uint32_t generation; } items_container_ref_t;
 typedef struct item_entry_ref_t { uint32_t index; uint32_t generation; } item_entry_ref_t;

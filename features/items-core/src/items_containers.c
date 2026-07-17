@@ -686,7 +686,7 @@ static int64_t stack_limit(item_def_ref_t ref, item_core_t core) {
 items_result_t items_try_stack_add(
     items_container_ref_t container_ref_value, const char *def_id, int64_t count,
     uint32_t requested_slot, const char *reason, item_entry_ref_t *out_entry, int64_t *out_applied) {
-    items_reason_check(reason);
+    if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
     if (ephemeral_ref(container_ref_value.index)) {
         return ephemeral_stack_add(
             container_ref_value, def_id, count, requested_slot, out_entry, out_applied);
@@ -748,7 +748,7 @@ items_result_t items_try_stack_add(
 }
 
 items_result_t items_try_stack_remove(item_entry_ref_t entry_ref_value, int64_t count, const char *reason) {
-    items_reason_check(reason);
+    if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
     if (ephemeral_ref(entry_ref_value.index)) { return ephemeral_stack_remove(entry_ref_value, count); }
     ItemsItemEntry *entry = require_entry(entry_ref_value);
     item_core_t core;
@@ -777,7 +777,7 @@ items_result_t items_try_stack_remove(item_entry_ref_t entry_ref_value, int64_t 
 
 items_result_t items_try_stack_remove_from_container(
     items_container_ref_t container_ref_value, const char *def_id, int64_t count, const char *reason) {
-    items_reason_check(reason);
+    if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
     if (ephemeral_ref(container_ref_value.index)) {
         return ephemeral_stack_remove_from_container(container_ref_value, def_id, count);
     }
@@ -835,7 +835,7 @@ bool items_can_afford(items_container_ref_t container, const char *def_id, int64
 items_result_t items_try_unique_create(
     items_container_ref_t container_ref_value, const char *def_id, uint32_t requested_slot,
     const char *reason, item_entry_ref_t *out_entry) {
-    items_reason_check(reason);
+    if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
     if (ephemeral_ref(container_ref_value.index)) {
         NT_ASSERT(out_entry != NULL);
         return ephemeral_unique_create(container_ref_value, def_id, requested_slot, out_entry);
@@ -877,7 +877,7 @@ items_result_t items_try_unique_create(
 }
 
 items_result_t items_try_entry_destroy(item_entry_ref_t entry_ref_value, const char *reason) {
-    items_reason_check(reason);
+    if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
     if (ephemeral_ref(entry_ref_value.index)) { return ephemeral_entry_destroy(entry_ref_value); }
     ItemsItemEntry *entry = require_entry(entry_ref_value);
     item_core_t core;
@@ -1190,7 +1190,7 @@ static void apply_payment_plan(const items_payment_plan_t *plan) {
 
 items_result_t items_try_pay_cost(
     item_cost_ref_t cost, items_payment_scope_t scope, const char *reason) {
-    items_reason_check(reason);
+    if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
     items_payment_plan_t plan;
     items_result_t result = build_payment_plan(cost, scope, &plan);
     if (result != ITEMS_RESULT_OK) { return result; }
@@ -1219,7 +1219,7 @@ items_result_t items_try_acquire(
     items_container_ref_t destination_ref, item_def_ref_t item,
     items_payment_scope_t payment, const char *reason,
     item_entry_ref_t *out_entry) {
-    items_reason_check(reason);
+    if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
     NT_ASSERT(out_entry != NULL);
     if (ephemeral_ref(destination_ref.index)) { return ITEMS_RESULT_WRONG_STORAGE; }
     ItemsItemContainer *destination = require_container(destination_ref);
@@ -1334,7 +1334,7 @@ items_result_t items_try_acquire(
 items_result_t items_try_upgrade_instance(
     item_entry_ref_t entry_ref_value, uint32_t target_level,
     items_payment_scope_t payment, const char *reason) {
-    items_reason_check(reason);
+    if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
     if (ephemeral_ref(entry_ref_value.index)) { return ITEMS_RESULT_WRONG_STORAGE; }
     ItemsItemEntry *entry = require_entry(entry_ref_value);
     item_def_ref_t item;
@@ -1383,7 +1383,7 @@ items_result_t items_try_entry_move(
     item_entry_ref_t source_ref, items_container_ref_t destination_ref,
     int64_t count, uint32_t requested_slot, const char *reason,
     item_entry_ref_t *out_destination) {
-    items_reason_check(reason);
+    if (!items_reason_check(reason)) { return ITEMS_RESULT_INVALID_REASON; }
     if (ephemeral_ref(source_ref.index)) {
         return ephemeral_entry_move(
             source_ref, destination_ref, count, requested_slot, reason, out_destination);
