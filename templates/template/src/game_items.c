@@ -3,7 +3,9 @@
 #include "features/progression/progression.h"
 #include "game_state_json.h"
 #include "game_state.h"
+#include "game_events.h"
 #include "items_state.h"
+#include "items_state_events.gen.h"
 
 #include "core/nt_assert.h"
 
@@ -463,6 +465,30 @@ bool game_items_validate_default_seed(char *error, int error_cap) {
     return game_items_validate_seed_plan(&k_default_seed_plan, error, error_cap);
 }
 
+static bool seed_audit_batch_available(const game_items_seed_plan_t *plan) {
+    if (plan->grant_count == 0) { return true; }
+    int live_events = 0;
+    (void)game_event_log(&live_events);
+    if (live_events < 0 || plan->grant_count > (size_t)GAME_EVENTS_LOG_CAP ||
+        (size_t)live_events > (size_t)GAME_EVENTS_LOG_CAP - plan->grant_count) {
+        return false;
+    }
+
+    const size_t align = _Alignof(ItemsEvTxn);
+    size_t batch_size = 0;
+    for (size_t i = 0; i < plan->grant_count; i++) {
+        batch_size = (batch_size + (align - 1U)) & ~(align - 1U);
+        const size_t event_size = sizeof(ItemsEvTxn) + sizeof("add") +
+                                  strlen(plan->grants[i].def_id) + 1U +
+                                  sizeof("starting:new_game");
+        if (event_size > UINT32_MAX || batch_size > UINT32_MAX - event_size) {
+            return false;
+        }
+        batch_size += event_size;
+    }
+    return game_event_can_emit((uint32_t)batch_size, align);
+}
+
 static bool game_items_try_create_defaults_from_plan(
     const game_items_seed_plan_t *plan, bool grant_starting_items,
     char *error, int error_cap) {
@@ -483,6 +509,9 @@ static bool game_items_try_create_defaults_from_plan(
         if (items_state.containers_entries[i].used) {
             return seed_error(error, error_cap, "seed initialization target is not reset");
         }
+    }
+    if (grant_starting_items && !seed_audit_batch_available(plan)) {
+        return seed_error(error, error_cap, "seed audit capacity is unavailable");
     }
 
     const ItemsState items_before = items_state;

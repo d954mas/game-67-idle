@@ -214,6 +214,36 @@ static void test_cursor_reset_on_tick_change(void) {
     TEST_ASSERT_EQUAL_INT(8, s_pos);
 }
 
+static void test_capacity_probe_is_exact_and_side_effect_free(void) {
+    const uint8_t one = 0x5A;
+    TEST_ASSERT_TRUE(game_event_can_emit(1U, 1U));
+    for (int i = 0; i < GAME_EVENTS_LOG_CAP; i++) {
+        TEST_ASSERT_NOT_NULL(game_event_emit(T("test.probe"), &one, 1U, 1U));
+    }
+    TEST_ASSERT_FALSE(game_event_can_emit(1U, 1U));
+    TEST_ASSERT_EQUAL_UINT32(0U, game_events_dropped());
+    int count = -1;
+    (void)game_event_log(&count);
+    TEST_ASSERT_EQUAL_INT(GAME_EVENTS_LOG_CAP, count);
+}
+
+static void test_capacity_probe_matches_aligned_arena_boundary(void) {
+    const uint8_t one = 0x5A;
+    TEST_ASSERT_NOT_NULL(game_event_emit(T("test.odd"), &one, 1U, 1U));
+    const size_t align = _Alignof(max_align_t);
+    const size_t aligned_offset = align;
+    const uint32_t fit = (uint32_t)((size_t)GAME_EVENTS_ARENA_BYTES - aligned_offset);
+    TEST_ASSERT_TRUE(game_event_can_emit(fit, align));
+    TEST_ASSERT_FALSE(game_event_can_emit(fit + 1U, align));
+    TEST_ASSERT_EQUAL_UINT32(0U, game_events_dropped());
+
+    uint8_t payload[GAME_EVENTS_ARENA_BYTES];
+    memset(payload, 0xA5, sizeof payload);
+    TEST_ASSERT_NOT_NULL(game_event_emit(T("test.fit"), payload, fit, align));
+    TEST_ASSERT_FALSE(game_event_can_emit(1U, 1U));
+    TEST_ASSERT_EQUAL_UINT32(0U, game_events_dropped());
+}
+
 /* Death-tests are only meaningful when asserts longjmp (FULL): in TRAP/OFF
    builds the overflow assert is compiled out or traps instead of returning. */
 #if NT_ASSERT_MODE == NT_ASSERT_FULL
@@ -285,6 +315,8 @@ int main(void) {
     RUN_TEST(test_alignment_powers_of_two_up_to_ceiling);
     RUN_TEST(test_react_generation_cap);
     RUN_TEST(test_cursor_reset_on_tick_change);
+    RUN_TEST(test_capacity_probe_is_exact_and_side_effect_free);
+    RUN_TEST(test_capacity_probe_matches_aligned_arena_boundary);
 #if NT_ASSERT_MODE == NT_ASSERT_FULL
     RUN_TEST(test_arena_overflow_asserts);
     RUN_TEST(test_log_cap_overflow_asserts);

@@ -1186,6 +1186,134 @@ void test_invalid_reasons_are_release_visible_and_atomic(void) {
     TEST_ASSERT_EQUAL_INT(0, event_count);
 }
 
+void test_full_audit_log_refuses_persistent_mutation_without_state_change(void) {
+    items_container_ref_t bag = create_container(4, ITEMS_CONTAINER_POLICY_GENERIC);
+    cJSON *before = items_state_to_json(&items_state);
+    const uint8_t payload = 0x5A;
+    for (int i = 0; i < GAME_EVENTS_LOG_CAP; i++) {
+        TEST_ASSERT_NOT_NULL(game_event_emit(
+            items_ev_txn_type(), &payload, 1U, 1U));
+    }
+    TEST_ASSERT_EQUAL_UINT32(0U, game_events_dropped());
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_AUDIT_UNAVAILABLE,
+        items_try_stack_add(bag, "tmpl.wood", 1, 0, "loot:test", NULL, NULL));
+
+    cJSON *after = items_state_to_json(&items_state);
+    TEST_ASSERT_TRUE(cJSON_Compare(before, after, true));
+    cJSON_Delete(after);
+    cJSON_Delete(before);
+    TEST_ASSERT_EQUAL_UINT32(0U, game_events_dropped());
+    int event_count = -1;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(GAME_EVENTS_LOG_CAP, event_count);
+}
+
+static void fill_audit_log(void) {
+    game_event_frame_reset();
+    const uint8_t payload = 0x5A;
+    for (int i = 0; i < GAME_EVENTS_LOG_CAP; i++) {
+        TEST_ASSERT_NOT_NULL(game_event_emit(
+            items_ev_txn_type(), &payload, 1U, 1U));
+    }
+    TEST_ASSERT_EQUAL_UINT32(0U, game_events_dropped());
+}
+
+void test_full_audit_log_refuses_all_persistent_txn_verbs(void) {
+    items_container_ref_t bag = create_container(6, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_entry_ref_t wood = ITEM_ENTRY_REF_NONE;
+    item_entry_ref_t sword = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 10, 0, "loot:test", &wood, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_unique_create(bag, "tmpl.sword", 1, "loot:test", &sword));
+    fill_audit_log();
+    ItemsState before = items_state;
+    item_entry_ref_t created = {123U, 456U};
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_AUDIT_UNAVAILABLE,
+        items_try_stack_remove(wood, 1, "use:test"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_AUDIT_UNAVAILABLE,
+        items_try_stack_remove_from_container(bag, "tmpl.wood", 1, "use:test"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_AUDIT_UNAVAILABLE,
+        items_try_unique_create(bag, "tmpl.sword", 2, "loot:test", &created));
+    TEST_ASSERT_EQUAL_UINT32(123U, created.index);
+    TEST_ASSERT_EQUAL_UINT32(456U, created.generation);
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_AUDIT_UNAVAILABLE,
+        items_try_entry_destroy(sword, "use:test"));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof before);
+    TEST_ASSERT_EQUAL_UINT32(0U, game_events_dropped());
+}
+
+void test_full_audit_log_refuses_composite_mutations(void) {
+    items_container_ref_t bag = create_container(8, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_entry_ref_t sword_entry = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.gold", 10, 0, "loot:test", NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(bag, "tmpl.wood", 2, 1, "loot:test", NULL, NULL));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_unique_create(bag, "tmpl.sword", 2, "loot:test", &sword_entry));
+    item_def_ref_t sword;
+    TEST_ASSERT_TRUE(items_try_get_string("tmpl.sword", &sword));
+    item_transition_t acquire = items_acquire_transition(sword);
+    TEST_ASSERT_EQUAL_INT(ITEM_TRANSITION_COST, acquire.kind);
+    items_payment_scope_t scope = {.count = 1, .containers = {bag}};
+    fill_audit_log();
+    ItemsState before = items_state;
+    item_entry_ref_t acquired = {123U, 456U};
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_AUDIT_UNAVAILABLE,
+        items_try_pay_cost(acquire.cost, scope, "shop_buy:sword"));
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_AUDIT_UNAVAILABLE,
+        items_try_acquire(bag, sword, scope, "shop_buy:sword", &acquired));
+    TEST_ASSERT_EQUAL_UINT32(123U, acquired.index);
+    TEST_ASSERT_EQUAL_UINT32(456U, acquired.generation);
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_AUDIT_UNAVAILABLE,
+        items_try_upgrade_instance(sword_entry, 2, scope, "level_cost:sword"));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof before);
+    TEST_ASSERT_EQUAL_UINT32(0U, game_events_dropped());
+}
+
+void test_full_audit_log_refuses_split_move_before_id_or_ref_changes(void) {
+    items_container_ref_t source_container = create_container(4, ITEMS_CONTAINER_POLICY_GENERIC);
+    items_container_ref_t destination = create_container(4, ITEMS_CONTAINER_POLICY_GENERIC);
+    item_entry_ref_t source = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_OK,
+        items_try_stack_add(
+            source_container, "tmpl.wood", 10, 0, "loot:test", &source, NULL));
+    const uint32_t source_id = items_entry_id(source);
+    fill_audit_log();
+    ItemsState before = items_state;
+    item_entry_ref_t moved = {123U, 456U};
+
+    TEST_ASSERT_EQUAL_INT(
+        ITEMS_RESULT_AUDIT_UNAVAILABLE,
+        items_try_entry_move(source, destination, 4, 1, "split:test", &moved));
+    TEST_ASSERT_EQUAL_MEMORY(&before, &items_state, sizeof before);
+    TEST_ASSERT_EQUAL_UINT32(123U, moved.index);
+    TEST_ASSERT_EQUAL_UINT32(456U, moved.generation);
+    item_entry_ref_t resolved = ITEM_ENTRY_REF_NONE;
+    TEST_ASSERT_TRUE(items_entry_try_from_id(source_id, &resolved));
+    TEST_ASSERT_EQUAL_UINT32(source.index, resolved.index);
+    TEST_ASSERT_EQUAL_UINT32(source.generation, resolved.generation);
+    TEST_ASSERT_EQUAL_UINT32(0U, game_events_dropped());
+}
+
 int main(void) {
     if (!items_runtime_test_catalog_bind()) { return 1; }
     game_events_init();
@@ -1222,6 +1350,10 @@ int main(void) {
     RUN_TEST(test_move_event_uses_persistent_numeric_identity);
     RUN_TEST(test_aggregate_remove_event_uses_none_entry_id);
     RUN_TEST(test_invalid_reasons_are_release_visible_and_atomic);
+    RUN_TEST(test_full_audit_log_refuses_persistent_mutation_without_state_change);
+    RUN_TEST(test_full_audit_log_refuses_all_persistent_txn_verbs);
+    RUN_TEST(test_full_audit_log_refuses_composite_mutations);
+    RUN_TEST(test_full_audit_log_refuses_split_move_before_id_or_ref_changes);
     int result = UNITY_END();
     game_events_shutdown();
     items_catalog_shutdown();

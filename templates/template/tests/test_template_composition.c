@@ -16,6 +16,7 @@
 #include "game_state.h"
 #include "settings_state.h"
 #include "items_state.h"
+#include "items_state_events.gen.h"
 #include "items_runtime_test_catalog.h"
 #include "progression_state.h"
 #include "features/settings/settings.h"
@@ -243,6 +244,36 @@ void test_incompatible_seed_plans_refuse_partial_initialization(void) {
     };
     const game_items_seed_plan_t duplicate_plan = {2, 32, duplicate, 2};
     assert_invalid_seed_plan_preserves_state(&duplicate_plan, "duplicate logical seed grant");
+}
+
+void test_seed_refuses_partial_audit_batch_before_initialization(void) {
+    items_state_fragment.reset();
+    progression_state_fragment.reset();
+    game_state_fragment.reset();
+    TEST_ASSERT_TRUE(items_runtime_rebuild(NULL, 0));
+    game_event_frame_reset();
+    const uint8_t payload = 0x5A;
+    for (int i = 0; i < GAME_EVENTS_LOG_CAP; i++) {
+        TEST_ASSERT_NOT_NULL(game_event_emit(items_ev_txn_type(), &payload, 1U, 1U));
+    }
+    ItemsState before_items = items_state;
+    GameState before_game = game_state;
+    const game_items_seed_grant_t grants[] = {
+        {"tmpl.gold", 50, GAME_ITEMS_SEED_WALLET},
+        {"tmpl.potion", 1, GAME_ITEMS_SEED_INVENTORY},
+    };
+    const game_items_seed_plan_t plan = {64, 32, grants, 2};
+    char error[128] = {0};
+
+    TEST_ASSERT_FALSE(game_items_test_try_create_defaults_from_plan(
+        &plan, error, (int)sizeof error));
+    TEST_ASSERT_EQUAL_STRING("seed audit capacity is unavailable", error);
+    TEST_ASSERT_EQUAL_MEMORY(&before_items, &items_state, sizeof before_items);
+    TEST_ASSERT_EQUAL_MEMORY(&before_game, &game_state, sizeof before_game);
+    TEST_ASSERT_EQUAL_UINT32(0U, game_events_dropped());
+    int event_count = -1;
+    (void)game_event_log(&event_count);
+    TEST_ASSERT_EQUAL_INT(GAME_EVENTS_LOG_CAP, event_count);
 }
 
 /* 3. Proves ONE envelope carries cross-fragment state through
@@ -725,6 +756,7 @@ int main(void) {
     RUN_TEST(test_registry_has_four_fragments_in_order);
     RUN_TEST(test_new_game_seeds_across_all_fragments);
     RUN_TEST(test_incompatible_seed_plans_refuse_partial_initialization);
+    RUN_TEST(test_seed_refuses_partial_audit_batch_before_initialization);
     RUN_TEST(test_cross_fragment_save_load_roundtrip);
     RUN_TEST(test_import_rejects_dangling_owner_before_publish);
     RUN_TEST(test_import_rejects_unreferenced_persistent_container_before_publish);
