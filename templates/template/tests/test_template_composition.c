@@ -73,6 +73,35 @@ static char *read_fixture(const char *path) {
     return text;
 }
 
+static void assert_legacy_rows_rejected_unchanged(const char *rows, const char *expected_error) {
+    const size_t capacity = strlen(rows) + 256U;
+    char *text = (char *)malloc(capacity);
+    TEST_ASSERT_NOT_NULL(text);
+    const int written = snprintf(text, capacity,
+        "{\"items\":{\"v\":1,\"owned\":{%s}},\"game\":{\"v\":1}}", rows);
+    TEST_ASSERT_TRUE(written > 0 && (size_t)written < capacity);
+    cJSON *features = cJSON_Parse(text);
+    free(text);
+    TEST_ASSERT_NOT_NULL(features);
+    cJSON *before = cJSON_Duplicate(features, true);
+    TEST_ASSERT_NOT_NULL(before);
+    char *before_text = cJSON_PrintUnformatted(before);
+    TEST_ASSERT_NOT_NULL(before_text);
+    char err[128] = {0};
+
+    TEST_ASSERT_FALSE(game_items_migrate_document_v1_to_v2(
+        features, err, (int)sizeof err));
+
+    TEST_ASSERT_EQUAL_STRING(expected_error, err);
+    char *after_text = cJSON_PrintUnformatted(features);
+    TEST_ASSERT_NOT_NULL(after_text);
+    TEST_ASSERT_EQUAL_STRING_MESSAGE(before_text, after_text, rows);
+    free(after_text);
+    free(before_text);
+    cJSON_Delete(before);
+    cJSON_Delete(features);
+}
+
 static void assert_rejected_import_preserves_state(cJSON *doc, const char *before) {
     char err[128] = {0};
     char *invalid = cJSON_PrintUnformatted(doc);
@@ -557,6 +586,70 @@ void test_legacy_items_fixture_imports_through_document_stage(void) {
     free(fixture);
 }
 
+void test_legacy_items_malformed_keys_routes_and_counts_reject_unchanged(void) {
+    typedef struct legacy_rejection_case {
+        const char *rows;
+        const char *error;
+    } legacy_rejection_case_t;
+    static const legacy_rejection_case_t cases[] = {
+        /* overflowing and noncanonical unique sequences */
+        {"\"tmpl.sword#9223372036854775808\":{\"def_id\":\"tmpl.sword\",\"container\":\"backpack\",\"count\":\"1\",\"level\":1,\"durability\":1,\"quarantined\":false}",
+         "legacy unique sequence overflow"},
+        {"\"tmpl.sword#01\":{\"def_id\":\"tmpl.sword\",\"container\":\"backpack\",\"count\":\"1\",\"level\":1,\"durability\":1,\"quarantined\":false}",
+         "legacy unique key does not match definition"},
+        /* overlong and canonical-looking truncated legacy map keys */
+        {"\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\":{\"def_id\":\"tmpl.gold\",\"container\":\"purse\",\"count\":\"1\",\"level\":1,\"durability\":1,\"quarantined\":false}",
+         "invalid legacy owned key"},
+        {"\"purse/tmpl.gol\":{\"def_id\":\"tmpl.gold\",\"container\":\"purse\",\"count\":\"1\",\"level\":1,\"durability\":1,\"quarantined\":false}",
+         "legacy stack key does not match fields"},
+        /* key/container mismatch */
+        {"\"backpack/tmpl.gold\":{\"def_id\":\"tmpl.gold\",\"container\":\"purse\",\"count\":\"1\",\"level\":1,\"durability\":1,\"quarantined\":false}",
+         "legacy stack key does not match fields"},
+        /* key/definition mismatch */
+        {"\"purse/tmpl.gold\":{\"def_id\":\"tmpl.xp\",\"container\":\"purse\",\"count\":\"1\",\"level\":1,\"durability\":1,\"quarantined\":false}",
+         "legacy stack key does not match fields"},
+        /* duplicate logical stack keys */
+        {"\"purse/tmpl.gold\":{\"def_id\":\"tmpl.gold\",\"container\":\"purse\",\"count\":\"1\",\"level\":1,\"durability\":1,\"quarantined\":false},"
+         "\"purse/tmpl.gold\":{\"def_id\":\"tmpl.gold\",\"container\":\"purse\",\"count\":\"2\",\"level\":1,\"durability\":1,\"quarantined\":false}",
+         "duplicate legacy owned key"},
+        /* unique count other than one */
+        {"\"tmpl.sword#2\":{\"def_id\":\"tmpl.sword\",\"container\":\"backpack\",\"count\":\"2\",\"level\":1,\"durability\":1,\"quarantined\":false}",
+         "legacy unique count must be one"},
+        /* unsupported container and storage routes */
+        {"\"vault/tmpl.gold\":{\"def_id\":\"tmpl.gold\",\"container\":\"vault\",\"count\":\"1\",\"level\":1,\"durability\":1,\"quarantined\":false}",
+         "unsupported legacy container route"},
+        {"\"backpack/tmpl.sword\":{\"def_id\":\"tmpl.sword\",\"container\":\"backpack\",\"count\":\"1\",\"level\":1,\"durability\":1,\"quarantined\":false}",
+         "legacy key conflicts with frozen storage"},
+    };
+    for (size_t i = 0; i < sizeof cases / sizeof cases[0]; i++) {
+        assert_legacy_rows_rejected_unchanged(cases[i].rows, cases[i].error);
+    }
+}
+
+void test_legacy_owner_conflict_rejects_frozen_fixture_exactly_unchanged(void) {
+    char *fixture = read_fixture(ITEMS_LEGACY_SAVE_V1_FIXTURE);
+    cJSON *document = cJSON_Parse(fixture);
+    free(fixture);
+    TEST_ASSERT_NOT_NULL(document);
+    cJSON *features = required_object(document, "features");
+    cJSON *game = required_object(features, "game");
+    TEST_ASSERT_NOT_NULL(cJSON_AddNumberToObject(game, "inventory_container_id", 99));
+    char *before = cJSON_PrintUnformatted(features);
+    TEST_ASSERT_NOT_NULL(before);
+    char err[128] = {0};
+
+    TEST_ASSERT_FALSE(game_items_migrate_document_v1_to_v2(
+        features, err, (int)sizeof err));
+
+    TEST_ASSERT_EQUAL_STRING("legacy owner reference conflicts with frozen mapping", err);
+    char *after = cJSON_PrintUnformatted(features);
+    TEST_ASSERT_NOT_NULL(after);
+    TEST_ASSERT_EQUAL_STRING(before, after);
+    free(after);
+    free(before);
+    cJSON_Delete(document);
+}
+
 int main(void) {
     if (!items_runtime_test_catalog_bind()) {
         return 1;
@@ -588,6 +681,8 @@ int main(void) {
     RUN_TEST(test_hold_to_reset_preserves_settings);
     RUN_TEST(test_legacy_items_fixture_migrates_deterministically_with_owner_refs);
     RUN_TEST(test_legacy_items_fixture_imports_through_document_stage);
+    RUN_TEST(test_legacy_items_malformed_keys_routes_and_counts_reject_unchanged);
+    RUN_TEST(test_legacy_owner_conflict_rejects_frozen_fixture_exactly_unchanged);
 #if NT_DEVAPI_ENABLED
     RUN_TEST(test_devapi_set_rolls_back_a_partially_mutating_setter);
 #endif
