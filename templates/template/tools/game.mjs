@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { spawnSync } from "node:child_process";
 
 import { main as buildWeb } from "./build_web.mjs";
+import { smokePackagedWeb } from "./browser_smoke.mjs";
 import { findStudioRoot } from "./lib/studio_root.mjs";
 import {
   packageWebArtifact,
@@ -63,6 +64,7 @@ function requiredScaffold(gameDir) {
   return [
     "CMakeLists.txt",
     "tools/game.mjs",
+    "tools/browser_smoke.mjs",
     "tools/build_web.mjs",
     "tools/package_web.mjs",
     "tools/lib/zip_store.mjs",
@@ -200,6 +202,8 @@ export async function executeGameCommand(args, dependencies = {}) {
   const loadMetadata = dependencies.loadMetadata || gamePackageMetadata;
   const verifyDependencies = dependencies.verifyDependencies || ((metadata) => verifyDependencySources({ studioRoot: findStudioRoot(gameDir), dependencies: metadata.dependencies }));
   const packageGameOwned = dependencies.package || ((options, metadata) => packageGame(options, { gameDir }, metadata));
+  const browserSmoke = dependencies.browserSmoke || smokePackagedWeb;
+  const shouldBrowserSmoke = dependencies.shouldBrowserSmoke || ((options) => options.target === "itch");
   const prepare = (templateProof = false) => {
     doctor({ gameDir, templateProof });
     const metadata = loadMetadata(gameDir, templateProof);
@@ -243,7 +247,9 @@ export async function executeGameCommand(args, dependencies = {}) {
     nativeTest(gameDir);
   }
   const result = packageGameOwned(args, metadata);
-  return { message: `verify passed: ${result.zipPath}`, result };
+  const browser = shouldBrowserSmoke(args) ? await browserSmoke({ zipPath: result.zipPath }) : null;
+  const browserMessage = browser ? "; browser smoke passed" : `; browser smoke not applicable (${args.target})`;
+  return { message: `verify passed: ${result.zipPath}${browserMessage}`, result, browser };
 }
 
 export async function main(argv = process.argv.slice(2), dependencies = {}) {

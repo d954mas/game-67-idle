@@ -53,7 +53,7 @@ test("doctor requires the copied game-owned scaffold and exact dependency record
   t.after(() => rmSync(gameDir, { recursive: true, force: true }));
   assert.throws(() => doctorGame({ gameDir }), /missing/i);
 
-  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/build_web.mjs", "tools/package_web.mjs", "tools/lib/zip_store.mjs", "tools/serve_web.mjs", "release/README.md", ".github/workflows/game-verify.yml"]) {
+  for (const rel of ["CMakeLists.txt", "tools/game.mjs", "tools/browser_smoke.mjs", "tools/build_web.mjs", "tools/package_web.mjs", "tools/lib/zip_store.mjs", "tools/serve_web.mjs", "release/README.md", ".github/workflows/game-verify.yml"]) {
     write(join(gameDir, rel), "fixture\n");
   }
   write(join(gameDir, "game.json"), JSON.stringify({ schema: "ai_studio.game.v1", id: "fixture", title: "Fixture", storageNamespace: "fixture" }));
@@ -85,7 +85,7 @@ test("native game test plan configures, builds, and runs CTest without a clean r
 test("verify composes doctor tests and one package without discovering workspace games", async () => {
   const calls = [];
   const result = await executeGameCommand({
-    command: "verify", target: "local", build: false, templateProof: true, skipTests: false, outDir: "",
+    command: "verify", target: "itch", build: false, templateProof: true, skipTests: false, outDir: "",
   }, {
     gameDir: "/repo/templates/template",
     doctor: () => { calls.push("doctor"); return { gameId: "template" }; },
@@ -93,10 +93,29 @@ test("verify composes doctor tests and one package without discovering workspace
     verifyDependencies: () => { calls.push("dependencies"); },
     nodeTest: () => { calls.push("node"); },
     nativeTest: () => { calls.push("native"); },
-    package: (options) => { calls.push(["package", options.build, options.target]); return { zipPath: "release/template-local.zip" }; },
+    package: (options) => { calls.push(["package", options.build, options.target]); return { zipPath: "release/template-itch.zip" }; },
+    browserSmoke: ({ zipPath }) => { calls.push(["browser", zipPath]); },
   });
-  assert.deepEqual(calls, ["doctor", "dependencies", "node", "native", ["package", false, "local"]]);
-  assert.match(result.message, /template-local\.zip/);
+  assert.deepEqual(calls, ["doctor", "dependencies", "node", "native", ["package", false, "itch"], ["browser", "release/template-itch.zip"]]);
+  assert.match(result.message, /template-itch\.zip/);
+});
+
+test("portal-backed verify targets keep deterministic package proof without live browser SDK dependencies", async () => {
+  for (const target of ["poki", "yandex", "playgama"]) {
+    const calls = [];
+    const result = await executeGameCommand({
+      command: "verify", target, build: false, templateProof: true, skipTests: true, outDir: "",
+    }, {
+      gameDir: "/repo/templates/template",
+      doctor: () => ({ gameId: "template" }),
+      loadMetadata: () => ({ dependencies: {}, proof: "reference-template" }),
+      verifyDependencies: () => {},
+      package: () => { calls.push("package"); return { zipPath: `template-${target}.zip` }; },
+      browserSmoke: () => calls.push("browser"),
+    });
+    assert.deepEqual(calls, ["package"]);
+    assert.match(result.message, new RegExp(`browser smoke not applicable \\(${target}\\)`));
+  }
 });
 
 test("game test and plain verify require dependency proof plus Node and native CTest gates", async () => {
@@ -112,10 +131,11 @@ test("game test and plain verify require dependency proof plus Node and native C
       nodeTest: () => calls.push("node"),
       nativeTest: () => calls.push("native"),
       package: () => { calls.push("package"); return { zipPath: "example.zip" }; },
+      browserSmoke: () => calls.push("browser"),
     });
     assert.deepEqual(calls, command === "test"
       ? ["dependencies", "node", "native"]
-      : ["dependencies", "node", "native", "package"]);
+      : ["dependencies", "node", "native", "package", "browser"]);
   }
 });
 
