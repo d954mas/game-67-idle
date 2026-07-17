@@ -19,8 +19,11 @@ node ai_studio/dev_environment/python_run.mjs `
 Omit `--key-color` for art generated with native transparency. Its spill and
 halo thresholds must be `null`; alpha, crop, and aspect checks still run. Chroma
 mode accepts only the style-lock's canonical magenta or green keys. This
-first slice provides the evaluator contract. Canvas alpha-output and game-asset
-promotion wiring are later T0317 slices.
+Canvas exposes the trusted evaluator through `asset-status-check`; PASS writes
+the report and moves the image to `checked`, while FAIL writes the report plus
+problem thumbnail and moves it to `quarantine`. Request callers cannot provide a
+verdict. Automatic invocation from alpha outputs and game-asset promotion remain
+later T0317 slices.
 
 ## Metric formulas
 

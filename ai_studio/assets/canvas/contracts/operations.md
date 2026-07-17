@@ -28,7 +28,13 @@ read as `null`. Internal generation and image-pipeline operations mint results i
 status and remain untracked. Status changes use the dedicated `setAssetStatus`
 operation (not a generic metadata patch), are journaled and undoable, and may move
 backward when review is revoked. The public setter may initialize `quarantine`,
-repeat a no-op, or downgrade an existing state; promotion to `checked` / `accepted`
-is reserved for later technical/style verdict operations carrying their evidence.
-CLI parity is `asset-status-show` / `asset-status-set`; HTTP parity is `GET` / `PUT
-.../elements/<id>/asset-status`.
+repeat a no-op, or downgrade an existing state. `runAssetTechnicalGate` is the
+trusted upward path to `checked`: it resolves the game-owned accepted style lock,
+runs the deterministic evaluator outside the project lock, then rechecks the
+Canvas head and commits the verdict, metrics, thresholds, lock id, source ref,
+and optional problem thumbnail in one undoable step. PASS promotes untracked or
+quarantined art to `checked` (and preserves `accepted`); FAIL moves any state to
+`quarantine`. Public callers cannot submit verdict evidence. `accepted` remains
+reserved for the later style-verdict operation. CLI parity is
+`asset-status-show` / `asset-status-set` / `asset-status-check`; HTTP parity is
+`GET` / `PUT .../asset-status` and `POST .../asset-status-check`.

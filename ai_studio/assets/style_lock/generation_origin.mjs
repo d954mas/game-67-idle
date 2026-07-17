@@ -29,23 +29,38 @@ function gameStyleLockPath(root, gameId) {
   return candidates[0] || null;
 }
 
+function projectGameId(project, label = "generation") {
+  const ownership = project?.ownership;
+  if (ownership === undefined) return null;
+  if (!ownership || typeof ownership !== "object" || Array.isArray(ownership) || ownership.kind !== "game") {
+    throw new Error(`${label} project ownership must be {kind:game, gameId:<lowercase-slug>}`);
+  }
+  if (!GAME_ID.test(ownership.gameId || "")) {
+    throw new Error(`${label} project ownership.gameId must be a lowercase slug`);
+  }
+  return ownership.gameId;
+}
+
+export function resolveAcceptedGameStyleLock(root, project) {
+  const gameId = projectGameId(project, "asset technical gate");
+  if (!gameId) throw new Error("asset technical gate requires a game-owned Canvas project with an accepted style lock");
+  const lockPath = gameStyleLockPath(root, gameId);
+  if (!lockPath) throw new Error(`asset technical gate requires design/style_lock.json for game ${gameId}`);
+  const lock = validateStyleLockFile(lockPath, { workspaceRoot: root });
+  if (lock.game_id !== gameId) throw new Error("asset technical gate style lock game_id must match Canvas project ownership.gameId");
+  if (lock.status !== "accepted") {
+    throw new Error(`asset technical gate requires an accepted style lock for game ${gameId}; current status is ${lock.status}`);
+  }
+  return { gameId, lock, lockPath };
+}
+
 // Resolve one frozen provenance record before any paid/slow generation begins.
 // Unowned canvases are deliberate exploration workspaces. Game-owned canvases default to
 // production: they need one accepted game lock, unless the caller explicitly chooses the
 // review-visible --no-lock escape hatch.
 export function resolveGenerationOrigin(root, project, { noLock = false } = {}) {
   if (typeof noLock !== "boolean") throw new Error("generation noLock must be a boolean");
-  const ownership = project?.ownership;
-  let gameId = null;
-  if (ownership !== undefined) {
-    if (!ownership || typeof ownership !== "object" || Array.isArray(ownership) || ownership.kind !== "game") {
-      throw new Error("generation project ownership must be {kind:game, gameId:<lowercase-slug>}");
-    }
-    if (!GAME_ID.test(ownership.gameId || "")) {
-      throw new Error("generation project ownership.gameId must be a lowercase slug");
-    }
-    gameId = ownership.gameId;
-  }
+  const gameId = projectGameId(project);
   if (!gameId) {
     return origin({ mode: "explore", tainted: noLock, taintReason: noLock ? "no-lock" : null });
   }

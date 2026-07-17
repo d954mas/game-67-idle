@@ -152,6 +152,10 @@ test("cli sets and reads an image asset status", async (t) => {
     /promotion from quarantine to checked requires gate evidence/,
   );
   assert.match(
+    (await runInProcessFail(env, "asset-status-check", projectId, "--element", elementId)).message,
+    /requires a game-owned Canvas project/,
+  );
+  assert.match(
     (await runInProcessFail(env, "asset-status-set", projectId, "--element", elementId, "--status", "approved")).message,
     /asset status must be quarantine\|checked\|accepted/,
   );

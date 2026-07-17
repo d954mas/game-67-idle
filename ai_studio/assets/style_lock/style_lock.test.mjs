@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import { validateStyleLock, validateStyleLockFile } from "./validate.mjs";
-import { resolveGenerationOrigin } from "./generation_origin.mjs";
+import { resolveAcceptedGameStyleLock, resolveGenerationOrigin } from "./generation_origin.mjs";
 
 const readJson = (relative) => JSON.parse(readFileSync(fileURLToPath(new URL(relative, import.meta.url)), "utf8"));
 const example = readJson("./style_lock.example.json");
@@ -38,6 +38,7 @@ test("generation origin distinguishes explore, locked production, and explicit n
       tainted: false,
       taint_reason: null,
     });
+    assert.throws(() => resolveAcceptedGameStyleLock(root, {}), /requires a game-owned Canvas project/);
 
     const ownedProject = { ownership: { kind: "game", gameId: example.game_id } };
     assert.throws(
@@ -79,6 +80,11 @@ test("generation origin distinguishes explore, locked production, and explicit n
       style_lock_id: example.id,
       tainted: false,
       taint_reason: null,
+    });
+    assert.deepEqual(resolveAcceptedGameStyleLock(root, ownedProject), {
+      gameId: example.game_id,
+      lock: example,
+      lockPath,
     });
 
     const draft = clone(example);

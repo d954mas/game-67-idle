@@ -440,6 +440,7 @@ export function historyEntryLabel(op, args = {}) {
     case "addText": return { label: "Add text", summary: String(a.content || "") };
     case "patchElement": return { label: patchElementLabel(a.patch), summary: "" };
     case "setAssetStatus": return { label: "Set asset status", summary: String(a.status || "") };
+    case "runAssetTechnicalGate": return { label: "Check asset quality", summary: String(a.verdict || "") };
     case "patchElements": return { label: "Move elements", summary: plural(count(a.count), "element") };
     case "removeElement": return { label: "Delete element", summary: "" };
     case "removeElements": return { label: "Delete elements", summary: plural(count(a.count), "element") };

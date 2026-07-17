@@ -53,6 +53,7 @@
 //   POST   /api/canvas/projects/<id>/elements/<eid>/promote-style  {}   (mint a STYLE card RIGHT of the element from its ALREADY-STORED meta.extracted; NO codex call; loud without meta.extracted first)
 //   GET    /api/canvas/projects/<id>/elements/<eid>/asset-status
 //   PUT    /api/canvas/projects/<id>/elements/<eid>/asset-status {status} (image-only; initialize quarantine or downgrade; upward transitions require gate evidence; one entry)
+//   POST   /api/canvas/projects/<id>/elements/<eid>/asset-status-check {} (runs the trusted technical gate; PASS -> checked, FAIL -> quarantine; one entry)
 //   POST   /api/canvas/projects/<id>/nodes-move    {moves:[{nodeId,x,y}...]} (mixed element+group move)
 //   POST   /api/canvas/projects/<id>/nodes-reorder {nodeIds, direction|index} (multi-node z-order)
 //   POST   /api/canvas/projects/<id>/nodes-align   {nodeIds, align, reference?} (align to selection bbox or parent frame; one entry)
@@ -139,6 +140,7 @@ import {
   removeElement,
   removeElements,
   renderGroup,
+  runAssetTechnicalGate,
   reorderElement,
   reorderNode,
   reorderNodes,
@@ -1054,6 +1056,16 @@ export function createCanvasApi(root) {
           return true;
         }
         sendJson(res, 405, { error: "method not allowed" });
+        return true;
+      }
+
+      // /api/canvas/projects/<id>/elements/<eid>/asset-status-check
+      // Evidence is produced by the shared evaluator; request-body verdicts are ignored so
+      // public callers cannot forge the quarantine -> checked transition.
+      if (parts.length === 7 && sub === "elements" && parts[6] === "asset-status-check" && req.method === "POST") {
+        const elementId = decodeURIComponent(parts[5]);
+        await readJsonBody(req);
+        sendMutation(200, await runAssetTechnicalGate(root, { projectId: id, elementId }));
         return true;
       }
 

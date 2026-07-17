@@ -27,3 +27,6 @@ than provenance. Its only valid persisted values are `quarantine`, `checked`, an
 `accepted`. Newly minted generated and pixel-derived images start in `quarantine`;
 absence means a legacy or user-imported image has not entered the review workflow.
 Writers must use the Canvas operation/CLI instead of editing `project.json`.
+The latest deterministic evidence lives in `element.meta.technical_gate`; it is
+a frozen report snapshot, not caller-authored state, and may reference a
+content-addressed failed-region thumbnail under the project's `files/` folder.
